@@ -1,0 +1,8 @@
+# tau-shrink / local-global shrinkage variant (E-V2): tau_k(lambda) =
+# lambda*tau_k,p95 + (1-lambda)*tau_global. Supportive; outside the core
+# ladder (docs/protocol/policies.md). lambda grid is a Phase 2+ decision.
+name: shrinkage
+status: contract_only
+policies: [tau_shrink]
+q_values: [0.95]
+calibration_label_scope: benign_only

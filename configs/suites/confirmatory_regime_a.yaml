@@ -1,0 +1,10 @@
+# Tier 1 confirmatory suite (docs/protocol/claim_hierarchy.md, regimes.md
+# Regime A). Trains the shared FedAvg AE once per seed, then runs the B0-B4
+# core ladder plus the confirmatory-tier mechanism modules.
+name: confirmatory_regime_a
+status: contract_only
+regimes: [A]
+experiment_ids: [E-C1, E-S1, E-M1, E-M2, E-M3, E-M4, E-M5, E-O1]
+training_enabled: true
+requires_score_reuse: false
+allow_training_override: false

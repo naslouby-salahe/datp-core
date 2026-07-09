@@ -1,0 +1,7 @@
+# Calibration-size-aware fallback (E-V1): size-dependent lambda(n_k) replacing
+# the hard n_min=100 fallback (docs/protocol/policies.md). Supportive variant.
+name: calibration_size
+status: contract_only
+policies: [cal_size_aware]
+q_values: [0.95]
+calibration_label_scope: benign_only

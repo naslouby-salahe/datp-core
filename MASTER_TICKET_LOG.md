@@ -545,6 +545,38 @@ check even though it is documentation.
 Buildable code begins here. All tickets are cheap-stage; they create the typed
 substrate every later stage depends on. **Entry gate:** P0-T11 go/no-go Done.
 
+> **Implementation note (2026-07-09, Phase 1 exit).** Phase 1 was executed
+> under an alternate, more granular 18-ticket breakdown (P1-T01..P1-T18)
+> supplied directly by the requesting user for the implementation session,
+> which explicitly authorized splitting/renumbering this plan and required
+> recording the deviation (see `CHANGELOG.md` §12). The ten ticket bodies
+> below (original P1-T01..P1-T10) are preserved as the historical plan
+> record and are **not** rewritten; their status lines still read
+> `Not Started` because none of them was executed verbatim under its
+> original ID. Disposition:
+>
+> - Original P1-T01 (skeleton/tooling), P1-T02 (domain enums), P1-T03
+>   (seed-plan types), P1-T04 (typed config system), P1-T05 (path resolver),
+>   P1-T06 (determinism/hardware/logging), and P1-T07 (manifest schema +
+>   no-overwrite) are all **implemented**, split across new P1-T01..P1-T11 —
+>   see `CHANGELOG.md` §3/§5 for the exact new-ticket-to-file mapping.
+> - Original P1-T08 (preprocessing cache contract, `data/cache.py`) is
+>   **not implemented**; deferred to Phase 2 (`CHANGELOG.md` §11).
+> - Original P1-T09 (CLI entrypoint & dataset registry) is **partially
+>   implemented**: the dataset registry (new P1-T06) and a read-only CLI
+>   skeleton (new P1-T12) exist; the suite run-dispatcher, plan/runner/
+>   readiness-gate modules, and `scripts/run_experiment.py` are **not
+>   implemented** — Phase 1's CLI never runs heavy work by design. Deferred
+>   to Phase 2 (`CHANGELOG.md` §11).
+> - Original P1-T10 (test fixtures & CHANGELOG-enforcement test) is
+>   **partially implemented**: tiny deterministic fixtures exist (new
+>   P1-T13); the programmatic CHANGELOG/master-log consistency test
+>   (`test_changelog_update_after_ticket.py`) is **not implemented** —
+>   deferred (`CHANGELOG.md` §11).
+>
+> Total ticket count for the plan of record moves from 82 to 90
+> (Phase 1: 10 → 18); see `CHANGELOG.md` §2.
+
 #### P1-T01 — Project skeleton, pyproject, tooling & Makefile
 - **Phase / Status:** 1 / Not Started
 - **Purpose:** Create `src/datp_core/` package, `pyproject.toml` (uv), `ruff` +

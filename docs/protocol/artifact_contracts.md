@@ -58,7 +58,7 @@ does not move or modify anything under it.
 | Raw path | `data/raw/edge_iiotset/` |
 | Expected file types | CSV with device/session identifying columns |
 | Client identity source | Device-client or group-client, chosen by a first-principles feasibility audit (P6-T02); never by appeal to external precedent (SB-28) |
-| Split type | Regime D: TBD by feasibility audit, benign train/cal/test. Regime D-temporal: chronological 70/30 per client by capture time |
+| Split type | Regime D: selected by the P6-T02 feasibility audit before preprocessing, benign train/cal/test. Regime D-temporal: chronological 70/30 per client by capture time |
 | Label columns / source | In-row attack-type label column; benign rows identified by label value |
 | Benign/attack separation requirement | Strict; attack rows never enter train/calibration |
 | Calibration eligibility requirement | n_min = 100; eligibility-coverage gate requires n_k ≥ 100 for ≥ 90% of clients to proceed (else reduce K or defer) |

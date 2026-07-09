@@ -1,0 +1,7 @@
+# FedAvg is the sole training baseline for the core B1-B4 causal ladder
+# (docs/protocol/identity_lock.md #2). E=1, full participation (Phase 2+).
+name: fedavg_nbaiot
+status: contract_only
+dataset_id: nbaiot
+training_algorithm: fedavg
+seed_plan: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]

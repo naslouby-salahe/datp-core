@@ -1,0 +1,9 @@
+# B-FedStatsBenign comparator (docs/protocol/policies.md). Locks the full
+# pooled-variance (including the between-client mean-shift term) + matched-
+# exceedance contract before any computation (SB-26/SB-27); benign-only
+# calibration is non-negotiable (identity_lock.md #4).
+name: b_fedstats_benign
+status: contract_only
+policies: [b_fedstats_benign]
+q_values: [0.95]
+calibration_label_scope: benign_only

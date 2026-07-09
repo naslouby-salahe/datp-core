@@ -1,0 +1,9 @@
+# CICIoT2023 file-level pseudo-client contract (docs/protocol/artifact_contracts.md #1.2).
+# 63 file-defined pseudo-clients; Regime B-a only (role=boundary, never confirmatory).
+name: ciciot2023_file_level
+status: contract_only
+dataset_id: ciciot2023
+regimes:
+  - B_A
+client_identity_type: file_level_pseudo_client
+raw_subdirectory: ciciot2023

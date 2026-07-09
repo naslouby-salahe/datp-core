@@ -1,0 +1,13 @@
+# The complete run: composes every suite above (docs/protocol/naming_conventions.md
+# "full_journal composes every suite above; it is the complete run, not an
+# additional experiment family"). experiment_ids lists only its own additional
+# experiments (E-Q1..E-Q6); the composed suites are documented, not re-listed.
+# status must never reach ready_for_full_run during Phase 1 — there is no
+# suite runner yet, so this is a contract only.
+name: full_journal
+status: contract_only
+regimes: [A, B_A, C, D, D_TEMPORAL]
+experiment_ids: [E-Q1, E-Q2, E-Q3, E-Q4, E-Q5, E-Q6]
+training_enabled: true
+requires_score_reuse: false
+allow_training_override: false

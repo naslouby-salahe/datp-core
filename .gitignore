@@ -216,3 +216,12 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# DATP repository-specific artifact stores (see docs/protocol/artifact_contracts.md)
+data/raw/
+data/preprocessed/
+data/manifests/
+checkpoints/*
+!checkpoints/README.md
+outputs/*
+!outputs/README.md

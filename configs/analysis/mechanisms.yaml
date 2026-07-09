@@ -1,0 +1,6 @@
+# Mechanism analyses (E-M1..E-M5): cluster/family granularity, B4 feature
+# ablation, per-client CDF overlays, JS-divergence/gain regression,
+# threshold-shift surfaces. Supportive tier only (docs/protocol/naming_conventions.md).
+name: mechanisms
+status: contract_only
+analysis_kind: mechanism_analysis

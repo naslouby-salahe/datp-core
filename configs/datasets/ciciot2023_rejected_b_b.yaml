@@ -1,0 +1,10 @@
+# CICIoT2023 device/MAC repartition — rejected (docs/protocol/regimes.md, Regime B-b).
+# The available CSV artifact lacks MAC/device/IP/capture-source/timestamp columns;
+# no pseudo-client substitute and no PCAP-reprocessing branch (SB-28). No client
+# identity type is declared: inventing one would violate the rejection rule.
+name: ciciot2023_rejected_b_b
+status: contract_only
+dataset_id: ciciot2023
+regimes:
+  - B_B_REJECTED_NO_METADATA
+raw_subdirectory: ciciot2023

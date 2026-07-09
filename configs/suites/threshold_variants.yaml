@@ -1,0 +1,10 @@
+# Threshold-only variant sweeps (E-S2, E-V1, E-V2, E-V3) on Regime A
+# (docs/protocol/naming_conventions.md). Cheap stage: reuses the frozen
+# Regime-A checkpoints and scores; never retrains (docs/protocol/reuse_policy.md).
+name: threshold_variants
+status: contract_only
+regimes: [A]
+experiment_ids: [E-S2, E-V1, E-V2, E-V3]
+training_enabled: false
+requires_score_reuse: true
+allow_training_override: false

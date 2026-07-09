@@ -14,17 +14,19 @@
 ## 1. Current Status Dashboard
 
 ```text
-Current phase:        Phase 0 — Protocol, Scope & Architecture Freeze (complete)
-Current ticket:       None — Phase 0 closed by P0-T11 go/no-go = Go
-Overall progress:     11 / 82 tickets Done (13%)
-Completed tickets:    11
+Current phase:        Phase 1 — Scratch Foundation (complete)
+Current ticket:       None — Phase 1 closed by P1-T18 quality gate = Green
+Overall progress:     29 / 90 tickets Done (32%)
+Completed tickets:    29
 In-progress tickets:  0
 Blocked tickets:      0
-Last completed ticket: P0-T11
-Next ticket:          P1-T01 (Phase 1 not started; requires explicit authorization)
-Last tests run:       pytest tests/unit -q — 32 passed, 0 failed
+Last completed ticket: P1-T18
+Next ticket:          P2-T01 (Phase 2 not started; requires explicit authorization)
+Last tests run:       pytest -q — 177 passed, 0 failed (uv run ruff check . / uv run pyright both clean)
 Current blocker:      None
-Last update:          2026-07-09 — Phase 0 complete, go/no-go signed Go
+Last update:          2026-07-09 — Phase 1 complete under a user-authorized 18-ticket
+                       breakdown (P1-T01..P1-T18) that supersedes/splits the
+                       original 10-ticket Phase 1 plan; see §12 Deviations.
 ```
 
 ---
@@ -34,14 +36,17 @@ Last update:          2026-07-09 — Phase 0 complete, go/no-go signed Go
 | Phase | Total Tickets | Done | In Progress | Blocked | Status | Exit Gate |
 |---|---|---|---|---|---|---|
 | 0 — Protocol/scope/architecture freeze | 11 | 11 | 0 | 0 | Done | P0-T11 go/no-go signed (Go) |
-| 1 — Scratch foundation | 10 | 0 | 0 | 0 | Not Started | P1-T10 foundation tests green |
+| 1 — Scratch foundation | 18 | 18 | 0 | 0 | Done | P1-T18 quality gate green |
 | 2 — Anchor reproduction pipeline | 11 | 0 | 0 | 0 | Not Started | P2-T11 frozen anchor + scores |
 | 3 — Core threshold policies & metrics | 11 | 0 | 0 | 0 | Not Started | P3-T11 B0–B4 + metrics validated |
 | 4 — Threshold variants & comparators | 9 | 0 | 0 | 0 | Not Started | P4-T09 variants reuse scores |
 | 5 — Mechanism analyses | 8 | 0 | 0 | 0 | Not Started | P5-T08 mechanisms from fixtures |
 | 6 — External dataset & stress tests | 12 | 0 | 0 | 0 | Not Started | P6-T12 D/C frozen, stress separated |
 | 7 — Temporal, final audit & freeze | 10 | 0 | 0 | 0 | Not Started | P7-T10 readiness report signed |
-| **Total** | **82** | **11** | **0** | **0** | **In Progress** | — |
+| **Total** | **90** | **29** | **0** | **0** | **In Progress** | — |
+
+Phase 1 total revised from 10 to 18 tickets (+8) under the user-authorized
+split in §12; the plan-of-record total moves from 82 to 90 accordingly.
 
 ---
 
@@ -60,16 +65,24 @@ Last update:          2026-07-09 — Phase 0 complete, go/no-go signed Go
 | P0-T09 | 0 | Done | 2026-07-09 | `pytest tests/unit/test_reuse_policy_doc.py` (3 passed) | `docs/protocol/reuse_policy.md`, `tests/unit/test_reuse_policy_doc.py` | Reuse/caching + raw-data placement |
 | P0-T10 | 0 | Done | 2026-07-09 | `pytest tests/unit/test_behavioral_reference.py` (2 passed) | `docs/protocol/behavioral_reference.md`, `tests/unit/test_behavioral_reference.py` | Old DATP behavioral-reference extraction |
 | P0-T11 | 0 | Done | 2026-07-09 | `pytest tests/unit -q` (full suite) | `docs/protocol/structure_decision.md`, `docs/protocol/go_no_go.md`, `CHANGELOG.md`, `tests/unit/test_changelog_format.py` | Structure decision + changelog + go/no-go |
-| P1-T01 | 1 | Not Started | — | — | — | Skeleton, pyproject, tooling, Makefile |
-| P1-T02 | 1 | Not Started | — | — | — | Domain enums & metric registry |
-| P1-T03 | 1 | Not Started | — | — | — | Seed-plan types |
-| P1-T04 | 1 | Not Started | — | — | — | Typed config system |
-| P1-T05 | 1 | Not Started | — | — | — | Canonical path resolver |
-| P1-T06 | 1 | Not Started | — | — | — | Runtime utilities (determinism/hw/logging) |
-| P1-T07 | 1 | Not Started | — | — | — | Manifest schema + writer/reader + no-overwrite |
-| P1-T08 | 1 | Not Started | — | — | — | Preprocessing cache contract |
-| P1-T09 | 1 | Not Started | — | — | — | CLI entrypoint & dataset registry |
-| P1-T10 | 1 | Not Started | — | — | — | Test fixtures & CHANGELOG enforcement test |
+| P1-T01 | 1 | Done | 2026-07-09 | `pytest -q` (32 passed, baseline) | `pyproject.toml`, `uv.lock`, `Makefile`, `.env.example`, `.gitignore`, `src/datp_core/__init__.py` | Skeleton, pyproject, tooling, Makefile |
+| P1-T02 | 1 | Done | 2026-07-09 | `pytest tests/unit/test_paths.py -q` (10 passed) | `src/datp_core/utils/paths.py`, `tests/unit/test_paths.py` | Canonical path resolver |
+| P1-T03 | 1 | Done | 2026-07-09 | `pytest tests/unit/test_domain_enums.py -q` (17 passed) | `src/datp_core/domain/{regimes,clients,partitions,policies,datasets,seeds,metrics}.py`, `tests/unit/test_domain_enums.py` | Domain enums & typed identifiers |
+| P1-T04 | 1 | Done | 2026-07-09 | `pytest tests/unit/test_config_loader.py tests/unit/test_config_validation.py -q` (31 passed) | `src/datp_core/config/{loader,schemas,validation}.py`, `tests/unit/test_config_{loader,validation}.py` | Typed config loader & schema validation |
+| P1-T05 | 1 | Done | 2026-07-09 | `pytest tests/integration/test_config_skeletons.py -q` (8 passed) | `configs/{datasets,training,thresholding,analysis,suites}/*.yaml` (22 files) | Config skeletons, all `status: contract_only` |
+| P1-T06 | 1 | Done | 2026-07-09 | `pytest tests/unit/test_dataset_contracts.py -q` (7 passed) | `src/datp_core/data/manifests.py`, `tests/unit/test_dataset_contracts.py` | Dataset registry & contract types |
+| P1-T07 | 1 | Done | 2026-07-09 | `pytest tests/unit/test_manifests.py -q` (14 passed) | `src/datp_core/experiments/{provenance,artifacts}.py`, `tests/unit/test_manifests.py` | Artifact manifest schema + JSON round-trip |
+| P1-T08 | 1 | Done | 2026-07-09 | `pytest tests/unit/test_artifact_guards.py tests/integration/test_no_overwrite_policy.py -q` (10 passed) | `src/datp_core/experiments/overwrite_guard.py`, `tests/unit/test_artifact_guards.py`, `tests/integration/test_no_overwrite_policy.py` | No-overwrite & lineage guard |
+| P1-T09 | 1 | Done | 2026-07-09 | `pytest tests/unit/test_determinism.py -q` (8 passed) | `src/datp_core/utils/{determinism,random}.py`, `tests/unit/test_determinism.py` | Determinism & seed-locking utilities |
+| P1-T10 | 1 | Done | 2026-07-09 | `pytest tests/unit/test_hardware.py -q` (8 passed) | `src/datp_core/utils/hardware.py`, `tests/unit/test_hardware.py` | Hardware/device selection utility |
+| P1-T11 | 1 | Done | 2026-07-09 | `pytest tests/unit/test_logging.py -q` (5 passed) | `src/datp_core/utils/logging.py`, `tests/unit/test_logging.py` | Logging convention (no duplicate handlers) |
+| P1-T12 | 1 | Done | 2026-07-09 | `pytest tests/unit/test_cli.py -q` (7 passed) | `src/datp_core/cli.py`, `src/datp_core/utils/layout.py`, `tests/unit/test_cli.py` | CLI skeleton (`doctor`/`validate-config`/`show-paths`/`list-suites`/`validate-layout`); no train command |
+| P1-T13 | 1 | Done | 2026-07-09 | `pytest tests/unit/test_fixtures.py -q` (5 passed) | `tests/fixtures/{tiny_clients,tiny_scores,tiny_dataset_contract,tiny_config,tiny_manifest,b_fedstats_benign_scores,absorption_bands}.py`, `tests/unit/test_fixtures.py` | Reusable tiny deterministic fixtures |
+| P1-T14 | 1 | Done | 2026-07-09 | `pytest tests/unit/test_layout.py tests/integration/test_layout_contract.py -q` (8 passed) | `src/datp_core/utils/layout.py`, `tests/unit/test_layout.py`, `tests/integration/test_layout_contract.py` | Output/results/checkpoints contract checks |
+| P1-T15 | 1 | Done | 2026-07-09 | `pytest tests/unit -q` (158 passed) | — (sweep/audit ticket; no new modules) | Phase 1 unit-test sweep confirmed complete |
+| P1-T16 | 1 | Done | 2026-07-09 | `pytest tests/integration -q` (19 passed) | `tests/integration/{test_layout_contract,test_manifest_lineage,test_cli_doctor}.py` | Phase 1 integration tests |
+| P1-T17 | 1 | Done | 2026-07-09 | `make show-paths list-suites lint typecheck unit integration validate-config validate-layout doctor` (all green) | `README.md`, `Makefile` | READMEs / Makefile / `.env.example` reviewed and updated |
+| P1-T18 | 1 | Done | 2026-07-09 | `pytest -q` (177 passed); `ruff check .`; `pyright` (0 errors) | `CHANGELOG.md`, `MASTER_TICKET_LOG.md` | Phase 1 quality gate + changelog/master-log update |
 | P2-T01 | 2 | Not Started | — | — | — | N-BaIoT loader & schema |
 | P2-T02 | 2 | Not Started | — | — | — | N-BaIoT preprocessing & cache (**heavy**) |
 | P2-T03 | 2 | Not Started | — | — | — | Physical-device partition builder |
@@ -144,6 +157,507 @@ Last update:          2026-07-09 — Phase 0 complete, go/no-go signed Go
 ## 5. Completed Work Log
 
 Newest first.
+
+```text
+## 2026-07-09 — P1-T18 — Phase 1 quality gate & CHANGELOG/master-log update
+
+Status:            Done
+Summary:           Ran the full Phase 1 quality gate (lint, typecheck, unit,
+                    integration, CLI doctor, config validation, layout
+                    validation, manifest round-trip, no-overwrite, git-status
+                    and stale-label audit) and reconciled CHANGELOG.md and
+                    MASTER_TICKET_LOG.md with the 18-ticket Phase 1 actually
+                    executed this session.
+Files changed:      CHANGELOG.md, MASTER_TICKET_LOG.md
+Tests added:        None (gate ticket; runs the existing suite)
+Tests run:          `pytest -q` (177 passed); `ruff check .` (clean); `pyright` (0 errors, 0 warnings)
+Result:             All Phase 1 quality-gate checks green; no temp files, no
+                    ops/audit side folders, no stale B5/B3-LGS/local_head/Ditto
+                    labels found outside documentation prose explaining the ban.
+Artifacts created:  None
+Decisions made:     D-007 (see §8)
+Blockers:           None
+Risks:              See §11 — original P1-T08 (preprocessing cache) and part of
+                    original P1-T09 (CLI run-dispatcher/readiness gate) were not
+                    built this session; deferred to Phase 2 (§12).
+Next ticket:        P2-T01 — N-BaIoT loader & schema (not started; requires
+                    explicit authorization to begin Phase 2)
+```
+
+```text
+## 2026-07-09 — P1-T17 — README / data-checkpoint-output-result READMEs / developer commands
+
+Status:            Done
+Summary:           Rewrote the root README.md with Phase 1 scope, setup, raw
+                    data placement, outputs/results/checkpoints summary, and a
+                    verified developer command reference; added `show-paths`
+                    and `list-suites` Makefile targets. Reviewed
+                    data/checkpoints/outputs/results READMEs (written in
+                    Phase 0) and .env.example; no changes needed, still accurate.
+Files changed:      README.md, Makefile
+Tests added:        None (docs ticket)
+Tests run:          `make show-paths list-suites lint typecheck unit integration validate-config validate-layout doctor` — all exit 0
+Result:             Every documented command verified to actually work against the real repo.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T18 — Phase 1 quality gate & changelog update
+```
+
+```text
+## 2026-07-09 — P1-T16 — Phase 1 integration tests
+
+Status:            Done
+Summary:           Added the remaining integration tests: end-to-end layout
+                    contract against the real repo, a full manifest lineage
+                    chain (dataset->preprocessing->split->checkpoint->score->
+                    threshold->metric) with reuse-mismatch rejection, and a
+                    real-subprocess CLI doctor test exercising the installed
+                    entrypoint. test_config_skeletons.py and
+                    test_no_overwrite_policy.py were already added under
+                    P1-T05/P1-T08.
+Files changed:      tests/integration/test_layout_contract.py,
+                    tests/integration/test_manifest_lineage.py,
+                    tests/integration/test_cli_doctor.py
+Tests added:        test_real_repo_resolves_and_satisfies_the_layout_contract,
+                    test_lineage_chain_links_every_stage_by_manifest_id,
+                    test_lineage_reuse_rejects_a_different_seed_anywhere_in_the_chain,
+                    test_doctor_subprocess_exits_cleanly_without_raw_datasets, +4 more
+Tests run:          `pytest tests/integration -q` — 19 passed
+Result:             Full integration suite green; no raw datasets required by any test.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T17 — READMEs & developer commands
+```
+
+```text
+## 2026-07-09 — P1-T15 — Phase 1 unit-test sweep
+
+Status:            Done
+Summary:           Audit-only ticket: confirmed every Phase 1 foundation
+                    module named in the ticket brief has a corresponding
+                    tests/unit/test_*.py file, and ran the full unit suite,
+                    lint, and typecheck together.
+Files changed:      None (no new modules; verification only)
+Tests added:        None (existing tests from P1-T02..P1-T14)
+Tests run:          `pytest tests/unit -q` — 158 passed; `ruff check .` clean; `pyright` 0 errors
+Result:             All expected unit test files present and green.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T16 — Phase 1 integration tests
+```
+
+```text
+## 2026-07-09 — P1-T14 — Output/results/checkpoints contract checks
+
+Status:            Done
+Summary:           Implemented a repository-layout validator: required
+                    top-level directories exist; data/raw stays a symlink
+                    (never committed raw content); checkpoints/ and outputs/
+                    contents are actually git-ignored (verified via
+                    `git check-ignore`, not just pattern inspection);
+                    results/ stays tracked (curated, never git-ignored). Added
+                    two artifact-placement guards: a checkpoint manifest path
+                    must never live under outputs/, and every curated result
+                    file must have a companion manifest.
+Files changed:      src/datp_core/utils/layout.py, tests/unit/test_layout.py
+Tests added:        test_layout_check_passes_on_expected_skeleton,
+                    test_missing_required_directory_fails,
+                    test_outputs_results_confusion_fails,
+                    test_checkpoint_path_under_outputs_fails_if_disallowed,
+                    test_result_file_without_manifest_fails, +1 more
+Tests run:          `pytest tests/unit/test_layout.py -q` — 6 passed
+Result:             Real-repo layout check passes; synthetic misconfigured
+                    repos (missing dir, results/outputs gitignore confusion)
+                    are correctly rejected.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T15 — Phase 1 unit-test sweep
+```
+
+```text
+## 2026-07-09 — P1-T13 — Reusable test fixtures
+
+Status:            Done
+Summary:           Added tiny, deterministic, dataset-free fixtures under
+                    tests/fixtures/: clients, benign scores, a synthetic
+                    dataset contract, in-memory config dicts, a score
+                    manifest, a B-FedStatsBenign-shaped calibration-score
+                    placeholder, and an absorption-bands placeholder. Added
+                    `pythonpath = ["."]` to pytest config so
+                    `tests.fixtures.*` imports resolve without package
+                    `__init__.py` files.
+Files changed:      tests/fixtures/{tiny_clients,tiny_scores,tiny_dataset_contract,
+                    tiny_config,tiny_manifest,b_fedstats_benign_scores,
+                    absorption_bands}.py, tests/unit/test_fixtures.py, pyproject.toml
+Tests added:        test_fixtures_load_without_error, test_fixtures_are_deterministic,
+                    test_fixtures_do_not_require_raw_dataset, test_fixtures_are_small,
+                    test_fixtures_contain_no_scientific_result_claims
+Tests run:          `pytest tests/unit/test_fixtures.py -q` — 5 passed
+Result:             Fixtures load, are deterministic, and contain no result claims.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T14 — Output/results/checkpoints contract checks
+```
+
+```text
+## 2026-07-09 — P1-T12 — CLI skeleton & command discovery
+
+Status:            Done
+Summary:           Implemented `datp-core` (argparse-based, stdlib only) with
+                    five safe, read-only commands: doctor, validate-config,
+                    show-paths, list-suites, validate-layout. `doctor` reports
+                    missing raw datasets clearly without creating anything and
+                    exits 0 when only data is missing (non-zero only on a real
+                    layout failure). No train/run command exists — Phase 1
+                    never dispatches heavy work.
+Files changed:      src/datp_core/cli.py, src/datp_core/utils/layout.py,
+                    tests/unit/test_cli.py
+Tests added:        test_cli_help_works, test_doctor_works_without_raw_datasets_and_reports_missing_data,
+                    test_validate_config_works_on_skeleton_configs, test_show_paths_prints_canonical_roots,
+                    test_list_suites_lists_suite_configs, test_training_command_is_absent_during_phase1
+Tests run:          `pytest tests/unit/test_cli.py -q` — 7 passed
+Result:             `uv run datp-core --help/doctor/validate-config/show-paths/list-suites/validate-layout` all verified manually.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              utils/layout.py (originally scoped to P1-T14) was built
+                    here because validate-layout depends on it; P1-T14 adds
+                    its own dedicated tests on top of this implementation.
+Next ticket:        P1-T13 — Reusable test fixtures
+```
+
+```text
+## 2026-07-09 — P1-T11 — Logging & command-output conventions
+
+Status:            Done
+Summary:           Implemented get_logger(): exactly one managed StreamHandler
+                    per logger name (repeat calls never duplicate handlers), a
+                    consistent format including an optional run_id (updatable
+                    in place on repeat calls), and a log level sourced from an
+                    explicit argument or the DATP_LOG_LEVEL env var (default INFO).
+Files changed:      src/datp_core/utils/logging.py, tests/unit/test_logging.py
+Tests added:        test_logger_can_be_created, test_duplicate_handlers_are_not_added,
+                    test_run_id_appears_in_formatted_output, test_log_level_comes_from_explicit_argument,
+                    test_log_level_defaults_to_info
+Tests run:          `pytest tests/unit/test_logging.py -q` — 5 passed
+Result:             No duplicate handlers across repeated get_logger() calls; run_id renders correctly.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T12 — CLI skeleton & command discovery
+```
+
+```text
+## 2026-07-09 — P1-T10 — Hardware/device selection utility
+
+Status:            Done
+Summary:           Implemented select_device(): CPU fallback by default,
+                    CUDA only when torch is installed AND reports available;
+                    strict mode raises HardwareError instead of silently
+                    downgrading; select_device_from_env() reads the
+                    documented DATP_DEVICE variable. DeviceDescriptor
+                    serializes to a plain dict for manifest use.
+Files changed:      src/datp_core/utils/hardware.py, tests/unit/test_hardware.py
+Tests added:        test_cpu_selected_by_default, test_cuda_request_fails_clearly_when_unavailable,
+                    test_auto_mode_returns_a_valid_device_descriptor, test_strict_mode_rejects_unavailable_accelerator,
+                    test_device_descriptor_serializes_to_manifest_compatible_form, +2 more
+Tests run:          `pytest tests/unit/test_hardware.py -q` — 8 passed
+Result:             No GPU/torch present in this environment; every CUDA-path
+                    assertion in the tests exercises the real absence, not a mock.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T11 — Logging & command-output conventions
+```
+
+```text
+## 2026-07-09 — P1-T09 — Determinism & seed-locking utilities
+
+Status:            Done
+Summary:           Implemented Python/NumPy RNG seeding primitives
+                    (utils/random.py) and apply_seed() (utils/determinism.py):
+                    seeds Python+NumPy always, seeds PyTorch only if installed,
+                    and strict mode raises DeterminismError instead of
+                    claiming a guarantee it cannot verify (PyTorch is not a
+                    Phase 1 dependency, so strict=True currently always fails
+                    honestly rather than lying). seed_for_role() derives
+                    train/analysis/stress-test sub-seeds so paired roles never
+                    collide. seed_plan_to_dict/from_dict make domain.seeds.SeedPlan
+                    manifest-compatible.
+Files changed:      src/datp_core/utils/random.py, src/datp_core/utils/determinism.py,
+                    tests/unit/test_determinism.py
+Tests added:        test_same_seed_gives_same_numpy_sequence, test_different_seeds_differ,
+                    test_paired_seed_plan_stable, test_seed_for_role_is_deterministic_and_role_distinct,
+                    test_strict_mode_fails_clearly_when_torch_unavailable, test_seed_plan_serializes_to_manifest_compatible_form
+Tests run:          `pytest tests/unit/test_determinism.py -q` — 8 passed
+Result:             No false determinism claims; strict mode fails clearly given the current environment.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T10 — Hardware/device selection utility
+```
+
+```text
+## 2026-07-09 — P1-T08 — No-overwrite & artifact lineage guard
+
+Status:            Done
+Summary:           Implemented guard_artifact_write() with three modes
+                    (create_new, resume_same_run_if_manifest_matches,
+                    overwrite_only_if_explicit_and_marked_dev) and
+                    guard_results_overwrite() for curated results/, which
+                    only allows overwrite when the source manifest matches or
+                    an explicit refresh flag is set.
+Files changed:      src/datp_core/experiments/overwrite_guard.py,
+                    tests/unit/test_artifact_guards.py,
+                    tests/integration/test_no_overwrite_policy.py
+Tests added:        test_new_artifact_path_is_allowed, test_existing_path_rejected_under_create_new,
+                    test_resume_with_matching_manifest_allowed, test_resume_with_mismatched_manifest_rejected,
+                    test_explicit_dev_overwrite_requires_flag, test_results_overwrite_without_matching_source_manifest_rejected
+Tests run:          `pytest tests/unit/test_artifact_guards.py tests/integration/test_no_overwrite_policy.py -q` — 10 passed
+Result:             No production output can be silently overwritten by any of the three modes.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T09 — Determinism & seed-locking utilities
+```
+
+```text
+## 2026-07-09 — P1-T07 — Artifact manifest schema & read/write helpers
+
+Status:            Done
+Summary:           Implemented 12 manifest dataclasses (dataset, preprocessing,
+                    split, checkpoint, score, threshold, metric, statistics,
+                    table, figure, run, curated-result), each referencing its
+                    upstream artifact by manifest_id and rejecting missing
+                    required identity fields in __post_init__. Added JSON
+                    round-trip (to_dict/to_json/write_manifest, and a
+                    from_dict function per type) plus two reuse-identity
+                    guards (verify_score_manifest_reuse,
+                    verify_checkpoint_manifest_reuse) that reject any
+                    identity mismatch.
+Files changed:      src/datp_core/experiments/provenance.py,
+                    src/datp_core/experiments/artifacts.py,
+                    tests/unit/test_manifests.py
+Tests added:        test_checkpoint_manifest_round_trips_through_json, test_read_manifest_round_trips,
+                    test_score_manifest_cannot_omit_checkpoint_id, test_threshold_manifest_cannot_omit_score_manifest_id,
+                    test_metric_manifest_cannot_omit_threshold_id, test_verify_score_manifest_reuse_rejects_identity_mismatch, +8 more
+Tests run:          `pytest tests/unit/test_manifests.py -q` — 14 passed
+Result:             Every manifest type round-trips through JSON unchanged; reuse mismatches are hard rejections.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T08 — No-overwrite & artifact lineage guard
+```
+
+```text
+## 2026-07-09 — P1-T06 — Dataset registry skeleton & dataset contract types
+
+Status:            Done
+Summary:           Implemented DatasetContract and a DATASET_CONTRACTS
+                    registry with one entry per (dataset, regime-scope) named
+                    contract: nbaiot (A, C), ciciot2023_file_level (B-a only),
+                    ciciot2023_rejected_b_b (rejected, requires
+                    rejection_rule, no invented client identity),
+                    edge_iiotset (D, D-temporal). require_raw_dataset_present()
+                    raises DatasetContractError instead of creating anything
+                    when raw data is missing. No dataset loading/preprocessing
+                    is implemented.
+Files changed:      src/datp_core/data/manifests.py, tests/unit/test_dataset_contracts.py
+Tests added:        test_nbaiot_supports_regime_a_and_c, test_ciciot2023_file_level_supports_b_a_only,
+                    test_ciciot2023_b_b_requires_metadata_feasibility_and_is_rejected,
+                    test_edge_iiotset_supports_regime_d, test_missing_raw_path_is_reported_not_created,
+                    test_dataset_contract_serializes_and_deserializes
+Tests run:          `pytest tests/unit/test_dataset_contracts.py -q` — 7 passed
+Result:             All four dataset contracts match artifact_contracts.md exactly; raw-data absence never auto-creates anything.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T07 — Artifact manifest schema & read/write helpers
+```
+
+```text
+## 2026-07-09 — P1-T05 — Config skeletons under configs/
+
+Status:            Done
+Summary:           Created all 22 config skeleton YAML files across
+                    configs/{datasets,training,thresholding,analysis,suites}/
+                    named exactly per naming_conventions.md §1, every one
+                    `status: contract_only` and loadable/validatable through
+                    the P1-T04 loader. Reworked ThresholdingConfig from
+                    singular policy/q to plural policies/q_values to
+                    represent multi-policy files (core_ladder.yaml lists
+                    B0-B4) and sweep files (quantiles.yaml lists 4 q values)
+                    without a second schema. Added ModelArchitectureConfig
+                    for the dataset-agnostic base_autoencoder.yaml. Made
+                    DatasetConfig.client_identity_type optional, required
+                    only once a config reaches ready_for_smoke (so
+                    edge_iiotset.yaml can stay contract_only pending the
+                    P6-T02 feasibility audit without inventing an identity type).
+Files changed:      configs/datasets/{nbaiot,ciciot2023_file_level,
+                    ciciot2023_rejected_b_b,edge_iiotset}.yaml,
+                    configs/training/{base_autoencoder,fedavg_nbaiot,
+                    fedavg_edge_iiotset,fedprox_nbaiot,fedprox_edge_iiotset,
+                    personalized_ae}.yaml,
+                    configs/thresholding/{core_ladder,b_fedstats_benign,
+                    quantiles,shrinkage,calibration_size,
+                    calibration_size_shrinkage,conformal_b2}.yaml,
+                    configs/analysis/{statistics,mechanisms,absorption,
+                    reporting}.yaml,
+                    configs/suites/{confirmatory_regime_a,regime_c_dirichlet,
+                    external_validation_regime_d,threshold_variants,
+                    stress_tests,temporal_recalibration,full_journal}.yaml,
+                    src/datp_core/config/{schemas,loader,validation}.py (revised),
+                    tests/integration/test_config_skeletons.py
+Tests added:        test_all_dataset_configs_parse_and_are_phase1_readiness,
+                    test_full_journal_suite_refuses_full_execution_during_phase1,
+                    test_confirmatory_suite_recognized_but_not_runnable,
+                    test_threshold_only_suites_declare_score_reuse_requirement, +4 more
+Tests run:          `pytest tests/integration/test_config_skeletons.py -q` — 8 passed
+Result:             All 22 skeletons parse and validate; none exceeds
+                    implementation_pending readiness; full_journal.is_runnable
+                    is False.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T06 — Dataset registry skeleton & dataset contract types
+```
+
+```text
+## 2026-07-09 — P1-T04 — Typed config loader & schema validation skeleton
+
+Status:            Done
+Summary:           Implemented YAML->dataclass loaders for all five config
+                    groups (dataset, training/model-architecture,
+                    thresholding, analysis, suite) with strict unknown-field
+                    rejection, plus protocol-level validation: dataset-regime
+                    compatibility, q in (0,1), seed-plan validity, B3 requires
+                    a family taxonomy, B4 requires a positive cluster K,
+                    B-FedStatsBenign requires benign-only calibration scope,
+                    and a threshold-only suite may not enable training unless
+                    explicitly overridden.
+Files changed:      src/datp_core/config/{loader,schemas,validation}.py,
+                    tests/unit/test_config_loader.py, tests/unit/test_config_validation.py
+Tests added:        test_valid_minimal_dataset_config_loads, test_unknown_field_fails,
+                    test_invalid_dataset_regime_pair_fails, test_invalid_q_fails,
+                    test_b3_without_taxonomy_fails, test_b4_invalid_k_fails,
+                    test_b_fedstats_benign_under_anomaly_labeled_calibration_fails,
+                    test_threshold_only_suite_with_training_enabled_fails, +18 more
+Tests run:          `pytest tests/unit/test_config_loader.py tests/unit/test_config_validation.py -q` — 31 passed
+Result:             Every required negative case (unknown field, invalid
+                    regime/policy/q/seed-plan, B3/B4/B-FedStatsBenign/suite
+                    scope rules) is rejected with a typed error.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T05 — Config skeletons under configs/
+```
+
+```text
+## 2026-07-09 — P1-T03 — Domain enums & typed identifiers
+
+Status:            Done
+Summary:           Implemented Regime/RegimeRole/RegimeSpec, ClientIdentityType/
+                    ClientId, SplitType/SplitRole/SplitRatios, ThresholdPolicy/
+                    Comparator/TrainingAlgorithm, DatasetId, SeedRole/SeedPlan,
+                    and Metric/MetricRole/MetricSpec — every value matching
+                    docs/protocol/{regimes,policies,naming_conventions,
+                    seed_plan,identity_lock}.md literally. All StrEnum
+                    (ruff UP042). Verified: no B5/B3-LGS/local_head/LocalHead
+                    token anywhere in any enum name or value; AUROC is
+                    CONTROL-only; CV(FPR) is the sole PRIMARY/thresholding-verdict
+                    metric; Regime A is the sole CONFIRMATORY regime; Regime D
+                    is EXTERNAL_VALIDATION only; FedProx/Ditto/FedRep-AE/FedPer-AE
+                    are all in STRESS_TEST_COMPARATORS, outside CORE_CAUSAL_LADDER.
+Files changed:      src/datp_core/domain/{regimes,clients,partitions,policies,
+                    datasets,seeds,metrics}.py, tests/unit/test_domain_enums.py
+Tests added:        test_all_enum_values_are_stable, test_no_stale_labels_in_enum_identifiers,
+                    test_ditto_fallback_naming_rule_is_representable, test_metric_claim_roles_are_correct,
+                    test_auroc_is_marked_control_only, test_regime_a_is_marked_confirmatory,
+                    test_regime_d_is_marked_external_validation_only,
+                    test_fedprox_and_personalization_are_outside_causal_ladder, +9 more
+Tests run:          `pytest tests/unit/test_domain_enums.py -q` — 17 passed
+Result:             Domain identifiers match the locked protocol nomenclature exactly.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T04 — Typed config loader & schema validation skeleton
+```
+
+```text
+## 2026-07-09 — P1-T02 — Canonical path resolver & repository layout contract
+
+Status:            Done
+Summary:           Implemented find_repo_root() (walks up for AGENTS.md +
+                    pyproject.toml markers), resolve_paths() (repo/config/
+                    data/raw/preprocessed/manifest/checkpoint/outputs/results/
+                    logs/score/metric/manifest/tables/figures roots, with
+                    DATP_DATA_ROOT as the only environment override), and
+                    safe_join() (rejects path-escape attempts via ..).
+Files changed:      src/datp_core/utils/paths.py, tests/unit/test_paths.py
+Tests added:        test_valid_repo_root_detection, test_raw_data_root_resolves_under_data_raw,
+                    test_outputs_root_resolves_to_outputs, test_results_root_resolves_to_results,
+                    test_checkpoint_root_resolves_to_checkpoints, test_env_override_applies_only_to_data_raw,
+                    test_unsupported_env_var_has_no_effect, test_path_escape_is_rejected,
+                    test_missing_repo_marker_fails_clearly
+Tests run:          `pytest tests/unit/test_paths.py -q` — 10 passed
+Result:             All canonical roots resolve correctly; only DATP_DATA_ROOT overrides anything; path escape rejected.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T03 — Domain enums & typed identifiers
+```
+
+```text
+## 2026-07-09 — P1-T01 — Bootstrap project skeleton & package metadata
+
+Status:            Done
+Summary:           Created pyproject.toml (uv/hatchling, Python >=3.11,
+                    pyyaml+numpy runtime deps, pytest/ruff/pyright dev deps,
+                    datp-core CLI entrypoint), uv.lock, Makefile, .env.example
+                    (DATP_DATA_ROOT + DATP_DEVICE only), .gitignore additions
+                    for data/raw, data/preprocessed, data/manifests,
+                    checkpoints/*, outputs/* (with checkpoints/README.md and
+                    outputs/README.md negated), and the Phase 1 package
+                    directories (domain, config, utils, data, experiments)
+                    under src/datp_core/. No CITATION.cff/VERSIONING.md
+                    (release/versioning work is forbidden by AGENTS.md).
+                    scripts/ was not created: nothing populates it yet in
+                    Phase 1 (structure_decision.md "do not pre-create empty
+                    folders").
+Files changed:      pyproject.toml, uv.lock, Makefile, .env.example,
+                    .gitignore, src/datp_core/__init__.py,
+                    src/datp_core/{domain,config,utils,data,experiments}/__init__.py
+Tests added:        None (bootstrap ticket; acceptance verified via commands below)
+Tests run:          `uv sync`; `uv run pytest --collect-only -q` (32 collected,
+                    Phase 0 baseline); `uv run python -c "import datp_core"`;
+                    `uv run ruff check .` (clean); `uv run pyright` (0 errors)
+Result:             Package imports cleanly; pytest discovers tests; ruff and pyright both clean.
+Artifacts created:  None
+Decisions made:     None
+Blockers:           None
+Risks:              None
+Next ticket:        P1-T02 — Canonical path resolver & repository layout contract
+```
 
 ```text
 ## 2026-07-09 — P0-T11 — Repository structure decision, changelog format & go/no-go coding gate
@@ -415,6 +929,10 @@ P1-T10).
 | D-004 | 2026-07-09 | Model-personalization fallback never labeled "Ditto" | SB-24; use `FedRep-AE`/`FedPer-AE` unless true Ditto implemented | P6-T11 |
 | D-005 | 2026-07-09 | `B-FedStatsBenign` uses full pooled variance + matched-exceedance, locked before computation | SB-26/27; matched-exceedance is the main comparison | P4-T05, P4-T06 |
 | D-006 | 2026-07-09 | Statistics (BCa CI) computed in P7-T03; claim gating separated into P7-T04 | Keep number computation distinct from claim pass/fail logic | P7-T03, P7-T04 |
+| D-007 | 2026-07-09 | Execute Phase 1 under a user-authorized 18-ticket breakdown (P1-T01..P1-T18) instead of the original 10-ticket plan; total ticket count moves 82→90 | User request explicitly permitted splitting tickets and required recording the deviation; finer granularity matches one-concern-per-ticket governance | P1-T01..P1-T18 (see §12) |
+| D-008 | 2026-07-09 | `ThresholdingConfig` uses plural `policies`/`q_values` instead of singular `policy`/`q` | `core_ladder.yaml` must list all of B0-B4 and `quantiles.yaml` must list a q-sweep in one file without a second schema | P1-T04, P1-T05 |
+| D-009 | 2026-07-09 | `DatasetConfig.client_identity_type` is optional below `ready_for_smoke` readiness | `edge_iiotset.yaml`'s identity type is genuinely undecided pending the P6-T02 feasibility audit (SB-28 forbids inventing it); `ciciot2023_rejected_b_b.yaml` never gets one | P1-T04, P1-T05 |
+| D-010 | 2026-07-09 | `src/datp_core/data/cache.py` (preprocessing cache) and the CLI run-dispatcher/readiness-gate (`experiments/plan.py`, `experiments/runner.py`, `experiments/readiness.py`, `scripts/run_experiment.py`) are deferred to Phase 2 | Nothing in Phase 1 needs an actual cache or execution engine yet; building them now would be scientific-algorithm-adjacent scope beyond a contract/skeleton | P1-T08 (original), P1-T09 (original) — see §12 |
 
 ---
 
@@ -433,6 +951,24 @@ P1-T10).
 | 2026-07-09 | P0-T09 | `pytest tests/unit/test_reuse_policy_doc.py -q` | 3 passed | Stage-classification parser |
 | 2026-07-09 | P0-T10 | `pytest tests/unit/test_behavioral_reference.py -q` | 2 passed | No-source-paste / no-compat-language checks |
 | 2026-07-09 | P0-T11 | `pytest tests/unit -q` | 32 passed | Full Phase-0 doc-parser suite (includes test_changelog_format.py) |
+| 2026-07-09 | P1-T01 | `uv sync && uv run pytest --collect-only -q` | 32 collected | Package imports cleanly on top of Phase 0 baseline |
+| 2026-07-09 | P1-T02 | `pytest tests/unit/test_paths.py -q` | 10 passed | Path resolver + escape rejection |
+| 2026-07-09 | P1-T03 | `pytest tests/unit/test_domain_enums.py -q` | 17 passed | Domain enum/identifier locks |
+| 2026-07-09 | P1-T04 | `pytest tests/unit/test_config_loader.py tests/unit/test_config_validation.py -q` | 31 passed | Config loader + validation rules |
+| 2026-07-09 | P1-T05 | `pytest tests/integration/test_config_skeletons.py -q` | 8 passed | All 22 config skeletons parse/validate |
+| 2026-07-09 | P1-T06 | `pytest tests/unit/test_dataset_contracts.py -q` | 7 passed | Dataset contract registry |
+| 2026-07-09 | P1-T07 | `pytest tests/unit/test_manifests.py -q` | 14 passed | Manifest JSON round-trip + required-field guards |
+| 2026-07-09 | P1-T08 | `pytest tests/unit/test_artifact_guards.py tests/integration/test_no_overwrite_policy.py -q` | 10 passed | No-overwrite policy (3 modes) |
+| 2026-07-09 | P1-T09 | `pytest tests/unit/test_determinism.py -q` | 8 passed | Seed application + role-derived sub-seeds |
+| 2026-07-09 | P1-T10 | `pytest tests/unit/test_hardware.py -q` | 8 passed | CPU-fallback device selection |
+| 2026-07-09 | P1-T11 | `pytest tests/unit/test_logging.py -q` | 5 passed | No duplicate handlers; run_id formatting |
+| 2026-07-09 | P1-T12 | `pytest tests/unit/test_cli.py -q` | 7 passed | CLI skeleton, 5 read-only commands |
+| 2026-07-09 | P1-T13 | `pytest tests/unit/test_fixtures.py -q` | 5 passed | Tiny deterministic fixtures |
+| 2026-07-09 | P1-T14 | `pytest tests/unit/test_layout.py -q` | 6 passed | Repo layout + artifact-placement guards |
+| 2026-07-09 | P1-T15 | `pytest tests/unit -q` | 158 passed | Full Phase 1 unit sweep |
+| 2026-07-09 | P1-T16 | `pytest tests/integration -q` | 19 passed | Full Phase 1 integration sweep |
+| 2026-07-09 | P1-T17 | `make show-paths list-suites lint typecheck unit integration validate-config validate-layout doctor` | all exit 0 | Every documented dev command verified |
+| 2026-07-09 | P1-T18 | `pytest -q`; `ruff check .`; `pyright` | 177 passed; clean; 0 errors | Final Phase 1 quality gate |
 
 Record `make test` / `make lint` / `make typecheck` and targeted `pytest` runs
 here, one row per meaningful run, tied to the ticket that triggered it.
@@ -474,6 +1010,23 @@ here, one row per meaningful run, tied to the ticket that triggered it.
 | 2026-07-09 | P0-T11 | `docs/protocol/go_no_go.md` | Created |
 | 2026-07-09 | P0-T11 | `tests/unit/test_changelog_format.py` | Created |
 | 2026-07-09 | P0-T11 | `CHANGELOG.md` | Updated (dashboard, tables, 11 update blocks, this log) |
+| 2026-07-09 | P1-T01 | `pyproject.toml`, `uv.lock`, `Makefile`, `.env.example`, `.gitignore`, `src/datp_core/__init__.py` + 5 subpackage `__init__.py` | Created |
+| 2026-07-09 | P1-T02 | `src/datp_core/utils/paths.py`, `tests/unit/test_paths.py` | Created |
+| 2026-07-09 | P1-T03 | `src/datp_core/domain/{regimes,clients,partitions,policies,datasets,seeds,metrics}.py`, `tests/unit/test_domain_enums.py` | Created |
+| 2026-07-09 | P1-T04 | `src/datp_core/config/{loader,schemas,validation}.py`, `tests/unit/test_config_{loader,validation}.py` | Created |
+| 2026-07-09 | P1-T05 | `configs/{datasets,training,thresholding,analysis,suites}/*.yaml` (22 files), `tests/integration/test_config_skeletons.py` | Created |
+| 2026-07-09 | P1-T06 | `src/datp_core/data/manifests.py`, `tests/unit/test_dataset_contracts.py` | Created |
+| 2026-07-09 | P1-T07 | `src/datp_core/experiments/{provenance,artifacts}.py`, `tests/unit/test_manifests.py` | Created |
+| 2026-07-09 | P1-T08 | `src/datp_core/experiments/overwrite_guard.py`, `tests/unit/test_artifact_guards.py`, `tests/integration/test_no_overwrite_policy.py` | Created |
+| 2026-07-09 | P1-T09 | `src/datp_core/utils/{determinism,random}.py`, `tests/unit/test_determinism.py` | Created |
+| 2026-07-09 | P1-T10 | `src/datp_core/utils/hardware.py`, `tests/unit/test_hardware.py` | Created |
+| 2026-07-09 | P1-T11 | `src/datp_core/utils/logging.py`, `tests/unit/test_logging.py` | Created |
+| 2026-07-09 | P1-T12 | `src/datp_core/cli.py`, `src/datp_core/utils/layout.py`, `tests/unit/test_cli.py` | Created |
+| 2026-07-09 | P1-T13 | `tests/fixtures/*.py` (7 files), `tests/unit/test_fixtures.py`, `pyproject.toml` | Created / Updated (`pythonpath`) |
+| 2026-07-09 | P1-T14 | `tests/unit/test_layout.py`, `tests/integration/test_layout_contract.py` | Created |
+| 2026-07-09 | P1-T16 | `tests/integration/{test_manifest_lineage,test_cli_doctor}.py` | Created |
+| 2026-07-09 | P1-T17 | `README.md`, `Makefile` | Updated |
+| 2026-07-09 | P1-T18 | `CHANGELOG.md`, `MASTER_TICKET_LOG.md` | Updated |
 
 ---
 
@@ -484,16 +1037,44 @@ here, one row per meaningful run, tied to the ticket that triggered it.
 - Conditional gates (non-blocking for Regime A/C): OQ1 CICIoT2023 feature-count
   verification (P6-T07); OQ2 Edge-IIoTset coverage/partition (P6-T02/T04); OQ3
   Ditto-vs-fallback choice (P6-T11). See MASTER_TICKET_LOG §20.
-- No live follow-ups yet.
+- **Preprocessing cache contract not built.** The original P1-T08
+  (`src/datp_core/data/cache.py`, raw-hash + preprocessing-config-hash cache
+  keying) was not implemented this session (§12). Phase 2 preprocessing
+  tickets (P2-T02, P6-T03) will need it before they can claim heavy-stage
+  reuse; pick it up as an early Phase 2 ticket or reopen it explicitly.
+- **CLI run-dispatcher/readiness gate not built.** The original P1-T09's
+  `datp run <suite>` dispatch, `experiments/plan.py`, `experiments/runner.py`,
+  and `experiments/readiness.py` were not implemented (§12); Phase 1's CLI is
+  read-only by design, but Phase 2 will need a controlled single execution
+  surface before any heavy stage runs, per the "no hidden one-off scripts" rule.
+- **CHANGELOG-consistency enforcement test not built.** The original P1-T10
+  wanted `tests/integration/test_changelog_update_after_ticket.py` (asserts
+  Done tickets carry a tests-run entry, Blocked tickets carry a blocker entry,
+  and changelog status matches MASTER_TICKET_LOG.md programmatically). This
+  session's `test_changelog_format.py` (from P0-T11) checks structural format
+  only, not per-ticket consistency. Recommend building this test before Phase 2
+  produces enough tickets for manual consistency checking to become unreliable.
 
 ---
 
 ## 12. Deviations from MASTER_TICKET_LOG.md
 
-*None.* Every deviation (ticket Split/Merged/Skipped/Reopened, or scope change)
-MUST be recorded here with: ticket ID, deviation type, reason, and the
-corresponding master-log update. Changelog statuses must match the master log at
-all times (tested by P1-T10 and P7-T10).
+Phase 1 was executed under an alternate ticket breakdown supplied directly by
+the requesting user for this session (18 tickets, P1-T01..P1-T18), explicitly
+authorized to split/renumber the original 10-ticket Phase 1 plan
+(MASTER_TICKET_LOG.md §"Phase 1 — Scratch Foundation", original P1-T01..P1-T10).
+Recorded per-item below:
+
+| Ticket(s) | Deviation type | Reason | Master-log update |
+|---|---|---|---|
+| Original P1-T01..P1-T10 → new P1-T01..P1-T18 | Split | User-supplied, more granular breakdown (one concern per ticket: path resolver, domain enums, config loader, config skeletons, dataset registry, manifests, no-overwrite guard, determinism, hardware, logging, CLI, fixtures, layout checks, unit-test sweep, integration-test sweep, docs, quality gate — each isolated) | Phase 1 total revised 10→18; plan-of-record total 82→90 (§2). Original P1-T01..P1-T10 prose bodies in `MASTER_TICKET_LOG.md` are left as the historical plan record; see the implementation note added directly above `#### P1-T01` there. |
+| Original P1-T08 "Preprocessing cache contract" (`data/cache.py`) | Skipped (deferred) | Not requested by the user's 18-ticket brief; nothing in Phase 1 performs preprocessing yet, so a cache has nothing to key against. Building it now would be premature/speculative. | Deferred to Phase 2 (§11 follow-up). Original ticket body left untouched in `MASTER_TICKET_LOG.md`. |
+| Original P1-T09 "CLI entrypoint & dataset registry" — the run-dispatch half (`experiments/{plan,runner,readiness}.py`, `scripts/run_experiment.py`, `datp run <suite>`) | Skipped (deferred) | The user's Phase 1 brief explicitly required the CLI to expose read-only commands only and forbade any training/run command in Phase 1 ("training command is absent or blocked"); the dataset-registry half of the original ticket is covered by new P1-T06, and the CLI-skeleton half by new P1-T12. | Deferred to Phase 2 (§11 follow-up). Original ticket body left untouched in `MASTER_TICKET_LOG.md`. |
+| Original P1-T02 `ClientKind` naming | Naming difference (non-breaking) | The canonical protocol doc (`docs/protocol/naming_conventions.md`) and this session's own domain-enum ticket used `ClientIdentityType` throughout; no `ClaimRole` enum was built in `domain/` since Tier/claim-role logic already lives in `docs/protocol/claim_hierarchy.md` (Phase 0) and is consumed there, not re-encoded as a Phase 1 domain type. | No master-log content changed; noted here for traceability only. |
+| Original P1-T10 CHANGELOG-consistency enforcement test | Not built this session | Out of the user's explicit 18-ticket list for this session. | See §11 follow-up; recommend an early Phase 2 (or reopened Phase 1) ticket. |
+
+Changelog statuses in §3 match `MASTER_TICKET_LOG.md`'s Phase 1 implementation
+note (see the note directly above `#### P1-T01` there) as of this update.
 
 ---
 
@@ -501,11 +1082,16 @@ all times (tested by P1-T10 and P7-T10).
 
 - **Phase 0 is complete.** All eleven P0 tickets are `Done`; the go/no-go gate
   ([docs/protocol/go_no_go.md](docs/protocol/go_no_go.md)) is signed **Go**.
-- **P1-T01 (project skeleton, pyproject, tooling & Makefile) is the next
-  ticket** but is not started and requires explicit authorization to begin
-  Phase 1 coding.
-- No source/runtime code, dataset preprocessing, or model training exists in
-  this repository as of this update.
+- **Phase 1 is complete.** All eighteen P1 tickets (this session's revised
+  breakdown, §12) are `Done`; the Phase 1 quality gate (P1-T18) is green:
+  `pytest -q` 177 passed, `ruff check .` clean, `pyright` 0 errors.
+- **P2-T01 (N-BaIoT loader & schema) is the next ticket** but is not started
+  and requires explicit authorization to begin Phase 2 coding.
+- No dataset preprocessing, model training, threshold-policy computation, or
+  any experiment execution exists in this repository as of this update — only
+  the Phase 1 foundation (paths, domain enums, config system, dataset/artifact
+  contracts, no-overwrite guard, determinism/hardware/logging utilities, CLI
+  skeleton, fixtures, layout checks) and the Phase 0 protocol freeze.
 
 ---
 

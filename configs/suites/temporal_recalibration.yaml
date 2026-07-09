@@ -1,0 +1,10 @@
+# Temporal recalibration MVE (E-B1) on Regime D-temporal
+# (docs/protocol/regimes.md). Reuses the frozen Regime D checkpoint; the
+# recalibration step itself is a cheap stage over stored scores.
+name: temporal_recalibration
+status: contract_only
+regimes: [D_TEMPORAL]
+experiment_ids: [E-B1]
+training_enabled: false
+requires_score_reuse: true
+allow_training_override: false

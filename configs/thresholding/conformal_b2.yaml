@@ -1,0 +1,7 @@
+# B2-conf: split/federated-conformal variant of B2 at marginal coverage 1-alpha,
+# alpha=1-q (E-V3, docs/protocol/policies.md). Closes the tautology critique (L04).
+name: conformal_b2
+status: contract_only
+policies: [b2_conf]
+q_values: [0.95]
+calibration_label_scope: benign_only

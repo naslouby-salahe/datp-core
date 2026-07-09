@@ -1,0 +1,12 @@
+# Core B0-B4 threshold-calibration-scope ladder (docs/protocol/policies.md).
+# B0 is a centralized reference and is excluded from the FL causal ladder by
+# CORE_CAUSAL_LADDER even though it is listed here for completeness. B3 needs
+# a device-taxonomy family assignment; B4 uses the locked canonical K=3
+# 4-scalar fingerprint.
+name: core_ladder
+status: contract_only
+policies: [B0, B1, B2, B3, B4]
+q_values: [0.95]
+has_family_taxonomy: true
+cluster_k: 3
+calibration_label_scope: benign_only
