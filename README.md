@@ -9,30 +9,18 @@ Governance, scope boundaries, and the full protocol freeze live under
 [`ai/`](ai/) and [`docs/protocol/`](docs/protocol/) — read
 [`AGENTS.md`](AGENTS.md) first.
 
-## Status: Phase 1 — Scratch Foundation
+## Status: Phase 2 — Anchor Reproduction Pipeline
 
-Phase 1 delivers a clean, tested, runnable project foundation. It does
-**not** implement scientific algorithms, run experiments, train models, or
-process real datasets. Concretely, Phase 1 provides:
+Phase 2 implements a fixture-validated Regime A N-BaIoT anchor: typed raw-data
+discovery/loading, physical-device mapping, leakage-checked splits, fixed
+autoencoder FedAvg, frozen checkpoints, reconstruction scores, and B1/B2
+evaluation. The safe CLI exposes a fixture smoke run, a dry 10-seed plan, and a
+two-seed real-data mini-run and full-run readiness gate that require configured CUDA.
 
-- project skeleton, package metadata, and a Phase 1 CLI skeleton
-- canonical path resolution and a repository layout contract
-- domain enums / typed identifiers for regimes, policies, datasets, seeds, metrics
-- a typed config loader and schema validation for `configs/`
-- config skeletons for every dataset/training/thresholding/analysis/suite group
-- dataset contracts (no loaders — raw data presence is checked, never assumed)
-- artifact manifest schemas with JSON round-trip and reuse-identity guards
-- a no-overwrite policy for produced artifacts and curated results
-- determinism and seed-locking utilities (Python/NumPy; PyTorch if present)
-- a hardware/device selection utility (CPU fallback; CUDA only if available)
-- a project logging convention
-- reusable, tiny, deterministic test fixtures
-
-**Not in Phase 1:** dataset loaders/preprocessing, FedAvg/FedProx training,
-threshold policy computation (B0-B4 and variants), scoring, statistics,
-table/figure generation, or any experiment execution. Those begin in Phase 2+
-per [`MASTER_TICKET_LOG.md`](MASTER_TICKET_LOG.md); track day-to-day progress
-in [`CHANGELOG.md`](CHANGELOG.md).
+**Not in Phase 2:** B3/B4 or threshold variants, FedProx, personalization,
+Regime C, Edge-IIoTset, temporal recalibration, full 10-seed execution,
+statistics, or result/manuscript production. Track implementation progress in
+[`CHANGELOG.md`](CHANGELOG.md).
 
 ## Setup
 
@@ -75,7 +63,13 @@ make doctor              # environment/device/raw-data/layout summary
 make check                # lint + typecheck + test
 ```
 
-Or invoke the CLI directly: `uv run datp-core --help`. Phase 1 exposes only
-read-only commands (`doctor`, `validate-config`, `show-paths`, `list-suites`,
-`validate-layout`) — there is no training or experiment-execution command
-yet, and none will run heavy work until Phase 2+.
+Or invoke the CLI directly: `uv run datp-core --help`. Phase 2 adds
+`run-smoke anchor-fixture`, `run-mini confirmatory-regime-a --seeds 2`,
+`plan confirmatory-regime-a`, and `validate-anchor-readiness`. The full
+10-seed execution requires `run-full confirmatory-regime-a --confirm-full-run`
+and is never run automatically.
+
+## Static analysis
+
+`sonar-project.properties` defines the SonarQube project scope. The local
+analysis was run against SonarQube Community Build with zero open findings.

@@ -10,12 +10,13 @@ from datp_core.utils.hardware import (
 )
 
 
-def test_cpu_selected_by_default():
+def test_auto_mode_selects_cuda_when_available():
     descriptor = select_device()
-    assert descriptor.resolved is DeviceType.CPU
+    assert descriptor.resolved is DeviceType.CUDA
 
 
-def test_cuda_request_fails_clearly_when_unavailable():
+def test_cuda_request_fails_clearly_when_unavailable(monkeypatch):
+    monkeypatch.setattr("datp_core.utils.hardware._cuda_available", lambda: False)
     with pytest.raises(HardwareError):
         select_device(DeviceType.CUDA)
 
@@ -26,7 +27,8 @@ def test_auto_mode_returns_a_valid_device_descriptor():
     assert descriptor.requested is DeviceType.AUTO
 
 
-def test_strict_mode_rejects_unavailable_accelerator():
+def test_strict_mode_rejects_unavailable_accelerator(monkeypatch):
+    monkeypatch.setattr("datp_core.utils.hardware._cuda_available", lambda: False)
     with pytest.raises(HardwareError):
         select_device(DeviceType.AUTO, strict=True)
 

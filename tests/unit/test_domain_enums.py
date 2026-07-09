@@ -45,9 +45,9 @@ def test_ditto_fallback_naming_rule_is_representable():
 
 
 def test_metric_claim_roles_are_correct():
-    assert metrics.METRIC_SPECS[Metric.CV_FPR].role is MetricRole.PRIMARY
-    assert metrics.METRIC_SPECS[Metric.CV_FPR].is_thresholding_verdict is True
-    assert metrics.METRIC_SPECS[Metric.AUROC].role is MetricRole.CONTROL
+    assert metrics.metric_spec(Metric.CV_FPR).role is MetricRole.PRIMARY
+    assert metrics.metric_spec(Metric.CV_FPR).is_thresholding_verdict is True
+    assert metrics.metric_spec(Metric.AUROC).role is MetricRole.CONTROL
 
 
 def test_auroc_is_marked_control_only():
@@ -57,13 +57,13 @@ def test_auroc_is_marked_control_only():
 
 
 def test_regime_a_is_marked_confirmatory():
-    assert regimes.REGIME_SPECS[Regime.A].role is RegimeRole.CONFIRMATORY
+    assert regimes.regime_spec(Regime.A).role is RegimeRole.CONFIRMATORY
     assert regimes.CONFIRMATORY_REGIMES == (Regime.A,)
 
 
 def test_regime_d_is_marked_external_validation_only():
-    assert regimes.REGIME_SPECS[Regime.D].role is RegimeRole.EXTERNAL_VALIDATION
-    assert regimes.REGIME_SPECS[Regime.D].role is not RegimeRole.CONFIRMATORY
+    assert regimes.regime_spec(Regime.D).role is RegimeRole.EXTERNAL_VALIDATION
+    assert regimes.regime_spec(Regime.D).role is not RegimeRole.CONFIRMATORY
 
 
 def test_fedprox_and_personalization_are_outside_causal_ladder():

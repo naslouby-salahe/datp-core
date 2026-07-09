@@ -48,9 +48,7 @@ def test_explicit_dev_overwrite_requires_flag(tmp_path):
     path.write_text("{}")
     with pytest.raises(OverwriteGuardError):
         guard_artifact_write(path, WriteMode.OVERWRITE_ONLY_IF_EXPLICIT_AND_MARKED_DEV)
-    guard_artifact_write(
-        path, WriteMode.OVERWRITE_ONLY_IF_EXPLICIT_AND_MARKED_DEV, explicit_dev_flag=True
-    )
+    guard_artifact_write(path, WriteMode.OVERWRITE_ONLY_IF_EXPLICIT_AND_MARKED_DEV, explicit_dev_flag=True)
 
 
 def test_results_overwrite_without_matching_source_manifest_rejected(tmp_path):

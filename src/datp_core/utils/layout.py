@@ -54,9 +54,7 @@ def validate_repo_layout(paths: RepoPaths) -> LayoutCheckResult:
 
     checks.append("data/raw is a symlink (raw data lives outside the repository)")
     if paths.data_raw.exists() and not paths.data_raw.is_symlink():
-        failures.append(
-            "data/raw must be a symlink to an external raw-data root, not a committed directory"
-        )
+        failures.append("data/raw must be a symlink to an external raw-data root, not a committed directory")
 
     for relative in ("checkpoints/__layout_probe__", "outputs/__layout_probe__"):
         checks.append(f"{relative} is git-ignored")
@@ -83,6 +81,4 @@ def validate_checkpoint_not_under_outputs(artifact_path: str) -> None:
 def validate_result_has_manifest(result_path: Path, manifest_path: Path) -> None:
     """Every curated result/ file must carry a companion manifest (artifact_contracts.md #2)."""
     if not manifest_path.exists():
-        raise ArtifactPlacementError(
-            f"curated result {result_path} has no companion manifest at {manifest_path}"
-        )
+        raise ArtifactPlacementError(f"curated result {result_path} has no companion manifest at {manifest_path}")

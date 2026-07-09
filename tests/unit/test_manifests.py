@@ -51,6 +51,7 @@ def _checkpoint() -> CheckpointManifest:
         weight_hash="abc123",
         split_manifest_id="split-1",
         common=COMMON,
+        alpha=None,
     )
 
 

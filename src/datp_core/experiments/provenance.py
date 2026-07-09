@@ -38,7 +38,7 @@ class ArtifactCommon:
     """ISO 8601 timestamp string."""
     code_version: str
     """Identifier for the code state that produced the artifact."""
-    status: ArtifactStatus = ArtifactStatus.PENDING
+    status: ArtifactStatus
 
 
 def _require(value: str, field_name: str, owner: str) -> None:
@@ -95,7 +95,7 @@ class CheckpointManifest:
     weight_hash: str
     split_manifest_id: str
     common: ArtifactCommon
-    alpha: float | None = None
+    alpha: float | None
 
     def __post_init__(self) -> None:
         _require(self.split_manifest_id, "split_manifest_id", "CheckpointManifest")

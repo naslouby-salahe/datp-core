@@ -34,13 +34,7 @@ class SplitRatios:
     calibration_test_gap: float = 0.0
 
     def __post_init__(self) -> None:
-        total = (
-            self.train
-            + self.calibration
-            + self.test
-            + self.train_calibration_gap
-            + self.calibration_test_gap
-        )
+        total = self.train + self.calibration + self.test + self.train_calibration_gap + self.calibration_test_gap
         if abs(total - 1.0) > 1e-9:
             raise ValueError(f"split ratios must sum to 1.0, got {total}")
 

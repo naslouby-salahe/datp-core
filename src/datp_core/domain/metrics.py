@@ -36,28 +36,35 @@ class MetricSpec:
     is_thresholding_verdict: bool
 
 
-METRIC_SPECS: dict[Metric, MetricSpec] = {
-    Metric.CV_FPR: MetricSpec(Metric.CV_FPR, MetricRole.PRIMARY, True),
-    Metric.FPR: MetricSpec(Metric.FPR, MetricRole.OPERATIONAL, False),
-    Metric.TPR: MetricSpec(Metric.TPR, MetricRole.SECONDARY, False),
-    Metric.BALANCED_ACCURACY: MetricSpec(Metric.BALANCED_ACCURACY, MetricRole.SECONDARY, False),
-    Metric.MACRO_F1: MetricSpec(Metric.MACRO_F1, MetricRole.SECONDARY, False),
-    Metric.AUROC: MetricSpec(Metric.AUROC, MetricRole.CONTROL, False),
-    Metric.IQR_FPR: MetricSpec(Metric.IQR_FPR, MetricRole.SECONDARY, False),
-    Metric.MAX_MINUS_MIN_FPR: MetricSpec(Metric.MAX_MINUS_MIN_FPR, MetricRole.SECONDARY, False),
-    Metric.WORST_CLIENT_FPR: MetricSpec(Metric.WORST_CLIENT_FPR, MetricRole.OPERATIONAL, False),
-    Metric.P10_MACRO_F1: MetricSpec(Metric.P10_MACRO_F1, MetricRole.SECONDARY, False),
-    Metric.ALERT_BURDEN: MetricSpec(Metric.ALERT_BURDEN, MetricRole.OPERATIONAL, False),
-}
+METRIC_SPECS: tuple[MetricSpec, ...] = (
+    MetricSpec(Metric.CV_FPR, MetricRole.PRIMARY, True),
+    MetricSpec(Metric.FPR, MetricRole.OPERATIONAL, False),
+    MetricSpec(Metric.TPR, MetricRole.SECONDARY, False),
+    MetricSpec(Metric.BALANCED_ACCURACY, MetricRole.SECONDARY, False),
+    MetricSpec(Metric.MACRO_F1, MetricRole.SECONDARY, False),
+    MetricSpec(Metric.AUROC, MetricRole.CONTROL, False),
+    MetricSpec(Metric.IQR_FPR, MetricRole.SECONDARY, False),
+    MetricSpec(Metric.MAX_MINUS_MIN_FPR, MetricRole.SECONDARY, False),
+    MetricSpec(Metric.WORST_CLIENT_FPR, MetricRole.OPERATIONAL, False),
+    MetricSpec(Metric.P10_MACRO_F1, MetricRole.SECONDARY, False),
+    MetricSpec(Metric.ALERT_BURDEN, MetricRole.OPERATIONAL, False),
+)
+
+
+def metric_spec(metric: Metric) -> MetricSpec:
+    for spec in METRIC_SPECS:
+        if spec.metric is metric:
+            return spec
+    raise ValueError(f"missing metric specification for {metric.value}")
 
 
 def is_primary(metric: Metric) -> bool:
-    return METRIC_SPECS[metric].role is MetricRole.PRIMARY
+    return metric_spec(metric).role is MetricRole.PRIMARY
 
 
 def is_control(metric: Metric) -> bool:
-    return METRIC_SPECS[metric].role is MetricRole.CONTROL
+    return metric_spec(metric).role is MetricRole.CONTROL
 
 
 def is_thresholding_verdict(metric: Metric) -> bool:
-    return METRIC_SPECS[metric].is_thresholding_verdict
+    return metric_spec(metric).is_thresholding_verdict

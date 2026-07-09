@@ -1,6 +1,7 @@
 # Dataset-agnostic AE architecture contract (docs/protocol/identity_lock.md #1).
 # input_dim differs per dataset and per-dataset training configs bind to it;
-# concrete layer sizes are a Phase 2+ decision.
+# Phase 2 fixes its width for the anchor pipeline.
 name: base_autoencoder
-status: contract_only
+status: ready_for_smoke
 architecture_family: autoencoder
+hidden_dim: 6

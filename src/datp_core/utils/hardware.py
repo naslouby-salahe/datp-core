@@ -1,13 +1,10 @@
-"""Device selection: CPU fallback by default, CUDA only when actually available.
-
-Never assumes a GPU is present and never hardcodes local hardware; the caller
-always gets back what was actually resolved, not what was hoped for.
-"""
+"""Device selection reports available hardware; experiment commands require configured CUDA."""
 
 from __future__ import annotations
 
 import importlib.util
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
@@ -65,9 +62,7 @@ def select_device(
         resolved = DeviceType.CUDA if cuda_available else DeviceType.CPU
 
     if strict and resolved is not DeviceType.CUDA:
-        raise HardwareError(
-            f"strict mode requires a CUDA accelerator; resolved device would be {resolved.value}"
-        )
+        raise HardwareError(f"strict mode requires a CUDA accelerator; resolved device would be {resolved.value}")
 
     return DeviceDescriptor(
         requested=requested,
@@ -79,7 +74,7 @@ def select_device(
 
 
 def select_device_from_env(
-    env: dict[str, str] | None = None,
+    env: Mapping[str, str] | None = None,
     *,
     strict: bool = False,
 ) -> DeviceDescriptor:

@@ -40,7 +40,7 @@ def test_list_suites_lists_suite_configs(capsys):
     exit_code = main(["list-suites"])
     captured = capsys.readouterr()
     assert exit_code == 0
-    assert "confirmatory_regime_a: status=contract_only runnable=False" in captured.out
+    assert "confirmatory_regime_a: status=ready_for_smoke runnable=False" in captured.out
     assert "full_journal: status=contract_only runnable=False" in captured.out
 
 
@@ -51,7 +51,7 @@ def test_validate_layout_reports_ok_on_the_real_repo(capsys):
     assert "layout: OK" in captured.out
 
 
-def test_training_command_is_absent_during_phase1():
-    assert "train" not in _COMMANDS
+def test_legacy_train_command_is_absent():
+    assert all(command.name != "train" for command in _COMMANDS)
     with pytest.raises(SystemExit):
         main(["train"])

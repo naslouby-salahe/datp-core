@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
+from collections.abc import Mapping
 
 LOG_LEVEL_ENV_VAR = "DATP_LOG_LEVEL"
 DEFAULT_LOGGER_NAME = "datp_core"
@@ -22,7 +23,7 @@ class _RunIdFilter(logging.Filter):
         return True
 
 
-def _level_from_env(env: dict[str, str] | None = None) -> int:
+def _level_from_env(env: Mapping[str, str] | None = None) -> int:
     env_map = os.environ if env is None else env
     raw = env_map.get(LOG_LEVEL_ENV_VAR, "INFO").upper()
     return getattr(logging, raw, logging.INFO)
@@ -40,9 +41,7 @@ def get_logger(
     new ``run_id`` updates the existing handler's filter in place.
     """
     logger = logging.getLogger(name)
-    managed_handler = next(
-        (h for h in logger.handlers if getattr(h, _MANAGED_HANDLER_ATTR, False)), None
-    )
+    managed_handler = next((h for h in logger.handlers if getattr(h, _MANAGED_HANDLER_ATTR, False)), None)
 
     if managed_handler is None:
         managed_handler = logging.StreamHandler()

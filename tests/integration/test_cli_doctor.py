@@ -11,9 +11,7 @@ REPO_ROOT = find_repo_root(Path(__file__))
 
 
 def _run_cli(*args: str) -> subprocess.CompletedProcess[str]:
-    script = (
-        "from datp_core.cli import main; import sys; sys.exit(main(sys.argv[1:]))"
-    )
+    script = "from datp_core.cli import main; import sys; sys.exit(main(sys.argv[1:]))"
     return subprocess.run(
         [sys.executable, "-c", script, *args],
         cwd=REPO_ROOT,

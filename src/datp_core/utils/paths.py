@@ -9,6 +9,7 @@ detected repository root.
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -49,14 +50,12 @@ def find_repo_root(start: Path | None = None) -> Path:
     for candidate in (current, *current.parents):
         if all((candidate / marker).is_file() for marker in _REPO_MARKER_FILES):
             return candidate
-    raise PathResolutionError(
-        f"no repository root found above {current}: missing marker files {_REPO_MARKER_FILES}"
-    )
+    raise PathResolutionError(f"no repository root found above {current}: missing marker files {_REPO_MARKER_FILES}")
 
 
 def resolve_paths(
     repo_root: Path | None = None,
-    env: dict[str, str] | None = None,
+    env: Mapping[str, str] | None = None,
 ) -> RepoPaths:
     """Resolve every canonical root relative to the detected (or given) repo root.
 

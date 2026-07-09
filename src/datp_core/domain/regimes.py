@@ -35,8 +35,8 @@ class RegimeSpec:
     pass_rule: str
 
 
-REGIME_SPECS: dict[Regime, RegimeSpec] = {
-    Regime.A: RegimeSpec(
+REGIME_SPECS: tuple[RegimeSpec, ...] = (
+    RegimeSpec(
         regime=Regime.A,
         role=RegimeRole.CONFIRMATORY,
         primary_metric=Metric.CV_FPR,
@@ -45,7 +45,7 @@ REGIME_SPECS: dict[Regime, RegimeSpec] = {
             "revise honestly otherwise, never suppressed"
         ),
     ),
-    Regime.B_A: RegimeSpec(
+    RegimeSpec(
         regime=Regime.B_A,
         role=RegimeRole.BOUNDARY,
         primary_metric=Metric.CV_FPR,
@@ -54,13 +54,13 @@ REGIME_SPECS: dict[Regime, RegimeSpec] = {
             "never generalized to CICIoT2023 as a whole; carries no confirmatory-style metric row"
         ),
     ),
-    Regime.B_B_REJECTED_NO_METADATA: RegimeSpec(
+    RegimeSpec(
         regime=Regime.B_B_REJECTED_NO_METADATA,
         role=RegimeRole.REJECTED,
         primary_metric=Metric.CV_FPR,
         pass_rule="no metadata columns available; suppression note only, never a metric row",
     ),
-    Regime.C: RegimeSpec(
+    RegimeSpec(
         regime=Regime.C,
         role=RegimeRole.SUPPORTIVE,
         primary_metric=Metric.CV_FPR,
@@ -69,20 +69,28 @@ REGIME_SPECS: dict[Regime, RegimeSpec] = {
             "high-heterogeneity band, not strict monotonicity"
         ),
     ),
-    Regime.D: RegimeSpec(
+    RegimeSpec(
         regime=Regime.D,
         role=RegimeRole.EXTERNAL_VALIDATION,
         primary_metric=Metric.CV_FPR,
         pass_rule="eligibility-coverage gate: proceed only if n_k >= 100 for >= 90% of clients",
     ),
-    Regime.D_TEMPORAL: RegimeSpec(
+    RegimeSpec(
         regime=Regime.D_TEMPORAL,
         role=RegimeRole.BOUNDARY,
         primary_metric=Metric.CV_FPR,
         pass_rule="exactly one of three pre-specified recovery outcomes applies; no retroactive streaming detector",
     ),
-}
+)
+
+
+def regime_spec(regime: Regime) -> RegimeSpec:
+    for spec in REGIME_SPECS:
+        if spec.regime is regime:
+            return spec
+    raise ValueError(f"missing regime specification for {regime.value}")
+
 
 CONFIRMATORY_REGIMES: tuple[Regime, ...] = tuple(
-    regime for regime, spec in REGIME_SPECS.items() if spec.role is RegimeRole.CONFIRMATORY
+    spec.regime for spec in REGIME_SPECS if spec.role is RegimeRole.CONFIRMATORY
 )

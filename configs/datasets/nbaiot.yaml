@@ -1,11 +1,13 @@
 # N-BaIoT dataset contract (docs/protocol/artifact_contracts.md #1.1).
 # 9 physical devices; supports Regime A (natural, confirmatory) and Regime C
-# (synthetic Dirichlet). status=contract_only: no loader/preprocessing exists yet.
+# (synthetic Dirichlet). The raw directory name matches the externally managed data root.
 name: nbaiot
-status: contract_only
+status: ready_for_smoke
 dataset_id: nbaiot
 regimes:
   - A
   - C
 client_identity_type: physical_device
-raw_subdirectory: nbaiot
+raw_subdirectory: N-BaIoT
+train_fraction: 0.6
+calibration_fraction: 0.2

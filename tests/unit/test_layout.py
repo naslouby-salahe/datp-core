@@ -46,9 +46,7 @@ def _init_tiny_git_repo(tmp_path, gitignore_lines, skip_dirs=()):
     (repo / ".gitignore").write_text("\n".join(gitignore_lines) + "\n")
 
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
-    subprocess.run(
-        ["git", "-c", "user.email=t@t.com", "-c", "user.name=t", "add", "-A"], cwd=repo, check=True
-    )
+    subprocess.run(["git", "-c", "user.email=t@t.com", "-c", "user.name=t", "add", "-A"], cwd=repo, check=True)
     subprocess.run(
         ["git", "-c", "user.email=t@t.com", "-c", "user.name=t", "commit", "-q", "-m", "init"],
         cwd=repo,

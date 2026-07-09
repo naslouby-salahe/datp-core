@@ -9,10 +9,11 @@ from datp_core.domain.clients import ClientIdentityType
 from datp_core.domain.datasets import DatasetId
 from datp_core.domain.policies import Comparator, ThresholdPolicy, TrainingAlgorithm
 from datp_core.domain.regimes import Regime
+from datp_core.utils.hardware import DeviceType
 
 
 class ConfigStatus(StrEnum):
-    """Readiness of a config skeleton; Phase 1 configs never exceed IMPLEMENTATION_PENDING."""
+    """Readiness of a typed configuration for validation, smoke runs, or operator-gated execution."""
 
     CONTRACT_ONLY = "contract_only"
     IMPLEMENTATION_PENDING = "implementation_pending"
@@ -43,11 +44,30 @@ class AnalysisKind(StrEnum):
     TABLE_AND_FIGURE_EXPORT = "table_and_figure_export"
 
 
-DATASET_REGIME_COMPATIBILITY: dict[DatasetId, tuple[Regime, ...]] = {
-    DatasetId.N_BAIOT: (Regime.A, Regime.C),
-    DatasetId.CICIOT2023: (Regime.B_A, Regime.B_B_REJECTED_NO_METADATA),
-    DatasetId.EDGE_IIOTSET: (Regime.D, Regime.D_TEMPORAL),
-}
+@dataclass(frozen=True)
+class AnchorArtifactLayout:
+    run_root_prefix: str
+    seed_directory_prefix: str
+    preprocessing_id_prefix: str
+    client_map_filename: str
+    split_manifest_filename: str
+    checkpoint_filename: str
+    score_filename: str
+    summary_filename: str
+    threshold_filename: str
+
+
+@dataclass(frozen=True)
+class DatasetRegimeCompatibility:
+    dataset_id: DatasetId
+    regimes: tuple[Regime, ...]
+
+
+DATASET_REGIME_COMPATIBILITIES: tuple[DatasetRegimeCompatibility, ...] = (
+    DatasetRegimeCompatibility(DatasetId.N_BAIOT, (Regime.A, Regime.C)),
+    DatasetRegimeCompatibility(DatasetId.CICIOT2023, (Regime.B_A, Regime.B_B_REJECTED_NO_METADATA)),
+    DatasetRegimeCompatibility(DatasetId.EDGE_IIOTSET, (Regime.D, Regime.D_TEMPORAL)),
+)
 """docs/protocol/artifact_contracts.md #1 regime-compatibility column, per dataset id."""
 
 
@@ -58,21 +78,22 @@ class DatasetConfig:
     dataset_id: DatasetId
     regimes: tuple[Regime, ...]
     raw_subdirectory: str
-    client_identity_type: ClientIdentityType | None = None
-    """None only when every listed regime has RegimeRole.REJECTED (no invented device identity, SB-28)."""
+    train_fraction: float | None
+    calibration_fraction: float | None
+    client_identity_type: ClientIdentityType | None
 
 
 @dataclass(frozen=True)
 class ModelArchitectureConfig:
     """Dataset-agnostic encoder/decoder shape contract (e.g. configs/training/base_autoencoder.yaml).
 
-    Concrete layer sizes are a Phase 2+ decision; Phase 1 only fixes the
-    architecture family identity so downstream training configs can reference it.
+    Smoke-ready anchor configurations must name their fixed hidden width.
     """
 
     name: str
     status: ConfigStatus
     architecture_family: ArchitectureFamily
+    hidden_dim: int | None
 
 
 @dataclass(frozen=True)
@@ -82,6 +103,20 @@ class TrainingConfig:
     dataset_id: DatasetId
     training_algorithm: TrainingAlgorithm
     seed_plan: tuple[int, ...]
+    rounds: int | None
+    local_epochs: int | None
+    learning_rate: float | None
+    momentum: float | None
+    weight_decay: float | None
+    full_participation: bool | None
+    device: DeviceType | None
+    fixture_client_count: int | None
+    fixture_benign_rows: int | None
+    fixture_attack_rows: int | None
+    fixture_feature_count: int | None
+    fixture_benign_mean_step: float | None
+    fixture_attack_mean: float | None
+    fixture_feature_std: float | None
 
 
 @dataclass(frozen=True)
@@ -111,8 +146,15 @@ class SuiteConfig:
     training_enabled: bool
     requires_score_reuse: bool
     allow_training_override: bool
+    dataset_config: str | None
+    training_config: str | None
+    model_config: str | None
+    thresholding_config: str | None
+    mini_seed_count: int | None
+    expected_client_count: int | None
+    artifact_layout: AnchorArtifactLayout | None
 
     @property
     def is_runnable(self) -> bool:
-        """Phase 1 never exposes a suite runner; no suite reaches READY_FOR_FULL_RUN yet."""
+        """Only a full-run-ready suite may run without an explicit development command."""
         return self.status is ConfigStatus.READY_FOR_FULL_RUN

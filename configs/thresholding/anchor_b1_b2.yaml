@@ -1,0 +1,6 @@
+# Phase 2 anchor-only threshold policy configuration.
+name: anchor_b1_b2
+status: ready_for_smoke
+policies: [B1, B2]
+q_values: [0.95]
+calibration_label_scope: benign_only

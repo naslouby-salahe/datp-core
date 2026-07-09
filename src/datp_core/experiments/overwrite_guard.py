@@ -45,7 +45,6 @@ def guard_artifact_write(
     if mode is WriteMode.OVERWRITE_ONLY_IF_EXPLICIT_AND_MARKED_DEV:
         if not explicit_dev_flag:
             raise OverwriteGuardError(f"{path} exists; overwrite requires explicit_dev_flag=True")
-        return
 
 
 def guard_results_overwrite(

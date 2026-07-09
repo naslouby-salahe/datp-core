@@ -159,8 +159,8 @@ owns a doc (e.g. `data/README.md`).
 | Phase | Name | Tickets | Focus | Heavy? | Entry gate | Exit gate |
 |---|---|---|---|---|---|---|
 | 0 | Protocol, scope & architecture freeze | 11 | Freeze identity, claims, regimes, contracts, structure, go/no-go | No | Roadmap locked | All freeze docs + go/no-go signed |
-| 1 | Scratch foundation | 10 | Skeleton, typed config, enums, paths, manifests, cache, CLI, fixtures, changelog | No | P0 done | Foundation tests green, layout enforced |
-| 2 | Anchor reproduction pipeline | 11 | N-BaIoT → split → AE → FedAvg → freeze → score → B1/B2 → gate | **Yes** | P1 done | Frozen anchor checkpoints + stored scores + smoke green |
+| 1 | Scratch foundation | 18 | Skeleton, typed config, enums, paths, manifests, cache, CLI, fixtures, changelog | No | P0 done | Foundation tests green, layout enforced |
+| 2 | Anchor reproduction pipeline | 20 | N-BaIoT → split → AE → FedAvg → freeze → score → B1/B2 → gate | **Yes** | P1 done | Frozen anchor checkpoints + stored scores + smoke green |
 | 3 | Core threshold policies & metrics | 11 | Quantile backbone, B0–B4, predictions, metrics, disparity, aggregation | No (reuse) | P2 scores exist | B0–B4 + metrics validated on fixtures |
 | 4 | Threshold variants & comparators | 9 | q, τ-shrink, cal-size, B2-conf, B-FedStatsBenign, no-retrain guard | No (reuse) | P3 done | Variants reuse scores; no-retrain proven |
 | 5 | Mechanism analyses | 8 | CDFs, shift surface, cluster stability, JS, P10, alert burden | No (reuse) | P3 done | Mechanism artifacts from fixtures |
@@ -172,8 +172,8 @@ owns a doc (e.g. `data/README.md`).
 ## 7. Ticket Count Summary
 
 - **Total phases:** 8 (Phase 0 → Phase 7).
-- **Total tickets:** 82.
-- **Per phase:** P0 = 11, P1 = 10, P2 = 11, P3 = 11, P4 = 9, P5 = 8, P6 = 12,
+- **Total tickets:** 99.
+- **Per phase:** P0 = 11, P1 = 18, P2 = 20, P3 = 11, P4 = 9, P5 = 8, P6 = 12,
   P7 = 10.
 - **Heavy-stage tickets (create/trigger reusable heavy artifacts):** 11 —
   P2-T02, P2-T06, P2-T07, P2-T08, P2-T11, P6-T03, P6-T05, P6-T09, P6-T10,
@@ -574,8 +574,9 @@ substrate every later stage depends on. **Entry gate:** P0-T11 go/no-go Done.
 >   (`test_changelog_update_after_ticket.py`) is **not implemented** —
 >   deferred (`CHANGELOG.md` §11).
 >
-> Total ticket count for the plan of record moves from 82 to 90
-> (Phase 1: 10 → 18); see `CHANGELOG.md` §2.
+> Phase 1 moved the plan-of-record total from 82 to 90 (10 → 18 tickets).
+> The authorized Phase 2 breakdown below moves it from 90 to 99 (11 → 20
+> tickets); see `CHANGELOG.md` §2/§12.
 
 #### P1-T01 — Project skeleton, pyproject, tooling & Makefile
 - **Phase / Status:** 1 / Not Started
@@ -861,6 +862,16 @@ Builds the reusable heavy backbone for Regime A and produces the frozen
 checkpoints + stored score artifacts every cheap stage consumes. **Entry gate:**
 P1-T10 Done. **Exit gate:** anchor smoke green + frozen checkpoints + scores +
 provenance manifests exist for ≥ 2 seeds.
+
+> **2026-07-09 authorized Phase 2 breakdown.** The requesting user supplied a
+> more granular 20-ticket Phase 2 contract (P2-T01..P2-T20), explicitly
+> replacing the eleven historical bodies below for implementation tracking.
+> The current ticket mapping and status are maintained in `CHANGELOG.md` §3/§5:
+> entry gate; discovery; loader; client mapping; splits; leakage manifests; AE;
+> FedAvg; checkpoints; scoring; score reuse; B1/B2; metrics; aggregation;
+> paired plan; safe commands; unit, integration, and smoke tests; quality gate.
+> The historical bodies remain below for design provenance and their `Not Started`
+> status lines do not describe the authorized Phase 2 implementation work.
 
 #### P2-T01 — N-BaIoT loader & schema
 - **Phase / Status:** 2 / Not Started

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datp_core.data.manifests import DatasetContract, DatasetOutputArtifact
 from datp_core.domain.datasets import DatasetId
-from datp_core.domain.partitions import SplitType
+from datp_core.domain.partitions import CALIBRATION_MIN_ELIGIBLE_ROWS, SplitType
 from datp_core.domain.regimes import Regime
 
 
@@ -20,4 +20,5 @@ def tiny_dataset_contract() -> DatasetContract:
         rejected=False,
         rejection_rule=None,
         expected_output_artifacts=(DatasetOutputArtifact.SPLIT_MANIFEST,),
+        calibration_min_eligible_rows=CALIBRATION_MIN_ELIGIBLE_ROWS,
     )

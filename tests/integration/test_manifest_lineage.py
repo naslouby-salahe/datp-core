@@ -63,6 +63,7 @@ def _build_chain() -> dict[str, Any]:
         weight_hash="hash-1",
         split_manifest_id=split.manifest_id,
         common=COMMON,
+        alpha=None,
     )
     score = ScoreManifest(
         manifest_id="score-1",
@@ -114,9 +115,7 @@ def test_lineage_chain_links_every_stage_by_manifest_id():
 def test_lineage_reuse_succeeds_when_identity_matches():
     chain = _build_chain()
     verify_checkpoint_manifest_reuse(chain["checkpoint"], DatasetId.N_BAIOT, Regime.A, 0, None)
-    verify_score_manifest_reuse(
-        chain["score"], DatasetId.N_BAIOT, Regime.A, 0, chain["checkpoint"].manifest_id
-    )
+    verify_score_manifest_reuse(chain["score"], DatasetId.N_BAIOT, Regime.A, 0, chain["checkpoint"].manifest_id)
 
 
 def test_lineage_reuse_rejects_a_different_seed_anywhere_in_the_chain():
@@ -124,14 +123,10 @@ def test_lineage_reuse_rejects_a_different_seed_anywhere_in_the_chain():
     with pytest.raises(ManifestReuseError):
         verify_checkpoint_manifest_reuse(chain["checkpoint"], DatasetId.N_BAIOT, Regime.A, 1, None)
     with pytest.raises(ManifestReuseError):
-        verify_score_manifest_reuse(
-            chain["score"], DatasetId.N_BAIOT, Regime.A, 1, chain["checkpoint"].manifest_id
-        )
+        verify_score_manifest_reuse(chain["score"], DatasetId.N_BAIOT, Regime.A, 1, chain["checkpoint"].manifest_id)
 
 
 def test_lineage_reuse_rejects_a_swapped_checkpoint():
     chain = _build_chain()
     with pytest.raises(ManifestReuseError):
-        verify_score_manifest_reuse(
-            chain["score"], DatasetId.N_BAIOT, Regime.A, 0, "some-other-checkpoint"
-        )
+        verify_score_manifest_reuse(chain["score"], DatasetId.N_BAIOT, Regime.A, 0, "some-other-checkpoint")

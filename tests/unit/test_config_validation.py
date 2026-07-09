@@ -64,12 +64,6 @@ def test_validate_benign_only_calibration_accepts_only_typed_benign_scope():
 
 def test_validate_suite_training_flag_blocks_threshold_only_training():
     with pytest.raises(ConfigValidationError):
-        validate_suite_training_flag(
-            training_enabled=True, requires_score_reuse=True, allow_training_override=False
-        )
-    validate_suite_training_flag(
-        training_enabled=True, requires_score_reuse=True, allow_training_override=True
-    )
-    validate_suite_training_flag(
-        training_enabled=False, requires_score_reuse=True, allow_training_override=False
-    )
+        validate_suite_training_flag(training_enabled=True, requires_score_reuse=True, allow_training_override=False)
+    validate_suite_training_flag(training_enabled=True, requires_score_reuse=True, allow_training_override=True)
+    validate_suite_training_flag(training_enabled=False, requires_score_reuse=True, allow_training_override=False)

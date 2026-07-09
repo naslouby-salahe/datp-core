@@ -8,6 +8,7 @@ Phase 1.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -44,7 +45,7 @@ class DatasetContract:
     rejected: bool
     rejection_rule: str | None
     expected_output_artifacts: tuple[DatasetOutputArtifact, ...]
-    calibration_min_eligible_rows: int = CALIBRATION_MIN_ELIGIBLE_ROWS
+    calibration_min_eligible_rows: int
 
     def __post_init__(self) -> None:
         if self.rejected and not self.rejection_rule:
@@ -55,71 +56,100 @@ class DatasetContract:
             raise ValueError("a dataset contract must cover at least one regime")
 
 
-DATASET_CONTRACTS: dict[str, DatasetContract] = {
-    "nbaiot": DatasetContract(
-        dataset_id=DatasetId.N_BAIOT,
-        regimes=(Regime.A, Regime.C),
-        raw_subdirectory="nbaiot",
-        client_identity_source="filename-encoded physical device (9 devices)",
-        split_type=SplitType.CHRONOLOGICAL_GAPPED,
-        label_source="row provenance (filename) yields benign-vs-attack-family",
-        metadata_feasibility_requirement=None,
-        rejected=False,
-        rejection_rule=None,
-        expected_output_artifacts=(
-            DatasetOutputArtifact.PREPROCESSED_PER_DEVICE_TENSORS,
-            DatasetOutputArtifact.SPLIT_MANIFEST,
+@dataclass(frozen=True)
+class DatasetRegistration:
+    name: str
+    contract: DatasetContract
+
+
+DATASET_REGISTRATIONS: tuple[DatasetRegistration, ...] = (
+    DatasetRegistration(
+        "nbaiot",
+        DatasetContract(
+            dataset_id=DatasetId.N_BAIOT,
+            regimes=(Regime.A, Regime.C),
+            raw_subdirectory="N-BaIoT",
+            client_identity_source="filename-encoded physical device (9 devices)",
+            split_type=SplitType.CHRONOLOGICAL_GAPPED,
+            label_source="row provenance (filename) yields benign-vs-attack-family",
+            metadata_feasibility_requirement=None,
+            rejected=False,
+            rejection_rule=None,
+            expected_output_artifacts=(
+                DatasetOutputArtifact.PREPROCESSED_PER_DEVICE_TENSORS,
+                DatasetOutputArtifact.SPLIT_MANIFEST,
+            ),
+            calibration_min_eligible_rows=CALIBRATION_MIN_ELIGIBLE_ROWS,
         ),
     ),
-    "ciciot2023_file_level": DatasetContract(
-        dataset_id=DatasetId.CICIOT2023,
-        regimes=(Regime.B_A,),
-        raw_subdirectory="ciciot2023",
-        client_identity_source="the file itself (63 file-defined pseudo-clients)",
-        split_type=SplitType.RANDOM_SHUFFLE_SEQUENTIAL,
-        label_source="in-row attack-family label column",
-        metadata_feasibility_requirement=None,
-        rejected=False,
-        rejection_rule=None,
-        expected_output_artifacts=(
-            DatasetOutputArtifact.PREPROCESSED_PER_FILE_TENSORS,
-            DatasetOutputArtifact.SPLIT_MANIFEST,
+    DatasetRegistration(
+        "ciciot2023_file_level",
+        DatasetContract(
+            dataset_id=DatasetId.CICIOT2023,
+            regimes=(Regime.B_A,),
+            raw_subdirectory="ciciot2023",
+            client_identity_source="the file itself (63 file-defined pseudo-clients)",
+            split_type=SplitType.RANDOM_SHUFFLE_SEQUENTIAL,
+            label_source="in-row attack-family label column",
+            metadata_feasibility_requirement=None,
+            rejected=False,
+            rejection_rule=None,
+            expected_output_artifacts=(
+                DatasetOutputArtifact.PREPROCESSED_PER_FILE_TENSORS,
+                DatasetOutputArtifact.SPLIT_MANIFEST,
+            ),
+            calibration_min_eligible_rows=CALIBRATION_MIN_ELIGIBLE_ROWS,
         ),
     ),
-    "ciciot2023_rejected_b_b": DatasetContract(
-        dataset_id=DatasetId.CICIOT2023,
-        regimes=(Regime.B_B_REJECTED_NO_METADATA,),
-        raw_subdirectory="ciciot2023",
-        client_identity_source="none available",
-        split_type=SplitType.FEASIBILITY_PENDING,
-        label_source="in-row attack-family label column",
-        metadata_feasibility_requirement="MAC / device / IP / capture-source / timestamp columns",
-        rejected=True,
-        rejection_rule=(
-            "metadata columns absent on the available CSV artifact; no pseudo-client "
-            "substitute, no PCAP-reprocessing branch, no invented device identity (SB-28)"
-        ),
-        expected_output_artifacts=(DatasetOutputArtifact.REJECTION_RECORD,),
-    ),
-    "edge_iiotset": DatasetContract(
-        dataset_id=DatasetId.EDGE_IIOTSET,
-        regimes=(Regime.D, Regime.D_TEMPORAL),
-        raw_subdirectory="edge_iiotset",
-        client_identity_source="device-client or group-client, decided by the P6-T02 feasibility audit",
-        split_type=SplitType.FEASIBILITY_PENDING,
-        label_source="in-row attack-type label column",
-        metadata_feasibility_requirement=(
-            "device/group identity column presence; timestamp column presence for D-temporal"
-        ),
-        rejected=False,
-        rejection_rule=None,
-        expected_output_artifacts=(
-            DatasetOutputArtifact.PREPROCESSED_PER_CLIENT_TENSORS,
-            DatasetOutputArtifact.SPLIT_MANIFEST,
-            DatasetOutputArtifact.COVERAGE_GATE_REPORT,
+    DatasetRegistration(
+        "ciciot2023_rejected_b_b",
+        DatasetContract(
+            dataset_id=DatasetId.CICIOT2023,
+            regimes=(Regime.B_B_REJECTED_NO_METADATA,),
+            raw_subdirectory="ciciot2023",
+            client_identity_source="none available",
+            split_type=SplitType.FEASIBILITY_PENDING,
+            label_source="in-row attack-family label column",
+            metadata_feasibility_requirement="MAC / device / IP / capture-source / timestamp columns",
+            rejected=True,
+            rejection_rule=(
+                "metadata columns absent on the available CSV artifact; no pseudo-client "
+                "substitute, no PCAP-reprocessing branch, no invented device identity (SB-28)"
+            ),
+            expected_output_artifacts=(DatasetOutputArtifact.REJECTION_RECORD,),
+            calibration_min_eligible_rows=CALIBRATION_MIN_ELIGIBLE_ROWS,
         ),
     ),
-}
+    DatasetRegistration(
+        "edge_iiotset",
+        DatasetContract(
+            dataset_id=DatasetId.EDGE_IIOTSET,
+            regimes=(Regime.D, Regime.D_TEMPORAL),
+            raw_subdirectory="edge_iiotset",
+            client_identity_source="device-client or group-client, decided by the P6-T02 feasibility audit",
+            split_type=SplitType.FEASIBILITY_PENDING,
+            label_source="in-row attack-type label column",
+            metadata_feasibility_requirement=(
+                "device/group identity column presence; timestamp column presence for D-temporal"
+            ),
+            rejected=False,
+            rejection_rule=None,
+            expected_output_artifacts=(
+                DatasetOutputArtifact.PREPROCESSED_PER_CLIENT_TENSORS,
+                DatasetOutputArtifact.SPLIT_MANIFEST,
+                DatasetOutputArtifact.COVERAGE_GATE_REPORT,
+            ),
+            calibration_min_eligible_rows=CALIBRATION_MIN_ELIGIBLE_ROWS,
+        ),
+    ),
+)
+
+
+def dataset_contract(name: str) -> DatasetContract:
+    for registration in DATASET_REGISTRATIONS:
+        if registration.name == name:
+            return registration.contract
+    raise DatasetContractError(f"unknown dataset registration {name!r}")
 
 
 def raw_dataset_root(contract: DatasetContract, repo_paths: RepoPaths) -> Path:
@@ -146,7 +176,7 @@ def contract_to_dict(contract: DatasetContract) -> dict[str, Any]:
     return data
 
 
-def contract_from_dict(data: dict[str, Any]) -> DatasetContract:
+def contract_from_dict(data: Mapping[str, Any]) -> DatasetContract:
     return DatasetContract(
         dataset_id=DatasetId(data["dataset_id"]),
         regimes=tuple(Regime(r) for r in data["regimes"]),
@@ -160,7 +190,5 @@ def contract_from_dict(data: dict[str, Any]) -> DatasetContract:
         expected_output_artifacts=tuple(
             DatasetOutputArtifact(artifact) for artifact in data["expected_output_artifacts"]
         ),
-        calibration_min_eligible_rows=data.get(
-            "calibration_min_eligible_rows", CALIBRATION_MIN_ELIGIBLE_ROWS
-        ),
+        calibration_min_eligible_rows=data["calibration_min_eligible_rows"],
     )

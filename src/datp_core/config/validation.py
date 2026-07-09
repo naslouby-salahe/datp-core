@@ -7,8 +7,9 @@ from datp_core.domain.datasets import DatasetId
 from datp_core.domain.policies import Comparator, ThresholdPolicy
 from datp_core.domain.regimes import Regime
 from datp_core.domain.seeds import SeedPlan, SeedPlanError, SeedRole
+from datp_core.utils.hardware import DeviceType
 
-from .schemas import DATASET_REGIME_COMPATIBILITY, CalibrationLabelScope, ConfigStatus
+from .schemas import DATASET_REGIME_COMPATIBILITIES, CalibrationLabelScope, ConfigStatus
 
 _STATUSES_REQUIRING_CLIENT_IDENTITY = (ConfigStatus.READY_FOR_SMOKE, ConfigStatus.READY_FOR_FULL_RUN)
 
@@ -26,11 +27,14 @@ class ConfigValidationError(ConfigError):
 
 
 def validate_dataset_regime_pair(dataset_id: DatasetId, regime: Regime) -> None:
-    allowed = DATASET_REGIME_COMPATIBILITY[dataset_id]
-    if regime not in allowed:
-        raise ConfigValidationError(
-            f"{dataset_id} does not support {regime}; allowed regimes: {allowed}"
-        )
+    for compatibility in DATASET_REGIME_COMPATIBILITIES:
+        if compatibility.dataset_id is dataset_id:
+            if regime not in compatibility.regimes:
+                raise ConfigValidationError(
+                    f"{dataset_id} does not support {regime}; allowed regimes: {compatibility.regimes}"
+                )
+            return
+    raise ConfigValidationError(f"missing dataset-regime compatibility for {dataset_id}")
 
 
 def validate_client_identity_presence(
@@ -70,6 +74,78 @@ def validate_seed_plan(seeds: tuple[int, ...]) -> None:
         raise ConfigValidationError(str(exc)) from exc
 
 
+def validate_anchor_training_fields(
+    status: ConfigStatus,
+    rounds: int | None,
+    local_epochs: int | None,
+    learning_rate: float | None,
+    momentum: float | None,
+    weight_decay: float | None,
+    device: DeviceType | None,
+    fixture_client_count: int | None,
+    fixture_benign_rows: int | None,
+    fixture_attack_rows: int | None,
+    fixture_feature_count: int | None,
+    fixture_benign_mean_step: float | None,
+    fixture_attack_mean: float | None,
+    fixture_feature_std: float | None,
+    full_participation: bool | None,
+) -> None:
+    if status not in _STATUSES_REQUIRING_CLIENT_IDENTITY:
+        return
+    if (
+        rounds is None
+        or local_epochs is None
+        or learning_rate is None
+        or momentum is None
+        or weight_decay is None
+        or device is None
+        or fixture_client_count is None
+        or fixture_benign_rows is None
+        or fixture_attack_rows is None
+        or fixture_feature_count is None
+        or fixture_benign_mean_step is None
+        or fixture_attack_mean is None
+        or fixture_feature_std is None
+        or full_participation is None
+    ):
+        raise ConfigValidationError("smoke-ready training config requires every anchor runtime field")
+    if rounds < 1 or local_epochs != 1 or learning_rate <= 0.0:
+        raise ConfigValidationError(
+            "anchor training requires rounds >= 1, local_epochs == 1, and positive learning_rate"
+        )
+    if momentum < 0.0 or weight_decay < 0.0:
+        raise ConfigValidationError("anchor optimizer settings must be non-negative")
+    if not full_participation:
+        raise ConfigValidationError("anchor FedAvg requires full_participation=true")
+    if device is not DeviceType.CUDA:
+        raise ConfigValidationError("anchor experiments require the configured CUDA device")
+    if fixture_client_count < 2 or fixture_benign_rows < 500 or fixture_attack_rows < 1 or fixture_feature_count < 1:
+        raise ConfigValidationError("fixture dimensions must support paired metrics and calibration eligibility")
+    if fixture_benign_mean_step <= 0.0 or fixture_attack_mean <= 0.0 or fixture_feature_std <= 0.0:
+        raise ConfigValidationError("fixture distribution parameters must be positive")
+
+
+def validate_anchor_architecture_fields(status: ConfigStatus, hidden_dim: int | None) -> None:
+    if status in _STATUSES_REQUIRING_CLIENT_IDENTITY and (hidden_dim is None or hidden_dim < 1):
+        raise ConfigValidationError("smoke-ready autoencoder config requires a positive hidden_dim")
+
+
+def validate_anchor_split_fields(
+    status: ConfigStatus,
+    train_fraction: float | None,
+    calibration_fraction: float | None,
+) -> None:
+    if status not in _STATUSES_REQUIRING_CLIENT_IDENTITY:
+        return
+    if train_fraction is None or calibration_fraction is None:
+        raise ConfigValidationError("smoke-ready dataset config requires train_fraction and calibration_fraction")
+    if not 0.0 < train_fraction < 1.0 or not 0.0 < calibration_fraction < 1.0:
+        raise ConfigValidationError("split fractions must be strictly between zero and one")
+    if train_fraction + calibration_fraction >= 1.0:
+        raise ConfigValidationError("split fractions must leave held-out benign test data")
+
+
 def validate_threshold_policy_scope(
     policy: ThresholdPolicy | Comparator,
     has_family_taxonomy: bool | None,
@@ -79,9 +155,8 @@ def validate_threshold_policy_scope(
         raise ConfigValidationError("B3 requires an explicit has_family_taxonomy field")
     if policy is ThresholdPolicy.B3 and not has_family_taxonomy:
         raise ConfigValidationError("B3 requires a device-taxonomy family assignment")
-    if policy is ThresholdPolicy.B4:
-        if cluster_k is None or cluster_k <= 0:
-            raise ConfigValidationError(f"B4 requires a positive cluster K, got {cluster_k}")
+    if policy is ThresholdPolicy.B4 and (cluster_k is None or cluster_k <= 0):
+        raise ConfigValidationError(f"B4 requires a positive cluster K, got {cluster_k}")
 
 
 def validate_benign_only_calibration(

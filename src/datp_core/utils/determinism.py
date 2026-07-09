@@ -7,6 +7,7 @@ mode fails clearly instead of silently trusting an unavailable backend.
 from __future__ import annotations
 
 import importlib.util
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -14,11 +15,11 @@ from datp_core.domain.seeds import SeedPlan, SeedRole
 
 from .random import seed_numpy_global, seed_python_random
 
-_ROLE_SEED_OFFSETS: dict[SeedRole, int] = {
-    SeedRole.TRAIN: 0,
-    SeedRole.ANALYSIS: 1_000_000,
-    SeedRole.STRESS_TEST: 2_000_000,
-}
+_ROLE_SEED_OFFSETS = (
+    (SeedRole.TRAIN, 0),
+    (SeedRole.ANALYSIS, 1_000_000),
+    (SeedRole.STRESS_TEST, 2_000_000),
+)
 
 
 class DeterminismError(RuntimeError):
@@ -38,7 +39,10 @@ class DeterminismReport:
 
 def seed_for_role(seed: int, role: SeedRole) -> int:
     """Derive a role-specific seed so train/analysis/stress-test streams never collide."""
-    return seed + _ROLE_SEED_OFFSETS[role]
+    for seed_role, offset in _ROLE_SEED_OFFSETS:
+        if seed_role is role:
+            return seed + offset
+    raise DeterminismError(f"unsupported seed role {role!r}")
 
 
 def apply_seed(seed: int, *, strict: bool = False) -> DeterminismReport:
@@ -86,5 +90,5 @@ def seed_plan_to_dict(plan: SeedPlan) -> dict[str, Any]:
     return {"seeds": list(plan.seeds), "role": plan.role.value}
 
 
-def seed_plan_from_dict(data: dict[str, Any]) -> SeedPlan:
+def seed_plan_from_dict(data: Mapping[str, Any]) -> SeedPlan:
     return SeedPlan(seeds=tuple(data["seeds"]), role=SeedRole(data["role"]))

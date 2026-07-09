@@ -7,6 +7,7 @@ exact typed dataclass ``to_*`` started from, including enum fields.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Mapping
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -41,7 +42,7 @@ class ManifestReuseError(RuntimeError):
     """Raised when a requested reuse identity does not match an existing manifest."""
 
 
-def _common_from_dict(data: dict[str, Any]) -> ArtifactCommon:
+def _common_from_dict(data: Mapping[str, Any]) -> ArtifactCommon:
     return ArtifactCommon(
         artifact_path=data["artifact_path"],
         created_at=data["created_at"],
@@ -70,7 +71,7 @@ def write_manifest(manifest: Any, path: Path) -> None:
     path.write_text(manifest_to_json(manifest))
 
 
-def dataset_manifest_from_dict(data: dict[str, Any]) -> DatasetManifest:
+def dataset_manifest_from_dict(data: Mapping[str, Any]) -> DatasetManifest:
     return DatasetManifest(
         manifest_id=data["manifest_id"],
         dataset_id=DatasetId(data["dataset_id"]),
@@ -79,7 +80,7 @@ def dataset_manifest_from_dict(data: dict[str, Any]) -> DatasetManifest:
     )
 
 
-def preprocessing_manifest_from_dict(data: dict[str, Any]) -> PreprocessingManifest:
+def preprocessing_manifest_from_dict(data: Mapping[str, Any]) -> PreprocessingManifest:
     return PreprocessingManifest(
         manifest_id=data["manifest_id"],
         dataset_id=DatasetId(data["dataset_id"]),
@@ -89,7 +90,7 @@ def preprocessing_manifest_from_dict(data: dict[str, Any]) -> PreprocessingManif
     )
 
 
-def split_manifest_from_dict(data: dict[str, Any]) -> SplitManifest:
+def split_manifest_from_dict(data: Mapping[str, Any]) -> SplitManifest:
     return SplitManifest(
         manifest_id=data["manifest_id"],
         dataset_id=DatasetId(data["dataset_id"]),
@@ -101,7 +102,7 @@ def split_manifest_from_dict(data: dict[str, Any]) -> SplitManifest:
     )
 
 
-def checkpoint_manifest_from_dict(data: dict[str, Any]) -> CheckpointManifest:
+def checkpoint_manifest_from_dict(data: Mapping[str, Any]) -> CheckpointManifest:
     return CheckpointManifest(
         manifest_id=data["manifest_id"],
         dataset_id=DatasetId(data["dataset_id"]),
@@ -113,11 +114,11 @@ def checkpoint_manifest_from_dict(data: dict[str, Any]) -> CheckpointManifest:
         weight_hash=data["weight_hash"],
         split_manifest_id=data["split_manifest_id"],
         common=_common_from_dict(data["common"]),
-        alpha=data.get("alpha"),
+        alpha=data["alpha"],
     )
 
 
-def score_manifest_from_dict(data: dict[str, Any]) -> ScoreManifest:
+def score_manifest_from_dict(data: Mapping[str, Any]) -> ScoreManifest:
     return ScoreManifest(
         manifest_id=data["manifest_id"],
         dataset_id=DatasetId(data["dataset_id"]),
@@ -129,7 +130,7 @@ def score_manifest_from_dict(data: dict[str, Any]) -> ScoreManifest:
     )
 
 
-def threshold_manifest_from_dict(data: dict[str, Any]) -> ThresholdManifest:
+def threshold_manifest_from_dict(data: Mapping[str, Any]) -> ThresholdManifest:
     return ThresholdManifest(
         manifest_id=data["manifest_id"],
         policy=_parse_policy(data["policy"]),
@@ -142,7 +143,7 @@ def threshold_manifest_from_dict(data: dict[str, Any]) -> ThresholdManifest:
     )
 
 
-def metric_manifest_from_dict(data: dict[str, Any]) -> MetricManifest:
+def metric_manifest_from_dict(data: Mapping[str, Any]) -> MetricManifest:
     return MetricManifest(
         manifest_id=data["manifest_id"],
         metric=Metric(data["metric"]),
@@ -154,7 +155,7 @@ def metric_manifest_from_dict(data: dict[str, Any]) -> MetricManifest:
     )
 
 
-def statistics_manifest_from_dict(data: dict[str, Any]) -> StatisticsManifest:
+def statistics_manifest_from_dict(data: Mapping[str, Any]) -> StatisticsManifest:
     return StatisticsManifest(
         manifest_id=data["manifest_id"],
         method=StatisticsMethod(data["method"]),
@@ -165,7 +166,7 @@ def statistics_manifest_from_dict(data: dict[str, Any]) -> StatisticsManifest:
     )
 
 
-def table_manifest_from_dict(data: dict[str, Any]) -> TableManifest:
+def table_manifest_from_dict(data: Mapping[str, Any]) -> TableManifest:
     return TableManifest(
         manifest_id=data["manifest_id"],
         experiment_id=data["experiment_id"],
@@ -174,7 +175,7 @@ def table_manifest_from_dict(data: dict[str, Any]) -> TableManifest:
     )
 
 
-def figure_manifest_from_dict(data: dict[str, Any]) -> FigureManifest:
+def figure_manifest_from_dict(data: Mapping[str, Any]) -> FigureManifest:
     return FigureManifest(
         manifest_id=data["manifest_id"],
         experiment_id=data["experiment_id"],
@@ -183,7 +184,7 @@ def figure_manifest_from_dict(data: dict[str, Any]) -> FigureManifest:
     )
 
 
-def run_manifest_from_dict(data: dict[str, Any]) -> RunManifest:
+def run_manifest_from_dict(data: Mapping[str, Any]) -> RunManifest:
     return RunManifest(
         manifest_id=data["manifest_id"],
         stage_name=RunStage(data["stage_name"]),
@@ -194,7 +195,7 @@ def run_manifest_from_dict(data: dict[str, Any]) -> RunManifest:
     )
 
 
-def curated_result_manifest_from_dict(data: dict[str, Any]) -> CuratedResultManifest:
+def curated_result_manifest_from_dict(data: Mapping[str, Any]) -> CuratedResultManifest:
     return CuratedResultManifest(
         manifest_id=data["manifest_id"],
         experiment_id=data["experiment_id"],
@@ -204,25 +205,29 @@ def curated_result_manifest_from_dict(data: dict[str, Any]) -> CuratedResultMani
     )
 
 
-_FROM_DICT_BY_TYPE_NAME: dict[str, Any] = {
-    "DatasetManifest": dataset_manifest_from_dict,
-    "PreprocessingManifest": preprocessing_manifest_from_dict,
-    "SplitManifest": split_manifest_from_dict,
-    "CheckpointManifest": checkpoint_manifest_from_dict,
-    "ScoreManifest": score_manifest_from_dict,
-    "ThresholdManifest": threshold_manifest_from_dict,
-    "MetricManifest": metric_manifest_from_dict,
-    "StatisticsManifest": statistics_manifest_from_dict,
-    "TableManifest": table_manifest_from_dict,
-    "FigureManifest": figure_manifest_from_dict,
-    "RunManifest": run_manifest_from_dict,
-    "CuratedResultManifest": curated_result_manifest_from_dict,
-}
+_ManifestReader = Callable[[Mapping[str, Any]], Any]
+_MANIFEST_READERS: tuple[tuple[str, _ManifestReader], ...] = (
+    ("DatasetManifest", dataset_manifest_from_dict),
+    ("PreprocessingManifest", preprocessing_manifest_from_dict),
+    ("SplitManifest", split_manifest_from_dict),
+    ("CheckpointManifest", checkpoint_manifest_from_dict),
+    ("ScoreManifest", score_manifest_from_dict),
+    ("ThresholdManifest", threshold_manifest_from_dict),
+    ("MetricManifest", metric_manifest_from_dict),
+    ("StatisticsManifest", statistics_manifest_from_dict),
+    ("TableManifest", table_manifest_from_dict),
+    ("FigureManifest", figure_manifest_from_dict),
+    ("RunManifest", run_manifest_from_dict),
+    ("CuratedResultManifest", curated_result_manifest_from_dict),
+)
 
 
 def read_manifest(path: Path, manifest_type: type) -> Any:
     data = json.loads(path.read_text())
-    return _FROM_DICT_BY_TYPE_NAME[manifest_type.__name__](data)
+    for type_name, reader in _MANIFEST_READERS:
+        if type_name == manifest_type.__name__:
+            return reader(data)
+    raise ManifestReuseError(f"unsupported manifest type {manifest_type.__name__!r}")
 
 
 def verify_score_manifest_reuse(

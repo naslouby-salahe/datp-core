@@ -14,19 +14,18 @@
 ## 1. Current Status Dashboard
 
 ```text
-Current phase:        Phase 1 — Scratch Foundation (complete)
-Current ticket:       None — Phase 1 closed by P1-T18 quality gate = Green
-Overall progress:     29 / 90 tickets Done (32%)
-Completed tickets:    29
+Current phase:        Phase 2 — Anchor Reproduction Pipeline (implementation-ready)
+Current ticket:       None — Phase 2 quality gate is Green; real mini/full execution remains operator-gated
+Overall progress:     49 / 99 tickets Done (49%)
+Completed tickets:    49
 In-progress tickets:  0
 Blocked tickets:      0
-Last completed ticket: P1-T18
-Next ticket:          P2-T01 (Phase 2 not started; requires explicit authorization)
-Last tests run:       pytest -q — 177 passed, 0 failed (uv run ruff check . / uv run pyright both clean)
+Last completed ticket: P2-T20
+Next ticket:          Operator-authorized two-seed real N-BaIoT mini run
+Last tests run:       pytest -q — 188 passed, 1 valid environment-dependent skip (ruff / pyright clean)
 Current blocker:      None
-Last update:          2026-07-09 — Phase 1 complete under a user-authorized 18-ticket
-                       breakdown (P1-T01..P1-T18) that supersedes/splits the
-                       original 10-ticket Phase 1 plan; see §12 Deviations.
+Last update:          2026-07-09 — typed-state/configuration-boundary remediation verified;
+                       full execution remains unattempted.
 ```
 
 ---
@@ -37,16 +36,17 @@ Last update:          2026-07-09 — Phase 1 complete under a user-authorized 18
 |---|---|---|---|---|---|---|
 | 0 — Protocol/scope/architecture freeze | 11 | 11 | 0 | 0 | Done | P0-T11 go/no-go signed (Go) |
 | 1 — Scratch foundation | 18 | 18 | 0 | 0 | Done | P1-T18 quality gate green |
-| 2 — Anchor reproduction pipeline | 11 | 0 | 0 | 0 | Not Started | P2-T11 frozen anchor + scores |
+| 2 — Anchor reproduction pipeline | 20 | 20 | 0 | 0 | Done | Fixture smoke, CUDA readiness, and real inventory verified |
 | 3 — Core threshold policies & metrics | 11 | 0 | 0 | 0 | Not Started | P3-T11 B0–B4 + metrics validated |
 | 4 — Threshold variants & comparators | 9 | 0 | 0 | 0 | Not Started | P4-T09 variants reuse scores |
 | 5 — Mechanism analyses | 8 | 0 | 0 | 0 | Not Started | P5-T08 mechanisms from fixtures |
 | 6 — External dataset & stress tests | 12 | 0 | 0 | 0 | Not Started | P6-T12 D/C frozen, stress separated |
 | 7 — Temporal, final audit & freeze | 10 | 0 | 0 | 0 | Not Started | P7-T10 readiness report signed |
-| **Total** | **90** | **29** | **0** | **0** | **In Progress** | — |
+| **Total** | **99** | **49** | **0** | **0** | **In Progress** | — |
 
-Phase 1 total revised from 10 to 18 tickets (+8) under the user-authorized
-split in §12; the plan-of-record total moves from 82 to 90 accordingly.
+Phase 1 total was revised from 10 to 18 tickets (+8), then the user-authorized
+Phase 2 breakdown revised it from 11 to 20 tickets (+9); the plan-of-record
+total is 99. See §12.
 
 ---
 
@@ -83,17 +83,26 @@ split in §12; the plan-of-record total moves from 82 to 90 accordingly.
 | P1-T16 | 1 | Done | 2026-07-09 | `pytest tests/integration -q` (19 passed) | `tests/integration/{test_layout_contract,test_manifest_lineage,test_cli_doctor}.py` | Phase 1 integration tests |
 | P1-T17 | 1 | Done | 2026-07-09 | `make show-paths list-suites lint typecheck unit integration validate-config validate-layout doctor` (all green) | `README.md`, `Makefile` | READMEs / Makefile / `.env.example` reviewed and updated |
 | P1-T18 | 1 | Done | 2026-07-09 | `pytest -q` (177 passed); `ruff check .`; `pyright` (0 errors) | `CHANGELOG.md`, `MASTER_TICKET_LOG.md` | Phase 1 quality gate + changelog/master-log update |
-| P2-T01 | 2 | Not Started | — | — | — | N-BaIoT loader & schema |
-| P2-T02 | 2 | Not Started | — | — | — | N-BaIoT preprocessing & cache (**heavy**) |
-| P2-T03 | 2 | Not Started | — | — | — | Physical-device partition builder |
-| P2-T04 | 2 | Not Started | — | — | — | Benign train/cal/test split & manifest |
-| P2-T05 | 2 | Not Started | — | — | — | Autoencoder architecture |
-| P2-T06 | 2 | Not Started | — | — | — | FedAvg training loop (**heavy**) |
-| P2-T07 | 2 | Not Started | — | — | — | Checkpoint save/select & freeze (**heavy**) |
-| P2-T08 | 2 | Not Started | — | — | — | Score generation & contract (**heavy**) |
-| P2-T09 | 2 | Not Started | — | — | — | B1/B2 anchor eval & 10-seed plan |
-| P2-T10 | 2 | Not Started | — | — | — | Anchor smoke run & provenance |
-| P2-T11 | 2 | Not Started | — | — | — | Anchor statistical gate (**heavy, gated**) |
+| P2-T01 | 2 | Done | 2026-07-09 | `pytest -q`; entry commands | `CHANGELOG.md`, `MASTER_TICKET_LOG.md` | Entry gate verified; user-authorized 20-ticket split recorded |
+| P2-T02 | 2 | Done | 2026-07-09 | `test_nbaiot_discovery.py` | `data/nbaiot.py` | Raw discovery, inventory, missing-data reporting |
+| P2-T03 | 2 | Done | 2026-07-09 | `test_nbaiot_discovery.py` | `data/nbaiot.py` | Typed CSV loader preserves device/source identity |
+| P2-T04 | 2 | Done | 2026-07-09 | `test_anchor_pipeline.py` | `partitioning/physical_device.py` | Deterministic physical-device client mapping |
+| P2-T05 | 2 | Done | 2026-07-09 | `test_anchor_pipeline.py` | `data/splits.py`, `data/preprocessing.py` | Benign train/cal/test splits and scaling |
+| P2-T06 | 2 | Done | 2026-07-09 | `test_anchor_pipeline.py` | `data/splits.py` | Split manifest and leakage validation |
+| P2-T07 | 2 | Done | 2026-07-09 | `test_anchor_pipeline.py` | `models/autoencoder.py` | Fixed deterministic autoencoder |
+| P2-T08 | 2 | Done | 2026-07-09 | `test_anchor_pipeline.py` | `federation/fedavg.py` | Full-participation benign-only FedAvg |
+| P2-T09 | 2 | Done | 2026-07-09 | `test_anchor_fixture_pipeline.py` | `models/checkpoints.py`, `models/frozen.py` | Final-round selection and frozen loading |
+| P2-T10 | 2 | Done | 2026-07-09 | `test_anchor_fixture_pipeline.py` | `models/scoring.py` | Calibration/test reconstruction scores |
+| P2-T11 | 2 | Done | 2026-07-09 | `test_anchor_fixture_pipeline.py` | `models/scoring.py` | Score lineage and reuse guard |
+| P2-T12 | 2 | Done | 2026-07-09 | `test_anchor_fixture_pipeline.py` | `thresholding/{quantiles,shared,local}.py` | B1/B2 p95 thresholds from stored scores |
+| P2-T13 | 2 | Done | 2026-07-09 | `test_anchor_pipeline.py` | `evaluation/{predictions,classification,disparity}.py` | Anchor predictions and control metrics |
+| P2-T14 | 2 | Done | 2026-07-09 | `test_anchor_fixture_pipeline.py` | `evaluation/aggregation.py` | Per-seed paired delta preserves B1−B2 sign |
+| P2-T15 | 2 | Done | 2026-07-09 | `test_anchor_pipeline.py` | `experiments/plan.py` | Locked 10-seed B1/B2 plan |
+| P2-T16 | 2 | Done | 2026-07-09 | `test_anchor_cli.py` | `cli.py`, `experiments/anchor.py` | Fixture smoke, safe mini/full gates, threshold-only command |
+| P2-T17 | 2 | Done | 2026-07-09 | `tests/unit/test_{nbaiot_discovery,anchor_pipeline}.py` | unit tests | Phase 2 unit coverage |
+| P2-T18 | 2 | Done | 2026-07-09 | `tests/integration/test_anchor_{fixture_pipeline,cli}.py` | integration tests | Shared checkpoint, lineage, CLI, no-retrain path |
+| P2-T19 | 2 | Done | 2026-07-09 | `datp-core run-smoke anchor-fixture` | `outputs/anchor-fixture/` (ignored runtime artifact) | Fixture end-to-end smoke passes |
+| P2-T20 | 2 | Done | 2026-07-09 | `pytest -q`; `ruff`; `pyright`; config/layout/readiness gates | runtime/config/docs | Real N-BaIoT, CUDA readiness, typed-state remediation, and static analysis verified |
 | P3-T01 | 3 | Not Started | — | — | — | Federated quantile backbone |
 | P3-T02 | 3 | Not Started | — | — | — | Threshold-policy interface & validation |
 | P3-T03 | 3 | Not Started | — | — | — | B0 centralized reference |
@@ -157,6 +166,87 @@ split in §12; the plan-of-record total moves from 82 to 90 accordingly.
 ## 5. Completed Work Log
 
 Newest first.
+
+```text
+## 2026-07-09 — P2-T20 remediation — Typed configuration and protocol state
+
+Status:            Done
+Summary:           Replaced internal mutable dictionary registries, dispatch,
+                    grouping, parameter-transfer, eligibility, and seed-role
+                    state with typed tuples and dataclasses. YAML/JSON/NPZ and
+                    PyTorch mappings are now limited to their I/O adapters.
+                    Anchor runtime grouping now owns config-derived dataset,
+                    regime, seed plan, FedAvg, splits, fixture distribution,
+                    client count, artifact layout, and CUDA device values.
+Files changed:      config loader/schemas/validation, data contracts/loading,
+                    domain registries, model/federation/scoring, CLI, utilities,
+                    artifact readers, and focused tests; confirmatory YAML
+                    now explicitly defines the artifact layout and all fixture
+                    and FedAvg runtime values are in YAML.
+Tests added:        Existing focused tests updated to use typed lookup APIs.
+Tests run:          pytest -q (188 passed, 1 environment-dependent skip); ruff;
+                    pyright; config validation; layout validation; readiness gate.
+Result:             No hidden anchor-runtime defaults or duplicated runtime
+                    policy values remain. No mini/full training was run.
+Artifacts created:  None.
+Decisions made:     D-011.
+Blockers:           None.
+Risks:              External serialization and PyTorch APIs necessarily accept
+                    mappings; those mappings are isolated at adapter boundaries.
+Next ticket:        Operator-authorized two-seed real N-BaIoT mini run.
+```
+
+```text
+## 2026-07-09 — P2-T20 — Configuration, CUDA, raw-layout, and Sonar remediation
+
+Status:            Done
+Summary:           Replaced the lowercase raw-directory assumption with the
+                    actual configured `N-BaIoT` directory; made runtime split,
+                    q, fixture, optimizer, and CUDA settings typed config
+                    fields; replaced the CPU-only NumPy AE path with CUDA
+                    PyTorch; and configured/scanned SonarQube Community Build.
+Files changed:      pyproject.toml, uv.lock, sonar-project.properties,
+                    configs/{datasets,training,thresholding}, source/runtime
+                    modules, tests, README.md, CHANGELOG.md.
+Tests added:        Updated hardware/config/anchor coverage for configured CUDA.
+Tests run:          pytest -q (188 passed, 1 environment-dependent skip); ruff;
+                    pyright; CUDA fixture smoke; SonarQube scan (0 open issues).
+Result:             Real raw inventory reports 9 device candidates, 9 benign
+                    files, and 80 attack files. No real training, mini run,
+                    full run, result claim, or Phase 3 work was performed.
+Artifacts created:  Runtime-only CUDA fixture checkpoint and score artifacts.
+Decisions made:     D-009.
+Blockers:           None.
+Risks:              Real full-data loading remains operator-gated.
+Next ticket:        Operator-authorized two-seed real N-BaIoT mini run.
+```
+
+```text
+## 2026-07-09 — P2-T01..P2-T19 — Phase 2 anchor implementation
+
+Status:            Done
+Summary:           Implemented the fixture-validated Regime A N-BaIoT anchor
+                    pipeline: raw discovery/loading, natural device clients,
+                    benign-only splits and scaling, fixed AE/FedAvg, frozen
+                    checkpoints, stored reconstruction scores, B1/B2, metrics,
+                    paired planning, and safe commands. No Phase 3 component,
+                    raw-data mutation, result curation, or full run occurred.
+Files changed:      `src/datp_core/{data,partitioning,models,federation,thresholding,evaluation,experiments}/`,
+                    `src/datp_core/cli.py`, `configs/training/*.yaml`, focused
+                    unit/integration tests, `README.md`.
+Tests added:        N-BaIoT discovery, anchor unit, fixture pipeline, and CLI
+                    integration tests.
+Tests run:          `pytest -q` (189 passed); `ruff check .`; `pyright`; fixture
+                    smoke; plan; readiness, config, layout, and doctor commands.
+Result:             Fixture anchor and threshold-only rerun pass with frozen
+                    checkpoint/score lineage. This is implementation-readiness
+                    evidence only, not a scientific result.
+Artifacts created:  `outputs/anchor-fixture/` runtime-only fixture artifact.
+Decisions made:     D-008 superseded by D-009 (CUDA PyTorch backend and typed real-data root).
+Blockers:           None; the two-seed real mini run remains operator-gated.
+Risks:              Full raw loading/training has not been authorized or run.
+Next ticket:        Operator-authorized two-seed real N-BaIoT mini run.
+```
 
 ```text
 ## 2026-07-09 — P1-T18 — Phase 1 quality gate & CHANGELOG/master-log update
@@ -912,10 +1002,7 @@ current sub-tasks, partial artifacts, and any early findings.
 
 ## 7. Blocked Ticket Log
 
-*None.* When a ticket is `Blocked`, this section MUST contain: ticket ID, blocker
-description, what it depends on, who/what can unblock, and date blocked. A missing
-entry here for a blocked ticket is a changelog-contract violation (tested by
-P1-T10).
+*None.*
 
 ---
 
@@ -931,6 +1018,8 @@ P1-T10).
 | D-006 | 2026-07-09 | Statistics (BCa CI) computed in P7-T03; claim gating separated into P7-T04 | Keep number computation distinct from claim pass/fail logic | P7-T03, P7-T04 |
 | D-007 | 2026-07-09 | Execute Phase 1 under a user-authorized 18-ticket breakdown (P1-T01..P1-T18) instead of the original 10-ticket plan; total ticket count moves 82→90 | User request explicitly permitted splitting tickets and required recording the deviation; finer granularity matches one-concern-per-ticket governance | P1-T01..P1-T18 (see §12) |
 | D-008 | 2026-07-09 | `ThresholdingConfig` uses plural `policies`/`q_values` instead of singular `policy`/`q` | `core_ladder.yaml` must list all of B0-B4 and `quantiles.yaml` must list a q-sweep in one file without a second schema | P1-T04, P1-T05 |
+| D-009 | 2026-07-09 | Anchor execution requires configured CUDA PyTorch and the exact external `N-BaIoT` raw directory | The available RTX 5060 Ti is mandatory for anchor commands; no CPU fallback or lowercase path alias remains | P2-T20 |
+| D-011 | 2026-07-09 | Internal protocol state and registries use dataclasses/tuples; mappings are I/O adapters only | Typed state prevents unvalidated keys and hidden runtime behavior while retaining required YAML/JSON/NPZ/PyTorch interoperability | P2-T20 remediation |
 | D-009 | 2026-07-09 | `DatasetConfig.client_identity_type` is optional below `ready_for_smoke` readiness | `edge_iiotset.yaml`'s identity type is genuinely undecided pending the P6-T02 feasibility audit (SB-28 forbids inventing it); `ciciot2023_rejected_b_b.yaml` never gets one | P1-T04, P1-T05 |
 | D-010 | 2026-07-09 | `src/datp_core/data/cache.py` (preprocessing cache) and the CLI run-dispatcher/readiness-gate (`experiments/plan.py`, `experiments/runner.py`, `experiments/readiness.py`, `scripts/run_experiment.py`) are deferred to Phase 2 | Nothing in Phase 1 needs an actual cache or execution engine yet; building them now would be scientific-algorithm-adjacent scope beyond a contract/skeleton | P1-T08 (original), P1-T09 (original) — see §12 |
 
@@ -1072,6 +1161,7 @@ Recorded per-item below:
 | Original P1-T09 "CLI entrypoint & dataset registry" — the run-dispatch half (`experiments/{plan,runner,readiness}.py`, `scripts/run_experiment.py`, `datp run <suite>`) | Skipped (deferred) | The user's Phase 1 brief explicitly required the CLI to expose read-only commands only and forbade any training/run command in Phase 1 ("training command is absent or blocked"); the dataset-registry half of the original ticket is covered by new P1-T06, and the CLI-skeleton half by new P1-T12. | Deferred to Phase 2 (§11 follow-up). Original ticket body left untouched in `MASTER_TICKET_LOG.md`. |
 | Original P1-T02 `ClientKind` naming | Naming difference (non-breaking) | The canonical protocol doc (`docs/protocol/naming_conventions.md`) and this session's own domain-enum ticket used `ClientIdentityType` throughout; no `ClaimRole` enum was built in `domain/` since Tier/claim-role logic already lives in `docs/protocol/claim_hierarchy.md` (Phase 0) and is consumed there, not re-encoded as a Phase 1 domain type. | No master-log content changed; noted here for traceability only. |
 | Original P1-T10 CHANGELOG-consistency enforcement test | Not built this session | Out of the user's explicit 18-ticket list for this session. | See §11 follow-up; recommend an early Phase 2 (or reopened Phase 1) ticket. |
+| Original Phase 2 P2-T01..P2-T11 → authorized P2-T01..P2-T20 | Split | The user supplied a finer, explicitly scoped Phase 2 contract that separates discovery, loader, mapping, split/leakage, model/training, artifacts, B1/B2, evaluation, planning, commands, tests, and quality gate. | Phase 2 total revised 11→20; plan total 90→99. The historical Phase 2 prose remains in the master log with an explicit supersession note. |
 
 Changelog statuses in §3 match `MASTER_TICKET_LOG.md`'s Phase 1 implementation
 note (see the note directly above `#### P1-T01` there) as of this update.
@@ -1085,13 +1175,13 @@ note (see the note directly above `#### P1-T01` there) as of this update.
 - **Phase 1 is complete.** All eighteen P1 tickets (this session's revised
   breakdown, §12) are `Done`; the Phase 1 quality gate (P1-T18) is green:
   `pytest -q` 177 passed, `ruff check .` clean, `pyright` 0 errors.
-- **P2-T01 (N-BaIoT loader & schema) is the next ticket** but is not started
-  and requires explicit authorization to begin Phase 2 coding.
-- No dataset preprocessing, model training, threshold-policy computation, or
-  any experiment execution exists in this repository as of this update — only
-  the Phase 1 foundation (paths, domain enums, config system, dataset/artifact
-  contracts, no-overwrite guard, determinism/hardware/logging utilities, CLI
-  skeleton, fixtures, layout checks) and the Phase 0 protocol freeze.
+- **Phase 2 implementation is ready.** The real `data/raw/N-BaIoT` inventory
+  has nine physical-device candidates and CUDA execution is enforced; no real
+  mini/full run or scientific result has been produced.
+- **Next action:** authorize and run the two-seed mini gate, then decide
+  separately whether to authorize the operator-gated full 10-seed run.
+- **Phase 3 has not started.** B3/B4, variants, FedProx, personalization,
+  Regime C, external datasets, temporal work, statistics, and curation remain out of scope.
 
 ---
 
