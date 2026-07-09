@@ -168,6 +168,56 @@ total is 99. See §12.
 Newest first.
 
 ```text
+## 2026-07-09 — P2 stabilization remediation — Wrapper removal
+
+Status:            Done
+Summary:           Removed forwarding-only APIs, including the random utility
+                    module, frozen-model forwarding class, convenience
+                    manifest serializers/writers, seed/metric facades, and
+                    raw-path helper. Direct callers now own the required
+                    standard-library or concrete-domain call.
+Files changed:      Domain, data, artifact, model, CLI, determinism, and
+                    focused test modules; `utils/random.py` deleted.
+Tests added:        None; existing behavioral tests were updated to direct APIs.
+Tests run:          Focused wrapper-affected tests (47 passed, 1
+                    environment-dependent skip); ruff; pyright. Full suite
+                    pending final cleanup audit.
+Result:             No wrapper classes, forwarding functions, redirect modules,
+                    or compatibility APIs remain in the implemented scope.
+Artifacts created:  None.
+Decisions made:     None.
+Blockers:           None.
+Risks:              None.
+Next ticket:        Operator-authorized two-seed real N-BaIoT mini run.
+```
+
+```text
+## 2026-07-09 — P2 stabilization remediation — Artifact-boundary hardening
+
+Status:            Done
+Summary:           Centralized Phase 2 JSON artifact writes in the manifest
+                    writer; replaced the anonymous split-manifest dictionary
+                    with typed manifest records; and added validation for
+                    checkpoint, score, threshold, prediction, metric, and
+                    paired-summary state.
+Files changed:      Phase 2 artifact, data, model, thresholding, evaluation,
+                    CLI, and focused fixture/integration test modules.
+Tests added:        Malformed score/checkpoint metadata rejection and invalid
+                    metric-value coverage.
+Tests run:          Focused artifact/anchor/CLI tests (24 passed); ruff;
+                    pyright. Full suite pending final stabilization audit.
+Result:             Metadata is now written through one owned boundary and
+                    malformed provenance is rejected before downstream use.
+                    No real training, mini run, full run, or Phase 3 work ran.
+Artifacts created:  None.
+Decisions made:     None.
+Blockers:           None.
+Risks:              Generic JSON and NumPy adapters retain dynamic I/O values
+                    at their serialization boundaries only.
+Next ticket:        Operator-authorized two-seed real N-BaIoT mini run.
+```
+
+```text
 ## 2026-07-09 — P2-T20 remediation — Typed configuration and protocol state
 
 Status:            Done

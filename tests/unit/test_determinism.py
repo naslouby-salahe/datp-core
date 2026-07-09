@@ -11,27 +11,26 @@ from datp_core.utils.determinism import (
     seed_plan_from_dict,
     seed_plan_to_dict,
 )
-from datp_core.utils.random import make_numpy_generator, seed_numpy_global
 
 TORCH_AVAILABLE = importlib.util.find_spec("torch") is not None
 
 
 def test_same_seed_gives_same_numpy_sequence():
-    a = make_numpy_generator(42).random(5)
-    b = make_numpy_generator(42).random(5)
+    a = np.random.default_rng(42).random(5)
+    b = np.random.default_rng(42).random(5)
     assert np.array_equal(a, b)
 
 
 def test_different_seeds_differ():
-    a = make_numpy_generator(1).random(5)
-    b = make_numpy_generator(2).random(5)
+    a = np.random.default_rng(1).random(5)
+    b = np.random.default_rng(2).random(5)
     assert not np.array_equal(a, b)
 
 
-def test_seed_numpy_global_is_reproducible():
-    seed_numpy_global(7)
+def test_numpy_global_seed_is_reproducible():
+    np.random.seed(7)
     first = np.random.random(3)
-    seed_numpy_global(7)
+    np.random.seed(7)
     second = np.random.random(3)
     assert np.array_equal(first, second)
 

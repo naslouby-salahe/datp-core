@@ -56,15 +56,3 @@ def metric_spec(metric: Metric) -> MetricSpec:
         if spec.metric is metric:
             return spec
     raise ValueError(f"missing metric specification for {metric.value}")
-
-
-def is_primary(metric: Metric) -> bool:
-    return metric_spec(metric).role is MetricRole.PRIMARY
-
-
-def is_control(metric: Metric) -> bool:
-    return metric_spec(metric).role is MetricRole.CONTROL
-
-
-def is_thresholding_verdict(metric: Metric) -> bool:
-    return metric_spec(metric).is_thresholding_verdict

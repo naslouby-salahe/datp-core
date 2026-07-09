@@ -11,8 +11,9 @@ import numpy as np
 
 from datp_core.data.nbaiot import DeviceSamples, NbaiotDataset, SampleSource
 from datp_core.domain.datasets import DatasetId
-from datp_core.domain.partitions import CALIBRATION_MIN_ELIGIBLE_ROWS, SplitType
+from datp_core.domain.partitions import CALIBRATION_MIN_ELIGIBLE_ROWS, CHRONOLOGICAL_GAP_FRACTION, SplitType
 from datp_core.domain.regimes import Regime
+from datp_core.experiments.artifacts import write_manifest
 
 
 class SplitError(ValueError):
@@ -24,6 +25,7 @@ class AnchorSplitSettings:
     split_type: SplitType
     train_fraction: float
     calibration_fraction: float
+    gap_fraction: float
     seed: int
 
 
@@ -77,6 +79,26 @@ class RegimeASplits:
             raise SplitError("Regime A split requires at least one client")
 
 
+@dataclass(frozen=True)
+class SplitManifestEntry:
+    client_id: str
+    calibration_eligible: bool
+    train_ids: tuple[str, ...]
+    calibration_ids: tuple[str, ...]
+    test_benign_ids: tuple[str, ...]
+    test_attack_ids: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class AnchorSplitManifest:
+    dataset_id: DatasetId
+    regime_id: Regime
+    seed: int
+    split_type: SplitType
+    split_config_hash: str
+    clients: tuple[SplitManifestEntry, ...]
+
+
 def _slice(samples: DeviceSamples, start: int, stop: int) -> SplitSamples:
     return SplitSamples(
         sample_ids=samples.sample_ids[start:stop],
@@ -92,26 +114,33 @@ def build_regime_a_splits(
     train_fraction: float,
     calibration_fraction: float,
 ) -> RegimeASplits:
-    """Build chronological benign partitions and preserve every attack row for evaluation."""
+    """Build chronological benign partitions with locked 1% buffer gaps and preserve every attack row.
+
+    docs/protocol/artifact_contracts.md #1.1: 60% train / 1% gap / 20% calibration / 1% gap / 18% test,
+    per device, original row order preserved. The gap rows are excluded from every partition.
+    """
     if not (0.0 < train_fraction < 1.0 and 0.0 < calibration_fraction < 1.0):
         raise SplitError("split fractions must be strictly between zero and one")
-    if train_fraction + calibration_fraction >= 1.0:
-        raise SplitError("train and calibration fractions must leave held-out benign test rows")
+    if train_fraction + calibration_fraction + 2 * CHRONOLOGICAL_GAP_FRACTION >= 1.0:
+        raise SplitError("train, calibration, and gap fractions must leave held-out benign test rows")
     clients: list[ClientSplit] = []
     for device_id in dataset.device_ids:
         benign = dataset.by_device(device_id, SampleSource.BENIGN)
         attack = dataset.by_device(device_id, SampleSource.ATTACK)
-        train_end = int(len(benign.sample_ids) * train_fraction)
-        calibration_end = train_end + int(len(benign.sample_ids) * calibration_fraction)
-        if train_end == 0 or calibration_end == train_end or calibration_end >= len(benign.sample_ids):
+        row_count = len(benign.sample_ids)
+        train_end = int(row_count * train_fraction)
+        calibration_start = train_end + int(row_count * CHRONOLOGICAL_GAP_FRACTION)
+        calibration_end = calibration_start + int(row_count * calibration_fraction)
+        test_start = calibration_end + int(row_count * CHRONOLOGICAL_GAP_FRACTION)
+        if train_end == 0 or calibration_end == calibration_start or test_start >= row_count:
             raise SplitError(f"insufficient benign rows to build all splits for client {device_id}")
-        calibration = _slice(benign, train_end, calibration_end)
+        calibration = _slice(benign, calibration_start, calibration_end)
         clients.append(
             ClientSplit(
                 client_id=device_id,
                 train=_slice(benign, 0, train_end),
                 calibration=calibration,
-                test_benign=_slice(benign, calibration_end, len(benign.sample_ids)),
+                test_benign=_slice(benign, test_start, row_count),
                 test_attack=SplitSamples(
                     sample_ids=attack.sample_ids,
                     features=attack.features.copy(),
@@ -124,6 +153,7 @@ def build_regime_a_splits(
         split_type=SplitType.CHRONOLOGICAL_GAPPED,
         train_fraction=train_fraction,
         calibration_fraction=calibration_fraction,
+        gap_fraction=CHRONOLOGICAL_GAP_FRACTION,
         seed=seed,
     )
     config_hash = hashlib.sha256(json.dumps(asdict(split_settings), default=str, sort_keys=True).encode()).hexdigest()
@@ -155,23 +185,24 @@ def write_split_manifest(
     dataset_id: DatasetId,
     regime: Regime,
 ) -> None:
-    document = {
-        "dataset_id": dataset_id.value,
-        "regime_id": regime.value,
-        "seed": splits.seed,
-        "split_type": splits.split_type.value,
-        "split_config_hash": splits.split_config_hash,
-        "clients": [
-            {
-                "client_id": client.client_id,
-                "calibration_eligible": client.calibration_eligible,
-                "train_ids": list(client.train.sample_ids),
-                "calibration_ids": list(client.calibration.sample_ids),
-                "test_benign_ids": list(client.test_benign.sample_ids),
-                "test_attack_ids": list(client.test_attack.sample_ids),
-            }
-            for client in splits.clients
-        ],
-    }
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(document, indent=2, sort_keys=True))
+    write_manifest(
+        AnchorSplitManifest(
+            dataset_id=dataset_id,
+            regime_id=regime,
+            seed=splits.seed,
+            split_type=splits.split_type,
+            split_config_hash=splits.split_config_hash,
+            clients=tuple(
+                SplitManifestEntry(
+                    client_id=client.client_id,
+                    calibration_eligible=client.calibration_eligible,
+                    train_ids=client.train.sample_ids,
+                    calibration_ids=client.calibration.sample_ids,
+                    test_benign_ids=client.test_benign.sample_ids,
+                    test_attack_ids=client.test_attack.sample_ids,
+                )
+                for client in splits.clients
+            ),
+        ),
+        path,
+    )

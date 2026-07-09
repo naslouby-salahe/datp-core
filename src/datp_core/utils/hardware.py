@@ -7,7 +7,6 @@ import os
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
 
 DEVICE_ENV_VAR = "DATP_DEVICE"
 
@@ -83,7 +82,7 @@ def select_device_from_env(
     return select_device(requested, strict=strict)
 
 
-def device_descriptor_to_dict(descriptor: DeviceDescriptor) -> dict[str, Any]:
+def device_descriptor_to_dict(descriptor: DeviceDescriptor) -> dict[str, object]:
     return {
         "requested": descriptor.requested.value,
         "resolved": descriptor.resolved.value,

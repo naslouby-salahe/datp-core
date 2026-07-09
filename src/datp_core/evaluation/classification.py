@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from math import isfinite
 
 import numpy as np
 
@@ -22,6 +23,13 @@ class ClientMetrics:
     balanced_accuracy: float
     macro_f1: float
     auroc_control: float
+
+    def __post_init__(self) -> None:
+        if not self.client_id:
+            raise MetricError("client metrics require a client ID")
+        values = (self.fpr, self.tpr, self.balanced_accuracy, self.macro_f1, self.auroc_control)
+        if any(not isfinite(value) or not 0.0 <= value <= 1.0 for value in values):
+            raise MetricError("client metrics must be finite probabilities between zero and one")
 
 
 def _binary_auc(labels: np.ndarray, scores: np.ndarray) -> float:
@@ -56,13 +64,19 @@ def _macro_f1(benign_predictions: np.ndarray, attack_predictions: np.ndarray) ->
 def evaluate_client_metrics(
     scores: AnchorScoreArtifact, predictions: tuple[ClientPredictions, ...]
 ) -> tuple[ClientMetrics, ...]:
+    prediction_by_client = {prediction.client_id: prediction for prediction in predictions}
+    score_client_ids = tuple(client.client_id for client in scores.clients)
+    if len(prediction_by_client) != len(predictions) or set(prediction_by_client) != set(score_client_ids):
+        raise MetricError("predictions must contain exactly one entry for every score-artifact client")
     metrics: list[ClientMetrics] = []
     for client in scores.clients:
-        prediction = next((item for item in predictions if item.client_id == client.client_id), None)
-        if prediction is None:
-            raise MetricError(f"missing predictions for client {client.client_id}")
+        prediction = prediction_by_client[client.client_id]
         if not len(client.test_benign) or not len(client.test_attack):
             raise MetricError(f"client {client.client_id} has an empty test denominator")
+        if len(prediction.benign_predictions) != len(client.test_benign) or len(prediction.attack_predictions) != len(
+            client.test_attack
+        ):
+            raise MetricError(f"client {client.client_id} predictions do not match score denominators")
         fpr = float(prediction.benign_predictions.mean())
         tpr = float(prediction.attack_predictions.mean())
         labels = np.concatenate(

@@ -55,3 +55,13 @@ def test_legacy_train_command_is_absent():
     assert all(command.name != "train" for command in _COMMANDS)
     with pytest.raises(SystemExit):
         main(["train"])
+
+
+def test_command_dispatch_has_no_duplicate_names():
+    names = [command.name for command in _COMMANDS]
+    assert len(names) == len(set(names))
+
+
+def test_anchor_commands_are_dispatched_through_the_same_command_table():
+    names = {command.name for command in _COMMANDS}
+    assert {"run-smoke", "run-mini", "plan", "run-thresholds", "run-full", "validate-anchor-readiness"} <= names

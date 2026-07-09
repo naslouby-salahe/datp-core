@@ -8,8 +8,8 @@ from datp_core.data.nbaiot import (
     SampleSource,
     discover_nbaiot,
     load_nbaiot,
-    write_inventory_manifest,
 )
+from datp_core.experiments.artifacts import write_manifest
 
 
 def _write_csv(path, device_id, rows=3):
@@ -39,9 +39,8 @@ def test_inventory_and_loader_preserve_device_and_source(tmp_path):
     assert inventory.is_usable
     assert dataset.device_ids == ("device-a",)
     assert dataset.by_device("device-a", SampleSource.BENIGN).features.shape == (3, 2)
-    assert "device-a" in inventory.to_json()
     manifest_path = tmp_path / "inventory.json"
-    write_inventory_manifest(inventory, manifest_path)
+    write_manifest(inventory, manifest_path)
     assert json.loads(manifest_path.read_text())["files"][0]["device_id"] == "device-a"
 
 

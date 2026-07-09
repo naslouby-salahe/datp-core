@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
@@ -13,6 +13,7 @@ import numpy as np
 from datp_core.domain.datasets import DatasetId
 from datp_core.domain.policies import TrainingAlgorithm
 from datp_core.domain.regimes import Regime
+from datp_core.experiments.artifacts import write_manifest
 from datp_core.models.autoencoder import ARCHITECTURE_ID, Autoencoder, ModelParameter
 
 
@@ -37,6 +38,18 @@ class AnchorCheckpointManifest:
     weight_hash: str
 
     def __post_init__(self) -> None:
+        if not all(
+            (
+                self.checkpoint_id,
+                self.split_id,
+                self.architecture_id,
+                self.selection_rule,
+                self.weight_hash,
+            )
+        ):
+            raise CheckpointError("anchor checkpoint manifest requires complete provenance")
+        if self.seed < 0 or self.selected_round < 1:
+            raise CheckpointError("anchor checkpoint manifest requires a non-negative seed and positive selected round")
         if self.selection_rule != FINAL_ROUND_SELECTION_RULE:
             raise CheckpointError("anchor checkpoint selection must use the final training round")
         if "threshold" in self.selection_rule or "auroc" in self.selection_rule:
@@ -93,23 +106,28 @@ def save_anchor_checkpoint(
         selection_rule=FINAL_ROUND_SELECTION_RULE,
         weight_hash=weight_hash,
     )
-    path.with_suffix(".json").write_text(json.dumps(asdict(manifest), default=str, indent=2, sort_keys=True))
+    write_manifest(manifest, path.with_suffix(".json"))
     path.chmod(0o444)
     path.with_suffix(".json").chmod(0o444)
     return manifest
 
 
 def read_anchor_checkpoint_manifest(path: Path) -> AnchorCheckpointManifest:
-    data = json.loads(path.read_text())
-    return AnchorCheckpointManifest(
-        checkpoint_id=data["checkpoint_id"],
-        dataset_id=DatasetId(data["dataset_id"]),
-        regime=Regime(data["regime"]),
-        seed=int(data["seed"]),
-        split_id=data["split_id"],
-        architecture_id=data["architecture_id"],
-        training_algorithm=TrainingAlgorithm(data["training_algorithm"]),
-        selected_round=int(data["selected_round"]),
-        selection_rule=data["selection_rule"],
-        weight_hash=data["weight_hash"],
-    )
+    try:
+        data = json.loads(path.read_text())
+        if not isinstance(data, dict):
+            raise TypeError("checkpoint manifest must be a JSON object")
+        return AnchorCheckpointManifest(
+            checkpoint_id=data["checkpoint_id"],
+            dataset_id=DatasetId(data["dataset_id"]),
+            regime=Regime(data["regime"]),
+            seed=int(data["seed"]),
+            split_id=data["split_id"],
+            architecture_id=data["architecture_id"],
+            training_algorithm=TrainingAlgorithm(data["training_algorithm"]),
+            selected_round=int(data["selected_round"]),
+            selection_rule=data["selection_rule"],
+            weight_hash=data["weight_hash"],
+        )
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        raise CheckpointError(f"invalid anchor checkpoint manifest {path}") from exc

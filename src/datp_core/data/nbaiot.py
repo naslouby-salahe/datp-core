@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import csv
-import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
@@ -43,9 +42,6 @@ class DatasetInventory:
     @property
     def is_usable(self) -> bool:
         return any(record.device_id is not None and record.source is not None for record in self.files)
-
-    def to_json(self) -> str:
-        return json.dumps(asdict(self), default=str, indent=2, sort_keys=True)
 
 
 @dataclass(frozen=True)
@@ -151,11 +147,6 @@ def discover_nbaiot(root: Path) -> DatasetInventory:
         missing_devices=(),
         ambiguous_files=tuple(sorted(ambiguous)),
     )
-
-
-def write_inventory_manifest(inventory: DatasetInventory, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(inventory.to_json())
 
 
 def _read_csv_file(

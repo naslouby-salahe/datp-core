@@ -51,9 +51,8 @@ def test_metric_claim_roles_are_correct():
 
 
 def test_auroc_is_marked_control_only():
-    assert metrics.is_control(Metric.AUROC)
-    assert not metrics.is_primary(Metric.AUROC)
-    assert not metrics.is_thresholding_verdict(Metric.AUROC)
+    assert metrics.metric_spec(Metric.AUROC).role is MetricRole.CONTROL
+    assert metrics.metric_spec(Metric.AUROC).is_thresholding_verdict is False
 
 
 def test_regime_a_is_marked_confirmatory():
@@ -106,7 +105,7 @@ def test_calibration_eligibility_threshold():
 
 
 def test_seed_plan_locked_confirmatory_set():
-    plan = seeds.confirmatory_seed_plan()
+    plan = SeedPlan(seeds=seeds.CONFIRMATORY_SEEDS, role=SeedRole.ANALYSIS)
     assert plan.seeds == tuple(range(10))
     assert seeds.PRELIMINARY_SEEDS == tuple(range(5))
 

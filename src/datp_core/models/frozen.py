@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -12,18 +11,7 @@ from datp_core.models.checkpoints import AnchorCheckpointManifest, CheckpointErr
 from datp_core.utils.hardware import DeviceType
 
 
-@dataclass(frozen=True)
-class FrozenAutoencoder:
-    model: Autoencoder
-    manifest: AnchorCheckpointManifest
-
-    def reconstruct(self, inputs: np.ndarray) -> np.ndarray:
-        return self.model.reconstruct(inputs)
-
-
-def load_frozen_anchor_checkpoint(
-    path: Path, manifest: AnchorCheckpointManifest, *, device: DeviceType
-) -> FrozenAutoencoder:
+def load_frozen_anchor_checkpoint(path: Path, manifest: AnchorCheckpointManifest, *, device: DeviceType) -> Autoencoder:
     if not path.is_file():
         raise CheckpointError(f"checkpoint file is missing: {path}")
     with np.load(path) as data:
@@ -43,4 +31,4 @@ def load_frozen_anchor_checkpoint(
     if model.architecture_id != manifest.architecture_id or _weight_hash(model) != manifest.weight_hash:
         raise CheckpointError("checkpoint weights or architecture do not match the frozen manifest")
     model.freeze()
-    return FrozenAutoencoder(model=model, manifest=manifest)
+    return model

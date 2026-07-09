@@ -7,13 +7,14 @@ mode fails clearly instead of silently trusting an unavailable backend.
 from __future__ import annotations
 
 import importlib.util
+import random
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from datp_core.domain.seeds import SeedPlan, SeedRole
+import numpy as np
 
-from .random import seed_numpy_global, seed_python_random
+from datp_core.domain.seeds import SeedPlan, SeedRole
 
 _ROLE_SEED_OFFSETS = (
     (SeedRole.TRAIN, 0),
@@ -46,8 +47,8 @@ def seed_for_role(seed: int, role: SeedRole) -> int:
 
 
 def apply_seed(seed: int, *, strict: bool = False) -> DeterminismReport:
-    seed_python_random(seed)
-    seed_numpy_global(seed)
+    random.seed(seed)
+    np.random.seed(seed)
 
     torch_available = importlib.util.find_spec("torch") is not None
     torch_seeded = False

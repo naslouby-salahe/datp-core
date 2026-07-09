@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import json
-from dataclasses import asdict, dataclass
-from pathlib import Path
+from dataclasses import dataclass
 
 from datp_core.domain.clients import ClientId, ClientIdentityType
 
@@ -46,8 +44,3 @@ def build_physical_device_client_map(
         ),
         expected_client_count=expected_client_count,
     )
-
-
-def write_client_map_manifest(client_map: PhysicalDeviceClientMap, path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(asdict(client_map), default=str, indent=2, sort_keys=True))

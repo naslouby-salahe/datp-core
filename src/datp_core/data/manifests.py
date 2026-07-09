@@ -152,13 +152,9 @@ def dataset_contract(name: str) -> DatasetContract:
     raise DatasetContractError(f"unknown dataset registration {name!r}")
 
 
-def raw_dataset_root(contract: DatasetContract, repo_paths: RepoPaths) -> Path:
-    return repo_paths.data_raw / contract.raw_subdirectory
-
-
 def require_raw_dataset_present(contract: DatasetContract, repo_paths: RepoPaths) -> Path:
     """Raise if the raw dataset directory is absent; never create it."""
-    root = raw_dataset_root(contract, repo_paths)
+    root = repo_paths.data_raw / contract.raw_subdirectory
     if not root.is_dir():
         raise DatasetContractError(
             f"raw dataset missing for {contract.dataset_id.value}: expected directory {root} "

@@ -17,6 +17,10 @@ class ClientPredictions:
     attack_predictions: np.ndarray
 
     def __post_init__(self) -> None:
+        if not self.client_id:
+            raise ValueError("client predictions require a client ID")
+        if self.benign_predictions.ndim != 1 or self.attack_predictions.ndim != 1:
+            raise ValueError("client predictions must be one-dimensional")
         self.benign_predictions.setflags(write=False)
         self.attack_predictions.setflags(write=False)
 

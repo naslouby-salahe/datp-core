@@ -34,14 +34,6 @@ class SeedPlan:
             raise SeedPlanError(f"seed plan contains negative seeds: {self.seeds}")
 
 
-def confirmatory_seed_plan(role: SeedRole = SeedRole.ANALYSIS) -> SeedPlan:
-    return SeedPlan(seeds=CONFIRMATORY_SEEDS, role=role)
-
-
-def preliminary_seed_plan(role: SeedRole = SeedRole.ANALYSIS) -> SeedPlan:
-    return SeedPlan(seeds=PRELIMINARY_SEEDS, role=role)
-
-
 def paired_delta_seeds(plan_a: SeedPlan, plan_b: SeedPlan) -> tuple[int, ...]:
     """Seeds valid for Delta_s = CV(FPR)[B1,s] - CV(FPR)[B2,s] (seed_plan.md pairing rule).
 

@@ -24,6 +24,9 @@ class SplitRole(StrEnum):
 CALIBRATION_MIN_ELIGIBLE_ROWS = 100
 """n_min; clients below this fall back to tau_global (Calibration-Pending)."""
 
+CHRONOLOGICAL_GAP_FRACTION = 0.01
+"""Locked buffer between adjacent chronological partitions (docs/protocol/artifact_contracts.md #1.1)."""
+
 
 @dataclass(frozen=True)
 class SplitRatios:

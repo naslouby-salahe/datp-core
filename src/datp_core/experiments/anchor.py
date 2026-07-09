@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-import json
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -19,12 +18,13 @@ from datp_core.evaluation.aggregation import AnchorSeedSummary, paired_anchor_su
 from datp_core.evaluation.classification import evaluate_client_metrics
 from datp_core.evaluation.disparity import compute_fpr_disparity
 from datp_core.evaluation.predictions import make_anchor_predictions
+from datp_core.experiments.artifacts import write_manifest
 from datp_core.federation.fedavg import FedAvgConfig, train_fedavg_anchor
 from datp_core.models.autoencoder import Autoencoder
 from datp_core.models.checkpoints import save_anchor_checkpoint
 from datp_core.models.frozen import load_frozen_anchor_checkpoint
 from datp_core.models.scoring import generate_anchor_scores, write_score_artifact
-from datp_core.partitioning.physical_device import build_physical_device_client_map, write_client_map_manifest
+from datp_core.partitioning.physical_device import build_physical_device_client_map
 from datp_core.thresholding.local import compute_b2_local_threshold
 from datp_core.thresholding.shared import compute_b1_shared_threshold
 from datp_core.utils.hardware import DeviceType
@@ -131,7 +131,7 @@ def run_anchor_seed(
     splits = transform_regime_a_splits(raw_splits, fit_feature_scaler(raw_splits))
     split_id = splits.split_config_hash
     seed_root = output_root / f"{config.artifacts.seed_directory_prefix}-{seed}"
-    write_client_map_manifest(client_map, seed_root / config.artifacts.client_map_filename)
+    write_manifest(client_map, seed_root / config.artifacts.client_map_filename)
     write_split_manifest(
         splits,
         seed_root / config.artifacts.split_manifest_filename,
@@ -158,9 +158,10 @@ def run_anchor_seed(
         split_id=split_id,
         selected_round=config.fedavg.rounds,
     )
-    frozen = load_frozen_anchor_checkpoint(checkpoint_path, checkpoint_manifest, device=config.device)
+    frozen_model = load_frozen_anchor_checkpoint(checkpoint_path, checkpoint_manifest, device=config.device)
     scores = generate_anchor_scores(
-        frozen,
+        frozen_model,
+        checkpoint_manifest,
         splits,
         client_mapping_id="|".join(client_map.client_ids),
         preprocessing_id=f"{config.artifacts.preprocessing_id_prefix}-{split_id[:16]}",
@@ -184,7 +185,7 @@ def run_anchor_seed(
         compute_fpr_disparity(eligible_b1_metrics).cv_fpr,
         compute_fpr_disparity(eligible_b2_metrics).cv_fpr,
     )
-    (seed_root / config.artifacts.summary_filename).write_text(json.dumps(asdict(summary), indent=2, sort_keys=True))
+    write_manifest(summary, seed_root / config.artifacts.summary_filename)
     return AnchorRunResult(summary=summary, checkpoint_path=str(checkpoint_path), score_path=str(score_path))
 
 
