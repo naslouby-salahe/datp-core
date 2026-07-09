@@ -243,7 +243,7 @@ plus machine-checkable schema stubs; each ticket carries an audit/validation
 check even though it is documentation.
 
 #### P0-T01 — Scientific scope & identity freeze
-- **Phase / Status:** 0 / Not Started
+- **Phase / Status:** 0 / Done
 - **Purpose:** Lock the DATP identity (roadmap §2) as the top constraint doc all
   later contracts import.
 - **Scientific reason:** Prevents scope drift and confirmatory-endpoint dilution.
@@ -271,7 +271,7 @@ check even though it is documentation.
 - **Notes:** This doc is imported by P1-T02 enum docstrings and P7 audits.
 
 #### P0-T02 — Claim hierarchy & confirmatory-endpoint isolation freeze
-- **Phase / Status:** 0 / Not Started
+- **Phase / Status:** 0 / Done
 - **Purpose:** Lock the 9-tier claim hierarchy and the singular Tier-1 endpoint.
 - **Scientific reason:** Nothing below Tier 1 may be promoted; endpoint is immutable.
 - **Engineering reason:** Drives `claim_gates` metadata (P7-T04) and claim map (P7-T05).
@@ -297,7 +297,7 @@ check even though it is documentation.
 - **Notes:** Feeds `ClaimRole` enum (P1-T02) and `claim_gates` (P7-T04).
 
 #### P0-T03 — Regime definitions freeze (A / B-a / B-b / C / D / D-temporal)
-- **Phase / Status:** 0 / Not Started
+- **Phase / Status:** 0 / Done
 - **Purpose:** Lock regime semantics, client definitions, purpose, pass/suppression rules.
 - **Scientific reason:** Each regime has a fixed role (confirmatory/boundary/
   supportive/external/temporal) and must not be conflated.
@@ -323,7 +323,7 @@ check even though it is documentation.
 - **Notes:** Drives P1-T02 `Regime` enum and P6 loaders/guards.
 
 #### P0-T04 — Threshold-policy & comparator nomenclature freeze
-- **Phase / Status:** 0 / Not Started
+- **Phase / Status:** 0 / Done
 - **Purpose:** Lock B0–B4 + comparator identifiers and naming locks.
 - **Scientific reason:** Prevents stale labels (no `B5`, no `B3-LGS`, no "Ditto"
   fallback misname) and preserves ladder meaning.
@@ -350,7 +350,7 @@ check even though it is documentation.
 - **Notes:** Feeds P3 policies and P4 comparators directly.
 
 #### P0-T05 — Dataset & artifact/directory contract definitions
-- **Phase / Status:** 0 / Not Started
+- **Phase / Status:** 0 / Done
 - **Purpose:** Define contracts for raw, preprocessed, splits, checkpoints,
   scores, thresholds, metrics, stats, tables, figures, manifests, results.
 - **Scientific reason:** Reuse is valid only when dataset/split/checkpoint/
@@ -377,7 +377,7 @@ check even though it is documentation.
 - **Notes:** Implemented concretely by P1-T07 manifest schema.
 
 #### P0-T06 — Config, experiment-suite & experiment-ID naming conventions
-- **Phase / Status:** 0 / Not Started
+- **Phase / Status:** 0 / Done
 - **Purpose:** Lock config group layout, suite names, and experiment IDs (E-C1…).
 - **Scientific reason:** Every table/figure must trace to a stable experiment ID.
 - **Engineering reason:** Prevents hardcoded experiment logic; drives config loader.
@@ -403,7 +403,7 @@ check even though it is documentation.
 - **Notes:** Feeds P1-T04 config schemas and P6/P4 suite configs.
 
 #### P0-T07 — Seed plan freeze
-- **Phase / Status:** 0 / Not Started
+- **Phase / Status:** 0 / Done
 - **Purpose:** Lock the paired 10-seed plan and seed roles.
 - **Scientific reason:** Confirmatory endpoint = 10 paired seeds; seed-extension
   honesty rule (roadmap §10) must be encoded.
@@ -428,7 +428,7 @@ check even though it is documentation.
 - **Notes:** Feeds P1-T03 seed types and P2-T09 paired plan.
 
 #### P0-T08 — Testing contract & test-pyramid freeze
-- **Phase / Status:** 0 / Not Started
+- **Phase / Status:** 0 / Done
 - **Purpose:** Lock the unit/integration/smoke/negative test taxonomy and the
   required test list per subsystem.
 - **Scientific reason:** Enforces no-leakage, benign-only, no-retrain, metric
@@ -453,7 +453,7 @@ check even though it is documentation.
 - **Notes:** This is the authority for §10 Testing Strategy.
 
 #### P0-T09 — Reuse/caching principle & raw-data placement freeze
-- **Phase / Status:** 0 / Not Started
+- **Phase / Status:** 0 / Done
 - **Purpose:** Lock the heavy-vs-cheap stage split and the `data/raw` placement rule.
 - **Scientific reason:** Threshold-only variants must reuse frozen checkpoints and
   stored scores; heavy reruns only on model/data/split/preprocess/scoring change.
@@ -481,7 +481,7 @@ check even though it is documentation.
 - **Notes:** Enforced in code by P4-T08 no-retrain guard and P7-T09 audit.
 
 #### P0-T10 — Old DATP behavioral-reference extraction
-- **Phase / Status:** 0 / Not Started
+- **Phase / Status:** 0 / Done
 - **Purpose:** Extract, from `/home/naslouby/Projects/datp`, only the behavioral
   semantics needed (threshold policy math, split semantics, scoring, metric defs).
 - **Scientific reason:** Preserve exact DATP behavior without inheriting layout.
@@ -510,7 +510,7 @@ check even though it is documentation.
 - **Notes:** Consulted by P3 (policy math) and P2-T04 (split semantics).
 
 #### P0-T11 — Repository structure decision, changelog format & go/no-go coding gate
-- **Phase / Status:** 0 / Not Started
+- **Phase / Status:** 0 / Done
 - **Purpose:** Ratify §5 structure decision, lock the CHANGELOG format/update
   contract, and record the go/no-go gate that authorizes Phase 1 coding.
 - **Scientific reason:** Ensures the build starts only after identity/claims/

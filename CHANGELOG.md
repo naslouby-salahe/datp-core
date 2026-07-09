@@ -14,17 +14,17 @@
 ## 1. Current Status Dashboard
 
 ```text
-Current phase:        Phase 0 — Protocol, Scope & Architecture Freeze
-Current ticket:       P0-T01 — Scientific scope & identity freeze
-Overall progress:     0 / 82 tickets Done (0%)
-Completed tickets:    0
+Current phase:        Phase 0 — Protocol, Scope & Architecture Freeze (complete)
+Current ticket:       None — Phase 0 closed by P0-T11 go/no-go = Go
+Overall progress:     11 / 82 tickets Done (13%)
+Completed tickets:    11
 In-progress tickets:  0
 Blocked tickets:      0
-Last completed ticket: None
-Next ticket:          P0-T01
-Last tests run:       None (no code yet)
+Last completed ticket: P0-T11
+Next ticket:          P1-T01 (Phase 1 not started; requires explicit authorization)
+Last tests run:       pytest tests/unit -q — 32 passed, 0 failed
 Current blocker:      None
-Last update:          2026-07-09 — planning package created
+Last update:          2026-07-09 — Phase 0 complete, go/no-go signed Go
 ```
 
 ---
@@ -33,7 +33,7 @@ Last update:          2026-07-09 — planning package created
 
 | Phase | Total Tickets | Done | In Progress | Blocked | Status | Exit Gate |
 |---|---|---|---|---|---|---|
-| 0 — Protocol/scope/architecture freeze | 11 | 0 | 0 | 0 | Not Started | P0-T11 go/no-go signed |
+| 0 — Protocol/scope/architecture freeze | 11 | 11 | 0 | 0 | Done | P0-T11 go/no-go signed (Go) |
 | 1 — Scratch foundation | 10 | 0 | 0 | 0 | Not Started | P1-T10 foundation tests green |
 | 2 — Anchor reproduction pipeline | 11 | 0 | 0 | 0 | Not Started | P2-T11 frozen anchor + scores |
 | 3 — Core threshold policies & metrics | 11 | 0 | 0 | 0 | Not Started | P3-T11 B0–B4 + metrics validated |
@@ -41,7 +41,7 @@ Last update:          2026-07-09 — planning package created
 | 5 — Mechanism analyses | 8 | 0 | 0 | 0 | Not Started | P5-T08 mechanisms from fixtures |
 | 6 — External dataset & stress tests | 12 | 0 | 0 | 0 | Not Started | P6-T12 D/C frozen, stress separated |
 | 7 — Temporal, final audit & freeze | 10 | 0 | 0 | 0 | Not Started | P7-T10 readiness report signed |
-| **Total** | **82** | **0** | **0** | **0** | **Not Started** | — |
+| **Total** | **82** | **11** | **0** | **0** | **In Progress** | — |
 
 ---
 
@@ -49,17 +49,17 @@ Last update:          2026-07-09 — planning package created
 
 | Ticket | Phase | Status | Last Update | Tests Run | Files Changed | Notes |
 |---|---|---|---|---|---|---|
-| P0-T01 | 0 | Not Started | — | — | — | Scientific scope & identity freeze |
-| P0-T02 | 0 | Not Started | — | — | — | Claim hierarchy & confirmatory isolation |
-| P0-T03 | 0 | Not Started | — | — | — | Regime definitions freeze |
-| P0-T04 | 0 | Not Started | — | — | — | Threshold-policy & comparator nomenclature |
-| P0-T05 | 0 | Not Started | — | — | — | Dataset & artifact/directory contracts |
-| P0-T06 | 0 | Not Started | — | — | — | Config/suite/experiment-ID naming |
-| P0-T07 | 0 | Not Started | — | — | — | Seed plan freeze |
-| P0-T08 | 0 | Not Started | — | — | — | Testing contract & test-pyramid |
-| P0-T09 | 0 | Not Started | — | — | — | Reuse/caching + raw-data placement |
-| P0-T10 | 0 | Not Started | — | — | — | Old DATP behavioral-reference extraction |
-| P0-T11 | 0 | Not Started | — | — | — | Structure decision + changelog + go/no-go |
+| P0-T01 | 0 | Done | 2026-07-09 | `pytest tests/unit/test_scope_boundaries.py` (2 passed) | `docs/protocol/identity_lock.md`, `docs/protocol/scope_boundaries.md`, `tests/unit/test_scope_boundaries.py` | Scientific scope & identity freeze |
+| P0-T02 | 0 | Done | 2026-07-09 | `pytest tests/unit/test_claim_hierarchy.py` (3 passed) | `docs/protocol/claim_hierarchy.md`, `tests/unit/test_claim_hierarchy.py` | Claim hierarchy & confirmatory isolation |
+| P0-T03 | 0 | Done | 2026-07-09 | `pytest tests/unit/test_regimes_doc.py` (3 passed) | `docs/protocol/regimes.md`, `tests/unit/test_regimes_doc.py` | Regime definitions freeze |
+| P0-T04 | 0 | Done | 2026-07-09 | `pytest tests/unit/test_policies_doc.py` (4 passed) | `docs/protocol/policies.md`, `tests/unit/test_policies_doc.py` | Threshold-policy & comparator nomenclature |
+| P0-T05 | 0 | Done | 2026-07-09 | `pytest tests/unit/test_artifact_contracts_doc.py` (3 passed) | `docs/protocol/artifact_contracts.md`, `data/README.md`, `checkpoints/README.md`, `outputs/README.md`, `results/README.md`, `tests/unit/test_artifact_contracts_doc.py` | Dataset & artifact/directory contracts |
+| P0-T06 | 0 | Done | 2026-07-09 | `pytest tests/unit/test_naming_conventions.py` (3 passed) | `docs/protocol/naming_conventions.md`, `tests/unit/test_naming_conventions.py` | Config/suite/experiment-ID naming |
+| P0-T07 | 0 | Done | 2026-07-09 | `pytest tests/unit/test_seed_plan_doc.py` (3 passed) | `docs/protocol/seed_plan.md`, `tests/unit/test_seed_plan_doc.py` | Seed plan freeze |
+| P0-T08 | 0 | Done | 2026-07-09 | `pytest tests/unit/test_testing_contract.py` (2 passed) | `docs/protocol/testing_contract.md`, `tests/unit/test_testing_contract.py` | Testing contract & test-pyramid |
+| P0-T09 | 0 | Done | 2026-07-09 | `pytest tests/unit/test_reuse_policy_doc.py` (3 passed) | `docs/protocol/reuse_policy.md`, `tests/unit/test_reuse_policy_doc.py` | Reuse/caching + raw-data placement |
+| P0-T10 | 0 | Done | 2026-07-09 | `pytest tests/unit/test_behavioral_reference.py` (2 passed) | `docs/protocol/behavioral_reference.md`, `tests/unit/test_behavioral_reference.py` | Old DATP behavioral-reference extraction |
+| P0-T11 | 0 | Done | 2026-07-09 | `pytest tests/unit -q` (full suite) | `docs/protocol/structure_decision.md`, `docs/protocol/go_no_go.md`, `CHANGELOG.md`, `tests/unit/test_changelog_format.py` | Structure decision + changelog + go/no-go |
 | P1-T01 | 1 | Not Started | — | — | — | Skeleton, pyproject, tooling, Makefile |
 | P1-T02 | 1 | Not Started | — | — | — | Domain enums & metric registry |
 | P1-T03 | 1 | Not Started | — | — | — | Seed-plan types |
@@ -137,12 +137,243 @@ Last update:          2026-07-09 — planning package created
 ## 4. Latest Update Block
 
 > Use the template in §14 for every future update. The most recent update goes
-> at the top of §5 (Completed Work Log) once tickets start closing.
+> at the top of §5 (Completed Work Log).
+
+---
+
+## 5. Completed Work Log
+
+Newest first.
+
+```text
+## 2026-07-09 — P0-T11 — Repository structure decision, changelog format & go/no-go coding gate
+
+Status:            Done
+Summary:           Ratified the §5 structure decision as docs/protocol/structure_decision.md,
+                    wrote docs/protocol/go_no_go.md recording the Go verdict, added the
+                    changelog-format parser test, and closed out this changelog for all of
+                    Phase 0.
+Files changed:      docs/protocol/structure_decision.md (new), docs/protocol/go_no_go.md (new),
+                    tests/unit/test_changelog_format.py (new), CHANGELOG.md (this file).
+Tests added:        test_changelog_format.py::test_dashboard_fields_present,
+                    ::test_status_enum_values, ::test_update_template_present,
+                    ::test_no_experimental_claims_in_changelog.
+Tests run:          pytest tests/unit -q — see full-suite count in §9.
+Result:             Phase 0 exit gate signed Go. Phase 1 authorized but not started.
+Artifacts created:  docs/protocol/structure_decision.md, docs/protocol/go_no_go.md.
+Decisions made:     None new; ratifies D-002, D-003 (Decision Log §8).
+Blockers:           None.
+Risks:              None new.
+Next ticket:        P1-T01 (not started; requires explicit Phase 1 authorization).
+```
+
+```text
+## 2026-07-09 — P0-T10 — Old DATP behavioral-reference extraction
+
+Status:            Done
+Summary:           Extracted threshold-policy math, eligibility/fallback rule, CV(FPR)
+                    formula, split semantics, checkpoint protocol, and AUROC role from
+                    /home/naslouby/Projects/datp as behavior-only notes (no source paste, no
+                    layout, no module-name inheritance).
+Files changed:      docs/protocol/behavioral_reference.md (new),
+                    tests/unit/test_behavioral_reference.py (new).
+Tests added:        test_behavioral_reference.py::test_no_source_paths_copied,
+                    ::test_no_backward_compat_language.
+Tests run:          pytest tests/unit/test_behavioral_reference.py -q — 2 passed.
+Result:             Behavioral reference locked; no structural/code inheritance introduced.
+Artifacts created:  docs/protocol/behavioral_reference.md.
+Decisions made:     None new.
+Blockers:           None.
+Risks:              None new.
+Next ticket:        P0-T11.
+```
+
+```text
+## 2026-07-09 — P0-T09 — Reuse/caching principle & raw-data placement freeze
+
+Status:            Done
+Summary:           Locked the heavy-vs-cheap stage table, the six invalidation triggers, and
+                    the data/raw symlink placement contract.
+Files changed:      docs/protocol/reuse_policy.md (new), tests/unit/test_reuse_policy_doc.py
+                    (new).
+Tests added:        test_reuse_policy_doc.py::test_stage_classification_complete,
+                    ::test_invalidation_triggers_listed, ::test_threshold_stage_not_marked_heavy.
+Tests run:          pytest tests/unit/test_reuse_policy_doc.py -q — 3 passed.
+Result:             Reuse/caching contract locked; enforced later by P4-T08 and P7-T09.
+Artifacts created:  docs/protocol/reuse_policy.md.
+Decisions made:     None new.
+Blockers:           None.
+Risks:              None new.
+Next ticket:        P0-T10.
+```
+
+```text
+## 2026-07-09 — P0-T08 — Testing contract & test-pyramid freeze
+
+Status:            Done
+Summary:           Canonicalized the unit/integration/smoke/negative test taxonomy
+                    (MASTER_TICKET_LOG.md §10) as a standalone doc with a coverage-of-contract
+                    rule and named Phase-0 test files.
+Files changed:      docs/protocol/testing_contract.md (new),
+                    tests/unit/test_testing_contract.py (new).
+Tests added:        test_testing_contract.py::test_every_subsystem_has_named_tests,
+                    ::test_no_generic_add_tests_placeholder.
+Tests run:          pytest tests/unit/test_testing_contract.py -q — 2 passed.
+Result:             Testing contract locked as the authority for MASTER_TICKET_LOG.md §10.
+Artifacts created:  docs/protocol/testing_contract.md.
+Decisions made:     None new.
+Blockers:           None.
+Risks:              None new.
+Next ticket:        P0-T09.
+```
+
+```text
+## 2026-07-09 — P0-T07 — Seed plan freeze
+
+Status:            Done
+Summary:           Locked the 10-seed set, the B1/B2/B0/B3/B4 pairing rule, the 5-seed
+                    preliminary vs 10-seed main distinction, and the seed-extension honesty
+                    rule (SB-21).
+Files changed:      docs/protocol/seed_plan.md (new), tests/unit/test_seed_plan_doc.py (new).
+Tests added:        test_seed_plan_doc.py::test_ten_paired_seeds,
+                    ::test_seed_extension_rule_present, ::test_no_seed_dropping_allowed.
+Tests run:          pytest tests/unit/test_seed_plan_doc.py -q — 3 passed.
+Result:             Seed plan locked; feeds P1-T03 seed types and P2-T09 paired plan.
+Artifacts created:  docs/protocol/seed_plan.md.
+Decisions made:     None new.
+Blockers:           None.
+Risks:              None new.
+Next ticket:        P0-T08.
+```
+
+```text
+## 2026-07-09 — P0-T06 — Config, experiment-suite & experiment-ID naming conventions
+
+Status:            Done
+Summary:           Locked the five config groups, the seven suite names, and the full
+                    E-C1…E-Q6 experiment-ID-to-suite registry; stated config-key naming rules
+                    (enum-backed, no raw policy strings, no "Ditto" hardcode).
+Files changed:      docs/protocol/naming_conventions.md (new),
+                    tests/unit/test_naming_conventions.py (new).
+Tests added:        test_naming_conventions.py::test_experiment_ids_unique,
+                    ::test_suite_names_map_to_known_experiments,
+                    ::test_no_stale_policy_names_in_registry.
+Tests run:          pytest tests/unit/test_naming_conventions.py -q — 3 passed.
+Result:             Naming conventions locked; feeds P1-T04 config schemas.
+Artifacts created:  docs/protocol/naming_conventions.md.
+Decisions made:     None new.
+Blockers:           None.
+Risks:              None new.
+Next ticket:        P0-T07.
+```
+
+```text
+## 2026-07-09 — P0-T05 — Dataset & artifact/directory contract definitions
+
+Status:            Done
+Summary:           Wrote per-dataset contracts (N-BaIoT, CICIoT2023, Edge-IIoTset; 12 fields
+                    each) and the 20-class pipeline artifact contract table (producer,
+                    consumers, manifest fields, reuse-validity key, read-only rule); added
+                    stub READMEs for data/, checkpoints/, outputs/, results/.
+Files changed:      docs/protocol/artifact_contracts.md (new), data/README.md (new),
+                    checkpoints/README.md (new), outputs/README.md (new), results/README.md
+                    (new), tests/unit/test_artifact_contracts_doc.py (new).
+Tests added:        test_artifact_contracts_doc.py::test_every_artifact_has_manifest_fields,
+                    ::test_readmes_exist, ::test_results_excludes_heavy_artifacts.
+Tests run:          pytest tests/unit/test_artifact_contracts_doc.py -q — 3 passed.
+Result:             Dataset/artifact contracts locked; concretely implemented by P1-T07.
+Artifacts created:  docs/protocol/artifact_contracts.md, four README.md stubs.
+Decisions made:     None new.
+Blockers:           None.
+Risks:              None new.
+Next ticket:        P0-T06.
+```
+
+```text
+## 2026-07-09 — P0-T04 — Threshold-policy & comparator nomenclature freeze
+
+Status:            Done
+Summary:           Locked B0–B4, threshold variants (τ-shrink, calibration-size-aware
+                    fallback, B2-conf), comparators (B-FedStatsBenign, B-LaridiFaithful), and
+                    stress-test comparators (FedProx, Ditto/FedRep-AE/FedPer-AE), plus every
+                    naming lock (no B5, no B3-LGS, B4 canonical K=3, no bare "Ditto").
+Files changed:      docs/protocol/policies.md (new), tests/unit/test_policies_doc.py (new).
+Tests added:        test_policies_doc.py::test_no_stale_labels, ::test_b0_not_in_causal_ladder,
+                    ::test_b4_canonical_k_is_3, ::test_fallback_not_named_ditto.
+Tests run:          pytest tests/unit/test_policies_doc.py -q — 4 passed.
+Result:             Policy/comparator nomenclature locked; feeds P3/P4 implementations.
+Artifacts created:  docs/protocol/policies.md.
+Decisions made:     None new.
+Blockers:           None.
+Risks:              None new.
+Next ticket:        P0-T05.
+```
+
+```text
+## 2026-07-09 — P0-T03 — Regime definitions freeze (A / B-a / B-b / C / D / D-temporal)
+
+Status:            Done
+Summary:           Locked all six regimes with role, client definition, purpose, threshold
+                    policies, primary metric, and pass/fail/suppression rule; recorded the two
+                    rejected-status labels (B_B_REJECTED_NO_METADATA,
+                    TEMPORAL_REJECTED_NO_TIMESTAMPS).
+Files changed:      docs/protocol/regimes.md (new), tests/unit/test_regimes_doc.py (new).
+Tests added:        test_regimes_doc.py::test_all_regimes_have_role_and_passrule,
+                    ::test_bb_marked_rejected, ::test_no_quantitative_bb_claim.
+Tests run:          pytest tests/unit/test_regimes_doc.py -q — 3 passed.
+Result:             Regime definitions locked; drives the Regime enum and P6 loaders/guards.
+Artifacts created:  docs/protocol/regimes.md.
+Decisions made:     None new.
+Blockers:           None.
+Risks:              None new.
+Next ticket:        P0-T04.
+```
+
+```text
+## 2026-07-09 — P0-T02 — Claim hierarchy & confirmatory-endpoint isolation freeze
+
+Status:            Done
+Summary:           Locked the nine claim tiers with the singular Tier-1 confirmatory claim,
+                    evidence/regime/metric/min-pass/fallback/reviewer-risk/placement fields
+                    per tier, and the Tier-9 forbidden-claims list.
+Files changed:      docs/protocol/claim_hierarchy.md (new),
+                    tests/unit/test_claim_hierarchy.py (new).
+Tests added:        test_claim_hierarchy.py::test_single_confirmatory_tier1,
+                    ::test_tier9_forbidden_enumerated, ::test_no_supportive_marked_confirmatory.
+Tests run:          pytest tests/unit/test_claim_hierarchy.py -q — 3 passed.
+Result:             Claim hierarchy locked; feeds ClaimRole enum and P7-T04 claim gates.
+Artifacts created:  docs/protocol/claim_hierarchy.md.
+Decisions made:     None new.
+Blockers:           None.
+Risks:              None new.
+Next ticket:        P0-T03.
+```
+
+```text
+## 2026-07-09 — P0-T01 — Scientific scope & identity freeze
+
+Status:            Done
+Summary:           Locked the fixed-encoder / sole-causal-variable / benign-only /
+                    CV(FPR)-primary / AUROC-control / stress-outside-ladder identity
+                    statements and the operational-FPR-equity fairness definition; enumerated
+                    SB-01…SB-32 as a parseable, testable list.
+Files changed:      docs/protocol/identity_lock.md (new), docs/protocol/scope_boundaries.md
+                    (new), tests/unit/test_scope_boundaries.py (new).
+Tests added:        test_scope_boundaries.py::test_all_SB_ids_present_and_unique,
+                    ::test_forbidden_terms_absent.
+Tests run:          pytest tests/unit/test_scope_boundaries.py -q — 2 passed.
+Result:             Scientific identity locked; imported by all later P0 docs and by P1-T02.
+Artifacts created:  docs/protocol/identity_lock.md, docs/protocol/scope_boundaries.md.
+Decisions made:     None new.
+Blockers:           None.
+Risks:              None new.
+Next ticket:        P0-T02.
+```
 
 ```text
 ## 2026-07-09 — Planning — MASTER_TICKET_LOG.md + CHANGELOG.md created
 
-Status: Planning package delivered (no code).
+Status: Done
 Summary: Authored the full 82-ticket master plan across 8 phases and this
          progress tracker. No implementation started.
 Files changed: MASTER_TICKET_LOG.md (new), CHANGELOG.md (new).
@@ -155,13 +386,6 @@ Blockers: None.
 Risks: See MASTER_TICKET_LOG §19 (R1–R14).
 Next ticket: P0-T01 — Scientific scope & identity freeze.
 ```
-
----
-
-## 5. Completed Work Log
-
-*None yet.* Newest completed ticket appears at the top once work begins, each as a
-full update block (template §14).
 
 ---
 
@@ -198,7 +422,17 @@ P1-T10).
 
 | Date | Ticket | Command | Result | Notes |
 |---|---|---|---|---|
-| — | — | — | — | No tests run yet (no code). |
+| 2026-07-09 | P0-T01 | `pytest tests/unit/test_scope_boundaries.py -q` | 2 passed | SB-ID parser + forbidden-term negation checks |
+| 2026-07-09 | P0-T02 | `pytest tests/unit/test_claim_hierarchy.py -q` | 3 passed | Tier parser |
+| 2026-07-09 | P0-T03 | `pytest tests/unit/test_regimes_doc.py -q` | 3 passed | Regime role/pass-rule parser |
+| 2026-07-09 | P0-T04 | `pytest tests/unit/test_policies_doc.py -q` | 4 passed | Naming-lock parser |
+| 2026-07-09 | P0-T05 | `pytest tests/unit/test_artifact_contracts_doc.py -q` | 3 passed | Artifact-table + README existence |
+| 2026-07-09 | P0-T06 | `pytest tests/unit/test_naming_conventions.py -q` | 3 passed | Experiment-ID registry parser |
+| 2026-07-09 | P0-T07 | `pytest tests/unit/test_seed_plan_doc.py -q` | 3 passed | Seed-set + honesty-rule parser |
+| 2026-07-09 | P0-T08 | `pytest tests/unit/test_testing_contract.py -q` | 2 passed | Subsystem-coverage parser |
+| 2026-07-09 | P0-T09 | `pytest tests/unit/test_reuse_policy_doc.py -q` | 3 passed | Stage-classification parser |
+| 2026-07-09 | P0-T10 | `pytest tests/unit/test_behavioral_reference.py -q` | 2 passed | No-source-paste / no-compat-language checks |
+| 2026-07-09 | P0-T11 | `pytest tests/unit -q` | 32 passed | Full Phase-0 doc-parser suite (includes test_changelog_format.py) |
 
 Record `make test` / `make lint` / `make typecheck` and targeted `pytest` runs
 here, one row per meaningful run, tied to the ticket that triggered it.
@@ -211,6 +445,35 @@ here, one row per meaningful run, tied to the ticket that triggered it.
 |---|---|---|---|
 | 2026-07-09 | Planning | `MASTER_TICKET_LOG.md` | Created (82-ticket plan) |
 | 2026-07-09 | Planning | `CHANGELOG.md` | Created (this tracker) |
+| 2026-07-09 | P0-T01 | `docs/protocol/identity_lock.md` | Created |
+| 2026-07-09 | P0-T01 | `docs/protocol/scope_boundaries.md` | Created |
+| 2026-07-09 | P0-T01 | `tests/unit/test_scope_boundaries.py` | Created |
+| 2026-07-09 | P0-T02 | `docs/protocol/claim_hierarchy.md` | Created |
+| 2026-07-09 | P0-T02 | `tests/unit/test_claim_hierarchy.py` | Created |
+| 2026-07-09 | P0-T03 | `docs/protocol/regimes.md` | Created |
+| 2026-07-09 | P0-T03 | `tests/unit/test_regimes_doc.py` | Created |
+| 2026-07-09 | P0-T04 | `docs/protocol/policies.md` | Created |
+| 2026-07-09 | P0-T04 | `tests/unit/test_policies_doc.py` | Created |
+| 2026-07-09 | P0-T05 | `docs/protocol/artifact_contracts.md` | Created |
+| 2026-07-09 | P0-T05 | `data/README.md` | Created |
+| 2026-07-09 | P0-T05 | `checkpoints/README.md` | Created |
+| 2026-07-09 | P0-T05 | `outputs/README.md` | Created |
+| 2026-07-09 | P0-T05 | `results/README.md` | Created |
+| 2026-07-09 | P0-T05 | `tests/unit/test_artifact_contracts_doc.py` | Created |
+| 2026-07-09 | P0-T06 | `docs/protocol/naming_conventions.md` | Created |
+| 2026-07-09 | P0-T06 | `tests/unit/test_naming_conventions.py` | Created |
+| 2026-07-09 | P0-T07 | `docs/protocol/seed_plan.md` | Created |
+| 2026-07-09 | P0-T07 | `tests/unit/test_seed_plan_doc.py` | Created |
+| 2026-07-09 | P0-T08 | `docs/protocol/testing_contract.md` | Created |
+| 2026-07-09 | P0-T08 | `tests/unit/test_testing_contract.py` | Created |
+| 2026-07-09 | P0-T09 | `docs/protocol/reuse_policy.md` | Created |
+| 2026-07-09 | P0-T09 | `tests/unit/test_reuse_policy_doc.py` | Created |
+| 2026-07-09 | P0-T10 | `docs/protocol/behavioral_reference.md` | Created |
+| 2026-07-09 | P0-T10 | `tests/unit/test_behavioral_reference.py` | Created |
+| 2026-07-09 | P0-T11 | `docs/protocol/structure_decision.md` | Created |
+| 2026-07-09 | P0-T11 | `docs/protocol/go_no_go.md` | Created |
+| 2026-07-09 | P0-T11 | `tests/unit/test_changelog_format.py` | Created |
+| 2026-07-09 | P0-T11 | `CHANGELOG.md` | Updated (dashboard, tables, 11 update blocks, this log) |
 
 ---
 
@@ -236,10 +499,13 @@ all times (tested by P1-T10 and P7-T10).
 
 ## 13. Next Action
 
-- **Begin P0-T01 — Scientific scope & identity freeze.** Produce
-  `docs/protocol/identity_lock.md` + `docs/protocol/scope_boundaries.md`, add the
-  SB-ID parser test, then update this changelog using the §14 template.
-- Phase 0 is documentation/freeze; no source code until P0-T11 (go/no-go) is Done.
+- **Phase 0 is complete.** All eleven P0 tickets are `Done`; the go/no-go gate
+  ([docs/protocol/go_no_go.md](docs/protocol/go_no_go.md)) is signed **Go**.
+- **P1-T01 (project skeleton, pyproject, tooling & Makefile) is the next
+  ticket** but is not started and requires explicit authorization to begin
+  Phase 1 coding.
+- No source/runtime code, dataset preprocessing, or model training exists in
+  this repository as of this update.
 
 ---
 
@@ -264,6 +530,45 @@ Next ticket:       (ID + title)
 After filling the template: update the §1 dashboard, the §2 phase table, and the
 §3 ticket row for that ticket. Marking a ticket `Done` requires a Tests-run entry;
 marking it `Blocked` requires a §7 blocker entry.
+
+---
+
+## 15. Phase 0 Consistency Audit (P0-T14/P0-T11 exit check)
+
+Run 2026-07-09 after all eleven P0 tickets reached `Done` and
+`pytest tests/unit -q` passed (32/32). Manual review against the checklist
+below; each row cites the doc that carries the guarantee.
+
+| # | Check | Result | Evidence |
+|---|---|---|---|
+| 1 | Scientific identity is preserved | Pass | `docs/protocol/identity_lock.md` |
+| 2 | Core ladder has a fixed encoder | Pass | `identity_lock.md` §1, `policies.md` |
+| 3 | B1–B4 share the same AE checkpoint per seed | Pass | `behavioral_reference.md` §7, `artifact_contracts.md` (frozen-checkpoint reuse key) |
+| 4 | Calibration is benign-only | Pass | `identity_lock.md` §4, `behavioral_reference.md` §6 |
+| 5 | Attack data is excluded from threshold fitting | Pass | `behavioral_reference.md` §6, `artifact_contracts.md` §1 (per-dataset benign-only requirement) |
+| 6 | AUROC is not used as the threshold verdict | Pass | `identity_lock.md` §6, `behavioral_reference.md` §8 |
+| 7 | Regime A confirmatory endpoint is isolated | Pass | `claim_hierarchy.md` Tier 1 (singular `role=confirmatory`), `regimes.md` |
+| 8 | Supportive/stress/exploratory modules are not promoted | Pass | `claim_hierarchy.md` (`test_no_supportive_marked_confirmatory`) |
+| 9 | FedProx and personalization are outside the causal ladder | Pass | `policies.md` (stress-test comparators table), `identity_lock.md` §8 |
+| 10 | Regime D is external validation only | Pass | `regimes.md` (`role: external_validation`) |
+| 11 | CICIoT2023 B-b has a metadata-based guard | Pass | `regimes.md`, `artifact_contracts.md` §1.2 rejection rule |
+| 12 | Threshold variants are threshold-only unless explicitly requiring new scores | Pass | `reuse_policy.md` stage table |
+| 13 | Score reuse contract is explicit | Pass | `artifact_contracts.md` §2 (reuse-validity key column) |
+| 14 | Checkpoint reuse contract is explicit | Pass | `artifact_contracts.md` §2, `checkpoints/README.md` |
+| 15 | No hidden retraining is allowed | Pass | `reuse_policy.md` "Enforcement" |
+| 16 | No stale labels are allowed | Pass | `policies.md` "Naming Locks" (`test_no_stale_labels`) |
+| 17 | No old DATP compatibility is allowed | Pass | `behavioral_reference.md` (`test_no_backward_compat_language`) |
+| 18 | No shims are allowed | Pass | `structure_decision.md` "Rejected" |
+| 19 | No duplicated pipelines are allowed | Pass | `reuse_policy.md` "Enforcement" (P7-T08 dry-run cross-reference) |
+| 20 | Repository structure decision is documented | Pass | `docs/protocol/structure_decision.md` |
+| 21 | Changelog is initialized | Pass | This file (dashboard, phase/ticket tables, 12 update blocks) |
+| 22 | Phase 1 entry criteria are clear | Pass | `docs/protocol/go_no_go.md` |
+| 23 | No temp files or ops/audit side folders were created | Pass | `git status --short` shows only `docs/protocol/`, `tests/`, four README stubs, and this file |
+| 24 | No runtime/experiment code exists | Pass | No `src/`, `pyproject.toml`, or `scripts/` created |
+| 25 | No raw dataset was moved or modified | Pass | `data/raw` symlink untouched; only `data/README.md` added |
+
+**Audit result: 25/25 pass, 0 failures.** Phase 0 go/no-go
+([docs/protocol/go_no_go.md](docs/protocol/go_no_go.md)) is signed **Go**.
 
 ---
 
