@@ -2,7 +2,7 @@ Read `AGENTS.md` first.
 Read `ai/README.md`.
 Use `ai/` as the source of truth.
 
-For specialized roles, use `.github/agents/*.agent.md`.
+Use `ai/agents/` for specialized role behavior.
 Use `ai/contracts/` before work.
 Use `ai/workflows/` to choose the task flow.
 Use `ai/hooks/` as checklist gates.
