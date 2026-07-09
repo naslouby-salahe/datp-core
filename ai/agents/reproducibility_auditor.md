@@ -25,4 +25,4 @@ Verify that configs, commands, outputs, and provenance are traceable.
 - Cleanup hook.
 
 ## Final-Report Expectations
-Report reproducibility checks, command/doc sync, clutter status, and skipped execution checks.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include reproducibility checks, command/doc sync, clutter status, and skipped execution checks.

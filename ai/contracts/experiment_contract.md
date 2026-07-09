@@ -31,4 +31,4 @@ Dataset, clients, seeds, metrics, configs, outputs, provenance, compatibility ga
 Check protocol, experiment readiness, statistics, artifact provenance, no-backward-compatibility, post-edit, tests, cleanup, and final report.
 
 ## Final report format
-Changed files, checks run, cleanup result, remaining risks, and skipped checks with reasons.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include changed files, checks run, cleanup result, remaining risks, skipped checks with reasons, dataset, clients, seeds, metrics, outputs, and provenance.

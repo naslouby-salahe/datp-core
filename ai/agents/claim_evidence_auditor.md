@@ -23,4 +23,4 @@ Ensure every claim is evidence-backed and correctly classified.
 - Reviewer attack check when claims are high risk.
 
 ## Final-Report Expectations
-Report claim classifications, evidence sources, unsupported claims removed, and remaining evidence gaps.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include claim classifications, evidence sources, unsupported claims removed, and remaining evidence gaps.

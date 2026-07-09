@@ -31,4 +31,4 @@ Claims are classified and evidence-backed, wording is safe, DATP scope is preser
 Check claim-evidence, manuscript integrity, literature overlap, reviewer risk, stale wording, cleanup, and final report.
 
 ## Final report format
-Changed files, checks run, cleanup result, remaining risks, and skipped checks with reasons.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include changed files, checks run, cleanup result, remaining risks, skipped checks with reasons, claim classifications, evidence used, wording constraints, and reviewer risks.

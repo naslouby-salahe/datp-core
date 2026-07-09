@@ -31,4 +31,4 @@ Structure is cleaner, no compatibility artifacts remain, impacted tests pass or 
 Check structure, naming, typing, comments, dependencies, no-backward-compatibility, tests, cleanup, and final report.
 
 ## Final report format
-Changed files, checks run, cleanup result, remaining risks, and skipped checks with reasons.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include changed files, checks run, cleanup result, remaining risks, skipped checks with reasons, cleanup performed, and compatibility check result.

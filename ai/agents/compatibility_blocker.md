@@ -25,4 +25,4 @@ Enforce the default clean-break policy.
 - Naming hook.
 
 ## Final-Report Expectations
-State that no backward-compatibility artifacts were added or preserved in touched scope.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. State that no backward-compatibility artifacts were added or preserved in touched scope.

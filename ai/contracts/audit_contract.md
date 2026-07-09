@@ -31,4 +31,4 @@ No files changed, findings are evidenced, required fixes are separated from opti
 Check no-edit status, scope, compatibility, DATP boundaries, claims, statistics when relevant, cleanup, and final report.
 
 ## Final report format
-Changed files, checks run, cleanup result, remaining risks, and skipped checks with reasons.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include changed files, checks run, cleanup result, remaining risks, skipped checks with reasons, audit scope, no-edit confirmation, findings, required fixes, limitations, and final verdict.

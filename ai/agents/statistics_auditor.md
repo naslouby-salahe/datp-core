@@ -24,4 +24,4 @@ Protect metric validity and statistical interpretation.
 - Claim-evidence hook.
 
 ## Final-Report Expectations
-State statistical checks performed, failures found, and any unresolved validity risk.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. State statistical checks performed, failures found, and any unresolved validity risk.

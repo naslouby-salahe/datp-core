@@ -25,4 +25,4 @@ Keep names direct, current, and semantically accurate.
 - README/Makefile sync when names affect commands or docs.
 
 ## Final-Report Expectations
-List naming changes or confirm touched names remain clear and current.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. List naming changes or confirm touched names remain clear and current.

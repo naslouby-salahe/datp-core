@@ -10,4 +10,4 @@ Use when no files should be changed.
 Edits are forbidden. No files change. Findings are classified by severity, each finding cites inspected evidence, required fixes are separated from optional improvements, and verdict is PASS, FAIL, or PARTIAL.
 
 ## Final report requirements
-Report audit scope, files inspected, no-edit confirmation, findings, required fixes, checks run, limitations, skipped checks, and final verdict.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include audit scope, files inspected, no-edit confirmation, findings, required fixes, checks run, limitations, skipped checks, and final verdict.

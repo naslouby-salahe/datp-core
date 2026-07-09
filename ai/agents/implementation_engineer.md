@@ -25,4 +25,4 @@ Implement clean, typed, direct code within the task contract.
 - Naming, typing, comment, dependency, structure, test, cleanup, and final report hooks.
 
 ## Final-Report Expectations
-Summarize files changed, checks run, tests run or skipped with reason, cleanup, and risks.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Summarize files changed, checks run, tests run or skipped with reasons, cleanup, and risks.

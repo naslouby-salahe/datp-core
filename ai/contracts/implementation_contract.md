@@ -31,4 +31,4 @@ Code works, impacted tests pass, structure is clean, no compatibility clutter ex
 Run pre-edit, post-edit, no-backward-compatibility, naming, typing, comment, dependency, structure, test, cleanup, and final report gates.
 
 ## Final report format
-Changed files, checks run, cleanup result, remaining risks, and skipped checks with reasons.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include changed files, checks run, cleanup result, remaining risks, skipped checks with reasons, impacted tests, and compatibility check result.

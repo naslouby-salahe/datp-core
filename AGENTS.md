@@ -33,7 +33,16 @@ Block completion for stale comments or docstrings, AI-generated comments, banner
 
 ## Final Report Format
 
-Every final report must include changed files, checks run, cleanup result, remaining risks, and skipped checks with reasons. Do not claim checks ran unless they did.
+Every final report must use Markdown headings and bullet lists.
+
+Required headings:
+- Changed Files
+- Checks Run
+- Cleanup Result
+- Remaining Risks
+- Skipped Checks
+
+Each changed file, check, risk, and skipped check must be listed as a bullet with a reason or status. Use `None` when a required heading has no items. Do not claim checks ran unless they did.
 
 ## AI Operating Structure
 
@@ -43,3 +52,14 @@ Every final report must include changed files, checks run, cleanup result, remai
 - `ai/hooks/`: mandatory gates and failure behavior.
 - `ai/contracts/`: task contract templates.
 - `ai/workflows/`: workflow-specific gate order and completion rules.
+
+## Native Adapter Policy
+
+- `ai/` is the single source of truth for governance.
+- Tool-specific folders are thin adapters only and must point back to `AGENTS.md` and `ai/`.
+- Adapters must not duplicate full governance content or become a second source of truth.
+- Hooks under `ai/hooks/` are checklist gates.
+- Contracts under `ai/contracts/` are mandatory before work starts.
+- Workflows under `ai/workflows/` define approved task paths.
+- Allowed native adapter folders are `.github/`, `.claude/`, `.agents/`, and `.codex/`.
+- No backward compatibility remains the default.

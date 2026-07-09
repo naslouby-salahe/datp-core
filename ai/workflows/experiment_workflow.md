@@ -10,4 +10,4 @@ Use for configs, runners, outputs, seeds, metrics, artifact provenance, and expe
 Protocol scope, dataset role, client definition, seed list, metric direction, config completeness, output layout, artifact provenance, no-backward-compatibility, tests, cleanup, and claim boundary all pass.
 
 ## Final report requirements
-Report dataset, clients, seeds, metrics, outputs, provenance, checks, tests or skipped tests, cleanup, and risks.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include dataset, clients, seeds, metrics, outputs, provenance, checks, tests or skipped tests, cleanup, and risks.

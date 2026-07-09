@@ -26,4 +26,4 @@ Keep repository structure direct, owned, and uncluttered.
 - Cleanup hook.
 
 ## Final-Report Expectations
-Report structural changes, clutter removed, and any remaining ownership risk.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include structural changes, clutter removed, and any remaining ownership risk.

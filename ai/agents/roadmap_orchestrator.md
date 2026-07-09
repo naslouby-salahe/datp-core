@@ -26,4 +26,4 @@ Coordinate tasks, select the workflow, and keep work inside approved scope.
 - Final report hook.
 
 ## Final-Report Expectations
-Report scope, changed files, checks run, cleanup, skipped checks, and remaining risks.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include scope, changed files, checks run, cleanup, skipped checks, and remaining risks.

@@ -24,4 +24,4 @@ Protect the DATP journal-extension identity.
 - Claim-evidence map when claims are touched.
 
 ## Final-Report Expectations
-State whether DATP scope, threshold semantics, stress-test status, and claim strength were preserved.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. State whether DATP scope, threshold semantics, stress-test status, and claim strength were preserved.

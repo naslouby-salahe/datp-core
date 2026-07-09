@@ -10,4 +10,4 @@ Use for tables, metrics, figures, summaries, and result interpretation.
 Metric direction, seed pairing, confidence interval interpretation, weak/null wording, claim evidence, and safe wording all pass.
 
 ## Final report requirements
-Report inspected files or artifacts, findings by severity, evidence, checks run, cleanup status, skipped checks, and verdict.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include inspected files or artifacts, findings by severity, evidence, checks run, cleanup status, skipped checks, and verdict.

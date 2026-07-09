@@ -10,4 +10,4 @@ Use for paper, README prose, LaTeX, Markdown, captions, abstract, introduction, 
 Claim-evidence and manuscript-integrity checks pass. Hype, unsupported first claims, unsupported privacy claims, unsupported deployment claims, unsupported robustness claims, unsupported causal language, stale wording, and AI-looking filler are absent.
 
 ## Final report requirements
-Report changed files, claim classifications, evidence used, wording constraints, checks run, cleanup, skipped checks, and remaining reviewer risks.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include changed files, claim classifications, evidence used, wording constraints, checks run, cleanup, skipped checks, and remaining reviewer risks.

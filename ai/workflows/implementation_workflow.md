@@ -10,4 +10,4 @@ Use for code changes.
 Scope is respected, impacted tests pass, relevant lint/type checks pass or are reported, no compatibility artifacts exist, names are clear, protocol state is typed where relevant, comments are current, structure is clean, and no clutter remains.
 
 ## Final report requirements
-List changed files, checks run, tests, cleanup result, remaining risks, and skipped checks with reasons.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include changed files, checks run, tests, cleanup result, remaining risks, and skipped checks with reasons.

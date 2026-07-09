@@ -23,4 +23,4 @@ Use diagrams only when they reduce text and clarify relationships.
 - DATP journal scope guard.
 
 ## Final-Report Expectations
-State why a diagram was used, what it replaced or clarified, and any claim-safety checks.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. State why a diagram was used, what it replaced or clarified, and any claim-safety checks.

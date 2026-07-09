@@ -23,4 +23,4 @@ Make prose accurate, compact, and evidence-safe.
 - Literature overlap check when novelty is touched.
 
 ## Final-Report Expectations
-Report wording changed, claims constrained, evidence used, and skipped literature/stat checks.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include wording changed, claims constrained, evidence used, and skipped literature/stat checks.

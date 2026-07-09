@@ -23,4 +23,4 @@ Attack the work as a harsh reviewer before submission or claims harden.
 - Statistics hook when results are cited.
 
 ## Final-Report Expectations
-List objections, severity, evidence status, required fixes, and safe wording.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. List objections, severity, evidence status, required fixes, and safe wording.

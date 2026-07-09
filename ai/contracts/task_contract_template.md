@@ -31,4 +31,4 @@ Scope, science, structure, naming, typing, comments, tests, claims, cleanup, and
 Check scope, compatibility, DATP boundaries, naming, structure, comments, typing/defaults, tests, cleanup, and final report.
 
 ## Final report format
-Changed files, checks run, cleanup result, remaining risks, and skipped checks with reasons.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include changed files, checks run, cleanup result, remaining risks, skipped checks with reasons, and any workflow-specific facts.

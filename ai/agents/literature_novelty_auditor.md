@@ -23,4 +23,4 @@ Check novelty and overlap against related work.
 - Manuscript integrity check.
 
 ## Final-Report Expectations
-State overlap risks, citation gaps, safe wording, and unresolved literature checks.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. State overlap risks, citation gaps, safe wording, and unresolved literature checks.

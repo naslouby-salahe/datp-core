@@ -25,4 +25,4 @@ Prepare and validate experiment configuration, execution paths, and artifact pro
 - Cleanup hook.
 
 ## Final-Report Expectations
-Report dataset, clients, seeds, metrics, outputs, provenance, tests, skipped checks, and risks.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include dataset, clients, seeds, metrics, outputs, provenance, tests, skipped checks, and risks.

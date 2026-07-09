@@ -26,4 +26,4 @@ Own threshold-policy semantics.
 - Statistics hook when metrics are touched.
 
 ## Final-Report Expectations
-State which threshold semantics were checked and whether any protocol-impact risk remains.
+Use the `AGENTS.md` final report format with Markdown headings and bullet lists. State which threshold semantics were checked and whether any protocol-impact risk remains.
