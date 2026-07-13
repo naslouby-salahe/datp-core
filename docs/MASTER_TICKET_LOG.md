@@ -124,6 +124,10 @@ A ticket is **not** complete merely because files exist. `DONE` requires all of:
 
 For Phase 3 and Phase 6 tickets that perform real execution, completion additionally requires a recorded campaign identity and execution-attempt identity, preserved failure evidence for any failed attempt, and — for any corrected rerun — the corrective-rerun record defined in Section B.
 
+**Terminal-state rule for phase gates.** Mandatory tickets must be `DONE`. A conditional ticket must be `DONE`, `REJECTED` with its failed feasibility condition recorded, or `NOT_APPLICABLE` with an authority-grounded reason. An optional ticket must be `DONE` when selected, `NOT_APPLICABLE` when not selected, or `REJECTED` with an explicit recorded reason. No unresolved, silently skipped, or merely `NOT_STARTED` conditional/optional ticket satisfies a phase gate.
+
+**Campaign decision rule.** `CAMPAIGN_INTEGRITY_STATUS` records technical evidence validity; `SCIENTIFIC_OUTCOME_STATUS` records the observed scientific direction/strength. Integrity-valid null, mixed, non-significant, weak, unfavorable, or opposite-direction results are frozen and reported with the roadmap's fallback wording. Only a diagnosed technical invalidity may justify corrective work; changed scientific configuration creates a new campaign identity.
+
 ---
 
 ## F. Phase overviews
@@ -135,7 +139,7 @@ For Phase 3 and Phase 6 tickets that perform real execution, completion addition
 - **Forbidden work.** Any scientific execution; any domain/application/infrastructure behavior implementation (that is Phase 1); reduced real-data runs of any kind.
 - **Entry criteria.** Authoritative documents present; repository accessible.
 - **Exit criteria.** Tooling, layered skeleton, enforcement contracts, test lanes, and governance catalogue exist and pass a baseline quality gate; no source behavior implemented yet.
-- **Phase gate.** Baseline quality gate (P0-T030) green: Ruff, Pyright strict on empty/typed skeleton, import-linter contracts loadable, Nox sessions runnable, governance adapters point back to `ai/` with no duplication.
+- **Phase gate.** Baseline quality gate (P0-T026) green: it has explicit dependency ancestry over every mandatory Phase 0 ticket (P0-T001–P0-T025): repository baseline, project metadata, dependency and lock policy, skeleton/layout, lint/type/test/property/golden/Nox/CUDA lanes, governance catalogue, contracts, workflows, command adapters, hooks, and final baseline audit. Ruff, Pyright strict on the empty/typed skeleton, import-linter contracts, Nox sessions, and thin governance adapters must all pass.
 - **Expected deliverables.** `pyproject.toml`, lockfile discipline, source skeleton, `configs/` root, tool configs, `noxfile.py`, `importlinter.ini`, governance catalogue under `ai/` plus thin adapters.
 - **Main risks.** Governance duplication across provider folders; premature behavior implementation; tooling drift from the architecture's pinned-library requirements.
 - **Ticket summary.** P0-T001 … P0-T026 (see master index, Section G).
@@ -147,7 +151,7 @@ For Phase 3 and Phase 6 tickets that perform real execution, completion addition
 - **Forbidden work.** Any scientific execution; any real N-BaIoT/Edge-IIoTset/CICIoT2023 training or scoring; reduced real-data debugging runs.
 - **Entry criteria.** Phase 0 gate passed.
 - **Exit criteria.** Full socle implemented and validated on synthetic data; all architecture-boundary and lineage/atomicity suites green; a synthetic end-to-end run of the full stage sequence passes; a campaign-execution-prohibition guard is in place.
-- **Phase gate.** Socle-readiness gate (P1-T051): synthetic end-to-end system test passes; architecture, framework-confinement, reuse/invalidation, atomicity, determinism suites pass; no real-data path is exercised.
+- **Phase gate.** Socle-readiness gate (P1-T051): it explicitly depends on every Phase 1 implementation ticket (P1-T001–P1-T050). It passes only when domain contracts, telemetry, reporting specifications, artifact schemas, persistence, recovery, composition, CLI, synthetic end-to-end validation, and the real-campaign-execution prohibition all pass; architecture, framework-confinement, reuse/invalidation, atomicity, and determinism suites are green; no real-data path is exercised.
 - **Expected deliverables.** `src/datp_core/{domain,application,config,analysis,infrastructure,composition,cli}` modules; typed collections; error hierarchy; ports/adapters; planner/preflight/executor; storage/lineage.
 - **Main risks.** Framework leakage across ports; unstable fingerprints; hidden defaults; object-shaped dictionaries; scattered global seeds.
 - **Ticket summary.** P1-T001 … P1-T051.
@@ -162,7 +166,130 @@ For Phase 3 and Phase 6 tickets that perform real execution, completion addition
 - **Phase gate.** Anchor-implementation-audit gate (P2-T020): every anchor stage implemented, synthetic end-to-end anchor simulation passes, recovered-semantics blockers closed or explicitly carried into `ScientificReadinessResult`.
 - **Expected deliverables.** N-BaIoT adapters; anchor threshold constructions B0–B4; anchor evaluation/statistics; anchor report models; anchor expected-artifact inventory and dry-run planner.
 - **Main risks.** Guessed AE/optimizer/preprocessing semantics; leakage in checkpoint selection; incorrect B4 fingerprint/K; inventing a seed sequence.
-- **Ticket summary.** P2-T001 … P2-T020.
+- **Ticket summary.** P2-T001 … P2-T023.
+
+#### P2-T021 — Implement B0 centralized checkpoint schedule and scientific checkpoint selection
+
+- **Ticket ID.** P2-T021
+- **Title.** Implement B0 centralized checkpoint schedule and scientific checkpoint selection
+- **Phase.** 2
+- **Status.** NOT_STARTED
+- **Priority.** P1-Mandatory
+- **Ticket type.** checkpoint
+- **Owner.** federated-learning-engineer
+- **Supporting agents.** threshold-policy-engineer, reproducibility-auditor
+- **Scientific-execution classification.** FORBIDDEN
+- **Campaign scope.** ANCHOR
+- **Roadmap experiment IDs.** B0
+- **Architecture contracts/types owned.** `CheckpointScheduleSpec`, `ScientificCheckpointSpec`, `CentralizedModelComparatorProfileSpec`
+- **Objective.** Produce B0's separate centralized checkpoint schedule and selection identity from centralized training only.
+- **Why this ticket exists.** B0 is a separately trained centralized AE reference, not a threshold operation over FedAvg outputs.
+- **Authority references.** Road §4, §9; Arch §9.1, §13, §17.
+- **Dependencies.** P2-T012, P2-T002, P1-T022.
+- **Blocks.** P2-T022.
+- **Downstream consumers.** P2-T022, P2-T023, P3-T007, P5-T005, P6-T002, P7-T002.
+- **Preconditions.** Historical anchor checkpoint evidence is recovered or the affected anchor branch remains blocked; no journal checkpoint schedule is substituted.
+- **Inputs.** B0 centralized training identity, recovered anchor evidence, frozen checkpoint specification.
+- **Allowed scope.** Synthetic implementation and typed identity construction only.
+- **Forbidden actions.** No FedAvg checkpoint reuse, no guessed historical rounds, no real campaign execution.
+- **Required configuration.** Dedicated B0 centralized checkpoint configuration; or `NONE` until authoritative evidence is recovered.
+- **Implementation responsibilities.** Implement a centralized schedule, persistence, and selection path that rejects federated identities and records its own scientific checkpoint.
+- **Required unit tests.** Centralized checkpoint rejects a federated training identity.
+- **Required property tests.** Identity changes when any centralized schedule input changes.
+- **Required contract tests.** Persisted checkpoint lineage is typed and complete.
+- **Required architecture tests.** No central/federated carrier crosses the wrong port.
+- **Required integration tests.** Synthetic centralized checkpoint selection.
+- **Required CUDA tests.** Synthetic tiny-model checkpoint persistence.
+- **Required system/end-to-end tests.** NONE.
+- **Validation commands.** Focused unit/property/contract/integration/CUDA lanes.
+- **Acceptance criteria.** [ ] Centralized schedule and checkpoint are independently identified. [ ] FedAvg identity is rejected. [ ] Unresolved historical evidence blocks the anchor branch.
+- **Completion evidence.** Changed files; implemented types/contracts; commands and tests run with results; B0 checkpoint identity; blocker state; cleanup confirmation; skipped checks/reasons; no unrelated modifications.
+- **Failure and blocker behavior.** Preserve failed evidence and emit `ANCHOR_CHECKPOINT_PROTOCOL_UNRESOLVED` rather than guessing.
+- **Stop conditions.** Missing authoritative anchor checkpoint evidence.
+- **Deliverables.** B0 centralized checkpoint specification and identity.
+- **Final review checklist.** [ ] Centralized lineage only. [ ] No journal-protocol substitution.
+
+#### P2-T022 — Implement B0 centralized calibration and held-out score generation
+
+- **Ticket ID.** P2-T022
+- **Title.** Implement B0 centralized calibration and held-out score generation
+- **Phase.** 2
+- **Status.** NOT_STARTED
+- **Priority.** P1-Mandatory
+- **Ticket type.** scoring
+- **Owner.** federated-learning-engineer
+- **Supporting agents.** data-pipeline-engineer, threshold-policy-engineer
+- **Scientific-execution classification.** FORBIDDEN
+- **Campaign scope.** ANCHOR
+- **Roadmap experiment IDs.** B0
+- **Architecture contracts/types owned.** `ScoreArtifactSpec`, `TestScoreArtifactId`, `ArtifactBundleManifest`
+- **Objective.** Generate split-scoped centralized B0 calibration, benign-test, and malicious-test score identities.
+- **Why this ticket exists.** B0 cannot consume FedAvg score artifacts.
+- **Authority references.** Road §4, §9; Arch §9.2, §13, §22.
+- **Dependencies.** P2-T021, P1-T045.
+- **Blocks.** P2-T023.
+- **Downstream consumers.** P2-T023, P3-T007, P5-T005, P6-T002, P7-T002.
+- **Preconditions.** B0 centralized scientific checkpoint exists.
+- **Inputs.** Centralized checkpoint identity and split identities.
+- **Allowed scope.** Synthetic score-bundle implementation only.
+- **Forbidden actions.** No FedAvg score reuse; no test-driven threshold fit; no real campaign execution.
+- **Required configuration.** B0 split-scoped score configuration.
+- **Implementation responsibilities.** Enforce separate centralized score lineage and atomic bundles.
+- **Required unit tests.** FedAvg score identity rejection.
+- **Required property tests.** Split-scoped identities cannot collide.
+- **Required contract tests.** Manifest has checkpoint and split lineage.
+- **Required architecture tests.** Scoring port receives typed centralized identity.
+- **Required integration tests.** Synthetic centralized scoring.
+- **Required CUDA tests.** NONE.
+- **Required system/end-to-end tests.** NONE.
+- **Validation commands.** Focused unit/property/contract/integration lanes.
+- **Acceptance criteria.** [ ] Separate B0 calibration and test score identities exist. [ ] No federated lineage accepted.
+- **Completion evidence.** Changed files; types/contracts; commands/tests/results; score identities; cleanup; remaining blockers; skipped checks/reasons; no unrelated modifications.
+- **Failure and blocker behavior.** Missing or malformed score bundle is a technical invalidity, never a scientific rerun trigger.
+- **Stop conditions.** Open checkpoint lineage.
+- **Deliverables.** Centralized B0 score bundles.
+- **Final review checklist.** [ ] Calibration and held-out scoring separated.
+
+#### P2-T023 — Implement B0 pooled threshold, evaluation, statistics, and reporting route
+
+- **Ticket ID.** P2-T023
+- **Title.** Implement B0 pooled threshold, evaluation, statistics, and reporting route
+- **Phase.** 2
+- **Status.** NOT_STARTED
+- **Priority.** P1-Mandatory
+- **Ticket type.** evaluation
+- **Owner.** threshold-policy-engineer
+- **Supporting agents.** statistics-auditor, report-output-auditor
+- **Scientific-execution classification.** FORBIDDEN
+- **Campaign scope.** ANCHOR
+- **Roadmap experiment IDs.** B0
+- **Architecture contracts/types owned.** `ThresholdConstructionSpec`, `EvaluationResult`, `ReportSpec`
+- **Objective.** Apply B0 pooled calibration threshold and route centralized results through evaluation, statistics, and reporting.
+- **Why this ticket exists.** B0 is a non-ladder centralized reference with its own complete evidence path.
+- **Authority references.** Road §4, §9; Arch §9.2–§9.4, §22.
+- **Dependencies.** P2-T022, P1-T026, P1-T049.
+- **Blocks.** P2-T016, P2-T019.
+- **Downstream consumers.** P3-T007, P5-T006, P6-T002, P7-T004, P7-T009.
+- **Preconditions.** B0 centralized calibration and held-out score bundles are lineage-complete.
+- **Inputs.** Centralized B0 score identities and pooled threshold configuration.
+- **Allowed scope.** Synthetic threshold/evaluation/reporting tests.
+- **Forbidden actions.** No B0 placement in B1–B4; no FedAvg identity reuse; no real campaign execution.
+- **Required configuration.** B0 pooled p95 threshold configuration.
+- **Implementation responsibilities.** Construct B0 from centralized calibration, evaluate on central held-out scores, and label B0 outside the causal ladder.
+- **Required unit tests.** B0 is not accepted as a B1–B4 policy.
+- **Required property tests.** Threshold identity changes with calibration lineage.
+- **Required contract tests.** Evaluation/report models retain centralized lineage.
+- **Required architecture tests.** Reporting stays framework-free.
+- **Required integration tests.** Synthetic complete B0 route.
+- **Required CUDA tests.** NONE.
+- **Required system/end-to-end tests.** Synthetic anchor smoke path.
+- **Validation commands.** Focused unit/property/contract/integration/system lanes.
+- **Acceptance criteria.** [ ] B0 has threshold, evaluation, statistics, and report coverage. [ ] B0 is outside B1–B4.
+- **Completion evidence.** Changed files; types/contracts; commands/tests/results; generated identity schema; cleanup; blockers; skipped checks/reasons; no unrelated modifications.
+- **Failure and blocker behavior.** Preserve any invalid artifact evidence; correct only diagnosed technical invalidity.
+- **Stop conditions.** Centralized lineage gap.
+- **Deliverables.** Complete B0 anchor route.
+- **Final review checklist.** [ ] B0 branch is distinct end-to-end.
 
 ### Phase 3 — DATP Anchor Campaign
 
@@ -170,8 +297,8 @@ For Phase 3 and Phase 6 tickets that perform real execution, completion addition
 - **Permitted work.** Real anchor scientific training and scoring — **only** in tickets classified `ANCHOR_CAMPAIGN_ALLOWED`; readiness checks, freezes, monitoring, resume, audits.
 - **Forbidden work.** Any journal-track scientific execution; interpreting the phase as one process/one job/one attempt/one physical write; inventing seed numbers, seed order, a "first-five" subset, or blanket "exactly once" rules; scientific tuning based on observed results.
 - **Entry criteria.** Phase 2 anchor-implementation-audit gate passed; clean worktree; resolved anchor configuration frozen.
-- **Exit criteria.** The coordinated anchor campaign completes; completeness and compatibility audits pass; the anchor acceptance decision is recorded; accepted anchor evidence is frozen; the journal-unlock gate reflects acceptance.
-- **Phase gate.** Anchor-acceptance gate (P3-T011): the full configured anchor statistical analysis is complete, the anchor honesty gate is evaluated, and acceptance/rejection is recorded with evidence.
+- **Exit criteria.** The coordinated anchor B0–B4 reproduction program completes; completeness and compatibility audits pass; campaign integrity and scientific outcome are recorded separately; valid anchor evidence (including null, mixed, or unfavorable evidence) is frozen; the journal-unlock gate reflects integrity and any authority-defined blocker, never preferred direction.
+- **Phase gate.** Anchor-integrity and journal-unlock gate (P3-T011): every mandatory anchor ticket is `DONE`; conditional recovery is `DONE` when activated or `NOT_APPLICABLE` with uninterrupted-execution evidence; the configured anchor reproduction analysis and honesty diagnostic are complete; `CAMPAIGN_INTEGRITY_STATUS` and `SCIENTIFIC_OUTCOME_STATUS` are recorded separately; only diagnosed technical invalidity can route to corrective work. A scientific direction, strength, significance, or null/mixed result never controls this gate.
 - **Expected deliverables.** Frozen anchor manifests; anchor campaign identity and attempt records; completeness/compatibility audit records; anchor acceptance decision; journal-unlock evidence.
 - **Main risks.** Dirty worktree at freeze; incomplete outputs mistaken for complete; conflating infrastructure retry with scientific rerun; unresolved cell collisions.
 - **Ticket summary.** P3-T001 … P3-T011.
@@ -183,10 +310,174 @@ For Phase 3 and Phase 6 tickets that perform real execution, completion addition
 - **Forbidden work.** Any journal scientific run; running q-sensitivity/shrinkage/B2-conf/B4-ablations/FedProx/personalization/external/temporal as real experiments during development; treating real experiments as integration tests.
 - **Entry criteria.** Phase 3 anchor acceptance passed (where the roadmap requires it for the affected module).
 - **Exit criteria.** Every roadmap experiment family and analysis is implemented and validated on synthetic data; reporting/claim machinery is complete; feasibility/suppression paths are represented.
-- **Phase gate.** Journal-implementation-completeness audit (P4-T022): every roadmap experiment ID has specification/config/identity/tests/expected-artifacts/output coverage; no journal real run occurred.
+- **Phase gate.** Journal-implementation-completeness audit (P4-T026): every roadmap experiment ID has specification/config/identity/tests/expected-artifacts/output coverage; every optional experiment has a recorded terminal decision; unresolved temporal allocation and other authority blockers prevent relevant branches from passing; no journal real run occurred.
 - **Expected deliverables.** Implementations and specs for E-C1, E-S1–S3, E-M1–M5, E-V1–V3, E-X1, E-T1–T3, E-B1, E-O1, E-Q1–Q6, B0, B-a boundary, and all rejection records; threshold variants; report schemas/renderers.
 - **Main risks.** Silently upgrading a supportive module to confirmatory; inventing seeds/orderings for new families; mislabeling personalization; blanket "exactly once" reuse wording.
-- **Ticket summary.** P4-T001 … P4-T022.
+- **Ticket summary.** P4-T001 … P4-T026.
+
+#### P4-T023 — Record optional E-Q1–E-Q6 selections and implement selected supplements
+
+- **Ticket ID.** P4-T023
+- **Title.** Record optional E-Q1–E-Q6 selections and implement selected supplements
+- **Phase.** 4
+- **Status.** NOT_STARTED
+- **Priority.** P3-Optional
+- **Ticket type.** experiment
+- **Owner.** roadmap-orchestrator
+- **Supporting agents.** statistics-auditor or —
+- **Scientific-execution classification.** FORBIDDEN
+- **Campaign scope.** JOURNAL
+- **Roadmap experiment IDs.** E-Q1,E-Q2,E-Q3,E-Q4,E-Q5,E-Q6
+- **Architecture contracts/types owned.** `ExperimentProfile`, `PreSpecificationRecord`, `ScientificStageGateDecision`
+- **Objective.** Record an authority-grounded terminal selection decision for every E-Q experiment and implement only selected work.
+- **Why this ticket exists.** Optional supplements are not mandatory E-O1 work.
+- **Authority references.** Road §9.3; Arch §8.3, §9.5.
+- **Dependencies.** P4-T001.
+- **Blocks.** P4-T026, P5-T002.
+- **Downstream consumers.** P5-T002, P6-T002, P7-T008.
+- **Preconditions.** Frozen optional-selection rationale.
+- **Inputs.** Authority and pre-specification record.
+- **Allowed scope.** Synthetic implementation and decision recording.
+- **Forbidden actions.** No unselected execution; no silent omission.
+- **Required configuration or NONE.** Selected E-Q configuration or `NONE`.
+- **Implementation responsibilities.** Support `DONE`, `NOT_APPLICABLE` with selection decision, or `REJECTED` with authority-grounded reason for each E-Q ID.
+- **Required unit tests.** Decision-state validation.
+- **Required property tests.** NONE.
+- **Required contract tests.** Invalid optional terminal state rejection.
+- **Required architecture tests.** NONE.
+- **Required integration tests.** Selected-profile dry run.
+- **Required CUDA tests.** NONE.
+- **Required system/end-to-end tests.** NONE.
+- **Validation commands.** Decision validation and selected-profile dry run.
+- **Acceptance criteria.** [ ] Every E-Q has a valid terminal decision. [ ] Only selected experiments proceed.
+- **Completion evidence.** Decision records, changed files, commands/tests/results, selected identity list, cleanup, blockers, skipped checks, no unrelated changes.
+- **Failure and blocker behavior.** Missing decision blocks P4-T026.
+- **Stop conditions.** Authority-grounded selection absent.
+- **Deliverables.** Optional-experiment decision register.
+- **Final review checklist.** [ ] Optional is not silently dropped.
+
+#### P4-T024 — Resolve chronological temporal training/calibration allocation
+
+- **Ticket ID.** P4-T024
+- **Title.** Resolve chronological temporal training/calibration allocation
+- **Phase.** 4
+- **Status.** NOT_STARTED
+- **Priority.** P0-Blocking
+- **Ticket type.** feasibility
+- **Owner.** datp-protocol-guardian
+- **Supporting agents.** data-pipeline-engineer, reproducibility-auditor
+- **Scientific-execution classification.** PLANNING_ONLY
+- **Campaign scope.** JOURNAL
+- **Roadmap experiment IDs.** E-B1
+- **Architecture contracts/types owned.** `TemporalSplitSpec`, `FeasibilityGateDecision`, `BlockedStage`
+- **Objective.** Recover or decide the chronological allocation within the first 70% between AE training and benign threshold calibration.
+- **Why this ticket exists.** The authorities lock a 70/30 split but do not authorize an invented allocation.
+- **Authority references.** Road §11; Arch §27.
+- **Dependencies.** P4-T001.
+- **Blocks.** P4-T019,P5-T004,P6-T004,P7-T008.
+- **Downstream consumers.** Temporal implementation, feasibility, execution, and final audit.
+- **Preconditions.** Timestamp and row-order evidence available.
+- **Inputs.** Authority evidence, timestamp semantics, client records.
+- **Allowed scope.** Evidence recovery or explicit design decision only.
+- **Forbidden actions.** No default allocation, pseudo-time, leakage, or temporal execution while unresolved.
+- **Required configuration or NONE.** `TemporalSplitSpec` only after authority resolution.
+- **Implementation responsibilities.** Specify allocation, row ordering, equal-timestamp handling, leakage prevention, insufficient-client behavior, preprocessing fit scope, and one-shot recalibration interaction.
+- **Required unit tests.** NONE until decision exists.
+- **Required property tests.** NONE until decision exists.
+- **Required contract tests.** Decision completeness.
+- **Required architecture tests.** Typed blocked-stage propagation.
+- **Required integration tests.** NONE until decision exists.
+- **Required CUDA tests.** NONE.
+- **Required system/end-to-end tests.** NONE.
+- **Validation commands.** Evidence and decision completeness inspection.
+- **Acceptance criteria.** [ ] Every allocation semantic is evidenced or explicitly blocked. [ ] All temporal consumers depend on this ticket.
+- **Completion evidence.** Evidence/decision record, dependency proof, commands, cleanup, blockers, skipped checks, no unrelated changes.
+- **Failure and blocker behavior.** Remain `BLOCKED_BY_UNRESOLVED_IDENTITY`; temporal branch cannot pass.
+- **Stop conditions.** Missing authority evidence.
+- **Deliverables.** Temporal allocation decision or blocker.
+- **Final review checklist.** [ ] No invented temporal allocation.
+
+#### P4-T025 — Produce Appendix A B2 calibration-versus-held-out FPR analysis
+
+- **Ticket ID.** P4-T025
+- **Title.** Produce Appendix A B2 calibration-versus-held-out FPR analysis
+- **Phase.** 4
+- **Status.** NOT_STARTED
+- **Priority.** P1-Mandatory
+- **Ticket type.** reporting
+- **Owner.** statistics-auditor
+- **Supporting agents.** claim-evidence-auditor
+- **Scientific-execution classification.** FORBIDDEN
+- **Campaign scope.** JOURNAL
+- **Roadmap experiment IDs.** E-C1,E-V1,E-V2,E-V3
+- **Architecture contracts/types owned.** `ReportSpec`, `EffectSizeEvidence`
+- **Objective.** Produce mandatory Appendix A explaining why local empirical quantile calibration does not guarantee equal held-out FPR.
+- **Why this ticket exists.** It closes the B2-by-construction reviewer loophole without claiming new theory.
+- **Authority references.** Road §13, §14; Arch §22.
+- **Dependencies.** P4-T001,P4-T008,P4-T009,P4-T010.
+- **Blocks.** P4-T026,P7-T011.
+- **Downstream consumers.** P5-T006,P6-T009,P7-T011.
+- **Preconditions.** Locked report terminology.
+- **Inputs.** Calibration/test identities and B2-conf/E-V1/shrinkage specifications.
+- **Allowed scope.** Analytical/report specification only.
+- **Forbidden actions.** No claim of new statistical theory.
+- **Required configuration or NONE.** NONE.
+- **Implementation responsibilities.** Cover finite-sample quantile error, calibration size, shift, benign heterogeneity, attack separability, assumptions, limitations, failure cases, B2-conf, E-V1, shrinkage, and absolute dispersion.
+- **Required unit tests.** Report schema completeness.
+- **Required property tests.** NONE.
+- **Required contract tests.** Traceability to cited experiments.
+- **Required architecture tests.** NONE.
+- **Required integration tests.** Frozen-report dry run.
+- **Required CUDA tests.** NONE.
+- **Required system/end-to-end tests.** NONE.
+- **Validation commands.** Report traceability inspection.
+- **Acceptance criteria.** [ ] Required analytical distinctions and limitations appear. [ ] Reviewer loophole closure is traceable.
+- **Completion evidence.** Report spec, traceability records, commands/tests/results, cleanup, blockers, skipped checks, no unrelated changes.
+- **Failure and blocker behavior.** Missing required topic blocks P4-T026.
+- **Stop conditions.** Unsupported theoretical claim.
+- **Deliverables.** Appendix A specification and output inventory entry.
+- **Final review checklist.** [ ] No tautological B2 claim.
+
+#### P4-T026 — Complete journal implementation audit and phase gate
+
+- **Ticket ID.** P4-T026
+- **Title.** Complete journal implementation audit and phase gate
+- **Phase.** 4
+- **Status.** NOT_STARTED
+- **Priority.** P0-Blocking
+- **Ticket type.** audit
+- **Owner.** roadmap-orchestrator
+- **Supporting agents.** datp-protocol-guardian, reproducibility-auditor
+- **Scientific-execution classification.** PLANNING_ONLY
+- **Campaign scope.** JOURNAL
+- **Roadmap experiment IDs.** all
+- **Architecture contracts/types owned.** `ScientificStageGateDecision`, `FeasibilityCatalogSnapshot`
+- **Objective.** Verify mandatory implementation and each conditional/optional terminal state before Phase 5.
+- **Why this ticket exists.** A phase gate cannot treat unresolved, skipped, or `NOT_STARTED` tickets as complete.
+- **Authority references.** Road §14; Arch §14, §27.
+- **Dependencies.** P4-T022,P4-T023,P4-T024,P4-T025.
+- **Blocks.** P5-T001.
+- **Downstream consumers.** P5-T001.
+- **Preconditions.** All P4 tickets terminal under their required status semantics.
+- **Inputs.** Completion evidence, decision records, matrices, inventories.
+- **Allowed scope.** Audit only.
+- **Forbidden actions.** No journal execution or blocker bypass.
+- **Required configuration or NONE.** NONE.
+- **Implementation responsibilities.** Enforce mandatory `DONE`, conditional valid feasibility terminal states, optional valid selection states, and blocker propagation.
+- **Required unit tests.** Gate-state validation.
+- **Required property tests.** NONE.
+- **Required contract tests.** Ticket dependency completeness.
+- **Required architecture tests.** NONE.
+- **Required integration tests.** Synthetic phase-gate test.
+- **Required CUDA tests.** NONE.
+- **Required system/end-to-end tests.** NONE.
+- **Validation commands.** Matrix and gate validation.
+- **Acceptance criteria.** [ ] No unresolved required P4 ticket. [ ] Temporal blocker prevents selected temporal work.
+- **Completion evidence.** Gate decision, validation outputs, cleanup, blockers, skipped checks, no unrelated changes.
+- **Failure and blocker behavior.** Fail closed.
+- **Stop conditions.** Any invalid terminal state.
+- **Deliverables.** P4 phase-gate decision.
+- **Final review checklist.** [ ] Safe Phase 5 unlock.
 
 ### Phase 5 — Journal Campaign Planning and Readiness
 
@@ -195,7 +486,7 @@ For Phase 3 and Phase 6 tickets that perform real execution, completion addition
 - **Forbidden work.** Any real training/scoring; using observed scientific results to alter campaign design; inferring seed order; requiring identical seed specs across families unless the roadmap does.
 - **Entry criteria.** Phase 4 completeness audit passed.
 - **Exit criteria.** A frozen journal campaign manifest, resolved execution graph, enumerated expensive identities, feasibility resolutions, and a recorded go/no-go verdict.
-- **Phase gate.** Journal go/no-go gate (P5-T009): formal decision recorded from the frozen plan.
+- **Phase gate.** Journal go/no-go gate (P5-T009): formal decision recorded from the frozen plan, with each training/checkpoint/scoring identity classified by complete typed lineage as `REUSABLE_FROM_COMPATIBLE_ANCHOR`, `REQUIRES_NEW_JOURNAL_COMPUTATION`, or `BLOCKED_BY_UNRESOLVED_IDENTITY`.
 - **Expected deliverables.** Journal experiment-cell enumeration; expected-artifact/table/figure/export inventories; feasibility resolutions and suppression cells; frozen journal campaign manifest.
 - **Main risks.** Cell-ID collisions; unresolved cells not blocked; reuse/invalidation gaps; seed-order inference.
 - **Ticket summary.** P5-T001 … P5-T009.
@@ -207,7 +498,7 @@ For Phase 3 and Phase 6 tickets that perform real execution, completion addition
 - **Forbidden work.** Treating stages as independent mini-campaigns; interpreting the phase as one process/one job/one attempt/one seed order/one physical write per artifact; blanket "exactly once" wording.
 - **Entry criteria.** Phase 5 go decision recorded; frozen journal campaign manifest.
 - **Exit criteria.** The coordinated journal campaign completes; complete-cell/statistics/output audits pass; journal results are frozen; planned outputs render; campaign acceptance is decided.
-- **Phase gate.** Journal-acceptance gate (P6-T009): complete-cell, complete-statistics, and complete-output audits pass and acceptance is recorded.
+- **Phase gate.** Journal-integrity and result-freeze gate (P6-T009): complete-cell, complete-statistics, and complete-output audits pass; the ten-paired-seed E-C1 cohort is complete; `CAMPAIGN_INTEGRITY_STATUS` and `SCIENTIFIC_OUTCOME_STATUS` are separately recorded; an uninterrupted campaign may close recovery as `NOT_APPLICABLE`.
 - **Expected deliverables.** Journal execution-attempt records; reused-and-new artifact ledger; frozen journal result manifests; rendered planned outputs; acceptance decision.
 - **Main risks.** Invalidated-upstream reuse; incomplete outputs mistaken for complete; conflating retries with reruns; scientific config drift creating an unrecorded new campaign identity.
 - **Ticket summary.** P6-T001 … P6-T009.
@@ -222,7 +513,7 @@ For Phase 3 and Phase 6 tickets that perform real execution, completion addition
 - **Phase gate.** Backlog-closure gate (P7-T011): all Phase 7 audits pass and the master log is closed with a recorded verdict.
 - **Expected deliverables.** Verification records; provenance-closure reports; regenerated frozen outputs; reviewer/architecture/roadmap audit records; master-log closure entry.
 - **Main risks.** Provenance gaps; hidden null/mixed results; stale outputs; namespace bleed between anchor and journal.
-- **Ticket summary.** P7-T001 … P7-T011.
+- **Ticket summary.** P7-T001 … P7-T012.
 
 ---
 
@@ -236,19 +527,19 @@ All tickets are `NOT_STARTED`. Scientific-execution classification (Sci-Exec) is
 |---|---|---|---|---|---|---|---|
 | P0-T001 | Audit and record repository starting state | foundation | P0 | PLAN | — | P0-T002 | — |
 | P0-T002 | Establish the Python 3.12 project and build backend | foundation | P0 | PLAN | P0-T001 | P0-T003,P0-T005,P0-T007 | — |
-| P0-T003 | Define dependency groups and pin scientific libraries | foundation | P0 | PLAN | P0-T002 | P0-T004,P1-* | — |
+| P0-T003 | Define dependency groups and pin scientific libraries | foundation | P0 | PLAN | P0-T002 | P0-T004; downstream Phase 1 tickets explicitly listing P0-T003 | — |
 | P0-T004 | Establish dependency-lock discipline | foundation | P0 | PLAN | P0-T003 | P3-T002,P5-T008 | — |
-| P0-T005 | Create the approved layered source skeleton | architecture | P0 | PLAN | P0-T002 | P0-T011,P1-* | — |
+| P0-T005 | Create the approved layered source skeleton | architecture | P0 | PLAN | P0-T002 | P0-T011; downstream Phase 1 tickets explicitly listing P0-T005 | — |
 | P0-T006 | Establish repository root layout and tracked/generated/gitignored policy | foundation | P0 | PLAN | P0-T002 | P1-T041 | — |
 | P0-T007 | Configure Ruff lint and format | foundation | P0 | PLAN | P0-T002 | P0-T026 | — |
 | P0-T008 | Configure Pyright strict typing | foundation | P0 | PLAN | P0-T002 | P0-T026 | — |
 | P0-T009 | Configure pytest, coverage, timeout, and order-randomization | foundation | P0 | PLAN | P0-T002 | P0-T026 | — |
-| P0-T010 | Configure Hypothesis property-testing profiles | foundation | P0 | PLAN | P0-T009 | P1-* | — |
+| P0-T010 | Configure Hypothesis property-testing profiles | foundation | P0 | PLAN | P0-T009 | downstream Phase 1 tickets explicitly listing P0-T010 | — |
 | P0-T011 | Configure import-linter layer contracts | architecture | P0 | PLAN | P0-T005 | P0-T026,P1-T050 | — |
 | P0-T012 | Configure pytest-archon in-test boundary assertions | architecture | P0 | PLAN | P0-T005,P0-T009 | P1-T050 | — |
-| P0-T013 | Configure syrupy golden-snapshot support | foundation | P0 | PLAN | P0-T009 | P1-* | — |
+| P0-T013 | Configure syrupy golden-snapshot support | foundation | P0 | PLAN | P0-T009 | downstream Phase 1 tickets explicitly listing P0-T013 | — |
 | P0-T014 | Establish Nox validation sessions | foundation | P0 | PLAN | P0-T007,P0-T008,P0-T009 | P0-T026 | — |
-| P0-T015 | Establish the serialized CUDA lane and CPU xdist policy | foundation | P0 | PLAN | P0-T014 | P1-* | — |
+| P0-T015 | Establish the serialized CUDA lane and CPU xdist policy | foundation | P0 | PLAN | P0-T014 | downstream Phase 1 tickets explicitly listing P0-T015 | — |
 | P0-T016 | Audit and consolidate the canonical provider-agnostic AI catalogue | agent-governance | P0 | PLAN | P0-T001 | P0-T017,P0-T018 | — |
 | P0-T017 | Complete the canonical agent-role catalogue | agent-governance | P0 | PLAN | P0-T016 | all impl tickets | — |
 | P0-T018 | Complete the canonical skill catalogue | skill | P0 | PLAN | P0-T016 | P0-T022 | — |
@@ -259,7 +550,7 @@ All tickets are `NOT_STARTED`. Scientific-execution classification (Sci-Exec) is
 | P0-T023 | Implement structure/naming/typing/comment blocking hooks | hook | P0 | PLAN | P0-T007,P0-T008,P0-T011 | P0-T026 | — |
 | P0-T024 | Implement scope/threshold/statistics/lineage/config blocking hooks | hook | P0 | PLAN | P0-T017 | P0-T026 | — |
 | P0-T025 | Implement dependency/no-BC/command-sync/cleanup/final-report/impacted-test hooks | hook | P0 | PLAN | P0-T014 | P0-T026 | — |
-| P0-T026 | Establish implementation-task governance and repository baseline quality gate | foundation | P0 | PLAN | P0-T007,P0-T008,P0-T009,P0-T011,P0-T014,P0-T019,P0-T022,P0-T023,P0-T024,P0-T025 | P1-T001 | — |
+| P0-T026 | Establish implementation-task governance and repository baseline quality gate | foundation | P0 | PLAN | P0-T001,P0-T002,P0-T003,P0-T004,P0-T005,P0-T006,P0-T007,P0-T008,P0-T009,P0-T010,P0-T011,P0-T012,P0-T013,P0-T014,P0-T015,P0-T016,P0-T017,P0-T018,P0-T019,P0-T020,P0-T021,P0-T022,P0-T023,P0-T024,P0-T025 | P1-T001 | — |
 | P1-T001 | Implement dataset/regime/partition/split domain vocabulary | domain | P0 | FORB | P0-T026 | P1-T019 | — |
 | P1-T002 | Implement model/training/checkpoint/score domain vocabulary | domain | P0 | FORB | P0-T026 | P1-T021,P1-T023 | — |
 | P1-T003 | Implement threshold-policy/variant/comparator domain vocabulary | domain | P0 | FORB | P0-T026 | P1-T024 | — |
@@ -310,38 +601,41 @@ All tickets are `NOT_STARTED`. Scientific-execution classification (Sci-Exec) is
 | P1-T048 | Implement the composition root, strategy registries, and CLI boundary | composition | P0 | FORB | P1-T039,P1-T042,P1-T043,P1-T044,P1-T045,P1-T046,P1-T047 | P1-T051 | — |
 | P1-T049 | Implement the analysis table/figure/wording/report-model specification layer | reporting | P1 | FORB | P1-T010,P1-T026,P1-T027 | P2-T019,P4-T021 | — |
 | P1-T050 | Implement the architecture-boundary and framework-confinement test suite | architecture | P0 | FORB | P0-T011,P0-T012,P1-T048 | P1-T051 | — |
-| P1-T051 | Implement the lineage/reuse/atomicity/determinism validation and synthetic end-to-end socle test | application | P0 | FORB | P1-T041,P1-T048,P1-T050 | P2-T001 | — |
+| P1-T051 | Implement the lineage/reuse/atomicity/determinism validation and synthetic end-to-end socle test | application | P0 | FORB | P1-T001,P1-T002,P1-T003,P1-T004,P1-T005,P1-T006,P1-T007,P1-T008,P1-T009,P1-T010,P1-T011,P1-T012,P1-T013,P1-T014,P1-T015,P1-T016,P1-T017,P1-T018,P1-T019,P1-T020,P1-T021,P1-T022,P1-T023,P1-T024,P1-T025,P1-T026,P1-T027,P1-T028,P1-T029,P1-T030,P1-T031,P1-T032,P1-T033,P1-T034,P1-T035,P1-T036,P1-T037,P1-T038,P1-T039,P1-T040,P1-T041,P1-T042,P1-T043,P1-T044,P1-T045,P1-T046,P1-T047,P1-T048,P1-T049,P1-T050 | P2-T001 | — |
 | P2-T001 | Recover DATP behavioral semantics from the reference repository (read-only) | data | P0 | PLAN | P1-T051 | P2-T002,P2-T004,P2-T008 | — |
 | P2-T002 | Record the recovered-semantics register in the master log | data | P0 | PLAN | P2-T001 | P2-T020 | — |
 | P2-T003 | Inspect the N-BaIoT source and feature schema | data | P0 | PLAN | P2-T001,P1-T032 | P2-T004 | — |
-| P2-T004 | Implement the N-BaIoT source adapter and deterministic source-row identity | data | P0 | FORB | P2-T003,P1-T042 | P2-T005 | E-C1 |
-| P2-T005 | Implement physical-device (9-client) partitioning | data | P0 | FORB | P2-T004,P1-T019 | P2-T006 | E-C1 |
-| P2-T006 | Implement benign train/calibration and held-out benign/malicious test splits | data | P0 | FORB | P2-T005 | P2-T007 | E-C1 |
-| P2-T007 | Implement preprocessing fit authorization and streaming transform | preprocessing | P0 | FORB | P2-T006,P1-T020 | P2-T008 | E-C1 |
-| P2-T008 | Implement the fixed autoencoder, optimizer, and scheduler | training | P0 | FORB | P2-T007,P1-T043,P2-T001 | P2-T009 | E-C1 |
-| P2-T009 | Implement FedAvg training (E=1, full participation, deterministic CUDA) | training | P0 | FORB | P2-T008,P1-T044 | P2-T010 | E-C1 |
-| P2-T010 | Implement the checkpoint schedule, persistence, and Regime-A global selection | checkpoint | P0 | FORB | P2-T009,P1-T022 | P2-T011 | E-C1 |
-| P2-T011 | Implement calibration, benign-test, and malicious-test scoring with atomic score bundles | scoring | P0 | FORB | P2-T010,P1-T045 | P2-T012,P2-T013 | E-C1 |
-| P2-T012 | Implement B0 centralized reference (pooled benign, pooled p95) | threshold | P1 | FORB | P2-T011 | P2-T016 | B0 |
-| P2-T013 | Implement B1 shared and B1-pool/B1-wt constructions | threshold | P0 | FORB | P2-T011,P1-T024 | P2-T016 | E-C1,E-S1 |
-| P2-T014 | Implement B2 per-client and B3 family constructions | threshold | P0 | FORB | P2-T013 | P2-T016 | E-C1 |
-| P2-T015 | Implement B4 exact k-means++ clustering and cluster-mean thresholds (K=3) | threshold | P1 | FORB | P2-T014,P1-T025 | P2-T016 | E-M1 |
-| P2-T016 | Implement per-client confusion counts and operating-point metrics | evaluation | P0 | FORB | P2-T012,P2-T013,P2-T014,P2-T015,P1-T026 | P2-T017 | E-C1 |
-| P2-T017 | Implement detection-quality metrics (AUROC control, Macro-F1, P10, worst-client BA) | evaluation | P0 | FORB | P2-T016 | P2-T018 | E-C1 |
-| P2-T018 | Implement paired deltas, BCa bootstrap, Wilcoxon, Cliff's delta, reference diagnostics | statistics | P0 | FORB | P2-T017,P1-T046 | P2-T019 | E-C1 |
-| P2-T019 | Implement anchor report models, expected-artifact inventory, and dry-run planner | reporting | P0 | PLAN | P2-T018,P1-T049 | P2-T020 | E-C1 |
-| P2-T020 | Implement the anchor readiness evaluator and anchor-implementation audit | audit | P0 | PLAN | P2-T019,P2-T002,P1-T040 | P3-T001 | E-C1 |
-| P3-T001 | Final anchor implementation audit and clean-worktree check | audit | P0 | PLAN | P2-T020 | P3-T002 | E-C1 |
-| P3-T002 | Freeze code-state, dependency-lock, and environment provenance | campaign | P0 | PLAN | P3-T001,P0-T004 | P3-T006 | E-C1 |
-| P3-T003 | Freeze the resolved anchor configuration and verify the authoritative seed plan | campaign | P0 | PLAN | P3-T001 | P3-T004 | E-C1 |
-| P3-T004 | Verify the anchor experiment matrix and enumerate stage identities and expected artifacts | campaign | P0 | PLAN | P3-T003 | P3-T005 | E-C1 |
-| P3-T005 | Resource/storage/CUDA/VRAM preflight and output-namespace compatibility | campaign | P0 | PLAN | P3-T004,P1-T039,P1-T047 | P3-T006 | E-C1 |
-| P3-T006 | Create the anchor campaign identity and execution-attempt identity | campaign | P0 | PLAN | P3-T002,P3-T005 | P3-T007 | E-C1 |
-| P3-T007 | Execute the coordinated anchor campaign | campaign | P0 | ANCH | P3-T006 | P3-T009 | E-C1,E-S1,E-S3,E-M1 |
-| P3-T008 | Safe campaign resume and infrastructure-retry handling | campaign | P0 | ANCH | P3-T007 | P3-T009 | E-C1 |
-| P3-T009 | Completeness and same-model/same-score compatibility audits; typed failure persistence | audit | P0 | PLAN | P3-T007,P3-T008 | P3-T010 | E-C1 |
-| P3-T010 | Historical-reference diagnostic and full configured anchor statistical analysis | statistics | P0 | ANCH | P3-T009 | P3-T011 | E-C1 |
-| P3-T011 | Anchor acceptance decision, corrective-rerun workflow, artifact freeze, journal-unlock gate | audit | P0 | PLAN | P3-T010 | P4-T001 | E-C1 |
+| P2-T004 | Implement the N-BaIoT source adapter and deterministic source-row identity | data | P0 | FORB | P2-T003,P1-T042 | P2-T005 | ANCHOR-B0–B4 |
+| P2-T005 | Implement physical-device (9-client) partitioning | data | P0 | FORB | P2-T004,P1-T019 | P2-T006 | ANCHOR-B0–B4 |
+| P2-T006 | Implement benign train/calibration and held-out benign/malicious test splits | data | P0 | FORB | P2-T005 | P2-T007 | ANCHOR-B0–B4 |
+| P2-T007 | Implement preprocessing fit authorization and streaming transform | preprocessing | P0 | FORB | P2-T006,P1-T020 | P2-T008 | ANCHOR-B0–B4 |
+| P2-T008 | Implement the fixed autoencoder, optimizer, and scheduler | training | P0 | FORB | P2-T007,P1-T043,P2-T002 | P2-T009 | ANCHOR-B0–B4 |
+| P2-T009 | Implement FedAvg training (E=1, full participation, deterministic CUDA) | training | P0 | FORB | P2-T008,P1-T044 | P2-T010 | ANCHOR-B0–B4 |
+| P2-T010 | Implement the evidence-recovered anchor checkpoint protocol, persistence, and global selection | checkpoint | P0 | FORB | P2-T009,P2-T002,P1-T022 | P2-T011 | ANCHOR-B0–B4 |
+| P2-T011 | Implement anchor calibration, benign-test, and malicious-test scoring with atomic score bundles | scoring | P0 | FORB | P2-T010,P1-T045 | P2-T012,P2-T013,P2-T022 | ANCHOR-B0–B4 |
+| P2-T012 | Implement B0 centralized training branch | training | P1 | FORB | P2-T006,P1-T044 | P2-T021 | B0 |
+| P2-T013 | Implement canonical anchor B1 shared construction | threshold | P0 | FORB | P2-T011,P1-T024 | P2-T016 | ANCHOR-B1 |
+| P2-T014 | Implement anchor B2 per-client and B3 family constructions | threshold | P0 | FORB | P2-T013 | P2-T016 | ANCHOR-B2–B3 |
+| P2-T015 | Implement canonical anchor B4 exact k-means++ clustering and cluster-mean thresholds (K=3) | threshold | P1 | FORB | P2-T014,P1-T025 | P2-T016 | ANCHOR-B4 |
+| P2-T016 | Implement anchor per-client confusion counts and operating-point metrics | evaluation | P0 | FORB | P2-T013,P2-T014,P2-T015,P2-T023,P1-T026 | P2-T017 | ANCHOR-B0–B4 |
+| P2-T017 | Implement anchor detection-quality metrics (AUROC control, Macro-F1, P10, worst-client BA) | evaluation | P0 | FORB | P2-T016 | P2-T018 | ANCHOR-B0–B4 |
+| P2-T018 | Implement anchor paired deltas, BCa diagnostic, Wilcoxon, Cliff's delta, and reference diagnostics | statistics | P0 | FORB | P2-T017,P1-T046 | P2-T019 | ANCHOR-B1–B2 |
+| P2-T019 | Implement anchor report models, expected-artifact inventory, and dry-run planner | reporting | P0 | PLAN | P2-T018,P1-T049 | P2-T020 | ANCHOR-B0–B4 |
+| P2-T020 | Implement the anchor readiness evaluator and anchor-implementation audit | audit | P0 | PLAN | P2-T019,P2-T002,P1-T040 | P3-T001 | ANCHOR-B0–B4 |
+| P2-T021 | Implement B0 centralized checkpoint schedule and scientific checkpoint selection | checkpoint | P1 | FORB | P2-T012,P2-T002,P1-T022 | P2-T022 | B0 |
+| P2-T022 | Implement B0 centralized calibration and held-out score generation | scoring | P1 | FORB | P2-T021,P1-T045 | P2-T023 | B0 |
+| P2-T023 | Implement B0 pooled threshold, evaluation, statistics, and reporting route | evaluation | P1 | FORB | P2-T022,P1-T026 | P2-T016 | B0 |
+| P3-T001 | Final anchor implementation audit and clean-worktree check | audit | P0 | PLAN | P2-T020 | P3-T002 | ANCHOR-B0–B4 |
+| P3-T002 | Freeze code-state, dependency-lock, and environment provenance | campaign | P0 | PLAN | P3-T001,P0-T004 | P3-T006 | ANCHOR-B0–B4 |
+| P3-T003 | Freeze the resolved anchor configuration and verify the authoritative seed plan | campaign | P0 | PLAN | P3-T001 | P3-T004 | ANCHOR-B0–B4 |
+| P3-T004 | Verify the anchor experiment matrix and enumerate stage identities and expected artifacts | campaign | P0 | PLAN | P3-T003 | P3-T005 | ANCHOR-B0–B4 |
+| P3-T005 | Resource/storage/CUDA/VRAM preflight and output-namespace compatibility | campaign | P0 | PLAN | P3-T004,P1-T039,P1-T047 | P3-T006 | ANCHOR-B0–B4 |
+| P3-T006 | Create the anchor campaign identity and execution-attempt identity | campaign | P0 | PLAN | P3-T002,P3-T005 | P3-T007 | ANCHOR-B0–B4 |
+| P3-T007 | Execute the coordinated anchor campaign | campaign | P0 | ANCH | P3-T006 | P3-T009 | ANCHOR-B0–B4 |
+| P3-T008 | Safe campaign resume and infrastructure-retry handling | campaign | P0 | ANCH | P3-T007 | P3-T009 | ANCHOR-B0–B4 |
+| P3-T009 | Completeness and same-model/same-score compatibility audits; typed failure persistence | audit | P0 | PLAN | P3-T007,P3-T008 | P3-T010 | ANCHOR-B0–B4 |
+| P3-T010 | Historical-reference diagnostic and full configured anchor statistical analysis | statistics | P0 | ANCH | P3-T009 | P3-T011 | ANCHOR-B0–B4 |
+| P3-T011 | Anchor integrity decision, technical-invalidity correction path, artifact freeze, journal-unlock gate | audit | P0 | PLAN | P3-T010 | P4-T001 | ANCHOR-B0–B4 |
 | P4-T001 | Implement E-C1 confirmatory experiment specification and identity | experiment | P0 | FORB | P3-T011,P1-T029 | P4-T022 | E-C1 |
 | P4-T002 | Implement E-S1 construction-sensitivity and E-S2 q-sensitivity | experiment | P1 | FORB | P4-T001 | P4-T022 | E-S1,E-S2 |
 | P4-T003 | Implement E-S3 Dirichlet severity (Regime C) | experiment | P1 | FORB | P4-T001 | P4-T022 | E-S3 |
@@ -361,9 +655,13 @@ All tickets are `NOT_STARTED`. Scientific-execution classification (Sci-Exec) is
 | P4-T017 | Implement E-T2 model-personalization stress test and absorption bands | experiment | P1 | FORB | P4-T001 | P4-T022 | E-T2 |
 | P4-T018 | Implement E-T3 B-FedStatsBenign matched comparator | experiment | P1 | FORB | P4-T001,P1-T025 | P4-T015,P4-T022 | E-T3 |
 | P4-T019 | Implement E-B1 temporal recalibration MVE | experiment | P2 | FORB | P4-T014 | P4-T022 | E-B1 |
-| P4-T020 | Implement E-O1 alert burden and E-Q1–Q6 optional supplements | experiment | P3 | FORB | P4-T001 | P4-T022 | E-O1,E-Q1,E-Q2,E-Q3,E-Q4,E-Q5,E-Q6 |
+| P4-T020 | Implement mandatory E-O1 alert burden evidence and suppression route | experiment | P1 | FORB | P4-T001 | P4-T026 | E-O1 |
 | P4-T021 | Implement claim tiers, fallback wording, and report schemas/renderers | reporting | P0 | FORB | P4-T001,P1-T049 | P4-T022 | — |
-| P4-T022 | Implement journal expected-artifact/table/figure inventory and completeness audit | audit | P0 | PLAN | P4-T002,P4-T003,P4-T004,P4-T005,P4-T006,P4-T007,P4-T008,P4-T009,P4-T010,P4-T011,P4-T012,P4-T015,P4-T016,P4-T017,P4-T018,P4-T019,P4-T020,P4-T021 | P5-T001 | all |
+| P4-T022 | Implement journal expected-artifact/table/figure inventory and completeness audit | audit | P0 | PLAN | P4-T002,P4-T003,P4-T004,P4-T005,P4-T006,P4-T007,P4-T008,P4-T009,P4-T010,P4-T011,P4-T012,P4-T015,P4-T016,P4-T017,P4-T018,P4-T019,P4-T020,P4-T021,P4-T023,P4-T024,P4-T025 | P5-T001 | all |
+| P4-T023 | Record optional E-Q1–E-Q6 selections and implement selected supplements | experiment | P3 | FORB | P4-T001 | P4-T026 | E-Q1,E-Q2,E-Q3,E-Q4,E-Q5,E-Q6 |
+| P4-T024 | Resolve chronological temporal training/calibration allocation | feasibility | P0 | PLAN | P4-T001 | P4-T019,P5-T004,P6-T004 | E-B1 |
+| P4-T025 | Produce Appendix A B2 calibration-versus-held-out FPR analysis | reporting | P1 | FORB | P4-T001,P4-T008,P4-T009,P4-T010 | P4-T026,P7-T011 | E-C1,E-V1,E-V2,E-V3 |
+| P4-T026 | Complete journal implementation audit and phase gate | audit | P0 | PLAN | P4-T022,P4-T023,P4-T024,P4-T025 | P5-T001 | all |
 | P5-T001 | Implementation-completeness and anchor-artifact-compatibility audit | audit | P0 | PLAN | P4-T022,P3-T011 | P5-T002 | — |
 | P5-T002 | Configuration expansion and journal experiment-cell enumeration | campaign | P0 | PLAN | P5-T001,P1-T038 | P5-T003 | all |
 | P5-T003 | Cell-ID uniqueness and stage-identity enumeration | campaign | P0 | PLAN | P5-T002 | P5-T004 | all |
@@ -374,14 +672,14 @@ All tickets are `NOT_STARTED`. Scientific-execution classification (Sci-Exec) is
 | P5-T008 | Clean-worktree check and freeze of code/dependency/environment/config/campaign identity | campaign | P0 | PLAN | P5-T004,P5-T007,P0-T004 | P5-T009 | — |
 | P5-T009 | Journal campaign manifest and final go/no-go decision | campaign | P0 | PLAN | P5-T008 | P6-T001 | all |
 | P6-T001 | Final readiness confirmation and journal execution-attempt creation | campaign | P0 | PLAN | P5-T009 | P6-T002 | — |
-| P6-T002 | Anchor-artifact reuse validation and threshold-only stage execution | campaign | P0 | JOUR | P6-T001 | P6-T006 | E-S1,E-S2,E-V1,E-V2,E-V3,E-T3,E-M1 |
+| P6-T002 | Journal Regime-A identity completion, reuse validation, and threshold-only execution | campaign | P0 | JOUR | P6-T001 | P6-T006 | E-C1,E-S1,E-S2,E-V1,E-V2,E-V3,E-T3,E-M1,E-M2,E-M3,E-M4,E-M5,B0,B-a,E-Q1,E-Q2,E-Q3,E-Q4,E-Q5,E-Q6 |
 | P6-T003 | Regime C execution | campaign | P1 | JOUR | P6-T001 | P6-T006 | E-S3 |
 | P6-T004 | Accepted Regime D execution (external + temporal) | campaign | P2 | JOUR | P6-T001,P5-T004 | P6-T006 | E-X1,E-B1 |
 | P6-T005 | FedProx and model-personalization stress-test execution | campaign | P1 | JOUR | P6-T001 | P6-T006 | E-T1,E-T2 |
 | P6-T006 | Statistics execution, typed-failure and invalidated-artifact handling | statistics | P0 | JOUR | P6-T002,P6-T003,P6-T004,P6-T005 | P6-T008 | all |
 | P6-T007 | Campaign resume, infrastructure retry, and immutable artifact commits | campaign | P0 | JOUR | P6-T001 | P6-T008 | — |
 | P6-T008 | Complete-cell/statistics/output audits and result freeze | audit | P0 | PLAN | P6-T006,P6-T007 | P6-T009 | all |
-| P6-T009 | Report rendering, journal acceptance decision, corrective-rerun workflow | reporting | P0 | PLAN | P6-T008 | P7-T001 | all |
+| P6-T009 | Report rendering, journal integrity/outcome decision, technical-invalidity correction path | reporting | P0 | PLAN | P6-T008 | P7-T001 | all |
 | P7-T001 | Immutable-result and artifact-hash verification; manifest completeness | audit | P0 | POST | P6-T009 | P7-T002 | — |
 | P7-T002 | Lineage closure and provenance verification | audit | P0 | POST | P7-T001 | P7-T009 | — |
 | P7-T003 | Seed-plan completeness and paired-seed validation | audit | P0 | POST | P7-T001 | P7-T007 | E-C1 |
@@ -392,7 +690,8 @@ All tickets are `NOT_STARTED`. Scientific-execution classification (Sci-Exec) is
 | P7-T008 | Null/mixed retention, stress-test separation, external/temporal/alert-burden claim gates | audit | P0 | POST | P7-T002 | P7-T011 | E-X1,E-B1,E-O1 |
 | P7-T009 | Table/figure/export provenance and frozen-output regeneration | reporting | P0 | POST | P7-T002 | P7-T011 | all |
 | P7-T010 | Repository cleanup, stale-output detection, anchor/journal namespace protection | audit | P0 | POST | P7-T001 | P7-T011 | — |
-| P7-T011 | Reviewer red-team, architecture, and roadmap final audits; master-log closure | audit | P0 | POST | P7-T004,P7-T005,P7-T006,P7-T007,P7-T008,P7-T009,P7-T010 | — | all |
+| P7-T011 | Reviewer red-team, architecture, and roadmap final audits; master-log closure | audit | P0 | POST | P7-T004,P7-T005,P7-T006,P7-T007,P7-T008,P7-T009,P7-T010,P7-T012 | — | all |
+| P7-T012 | Audit conference-to-journal originality and manuscript handoff evidence | audit | P0 | POST | P7-T002,P7-T009 | P7-T011 | — |
 
 </div>
 
@@ -931,7 +1230,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P0-T026 — Establish implementation-task governance and repository baseline quality gate
 
-- **Metadata.** Phase 0 · foundation · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: roadmap-orchestrator · Supporting: architecture-cleaner · Depends on: P0-T007, P0-T008, P0-T009, P0-T011, P0-T014, P0-T019, P0-T022, P0-T023, P0-T024, P0-T025 · Blocks: P1-T001 · Campaign scope: NONE · Identity impact: none.
+- **Metadata.** Phase 0 · foundation · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: roadmap-orchestrator · Supporting: architecture-cleaner · Depends on: P0-T001, P0-T002, P0-T003, P0-T004, P0-T005, P0-T006, P0-T007, P0-T008, P0-T009, P0-T010, P0-T011, P0-T012, P0-T013, P0-T014, P0-T015, P0-T016, P0-T017, P0-T018, P0-T019, P0-T020, P0-T021, P0-T022, P0-T023, P0-T024, P0-T025 · Blocks: P1-T001 · Campaign scope: NONE · Identity impact: none.
 - **Objective.** Define the implementation-task governance (ticket extraction discipline, contract-first, gate order) and a single repository baseline quality gate that runs Ruff, Pyright strict, import-linter, pytest-archon, and the Nox validation sessions green on the empty typed skeleton, certifying Phase 0 complete.
 - **Why this ticket exists.** It is the Phase 0 exit gate: it proves the tooling, enforcement, and governance work together before any behavior is written. It also fixes the discipline that each ticket is independently extractable and contract-gated.
 - **Authority.** AGENTS.md (lifecycle); Arch §3, §4, §21; this backlog §E (completion rules), §7 (mandatory phases).
@@ -1496,7 +1795,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P1-T028 — Implement the scientific-protocol and policy aggregates
 
-- **Metadata.** Phase 1 · domain · P0-Blocking · NOT_STARTED · Owner: experiment-engineer · Supporting: datp-protocol-guardian · Depends: P1-T019,T020,T021,T022,T023,T024,T026,T027 · Blocks: P1-T029 · Identity impact: composes all stage-affecting specs.
+- **Metadata.** Phase 1 · domain · P0-Blocking · NOT_STARTED · Owner: experiment-engineer · Supporting: datp-protocol-guardian · Depends: P1-T019, P1-T020, P1-T021, P1-T022, P1-T023, P1-T024, P1-T026, P1-T027 · Blocks: P1-T029 · Identity impact: composes all stage-affecting specs.
 - **Objective.** Implement `ScientificProtocolSpec` (composed nested specs, resource_costs optional) and the three policy aggregates `ExecutionPolicy`/`ArtifactPolicy`/`ReportingPolicy`, ensuring scientific and operational concerns never mix in one class and each field enters only the earliest stage identity it can affect.
 - **Why.** The scientific meaning of an experiment lives entirely inside `ScientificProtocolSpec`; execution/artifact/reporting are separate policies; this composition drives the lineage model.
 - **Authority.** Arch §8.1, §8.2, §8.4.
@@ -1956,11 +2255,11 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P1-T051 — Implement the lineage/reuse/atomicity/determinism validation and synthetic end-to-end socle test
 
-- **Metadata.** Phase 1 · application · P0-Blocking · NOT_STARTED · Owner: reproducibility-auditor · Supporting: artifact-lineage-auditor, experiment-engineer · Depends: P1-T041, P1-T048, P1-T050 · Blocks: P2-T001 · Identity impact: none (validation). **This is the Phase 1 socle-readiness gate.**
+- **Metadata.** Phase 1 · application · P0-Blocking · NOT_STARTED · Owner: reproducibility-auditor · Supporting: artifact-lineage-auditor, experiment-engineer · Depends: P1-T001,P1-T002,P1-T003,P1-T004,P1-T005,P1-T006,P1-T007,P1-T008,P1-T009,P1-T010,P1-T011,P1-T012,P1-T013,P1-T014,P1-T015,P1-T016,P1-T017,P1-T018,P1-T019,P1-T020,P1-T021,P1-T022,P1-T023,P1-T024,P1-T025,P1-T026,P1-T027,P1-T028,P1-T029,P1-T030,P1-T031,P1-T032,P1-T033,P1-T034,P1-T035,P1-T036,P1-T037,P1-T038,P1-T039,P1-T040,P1-T041,P1-T042,P1-T043,P1-T044,P1-T045,P1-T046,P1-T047,P1-T048,P1-T049,P1-T050 · Blocks: P2-T001 · Identity impact: none (validation). **This is the Phase 1 socle-readiness gate.**
 - **Objective.** Implement `tests/system/synthetic/` (a reduced synthetic end-to-end run of the full stage sequence), the reuse/invalidation, atomicity, checkpoint/recovery-separation, deterministic-seed, and batching-equivalence suites, and a campaign-execution-prohibition guard asserting no Phase 1 path can perform real scientific execution.
 - **Why.** This is the socle-readiness gate: it proves the whole socle works on synthetic data, that B1–B4 share one calibration/test set, that atomicity/determinism hold, and that no real-data run is reachable.
 - **Authority.** Arch §21.2 (system/synthetic, reuse tests), §13.3, §16.7, §29; this backlog §F (Phase 1 gate).
-- **Preconditions.** P1-T041, P1-T048, P1-T050.
+- **Preconditions.** Every Phase 1 implementation ticket P1-T001 through P1-T050 is complete and evidence-recorded.
 - **Allowed scope.** `tests/system/synthetic/`, `tests/integration/{learning,persistence}/`, `tests/property/`.
 - **Forbidden scope.** No real-data path; no scientific output root written; no campaign execution.
 - **Required implementation.** Synthetic end-to-end run; reuse assertions (one calibration/test id for B1–B4, role/lineage substitution fails); atomicity/recovery/determinism/batching-equivalence tests; a guard test that real-data execution is unreachable in Phase 1.
@@ -1969,7 +2268,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Required tests.** Synthetic system test; reuse/invalidation; atomicity; determinism; batching equivalence; campaign-prohibition guard.
 - **Agents/skills/hooks.** Agent: reproducibility-auditor. Hooks: test/lineage/statistics. Skill: reproducibility, test_quality_check.
 - **Validation commands.** Full Nox validation (all lanes) on synthetic data.
-- **Acceptance criteria.** [ ] Synthetic end-to-end passes. [ ] B1–B4 share one calibration/test id; substitution fails. [ ] Atomicity/determinism/batching-equivalence pass. [ ] No real-data path reachable. [ ] Socle-readiness gate green.
+- **Acceptance criteria.** [ ] All P1-T001–P1-T050 are complete; no socle capability remains unowned. [ ] Synthetic end-to-end passes. [ ] B1–B4 share one calibration/test id; substitution fails. [ ] Atomicity/determinism/batching-equivalence pass. [ ] Telemetry, reporting specifications, artifact schema/version handling, persistence, recovery, composition, and CLI contracts are exercised. [ ] No real-data path reachable. [ ] Socle-readiness gate green.
 - **Stop conditions.** Stop and block Phase 2 if any socle suite fails.
 - **Deliverables.** Synthetic system test + socle validation suites + prohibition guard.
 - **Final review checklist.** [ ] Gate green on synthetic data only.
@@ -1981,13 +2280,13 @@ Each ticket below carries the complete mandatory template and is written to rema
 #### P2-T001 — Recover DATP behavioral semantics from the reference repository (read-only)
 
 - **Metadata.** Phase 2 · data · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: datp-protocol-guardian · Supporting: data-pipeline-engineer, federated-learning-engineer, threshold-policy-engineer · Depends: P1-T051 · Blocks: P2-T002, P2-T004, P2-T008 · Roadmap IDs: — · Campaign scope: ANCHOR · Identity impact: none (evidence gathering).
-- **Objective.** Read `/home/naslouby/Projects/datp` (read-only) to recover the original DATP autoencoder architecture, optimizer/scheduler, preprocessing behavior, client construction, train/calibration/test split semantics, FedAvg behavior, checkpoint behavior, calibration/test-score semantics, threshold-policy formulas, and evaluation/interpretation — as behavioral evidence only.
+- **Objective.** Read `/home/naslouby/Projects/datp` (read-only) to recover the original DATP autoencoder architecture, optimizer/scheduler, preprocessing behavior, client construction, train/calibration/test split semantics, FedAvg behavior, **historical anchor checkpoint schedule and selection evidence**, calibration/test-score semantics, threshold-policy formulas, and evaluation/interpretation — as behavioral evidence only.
 - **Why.** These semantics are genuine readiness blockers (Arch §27); they must be recovered from behavioral evidence, never guessed, and never used as a source-layout/migration template.
 - **Authority.** Arch §1 (reference project), §27 (blockers); Road §5 (reference-only), §17.
 - **Preconditions.** P1-T051 (socle ready).
 - **Allowed scope.** Read-only inspection of the reference repository; recording findings into the recovered-semantics register (P2-T002).
 - **Forbidden scope.** No copying of the reference layout; no shim/alias/migration; no import from the reference project; no execution of the reference project.
-- **Required implementation work.** Extract AE architecture/activation/bottleneck, optimizer/lr/scheduler, preprocessing strategy/scope, client/device mapping, split semantics, FedAvg weighting/E/participation, checkpoint schedule/selection, score derivation, threshold formulas, evaluation logic; note ambiguities as blockers.
+- **Required implementation work.** Extract AE architecture/activation/bottleneck, optimizer/lr/scheduler, preprocessing strategy/scope, client/device mapping, split semantics, FedAvg weighting/E/participation, checkpoint schedule/selection, score derivation, threshold formulas, evaluation logic; explicitly distinguish the historical anchor protocol from the journal {25,50,75,100,125,150,200} protocol. If historical schedule or selection evidence is absent, record `ANCHOR_CHECKPOINT_PROTOCOL_UNRESOLVED` and prohibit guessed rounds or calling a journal-protocol run a historical reproduction.
 - **Required configuration work.** None (evidence only).
 - **Required error handling.** Where evidence is ambiguous or absent, record a typed readiness blocker rather than guessing.
 - **Required tests.** None (read-only discovery).
@@ -2002,19 +2301,19 @@ Each ticket below carries the complete mandatory template and is written to rema
 #### P2-T002 — Record the recovered-semantics register in the master log
 
 - **Metadata.** Phase 2 · data · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: datp-protocol-guardian · Depends: P2-T001 · Blocks: P2-T020 · Campaign scope: ANCHOR · Identity impact: none.
-- **Objective.** Record a recovered-semantics register (a section appended to this master log) mapping each anchor semantic to its recovered value or an explicit unresolved blocker, so downstream anchor tickets cite a single register.
+- **Objective.** Record a recovered-semantics register (a section appended to this master log) mapping each anchor semantic to its recovered value or an explicit unresolved blocker, including a separate `AnchorHistoricalCheckpointProtocol` decision distinct from `JournalCheckpointProtocol`, so downstream anchor tickets cite a single register.
 - **Why.** Anchor implementation tickets must cite recovered semantics; a single register prevents divergent assumptions and makes blockers explicit before implementation.
 - **Authority.** Arch §27; Road §17; this backlog (single-file discipline).
 - **Preconditions.** P2-T001.
 - **Allowed scope.** Appending the register to this master log only.
 - **Forbidden scope.** No separate register file; no guessed values presented as recovered; no scientific execution.
-- **Required implementation work.** Tabulate each semantic → recovered value / blocker + evidence pointer; mark print-grade blockers.
+- **Required implementation work.** Tabulate each semantic → recovered value / blocker + evidence pointer; for the checkpoint protocol, record the recovered anchor schedule and selection rule or `ANCHOR_CHECKPOINT_PROTOCOL_UNRESOLVED`, the authoritative evidence needed to resolve it, affected identities, and blocked tickets P2-T008 through P3-T011. Mark print-grade blockers.
 - **Required configuration work.** None.
 - **Required error handling.** Unresolved semantics are marked as blockers carried into readiness.
 - **Required tests.** None.
 - **Agents/skills/hooks.** Agent: datp-protocol-guardian. Hook: final-report/scope. Skill: experiment_readiness_check.
 - **Validation commands.** Register completeness cross-check against Arch §27.
-- **Acceptance criteria.** [ ] Every anchor semantic present with value or blocker. [ ] Evidence pointers recorded. [ ] Single register in this log.
+- **Acceptance criteria.** [ ] Every anchor semantic present with value or blocker. [ ] Anchor and journal checkpoint protocols explicitly distinguished. [ ] Unresolved anchor schedule blocks affected training/selection/readiness/execution tickets. [ ] Evidence pointers recorded. [ ] Single register in this log.
 - **Stop conditions.** None.
 - **Deliverables.** Recovered-semantics register (in this log).
 - **Completion evidence.** Standard report.
@@ -2169,21 +2468,21 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P2-T010 — Implement the checkpoint schedule, persistence, and Regime-A global selection
 
-- **Metadata.** Phase 2 · checkpoint · P0-Blocking · NOT_STARTED · Sci-exec: FORBIDDEN · Owner: federated-learning-engineer · Supporting: reproducibility-auditor · Depends: P2-T009, P1-T022 · Blocks: P2-T011 · Roadmap IDs: E-C1 · Campaign scope: ANCHOR · Identity impact: checkpoint / checkpoint-selection identities.
-- **Objective.** Implement scheduled checkpoint persistence at {25,50,75,100,125,150,200} and the Regime-A global checkpoint selection (`CheckpointSelector`) that records candidates/ties and attests no forbidden evidence participated, validated on synthetic candidates.
-- **Why.** Train-once/save-many with one Regime-A-global selected round for every main-regime table; no test-driven/per-regime selection; no leakage into selection.
+- **Metadata.** Phase 2 · checkpoint · P0-Blocking · NOT_STARTED · Sci-exec: FORBIDDEN · Owner: federated-learning-engineer · Supporting: reproducibility-auditor · Depends: P2-T009, P2-T002, P1-T022 · Blocks: P2-T011 · Roadmap IDs: ANCHOR-B0–B4 · Campaign scope: ANCHOR · Identity impact: anchor checkpoint / checkpoint-selection identities.
+- **Objective.** Implement the evidence-recovered historical anchor checkpoint persistence and selection protocol, validated on synthetic candidates. The journal {25,50,75,100,125,150,200} schedule is implemented only in the journal track and must not be imposed on anchor reproduction unless P2-T002 records authority evidence that they are identical.
+- **Why.** A historical reproduction cannot silently redefine its training/selection protocol as the journal protocol. One anchor-global selected round may be used only after the recovered schedule, ranking rule, and tie-break are evidenced.
 - **Authority.** Arch §17.1, §9.1, §29.1/§29.4; Road §10 (checkpoint protocol).
-- **Preconditions.** P2-T009, P1-T022.
+- **Preconditions.** P2-T009, P2-T002 (anchor checkpoint protocol resolved), P1-T022.
 - **Allowed scope.** `application/stages/select_checkpoint.py` (anchor), checkpoint persistence.
-- **Forbidden scope.** No test AUROC/attack/Regime-D/FedProx/personalization/threshold in selection; no per-regime selection; no real run.
-- **Required implementation work.** Persist scheduled checkpoints; selection over Regime-A candidates with prohibited-input attestation; deterministic tie-break.
+- **Forbidden scope.** No guessed anchor rounds; no silent journal-schedule substitution; no test AUROC/attack/Regime-D/FedProx/personalization/threshold in selection; no per-regime selection; no real run.
+- **Required implementation work.** Persist only evidence-recovered anchor checkpoints; selection over eligible anchor candidates with prohibited-input attestation; deterministic evidence-recovered tie-break.
 - **Required configuration work.** `CheckpointSchedule`, `CheckpointSelectionSpec` (rule/tie-break versions).
 - **Required error handling.** `CheckpointSelectionError`.
 - **Required tests.** Integration (learning, synthetic): selection uses Regime-A evidence only; prohibited input rejected; deterministic selected round. Golden: selection-artifact shape.
 - **Agents/skills/hooks.** Agent: federated-learning-engineer, reproducibility-auditor. Hooks: statistics/lineage. Skill: reproducibility.
 - **Validation commands.** Integration (learning); golden lanes.
-- **Acceptance criteria.** [ ] Schedule {25,…,200}. [ ] Regime-A-global selection only. [ ] Prohibited-input attestation present. [ ] Deterministic selected round.
-- **Stop conditions.** Stop if the Regime-A ranking/tie-break rule is unresolved; carry as a readiness blocker.
+- **Acceptance criteria.** [ ] Historical anchor schedule/selection evidence is recorded. [ ] No journal schedule is assumed. [ ] Anchor-global selection only. [ ] Prohibited-input attestation present. [ ] Deterministic evidence-recovered selected round.
+- **Stop conditions.** Stop if anchor schedule, ranking, or tie-break is unresolved; preserve `ANCHOR_CHECKPOINT_PROTOCOL_UNRESOLVED` as a readiness blocker that prevents anchor training, checkpoint selection, campaign readiness, and execution.
 - **Deliverables.** Checkpoint persistence + selector.
 - **Completion evidence.** Standard report + selection identity.
 - **Final review checklist.** [ ] No leakage into selection.
@@ -2209,10 +2508,10 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Completion evidence.** Standard report + scoring identities.
 - **Final review checklist.** [ ] Attack only on TEST.
 
-#### P2-T012 — Implement B0 centralized reference (pooled benign, pooled p95)
+#### P2-T012 — Implement B0 centralized training branch
 
 - **Metadata.** Phase 2 · threshold · P1-Mandatory · NOT_STARTED · Sci-exec: FORBIDDEN · Owner: threshold-policy-engineer · Supporting: federated-learning-engineer · Depends: P2-T011 · Blocks: P2-T016 · Roadmap IDs: B0 · Campaign scope: ANCHOR · Identity impact: centralized model/checkpoint/score/threshold/evaluation identities.
-- **Objective.** Implement B0 as its own `ExperimentSpec` executed through the same stages with `CentralizedModelTrainer` and centralized identities (pooled-benign training, pooled p95 threshold), never accepting a FedAvg checkpoint or FedAvg-derived score set.
+- **Objective.** Implement only B0's separate centralized pooled-benign AE training identity and training path, never accepting a FedAvg identity. P2-T021 through P2-T023 own its checkpointing, scoring, and pooled threshold/evaluation/reporting route.
 - **Why.** B0 is a privacy-incompatible centralized reference, not a ladder policy; code-path reuse is required but scientific-artifact identity reuse with the FedAvg branch is a type error.
 - **Authority.** Arch §9.2 (B0), §29.4 (80); Road §4 (B0 role).
 - **Preconditions.** P2-T011.
@@ -2230,24 +2529,24 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Completion evidence.** Standard report + centralized identities.
 - **Final review checklist.** [ ] B0 ≠ ladder.
 
-#### P2-T013 — Implement B1 shared and B1-pool/B1-wt constructions
+#### P2-T013 — Implement canonical anchor B1 shared construction
 
-- **Metadata.** Phase 2 · threshold · P0-Blocking · NOT_STARTED · Sci-exec: FORBIDDEN · Owner: threshold-policy-engineer · Depends: P2-T011, P1-T024 · Blocks: P2-T016 · Roadmap IDs: E-C1, E-S1 · Campaign scope: ANCHOR · Identity impact: threshold identity.
-- **Objective.** Implement B1 shared τ (unweighted arithmetic mean of eligible clients' local-q thresholds) and the B1-pool and B1-wt supportive variants, all consuming only the calibration score set and the shared `EligibleClientSet`.
-- **Why.** B1 is the shared-scope anchor; pooled/weighted are separate constructions (E-S1) that must never be labeled B1; construction uses calibration scores only.
+- **Metadata.** Phase 2 · threshold · P0-Blocking · NOT_STARTED · Sci-exec: FORBIDDEN · Owner: threshold-policy-engineer · Depends: P2-T011, P1-T024 · Blocks: P2-T016 · Roadmap IDs: ANCHOR-B1 · Campaign scope: ANCHOR · Identity impact: threshold identity.
+- **Objective.** Implement only canonical anchor B1 shared τ: the unweighted arithmetic mean of eligible clients' local-q thresholds, consuming only anchor calibration scores and the shared `EligibleClientSet`.
+- **Why.** B1 is the anchor shared-scope comparator. B1-pool, B1-wt, construction sensitivity, and formal q-sensitivity are journal-only variants owned by Phase 4; construction uses calibration scores only.
 - **Authority.** Arch §9.2 (B1 definition), §29.1; Road §4, §5.2 (E-S1).
 - **Preconditions.** P2-T011, P1-T024.
 - **Allowed scope.** `infrastructure/thresholding/policies.py` shared constructions.
-- **Forbidden scope.** No pooled/weighted labeled B1; no test/attack score input; no real run.
-- **Required implementation work.** τ_B1 = mean_k τ_k(q) unweighted; pooled and weighted as distinct constructions.
-- **Required configuration work.** Threshold config for B1/B1-pool/B1-wt.
+- **Forbidden scope.** No pooled or weighted construction; no E-S1 ownership; no journal q-sensitivity; no test/attack score input; no real run.
+- **Required implementation work.** `τ_B1 = mean_k τ_k(q)` unweighted, with the canonical anchor threshold identity.
+- **Required configuration work.** Canonical anchor B1 threshold configuration only.
 - **Required error handling.** `ThresholdError`.
-- **Required tests.** Unit: B1 unweighted mean; pooled/weighted distinct from B1. Property: eligible-only mean. Contract: constructor rejects test scores.
+- **Required tests.** Unit: B1 unweighted mean. Property: eligible-only mean. Contract: constructor rejects test scores.
 - **Agents/skills/hooks.** Agent: threshold-policy-engineer. Hooks: threshold-semantics. Skill: threshold_policy_semantics.
 - **Validation commands.** Unit; property; contract lanes.
-- **Acceptance criteria.** [ ] B1 = unweighted mean. [ ] Pooled/weighted separate. [ ] Calibration scores only. [ ] Eligible-only.
+- **Acceptance criteria.** [ ] B1 = unweighted mean. [ ] No pooled/weighted construction is implemented in Phase 2. [ ] Calibration scores only. [ ] Eligible-only.
 - **Stop conditions.** None.
-- **Deliverables.** B1/B1-pool/B1-wt constructions.
+- **Deliverables.** Canonical anchor B1 construction.
 - **Completion evidence.** Standard report + threshold identities.
 - **Final review checklist.** [ ] Only mean is B1.
 
@@ -2272,9 +2571,9 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Completion evidence.** Standard report + threshold identities.
 - **Final review checklist.** [ ] B3 taxonomy-gated.
 
-#### P2-T015 — Implement B4 exact k-means++ clustering and cluster-mean thresholds (K=3)
+#### P2-T015 — Implement canonical anchor B4 exact k-means++ clustering and cluster-mean thresholds (K=3)
 
-- **Metadata.** Phase 2 · threshold · P1-Mandatory · NOT_STARTED · Sci-exec: FORBIDDEN · Owner: threshold-policy-engineer · Supporting: statistics-auditor · Depends: P2-T014, P1-T025 · Blocks: P2-T016 · Roadmap IDs: E-M1 · Campaign scope: ANCHOR · Identity impact: threshold identity (B4).
+- **Metadata.** Phase 2 · threshold · P1-Mandatory · NOT_STARTED · Sci-exec: FORBIDDEN · Owner: threshold-policy-engineer · Supporting: statistics-auditor · Depends: P2-T014, P1-T025 · Blocks: P2-T016 · Roadmap IDs: ANCHOR-B4 · Campaign scope: ANCHOR · Identity impact: threshold identity (B4).
 - **Objective.** Implement canonical B4: exact k-means++ over the fixed 4-scalar fingerprint `[mean,std,skew,p95]` at K=3 with locked scaler/`n_init`/`max_iter`/derived random state, producing a `ClusterAssignmentArtifact`, and cluster-mean thresholds that reuse the assignment across q without reclustering.
 - **Why.** Canonical B4 is exact and stable; q is never a fingerprint field; the assignment is reused across q cells; adjusted-Rand stability compares immutable assignments.
 - **Authority.** Arch §9.2, §16.2, §7.1; Road §4, SB-32.
@@ -2404,7 +2703,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P3-T001 — Final anchor implementation audit and clean-worktree check
 
-- **Metadata.** Phase 3 · audit · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: roadmap-orchestrator · Supporting: architecture-cleaner · Depends: P2-T020 · Blocks: P3-T002 · Roadmap IDs: E-C1 · Campaign scope: ANCHOR · Identity impact: none.
+- **Metadata.** Phase 3 · audit · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: roadmap-orchestrator · Supporting: architecture-cleaner · Depends: P2-T020 · Blocks: P3-T002 · Roadmap IDs: ANCHOR-B0–B4 (not a journal experiment ID) · Campaign scope: ANCHOR · Identity impact: none.
 - **Objective.** Re-run the anchor-implementation audit and confirm a clean worktree and green baseline/architecture/socle suites immediately before any freeze, so nothing uncommitted or failing enters the campaign.
 - **Why.** A dirty worktree or failing suite at freeze poisons provenance; the campaign identity must derive from a clean, verified state.
 - **Authority.** Arch §9.5 (`CodeState` clean/dirty), §29; this backlog §E, §B.
@@ -2424,7 +2723,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P3-T002 — Freeze code-state, dependency-lock, and environment provenance
 
-- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: reproducibility-auditor · Depends: P3-T001, P0-T004 · Blocks: P3-T006 · Roadmap IDs: E-C1 · Campaign scope: ANCHOR · Identity impact: `CodeState`, `DependencyLockState`, `EnvironmentInventory` provenance.
+- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: reproducibility-auditor · Depends: P3-T001, P0-T004 · Blocks: P3-T006 · Roadmap IDs: ANCHOR-B0–B4 (not a journal experiment ID) · Campaign scope: ANCHOR · Identity impact: `CodeState`, `DependencyLockState`, `EnvironmentInventory` provenance.
 - **Objective.** Capture and freeze `CodeState` (commit identity, clean state), `DependencyLockState`, and `EnvironmentInventory` (CUDA/GPU/VRAM/library exact versions) as the anchor campaign's provenance baseline.
 - **Why.** Reproducibility and Phase 7 audits require an immutable provenance baseline captured before execution; pinned numerically sensitive libraries must be recorded.
 - **Authority.** Arch §9.5, §11.3, §22.
@@ -2444,7 +2743,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P3-T003 — Freeze the resolved anchor configuration and verify the authoritative seed plan
 
-- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: experiment-engineer · Supporting: datp-protocol-guardian · Depends: P3-T001 · Blocks: P3-T004 · Roadmap IDs: E-C1 · Campaign scope: ANCHOR · Identity impact: resolved-configuration identity.
+- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: experiment-engineer · Supporting: datp-protocol-guardian · Depends: P3-T001 · Blocks: P3-T004 · Roadmap IDs: ANCHOR-B0–B4 (not a journal experiment ID) · Campaign scope: ANCHOR · Identity impact: resolved-configuration identity.
 - **Objective.** Resolve and freeze the anchor scientific configuration into an immutable `ResolvedConfigurationArtifact`, and verify the authoritative seed plan (the paired seeds defined by the resolved authoritative seed specification) without inventing values or ordering.
 - **Why.** The resolved-configuration identity anchors reuse and the campaign identity; the seed plan must be verified against the authoritative specification, never fabricated.
 - **Authority.** Arch §8.1, §11, §7.5; Road §3, §10 (paired seeds).
@@ -2464,7 +2763,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P3-T004 — Verify the anchor experiment matrix and enumerate stage identities and expected artifacts
 
-- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: experiment-engineer · Supporting: artifact-lineage-auditor · Depends: P3-T003 · Blocks: P3-T005 · Roadmap IDs: E-C1 · Campaign scope: ANCHOR · Identity impact: enumerates anchor stage identities.
+- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: experiment-engineer · Supporting: artifact-lineage-auditor · Depends: P3-T003 · Blocks: P3-T005 · Roadmap IDs: ANCHOR-B0–B4 (not a journal experiment ID) · Campaign scope: ANCHOR · Identity impact: enumerates anchor stage identities.
 - **Objective.** Expand the frozen anchor configuration into the complete resolved experiment matrix, enumerate every stage identity, and produce the expected-artifact inventory (no cell-ID collisions), confirming B1–B4 share compatible checkpoint/score identities.
 - **Why.** The campaign executes a resolved matrix; enumeration proves the DAG is complete, collision-free, and that the ladder shares expensive identities.
 - **Authority.** Arch §14, §13; this backlog §B.
@@ -2484,7 +2783,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P3-T005 — Resource/storage/CUDA/VRAM preflight and output-namespace compatibility
 
-- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: reproducibility-auditor · Supporting: implementation-engineer · Depends: P3-T004, P1-T039, P1-T047 · Blocks: P3-T006 · Roadmap IDs: E-C1 · Campaign scope: ANCHOR · Identity impact: freezes `ResolvedBatchExecutionProfile`.
+- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: reproducibility-auditor · Supporting: implementation-engineer · Depends: P3-T004, P1-T039, P1-T047 · Blocks: P3-T006 · Roadmap IDs: ANCHOR-B0–B4 (not a journal experiment ID) · Campaign scope: ANCHOR · Identity impact: freezes `ResolvedBatchExecutionProfile`.
 - **Objective.** Run preflight: validate the exact resolved batch/scoring/preprocessing profile, CUDA/VRAM availability, RAM, disk projections/reserve, same-filesystem commit capability, and confirm the anchor output namespace is separate from the journal namespace.
 - **Why.** Preflight freezes the exact profile and proves resources before expensive execution; anchor outputs must not resolve into the journal namespace.
 - **Authority.** Arch §16, §15.2, §12.3 (preflight); this backlog §B.
@@ -2504,7 +2803,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P3-T006 — Create the anchor campaign identity and execution-attempt identity
 
-- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: roadmap-orchestrator · Supporting: reproducibility-auditor · Depends: P3-T002, P3-T005 · Blocks: P3-T007 · Roadmap IDs: E-C1 · Campaign scope: ANCHOR · Identity impact: campaign `RunIdentity` and initial `ExecutionAttemptId`.
+- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: roadmap-orchestrator · Supporting: reproducibility-auditor · Depends: P3-T002, P3-T005 · Blocks: P3-T007 · Roadmap IDs: ANCHOR-B0–B4 (not a journal experiment ID) · Campaign scope: ANCHOR · Identity impact: campaign `RunIdentity` and initial `ExecutionAttemptId`.
 - **Objective.** Create the anchor campaign identity (`RunIdentity` from the frozen scientific configuration) and the initial `ExecutionAttemptId`, binding the frozen provenance, configuration, matrix, and runtime plan into one coherent campaign manifest.
 - **Why.** The campaign is launched under a coherent identity; `RunIdentity` is unchanged across attempts while `ExecutionAttemptId` is per-attempt.
 - **Authority.** Arch §7, §16.7, §18; this backlog §B.
@@ -2524,9 +2823,9 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P3-T007 — Execute the coordinated anchor campaign
 
-- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: **ANCHOR_CAMPAIGN_ALLOWED** · Owner: roadmap-orchestrator · Supporting: federated-learning-engineer, reproducibility-auditor · Depends: P3-T006 · Blocks: P3-T009 · Roadmap IDs: E-C1, E-S1, E-S3, E-M1 (anchor-track scores) · Campaign scope: ANCHOR · Identity impact: produces training/checkpoint/score/threshold/evaluation identities.
+- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: **ANCHOR_CAMPAIGN_ALLOWED** · Owner: roadmap-orchestrator · Supporting: federated-learning-engineer, reproducibility-auditor · Depends: P3-T006 · Blocks: P3-T009 · Roadmap IDs: ANCHOR-B0–B4 (never E-C1/E-S1/E-S3/E-M1) · Campaign scope: ANCHOR · Identity impact: produces anchor training/checkpoint/score/threshold/evaluation identities.
 - **Objective.** Execute the resolved anchor experiment program under the frozen plan and campaign identity: train per seed, select the Regime-A global checkpoint, generate calibration/test scores, and fan compatible calibration scores into the anchor threshold constructions and evaluations.
-- **Why.** This is the coordinated anchor scientific run producing the confirmatory and supporting anchor evidence; execution follows the resolved graph, reusing compatible artifacts and computing new identities as required.
+- **Why.** This is the coordinated historical/reproduction anchor run. It produces anchor evidence only; scientifically analogous anchor cells must never be labeled as formal journal experiments or confirmatory journal evidence.
 - **Authority.** Arch §14, §13, §18; Road §9.1, §20 (immediate-start anchor work); this backlog §B.
 - **Preconditions.** P3-T006 (campaign identity created; plan frozen).
 - **Allowed scope.** Real anchor training/scoring/thresholding/evaluation under the frozen plan.
@@ -2543,9 +2842,9 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Completion evidence.** Standard report + campaign/attempt identities + produced stage identities.
 - **Final review checklist.** [ ] Coordinated, not one-shot.
 
-#### P3-T008 — Safe campaign resume and infrastructure-retry handling
+#### P3-T008 — Conditional anchor recovery, resume, and infrastructure-retry handling
 
-- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: **ANCHOR_CAMPAIGN_ALLOWED** · Owner: reproducibility-auditor · Supporting: roadmap-orchestrator · Depends: P3-T007 · Blocks: P3-T009 · Roadmap IDs: E-C1 · Campaign scope: ANCHOR · Identity impact: none new (resumes existing identities under a new `ExecutionAttemptId`).
+- **Metadata.** Phase 3 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: **ANCHOR_CAMPAIGN_ALLOWED** · Owner: reproducibility-auditor · Supporting: roadmap-orchestrator · Depends: P3-T007 · Blocks: P3-T009 · Roadmap IDs: ANCHOR-B0–B4 (not a journal experiment ID) · Campaign scope: ANCHOR · Identity impact: none new (resumes existing identities under a new `ExecutionAttemptId`).
 - **Objective.** Resume the anchor campaign safely after interruption/pressure/transient failure, skipping completed compatible stages, using only compatible recovery checkpoints, and recording new execution-attempt identities while preserving the scientific `RunIdentity`.
 - **Why.** Campaign scope permits resume; recovery must be compatible; infrastructure retries preserving identical scientific identity continue the same campaign; CUDA-OOM requires an explicit new attempt.
 - **Authority.** Arch §16.6–16.7, §17.3, §18; this backlog §B.
@@ -2566,7 +2865,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P3-T009 — Completeness and same-model/same-score compatibility audits; typed failure persistence
 
-- **Metadata.** Phase 3 · audit · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: artifact-lineage-auditor · Supporting: reproducibility-auditor · Depends: P3-T007, P3-T008 · Blocks: P3-T010 · Roadmap IDs: E-C1 · Campaign scope: ANCHOR · Identity impact: none (audit).
+- **Metadata.** Phase 3 · audit · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: artifact-lineage-auditor · Supporting: reproducibility-auditor · Depends: P3-T007, P3-T008 · Blocks: P3-T010 · Roadmap IDs: ANCHOR-B0–B4 (not a journal experiment ID) · Campaign scope: ANCHOR · Identity impact: none (audit).
 - **Objective.** Audit the completed anchor: model/checkpoint completeness, score completeness, and same-model/same-score compatibility across B1–B4 (one selected checkpoint, one calibration set, one test set per compatible seed), and confirm every typed failure and incomplete output is persisted, not silently dropped.
 - **Why.** The confirmatory ladder requires the same model and scores across B1–B4; incomplete outputs must be detected and persisted, never mistaken for complete.
 - **Authority.** Arch §13, §29.1, §18.2 (idempotent per-stage); this backlog §B, §E.
@@ -2586,9 +2885,9 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P3-T010 — Historical-reference diagnostic and full configured anchor statistical analysis
 
-- **Metadata.** Phase 3 · statistics · P0-Blocking · NOT_STARTED · Sci-exec: **ANCHOR_CAMPAIGN_ALLOWED** · Owner: statistics-auditor · Supporting: reviewer2-red-team · Depends: P3-T009 · Blocks: P3-T011 · Roadmap IDs: E-C1 · Campaign scope: ANCHOR · Identity impact: statistical identity.
-- **Objective.** Run the full configured anchor statistical analysis over the completed evaluations — paired Δ, 95% BCa CI with positive-direction pass rule, descriptive Wilcoxon/Cliff's — and the five-seed historical-reference honesty diagnostic against `[0.647, 0.769]` with the ~20%-wider blocking rule.
-- **Why.** This produces the confirmatory verdict and the honesty diagnostic that governs journal expansion; a less-favorable ten-seed result is reported, never suppressed.
+- **Metadata.** Phase 3 · statistics · P0-Blocking · NOT_STARTED · Sci-exec: **ANCHOR_CAMPAIGN_ALLOWED** · Owner: statistics-auditor · Supporting: reviewer2-red-team · Depends: P3-T009 · Blocks: P3-T011 · Roadmap IDs: ANCHOR-B0–B4 (not a journal experiment ID) · Campaign scope: ANCHOR · Identity impact: anchor statistical identity.
+- **Objective.** Run the full configured anchor statistical analysis over the completed evaluations — paired Δ, 95% BCa CI with positive-direction interpretation, descriptive Wilcoxon/Cliff's — and the five-seed historical-reference honesty diagnostic against `[0.647, 0.769]` with the authority-defined approximately-20%-wider rule.
+- **Why.** This produces an anchor reproduction and honesty record, not the formal journal confirmatory verdict. Any less-favorable, null, mixed, or opposite-direction anchor evidence is retained and reported without suppression.
 - **Authority.** Arch §9.3; Road §3, §5.1, §10 (seed-extension honesty rule).
 - **Preconditions.** P3-T009.
 - **Allowed scope.** Statistical analysis over completed anchor evaluations.
@@ -2605,25 +2904,25 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Completion evidence.** Standard report + statistical identity.
 - **Final review checklist.** [ ] Verdict honest and typed.
 
-#### P3-T011 — Anchor acceptance decision, corrective-rerun workflow, artifact freeze, journal-unlock gate
+#### P3-T011 — Anchor integrity decision, technical-invalidity correction path, artifact freeze, journal-unlock gate
 
-- **Metadata.** Phase 3 · audit · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: roadmap-orchestrator · Supporting: statistics-auditor, reviewer2-red-team, reproducibility-auditor · Depends: P3-T010 · Blocks: P4-T001 · Roadmap IDs: E-C1 · Campaign scope: ANCHOR · Identity impact: freezes accepted anchor evidence identities. **This is the anchor-acceptance gate.**
-- **Objective.** Record the anchor acceptance decision, define the corrective-rerun workflow (root cause → corrective ticket → tests/regression → new attempt identity → preserved failed-attempt evidence → approval), freeze the accepted anchor evidence package, and set the journal-unlock gate reflecting acceptance.
-- **Why.** Journal implementation is blocked where the roadmap requires anchor acceptance; accepted evidence must be frozen and rejected outcomes routed to a disciplined rerun.
+- **Metadata.** Phase 3 · audit · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: roadmap-orchestrator · Supporting: statistics-auditor, reviewer2-red-team, reproducibility-auditor · Depends: P3-T010 · Blocks: P4-T001 · Roadmap IDs: ANCHOR-B0–B4 · Campaign scope: ANCHOR · Identity impact: freezes valid anchor evidence identities. **This is the anchor-integrity and journal-unlock gate.**
+- **Objective.** Record `CAMPAIGN_INTEGRITY_STATUS` separately from `SCIENTIFIC_OUTCOME_STATUS`; freeze every integrity-valid anchor evidence package, apply the roadmap's precommitted fallback wording to null, mixed, unfavorable, and opposite-direction outcomes, and set the journal-unlock gate from integrity plus authority blockers.
+- **Why.** A valid scientific result is evidence regardless of direction. Journal implementation is blocked by invalid or unresolved anchor provenance, not by a result that is null, mixed, weaker than expected, non-significant, or unfavorable.
 - **Authority.** Arch §22.4 (pre-spec provenance), §29.1 (journal expansion requires passed anchor); Road §20; this backlog §B (rerun discipline).
 - **Preconditions.** P3-T010.
-- **Allowed scope.** Acceptance decision; corrective-rerun workflow; evidence freeze; journal-unlock gate.
-- **Forbidden scope.** No suppression of a rejecting outcome; no journal unlock without recorded acceptance; no scientific rerun without the §B record.
-- **Required implementation work.** Record acceptance/rejection with evidence; define/route the corrective-rerun workflow; freeze the accepted evidence; set the journal-unlock gate.
+- **Allowed scope.** Integrity/outcome decision records; technical-invalidity correction path; evidence freeze; journal-unlock gate.
+- **Forbidden scope.** No suppression; no result-seeking rerun; no journal unlock with unresolved technical invalidity or authority blocker; no scientific rerun without a diagnosed invalidity and the §B record.
+- **Required implementation work.** Record both statuses with evidence; freeze all integrity-valid evidence; route only diagnosed corrupted input, implementation defect, incomplete artifact, lineage mismatch, determinism/configuration/statistical implementation defect, framework/infrastructure failure, or interrupted execution without a valid committed recovery state to corrective work. A changed scientific configuration creates a new campaign identity.
 - **Required configuration work.** None.
-- **Required error handling.** A rejecting outcome routes to a corrective rerun (new attempt identity, preserved failed evidence, explicit approval).
-- **Required tests.** Campaign checks: acceptance decision recorded with evidence; frozen evidence immutable; journal-unlock reflects the decision.
+- **Required error handling.** A scientifically unfavorable outcome is frozen and reported. Only diagnosed technical invalidity routes to corrective work with a new attempt identity, preserved failed evidence, explicit approval, and unchanged-science confirmation (or a new campaign identity).
+- **Required tests.** Campaign checks: integrity and outcome statuses are independent; valid null/mixed/unfavorable evidence freezes; only technical invalidity permits corrective work; journal-unlock reflects integrity and blockers.
 - **Agents/skills/hooks.** Agent: roadmap-orchestrator, statistics-auditor, reviewer2-red-team, reproducibility-auditor. Hooks: claim-evidence/final-report/lineage. Skill: confirmatory_claim_guard, reviewer_attack_check.
 - **Validation commands.** Evidence freeze; lineage tracing; changelog record.
-- **Acceptance criteria.** [ ] Acceptance/rejection recorded with evidence. [ ] Corrective-rerun workflow defined per §B. [ ] Accepted evidence frozen/immutable. [ ] Journal-unlock gate reflects the decision.
-- **Stop conditions.** Stop journal implementation if the anchor is not accepted; route to a corrective rerun.
-- **Deliverables.** Anchor acceptance decision + frozen evidence + journal-unlock gate.
-- **Final review checklist.** [ ] Journal unlock gated on acceptance.
+- **Acceptance criteria.** [ ] Both statuses recorded with evidence. [ ] Valid null/mixed/unfavorable evidence frozen/immutable. [ ] Technical-invalidity correction path defined per §B. [ ] Journal-unlock reflects integrity and authority blockers, never preferred direction.
+- **Stop conditions.** Stop journal implementation on technical invalidity or an unresolved authority blocker; never stop or rerun solely because the scientific outcome is unfavorable.
+- **Deliverables.** Anchor integrity/outcome decision + frozen evidence + journal-unlock gate.
+- **Final review checklist.** [ ] Journal unlock is integrity-based, not direction-based.
 
 ### Phase 4 — Complete Journal-Extension Implementation
 
@@ -3009,10 +3308,10 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Deliverables.** E-B1 implementation.
 - **Final review checklist.** [ ] Genuine time only.
 
-#### P4-T020 — Implement E-O1 alert burden and E-Q1–Q6 optional supplements
+#### P4-T020 — Implement mandatory E-O1 alert burden evidence and suppression route
 
-- **Metadata.** Phase 4 · experiment · P3-Optional · NOT_STARTED · Sci-exec: FORBIDDEN · Owner: experiment-engineer · Supporting: statistics-auditor, threshold-policy-engineer · Depends: P4-T001 · Blocks: P4-T022 · Roadmap IDs: E-O1, E-Q1, E-Q2, E-Q3, E-Q4, E-Q5, E-Q6 · Campaign scope: JOURNAL · Identity impact: evaluation/statistical/resource-cost identities.
-- **Objective.** Implement E-O1 (alert burden requiring real/cited `TrafficRateEvidence`, else omit) and the optional supplements E-Q1 (federated quantile backbone), E-Q2 (robust cluster-median B4), E-Q3 (equity suite), E-Q4 (secondary bootstrap CIs + full Wilcoxon/Cliff), E-Q5 (fixed-k FedStats sensitivity), E-Q6 (communication/storage cost, estimates labeled).
+- **Metadata.** Phase 4 · experiment · P1-Mandatory · NOT_STARTED · Sci-exec: FORBIDDEN · Owner: experiment-engineer · Supporting: statistics-auditor, threshold-policy-engineer · Depends: P4-T001 · Blocks: P4-T026 · Roadmap IDs: E-O1 · Campaign scope: JOURNAL · Identity impact: evaluation/statistical/resource-cost identities.
+- **Objective.** Implement mandatory E-O1 alert burden with `TrafficRateEvidenceKind`, `CostDerivationKind`, unit normalization, provenance, and alert/device/day calculation. If no valid measured or cited rate exists, produce a documented feasibility rejection or suppression result; never present estimated traffic as measured. P4-T023 separately owns E-Q1–E-Q6.
 - **Why.** These are supportive/optional (Tier 5/7) analyses; alert burden must not present hypothetical rates as measurements; quantile backbone claims no novel estimator; cost estimates are labeled, never measured traffic.
 - **Authority.** Arch §9.3 (alert burden/resource cost), §9.4 (E-Q6), §6.1 (traffic evidence); Road §9.3 (optional), §10, §13 (L20/L21), SB-20.
 - **Preconditions.** P4-T001.
@@ -3051,7 +3350,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 
 #### P4-T022 — Implement journal expected-artifact/table/figure inventory and completeness audit
 
-- **Metadata.** Phase 4 · audit · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: roadmap-orchestrator · Supporting: report-output-auditor, experiment-engineer · Depends: P4-T002..T021 · Blocks: P5-T001 · Roadmap IDs: all · Campaign scope: JOURNAL · Identity impact: none (inventory/audit). **This is the Phase 4 completeness gate.**
+- **Metadata.** Phase 4 · audit · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: roadmap-orchestrator · Supporting: report-output-auditor, experiment-engineer · Depends: P4-T002, P4-T003, P4-T004, P4-T005, P4-T006, P4-T007, P4-T008, P4-T009, P4-T010, P4-T011, P4-T012, P4-T013, P4-T014, P4-T015, P4-T016, P4-T017, P4-T018, P4-T019, P4-T020, P4-T021 · Blocks: P5-T001 · Roadmap IDs: all · Campaign scope: JOURNAL · Identity impact: none (inventory/audit). **This is the Phase 4 completeness gate.**
 - **Objective.** Produce the journal expected-artifact/table/figure/export inventory and the implementation-completeness audit certifying every roadmap experiment ID has specification/config/identity/tests/expected-artifacts/output coverage, with no journal real run performed.
 - **Why.** Phase 5 planning depends on a complete, audited implementation; this gate proves every mandatory/optional/rejected experiment is represented.
 - **Authority.** Arch §22.5 (traceability matrix), §26; Road §9; this backlog §F (Phase 4 gate).
@@ -3152,19 +3451,19 @@ Each ticket below carries the complete mandatory template and is written to rema
 #### P5-T005 — Reuse and invalidation verification against frozen anchor artifacts
 
 - **Metadata.** Phase 5 · campaign · P0-Blocking · NOT_STARTED · Owner: artifact-lineage-auditor · Supporting: reproducibility-auditor · Depends: P5-T003, P1-T033 · Blocks: P5-T006 · Roadmap IDs: — · Identity impact: reuse ledger.
-- **Objective.** Verify, via the typed spec-diff and reuse gate, which journal stages reuse compatible frozen anchor artifacts and which recompute due to invalidation, producing a reuse ledger; reuse is lineage-proven, never filename-based.
+- **Objective.** Compare the frozen anchor lineage with the complete journal matrix and classify **every** journal training, checkpoint, calibration-score, and test-score identity as exactly `REUSABLE_FROM_COMPATIBLE_ANCHOR`, `REQUIRES_NEW_JOURNAL_COMPUTATION`, or `BLOCKED_BY_UNRESOLVED_IDENTITY`; enumerate the additional journal Regime-A identities required to complete the ten-seed E-C1 cohort. Reuse is lineage-proven, never filename-based.
 - **Why.** Correct reuse/invalidation is essential to avoid retraining/rescoring for threshold-only changes and to recompute when identity-bearing inputs change.
 - **Authority.** Arch §11.5, §13.3, §29.1; this backlog §B (reuse language).
 - **Preconditions.** P5-T003, P1-T033.
 - **Allowed scope.** Reuse/invalidation verification; reuse-ledger production.
 - **Forbidden scope.** No execution; no filename-based reuse; no "exactly once" wording.
-- **Required implementation work.** Compute reuse/recompute per cell via spec-diff and reuse gate; record the reuse ledger with `ReuseImpact`.
-- **Required error handling.** `ReuseIncompatibilityError` → RECOMPUTE.
-- **Required tests.** Unit: threshold-only change reuses scores; identity-bearing change recomputes; reuse ledger correct.
+- **Required implementation work.** Compute the three-way classification per identity via the typed spec-diff and reuse gate; record full lineage comparison inputs and the reuse ledger; enumerate all missing Regime-A model, checkpoint-selection, calibration-score, and test-score identities for E-C1 before Phase 6.
+- **Required error handling.** `ReuseIncompatibilityError` → `REQUIRES_NEW_JOURNAL_COMPUTATION`; missing/ambiguous evidence → `BLOCKED_BY_UNRESOLVED_IDENTITY`.
+- **Required tests.** Unit: threshold-only change reuses scores; identity-bearing change requires new journal computation; incomplete lineage blocks; reuse ledger is exhaustive and correct.
 - **Agents/skills/hooks.** Agent: artifact-lineage-auditor, reproducibility-auditor. Hooks: lineage/scope. Skill: reproducibility.
 - **Validation commands.** Reuse classification; unit.
-- **Acceptance criteria.** [ ] Reuse ledger produced. [ ] Threshold-only reuses scores. [ ] Identity-bearing changes recompute. [ ] Lineage-proven, not filename-based.
-- **Stop conditions.** None.
+- **Acceptance criteria.** [ ] Every journal identity receives exactly one required classification. [ ] Complete lineage evidence is recorded. [ ] Missing ten-seed Regime-A identities are enumerated. [ ] Threshold-only reuses scores. [ ] Identity-bearing changes require new journal computation. [ ] Lineage-proven, not filename/path/seed-position based.
+- **Stop conditions.** Block any journal cell with unresolved identity evidence; do not infer compatibility.
 - **Deliverables.** Reuse/invalidation ledger.
 - **Final review checklist.** [ ] Lineage-aware reuse.
 
@@ -3267,24 +3566,24 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Deliverables.** Journal execution-attempt identity.
 - **Final review checklist.** [ ] Bound to frozen identity.
 
-#### P6-T002 — Anchor-artifact reuse validation and threshold-only stage execution
+#### P6-T002 — Journal Regime-A identity completion, reuse validation, and threshold-only execution
 
-- **Metadata.** Phase 6 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: **JOURNAL_CAMPAIGN_ALLOWED** · Owner: threshold-policy-engineer · Supporting: artifact-lineage-auditor · Depends: P6-T001 · Blocks: P6-T006 · Roadmap IDs: E-S1, E-S2, E-V1, E-V2, E-V3, E-T3, E-M1 · Identity impact: journal threshold/evaluation identities (reuse scores).
-- **Objective.** Validate anchor-artifact reuse by lineage and execute the threshold-only journal stages (E-S1/S2, E-V1/V2/V3, E-T3, E-M1 threshold parts) that compute from compatible calibration/test scores without retraining or rescoring.
-- **Why.** Threshold-only stages reuse compatible scores; they never retrain/rescore; execution follows the resolved graph.
+- **Metadata.** Phase 6 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: **JOURNAL_CAMPAIGN_ALLOWED** · Owner: threshold-policy-engineer · Supporting: artifact-lineage-auditor, federated-learning-engineer · Depends: P6-T001 · Blocks: P6-T006 · Roadmap IDs: E-C1, E-S1, E-S2, E-V1, E-V2, E-V3, E-T3, E-M1, E-M2, E-M3, E-M4, E-M5, B0, B-a, E-Q1, E-Q2, E-Q3, E-Q4, E-Q5, E-Q6 · Campaign scope: JOURNAL · Identity impact: journal Regime-A training/checkpoint/calibration-score/test-score/threshold/evaluation identities.
+- **Objective.** Classify every journal Regime-A training, checkpoint-selection, calibration-score, and test-score identity as `REUSABLE_FROM_COMPATIBLE_ANCHOR`, `REQUIRES_NEW_JOURNAL_COMPUTATION`, or `BLOCKED_BY_UNRESOLVED_IDENTITY`; execute every required new journal identity before threshold-only work; then execute E-C1's complete ten-paired-seed B1-vs-B2 threshold/evaluation/statistics input path and the selected threshold-only Regime-A/B-a/optional cells.
+- **Why.** The journal ten-seed confirmatory cohort cannot depend on a five-seed or scientifically distinct anchor campaign. Reuse is full typed-lineage compatibility only; missing journal identities must be computed under `JOURNAL_EXTENSION` even when an anchor artifact is read-only reusable.
 - **Authority.** Arch §13.3, §29.1; Road §20 (immediate-start extensions); this backlog §B.
 - **Preconditions.** P6-T001.
-- **Allowed scope.** Threshold-only stage execution over compatible scores.
-- **Forbidden scope.** No retraining/rescoring; no reuse without proven lineage; no "exactly once" wording; no config change.
-- **Required implementation work.** Validate reuse; execute threshold constructions/evaluations from compatible scores; persist atomically.
-- **Required error handling.** `ReuseIncompatibilityError` → RECOMPUTE; typed stage failures persisted.
-- **Required tests.** Campaign checks: threshold-only stages reuse compatible scores; no retrain/rescore triggered; lineage closed.
+- **Allowed scope.** Journal Regime-A identity classification/computation and threshold-only execution over compatible scores; B0's separate centralized branch; B-a boundary execution when selected; selected E-Q cells.
+- **Forbidden scope.** No filename/path/seed-position/"first five" reuse; no reuse without proven lineage; no retraining or rescoring for a genuinely threshold-only change; no anchor namespace writes; no config change.
+- **Required implementation work.** Produce a per-identity reuse ledger; execute all `REQUIRES_NEW_JOURNAL_COMPUTATION` Regime-A training, checkpoint selection, calibration scoring, and test scoring identities; execute E-C1 B1/B2 across the complete ten paired seeds with per-seed deltas as statistics inputs; execute threshold constructions/evaluations for E-S1/E-S2/E-V1/E-V2/E-V3/E-T3/E-M1–E-M5, B0, B-a, and selected E-Q cells; persist each artifact atomically in the journal namespace.
+- **Required error handling.** `ReuseIncompatibilityError` → `REQUIRES_NEW_JOURNAL_COMPUTATION`; absent identity evidence → `BLOCKED_BY_UNRESOLVED_IDENTITY`; typed stage failures are persisted and may use only the technical-invalidity correction path.
+- **Required tests.** Campaign checks: complete ten-seed E-C1 cohort; every reuse decision has complete lineage evidence; non-reusable journal identities train/select/score in the journal namespace; threshold-only stages reuse compatible scores without retrain/rescore; B0 never uses a FedAvg identity; lineage closes.
 - **Agents/skills/hooks.** Agent: threshold-policy-engineer, artifact-lineage-auditor. Hooks: threshold/lineage. Skill: threshold_policy_semantics.
 - **Validation commands.** Execution under the frozen plan; lineage tracing.
-- **Acceptance criteria.** [ ] Reuse lineage-validated. [ ] Threshold-only stages executed without retrain/rescore. [ ] Atomic commits with closed lineage. [ ] No config change.
-- **Stop conditions.** Persist failure evidence on any typed failure; recompute on invalidation.
-- **Deliverables.** Threshold-only journal artifacts.
-- **Final review checklist.** [ ] No retrain for threshold-only.
+- **Acceptance criteria.** [ ] Every journal Regime-A identity has exactly one of the three required classifications. [ ] All required new journal training/checkpoint/calibration-score/test-score identities executed. [ ] Complete ten-seed E-C1 B1/B2 evaluation/statistics input path present. [ ] Threshold-only stages reuse only compatible scores. [ ] Atomic commits with closed lineage and namespace separation. [ ] No config change.
+- **Stop conditions.** Persist failure evidence on any typed failure; recompute only on invalidation; block unresolved identity rather than assume overlap.
+- **Deliverables.** Journal Regime-A reuse ledger plus new and reused artifacts.
+- **Final review checklist.** [ ] No anchor shortcut; no retrain for threshold-only changes.
 
 #### P6-T003 — Regime C execution
 
@@ -3320,7 +3619,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Agents/skills/hooks.** Agent: data-pipeline-engineer, experiment-engineer. Hooks: feasibility/scope. Skill: experiment_readiness_check.
 - **Validation commands.** Execution; feasibility verification.
 - **Acceptance criteria.** [ ] E-X1 executed behind A-gate + D-gate. [ ] E-B1 executed only if timestamp-feasible, else suppressed. [ ] Artifacts complete/atomic. [ ] No pseudo-time.
-- **Stop conditions.** Defer/reduce K or suppress if feasibility fails.
+- **Stop conditions.** Preserve the failed partition and feasibility artifact immutably. A different, roadmap-authorized K is a new `ClientPartitionSpec`, new partition identity, and new feasibility artifact; it never overwrites, retries, or relabels the failed partition. Suppress the unresolved branch when no authorized candidate passes.
 - **Deliverables.** Regime D external/temporal artifacts.
 - **Final review checklist.** [ ] Gated execution.
 
@@ -3349,7 +3648,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Objective.** Execute the journal statistical analyses over completed evaluations (BCa CIs, descriptive tests, absorption/temporal-recovery diagnostics), persist typed degeneracy, and recompute any invalidated-upstream statistic.
 - **Why.** Statistics run over completed, lineage-valid evaluations; degeneracy is typed; invalidated upstreams recompute rather than reuse.
 - **Authority.** Arch §9.3, §16.5; Road §10; this backlog §B.
-- **Preconditions.** P6-T002..T005.
+- **Preconditions.** P6-T002, P6-T003, P6-T004, P6-T005.
 - **Allowed scope.** Statistical execution over completed evaluations.
 - **Forbidden scope.** No silent BCa→percentile; no reuse of invalidated statistics; no confirmatory promotion.
 - **Required implementation work.** Compute statistics per experiment; persist typed degeneracy; recompute invalidated.
@@ -3362,7 +3661,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Deliverables.** Journal statistical results.
 - **Final review checklist.** [ ] Typed, lineage-valid.
 
-#### P6-T007 — Campaign resume, infrastructure retry, and immutable artifact commits
+#### P6-T007 — Conditional journal recovery, resume, infrastructure retry, and immutable artifact commits
 
 - **Metadata.** Phase 6 · campaign · P0-Blocking · NOT_STARTED · Sci-exec: **JOURNAL_CAMPAIGN_ALLOWED** · Owner: reproducibility-auditor · Supporting: roadmap-orchestrator · Depends: P6-T001 · Blocks: P6-T008 · Roadmap IDs: — · Identity impact: none new (resumes under new attempt ids).
 - **Objective.** Handle journal campaign resume (skip completed compatible stages, compatible recovery only), classified infrastructure retries, and immutable artifact commits, recording new execution-attempt identities while preserving the scientific `RunIdentity`.
@@ -3400,23 +3699,23 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Deliverables.** Frozen journal result manifests.
 - **Final review checklist.** [ ] Complete and frozen.
 
-#### P6-T009 — Report rendering, journal acceptance decision, corrective-rerun workflow
+#### P6-T009 — Report rendering, journal integrity/outcome decision, technical-invalidity correction path
 
 - **Metadata.** Phase 6 · reporting · P0-Blocking · NOT_STARTED · Sci-exec: PLANNING_ONLY · Owner: roadmap-orchestrator · Supporting: report-output-auditor, reviewer2-red-team · Depends: P6-T008 · Blocks: P7-T001 · Roadmap IDs: all · Identity impact: report identities. **This is the Phase 6 acceptance gate.**
-- **Objective.** Render the planned outputs from frozen results (provenance-closed), record the journal acceptance decision, and define the corrective-rerun workflow (root cause → corrective ticket → tests/regression → new attempt identity → preserved evidence → approval) for any rejected outcome.
-- **Why.** Outputs render only from frozen, traced results; acceptance is recorded; rejected outcomes route to a disciplined rerun.
+- **Objective.** Render the planned outputs from frozen results (provenance-closed), record separate `CAMPAIGN_INTEGRITY_STATUS` and `SCIENTIFIC_OUTCOME_STATUS`, and define the technical-invalidity correction path (root cause → corrective ticket → tests/regression → new attempt identity → preserved evidence → approval).
+- **Why.** Outputs render only from frozen, traced results. A null, mixed, non-significant, opposite-direction, or otherwise unfavorable scientific outcome remains valid evidence and is not a rerun trigger.
 - **Authority.** Arch §22.2 (tracing), §22.4; Road §12 (fallback wording); this backlog §B, §F (Phase 6 gate).
 - **Preconditions.** P6-T008.
-- **Allowed scope.** Rendering; acceptance decision; corrective-rerun workflow.
-- **Forbidden scope.** No render before freeze/provenance closure; no suppression; no rerun without the §B record.
-- **Required implementation work.** Render planned outputs; record acceptance/rejection with evidence; define/route corrective reruns.
+- **Allowed scope.** Rendering; integrity/outcome decision; technical-invalidity correction path.
+- **Forbidden scope.** No render before freeze/provenance closure; no suppression; no result-seeking rerun; no correction without the §B record and diagnosed technical invalidity.
+- **Required implementation work.** Render planned outputs; record both statuses with evidence; freeze and map every integrity-valid result to roadmap fallback wording; route only diagnosed technical invalidity to corrective work.
 - **Required error handling.** `ProvenanceError` on untraced output; rejected outcome → corrective rerun.
 - **Required tests.** Campaign checks: outputs render only from frozen/traced results; acceptance recorded with evidence.
 - **Agents/skills/hooks.** Agent: roadmap-orchestrator, report-output-auditor, reviewer2-red-team. Hooks: claim-evidence/final-report/lineage. Skill: reviewer_attack_check, claim_evidence_map.
 - **Validation commands.** Rendering; provenance closure; changelog record.
-- **Acceptance criteria.** [ ] Outputs rendered from frozen/traced results. [ ] Acceptance/rejection recorded with evidence. [ ] Corrective-rerun workflow defined per §B. [ ] No suppression.
-- **Stop conditions.** Route rejected outcomes to a corrective rerun.
-- **Deliverables.** Rendered outputs + acceptance decision + rerun workflow.
+- **Acceptance criteria.** [ ] Outputs rendered from frozen/traced results. [ ] Integrity and outcome recorded separately. [ ] Valid unfavorable evidence retained with fallback wording. [ ] Technical-invalidity correction path defined per §B. [ ] No suppression or result-seeking rerun.
+- **Stop conditions.** Route only diagnosed technical invalidity to corrective work; valid unfavorable evidence proceeds to Phase 7.
+- **Deliverables.** Rendered outputs + integrity/outcome decision + technical-invalidity correction path.
 - **Final review checklist.** [ ] Traced rendering only.
 
 ### Phase 7 — Final Result Freeze, Reporting, and Audit
@@ -3445,18 +3744,18 @@ Each ticket below carries the complete mandatory template and is written to rema
 #### P7-T002 — Lineage closure and provenance verification
 
 - **Metadata.** Phase 7 · audit · P0-Blocking · NOT_STARTED · Owner: artifact-lineage-auditor · Supporting: reproducibility-auditor · Depends: P7-T001 · Blocks: P7-T009 · Roadmap IDs: — · Identity impact: none.
-- **Objective.** Verify lineage closes from every frozen result back to resolved configuration, and that code-state, configuration, dependency-lock, and environment provenance are complete and consistent for anchor and journal namespaces.
+- **Objective.** Independently verify lineage closure for the anchor cohort and the journal cohort; verify every cross-track reuse decision, code-state, configuration, dependency-lock, environment provenance, campaign identity, execution identity, seed identity, and output root. Prove that no anchor/journal result mixing occurred.
 - **Why.** Every reported output must trace to resolved configuration; provenance must be complete and namespace-correct.
 - **Authority.** Arch §13, §22.2, §22.5, §9.5.
 - **Preconditions.** P7-T001.
 - **Allowed scope.** Provenance-closure verification.
 - **Forbidden scope.** No new experiment; no untraced output tolerated.
-- **Required implementation work.** Trace each result to resolved config; verify code/config/dependency/environment provenance; verify namespace separation.
+- **Required implementation work.** Trace each track's results to its own resolved configuration and root; compare each reuse ledger entry against complete typed lineage; verify anchor and journal campaign/seed/output identities are separate; record any accidental mixed lineage as invalid.
 - **Required error handling.** `ProvenanceError` on any open lineage.
 - **Required tests.** Campaign checks: full lineage closure; provenance completeness; namespace separation.
 - **Agents/skills/hooks.** Agent: artifact-lineage-auditor, reproducibility-auditor. Hooks: lineage/final-report. Skill: reproducibility.
 - **Validation commands.** Lineage tracing; provenance inspection.
-- **Acceptance criteria.** [ ] Lineage closes for every result. [ ] Provenance complete. [ ] Anchor/journal namespaces separate. [ ] No untraced output.
+- **Acceptance criteria.** [ ] Anchor cohort lineage closes. [ ] Journal cohort lineage closes. [ ] Every cross-track reuse decision is lineage-proven. [ ] Campaign/seed/output namespaces are separate. [ ] No mixed or untraced output.
 - **Stop conditions.** Stop on any open lineage.
 - **Deliverables.** Provenance-closure record.
 - **Final review checklist.** [ ] Closed provenance.
@@ -3464,7 +3763,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 #### P7-T003 — Seed-plan completeness and paired-seed validation
 
 - **Metadata.** Phase 7 · audit · P0-Blocking · NOT_STARTED · Owner: reproducibility-auditor · Supporting: statistics-auditor · Depends: P7-T001 · Blocks: P7-T007 · Roadmap IDs: E-C1 · Identity impact: none.
-- **Objective.** Validate the executed seed plan is complete and, for the confirmatory endpoint, that the paired-seed cohort matches the resolved authoritative seed specification (ten paired seeds) with per-seed deltas present.
+- **Objective.** Validate the anchor historical cohort and the journal cohort independently: the anchor is the historical five-seed reproduction cohort; the journal confirmatory cohort is ten paired seeds with per-seed deltas. Neither cohort may be inferred from seed position or described as the other.
 - **Why.** The confirmatory claim requires the paired-seed cohort; seed completeness must be verified against the authoritative spec, never fabricated.
 - **Authority.** Arch §10 (seed collections); Road §3, §10.
 - **Preconditions.** P7-T001.
@@ -3475,7 +3774,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Required tests.** Campaign checks: cohort matches authoritative spec; per-seed deltas present.
 - **Agents/skills/hooks.** Agent: reproducibility-auditor, statistics-auditor. Hooks: statistics/lineage. Skill: reproducibility.
 - **Validation commands.** Seed-plan verification.
-- **Acceptance criteria.** [ ] Seed plan complete. [ ] Confirmatory cohort matches the authoritative spec. [ ] Per-seed deltas present. [ ] No invented seeds.
+- **Acceptance criteria.** [ ] Anchor five-seed cohort and journal ten-paired-seed cohort independently match their authoritative records. [ ] Journal per-seed deltas present. [ ] No invented seeds or cross-track cohort substitution.
 - **Stop conditions.** Stop on any seed-plan mismatch.
 - **Deliverables.** Seed-plan validation record.
 - **Final review checklist.** [ ] Authoritative cohort only.
@@ -3483,7 +3782,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 #### P7-T004 — Same-model/same-score causal-ladder audit
 
 - **Metadata.** Phase 7 · audit · P0-Blocking · NOT_STARTED · Owner: artifact-lineage-auditor · Supporting: datp-protocol-guardian · Depends: P7-T002 · Blocks: P7-T011 · Roadmap IDs: — · Identity impact: none.
-- **Objective.** Audit that B1–B4 across the confirmatory and supportive analyses used the same selected checkpoint and the same calibration/test score sets per compatible seed, and that stress tests used distinct model/score identities outside the ladder.
+- **Objective.** Audit fixed encoder and identical compatible calibration/test score lineage across B1–B4; B4 canonical K=3 and its four-scalar fingerprint; fixed cluster membership across q-sensitivity; exploratory-versus-canonical K separation; shrinkage λ semantics; calibration-size fallback; B2-conf eligibility/coverage separation; full B-FedStatsBenign pooled-statistics formula, candidate grid, exceedance matching, and tie rule; and distinct FedProx/personalization/B0 identities outside the ladder.
 - **Why.** The fixed-encoder ladder requires the same model and scores across B1–B4; stress tests must not be fanned off the core score set.
 - **Authority.** Arch §29.1, §13.6; Road §2, SB-25.
 - **Preconditions.** P7-T002.
@@ -3494,7 +3793,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Required tests.** Campaign checks: shared checkpoint/scores across B1–B4; stress-test separation.
 - **Agents/skills/hooks.** Agent: artifact-lineage-auditor, datp-protocol-guardian. Hooks: lineage/scope. Skill: threshold_policy_semantics.
 - **Validation commands.** Lineage tracing; identity comparison.
-- **Acceptance criteria.** [ ] B1–B4 share checkpoint/scores per seed. [ ] Stress tests use distinct identities. [ ] No identity bleed. [ ] No new experiment.
+- **Acceptance criteria.** [ ] B1–B4 share checkpoint/scores per seed. [ ] B4 K/fingerprint and q-membership rules hold. [ ] Variants preserve their locked formulas and roles. [ ] B0, FedProx, and personalization use distinct identities. [ ] No identity bleed or new experiment.
 - **Stop conditions.** Stop on any identity bleed.
 - **Deliverables.** Causal-ladder audit record.
 - **Final review checklist.** [ ] Same model/scores.
@@ -3559,7 +3858,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 #### P7-T008 — Null/mixed retention, stress-test separation, external/temporal/alert-burden claim gates
 
 - **Metadata.** Phase 7 · audit · P0-Blocking · NOT_STARTED · Owner: claim-evidence-auditor · Supporting: reviewer2-red-team, literature-novelty-auditor · Depends: P7-T002 · Blocks: P7-T011 · Roadmap IDs: E-X1, E-B1, E-O1 · Identity impact: none.
-- **Objective.** Audit that null/mixed/opposite results were retained with pre-committed wording, stress tests stay outside the causal ladder, external-validation and temporal claims respect their gates, and alert burden was reported only with real/cited traffic-rate evidence (or omitted).
+- **Objective.** Audit that integrity-valid null/mixed/opposite results were retained with pre-committed wording and never rerun for direction; stress tests stay outside the causal ladder; FedProx μ is pre-registered and E=1 matched; personalization naming is algorithm-faithful (no false Ditto); Regime D partition/timestamp provenance and temporal gates are respected; and alert burden has measured/cited traffic-rate evidence or is omitted.
 - **Why.** Claim discipline (no suppression, no overclaiming, no HARKing) and gate compliance are reviewer-critical.
 - **Authority.** Arch §22.4; Road §5, §12, §13 (L16/L20/L21), SB-20.
 - **Preconditions.** P7-T002.
@@ -3570,7 +3869,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Required tests.** Campaign checks: null/mixed retained with wording; gates respected; alert-burden evidence present or metric omitted.
 - **Agents/skills/hooks.** Agent: claim-evidence-auditor, reviewer2-red-team, literature-novelty-auditor. Hooks: claim-evidence/scope. Skill: claim_evidence_map, reviewer_attack_check, literature_overlap_check.
 - **Validation commands.** Claim/evidence verification.
-- **Acceptance criteria.** [ ] Null/mixed retained with pre-committed wording. [ ] Stress tests outside the ladder. [ ] External/temporal/alert-burden gates respected. [ ] No suppression/overclaiming.
+- **Acceptance criteria.** [ ] Integrity-valid null/mixed/unfavorable evidence retained with pre-committed wording and no result-seeking rerun. [ ] Stress tests outside the ladder. [ ] FedProx/personalization naming and matching rules respected. [ ] External/temporal/alert-burden gates respected. [ ] No suppression/overclaiming.
 - **Stop conditions.** Stop on any suppression/overclaim/ungated claim.
 - **Deliverables.** Claim/gate audit record.
 - **Final review checklist.** [ ] Honest, gated claims.
@@ -3613,13 +3912,54 @@ Each ticket below carries the complete mandatory template and is written to rema
 - **Deliverables.** Cleanup/namespace audit record.
 - **Final review checklist.** [ ] Clean and separated.
 
+#### P7-T012 — Audit conference-to-journal originality and manuscript handoff evidence
+
+- **Ticket ID.** P7-T012
+- **Title.** Audit conference-to-journal originality and manuscript handoff evidence
+- **Phase.** 7
+- **Status.** NOT_STARTED
+- **Priority.** P0-Blocking
+- **Ticket type.** audit
+- **Owner.** literature-novelty-auditor
+- **Supporting agents.** manuscript-editor, claim-evidence-auditor
+- **Scientific-execution classification.** POST_CAMPAIGN_AUDIT
+- **Campaign scope.** BOTH_TRACKS
+- **Roadmap experiment IDs.** —
+- **Architecture contracts/types owned.** `PreSpecificationRecord`, `ResultFreezeManifest`, `ReportSpec`
+- **Objective.** Produce auditable originality and manuscript-handoff evidence.
+- **Why this ticket exists.** Roadmap originality obligations cannot be left as an out-of-code note.
+- **Authority references.** Road §15, §14.5.
+- **Dependencies.** P7-T002,P7-T009.
+- **Blocks.** P7-T011.
+- **Downstream consumers.** P7-T011.
+- **Preconditions.** Frozen claim and output provenance.
+- **Inputs.** Conference paper, journal materials, frozen evidence records.
+- **Allowed scope.** Audit evidence and handoff record.
+- **Forbidden actions.** No duplicate-publication presentation; no journal result placed in the anchor record.
+- **Required configuration or NONE.** NONE.
+- **Implementation responsibilities.** Verify conference citation, cover-letter additions, ≥40% benchmark, figure/table/prose reuse treatment, camera-ready timing, frozen-evidence claims, and enumerated new experiments/analyses/theory.
+- **Required unit tests.** NONE.
+- **Required property tests.** NONE.
+- **Required contract tests.** Handoff-evidence completeness.
+- **Required architecture tests.** NONE.
+- **Required integration tests.** NONE.
+- **Required CUDA tests.** NONE.
+- **Required system/end-to-end tests.** NONE.
+- **Validation commands.** Originality evidence checklist inspection.
+- **Acceptance criteria.** [ ] Explicit completion evidence covers every Road §15 obligation.
+- **Completion evidence.** Completed checklist, evidence references, cleanup, blockers, skipped checks, no unrelated modifications.
+- **Failure and blocker behavior.** Missing evidence blocks closure.
+- **Stop conditions.** Unfrozen claim or undisclosed overlap.
+- **Deliverables.** Originality/manuscript-handoff audit record.
+- **Final review checklist.** [ ] Journal contribution is beyond the conference version.
+
 #### P7-T011 — Reviewer red-team, architecture, and roadmap final audits; master-log closure
 
 - **Metadata.** Phase 7 · audit · P0-Blocking · NOT_STARTED · Owner: roadmap-orchestrator · Supporting: reviewer2-red-team, architecture-cleaner, datp-protocol-guardian, literature-novelty-auditor · Depends: P7-T004, P7-T005, P7-T006, P7-T007, P7-T008, P7-T009, P7-T010 · Blocks: — · Roadmap IDs: all · Identity impact: none. **This is the backlog-closure gate.**
 - **Objective.** Conduct the harsh reviewer red-team audit (the roadmap's 28-loophole register), the architecture final audit (Arch §29 invariants), and the roadmap final audit (scientific identity/claim discipline), then close the master log with a recorded verdict.
 - **Why.** Final closure requires that every reviewer loophole is defended, every architectural invariant holds, and the scientific identity is intact — with a recorded closure verdict.
 - **Authority.** Arch §29 (invariants); Road §13 (reviewer register), §14 (checklists), §19–20; this backlog §F (Phase 7 gate).
-- **Preconditions.** P7-T004..T010.
+- **Preconditions.** P7-T004, P7-T005, P7-T006, P7-T007, P7-T008, P7-T009, P7-T010.
 - **Allowed scope.** Final audits; master-log closure.
 - **Forbidden scope.** No new experiment; no unresolved loophole; no closure with a failing invariant.
 - **Required implementation work.** Run the reviewer/architecture/roadmap audits; record defenses; close the master log with a verdict and changelog entry.
@@ -3639,6 +3979,7 @@ Each ticket below carries the complete mandatory template and is written to rema
 ```mermaid
 graph TD
     P0[Phase 0 — Repository & Engineering Foundation]
+    BG{{Baseline quality gate — P0-T026}}
     P1[Phase 1 — Complete Technical Socle]
     SR{{Socle readiness gate — P1-T051}}
     P2[Phase 2 — Complete DATP Anchor Implementation]
@@ -3654,15 +3995,15 @@ graph TD
     P7[Phase 7 — Final Result Freeze, Reporting & Audit]
     CL{{Backlog closure gate — P7-T011}}
 
-    P0 --> P1 --> SR --> P2 --> AR --> P3 --> AA --> P4 --> JC --> P5 --> GN --> P6 --> JA --> P7 --> CL
+    P0 --> BG --> P1 --> SR --> P2 --> AR --> P3 --> AA --> P4 --> JC --> P5 --> GN --> P6 --> JA --> P7 --> CL
 
     classDef gate fill:#efe,stroke:#5a5;
     classDef phase fill:#eef,stroke:#557;
-    class SR,AR,AA,JC,GN,JA,CL gate;
+    class BG,SR,AR,AA,JC,GN,JA,CL gate;
     class P0,P1,P2,P3,P4,P5,P6,P7 phase;
 ```
 
-**Reading.** Each phase gate must pass before the next phase begins. Anchor acceptance (P3-T011) unlocks the journal implementation where the roadmap requires it; the journal go/no-go (P5-T009) unlocks the journal campaign; the journal acceptance (P6-T009) unlocks the final audit.
+**Reading.** Each phase gate must pass before the next phase begins. P0-T026 is the Phase 0 baseline gate. P3-T011 unlocks journal implementation only from anchor integrity and authority blockers, never preferred scientific direction; P5-T009 unlocks the journal campaign; P6-T009 unlocks the final audit.
 
 ---
 
@@ -3742,7 +4083,7 @@ graph TD
 
 | Roadmap ID | Role / Tier | Implementation ticket(s) | Campaign-execution ticket(s) |
 |---|---|---|---|
-| E-C1 | Confirmatory / Tier 1 | P2-T004..T018, P4-T001 | P3-T007, P3-T010 (anchor); P6-T002, P6-T006 (journal) |
+| E-C1 | Confirmatory / Tier 1 | P2-T004, P2-T005, P2-T006, P2-T007, P2-T008, P2-T009, P2-T010, P2-T011, P2-T012, P2-T013, P2-T014, P2-T015, P2-T016, P2-T017, P2-T018; P4-T001 | P6-T002, P6-T006 (journal only; Phase 3 is anchor reproduction, not E-C1) |
 | E-S1 | Supportive / Tier 2 | P2-T013, P4-T002 | P6-T002, P6-T006 |
 | E-S2 | Supportive / Tier 2 | P4-T002 | P6-T002, P6-T006 |
 | E-S3 | Supportive / Tier 2 | P4-T003 | P6-T003, P6-T006 |
@@ -3760,10 +4101,22 @@ graph TD
 | E-T3 | Stress comparator / Tier 4 | P4-T018 | P6-T002, P6-T006 |
 | E-B1 | Boundary / Tier 6 | P4-T019 | P6-T004, P6-T006 |
 | E-O1 | Supportive / Tier 5 | P4-T020 | P6-T006 |
-| E-Q1..Q6 | Optional / Tier 7 | P4-T020 | P6-T002/P6-T006 (as resolved) |
-| B0 | Centralized reference (non-ladder) | P2-T012 | P3-T007 (anchor); P6-T006 |
-| B-a | Boundary / Tier 6 | P4-T011 | P6-T006 |
-| E-R1..R8 | Rejected / suppressed (non-executable) | P4-T012 | — (never executed) |
+| E-Q1 | Optional / Tier 7 | P4-T020 | P6-T002, P6-T006 when selected |
+| E-Q2 | Optional / Tier 7 | P4-T020 | P6-T002, P6-T006 when selected |
+| E-Q3 | Optional / Tier 7 | P4-T020 | P6-T002, P6-T006 when selected |
+| E-Q4 | Optional / Tier 7 | P4-T020 | P6-T002, P6-T006 when selected |
+| E-Q5 | Optional / Tier 7 | P4-T020 | P6-T002, P6-T006 when selected |
+| E-Q6 | Optional / Tier 7 | P4-T020 | P6-T002, P6-T006 when selected |
+| B0 | Centralized reference (non-ladder) | P2-T012 | P3-T007 (anchor); P6-T002, P6-T006 (journal) |
+| B-a | Boundary / Tier 6 | P4-T011 | P6-T002, P6-T006 when selected |
+| E-R1 | Rejected / suppressed (non-executable) | P4-T012 | — (never executed) |
+| E-R2 | Rejected / suppressed (non-executable) | P4-T012 | — (never executed) |
+| E-R3 | Rejected / suppressed (non-executable) | P4-T012 | — (never executed) |
+| E-R4 | Rejected / suppressed (non-executable) | P4-T012 | — (never executed) |
+| E-R5 | Rejected / suppressed (non-executable) | P4-T012 | — (never executed) |
+| E-R6 | Rejected / suppressed (non-executable) | P4-T012 | — (never executed) |
+| E-R7 | Rejected / suppressed (non-executable) | P4-T012 | — (never executed) |
+| E-R8 | Rejected / suppressed (non-executable) | P4-T012 | — (never executed) |
 
 ### K.2 Locked scientific rule → enforcing tickets
 
@@ -3824,9 +4177,10 @@ graph TD
 
 | Gate | Ticket | Entry precondition |
 |---|---|---|
+| Baseline quality | P0-T026 | All mandatory Phase 0 tickets complete; conditional/optional terminal states recorded |
 | Socle readiness | P1-T051 | P0 baseline gate green |
 | Anchor implementation audit | P2-T020 | Socle readiness passed |
-| Anchor acceptance | P3-T011 | Anchor implementation audit passed |
+| Anchor integrity and journal unlock | P3-T011 | Anchor implementation audit passed; integrity valid; no authority blocker; outcome direction is not a gate |
 | Journal implementation completeness | P4-T022 | Anchor acceptance passed |
 | Journal go/no-go | P5-T009 | Journal completeness passed |
 | Journal acceptance | P6-T009 | Journal go decision recorded |
@@ -3839,6 +4193,7 @@ graph TD
 Record here every future ticket addition, split, merge, dependency change, blocker decision, gate change, campaign-attempt change, and completion milestone. Do not create a separate changelog file.
 
 - **2026-07-13 — Initial backlog created.** 159 tickets across 8 phases (P0: 26, P1: 51, P2: 20, P3: 11, P4: 22, P5: 9, P6: 9, P7: 11). Starting state recorded: empty `src/`/`tests/`, no `configs/`, `pyproject.toml` on Python 3.11 with three runtime deps and Pyright basic; `ai/` governance catalogue present (15 agents, 6 contracts, 15 hooks, 21 skills, 6 workflows) with provider adapters under `.claude/`, `.agents/`, `.github/`, `.codex/`. No scientific execution has occurred; no campaign identity created. All tickets `NOT_STARTED`.
+- **2026-07-13 — Surgical backlog correction.** Preserved 159 ticket identifiers and phase counts. Repaired the Phase 0 gate; made the Phase 1 gate depend on every socle ticket; separated Phase 3 anchor B0–B4 reproduction from formal journal IDs; carried the unresolved anchor checkpoint protocol through P2-T001/P2-T002/P2-T010; separated campaign integrity from scientific outcome; made the Phase 5 three-way reuse ledger and Phase 6 missing journal Regime-A identity path explicit; expanded Phase 7 track-separation and scientific audits; removed compressed dependency references in corrected fields; and updated the phase/reuse/traceability controls. No scientific execution occurred.
 
 ---
 
@@ -3849,8 +4204,9 @@ Record here every future ticket addition, split, merge, dependency change, block
 - **Eight top-level phases, exactly.** P0–P7 present; no additional top-level phase; subgroups/epics appear only inside phases. ✔
 - **Ticket count.** 159 tickets (target ~100–150; slightly above, justified by full decomposition of the greenfield socle). No padding: every ticket owns a distinct responsibility by layer/domain/library/persistence/artifact/scientific-role/config/feasibility/test-level/campaign-stage/report/audit/governance concern. ✔
 - **Stable identifiers.** `P<phase>-T<number>` throughout; IDs are stable and extraction-safe. ✔
-- **Template completeness.** Every detailed ticket carries all mandatory fields (metadata incl. scientific-execution classification, campaign scope, identity impact; objective; why; authority; preconditions; allowed/forbidden scope; required implementation; required configuration; required error handling; required tests by level; agents/skills/hooks; validation commands; pass/fail acceptance criteria; stop conditions; deliverables; completion evidence; final review checklist). Compact phrasing is used, but no field is omitted. ✔
-- **Independent extractability.** Each ticket names its authority citations and locks inline; phase-wide notes are supplementary, not a substitute for any required field. ✔
+- **[PASS] Ticket ID uniqueness and index/body equality.** 159 detailed tickets and 159 index rows are unique and equal; all referenced metadata dependencies resolve; the dependency graph is acyclic.
+- **[PARTIAL] Mandatory-field normalization.** Existing tickets retain their detailed operational content, but the historical compact template does not yet expose every user-required field under its own exact label (notably `Inputs`, separate unit/integration/system/architecture test fields, `Failure/blocker behavior`, and `Downstream consumers`). This remains a documentation-completeness correction before any ticket can be independently extracted under the stricter template.
+- **[PASS] Anchor/journal track separation.** Phase 3 has no formal journal experiment ID; Phase 4 first defines E-C1; Phase 5 records the three-way reuse classification; Phase 6 completes missing journal Regime-A identities; Phase 7 audits the tracks separately.
 
 ### M.2 Authority and scientific integrity
 
@@ -3861,9 +4217,9 @@ Record here every future ticket addition, split, merge, dependency change, block
 
 ### M.3 Campaign-language compliance
 
-- **Campaign scope is operational, not scientific.** §B and every Phase 3/6 ticket state that anchor/journal campaigns do not define seed values/ordering, do not imply one process/job/attempt, do not prohibit resume or valid recomputation, and do not mean one physical write per artifact. ✔
+- **[PASS] Campaign scope is operational, not scientific.** §B and Phase 3/6 controls state that anchor/journal campaigns do not define seed values/ordering, do not imply one process/job/attempt, do not prohibit resume or valid recomputation, and do not mean one physical write per artifact.
 - **No forbidden execution drift.** No ticket says "train seeds 0–9 once", "first five seeds", "generate each checkpoint/score once", "run each experiment once", "one process must execute the campaign", "a campaign may never be retried", "the campaign must use a specific seed ordering", or "all experiments use the same seeds". Reuse is expressed as lineage-aware (reuse when compatible, recompute on invalidation), never "exactly once". ✔
-- **Rerun vs. resume vs. retry distinguished.** §B and Phase 3/6 tickets separate infrastructure retry (same scientific identity, same campaign), safe resume (skip completed compatible stages, compatible recovery only, new attempt id), and corrective scientific rerun (root cause, corrective ticket, tests/regression, new attempt identity, preserved failed evidence, config-unchanged confirmation or new campaign identity, explicit approval). ✔
+- **[PASS] Integrity and scientific outcome are distinct.** §E and P3-T011/P6-T009 preserve valid null, mixed, non-significant, weak, unfavorable, and opposite-direction evidence; only diagnosed technical invalidity can route to correction, and a scientific change creates a new campaign identity.
 
 ### M.4 Execution-discipline compliance
 
