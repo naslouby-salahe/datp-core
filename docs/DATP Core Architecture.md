@@ -269,10 +269,10 @@ All finite vocabularies live in `domain/vocabulary.py`, grouped by cohesive conc
 | `SplitRole` | `TRAIN`, `CALIBRATION`, `TEST`, `TEMPORAL_EVALUATION` | Separates threshold-fitting and evaluation substrates |
 | `ProtocolTrack` | `DATP_ANCHOR`, `JOURNAL_EXTENSION` | Separates five-seed reproduction from journal artifacts and output namespaces |
 | `CoreThresholdPolicy` | `B1`, `B2`, `B3`, `B4` | The causal ladder only |
-| `ThresholdConstructionKind` | `SHARED`, `LOCAL`, `FAMILY`, `CLUSTER`, `ROBUST_CLUSTER_MEDIAN`, `SHRINKAGE`, `CALIB_SIZE_FALLBACK`, `CONFORMAL`, `CENTRALIZED_B0`, `FED_STATS_BENIGN` | Explicit discriminator tag for `ThresholdConstructionSpec`; the variant is never inferred from optional-field presence |
+| `ThresholdConstructionKind` | `SHARED`, `LOCAL`, `FAMILY`, `CLUSTER`, `ROBUST_CLUSTER_MEDIAN`, `SHRINKAGE`, `CALIB_SIZE_FALLBACK`, `CONFORMAL`, `FED_STATS_BENIGN` | Explicit discriminator tag for a FedAvg-derived `ThresholdConstructionSpec`; the variant is never inferred from optional-field presence |
 | `SharedThresholdConstruction` | `MEAN`, `POOLED`, `WEIGHTED` | Separates B1 construction from its identity |
 | `ThresholdVariant` | `SHRINKAGE_LGS`, `CALIB_SIZE_FALLBACK`, `CONFORMAL_B2`, `ROBUST_CLUSTER_MEDIAN_B4` | Roadmap-supported threshold variants |
-| `ThresholdComparatorRole` | `CENTRALIZED_B0`, `FED_STATS_BENIGN` | Non-ladder comparators |
+| `ThresholdComparatorRole` | `CENTRALIZED_MODEL_B0`, `FED_STATS_BENIGN` | Non-ladder comparators; B0 names a separately trained centralized-model comparator, not a threshold-construction variant |
 | `AggregationStrategy` | `FEDAVG`, `FEDPROX` | FedAvg core; FedProx stress test |
 | `ModelPersonalizationStrategy` | `NONE`, `DITTO`, `FEDREP_AE`, `FEDPER_AE` | Naming lock: FedRep/FedPer are never labeled Ditto |
 | `ExperimentRole` | `CONFIRMATORY`, `SUPPORTIVE`, `EXTERNAL_VALIDATION`, `STRESS_TEST`, `MECHANISM`, `BOUNDARY`, `EXPLORATORY`, `FUTURE_WORK`, `FORBIDDEN` | Evidence-role vocabulary; only `CONFIRMATORY` maps to Tier 1 |
@@ -288,7 +288,7 @@ All finite vocabularies live in `domain/vocabulary.py`, grouped by cohesive conc
 | `OperatingPointMetric` | `FPR`, `TPR`, `CV_FPR`, `CV_TPR`, `IQR_FPR`, `FPR_RANGE`, `WORST_CLIENT_FPR`, `ALERT_BURDEN`, `FPR_TARGET_ATTAINMENT` | CV_FPR is primary |
 | `DetectionQualityMetric` | `AUROC`, `MACRO_F1`, `P10_MACRO_F1`, `BALANCED_ACCURACY`, `WORST_CLIENT_BA` | AUROC is control-only |
 | `EquityMetric` | `JAIN_INDEX`, `GINI_COEFFICIENT`, `WITHIN_CLUSTER_DISPERSION`, `ACROSS_CLUSTER_DISPERSION` | Optional equity suite |
-| `EstimationMetric` | `QUANTILE_ESTIMATION_ERROR`, `THRESHOLD_VARIANCE`, `CALIBRATION_SAMPLE_EFFICIENCY`, `COVERAGE_RATIO` | Quantile backbone and conformal |
+| `EstimationMetric` | `QUANTILE_ESTIMATION_ERROR`, `THRESHOLD_VARIANCE`, `CALIBRATION_SAMPLE_EFFICIENCY`, `ELIGIBILITY_COVERAGE`, `CONFORMAL_COVERAGE` | Quantile backbone; client operating-point eligibility and B2-conf empirical coverage are distinct metrics |
 | `ClusterMetric` | `ADJUSTED_RAND_INDEX`, `SILHOUETTE` | Cluster stability |
 | `DistributionMetric` | `PAIRWISE_JS_DIVERGENCE` | Heterogeneity |
 | `DiagnosticRatio` | `ABSORPTION_RATIO`, `BETWEEN_RATIO`, `RECOVERY_RATIO` | Locked-rule diagnostics |
@@ -415,7 +415,8 @@ Scalar value objects live in `domain/identifiers.py` as frozen, slotted dataclas
 | Value object | Wraps | Validation | Prevents | Distinct from |
 |---|---|---|---|---|
 | `ClientId` | str | non-empty, no whitespace | identity confusion, unstable rosters | — |
-| `ExperimentId` | str | `^E-[A-Z]+\d+$` | free-text experiment references | — |
+| `ExperimentId` | str | `^E-[A-Z]+\d+$` | free-text roadmap experiment references | `ArchitectureCatalogueId` |
+| `ArchitectureCatalogueId` | str | uppercase snake case naming a roadmap-described activity that has no roadmap experiment identifier | fabricated manuscript experiment nomenclature | ExperimentId |
 | `CellId` | str | `<ExperimentId>#<hash16>`; the 16-hex-character hash is derived from the canonical resolved sweep-cell specification, never raw configuration text or unordered fields; the planner checks every generated value for collisions | ambiguous sweep cells; silent collision reuse | ExperimentId |
 | `ArtifactId` | str | non-empty; deterministically derived from artifact type, the scope-specific `ArtifactKey`, stage identity, and protocol namespace (plus schema identity where required); never randomly generated | filename-based identity; random scientific-artifact identifiers | ExecutionAttemptId |
 | `RunIdentity` | str | derived from the resolved scientific configuration identity | ties multiple execution attempts to one unchanged scientific run | ExecutionAttemptId |
@@ -435,7 +436,9 @@ Scalar value objects live in `domain/identifiers.py` as frozen, slotted dataclas
 | `ThresholdPercentile` | Decimal | `0 < q < 1` | degenerate τ; FPR-target desynchronization | ConfidenceLevel, CoverageRatio |
 | `FprTarget` | Decimal | `0 < t < 1`; `== 1 - q` | target/percentile desynchronization | Probability, ConfidenceLevel |
 | `ConfidenceLevel` | Decimal | `0 < c < 1` (typically 0.95) | mixing CI level with coverage or target | CoverageRatio, FprTarget |
-| `CoverageRatio` | Decimal | `0 <= r <= 1` | eligibility or conformal coverage above one | ConfidenceLevel, FprTarget |
+| `CoverageRatio` | Decimal | `0 <= r <= 1` | an invalid bounded ratio | ConfidenceLevel, FprTarget |
+| `EligibilityCoverage` | Decimal | `0 <= r <= 1` | conflating the eligible-client proportion with conformal coverage | ConformalCoverage |
+| `ConformalCoverage` | Decimal | `0 <= r <= 1` | conflating empirical B2-conf coverage with eligibility coverage | EligibilityCoverage |
 | `Probability` | Decimal | `0 <= p <= 1` | a generic probability misused as a specific rate | all of the above |
 | `FalsePositiveRate` / `TruePositiveRate` | float | finite, `0 <= r <= 1` | FPR/TPR interchange | each other |
 | `PrecisionScore` / `RecallScore` / `F1Score` | float | finite, `0 <= r <= 1`, declared zero-denominator policy | detection-score interchange | each other |
@@ -491,7 +494,7 @@ class CalibrationScoringIdentity:
 
 `StageIdentity` composes distinct `CalibrationScoringIdentity`, `TestScoringIdentity`, and `TemporalScoringIdentity` fields, so the reuse gate compares like roles and stages only.
 
-Additional nominal identities include `DatasetSourceIdentity`, `FeatureSchemaIdentity`, `SplitIdentity`, `FittedPreprocessorIdentity`, `CheckpointSelectionIdentity`, `TemporalWindowIdentity`, `ResolvedConfigurationIdentity`, `RecoveryCompatibilityIdentity`, and `ResultFreezeIdentity`. A scientific `CheckpointIdentity` identifies scheduled model weights; `CheckpointSelectionIdentity` identifies the Regime-A evidence and deterministic rule that selected one scheduled round. Neither can be substituted for the other.
+Additional nominal identities include `DatasetSourceIdentity`, `FeatureSchemaIdentity`, `SplitIdentity`, `FittedPreprocessorIdentity`, `CheckpointSelectionIdentity`, `CentralizedModelIdentity`, `CentralizedCheckpointIdentity`, `CentralizedCalibrationScoringIdentity`, `CentralizedTestScoringIdentity`, `CentralizedThresholdIdentity`, `CentralizedEvaluationIdentity`, `TemporalWindowIdentity`, `ResolvedConfigurationIdentity`, `RecoveryCompatibilityIdentity`, and `ResultFreezeIdentity`. A scientific `CheckpointIdentity` identifies scheduled model weights; `CheckpointSelectionIdentity` identifies the Regime-A evidence and deterministic rule that selected one scheduled round. Neither can be substituted for the other; centralized identities are separate nominal dataclasses and cannot be supplied where a FedAvg identity is required.
 
 ### 7.3 Numeric validity and canonical representation
 
@@ -508,12 +511,12 @@ A frozen dataclass never holds a live `dict`. A constructor that accepts a `Mapp
 The following values live once in `domain/definitions.py` and have no configuration override:
 
 ```python
-REGIME_D_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES: Final = CalibrationSampleCount(100)
+PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES: Final = CalibrationSampleCount(100)
 REGIME_D_MINIMUM_COVERAGE: Final = CoverageRatio(Decimal("0.90"))
 REGIME_D_TEMPORAL_HISTORICAL_FRACTION: Final = Probability(Decimal("0.70"))
 ```
 
-A Regime D partition passes only when at least `REGIME_D_MINIMUM_COVERAGE` of its clients each meet `REGIME_D_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES`. Reducing K creates a new `PartitionIdentity` and requires a new first-principles feasibility artifact; no prior failed result can be relabeled. The canonical D-temporal mapper accepts only the locked 70/30 chronological boundary and genuine capture timestamps. It rejects file, row, merge, directory, and synthetic ordering as pseudo-time. The allocation between training and calibration inside the first 70% remains an inherited-semantics blocker until authoritative evidence resolves it.
+`ProtocolEligibilitySpec(minimum_calibration_samples=PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES)` is the sole authority for the minimum client-calibration count. It applies to every per-client operating-point dispersion evaluation in Regimes A, B-a, C, and D; it is neither a dataset-ingestion minimum nor a Regime-D feasibility value. A Regime D partition passes only when at least `REGIME_D_MINIMUM_COVERAGE` of its clients meet that protocol rule. Reducing K creates a new `PartitionIdentity` and requires a new first-principles feasibility artifact; no prior failed result can be relabeled. The canonical D-temporal mapper accepts only the locked 70/30 chronological boundary and genuine capture timestamps. It rejects file, row, merge, directory, and synthetic ordering as pseudo-time. The allocation between training and calibration inside the first 70% remains an inherited-semantics blocker until authoritative evidence resolves it.
 
 ---
 
@@ -585,7 +588,7 @@ class ReportingPolicy:
 
 ### 8.3 Experiment aggregate
 
-`ExperimentIdentity` isolates the naming and role of an experiment from its scientific content; `ExperimentSpec` composes identity, evidence role, the scientific protocol, and the three policy aggregates. A sweep, when present, expands into fully-resolved cells at plan time.
+`ExperimentIdentity` isolates the naming and role of an experiment from its scientific content. Every named roadmap experiment is constructed only through a closed `ExperimentProfileSpec`; `ExperimentSpec` composes that resolved profile with the three policy aggregates. Generic `SweepSpec` remains an internal expansion utility, but no named experiment accepts an arbitrary sweep or a caller-supplied scientific protocol.
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -598,11 +601,32 @@ class ExperimentIdentity:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentSpec:
     identity: ExperimentIdentity
+    profile: ExperimentProfileSpec
     scientific_protocol: ScientificProtocolSpec
     execution_policy: ExecutionPolicy
     artifact_policy: ArtifactPolicy
     reporting_policy: ReportingPolicy
-    sweep: SweepSpec | None
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExperimentProfileSpec:
+    catalogue_id: ExperimentId | ArchitectureCatalogueId
+    identity: ExperimentIdentity
+    regime_compatibility: RegimeCompatibilitySpec
+    authorized_protocols: tuple[ScientificProtocolSpec, ...]
+    authorized_seed_plan: SeedTuple
+    primary_metrics: tuple[MetricId, ...]
+    secondary_metrics: tuple[MetricId, ...]
+    statistical_procedure: StatisticalAnalysisSpec
+    artifact_dependencies: ArtifactDependencySpec
+    fallback_policy: FallbackPolicySpec
+    manuscript_role: ManuscriptRoleSpec
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CentralizedModelComparatorProfileSpec:
+    catalogue_id: ArchitectureCatalogueId
+    identity: ExperimentIdentity
+    comparator: CentralizedModelComparatorSpec
+    reporting_policy: ReportingPolicy
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentCell:
@@ -616,6 +640,14 @@ class ExperimentCell:
     scientific_readiness: ScientificReadinessResult
 ```
 
+`ExperimentProfileSpec` validates the exact experiment identifier, evidence role, dataset, regime, client definition, training strategy, policy set, threshold construction, parameter grid, seed plan, metrics, statistical procedure, artifact dependencies, allowed fallback behavior, and manuscript role before it can yield an `ExperimentSpec`. Its `authorized_protocols` are the exhaustive expansion of the profile's closed cells; a generic sweep can expand only those cells and cannot introduce another value. A changed model, preprocessing, batch/scoring semantics, split, quantile method, seed derivation, or training setting is rejected before planning rather than merely producing a different fingerprint. `CentralizedModelComparatorProfileSpec` is disjoint from this FedAvg-profile path and is the only named-profile route for B0.
+
+The authoritative profile catalogue contains the roadmap's fixed values: E-S2 q ∈ {0.90, 0.95, 0.975, 0.99}; E-S3 α ∈ {0.1, 0.3, 0.5, 1.0, 10.0, IID} with 20 synthetic clients; E-V1 n ∈ {50, 100, 250, 500, 1000, 5000}; E-V2 λ ∈ {0.00, 0.25, 0.50, 0.75, 1.00}; E-V3 α = 0.05; and E-Q5 k ∈ {2.0, 2.5, 3.0}. The profile catalogue also owns every roadmap-defined absorption cutoff, temporal-recovery cutoff, Regime-D viability gate, suppression gate, sign requirement, evidence classification, and main-versus-supplementary boundary. A value absent from the roadmap remains an explicit readiness blocker, never an open parameter.
+
+`ConfirmatoryExperimentProfileSpec` is a closed `ExperimentProfileSpec` specialization for E-C1. It accepts only Regime A, N-BaIoT, nine physical-device clients, FedAvg, E = 1, full participation, one trained autoencoder per seed, identical frozen checkpoint/calibration-score/test-score identities for B1 and B2, B1/B2 only, `CV_FPR` only, exactly ten paired seeds, Δ = B1 − B2, and the 95% BCa procedure whose positive-direction interval must exclude zero. It has no B0/B3/B4/variant/comparator arm, unpaired cohort, alternate primary metric, retraining branch, alternate eligibility set, or Wilcoxon/Cliff's decision branch. Secondary statistics are descriptive outputs only.
+
+`RegimeCompatibilitySpec` is a closed mapping: A → N-BaIoT/nine `NATURAL_DEVICE` clients; B-a → CICIoT2023/verified file-defined `FILE_PSEUDO_CLIENT` partition and boundary-only role; C → N-BaIoT/20 `DIRICHLET_SYNTHETIC` clients; D → Edge-IIoTset and the feasibility-approved `DEVICE_CLIENT` or `GROUP_CLIENT` partition; D-temporal → the same approved D client definition plus genuine timestamps, chronological 70/30 split, and one-shot recalibration only. It rejects every other dataset/regime/client-definition combination, B3 without an authorized taxonomy, temporal pseudo-time, a feasibility-unapproved D partition, and canonical B4 wording for any K other than 3. B-a is represented by `ArchitectureCatalogueId("B_A_APPLICABILITY_BOUNDARY")`; its profile locks CICIoT2023's verified file-level pseudo-client metadata, the authorized B1/B2/B4 comparisons, CV(FPR), applicable absolute-dispersion metrics and pairwise-JS descriptor, its complete artifact lineage, and its boundary-only reporting role. It has no physical-device or natural-device-generalization claim path.
+
 A role/tier invariant is enforced at construction: `evidence_role == CONFIRMATORY` requires `tier == TIER_1`, and no other role may carry `TIER_1`. This makes it impossible to promote a supportive, mechanism, or stress-test experiment into the confirmatory claim.
 
 ### 8.4 Scientific aggregate class diagram
@@ -624,11 +656,19 @@ A role/tier invariant is enforced at construction: `evidence_role == CONFIRMATOR
 classDiagram
     class ExperimentSpec {
       +ExperimentIdentity identity
+      +ExperimentProfileSpec profile
       +ScientificProtocolSpec scientific_protocol
       +ExecutionPolicy execution_policy
       +ArtifactPolicy artifact_policy
       +ReportingPolicy reporting_policy
-      +SweepSpec sweep
+    }
+    class ExperimentProfileSpec {
+      +ExperimentId or ArchitectureCatalogueId catalogue_id
+      +RegimeCompatibilitySpec regime_compatibility
+      +ScientificProtocolSpec authorized_protocols
+      +SeedTuple authorized_seed_plan
+      +MetricId primary_metrics
+      +StatisticalAnalysisSpec statistical_procedure
     }
     class ExperimentIdentity {
       +ExperimentId experiment_id
@@ -669,6 +709,7 @@ classDiagram
       +ClaimOutcome wording_outcomes
     }
     ExperimentSpec *-- ExperimentIdentity
+    ExperimentSpec *-- ExperimentProfileSpec
     ExperimentSpec *-- ScientificProtocolSpec
     ExperimentSpec *-- ExecutionPolicy
     ExperimentSpec *-- ArtifactPolicy
@@ -713,7 +754,7 @@ All types are frozen (`frozen=True, slots=True, kw_only=True`); collections are 
 | `FittedPreprocessorResult` | immutable fitted state | `artifact`, `identity`, `training_row_order_checksum` | contains no processed split and no TEST-derived statistic |
 | `ProcessedSplitResult` | transformed split materialization | `artifacts`, `split_manifest_identity`, `preprocessor_identity`, `source_row_lineage` | row order and source-row identity retained |
 | `AutoencoderSpec` | fixed AE | `input_dim: int`, `hidden_dims: tuple[int, ...]`, `bottleneck_dim: int`, `activation: ActivationFunction` | no BatchNorm |
-| `FederationSpec` | FL setup | `aggregation: AggregationStrategy`, `local_epochs: int`, `participation: ParticipationStrategy`, `rounds_max: int`, `fedprox_mu: float \| None` | `fedprox_mu` present iff FEDPROX; E = 1 for the core ladder |
+| `FederationSpec` | FL setup | `aggregation: AggregationStrategy`, `local_epochs: int`, `participation: ParticipationStrategy`, `rounds_max: int`, `fedprox_mu: float \| None` | `fedprox_mu` is absent for FEDAVG and a strictly positive member of the pre-registered frozen grid for FEDPROX; E = 1 for the core ladder and matched FedProx stress cells |
 | `TrainingSpec` | model/optimizer semantics | `seed`, `autoencoder`, `federation`, `optimizer`, `lr`, `scheduler`, `training_batch: TrainingBatchSpec`, `precision`, `determinism`, `personalization` | dataset/regime are inherited from protocol; owns training batch sizing exclusively; personalization NONE for core ladder |
 | `TrainingBatchSpec` | training batch ownership | `micro_batch_size: BatchSize`, `gradient_accumulation_steps: GradientAccumulationSteps`, `effective_batch_size: BatchSize`, `dataloader_batch_size: BatchSize`, `client_batch_partitioning`, `optimizer_step_semantics` | `effective_batch_size == micro_batch_size × gradient_accumulation_steps` under the declared optimizer-step semantics; owned only by `TrainingSpec` |
 | `CheckpointSchedule` | save/eval rounds | `rounds: tuple[RoundNumber, ...]` | fixed schedule {25, 50, 75, 100, 125, 150, 200} |
@@ -736,28 +777,32 @@ The only authoritative data flow is `source inspection → client-partition mani
 | `ClientCalibrationScoreArtifact` | benign threshold-fitting scores | `client_id`, exact CALIBRATION split identity, split-manifest hash, scoring identity, checkpoint identity/hash, preprocessor identity, feature-schema identity, sample count, schema version, content hash, row-order checksum, artifact ref | contains no attack score field and no TEST role |
 | `ClientTestScoreArtifact` | atomically committed evaluation-score manifest | `client_id`, `test_split_identity`, `split_manifest_hash`, `test_scoring_identity`, `scientific_checkpoint_identity`, `scientific_checkpoint_content_hash`, `fitted_preprocessor_identity`, `feature_schema_identity`, `benign_scores_ref: ArtifactRef`, `benign_sample_count`, `benign_content_hash`, `benign_row_order_checksum`, `attack_scores_ref: ArtifactRef`, `attack_sample_count`, `attack_content_hash`, `attack_row_order_checksum`, `aggregate_manifest_hash`, `score_schema_version` | TEST role only; attack scores exist only here; `benign_scores_ref` and `attack_scores_ref` are two separately addressed, immutable `ArtifactRef` members verified and committed atomically as one aggregate manifest — never interleaved columns and never a loosely-typed or partially committed pair; a fully typed immutable multi-file bundle remains a valid persistence mechanism for the pair |
 | `ClientTemporalScoreArtifact` | temporal evaluation scores | test-artifact lineage plus `temporal_window_identity` and boundary identity | genuine D-temporal window required |
-| `CalibrationScoreArtifactSet` | shared threshold substrate | `artifact_id: CalibrationScoreArtifactId`, complete `CalibrationScoringLineage`, `per_client: ClientCalibrationScoreMap` | one set feeds B1–B4 and compatible threshold variants |
+| `CalibrationScoreArtifactSet` | fixed-FedAvg threshold substrate | `artifact_id: CalibrationScoreArtifactId`, complete `CalibrationScoringLineage`, `per_client: ClientCalibrationScoreMap` | one set feeds B1–B4 and compatible threshold variants only |
 | `TestScoreArtifactSet` | shared evaluation substrate | `artifact_id: TestScoreArtifactId`, complete `TestScoringLineage`, `per_client: ClientTestScoreMap` | accepted by evaluators only |
 | `TemporalScoreArtifactSet` | temporal evaluation substrate | `artifact_id: TemporalScoreArtifactId`, complete `TemporalScoringLineage`, `window_identity`, `per_client: ClientTemporalScoreMap` | accepted by temporal evaluators only |
 | `SplitScopedScoreBundle` | convenience aggregate | `calibration`, `test`, `temporal: TemporalScoreArtifactSet \| None` | preserves distinct typed members; never accepted directly by threshold/evaluation ports |
-| `SharedThresholdSpec` | B1 shared construction | `kind`, `percentile`, `construction`, `estimator` | no local/family/cluster fields |
+| `SharedThresholdSpec` | B1 shared construction | `kind`, `percentile`, `construction = MEAN`, `estimator` | τ_B1(q) is the unweighted arithmetic mean of all eligible clients' local-q thresholds; pooled and sample-weighted constructions are separate supportive variants, never B1 |
 | `LocalThresholdSpec` | B2 local construction | `kind`, `percentile`, `estimator` | calibration scores only |
-| `FamilyThresholdSpec` | B3 family construction | `kind`, `percentile`, `family_manifest_identity` | Regime A taxonomy required |
-| `ClusterThresholdSpec` | B4 exact clustering | `kind`, `percentile`, `B4ClusteringSpec` | canonical K=3 and exact contract |
+| `FamilyThresholdSpec` | B3 family construction | `kind`, `percentile`, `family_manifest_identity` | τ_B3,family(q) is the unweighted arithmetic mean of eligible family members' local-q thresholds; an authorized taxonomy is required |
+| `ClusterThresholdSpec` | B4 exact clustering | `kind`, `percentile`, `B4ClusteringSpec`, `ClusterThresholdAggregationSpec` | membership uses the fixed p95 fingerprint; τ_cluster,c(q) is the unweighted arithmetic mean of eligible member clients' local-q thresholds; canonical K=3 and exact contract |
 | `RobustClusterMedianThresholdSpec` | optional E-Q2 B4 aggregation variant | canonical B4 assignment identity and median member-threshold aggregation | optional/supplementary only; cannot replace canonical B4 |
 | `ShrinkageThresholdSpec` / `CalibrationSizeFallbackThresholdSpec` | supportive local/global variants | variant-specific λ or size rule | no pseudo-discriminating optional fields |
 | `ConformalThresholdSpec` | B2-conf | `kind`, `ConformalSplitSpec`, finite-sample quantile-index rule | proper-fit/calibration identities explicit; TEST excluded |
-| `CentralizedThresholdSpec` / `FedStatsBenignThresholdSpec` | non-ladder comparators | comparator-specific fields | no ladder policy identity |
-| `ThresholdConstructionSpec` | closed construction union | the ten frozen variants above | every consumer exhausts with `assert_never` |
+| `CentralizedModelComparatorSpec` | B0 centralized-AE reference | centralized pooled-benign training specification, model identity, centralized checkpoint identity/hash, pooled benign calibration-score identity, test-score identity, pooled threshold identity, evaluation lineage, provenance chain | B0 is trained centrally and evaluated from its own score artifacts; it cannot accept a FedAvg checkpoint, `CalibrationScoreArtifactSet`, or `TestScoreArtifactSet` |
+| `FedStatsBenignThresholdSpec` | non-ladder FedAvg-score comparator | comparator-specific fields | no ladder policy identity |
+| `ThresholdConstructionSpec` | closed FedAvg-score construction union | the nine frozen FedAvg-derived variants above | B0 is excluded; every consumer exhausts with `assert_never` |
 | `ThresholdSuiteSpec` | ordered construction set | `constructions: tuple[ThresholdConstructionSpec, ...]` | does not own scoring configuration |
-| `ThresholdAssignment` | resulting τ | `policy`, `per_client_tau`, `calibration_score_artifact_id`, `threshold_identity` | exact calibration set referenced |
-| `B4ClusteringSpec` | canonical small-client clustering | ordered fingerprint `[mean, standard_deviation, skewness, p95]`, locked `B4FingerprintScalerSpec` and fit scope, k-means++, K=3, locked `n_init` and `max_iter`, derived random state | exact `KMeans`; each client receives the arithmetic mean of member clients' benign local-p95 thresholds; optional K values are separate exploratory specs; unresolved scaler/algorithm constants block print-grade execution and are not caller overrides |
+| `ThresholdAssignment` | resulting FedAvg-model τ | `policy`, `per_client_tau`, `calibration_score_artifact_id`, `threshold_identity`, `eligible_client_set_identity`, `fallback_fingerprint` | exact calibration set and paired eligible set referenced; B0 uses a separate centralized evaluation assignment/result contract |
+| `B4ClusteringSpec` | canonical small-client clustering | ordered fixed fingerprint `[mean(error), std(error), skew(error), p95(error)]`, locked `B4FingerprintScalerSpec` and fit scope, k-means++, K=3, locked `n_init` and `max_iter`, derived random state | exact `KMeans`; q is not a fingerprint field and cannot replace p95; optional K values are separate exploratory specs; unresolved scaler/algorithm constants block print-grade execution and are not caller overrides |
+| `ClusterThresholdAggregationSpec` | B4 threshold at one q | `percentile`, `member_local_thresholds`, `cluster_assignment_identity` | for each cluster c, τ_cluster,c(q) = arithmetic mean of eligible member clients’ local-q thresholds; the cluster assignment is reused unchanged across q cells |
 | `ClusterAssignmentArtifact` | B4 assignment evidence | clustering identity, client assignments, scaled fingerprints, centroid refs, content hash | adjusted-Rand stability compares immutable assignments |
 | `FedStatsBenignThresholdSpec` | locked comparator | `candidate_grid`, `fixed_k_supplementary` | full pooled variance, weighted mean, within/between terms and matched-exceedance are structural algorithm rules; ties always choose larger k; no booleans can disable them |
 
 Each per-client test-score artifact commits `benign_scores_ref` and `attack_scores_ref` through a fixed atomic persistence protocol, never through an ad hoc write order: (1) write and verify the benign score artifact (schema, row count, row order, lineage, content hash); (2) write and verify the attack score artifact under the same checks; (3) build the typed `ClientTestScoreArtifact` aggregate manifest; (4) verify both child references share the same client, test split, scoring identity, checkpoint, preprocessor, feature schema, and evaluation lineage; (5) compute `aggregate_manifest_hash` over the verified pair; (6) commit the aggregate manifest — or, where persisted as a multi-file bundle, write the final bundle commit marker — last; (7) only the committed aggregate becomes reader-visible; (8) a missing, mismatched, partially written, or uncommitted pair is rejected rather than partially exposed; (9) `ClientTestScoreMap` and `TestScoreArtifactSet` reference only committed aggregates. A fully typed immutable multi-file bundle is a valid way to persist the pair; the rejected design is a loosely typed or partially committed pair, not multi-file persistence itself. `PolicyEvaluator.evaluate(EvaluatePolicyRequest)` consumes only a committed `ClientTestScoreArtifact` (or committed temporal aggregate); it never accepts two independent benign/attack score references supplied directly by a caller.
 
-`ThresholdConstructor.construct(ConstructThresholdsRequest)` accepts `CalibrationScoreArtifactSet` and has no request field capable of carrying test or attack scores. `PolicyEvaluator.evaluate(EvaluatePolicyRequest)` accepts `TestScoreArtifactSet` (or the temporal-specific set) and has no calibration-score input. Calibration/test leakage is therefore a type error, not a runtime convention.
+`ThresholdConstructor.construct(ConstructThresholdsRequest)` accepts `CalibrationScoreArtifactSet` and has no request field capable of carrying test or attack scores. It derives local-q thresholds from eligible benign calibration clients only. Thus τ_B1(q) = mean_k τ_k(q), and τ_B3,family(q) = mean_{k in eligible family} τ_k(q), with each mean unweighted and computed at the cell's same q. `PolicyEvaluator.evaluate(EvaluatePolicyRequest)` accepts `TestScoreArtifactSet` (or the temporal-specific set) and has no calibration-score input. Calibration/test leakage is therefore a type error, not a runtime convention.
+
+`CentralizedModelComparatorRunner.evaluate(EvaluateCentralizedModelComparatorRequest)` is the only B0 route. It first trains the centralized AE on pooled benign training data, then generates its own pooled benign calibration scores and centralized test scores from its own checkpoint, computes the pooled threshold, and persists the complete centralized lineage. The runner accepts no FedAvg checkpoint or score-set type, and the FedAvg threshold constructor accepts no `CentralizedModelComparatorSpec`; a pooled threshold on FedAvg scores is therefore not representable as B0.
 
 For `FedStatsBenignThresholdSpec`, clients disclose benign-only `(n_k, mean_k, variance_k)` and exceedance counts. The algorithm computes the sample-count-weighted global mean and `sum(n_k * (variance_k + (mean_k - global_mean)^2)) / sum(n_k)`, persists within term, between term and between ratio, evaluates the pre-registered candidate grid at the matched benign exceedance target, and deterministically selects the larger k on a tie. Fixed-k values are separate supplementary cells and cannot become the primary result.
 
@@ -765,11 +810,14 @@ For `FedStatsBenignThresholdSpec`, clients disclose benign-only `(n_k, mean_k, v
 
 | Type | Purpose | Key fields |
 |---|---|---|
-| `ClientEvaluationResult` | sufficient per-client operating point | `client_id`, TP, FP, TN, FN, benign/attack test counts, assigned threshold, FPR, TPR, precision, recall, F1, balanced accuracy, eligibility status, typed exclusion/fallback reason, calibration-sample-count reference, test split identity |
+| `ClientEvaluationResult` | sufficient per-client operating point | `client_id`, TP, FP, TN, FN, benign/attack test counts, assigned threshold, FPR, TPR, precision, recall, F1, balanced accuracy, eligibility status, typed exclusion/fallback reason, calibration-sample-count reference, eligible-client-set identity, fallback fingerprint, test split identity | ineligible clients remain in per-client artifacts but are excluded from eligible-only dispersion metrics |
 | `ValidCvResult` | defined CV(FPR)/CV(TPR) outcome | `point_estimate: float`, affected client/seed scope |
 | `UndefinedCvResult` | expected zero-mean CV degeneracy | `reason`, `mean_value: float`, absolute-dispersion companions (IQR, range), affected client/seed scope, `wording_outcome: ClaimOutcome` |
 | `CvOutcome` | closed CV union | `ValidCvResult \| UndefinedCvResult`; exhaustive `assert_never` |
-| `FleetDispersionResult` | fleet disparity | `cv_fpr: CvOutcome`, `cv_tpr: CvOutcome`, IQR(FPR), max–min FPR, worst-client FPR, eligible count, coverage ratio |
+| `EligibleClientSet` | paired operating-point population | roster identity, protocol eligibility rule identity, ordered eligible clients, ineligible-client reasons | constructed once per paired policy comparison and reused unchanged by every compared policy |
+| `EligibilityCoverageResult` | protocol eligibility reporting | `eligible_count`, `roster_count`, `coverage: EligibilityCoverage`, `eligible_client_set_identity` | distinct from B2-conf coverage and traceable to the protocol rule |
+| `ConformalCoverageResult` | B2-conf empirical coverage | `empirical_coverage: ConformalCoverage`, target coverage, conformal split identity | cannot carry an eligible-client set or substitute for eligibility coverage |
+| `FleetDispersionResult` | fleet disparity | `cv_fpr: CvOutcome`, `cv_tpr: CvOutcome`, IQR(FPR), max–min FPR, worst-client FPR, `eligibility_coverage: EligibilityCoverageResult` | all eligible-only metrics use the persisted paired eligible set |
 | `FleetDetectionResult` | fleet detection quality | Macro-F1, P10 Macro-F1, worst-client balanced accuracy, AUROC control |
 | `FleetEquityResult` | optional equity suite | Jain index, Gini coefficient |
 | `ClusterDispersionResult` | B4 mechanism results | within-cluster dispersion, across-cluster dispersion, adjusted-Rand stability evidence |
@@ -797,6 +845,8 @@ For `FedStatsBenignThresholdSpec`, clients disclose benign-only `(n_k, mean_k, v
 | `MetricSpec` | metric metadata | `metric: MetricId`, `family`, `is_control`, `needs_eligible_only`, `higher_is_better` |
 
 The anchor gate is evaluated separately from ordinary statistical rendering. Material movement toward zero or a reproduced interval wider than approximately `1.20 × 0.122` blocks journal expansion until resolved; the architecture records the comparison rather than rounding a hidden cutoff. A less-favorable ten-seed result remains mandatory and cannot be suppressed.
+
+`ProtocolEligibilitySpec` classifies each client from its benign calibration count before threshold-policy evaluation. A client below the protocol minimum receives the ordinary hard global fallback only for policies whose authorized profile permits that fallback; it remains excluded from eligible-only dispersion metrics. The calibration-size-aware fallback is a distinct authorized variant: it replaces, rather than follows, the ordinary hard fallback for that variant's declared cells, and its size-dependent rule is fingerprinted and persisted. Before evaluating any paired comparison, `EligibleClientSet` is built once from shared calibration lineage and supplied unchanged to every policy; a policy cannot change the evaluated population. Every evaluation persists `EligibilityCoverageResult`, the complete ineligible-client reason set, and its fallback fingerprint. `ConformalCoverageResult` is emitted only for B2-conf and has a distinct metric identity.
 
 For every eligible client, `benign_test_count == TN + FP`, `attack_test_count == TP + FN`, and all derived rates/precision/recall/F1/balanced-accuracy values are recomputable from the stored counts and declared zero-denominator policy. Fleet results are derived only from the immutable client map and retain coverage/exclusion evidence. No roadmap metric requires rereading raw labels or reconstructing a value from logs.
 
@@ -936,6 +986,10 @@ classDiagram
       <<Protocol>>
       +construct(ConstructThresholdsRequest) ThresholdConstructionResult
     }
+    class CentralizedModelComparatorRunner {
+      <<Protocol>>
+      +evaluate(EvaluateCentralizedModelComparatorRequest) CentralizedModelComparatorResult
+    }
     class PolicyEvaluator {
       <<Protocol>>
       +evaluate(EvaluatePolicyRequest) PolicyEvaluationResult
@@ -1053,13 +1107,16 @@ Anything that can change weights, scores, thresholds, metrics, or interpretation
 
 ### 11.4 Mapping and validation rules
 
-- The threshold configuration maps to the closed union in §9.2. No `use_full_pooled_variance` or tie-break boolean exists: full pooled variance and larger-k ties are algorithm definitions. The B4 canonical arm accepts no algorithm/K override; exploratory K uses a separate experiment specification.
+- Configuration first resolves a named `ExperimentProfileSpec`; only then may it map the profile's closed cells to an `ExperimentSpec`. A caller cannot submit a generic sweep, arbitrary policy set, alternate model/preprocessing fingerprint, or an unapproved fallback behavior under a named experiment identifier. No `use_full_pooled_variance` or tie-break boolean exists: full pooled variance and larger-k ties are algorithm definitions. The B4 canonical arm accepts no algorithm/K override; exploratory K uses a separate authorized profile.
 - `EvaluationConfig.primary` must be `CV_FPR`; AUROC may appear only among `controls`, where its `MetricSpec.is_control` is true.
 - Requesting `ALERT_BURDEN` selects the evidence-bearing evaluation variant and requires valid measured or cited `TrafficRateEvidence` before evaluation.
 - `StatisticalConfig` for a confirmatory experiment must set the primary method to `BCA_BOOTSTRAP`, the confidence level to 0.95, and the paired-seed count to ten.
 - `BootstrapResampleCount` is required explicitly for every bootstrap procedure and has no default.
 - Canonical D-temporal mapping rejects any boundary other than 70/30 and rejects timestamp evidence that is not genuine capture time.
 - A Regime D scientific plan carries a matching immutable feasibility artifact; missing evidence may plan inspection/audit only.
+- Regime compatibility validation runs before every stage: it rejects dataset/client-definition mismatches, B-a physical-device language, synthetic Dirichlet natural-device evidence, missing genuine temporal metadata, a D partition not approved by its feasibility artifact, B3 without an authorized taxonomy, and a canonical B4 claim from an exploratory K.
+- B0 maps only to `CentralizedModelComparatorSpec`; it requires its own pooled-benign training, checkpoint, calibration-score, test-score, threshold, evaluation, and provenance identities. It cannot map through a FedAvg threshold-construction arm.
+- FedProx mapping requires a strictly positive µ selected from the frozen pre-registered profile grid. FedAvg has no µ field; a grid containing zero, a value copied from FedAvg, or a value chosen from confirmatory test outcomes is invalid.
 - Mixed precision is rejected for `SCIENTIFIC` and `PRINT_GRADE` runs unless explicitly pre-registered, equivalence-tested, and fingerprinted; the default is `FP32`.
 - Any field marked unresolved is accepted for `DEVELOPMENT` and `SMOKE` runs and rejected for `SCIENTIFIC` and `PRINT_GRADE`.
 
@@ -1079,6 +1136,7 @@ Contracts are organized in two tiers. **Application stage contracts** are the op
 
 ```python
 def map_experiment_schema(schema: ExperimentConfigSchema) -> ExperimentSpec: ...
+def resolve_experiment_profile(request: ResolveExperimentProfileRequest) -> ExperimentProfileSpec: ...
 ```
 
 Pure, in `config/mapping.py`. It is the only place a configuration schema becomes a domain specification.
@@ -1124,6 +1182,9 @@ class ScoreGenerator(Protocol):
 
 class ThresholdConstructor(Protocol):
     def construct(self, request: ConstructThresholdsRequest) -> ThresholdConstructionResult: ...
+
+class CentralizedModelComparatorRunner(Protocol):
+    def evaluate(self, request: EvaluateCentralizedModelComparatorRequest) -> CentralizedModelComparatorResult: ...
 
 class PolicyEvaluator(Protocol):
     def evaluate(self, request: EvaluatePolicyRequest) -> PolicyEvaluationResult: ...
@@ -1176,19 +1237,20 @@ class TestProfileExecutor(Protocol):
 
 Each stage contract is described below by responsibility, layer, request, result, invariants, typed failures, implementation variability, and fingerprint impact.
 
-- **`ExperimentPlanner`** — application. `CreateExecutionPlanRequest` carries resolved specifications, passed anchor evidence where the journal track requires it, an immutable feasibility snapshot, and scientific readiness. It has no artifact-catalogue field and never queries repositories. It emits a deterministic `DraftExecutionPlan` of `DraftPlannedStage` values, each carrying only a `ScientificStageGateDecision`; preflight consumes the draft together with the artifact catalogue snapshot to classify reuse/resources and freezes the `FinalExecutionPlan`.
+- **`ExperimentPlanner`** — application. `CreateExecutionPlanRequest` carries only resolved closed profile cells, passed anchor evidence where the journal track requires it, an immutable feasibility snapshot, and scientific readiness. It has no artifact-catalogue field and never queries repositories. It rejects a cell not contained in its `ExperimentProfileSpec`, then emits a deterministic `DraftExecutionPlan` of `DraftPlannedStage` values, each carrying only a `ScientificStageGateDecision`; preflight consumes the draft together with the artifact catalogue snapshot to classify reuse/resources and freezes the `FinalExecutionPlan`.
 - **`ExecutionPreflight`** — application. `PreflightRequest` carries the `DraftExecutionPlan`, an immutable artifact catalogue snapshot, hardware inventory, storage-root inventory, disk projections, the exact resolved `TrainingBatchSpec`/`ScoringBatchSpec`/`PreprocessingChunkSpec` selected before planning, resource budgets, and lock/storage capability evidence. It validates readiness, CUDA, RAM, VRAM, every storage root, writability, same-filesystem commit capability, disk projections/reserve, parallelism, and that exact combination as the frozen `ResolvedBatchExecutionProfile`. It returns either validation success for that exact profile or a typed blocking failure; it never chooses, applies, or substitutes a different profile, and may only describe alternatives diagnostically after a failure. It classifies each draft stage into a `FinalPlannedStage` carrying `REUSE`/`RECOMPUTE`/`BLOCKED` plus validated `StageRuntimeRequirements`, and returns the resolved runtime, advisory cost estimate, and immutable `FinalExecutionPlan`. Ordinary lineage incompatibility is `RECOMPUTE`, not `BLOCKED`.
 - **`DatasetSourceInspector`** — application. Inspects source/schema/timestamp facts and emits source and feature-schema manifests; it does not partition, split, fit, or transform.
 - **`ClientPartitioner`** — application. Consumes source inspection and a partition spec and emits a source-row-preserving client-partition manifest. Dirichlet output is deterministic and independently feasible per candidate identity.
 - **`SplitManifestBuilder`** — application. Assigns source rows to exact split identities without preprocessing. Calibration is benign-only; temporal and conformal variants enforce their dedicated contracts.
 - **`PreprocessorFitter`** — application. Fits only from authorized TRAIN rows named by the split manifest and emits a fitted-preprocessor artifact.
 - **`ProcessedSplitMaterializer`** — application. Applies the fitted state to declared splits in deterministic order and preserves source-row lineage and row-order checksums.
-- **`FederatedTrainer`** — CUDA-required application stage. `TrainFederatedModelRequest` carries processed training descriptors, training spec, schedule, the frozen `ResolvedBatchExecutionProfile`, `DataLoaderSeedPlan`, and an optional compatible recovery descriptor. Full participation aborts a round on any missing, timed-out, malformed, non-finite, or shape-incompatible update; no scientific checkpoint or round advance occurs.
+- **`FederatedTrainer`** — CUDA-required application stage. `TrainFederatedModelRequest` carries processed training descriptors, training spec, schedule, the frozen `ResolvedBatchExecutionProfile`, `DataLoaderSeedPlan`, and an optional compatible recovery descriptor. The FedProx request branch inherits the profile-locked FedAvg-matched architecture, preprocessing, partitions/splits, local epochs, batch semantics, optimizer/learning-rate policy, participation, rounds, and all non-strategy settings, while introducing only its strictly positive frozen-grid proximal µ. Full participation aborts a round on any missing, timed-out, malformed, non-finite, or shape-incompatible update; no scientific checkpoint or round advance occurs.
 - **`CheckpointSelector`** — application. Consumes all scheduled Regime A candidate results and the locked selection spec, produces one selection artifact, and proves that forbidden evidence did not participate. Other regimes use the selected round; no per-regime selection contract exists.
 - **`ScientificCheckpointRepository`** — application over infrastructure persistence. Lookup returns typed descriptors; commit accepts a descriptor plus an opaque staged artifact reference already produced inside the modeling adapter. Raw weights/state dictionaries never enter the application request. Hash-verified immutable content is never overwritten.
 - **`ScoreGenerator`** — CUDA-required application stage with distinct calibration and test methods. Both receive the exact split/checkpoint/preprocessor/schema lineage and `DataLoaderSeedPlan`; the outputs are distinct typed sets. Temporal scoring uses a dedicated request/result carrying window identity.
-- **`ThresholdConstructor`** — consumes only `CalibrationScoreArtifactSet` and a closed threshold variant. B4 emits a cluster-assignment artifact; B-FedStatsBenign always reports weighted mean, within term, between term, between ratio, matched-exceedance evidence, and larger-k tie resolution.
-- **`PolicyEvaluator`** — consumes only `TestScoreArtifactSet` plus assignments; the temporal evaluator consumes only `TemporalScoreArtifactSet`. It emits sufficient confusion counts and cohesive fleet results without rereading raw labels. Alert burden requires the evidence-bearing request variant.
+- **`ThresholdConstructor`** — consumes only `CalibrationScoreArtifactSet` and a closed threshold variant. It receives the profile-derived `EligibleClientSet`. B4 emits one fixed-p95 `ClusterAssignmentArtifact` and, for every requested q, a `ClusterThresholdAggregationSpec` derived from member local-q thresholds; it never reclusters with q. B-FedStatsBenign always reports weighted mean, within term, between term, between ratio, matched-exceedance evidence, and larger-k tie resolution.
+- **`CentralizedModelComparatorRunner`** — consumes `CentralizedModelComparatorSpec` and only pooled centralized inputs; it owns the separate B0 train, checkpoint, calibration-score, test-score, pooled-threshold, evaluation, and provenance chain. No port accepts a FedAvg artifact on its behalf.
+- **`PolicyEvaluator`** — consumes only `TestScoreArtifactSet` plus assignments and the already fixed `EligibleClientSet`; the temporal evaluator consumes only `TemporalScoreArtifactSet`. It emits sufficient confusion counts and cohesive fleet results without rereading raw labels. Alert burden requires the evidence-bearing request variant.
 - **`StatisticalAnalyzer`** — returns the procedure-specific closed result union. The confirmatory branch enforces ten paired seeds, explicit BCa resamples, positive Δ orientation, and the locked pass rule.
 - **`AnchorReproductionGate`** — evaluates the five-seed anchor before journal expansion and persists a separate result; it is not a table-rendering shortcut.
 - **`FeasibilityGateEvaluator`** — permits source inspection and feasibility audit without prior evidence, but blocks Regime D partition materialization and every later scientific stage unless a passed artifact matches both source and partition identity.
@@ -1210,7 +1272,7 @@ These framework-neutral ports realize application variation points. Array/batch/
 - **`ProcessedSplitRepository`** — typed put/get of `ProcessedSplitDescriptor`; private streaming readers never cross upward.
 - **`ModelTrainingAdapter`** — `train(request) -> TrainingRunResult`; owns PyTorch/Flower/model handles and converts them to checkpoint descriptors before returning.
 - **`QuantileEstimator`** — `estimate(request: QuantileEstimateRequest) -> QuantileEstimateResult`. Exact estimators only; underlying arrays remain private.
-- **`ThresholdStrategy`** and its registry keyed on `CoreThresholdPolicy | ThresholdVariant | ThresholdComparatorRole` — `assign(request) -> ThresholdAssignment`.
+- **`ThresholdStrategy`** and its registry keyed on `CoreThresholdPolicy | ThresholdVariant | ThresholdComparatorRole.FED_STATS_BENIGN` — `assign(request) -> ThresholdAssignment`. `CENTRALIZED_MODEL_B0` is handled only by `CentralizedModelComparatorRunner`, not by this registry.
 - **`ClusteringStrategy`** — `cluster(request: B4ClusteringRequest) -> ClusterAssignmentArtifact`. Canonical B4 is exact k-means++ with locked constants and derived random state.
 - **Score access** is private to the scoring, threshold, and evaluation adapters. Application methods receive typed score-set descriptors, never `ColumnView`, `ScoreBatch`, NumPy, pandas, or PyArrow carriers.
 - **`MetricCalculator`** with one typed method per family (`compute_operating_point`, `compute_equity`, `compute_estimation`, and so on) — never a generic `compute(family, inputs)`.
@@ -1252,6 +1314,15 @@ DatasetSourceIdentity
                         → StatisticalIdentity (+ procedure spec and paired evaluations)
                           → ResultFreezeIdentity (+ immutable result inputs)
                             → ReportIdentity (+ traced table/figure spec and formats)
+
+CentralizedModelIdentity (+ pooled-benign training specification)
+  → CentralizedCheckpointIdentity
+    → CentralizedCalibrationScoringIdentity (+ pooled benign calibration scores)
+    → CentralizedTestScoringIdentity (+ centralized test scores)
+      → CentralizedThresholdIdentity (+ pooled threshold)
+        → CentralizedEvaluationIdentity (+ centralized test-score identity)
+          → ResultFreezeIdentity (+ immutable result inputs)
+            → ReportIdentity (+ traced table/figure spec and formats)
 ExperimentIdentity = hash(all stage identities of a cell)
 ```
 
@@ -1269,6 +1340,7 @@ ExperimentIdentity = hash(all stage identities of a cell)
 | `CheckpointIdentity` | `TrainingIdentity`, `RoundNumber`, `CheckpointKind = SCIENTIFIC` |
 | `CheckpointSelectionIdentity` | candidate checkpoint identities, Regime A evidence identity, selection rule/tie-break version |
 | calibration/test/temporal scoring identity | source, partition, split, schema, preprocessor, training, scientific checkpoint identity/hash, scoring spec/schema, roster, role, row order, precision, output-affecting batch profile |
+| centralized model/checkpoint/calibration/test/threshold/evaluation identities | pooled-benign centralized training specification, centralized model/checkpoint identity/hash, centralized role-scoped score identity, pooled threshold rule, and centralized test-score lineage; no FedAvg identity is accepted |
 | `ThresholdIdentity` | calibration-score artifact identity, closed construction variant and estimator |
 | `EvaluationIdentity` | threshold identity, test/temporal score identity, metric specs, eligibility and traffic evidence where requested |
 | `StatisticalIdentity` | tuple of paired `EvaluationIdentity` values, `StatisticalMethod`, `ConfidenceLevel`, resamples, bootstrap `Seed` |
@@ -1318,6 +1390,11 @@ graph TD
     CA --> SH[shrinkage LGS]
     CA --> CF[conformal B2-conf]
     CA --> FS[B-FedStatsBenign]
+    PB[pooled benign training] --> CM[centralized B0 model]
+    CM --> CC[centralized B0 checkpoint]
+    CC --> B0C[centralized B0 calibration scores]
+    CC --> B0T[centralized B0 test scores]
+    B0C --> B0[B0 pooled threshold]
     B1 --> EV[evaluation on typed test scores]
     B2 --> EV
     B3 --> EV
@@ -1327,16 +1404,19 @@ graph TD
     CF --> EV
     FS --> EV
     TS --> EV
+    B0 --> B0E[B0 evaluation on centralized test scores]
+    B0T --> B0E
+    B0E --> ST
     EV --> ST[statistical analysis: BCa]
     ST --> RP[tables and figures]
 
     classDef shared fill:#eef,stroke:#557;
     classDef policy fill:#efe,stroke:#5a5;
     class CA,TS shared;
-    class B1,B2,B3,B4,QV,SH,CF,FS policy;
+    class B1,B2,B3,B4,QV,SH,CF,FS,B0 policy;
 ```
 
-**Guarantee.** One selected scientific checkpoint produces one calibration set and one test set per compatible seed/scoring identity. Every threshold construction fans off calibration scores, and every evaluation joins its assignment only with test scores. No threshold change retrains or rescores the model, and no attack score can reach threshold construction.
+**Guarantee.** One selected FedAvg checkpoint produces one calibration set and one test set per compatible seed/scoring identity for B1–B4 and compatible variants. B0 is a separately trained centralized-model branch with its own checkpoint and role-scoped score artifacts; it does not fan out from the FedAvg branch. Every threshold construction joins only its matching test-score role, no threshold change retrains or rescores its own model branch, and no attack score can reach threshold construction.
 
 ---
 
@@ -1933,7 +2013,10 @@ Dirichlet property/unit contracts always use the existing `TestDataScale.SYNTHET
 | Resource costs | measured and estimated labels cannot be interchanged; E-Q6 table closes provenance |
 | Regime D feasibility | below 90% blocks; missing evidence permits audit only; passing evidence unlocks only matching source/partition lineage |
 | Temporal/conformal | non-70/30 canonical D split and pseudo-time rejected; TEST excluded from conformal fit; finite-sample index checked |
-| B-FedStatsBenign/B4 | simple variance and caller tie-break impossible; full between term checked; exact canonical K=3 contract and assignment stability |
+| B0/B-FedStatsBenign/B4 | B0 rejects every FedAvg checkpoint/score artifact; simple variance and caller tie-break impossible; full between term checked; exact canonical K=3 fixed-p95 fingerprint and assignment stability; q-specific B4 thresholds average member local-q thresholds without reclustering |
+| Eligibility/coverage | protocol minimum is owned once; paired policies receive identical eligible-client-set identity; ordinary hard fallback is fingerprinted; calibration-size-aware cells replace rather than pre-empt with that fallback; eligibility coverage and conformal coverage cannot share a metric/result/table field |
+| Closed experiment profiles | every named profile rejects an unauthorized dataset/regime/client meaning/policy/grid/seed/statistic/fallback/model/preprocessing fingerprint; generic sweep expansion cannot create an unauthorized cell; E-C1 rejects all non-confirmatory additions |
+| Regime compatibility/FedProx | incompatible dataset/partition/client definitions, pseudo-time, unauthorized B3 taxonomy and exploratory-K canonical claims are rejected; FedProx requires a strictly positive frozen-grid µ and verifies all non-strategy settings against the matched FedAvg profile |
 | Determinism/federation | DataLoader worker/repeat/parallel/resume equivalence; client ordering; full-participation timeout/malformed/non-finite/shape failure aborts round |
 | Heartbeat/resources | heartbeat staleness; disk/writable/same-filesystem preflight; pressure pause/resume; no dynamic scientific effective-batch or precision change |
 | Batch/chunk immutability | preflight validates the exact configured `TrainingBatchSpec`/`ScoringBatchSpec`/`PreprocessingChunkSpec` combination and never selects a smaller alternative; CUDA OOM does not modify training or scoring batch size and is terminal for the execution attempt; RAM pressure does not modify chunk size; scoring OOM does not modify scoring batch size; gradient-accumulation and effective batch size cannot change after stage start; smoke mode never backs off automatically; a manually changed profile creates new affected identities under a new run; resource pressure can pause or fail a stage but cannot mutate the profile |
@@ -1994,7 +2077,7 @@ Reporting produces typed table, figure, and report artifacts, each traceable to 
 
 ### 22.1 Typed outputs
 
-A table specification and figure specification live in framework-free `analysis/table_specs.py` and `analysis/figure_specs.py`; wording and lineage closure live in `analysis/wording.py` and `analysis/tracing.py`. `infrastructure/reporting/table_renderer.py` renders CSV, Markdown, LaTeX and machine-readable Parquet/JSON where applicable; `matplotlib_renderer.py` renders SVG, PNG and PDF. Scientific analysis imports no plotting framework. B4 interpretability remains a contingency table or small heatmap; there is no Sankey type. A table/figure specification persists as `ArtifactType.TABLE_INPUT`/`FIGURE_INPUT`; its rendered output persists separately as `ArtifactType.RENDERED_TABLE`/`RENDERED_FIGURE`; a rendered wording block persists as `ArtifactType.WORDING_OUTPUT`. Rendered outputs are never folded back into the `TABLE_INPUT`/`FIGURE_INPUT` members that describe their pre-render specification.
+A table specification and figure specification live in framework-free `analysis/table_specs.py` and `analysis/figure_specs.py`; wording and lineage closure live in `analysis/wording.py` and `analysis/tracing.py`. `infrastructure/reporting/table_renderer.py` renders CSV, Markdown, LaTeX and machine-readable Parquet/JSON where applicable; `matplotlib_renderer.py` renders SVG, PNG and PDF. Scientific analysis imports no plotting framework. B4 interpretability remains a contingency table or small heatmap; there is no Sankey type. `EligibilityCoverageResult` and `ConformalCoverageResult` occupy disjoint table/figure columns, report wording fields, statistical-contract fields, and manifest members; no renderer accepts a generic coverage field. A table/figure specification persists as `ArtifactType.TABLE_INPUT`/`FIGURE_INPUT`; its rendered output persists separately as `ArtifactType.RENDERED_TABLE`/`RENDERED_FIGURE`; a rendered wording block persists as `ArtifactType.WORDING_OUTPUT`. Rendered outputs are never folded back into the `TABLE_INPUT`/`FIGURE_INPUT` members that describe their pre-render specification.
 
 ### 22.2 Traceability chain
 
@@ -2022,19 +2105,21 @@ Every row below expands to explicit typed cells in the experiment catalogue; “
 | ID | Role; regime | Gates | Training / scoring / threshold | Result | Reused upstream → new artifacts | Intended output; fallback/suppression | Test profile |
 |---|---|---|---|---|---|---|---|
 | E-C1 | confirmatory/Tier 1; A | A-gate | core / shared cal+test / B1,B2 | confirmatory BCa | checkpoint+scores → paired delta, interval, freeze | confirmatory table; report any null/opposite | scientific smoke + statistics contract |
+| B0 | centralized reference; authorized regimes | matching regime gates | centralized pooled-benign AE / centralized calibration+test / pooled threshold | centralized evaluation | centralized training → its own checkpoint, scores, threshold, evaluation | reference only; never a FedAvg-score construction or core-ladder cell | centralized-lineage contract |
+| B_A_APPLICABILITY_BOUNDARY | boundary/Tier 6; B-a | verified CICIOT2023 schema/partition metadata | B-a matched training / file-pseudo-client cal+test / authorized B1,B2,B4 | CV(FPR), applicable absolute dispersion, pairwise-JS | B-a partition/checkpoint/scores → boundary result | boundary report only; no natural-device generalization | B-a compatibility/lineage contract |
 | E-S1 | supportive/Tier 2; A | A-gate | core / shared / B1,B1-pool,B1-wt,B2 | fleet dispersion | scores → construction results | dispersion table; narrow claim if shared matches | threshold/evaluation contract |
-| E-S2 | supportive/Tier 2; A(+D) | A-gate(+D-gate) | core / shared / q sweep B1,B2,B4 | fleet dispersion | scores → sensitivity grid | heatmap; report inversions | synthetic-small sweep |
+| E-S2 | supportive/Tier 2; A(+D) | A-gate(+D-gate) | core / shared / q ∈ {0.90,0.95,0.975,0.99}; B1,B2,B4 | fleet dispersion | scores + fixed-p95 B4 assignments → q-specific threshold grid | heatmap; report inversions; B4 membership fixed while member local-q thresholds are averaged | synthetic-small sweep |
 | E-S3 | supportive/Tier 2; C | A-gate | core-C / shared / B1,B2,B4 | paired dispersion by alpha | partitions/checkpoints/scores → trend | severity figure; report band/non-monotonicity | SYNTHETIC_TINY Dirichlet + smoke |
 | E-M1 | mechanism/Tier 5; A(+D) | A-gate(+D-gate) | core / shared / B1–B4 | cluster/fleet dispersion+ARI | fingerprints/scores → assignments/stability | stability/dispersion outputs; instability explicit | exact-cluster golden |
 | E-M2 | mechanism/Tier 5/7; A | A-gate | core / shared / B4 feature variants | cluster results | fingerprints/scores → ablation assignments | ablation+contingency; instability explicit | cluster contract |
 | E-M3 | mechanism/Tier 5; A | A-gate | core / shared / B1,B2,B4 | client/fleet detection | test scores+assignments → CDF inputs | CDF/deep-dive figure; no filtering | report trace contract |
 | E-M4 | mechanism/Tier 5; A/C(+D) | A-gate(+D-gate) | matching core / shared / none | association result | distributions/evaluations → regression | scatter; weak R² retained | statistics contract |
 | E-M5 | mechanism/Tier 5; A | A-gate | core / shared / B1→B2 | client deltas | scores+assignments → delta result | scatter, all 9 devices | evaluation contract |
-| E-V1 | boundary/Tier 6; A | A-gate | core / calibration subsamples / B1,B2,B4 | size/variance results | scores → subsample identities/results | size curve; plateau/collapse reported | bounded property + sweep |
+| E-V1 | boundary/Tier 6; A | A-gate | core / calibration subsamples n ∈ {50,100,250,500,1000,5000} / B1,B2,B4 and calibration-size-aware fallback | size/variance results | scores → subsample/fallback identities/results | size curve; the authorized size-dependent fallback replaces the ordinary hard fallback in its cells | bounded property + sweep |
 | E-V2 | supportive/Tier 6; A | A-gate | core / shared / shrinkage variants | fleet dispersion/detection | scores → λ results | λ curve; non-monotonicity retained | threshold contract |
-| E-V3 | supportive to Tier 1, non-confirmatory; A(+D) | A-gate(+D-gate) | core / conformal split / B2-conf | coverage result | split manifests/scores → conformal result | coverage table; miss reported | conformal lineage contract |
+| E-V3 | supportive to Tier 1, non-confirmatory; A(+D) | A-gate(+D-gate) | core / conformal split α = 0.05 / B2-conf | conformal-coverage result | split manifests/scores → conformal result | conformal-coverage table; miss reported; never substitutes eligibility coverage | conformal lineage contract |
 | E-X1 | external/Tier 3; D | A-gate+D-gate | core-D at selected global round / shared / B1–B4,FedStats,q | external BCa/fleet | D manifests/checkpoints/scores → external results | main table; divergence boundary or rejection | real-subsample then serialized full |
-| E-T1 | stress/Tier 4; A+D | A-gate(+D-gate) | FedProx / separate scores / B1–B4 | stress delta | shared data pipeline → new training/scores | stress table; convergence failure retained | serialized CUDA stress smoke |
+| E-T1 | stress/Tier 4; A+D | A-gate(+D-gate) | FedProx with strictly positive pre-registered µ-grid / separate scores / B1–B4 | stress delta | shared non-strategy pipeline → new FedProx training/scores | stress table; convergence failure retained; no post-hoc µ search | serialized CUDA stress smoke |
 | E-T2 | stress/Tier 4; A+D | A-gate(+D-gate) | selected personalization / separate scores / B1–B4 | absorption result+cost | shared data pipeline → new model/scores/cost | stress/cost table; locked band | serialized CUDA stress smoke |
 | E-T3 | stress comparator/Tier 4; A+D | A-gate(+D-gate) | core / shared calibration / FedStatsBenign | fleet+between-ratio | calibration scores → comparator diagnostics | comparator table; honest result | pooled-variance/tie contract |
 | E-B1 | boundary/Tier 6; D-temporal | A-gate+D-gate+timestamp | core-D / temporal sets / B1,B2,B4 frozen+one-shot | temporal recovery union | D manifests/checkpoint → windows/results | recovery curve; one locked outcome | temporal lineage contract |
@@ -2110,7 +2195,7 @@ Each extension touches only the listed places; discriminated unions, named profi
 - **Add a dataset** — a `Dataset` member; a chunked `DatasetSource` and partitioner adapter; a `DatasetConfig` with `input_dim` and verification; a dataset-regime profile; registration at the root; contract and memory-equivalence tests.
 - **Add a regime** — a `Regime` member (executable only, else a `RejectionRecord`); a partition strategy if new; a profile and configuration; tests. No new pipeline.
 - **Add a threshold policy, variant, or comparator** — the correct enum member; a discriminated `ThresholdConfig` arm with exactly its fields; a `ThresholdStrategy` implementation; registration in the policy registry; a property test; adherence to the naming locks. Scores are reused automatically because a threshold change preserves the scoring identity.
-- **Add a training strategy** — an `AggregationStrategy` or `ModelPersonalizationStrategy` member (never mislabeling FedRep or FedPer as Ditto); a trainer behind `FederatedTrainer` (CUDA-required); Tier-4 stress-test status; the fairness lock (E and µ frozen equal to FedAvg); equivalence and CUDA tests.
+- **Add a training strategy** — an `AggregationStrategy` or `ModelPersonalizationStrategy` member (never mislabeling FedRep or FedPer as Ditto); a trainer behind `FederatedTrainer` (CUDA-required); Tier-4 stress-test status; matched architecture, preprocessing, partitions/splits, E, batch semantics, optimizer/learning-rate policy, participation, rounds, and all non-strategy settings; for FedProx alone, a strictly positive pre-registered µ-grid that is never selected from confirmatory test outcomes; equivalence and CUDA tests.
 - **Add a metric** — the correct family enum and a `MetricSpec` (control, eligible-only, higher-is-better); a typed per-family calculator method; tests; no duplicate names.
 - **Add an artifact type** — an `ArtifactType` member; a typed `ArtifactRepository` write/lookup pair; provenance wiring; tests.
 - **Add an experiment** — a configuration file and a typed catalogue entry referencing existing or derived profiles; role, tier, and status; a wording mapping if a new claim outcome arises; the planner picks it up. No new module.
@@ -2154,7 +2239,7 @@ Each blocker is carried into `ScientificReadinessResult`. A print-grade plan can
 | Regime A checkpoint-selection evidence/ranking rule | scientific protocol authority; checkpoint-selection identity | CHECKPOINT_SELECT and all main reporting | candidate enumeration smoke | invented metric, per-regime rule, or forbidden evidence | versioned selection rule and tie-break record before results |
 | Operational interpretation of “material movement toward zero” for the five-seed anchor | scientific/statistical authority; anchor-gate identity | journal-expansion plan | interval-comparison smoke | invented numeric tolerance or automatic pass | versioned gate rule preserving the roadmap's approximately-20%-wider condition |
 
-The roadmap already resolves the anchor interval, ten paired confirmatory seeds, checkpoint schedule, B4 K=3, Regime D `n_k ≥ 100` and coverage `≥ 0.90`, canonical temporal 70/30 boundary, and full FedStats variance/tie rule; those are definitions, not blockers.
+The roadmap already resolves the anchor interval, ten paired confirmatory seeds, checkpoint schedule, B4 K=3, the protocol eligibility rule and Regime-D 90% coverage gate, canonical temporal 70/30 boundary, and full FedStats variance/tie rule; those are definitions, not blockers.
 
 ---
 
@@ -2326,14 +2411,15 @@ Each invariant is stated together with the mechanism that enforces it.
 
 ### 29.1 Scientific consistency
 
-- The same selected compatible checkpoint, calibration-score set, and test-score set feed B1–B4 — enforced by role-scoped lineage and a reuse gate that excludes threshold/report identities.
+- The same selected compatible FedAvg checkpoint, calibration-score set, and test-score set feed B1–B4 — enforced by role-scoped lineage and a reuse gate that excludes threshold/report identities. B0 has a separate centralized-model checkpoint and role-scoped score lineage.
 - A threshold-only change never causes retraining or rescoring — enforced because a threshold change preserves the scoring lineage.
 - Calibration is benign-only and cannot be confused with evaluation — enforced by split-specific score artifact types and port signatures.
 - AUROC is a control metric — enforced by `MetricSpec.is_control` and the requirement that the evaluation primary is `CV_FPR`.
 - The confirmatory endpoint is Regime A, B1 versus B2, CV(FPR), ten seeds, BCa, positive-direction interval — enforced by the `StatisticalAnalysisSpec` lock, the role/tier invariant, and the `ConfirmatoryAnalysisResult` pass rule.
 - Stress tests remain outside the causal ladder — enforced by separate training and scoring identities and Tier-4 roles that are never fanned off the core score set.
-- B3 requires a taxonomy and B4 requires a cluster count with canonical K = 3 — enforced by the discriminated `ThresholdConfig` arms and the derived `is_canonical_k`.
-- Journal expansion requires a passed five-seed anchor result; Regime D science requires exact-lineage feasibility at the locked 100-sample/90%-coverage rule; checkpoint selection is Regime-A-global only.
+- B1/B3 use unweighted means of eligible local-q thresholds; B3 requires an authorized taxonomy. B4 requires canonical K = 3 and a fixed `[mean, std, skew, p95]` fingerprint; its q-specific assignment is the unweighted mean of member local-q thresholds, never a q-mutated fingerprint — enforced by the discriminated threshold arms and the derived `is_canonical_k`.
+- The protocol-wide client eligibility rule is owned once and paired policies use an identical persisted eligible set; eligibility coverage and conformal coverage have disjoint identities. Journal expansion requires a passed five-seed anchor result; Regime D science additionally requires exact-lineage feasibility at the locked 90%-coverage gate; checkpoint selection is Regime-A-global only.
+- Named experiments are executable only through their closed profiles; altered scientific fingerprints are validation failures, not another permitted artifact lineage.
 - Paths, logs, and test settings never enter scientific identity — enforced by the fingerprint-input tables and the storage-resolution model.
 
 ### 29.2 Dependency and type consistency
@@ -2348,6 +2434,6 @@ Each invariant is stated together with the mechanism that enforces it.
 
 ### 29.4 Invalid states made unrepresentable
 
-1. Calibrating on attack data. 2. Fitting preprocessing on TEST. 3. Retraining for a threshold-only change. 4. Test-AUROC/attack/stress/external/threshold-driven checkpoint selection. 5. Per-regime or recovery checkpoint selection. 6. A pseudo-discriminated threshold/statistical object. 7. B3 without taxonomy. 8. Caller-controlled canonical B4 K/algorithm. 9. Simple FedStats variance or configurable tie rule. 10. Fixed-k as primary comparator. 11. Executing rejected B-b. 12. Non-70/30 canonical temporal split or pseudo-time. 13. Reusing incompatible scores instead of `RECOMPUTE`. 14. Threshold identity inside a checkpoint. 15. Invalid q. 16. Invalid λ. 17. Negative seed/count/bytes. 18. AUROC as primary threshold verdict. 19. Ineligible-client contamination. 20. Alert burden without valid evidence. 21. Untraced or unfrozen reporting. 22. FedRep mislabeled Ditto. 23. Framework carrier in domain/application. 24. Application importing configuration. 25. Confirmatory role outside Tier 1. 26. Suppressed confirmatory/less-favorable ten-seed evidence. 27. Silent CPU fallback. 28. Silent scientific batch/precision change. 29. Silent approximate quantile. 30. Unproven mixed precision. 31. Multi-GPU/multi-node Phase 0 execution. 32. Concurrent commit without lease. 33. Partial file/bundle marked complete. 34. Immutable overwrite. 35. Recovery selected/cited. 36. Incompatible resume. 37. Scattered global/DataLoader seeds. 38. Interchanged probability objects. 39. Path-derived artifact identity. 40. Machine path in identity. 41. Root escape. 42. Test write to scientific root. 43. Unbounded/sensitive event. 44. Retry of scientific/determinism failure. 45. Cross-stage identity substitution. 46. Non-finite fingerprint/rate. 47. Raw-float fingerprint instability. 48. CUDA fork. 49. Import side effect. 50. Approximate/unstable canonical B4. 51. Untracked row reordering. 52. Swallowed BCa failure or hidden resample default. 53. Invalid atomicity claim. 54. Generic persistence call. 55. Calibration passed to evaluator or test/attack scores passed to threshold construction. 56. Journal stage without passed anchor/readiness. 57. Regime D science without matching passed feasibility. 58. Failed partition relabeled after K reduction. 59. E-Q6 estimate rendered as measured. 60. Long training under a filesystem commit lock. 61. `RUNNING → REUSED`. 62. Anchor/journal namespace overwrite. 63. A `DraftPlannedStage` carrying a reuse decision, or the planner consulting the artifact catalogue. 64. An automatic `FAILED_OOM → PAUSED`/`RECOVERED`/retried transition. 65. A randomly generated scientific `ArtifactId`, or identical logical id with mismatched bytes silently accepted. 66. A silent `CellId` collision between distinct resolved sweep cells. 67. Expected statistical degeneracy raised as an exception instead of persisted as a typed result. 68. An out-of-scope method reachable through a threshold-construction union, strategy registry, or planner stage. 69. A concrete `Path` inside a domain identity, scientific specification, stage fingerprint, artifact key, or scientific manifest. 70. A benign/attack test-score pair exposed before its aggregate manifest commits.
+1. Calibrating on attack data. 2. Fitting preprocessing on TEST. 3. Retraining for a threshold-only change. 4. Test-AUROC/attack/stress/external/threshold-driven checkpoint selection. 5. Per-regime or recovery checkpoint selection. 6. A pseudo-discriminated threshold/statistical object. 7. B3 without taxonomy. 8. Caller-controlled canonical B4 K/algorithm or q-mutated fingerprint. 9. Simple FedStats variance or configurable tie rule. 10. Fixed-k as primary comparator. 11. Executing rejected B-b. 12. Non-70/30 canonical temporal split or pseudo-time. 13. Reusing incompatible scores instead of `RECOMPUTE`. 14. Threshold identity inside a checkpoint. 15. Invalid q. 16. Invalid λ. 17. Negative seed/count/bytes. 18. AUROC as primary threshold verdict. 19. A policy-specific eligible-client population, eligibility/conformal metric substitution, or pre-empted calibration-size-aware fallback. 20. Alert burden without valid evidence. 21. Untraced or unfrozen reporting. 22. FedRep mislabeled Ditto. 23. Framework carrier in domain/application. 24. Application importing configuration. 25. Confirmatory role outside Tier 1. 26. Suppressed confirmatory/less-favorable ten-seed evidence. 27. Silent CPU fallback. 28. Silent scientific batch/precision change. 29. Silent approximate quantile. 30. Unproven mixed precision. 31. Multi-GPU/multi-node Phase 0 execution. 32. Concurrent commit without lease. 33. Partial file/bundle marked complete. 34. Immutable overwrite. 35. Recovery selected/cited. 36. Incompatible resume. 37. Scattered global/DataLoader seeds. 38. Interchanged probability objects. 39. Path-derived artifact identity. 40. Machine path in identity. 41. Root escape. 42. Test write to scientific root. 43. Unbounded/sensitive event. 44. Retry of scientific/determinism failure. 45. Cross-stage identity substitution. 46. Non-finite fingerprint/rate. 47. Raw-float fingerprint instability. 48. CUDA fork. 49. Import side effect. 50. Approximate/unstable canonical B4. 51. Untracked row reordering. 52. Swallowed BCa failure or hidden resample default. 53. Invalid atomicity claim. 54. Generic persistence call. 55. Calibration passed to evaluator or test/attack scores passed to threshold construction. 56. Journal stage without passed anchor/readiness. 57. Regime D science without matching passed feasibility. 58. Failed partition relabeled after K reduction. 59. E-Q6 estimate rendered as measured. 60. Long training under a filesystem commit lock. 61. `RUNNING → REUSED`. 62. Anchor/journal namespace overwrite. 63. A `DraftPlannedStage` carrying a reuse decision, or the planner consulting the artifact catalogue. 64. An automatic `FAILED_OOM → PAUSED`/`RECOVERED`/retried transition. 65. A randomly generated scientific `ArtifactId`, or identical logical id with mismatched bytes silently accepted. 66. A silent `CellId` collision between distinct resolved sweep cells. 67. Expected statistical degeneracy raised as an exception instead of persisted as a typed result. 68. An out-of-scope method reachable through a threshold-construction union, strategy registry, or planner stage. 69. A concrete `Path` inside a domain identity, scientific specification, stage fingerprint, artifact key, or scientific manifest. 70. A benign/attack test-score pair exposed before its aggregate manifest commits. 71. B0 supplied with a FedAvg checkpoint or FedAvg-generated score artifact. 72. A named experiment cell outside its closed profile. 73. A regime/dataset/client-definition mismatch. 74. FedProx µ = 0, a FedAvg-equivalent µ, a non-frozen µ, or a µ selected from confirmatory test outcomes.
 
 This document defines the fixed technical patterns within which every DATP journal-extension experiment is planned, executed, reused, and reported. It is the authoritative Phase 0 architecture for `datp_core`; the scientific meaning it serves is governed entirely by the Journal Extension Master Roadmap.
