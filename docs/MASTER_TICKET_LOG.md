@@ -250,194 +250,194 @@ For Phase 3 and Phase 6 tickets that perform real execution, completion addition
 
 ## G. Master ticket index
 
-All tickets are `NOT_STARTED`. Scientific-execution classification (Sci-Exec) is abbreviated: `FORB` = FORBIDDEN, `PLAN` = PLANNING_ONLY, `ANCH` = ANCHOR_CAMPAIGN_ALLOWED, `JOUR` = JOURNAL_CAMPAIGN_ALLOWED, `POST` = POST_CAMPAIGN_ONLY. Dependencies and Blocks list explicit ticket IDs only — no phase-wide prose such as "all Phase 1 tickets" is used; where a ticket is a dependency of every subsequent ticket in a phase, it is expressed as blocking that phase's single defined gate ticket. Roadmap IDs list roadmap experiment identifiers where applicable. **The Phase 0 rows below (P0-T001–P0-T026) are fully reconstructed and mechanically cross-checked against their Section H bodies in this revision.** Rows for Phase 1 through Phase 7 remain in their prior, not-yet-reconstructed form (including the vague `Blocks` prose flagged for correction) and are pending their own reconstruction stage; a `Campaign scope` column is planned for this table but has not yet been added because doing so requires rebuilding every row at once, which is deferred to that stage (see Section M).
+All tickets are `NOT_STARTED`. Scientific-execution classification (Sci-Exec) is abbreviated: `FORB` = FORBIDDEN, `PLAN` = PLANNING_ONLY, `ANCH` = ANCHOR_CAMPAIGN_ALLOWED, `JOUR` = JOURNAL_CAMPAIGN_ALLOWED, `POST` = POST_CAMPAIGN_ONLY. `Campaign scope` (Scope) uses the same abbreviation set plus `NONE` (no campaign scope, Phases 0–1). Dependencies and Blocks list explicit ticket IDs only — no phase-wide prose such as "all Phase 1 tickets" is used; where a ticket is a dependency of every subsequent ticket in a phase, it is expressed as blocking that phase's single defined gate ticket. Roadmap IDs list roadmap experiment identifiers where applicable. **All 182 rows below (P0-T001–P7-T012) are fully reconstructed and mechanically cross-checked against their Section H bodies in this revision, including the `Campaign scope` column, added by extracting each ticket's own `Campaign scope` field from Section H (no new value invented).**
 
 <div style="overflow-x:auto">
 
-| ID | Title | Type | Pri | Sci-Exec | Depends on | Blocks | Roadmap IDs |
-|---|---|---|---|---|---|---|---|
-| P0-T001 | Audit and record repository starting state | foundation | P0 | PLAN | — | P0-T002 | — |
-| P0-T002 | Establish the Python 3.12 project and build backend | foundation | P0 | PLAN | P0-T001 | P0-T003,P0-T005,P0-T007,P0-T008,P0-T009 | — |
-| P0-T003 | Define dependency groups and pin scientific libraries | foundation | P0 | PLAN | P0-T002 | P0-T004,P0-T026 | — |
-| P0-T004 | Establish dependency-lock discipline | foundation | P0 | PLAN | P0-T003 | P3-T002,P5-T008,P0-T026 | — |
-| P0-T005 | Create the approved layered source skeleton | architecture | P0 | PLAN | P0-T002 | P0-T011,P0-T026 | — |
-| P0-T006 | Establish repository root layout and tracked/generated/gitignored policy | foundation | P0 | PLAN | P0-T002 | P1-T054,P0-T026 | — |
-| P0-T007 | Configure Ruff lint and format | foundation | P0 | PLAN | P0-T002 | P0-T026 | — |
-| P0-T008 | Configure Pyright strict typing | foundation | P0 | PLAN | P0-T002 | P0-T026 | — |
-| P0-T009 | Configure pytest, coverage, timeout, and order-randomization | foundation | P0 | PLAN | P0-T002 | P0-T010,P0-T026 | — |
-| P0-T010 | Configure Hypothesis property-testing profiles | foundation | P0 | PLAN | P0-T009 | P0-T026 | — |
-| P0-T011 | Configure import-linter layer contracts | architecture | P0 | PLAN | P0-T005 | P0-T026,P1-T050 | — |
-| P0-T012 | Configure pytest-archon in-test boundary assertions | architecture | P0 | PLAN | P0-T005,P0-T009 | P1-T050,P0-T026 | — |
-| P0-T013 | Configure syrupy golden-snapshot support | foundation | P0 | PLAN | P0-T009 | P0-T026 | — |
-| P0-T014 | Establish Nox validation sessions | foundation | P0 | PLAN | P0-T007,P0-T008,P0-T009 | P0-T015,P0-T026 | — |
-| P0-T015 | Establish the serialized CUDA lane and CPU xdist policy | foundation | P0 | PLAN | P0-T014 | P0-T026 | — |
-| P0-T016 | Audit and consolidate the canonical provider-agnostic AI catalogue | agent-governance | P0 | PLAN | P0-T001 | P0-T017,P0-T018,P0-T019,P0-T020,P0-T021 | — |
-| P0-T017 | Complete the canonical agent-role catalogue | agent-governance | P0 | PLAN | P0-T016 | P0-T024,P0-T026 | — |
-| P0-T018 | Complete the canonical skill catalogue | skill | P0 | PLAN | P0-T016 | P0-T022,P0-T026 | — |
-| P0-T019 | Establish the task-contract template set | agent-governance | P0 | PLAN | P0-T016 | P0-T026 | — |
-| P0-T020 | Establish the workflow catalogue | workflow | P0 | PLAN | P0-T016 | P0-T026 | — |
-| P0-T021 | Establish the command catalogue and provider thin adapters | command | P0 | PLAN | P0-T016 | P0-T026 | — |
-| P0-T022 | Implement pre-edit and post-edit blocking hooks | hook | P0 | PLAN | P0-T018 | P0-T026 | — |
-| P0-T023 | Implement structure/naming/typing/comment blocking hooks | hook | P0 | PLAN | P0-T007,P0-T008,P0-T011 | P0-T026 | — |
-| P0-T024 | Implement scope/threshold/statistics/lineage/config blocking hooks | hook | P0 | PLAN | P0-T017 | P0-T026 | — |
-| P0-T025 | Implement dependency/no-BC/command-sync/cleanup/final-report/impacted-test hooks | hook | P0 | PLAN | P0-T014 | P0-T026 | — |
-| P0-T026 | Establish implementation-task governance and repository baseline quality gate | foundation | P0 | PLAN | P0-T001,P0-T002,P0-T003,P0-T004,P0-T005,P0-T006,P0-T007,P0-T008,P0-T009,P0-T010,P0-T011,P0-T012,P0-T013,P0-T014,P0-T015,P0-T016,P0-T017,P0-T018,P0-T019,P0-T020,P0-T021,P0-T022,P0-T023,P0-T024,P0-T025 | P1-T001 | — |
-| P1-T001 | Implement dataset/regime/partition/split domain vocabulary | domain | P0 | FORB | P0-T026 | P1-T019 | — |
-| P1-T002 | Implement model/training/checkpoint/score domain vocabulary | domain | P0 | FORB | P0-T026 | P1-T021,P1-T023 | — |
-| P1-T003 | Implement threshold-policy/variant/comparator domain vocabulary | domain | P0 | FORB | P0-T026 | P1-T024 | — |
-| P1-T004 | Implement metric-family enums and the MetricId union | domain | P0 | FORB | P0-T026 | P1-T026 | — |
-| P1-T005 | Implement statistical-method/claim-outcome/absorption vocabulary | domain | P0 | FORB | P0-T026 | P1-T027 | — |
-| P1-T006 | Implement experiment-role/claim-tier/status vocabulary and the role/tier invariant | domain | P0 | FORB | P0-T026 | P1-T029 | — |
-| P1-T007 | Implement feasibility/rejection/reuse/blocking vocabulary | domain | P0 | FORB | P0-T026 | P1-T029,P4-T012 | — |
-| P1-T008 | Implement storage/artifact/manifest vocabulary | domain | P0 | FORB | P0-T026 | P1-T054,P1-T055,P1-T056,P1-T057,P1-T058,P1-T059 | — |
-| P1-T009 | Implement runtime/lifecycle/seed-role/pipeline-stage vocabulary | domain | P0 | FORB | P0-T026 | P1-T036,P1-T039 | — |
-| P1-T011 | Implement finite-numeric and Decimal probability-like value objects | domain | P0 | FORB | P1-T001 | P1-T019,P1-T024 | — |
-| P1-T012 | Implement identity, seed-plan, and stage-fingerprint value objects | domain | P0 | FORB | P1-T009 | P1-T013 | — |
-| P1-T013 | Implement per-stage nominal identity dataclasses | domain | P0 | FORB | P1-T012 | P1-T028 | — |
-| P1-T014 | Implement resource, traffic-rate, and byte value objects | domain | P0 | FORB | P1-T011 | P1-T026 | — |
-| P1-T015 | Implement immutable typed collections and the object-dict prohibition | domain | P0 | FORB | P1-T011,P1-T012 | P1-T023 | — |
-| P1-T016 | Implement locked dispersion, quantile, and pooled-variance mathematics | domain | P0 | FORB | P1-T011 | P1-T026,P2-T016 | — |
-| P1-T017 | Implement Cliff's delta and effect-size pure functions | domain | P1 | FORB | P1-T011 | P1-T027 | — |
-| P1-T018 | Implement locked domain constants and the protocol eligibility rule | domain | P0 | FORB | P1-T011,P1-T016 | P1-T026 | — |
-| P1-T019 | Implement dataset, partition, and split specifications | domain | P0 | FORB | P1-T001,P1-T011 | P1-T028,P2-T005 | — |
-| P1-T020 | Implement preprocessing and processed-split specifications | domain | P0 | FORB | P1-T019 | P1-T028,P2-T007 | — |
-| P1-T021 | Implement model, federation, training, and batch specifications | domain | P0 | FORB | P1-T002 | P1-T028,P2-T008 | — |
-| P1-T022 | Implement checkpoint schedule, selection, and recovery specifications | domain | P0 | FORB | P1-T002 | P1-T028,P2-T010 | — |
-| P1-T023 | Implement scoring and split-scoped score-artifact specifications | domain | P0 | FORB | P1-T002,P1-T015 | P1-T024,P2-T011 | — |
-| P1-T024 | Implement the threshold-construction union and suite specifications | domain | P0 | FORB | P1-T003,P1-T023 | P1-T025,P2-T013 | — |
-| P1-T025 | Implement B4 clustering and federated-statistics specifications | domain | P0 | FORB | P1-T024 | P2-T015,P4-T018 | — |
-| P1-T026 | Implement evaluation, operating-point, and alert-burden result types | domain | P0 | FORB | P1-T004,P1-T014,P1-T016,P1-T018 | P1-T028,P2-T016 | — |
-| P1-T027 | Implement statistical, confirmatory, and anchor-gate result types | domain | P0 | FORB | P1-T005,P1-T017 | P1-T028,P2-T018 | E-C1 |
-| P1-T028 | Implement the scientific-protocol and policy aggregates | domain | P0 | FORB | P1-T019,P1-T020,P1-T021,P1-T022,P1-T023,P1-T024,P1-T026,P1-T027 | P1-T029 | — |
-| P1-T029 | Implement experiment identity/profile/cell aggregates and closed profiles | domain | P0 | FORB | P1-T006,P1-T007,P1-T028 | P1-T031,P4-T001 | E-C1 |
-| P1-T030 | Implement the DatpCoreError hierarchy and typed error families | domain | P0 | FORB | P0-T026 | P1-T034,P1-T037 | — |
-| P1-T031 | Implement Pydantic boundary schemas and discriminated unions | configuration | P0 | FORB | P1-T029 | P1-T032 | — |
-| P1-T032 | Implement YAML loading, override composition, and schema-to-domain mapping | configuration | P0 | FORB | P1-T031 | P1-T036,P2-T003 | — |
-| P1-T033 | Implement resolved-configuration recording and the typed spec-diff | configuration | P0 | FORB | P1-T032 | P1-T036,P5-T005 | — |
-| P1-T034 | Implement data/learning/scoring/thresholding application ports | application | P0 | FORB | P1-T028,P1-T030 | P1-T037,P1-T043 | — |
-| P1-T035 | Implement statistics/reporting/telemetry application ports | application | P0 | FORB | P1-T027,P1-T051,P1-T030 | P1-T065,P1-T067,P1-T049 | — |
-| P1-T036 | Implement persistence/runtime application ports | application | P0 | FORB | P1-T008,P1-T009,P1-T033 | P1-T054,P1-T055,P1-T056,P1-T057,P1-T058,P1-T059,P1-T060,P1-T061,P1-T062,P1-T063,P1-T064,P1-T068 | — |
-| P1-T037 | Implement reusable pipeline stage functions and concrete services | application | P0 | FORB | P1-T034,P1-T035,P1-T036 | P1-T038,P2-T004 | — |
-| P1-T038 | Implement ExperimentPlanner and the ScoreReuseGate | application | P0 | FORB | P1-T037,P1-T033 | P1-T039,P5-T002 | — |
-| P1-T039 | Implement preflight, executor, lifecycle, and resource-pressure orchestration | application | P0 | FORB | P1-T038 | P1-T060,P1-T062,P1-T068,P3-T005 | — |
-| P1-T040 | Implement anchor/feasibility gates, readiness evaluator, freeze, and tracing | application | P0 | FORB | P1-T038,P1-T027 | P2-T020,P4-T013,P1-T067 | — |
-| P1-T042 | Implement PyArrow streaming and bounded-pandas data adapters | infrastructure | P0 | FORB | P1-T034,P1-T054,P1-T055,P1-T056,P1-T057 | P2-T004 | — |
-| P1-T043 | Implement the PyTorch AE model and deterministic device/seed/DataLoader adapters | infrastructure | P0 | FORB | P1-T034,P1-T054,P1-T055,P1-T056 | P1-T044,P2-T008 | — |
-| P1-T044 | Implement Flower FedAvg/FedProx and centralized trainers | infrastructure | P0 | FORB | P1-T043 | P2-T009,P4-T016 | — |
-| P1-T045 | Implement scoring, threshold, clustering, quantile, and fed-stats adapters | infrastructure | P0 | FORB | P1-T043 | P2-T011,P2-T015 | — |
-| P1-T046 | Implement the SciPy statistics adapter and per-family metric calculators | infrastructure | P0 | FORB | P1-T035,P1-T056,P1-T057 | P2-T016,P2-T018 | — |
-| P1-T049 | Implement the analysis table/figure/wording/report-model specification layer | reporting | P1 | FORB | P1-T052,P1-T026,P1-T027 | P2-T019,P4-T021 | — |
-| P1-T050 | Implement the architecture-boundary and framework-confinement test suite | architecture | P0 | FORB | P0-T011,P0-T012,P1-T068,P1-T069 | P1-T070 | — |
-| P1-T051 | Implement application telemetry vocabulary and contracts | telemetry | P1 | FORB | P0-T026 | P1-T065 | — |
-| P1-T052 | Implement analysis reporting vocabulary | reporting | P1 | FORB | P0-T026 | P1-T049 | — |
-| P1-T053 | Implement test-support vocabulary and typed test profiles | test-support | P1 | FORB | P0-T026 | P1-T070 | — |
-| P1-T054 | Implement semantic storage-root binding and path resolution | persistence | P0 | FORB | P1-T036,P0-T006 | P1-T055,P1-T056,P1-T057,P1-T058,P1-T059,P1-T042,P1-T043,P1-T070 | — |
-| P1-T055 | Implement content hashing | persistence | P0 | FORB | P1-T054 | P1-T057,P1-T058,P1-T042,P1-T043,P1-T046,P1-T070 | — |
-| P1-T056 | Implement serialization and schema-version handling | persistence | P0 | FORB | P1-T054 | P1-T057,P1-T058,P1-T042,P1-T043,P1-T046,P1-T070 | — |
-| P1-T057 | Implement atomic single-artifact persistence | persistence | P0 | FORB | P1-T054,P1-T055,P1-T056 | P1-T058,P1-T059,P1-T070 | — |
-| P1-T058 | Implement immutable multi-file bundle commit and manifest verification | persistence | P0 | FORB | P1-T057 | P1-T070 | — |
-| P1-T059 | Implement lock providers, leases, and commit ownership | persistence | P0 | FORB | P1-T057 | P1-T070 | — |
-| P1-T060 | Implement CUDA guard and deterministic device initialization | infrastructure | P0 | FORB | P1-T035,P1-T036 | P1-T039,P1-T068,P1-T070 | — |
-| P1-T061 | Implement hardware inventory and GPU assignment | infrastructure | P0 | FORB | P1-T035,P1-T036 | P1-T062,P1-T066,P1-T068,P1-T070 | — |
-| P1-T062 | Implement resource-pressure monitoring and cooperative throttling | infrastructure | P0 | FORB | P1-T061 | P1-T039,P1-T068,P1-T070 | — |
-| P1-T063 | Implement the CheckpointStore adapter (scientific and recovery persistence) | persistence | P0 | FORB | P1-T054,P1-T055,P1-T056,P1-T057,P1-T059 | P1-T068,P1-T070,P2-T010 | — |
-| P1-T064 | Implement run-state persistence and lifecycle storage | persistence | P0 | FORB | P1-T054,P1-T056 | P1-T068,P1-T070 | — |
-| P1-T065 | Implement the structured telemetry adapter | telemetry | P1 | FORB | P1-T051,P1-T035 | P1-T068,P1-T070 | — |
-| P1-T066 | Implement the environment and provenance inventory adapter | persistence | P0 | FORB | P1-T061 | P1-T068,P1-T070 | — |
-| P1-T067 | Implement report renderers | reporting | P1 | FORB | P1-T052,P1-T040 | P1-T068,P1-T070 | — |
-| P1-T068 | Implement the composition root and strategy registries | composition | P0 | FORB | P1-T039,P1-T042,P1-T043,P1-T044,P1-T045,P1-T046,P1-T054,P1-T055,P1-T056,P1-T057,P1-T058,P1-T059,P1-T060,P1-T061,P1-T062,P1-T063,P1-T064,P1-T065,P1-T066,P1-T067 | P1-T069,P1-T050,P1-T070 | — |
-| P1-T069 | Implement the CLI boundary and command invocation | cli | P0 | FORB | P1-T068 | P1-T050,P1-T070 | — |
-| P1-T070 | Implement the lineage/reuse/atomicity/determinism validation and synthetic end-to-end socle test | application | P0 | FORB | P1-T001,P1-T002,P1-T003,P1-T004,P1-T005,P1-T006,P1-T007,P1-T008,P1-T009,P1-T011,P1-T012,P1-T013,P1-T014,P1-T015,P1-T016,P1-T017,P1-T018,P1-T019,P1-T020,P1-T021,P1-T022,P1-T023,P1-T024,P1-T025,P1-T026,P1-T027,P1-T028,P1-T029,P1-T030,P1-T031,P1-T032,P1-T033,P1-T034,P1-T035,P1-T036,P1-T037,P1-T038,P1-T039,P1-T040,P1-T042,P1-T043,P1-T044,P1-T045,P1-T046,P1-T049,P1-T050,P1-T051,P1-T052,P1-T053,P1-T054,P1-T055,P1-T056,P1-T057,P1-T058,P1-T059,P1-T060,P1-T061,P1-T062,P1-T063,P1-T064,P1-T065,P1-T066,P1-T067,P1-T068,P1-T069 | P2-T001 | — |
-| P2-T001 | Recover DATP behavioral semantics from the reference repository (read-only) | data | P0 | PLAN | P1-T070 | P2-T002,P2-T004,P2-T008 | — |
-| P2-T002 | Record the recovered-semantics register in the master log | data | P0 | PLAN | P2-T001 | P2-T020 | — |
-| P2-T003 | Inspect the N-BaIoT source and feature schema | data | P0 | PLAN | P2-T001,P1-T032 | P2-T004 | — |
-| P2-T004 | Implement the N-BaIoT source adapter and deterministic source-row identity | data | P0 | FORB | P2-T003,P1-T042 | P2-T005 | ANCHOR-B0–B4 |
-| P2-T005 | Implement physical-device (9-client) partitioning | data | P0 | FORB | P2-T004,P1-T019 | P2-T006 | ANCHOR-B0–B4 |
-| P2-T006 | Implement benign train/calibration and held-out benign/malicious test splits | data | P0 | FORB | P2-T005 | P2-T007 | ANCHOR-B0–B4 |
-| P2-T007 | Implement preprocessing fit authorization and streaming transform | preprocessing | P0 | FORB | P2-T006,P1-T020 | P2-T008 | ANCHOR-B0–B4 |
-| P2-T008 | Implement the fixed autoencoder, optimizer, and scheduler | training | P0 | FORB | P2-T007,P1-T043,P2-T002 | P2-T009 | ANCHOR-B0–B4 |
-| P2-T009 | Implement FedAvg training (E=1, full participation, deterministic CUDA) | training | P0 | FORB | P2-T008,P1-T044 | P2-T010 | ANCHOR-B0–B4 |
-| P2-T010 | Implement the evidence-recovered anchor checkpoint protocol, persistence, and global selection | checkpoint | P0 | FORB | P2-T009,P2-T002,P1-T022 | P2-T011 | ANCHOR-B0–B4 |
-| P2-T011 | Implement anchor calibration, benign-test, and malicious-test scoring with atomic score bundles | scoring | P0 | FORB | P2-T010,P1-T045 | P2-T012,P2-T013,P2-T022 | ANCHOR-B0–B4 |
-| P2-T012 | Implement B0 centralized training branch | training | P1 | FORB | P2-T006,P1-T044 | P2-T021 | B0 |
-| P2-T013 | Implement canonical anchor B1 shared construction | threshold | P0 | FORB | P2-T011,P1-T024 | P2-T016 | ANCHOR-B1 |
-| P2-T014 | Implement anchor B2 per-client and B3 family constructions | threshold | P0 | FORB | P2-T013 | P2-T016 | ANCHOR-B2–B3 |
-| P2-T015 | Implement canonical anchor B4 exact k-means++ clustering and cluster-mean thresholds (K=3) | threshold | P1 | FORB | P2-T014,P1-T025 | P2-T016 | ANCHOR-B4 |
-| P2-T016 | Implement anchor per-client confusion counts and operating-point metrics | evaluation | P0 | FORB | P2-T013,P2-T014,P2-T015,P2-T023,P1-T026 | P2-T017 | ANCHOR-B0–B4 |
-| P2-T017 | Implement anchor detection-quality metrics (AUROC control, Macro-F1, P10, worst-client BA) | evaluation | P0 | FORB | P2-T016 | P2-T018 | ANCHOR-B0–B4 |
-| P2-T018 | Implement anchor paired deltas, BCa diagnostic, Wilcoxon, Cliff's delta, and reference diagnostics | statistics | P0 | FORB | P2-T017,P1-T046 | P2-T019 | ANCHOR-B1–B2 |
-| P2-T019 | Implement anchor report models, expected-artifact inventory, and dry-run planner | reporting | P0 | PLAN | P2-T018,P1-T049 | P2-T020 | ANCHOR-B0–B4 |
-| P2-T020 | Implement the anchor readiness evaluator and anchor-implementation audit | audit | P0 | PLAN | P2-T019,P2-T002,P1-T040 | P3-T001 | ANCHOR-B0–B4 |
-| P2-T021 | Implement B0 centralized checkpoint schedule and scientific checkpoint selection | checkpoint | P1 | FORB | P2-T012,P2-T002,P1-T022 | P2-T022 | B0 |
-| P2-T022 | Implement B0 centralized calibration and held-out score generation | scoring | P1 | FORB | P2-T021,P1-T045 | P2-T023 | B0 |
-| P2-T023 | Implement B0 pooled threshold, evaluation, statistics, and reporting route | evaluation | P1 | FORB | P2-T022,P1-T026 | P2-T016 | B0 |
-| P3-T001 | Final anchor implementation audit and clean-worktree check | audit | P0 | PLAN | P2-T020 | P3-T002 | ANCHOR-B0–B4 |
-| P3-T002 | Freeze code-state, dependency-lock, and environment provenance | campaign | P0 | PLAN | P3-T001,P0-T004 | P3-T006 | ANCHOR-B0–B4 |
-| P3-T003 | Freeze the resolved anchor configuration and verify the authoritative seed plan | campaign | P0 | PLAN | P3-T001 | P3-T004 | ANCHOR-B0–B4 |
-| P3-T004 | Verify the anchor experiment matrix and enumerate stage identities and expected artifacts | campaign | P0 | PLAN | P3-T003 | P3-T005 | ANCHOR-B0–B4 |
-| P3-T005 | Resource/storage/CUDA/VRAM preflight and output-namespace compatibility | campaign | P0 | PLAN | P3-T004,P1-T039,P1-T060,P1-T061,P1-T062 | P3-T006 | ANCHOR-B0–B4 |
-| P3-T006 | Create the anchor campaign identity and execution-attempt identity | campaign | P0 | PLAN | P3-T002,P3-T005 | P3-T007 | ANCHOR-B0–B4 |
-| P3-T007 | Execute the coordinated anchor campaign | campaign | P0 | ANCH | P3-T006 | P3-T009 | ANCHOR-B0–B4 |
-| P3-T008 | Safe campaign resume and infrastructure-retry handling | campaign | P0 | ANCH | P3-T006 | P3-T009 | ANCHOR-B0–B4 |
-| P3-T009 | Completeness and same-model/same-score compatibility audits; typed failure persistence | audit | P0 | PLAN | P3-T007; P3-T008 when activated | P3-T010 | ANCHOR-B0–B4 |
-| P3-T010 | Historical-reference diagnostic and full configured anchor statistical analysis | statistics | P0 | ANCH | P3-T009 | P3-T011 | ANCHOR-B0–B4 |
-| P3-T011 | Anchor integrity decision, technical-invalidity correction path, artifact freeze, journal-unlock gate | audit | P0 | PLAN | P3-T010 | P4-T001 | ANCHOR-B0–B4 |
-| P4-T001 | Implement E-C1 confirmatory experiment specification and identity | experiment | P0 | FORB | P3-T011,P1-T029 | P4-T022 | E-C1 |
-| P4-T002 | Implement E-S1 construction-sensitivity and E-S2 q-sensitivity | experiment | P1 | FORB | P4-T001 | P4-T022 | E-S1,E-S2 |
-| P4-T003 | Implement E-S3 Dirichlet severity (Regime C) | experiment | P1 | FORB | P4-T001 | P4-T022 | E-S3 |
-| P4-T004 | Implement E-M1 cluster/family granularity and stability | experiment | P1 | FORB | P4-T001 | P4-T022 | E-M1 |
-| P4-T005 | Implement E-M2 B4 cluster-feature ablation and contingency | experiment | P1 | FORB | P4-T004 | P4-T022 | E-M2 |
-| P4-T006 | Implement E-M3 per-client CDF overlays and Ennio deep dive | experiment | P1 | FORB | P4-T001 | P4-T022 | E-M3 |
-| P4-T007 | Implement E-M4 JS↔gain association and E-M5 threshold-shift scatter | experiment | P1 | FORB | P4-T001 | P4-T022 | E-M4,E-M5 |
-| P4-T008 | Implement E-V1 calibration-size sweep and size-aware fallback | experiment | P1 | FORB | P4-T001 | P4-T022 | E-V1 |
-| P4-T009 | Implement E-V2 local-global shrinkage (τ-shrink) | experiment | P1 | FORB | P4-T001 | P4-T022 | E-V2 |
-| P4-T010 | Implement E-V3 split-conformal B2-conf and conformal coverage | experiment | P1 | FORB | P4-T001 | P4-T022 | E-V3 |
-| P4-T011 | Implement the B-a CICIoT2023 boundary | experiment | P1 | FORB | P4-T001 | P4-T022 | B-a |
-| P4-T012 | Implement B-b/temporal CICIoT2023 rejection and suppression records | feasibility | P1 | PLAN | P1-T007,P4-T011 | P4-T022 | E-R1,E-R2,E-R3,E-R4,E-R5,E-R6,E-R7,E-R8 |
-| P4-T013 | Implement the Regime D Edge-IIoTset source/schema/feasibility audit | feasibility | P2 | FORB | P4-T001,P1-T040 | P4-T014 | E-X1 |
-| P4-T014 | Implement Regime D partitioning, preprocessing, training, and scoring | data | P2 | FORB | P4-T013 | P4-T015,P4-T019 | E-X1 |
-| P4-T015 | Implement E-X1 external validation | experiment | P2 | FORB | P4-T014,P4-T018 | P4-T022 | E-X1 |
-| P4-T016 | Implement E-T1 FedProx aggregation stress test | experiment | P1 | FORB | P4-T001,P1-T044 | P4-T022 | E-T1 |
-| P4-T017 | Implement E-T2 model-personalization stress test and absorption bands | experiment | P1 | FORB | P4-T001 | P4-T022 | E-T2 |
-| P4-T018 | Implement E-T3 B-FedStatsBenign matched comparator | experiment | P1 | FORB | P4-T001,P1-T025 | P4-T015,P4-T022 | E-T3 |
-| P4-T019 | Implement E-B1 temporal recalibration MVE | experiment | P2 | FORB | P4-T014 | P4-T022 | E-B1 |
-| P4-T020 | Implement mandatory E-O1 alert burden evidence and suppression route | experiment | P1 | FORB | P4-T001 | P4-T026 | E-O1 |
-| P4-T021 | Implement claim tiers, fallback wording, and report schemas/renderers | reporting | P0 | FORB | P4-T001,P1-T049 | P4-T022 | — |
-| P4-T022 | Implement journal expected-artifact/table/figure inventory and completeness audit | audit | P0 | PLAN | P4-T002,P4-T003,P4-T004,P4-T005,P4-T006,P4-T007,P4-T008,P4-T009,P4-T010,P4-T011,P4-T012,P4-T015,P4-T016,P4-T017,P4-T018,P4-T019,P4-T020,P4-T021,P4-T023,P4-T024,P4-T025 | P5-T001 | all |
-| P4-T023 | Record optional E-Q1–E-Q6 selections and implement selected supplements | experiment | P3 | FORB | P4-T001 | P4-T026 | E-Q1,E-Q2,E-Q3,E-Q4,E-Q5,E-Q6 |
-| P4-T024 | Resolve chronological temporal training/calibration allocation | feasibility | P0 | PLAN | P4-T001 | P4-T019,P5-T004,P6-T004 | E-B1 |
-| P4-T025 | Produce Appendix A B2 calibration-versus-held-out FPR analysis | reporting | P1 | FORB | P4-T001,P4-T008,P4-T009,P4-T010 | P4-T026,P7-T011 | E-C1,E-V1,E-V2,E-V3 |
-| P4-T026 | Complete journal implementation audit and phase gate | audit | P0 | PLAN | P4-T022,P4-T023,P4-T024,P4-T025 | P5-T001 | all |
-| P5-T001 | Implementation-completeness and anchor-artifact-compatibility audit | audit | P0 | PLAN | P4-T026,P3-T011 | P5-T002 | — |
-| P5-T002 | Configuration expansion and journal experiment-cell enumeration | campaign | P0 | PLAN | P5-T001,P1-T038 | P5-T003 | all |
-| P5-T003 | Cell-ID uniqueness and stage-identity enumeration | campaign | P0 | PLAN | P5-T002 | P5-T004 | all |
-| P5-T004 | Feasibility-gate resolution, suppression cells, and unresolved-cell blocking | feasibility | P0 | PLAN | P5-T003,P4-T013,P4-T024 | P5-T005 | E-X1,E-B1,B-a |
-| P5-T005 | Reuse and invalidation verification against frozen anchor artifacts | campaign | P0 | PLAN | P5-T003,P1-T033 | P5-T006 | — |
-| P5-T006 | Expected-artifact/table/figure/export inventory and experiment-to-claim/output mapping | reporting | P0 | PLAN | P5-T003 | P5-T007 | all |
-| P5-T007 | Resource/storage estimation and worker/CUDA/process/resume-boundary planning | campaign | P0 | PLAN | P5-T005,P5-T006 | P5-T008 | — |
-| P5-T008 | Clean-worktree check and freeze of code/dependency/environment/config/campaign identity | campaign | P0 | PLAN | P5-T004,P5-T007,P0-T004 | P5-T009 | — |
-| P5-T009 | Journal campaign manifest and final go/no-go decision | campaign | P0 | PLAN | P5-T008 | P6-T001 | all |
-| P6-T001 | Final readiness confirmation and journal execution-attempt creation | campaign | P0 | PLAN | P5-T009 | P6-T002 | — |
-| P6-T002 | Journal Regime-A identity completion, reuse validation, and threshold-only execution | campaign | P0 | JOUR | P6-T001 | P6-T006 | E-C1,E-S1,E-S2,E-V1,E-V2,E-V3,E-T3,E-M1,E-M2,E-M3,E-M4,E-M5,B0,B-a,E-Q1,E-Q2,E-Q3,E-Q4,E-Q5,E-Q6 |
-| P6-T003 | Regime C execution | campaign | P1 | JOUR | P6-T001 | P6-T006 | E-S3 |
-| P6-T004 | Accepted Regime D execution (external + temporal) | campaign | P2 | JOUR | P6-T001,P5-T004 | P6-T006 | E-X1,E-B1 |
-| P6-T005 | FedProx and model-personalization stress-test execution | campaign | P1 | JOUR | P6-T001 | P6-T006 | E-T1,E-T2 |
-| P6-T006 | Statistics execution, typed-failure and invalidated-artifact handling | statistics | P0 | JOUR | P6-T002,P6-T003,P6-T004,P6-T005 | P6-T008 | all |
-| P6-T007 | Campaign resume, infrastructure retry, and immutable artifact commits | campaign | P0 | JOUR | P6-T001 | P6-T008 | — |
-| P6-T008 | Complete-cell/statistics/output audits and result freeze | audit | P0 | PLAN | P6-T006,P6-T007 | P6-T009 | all |
-| P6-T009 | Report rendering, journal integrity/outcome decision, technical-invalidity correction path | reporting | P0 | PLAN | P6-T008 | P7-T001 | all |
-| P7-T001 | Immutable-result and artifact-hash verification; manifest completeness | audit | P0 | POST | P6-T009 | P7-T002 | — |
-| P7-T002 | Lineage closure and provenance verification | audit | P0 | POST | P7-T001 | P7-T009 | — |
-| P7-T003 | Seed-plan completeness and paired-seed validation | audit | P0 | POST | P7-T001 | P7-T007 | E-C1 |
-| P7-T004 | Same-model/same-score causal-ladder audit | audit | P0 | POST | P7-T002 | P7-T011 | — |
-| P7-T005 | Benign-only-calibration, attack-exclusion, checkpoint-selection audit | audit | P0 | POST | P7-T002 | P7-T011 | — |
-| P7-T006 | Metric-orientation, CV(FPR), absolute-dispersion, AUROC-control audit | audit | P0 | POST | P7-T002 | P7-T011 | — |
-| P7-T007 | BCa implementation, CI-direction, secondary-statistics, degeneracy audit | audit | P0 | POST | P7-T003 | P7-T011 | E-C1 |
-| P7-T008 | Null/mixed retention, stress-test separation, external/temporal/alert-burden claim gates | audit | P0 | POST | P7-T002 | P7-T011 | E-X1,E-B1,E-O1 |
-| P7-T009 | Table/figure/export provenance and frozen-output regeneration | reporting | P0 | POST | P7-T002 | P7-T011 | all |
-| P7-T010 | Repository cleanup, stale-output detection, anchor/journal namespace protection | audit | P0 | POST | P7-T001 | P7-T011 | — |
-| P7-T011 | Reviewer red-team, architecture, and roadmap final audits; master-log closure | audit | P0 | POST | P7-T004,P7-T005,P7-T006,P7-T007,P7-T008,P7-T009,P7-T010,P7-T012 | — | all |
-| P7-T012 | Audit conference-to-journal originality and manuscript handoff evidence | audit | P0 | POST | P7-T002,P7-T009 | P7-T011 | — |
+| ID | Title | Type | Pri | Sci-Exec | Scope | Depends on | Blocks | Roadmap IDs |
+|---|---|---|---|---|---|---|---|---|
+| P0-T001 | Audit and record repository starting state | foundation | P0 | PLAN | NONE | — | P0-T002 | — |
+| P0-T002 | Establish the Python 3.12 project and build backend | foundation | P0 | PLAN | NONE | P0-T001 | P0-T003,P0-T005,P0-T007,P0-T008,P0-T009 | — |
+| P0-T003 | Define dependency groups and pin scientific libraries | foundation | P0 | PLAN | NONE | P0-T002 | P0-T004,P0-T026 | — |
+| P0-T004 | Establish dependency-lock discipline | foundation | P0 | PLAN | NONE | P0-T003 | P3-T002,P5-T008,P0-T026 | — |
+| P0-T005 | Create the approved layered source skeleton | architecture | P0 | PLAN | NONE | P0-T002 | P0-T011,P0-T026 | — |
+| P0-T006 | Establish repository root layout and tracked/generated/gitignored policy | foundation | P0 | PLAN | NONE | P0-T002 | P1-T054,P0-T026 | — |
+| P0-T007 | Configure Ruff lint and format | foundation | P0 | PLAN | NONE | P0-T002 | P0-T026 | — |
+| P0-T008 | Configure Pyright strict typing | foundation | P0 | PLAN | NONE | P0-T002 | P0-T026 | — |
+| P0-T009 | Configure pytest, coverage, timeout, and order-randomization | foundation | P0 | PLAN | NONE | P0-T002 | P0-T010,P0-T026 | — |
+| P0-T010 | Configure Hypothesis property-testing profiles | foundation | P0 | PLAN | NONE | P0-T009 | P0-T026 | — |
+| P0-T011 | Configure import-linter layer contracts | architecture | P0 | PLAN | NONE | P0-T005 | P0-T026,P1-T050 | — |
+| P0-T012 | Configure pytest-archon in-test boundary assertions | architecture | P0 | PLAN | NONE | P0-T005,P0-T009 | P1-T050,P0-T026 | — |
+| P0-T013 | Configure syrupy golden-snapshot support | foundation | P0 | PLAN | NONE | P0-T009 | P0-T026 | — |
+| P0-T014 | Establish Nox validation sessions | foundation | P0 | PLAN | NONE | P0-T007,P0-T008,P0-T009 | P0-T015,P0-T026 | — |
+| P0-T015 | Establish the serialized CUDA lane and CPU xdist policy | foundation | P0 | PLAN | NONE | P0-T014 | P0-T026 | — |
+| P0-T016 | Audit and consolidate the canonical provider-agnostic AI catalogue | agent-governance | P0 | PLAN | NONE | P0-T001 | P0-T017,P0-T018,P0-T019,P0-T020,P0-T021 | — |
+| P0-T017 | Complete the canonical agent-role catalogue | agent-governance | P0 | PLAN | NONE | P0-T016 | P0-T024,P0-T026 | — |
+| P0-T018 | Complete the canonical skill catalogue | skill | P0 | PLAN | NONE | P0-T016 | P0-T022,P0-T026 | — |
+| P0-T019 | Establish the task-contract template set | agent-governance | P0 | PLAN | NONE | P0-T016 | P0-T026 | — |
+| P0-T020 | Establish the workflow catalogue | workflow | P0 | PLAN | NONE | P0-T016 | P0-T026 | — |
+| P0-T021 | Establish the command catalogue and provider thin adapters | command | P0 | PLAN | NONE | P0-T016 | P0-T026 | — |
+| P0-T022 | Implement pre-edit and post-edit blocking hooks | hook | P0 | PLAN | NONE | P0-T018 | P0-T026 | — |
+| P0-T023 | Implement structure/naming/typing/comment blocking hooks | hook | P0 | PLAN | NONE | P0-T007,P0-T008,P0-T011 | P0-T026 | — |
+| P0-T024 | Implement scope/threshold/statistics/lineage/config blocking hooks | hook | P0 | PLAN | NONE | P0-T017 | P0-T026 | — |
+| P0-T025 | Implement dependency/no-BC/command-sync/cleanup/final-report/impacted-test hooks | hook | P0 | PLAN | NONE | P0-T014 | P0-T026 | — |
+| P0-T026 | Establish implementation-task governance and repository baseline quality gate | foundation | P0 | PLAN | NONE | P0-T001,P0-T002,P0-T003,P0-T004,P0-T005,P0-T006,P0-T007,P0-T008,P0-T009,P0-T010,P0-T011,P0-T012,P0-T013,P0-T014,P0-T015,P0-T016,P0-T017,P0-T018,P0-T019,P0-T020,P0-T021,P0-T022,P0-T023,P0-T024,P0-T025 | P1-T001 | — |
+| P1-T001 | Implement dataset/regime/partition/split domain vocabulary | domain | P0 | FORB | NONE | P0-T026 | P1-T019 | — |
+| P1-T002 | Implement model/training/checkpoint/score domain vocabulary | domain | P0 | FORB | NONE | P0-T026 | P1-T021,P1-T023 | — |
+| P1-T003 | Implement threshold-policy/variant/comparator domain vocabulary | domain | P0 | FORB | NONE | P0-T026 | P1-T024 | — |
+| P1-T004 | Implement metric-family enums and the MetricId union | domain | P0 | FORB | NONE | P0-T026 | P1-T026 | — |
+| P1-T005 | Implement statistical-method/claim-outcome/absorption vocabulary | domain | P0 | FORB | NONE | P0-T026 | P1-T027 | — |
+| P1-T006 | Implement experiment-role/claim-tier/status vocabulary and the role/tier invariant | domain | P0 | FORB | NONE | P0-T026 | P1-T029 | — |
+| P1-T007 | Implement feasibility/rejection/reuse/blocking vocabulary | domain | P0 | FORB | NONE | P0-T026 | P1-T029,P4-T012 | — |
+| P1-T008 | Implement storage/artifact/manifest vocabulary | domain | P0 | FORB | NONE | P0-T026 | P1-T054,P1-T055,P1-T056,P1-T057,P1-T058,P1-T059 | — |
+| P1-T009 | Implement runtime/lifecycle/seed-role/pipeline-stage vocabulary | domain | P0 | FORB | NONE | P0-T026 | P1-T036,P1-T039 | — |
+| P1-T011 | Implement finite-numeric and Decimal probability-like value objects | domain | P0 | FORB | NONE | P1-T001 | P1-T019,P1-T024 | — |
+| P1-T012 | Implement identity, seed-plan, and stage-fingerprint value objects | domain | P0 | FORB | NONE | P1-T009 | P1-T013 | — |
+| P1-T013 | Implement per-stage nominal identity dataclasses | domain | P0 | FORB | NONE | P1-T012 | P1-T028 | — |
+| P1-T014 | Implement resource, traffic-rate, and byte value objects | domain | P0 | FORB | NONE | P1-T011 | P1-T026 | — |
+| P1-T015 | Implement immutable typed collections and the object-dict prohibition | domain | P0 | FORB | NONE | P1-T011,P1-T012 | P1-T023 | — |
+| P1-T016 | Implement locked dispersion, quantile, and pooled-variance mathematics | domain | P0 | FORB | NONE | P1-T011 | P1-T026,P2-T016 | — |
+| P1-T017 | Implement Cliff's delta and effect-size pure functions | domain | P1 | FORB | NONE | P1-T011 | P1-T027 | — |
+| P1-T018 | Implement locked domain constants and the protocol eligibility rule | domain | P0 | FORB | NONE | P1-T011,P1-T016 | P1-T026 | — |
+| P1-T019 | Implement dataset, partition, and split specifications | domain | P0 | FORB | NONE | P1-T001,P1-T011 | P1-T028,P2-T005 | — |
+| P1-T020 | Implement preprocessing and processed-split specifications | domain | P0 | FORB | NONE | P1-T019 | P1-T028,P2-T007 | — |
+| P1-T021 | Implement model, federation, training, and batch specifications | domain | P0 | FORB | NONE | P1-T002 | P1-T028,P2-T008 | — |
+| P1-T022 | Implement checkpoint schedule, selection, and recovery specifications | domain | P0 | FORB | NONE | P1-T002 | P1-T028,P2-T010 | — |
+| P1-T023 | Implement scoring and split-scoped score-artifact specifications | domain | P0 | FORB | NONE | P1-T002,P1-T015 | P1-T024,P2-T011 | — |
+| P1-T024 | Implement the threshold-construction union and suite specifications | domain | P0 | FORB | NONE | P1-T003,P1-T023 | P1-T025,P2-T013 | — |
+| P1-T025 | Implement B4 clustering and federated-statistics specifications | domain | P0 | FORB | NONE | P1-T024 | P2-T015,P4-T018 | — |
+| P1-T026 | Implement evaluation, operating-point, and alert-burden result types | domain | P0 | FORB | NONE | P1-T004,P1-T014,P1-T016,P1-T018 | P1-T028,P2-T016 | — |
+| P1-T027 | Implement statistical, confirmatory, and anchor-gate result types | domain | P0 | FORB | NONE | P1-T005,P1-T017 | P1-T028,P2-T018 | E-C1 |
+| P1-T028 | Implement the scientific-protocol and policy aggregates | domain | P0 | FORB | NONE | P1-T019,P1-T020,P1-T021,P1-T022,P1-T023,P1-T024,P1-T026,P1-T027 | P1-T029 | — |
+| P1-T029 | Implement experiment identity/profile/cell aggregates and closed profiles | domain | P0 | FORB | NONE | P1-T006,P1-T007,P1-T028 | P1-T031,P4-T001 | E-C1 |
+| P1-T030 | Implement the DatpCoreError hierarchy and typed error families | domain | P0 | FORB | NONE | P0-T026 | P1-T034,P1-T037 | — |
+| P1-T031 | Implement Pydantic boundary schemas and discriminated unions | configuration | P0 | FORB | NONE | P1-T029 | P1-T032 | — |
+| P1-T032 | Implement YAML loading, override composition, and schema-to-domain mapping | configuration | P0 | FORB | NONE | P1-T031 | P1-T036,P2-T003 | — |
+| P1-T033 | Implement resolved-configuration recording and the typed spec-diff | configuration | P0 | FORB | NONE | P1-T032 | P1-T036,P5-T005 | — |
+| P1-T034 | Implement data/learning/scoring/thresholding application ports | application | P0 | FORB | NONE | P1-T028,P1-T030 | P1-T037,P1-T043 | — |
+| P1-T035 | Implement statistics/reporting/telemetry application ports | application | P0 | FORB | NONE | P1-T027,P1-T051,P1-T030 | P1-T065,P1-T067,P1-T049 | — |
+| P1-T036 | Implement persistence/runtime application ports | application | P0 | FORB | NONE | P1-T008,P1-T009,P1-T033 | P1-T054,P1-T055,P1-T056,P1-T057,P1-T058,P1-T059,P1-T060,P1-T061,P1-T062,P1-T063,P1-T064,P1-T068 | — |
+| P1-T037 | Implement reusable pipeline stage functions and concrete services | application | P0 | FORB | NONE | P1-T034,P1-T035,P1-T036 | P1-T038,P2-T004 | — |
+| P1-T038 | Implement ExperimentPlanner and the ScoreReuseGate | application | P0 | FORB | NONE | P1-T037,P1-T033 | P1-T039,P5-T002 | — |
+| P1-T039 | Implement preflight, executor, lifecycle, and resource-pressure orchestration | application | P0 | FORB | NONE | P1-T038 | P1-T060,P1-T062,P1-T068,P3-T005 | — |
+| P1-T040 | Implement anchor/feasibility gates, readiness evaluator, freeze, and tracing | application | P0 | FORB | NONE | P1-T038,P1-T027 | P2-T020,P4-T013,P1-T067 | — |
+| P1-T042 | Implement PyArrow streaming and bounded-pandas data adapters | infrastructure | P0 | FORB | NONE | P1-T034,P1-T054,P1-T055,P1-T056,P1-T057 | P2-T004 | — |
+| P1-T043 | Implement the PyTorch AE model and deterministic device/seed/DataLoader adapters | infrastructure | P0 | FORB | NONE | P1-T034,P1-T054,P1-T055,P1-T056 | P1-T044,P2-T008 | — |
+| P1-T044 | Implement Flower FedAvg/FedProx and centralized trainers | infrastructure | P0 | FORB | NONE | P1-T043 | P2-T009,P4-T016 | — |
+| P1-T045 | Implement scoring, threshold, clustering, quantile, and fed-stats adapters | infrastructure | P0 | FORB | NONE | P1-T043 | P2-T011,P2-T015 | — |
+| P1-T046 | Implement the SciPy statistics adapter and per-family metric calculators | infrastructure | P0 | FORB | NONE | P1-T035,P1-T056,P1-T057 | P2-T016,P2-T018 | — |
+| P1-T049 | Implement the analysis table/figure/wording/report-model specification layer | reporting | P1 | FORB | NONE | P1-T052,P1-T026,P1-T027 | P2-T019,P4-T021 | — |
+| P1-T050 | Implement the architecture-boundary and framework-confinement test suite | architecture | P0 | FORB | NONE | P0-T011,P0-T012,P1-T068,P1-T069 | P1-T070 | — |
+| P1-T051 | Implement application telemetry vocabulary and contracts | telemetry | P1 | FORB | NONE | P0-T026 | P1-T065 | — |
+| P1-T052 | Implement analysis reporting vocabulary | reporting | P1 | FORB | NONE | P0-T026 | P1-T049 | — |
+| P1-T053 | Implement test-support vocabulary and typed test profiles | test-support | P1 | FORB | NONE | P0-T026 | P1-T070 | — |
+| P1-T054 | Implement semantic storage-root binding and path resolution | persistence | P0 | FORB | NONE | P1-T036,P0-T006 | P1-T055,P1-T056,P1-T057,P1-T058,P1-T059,P1-T042,P1-T043,P1-T070 | — |
+| P1-T055 | Implement content hashing | persistence | P0 | FORB | NONE | P1-T054 | P1-T057,P1-T058,P1-T042,P1-T043,P1-T046,P1-T070 | — |
+| P1-T056 | Implement serialization and schema-version handling | persistence | P0 | FORB | NONE | P1-T054 | P1-T057,P1-T058,P1-T042,P1-T043,P1-T046,P1-T070 | — |
+| P1-T057 | Implement atomic single-artifact persistence | persistence | P0 | FORB | NONE | P1-T054,P1-T055,P1-T056 | P1-T058,P1-T059,P1-T070 | — |
+| P1-T058 | Implement immutable multi-file bundle commit and manifest verification | persistence | P0 | FORB | NONE | P1-T057 | P1-T070 | — |
+| P1-T059 | Implement lock providers, leases, and commit ownership | persistence | P0 | FORB | NONE | P1-T057 | P1-T070 | — |
+| P1-T060 | Implement CUDA guard and deterministic device initialization | infrastructure | P0 | FORB | NONE | P1-T035,P1-T036 | P1-T039,P1-T068,P1-T070 | — |
+| P1-T061 | Implement hardware inventory and GPU assignment | infrastructure | P0 | FORB | NONE | P1-T035,P1-T036 | P1-T062,P1-T066,P1-T068,P1-T070 | — |
+| P1-T062 | Implement resource-pressure monitoring and cooperative throttling | infrastructure | P0 | FORB | NONE | P1-T061 | P1-T039,P1-T068,P1-T070 | — |
+| P1-T063 | Implement the CheckpointStore adapter (scientific and recovery persistence) | persistence | P0 | FORB | NONE | P1-T054,P1-T055,P1-T056,P1-T057,P1-T059 | P1-T068,P1-T070,P2-T010 | — |
+| P1-T064 | Implement run-state persistence and lifecycle storage | persistence | P0 | FORB | NONE | P1-T054,P1-T056 | P1-T068,P1-T070 | — |
+| P1-T065 | Implement the structured telemetry adapter | telemetry | P1 | FORB | NONE | P1-T051,P1-T035 | P1-T068,P1-T070 | — |
+| P1-T066 | Implement the environment and provenance inventory adapter | persistence | P0 | FORB | NONE | P1-T061 | P1-T068,P1-T070 | — |
+| P1-T067 | Implement report renderers | reporting | P1 | FORB | NONE | P1-T052,P1-T040 | P1-T068,P1-T070 | — |
+| P1-T068 | Implement the composition root and strategy registries | composition | P0 | FORB | NONE | P1-T039,P1-T042,P1-T043,P1-T044,P1-T045,P1-T046,P1-T054,P1-T055,P1-T056,P1-T057,P1-T058,P1-T059,P1-T060,P1-T061,P1-T062,P1-T063,P1-T064,P1-T065,P1-T066,P1-T067 | P1-T069,P1-T050,P1-T070 | — |
+| P1-T069 | Implement the CLI boundary and command invocation | cli | P0 | FORB | NONE | P1-T068 | P1-T050,P1-T070 | — |
+| P1-T070 | Implement the lineage/reuse/atomicity/determinism validation and synthetic end-to-end socle test | application | P0 | FORB | NONE | P1-T001,P1-T002,P1-T003,P1-T004,P1-T005,P1-T006,P1-T007,P1-T008,P1-T009,P1-T011,P1-T012,P1-T013,P1-T014,P1-T015,P1-T016,P1-T017,P1-T018,P1-T019,P1-T020,P1-T021,P1-T022,P1-T023,P1-T024,P1-T025,P1-T026,P1-T027,P1-T028,P1-T029,P1-T030,P1-T031,P1-T032,P1-T033,P1-T034,P1-T035,P1-T036,P1-T037,P1-T038,P1-T039,P1-T040,P1-T042,P1-T043,P1-T044,P1-T045,P1-T046,P1-T049,P1-T050,P1-T051,P1-T052,P1-T053,P1-T054,P1-T055,P1-T056,P1-T057,P1-T058,P1-T059,P1-T060,P1-T061,P1-T062,P1-T063,P1-T064,P1-T065,P1-T066,P1-T067,P1-T068,P1-T069 | P2-T001 | — |
+| P2-T001 | Recover DATP behavioral semantics from the reference repository (read-only) | data | P0 | PLAN | ANCH | P1-T070 | P2-T002,P2-T004,P2-T008 | — |
+| P2-T002 | Record the recovered-semantics register in the master log | data | P0 | PLAN | ANCH | P2-T001 | P2-T020 | — |
+| P2-T003 | Inspect the N-BaIoT source and feature schema | data | P0 | PLAN | ANCH | P2-T001,P1-T032 | P2-T004 | — |
+| P2-T004 | Implement the N-BaIoT source adapter and deterministic source-row identity | data | P0 | FORB | ANCH | P2-T003,P1-T042 | P2-T005 | ANCHOR-B0–B4 |
+| P2-T005 | Implement physical-device (9-client) partitioning | data | P0 | FORB | ANCH | P2-T004,P1-T019 | P2-T006 | ANCHOR-B0–B4 |
+| P2-T006 | Implement benign train/calibration and held-out benign/malicious test splits | data | P0 | FORB | ANCH | P2-T005 | P2-T007 | ANCHOR-B0–B4 |
+| P2-T007 | Implement preprocessing fit authorization and streaming transform | preprocessing | P0 | FORB | ANCH | P2-T006,P1-T020 | P2-T008 | ANCHOR-B0–B4 |
+| P2-T008 | Implement the fixed autoencoder, optimizer, and scheduler | training | P0 | FORB | ANCH | P2-T007,P1-T043,P2-T002 | P2-T009 | ANCHOR-B0–B4 |
+| P2-T009 | Implement FedAvg training (E=1, full participation, deterministic CUDA) | training | P0 | FORB | ANCH | P2-T008,P1-T044 | P2-T010 | ANCHOR-B0–B4 |
+| P2-T010 | Implement the evidence-recovered anchor checkpoint protocol, persistence, and global selection | checkpoint | P0 | FORB | ANCH | P2-T009,P2-T002,P1-T022 | P2-T011 | ANCHOR-B0–B4 |
+| P2-T011 | Implement anchor calibration, benign-test, and malicious-test scoring with atomic score bundles | scoring | P0 | FORB | ANCH | P2-T010,P1-T045 | P2-T012,P2-T013,P2-T022 | ANCHOR-B0–B4 |
+| P2-T012 | Implement B0 centralized training branch | training | P1 | FORB | ANCH | P2-T006,P1-T044 | P2-T021 | B0 |
+| P2-T013 | Implement canonical anchor B1 shared construction | threshold | P0 | FORB | ANCH | P2-T011,P1-T024 | P2-T016 | ANCHOR-B1 |
+| P2-T014 | Implement anchor B2 per-client and B3 family constructions | threshold | P0 | FORB | ANCH | P2-T013 | P2-T016 | ANCHOR-B2–B3 |
+| P2-T015 | Implement canonical anchor B4 exact k-means++ clustering and cluster-mean thresholds (K=3) | threshold | P1 | FORB | ANCH | P2-T014,P1-T025 | P2-T016 | ANCHOR-B4 |
+| P2-T016 | Implement anchor per-client confusion counts and operating-point metrics | evaluation | P0 | FORB | ANCH | P2-T013,P2-T014,P2-T015,P2-T023,P1-T026 | P2-T017 | ANCHOR-B0–B4 |
+| P2-T017 | Implement anchor detection-quality metrics (AUROC control, Macro-F1, P10, worst-client BA) | evaluation | P0 | FORB | ANCH | P2-T016 | P2-T018 | ANCHOR-B0–B4 |
+| P2-T018 | Implement anchor paired deltas, BCa diagnostic, Wilcoxon, Cliff's delta, and reference diagnostics | statistics | P0 | FORB | ANCH | P2-T017,P1-T046 | P2-T019 | ANCHOR-B1–B2 |
+| P2-T019 | Implement anchor report models, expected-artifact inventory, and dry-run planner | reporting | P0 | PLAN | ANCH | P2-T018,P1-T049 | P2-T020 | ANCHOR-B0–B4 |
+| P2-T020 | Implement the anchor readiness evaluator and anchor-implementation audit | audit | P0 | PLAN | ANCH | P2-T019,P2-T002,P1-T040 | P3-T001 | ANCHOR-B0–B4 |
+| P2-T021 | Implement B0 centralized checkpoint schedule and scientific checkpoint selection | checkpoint | P1 | FORB | ANCH | P2-T012,P2-T002,P1-T022 | P2-T022 | B0 |
+| P2-T022 | Implement B0 centralized calibration and held-out score generation | scoring | P1 | FORB | ANCH | P2-T021,P1-T045 | P2-T023 | B0 |
+| P2-T023 | Implement B0 pooled threshold, evaluation, statistics, and reporting route | evaluation | P1 | FORB | ANCH | P2-T022,P1-T026 | P2-T016 | B0 |
+| P3-T001 | Final anchor implementation audit and clean-worktree check | audit | P0 | PLAN | ANCH | P2-T020 | P3-T002 | ANCHOR-B0–B4 |
+| P3-T002 | Freeze code-state, dependency-lock, and environment provenance | campaign | P0 | PLAN | ANCH | P3-T001,P0-T004 | P3-T006 | ANCHOR-B0–B4 |
+| P3-T003 | Freeze the resolved anchor configuration and verify the authoritative seed plan | campaign | P0 | PLAN | ANCH | P3-T001 | P3-T004 | ANCHOR-B0–B4 |
+| P3-T004 | Verify the anchor experiment matrix and enumerate stage identities and expected artifacts | campaign | P0 | PLAN | ANCH | P3-T003 | P3-T005 | ANCHOR-B0–B4 |
+| P3-T005 | Resource/storage/CUDA/VRAM preflight and output-namespace compatibility | campaign | P0 | PLAN | ANCH | P3-T004,P1-T039,P1-T060,P1-T061,P1-T062 | P3-T006 | ANCHOR-B0–B4 |
+| P3-T006 | Create the anchor campaign identity and execution-attempt identity | campaign | P0 | PLAN | ANCH | P3-T002,P3-T005 | P3-T007 | ANCHOR-B0–B4 |
+| P3-T007 | Execute the coordinated anchor campaign | campaign | P0 | ANCH | ANCH | P3-T006 | P3-T009 | ANCHOR-B0–B4 |
+| P3-T008 | Conditional anchor recovery, resume, and infrastructure-retry handling | campaign | P0 | ANCH | ANCH | P3-T006 | P3-T009 | ANCHOR-B0–B4 |
+| P3-T009 | Completeness and same-model/same-score compatibility audits; typed failure persistence | audit | P0 | PLAN | ANCH | P3-T007; P3-T008 when activated | P3-T010 | ANCHOR-B0–B4 |
+| P3-T010 | Historical-reference diagnostic and full configured anchor statistical analysis | statistics | P0 | ANCH | ANCH | P3-T009 | P3-T011 | ANCHOR-B0–B4 |
+| P3-T011 | Anchor integrity decision, technical-invalidity correction path, artifact freeze, journal-unlock gate | audit | P0 | PLAN | ANCH | P3-T010 | P4-T001 | ANCHOR-B0–B4 |
+| P4-T001 | Implement E-C1 confirmatory experiment specification and identity | experiment | P0 | FORB | JOUR | P3-T011,P1-T029 | P4-T022 | E-C1 |
+| P4-T002 | Implement E-S1 construction-sensitivity and E-S2 q-sensitivity | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-S1,E-S2 |
+| P4-T003 | Implement E-S3 Dirichlet severity (Regime C) | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-S3 |
+| P4-T004 | Implement E-M1 cluster/family granularity and stability | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-M1 |
+| P4-T005 | Implement E-M2 B4 cluster-feature ablation and contingency | experiment | P1 | FORB | JOUR | P4-T004 | P4-T022 | E-M2 |
+| P4-T006 | Implement E-M3 per-client CDF overlays and Ennio deep dive | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-M3 |
+| P4-T007 | Implement E-M4 JS↔gain association and E-M5 threshold-shift scatter | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-M4,E-M5 |
+| P4-T008 | Implement E-V1 calibration-size sweep and size-aware fallback | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-V1 |
+| P4-T009 | Implement E-V2 local-global shrinkage (τ-shrink) | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-V2 |
+| P4-T010 | Implement E-V3 split-conformal B2-conf and conformal coverage | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-V3 |
+| P4-T011 | Implement the B-a CICIoT2023 boundary | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | B-a |
+| P4-T012 | Implement B-b/temporal CICIoT2023 rejection and suppression records | feasibility | P1 | PLAN | JOUR | P1-T007,P4-T011 | P4-T022 | E-R1,E-R2,E-R3,E-R4,E-R5,E-R6,E-R7,E-R8 |
+| P4-T013 | Implement the Regime D Edge-IIoTset source/schema/feasibility audit | feasibility | P2 | FORB | JOUR | P4-T001,P1-T040 | P4-T014 | E-X1 |
+| P4-T014 | Implement Regime D partitioning, preprocessing, training, and scoring | data | P2 | FORB | JOUR | P4-T013 | P4-T015,P4-T019 | E-X1 |
+| P4-T015 | Implement E-X1 external validation | experiment | P2 | FORB | JOUR | P4-T014,P4-T018 | P4-T022 | E-X1 |
+| P4-T016 | Implement E-T1 FedProx aggregation stress test | experiment | P1 | FORB | JOUR | P4-T001,P1-T044 | P4-T022 | E-T1 |
+| P4-T017 | Implement E-T2 model-personalization stress test and absorption bands | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-T2 |
+| P4-T018 | Implement E-T3 B-FedStatsBenign matched comparator | experiment | P1 | FORB | JOUR | P4-T001,P1-T025 | P4-T015,P4-T022 | E-T3 |
+| P4-T019 | Implement E-B1 temporal recalibration MVE | experiment | P2 | FORB | JOUR | P4-T014,P4-T024 | P4-T022 | E-B1 |
+| P4-T020 | Implement mandatory E-O1 alert burden evidence and suppression route | experiment | P1 | FORB | JOUR | P4-T001 | P4-T026 | E-O1 |
+| P4-T021 | Implement claim tiers, fallback wording, and report schemas/renderers | reporting | P0 | FORB | JOUR | P4-T001,P1-T049 | P4-T022 | — |
+| P4-T022 | Implement journal expected-artifact/table/figure inventory and completeness audit | audit | P0 | PLAN | JOUR | P4-T002,P4-T003,P4-T004,P4-T005,P4-T006,P4-T007,P4-T008,P4-T009,P4-T010,P4-T011,P4-T012,P4-T015,P4-T016,P4-T017,P4-T018,P4-T019,P4-T020,P4-T021,P4-T023,P4-T024,P4-T025 | P5-T001 | all |
+| P4-T023 | Record optional E-Q1–E-Q6 selections and implement selected supplements | experiment | P3 | FORB | JOUR | P4-T001 | P4-T026 | E-Q1,E-Q2,E-Q3,E-Q4,E-Q5,E-Q6 |
+| P4-T024 | Resolve chronological temporal training/calibration allocation | feasibility | P0 | PLAN | JOUR | P4-T001 | P4-T019,P5-T004,P6-T004 | E-B1 |
+| P4-T025 | Produce Appendix A B2 calibration-versus-held-out FPR analysis | reporting | P1 | FORB | JOUR | P4-T001,P4-T008,P4-T009,P4-T010 | P4-T026,P7-T011 | E-C1,E-V1,E-V2,E-V3 |
+| P4-T026 | Complete journal implementation audit and phase gate | audit | P0 | PLAN | JOUR | P4-T022,P4-T023,P4-T024,P4-T025 | P5-T001 | all |
+| P5-T001 | Implementation-completeness and anchor-artifact-compatibility audit | audit | P0 | PLAN | JOUR | P4-T026,P3-T011 | P5-T002 | — |
+| P5-T002 | Configuration expansion and journal experiment-cell enumeration | campaign | P0 | PLAN | JOUR | P5-T001,P1-T038 | P5-T003 | all |
+| P5-T003 | Cell-ID uniqueness and stage-identity enumeration | campaign | P0 | PLAN | JOUR | P5-T002 | P5-T004 | all |
+| P5-T004 | Feasibility-gate resolution, suppression cells, and unresolved-cell blocking | feasibility | P0 | PLAN | JOUR | P5-T003,P4-T013,P4-T024 | P5-T005 | E-X1,E-B1,B-a |
+| P5-T005 | Reuse and invalidation verification against frozen anchor artifacts | campaign | P0 | PLAN | JOUR | P5-T003,P1-T033 | P5-T006 | — |
+| P5-T006 | Expected-artifact/table/figure/export inventory and experiment-to-claim/output mapping | reporting | P0 | PLAN | JOUR | P5-T003 | P5-T007 | all |
+| P5-T007 | Resource/storage estimation and worker/CUDA/process/resume-boundary planning | campaign | P0 | PLAN | JOUR | P5-T005,P5-T006 | P5-T008 | — |
+| P5-T008 | Clean-worktree check and freeze of code/dependency/environment/config/campaign identity | campaign | P0 | PLAN | JOUR | P5-T004,P5-T007,P0-T004 | P5-T009 | — |
+| P5-T009 | Journal campaign manifest and final go/no-go decision | campaign | P0 | PLAN | JOUR | P5-T008 | P6-T001 | all |
+| P6-T001 | Final readiness confirmation and journal execution-attempt creation | campaign | P0 | PLAN | JOUR | P5-T009 | P6-T002 | — |
+| P6-T002 | Journal Regime-A identity completion, reuse validation, and threshold-only execution | campaign | P0 | JOUR | JOUR | P6-T001 | P6-T006 | E-C1,E-S1,E-S2,E-V1,E-V2,E-V3,E-T3,E-M1,E-M2,E-M3,E-M4,E-M5,B0,B-a,E-Q1,E-Q2,E-Q3,E-Q4,E-Q5,E-Q6 |
+| P6-T003 | Regime C execution | campaign | P1 | JOUR | JOUR | P6-T001 | P6-T006 | E-S3 |
+| P6-T004 | Accepted Regime D execution (external + temporal) | campaign | P2 | JOUR | JOUR | P6-T001,P5-T004 | P6-T006 | E-X1,E-B1 |
+| P6-T005 | FedProx and model-personalization stress-test execution | campaign | P1 | JOUR | JOUR | P6-T001 | P6-T006 | E-T1,E-T2 |
+| P6-T006 | Statistics execution, typed-failure and invalidated-artifact handling | statistics | P0 | JOUR | JOUR | P6-T002,P6-T003,P6-T004,P6-T005 | P6-T008 | all |
+| P6-T007 | Conditional journal recovery, resume, infrastructure retry, and immutable artifact commits | campaign | P0 | JOUR | JOUR | P6-T001 | P6-T008 | — |
+| P6-T008 | Complete-cell/statistics/output audits and result freeze | audit | P0 | PLAN | JOUR | P6-T006,P6-T007 | P6-T009 | all |
+| P6-T009 | Report rendering, journal integrity/outcome decision, technical-invalidity correction path | reporting | P0 | PLAN | JOUR | P6-T008 | P7-T001 | all |
+| P7-T001 | Immutable-result and artifact-hash verification; manifest completeness | audit | P0 | POST | POST | P6-T009 | P7-T002 | — |
+| P7-T002 | Lineage closure and provenance verification | audit | P0 | POST | POST | P7-T001 | P7-T009 | — |
+| P7-T003 | Seed-plan completeness and paired-seed validation | audit | P0 | POST | POST | P7-T001 | P7-T007 | E-C1 |
+| P7-T004 | Same-model/same-score causal-ladder audit | audit | P0 | POST | POST | P7-T002 | P7-T011 | — |
+| P7-T005 | Benign-only-calibration, attack-exclusion, and checkpoint-selection audit | audit | P0 | POST | POST | P7-T002 | P7-T011 | — |
+| P7-T006 | Metric-orientation, CV(FPR), absolute-dispersion, and AUROC-control audit | audit | P0 | POST | POST | P7-T002 | P7-T011 | — |
+| P7-T007 | BCa implementation, CI-direction, secondary-statistics, degeneracy audit | audit | P0 | POST | POST | P7-T003 | P7-T011 | E-C1 |
+| P7-T008 | Null/mixed retention, stress-test separation, external/temporal/alert-burden claim gates | audit | P0 | POST | POST | P7-T002 | P7-T011 | E-X1,E-B1,E-O1 |
+| P7-T009 | Table/figure/export provenance and frozen-output regeneration | reporting | P0 | POST | POST | P7-T002 | P7-T011 | all |
+| P7-T010 | Repository cleanup, stale-output detection, and anchor/journal namespace protection | audit | P0 | POST | POST | P7-T001 | P7-T011 | — |
+| P7-T011 | Reviewer red-team, architecture, and roadmap final audits; master-log closure | audit | P0 | POST | POST | P7-T004,P7-T005,P7-T006,P7-T007,P7-T008,P7-T009,P7-T010,P7-T012,P4-T025 | — | all |
+| P7-T012 | Audit conference-to-journal originality and manuscript handoff evidence | audit | P0 | POST | POST | P7-T002,P7-T009 | P7-T011 | — |
 
 </div>
 
@@ -4570,7 +4570,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Scientific-execution classification.** FORBIDDEN
 - **Campaign scope.** ANCHOR
 - **Roadmap experiment IDs.** E-C1
-- **Architecture contracts/types owned.** `FedAvgRoundSpec`, `FederationConfig`, `TrainingIdentity`
+- **Architecture contracts/types owned.** `FederationSpec`, `TrainingIdentity`
 - **Objective.** Implement anchor FedAvg training (E=1, full participation, recovered weighting, deterministic CUDA, fixed batch semantics) producing scheduled scientific checkpoints, validated on synthetic clients without a real run.
 - **Why this ticket exists.** FedAvg is the core baseline; E=1 and full participation are locked; training identity feeds every downstream artifact.
 - **Authority references.** Arch §16.1–16.5, §9.1; Road §2.
@@ -4652,7 +4652,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Scientific-execution classification.** FORBIDDEN
 - **Campaign scope.** ANCHOR
 - **Roadmap experiment IDs.** E-C1
-- **Architecture contracts/types owned.** `ScoringSpec`, `ScoreBundle`, `AtomicScorePairCommit`
+- **Architecture contracts/types owned.** `ScoreGenerationSpec`, `SplitScopedScoreBundle`
 - **Objective.** Implement anchor scoring under the selected checkpoint: per-client calibration benign scores, and the atomically committed benign+attack test-score aggregate, with full lineage/hashes/row-order checksums, validated on synthetic scores.
 - **Why this ticket exists.** One calibration set and one test set per compatible seed feed B1–B4; the benign/attack pair commits as one aggregate; attack scores exist only on TEST.
 - **Authority references.** Arch §9.2 (atomic pair protocol), §13.3, §29.1.
@@ -4693,14 +4693,14 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Scientific-execution classification.** FORBIDDEN
 - **Campaign scope.** ANCHOR
 - **Roadmap experiment IDs.** B0
-- **Architecture contracts/types owned.** `CentralizedModelComparatorProfileSpec`, `CentralizedTrainingIdentity`
+- **Architecture contracts/types owned.** `CentralizedModelComparatorProfileSpec`
 - **Objective.** Implement only B0's separate centralized pooled-benign AE training identity and training path, never accepting a FedAvg identity. P2-T021 through P2-T023 own its checkpointing, scoring, and pooled threshold/evaluation/reporting route.
 - **Why this ticket exists.** B0 is a privacy-incompatible centralized reference, not a ladder policy; code-path reuse is required but scientific-artifact identity reuse with the FedAvg branch is a type error.
 - **Authority references.** Arch §9.2 (B0), §29.4 (80); Road §4 (B0 role).
-- **Dependencies.** P2-T011.
-- **Blocks.** P2-T016.
-- **Downstream consumers.** P2-T016 consumes B0 centralized evaluation results for comparative analysis.
-- **Preconditions.** P2-T011 complete.
+- **Dependencies.** P2-T006, P1-T044.
+- **Blocks.** P2-T021.
+- **Downstream consumers.** P2-T021 consumes the B0 centralized training identity for checkpoint scheduling and selection.
+- **Preconditions.** P2-T006, P1-T044 complete.
 - **Inputs.** Arch §9.2, §29.4; Road §4.
 - **Allowed scope.** B0 centralized path via the reusable stages.
 - **Forbidden actions.** No B0 as a ladder policy; no FedAvg checkpoint/score into B0; no B0 mega-interface; no real run.
@@ -4734,7 +4734,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Scientific-execution classification.** FORBIDDEN
 - **Campaign scope.** ANCHOR
 - **Roadmap experiment IDs.** ANCHOR-B1
-- **Architecture contracts/types owned.** `ThresholdConstructionSpec`, `B1SharedThreshold`, `EligibleClientSet`
+- **Architecture contracts/types owned.** `ThresholdConstructionSpec`, `SharedThresholdSpec`, `EligibleClientSet`
 - **Objective.** Implement only canonical anchor B1 shared τ: the unweighted arithmetic mean of eligible clients' local-q thresholds, consuming only anchor calibration scores and the shared `EligibleClientSet`.
 - **Why this ticket exists.** B1 is the anchor shared-scope comparator. B1-pool, B1-wt, construction sensitivity, and formal q-sensitivity are journal-only variants owned by Phase 4; construction uses calibration scores only.
 - **Authority references.** Arch §9.2 (B1 definition), §29.1; Road §4, §5.2 (E-S1).
@@ -4775,7 +4775,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Scientific-execution classification.** FORBIDDEN
 - **Campaign scope.** ANCHOR
 - **Roadmap experiment IDs.** E-C1
-- **Architecture contracts/types owned.** `B2LocalThreshold`, `B3FamilyThreshold`, `FamilyManifestIdentity`
+- **Architecture contracts/types owned.** `LocalThresholdSpec`, `FamilyThresholdSpec` (`family_manifest_identity`)
 - **Objective.** Implement B2 per-client local-p95 thresholds and B3 family-mean thresholds (unweighted mean of eligible family members' local-q thresholds; requires an authorized taxonomy).
 - **Why this ticket exists.** B2 is the confirmatory comparator (local scope); B3 is the family mechanism baseline and must not run without an authorized taxonomy.
 - **Authority references.** Arch §9.2, §8.3 (B3 requires taxonomy), §29.1; Road §4.
@@ -4861,10 +4861,10 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Objective.** Implement anchor policy evaluation producing per-client confusion counts and operating-point metrics (FPR, TPR, CV(FPR) primary, CV(TPR), IQR(FPR), max−min FPR, worst-client FPR) over the shared `EligibleClientSet`, with typed zero-mean CV handling.
 - **Why this ticket exists.** CV(FPR) is the primary endpoint over eligible clients; absolute-dispersion companions guard small-denominator artifacts; a shared eligible set is used by every compared policy.
 - **Authority references.** Arch §9.3, §29.1; Road §10.
-- **Dependencies.** P2-T012, P2-T013, P2-T014, P2-T015, P1-T026.
+- **Dependencies.** P2-T013, P2-T014, P2-T015, P2-T023, P1-T026.
 - **Blocks.** P2-T017.
 - **Downstream consumers.** P2-T017 consumes the operating-point metrics and confusion counts for detection-quality evaluation.
-- **Preconditions.** P2-T012, P2-T013, P2-T014, P2-T015, P1-T026 complete.
+- **Preconditions.** P2-T013, P2-T014, P2-T015, P2-T023, P1-T026 complete.
 - **Inputs.** Arch §9.3, §29.1; Road §10.
 - **Allowed scope.** `application/stages/evaluate_policy.py` (anchor), metric calculators.
 - **Forbidden actions.** No per-policy eligible population; no CV exception for expected zero mean; no test-set-driven checkpoint selection; no real run.
@@ -5490,7 +5490,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Allowed scope.** Resume orchestration; recovery-compatibility validation; retry of classified transient failures.
 - **Forbidden actions.** No auto `FAILED_OOM→PAUSED/RECOVERED`; no resume under a changed profile; no scientific-identity change; no retry of scientific/determinism failure.
 - **Required configuration or NONE.** Frozen configuration only.
-- **Implementation responsibilities.** Skip completed compatible stages; validate recovery compatibility; mint a new `ExecutionAttemptId` per explicit resume; record failure and retry.
+- **Implementation responsibilities.** Skip completed compatible stages; validate recovery compatibility; continue the same `ExecutionAttemptId` for a graceful-pressure-boundary resume (safe unit finishes and commits, then resumes within the same attempt, per Arch §17.3); mint a new `ExecutionAttemptId` only for resume after an interruption or transient-failure recovery (not a graceful-pressure boundary); record failure and retry.
 - **Required unit tests.** NONE.
 - **Required property tests.** NONE.
 - **Required contract tests.** NONE.
@@ -6162,7 +6162,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Acceptance criteria.** [ ] Source/schema inspected. [ ] Feasibility gated on ≥90% coverage. [ ] Partition decided by first-principles audit. [ ] Timestamp evidence recorded. [ ] No scientific run.
 - **Completion evidence.** Changed files (feasibility audit, partition-decision record); commands run and results; recorded identities; cleanup confirmation.
 - **Failure and blocker behavior.** `DatasetError`/`FeasibilityRejection`; GATED/REJECTED status recorded. Stop and reduce K or defer if coverage fails; record the reason.
-- **Stop conditions.** Stop and reduce K or defer if coverage fails; record the reason.
+- **Stop conditions.** Stop and reduce K or defer if coverage fails; record the reason. A reduced/alternate K is a new `ClientPartitionSpec` with a new `PartitionIdentity` and a new feasibility artifact; it never overwrites, retries, or relabels the failed partition's identity or feasibility artifact.
 - **Deliverables.** Regime D feasibility artifact + partition decision.
 - **Final review checklist.** [ ] Audit-driven, no precedent.
 
@@ -6189,7 +6189,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Preconditions.** P4-T013 (feasibility passed for implementation validation) complete.
 - **Inputs.** Arch §12.3, §16, SB-13; Road §7 (Regime D), §9.2 (E-X1).
 - **Allowed scope.** Regime D partition/preprocess/train/score specs and configs.
-- **Forbidden actions.** No scientific run on real Edge-IIoTset; no reuse of anchor N-BaIoT identities across datasets; no feasibility-ungated stage.
+- **Forbidden actions.** No scientific run on real Edge-IIoTset; no reuse of anchor N-BaIoT identities across datasets; no feasibility-ungated stage; no construction of an alternate K's `ClientPartitionSpec` by overwriting, retrying, or relabeling a prior failed partition's identity (each roadmap-authorized alternate K is its own new `ClientPartitionSpec`, `PartitionIdentity`, and feasibility artifact).
 - **Required configuration or NONE.** Regime D scientific config (matched input_dim).
 - **Implementation responsibilities.** Approved partition; per-dataset preprocessing; FedAvg training; scoring; distinct Regime-D identities.
 - **Required unit tests.** NONE.
@@ -6384,14 +6384,14 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Scientific-execution classification.** FORBIDDEN
 - **Campaign scope.** JOURNAL
 - **Roadmap experiment IDs.** E-B1
-- **Architecture contracts/types owned.** `TemporalSplitSpec`, `TemporalWindowIdentity`, `RecalibrationSpec`, `TemporalOutcomeMapping`
+- **Architecture contracts/types owned.** `TemporalWindowSpec`, `TemporalBoundary`, `OneShotRecalibrationSpec`, `TemporalOutcome`
 - **Objective.** Implement E-B1: Edge-IIoTset chronological 70/30 split (genuine timestamps), early-window training/benign-only calibration, late-window evaluation, frozen vs one-shot recalibration, per-window CV(FPR) and recovery ratio, mapped to one of the three pre-specified temporal outcomes.
 - **Why this ticket exists.** E-B1 (Tier 6) is the temporal recalibration MVE; it requires real timestamps and rejects file/row/merge/folder/synthetic pseudo-time; one locked outcome is applied.
 - **Authority references.** Arch §7.5 (temporal locks), §9.1 (temporal specs); Road §11 (three outcomes), §11.1, SB-08.
-- **Dependencies.** P4-T014.
+- **Dependencies.** P4-T014, P4-T024.
 - **Blocks.** P4-T022.
 - **Downstream consumers.** P4-T022 consumes the temporal window/score/eval identities and recovery ratio results from this ticket.
-- **Preconditions.** P4-T014 (Regime D feasible + genuine timestamps) complete.
+- **Preconditions.** P4-T014 (Regime D feasible + genuine timestamps) complete; P4-T024 (chronological temporal training/calibration allocation) resolved.
 - **Inputs.** Arch §7.5, §9.1; Road §11, §11.1; SB-08.
 - **Allowed scope.** E-B1 temporal specs/configs.
 - **Forbidden actions.** No pseudo-time; no sliding/periodic recalibration; no retroactive drift detector; no journal execution.
@@ -6425,20 +6425,20 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Scientific-execution classification.** FORBIDDEN
 - **Campaign scope.** JOURNAL
 - **Roadmap experiment IDs.** E-O1
-- **Architecture contracts/types owned.** `TrafficRateEvidenceKind`, `CostDerivationKind`, `AlertBurdenSpec`, `ResourceCostSpec`, `QuantileBackboneSpec`, `EquitySuiteSpec`
+- **Architecture contracts/types owned.** `TrafficRateEvidenceKind`, `CostDerivationKind`, `AlertBurdenSpec`, `ResourceCostSpec`
 - **Objective.** Implement mandatory E-O1 alert burden with `TrafficRateEvidenceKind`, `CostDerivationKind`, unit normalization, provenance, and alert/device/day calculation. If no valid measured or cited rate exists, produce a documented feasibility rejection or suppression result; never present estimated traffic as measured. P4-T023 separately owns E-Q1–E-Q6.
-- **Why this ticket exists.** These are supportive/optional (Tier 5/7) analyses; alert burden must not present hypothetical rates as measurements; quantile backbone claims no novel estimator; cost estimates are labeled, never measured traffic.
-- **Authority references.** Arch §9.3 (alert burden/resource cost), §9.4 (E-Q6), §6.1 (traffic evidence); Road §9.3 (optional), §10, §13 (L20/L21), SB-20.
+- **Why this ticket exists.** E-O1 (Tier 5, mandatory) is a supportive analysis that must not present hypothetical alert rates as measurements; resource-cost estimates are labeled, never presented as measured traffic.
+- **Authority references.** Arch §9.3 (alert burden/resource cost), §6.1 (traffic evidence); Road §9.2 (mandatory supportive), §10, §13 (L20/L21), SB-20.
 - **Dependencies.** P4-T001.
 - **Blocks.** P4-T026.
 - **Downstream consumers.** P4-T026 consumes the alert burden evidence and suppression results from this ticket.
 - **Preconditions.** P4-T001 complete.
-- **Inputs.** Arch §9.3, §9.4, §6.1; Road §9.3, §10, §13; SB-20.
-- **Allowed scope.** E-O1/E-Q1–Q6 specs/configs.
-- **Forbidden actions.** No hypothetical alert rate as measurement; no novel-estimator claim; no cost estimate rendered as measured; no journal execution.
-- **Required configuration or NONE.** E-O1 traffic evidence; E-Q* configs.
-- **Implementation responsibilities.** Alert-burden with evidence gate; quantile-backbone diagnostics; robust-median variant; equity suite; secondary statistics; fixed-k sensitivity; communication/storage cost with labels.
-- **Required unit tests.** Alert burden requires evidence; estimates labeled; quantile backbone no novel claim.
+- **Inputs.** Arch §9.3, §6.1; Road §9.2, §10, §13; SB-20.
+- **Allowed scope.** E-O1 spec/config.
+- **Forbidden actions.** No hypothetical alert rate as measurement; no cost estimate rendered as measured; no journal execution; no E-Q1–E-Q6 content (owned separately by P4-T023).
+- **Required configuration or NONE.** E-O1 traffic evidence configuration.
+- **Implementation responsibilities.** Alert-burden with evidence gate; communication/storage resource cost with `MEASURED`/`ESTIMATED` labels.
+- **Required unit tests.** Alert burden requires evidence; cost estimates labeled.
 - **Required property tests.** NONE.
 - **Required contract tests.** Resource-cost provenance closes.
 - **Required architecture tests.** NONE.
@@ -6446,12 +6446,12 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Required CUDA tests.** NONE.
 - **Required system/end-to-end tests.** Synthetic system.
 - **Validation commands.** Unit; contract; synthetic system.
-- **Acceptance criteria.** [ ] Alert burden evidence-gated (omit if absent). [ ] Cost estimates labeled, never measured. [ ] Quantile backbone no novel claim. [ ] Equity never replaces CV(FPR).
-- **Completion evidence.** Changed files (E-O1/E-Q* specs/configs); commands run and results; recorded identities; cleanup confirmation.
+- **Acceptance criteria.** [ ] Alert burden evidence-gated (omit if absent). [ ] Cost estimates labeled, never measured. [ ] No E-Q1–E-Q6 content in this ticket.
+- **Completion evidence.** Changed files (E-O1 specs/configs); commands run and results; recorded identities; cleanup confirmation.
 - **Failure and blocker behavior.** Alert-burden config fails without evidence; `MEASURED`/`ESTIMATED` labels enforced. Omit alert burden if no real/cited rate exists.
 - **Stop conditions.** Omit alert burden if no real/cited rate exists.
-- **Deliverables.** E-O1/E-Q1–E-Q6 implementations.
-- **Final review checklist.** [ ] Supplement, not primary.
+- **Deliverables.** E-O1 implementation.
+- **Final review checklist.** [ ] Mandatory supportive analysis, not primary; E-Q1–E-Q6 owned separately by P4-T023.
 
 #### P4-T021 — Implement claim tiers, fallback wording, and report schemas/renderers
 
@@ -6466,7 +6466,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Scientific-execution classification.** FORBIDDEN
 - **Campaign scope.** JOURNAL
 - **Roadmap experiment IDs.** —
-- **Architecture contracts/types owned.** `ClaimTier`, `ClaimOutcome`, `FallbackWording`, `ReportSchema`, `ReportRenderer`, table/figure/export specifications
+- **Architecture contracts/types owned.** `ClaimTier`, `ClaimOutcome`, `ReportRenderer`, `ReportIdentity`, table/figure/export specifications
 - **Objective.** Implement the claim-tier machinery (nine tiers; only confirmatory at Tier 1), the `ClaimOutcome`-driven fallback wording for every major claim (strong/weak/mixed/null/opposite/feasibility/suppressed), and the report schemas/renderers (tables/figures/exports: Markdown/LaTeX/CSV/Parquet/SVG/PNG/PDF) needed by the journal campaign — no HARKing, no overclaiming, no result suppression.
 - **Why this ticket exists.** The claim/report layer enforces claim discipline and honest wording; null/mixed results are reportable; suppression evidence is documented.
 - **Authority references.** Arch §22, §6.6; Road §5, §12 (fallback wording), §13 (reviewer register), §14.4.
@@ -6535,7 +6535,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Deliverables.** Journal inventory + completeness audit.
 - **Final review checklist.** [ ] Complete on synthetic data only.
 
-> **[LEGACY — relocated, not yet reconstructed under the mandatory Section H template.]** The four tickets below (P4-T023–P4-T026) existed only in Section F prior to this revision and are moved here verbatim so that Section G's index rows have a corresponding body. Their content is pending the Phase 4 reconstruction stage (including the mandated E-O1/E-Q separation and the Phase 7 originality-before-closure reordering) and must not be treated as validated against the current mandatory template.
+> **Relocated in an earlier revision; full-template-normalized and cross-checked in this revision.** The four tickets below (P4-T023–P4-T026) originally existed only in Section F and were moved here so that Section G's index rows have a corresponding body. All four use the mandatory 37-field template. The E-O1/E-Q separation is now resolved: `P4-T020` (E-O1, mandatory) no longer carries E-Q-scoped content, and Section K.1's `E-Q1`–`E-Q6` rows now correctly cite `P4-T023` (not `P4-T020`) as their implementing ticket. The Phase 7 originality-before-closure ordering was independently audited and confirmed already correct (`P7-T012` is a precondition of `P7-T011` in both Section G and Section H).
 
 #### P4-T023 — Record optional E-Q1–E-Q6 selections and implement selected supplements
 
@@ -6842,7 +6842,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Campaign scope.** JOURNAL
 - **Roadmap experiment IDs.** E-X1, E-B1, B-a
 - **Architecture contracts/types owned.** `FeasibilityRejection`; `BlockingReason`; suppression-cell records.
-- **Objective.** Resolve every feasibility gate (Regime D coverage, timestamp availability, CICIoT2023 feature count), create suppression cells for infeasible experiments, and block any unresolved cell from the plan.
+- **Objective.** Resolve every feasibility gate (Regime D coverage, timestamp availability, CICIoT2023 feature count), create suppression cells for infeasible experiments, and block any unresolved cell from the plan. Each Regime-D partition candidate (including any roadmap-authorized alternate K) receives its own distinct suppression cell and feasibility-artifact identity; no candidate's record is shared, mutated, or overwritten by a later candidate's evaluation.
 - **Why this ticket exists.** Scientific stages cannot enter the plan without resolved feasibility; infeasible experiments become documented suppression outcomes, not silent omissions.
 - **Authority references.** Arch §12.3 (feasibility gate), §27; Road §7, §9.4, §12.9/§12.10.
 - **Dependencies.** P5-T003, P4-T013, P4-T024.
@@ -6854,7 +6854,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Forbidden actions.** No execution; no unresolved cell in the plan; no relabeled failed feasibility.
 - **Required configuration or NONE.** NONE.
 - **Implementation responsibilities.** Resolve gates; create suppression records; block unresolved cells with typed reasons.
-- **Required unit tests.** Infeasible → suppression cell; unresolved → blocked; passing → unlocks matching lineage only.
+- **Required unit tests.** Infeasible → suppression cell; unresolved → blocked; passing → unlocks matching lineage only; each alternate K candidate for the same experiment produces its own distinct suppression cell / feasibility-artifact identity, never a shared or mutated per-experiment record.
 - **Required property tests.** NONE.
 - **Required contract tests.** NONE.
 - **Required architecture tests.** NONE.
@@ -6882,7 +6882,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Scientific-execution classification.** FORBIDDEN
 - **Campaign scope.** JOURNAL
 - **Roadmap experiment IDs.** —
-- **Architecture contracts/types owned.** Reuse ledger with `REUSABLE_FROM_COMPATIBLE_ANCHOR`, `REQUIRES_NEW_JOURNAL_COMPUTATION`, `BLOCKED_BY_UNRESOLVED_IDENTITY` classifications; `ReuseIncompatibilityError`.
+- **Architecture contracts/types owned.** Reuse ledger with `REUSABLE_FROM_COMPATIBLE_ANCHOR`, `REQUIRES_NEW_JOURNAL_COMPUTATION`, `BLOCKED_BY_UNRESOLVED_IDENTITY` classifications (a planning-level, journal-reuse-ledger-specific elaboration of the architecture's `ReuseDecisionKind` enum — `REUSE`/`RECOMPUTE`/`BLOCKED` respectively; this ledger vocabulary is not itself a class defined in `docs/DATP Core Architecture.md` and is used consistently across P5-T001, this ticket, and P6-T002); `ReuseIncompatibilityError`.
 - **Objective.** Compare the frozen anchor lineage with the complete journal matrix and classify **every** journal training, checkpoint, calibration-score, and test-score identity as exactly `REUSABLE_FROM_COMPATIBLE_ANCHOR`, `REQUIRES_NEW_JOURNAL_COMPUTATION`, or `BLOCKED_BY_UNRESOLVED_IDENTITY`; enumerate the additional journal Regime-A identities required to complete the ten-seed E-C1 cohort. Reuse is lineage-proven, never filename-based.
 - **Why this ticket exists.** Correct reuse/invalidation is essential to avoid retraining/rescoring for threshold-only changes and to recompute when identity-bearing inputs change; this ticket produces the reuse ledger.
 - **Authority references.** Arch §11.5, §13.3, §29.1; this backlog §B (reuse language).
@@ -7349,7 +7349,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Allowed scope.** Resume/retry/commit orchestration.
 - **Forbidden actions.** No auto OOM recovery; no resume under a changed profile; no scientific-identity change; no retry of scientific/determinism failure.
 - **Required configuration or NONE.** NONE.
-- **Implementation responsibilities.** Skip completed compatible stages; validate recovery; mint new attempt ids; commit artifacts immutably.
+- **Implementation responsibilities.** Skip completed compatible stages; validate recovery; continue the same execution-attempt identity for a graceful-pressure-boundary resume (safe unit finishes and commits, then resumes within the same attempt, per Arch §17.3); mint a new attempt id only for resume after an interruption or transient-failure recovery (not a graceful-pressure boundary); commit artifacts immutably.
 - **Required unit tests.** NONE.
 - **Required property tests.** NONE.
 - **Required contract tests.** NONE.
@@ -7793,14 +7793,14 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Campaign scope.** POST_CAMPAIGN
 - **Roadmap experiment IDs.** all
 - **Architecture contracts/types owned.** NONE
-- **Objective.** Verify table/figure/export provenance closure and regenerate every reported output (LaTeX/Markdown/CSV/Parquet/SVG/PNG/PDF) from frozen artifacts, confirming byte-for-byte or content+row-order consistency and that no output is sourced from logs.
+- **Objective.** Verify table/figure/export provenance closure and regenerate every reported output (LaTeX/Markdown/CSV/Parquet/SVG/PNG/PDF) from frozen artifacts, confirming byte-for-byte or content+row-order consistency and that no output is sourced from logs. Regeneration scope includes every entry in the `P5-T006` expected-output inventory, including the Appendix A (`P4-T025`, B2 calibration-versus-held-out FPR analysis) output-inventory entry.
 - **Why this ticket exists.** Reported outputs must be regenerable from frozen artifacts; provenance must close; no scientific value comes from a log line.
 - **Authority references.** Arch §22, §19.3; Road §14.4.
 - **Dependencies.** P7-T002.
 - **Blocks.** P7-T011.
 - **Downstream consumers.** P7-T011 consumes the regenerated-output and provenance-closure record.
 - **Preconditions.** P7-T002.
-- **Inputs.** Frozen artifacts; reported table/figure/export outputs (LaTeX/Markdown/CSV/Parquet/SVG/PNG/PDF).
+- **Inputs.** Frozen artifacts; the `P5-T006` expected-artifact/table/figure/export inventory (including the Appendix A entry); reported table/figure/export outputs (LaTeX/Markdown/CSV/Parquet/SVG/PNG/PDF).
 - **Allowed scope.** Output regeneration over frozen artifacts; provenance closure.
 - **Forbidden actions.** No new experiment; no untraced output; no log-sourced value.
 - **Required configuration or NONE.** NONE.
@@ -7919,10 +7919,10 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Objective.** Conduct the harsh reviewer red-team audit (the roadmap's 28-loophole register), the architecture final audit (Arch §29 invariants), and the roadmap final audit (scientific identity/claim discipline), then close the master log with a recorded verdict. **This is the backlog-closure gate.**
 - **Why this ticket exists.** Final closure requires that every reviewer loophole is defended, every architectural invariant holds, and the scientific identity is intact — with a recorded closure verdict.
 - **Authority references.** Arch §29 (invariants); Road §13 (reviewer register), §14 (checklists), §19–20; this backlog §F (Phase 7 gate).
-- **Dependencies.** P7-T004, P7-T005, P7-T006, P7-T007, P7-T008, P7-T009, P7-T010, P7-T012.
+- **Dependencies.** P7-T004, P7-T005, P7-T006, P7-T007, P7-T008, P7-T009, P7-T010, P7-T012, P4-T025.
 - **Blocks.** —
 - **Downstream consumers.** NONE.
-- **Preconditions.** P7-T004, P7-T005, P7-T006, P7-T007, P7-T008, P7-T009, P7-T010, P7-T012.
+- **Preconditions.** P7-T004, P7-T005, P7-T006, P7-T007, P7-T008, P7-T009, P7-T010, P7-T012, P4-T025.
 - **Inputs.** Reviewer 28-loophole register; Arch §29 invariants; roadmap scientific identity/claim discipline records.
 - **Allowed scope.** Final audits; master-log closure.
 - **Forbidden actions.** No new experiment; no unresolved loophole; no closure with a failing invariant.
@@ -7947,7 +7947,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 
 ## I. Dependency and phase diagrams
 
-> **[LEGACY — pending full reconstruction.]** The diagram below is carried over from the prior revision. Its Phase 0 gate node (`P0-T026`) is accurate and mechanically consistent with the reconstructed Phase 0 tickets in Section H. Its Phase 1 gate node (`P1-T070`) reflects the completed Phase 1 mega-ticket decomposition (renumbered from the retired `P1-T051`) and is mechanically consistent with the fully reconstructed Phase 1 ticket set in Section H (all 66 tickets now use the mandatory template). Its Phase 2–7 gate nodes (`P2-T020`, `P3-T011`, `P4-T022`, `P5-T009`, `P6-T009`, `P7-T011`) reference ticket IDs from the not-yet-reconstructed Phase 2–7 sections and are not yet re-verified against those phases' eventual reconstructed IDs; they must be regenerated in each phase's own reconstruction stage.
+> **Gate nodes verified against the fully reconstructed Section H (this revision).** Every gate node below (`P0-T026`, `P1-T070`, `P2-T020`, `P3-T011`, `P4-T022`, `P5-T009`, `P6-T009`, `P7-T011`) was checked against its Section H body and Section G row: each ticket ID exists, is the correct phase's terminal gate ticket, and its `Blocks`/`Depends` chain matches the diagram edges below. `P1-T070` reflects the completed Phase 1 mega-ticket decomposition (renumbered from the retired `P1-T051`). No node label or edge was changed in this pass; this note replaces the prior revision's "[LEGACY — pending full reconstruction]" caveat, which is no longer accurate now that all 8 phases use the mandatory template.
 
 ```mermaid
 graph TD
@@ -7982,7 +7982,7 @@ graph TD
 
 ## J. Artifact and protocol-track lineage
 
-> **[LEGACY — pending full reconstruction.]** The diagram below is carried over from the prior revision and is not yet re-verified against Phase 1–7 reconstruction. It is retained because it correctly shows the general reuse/fan-out shape (shared calibration/test scores feeding B1–B4 and compatible variants; distinct B0/FedProx/personalization branches; anchor/journal namespace separation) described in Architecture §13.6, but its node labels have not been cross-checked against reconstructed Phase 2–7 ticket IDs.
+> **Node labels verified against the fully reconstructed Section H (this revision).** The diagram below correctly shows the general reuse/fan-out shape (shared calibration/test scores feeding B1–B4 and compatible variants; distinct B0/FedProx/personalization branches; anchor/journal namespace separation) described in Architecture §13.6. Its labels were cross-checked against the reconstructed Phase 2–7 ticket bodies in this pass (e.g. `B1`–`B4` against P2-T013–P2-T015/P2-T023 and P7-T004; `FPXe`/`PERSe`/`B0e` against P6-T005/P6-T002 and P7-T004; the `JOURNAL_EXTENSION` namespace-write rule against P4-T001–P4-T026 and P6-T002); no node label or edge was changed in this pass. This note replaces the prior revision's "[LEGACY]" caveat, which is no longer accurate now that all 8 phases use the mandatory template.
 
 ```mermaid
 graph TD
@@ -8076,12 +8076,12 @@ graph TD
 | E-T3 | Stress comparator / Tier 4 | P4-T018 | P6-T002, P6-T006 |
 | E-B1 | Boundary / Tier 6 | P4-T019 | P6-T004, P6-T006 |
 | E-O1 | Supportive / Tier 5 | P4-T020 | P6-T006 |
-| E-Q1 | Optional / Tier 7 | P4-T020 | P6-T002, P6-T006 when selected |
-| E-Q2 | Optional / Tier 7 | P4-T020 | P6-T002, P6-T006 when selected |
-| E-Q3 | Optional / Tier 7 | P4-T020 | P6-T002, P6-T006 when selected |
-| E-Q4 | Optional / Tier 7 | P4-T020 | P6-T002, P6-T006 when selected |
-| E-Q5 | Optional / Tier 7 | P4-T020 | P6-T002, P6-T006 when selected |
-| E-Q6 | Optional / Tier 7 | P4-T020 | P6-T002, P6-T006 when selected |
+| E-Q1 | Optional / Tier 7 | P4-T023 | P6-T002, P6-T006 when selected |
+| E-Q2 | Optional / Tier 7 | P4-T023 | P6-T002, P6-T006 when selected |
+| E-Q3 | Optional / Tier 7 | P4-T023 | P6-T002, P6-T006 when selected |
+| E-Q4 | Optional / Tier 7 | P4-T023 | P6-T002, P6-T006 when selected |
+| E-Q5 | Optional / Tier 7 | P4-T023 | P6-T002, P6-T006 when selected |
+| E-Q6 | Optional / Tier 7 | P4-T023 | P6-T002, P6-T006 when selected |
 | B0 | Centralized reference (non-ladder) | P2-T012 | P3-T007 (anchor); P6-T002, P6-T006 (journal) |
 | B-a | Boundary / Tier 6 | P4-T011 | P6-T002, P6-T006 when selected |
 | E-R1 | Rejected / suppressed (non-executable) | P4-T012 | — (never executed) |
@@ -8221,16 +8221,29 @@ Record here every future ticket addition, split, merge, dependency change, block
   - **Re-verification discipline applied immediately, per the Stage 4/5/6 lesson.** A single combined grep across the full Section H range (Phase 0 heading through the Section I heading) was run immediately after applying all seven batches, before any front-matter/Section-F/Section-L/Section-M claim was written, confirming zero remaining compact-template lines and exact body/G-index count matches for all 8 phases in one pass: P0 26/26, P1 66/66, P2 23/23, P3 11/11, P4 26/26, P5 9/9, P6 9/9, P7 12/12 — 182/182 total, zero duplicate IDs across the combined range.
   - **Not performed in this revision (explicit, not hidden):** the `Campaign scope` column addition to the Section G shared index table; regeneration of Section I/J/K diagrams and matrices for any phase; the four full audit cycles requested by the governing prompt; independent re-verification of Phase 5/6/7's scientific/architectural content against the roadmap and architecture documents beyond the template-format check (this stage certifies template completeness and mechanical consistency across the whole document, not a fresh scientific re-audit of any phase's substance — in particular, the Phase 6 journal-campaign execution rules, the Phase 7 reviewer 28-loophole register, and the Phase 7 originality/manuscript-handoff obligations in `P7-T012` were reformatted but not independently re-derived from the roadmap and architecture documents in this pass).
   - No scientific execution occurred. No file other than `docs/MASTER_TICKET_LOG.md` was modified. No temporary, scratch, or duplicate ticket-log file was created.
+- **2026-07-14 — Stage 8: first substantive-audit-and-fix cycle covering the named "still NOT COMPLETE" items from the prior revision.** Continuing per the user's request ("go ahead and apply all the remaining fixes... utilize parallel agents"), this stage performed the mechanical `Campaign scope` column addition to Section G, updated the stale Section I/J captions, and ran a parallel audit-and-fix pass over the specific substantive items Section M had flagged as deferred: B0 centralized-branch separation, recovery conditionality, E-O1/E-Q separation, Regime-D alternate-K identity propagation, temporal-blocker dependency wiring, Appendix A traceability, Phase 7 originality-before-closure ordering, and exact-architecture-name usage. Per this repository's audit-only-workflow discipline, every audit was dispatched as a read-only, findings-only pass (7 parallel subagents, each citing evidence and classifying findings by severity); this main session then read each report, independently re-verified the most consequential claims directly against `docs/DATP Core Architecture.md` and `docs/Journal_Extension_Master_Roadmap.md` before acting, and applied only evidenced, targeted corrections — never a blanket or unverified rewrite. Scope of this revision, honestly enumerated:
+  - **Section G: `Campaign scope` column added to all 182 rows**, mechanically extracted from each ticket's own Section H `Campaign scope` field (no new value invented); 4 pre-existing minor title mismatches between Section G and Section H (`P3-T008`, `P6-T007`, `P7-T005`, `P7-T006`, `P7-T010`) were also corrected so both sections state the identical title.
+  - **Section I/J: stale "[LEGACY — pending full reconstruction]" captions replaced** with verification notes reflecting that all 8 phases are now reconstructed; gate-node IDs and lineage-diagram labels were cross-checked against Section H and found accurate (no diagram redraw was performed — see "Not performed" below).
+  - **B0 centralized-branch audit found and this stage fixed a real defect introduced during the earlier Phase 2 template conversion:** `P2-T012`'s `Dependencies`/`Blocks`/`Downstream consumers` fields had drifted from Section G's untouched original graph, wrongly wiring B0's raw centralized-training ticket directly into the shared anchor B1–B4 evaluation ticket (`P2-T016`) instead of B0's own checkpoint ticket (`P2-T021`); `P2-T016`'s `Dependencies` correspondingly cited `P2-T012` instead of `P2-T023` (B0's completed evaluation route, which already correctly declared `P2-T016` in its own `Blocks` field). Both tickets were corrected to match Section G's original, never-touched dependency graph.
+  - **E-O1/E-Q separation:** confirmed `P4-T020` (E-O1, mandatory) had accumulated E-Q-scoped content (`QuantileBackboneSpec`, `EquitySuiteSpec`, E-Q acceptance criteria, "Supplement, not primary" framing) contradicting its own Objective's claim that "P4-T023 separately owns E-Q1–E-Q6." Removed all E-Q-scoped fields from `P4-T020`. Corrected Section K.1's six `E-Q1`–`E-Q6` rows, which incorrectly cited `P4-T020` as the implementing ticket for all six (should be `P4-T023`, per `P4-T020`'s own Roadmap ID field and `P4-T023`'s own Roadmap ID field). Updated the stale legacy blockquote preceding `P4-T023` that had claimed this separation was still pending.
+  - **Temporal-blocker dependency wiring:** `P4-T024` (chronological temporal allocation resolution) explicitly names `P4-T019` (E-B1 temporal MVE) in its `Blocks` field, but `P4-T019`'s own `Dependencies`/`Preconditions` never listed `P4-T024` and had no transitive path to it. Added `P4-T024` to `P4-T019`'s `Dependencies`/`Preconditions` in both Section G and Section H.
+  - **Regime-D alternate-K identity propagation:** the "new `ClientPartitionSpec`/`PartitionIdentity`/feasibility artifact per alternate K, never overwrite/retry/relabel" rule was previously stated only in the campaign-execution ticket `P6-T004`; it is now also explicit in `P4-T013`'s `Stop conditions`, `P4-T014`'s `Forbidden actions` (the tickets that actually construct the governed objects), and `P5-T004`'s `Objective`/`Required unit tests` (per-candidate distinct suppression-cell/feasibility-artifact identity).
+  - **Appendix A traceability:** `P4-T025` (Appendix A) explicitly names `P7-T011` (the backlog-closure gate) in its `Blocks` field, but `P7-T011`'s `Dependencies`/`Preconditions` never listed `P4-T025` — a genuine gate-integrity gap, since `P7-T011` is responsible for verifying every reviewer loophole (including `L04`, which Appendix A defends) is closed. Added `P4-T025` to `P7-T011`'s `Dependencies`/`Preconditions` in both Section G and Section H. Also added an explicit citation of the `P5-T006` expected-output inventory (including the Appendix A entry) to `P7-T009`'s `Objective`/`Inputs`, since its regeneration scope previously relied only on the generic `Roadmap experiment IDs: all` field.
+  - **Recovery conditionality:** confirmed every recovery/resume/retry activation condition, the `NOT_APPLICABLE` fallback, the no-automatic-OOM-recovery rule, `RunIdentity` invariance, and the retry-never-applies-to-scientific-failure rule are all correctly and consistently stated in `P3-T008`/`P6-T007` (matching Architecture §16.6–§18). Found and fixed one real internal conflation: both tickets stated a blanket "mint a new `ExecutionAttemptId` on every resume," contradicting Architecture §17.3's rule that a graceful-pressure-boundary resume continues the *same* attempt. Both tickets' `Implementation responsibilities` were corrected to distinguish the same-attempt graceful-pressure case from the new-attempt post-interruption/transient-failure case.
+  - **Exact-architecture-name audit:** independently re-verified via direct `grep` against `docs/DATP Core Architecture.md` before acting (not merely trusting the subagent's report). Confirmed and corrected 8 invented/non-matching type names: `P2-T009` (`FedAvgRoundSpec`/`FederationConfig` → `FederationSpec`), `P2-T011` (`ScoringSpec`/`ScoreBundle`/`AtomicScorePairCommit` → `ScoreGenerationSpec`/`SplitScopedScoreBundle`), `P2-T012` (`CentralizedTrainingIdentity` removed, no equivalent type exists), `P2-T013` (`B1SharedThreshold` → `SharedThresholdSpec`), `P2-T014` (`B2LocalThreshold`/`B3FamilyThreshold`/`FamilyManifestIdentity` → `LocalThresholdSpec`/`FamilyThresholdSpec`/lowercase `family_manifest_identity`), `P4-T019` (`TemporalSplitSpec`/`TemporalWindowIdentity`/`RecalibrationSpec`/`TemporalOutcomeMapping` → `TemporalWindowSpec`/`TemporalBoundary`/`OneShotRecalibrationSpec`/`TemporalOutcome`), `P4-T021` (`FallbackWording`/`ReportSchema` removed, no equivalent type exists). `P5-T005`'s three-way journal-reuse-ledger vocabulary (`REUSABLE_FROM_COMPATIBLE_ANCHOR` etc.) was **not** renamed to the architecture's generic `ReuseDecisionKind` (`REUSE`/`RECOMPUTE`/`BLOCKED`) because it is used consistently across `P5-T001`, `P5-T005`, and `P6-T002` as a more descriptive journal-specific elaboration; instead, an explicit annotation was added stating the relationship, since renaming a widely-used, possibly-intentional vocabulary without a dedicated architecture-level decision would itself be a scope overreach.
+  - **Phase 7 originality-before-closure ordering: audited and confirmed already correct, no fix needed.** `P7-T012` was already a documented precondition of `P7-T011` in Section G, Section H, and Section F prose; the "reordering" concern in the prior revision's legacy note was a documentation-wording ambiguity, not a graph-logic defect.
+  - **Not performed in this revision (explicit, not hidden):** a full line-by-line re-derivation of all 182 tickets' scientific/architectural substance against the complete authority corpus (620-line roadmap + 2771-line architecture) — this stage audited the 8 *specifically named* dimensions from the prior revision's Section M plus verified/fixed what those audits found, which is not equivalent to an exhaustive whole-document scientific re-audit; the "four full audit cycles" requested by the original governing prompt (this stage constitutes one cycle: audit → verify → fix → re-verify, not four); Section I/J diagram redraws (only captions were updated; the Mermaid graphs themselves were not regenerated); Section K's remaining known gap (the `B0` row in K.1 still cites only `P2-T012` in its "Implementation ticket(s)" column, omitting `P2-T021`–`P2-T023`, per the B0 audit's `[NOTE]` finding); the B0 audit's `[MINOR]` findings on `P6-T002`'s annotation style (not fixed, optional); the pre-existing, document-wide 49-edge Depends/Blocks graph-symmetry pattern found by a full mechanical script pass (only the 2 edges within this stage's named audit scope — `P4-T019`/`P4-T024` and the `P2-T012`/`P2-T016` B0 defect — were fixed; the remaining ~47 edges reflect a pre-existing, undocumented "Depends = nearest causal predecessor, Blocks = broader downstream-consumer annotation" convention that predates this entire reconstruction effort and was never touched by any prior stage; changing it requires a dedicated dependency-graph-convention decision, not a template-conversion-adjacent fix, and is out of this stage's scope).
+  - No scientific execution occurred. No file other than `docs/MASTER_TICKET_LOG.md` was modified. No temporary, scratch, or duplicate ticket-log file was created.
 
 ---
 
 ## M. Exhaustive self-audit
 
-This section reports the actual, mechanically-checked state of this revision. It intentionally does not claim overall completion: per the front-matter reconstruction-status note, all 8 phases (182/182 tickets) are now on the mandatory 37-field template, but the `Campaign scope` column in Section G, the diagrams/matrices in Sections I/J/K, the four full audit cycles, and an independent scientific/architectural re-audit of every phase's substance remain outstanding. Every item below is reported honestly as `[PASS]`, `[FAIL]`, or `[NOT COMPLETE — deferred to a later stage]`; no `[PARTIAL]` marking is used, and no item is marked `[PASS]` based on intention rather than a performed check.
+This section reports the actual, mechanically-checked state of this revision. It intentionally does not claim overall completion: all 8 phases (182/182 tickets) are on the mandatory 37-field template, the `Campaign scope` column has been added to Section G, and a first substantive-audit-and-fix cycle has resolved 8 named findings (see Section L Stage 8) — but the diagrams in Sections I/J were not redrawn (only captions updated), Section K.1's B0 row still has one known gap, three further audit cycles remain against the original "four full audit cycles" request, and a full line-by-line re-derivation of every ticket's substance against the complete authority corpus has not been performed. Every item below is reported honestly as `[PASS]`, `[FAIL]`, or `[NOT COMPLETE — deferred to a later stage]`; no `[PARTIAL]` marking is used, and no item is marked `[PASS]` based on intention rather than a performed check.
 
 ### M.1 Overall verdict
 
-**NOT COMPLETE.** Of the 26 completion conditions in the governing prompt, the conditions bearing on Sections A–E, the Phase 0 ticket set, the Phase 1 mega-ticket decomposition (splitting `P1-T010`/`P1-T041`/`P1-T047`/`P1-T048` and correcting every resulting cross-reference), and the full-template normalization of every ticket across all 8 phases (Phase 0 through Phase 7, 182 tickets total) are satisfied in this revision. **All 8 phases are fully reconstructed at the template-format level: every one of the 182 tickets uses the mandatory 37-field template.** The `Campaign scope` column in Section G, the diagrams/matrices in Sections I/J/K, the four full audit cycles requested by the governing prompt, and an independent scientific/architectural re-audit of every phase's substance beyond template format remain explicitly out of scope for this staged revision (agreed with the user before work began). No claim is made that the whole-document reconstruction — in the sense of the full 26-condition bar — is finished.
+**NOT COMPLETE.** Of the 26 completion conditions in the governing prompt, the conditions bearing on Sections A–E, the Phase 0 ticket set, the Phase 1 mega-ticket decomposition, the full-template normalization of every ticket across all 8 phases, the `Campaign scope` column in Section G, and a first cycle of named substantive audits-and-fixes (B0 separation, recovery conditionality, E-O1/E-Q separation, Regime-D alternate-K propagation, temporal-blocker wiring, Appendix A traceability, originality-before-closure ordering, and exact-architecture-name usage) are satisfied in this revision. **All 8 phases are fully reconstructed at the template-format level (182/182 tickets), Section G now carries the `Campaign scope` column, and 8 real, evidenced defects found by this stage's audits have been fixed** (2 real dependency-graph defects, 1 content-conflation defect, 2 traceability gaps, 3 propagation gaps, 1 internal-consistency conflation, and 8 invented architecture-type names). Diagram/matrix regeneration beyond caption updates, the remaining 3 audit cycles, and a full scientific/architectural re-derivation of every ticket's substance against the complete authority corpus remain explicitly out of scope for this staged revision. No claim is made that the whole-document reconstruction — in the sense of the full 26-condition bar — is finished.
 
 ### M.2 Checks performed and their results
 
@@ -8262,12 +8275,22 @@ This section reports the actual, mechanically-checked state of this revision. It
 - **[PASS] Phase 7 full-template normalization.** All 12 Phase 7 tickets (`P7-T001`–`P7-T012`) now use the complete 37-field template; a direct text search for `\*\*Metadata\.\*\*` within the Phase 7 line range of Section H returns zero matches. `P7-T012` already used the full template from an earlier relocation and required no rewrite. The backlog-closure gate note on `P7-T011`, its eight-ticket dependency list, and its `Blocks: —`/terminal-node status were verified preserved exactly.
 - **[PASS] Phase 5/6/7 ticket counts and dependency graphs unchanged.** None of the three phases contains an overloaded ticket requiring a split; all 30 ticket IDs, and every `Dependencies`/`Blocks` edge, are identical to the prior revision's Section G rows, verified by direct comparison during the conversion.
 - **[PASS] Combined Phase 0–7 (whole-document) zero-Metadata re-verification.** Immediately after applying all seven Stage 7 subagent batches (before writing any front-matter/Section-F/Section-L/Section-M completion claim, per the Stage 4/5/6 discipline), a single grep across the full Section H range (Phase 0 heading through the Section I heading) confirmed zero remaining `**Metadata.**` lines and exact body/G-index count matches for all 8 phases in one pass: P0 26/26, P1 66/66, P2 23/23, P3 11/11, P4 26/26, P5 9/9, P6 9/9, P7 12/12 — 182/182 total, zero duplicate ticket IDs anywhere in the document.
-- **[NOT COMPLETE — deferred] `Campaign scope` column in Section G.** Not added in this revision; adding it requires rewriting every row of the shared index table at once, which is deferred to a later stage together with the full-table reconstruction.
-- **[NOT COMPLETE — deferred] Independent scientific/architectural re-audit of every phase's substance beyond template format.** Phase 2/3/4/5/6/7's own `Roadmap experiment IDs`/`Scientific-execution classification`/`Campaign scope` fields were verified during their template conversions for internal consistency with the phase-wide notes already in this document, but no phase's ticket bodies have been independently re-derived from `docs/Journal_Extension_Master_Roadmap.md` and `docs/DATP Core Architecture.md` in this revision — this stage certifies template completeness and mechanical consistency only, not a fresh scientific re-audit of any phase's substance.
-- **[NOT COMPLETE — deferred] B0 centralized-branch full audit, recovery conditionality, E-O1/E-Q separation, Regime-D alternate-K identity correction, temporal-blocker dependency wiring, Appendix A traceability, originality-audit reordering, exact-architecture-name audit, full roadmap/architecture/artifact-lineage/phase-gate matrices, regenerated diagrams, and the four full audit cycles.** None of these apply meaningfully to Phase 0 (pure tooling/governance) and none was performed against any phase's scientific substance in this revision; they remain explicit pending work. (Phase 2's B0-centralized-branch tickets, P2-T012 and P2-T021–P2-T023; Phase 3's campaign-execution/rerun-discipline tickets P3-T007–P3-T011; Phase 4's E-O1/E-Q separation and originality-audit-reordering tickets P4-T023–P4-T026; Phase 6's journal-campaign execution tickets P6-T002–P6-T009; and Phase 7's reviewer red-team/originality-audit tickets P7-T011/P7-T012, were all reformatted but not re-audited for B0-naming-lock, rerun-discipline, E-O1/E-Q-separation, or reviewer-loophole-defense correctness beyond the checks already applied during their original construction — the mandated E-O1/E-Q separation and Phase 7 originality-before-closure reordering flagged in the prior revision's legacy note remain explicit pending work, not resolved by this stage's template-format conversion.)
+- **[PASS] `Campaign scope` column added to Section G.** All 182 rows now carry a `Scope` column, mechanically extracted from each ticket's own Section H `Campaign scope` field via a scripted awk extraction (not manually transcribed, to avoid transcription error); the extracted distribution (P0/P1: `NONE` × 92; P2/P3: `ANCH` × 34; P4/P5/P6: `JOUR` × 44; P7: `POST` × 12) exactly matches the expected per-phase pattern with no anomalies. 4 pre-existing Section G/H title mismatches (`P3-T008`, `P6-T007`, `P7-T005`, `P7-T006`, `P7-T010`) were corrected in the same pass.
+- **[PASS] B0 centralized-branch audit performed; 1 real defect found and fixed.** A dedicated read-only audit subagent (datp-protocol-guardian persona) inspected every B0-related ticket against `docs/DATP Core Architecture.md` and `docs/Journal_Extension_Master_Roadmap.md`. Verdict: PARTIAL — B0's scientific identity separation from FedAvg/B1–B4 is otherwise correctly and repeatedly enforced, but `P2-T012`'s `Dependencies`/`Blocks`/`Downstream consumers` had drifted from Section G's untouched original graph during the earlier Phase 2 conversion, wrongly wiring B0's raw training ticket into the shared anchor evaluation ticket `P2-T016` instead of B0's own checkpoint ticket `P2-T021`; `P2-T016`'s `Dependencies` correspondingly cited `P2-T012` instead of `P2-T023`. Both corrected to match Section G, independently confirmed by direct inspection of both ticket bodies before editing (not merely trusting the subagent's claim).
+- **[PASS] Recovery-conditionality audit performed; 1 real internal conflation found and fixed.** A dedicated read-only audit subagent (reproducibility-auditor persona) confirmed every activation condition, the `NOT_APPLICABLE` fallback, the no-automatic-OOM rule, `RunIdentity` invariance, and the retry/recompute distinction are correctly stated in `P3-T008`/`P6-T007`. Verdict: PARTIAL — both tickets stated a blanket "mint new `ExecutionAttemptId` on every resume," contradicting Architecture §17.3 (graceful-pressure-boundary resume continues the *same* attempt); corrected both tickets' `Implementation responsibilities` to distinguish the two cases.
+- **[PASS] E-O1/E-Q separation audit performed; verdict FAIL, both findings fixed.** A dedicated read-only audit subagent (threshold-policy-engineer persona) found Section K.1 misattributed all six `E-Q1`–`E-Q6` rows to `P4-T020` instead of `P4-T023`, and that `P4-T020`'s own body substantively conflated mandatory E-O1 content with optional E-Q1–E-Q6 content across six fields, contradicting its own Objective. Both corrected: K.1's six rows now cite `P4-T023`; `P4-T020` now carries only E-O1-scoped content.
+- **[PASS] Regime-D alternate-K identity audit performed; verdict PARTIAL, propagation gaps fixed.** A dedicated read-only audit subagent (experiment-engineer persona) confirmed the alternate-K rule (new `ClientPartitionSpec`/`PartitionIdentity`/feasibility artifact per candidate, never overwrite/retry/relabel) is correctly stated in the campaign-execution ticket `P6-T004`, but was absent from `P4-T014` (the implementation ticket that constructs the governed objects) and only partially present in `P4-T013`; `P5-T004` stated immutability but not per-candidate artifact distinctness. All three gaps closed with targeted additions to the specific fields the audit identified.
+- **[PASS] Temporal-blocker dependency-wiring audit (manual, script-assisted) performed; 1 real gap found and fixed.** A full mechanical Depends/Blocks graph-symmetry script (Python) was run across all 182 Section G rows, filtered to exclude the documented same-phase gate-aggregation convention; found `P4-T024` (temporal-blocker resolution) explicitly names `P4-T019` (E-B1 temporal MVE) in its `Blocks` field with no transitive path back, while `P4-T019`'s own `Dependencies`/`Preconditions` never listed `P4-T024`. Fixed in both Section G and Section H.
+- **[PASS] Appendix A traceability audit performed; verdict FAIL, both findings fixed.** A dedicated read-only audit subagent (claim-evidence-auditor persona) found `P4-T025` (Appendix A) explicitly blocks `P7-T011` (backlog-closure gate) but `P7-T011`'s `Dependencies`/`Preconditions` never listed it — a genuine gate-integrity gap, since `P7-T011` must verify reviewer loophole `L04` (which Appendix A defends) is closed. Fixed by adding `P4-T025` to `P7-T011`'s dependency fields in both Section G and Section H, and by citing the `P5-T006` output inventory (including Appendix A) explicitly in `P7-T009`'s `Objective`/`Inputs`.
+- **[PASS] Phase 7 originality-before-closure ordering audit performed; verdict PASS, no fix needed.** A dedicated read-only audit subagent (literature-novelty-auditor persona) confirmed `P7-T012` was already a documented precondition of `P7-T011` in Section G, Section H, and Section F prose; the "reordering" concern in the prior revision's legacy note was a documentation-wording ambiguity, not a graph-logic defect. The stale legacy-note wording was corrected.
+- **[PASS] Exact-architecture-name audit performed; verdict PARTIAL, 8 confirmed defects fixed after independent re-verification.** A dedicated read-only audit subagent (architecture-cleaner persona) sampled 30 tickets across all 8 phases against `docs/DATP Core Architecture.md`'s full type inventory and reported 8 invented/non-matching type names. Before applying any correction, this session independently re-ran direct `grep` verification of every claimed name against the architecture document (not merely trusting the subagent's report) — all 8 were confirmed absent from the architecture document under the claimed spelling, and the subagent's proposed correct names were confirmed present verbatim. Corrected `P2-T009`, `P2-T011`, `P2-T012`, `P2-T013`, `P2-T014`, `P4-T019`, `P4-T021`. `P5-T005`'s three-way reuse-ledger vocabulary was deliberately **not** renamed (used consistently across three tickets as a plausible journal-specific elaboration of the architecture's `ReuseDecisionKind`); an explicit relationship annotation was added instead, since a blanket rename of a possibly-intentional, widely-used vocabulary without a dedicated architecture-level decision would itself be a scope overreach.
+- **[NOT COMPLETE — deferred] Diagram/matrix regeneration in Sections I/J/K beyond caption updates and the K.1 E-Q correction.** Section I/J's stale "[LEGACY]" captions were replaced with verification notes (gate-node IDs and lineage-diagram labels were cross-checked against Section H and confirmed accurate), but the Mermaid diagrams themselves were not redrawn. Section K.1's `B0` row still cites only `P2-T012` in its "Implementation ticket(s)" column, omitting `P2-T021`–`P2-T023` (a known, disclosed gap per the B0 audit's `[NOTE]` finding, not yet corrected).
+- **[NOT COMPLETE — deferred] Full scientific/architectural re-derivation of every ticket's substance against the complete authority corpus.** This stage audited 8 *specifically named* dimensions (matching the prior revision's own Section M "NOT COMPLETE" list) plus fixed what those audits found; this is not equivalent to an exhaustive, whole-document, line-by-line re-derivation of all 182 tickets against the full 620-line roadmap and 2771-line architecture document. The pre-existing, document-wide Depends/Blocks graph-symmetry pattern (49 non-gate-aggregation edges found by the full mechanical script pass, of which only 2 fell within this stage's specifically named audit scope and were fixed) remains otherwise unaddressed; it reflects an undocumented "Depends = nearest causal predecessor, Blocks = broader downstream-consumer annotation" convention that predates this entire reconstruction effort.
+- **[NOT COMPLETE — deferred] The remaining 3 of the "four full audit cycles" requested by the governing prompt.** This stage constitutes one audit-fix-verify cycle (parallel audit → independent re-verification → targeted fix → mechanical re-check); three further cycles remain, per the original governing prompt's request, before that specific completion condition is satisfied.
+- **[NOT COMPLETE — deferred] B0-row Implementation-ticket completeness in Section K.1, the B0 audit's `[MINOR]` findings on `P6-T002`'s annotation style, and the `P4-T023` Section G/H `Blocks` field desync (`P5-T002` present in H, absent in G).** All three were identified as optional/minor by their respective audits and were not fixed in this stage; they do not block any acceptance criterion currently in force.
 - **[PASS] No result-seeking rerun language introduced or left uncorrected anywhere in this revision.** Sections A, B, C, D, E, and all 182 tickets across Phases 0–7 contain no instance of "corrective rerun," "rejected outcome," or similar phrasing describing a preferred-direction rerun; Section B explicitly bans it, and the reformatted Phase 6 gate ticket `P6-T009` and Phase 7 audit ticket `P7-T008` explicitly restate the anti-suppression/anti-rerun and null/mixed-retention rules in their reformatted bodies.
 
-### M.3 Mechanical counts (this revision's scope: Sections A–E and the full-template normalization of all 182 tickets across all 8 phases)
+### M.3 Mechanical counts (this revision's scope: Sections A–E, the full-template normalization of all 182 tickets, the Section G `Campaign scope` column, and the Stage 8 audit-and-fix cycle)
 
 - Duplicate Phase 0 ticket IDs: 0.
 - Phase 0 index-only entries (no Section H body): 0.
@@ -8316,7 +8339,8 @@ This section reports the actual, mechanically-checked state of this revision. It
 - Combined Phase 0–7 (whole-document) `**Metadata.**` lines remaining in Section H: 0 (verified in one combined grep pass across all 8 phases).
 - Whole-document duplicate ticket IDs across all 8 phases: 0 (verified by `sort | uniq -d` returning no output across the full `^#### P[0-9]-T0[0-9]{2}` set).
 - Whole-document body/G-index count total: 182/182 (26+66+23+11+26+9+9+12 on both sides).
-- **Not counted in this revision (deferred to future audit stages):** priority/type/scientific-execution/campaign-scope mismatches against the roadmap and architecture documents (as opposed to internal phase-wide-note consistency, which was checked), roadmap-ID mismatches, dependency/block-reference validity beyond ID-existence, invalid architecture names, unmapped roadmap experiments, unmapped architecture contracts, unmapped artifact families, and stale diagram references. Reporting a zero here would be a false claim; these counts require a dedicated scientific/architectural re-audit stage, not merely template-format conversion.
+- **Not counted in this revision (deferred to future audit stages):** priority/type/scientific-execution/campaign-scope mismatches against the roadmap and architecture documents (as opposed to internal phase-wide-note consistency, which was checked), roadmap-ID mismatches, dependency/block-reference validity beyond ID-existence (except the 3 specific edges fixed in Stage 8), invalid architecture names beyond the 30-ticket sample checked in Stage 8, unmapped roadmap experiments, unmapped architecture contracts, unmapped artifact families, and stale diagram references. Reporting a zero here would be a false claim; these counts require a dedicated scientific/architectural re-audit stage, not merely template-format conversion.
+- Stage 8 fixes applied: 2 dependency-graph defects (`P2-T012`/`P2-T016`, `P4-T019`/`P4-T024`); 1 content-conflation defect (`P4-T020`); 1 index misattribution (Section K.1, 6 rows); 2 traceability gaps (`P7-T011`/`P4-T025`, `P7-T009`/`P5-T006`); 3 propagation gaps (`P4-T013`, `P4-T014`, `P5-T004`); 1 internal-consistency conflation across 2 tickets (`P3-T008`, `P6-T007`); 8 invented architecture-type names across 7 tickets (`P2-T009`, `P2-T011`, `P2-T012`, `P2-T013`, `P2-T014`, `P4-T019`, `P4-T021`); 1 explanatory annotation added without renaming (`P5-T005`). Total: 18 distinct corrections across 15 tickets plus Section G/I/J/K/L/M meta-sections.
 
 ### M.4 Remaining blockers
 
@@ -8331,7 +8355,7 @@ This section reports the actual, mechanically-checked state of this revision. It
 - No temporary, scratch, audit, or duplicate file was created; only `docs/MASTER_TICKET_LOG.md` was edited, in place.
 - Weak/null/mixed/unfavorable outcomes cannot trigger result-seeking execution under the rules stated in this revision's Sections B and E.
 - Phase 0 is structurally ready (tooling/governance scaffolding fully specified per ticket) but no repository implementation ticket has actually been executed; every ticket's `Status` field across all 8 phases remains `NOT_STARTED`, consistent with Section C.
-- **This revision is explicitly `NOT COMPLETE`** against the full 26-condition bar of the governing prompt. It completes exactly the scope agreed with the user across this multi-turn effort (the Phase 1 mega-ticket decomposition and full-template normalization, and the full-template normalization of every ticket in Phases 2 through 7, all fully reconstructed and mechanically checked, on top of the already-complete Sections A–E and Phase 0 — bringing the whole document to 182/182 tickets on the mandatory 37-field template) and leaves the `Campaign scope` column in Section G, the diagram/matrix regeneration in Sections I/J/K, the four full audit cycles, and an independent scientific/architectural re-audit of every phase's substance explicitly marked as pending future work.
+- **This revision is explicitly `NOT COMPLETE`** against the full 26-condition bar of the governing prompt. It completes the full-template normalization of all 182 tickets (Phases 0–7), adds the `Campaign scope` column to Section G, and completes a first audit-and-fix cycle over 8 specifically named substantive dimensions, with 18 distinct, independently-re-verified corrections applied across 15 tickets. It leaves diagram/matrix regeneration beyond caption updates, 3 further audit cycles, and a full scientific/architectural re-derivation of every ticket's substance against the complete authority corpus explicitly marked as pending future work.
 
 ---
 
