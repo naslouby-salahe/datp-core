@@ -281,7 +281,7 @@ All finite vocabularies live in `domain/vocabulary.py`, grouped by cohesive conc
 | `ExecutionStatus` | `MANDATORY`, `OPTIONAL`, `SUPPRESSED`, `REJECTED`, `FUTURE` | Experiment-matrix partition |
 | `FeasibilityStatus` | `FEASIBLE`, `GATED`, `PENDING_VERIFICATION`, `REJECTED` | Feasibility audit outcome |
 | `ClientEligibilityStatus` | `ELIGIBLE`, `FALLBACK_ASSIGNED`, `EXCLUDED` | Per-client evaluation inclusion/fallback state |
-| `ClientEligibilityReason` | `SUFFICIENT_CALIBRATION`, `INSUFFICIENT_CALIBRATION_GLOBAL_FALLBACK`, `MISSING_TEST_BENIGN`, `MISSING_TEST_ATTACK`, `UNDEFINED_REQUIRED_RATE` | Typed explanation; no free-text eligibility semantics |
+| `ClientEligibilityReason` | `SUFFICIENT_CALIBRATION`, `INSUFFICIENT_CALIBRATION_GLOBAL_FALLBACK`, `MISSING_TEST_BENIGN`, `MISSING_TEST_ATTACK` | Typed explanation; no free-text eligibility semantics. Missing or invalid traffic-rate evidence is not a client eligibility reason — it fails alert-burden configuration/evaluation-suite construction before per-client eligibility is evaluated |
 | `RejectionReason` | `B_B_NO_METADATA`, `TEMPORAL_NO_TIMESTAMPS`, `FEDBN_NO_BATCHNORM`, `LARIDI_ANOMALY_LABELED`, `MIA_NO_LITERATURE`, `STREAMING_DRIFT_SCOPE`, `BYZANTINE_CONFORMAL_SCOPE`, `BROAD_PFL_LIMIT` | Rejected experiments E-R1..R8 |
 | `ReuseIncompatibilityReason` | `SOURCE_MISMATCH`, `SCHEMA_MISMATCH`, `PARTITION_MISMATCH`, `SPLIT_MISMATCH`, `PREPROCESSOR_MISMATCH`, `TRAINING_MISMATCH`, `CHECKPOINT_MISMATCH`, `SCORING_MISMATCH`, `SCORE_SCHEMA_MISMATCH`, `CLIENT_ROSTER_MISMATCH`, `ROW_ORDER_MISMATCH`, `PRECISION_MISMATCH`, `BATCH_PROFILE_MISMATCH` | Existing but incompatible artifacts normally require recomputation |
 | `BlockingReason` | `MISSING_SOURCE`, `FAILED_ANCHOR_GATE`, `FAILED_FEASIBILITY`, `UNRESOLVED_SCIENTIFIC_DECISION`, `INVALID_LINEAGE`, `REQUIRED_HARDWARE_UNAVAILABLE`, `INSUFFICIENT_STORAGE` | Conditions under which valid recomputation cannot proceed |
@@ -411,7 +411,7 @@ A specification with more than one variant carries an explicit enum tag naming t
 
 ## 7. Value objects
 
-Scalar value objects live in `domain/identifiers.py` as frozen, slotted dataclasses whose `__post_init__` raises `DomainValidationError` on an invalid value. Every float-wrapping value object additionally rejects `NaN` and infinity (§7.3), so the range checks below are always accompanied by a finiteness check. Probability-like quantities are **distinct types** and are not interchangeable: a `ConfidenceLevel` cannot be passed where an `FprTarget` is expected.
+Scalar value objects live in `domain/identifiers.py` as frozen, slotted dataclasses whose `__post_init__` raises `DomainValidationError` on an invalid value. `ThresholdPercentile`, `FprTarget`, `ConfidenceLevel`, `CoverageRatio`, and `Probability` wrap a canonical `Decimal` rather than a binary `float`, because their values are identity-bearing and participate in exact arithmetic such as `FprTarget == 1 - q` (§7.3). Every other float-wrapping value object rejects `NaN` and infinity (§7.3), so the range checks below are always accompanied by a finiteness check. Probability-like quantities are **distinct types** and are not interchangeable: a `ConfidenceLevel` cannot be passed where an `FprTarget` is expected.
 
 | Value object | Wraps | Validation | Prevents | Distinct from |
 |---|---|---|---|---|
@@ -430,11 +430,11 @@ Scalar value objects live in `domain/identifiers.py` as frozen, slotted dataclas
 | `Seed` | int | `>= 0` | negative or undefined seeds | — |
 | `RoundNumber` | int | `>= 1`; must be in schedule when selecting | off-schedule checkpoints | — |
 | `FederatedRoundId` | tuple | training identity plus scheduled round | cross-run round confusion | RoundNumber |
-| `ThresholdPercentile` | float | `0 < q < 1` | degenerate τ; FPR-target desynchronization | ConfidenceLevel, CoverageRatio |
-| `FprTarget` | float | `0 < t < 1`; `== 1 - q` | target/percentile desynchronization | Probability, ConfidenceLevel |
-| `ConfidenceLevel` | float | `0 < c < 1` (typically 0.95) | mixing CI level with coverage or target | CoverageRatio, FprTarget |
-| `CoverageRatio` | float | `0 <= r <= 1` | eligibility or conformal coverage above one | ConfidenceLevel, FprTarget |
-| `Probability` | float | `0 <= p <= 1` | a generic probability misused as a specific rate | all of the above |
+| `ThresholdPercentile` | Decimal | `0 < q < 1` | degenerate τ; FPR-target desynchronization | ConfidenceLevel, CoverageRatio |
+| `FprTarget` | Decimal | `0 < t < 1`; `== 1 - q` | target/percentile desynchronization | Probability, ConfidenceLevel |
+| `ConfidenceLevel` | Decimal | `0 < c < 1` (typically 0.95) | mixing CI level with coverage or target | CoverageRatio, FprTarget |
+| `CoverageRatio` | Decimal | `0 <= r <= 1` | eligibility or conformal coverage above one | ConfidenceLevel, FprTarget |
+| `Probability` | Decimal | `0 <= p <= 1` | a generic probability misused as a specific rate | all of the above |
 | `FalsePositiveRate` / `TruePositiveRate` | float | finite, `0 <= r <= 1` | FPR/TPR interchange | each other |
 | `PrecisionScore` / `RecallScore` / `F1Score` | float | finite, `0 <= r <= 1`, declared zero-denominator policy | detection-score interchange | each other |
 | `BalancedAccuracyScore` / `AuRocScore` | float | finite, `0 <= r <= 1` | control/operating-point confusion | each other |
@@ -451,7 +451,7 @@ Scalar value objects live in `domain/identifiers.py` as frozen, slotted dataclas
 | `BootstrapResampleCount` | int | `>= 1`; explicit, no default | hidden statistical default | SampleCount |
 | `TrafficRate` | decimal rate plus `TrafficRateUnit` | finite and strictly positive; supported unit | zero, negative, NaN, infinity, unsupported unit | Probability |
 | `BatchSize` | int | `>= 1` | zero or negative batch; **scientific, fingerprinted** | WorkerCount |
-| `WorkerCount` | int | `>= 0` | negative workers; **execution, recorded not fingerprinted** | BatchSize |
+| `WorkerCount` | int | `>= 0` | negative workers; **execution-only when deterministic equivalence is proven; output-affecting and identity-bearing when it changes row ordering, sample ordering, numerical output, or framework behavior** | BatchSize |
 | `ChunkRowCount` | int | `>= 1` | zero-row chunks | — |
 | `RamBudgetBytes` | int | `>= 1` | nonsensical budget | VramFraction |
 | `VramFraction` | float | `0 < f <= 1` | over-allocation | RamBudgetBytes |
@@ -494,7 +494,7 @@ Additional nominal identities include `DatasetSourceIdentity`, `FeatureSchemaIde
 
 Every value object wrapping a `float` rejects `NaN` and infinity in `__post_init__`, in addition to its range check. This is not cosmetic: a `NaN` slipping into a fingerprinted field (for example from an empty-slice mean) would make two otherwise identical specifications compare unequal, because `NaN != NaN`, silently breaking stage-identity reuse and deduplication. Rejecting non-finite values at construction removes that failure mode.
 
-`ThresholdPercentile` and `FprTarget` are stored through a canonical quantized representation so that `q` and `1 - q` are exact and reproducible across computation paths. The `FprTarget == 1 - q` invariant is checked against that canonical value, not against a raw floating-point subtraction whose last bit can differ depending on how it was computed.
+`ThresholdPercentile`, `FprTarget`, `ConfidenceLevel`, `CoverageRatio`, and `Probability` wrap a canonical `Decimal` instead of a binary `float`. A boundary numeric or string input is converted to `Decimal` and quantized to a fixed, documented number of decimal places exactly once, inside `__post_init__`; the constructed value object stores only that canonical `Decimal` and rejects a non-finite (`NaN` or infinite) `Decimal` with the same `DomainValidationError` used for an out-of-range value. Every downstream comparison, arithmetic operation, and fingerprint serialization operates on this canonical `Decimal`, never on a raw binary float, so `q` and `1 - q` are exact and reproducible regardless of which computation path produced them. The `FprTarget == 1 - q` invariant is checked against these canonical `Decimal` values, not against a floating-point subtraction whose last bit can differ depending on how it was computed.
 
 ### 7.4 Immutable mapping fields
 
@@ -558,7 +558,7 @@ class ExecutionPolicy:
     device: DeviceSpec
     budget: ResourceBudget
     parallelism: ParallelismSpec
-    seed_role_usage: SeedTuple
+    seed_roles: SeedRoleTuple
     resource_pressure: ResourcePressurePolicy
     recovery: RecoveryCheckpointPolicy
 
@@ -728,7 +728,7 @@ The only authoritative data flow is `source inspection → client-partition mani
 | Type | Purpose | Key fields | Invariants |
 |---|---|---|---|
 | `ClientCalibrationScoreArtifact` | benign threshold-fitting scores | `client_id`, exact CALIBRATION split identity, split-manifest hash, scoring identity, checkpoint identity/hash, preprocessor identity, feature-schema identity, sample count, schema version, content hash, row-order checksum, artifact ref | contains no attack score field and no TEST role |
-| `ClientTestScoreArtifact` | evaluation scores | same lineage fields plus benign and attack sample counts and evaluation artifact refs | TEST role only; attack scores exist only here |
+| `ClientTestScoreArtifact` | evaluation scores | `client_id`, `test_split_identity`, `split_manifest_hash`, `test_scoring_identity`, `scientific_checkpoint_identity`, `scientific_checkpoint_content_hash`, `fitted_preprocessor_identity`, `feature_schema_identity`, `benign_scores_ref: ArtifactRef`, `attack_scores_ref: ArtifactRef`, `benign_sample_count`, `attack_sample_count`, `score_schema_version`, `content_hash`, `row_order_checksum` | TEST role only; attack scores exist only here; `benign_scores_ref` and `attack_scores_ref` are two separately addressed, immutable `ArtifactRef` members of the one typed artifact — never interleaved columns and never a loosely-typed multi-file bundle |
 | `ClientTemporalScoreArtifact` | temporal evaluation scores | test-artifact lineage plus `temporal_window_identity` and boundary identity | genuine D-temporal window required |
 | `CalibrationScoreArtifactSet` | shared threshold substrate | `artifact_id: CalibrationScoreArtifactId`, complete `CalibrationScoringLineage`, `per_client: ClientCalibrationScoreMap` | one set feeds B1–B4 and compatible threshold variants |
 | `TestScoreArtifactSet` | shared evaluation substrate | `artifact_id: TestScoreArtifactId`, complete `TestScoringLineage`, `per_client: ClientTestScoreMap` | accepted by evaluators only |
@@ -748,6 +748,8 @@ The only authoritative data flow is `source inspection → client-partition mani
 | `B4ClusteringSpec` | canonical small-client clustering | ordered fingerprint `[mean, standard_deviation, skewness, p95]`, locked `B4FingerprintScalerSpec` and fit scope, k-means++, K=3, locked `n_init` and `max_iter`, derived random state | exact `KMeans`; each client receives the arithmetic mean of member clients' benign local-p95 thresholds; optional K values are separate exploratory specs; unresolved scaler/algorithm constants block print-grade execution and are not caller overrides |
 | `ClusterAssignmentArtifact` | B4 assignment evidence | clustering identity, client assignments, scaled fingerprints, centroid refs, content hash | adjusted-Rand stability compares immutable assignments |
 | `FedStatsBenignThresholdSpec` | locked comparator | `candidate_grid`, `fixed_k_supplementary` | full pooled variance, weighted mean, within/between terms and matched-exceedance are structural algorithm rules; ties always choose larger k; no booleans can disable them |
+
+Each per-client test-score artifact persists `benign_scores_ref` and `attack_scores_ref` as two separately addressed, immutable `ArtifactRef` members of the one typed `ClientTestScoreArtifact` — never merged into one interleaved column and never persisted as a loosely-typed multi-file bundle. This preserves role separation between benign and attack scores, keeps their sample counts and content hashes independently verifiable, and preserves the exact test lineage each score was produced under.
 
 `ThresholdConstructor.construct(ConstructThresholdsRequest)` accepts `CalibrationScoreArtifactSet` and has no request field capable of carrying test or attack scores. `PolicyEvaluator.evaluate(EvaluatePolicyRequest)` accepts `TestScoreArtifactSet` (or the temporal-specific set) and has no calibration-score input. Calibration/test leakage is therefore a type error, not a runtime convention.
 
@@ -1005,6 +1007,7 @@ A keyed collection is permitted only when the mapping itself represents a genuin
 | `ClientEvaluationMap` | `ClientId → ClientEvaluationResult` | keys equal roster; confusion counts and eligibility complete |
 | `ThresholdAssignmentSet` | `ClientId → ThresholdValue` | keys equal the roster; every τ valid for the score schema |
 | `SeedTuple` | ordered `tuple[Seed, ...]` | unique/non-negative; preserves declared order |
+| `SeedRoleTuple` | ordered `tuple[SeedRole, ...]` | unique members; preserves declared order |
 | `SeedMap[T]` | `Seed → T` | keys match the declared cohort |
 | `ConfirmatorySeedCohort` | ten ordered paired seeds | exactly ten; paired B1/B2 membership |
 | `EnumMap[K, V]` | finite enum `K → V` | exhaustive or declared sparse; no foreign keys |
@@ -1012,7 +1015,7 @@ A keyed collection is permitted only when the mapping itself represents a genuin
 | `ClientMap[T]` | `ClientId → T` | stable roster identity and ordering |
 | `ArtifactReferenceCollection` | ordered `ArtifactRef` set | references unique by (id, hash); order preserved for provenance |
 
-`EnumMap` is used for arbitrary finite enums; `MetricMap` is reserved for actual metrics. `SeedTuple`, `SeedMap`, and `ConfirmatorySeedCohort` name their distinct ordering/cardinality semantics. These collections replace every raw structured mapping, so no object-shaped dictionary survives in domain or application contracts.
+`EnumMap` is used for arbitrary finite enums; `MetricMap` is reserved for actual metrics. `SeedTuple`, `SeedRoleTuple`, `SeedMap`, and `ConfirmatorySeedCohort` name their distinct ordering/cardinality semantics; `SeedTuple` holds ordered actual seed values, and `SeedRoleTuple` holds the distinct enabled `SeedRole` members — the two are never interchanged. These collections replace every raw structured mapping, so no object-shaped dictionary survives in domain or application contracts.
 
 ---
 
@@ -1026,7 +1029,7 @@ Anything that can change weights, scores, thresholds, metrics, or interpretation
 
 ### 11.2 Execution configuration (recorded; fingerprinted only where output-affecting)
 
-`ResourceBudget` (RAM/VRAM ceilings, I/O chunk and storage reserve), `ParallelismSpec`, DataLoader execution settings, logging/heartbeat interval, recovery/lock/pressure policy, serialization, `DevicePolicy`, `ExecutionMode`, and registered batch-profile availability. Preflight chooses one registered profile before a run; the effective training semantics and any output-affecting scoring fields then enter their stage identities. A worker-count change that affects ordering or numerics is likewise identity-bearing.
+`ResourceBudget` (RAM/VRAM ceilings, I/O chunk and storage reserve), `ParallelismSpec`, DataLoader execution settings, logging/heartbeat interval, recovery/lock/pressure policy, serialization, `DevicePolicy`, `ExecutionMode`, and registered batch-profile availability. Configuration resolves exactly one `BatchExecutionProfile` before preflight; preflight validates that exact profile and never substitutes another. The effective training semantics and any output-affecting scoring fields then enter their stage identities. `WorkerCount` is execution-only when deterministic equivalence is proven; it becomes identity-bearing whenever it changes row ordering, sample ordering, numerical output, or framework behavior.
 
 ### 11.3 Environment inventory (recorded only)
 
@@ -1130,6 +1133,8 @@ class ArtifactRepository(Protocol):
     def get_calibration_score_set(self, ref: ArtifactRef) -> CalibrationScoreArtifactSet: ...
     def put_test_score_set(self, obj: TestScoreArtifactSet) -> ArtifactRef: ...
     def get_test_score_set(self, ref: ArtifactRef) -> TestScoreArtifactSet: ...
+    def put_temporal_score_set(self, obj: TemporalScoreArtifactSet) -> ArtifactRef: ...
+    def get_temporal_score_set(self, ref: ArtifactRef) -> TemporalScoreArtifactSet: ...
     def put_metric_output(self, obj: PolicyEvaluationResult) -> ArtifactRef: ...
     def get_metric_output(self, ref: ArtifactRef) -> PolicyEvaluationResult: ...
     def lookup(self, request: ArtifactLookupRequest) -> ArtifactLookupResult: ...
@@ -1156,7 +1161,7 @@ class TestProfileExecutor(Protocol):
 Each stage contract is described below by responsibility, layer, request, result, invariants, typed failures, implementation variability, and fingerprint impact.
 
 - **`ExperimentPlanner`** — application. `CreateExecutionPlanRequest` carries resolved specifications, passed anchor evidence where the journal track requires it, an immutable feasibility snapshot, an immutable artifact catalogue snapshot, and scientific readiness. It never queries repositories. It emits a deterministic `DraftExecutionPlan`; preflight classifies reuse/resources and freezes the `FinalExecutionPlan`.
-- **`ExecutionPreflight`** — application. Validates readiness, CUDA, RAM, VRAM, every storage root, writability, same-filesystem commit capability, disk projections/reserve, parallelism, and one registered batch profile. It returns the catalogue-based reuse decisions, resolved runtime, advisory cost estimate, and immutable final plan. Ordinary lineage incompatibility is `RECOMPUTE`, not `BLOCKED`.
+- **`ExecutionPreflight`** — application. Validates readiness, CUDA, RAM, VRAM, every storage root, writability, same-filesystem commit capability, disk projections/reserve, parallelism, and the exact configured `BatchExecutionProfile` and chunk configuration selected before planning. It returns either validation success for that exact profile or a typed blocking failure; it never substitutes a smaller or otherwise different profile. It returns the catalogue-based reuse decisions, resolved runtime, advisory cost estimate, and immutable final plan. Ordinary lineage incompatibility is `RECOMPUTE`, not `BLOCKED`.
 - **`DatasetSourceInspector`** — application. Inspects source/schema/timestamp facts and emits source and feature-schema manifests; it does not partition, split, fit, or transform.
 - **`ClientPartitioner`** — application. Consumes source inspection and a partition spec and emits a source-row-preserving client-partition manifest. Dirichlet output is deterministic and independently feasible per candidate identity.
 - **`SplitManifestBuilder`** — application. Assigns source rows to exact split identities without preprocessing. Calibration is benign-only; temporal and conformal variants enforce their dedicated contracts.
@@ -1268,7 +1273,7 @@ A threshold-policy change preserves both scoring lineages, so B1, B2, B3, B4 and
 
 ### 13.4 Fingerprint computation and stability
 
-A stage fingerprint is computed from a **canonical tuple of typed, quantized fields**, not from a JSON serialization of a specification. This is deliberate: `json.dumps` does not guarantee a stable float representation or key order across interpreter versions unless keys are sorted, and a computed float such as `1 - q` can differ in its last bit depending on the computation path, silently producing two different fingerprints for the same scientific configuration. Instead, each identity derivation gathers its contributing fields (§13.2) as typed values, renders floats through the canonical quantized representation of §7.3, orders fields by a fixed schema, and hashes the resulting byte sequence with blake3. Enum members contribute their stable serialized value. No raw float and no unordered mapping is ever hashed directly.
+A stage fingerprint is computed from a **canonical tuple of typed, quantized fields**, not from a JSON serialization of a specification. This is deliberate: `json.dumps` does not guarantee a stable float representation or key order across interpreter versions unless keys are sorted, and a computed value such as `1 - q` can differ in its last bit depending on the computation path, silently producing two different fingerprints for the same scientific configuration. Instead, each identity derivation gathers its contributing fields (§13.2) as typed values, rendering `Decimal`-backed fields (`ThresholdPercentile`, `FprTarget`, `ConfidenceLevel`, `CoverageRatio`, `Probability`) through their canonical `Decimal` representation and any other fingerprinted float through a fixed canonical quantized byte encoding, orders fields by a fixed schema, and hashes the resulting byte sequence with blake3. Enum members contribute their stable serialized value. No raw binary float, no raw `Decimal` string, and no unordered mapping is ever hashed directly.
 
 ### 13.5 Immutability and lineage rules
 
@@ -1345,7 +1350,7 @@ class ExperimentPlanner(Protocol):
     def create_plan(self, request: CreateExecutionPlanRequest) -> DraftExecutionPlan: ...
 
 class PlanExecutor(Protocol):
-    def execute(self, request: ExecuteFinalPlanRequest, runners: StageRunnerRegistry) -> ExecutionSummary: ...
+    def execute(self, request: ExecuteFinalPlanRequest) -> ExecutionSummary: ...
 ```
 
 `CreateExecutionPlanRequest` carries resolved specifications, anchor/readiness results, and immutable feasibility and artifact snapshots. `StageRunnerRegistry` is an exhaustive `EnumMap[PipelineStage, StageRunner]` assembled at the composition root and injected into the executor; it replaces a universal service locator without becoming a method payload. Planning is pure and deterministic: equal immutable inputs yield an equal draft.
@@ -1457,7 +1462,25 @@ Preflight validates writability/capacity for processed splits, scientific and re
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ArtifactKey:
+class DatasetArtifactKey:
+    """Source inspection, feature schema, and other source-level artifacts."""
+    artifact_type: ArtifactType
+    dataset: Dataset
+    stage_identity: StageFingerprint
+    namespace: ArtifactNamespace
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RegimeArtifactKey:
+    """Partition manifests, split manifests, feasibility artifacts, regime-level preprocessing evidence."""
+    artifact_type: ArtifactType
+    dataset: Dataset
+    regime: Regime
+    stage_identity: StageFingerprint
+    namespace: ArtifactNamespace
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SeedScopedArtifactKey:
+    """Training, scientific checkpoints, score sets, threshold assignments, seed-level evaluation."""
     artifact_type: ArtifactType
     dataset: Dataset
     regime: Regime
@@ -1466,13 +1489,46 @@ class ArtifactKey:
     namespace: ArtifactNamespace
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class CrossSeedArtifactKey:
+    """Paired deltas, bootstrap intervals, five-seed anchor reproduction, ten-seed confirmatory results."""
+    artifact_type: ArtifactType
+    dataset: Dataset
+    regime: Regime
+    seed_cohort_identity: StageFingerprint
+    stage_identity: StageFingerprint
+    namespace: ArtifactNamespace
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RunArtifactKey:
+    """Resolved configuration, execution plan, run state, code/dependency inventory, advisory estimates."""
+    artifact_type: ArtifactType
+    stage_identity: StageFingerprint
+    namespace: ArtifactNamespace
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ReportArtifactKey:
+    """Result-freeze manifests, table inputs, figure inputs, rendered outputs."""
+    artifact_type: ArtifactType
+    stage_identity: StageFingerprint
+    namespace: ArtifactNamespace
+
+type ArtifactKey = (
+    DatasetArtifactKey
+    | RegimeArtifactKey
+    | SeedScopedArtifactKey
+    | CrossSeedArtifactKey
+    | RunArtifactKey
+    | ReportArtifactKey
+)
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ResolvedArtifactLocation:
     root: StorageRoot
     relative_path: RelativeArtifactPath
     absolute_path: Path
 ```
 
-An `ArtifactKey` is the logical address of an artifact. `ArtifactPathResolver.resolve(ResolveArtifactLocationRequest)` maps a key and a selected root to a `ResolvedArtifactLocation`, deriving a `RelativeArtifactPath` from typed fields and joining it beneath the root. The namespace keeps `DATP_ANCHOR`, `JOURNAL_EXTENSION`, recovery, cache, staging, and test artifacts on structurally separate branches; journal output can depend on an anchor result but cannot resolve to the anchor's write namespace.
+An `ArtifactKey` is a closed union of scope-specific logical-address variants, never a single generic key with optional dataset, regime, or seed fields: `DatasetArtifactKey` for source-level artifacts before regime selection, `RegimeArtifactKey` for regime-scoped manifests and feasibility evidence, `SeedScopedArtifactKey` for seed-level training/checkpoint/score/threshold artifacts, `CrossSeedArtifactKey` for cross-seed paired and cohort-level results, `RunArtifactKey` for run-level artifacts with no dataset/regime/seed scope, and `ReportArtifactKey` for result-freeze and rendered report inputs. `ArtifactPathResolver.resolve(ResolveArtifactLocationRequest)` maps a key and a selected root to a `ResolvedArtifactLocation`, exhaustively matching the key variant with `assert_never`, deriving a `RelativeArtifactPath` from that variant's typed fields, and joining it beneath the root. The namespace keeps `DATP_ANCHOR`, `JOURNAL_EXTENSION`, recovery, cache, staging, and test artifacts on structurally separate branches; journal output can depend on an anchor result but cannot resolve to the anchor's write namespace.
 
 ### 15.3 Path rules
 
@@ -1482,7 +1538,7 @@ An `ArtifactKey` is the logical address of an artifact. `ArtifactPathResolver.re
 - Artifact identity is never its path; the same content resolves consistently but is addressed by id and hash.
 - Machine-specific paths never enter scientific identity or a stage fingerprint.
 - Manifests store logical keys and root-relative paths, not absolute machine paths.
-- Content-addressed artifacts use a Git-object-style layout beneath their root, sharding by the leading hash bytes (`<hash[:2]>/<hash>`), so identity and location coincide and identical content is deduplicated by construction.
+- Content-addressed artifacts use a Git-object-style layout beneath their root, sharding by the leading hash bytes (`<hash[:2]>/<hash>`). The content-addressed relative location is deterministically derived from the artifact identity and content hash, so identical content is deduplicated by construction; the location remains a storage consequence and is never itself the artifact identity.
 - A single-file writer creates its temporary file in the destination directory or on the same validated filesystem, writes completely, flushes and fsyncs as required by the artifact policy, verifies content hash/schema, atomically replaces the final path, and only then updates the manifest. A separate `STAGING` root is permitted only when preflight proves it shares the required filesystem; it is not the default source of atomicity.
 - A multi-file writer creates a new immutable bundle directory, writes and verifies the exact members declared by `ArtifactBundleManifest`, and writes the final commit marker last. Readers reject an absent/invalid marker, an unexpected/missing member, or any member-hash mismatch. No claim of directory-level atomicity rests on individual `os.replace` calls.
 - Scientific checkpoints and recovery state occupy distinct roots (`SCIENTIFIC_CHECKPOINTS`, `RECOVERY_STATE`) and distinct namespaces, so recovery state can never be resolved as a scientific checkpoint.
@@ -1494,7 +1550,7 @@ An `ArtifactKey` is the logical address of an artifact. `ArtifactPathResolver.re
 ```mermaid
 graph TD
     ID[logical artifact identity: ArtifactId + content_hash]
-    KEY[ArtifactKey: type, dataset, regime, seed, stage identity, namespace]
+    KEY[ArtifactKey: closed union of scope-specific variants - type, applicable scope fields, stage identity, namespace]
     ROOT[StorageRoot: kind, path, visibility]
     RES[ArtifactPathResolver.resolve]
     TMP[same-filesystem temporary file or incomplete bundle]
@@ -1545,11 +1601,11 @@ A fixed seed does not by itself guarantee stable clustering across scikit-learn 
 
 ### 16.3 Memory-safe batching and streaming
 
-No dataset adapter loads an entire large dataset into a DataFrame. The contracts are: chunked raw reads through row-group or `chunksize` iteration; batch-level preprocessing; incremental fit where valid and a two-pass fit where exact TRAIN-fitted statistics require it, enforced by `NormalizationScope`; partitioned Parquet processed artifacts, one partition per client and split; client-specific batch iteration; batched training consuming client batch iterators; batched CUDA scoring that streams to the device and writes incrementally; and column-selective, memory-mapped reads for later analyses. Train batch size, score batch size, and gradient accumulation are scientific and fingerprinted; chunk row count, worker count, prefetch, and pinned memory are execution configuration.
+No dataset adapter loads an entire large dataset into a DataFrame. The contracts are: chunked raw reads through row-group or `chunksize` iteration; batch-level preprocessing; incremental fit where valid and a two-pass fit where exact TRAIN-fitted statistics require it, enforced by `NormalizationScope`; partitioned Parquet processed artifacts, one partition per client and split; client-specific batch iteration; batched training consuming client batch iterators; batched CUDA scoring that streams to the device and writes incrementally; and column-selective, memory-mapped reads for later analyses. Train batch size, score batch size, and gradient accumulation are scientific and fingerprinted; chunk row count, worker count, prefetch, and pinned memory are execution configuration, fingerprinted only where chunk row count or worker count changes ordering or numerical output.
 
 PyArrow `dataset.Scanner` and `RecordBatchReader` provide the sole tabular streaming path. Row-group traversal, source-row identity, and output order are explicit; the exact PyArrow version is pinned. Bounded pandas conversion is permitted only inside an adapter that requires it. Tests cover bounded peak memory, stable row-group traversal, source-row lineage, and equivalent output across supported configurations.
 
-I/O chunk sizes may adapt only when declared equivalence proves identical row order, fitted statistics under the numerical policy, and score output within tolerance; the adaptation is recorded and cannot change model, precision, threshold, split, or score-role semantics. GPU scoring batch size is frozen whenever it can affect output and participates in the appropriate role-scoped scoring identity unless supported sizes have an explicit equivalence contract.
+Preprocessing chunk-row count and GPU scoring batch size are configured explicitly before execution and frozen for the complete stage. No runtime component may adapt, resize, substitute, or renegotiate either value once the stage starts, in any execution mode, even where numerical equivalence could theoretically be demonstrated: this architecture deliberately rejects runtime adaptation to protect scientific reproducibility and operational clarity. GPU scoring batch size participates in the appropriate role-scoped scoring identity whenever it is output-affecting. A different chunk-row-count or scoring-batch configuration requires a new, explicitly configured run and produces a new stage identity where output-affecting; this architecture may still support several explicitly configured fixed profiles across separate runs.
 
 ### 16.4 Parallelism
 
@@ -1563,7 +1619,7 @@ I/O chunk sizes may adapt only when declared equivalence proves identical row or
 
 ### 16.5 Failure discipline
 
-Resource preflight resolves a proposed plan and freezes the resolved values before the real run. On out-of-memory a scientific run fails with `CudaOutOfMemoryError` or `RamPreflightError`, emits a typed diagnostic, resolves a new configuration, receives a new fingerprint where the changed field is scientific, and restarts cleanly; it never silently reduces batch size mid-run. Approximate quantiles never silently replace exact quantiles: every `QuantileEstimatorType` member is exact, and any approximate estimator would be a separately named, explicitly configured, equivalence-tested method excluded from confirmatory runs.
+Resource preflight resolves a proposed plan and freezes the resolved values before the real run. On out-of-memory a scientific run fails its current stage with the existing typed `CudaOutOfMemoryError` or `RamPreflightError` and emits a typed diagnostic. Failure does not reduce the micro-batch, increase gradient accumulation, replay the logical batch under another decomposition, alter scoring or chunk size, change precision, switch to CPU, automatically retry with another profile, or mutate the existing run identity. A new run may use a different, explicitly configured `BatchExecutionProfile` only after the previous run has failed or stopped, and that new run receives new affected stage identities (training, scoring, or preprocessing/materialization identities as applicable, and the resolved-configuration identity in every case); it is never presented as a continuation of the original scientific run. Approximate quantiles never silently replace exact quantiles: every `QuantileEstimatorType` member is exact, and any approximate estimator would be a separately named, explicitly configured, equivalence-tested method excluded from confirmatory runs.
 
 The fail-loudly doctrine extends to statistics. BCa bootstrap intervals can become unstable or degenerate at very small sample sizes or when the statistic has ties, and the acceleration-constant computation can fail. Such a failure is surfaced as a typed `StatisticsError`, not swallowed or silently downgraded to a percentile interval; the run reports the failure and the accompanying absolute-dispersion companions rather than substituting a different method without record.
 
@@ -1573,9 +1629,15 @@ These are failure semantics for the locked full-participation protocol; no dropo
 
 ### 16.6 Resource pressure and frozen batch semantics
 
-Preflight may choose one `BatchExecutionProfile` from a pre-registered finite set before training. Micro-batch size, gradient accumulation, effective batch size, precision, and optimizer-step semantics are then frozen and, where output-affecting, identity-bearing. A scientific/print-grade run cannot reduce batch size, change precision, or fall back to CPU after start. A different profile creates a new resolved run identity unless a pre-registered equivalence contract proves identity preservation. Only non-citable smoke/development profiles may declare bounded training backoff.
+No runtime component may automatically reduce, adapt, back off, substitute, or renegotiate any configured training batch size, scoring batch size, preprocessing chunk size, DataLoader batch size, gradient-accumulation value, or effective batch size, in any execution mode, including development and smoke runs.
 
-At runtime, `ResourcePressureMonitor.inspect` may recommend deterministic reduction of non-scientific CPU concurrency, cooperative throttling, or pause at a safe batch/completed-round boundary. The executor finishes the safe unit, commits a compatible recovery checkpoint when safe, pauses/exits, and resumes with the same frozen scientific profile. After CUDA OOM it does not attempt fresh serialization from a potentially compromised process; it resumes later from the last previously committed compatible recovery state.
+Configuration resolves exactly one `BatchExecutionProfile` and one preprocessing chunk configuration before preflight. Once the resolved run or stage begins, the following remain fixed for its complete duration and, where output-affecting, identity-bearing: training micro-batch size; effective training batch size; gradient-accumulation step count; DataLoader batch size; scoring batch size; temporal-scoring batch size; preprocessing chunk-row count; Parquet/Arrow scan batch size where configurable; client batch partitioning; prefetch batch count where it can affect ordering or memory behavior; precision mode; worker count where it affects ordering or output; and optimizer-step semantics. No runtime service may reduce or increase any of these values.
+
+Preflight validates the exact resolved profile against RAM, VRAM, CUDA availability, worker count, projected storage, and deterministic-execution requirements, and returns either validation success for that exact profile or a typed blocking failure; it never substitutes another profile. If several named profiles exist, the experiment configuration selects one explicitly before planning and preflight; the planner and preflight may describe alternatives diagnostically but never select or apply one.
+
+A scientific/print-grade run cannot reduce batch size, change precision, or fall back to CPU after start. A different profile always creates a new resolved run identity; there is no equivalence exception that preserves identity across a profile change. A reduced smoke profile may exist only as a separately named, explicitly selected configuration chosen before execution; it is non-citable, carries its own resolved identity, and is never selected automatically after an OOM or resource-pressure event.
+
+At runtime, `ResourcePressureMonitor.inspect` may recommend only actions that preserve the complete resolved profile: continue; a deterministic reduction of non-scientific CPU concurrency where equivalence is guaranteed and worker count is not itself frozen/output-affecting; cooperative throttling; pause at a safe batch/completed-round boundary; committing an already-valid recovery checkpoint at that boundary; exiting cleanly after the recovery commit; or resuming later with the exact same frozen profile. It may never recommend a smaller training, scoring, or temporal-scoring batch, a smaller preprocessing chunk, a different gradient-accumulation or effective-batch value, a different precision or DataLoader batch, an alternate profile, OOM backoff, or dynamic autotuning. The executor finishes the safe unit, commits a compatible recovery checkpoint when safe, pauses/exits, and resumes with the same frozen scientific profile. After CUDA OOM it does not attempt fresh serialization from a potentially compromised process; it resumes later from the last previously committed compatible recovery state. A recovery checkpoint resumes only when every frozen size-related field of the current profile matches the checkpoint's recorded profile; a mismatch fails recovery compatibility, and the run starts fresh under newly derived identities.
 
 ```mermaid
 stateDiagram-v2
@@ -1840,7 +1902,8 @@ Dirichlet property/unit contracts always use the existing `TestDataScale.SYNTHET
 | B-FedStatsBenign/B4 | simple variance and caller tie-break impossible; full between term checked; exact canonical K=3 contract and assignment stability |
 | Determinism/federation | DataLoader worker/repeat/parallel/resume equivalence; client ordering; full-participation timeout/malformed/non-finite/shape failure aborts round |
 | Heartbeat/resources | heartbeat staleness; disk/writable/same-filesystem preflight; pressure pause/resume; no dynamic scientific effective-batch or precision change |
-| Persistence/locks | same-filesystem single-file atomic commit; partial bundle rejection; lease release, heartbeat, stale owner and process-death recovery; compatible recovery checkpoint only |
+| Batch/chunk immutability | preflight validates the exact configured `BatchExecutionProfile` and never selects a smaller alternative; CUDA OOM does not modify training or scoring batch size; RAM pressure does not modify chunk size; scoring OOM does not modify scoring batch size; gradient-accumulation and effective batch size cannot change after stage start; smoke mode never backs off automatically; a manually changed profile creates new affected identities; resource pressure can pause or fail a stage but cannot mutate the profile |
+| Persistence/locks | same-filesystem single-file atomic commit; partial bundle rejection; lease release, heartbeat, stale owner and process-death recovery; compatible recovery checkpoint only; recovery refuses a changed batch/chunk profile |
 | Planning/reuse | typed spec-diff impacts; incompatible artifact is `RECOMPUTE`; anchor gate/namespace isolation; global checkpoint selection; lifecycle transitions |
 | Result freeze/reporting | no render before freeze/provenance closure; all required formats; no scientific value sourced only from logs |
 | Architecture | no framework carrier or untyped public mapping crosses layers; closed unions are exhaustively handled |
@@ -1965,7 +2028,7 @@ The following are explicitly rejected. Each has a structural reason, not merely 
 - **Application-layer YAML parsing** — configuration is parsed and validated only at the config boundary and mapped once to domain specs.
 - **Framework leakage** — PyTorch, Flower, scikit-learn, SciPy, pandas, NumPy, and Pydantic live only in infrastructure or the config boundary.
 - **Hidden defaults and silent fallback** — no scientific default is implicit; there is no silent CPU fallback, no silent batch-size reduction, and no silent approximate-quantile substitution.
-- **Scientific dynamic batch reduction** — forbidden after a run starts. Preflight selection from registered profiles, non-citable smoke backoff, and cooperative pause/throttle are distinct permitted operations.
+- **Scientific dynamic batch reduction** — forbidden in every execution mode, including development and smoke runs, and forbidden at any point during a stage. Configuration selects the exact `BatchExecutionProfile` before preflight; preflight validates that exact profile and never substitutes another. A reduced smoke profile is a separately named, explicitly selected configuration with its own resolved identity, never an automatic backoff. Cooperative pause/throttle of non-scientific concurrency remains a distinct permitted operation that never mutates a frozen size.
 - **Universal execution service locator** — replaced by the exhaustive typed `StageRunnerRegistry` assembled at the composition root.
 - **Simple pooled variance or configurable FedStats tie-break** — no domain/config variant exists; full within-plus-between variance and larger-k ties are the only algorithm contract.
 - **Approximate mini-batch clustering for canonical B4** — exact k-means++ is required for the small client-fingerprint matrix.
@@ -2034,7 +2097,7 @@ Each blocker is carried into `ScientificReadinessResult`. A print-grade plan can
 | AE architecture | behavioral reference; training/checkpoint/scoring | TRAIN onward | reduced explicit AE | guessed/mainline architecture | verified `AutoencoderSpec` evidence |
 | Optimizer, learning rate, scheduler | behavioral reference; training | TRAIN onward | explicit non-citable values | hidden/default or tuned values | signed training-spec record |
 | Inherited preprocessing strategy/scope | behavioral reference; preprocessor onward | PREPROCESSOR_FIT onward | explicit smoke transform | fit on unauthorized rows or invented scope | verified preprocessing record |
-| Training batch semantics | behavioral reference plus equivalence/preflight; training | TRAIN onward | named smoke profile/backoff | silent profile choice/change | registered frozen profile evidence |
+| Training batch semantics | behavioral reference plus equivalence/preflight; training | TRAIN onward | named, explicitly selected smoke profile | silent profile choice/change | registered frozen profile evidence |
 | Score batch semantics | behavioral reference/equivalence; scoring | scoring onward | named smoke batch | unrecorded output-affecting change | scoring equivalence or fixed identity evidence |
 | FedProx µ-grid | pre-registration; stress training | E-T1 | convergence smoke only | post-hoc µ search | versioned grid before results |
 | Personalization comparator/hyperparameters | documented pre-training decision; stress identities | E-T2 | interface smoke | mislabeled or post-hoc comparator | selected algorithm/spec record |
@@ -2063,7 +2126,7 @@ Concise responsibility tables for the most important contracts. Each states owne
 
 | Field | Description |
 |---|---|
-| Responsibility | Expand sweeps into cells, derive stage identities, deduplicate expensive stages, classify reuse, freeze an immutable plan |
+| Responsibility | Expand sweeps, derive identities and dependencies, deduplicate compatible stages, evaluate supplied scientific gates, and emit a deterministic draft plan |
 | Layer | application |
 | Input | `CreateExecutionPlanRequest` |
 | Output | `DraftExecutionPlan` |
