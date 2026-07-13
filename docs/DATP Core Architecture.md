@@ -64,27 +64,29 @@ The architecture provides no executable path for out-of-scope work. Dynamic thre
 
 ## 3. Dependency model
 
-The application layer depends on the domain only. Configuration is validated and mapped to immutable domain specifications at the composition root. Application and infrastructure receive typed domain specifications — never Pydantic models, YAML mappings, environment mappings, or raw dictionaries. After the boundary mapping completes, no configuration type exists in the running system.
+Seven layers exist, each with exactly one allowed set of imports. `composition` is the sole place object graphs are assembled; `cli` is a thin process entrypoint that calls into `composition` and renders a boundary result. Configuration is validated and mapped to immutable domain specifications inside `config`, a distinct layer from `composition`. Application and infrastructure receive typed domain specifications — never Pydantic models, YAML mappings, environment mappings, or raw dictionaries. After boundary mapping completes, no configuration type exists in the running system.
 
 ### 3.1 Layers and allowed dependencies
 
 - **domain** — pure vocabulary (enums), value objects, specifications, request/result contracts, lineage identities, and locked pure functions. Imports only the standard library and other domain modules.
-- **config** — Pydantic boundary schemas plus pure mapping functions to domain specifications. Imports domain only.
-- **application** — ports (Protocols), reusable stage functions, the experiment planner, the plan executor, the reuse gate, lifecycle, and preflight. Imports domain only.
-- **infrastructure** — adapters implementing application ports using frameworks. Imports application/domain; `infrastructure.reporting` additionally imports framework-free analysis renderer contracts/specifications.
-- **analysis** — table, figure, wording, and tracing components. Imports domain and application; its scientific parts import no framework.
-- **cli / composition root** — wires configuration, application, infrastructure, and analysis. The only place composition occurs.
+- **application** — ports (Protocols), reusable stage functions, experiment planning, plan execution, the reuse gate, lifecycle, and preflight. Imports domain only.
+- **config** — an inbound configuration adapter: Pydantic boundary schemas plus pure mapping functions to domain specifications. Imports domain only.
+- **analysis** — table, figure, wording, and tracing specifications. Imports domain only, unless one narrowly justified framework-free application reporting contract (result-freeze/trace types) is unavoidable; its scientific parts import no framework and no persistence adapter.
+- **infrastructure** — adapters implementing application ports using frameworks. Imports application and domain; `infrastructure.reporting` additionally imports framework-free `analysis` specifications to render them.
+- **composition** — constructs concrete adapters, binds ports, assembles application services, selects explicit strategy implementations, maps resolved configuration into the object graph, and exposes complete use-case entrypoints. Imports `config`, `application`, `infrastructure`, `analysis`, and `domain`. The only layer where concrete types from more than one other layer meet.
+- **cli** — parses command-line input, invokes the composition root, calls a use case, renders the boundary result, and converts a typed failure into a process exit code. Imports `composition` and minimal boundary result/error types only. It never imports `infrastructure`, `config`, or a framework directly, never instantiates an adapter, and never wires a dependency itself.
 
 ### 3.2 Forbidden dependency directions
 
 Encoded as import-linter contracts:
 
 - `domain →` anything but the standard library and domain.
-- `application → config` (the application never sees configuration).
-- `application → infrastructure` (only ports).
-- `application →` any framework (PyTorch, Flower, scikit-learn, SciPy, pandas, NumPy, Pydantic).
-- `config →` anything but domain.
-- `analysis → infrastructure` and `analysis →` any framework within its scientific parts.
+- `application → config`, `application → infrastructure` (ports only), `application → analysis`, `application → cli`, `application →` any framework (PyTorch, Flower, scikit-learn, SciPy, pandas, NumPy, Pydantic).
+- `config →` anything but domain; `config → infrastructure`; `config → cli`.
+- `analysis →` any persistence adapter or `infrastructure`; `analysis → cli`; `analysis →` any framework within its scientific parts.
+- `infrastructure → config`; `infrastructure → cli`.
+- `composition →` any framework directly (frameworks are reached only through `infrastructure` adapters `composition` constructs).
+- `cli →` anything but `composition` and shared boundary result/error types; the CLI never constructs an adapter, binds a port, or resolves a filesystem path directly.
 - any framework import inside `domain`.
 
 ### 3.3 Layer dependency diagram
@@ -92,38 +94,66 @@ Encoded as import-linter contracts:
 ```mermaid
 graph TD
     DOM[domain: vocabulary, value objects, specs, results, lineage, pure fns]
+    APP[application: ports, stages, planning, runtime, reporting]
     CFG[config: pydantic schema then domain specs]
-    APP[application: ports, stages, planner, executor, preflight, lifecycle]
-    INFRA[infrastructure: torch, flwr, sklearn, scipy, pandas, fs, cuda]
-    ANA[analysis: tables, figures, wording, tracing]
-    CLI[cli and composition root]
+    ANA[analysis: table/figure specs, wording, report models]
+    INFRA[infrastructure: torch, flwr, sklearn, scipy, pandas, fs, cuda, renderers]
+    COMP[composition: root, registries]
+    CLI[cli: main, commands]
 
-    CFG --> DOM
     APP --> DOM
+    CFG --> DOM
+    ANA --> DOM
     INFRA --> APP
     INFRA --> DOM
     INFRA --> ANA
-    ANA --> APP
-    ANA --> DOM
-    CLI --> CFG
-    CLI --> APP
-    CLI --> INFRA
-    CLI --> ANA
-    CLI --> DOM
+    COMP --> CFG
+    COMP --> APP
+    COMP --> INFRA
+    COMP --> ANA
+    COMP --> DOM
+    CLI --> COMP
 
     classDef pure fill:#eef,stroke:#557;
     classDef adapter fill:#fee,stroke:#a55;
     classDef root fill:#efe,stroke:#5a5;
     class DOM,CFG,APP,ANA pure;
     class INFRA adapter;
-    class CLI root;
+    class COMP,CLI root;
 ```
 
-**Guarantee.** The diagram is the enforced import graph. Every edge is an allowed dependency; every absent edge is forbidden by an import-linter contract. Frameworks live only in infrastructure; the application is testable without any of them.
+**Guarantee.** The diagram is the enforced import graph. Every edge is an allowed dependency; every absent edge is forbidden by an import-linter contract, backed by a pytest-archon in-test assertion for clearer failure diffs. Frameworks live only in `infrastructure`; the application is testable without any of them. `composition` is the only node with edges to every other layer; `cli` has exactly one outbound edge.
 
 ### 3.4 Boundary mapping
 
-`config/mapping.py` exposes pure functions of the form `map_*(schema) -> <DomainSpec>`. The composition root calls them once, obtains frozen domain specifications carrying value objects and stage identities, and injects those specifications together with concrete adapters into the application.
+`config/mapping/*.py` exposes pure functions of the form `map_*(schema) -> <DomainSpec>`, one module per configuration concept (Section 11). `composition/root.py` calls them once, obtains frozen domain specifications carrying value objects and stage identities, and injects those specifications together with concrete `infrastructure` adapters into `application` services. `composition` never performs scientific computation itself.
+
+### 3.5 Layer ownership matrix
+
+| Layer | Owns | Must not own |
+|---|---|---|
+| `domain` | Scientific vocabulary and meaning, immutable identities, value objects, artifact and lineage semantics, pure locked formulas and eligibility rules | Frameworks, concrete paths, process execution, test profiles, mutable run state |
+| `application` | Use cases, reusable stages, experiment planning, plan execution, reuse decisions, lifecycle, preflight, report eligibility/tracing gates | PyTorch, Flower, PyArrow, SciPy, Pydantic, scikit-learn, concrete filesystem paths, rendering libraries |
+| `config` | External schema validation, composition of configuration data, pure mapping to internal immutable specifications | Runtime execution, repository access, scientific computation, adapter construction |
+| `analysis` | Framework-free table, figure, wording, and report-model specifications | Repositories, paths, stage execution, rendering libraries, CUDA/hardware inspection |
+| `infrastructure` | Framework adapters, CUDA, filesystem, multiprocessing, serialization, rendering, concrete persistence | Scientific claims, experiment-role classification, checkpoint-selection policy, scientific reuse decisions |
+| `composition` | Explicit construction and wiring of adapters and application services, resolved-configuration-to-object-graph mapping | Scientific computation, service-locator behavior, business logic of its own |
+| `cli` | Command parsing, invocation of the composition root, boundary rendering, process exit codes | Dependency construction, orchestration, path resolution, adapter instantiation |
+| `tests` | Fixtures, profiles, validation lanes, golden artifacts, test executors | Any dependency imported by production code |
+
+### 3.6 Type-placement decision procedure
+
+A new type is placed by answering, in order:
+
+1. **Is it part of scientific meaning, reproducibility identity, artifact identity, or a scientifically meaningful admissibility rule, independent of any machine or framework?** If yes → `domain`.
+2. **Does it orchestrate a use case, a plan, a stage, a lifecycle transition, or a reuse/report-eligibility decision using only domain types and ports?** If yes → `application`.
+3. **Does it validate or compose externally supplied configuration text/values before mapping to a domain specification?** If yes → `config`.
+4. **Is it a framework-free specification of what a table, figure, or wording block should contain, derived only from domain/application result types?** If yes → `analysis`.
+5. **Does it require a concrete framework, the filesystem, CUDA, multiprocessing, or a serialization library to do its job?** If yes → `infrastructure`, behind the narrowest existing port; a new port is added only at a genuine variation point (Section 12).
+6. **Does it construct or wire adapters, select a concrete strategy implementation, or map a resolved configuration into an object graph?** If yes → `composition`.
+7. **Does it parse a command line, invoke a use case, or render a boundary result?** If yes → `cli`.
+
+Worked examples: `ThresholdPercentile` is identity-bearing and framework-free → `domain`. `ExperimentPlanner` orchestrates stages from typed specs and ports only → `application`. `ExperimentConfigSchema` validates external YAML-sourced values → `config`. A `DispersionLadderTableSpec` describing which columns a table needs → `analysis`. A concrete `KMeans`-backed `ClusteringStrategy` → `infrastructure`, behind the `ClusteringStrategy` port. Choosing which `ThresholdStrategy` implementation backs `ThresholdConstructionKind.CLUSTER` and injecting it → `composition`. A `--experiment` flag parser → `cli`. If two of these locations remain plausible for a given type, the structure is not precise enough and must be refined before the type is added.
 
 ---
 
@@ -148,7 +178,7 @@ For each accepted library the table states its exact role, the single layer it i
 | PyTorch | Fixed AE, training, scoring, RNG state | infrastructure only | Required | `nn.Module` handles never cross into domain, config, or application. |
 | Flower | FedAvg and FedProx orchestration | `infrastructure.federation` only | Required | Strategy and client classes stay behind the training port. |
 | scikit-learn | exact k-means++ over B4 client fingerprints, adjusted Rand, silhouette | infrastructure | Required | Canonical B4 uses `KMeans`, never `MiniBatchKMeans`; approximately 9–15 four-scalar fingerprints do not justify approximation. Estimators never cross upward. |
-| SciPy | BCa bootstrap, Wilcoxon, Spearman, Jensen–Shannon | infrastructure | Required | Cliff's delta is **not** in SciPy and is implemented as a vetted, property-tested pure function in `domain/definitions.py`. |
+| SciPy | BCa bootstrap, Wilcoxon, Spearman, Jensen–Shannon | infrastructure | Required | Cliff's delta is **not** in SciPy and is implemented as a vetted, property-tested pure function in `domain/mathematics/effect_sizes.py`. |
 | Typer | CLI entrypoints | `cli` only | Optional | argparse is an acceptable fallback. |
 | rich | CLI and preflight error rendering | `cli` only | Optional | Renders typed errors and preflight findings legibly at the boundary; never used inside scientific logic. |
 | structlog | Structured-event binding and rendering | `infrastructure.telemetry` only | Required | Behind the `EventSink` port; its context binding removes the need for a hand-rolled JSON formatter. stdlib `logging` is retained only as an internal render fallback. |
@@ -176,90 +206,261 @@ Hydra and OmegaConf (configuration is Pydantic-validated then mapped to frozen s
 
 ## 5. Project structure
 
+This section shows two distinct trees: the Python source package (`src/datp_core/`), and the complete repository. A module is listed only where an already-required or roadmap-certain responsibility exists; no module is pre-created for speculative future work. Every module below carries the soft cap and cohesion rule of Section 5.3.
+
+### 5.1 Source package tree
+
 ```
-datp_core/
+src/datp_core/
   domain/
-    vocabulary.py        # all enums (Section 6), split into cohesive groups if large
-    identifiers.py       # scalar value objects (Section 7)
-    collections.py       # immutable typed collections (Section 10)
-    lineage.py           # StageKind, StageIdentity, per-stage fingerprint newtypes, pure derivation (Section 13)
-    datasets.py          # source inspection, partition, feasibility specs and manifests
-    splits.py            # split, temporal, conformal, preprocessing and materialization contracts
-    models.py            # training, checkpoint schedule and selection, recovery policy
-    scores.py            # split-scoped calibration, test and temporal score artifacts
-    thresholds.py        # closed threshold-spec union, assignments, B4 and comparator contracts
-    evaluation.py        # client/fleet results, traffic-rate evidence and alert burden
-    statistics.py        # closed statistical-result union and procedure-specific results
-    resources.py         # scientific communication/storage cost values and results
-    protocol.py          # ScientificProtocolSpec aggregate (Section 8)
-    policy.py            # ExecutionPolicy, ArtifactPolicy, ReportingPolicy (Section 8)
-    experiment.py        # ExperimentIdentity, ExperimentSpec, ExperimentCell, SweepSpec
-    execution.py         # device, batching, DataLoader seeds, pressure, disk and cost estimates
-    planning.py          # readiness, draft/final plans, feasibility snapshots and reuse
-    storage.py           # StorageRootKind, StorageRootSpec, ArtifactKey, RelativeArtifactPath (Section 15)
-    provenance.py        # source/schema/config/code/freeze/bundle manifests and provenance
-    observability.py     # StructuredEvent envelope + typed event details (Section 19)
-    feasibility.py       # RegimeDFeasibilityResult, gate decisions, rejection/suppression records
-    testing.py           # TestProfileSpec + test-profile value objects (Section 21)
-    definitions.py       # locked pure fns: cv_fpr, pooled_variance, eligibility, fpr_target, cliffs_delta, canonical_k
-    errors.py            # domain error hierarchy (Section 20)
-  config/
-    schema.py            # pydantic boundary schemas
-    sections.py          # per-concept schema sections when schema.py would exceed the soft cap
-    mapping.py           # schema to domain specs (pure)
-    compose.py           # explicit base plus override composition, eager resolution
+    data/
+      datasets.py          # Dataset, Regime; DatasetSpec, DatasetSourceInspectionResult
+      partitioning.py       # ClientDefinitionStrategy; ClientPartitionSpec/Result, ClientPartitionManifest
+      splitting.py          # SplitRole; SplitSpec/SplitCollectionSpec union, TemporalWindowSpec/Boundary,
+                             # ConformalSplitSpec, SplitManifest, RecalibrationMode, TemporalOutcome
+      preprocessing.py      # NormalizationStrategy/Scope; PreprocessingSpec, PreprocessingChunkSpec,
+                             # FittedPreprocessorResult, ProcessedSplitResult
+    learning/
+      models.py             # ActivationFunction; AutoencoderSpec
+      training.py           # AggregationStrategy, ModelPersonalizationStrategy, ParticipationStrategy,
+                             # OptimizerType, LrSchedulerType, PrecisionMode, DeterminismLevel;
+                             # FederationSpec, TrainingSpec, TrainingBatchSpec
+      checkpoints.py        # CheckpointKind, CheckpointSelectionStrategy; CheckpointSchedule,
+                             # CheckpointSelectionSpec/Result/Artifact, CheckpointDescriptor,
+                             # RecoveryCheckpointPolicy, RecoveryState
+      scores.py             # QuantileEstimatorType; split-scoped calibration/test/temporal score
+                             # artifacts and sets; ScoreGenerationSpec, ScoringBatchSpec
+    thresholding/
+      policies.py           # CoreThresholdPolicy, SharedThresholdConstruction, ThresholdConstructionKind;
+                             # SharedThresholdSpec, LocalThresholdSpec, FamilyThresholdSpec,
+                             # ThresholdConstructionSpec union, ThresholdSuiteSpec, ThresholdAssignment
+      variants.py           # ThresholdVariant, ConformalMode; ShrinkageThresholdSpec,
+                             # CalibrationSizeFallbackThresholdSpec, ConformalThresholdSpec,
+                             # RobustClusterMedianThresholdSpec
+      clustering.py         # ClusterCount and canonical-K lock; B4ClusteringSpec,
+                             # ClusterThresholdAggregationSpec, ClusterAssignmentArtifact
+      federated_statistics.py # ThresholdComparatorRole; FedStatsBenignThresholdSpec,
+                             # CentralizedModelComparatorSpec (B0 identity, not a ladder member)
+    evaluation/
+      operating_points.py   # ClientEligibilityStatus/Reason; ClientEvaluationResult, EligibleClientSet,
+                             # EligibilityCoverageResult, ConformalCoverageResult, FleetDispersionResult,
+                             # FleetDetectionResult, FleetEquityResult, ClusterDispersionResult
+      metrics.py            # MetricFamily and every MetricId member enum; MetricSpec
+      alert_burden.py        # TrafficRateUnit, TrafficRateEvidenceKind, CostDerivationKind;
+                             # TrafficRateEvidence variants, AlertBurdenResult
+      statistical_results.py # StatisticalMethod, ClaimOutcome, AbsorptionBand; PairedDeltaResult,
+                             # BootstrapIntervalOutcome (Valid/Degenerate), Wilcoxon/CliffsDelta results,
+                             # ConfirmatoryAnalysisResult, AnchorReferenceInterval/GateSpec/Result,
+                             # AbsorptionResult, TemporalRecoveryResult
+    experiments/
+      identities.py         # ExperimentId, ArchitectureCatalogueId, CellId; ExperimentIdentity
+      claims.py             # ExperimentRole, ClaimTier, ExecutionStatus; the role/tier invariant
+      protocols.py          # ProtocolTrack; ScientificProtocolSpec, ExecutionPolicy, ArtifactPolicy,
+                             # ReportingPolicy
+      specifications.py     # ExperimentSpec, ExperimentProfileSpec, ExperimentCell,
+                             # RegimeCompatibilitySpec, ConfirmatoryExperimentProfileSpec,
+                             # CentralizedModelComparatorProfileSpec, SweepSpec
+      feasibility.py         # FeasibilityStatus, RejectionReason, ReuseIncompatibilityReason,
+                             # BlockingReason; RegimeDFeasibilityResult, RejectionRecord,
+                             # ReuseIncompatibilityRecord, SuppressionRecord, feasibility gate decisions
+    artifacts/
+      keys.py               # StorageRootKind, StorageVisibility, ArtifactNamespace, ArtifactType;
+                             # StorageRootSpec, ArtifactKey union and its scope-specific variants,
+                             # RelativeArtifactPath
+      references.py         # ArtifactRef, ArtifactId, ArtifactBundleId, ArtifactSchemaVersion,
+                             # per-role score artifact ids, FeasibilityArtifactId
+      lineage.py            # PipelineStage, ReuseDecisionKind, ReuseImpact; StageFingerprint,
+                             # StageIdentity and every per-stage identity dataclass (Section 13)
+      manifests.py          # ManifestType; DatasetSourceManifest .. ArtifactBundleManifest,
+                             # ResultFreezeManifest
+      provenance.py         # ProvenanceRecord, CodeState, DependencyLockState, EnvironmentInventory,
+                             # PreSpecificationRecord, TableProvenance, FigureProvenance
+    runtime/
+      policies.py           # ExecutionMode, DevicePolicy, StageConcurrency, ProcessStartMethod,
+                             # WorkerRole, FailureDisposition, RoundDisposition, RunStatus,
+                             # ResourcePressureLevel, PauseDecision; ResourceBudget, DeviceSpec,
+                             # ParallelismSpec, ResourcePressurePolicy
+      seeds.py               # SeedRole; Seed, SeedPlan, DataLoaderSeedPlan, `derive_seed`
+      admissibility.py       # BatchSize, GradientAccumulationSteps, WorkerCount identity-bearing
+                             # rules; ResolvedBatchExecutionProfile composition rules
+    mathematics/
+      dispersion.py          # `cv_fpr`, `pooled_variance` (with the between-client term)
+      quantiles.py           # `fpr_target`, exact quantile helpers backing `QuantileEstimatorType`
+      pooled_statistics.py   # eligibility-rule helpers, `is_canonical_k`
+      effect_sizes.py        # `cliffs_delta` (vetted, property-tested; not in SciPy)
+    errors.py                # `DatpCoreError` hierarchy (Section 20)
   application/
-    ports.py             # stage-contract Protocols (Section 12)
-    stages.py            # reusable stage functions orchestrating adapter ports
-    planner.py           # ExperimentPlanner
-    runner.py            # PlanExecutor
-    reuse.py             # ScoreReuseGate (stage-identity comparison)
-    lifecycle.py         # run-state machine and stage lifecycle records
-    preflight.py         # readiness, disk/RAM/VRAM/CUDA and storage-capability validation
-    profiles.py          # TestProfileExecutor contract wiring (Section 21)
-  experiments/
-    catalogue.py         # one typed ExperimentSpec entry per executable roadmap experiment id
-    profiles.py          # immutable named protocol/execution/artifact/reporting profiles
-    rejected.py          # RejectionRecords (E-R1..R8); non-executable
-  infrastructure/
-    hardware/            # inventory.py (GPU/CUDA/RAM), cuda_guard.py, preflight_adapter.py
-    datasets/            # source inspection, partition and split-manifest adapters
-    preprocessing/       # fitter.py and materialize.py (bounded PyArrow batches)
-    modeling/            # autoencoder.py, trainer_fedavg.py, trainer_fedprox.py, personalization.py
-    checkpoints/         # scientific_repo.py, selection.py, recovery_repo.py
-    scoring/             # calibration.py, test.py, temporal.py, incremental writers
-    thresholds/          # quantile.py, policies.py, variants.py, comparators.py, clustering.py
-    metrics.py           # per-family metric calculators
-    statistics.py        # scipy adapters and in-repo cliffs_delta caller
-    persistence/         # artifacts.py, bundles.py, path_resolver.py, roots.py, hashing.py, serialization.py, manifests.py, runstate.py, locks.py, code_state.py, dependency_lock.py
-    reporting/           # table_renderer.py, matplotlib_renderer.py
-    telemetry/           # event_sink.py (console + JSONL renderers)
-    parallel/            # executors.py (guarded), seeding.py (generator handoff)
+    planning/
+      plan.py               # DraftPlannedStage, FinalPlannedStage, StageDependency/Collection,
+                             # DraftExecutionPlan, FinalExecutionPlan
+      planner.py            # ExperimentPlanner (concrete; deterministic pure expansion, no port)
+      reuse.py              # ScoreReuseGate (concrete; pure lineage comparison, no port)
+      gates.py              # AnchorReproductionGate, FeasibilityGateEvaluator (concrete decision
+                             # logic over already-typed evidence, no framework, no port)
+    stages/
+      inspect_dataset.py
+      partition_clients.py
+      build_splits.py
+      fit_preprocessor.py
+      materialize_splits.py
+      train_model.py        # dispatches to the federated or centralized training port; the same
+                             # stage function orchestrates both FedAvg/FedProx and B0 training
+      select_checkpoint.py  # CheckpointSelector (concrete; Section 17.1) — not infrastructure
+      generate_scores.py
+      construct_thresholds.py
+      evaluate_policy.py    # PolicyEvaluator (concrete; pure confusion-count arithmetic, no port)
+      analyze_statistics.py # statistical-analysis stage (delegates computation to the
+                             # statistics port; the stage function itself is concrete)
+    runtime/
+      preflight.py          # ExecutionPreflight
+      executor.py           # PlanExecutor
+      lifecycle.py          # run-state machine and stage lifecycle records
+      resource_pressure.py  # cooperative throttle/pause orchestration around the runtime port
+    reporting/
+      freeze.py             # result-freeze eligibility validation
+      tracing.py            # TableFigureTracer (concrete; pure provenance-closure check, no port)
+    ports/
+      data.py               # DatasetSourceInspector, ClientPartitioner, SplitManifestBuilder,
+                             # PreprocessorFitter, ProcessedSplitMaterializer
+      learning.py           # FederatedTrainer, CentralizedModelTrainer (B0's distinct training port)
+      scoring.py            # ScoreGenerator
+      thresholding.py       # ThresholdConstructor, ThresholdStrategy registry, ClusteringStrategy,
+                             # QuantileEstimator
+      statistics.py         # StatisticalProcedureRunner (SciPy-backed BCa/Wilcoxon/Spearman/JS)
+      persistence.py        # ArtifactStore, CheckpointStore, ManifestStore, RunStateStore,
+                             # ArtifactLockProvider (Section 12.2) — no `ArtifactPathResolver` here
+      runtime.py            # CudaGuard, HardwareInspector, ResourcePressureMonitor
+      reporting.py          # ReportRenderer (framework renderers implement this in infrastructure)
+      telemetry.py          # EventSink; StructuredEvent envelope and typed event details
+  config/
+    schemas/
+      scientific.py         # dataset/partition/split/preprocessing/training/threshold/evaluation/
+                             # statistics schema sections
+      execution.py          # execution-mode/device/resource/parallelism schema sections
+      artifacts.py          # namespace/retention/serialization schema sections
+      reporting.py          # table/figure/format/wording schema sections
+    mapping/
+      scientific.py         # schema to `ScientificProtocolSpec` and its members (pure)
+      execution.py          # schema to `ExecutionPolicy` (pure)
+      artifacts.py          # schema to `ArtifactPolicy` (pure)
+      reporting.py          # schema to `ReportingPolicy` (pure)
+    loader.py               # YAML text to schema objects
+    compose.py               # explicit base plus override composition, eager resolution
   analysis/
-    table_specs.py  figure_specs.py  wording.py  tracing.py
+    tables/                 # one module per `TableType` family needing a distinct specification
+    figures/                # one module per `FigureType` family needing a distinct specification
+    wording.py               # `ClaimOutcome`-driven wording selection
+    report_models.py         # framework-free report-model construction shared by tables and figures
+  infrastructure/
+    data/
+      inspection.py  partitioning.py  splitting.py  preprocessing.py  materialization.py
+    learning/
+      models/
+        autoencoder.py
+      federation/
+        trainer.py           # shared FedAvg/FedProx training lifecycle
+        strategies/
+          fedavg.py  fedprox.py
+      personalization/
+        ditto.py             # faithful Ditto only
+        fedrep_ae.py
+        fedper_ae.py         # never labeled `ditto.py`
+      centralized/
+        trainer.py           # B0's own centralized training implementation (Section 9.2)
+    scoring/
+      calibration.py  test.py  temporal.py
+    thresholding/
+      quantiles.py  policies.py  variants.py  clustering.py  federated_statistics.py
+    evaluation/
+      metrics.py
+    statistics/
+      scipy_adapter.py       # BCa/Wilcoxon/Spearman/JS; in-repo `cliffs_delta` caller
+    persistence/
+      artifacts.py  checkpoints.py  recovery.py  manifests.py  bundles.py
+      roots.py  paths.py     # `BoundStorageRoot` binding and `ArtifactPathResolver` — internal
+                              # implementation detail of this package only (Section 15)
+      hashing.py  serialization.py  run_state.py  locks.py
+    runtime/
+      hardware.py  cuda.py  determinism.py  processes.py  resources.py
+    reporting/
+      markdown.py  latex.py  matplotlib.py
+    telemetry/
+      structured_events.py
+  composition/
+    root.py                 # construct adapters, bind ports, assemble application services,
+                             # map resolved configuration into the object graph, expose use cases
+    registries.py            # `EnumMap` strategy registries (e.g. threshold-policy to
+                              # `ThresholdStrategy` implementation) populated once at the root
   cli/
-    main.py              # composition root
-configs/
-  profiles/  experiments/
-tests/
-  domain/ property/ config/ architecture/ contract/
-  equivalence/ cuda/ resource/ reuse/ lineage/ recovery/ e2e/
-  golden/              # syrupy snapshots of manifests and provenance records (Section 21)
-  profiles/            # typed test-profile files (Section 21)
-pyproject.toml
-importlinter.ini
-noxfile.py
+    main.py
+    commands/
 ```
 
-**Structure rules.** A module carries a soft cap of roughly five hundred lines and is split by responsibility, never one file per class and never into a junk-drawer module. No module is named `utils`, `helpers`, `common`, `misc`, `base`, `manager`, or `shared`. Factories live in infrastructure and the composition root; registries mapping an enum to a strategy live in application and are populated at the root; shared pure logic lives in named modules such as `domain/definitions.py`.
+### 5.2 Repository tree
+
+```
+datp-core/
+├── src/datp_core/            # tracked; source of truth for structure and behavior
+├── configs/                  # tracked; external data only, no `__init__.py`, no executable code
+│   ├── protocols/            # scientific-protocol YAML (dataset/partition/split/model/threshold defaults)
+│   ├── experiments/           # one YAML per roadmap experiment id (E-C1.yaml, ...)
+│   ├── execution/             # named execution profiles (device/batch/parallelism)
+│   ├── artifacts/              # namespace/retention/serialization configuration
+│   ├── reporting/              # table/figure/format/wording configuration
+│   └── tests/                  # typed test-profile files (Section 21) — test-only configuration
+├── data/                      # gitignored; external inputs, read-only at runtime
+│   ├── raw/                   # immutable external dataset copies (`StorageVisibility.EXTERNAL_READONLY`)
+│   └── manifests/              # tracked; committed `DatasetSourceManifest`/`FeatureSchemaManifest` snapshots
+├── checkpoints/               # gitignored, recoverable; scientific model weights (`SCIENTIFIC_CHECKPOINTS`)
+├── outputs/
+│   ├── anchor/                 # gitignored, recoverable; `DATP_ANCHOR` namespace scientific outputs
+│   └── journal/                 # gitignored, recoverable; `JOURNAL_EXTENSION` namespace scientific outputs
+├── results/                    # tracked, append-only, publishable; curated tables/figures/exports
+│   ├── tables/  figures/  exports/
+├── .runtime/                    # gitignored, ephemeral, runtime-only; never scientific evidence
+│   ├── recovery/  run_state/  cache/  locks/  staging/
+├── tests/                       # tracked; organized by test level, not mirrored to `src/`
+│   ├── unit/
+│   │   ├── domain/  application/  config/  analysis/
+│   ├── property/
+│   ├── contract/
+│   ├── integration/
+│   │   ├── data/  learning/  persistence/  reporting/  cuda/
+│   ├── architecture/
+│   │   ├── test_dependency_rules.py  test_framework_confinement.py
+│   │   ├── test_no_forbidden_module_names.py  test_no_module_side_effects.py  test_no_cycles.py
+│   ├── system/
+│   │   ├── synthetic/  scientific_smoke/
+│   ├── golden/                  # tracked; syrupy snapshots (recoverable evidence, not scientific output)
+│   ├── fixtures/
+│   └── support/                 # test execution helpers; never imported by `src/datp_core`
+├── docs/
+│   ├── decisions/                # tracked; non-executable rejected/future-work records (Section 3.1)
+│   └── (roadmap, architecture, other design documents)
+├── pyproject.toml
+├── importlinter.ini
+└── noxfile.py
+```
+
+**Tracked vs generated.** `src/datp_core/`, `configs/`, `data/manifests/`, `results/`, `tests/`, `docs/`, and the root tool-configuration files are tracked. `data/raw/`, `checkpoints/`, `outputs/`, and `.runtime/` are gitignored; they are regenerated by running the pipeline against tracked configuration and are never hand-edited. `checkpoints/` and `outputs/` are recoverable (reproducible from tracked configuration plus recorded seeds) but not committed, because they are large binary/Parquet artifacts. `.runtime/` is ephemeral and carries no scientific evidence. `results/` is append-only and publishable: once a table or figure is frozen and traced (Section 22), its rendered form is retained for the manuscript and is never silently overwritten by a later run with a different identity.
+
+### 5.3 Structure rules
+
+- A module carries a soft maximum of roughly five hundred lines. This is a warning threshold, not permission to keep an incohesive 499-line module: a file is split earlier whenever it owns more than one responsibility, and a file is never split merely to satisfy the line count. Splitting follows semantic ownership, never alphabetical or arbitrary grouping.
+- Giant enum, identifier, request, result, or definition modules are not acceptable, and neither is a trivial one-class file with no independent responsibility. Cohesion takes precedence over line count in both directions.
+- No module is named `utils`, `helpers`, `common`, `misc`, `base`, `manager`, `handler`, `processor`, `context`, `payload`, or `shared`. A general word is used only when qualified by a precise domain noun and no clearer term exists (`ScoreReuseGate`, not `ReuseManager`).
+- Factories live in `infrastructure` and `composition`; registries mapping an enum to a strategy live in `application` (declared) and are populated once in `composition/registries.py`; shared pure logic lives in named modules such as `domain/mathematics/dispersion.py`.
+- No root Python `experiments/` package exists. Experiment identity, role, and immutable specifications live in `domain/experiments/`; experiment YAML data lives in `configs/experiments/`; schema-to-domain mapping lives in `config/mapping/`; plan expansion lives in `application/planning/`; rejected and future experiments are non-executable records under `docs/decisions/` (mirrored as `RejectionRecord` values in `domain/experiments/feasibility.py`); adapter registries live in `composition/` without containing scientific experiment definitions.
 
 ---
 
 ## 6. Enum catalogue
 
-All finite vocabularies live in `domain/vocabulary.py`, grouped by cohesive concept and split into sibling modules if one group would exceed the soft cap. `StrEnum` is used wherever a value is serialized, with stable UPPER_SNAKE members and snake_case serialized values; `IntEnum` is used only for the ordered claim tier. Out-of-scope concepts have no executable protocol, strategy, planner, stage, or adapter enum members; they may appear only in evidence-role metadata, rejection reasons, suppression records, and other explicitly non-executable vocabularies. Concrete paths, arbitrary client identifiers, dynamic artifact identifiers, runtime-generated names, numerical sweep grids, and open-ended external labels are **never** enums; they are value objects, validated strings, or configuration grids.
+There is no single, centralized `vocabulary.py`. Each finite vocabulary is co-located with the capability subpackage it describes (Section 5.1): dataset/partition/split vocabulary lives in `domain/data/`, model/training/checkpoint/score vocabulary in `domain/learning/`, threshold vocabulary in `domain/thresholding/`, metric/statistics vocabulary in `domain/evaluation/`, experiment-role/claim/feasibility vocabulary in `domain/experiments/`, storage/artifact vocabulary in `domain/artifacts/`, and execution/lifecycle vocabulary in `domain/runtime/`. The tables below group enums by scientific concept for readability; each group's owning subpackage is named in its heading. `StrEnum` is used wherever a value is serialized, with stable UPPER_SNAKE members and snake_case serialized values; `IntEnum` is used only for the ordered claim tier. Out-of-scope concepts have no executable protocol, strategy, planner, stage, or adapter enum members; they may appear only in evidence-role metadata, rejection reasons, suppression records, and other explicitly non-executable vocabularies. Concrete paths, arbitrary client identifiers, dynamic artifact identifiers, runtime-generated names, numerical sweep grids, and open-ended external labels are **never** enums; they are value objects, validated strings, or configuration grids.
 
 ### 6.1 Scientific vocabulary
+
+This table spans several capability subpackages rather than one module: `Dataset`, `Regime`, `ClientDefinitionStrategy` live in `domain/data/datasets.py`/`partitioning.py`; `SplitRole` in `domain/data/splitting.py`; `ProtocolTrack` in `domain/experiments/protocols.py`; the threshold-construction rows in `domain/thresholding/policies.py`/`variants.py`/`federated_statistics.py`; `AggregationStrategy`/`ModelPersonalizationStrategy` in `domain/learning/training.py`; `ExperimentRole`/`ClaimTier`/`ExecutionStatus` in `domain/experiments/claims.py`; the feasibility/rejection/reuse/blocking rows in `domain/experiments/feasibility.py`; the metric-family rows in `domain/evaluation/metrics.py`; `TrafficRateUnit`/`TrafficRateEvidenceKind`/`CostDerivationKind` in `domain/evaluation/alert_burden.py`; `StatisticalMethod`/`ClaimOutcome`/`AbsorptionBand` in `domain/evaluation/statistical_results.py`; `CheckpointSelectionStrategy`/`ParticipationStrategy` in `domain/learning/checkpoints.py`/`training.py`; and `RecalibrationMode`/`TemporalOutcome` in `domain/data/splitting.py`.
 
 | Enum | Members (abbreviated) | Reason it is finite |
 |---|---|---|
@@ -308,6 +509,8 @@ Stable rendered rejection/status labels remain `B_B_REJECTED_NO_METADATA` and `T
 
 ### 6.2 Model, preprocessing, and estimation vocabulary
 
+Owned by `domain/data/preprocessing.py` (`NormalizationStrategy`, `NormalizationScope`), `domain/learning/models.py`/`training.py` (`ActivationFunction`, `OptimizerType`, `LrSchedulerType`, `PrecisionMode`, `DeterminismLevel`), and `domain/learning/scores.py`/`domain/thresholding/variants.py` (`QuantileEstimatorType`, `ConformalMode`).
+
 | Enum | Members | Purpose | Fingerprint category |
 |---|---|---|---|
 | `ActivationFunction` | `RELU`, `LEAKY_RELU`, `TANH`, `SIGMOID`, `ELU` | AE activation | Scientific (training identity) |
@@ -321,6 +524,8 @@ Stable rendered rejection/status labels remain `B_B_REJECTED_NO_METADATA` and `T
 | `ConformalMode` | `SPLIT`, `FEDERATED` | B2-conf variant | Scientific (threshold identity) |
 
 ### 6.3 Execution and lifecycle vocabulary
+
+Owned by `domain/runtime/policies.py` (`ExecutionMode`, `DevicePolicy`, `StageConcurrency`, `ProcessStartMethod`, `WorkerRole`, `FailureDisposition`, `ResourcePressureLevel`, `PauseDecision`), `domain/runtime/seeds.py` (`SeedRole`), and `domain/artifacts/lineage.py` (`PipelineStage`, `RunStatus`, `ReuseDecisionKind`, `CheckpointKind`, `RoundDisposition`, `ReuseImpact` — these remain domain because they are intrinsic to stage-identity and reuse-lineage meaning, not mutable runtime state).
 
 | Enum | Members | Purpose | Fingerprint category |
 |---|---|---|---|
@@ -342,6 +547,8 @@ Stable rendered rejection/status labels remain `B_B_REJECTED_NO_METADATA` and `T
 
 ### 6.4 Storage and persistence vocabulary
 
+Owned by `domain/artifacts/keys.py` (`StorageRootKind`, `StorageVisibility`, `ArtifactNamespace`, `SerializationFormat`, `WriteDisposition`), `domain/artifacts/manifests.py` (`ManifestType`, `ArtifactType`), and `domain/artifacts/references.py`/`lineage.py` (`LockScope`, `ValidationStatus`, `IntegrityStatus`, `SchemaCompatibility`).
+
 | Enum | Members | Purpose |
 |---|---|---|
 | `StorageRootKind` | `RAW_DATA`, `PROCESSED_DATA`, `SCIENTIFIC_CHECKPOINTS`, `RECOVERY_STATE`, `SCORES`, `METRICS`, `STATISTICS`, `REPORTS`, `RUN_STATE`, `CACHE`, `LOCKS`, `STAGING`, `TEST_SANDBOX` | Semantic storage roots (never concrete paths) |
@@ -358,6 +565,8 @@ Stable rendered rejection/status labels remain `B_B_REJECTED_NO_METADATA` and `T
 
 ### 6.5 Observability vocabulary
 
+This vocabulary is an `application` concern, not a `domain` one: log-rendering and event-envelope shape are operational, not scientific meaning. `LogEventKind`, `LogSink`, and `LogFormat` live in `application/ports/telemetry.py` alongside `StructuredEvent`/`EventContext` (Section 19).
+
 | Enum | Members | Purpose |
 |---|---|---|
 | `LogEventKind` | `RUN_PLANNED`, `RUN_STARTED`, `RUN_COMPLETED`, `RUN_FAILED`, `STAGE_STARTED`, `STAGE_REUSED`, `STAGE_COMPLETED`, `STAGE_BLOCKED`, `STAGE_FAILED`, `STAGE_HEARTBEAT`, `FEDERATED_ROUND_STARTED`, `FEDERATED_ROUND_COMPLETED`, `FEDERATED_ROUND_FAILED`, `RECOVERY_CHECKPOINT_COMMITTED`, `RESOURCE_PRESSURE_DETECTED`, `STAGE_PAUSED`, `STAGE_RESUMED`, `ARTIFACT_LOCK_ACQUIRED`, `ARTIFACT_REUSED`, `ARTIFACT_WRITTEN`, `ARTIFACT_REJECTED`, `RESOURCE_PREFLIGHT_COMPLETED`, `CUDA_OUT_OF_MEMORY`, `DETERMINISM_VIOLATION`, `LINEAGE_MISMATCH`, `TEST_PROFILE_STARTED`, `TEST_PROFILE_COMPLETED` | Typed structured-event kinds |
@@ -365,6 +574,8 @@ Stable rendered rejection/status labels remain `B_B_REJECTED_NO_METADATA` and `T
 | `LogFormat` | `HUMAN_READABLE`, `JSON` | Rendering of an event |
 
 ### 6.6 Reporting vocabulary
+
+Owned by `analysis/report_models.py` (`ReportArtifactType`, `TableType`, `FigureType`) and `application/reporting/tracing.py` (`RenderingStatus`).
 
 | Enum | Members | Purpose |
 |---|---|---|
@@ -375,9 +586,11 @@ Stable rendered rejection/status labels remain `B_B_REJECTED_NO_METADATA` and `T
 
 ### 6.7 Test vocabulary
 
+This vocabulary configures test execution only; it is never imported by `src/datp_core` production packages (Section 21). It lives under `tests/support/` and is populated from `configs/tests/` files, never from `domain`.
+
 | Enum | Members | Purpose |
 |---|---|---|
-| `TestSuiteKind` | `UNIT`, `PROPERTY`, `CONFIG_MAPPING`, `ARCHITECTURE`, `CONTRACT`, `EQUIVALENCE`, `INTEGRATION`, `CUDA`, `RESOURCE`, `REUSE`, `LINEAGE`, `RECOVERY`, `SCIENTIFIC_SMOKE`, `E2E` | Behavior-defined test category |
+| `TestSuiteKind` | `UNIT`, `PROPERTY`, `CONTRACT`, `ARCHITECTURE`, `INTEGRATION`, `CUDA`, `GOLDEN`, `SYSTEM_SYNTHETIC`, `SCIENTIFIC_SMOKE` | Behavior-defined test category, aligned one-to-one with the `tests/` directories in Section 5.2; `INTEGRATION` and `CUDA` cover the former equivalence/resource/reuse/lineage/recovery suites, now organized under `tests/integration/{data,learning,persistence,reporting,cuda}/` by responsibility rather than by a separate suite-kind member each |
 | `TestDataScale` | `SYNTHETIC_TINY`, `SYNTHETIC_SMALL`, `REAL_SUBSAMPLE`, `REAL_FULL` | Data volume selected by a profile |
 | `TestIsolationMode` | `IN_MEMORY`, `TMP_SANDBOX`, `SHARED_READONLY_FIXTURE` | Storage isolation for a profile |
 | `TestDeviceRequirement` | `CPU_ONLY`, `CUDA_REQUIRED`, `CUDA_OPTIONAL` | Device demand of a profile |
@@ -410,7 +623,7 @@ A specification with more than one variant carries an explicit enum tag naming t
 
 ## 7. Value objects
 
-Scalar value objects live in `domain/identifiers.py` as frozen, slotted dataclasses whose `__post_init__` raises `DomainValidationError` on an invalid value. `ThresholdPercentile`, `FprTarget`, `ConfidenceLevel`, `CoverageRatio`, and `Probability` wrap a canonical `Decimal` rather than a binary `float`, because their values are identity-bearing and participate in exact arithmetic such as `FprTarget == 1 - q` (§7.3). Every other float-wrapping value object rejects `NaN` and infinity (§7.3), so the range checks below are always accompanied by a finiteness check. Probability-like quantities are **distinct types** and are not interchangeable: a `ConfidenceLevel` cannot be passed where an `FprTarget` is expected.
+Scalar value objects are co-located with the capability subpackage that owns their meaning, following the same rule as Section 6, rather than centralized in one `identifiers.py`: identifiers such as `ClientId`, `ExperimentId`, `CellId`, `ArtifactId` live beside their owning aggregate (`domain/experiments/identities.py`, `domain/artifacts/references.py`); threshold and probability-like quantities (`ThresholdPercentile`, `FprTarget`, `ConfidenceLevel`, `CoverageRatio`, `Probability`, `ShrinkageWeight`) live in `domain/thresholding/policies.py`/`variants.py` and `domain/evaluation/statistical_results.py`; execution-facing quantities (`BatchSize`, `GradientAccumulationSteps`, `WorkerCount`, `RamBudgetBytes`, `VramFraction`, `GpuIndex`, `NumericTolerance`) live in `domain/runtime/admissibility.py`; and storage-facing quantities (`RelativeArtifactPath`, `ByteCount`, `DiskCapacity`) live in `domain/artifacts/keys.py`/`references.py`. Every value object is a frozen, slotted dataclass whose `__post_init__` raises `DomainValidationError` on an invalid value. `ThresholdPercentile`, `FprTarget`, `ConfidenceLevel`, `CoverageRatio`, and `Probability` wrap a canonical `Decimal` rather than a binary `float`, because their values are identity-bearing and participate in exact arithmetic such as `FprTarget == 1 - q` (§7.3). Every other float-wrapping value object rejects `NaN` and infinity (§7.3), so the range checks below are always accompanied by a finiteness check. Probability-like quantities are **distinct types** and are not interchangeable: a `ConfidenceLevel` cannot be passed where an `FprTarget` is expected.
 
 | Value object | Wraps | Validation | Prevents | Distinct from |
 |---|---|---|---|---|
@@ -467,7 +680,7 @@ Scalar value objects live in `domain/identifiers.py` as frozen, slotted dataclas
 
 ### 7.1 Canonical cluster count
 
-`ClusterCount` carries no caller-controlled canonicality flag. Canonicality is derived from the value locked in `domain/definitions.py`:
+`ClusterCount` carries no caller-controlled canonicality flag. Canonicality is derived from the value locked in `domain/thresholding/clustering.py`:
 
 ```python
 CANONICAL_CLUSTER_K: Final = ClusterCount(3)
@@ -508,7 +721,7 @@ A frozen dataclass never holds a live `dict`. A constructor that accepts a `Mapp
 
 ### 7.5 Locked domain definitions
 
-The following values live once in `domain/definitions.py` and have no configuration override:
+The following values live once in `domain/mathematics/pooled_statistics.py` and have no configuration override:
 
 ```python
 PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES: Final = CalibrationSampleCount(100)
@@ -802,7 +1015,7 @@ Each per-client test-score artifact commits `benign_scores_ref` and `attack_scor
 
 `ThresholdConstructor.construct(ConstructThresholdsRequest)` accepts `CalibrationScoreArtifactSet` and has no request field capable of carrying test or attack scores. It derives local-q thresholds from eligible benign calibration clients only. Thus τ_B1(q) = mean_k τ_k(q), and τ_B3,family(q) = mean_{k in eligible family} τ_k(q), with each mean unweighted and computed at the cell's same q. `PolicyEvaluator.evaluate(EvaluatePolicyRequest)` accepts `TestScoreArtifactSet` (or the temporal-specific set) and has no calibration-score input. Calibration/test leakage is therefore a type error, not a runtime convention.
 
-`CentralizedModelComparatorRunner.evaluate(EvaluateCentralizedModelComparatorRequest)` is the only B0 route. It first trains the centralized AE on pooled benign training data, then generates its own pooled benign calibration scores and centralized test scores from its own checkpoint, computes the pooled threshold, and persists the complete centralized lineage. The runner accepts no FedAvg checkpoint or score-set type, and the FedAvg threshold constructor accepts no `CentralizedModelComparatorSpec`; a pooled threshold on FedAvg scores is therefore not representable as B0.
+B0 has no dedicated mega-interface. It is its own `ExperimentSpec` executed through the same reusable stages as every other cell (`inspect_dataset` → `partition_clients` [pooling, not client partitioning] → `build_splits` → `fit_preprocessor` → `materialize_splits` → `train_model` → `select_checkpoint` → `generate_scores` → `construct_thresholds` → `evaluate_policy` → `analyze_statistics`), so the pipeline code path is identical in shape to B1–B4. The only differences are (1) `train_model` dispatches to `CentralizedModelTrainer` instead of `FederatedTrainer`, because centralized pooled-benign training is a genuinely different backend with no aggregation round, and (2) every identity produced along the way is a separate centralized nominal type (`CentralizedModelIdentity`, `CentralizedCheckpointIdentity`, `CentralizedCalibrationScoringIdentity`, `CentralizedTestScoringIdentity`, `CentralizedThresholdIdentity`, `CentralizedEvaluationIdentity`; Section 7.2). No stage, port, or registry accepts a FedAvg checkpoint or a FedAvg-derived score-set type where a centralized identity is required, and the reverse never happens either; a pooled threshold computed on FedAvg scores is therefore not representable as B0. Code-path reuse is required by construction; scientific-artifact identity reuse between B0 and the FedAvg branch is a type error.
 
 For `FedStatsBenignThresholdSpec`, clients disclose benign-only `(n_k, mean_k, variance_k)` and exceedance counts. The algorithm computes the sample-count-weighted global mean and `sum(n_k * (variance_k + (mean_k - global_mean)^2)) / sum(n_k)`, persists within term, between term and between ratio, evaluates the pre-registered candidate grid at the matched benign exceedance target, and deterministically selects the larger k on a tie. Fixed-k values are separate supplementary cells and cannot become the primary result.
 
@@ -933,118 +1146,122 @@ NumPy arrays, pandas objects, PyArrow batches, `nn.Module`, Torch tensors/state 
 
 ### 9.7 Application contracts class diagram
 
+Stereotypes distinguish a genuine external variation point (`<<Port>>`, implemented by an infrastructure adapter and selected in `composition`) from a concrete application service (`<<Service>>`, orchestration or pure decision logic with a single implementation that never crosses a framework boundary; Section 3.6).
+
 ```mermaid
 classDiagram
     class ExperimentPlanner {
-      <<Protocol>>
+      <<Service>>
       +create_plan(CreateExecutionPlanRequest) DraftExecutionPlan
     }
     class ExecutionPreflight {
-      <<Protocol>>
+      <<Service>>
       +validate(PreflightRequest) PreflightResult
     }
     class DatasetSourceInspector {
-      <<Protocol>>
+      <<Port>>
       +inspect(InspectDatasetSourceRequest) DatasetSourceInspectionResult
     }
     class ClientPartitioner {
-      <<Protocol>>
+      <<Port>>
       +partition(ClientPartitionRequest) ClientPartitionResult
     }
     class SplitManifestBuilder {
-      <<Protocol>>
+      <<Port>>
       +build(BuildSplitManifestRequest) SplitManifestResult
     }
     class PreprocessorFitter {
-      <<Protocol>>
+      <<Port>>
       +fit(FitPreprocessorRequest) FittedPreprocessorResult
     }
     class ProcessedSplitMaterializer {
-      <<Protocol>>
+      <<Port>>
       +materialize(MaterializeProcessedSplitsRequest) ProcessedSplitResult
     }
     class FederatedTrainer {
-      <<Protocol>>
+      <<Port>>
       +train(TrainFederatedModelRequest) TrainingRunResult
     }
+    class CentralizedModelTrainer {
+      <<Port>>
+      +train(TrainCentralizedModelRequest) TrainingRunResult
+    }
     class CheckpointSelector {
-      <<Protocol>>
+      <<Service>>
       +select(CheckpointSelectionRequest) CheckpointSelectionResult
     }
-    class ScientificCheckpointRepository {
-      <<Protocol>>
+    class CheckpointStore {
+      <<Port>>
       +find_compatible(FindCheckpointRequest) CheckpointLookupResult
       +save(SaveScientificCheckpointRequest) CheckpointWriteResult
     }
     class ScoreGenerator {
-      <<Protocol>>
+      <<Port>>
       +generate_calibration_scores(GenerateCalibrationScoresRequest) CalibrationScoreGenerationResult
       +generate_test_scores(GenerateTestScoresRequest) TestScoreGenerationResult
       +generate_temporal_scores(GenerateTemporalScoresRequest) TemporalScoreGenerationResult
     }
     class ThresholdConstructor {
-      <<Protocol>>
+      <<Port>>
       +construct(ConstructThresholdsRequest) ThresholdConstructionResult
     }
-    class CentralizedModelComparatorRunner {
-      <<Protocol>>
-      +evaluate(EvaluateCentralizedModelComparatorRequest) CentralizedModelComparatorResult
-    }
     class PolicyEvaluator {
-      <<Protocol>>
+      <<Service>>
       +evaluate(EvaluatePolicyRequest) PolicyEvaluationResult
       +evaluate_temporal(EvaluateTemporalPolicyRequest) TemporalPolicyEvaluationResult
     }
-    class StatisticalAnalyzer {
-      <<Protocol>>
-      +analyze(RunStatisticalAnalysisRequest) StatisticalAnalysisResult
+    class StatisticalProcedureRunner {
+      <<Port>>
+      +run(RunStatisticalAnalysisRequest) StatisticalAnalysisResult
     }
     class AnchorReproductionGate {
-      <<Protocol>>
+      <<Service>>
       +evaluate(AnchorReproductionGateRequest) AnchorReproductionResult
     }
     class FeasibilityGateEvaluator {
-      <<Protocol>>
+      <<Service>>
       +evaluate(FeasibilityGateRequest) FeasibilityGateDecision
     }
     class ResourcePressureMonitor {
-      <<Protocol>>
+      <<Port>>
       +inspect(ResourcePressureRequest) ResourcePressureSnapshot
     }
     class PlanExecutor {
-      <<Protocol>>
+      <<Service>>
       +execute(ExecuteFinalPlanRequest) ExecutionSummary
     }
     class TableFigureTracer {
-      <<Protocol>>
+      <<Service>>
       +trace(TraceReportArtifactRequest) ReportTraceResult
     }
-    class ArtifactRepository {
-      <<Protocol>>
+    class ArtifactStore {
+      <<Port>>
       +lookup(ArtifactLookupRequest) ArtifactLookupResult
       +write_atomically(WriteArtifactRequest) ArtifactWriteResult
       +commit_bundle(CommitArtifactBundleRequest) ArtifactBundleCommitResult
       +validate_integrity(ValidateArtifactRequest) ArtifactValidationResult
     }
-    class ArtifactPathResolver {
-      <<Protocol>>
-      +resolve(ResolveArtifactLocationRequest) ResolvedArtifactLocation
+    class ManifestStore {
+      <<Port>>
+      +record(manifest) None
+      +trace(output_id) tuple~ProvenanceRecord~
+    }
+    class RunStateStore {
+      <<Port>>
+      +append(record) None
+      +status_of(stage_fingerprint) RunStatus
     }
     class ArtifactLockProvider {
-      <<Protocol>>
+      <<Port>>
       +acquire(AcquireArtifactLockRequest) ArtifactLockLease
     }
     class EventSink {
-      <<Protocol>>
+      <<Port>>
       +publish(StructuredEvent) None
-    }
-    class TestProfileExecutor {
-      <<Protocol>>
-      +execute(ExecuteTestProfileRequest) TestRunResult
     }
     ExperimentPlanner ..> DraftExecutionPlan
     PolicyEvaluator ..> PolicyEvaluationResult
-    StatisticalAnalyzer ..> StatisticalAnalysisResult
+    StatisticalProcedureRunner ..> StatisticalAnalysisResult
     ScoreGenerator ..> CalibrationScoreArtifactSet
     ScoreGenerator ..> TestScoreArtifactSet
     ScoreGenerator ..> TemporalScoreArtifactSet
@@ -1053,11 +1270,11 @@ classDiagram
     FeasibilityGateEvaluator ..> FeasibilityGateDecision
     PlanExecutor ..> FinalExecutionPlan
     TableFigureTracer ..> ResultFreezeManifest
-    ArtifactRepository ..> ArtifactWriteResult
-    ArtifactPathResolver ..> ResolvedArtifactLocation
+    ArtifactStore ..> ArtifactWriteResult
+    CheckpointStore ..> CheckpointWriteResult
 ```
 
-**Guarantee.** Every application contract takes one named request and returns one named result. No weakly-typed `put(obj, type) -> object`, `get(ref) -> object`, or `compute(family, inputs) -> mapping` exists anywhere in the design.
+**Guarantee.** Every application contract takes one named request and returns one named result. No weakly-typed `put(obj, type) -> object`, `get(ref) -> object`, or `compute(family, inputs) -> mapping` exists anywhere in the design. `ArtifactPathResolver` does not appear here: path resolution is an internal collaborator of `infrastructure/persistence` (Section 15), never an application-facing port. `TestProfileExecutor` does not appear here either: test execution is a `tests/support/` concern, never a production application contract (Section 21).
 
 ---
 
@@ -1065,7 +1282,7 @@ classDiagram
 
 **Object-shaped dictionaries are forbidden.** A dictionary whose keys are field names — for example one holding `dataset`, `seed`, `policy`, `threshold`, and `metrics` — is an unnamed object and is replaced by a frozen dataclass. The following are never used as method inputs or outputs, as domain or application state, or as configuration after mapping: `dict[str, Any]`, `Mapping[str, object]`, untyped JSON payloads, metadata bags, and generic dictionaries.
 
-A keyed collection is permitted only when the mapping itself represents a genuine relationship (a client to its scores, a seed to its delta). Such collections are dedicated, frozen, validated types in `domain/collections.py`, each storing an immutable snapshot and validating its own invariants at construction.
+A keyed collection is permitted only when the mapping itself represents a genuine relationship (a client to its scores, a seed to its delta). Such collections are dedicated, frozen, validated types co-located with the capability they serve (`ClientRoster`/`ClientCalibrationScoreMap`/`ClientTestScoreMap` in `domain/learning/scores.py`; `SeedTuple`/`SeedMap`/`ConfirmatorySeedCohort` in `domain/runtime/seeds.py`; `ArtifactReferenceCollection` in `domain/artifacts/references.py`; `StageDependencyCollection` in `domain/artifacts/lineage.py`; `MetricMap` in `domain/evaluation/metrics.py`), each storing an immutable snapshot and validating its own invariants at construction. `EnumMap` and `ClientMap` are generic collection templates shared across these modules, not a separate junk-drawer module.
 
 | Collection | Relationship | Invariant validated at construction |
 |---|---|---|
@@ -1091,15 +1308,15 @@ A keyed collection is permitted only when the mapping itself represents a genuin
 
 ## 11. Configuration architecture
 
-Configuration is grouped into three categories held in separate schema groups so they cannot be confused. `config/mapping.py` converts each to immutable domain specifications. Only scientific configuration, and the output-affecting subset of execution configuration, enters stage fingerprints.
+Two distinct things are both called "configuration" and must not be confused. `src/datp_core/config/` is Python boundary code: Pydantic schemas (`config/schemas/*.py`), pure mapping functions to domain specifications (`config/mapping/*.py`), YAML loading (`config/loader.py`), and explicit override composition (`config/compose.py`). `configs/` at the repository root is external data: YAML files with no `__init__.py`, no executable Python, no implicit plugin behavior, and no dynamic imports, organized into precise groups rather than one vague `profiles/` catch-all — `configs/protocols/`, `configs/experiments/`, `configs/execution/`, `configs/artifacts/`, `configs/reporting/`, and `configs/tests/` (Section 5.2). Every configuration field has exactly one schema owner in `config/schemas/` and exactly one mapped internal type; after mapping completes, no Pydantic model or raw mapping enters application execution. Configuration is grouped into three fingerprint categories so they cannot be confused. Only scientific configuration, and the output-affecting subset of execution configuration, enters stage fingerprints.
 
 ### 11.1 Scientific configuration (fingerprinted)
 
-Anything that can change weights, scores, thresholds, metrics, or interpretation. Sections: protocol track; dataset/partition/split/preprocessing; model/federation/training; checkpoint schedule and Regime-A selection; scoring; the discriminated threshold union; evaluation and traffic evidence; statistics; temporal; and resource-cost reporting. Dataset/regime are owned by `ScientificProtocolSpec`, precision/determinism by the relevant training/scoring specs, training batch semantics by `TrainingSpec.training_batch: TrainingBatchSpec`, scoring batch semantics by `ScoreGenerationSpec.scoring_batch: ScoringBatchSpec`, and preprocessing chunk semantics by `PreprocessingSpec.chunking: PreprocessingChunkSpec`; derived read-only views may expose them, but no second configuration owner exists.
+Anything that can change weights, scores, thresholds, metrics, or interpretation, validated by `config/schemas/scientific.py` and mapped by `config/mapping/scientific.py`. Sections: protocol track; dataset/partition/split/preprocessing; model/federation/training; checkpoint schedule and Regime-A selection; scoring; the discriminated threshold union; evaluation and traffic evidence; statistics; temporal; and resource-cost reporting. Dataset/regime are owned by `ScientificProtocolSpec`, precision/determinism by the relevant training/scoring specs, training batch semantics by `TrainingSpec.training_batch: TrainingBatchSpec`, scoring batch semantics by `ScoreGenerationSpec.scoring_batch: ScoringBatchSpec`, and preprocessing chunk semantics by `PreprocessingSpec.chunking: PreprocessingChunkSpec`; derived read-only views may expose them, but no second configuration owner exists. Experiment YAML data itself lives in `configs/experiments/` (one file per roadmap experiment id), never as Python inside `src/datp_core`.
 
 ### 11.2 Execution configuration (recorded; fingerprinted only where output-affecting)
 
-`ResourceBudget` (RAM/VRAM ceilings and storage/prefetch/worker-count reserves), `ParallelismSpec`, DataLoader execution settings, logging/heartbeat interval, recovery/lock/pressure policy, serialization, `DevicePolicy`, `ExecutionMode`, and registered execution-profile availability. Configuration resolves exactly one `TrainingBatchSpec`, one `ScoringBatchSpec`, and one `PreprocessingChunkSpec` before preflight, together forming the exact `ResolvedBatchExecutionProfile`; preflight validates that exact combination and never substitutes another. The effective training semantics and any output-affecting scoring fields then enter their stage identities. `WorkerCount` is execution-only when deterministic equivalence is proven; it becomes identity-bearing whenever it changes row ordering, sample ordering, numerical output, or framework behavior.
+Validated by `config/schemas/execution.py` and mapped by `config/mapping/execution.py` to `ExecutionPolicy`: `ResourceBudget` (RAM/VRAM ceilings and storage/prefetch/worker-count reserves), `ParallelismSpec`, DataLoader execution settings, logging/heartbeat interval, recovery/lock/pressure policy, serialization, `DevicePolicy`, `ExecutionMode`, and registered execution-profile availability (`configs/execution/`). Configuration resolves exactly one `TrainingBatchSpec`, one `ScoringBatchSpec`, and one `PreprocessingChunkSpec` before preflight, together forming the exact `ResolvedBatchExecutionProfile`; preflight validates that exact combination and never substitutes another. The effective training semantics and any output-affecting scoring fields then enter their stage identities. `WorkerCount` is execution-only when deterministic equivalence is proven; it becomes identity-bearing whenever it changes row ordering, sample ordering, numerical output, or framework behavior.
 
 ### 11.3 Environment inventory (recorded only)
 
@@ -1115,7 +1332,7 @@ Anything that can change weights, scores, thresholds, metrics, or interpretation
 - Canonical D-temporal mapping rejects any boundary other than 70/30 and rejects timestamp evidence that is not genuine capture time.
 - A Regime D scientific plan carries a matching immutable feasibility artifact; missing evidence may plan inspection/audit only.
 - Regime compatibility validation runs before every stage: it rejects dataset/client-definition mismatches, B-a physical-device language, synthetic Dirichlet natural-device evidence, missing genuine temporal metadata, a D partition not approved by its feasibility artifact, B3 without an authorized taxonomy, and a canonical B4 claim from an exploratory K.
-- B0 maps only to `CentralizedModelComparatorSpec`; it requires its own pooled-benign training, checkpoint, calibration-score, test-score, threshold, evaluation, and provenance identities. It cannot map through a FedAvg threshold-construction arm.
+- B0 maps only to `CentralizedModelComparatorSpec` through `config/mapping/scientific.py`'s dedicated centralized-comparator mapper; it requires its own pooled-benign training, checkpoint, calibration-score, test-score, threshold, evaluation, and provenance identities. It cannot map through a FedAvg threshold-construction arm.
 - FedProx mapping requires a strictly positive µ selected from the frozen pre-registered profile grid. FedAvg has no µ field; a grid containing zero, a value copied from FedAvg, or a value chosen from confirmatory test outcomes is invalid.
 - Mixed precision is rejected for `SCIENTIFIC` and `PRINT_GRADE` runs unless explicitly pre-registered, equivalence-tested, and fingerprinted; the default is `FP32`.
 - Any field marked unresolved is accepted for `DEVELOPMENT` and `SMOKE` runs and rejected for `SCIENTIFIC` and `PRINT_GRADE`.
@@ -1124,13 +1341,13 @@ There are no hidden defaults, no silent environment overrides, no untyped config
 
 ### 11.5 Typed resolved-specification diff
 
-`ResolvedSpecDiffer.compare(ResolvedSpecDiffRequest) -> ResolvedSpecificationDiff` is pure and compares two fully mapped specifications field-by-field through typed `ScientificSpecificationChange`, `ExecutionPolicyChange`, and `EnvironmentChange` variants. Each change carries its affected stage identities and one `ReuseImpact`: training invalidation, scoring invalidation, threshold-only invalidation, evaluation/statistics-only invalidation, or no-output-impact runtime change. It is not a recursive dictionary diff. The CLI may render the result before an expensive run; the diff neither changes a spec nor unlocks reuse.
+`ResolvedSpecDiffer.compare(ResolvedSpecDiffRequest) -> ResolvedSpecificationDiff` is pure and compares two fully mapped specifications field-by-field through typed `ScientificSpecificationChange`, `ExecutionPolicyChange`, and `EnvironmentChange` variants. Each change carries its affected stage identities and one `ReuseImpact`: training invalidation, scoring invalidation, threshold-only invalidation, evaluation/statistics-only invalidation, or no-output-impact runtime change. It is not a recursive dictionary diff. `composition` may render the result through the CLI before an expensive run; the diff neither changes a spec nor unlocks reuse.
 
 ---
 
 ## 12. Ports and method signatures
 
-Contracts are organized in two tiers. **Application stage contracts** are the operations the plan executor invokes; each takes one named request and returns one named result. **Infrastructure adapter contracts** are the finer-grained ports the stage contracts are implemented in terms of. Both live under `application/ports.py`; adapters live in `infrastructure`. There is no weakly-typed persistence or dispatch method anywhere.
+Contracts are organized in three tiers, each described in its own subsection below: **port contracts** (`application/ports/*.py`) are Protocols implemented by `infrastructure` adapters at genuine framework or hardware boundaries; **concrete application services** are pure orchestration or decision logic with a single implementation and no port; **infrastructure adapter contracts** are the concrete realizations of the ports. There is no weakly-typed persistence or dispatch method anywhere.
 
 ### 12.1 Configuration mapping
 
@@ -1139,17 +1356,14 @@ def map_experiment_schema(schema: ExperimentConfigSchema) -> ExperimentSpec: ...
 def resolve_experiment_profile(request: ResolveExperimentProfileRequest) -> ExperimentProfileSpec: ...
 ```
 
-Pure, in `config/mapping.py`. It is the only place a configuration schema becomes a domain specification.
+Pure, split across `config/mapping/scientific.py`, `execution.py`, `artifacts.py`, and `reporting.py` by configuration concept (Section 11). This is the only place a configuration schema becomes a domain specification.
 
-### 12.2 Application stage contracts
+### 12.2 Port contracts (`application/ports/`)
+
+A port exists only at a genuine external variation point — a framework boundary, a hardware/runtime inspection, a persistence backend, or a telemetry/reporting sink (Section 3.6). Each port below is grouped by the module that declares it; the infrastructure adapters implementing them are described in Section 12.4.
 
 ```python
-class ExperimentPlanner(Protocol):
-    def create_plan(self, request: CreateExecutionPlanRequest) -> DraftExecutionPlan: ...
-
-class ExecutionPreflight(Protocol):
-    def validate(self, request: PreflightRequest) -> PreflightResult: ...
-
+# application/ports/data.py
 class DatasetSourceInspector(Protocol):
     def inspect(self, request: InspectDatasetSourceRequest) -> DatasetSourceInspectionResult: ...
 
@@ -1165,129 +1379,179 @@ class PreprocessorFitter(Protocol):
 class ProcessedSplitMaterializer(Protocol):
     def materialize(self, request: MaterializeProcessedSplitsRequest) -> ProcessedSplitResult: ...
 
+# application/ports/learning.py
 class FederatedTrainer(Protocol):
     def train(self, request: TrainFederatedModelRequest) -> TrainingRunResult: ...
 
-class CheckpointSelector(Protocol):
-    def select(self, request: CheckpointSelectionRequest) -> CheckpointSelectionResult: ...
+class CentralizedModelTrainer(Protocol):
+    def train(self, request: TrainCentralizedModelRequest) -> TrainingRunResult: ...
 
-class ScientificCheckpointRepository(Protocol):
-    def find_compatible(self, request: FindCheckpointRequest) -> CheckpointLookupResult: ...
-    def save(self, request: SaveScientificCheckpointRequest) -> CheckpointWriteResult: ...
-
+# application/ports/scoring.py
 class ScoreGenerator(Protocol):
     def generate_calibration_scores(self, request: GenerateCalibrationScoresRequest) -> CalibrationScoreGenerationResult: ...
     def generate_test_scores(self, request: GenerateTestScoresRequest) -> TestScoreGenerationResult: ...
     def generate_temporal_scores(self, request: GenerateTemporalScoresRequest) -> TemporalScoreGenerationResult: ...
 
+# application/ports/thresholding.py
 class ThresholdConstructor(Protocol):
     def construct(self, request: ConstructThresholdsRequest) -> ThresholdConstructionResult: ...
 
-class CentralizedModelComparatorRunner(Protocol):
-    def evaluate(self, request: EvaluateCentralizedModelComparatorRequest) -> CentralizedModelComparatorResult: ...
+class ThresholdStrategy(Protocol):
+    def assign(self, request: AssignThresholdRequest) -> ThresholdAssignment: ...
 
-class PolicyEvaluator(Protocol):
-    def evaluate(self, request: EvaluatePolicyRequest) -> PolicyEvaluationResult: ...
-    def evaluate_temporal(self, request: EvaluateTemporalPolicyRequest) -> TemporalPolicyEvaluationResult: ...
+class ClusteringStrategy(Protocol):
+    def cluster(self, request: B4ClusteringRequest) -> ClusterAssignmentArtifact: ...
 
-class StatisticalAnalyzer(Protocol):
-    def analyze(self, request: RunStatisticalAnalysisRequest) -> StatisticalAnalysisResult: ...
+class QuantileEstimator(Protocol):
+    def estimate(self, request: QuantileEstimateRequest) -> QuantileEstimateResult: ...
 
-class AnchorReproductionGate(Protocol):
-    def evaluate(self, request: AnchorReproductionGateRequest) -> AnchorReproductionResult: ...
+# application/ports/statistics.py
+class StatisticalProcedureRunner(Protocol):
+    def run(self, request: RunStatisticalAnalysisRequest) -> StatisticalAnalysisResult: ...
 
-class FeasibilityGateEvaluator(Protocol):
-    def evaluate(self, request: FeasibilityGateRequest) -> FeasibilityGateDecision: ...
-
-class ResourcePressureMonitor(Protocol):
-    def inspect(self, request: ResourcePressureRequest) -> ResourcePressureSnapshot: ...
-
-class ArtifactPathResolver(Protocol):
-    def resolve(self, request: ResolveArtifactLocationRequest) -> ResolvedArtifactLocation: ...
-
-class ArtifactRepository(Protocol):
-    def put_calibration_score_set(self, obj: CalibrationScoreArtifactSet) -> ArtifactRef: ...
-    def get_calibration_score_set(self, ref: ArtifactRef) -> CalibrationScoreArtifactSet: ...
-    def put_test_score_set(self, obj: TestScoreArtifactSet) -> ArtifactRef: ...
-    def get_test_score_set(self, ref: ArtifactRef) -> TestScoreArtifactSet: ...
-    def put_temporal_score_set(self, obj: TemporalScoreArtifactSet) -> ArtifactRef: ...
-    def get_temporal_score_set(self, ref: ArtifactRef) -> TemporalScoreArtifactSet: ...
-    def put_metric_output(self, obj: PolicyEvaluationResult) -> ArtifactRef: ...
-    def get_metric_output(self, ref: ArtifactRef) -> PolicyEvaluationResult: ...
+# application/ports/persistence.py — narrow by storage semantics (Section 12.7); no
+# generic ArtifactRepository, and no ArtifactPathResolver (Section 15)
+class ArtifactStore(Protocol):
     def lookup(self, request: ArtifactLookupRequest) -> ArtifactLookupResult: ...
     def write_atomically(self, request: WriteArtifactRequest) -> ArtifactWriteResult: ...
     def commit_bundle(self, request: CommitArtifactBundleRequest) -> ArtifactBundleCommitResult: ...
     def validate_integrity(self, request: ValidateArtifactRequest) -> ArtifactValidationResult: ...
 
+class CheckpointStore(Protocol):
+    def find_compatible(self, request: FindCheckpointRequest) -> CheckpointLookupResult: ...
+    def save(self, request: SaveScientificCheckpointRequest) -> CheckpointWriteResult: ...
+    def save_recovery(self, request: SaveRecoveryStateRequest) -> RecoveryWriteResult: ...
+    def load_recovery(self, request: LoadRecoveryStateRequest) -> RecoveryLookupResult: ...
+
+class ManifestStore(Protocol):
+    def record(self, manifest: ManifestType) -> None: ...
+    def trace(self, output_id: str) -> tuple[ProvenanceRecord, ...]: ...
+
+class RunStateStore(Protocol):
+    def append(self, record: object) -> None: ...
+    def status_of(self, stage_fingerprint: StageFingerprint) -> RunStatus: ...
+
 class ArtifactLockProvider(Protocol):
     def acquire(self, request: AcquireArtifactLockRequest) -> ArtifactLockLease: ...
 
+# application/ports/runtime.py
+class HardwareInspector(Protocol):
+    def inspect(self) -> HardwareInventory: ...
+
+class CudaGuard(Protocol):
+    def require_cuda(self, device: DeviceSpec) -> GpuAssignment: ...
+
+class ResourcePressureMonitor(Protocol):
+    def inspect(self, request: ResourcePressureRequest) -> ResourcePressureSnapshot: ...
+
+# application/ports/reporting.py
+class ReportRenderer(Protocol):
+    def render(self, request: RenderReportArtifactRequest) -> RenderedReportArtifact: ...
+
+# application/ports/telemetry.py
 class EventSink(Protocol):
     def publish(self, event: StructuredEvent) -> None: ...
-
-class PlanExecutor(Protocol):
-    def execute(self, request: ExecuteFinalPlanRequest) -> ExecutionSummary: ...
-
-class TableFigureTracer(Protocol):
-    def trace(self, request: TraceReportArtifactRequest) -> ReportTraceResult: ...
-
-class TestProfileExecutor(Protocol):
-    def execute(self, request: ExecuteTestProfileRequest) -> TestRunResult: ...
 ```
 
-Each stage contract is described below by responsibility, layer, request, result, invariants, typed failures, implementation variability, and fingerprint impact.
+`CheckpointStore` keeps scientific and recovery checkpoints methodically distinct — separate save/load methods, separate `CheckpointKind`-scoped roots and namespaces (Section 17) — rather than one generic `save`/`load` pair that could confuse the two. `ManifestStore` and `RunStateStore` are deliberately narrower than a general artifact store: a manifest record and a lifecycle record are not artifacts and do not share `ArtifactStore`'s content-addressed commit protocol.
 
-- **`ExperimentPlanner`** — application. `CreateExecutionPlanRequest` carries only resolved closed profile cells, passed anchor evidence where the journal track requires it, an immutable feasibility snapshot, and scientific readiness. It has no artifact-catalogue field and never queries repositories. It rejects a cell not contained in its `ExperimentProfileSpec`, then emits a deterministic `DraftExecutionPlan` of `DraftPlannedStage` values, each carrying only a `ScientificStageGateDecision`; preflight consumes the draft together with the artifact catalogue snapshot to classify reuse/resources and freezes the `FinalExecutionPlan`.
-- **`ExecutionPreflight`** — application. `PreflightRequest` carries the `DraftExecutionPlan`, an immutable artifact catalogue snapshot, hardware inventory, storage-root inventory, disk projections, the exact resolved `TrainingBatchSpec`/`ScoringBatchSpec`/`PreprocessingChunkSpec` selected before planning, resource budgets, and lock/storage capability evidence. It validates readiness, CUDA, RAM, VRAM, every storage root, writability, same-filesystem commit capability, disk projections/reserve, parallelism, and that exact combination as the frozen `ResolvedBatchExecutionProfile`. It returns either validation success for that exact profile or a typed blocking failure; it never chooses, applies, or substitutes a different profile, and may only describe alternatives diagnostically after a failure. It classifies each draft stage into a `FinalPlannedStage` carrying `REUSE`/`RECOMPUTE`/`BLOCKED` plus validated `StageRuntimeRequirements`, and returns the resolved runtime, advisory cost estimate, and immutable `FinalExecutionPlan`. Ordinary lineage incompatibility is `RECOMPUTE`, not `BLOCKED`.
-- **`DatasetSourceInspector`** — application. Inspects source/schema/timestamp facts and emits source and feature-schema manifests; it does not partition, split, fit, or transform.
-- **`ClientPartitioner`** — application. Consumes source inspection and a partition spec and emits a source-row-preserving client-partition manifest. Dirichlet output is deterministic and independently feasible per candidate identity.
-- **`SplitManifestBuilder`** — application. Assigns source rows to exact split identities without preprocessing. Calibration is benign-only; temporal and conformal variants enforce their dedicated contracts.
-- **`PreprocessorFitter`** — application. Fits only from authorized TRAIN rows named by the split manifest and emits a fitted-preprocessor artifact.
-- **`ProcessedSplitMaterializer`** — application. Applies the fitted state to declared splits in deterministic order and preserves source-row lineage and row-order checksums.
-- **`FederatedTrainer`** — CUDA-required application stage. `TrainFederatedModelRequest` carries processed training descriptors, training spec, schedule, the frozen `ResolvedBatchExecutionProfile`, `DataLoaderSeedPlan`, and an optional compatible recovery descriptor. The FedProx request branch inherits the profile-locked FedAvg-matched architecture, preprocessing, partitions/splits, local epochs, batch semantics, optimizer/learning-rate policy, participation, rounds, and all non-strategy settings, while introducing only its strictly positive frozen-grid proximal µ. Full participation aborts a round on any missing, timed-out, malformed, non-finite, or shape-incompatible update; no scientific checkpoint or round advance occurs.
-- **`CheckpointSelector`** — application. Consumes all scheduled Regime A candidate results and the locked selection spec, produces one selection artifact, and proves that forbidden evidence did not participate. Other regimes use the selected round; no per-regime selection contract exists.
-- **`ScientificCheckpointRepository`** — application over infrastructure persistence. Lookup returns typed descriptors; commit accepts a descriptor plus an opaque staged artifact reference already produced inside the modeling adapter. Raw weights/state dictionaries never enter the application request. Hash-verified immutable content is never overwritten.
-- **`ScoreGenerator`** — CUDA-required application stage with distinct calibration and test methods. Both receive the exact split/checkpoint/preprocessor/schema lineage and `DataLoaderSeedPlan`; the outputs are distinct typed sets. Temporal scoring uses a dedicated request/result carrying window identity.
-- **`ThresholdConstructor`** — consumes only `CalibrationScoreArtifactSet` and a closed threshold variant. It receives the profile-derived `EligibleClientSet`. B4 emits one fixed-p95 `ClusterAssignmentArtifact` and, for every requested q, a `ClusterThresholdAggregationSpec` derived from member local-q thresholds; it never reclusters with q. B-FedStatsBenign always reports weighted mean, within term, between term, between ratio, matched-exceedance evidence, and larger-k tie resolution.
-- **`CentralizedModelComparatorRunner`** — consumes `CentralizedModelComparatorSpec` and only pooled centralized inputs; it owns the separate B0 train, checkpoint, calibration-score, test-score, pooled-threshold, evaluation, and provenance chain. No port accepts a FedAvg artifact on its behalf.
-- **`PolicyEvaluator`** — consumes only `TestScoreArtifactSet` plus assignments and the already fixed `EligibleClientSet`; the temporal evaluator consumes only `TemporalScoreArtifactSet`. It emits sufficient confusion counts and cohesive fleet results without rereading raw labels. Alert burden requires the evidence-bearing request variant.
-- **`StatisticalAnalyzer`** — returns the procedure-specific closed result union. The confirmatory branch enforces ten paired seeds, explicit BCa resamples, positive Δ orientation, and the locked pass rule.
-- **`AnchorReproductionGate`** — evaluates the five-seed anchor before journal expansion and persists a separate result; it is not a table-rendering shortcut.
-- **`FeasibilityGateEvaluator`** — permits source inspection and feasibility audit without prior evidence, but blocks Regime D partition materialization and every later scientific stage unless a passed artifact matches both source and partition identity.
-- **`ResourcePressureMonitor`** — observes resources and recommends cooperative throttle or pause. It cannot change effective batch size, precision, model, split, threshold, or scoring identity.
-- **`ArtifactPathResolver`** — application over infrastructure persistence. Request `ResolveArtifactLocationRequest(artifact_key, storage_root)`; result `ResolvedArtifactLocation`. Resolves a logical key to a concrete location beneath a validated `BoundStorageRoot` (Section 15). Failures: `PathResolutionError`. No fingerprint impact — location is not identity.
-- **`ArtifactRepository`** — application over infrastructure persistence. The domain-facing surface has a precise typed pair per artifact type, including distinct calibration/test/temporal score methods. Each delegates to lookup, commit, and validation mechanics; no generic object method or framework carrier exists. Failures: `ArtifactError`, `PartialArtifactError`, `IncompleteArtifactBundleError`, `ArtifactLockConflict`.
-- **`ArtifactLockProvider`** — application over infrastructure persistence. `AcquireArtifactLockRequest` declares artifact/bundle id, owner, `LockScope`, timeout and heartbeat policy; `ArtifactLockLease` is a context manager with explicit release, optional renewal, stale-owner detection and process-death recovery. Long computation ownership never implies a long-held commit lock.
-- **`EventSink`** — application. `publish(StructuredEvent) -> None`. Non-blocking, best-effort rendering; never the scientific source of truth. No failures propagate into scientific computation.
-- **`PlanExecutor`** — application. Runs the frozen plan under the resolved runtime plan. Failures: any stage error family, surfaced typed. Idempotent per stage through the reuse gate.
-- **`TestProfileExecutor`** — application. Request `ExecuteTestProfileRequest(profile, selection)`; result `TestRunResult(outcomes, retained_artifacts, usage)`. Runs a typed test profile against isolated storage (Section 21). Failures: `TestProfileValidationError`.
+### 12.3 Concrete application services
 
-### 12.3 Infrastructure adapter contracts
+The following have exactly one implementation, require no external framework, and are therefore concrete services rather than ports (Section 3.6). They still depend only on domain types and the ports above; they are not a backdoor for framework leakage.
 
-These framework-neutral ports realize application variation points. Array/batch/model primitives remain private collaborators inside each adapter and are intentionally absent from this public list.
+```python
+class ExperimentPlanner:
+    def create_plan(self, request: CreateExecutionPlanRequest) -> DraftExecutionPlan: ...
+
+class ExecutionPreflight:
+    def validate(self, request: PreflightRequest) -> PreflightResult: ...
+
+class ScoreReuseGate:
+    def decide_calibration(self, required: CalibrationScoringLineage, candidate: CalibrationScoreArtifactSet | None) -> ReuseDecision: ...
+    def decide_test(self, required: TestScoringLineage, candidate: TestScoreArtifactSet | None) -> ReuseDecision: ...
+    def decide_temporal(self, required: TemporalScoringLineage, candidate: TemporalScoreArtifactSet | None) -> ReuseDecision: ...
+
+class CheckpointSelector:
+    def select(self, request: CheckpointSelectionRequest) -> CheckpointSelectionResult: ...
+
+class PolicyEvaluator:
+    def evaluate(self, request: EvaluatePolicyRequest) -> PolicyEvaluationResult: ...
+    def evaluate_temporal(self, request: EvaluateTemporalPolicyRequest) -> TemporalPolicyEvaluationResult: ...
+
+class AnchorReproductionGate:
+    def evaluate(self, request: AnchorReproductionGateRequest) -> AnchorReproductionResult: ...
+
+class FeasibilityGateEvaluator:
+    def evaluate(self, request: FeasibilityGateRequest) -> FeasibilityGateDecision: ...
+
+class PlanExecutor:
+    def execute(self, request: ExecuteFinalPlanRequest) -> ExecutionSummary: ...
+
+class TableFigureTracer:
+    def trace(self, request: TraceReportArtifactRequest) -> ReportTraceResult: ...
+```
+
+Each contract is described below by responsibility, layer, request, result, invariants, typed failures, implementation variability, and fingerprint impact.
+
+- **`ExperimentPlanner`** — `application/planning/planner.py`, concrete service. `CreateExecutionPlanRequest` carries only resolved closed profile cells, passed anchor evidence where the journal track requires it, an immutable feasibility snapshot, and scientific readiness. It has no artifact-catalogue field and never queries a store. It rejects a cell not contained in its `ExperimentProfileSpec`, then emits a deterministic `DraftExecutionPlan` of `DraftPlannedStage` values, each carrying only a `ScientificStageGateDecision`; preflight consumes the draft together with the artifact catalogue snapshot to classify reuse/resources and freezes the `FinalExecutionPlan`.
+- **`ExecutionPreflight`** — `application/runtime/preflight.py`, concrete service composing the `HardwareInspector`, `CudaGuard`, and storage-preflight ports. `PreflightRequest` carries the `DraftExecutionPlan`, an immutable artifact catalogue snapshot, hardware inventory, storage-root inventory, disk projections, the exact resolved `TrainingBatchSpec`/`ScoringBatchSpec`/`PreprocessingChunkSpec` selected before planning, resource budgets, and lock/storage capability evidence. It validates readiness, CUDA, RAM, VRAM, every storage root, writability, same-filesystem commit capability, disk projections/reserve, parallelism, and that exact combination as the frozen `ResolvedBatchExecutionProfile`. It returns either validation success for that exact profile or a typed blocking failure; it never chooses, applies, or substitutes a different profile, and may only describe alternatives diagnostically after a failure. It classifies each draft stage into a `FinalPlannedStage` carrying `REUSE`/`RECOMPUTE`/`BLOCKED` plus validated `StageRuntimeRequirements`, and returns the resolved runtime, advisory cost estimate, and immutable `FinalExecutionPlan`. Ordinary lineage incompatibility is `RECOMPUTE`, not `BLOCKED`.
+- **`DatasetSourceInspector`** (port; `infrastructure/data/inspection.py`) — `application/stages/inspect_dataset.py` invokes it. Inspects source/schema/timestamp facts and emits source and feature-schema manifests; it does not partition, split, fit, or transform.
+- **`ClientPartitioner`** (port) — `application/stages/partition_clients.py` invokes it. Consumes source inspection and a partition spec and emits a source-row-preserving client-partition manifest. Dirichlet output is deterministic and independently feasible per candidate identity. B0 uses the same stage with a pooling partition spec instead of a per-client one.
+- **`SplitManifestBuilder`** (port) — `application/stages/build_splits.py` invokes it. Assigns source rows to exact split identities without preprocessing. Calibration is benign-only; temporal and conformal variants enforce their dedicated contracts.
+- **`PreprocessorFitter`** (port) — `application/stages/fit_preprocessor.py` invokes it. Fits only from authorized TRAIN rows named by the split manifest and emits a fitted-preprocessor artifact.
+- **`ProcessedSplitMaterializer`** (port) — `application/stages/materialize_splits.py` invokes it. Applies the fitted state to declared splits in deterministic order and preserves source-row lineage and row-order checksums.
+- **`FederatedTrainer`** (port; CUDA-required) and **`CentralizedModelTrainer`** (port; CUDA-required) — `application/stages/train_model.py` dispatches to whichever port the resolved specification requires: `FederatedTrainer` for FedAvg/FedProx, `CentralizedModelTrainer` for B0 (Section 9.2). `TrainFederatedModelRequest` carries processed training descriptors, training spec, schedule, the frozen `ResolvedBatchExecutionProfile`, `DataLoaderSeedPlan`, and an optional compatible recovery descriptor. The FedProx request branch inherits the profile-locked FedAvg-matched architecture, preprocessing, partitions/splits, local epochs, batch semantics, optimizer/learning-rate policy, participation, rounds, and all non-strategy settings, while introducing only its strictly positive frozen-grid proximal µ. Full participation aborts a round on any missing, timed-out, malformed, non-finite, or shape-incompatible update; no scientific checkpoint or round advance occurs. `TrainCentralizedModelRequest` carries the pooled-benign training descriptor only and has no federation field; its result feeds only centralized identities.
+- **`CheckpointSelector`** — `application/stages/select_checkpoint.py`, concrete service (Section 17.1). Consumes all scheduled Regime A candidate results and the locked selection spec, produces one selection artifact, and proves that forbidden evidence did not participate. Other regimes use the selected round; no per-regime selection contract exists. It calls `CheckpointStore` only to read already-persisted candidate descriptors; it decides which one wins, `CheckpointStore` never does.
+- **`CheckpointStore`** (port) — infrastructure persistence. Lookup returns typed descriptors; save accepts a descriptor plus an opaque staged artifact reference already produced inside the modeling adapter; recovery save/load are separate methods over the distinct `RECOVERY` root and namespace. Raw weights/state dictionaries never enter the application request. Hash-verified immutable content is never overwritten. It stores whichever scientifically valid checkpoint it is given; it never decides which one is scientifically primary.
+- **`ScoreGenerator`** (port; CUDA-required) — `application/stages/generate_scores.py` invokes it, with distinct calibration and test methods. Both receive the exact split/checkpoint/preprocessor/schema lineage and `DataLoaderSeedPlan`; the outputs are distinct typed sets. Temporal scoring uses a dedicated request/result carrying window identity.
+- **`ThresholdConstructor`** (port), together with the **`ThresholdStrategy`** registry and **`ClusteringStrategy`**/**`QuantileEstimator`** ports it composes — `application/stages/construct_thresholds.py` invokes it. Consumes only `CalibrationScoreArtifactSet` and a closed threshold variant. It receives the profile-derived `EligibleClientSet`. B4 emits one fixed-p95 `ClusterAssignmentArtifact` and, for every requested q, a `ClusterThresholdAggregationSpec` derived from member local-q thresholds; it never reclusters with q. B-FedStatsBenign always reports weighted mean, within term, between term, between ratio, matched-exceedance evidence, and larger-k tie resolution. `CENTRALIZED_MODEL_B0` is not a member of the `ThresholdStrategy` registry key union; B0's pooled threshold is constructed by the same stage using the centralized calibration-score identity, never by registering B0 as a ladder policy.
+- **`PolicyEvaluator`** — `application/stages/evaluate_policy.py`, concrete service; pure confusion-count arithmetic over already-typed score/threshold inputs, no framework. Consumes only `TestScoreArtifactSet` plus assignments and the already fixed `EligibleClientSet`; the temporal evaluator consumes only `TemporalScoreArtifactSet`. It emits sufficient confusion counts and cohesive fleet results without rereading raw labels. Alert burden requires the evidence-bearing request variant.
+- **`StatisticalProcedureRunner`** (port; SciPy-backed) — `application/stages/analyze_statistics.py` orchestrates it and returns the procedure-specific closed result union. The confirmatory branch enforces ten paired seeds, explicit BCa resamples, positive Δ orientation, and the locked pass rule.
+- **`AnchorReproductionGate`** — `application/planning/gates.py`, concrete service. Evaluates the five-seed anchor before journal expansion and persists a separate result; it is not a table-rendering shortcut.
+- **`FeasibilityGateEvaluator`** — `application/planning/gates.py`, concrete service. Permits source inspection and feasibility audit without prior evidence, but blocks Regime D partition materialization and every later scientific stage unless a passed artifact matches both source and partition identity.
+- **`ResourcePressureMonitor`** (port; hardware polling) — `application/runtime/resource_pressure.py` orchestrates it. Observes resources and recommends cooperative throttle or pause. It cannot change effective batch size, precision, model, split, threshold, or scoring identity.
+- **`ArtifactStore`** (port) — infrastructure persistence. Content-addressed lookup, atomic single-file commit, and marker-committed bundle commit, each with its own typed request/result; no generic object method or framework carrier exists. Failures: `ArtifactError`, `PartialArtifactError`, `IncompleteArtifactBundleError`, `ArtifactLockConflict`. Path resolution is an internal collaborator of its infrastructure implementation (`infrastructure/persistence/paths.py`), never a method an application caller invokes directly (Section 15).
+- **`ArtifactLockProvider`** (port) — infrastructure persistence. `AcquireArtifactLockRequest` declares artifact/bundle id, owner, `LockScope`, timeout and heartbeat policy; `ArtifactLockLease` is a context manager with explicit release, optional renewal, stale-owner detection and process-death recovery. Long computation ownership never implies a long-held commit lock.
+- **`EventSink`** (port) — `publish(StructuredEvent) -> None`. Non-blocking, best-effort rendering; never the scientific source of truth. No failures propagate into scientific computation.
+- **`PlanExecutor`** — `application/runtime/executor.py`, concrete service. Runs the frozen plan under the resolved runtime plan. Failures: any stage error family, surfaced typed. Idempotent per stage through `ScoreReuseGate`.
+- **`TableFigureTracer`** — `application/reporting/tracing.py`, concrete service; pure provenance-closure check over already-persisted manifests, no framework. Requires a matching `ResultFreezeManifest` and refuses untraceable output with `ProvenanceError` (Section 22).
+
+Test execution is not an application contract at all: it is a `tests/support/` helper that resolves a `TestProfileSpec` from `configs/tests/` and drives fixtures directly, with no production package depending on it (Section 21).
+
+### 12.4 Infrastructure adapter contracts
+
+These implement the ports of Section 12.2. Array/batch/model primitives remain private collaborators inside each adapter and are intentionally absent from this public list.
 
 - **`HardwareInspector`** — `inspect() -> HardwareInventory`. Read-only; reports `cuda_available = False` rather than raising.
 - **`CudaGuard`** — `require_cuda(device: DeviceSpec) -> GpuAssignment`. Failures: `CudaUnavailableError`, `CudaDeviceMismatchError`, `InvalidCpuFallbackError`.
-- **`DatasetSourceRepository`** — `inspect(request) -> DatasetSourceInspectionResult`. Its private adapter uses PyArrow scanners and bounded batches.
-- **`ProcessedSplitRepository`** — typed put/get of `ProcessedSplitDescriptor`; private streaming readers never cross upward.
-- **`ModelTrainingAdapter`** — `train(request) -> TrainingRunResult`; owns PyTorch/Flower/model handles and converts them to checkpoint descriptors before returning.
+- **`DatasetSourceInspector`** implementation (`infrastructure/data/inspection.py`) — uses PyArrow scanners and bounded batches.
+- **`ProcessedSplitMaterializer`** implementation (`infrastructure/data/materialization.py`) — typed put/get of `ProcessedSplitDescriptor`; private streaming readers never cross upward.
+- **`FederatedTrainer`** implementation (`infrastructure/learning/federation/trainer.py` with `strategies/fedavg.py`/`fedprox.py`) and **`CentralizedModelTrainer`** implementation (`infrastructure/learning/centralized/trainer.py`) — own PyTorch/Flower/model handles and convert them to checkpoint descriptors before returning.
 - **`QuantileEstimator`** — `estimate(request: QuantileEstimateRequest) -> QuantileEstimateResult`. Exact estimators only; underlying arrays remain private.
-- **`ThresholdStrategy`** and its registry keyed on `CoreThresholdPolicy | ThresholdVariant | ThresholdComparatorRole.FED_STATS_BENIGN` — `assign(request) -> ThresholdAssignment`. `CENTRALIZED_MODEL_B0` is handled only by `CentralizedModelComparatorRunner`, not by this registry.
+- **`ThresholdStrategy`** registry keyed on `CoreThresholdPolicy | ThresholdVariant | ThresholdComparatorRole.FED_STATS_BENIGN` — `assign(request) -> ThresholdAssignment`. Populated once in `composition/registries.py`.
 - **`ClusteringStrategy`** — `cluster(request: B4ClusteringRequest) -> ClusterAssignmentArtifact`. Canonical B4 is exact k-means++ with locked constants and derived random state.
 - **Score access** is private to the scoring, threshold, and evaluation adapters. Application methods receive typed score-set descriptors, never `ColumnView`, `ScoreBatch`, NumPy, pandas, or PyArrow carriers.
-- **`MetricCalculator`** with one typed method per family (`compute_operating_point`, `compute_equity`, `compute_estimation`, and so on) — never a generic `compute(family, inputs)`.
-- **`ManifestRepository`** — `record(manifest) -> None`, `trace(output_id) -> tuple[ProvenanceRecord, ...]`.
-- **`RunStateRepository`** — `append(record) -> None`, `status_of(stage_fingerprint) -> RunStatus`.
-- **`TableFigureTracer`** — `trace(request: TraceReportArtifactRequest) -> ReportTraceResult`; requires a matching `ResultFreezeManifest` and refuses untraceable output with `ProvenanceError`. Framework renderers consume traced table/figure specs only in `infrastructure/reporting`.
+- **`MetricCalculator`** (`infrastructure/evaluation/metrics.py`) with one typed method per family (`compute_operating_point`, `compute_equity`, `compute_estimation`, and so on) — never a generic `compute(family, inputs)`.
+- **`ArtifactStore`** implementation (`infrastructure/persistence/artifacts.py`, `bundles.py`) — delegates internally to `roots.py`/`paths.py` (`BoundStorageRoot` binding and the internal `ArtifactPathResolver`), `hashing.py`, and `serialization.py`.
+- **`CheckpointStore`** implementation (`infrastructure/persistence/checkpoints.py`, `recovery.py`) — distinct methods and namespaces for scientific versus recovery state (Section 17).
+- **`ManifestStore`** implementation (`infrastructure/persistence/manifests.py`) — `record(manifest) -> None`, `trace(output_id) -> tuple[ProvenanceRecord, ...]`.
+- **`RunStateStore`** implementation (`infrastructure/persistence/run_state.py`) — `append(record) -> None`, `status_of(stage_fingerprint) -> RunStatus`.
+- **`ReportRenderer`** implementations (`infrastructure/reporting/markdown.py`, `latex.py`, `matplotlib.py`) — consume traced, framework-free table/figure specifications from `analysis/` and produce Markdown, LaTeX, SVG, PNG, or PDF output; they never alter a scientific value.
 - **`Clock`** — `now() -> datetime` (frozen in tests). **`CodeStateProvider`** and **`DependencyLockStateProvider`** return the typed provenance records from §9.5, including dirty diff hash where permitted and exact dependency-lock identity.
 
-### 12.4 Stage dispatch and CLI rendering
+### 12.5 Composition root and CLI separation
 
-The plan executor dispatches on `PipelineStage` with a `match`/`case` that ends in `assert_never`, so adding a stage without a handler is a static error. At the composition root the CLI renders typed errors and preflight findings with rich, translating a `DatpCoreError` into a legible boundary message without ever formatting scientific values itself.
+The CLI is not the composition root (Section 3.2). `composition/root.py` is the sole place object graphs are assembled: it constructs concrete `infrastructure` adapters, binds them to `application/ports/*` Protocols, assembles the concrete application services of Section 12.3, selects explicit strategy implementations (for example, which `ThresholdStrategy` backs each `ThresholdConstructionKind`), maps resolved configuration into that object graph, and exposes complete use-case entrypoints (for example `run_experiment(cell: ExperimentCell) -> ExecutionSummary`) to `cli`. `composition/registries.py` holds the `EnumMap` strategy registries populated once at startup; it replaces any universal service locator.
 
-### 12.5 Rejected weak contracts
+`cli/main.py` and `cli/commands/` do only four things: parse command-line input into a typed request, invoke a `composition` use-case entrypoint, render the returned boundary result (or a typed failure, via `rich`) with `infrastructure` reporting confined to that rendering step, and convert the outcome into a process exit code. The CLI never instantiates an adapter, never wires a dependency, never contains scientific or stage-orchestration logic, and never resolves a filesystem path itself — every path stays inside `infrastructure/persistence`, reached only through the object graph `composition` already assembled.
 
-`put(obj, type) -> object`, `get(ref) -> object`, and `compute(family, inputs) -> mapping` do not exist. Persistence is typed per artifact type; metrics and statistics are typed per family and procedure. The only `Any` in the system is at the single isolated pandas/PyTorch adapter boundary, where a value is immediately converted to a typed domain object.
+### 12.6 Stage dispatch and rendering
+
+`PlanExecutor` dispatches on `PipelineStage` with a `match`/`case` that ends in `assert_never`, so adding a stage without a handler is a static error. `cli` renders typed errors and preflight findings with `rich`, translating a `DatpCoreError` into a legible boundary message without ever formatting scientific values itself; the translation itself is invoked through `composition`, never performed by `cli` reaching into `infrastructure` directly.
+
+### 12.7 Rejected weak contracts
+
+`put(obj, type) -> object`, `get(ref) -> object`, and `compute(family, inputs) -> mapping` do not exist. Persistence is typed per artifact type and per storage semantics (`ArtifactStore`, `CheckpointStore`, `ManifestStore`, `RunStateStore`); metrics and statistics are typed per family and procedure. The only `Any` in the system is at the single isolated pandas/PyTorch adapter boundary, where a value is immediately converted to a typed domain object. A single god `ArtifactRepository` claiming ownership of every persistence concern is also rejected (Section 12.2): its responsibilities do not overlap between the four persistence ports above.
 
 ---
 
@@ -1348,7 +1612,7 @@ ExperimentIdentity = hash(all stage identities of a cell)
 
 ### 13.3 Score-reuse gate
 
-`application/reuse.py::ScoreReuseGate` compares the complete score lineage enumerated above, including source, partition, split, schema, fitted preprocessor, training, scientific checkpoint identity and content hash, scoring identity/schema, roster, role, row order, precision, and any output-affecting batch profile. It never consults threshold or reporting fields.
+`application/planning/reuse.py::ScoreReuseGate` compares the complete score lineage enumerated above, including source, partition, split, schema, fitted preprocessor, training, scientific checkpoint identity and content hash, scoring identity/schema, roster, role, row order, precision, and any output-affecting batch profile. It never consults threshold or reporting fields.
 
 ```python
 class ScoreReuseGate:
@@ -1422,7 +1686,7 @@ graph TD
 
 ## 14. Experiment-suite planning and reuse
 
-`application/planner.py::ExperimentPlanner` is a deterministic, non-DAG-framework component. It produces a draft from immutable inputs; preflight resolves reuse and resources into the final immutable plan. The planner never queries mutable repositories.
+`application/planning/planner.py::ExperimentPlanner` is a deterministic, non-DAG-framework concrete service (Section 3.6, Section 12.3). It produces a draft from immutable inputs; preflight resolves reuse and resources into the final immutable plan. The planner never queries a store.
 
 ### 14.1 Responsibilities
 
@@ -1442,14 +1706,14 @@ The core B1–B4 policies share the same compatible checkpoint and role-scoped c
 ### 14.2 Interfaces
 
 ```python
-class ExperimentPlanner(Protocol):
+class ExperimentPlanner:
     def create_plan(self, request: CreateExecutionPlanRequest) -> DraftExecutionPlan: ...
 
-class PlanExecutor(Protocol):
+class PlanExecutor:
     def execute(self, request: ExecuteFinalPlanRequest) -> ExecutionSummary: ...
 ```
 
-`CreateExecutionPlanRequest` carries resolved specifications, anchor/readiness results, and an immutable feasibility snapshot; it has no artifact-catalogue field. `PreflightRequest` carries the resulting `DraftExecutionPlan` together with the immutable artifact catalogue snapshot, hardware inventory, storage-root inventory, disk projections, resolved execution specifications, resource budgets, and lock/storage capability evidence. `StageRunnerRegistry` is an exhaustive `EnumMap[PipelineStage, StageRunner]` assembled at the composition root and injected into the executor; it replaces a universal service locator without becoming a method payload. Planning is pure and deterministic: equal immutable inputs yield an equal draft.
+Both are concrete services (Section 12.3), not Protocols; there is no alternative planner or executor implementation to abstract over. `CreateExecutionPlanRequest` carries resolved specifications, anchor/readiness results, and an immutable feasibility snapshot; it has no artifact-catalogue field. `PreflightRequest` carries the resulting `DraftExecutionPlan` together with the immutable artifact catalogue snapshot, hardware inventory, storage-root inventory, disk projections, resolved execution specifications, resource budgets, and lock/storage capability evidence. `StageRunnerRegistry` is an exhaustive `EnumMap[PipelineStage, StageRunner]` assembled in `composition/registries.py` and injected into the executor; it replaces a universal service locator without becoming a method payload. Planning is pure and deterministic: equal immutable inputs yield an equal draft.
 
 ### 14.3 Deduplication
 
@@ -1475,7 +1739,8 @@ The anchor and journal manifests and namespaces remain distinct. Missing Regime 
 
 ```mermaid
 sequenceDiagram
-    participant Root as cli / composition root
+    participant Cli as cli
+    participant Root as composition/root.py
     participant Cfg as config loader
     participant Map as schema mapper
     participant Plan as ExperimentPlanner
@@ -1483,11 +1748,12 @@ sequenceDiagram
     participant Pre as ExecutionPreflight
     participant Cat as artifact catalogue snapshot
     participant Exec as PlanExecutor
-    participant Repo as ArtifactRepository
+    participant Store as ArtifactStore
     participant Lock as ArtifactLockProvider
     participant Sink as EventSink
     participant Adp as scientific adapter
 
+    Cli->>Root: invoke use case (run_experiment)
     Root->>Cfg: load configuration text
     Cfg->>Map: map_experiment_schema(schema)
     Map-->>Root: ExperimentSpec (frozen)
@@ -1501,9 +1767,9 @@ sequenceDiagram
     Pre-->>Root: PreflightResult + FinalExecutionPlan (FinalPlannedStage tuple)
     Root->>Exec: execute(ExecuteFinalPlanRequest)
     loop each planned stage
-        Exec->>Repo: lookup(reuse candidate)
+        Exec->>Store: lookup(reuse candidate)
         alt reuse
-            Repo-->>Exec: valid artifact
+            Store-->>Exec: valid artifact
             Exec->>Sink: publish(STAGE_REUSED)
         else compute
             Exec->>Lock: acquire(COMPUTATION_OWNERSHIP lease)
@@ -1511,22 +1777,23 @@ sequenceDiagram
             Exec->>Adp: run scientific stage
             Adp-->>Exec: typed result
             Exec->>Lock: release ownership; acquire short COMMIT lease
-            Exec->>Repo: write_atomically(WriteArtifactRequest)
-            Repo-->>Exec: ArtifactWriteResult
+            Exec->>Store: write_atomically(WriteArtifactRequest)
+            Store-->>Exec: ArtifactWriteResult
             Exec->>Lock: release commit lease
             Exec->>Sink: publish(ARTIFACT_WRITTEN, STAGE_COMPLETED)
         end
     end
     Exec-->>Root: ExecutionSummary
+    Root-->>Cli: boundary result
 ```
 
-**Guarantee.** The sequence is resolved specs → draft (planner, feasibility snapshot only) → artifact catalogue snapshot → reuse classification → disk/RAM/VRAM/CUDA preflight → final plan → execution. Reuse is decided before computation, and only preflight ever consults the artifact catalogue. A short commit lock is held only for persistence; an optional computation-ownership lease may cover long work without holding a filesystem commit lock. A result is validated before completion, and a failure produces no partial scientific artifact.
+**Guarantee.** The sequence is resolved specs → draft (planner, feasibility snapshot only) → artifact catalogue snapshot → reuse classification → disk/RAM/VRAM/CUDA preflight → final plan → execution. Reuse is decided before computation, and only preflight ever consults the artifact catalogue. A short commit lock is held only for persistence; an optional computation-ownership lease may cover long work without holding a filesystem commit lock. A result is validated before completion, and a failure produces no partial scientific artifact. `cli` performs no construction or wiring of its own: every collaborator above the dashed boundary into `Root` is assembled once by `composition/root.py` before the use case runs.
 
 ---
 
 ## 15. Path and storage architecture
 
-Concrete paths never appear in enums, in domain logic, or in application logic. Storage is expressed through semantic root kinds, validated path value objects, and a single path-resolution port. Artifact identity remains id plus content hash; a path is only where a resolved artifact is written and read, never what it is.
+Concrete paths never appear in enums, in domain logic, or in application logic. Storage is expressed through semantic root kinds and validated path value objects; path resolution itself is an internal collaborator of `infrastructure/persistence` (`infrastructure/persistence/paths.py`), never an application-facing port (Section 12.2). Artifact identity remains id plus content hash; a path is only where a resolved artifact is written and read, never what it is.
 
 ### 15.1 Semantic roots
 
@@ -1964,9 +2231,11 @@ Stage-boundary failures use the typed exception hierarchy, not a `Result[T, E]` 
 
 ## 21. Test architecture and profiles
 
-Tests are organized by behavior and resolved from typed profiles, not from ad-hoc markers or duplicated fixtures. No test file parses YAML directly, and no fixture silently uses a real dataset or a scientific output root.
+Tests are organized primarily by test level (`tests/unit/`, `tests/property/`, `tests/contract/`, `tests/integration/`, `tests/architecture/`, `tests/system/`, `tests/golden/`, `tests/fixtures/`, `tests/support/`; Section 5.2), then by responsibility within each level. The test tree does not mirror `src/datp_core/` module-for-module. Tests are resolved from typed profiles, not from ad-hoc markers or duplicated fixtures. No test file parses YAML directly, and no fixture silently uses a real dataset or a scientific output root. No production package under `src/datp_core/` imports anything from `tests/`; the dependency runs one way only.
 
 ### 21.1 Test-profile specification
+
+Test-profile types are test infrastructure, not production code: they live in `tests/support/profiles.py`, never in `domain/` or `config/`. Profile data itself lives in `configs/tests/` as plain YAML with no `__init__.py` and no executable Python, mirroring the config/`configs/` split of Section 11 but entirely outside the production object graph `composition/root.py` assembles.
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -1998,13 +2267,33 @@ class TestProfileSpec:
     logging: TestLoggingSpec
 ```
 
-### 21.2 Behavior categories
+Production code may expose injectable ports and deterministic operations that tests use (Section 12.2's ports are all constructor-injectable), but production code never imports `pytest`, a fixture, a Nox session, an xdist lane, or golden-test infrastructure.
 
-The suite covers pure domain invariants (benign-only calibration, Δ orientation B1 − B2, AUROC-control, canonical-K derivation, eligibility, and rejection of non-finite values); property tests (value-object ranges and finiteness, `cv_fpr`, `pooled_variance` including the between-term, `fpr_target = 1 − q` under the canonical representation, and bootstrap sanity); dedicated Cliff's delta property tests; configuration mapping and closed-union handling; static and in-test architecture boundaries; shared port contracts; preprocessing/scoring/parallel/resume equivalence; clustering and manifest goldens; CUDA/resource/reuse/lineage/recovery contracts; the confirmatory BCa rule and failure behavior; and a reduced synthetic end-to-end run. Reuse tests assert that B1–B4 share one calibration-set id and compatible evaluations share one test-set id, while role or lineage substitution fails.
+### 21.2 Test tree and markers
 
-Cliff's delta tests retain antisymmetry, bounds in `[−1, 1]`, and correct ties. Configuration tests reject unresolved print-grade fields. Import-linter and pytest-archon enforce dependencies, while `test_no_module_side_effects.py` protects spawn re-imports. Equivalence covers chunked/reference preprocessing, batched/reference scoring, sequential/parallel and uninterrupted/resumed execution. Golden tests retain the fixed B4 assignment/adjusted-Rand evidence and syrupy snapshots of `ExperimentManifest`/`ProvenanceRecord`; Parquet checks compare both content and row order. CUDA tests enforce refusal/no fallback/spawn; BCa acceleration failure is surfaced rather than silently replaced.
+| Directory | `TestSuiteKind` | Purpose |
+|---|---|---|
+| `tests/unit/domain/` | `UNIT` | Domain invariants: benign-only calibration, Δ orientation B1 − B2, AUROC-control, canonical-K derivation, eligibility, rejection of non-finite values |
+| `tests/unit/application/` | `UNIT` | Concrete-service behavior (Section 12.3) in isolation, with ports replaced by typed test doubles |
+| `tests/unit/config/` | `UNIT` | Schema validation and schema-to-domain mapping (formerly `CONFIG_MAPPING`) |
+| `tests/unit/analysis/` | `UNIT` | Framework-free table/figure/wording specification construction |
+| `tests/property/` | `PROPERTY` | Value-object ranges and finiteness; `cv_fpr`, `pooled_variance` (including the between-term), `fpr_target = 1 − q` under the canonical representation; bootstrap sanity; dedicated Cliff's delta properties (antisymmetry, bounds in `[−1, 1]`, correct ties) |
+| `tests/contract/` | `CONTRACT` | Shared port contracts: every `infrastructure` adapter implementing a Section 12.2 port is exercised against the same contract suite |
+| `tests/integration/data/` | `INTEGRATION` | Chunked-versus-reference preprocessing equivalence, source-row lineage, bounded peak memory |
+| `tests/integration/learning/` | `INTEGRATION` | Batched-versus-reference scoring equivalence, checkpoint selection, reuse/lineage across B1–B4 and B0 |
+| `tests/integration/persistence/` | `INTEGRATION` | Atomic single-file commit, bundle commit-marker rejection, lock lease/heartbeat/stale-owner recovery, recovery-versus-scientific checkpoint isolation |
+| `tests/integration/reporting/` | `INTEGRATION` | Result-freeze/provenance closure, `TRACE_REFUSED` handling, renderer output for each format |
+| `tests/integration/cuda/` | `CUDA` (serialized lane) | CUDA refusal/no-fallback/spawn-context; sequential/parallel and uninterrupted/resumed execution equivalence |
+| `tests/architecture/` | `ARCHITECTURE` | `test_dependency_rules.py`, `test_framework_confinement.py`, `test_no_forbidden_module_names.py`, `test_no_module_side_effects.py`, `test_no_cycles.py` (Section 5.2) |
+| `tests/system/synthetic/` | `SYSTEM_SYNTHETIC` | A reduced synthetic end-to-end run of the full stage sequence |
+| `tests/system/scientific_smoke/` | `SCIENTIFIC_SMOKE` | The confirmatory BCa rule and its failure behavior on a small real-data subsample |
+| `tests/golden/` | `GOLDEN` | Fixed B4 assignment/adjusted-Rand evidence and syrupy snapshots of `ExperimentManifest`/`ProvenanceRecord`; Parquet checks compare both content and row order |
+| `tests/fixtures/` | — | Shared, read-only fixture data (`SHARED_READONLY_FIXTURE`) |
+| `tests/support/` | — | `TestProfileSpec` and mapping, fixture factories, sandbox helpers; never imported by `src/datp_core` |
 
-Dirichlet property/unit contracts always use the existing `TestDataScale.SYNTHETIC_TINY`, small deterministic K, bounded sample counts, deterministic seeds, and strict timeouts. They generate bounded partitions and assert sample conservation, no overlap, expected client count, valid alpha handling, no empty client where forbidden, stable source-row identity, deterministic output, and timeout compliance. Integration/equivalence may additionally use the existing `SHARED_READONLY_FIXTURE`, but that fixture never replaces generated tiny property cases.
+Named Nox sessions apply cross-cutting execution constraints without duplicating suite structure: `cuda` (serializes `tests/integration/cuda/` and any other `CUDA`-tagged test onto one worker), `serial` (non-CUDA tests that must not run under xdist), `resource_intensive` (tests declaring an elevated `TestResourceBudget`), `xdist_safe` (the default parallel CPU session), `synthetic` (`tests/system/synthetic/`), and `scientific_smoke` (`tests/system/scientific_smoke/`). CUDA tests never run concurrently on one GPU. CPU-safe tests may use xdist freely. No test writes into a scientific output root (`checkpoints/`, `outputs/`, `results/`); every test resolves storage only beneath `TEST_SANDBOX`.
+
+Reuse tests assert that B1–B4 share one calibration-set id and compatible evaluations share one test-set id, while role or lineage substitution fails. Dirichlet property/unit contracts always use `TestDataScale.SYNTHETIC_TINY`, small deterministic K, bounded sample counts, deterministic seeds, and strict timeouts; they assert sample conservation, no overlap, expected client count, valid alpha handling, no empty client where forbidden, stable source-row identity, deterministic output, and timeout compliance. Integration tests may additionally use `SHARED_READONLY_FIXTURE`, but that fixture never replaces generated tiny property cases.
 
 | Invariant family | Required behavior-focused test |
 |---|---|
@@ -2022,20 +2311,20 @@ Dirichlet property/unit contracts always use the existing `TestDataScale.SYNTHET
 | Batch/chunk immutability | preflight validates the exact configured `TrainingBatchSpec`/`ScoringBatchSpec`/`PreprocessingChunkSpec` combination and never selects a smaller alternative; CUDA OOM does not modify training or scoring batch size and is terminal for the execution attempt; RAM pressure does not modify chunk size; scoring OOM does not modify scoring batch size; gradient-accumulation and effective batch size cannot change after stage start; smoke mode never backs off automatically; a manually changed profile creates new affected identities under a new run; resource pressure can pause or fail a stage but cannot mutate the profile |
 | Persistence/locks | same-filesystem single-file atomic commit; partial bundle rejection; lease release, heartbeat, stale owner and process-death recovery; compatible recovery checkpoint only; recovery refuses a changed batch/chunk profile |
 | Test-score atomicity | missing benign child rejected; missing attack child rejected; mismatched client/split/checkpoint/scoring-identity rejected; incorrect sample count or invalid row-order checksum rejected; child hash mismatch rejected; absent final commit marker rejected; a successfully committed pair is readable and consumed only by `PolicyEvaluator` as one aggregate |
-| Planning/reuse | typed spec-diff impacts; incompatible artifact is `RECOMPUTE`; anchor gate/namespace isolation; global checkpoint selection; lifecycle transitions; `DraftPlannedStage` carries no reuse decision; `FinalPlannedStage` always carries a classified reuse decision; the planner never queries the artifact repository; only `ExecutionPreflight` receives the artifact catalogue snapshot; identical immutable planner inputs produce an identical draft |
+| Planning/reuse | typed spec-diff impacts; incompatible artifact is `RECOMPUTE`; anchor gate/namespace isolation; global checkpoint selection; lifecycle transitions; `DraftPlannedStage` carries no reuse decision; `FinalPlannedStage` always carries a classified reuse decision; the planner never queries `ArtifactStore`; only `ExecutionPreflight` receives the artifact catalogue snapshot; identical immutable planner inputs produce an identical draft |
 | OOM lifecycle | `CudaOutOfMemoryError` ends the current `ExecutionAttemptId`; no `FAILED_OOM → PAUSED` or `FAILED_OOM → RECOVERED` transition exists; no automatic retry; a later explicit attempt may use only a previously committed compatible recovery checkpoint under a new `ExecutionAttemptId`; a changed execution profile cannot use the old recovery checkpoint |
 | Artifact and cell identity | `ArtifactId` is deterministic for identical logical inputs; identical logical id with mismatched bytes is rejected as an integrity conflict, never issued a new random id; `CellId` collisions between distinct resolved sweep cells raise `AmbiguousPlanError` |
 | Statistical degeneracy | an expected zero-mean CV or BCa degeneracy becomes a typed, persisted `UndefinedCvResult`/`DegenerateBootstrapIntervalResult`; an unexpected statistical failure raises `StatisticsError`; BCa is never silently replaced by a percentile interval |
 | Out-of-scope execution | a `RejectionRecord` cannot create a planner stage; no strategy registry accepts a rejected or out-of-scope method; no configuration union contains an executable variant for a rejected experiment; every catalogue entry with `ExecutionStatus.REJECTED` is architecture-tested as non-executable |
-| Storage boundaries | pure domain and application types contain no concrete `Path`; `BoundStorageRoot`/`ResolvedArtifactLocation` binding occurs only at the infrastructure/composition-root boundary; manifests carry `StorageRootKind` and root-relative paths only; a resolution escaping its bound root raises `PathResolutionError` |
+| Storage boundaries | pure domain and application types contain no concrete `Path`; `BoundStorageRoot`/`ResolvedArtifactLocation` binding occurs only inside `infrastructure/persistence`; manifests carry `StorageRootKind` and root-relative paths only; a resolution escaping its bound root raises `PathResolutionError`; no direct `Path` construction exists anywhere outside `infrastructure/persistence` |
 | Result freeze/reporting | no render before freeze/provenance closure; all required formats; no scientific value sourced only from logs |
-| Architecture | no framework carrier or untyped public mapping crosses layers; closed unions are exhaustively handled |
+| Architecture | dependency direction matches Section 3's diagram exactly (`test_dependency_rules.py`); no PyTorch, Flower, NumPy, pandas, PyArrow, SciPy, or scikit-learn object crosses a port boundary (`test_framework_confinement.py`); no Pydantic model crosses the `config` boundary; no forbidden generic module name (`utils`, `helpers`, `common`, `misc`, `base`, `manager`, `handler`, `processor`, `context`, `payload`, `shared`) exists anywhere under `src/datp_core` (`test_no_forbidden_module_names.py`); importing a production module has no side effect (`test_no_module_side_effects.py`, Section 16.4); no import cycle exists (`test_no_cycles.py`); every closed union is exhaustively handled with `assert_never`; no root `experiments/` package exists |
 
 Real full-data and CUDA tests are serialized and profile-controlled. Property tests remain bounded by the declared timeout and memory budget; no test merely asserts enum-member spelling.
 
 ### 21.3 Configuration ownership
 
-`pyproject.toml` holds tool configuration and marker registration only. Test-profile files under `tests/profiles/` hold the profile fields, which are mapped once into `TestProfileSpec` and injected into fixtures; a fixture receives a resolved spec, never a raw mapping. Isolated storage resolves beneath `TEST_SANDBOX` only. Synthetic data is the default; real data is used only where a profile's `ExternalDependencyPolicy` is `REAL_DATA_ALLOWED`. CUDA tests run in a serialized lane (`SERIAL_CUDA_LANE`); CPU-safe suites use xdist (`XDIST_SAFE`). Timeouts and resource budgets are declared per profile. Failed-artifact retention follows the profile's `ArtifactRetentionPolicy`. Deterministic replay is guaranteed by the equivalence suites. Nox owns the named validation sessions and the composition of impacted-test and full-suite runs.
+`pyproject.toml` holds tool configuration and marker registration only. Test-profile files under `configs/tests/` hold the profile fields, which `tests/support/` maps once into `TestProfileSpec` and injects into fixtures; a fixture receives a resolved spec, never a raw mapping. Isolated storage resolves beneath `TEST_SANDBOX` only. Synthetic data is the default; real data is used only where a profile's `ExternalDependencyPolicy` is `REAL_DATA_ALLOWED`. CUDA tests run in a serialized lane (`SERIAL_CUDA_LANE`); CPU-safe suites use xdist (`XDIST_SAFE`). Timeouts and resource budgets are declared per profile. Failed-artifact retention follows the profile's `ArtifactRetentionPolicy`. Deterministic replay is guaranteed by the equivalence suites. Nox owns the named validation sessions and the composition of impacted-test and full-suite runs.
 
 ### 21.4 Test isolation diagram
 
@@ -2077,7 +2366,7 @@ Reporting produces typed table, figure, and report artifacts, each traceable to 
 
 ### 22.1 Typed outputs
 
-A table specification and figure specification live in framework-free `analysis/table_specs.py` and `analysis/figure_specs.py`; wording and lineage closure live in `analysis/wording.py` and `analysis/tracing.py`. `infrastructure/reporting/table_renderer.py` renders CSV, Markdown, LaTeX and machine-readable Parquet/JSON where applicable; `matplotlib_renderer.py` renders SVG, PNG and PDF. Scientific analysis imports no plotting framework. B4 interpretability remains a contingency table or small heatmap; there is no Sankey type. `EligibilityCoverageResult` and `ConformalCoverageResult` occupy disjoint table/figure columns, report wording fields, statistical-contract fields, and manifest members; no renderer accepts a generic coverage field. A table/figure specification persists as `ArtifactType.TABLE_INPUT`/`FIGURE_INPUT`; its rendered output persists separately as `ArtifactType.RENDERED_TABLE`/`RENDERED_FIGURE`; a rendered wording block persists as `ArtifactType.WORDING_OUTPUT`. Rendered outputs are never folded back into the `TABLE_INPUT`/`FIGURE_INPUT` members that describe their pre-render specification.
+Table and figure specifications live in framework-free `analysis/tables/` and `analysis/figures/`; wording selection lives in `analysis/wording.py`; framework-free report-model construction shared by both lives in `analysis/report_models.py`. Result-freezing and provenance-closure verification are `application/reporting/` concerns (`freeze.py`, `tracing.py`), not `analysis` ones — `analysis` never reads a repository, resolves a path, or verifies a lineage chain (Section 3.6, Section 3.5 ownership matrix). `infrastructure/reporting/markdown.py` and `latex.py` render CSV, Markdown, LaTeX and machine-readable Parquet/JSON where applicable; `matplotlib.py` renders SVG, PNG and PDF. Scientific analysis imports no plotting framework. B4 interpretability remains a contingency table or small heatmap; there is no Sankey type. `EligibilityCoverageResult` and `ConformalCoverageResult` occupy disjoint table/figure columns, report wording fields, statistical-contract fields, and manifest members; no renderer accepts a generic coverage field. A table/figure specification persists as `ArtifactType.TABLE_INPUT`/`FIGURE_INPUT`; its rendered output persists separately as `ArtifactType.RENDERED_TABLE`/`RENDERED_FIGURE`; a rendered wording block persists as `ArtifactType.WORDING_OUTPUT`. Rendered outputs are never folded back into the `TABLE_INPUT`/`FIGURE_INPUT` members that describe their pre-render specification.
 
 ### 22.2 Traceability chain
 
@@ -2092,13 +2381,40 @@ resolved configuration
               → format-specific renderer
 ```
 
-Every reported output resolves back through this chain to resolved configuration. `TableFigureTracer.trace` requires an immutable `ResultFreezeManifest` whose expected inputs and hashes close; otherwise it sets `TRACE_REFUSED` and raises `ProvenanceError`. No table or figure reads a log. Environment inventory is recorded but not fingerprinted; every persisted artifact carries an `ArtifactSchemaVersion` and content hash.
+Every reported output resolves back through this chain to resolved configuration. `TableFigureTracer.trace` (`application/reporting/tracing.py`, a concrete service, Section 12.3) requires an immutable `ResultFreezeManifest` whose expected inputs and hashes close; otherwise it sets `TRACE_REFUSED` and raises `ProvenanceError`. No table or figure reads a log. Environment inventory is recorded but not fingerprinted; every persisted artifact carries an `ArtifactSchemaVersion` and content hash.
 
-### 22.3 Pre-specification provenance
+### 22.3 Analysis, trace, and rendering diagram
+
+```mermaid
+graph TD
+    DOM[domain result types: PolicyEvaluationResult, StatisticalAnalysisResult, ...]
+    ANA[analysis/: table_specs, figure_specs, wording, report_models — framework-free]
+    FRZ[application/reporting/freeze.py: ResultFreezeManifest eligibility]
+    TRC[application/reporting/tracing.py: TableFigureTracer]
+    REND[infrastructure/reporting/: markdown.py, latex.py, matplotlib.py]
+    OUT[RENDERED_TABLE / RENDERED_FIGURE / WORDING_OUTPUT]
+    REFUSE[TRACE_REFUSED + ProvenanceError]
+
+    DOM --> ANA
+    ANA --> FRZ
+    FRZ --> TRC
+    TRC -->|lineage closes| REND
+    TRC -->|lineage does not close| REFUSE
+    REND --> OUT
+
+    classDef pure fill:#eef,stroke:#557;
+    classDef adapter fill:#fee,stroke:#a55;
+    class DOM,ANA pure;
+    class REND adapter;
+```
+
+**Guarantee.** `analysis` depends only on `domain` result types and never on a repository, a path, or an infrastructure renderer. `application/reporting` is the sole gate between a framework-free specification and a rendered artifact: it either verifies provenance closure and hands the specification to `infrastructure/reporting`, or refuses to render at all. A renderer never alters a scientific value; it only chooses a serialization format.
+
+### 22.4 Pre-specification provenance
 
 Pre-specified decision bands — the model-personalization absorption cutoffs and the temporal-recalibration outcome bands — are recorded as `PreSpecificationRecord` entries in the manifest, each naming the version-controlled roadmap lock revision and the time it was fixed. This evidences that the bands were committed before any Regime D or stress-test data existed, which is the provenance that answers the reviewer objection that a band might have been chosen after seeing pilot data. The bands themselves are applied exactly as locked, without post-hoc adjustment.
 
-### 22.4 Roadmap-to-architecture traceability matrix
+### 22.5 Roadmap-to-architecture traceability matrix
 
 Every row below expands to explicit typed cells in the experiment catalogue; “core” means the fixed FedAvg E=1/full-participation training identity and its globally selected scheduled round. `A-gate` is the passed anchor reproduction; `D-gate` is exact-source/partition feasibility. All journal rows require `A-gate`; D/D-temporal rows additionally require `D-gate`. Rejection rows are non-executable records.
 
@@ -2171,20 +2487,29 @@ The following are explicitly rejected. Each has a structural reason, not merely 
 - **The global `multiprocessing.set_start_method`** — it can be set only once and raises if already set; a per-stage `get_context("spawn")` is used for CUDA stages.
 - **A `Result[T, E]` monad at stage boundaries** — it invites ignored errors and fights the fail-loudly doctrine; typed exceptions are used, with discriminated result values only for pure fallible functions.
 - **Compatibility shims, aliases, or migration facades** — the implementation is written from scratch.
+- **A root Python `experiments/` package** — it would introduce an undeclared architectural layer duplicating `domain/experiments/`, `configs/experiments/`, `config/mapping/`, and `application/planning/`; removed rather than reconciled with an import-linter carve-out (Section 3.1).
+- **The CLI as composition root** — `cli` parses input, invokes `composition`, and renders a boundary result; it never wires a dependency itself (Section 3.2, Section 12.5).
+- **`ArtifactPathResolver` as an application-facing port** — path resolution is an internal collaborator of `infrastructure/persistence`; the application never receives a `Path`, `BoundStorageRoot`, or `ResolvedArtifactLocation` (Section 15).
+- **A `CentralizedModelComparatorRunner` mega-interface** — B0 is its own `ExperimentSpec` executed through the same reusable stages as every other cell, with separate centralized identities; no single interface performs training, checkpointing, scoring, thresholding, evaluation, and provenance at once (Section 9.2).
+- **A generic `ArtifactRepository` god-interface** — persistence is narrowed into `ArtifactStore`, `CheckpointStore`, `ManifestStore`, `RunStateStore`, and `ArtifactLockProvider`, each with non-overlapping responsibilities (Section 12.2).
+- **Checkpoint-selection policy living in infrastructure** — `CheckpointStore` only lists, loads, saves, hashes, and validates checkpoint artifacts; `CheckpointSelector` in `application/stages/select_checkpoint.py` decides which scientifically valid checkpoint wins (Section 17.1).
+- **`TestProfileExecutor` as an application port** — test execution is a `tests/support/` concern; production code exposes injectable ports that tests use, but never imports test-profile or fixture concepts (Section 21).
+- **A flat, junk-drawer domain** — `domain/vocabulary.py`, `domain/identifiers.py`, `domain/collections.py`, and `domain/definitions.py` are replaced by cohesive capability subpackages (`data`, `learning`, `thresholding`, `evaluation`, `experiments`, `artifacts`, `runtime`, `mathematics`); no single module centralizes every enum, identifier, or pure function (Section 3.4).
 
 ---
 
 ## 24. Naming and navigation rules
 
-- **Modules** are domain nouns (`thresholds.py`, `scores.py`, `lineage.py`, `planning.py`, `storage.py`, `observability.py`). Banned: `utils.py`, `common.py`, `base.py`, `misc.py`, `helpers.py`, `manager.py`, `shared.py`.
+- **Modules** are domain nouns (`thresholds.py`/`policies.py`, `scores.py`, `lineage.py`, `planner.py`, `keys.py`, `dispersion.py`). Banned: `utils.py`, `common.py`, `base.py`, `misc.py`, `helpers.py`, `manager.py`, `handler.py`, `processor.py`, `context.py`, `payload.py`, `shared.py`.
 - **Classes** are precise nouns; the bare names `Data`, `Config`, `Result`, `Manager`, `Context`, `Payload`, `Handler`, and `Processor` are banned. Results are named per operation (`PolicyEvaluationResult`, `TrainingRunResult`, `CalibrationScoreGenerationResult`, `ConfirmatoryAnalysisResult`, `ExecutionSummary`).
 - **Enums** are singular concept nouns; `StrEnum` members are UPPER_SNAKE with snake_case serialized values that carry the naming locks.
-- **Configuration** types are `<Section>Config` (schema) mapping to `<Concept>Spec` (domain).
-- **Experiments** use the roadmap identifiers verbatim (`E-C1`); configuration files are `configs/experiments/E-C1.yaml`; the catalogue symbol is `E_C1`; sweep cells carry a `CellId`.
-- **Tests** are `test_<behavior>.py`; property tests live under `tests/property/`.
-- **Files** carry a roughly five-hundred-line soft cap, split by responsibility, never by class count.
-- **Imports** are import-linter enforced; no `import *`; explicit `__all__`; no side-effectful `__init__`.
-- **Factories** live in infrastructure and the composition root; **registries** mapping an enum to a strategy live in application and are populated at the root; shared pure logic lives in named modules such as `domain/definitions.py`.
+- **Configuration** types are `<Section>Config` (schema, in `config/schemas/`) mapping to `<Concept>Spec` (domain, in the owning `domain/` subpackage).
+- **Experiments** use the roadmap identifiers verbatim (`E-C1`); configuration data files are `configs/experiments/E-C1.yaml`; the domain specification symbol is `E_C1`; sweep cells carry a `CellId`. No root `experiments/` Python package exists (Section 3.1).
+- **Tests** are `test_<behavior>.py`; property tests live under `tests/property/`; test suites are organized by level first, not mirrored to `src/` (Section 21).
+- **Files** carry a roughly five-hundred-line soft cap; it is a warning threshold, not permission to keep an incohesive 499-line module, and a file is never split merely to satisfy the line count (Section 5.3).
+- **Imports** are import-linter and pytest-archon enforced; no `import *`; explicit `__all__`; no side-effectful `__init__`.
+- **Factories** live in `infrastructure` and `composition`; **registries** mapping an enum to a strategy live in `application` (declared) and are populated once in `composition/registries.py`; shared pure logic lives in named modules such as `domain/mathematics/dispersion.py`.
+- **Configuration groups** under `configs/` use precise nouns (`protocols`, `experiments`, `execution`, `artifacts`, `reporting`, `tests`); `profiles` is never used as a universal catch-all category (Section 9, Section 11).
 
 ---
 
@@ -2192,14 +2517,14 @@ The following are explicitly rejected. Each has a structural reason, not merely 
 
 Each extension touches only the listed places; discriminated unions, named profiles, and the planner make wrong shapes unrepresentable.
 
-- **Add a dataset** — a `Dataset` member; a chunked `DatasetSource` and partitioner adapter; a `DatasetConfig` with `input_dim` and verification; a dataset-regime profile; registration at the root; contract and memory-equivalence tests.
+- **Add a dataset** — a `Dataset` member in `domain/data/datasets.py`; a chunked source-inspection and partitioner adapter in `infrastructure/data/`; a `DatasetConfig` in `config/schemas/scientific.py` with `input_dim` and verification; a dataset-regime profile in `domain/experiments/specifications.py`; registration in `composition/registries.py`; contract and memory-equivalence tests.
 - **Add a regime** — a `Regime` member (executable only, else a `RejectionRecord`); a partition strategy if new; a profile and configuration; tests. No new pipeline.
-- **Add a threshold policy, variant, or comparator** — the correct enum member; a discriminated `ThresholdConfig` arm with exactly its fields; a `ThresholdStrategy` implementation; registration in the policy registry; a property test; adherence to the naming locks. Scores are reused automatically because a threshold change preserves the scoring identity.
-- **Add a training strategy** — an `AggregationStrategy` or `ModelPersonalizationStrategy` member (never mislabeling FedRep or FedPer as Ditto); a trainer behind `FederatedTrainer` (CUDA-required); Tier-4 stress-test status; matched architecture, preprocessing, partitions/splits, E, batch semantics, optimizer/learning-rate policy, participation, rounds, and all non-strategy settings; for FedProx alone, a strictly positive pre-registered µ-grid that is never selected from confirmatory test outcomes; equivalence and CUDA tests.
-- **Add a metric** — the correct family enum and a `MetricSpec` (control, eligible-only, higher-is-better); a typed per-family calculator method; tests; no duplicate names.
-- **Add an artifact type** — an `ArtifactType` member; a typed `ArtifactRepository` write/lookup pair; provenance wiring; tests.
-- **Add an experiment** — a configuration file and a typed catalogue entry referencing existing or derived profiles; role, tier, and status; a wording mapping if a new claim outcome arises; the planner picks it up. No new module.
-- **Add a configuration field** — the specific `<Section>Config` (never a god-config); mapping and value-object wrapping; validation; scientific fields are fingerprinted, execution fields are recorded; tests.
+- **Add a threshold policy, variant, or comparator** — the correct enum member in `domain/thresholding/`; a discriminated `ThresholdConfig` arm with exactly its fields; a `ThresholdStrategy` implementation in `infrastructure/thresholding/`; registration in `composition/registries.py`'s policy registry; a property test; adherence to the naming locks. Scores are reused automatically because a threshold change preserves the scoring identity.
+- **Add a training strategy** — an `AggregationStrategy` or `ModelPersonalizationStrategy` member (never mislabeling FedRep or FedPer as Ditto); a trainer behind `FederatedTrainer` in `infrastructure/learning/federation/strategies/` (CUDA-required); Tier-4 stress-test status; matched architecture, preprocessing, partitions/splits, E, batch semantics, optimizer/learning-rate policy, participation, rounds, and all non-strategy settings; for FedProx alone, a strictly positive pre-registered µ-grid that is never selected from confirmatory test outcomes; equivalence and CUDA tests.
+- **Add a metric** — the correct family enum in `domain/evaluation/metrics.py` and a `MetricSpec` (control, eligible-only, higher-is-better); a typed per-family calculator method in `infrastructure/evaluation/metrics.py`; tests; no duplicate names.
+- **Add an artifact type** — an `ArtifactType` member in `domain/artifacts/manifests.py`; a typed write/lookup pair on the correct narrow port (`ArtifactStore`, `CheckpointStore`, or `ManifestStore` — never a generic repository); provenance wiring; tests.
+- **Add an experiment** — a YAML file in `configs/experiments/` and a typed `ExperimentSpec` in `domain/experiments/specifications.py` referencing existing or derived profiles; role, tier, and status; a wording mapping if a new claim outcome arises; `ExperimentPlanner` picks it up. No new module, no root `experiments/` package.
+- **Add a configuration field** — the specific `<Section>Config` in `config/schemas/` (never a god-config); mapping in `config/mapping/` and value-object wrapping; validation; scientific fields are fingerprinted, execution fields are recorded; tests.
 
 ---
 
@@ -2263,27 +2588,43 @@ Concise responsibility tables for the most important contracts. Each states owne
 **`DatasetSourceInspector` → `ClientPartitioner` → `SplitManifestBuilder` → `PreprocessorFitter` → `ProcessedSplitMaterializer`**
 
 | Field | Description |
+**`ExperimentPlanner`**
+
+| Field | Description |
+|---|---|
+| Responsibility | Expand sweeps, derive identities and dependencies, deduplicate compatible stages, evaluate supplied scientific gates, and emit a deterministic draft plan |
+| Layer | application, concrete service (`application/planning/planner.py`) |
+| Input | `CreateExecutionPlanRequest` |
+| Output | `DraftExecutionPlan` |
+| Dependencies | domain; an immutable feasibility snapshot and gate/readiness results only — no artifact-catalogue access |
+| Failures | `AmbiguousPlanError`, `CyclicPlanError` |
+| Fingerprint impact | none (reads identities) |
+| Persistence | runtime-only (emits a plan) |
+
+**`DatasetSourceInspector` → `ClientPartitioner` → `SplitManifestBuilder` → `PreprocessorFitter` → `ProcessedSplitMaterializer`**
+
+| Field | Description |
 |---|---|
 | Responsibility | Inspect source facts, assign clients, assign exact splits, fit only authorized TRAIN rows, then materialize transformed splits with source-row lineage |
-| Layer | application contracts, infrastructure implementations |
+| Layer | application ports (`application/ports/data.py`), infrastructure implementations (`infrastructure/data/`) |
 | Input | one dedicated request per stage using the immediately preceding manifest |
 | Output | source/schema manifests, partition manifest, split manifest, fitted-preprocessor artifact, processed-split result |
-| Dependencies | framework-neutral repositories; private PyArrow/pandas carriers stay inside adapters |
+| Dependencies | framework-neutral ports; private PyArrow/pandas carriers stay inside adapters |
 | Failures | `DatasetError`, `PartitionError`, `SplitError`, `PreprocessingError` |
 | Fingerprint impact | source, schema, partition, split, fitted-preprocessor, processed-split identities |
 | Persistence | every result is schema-versioned and immutable |
 
-**`FederatedTrainer`**
+**`FederatedTrainer` / `CentralizedModelTrainer`**
 
 | Field | Description |
 |---|---|
-| Responsibility | Train the fixed AE once to schedule under CUDA, saving scientific checkpoints; report convergence |
-| Layer | application contract, infrastructure implementation |
-| Input | `TrainFederatedModelRequest` |
+| Responsibility | Train the fixed AE once to schedule under CUDA, saving scientific checkpoints; report convergence. `CentralizedModelTrainer` is B0's distinct centralized-training port (Section 9.2), never a variant of `FederatedTrainer` |
+| Layer | application ports (`application/ports/learning.py`), infrastructure implementations (`infrastructure/learning/federation/`, `infrastructure/learning/centralized/`) |
+| Input | `TrainFederatedModelRequest` / `TrainCentralizedModelRequest` |
 | Output | `TrainingRunResult` |
-| Dependencies | `ModelTrainingAdapter`, `CudaGuard`, processed-split and checkpoint repositories |
+| Dependencies | `CudaGuard`; `ProcessedSplitMaterializer` output; `CheckpointStore` |
 | Failures | `TrainingError`, `CudaUnavailableError`, `CudaOutOfMemoryError`, `DeterminismViolationError` |
-| Fingerprint impact | training and checkpoint identities |
+| Fingerprint impact | training and checkpoint identities (federated or centralized, never shared) |
 | Persistence | scientific checkpoints; recovery state |
 
 **`CheckpointSelector`**
@@ -2291,10 +2632,10 @@ Concise responsibility tables for the most important contracts. Each states owne
 | Field | Description |
 |---|---|
 | Responsibility | Evaluate all scheduled Regime A candidates once and select the global primary round under the locked rule/tie break |
-| Layer | application contract |
+| Layer | application, concrete service (`application/stages/select_checkpoint.py`, Section 17.1) — not infrastructure |
 | Input | `CheckpointSelectionRequest` |
 | Output | `CheckpointSelectionResult` and artifact |
-| Dependencies | scientific checkpoint descriptors and allowed Regime A evidence only |
+| Dependencies | `CheckpointStore` (read-only lookup of candidate descriptors); allowed Regime A evidence only |
 | Failures | `CheckpointSelectionError` |
 | Fingerprint impact | checkpoint-selection identity |
 | Persistence | immutable selection artifact distinct from weights |
@@ -2304,10 +2645,10 @@ Concise responsibility tables for the most important contracts. Each states owne
 | Field | Description |
 |---|---|
 | Responsibility | Generate separate per-client calibration and test/temporal score artifacts under one selected scientific checkpoint |
-| Layer | application contract, infrastructure implementation |
+| Layer | application port (`application/ports/scoring.py`), infrastructure implementation (`infrastructure/scoring/`) |
 | Input | `GenerateCalibrationScoresRequest`, `GenerateTestScoresRequest`, or temporal request |
 | Output | split-specific generation result and typed artifact set |
-| Dependencies | `CudaGuard`, processed-split/checkpoint repositories, artifact repository |
+| Dependencies | `CudaGuard`; `ProcessedSplitMaterializer`/`CheckpointStore` outputs; `ArtifactStore` |
 | Failures | `ScoringError`, `CudaUnavailableError`, `CudaOutOfMemoryError` |
 | Fingerprint impact | scoring identity |
 | Persistence | one calibration and one test set per compatible scoring identity; optional temporal sets by window |
@@ -2317,7 +2658,7 @@ Concise responsibility tables for the most important contracts. Each states owne
 | Field | Description |
 |---|---|
 | Responsibility | Build one closed-union threshold construction from calibration scores only; persist B4/FedStats evidence where applicable |
-| Layer | application contract, infrastructure implementation |
+| Layer | application port (`application/ports/thresholding.py`), infrastructure implementation (`infrastructure/thresholding/`) |
 | Input | `ConstructThresholdsRequest` |
 | Output | `ThresholdConstructionResult` |
 | Dependencies | `QuantileEstimator`, `ThresholdStrategy`, `ClusteringStrategy` |
@@ -2330,20 +2671,20 @@ Concise responsibility tables for the most important contracts. Each states owne
 | Field | Description |
 |---|---|
 | Responsibility | Join assignments with test/temporal scores, emit confusion-complete client results and cohesive fleet results; require traffic evidence for alert burden |
-| Layer | application contract, infrastructure implementation |
+| Layer | application, concrete service (`application/stages/evaluate_policy.py`) — pure confusion-count arithmetic, no framework, no port |
 | Input | `EvaluatePolicyRequest` |
 | Output | `PolicyEvaluationResult` |
-| Dependencies | framework-neutral evaluation adapter and typed artifact repositories |
+| Dependencies | `ArtifactStore` (read of typed score-set descriptors only) |
 | Failures | `EvaluationError` |
 | Fingerprint impact | evaluation identity |
 | Persistence | metric outputs |
 
-**`StatisticalAnalyzer`**
+**`StatisticalProcedureRunner`**
 
 | Field | Description |
 |---|---|
 | Responsibility | Run BCa bootstrap and descriptive tests; produce the confirmatory verdict under the locked pass rule |
-| Layer | application contract, infrastructure implementation |
+| Layer | application port (`application/ports/statistics.py`), infrastructure implementation (`infrastructure/statistics/scipy_adapter.py`); orchestrated by the concrete `application/stages/analyze_statistics.py` stage |
 | Input | `RunStatisticalAnalysisRequest` |
 | Output | `StatisticalAnalysisResult` (with `ConfirmatoryAnalysisResult` for the endpoint) |
 | Dependencies | SciPy adapter; in-repo `cliffs_delta` |
@@ -2351,38 +2692,38 @@ Concise responsibility tables for the most important contracts. Each states owne
 | Fingerprint impact | statistical identity |
 | Persistence | statistical outputs |
 
-**`ArtifactRepository`**
+**`ArtifactStore`**
 
 | Field | Description |
 |---|---|
 | Responsibility | Look up, commit/validate single-file artifacts, and marker-commit immutable bundles addressed by id and content hash |
-| Layer | application contract, infrastructure implementation |
+| Layer | application port (`application/ports/persistence.py`), infrastructure implementation (`infrastructure/persistence/artifacts.py`, `bundles.py`) |
 | Input | lookup/write/validate requests plus `CommitArtifactBundleRequest` |
 | Output | lookup/write/validation results plus `ArtifactBundleCommitResult` |
-| Dependencies | `ArtifactPathResolver`, `ArtifactLockProvider` |
+| Dependencies | `ArtifactLockProvider`; the internal path resolver of `infrastructure/persistence/paths.py` (never exposed as a separate application dependency; Section 15) |
 | Failures | `ArtifactError`, `PartialArtifactError`, `IncompleteArtifactBundleError`, `ArtifactLockConflict` |
 | Fingerprint impact | none (persists identified content) |
-| Persistence | all persisted artifacts |
+| Persistence | all persisted artifacts other than checkpoints, manifests, and run-state records |
 
-**`ArtifactPathResolver`**
+**`CheckpointStore`**
 
 | Field | Description |
 |---|---|
-| Responsibility | Resolve a logical `ArtifactKey` to a location beneath a validated typed root |
-| Layer | application contract, infrastructure implementation |
-| Input | `ResolveArtifactLocationRequest` |
-| Output | `ResolvedArtifactLocation` |
-| Dependencies | `BoundStorageRoot` bindings |
-| Failures | `PathResolutionError` |
-| Fingerprint impact | none (location is not identity) |
-| Persistence | runtime-only |
+| Responsibility | List, load, save, hash, and validate scientific and recovery checkpoint artifacts under distinct methods, roots, and namespaces; never decide which is scientifically primary (Section 17.1) |
+| Layer | application port (`application/ports/persistence.py`), infrastructure implementation (`infrastructure/persistence/checkpoints.py`, `recovery.py`) |
+| Input | `FindCheckpointRequest`, `SaveScientificCheckpointRequest`, `SaveRecoveryStateRequest`, `LoadRecoveryStateRequest` |
+| Output | `CheckpointLookupResult`, `CheckpointWriteResult`, `RecoveryWriteResult`, `RecoveryLookupResult` |
+| Dependencies | `ArtifactLockProvider` |
+| Failures | `CheckpointError`, `RecoveryStateMismatchError`, `ResumeIncompatibilityError` |
+| Fingerprint impact | none (persists identified content) |
+| Persistence | scientific checkpoints (`SCIENTIFIC_CHECKPOINTS` root) and recovery state (`RECOVERY_STATE` root), never conflated |
 
 **`EventSink`**
 
 | Field | Description |
 |---|---|
 | Responsibility | Publish typed structured events for rendering |
-| Layer | application contract, infrastructure implementation |
+| Layer | application port (`application/ports/telemetry.py`), infrastructure implementation (`infrastructure/telemetry/`) |
 | Input | `StructuredEvent` |
 | Output | none |
 | Dependencies | `LogSink`, `LogFormat` renderers |
@@ -2390,18 +2731,7 @@ Concise responsibility tables for the most important contracts. Each states owne
 | Fingerprint impact | none |
 | Persistence | JSONL event stream (diagnostic, not scientific) |
 
-**`TestProfileExecutor`**
-
-| Field | Description |
-|---|---|
-| Responsibility | Run a typed test profile against isolated storage and lanes |
-| Layer | application contract |
-| Input | `ExecuteTestProfileRequest` |
-| Output | `TestRunResult` |
-| Dependencies | test fixtures; `TEST_SANDBOX` roots |
-| Failures | `TestProfileValidationError` |
-| Fingerprint impact | none |
-| Persistence | sandboxed, retention by policy |
+Test execution has no entry in this table: it is not an application or infrastructure contract, but a `tests/support/` helper that resolves a `TestProfileSpec` from `configs/tests/` and drives fixtures directly (Section 21).
 
 ---
 
@@ -2424,7 +2754,9 @@ Each invariant is stated together with the mechanism that enforces it.
 
 ### 29.2 Dependency and type consistency
 
-- The domain is framework-free; the application depends on the domain only; infrastructure implements application ports; configuration maps boundary schemas to immutable specs; analysis consumes stable contracts; composition occurs at the outer boundary — enforced by import-linter contracts.
+- The domain is framework-free; the application depends on the domain only; infrastructure implements application ports; configuration maps boundary schemas to immutable specs; analysis consumes domain-only contracts; composition assembles adapters and services from every layer; the CLI depends only on composition — enforced by import-linter and pytest-archon contracts (Section 3, Section 12.5).
+- Persistence is narrow by storage semantics (`ArtifactStore`, `CheckpointStore`, `ManifestStore`, `RunStateStore`, `ArtifactLockProvider`) rather than one god interface, and path resolution never crosses into the application layer — enforced by the Section 12.2 port signatures and the Section 15 storage model.
+- No root Python `experiments/` package exists; experiment identity and specification live in `domain/experiments/`, external data in `configs/experiments/`, and plan expansion in `application/planning/` — enforced by `test_no_forbidden_module_names.py` and the import-linter contract set.
 - Every referenced type and enum is defined; every operation uses a named request and result; no object-shaped dictionary appears in domain or application contracts; no generic result replaces a precise outcome — enforced by Pyright strict mode and the collection and dataclass discipline.
 - Distinct identities are distinct nominal types and each `match` over a finite vocabulary is exhaustive — enforced by identity dataclasses and `assert_never`; fingerprints are reproducible because they hash canonical quantized tuples and reject non-finite values.
 
@@ -2434,6 +2766,6 @@ Each invariant is stated together with the mechanism that enforces it.
 
 ### 29.4 Invalid states made unrepresentable
 
-1. Calibrating on attack data. 2. Fitting preprocessing on TEST. 3. Retraining for a threshold-only change. 4. Test-AUROC/attack/stress/external/threshold-driven checkpoint selection. 5. Per-regime or recovery checkpoint selection. 6. A pseudo-discriminated threshold/statistical object. 7. B3 without taxonomy. 8. Caller-controlled canonical B4 K/algorithm or q-mutated fingerprint. 9. Simple FedStats variance or configurable tie rule. 10. Fixed-k as primary comparator. 11. Executing rejected B-b. 12. Non-70/30 canonical temporal split or pseudo-time. 13. Reusing incompatible scores instead of `RECOMPUTE`. 14. Threshold identity inside a checkpoint. 15. Invalid q. 16. Invalid λ. 17. Negative seed/count/bytes. 18. AUROC as primary threshold verdict. 19. A policy-specific eligible-client population, eligibility/conformal metric substitution, or pre-empted calibration-size-aware fallback. 20. Alert burden without valid evidence. 21. Untraced or unfrozen reporting. 22. FedRep mislabeled Ditto. 23. Framework carrier in domain/application. 24. Application importing configuration. 25. Confirmatory role outside Tier 1. 26. Suppressed confirmatory/less-favorable ten-seed evidence. 27. Silent CPU fallback. 28. Silent scientific batch/precision change. 29. Silent approximate quantile. 30. Unproven mixed precision. 31. Multi-GPU/multi-node Phase 0 execution. 32. Concurrent commit without lease. 33. Partial file/bundle marked complete. 34. Immutable overwrite. 35. Recovery selected/cited. 36. Incompatible resume. 37. Scattered global/DataLoader seeds. 38. Interchanged probability objects. 39. Path-derived artifact identity. 40. Machine path in identity. 41. Root escape. 42. Test write to scientific root. 43. Unbounded/sensitive event. 44. Retry of scientific/determinism failure. 45. Cross-stage identity substitution. 46. Non-finite fingerprint/rate. 47. Raw-float fingerprint instability. 48. CUDA fork. 49. Import side effect. 50. Approximate/unstable canonical B4. 51. Untracked row reordering. 52. Swallowed BCa failure or hidden resample default. 53. Invalid atomicity claim. 54. Generic persistence call. 55. Calibration passed to evaluator or test/attack scores passed to threshold construction. 56. Journal stage without passed anchor/readiness. 57. Regime D science without matching passed feasibility. 58. Failed partition relabeled after K reduction. 59. E-Q6 estimate rendered as measured. 60. Long training under a filesystem commit lock. 61. `RUNNING → REUSED`. 62. Anchor/journal namespace overwrite. 63. A `DraftPlannedStage` carrying a reuse decision, or the planner consulting the artifact catalogue. 64. An automatic `FAILED_OOM → PAUSED`/`RECOVERED`/retried transition. 65. A randomly generated scientific `ArtifactId`, or identical logical id with mismatched bytes silently accepted. 66. A silent `CellId` collision between distinct resolved sweep cells. 67. Expected statistical degeneracy raised as an exception instead of persisted as a typed result. 68. An out-of-scope method reachable through a threshold-construction union, strategy registry, or planner stage. 69. A concrete `Path` inside a domain identity, scientific specification, stage fingerprint, artifact key, or scientific manifest. 70. A benign/attack test-score pair exposed before its aggregate manifest commits. 71. B0 supplied with a FedAvg checkpoint or FedAvg-generated score artifact. 72. A named experiment cell outside its closed profile. 73. A regime/dataset/client-definition mismatch. 74. FedProx µ = 0, a FedAvg-equivalent µ, a non-frozen µ, or a µ selected from confirmatory test outcomes.
+1. Calibrating on attack data. 2. Fitting preprocessing on TEST. 3. Retraining for a threshold-only change. 4. Test-AUROC/attack/stress/external/threshold-driven checkpoint selection. 5. Per-regime or recovery checkpoint selection. 6. A pseudo-discriminated threshold/statistical object. 7. B3 without taxonomy. 8. Caller-controlled canonical B4 K/algorithm or q-mutated fingerprint. 9. Simple FedStats variance or configurable tie rule. 10. Fixed-k as primary comparator. 11. Executing rejected B-b. 12. Non-70/30 canonical temporal split or pseudo-time. 13. Reusing incompatible scores instead of `RECOMPUTE`. 14. Threshold identity inside a checkpoint. 15. Invalid q. 16. Invalid λ. 17. Negative seed/count/bytes. 18. AUROC as primary threshold verdict. 19. A policy-specific eligible-client population, eligibility/conformal metric substitution, or pre-empted calibration-size-aware fallback. 20. Alert burden without valid evidence. 21. Untraced or unfrozen reporting. 22. FedRep mislabeled Ditto. 23. Framework carrier in domain/application. 24. Application importing configuration. 25. Confirmatory role outside Tier 1. 26. Suppressed confirmatory/less-favorable ten-seed evidence. 27. Silent CPU fallback. 28. Silent scientific batch/precision change. 29. Silent approximate quantile. 30. Unproven mixed precision. 31. Multi-GPU/multi-node Phase 0 execution. 32. Concurrent commit without lease. 33. Partial file/bundle marked complete. 34. Immutable overwrite. 35. Recovery selected/cited. 36. Incompatible resume. 37. Scattered global/DataLoader seeds. 38. Interchanged probability objects. 39. Path-derived artifact identity. 40. Machine path in identity. 41. Root escape. 42. Test write to scientific root. 43. Unbounded/sensitive event. 44. Retry of scientific/determinism failure. 45. Cross-stage identity substitution. 46. Non-finite fingerprint/rate. 47. Raw-float fingerprint instability. 48. CUDA fork. 49. Import side effect. 50. Approximate/unstable canonical B4. 51. Untracked row reordering. 52. Swallowed BCa failure or hidden resample default. 53. Invalid atomicity claim. 54. Generic persistence call. 55. Calibration passed to evaluator or test/attack scores passed to threshold construction. 56. Journal stage without passed anchor/readiness. 57. Regime D science without matching passed feasibility. 58. Failed partition relabeled after K reduction. 59. E-Q6 estimate rendered as measured. 60. Long training under a filesystem commit lock. 61. `RUNNING → REUSED`. 62. Anchor/journal namespace overwrite. 63. A `DraftPlannedStage` carrying a reuse decision, or the planner consulting the artifact catalogue. 64. An automatic `FAILED_OOM → PAUSED`/`RECOVERED`/retried transition. 65. A randomly generated scientific `ArtifactId`, or identical logical id with mismatched bytes silently accepted. 66. A silent `CellId` collision between distinct resolved sweep cells. 67. Expected statistical degeneracy raised as an exception instead of persisted as a typed result. 68. An out-of-scope method reachable through a threshold-construction union, strategy registry, or planner stage. 69. A concrete `Path` inside a domain identity, scientific specification, stage fingerprint, artifact key, or scientific manifest. 70. A benign/attack test-score pair exposed before its aggregate manifest commits. 71. B0 supplied with a FedAvg checkpoint or FedAvg-generated score artifact. 72. A named experiment cell outside its closed profile. 73. A regime/dataset/client-definition mismatch. 74. FedProx µ = 0, a FedAvg-equivalent µ, a non-frozen µ, or a µ selected from confirmatory test outcomes. 75. A root Python `experiments/` package duplicating `domain/experiments/`, `configs/experiments/`, and `application/planning/`. 76. The CLI constructing an adapter, binding a port, or resolving a path directly instead of calling `composition`. 77. `ArtifactPathResolver` reachable as an application-facing port or receiving a `Path`/`BoundStorageRoot`/`ResolvedArtifactLocation` across the application boundary. 78. A single `ArtifactRepository` (or any other god persistence interface) claiming ownership of artifacts, checkpoints, manifests, and run state at once. 79. Checkpoint-selection logic executing inside `infrastructure/persistence` rather than `application/stages/select_checkpoint.py`. 80. A `CentralizedModelComparatorRunner`-style mega-interface performing B0's training, checkpointing, scoring, thresholding, evaluation, and provenance in one call instead of through the reusable stage sequence. 81. `TestProfileExecutor`, `TestProfileSpec`, or any other test-profile concept imported by a module under `src/datp_core`.
 
 This document defines the fixed technical patterns within which every DATP journal-extension experiment is planned, executed, reused, and reported. It is the authoritative Phase 0 architecture for `datp_core`; the scientific meaning it serves is governed entirely by the Journal Extension Master Roadmap.
