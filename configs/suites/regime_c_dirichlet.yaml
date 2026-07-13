@@ -1,9 +1,0 @@
-# Regime C synthetic Dirichlet severity sweep (E-S3), supportive tier
-# (docs/protocol/regimes.md). Trains per-alpha FedAvg AEs.
-name: regime_c_dirichlet
-status: contract_only
-regimes: [C]
-experiment_ids: [E-S3]
-training_enabled: true
-requires_score_reuse: false
-allow_training_override: false

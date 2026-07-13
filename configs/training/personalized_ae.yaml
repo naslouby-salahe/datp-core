@@ -1,9 +1,0 @@
-# Model-personalization stress test (E-T2), outside the causal B1-B4 ladder.
-# Never labeled "Ditto" unless the true Ditto algorithm is faithfully
-# implemented (SB-24); OQ3 (true Ditto vs FedRep-AE/FedPer-AE fallback) is
-# decided and documented before training starts, not in this Phase 1 skeleton.
-name: personalized_ae
-status: contract_only
-dataset_id: nbaiot
-training_algorithm: personalized_fedrep_ae
-seed_plan: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]

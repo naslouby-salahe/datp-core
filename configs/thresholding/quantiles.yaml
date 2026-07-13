@@ -1,7 +1,0 @@
-# q-sensitivity sweep (E-S2, docs/protocol/naming_conventions.md). Runs B1/B2
-# at each q; reuses frozen scores per docs/protocol/reuse_policy.md.
-name: quantiles
-status: contract_only
-policies: [B1, B2]
-q_values: [0.90, 0.95, 0.975, 0.99]
-calibration_label_scope: benign_only

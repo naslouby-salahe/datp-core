@@ -1,5 +1,0 @@
-# Table/figure export contract (docs/protocol/artifact_contracts.md #2):
-# reads existing outputs only, never recomputes metrics.
-name: reporting
-status: contract_only
-analysis_kind: table_and_figure_export

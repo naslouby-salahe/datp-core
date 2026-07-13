@@ -1,6 +1,0 @@
-# Bootstrap CI + paired-test contract (docs/protocol/seed_plan.md,
-# claim_hierarchy.md Tier 1): 95% BCa bootstrap on the per-seed delta,
-# Wilcoxon/Cliff's delta as descriptive secondaries. No computation in Phase 1.
-name: statistics
-status: contract_only
-analysis_kind: bootstrap_bca_and_paired_tests

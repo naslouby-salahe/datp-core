@@ -1,9 +1,0 @@
-# Regime D external validation (E-X1), gated by the P6-T02 eligibility-coverage
-# audit (docs/protocol/regimes.md). Trains a FedAvg AE on Edge-IIoTset.
-name: external_validation_regime_d
-status: contract_only
-regimes: [D]
-experiment_ids: [E-X1]
-training_enabled: true
-requires_score_reuse: false
-allow_training_override: false

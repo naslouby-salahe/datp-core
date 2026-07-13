@@ -1,7 +1,0 @@
-# Combined calibration-size-aware fallback + tau-shrink variant. Supportive;
-# outside the core ladder (docs/protocol/policies.md).
-name: calibration_size_shrinkage
-status: contract_only
-policies: [cal_size_aware, tau_shrink]
-q_values: [0.95]
-calibration_label_scope: benign_only

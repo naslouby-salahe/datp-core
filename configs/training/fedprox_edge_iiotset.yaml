@@ -1,6 +1,0 @@
-# FedProx stress test on Regime D, outside the causal B1-B4 ladder.
-name: fedprox_edge_iiotset
-status: contract_only
-dataset_id: edge_iiotset
-training_algorithm: fedprox
-seed_plan: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]

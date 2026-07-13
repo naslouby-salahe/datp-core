@@ -1,5 +1,0 @@
-# Pre-specified absorption bands for model-personalization stress tests
-# (R9, MASTER_TICKET_LOG.md); applied as-is, not tuned post hoc.
-name: absorption
-status: contract_only
-analysis_kind: absorption_bands

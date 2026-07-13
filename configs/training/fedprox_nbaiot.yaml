@@ -1,7 +1,0 @@
-# FedProx heterogeneity-aware aggregation stress test (E-T1), outside the
-# causal B1-B4 ladder (docs/protocol/policies.md). mu-grid frozen before results.
-name: fedprox_nbaiot
-status: contract_only
-dataset_id: nbaiot
-training_algorithm: fedprox
-seed_plan: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
