@@ -81,7 +81,7 @@ Ordered by the same presentation order as `docs/MASTER_TICKET_LOG.md` Section H 
 | [P1-T032](P1-T032.md) | Implement YAML loading, override composition, and schema-to-domain mapping | configuration | P0 | P1-T031 | P1-T036, P2-T003 |
 | [P1-T033](P1-T033.md) | Implement resolved-configuration recording and the typed spec-diff | configuration | P0 | P1-T032 | P1-T036, P5-T005 |
 | [P1-T034](P1-T034.md) | Implement data/learning/scoring/thresholding application ports | application | P0 | P1-T028, P1-T030 | P1-T037, P1-T043 |
-| [P1-T035](P1-T035.md) | Implement statistics/reporting/telemetry application ports | application | P0 | P1-T027, P1-T051, P1-T030 | P1-T065, P1-T067, P1-T049 |
+| [P1-T035](P1-T035.md) | Implement statistics/reporting/telemetry application ports | application | P0 | P1-T027, P1-T051, P1-T030 | P1-T065, P1-T067 |
 | [P1-T036](P1-T036.md) | Implement persistence/runtime application ports | application | P0 | P1-T008, P1-T009, P1-T033 | P1-T054, P1-T055, P1-T056, P1-T057, P1-T058, P1-T059, P1-T060, P1-T061, P1-T062, P1-T063, P1-T064, P1-T068 |
 | [P1-T037](P1-T037.md) | Implement reusable pipeline stage functions and concrete services | application | P0 | P1-T034, P1-T035, P1-T036 | P1-T038, P2-T004 |
 | [P1-T038](P1-T038.md) | Implement ExperimentPlanner and the ScoreReuseGate | application | P0 | P1-T037, P1-T033 | P1-T039, P5-T002 |
