@@ -25,5 +25,11 @@ Coordinate tasks, select the workflow, and keep work inside approved scope.
 - No-backward-compatibility gate.
 - Final report hook.
 
+## Required Inputs
+The user's task request, the relevant `ai/contracts/` template, and the current repository/ticket state.
+
+## Escalation
+If a task requires a decision no authority (roadmap, architecture, this catalogue) resolves, stop and report the exact unresolved decision rather than guessing.
+
 ## Final-Report Expectations
 Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include scope, changed files, checks run, cleanup, skipped checks, and remaining risks.

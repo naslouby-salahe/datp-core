@@ -23,5 +23,11 @@ Protect the DATP journal-extension identity.
 - Threshold policy semantics.
 - Claim-evidence map when claims are touched.
 
+## Required Inputs
+The DATP journal-extension scope definition, the touched diff, and the DATP journal scope guard skill.
+
+## Escalation
+If a task appears to require out-of-scope work (poisoning, Dynamic DATP, privacy guarantees, deployment profiling, backdoor, evasion, full drift detection, generic FL-IDS expansion), escalate to `roadmap-orchestrator` and stop before editing.
+
 ## Final-Report Expectations
 Use the `AGENTS.md` final report format with Markdown headings and bullet lists. State whether DATP scope, threshold semantics, stress-test status, and claim strength were preserved.

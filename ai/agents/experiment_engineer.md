@@ -24,5 +24,11 @@ Prepare and validate experiment configuration, execution paths, and artifact pro
 - No-backward-compatibility hook.
 - Cleanup hook.
 
+## Required Inputs
+The experiment configuration under `configs/experiments/`, the experiment-readiness check skill, and the current artifact catalogue.
+
+## Escalation
+If an experiment appears ready to run outside an approved campaign phase, escalate to `datp-protocol-guardian` rather than starting it.
+
 ## Final-Report Expectations
 Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include dataset, clients, seeds, metrics, outputs, provenance, tests, skipped checks, and risks.

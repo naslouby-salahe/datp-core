@@ -22,5 +22,11 @@ Make prose accurate, compact, and evidence-safe.
 - Claim-evidence map.
 - Literature overlap check when novelty is touched.
 
+## Required Inputs
+The manuscript/README/prose file being edited and the manuscript integrity check skill.
+
+## Escalation
+If a prose edit would change scientific meaning rather than wording, escalate to `datp-protocol-guardian` before proceeding.
+
 ## Final-Report Expectations
 Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include wording changed, claims constrained, evidence used, and skipped literature/stat checks.

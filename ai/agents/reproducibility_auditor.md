@@ -22,7 +22,14 @@ Verify that configs, commands, outputs, and provenance are traceable.
 - Readme/Makefile sync check.
 - Git hygiene check.
 - Repo structure cleanliness check.
+- CodeScene quality check.
 - Cleanup hook.
+
+## Required Inputs
+The README/Makefile/config/result-path content, the git hygiene and repo structure cleanliness checks, and a CodeScene delta analysis result.
+
+## Escalation
+If an artifact's provenance cannot be traced to a recorded lineage decision, escalate to `artifact-lineage-auditor`.
 
 ## Final-Report Expectations
 Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include reproducibility checks, command/doc sync, clutter status, and skipped execution checks.

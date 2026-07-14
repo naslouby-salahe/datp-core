@@ -24,5 +24,11 @@ Implement clean, typed, direct code within the task contract.
 - Post-edit hook.
 - Naming, typing, comment, dependency, structure, test, cleanup, and final report hooks.
 
+## Required Inputs
+The task contract, the target files' current content, and the impacted-test set.
+
+## Escalation
+If the contract's scope is ambiguous for the change at hand, escalate to `roadmap-orchestrator` before editing.
+
 ## Final-Report Expectations
 Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Summarize files changed, checks run, tests run or skipped with reasons, cleanup, and risks.

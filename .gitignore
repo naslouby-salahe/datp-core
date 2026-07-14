@@ -217,11 +217,13 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# DATP repository-specific artifact stores (see docs/protocol/artifact_contracts.md)
-data/raw/
-data/preprocessed/
-data/manifests/
-checkpoints/*
-!checkpoints/README.md
-outputs/*
-!outputs/README.md
+# DATP repository-specific artifact stores: generated/regenerable outputs are ignored;
+# data/manifests/, configs/, results/, tests/, docs/decisions/ are tracked and intentionally
+# absent from this list.
+# `data/raw` has no trailing slash: it is a symlink to an external mount, and a directory-only
+# (trailing-slash) gitignore pattern does not match a symlink, only a real directory.
+data/raw
+checkpoints/
+outputs/
+.runtime/
+.import_linter_cache/

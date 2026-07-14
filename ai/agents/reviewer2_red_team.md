@@ -22,5 +22,11 @@ Attack the work as a harsh reviewer before submission or claims harden.
 - Claim-evidence hook.
 - Statistics hook when results are cited.
 
+## Required Inputs
+The manuscript claims under review and the reviewer attack check skill.
+
+## Escalation
+If an objection reveals a missing evidence source rather than a wording problem, escalate to `claim-evidence-auditor`.
+
 ## Final-Report Expectations
 Use the `AGENTS.md` final report format with Markdown headings and bullet lists. List objections, severity, evidence status, required fixes, and safe wording.

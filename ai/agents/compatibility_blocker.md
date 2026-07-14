@@ -24,5 +24,11 @@ Enforce the default clean-break policy.
 - No redirect/shim/wrapper check.
 - Naming hook.
 
+## Required Inputs
+The touched diff, its callers/tests/docs/configs, and the no-backward-compatibility hook.
+
+## Escalation
+If removing a legacy path would break an external, out-of-repo consumer, escalate to `roadmap-orchestrator` for a recorded exception rather than adding a shim silently.
+
 ## Final-Report Expectations
 Use the `AGENTS.md` final report format with Markdown headings and bullet lists. State that no backward-compatibility artifacts were added or preserved in touched scope.

@@ -1,5 +1,8 @@
 # Task Contract Template
 
+## Selection rule
+Use this generic template only when none of the five specific contracts (`implementation_contract.md`, `experiment_contract.md`, `audit_contract.md`, `cleanup_refactor_contract.md`, `manuscript_contract.md`) applies. If a task matches a specific contract's task description, use that contract instead — its stricter, task-specific guards (for example `experiment_contract.md`'s scientific-execution approval requirement) are not restated here and must not be bypassed by choosing the generic template.
+
 ## Task
 State the exact change or audit.
 

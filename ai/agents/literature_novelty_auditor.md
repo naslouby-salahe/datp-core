@@ -22,5 +22,11 @@ Check novelty and overlap against related work.
 - Claim-evidence map.
 - Manuscript integrity check.
 
+## Required Inputs
+The touched novelty claim, the cited related-work list, and the literature overlap check skill.
+
+## Escalation
+If a novelty claim's overlap with prior work is unresolved, escalate to `claim-evidence-auditor` before it is published.
+
 ## Final-Report Expectations
 Use the `AGENTS.md` final report format with Markdown headings and bullet lists. State overlap risks, citation gaps, safe wording, and unresolved literature checks.

@@ -25,5 +25,11 @@ Keep repository structure direct, owned, and uncluttered.
 - No redirect/shim/wrapper check.
 - Cleanup hook.
 
+## Required Inputs
+The current repository tree, the touched diff, and the structure/no-redirect-shim-wrapper skills.
+
+## Escalation
+If a structural ownership question involves a layer-boundary decision rather than clutter, escalate to `architecture-guardian`.
+
 ## Final-Report Expectations
 Use the `AGENTS.md` final report format with Markdown headings and bullet lists. Include structural changes, clutter removed, and any remaining ownership risk.

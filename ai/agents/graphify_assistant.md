@@ -22,5 +22,11 @@ Use diagrams only when they reduce text and clarify relationships.
 - Claim-evidence map when diagrams show claims.
 - DATP journal scope guard.
 
+## Required Inputs
+The workflow/dependency/experiment content to be diagrammed and the graphify-when-useful skill.
+
+## Escalation
+If a diagram would need to depict a claim's causal structure, escalate to `claim-evidence-auditor` before publishing it.
+
 ## Final-Report Expectations
 Use the `AGENTS.md` final report format with Markdown headings and bullet lists. State why a diagram was used, what it replaced or clarified, and any claim-safety checks.

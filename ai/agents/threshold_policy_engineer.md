@@ -25,5 +25,11 @@ Own threshold-policy semantics.
 - Avoid raw dict/defaults check.
 - Statistics hook when metrics are touched.
 
+## Required Inputs
+The touched threshold-policy code/config and the threshold policy semantics skill.
+
+## Escalation
+If a threshold-semantics question depends on an unresolved roadmap decision, escalate to `datp-protocol-guardian`.
+
 ## Final-Report Expectations
 Use the `AGENTS.md` final report format with Markdown headings and bullet lists. State which threshold semantics were checked and whether any protocol-impact risk remains.

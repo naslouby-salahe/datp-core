@@ -9,9 +9,10 @@ This file and each standalone ticket file's own `Status` field must always agree
 - **Selected phase.** Phase 0 — Repository and Engineering Foundation.
 - **Canonical phase code.** `phase-0` (directory `docs/tickets/phase-0/`; ticket ID prefix `P0-`).
 - **Expected ticket count (per `docs/MASTER_TICKET_LOG.md`).** 26 (`P0-T001`–`P0-T026`).
-- **Extracted ticket count (this register).** 27 (`P0-T001`–`P0-T026` preserved verbatim by ID, plus one added ticket `P0-T027`; see "Added ticket" below).
+- **Extracted ticket count (this register).** 28 (`P0-T001`–`P0-T026` preserved verbatim by ID, plus two added tickets `P0-T027` and `P0-T028`; see "Added ticket" below).
 - **Added ticket.** `P0-T027` — Configure SonarQube/SonarCloud analysis and quality gate. Added because the ticket-conversion task instructions (Section 16 of the conversion task) mandate a Sonar quality gate in every ticket's validation requirements, no existing Phase 0 ticket can absorb project-wide Sonar configuration without overloading a single-tool-configuration responsibility (the existing pattern is one ticket per tool: `P0-T007` Ruff, `P0-T008` Pyright, `P0-T009` pytest, `P0-T010` Hypothesis, `P0-T011` import-linter, `P0-T012` pytest-archon, `P0-T013` syrupy), and `P0-T014` (Nox session wiring) explicitly forbids "business logic in sessions," which Sonar project configuration would violate if folded in. `P0-T027` is a genuinely new tool-configuration ticket, not a renumbering of an existing one; no existing ID was reused or altered. `docs/MASTER_TICKET_LOG.md` itself is unchanged by this addition — the addition exists only in `docs/tickets/`.
-- **Phase-gate ticket.** `P0-T026` — Establish implementation-task governance and repository baseline quality gate. Its dependency list has been extended in the standalone ticket file to include `P0-T027` in addition to the 25 dependencies already present in the master log (`P0-T001`–`P0-T025`), so the gate cannot pass without the Sonar ticket.
+- **Added ticket.** `P0-T028` — Configure CodeScene analysis and quality gate. Added under the identical one-tool-per-ticket precedent established by `P0-T027`: CodeScene is a second, independent code-health/hotspot analysis tool with its own project configuration (`.codescene/code-health-rules.json`) and its own Nox session, and folding it into an existing ticket would overload that ticket's single-tool-configuration responsibility in the same way folding Sonar into `P0-T014` would have. `P0-T028` is a genuinely new tool-configuration ticket, independent of and a peer to `P0-T027` (same dependency base: `P0-T007`, `P0-T008`, `P0-T009`; no dependency on `P0-T027` itself). `docs/MASTER_TICKET_LOG.md` itself is unchanged by this addition — the addition exists only in `docs/tickets/`.
+- **Phase-gate ticket.** `P0-T026` — Establish implementation-task governance and repository baseline quality gate. Its dependency list has been extended in the standalone ticket file to include `P0-T027` and `P0-T028` in addition to the 25 dependencies already present in the master log (`P0-T001`–`P0-T025`), so the gate cannot pass without either the Sonar ticket or the CodeScene ticket.
 - **Current active ticket.** NONE — no ticket has been started; this is a document-conversion task only.
 - **Next eligible ticket.** `P0-T001` (the only Phase 0 ticket with no dependencies).
 - **Unresolved blockers.** NONE — Phase 0 raises no scientific or architectural blocker per `docs/MASTER_TICKET_LOG.md` Section F ("Authority blockers. None. Phase 0 is pure tooling/governance scaffolding and raises no scientific blocker.").
@@ -117,38 +118,39 @@ All rows are initialized `NOT_STARTED`. Creating a standalone ticket Markdown fi
 
 | Ticket ID | Title | Status | Dependencies | Started | Last Updated | Finished | Current Step | Audit 1 | Audit 2 | Audit 3 | Blocker | Evidence |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| P0-T001 | Audit and record repository starting state | NOT_STARTED | — | — | — | — | — | — | — | — | NONE | — |
-| P0-T002 | Establish the Python 3.12 project and build backend | NOT_STARTED | P0-T001 | — | — | — | — | — | — | — | NONE | — |
-| P0-T003 | Define dependency groups and pin scientific libraries | NOT_STARTED | P0-T002 | — | — | — | — | — | — | — | NONE | — |
-| P0-T004 | Establish dependency-lock discipline | NOT_STARTED | P0-T003 | — | — | — | — | — | — | — | NONE | — |
-| P0-T005 | Create the approved layered source skeleton | NOT_STARTED | P0-T002 | — | — | — | — | — | — | — | NONE | — |
-| P0-T006 | Establish repository root layout and tracked/generated/gitignored policy | NOT_STARTED | P0-T002 | — | — | — | — | — | — | — | NONE | — |
-| P0-T007 | Configure Ruff lint and format | NOT_STARTED | P0-T002 | — | — | — | — | — | — | — | NONE | — |
-| P0-T008 | Configure Pyright strict typing | NOT_STARTED | P0-T002 | — | — | — | — | — | — | — | NONE | — |
-| P0-T009 | Configure pytest, coverage, timeout, and order-randomization | NOT_STARTED | P0-T002 | — | — | — | — | — | — | — | NONE | — |
-| P0-T010 | Configure Hypothesis property-testing profiles | NOT_STARTED | P0-T009 | — | — | — | — | — | — | — | NONE | — |
-| P0-T011 | Configure import-linter layer contracts | NOT_STARTED | P0-T005 | — | — | — | — | — | — | — | NONE | — |
-| P0-T012 | Configure pytest-archon in-test boundary assertions | NOT_STARTED | P0-T005, P0-T009 | — | — | — | — | — | — | — | NONE | — |
-| P0-T013 | Configure syrupy golden-snapshot support | NOT_STARTED | P0-T009 | — | — | — | — | — | — | — | NONE | — |
-| P0-T014 | Establish Nox validation sessions | NOT_STARTED | P0-T007, P0-T008, P0-T009 | — | — | — | — | — | — | — | NONE | — |
-| P0-T015 | Establish the serialized CUDA lane and CPU xdist policy | NOT_STARTED | P0-T014 | — | — | — | — | — | — | — | NONE | — |
-| P0-T016 | Audit and consolidate the canonical provider-agnostic AI catalogue | NOT_STARTED | P0-T001 | — | — | — | — | — | — | — | NONE | — |
-| P0-T017 | Complete the canonical agent-role catalogue | NOT_STARTED | P0-T016 | — | — | — | — | — | — | — | NONE | — |
-| P0-T018 | Complete the canonical skill catalogue | NOT_STARTED | P0-T016 | — | — | — | — | — | — | — | NONE | — |
-| P0-T019 | Establish the task-contract template set | NOT_STARTED | P0-T016 | — | — | — | — | — | — | — | NONE | — |
-| P0-T020 | Establish the workflow catalogue | NOT_STARTED | P0-T016 | — | — | — | — | — | — | — | NONE | — |
-| P0-T021 | Establish the command catalogue and provider thin adapters | NOT_STARTED | P0-T016 | — | — | — | — | — | — | — | NONE | — |
-| P0-T022 | Implement pre-edit and post-edit blocking hooks | NOT_STARTED | P0-T018 | — | — | — | — | — | — | — | NONE | — |
-| P0-T023 | Implement structure/naming/typing/comment blocking hooks | NOT_STARTED | P0-T007, P0-T008, P0-T011 | — | — | — | — | — | — | — | NONE | — |
-| P0-T024 | Implement scope/threshold/statistics/lineage/config blocking hooks | NOT_STARTED | P0-T017 | — | — | — | — | — | — | — | NONE | — |
-| P0-T025 | Implement dependency/no-BC/command-sync/cleanup/final-report/impacted-test hooks | NOT_STARTED | P0-T014 | — | — | — | — | — | — | — | NONE | — |
-| P0-T026 | Establish implementation-task governance and repository baseline quality gate | NOT_STARTED | P0-T001–P0-T025, P0-T027 | — | — | — | — | — | — | — | NONE | — |
-| P0-T027 | Configure SonarQube/SonarCloud analysis and quality gate (added; see "Added ticket" above) | NOT_STARTED | P0-T007, P0-T008, P0-T009 | — | — | — | — | — | — | — | NONE | — |
+| P0-T001 | Audit and record repository starting state | DONE | — | 2026-07-14T14:57:06Z | 2026-07-14T14:57:06Z | 2026-07-14T14:57:06Z | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T001.md` |
+| P0-T002 | Establish the Python 3.12 project and build backend | DONE | P0-T001 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T002.md` |
+| P0-T003 | Define dependency groups and pin scientific libraries | DONE | P0-T002 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T003.md`; sqlalchemy/alembic transitive-via-flwr disposition recorded |
+| P0-T004 | Establish dependency-lock discipline | DONE | P0-T003 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T004.md`; from-scratch resolve drift finding recorded |
+| P0-T005 | Create the approved layered source skeleton | DONE | P0-T002 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T005.md`; 163 files, 162 submodules import clean |
+| P0-T006 | Establish repository root layout and tracked/generated/gitignored policy | DONE | P0-T002 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T006.md`; untracked pre-committed `data/raw` symlink, fixed gitignore/comment defects |
+| P0-T007 | Configure Ruff lint and format | DONE | P0-T002 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T007.md`; ruff check/format clean repo-wide |
+| P0-T008 | Configure Pyright strict typing | DONE | P0-T002 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T008.md`; strict mode live-verified against 5 real violations |
+| P0-T009 | Configure pytest, coverage, timeout, and order-randomization | DONE | P0-T002 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T009.md`; 9 markers registered, randomization live-verified |
+| P0-T010 | Configure Hypothesis property-testing profiles | DONE | P0-T009 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T010.md`; profiles live-verified deterministic; fixed cross-ticket Pyright venv gap |
+| P0-T011 | Configure import-linter layer contracts | DONE | P0-T005 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T011.md`; 7 contracts, 2 live adversarial violations caught |
+| P0-T012 | Configure pytest-archon in-test boundary assertions | DONE | P0-T005, P0-T009 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T012.md`; assertion live-proven to fail then pass |
+| P0-T013 | Configure syrupy golden-snapshot support | DONE | P0-T009 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T013.md`; round-trip and mismatch both live-verified |
+| P0-T014 | Establish Nox validation sessions | DONE | P0-T007, P0-T008, P0-T009 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T014.md`; fixed critical PATH tool-resolution defect, all 12 sessions verified |
+| P0-T015 | Establish the serialized CUDA lane and CPU xdist policy | DONE | P0-T014 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T015.md`; real-GPU-verified, 3 real defects found and fixed |
+| P0-T016 | Audit and consolidate the canonical provider-agnostic AI catalogue | DONE | P0-T001 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T016.md`; no duplication found across all 4 adapters |
+| P0-T017 | Complete the canonical agent-role catalogue | DONE | P0-T016 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T017.md`; 7 roles added, 19/19 required roles covered |
+| P0-T018 | Complete the canonical skill catalogue | DONE | P0-T016 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T018.md`; 15 skills added, 24/24 required checks covered |
+| P0-T019 | Establish the task-contract template set | DONE | P0-T016 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T019.md`; closed generic-template bypass loophole |
+| P0-T020 | Establish the workflow catalogue | DONE | P0-T016 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T020.md`; fixed 3 missing gate-order gaps (post-edit/no-BC) |
+| P0-T021 | Establish the command catalogue and provider thin adapters | DONE | P0-T016 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T021.md`; added 4 missing hook commands |
+| P0-T022 | Implement pre-edit and post-edit blocking hooks | DONE | P0-T018 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T022.md`; fixed critical diff-only wording defect in post_edit_hook |
+| P0-T023 | Implement structure/naming/typing/comment blocking hooks | DONE | P0-T007, P0-T008, P0-T011 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T023.md`; all 4 hooks bound to concrete architecture rules |
+| P0-T024 | Implement scope/threshold/statistics/lineage/config blocking hooks | DONE | P0-T017 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T024.md`; 4 new hooks created, statistics_hook strengthened |
+| P0-T025 | Implement dependency/no-BC/command-sync/cleanup/final-report/impacted-test hooks | DONE | P0-T014 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE | Completion record in `P0-T025.md`; order-independence live-verified, 3 real gaps fixed |
+| P0-T026 | Establish implementation-task governance and repository baseline quality gate | DONE | P0-T001–P0-T025, P0-T027, P0-T028 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE (reopened to compose the CodeScene gate, reverified green, returned to DONE) | Completion record in `P0-T026.md`; CodeScene addendum recorded; CHANGELOG.md added |
+| P0-T027 | Configure SonarQube/SonarCloud analysis and quality gate (added; see "Added ticket" above) | DONE | P0-T007, P0-T008, P0-T009 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE (auth resolved; live analysis passed, 304 files, 0 issues) | Completion record in `P0-T027.md` |
+| P0-T028 | Configure CodeScene analysis and quality gate (added; see "Added ticket" above) | DONE | P0-T007, P0-T008, P0-T009 | 2026-07-14 | 2026-07-14 | 2026-07-14 | Complete | PASS | PASS | PASS | NONE (auth resolved; live delta analysis passed after a genuine duplication finding was fixed) | Completion record in `P0-T028.md` |
 
 ## Notes on the Phase 0 register
 
-- Every dependency ID above is cross-checked against `docs/MASTER_TICKET_LOG.md` Section G (Master ticket index) for `P0-T001`–`P0-T026`; `P0-T027`'s dependencies were assigned during extraction per the justification above.
-- `P0-T026`'s dependency list is extended beyond the master log (`P0-T001`–`P0-T025`) to also require `P0-T027`, so that the baseline quality gate cannot reach `DONE` without the Sonar gate. This is the one intentional dependency change made during extraction, and it is documented here and in `docs/tickets/phase-0/P0-T026.md` and `docs/tickets/phase-0/README.md`.
+- Every dependency ID above is cross-checked against `docs/MASTER_TICKET_LOG.md` Section G (Master ticket index) for `P0-T001`–`P0-T026`; `P0-T027`'s and `P0-T028`'s dependencies were assigned during extraction per the justification above.
+- `P0-T026`'s dependency list is extended beyond the master log (`P0-T001`–`P0-T025`) to also require `P0-T027` and `P0-T028`, so that the baseline quality gate cannot reach `DONE` without both the Sonar gate and the CodeScene gate. This is the intentional dependency change made during extraction (later widened to include `P0-T028`), and it is documented here and in `docs/tickets/phase-0/P0-T026.md` and `docs/tickets/phase-0/README.md`.
 - No other ticket's dependencies, blocks, priority, type, scientific-execution classification, or campaign scope were altered from `docs/MASTER_TICKET_LOG.md`.
 
 ## Ticket table — Phase 1

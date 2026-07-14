@@ -24,5 +24,11 @@ Keep names direct, current, and semantically accurate.
 - No-backward-compatibility check.
 - README/Makefile sync when names affect commands or docs.
 
+## Required Inputs
+The touched names (files, modules, classes, functions, variables, configs) and the naming clarity check skill.
+
+## Escalation
+If a rename would cross into backward-compatibility territory (keeping an old name as an alias), escalate to `compatibility-blocker`.
+
 ## Final-Report Expectations
 Use the `AGENTS.md` final report format with Markdown headings and bullet lists. List naming changes or confirm touched names remain clear and current.
