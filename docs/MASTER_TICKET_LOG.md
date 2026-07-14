@@ -262,13 +262,13 @@ All tickets are `NOT_STARTED`. Scientific-execution classification (Sci-Exec) is
 | P0-T004 | Establish dependency-lock discipline | foundation | P0 | PLAN | NONE | P0-T003 | P3-T002,P5-T008,P0-T026 | — |
 | P0-T005 | Create the approved layered source skeleton | architecture | P0 | PLAN | NONE | P0-T002 | P0-T011,P0-T026 | — |
 | P0-T006 | Establish repository root layout and tracked/generated/gitignored policy | foundation | P0 | PLAN | NONE | P0-T002 | P1-T054,P0-T026 | — |
-| P0-T007 | Configure Ruff lint and format | foundation | P0 | PLAN | NONE | P0-T002 | P0-T026 | — |
+| P0-T007 | Configure Ruff lint and format | foundation | P1 | PLAN | NONE | P0-T002 | P0-T026 | — |
 | P0-T008 | Configure Pyright strict typing | foundation | P0 | PLAN | NONE | P0-T002 | P0-T026 | — |
 | P0-T009 | Configure pytest, coverage, timeout, and order-randomization | foundation | P0 | PLAN | NONE | P0-T002 | P0-T010,P0-T026 | — |
-| P0-T010 | Configure Hypothesis property-testing profiles | foundation | P0 | PLAN | NONE | P0-T009 | P0-T026 | — |
+| P0-T010 | Configure Hypothesis property-testing profiles | foundation | P1 | PLAN | NONE | P0-T009 | P0-T026 | — |
 | P0-T011 | Configure import-linter layer contracts | architecture | P0 | PLAN | NONE | P0-T005 | P0-T026,P1-T050 | — |
 | P0-T012 | Configure pytest-archon in-test boundary assertions | architecture | P0 | PLAN | NONE | P0-T005,P0-T009 | P1-T050,P0-T026 | — |
-| P0-T013 | Configure syrupy golden-snapshot support | foundation | P0 | PLAN | NONE | P0-T009 | P0-T026 | — |
+| P0-T013 | Configure syrupy golden-snapshot support | foundation | P1 | PLAN | NONE | P0-T009 | P0-T026 | — |
 | P0-T014 | Establish Nox validation sessions | foundation | P0 | PLAN | NONE | P0-T007,P0-T008,P0-T009 | P0-T015,P0-T026 | — |
 | P0-T015 | Establish the serialized CUDA lane and CPU xdist policy | foundation | P0 | PLAN | NONE | P0-T014 | P0-T026 | — |
 | P0-T016 | Audit and consolidate the canonical provider-agnostic AI catalogue | agent-governance | P0 | PLAN | NONE | P0-T001 | P0-T017,P0-T018,P0-T019,P0-T020,P0-T021 | — |
@@ -276,7 +276,7 @@ All tickets are `NOT_STARTED`. Scientific-execution classification (Sci-Exec) is
 | P0-T018 | Complete the canonical skill catalogue | skill | P0 | PLAN | NONE | P0-T016 | P0-T022,P0-T026 | — |
 | P0-T019 | Establish the task-contract template set | agent-governance | P0 | PLAN | NONE | P0-T016 | P0-T026 | — |
 | P0-T020 | Establish the workflow catalogue | workflow | P0 | PLAN | NONE | P0-T016 | P0-T026 | — |
-| P0-T021 | Establish the command catalogue and provider thin adapters | command | P0 | PLAN | NONE | P0-T016 | P0-T026 | — |
+| P0-T021 | Establish the command catalogue and provider thin adapters | command | P1 | PLAN | NONE | P0-T016 | P0-T026 | — |
 | P0-T022 | Implement pre-edit and post-edit blocking hooks | hook | P0 | PLAN | NONE | P0-T018 | P0-T026 | — |
 | P0-T023 | Implement structure/naming/typing/comment blocking hooks | hook | P0 | PLAN | NONE | P0-T007,P0-T008,P0-T011 | P0-T026 | — |
 | P0-T024 | Implement scope/threshold/statistics/lineage/config blocking hooks | hook | P0 | PLAN | NONE | P0-T017 | P0-T026 | — |

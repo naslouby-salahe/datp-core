@@ -85,7 +85,9 @@ The authoritative, single operational status register for every ticket above is 
 
 ## Unresolved blockers
 
-NONE. `docs/MASTER_TICKET_LOG.md` Section F records Phase 0's "Authority blockers" as "None. Phase 0 is pure tooling/governance scaffolding and raises no scientific blocker," and this extraction introduced no new blocker.
+NONE. `docs/MASTER_TICKET_LOG.md` Section F records Phase 0's "Authority blockers" as "None. Phase 0 is pure tooling/governance scaffolding and raises no scientific blocker," and this extraction introduced no new blocker of that kind.
+
+A previously found **authority-document inconsistency** (Section G of `docs/MASTER_TICKET_LOG.md` showing priority `P0` for `P0-T007`, `P0-T010`, `P0-T013`, and `P0-T021` while Section H gave those same four tickets `P1-Mandatory`) has been corrected directly in `docs/MASTER_TICKET_LOG.md` Section G at the user's explicit request; all three sections (F, G, H) now agree on `P1-Mandatory` for these four tickets. The four standalone ticket files already used `P1 — Mandatory` and required no change. Full detail is recorded in `docs/tickets/TICKET_STATUS.md`.
 
 ## Confirmation that existing canonical IDs were preserved
 
