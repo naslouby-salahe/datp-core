@@ -226,3 +226,77 @@ All rows are initialized `NOT_STARTED`. Creating a standalone ticket Markdown fi
 - No ticket was added or split during this extraction; the mega-ticket decomposition (retiring `P1-T010`, `P1-T041`, `P1-T047`, `P1-T048`) was already final in the master log before this extraction began, per that document's own reconstruction-status note.
 - `P1-T070` cannot become `READY` until every other Phase 1 row above is `DONE`; it is the Phase 1 phase-gate ticket, analogous to `P0-T026` for Phase 0.
 - No Phase 1 ticket can become `READY` until `P0-T026` (Phase 0's own phase-gate ticket) is `DONE`, since every Phase 1 ticket with no other listed dependency still depends transitively on the Phase 0 baseline quality gate.
+
+## Register metadata — Phase 3
+
+- **Selected phase.** Phase 3 — DATP Anchor Campaign (`phase-3`; `P3-`).
+- **Expected / extracted ticket count.** 11 / 11 (`P3-T001`–`P3-T011`); no added, split, moved, or retired ticket.
+- **Phase gate.** `P3-T011` — anchor integrity and journal-unlock gate.
+- **Current active ticket.** NONE — documentation conversion does not start implementation.
+- **Next eligible ticket.** NONE — `P2-T020` is not `DONE`.
+- **Unresolved blockers.** Implementation prerequisites remain `NOT_STARTED`; `P3-T008` is conditional and requires uninterrupted-completion evidence when `NOT_APPLICABLE`.
+- **Dates and evidence.** No implementation timestamp, audit result, or scientific evidence is recorded by this documentation task.
+
+## Ticket table — Phase 3
+
+| Ticket ID | Title | Status | Dependencies | Started | Last Updated | Finished | Current Step | Audit 1 | Audit 2 | Audit 3 | Blocker | Evidence |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| P3-T001 | Final anchor implementation audit and clean-worktree check | NOT_STARTED | P2-T020. | — | — | — | — | — | — | — | NONE | — |
+| P3-T002 | Freeze code-state, dependency-lock, and environment provenance | NOT_STARTED | P3-T001, P0-T004. | — | — | — | — | — | — | — | NONE | — |
+| P3-T003 | Freeze the resolved anchor configuration and verify the authoritative seed plan | NOT_STARTED | P3-T001. | — | — | — | — | — | — | — | NONE | — |
+| P3-T004 | Verify the anchor experiment matrix and enumerate stage identities and expected artifacts | NOT_STARTED | P3-T003. | — | — | — | — | — | — | — | NONE | — |
+| P3-T005 | Resource/storage/CUDA/VRAM preflight and output-namespace compatibility | NOT_STARTED | P3-T004, P1-T039, P1-T060, P1-T061, P1-T062. | — | — | — | — | — | — | — | NONE | — |
+| P3-T006 | Create the anchor campaign identity and execution-attempt identity | NOT_STARTED | P3-T002, P3-T005. | — | — | — | — | — | — | — | NONE | — |
+| P3-T007 | Execute the coordinated anchor campaign | NOT_STARTED | P3-T006. | — | — | — | — | — | — | — | NONE | — |
+| P3-T008 | Conditional anchor recovery, resume, and infrastructure-retry handling | NOT_STARTED | P3-T006. | — | — | — | — | — | — | — | NONE | — |
+| P3-T009 | Completeness and same-model/same-score compatibility audits; typed failure persistence | NOT_STARTED | P3-T007; P3-T008 when activated. | — | — | — | — | — | — | — | NONE | — |
+| P3-T010 | Historical-reference diagnostic and full configured anchor statistical analysis | NOT_STARTED | P3-T009. | — | — | — | — | — | — | — | NONE | — |
+| P3-T011 | Anchor integrity decision, technical-invalidity correction path, artifact freeze, journal-unlock gate | NOT_STARTED | P3-T010. | — | — | — | — | — | — | — | NONE | — |
+
+## Register metadata — Phase 4
+
+- **Selected phase.** Phase 4 — Complete Journal-Extension Implementation (`phase-4`; `P4-`).
+- **Expected / extracted ticket count.** 26 / 26 (`P4-T001`–`P4-T026`); no added, split, moved, or retired ticket.
+- **Phase gate.** `P4-T026` — journal implementation-completeness audit.
+- **Current active ticket.** NONE — documentation conversion does not start implementation.
+- **Next eligible ticket.** NONE — `P3-T011` and prior prerequisites are not `DONE`.
+- **Unresolved blockers.** `P4-T022` has a documented Section G/Section H dependency discrepancy; Section G/Section H also differ on the `P4-T023 → P5-T002` and `P4-T024 → P7-T008` downstream edges. Phase 4 remains fail-closed through `P4-T026`.
+- **Dates and evidence.** No implementation timestamp, audit result, journal output, or scientific evidence is recorded by this documentation task.
+
+## Ticket table — Phase 4
+
+| Ticket ID | Title | Status | Dependencies | Started | Last Updated | Finished | Current Step | Audit 1 | Audit 2 | Audit 3 | Blocker | Evidence |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| P4-T001 | Implement E-C1 confirmatory experiment specification and identity | NOT_STARTED | P3-T011, P1-T029. | — | — | — | — | — | — | — | NONE | — |
+| P4-T002 | Implement E-S1 construction-sensitivity and E-S2 q-sensitivity | NOT_STARTED | P4-T001. | — | — | — | — | — | — | — | NONE | — |
+| P4-T003 | Implement E-S3 Dirichlet severity (Regime C) | NOT_STARTED | P4-T001. | — | — | — | — | — | — | — | NONE | — |
+| P4-T004 | Implement E-M1 cluster/family granularity and stability | NOT_STARTED | P4-T001. | — | — | — | — | — | — | — | NONE | — |
+| P4-T005 | Implement E-M2 B4 cluster-feature ablation and contingency | NOT_STARTED | P4-T004. | — | — | — | — | — | — | — | NONE | — |
+| P4-T006 | Implement E-M3 per-client CDF overlays and Ennio deep dive | NOT_STARTED | P4-T001. | — | — | — | — | — | — | — | NONE | — |
+| P4-T007 | Implement E-M4 JS↔gain association and E-M5 threshold-shift scatter | NOT_STARTED | P4-T001. | — | — | — | — | — | — | — | NONE | — |
+| P4-T008 | Implement E-V1 calibration-size sweep and size-aware fallback | NOT_STARTED | P4-T001. | — | — | — | — | — | — | — | NONE | — |
+| P4-T009 | Implement E-V2 local-global shrinkage (τ-shrink) | NOT_STARTED | P4-T001. | — | — | — | — | — | — | — | NONE | — |
+| P4-T010 | Implement E-V3 split-conformal B2-conf and conformal coverage | NOT_STARTED | P4-T001. | — | — | — | — | — | — | — | NONE | — |
+| P4-T011 | Implement the B-a CICIoT2023 boundary | NOT_STARTED | P4-T001. | — | — | — | — | — | — | — | NONE | — |
+| P4-T012 | Implement B-b/temporal CICIoT2023 rejection and suppression records | NOT_STARTED | P1-T007, P4-T011. | — | — | — | — | — | — | — | NONE | — |
+| P4-T013 | Implement the Regime D Edge-IIoTset source/schema/feasibility audit | NOT_STARTED | P4-T001, P1-T040. | — | — | — | — | — | — | — | NONE | — |
+| P4-T014 | Implement Regime D partitioning, preprocessing, training, and scoring | NOT_STARTED | P4-T013. | — | — | — | — | — | — | — | NONE | — |
+| P4-T015 | Implement E-X1 external validation | NOT_STARTED | P4-T014, P4-T018. | — | — | — | — | — | — | — | NONE | — |
+| P4-T016 | Implement E-T1 FedProx aggregation stress test | NOT_STARTED | P4-T001, P1-T044. | — | — | — | — | — | — | — | NONE | — |
+| P4-T017 | Implement E-T2 model-personalization stress test and absorption bands | NOT_STARTED | P4-T001. | — | — | — | — | — | — | — | NONE | — |
+| P4-T018 | Implement E-T3 B-FedStatsBenign matched comparator | NOT_STARTED | P4-T001, P1-T025. | — | — | — | — | — | — | — | NONE | — |
+| P4-T019 | Implement E-B1 temporal recalibration MVE | NOT_STARTED | P4-T014, P4-T024. | — | — | — | — | — | — | — | NONE | — |
+| P4-T020 | Implement mandatory E-O1 alert burden evidence and suppression route | NOT_STARTED | P4-T001. | — | — | — | — | — | — | — | NONE | — |
+| P4-T021 | Implement claim tiers, fallback wording, and report schemas/renderers | NOT_STARTED | P4-T001, P1-T049. | — | — | — | — | — | — | — | NONE | — |
+| P4-T022 | Implement journal expected-artifact/table/figure inventory and completeness audit | NOT_STARTED | P4-T002, P4-T003, P4-T004, P4-T005, P4-T006, P4-T007, P4-T008, P4-T009, P4-T010, P4-T011, P4-T012, P4-T013, P4-T014, P4-T015, P4-T016, P4-T017, P4-T018, P4-T019, P4-T020, P4-T021. | — | — | — | — | — | — | — | NONE | — |
+| P4-T023 | Record optional E-Q1–E-Q6 selections and implement selected supplements | NOT_STARTED | P4-T001. | — | — | — | — | — | — | — | NONE | — |
+| P4-T024 | Resolve chronological temporal training/calibration allocation | NOT_STARTED | P4-T001. | — | — | — | — | — | — | — | NONE | — |
+| P4-T025 | Produce Appendix A B2 calibration-versus-held-out FPR analysis | NOT_STARTED | P4-T001,P4-T008,P4-T009,P4-T010. | — | — | — | — | — | — | — | NONE | — |
+| P4-T026 | Complete journal implementation audit and phase gate | NOT_STARTED | P4-T022,P4-T023,P4-T024,P4-T025. | — | — | — | — | — | — | — | NONE | — |
+
+## Notes on the Phase 3 and Phase 4 registers
+
+- Every ticket-file `Status` field and row above must match; a mismatch is blocking.
+- `P3-T011` records campaign integrity separately from scientific outcome. An integrity-valid weak, null, mixed, unfavorable, or opposite-direction anchor result is frozen evidence, not a retry condition.
+- Phase 4 validation is synthetic, dry-run, or read-only artifact inspection only. No row may receive journal campaign evidence until a future authorized phase.
+- The `P4-T022` discrepancy is retained as an authority finding: Section G and Section H disagree on some dependencies/blocks. The standalone ticket fields follow Section H; `P4-T026` directly requires `P4-T022`–`P4-T025`, preserving phase-gate coverage.
