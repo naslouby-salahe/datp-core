@@ -37,6 +37,61 @@ This file and each standalone ticket file's own `Status` field must always agree
 - **Architecture last-read timestamp.** 2026-07-14 (`docs/DATP Core Architecture.md`, Sections 1–8 read in full during extraction; Sections 9, 12, 15–22, 25, 27, 29 read section-by-section as cited by individual Phase 1 tickets during their reconstruction).
 - **Master-log last-read timestamp.** 2026-07-14 (`docs/MASTER_TICKET_LOG.md`, Sections A–H, Phase 1 in full — all 66 ticket bodies read completely).
 
+
+
+## Register metadata — Phase 2
+
+- **Selected phase.** Phase 2 — Complete DATP Anchor Implementation.
+- **Canonical phase code.** `phase-2` (directory `docs/tickets/phase-2/`; ticket prefix `P2-`).
+- **Expected ticket count.** 23 (`P2-T001`–`P2-T023`) per `docs/MASTER_TICKET_LOG.md`.
+- **Extracted ticket count.** 23; all IDs preserved with no addition, split, renumbering, or retirement.
+- **Phase gate.** `P2-T020`; direct dependencies: `P2-T019`, `P2-T002`, and `P1-T040`; all Phase 2 routes are transitively covered.
+- **Current active ticket.** NONE — conversion is not implementation.
+- **Next eligible ticket.** NONE — `P1-T070` is `NOT_STARTED`.
+- **Unresolved blockers.** Recovered anchor semantics, including the historical checkpoint protocol, must be resolved or carried to readiness; never guessed or resolved by real execution.
+- **Authority finding.** The master log conflicts about the reconstruction status of `P2-T021`–`P2-T023`. Its Phase 2 index and detailed bodies also differ for `P2-T003` (scientific-execution classification and roadmap ID), `P2-T008` (dependency), `P2-T011` (block), `P2-T012` (type), and `P2-T023` (dependency/block), with further roadmap-ID drift. The standalone files preserve the detailed ticket bodies; the authority is unchanged.
+- **Last updated.** 2026-07-14 (Phase 2 documentation conversion; no implementation/scientific execution).
+- **Roadmap last-read timestamp.** 2026-07-14 (complete authority read).
+- **Architecture last-read timestamp.** 2026-07-14 (complete authority read).
+- **Master-log last-read timestamp.** 2026-07-14 (complete authority read; Phase 2 bodies re-read).
+
+## Ticket table — Phase 2
+
+All rows remain `NOT_STARTED`; documentation creation does not implement tickets.
+
+| Ticket ID | Title | Status | Dependencies | Started | Last Updated | Finished | Current Step | Audit 1 | Audit 2 | Audit 3 | Blocker | Evidence |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| P2-T001 | Recover DATP behavioral semantics from the reference repository (read-only) | NOT_STARTED | P1-T070. | — | — | — | — | — | — | — | NONE | — |
+| P2-T002 | Record the recovered-semantics register in the master log | NOT_STARTED | P2-T001. | — | — | — | — | — | — | — | NONE | — |
+| P2-T003 | Inspect the N-BaIoT source and feature schema | NOT_STARTED | P2-T001, P1-T032. | — | — | — | — | — | — | — | NONE | — |
+| P2-T004 | Implement the N-BaIoT source adapter and deterministic source-row identity | NOT_STARTED | P2-T003, P1-T042. | — | — | — | — | — | — | — | NONE | — |
+| P2-T005 | Implement physical-device (9-client) partitioning | NOT_STARTED | P2-T004, P1-T019. | — | — | — | — | — | — | — | NONE | — |
+| P2-T006 | Implement benign train/calibration and held-out benign/malicious test splits | NOT_STARTED | P2-T005. | — | — | — | — | — | — | — | NONE | — |
+| P2-T007 | Implement preprocessing fit authorization and streaming transform | NOT_STARTED | P2-T006, P1-T020. | — | — | — | — | — | — | — | NONE | — |
+| P2-T008 | Implement the fixed autoencoder, optimizer, and scheduler | NOT_STARTED | P2-T007, P1-T043, P2-T001. | — | — | — | — | — | — | — | NONE | — |
+| P2-T009 | Implement FedAvg training (E=1, full participation, deterministic CUDA) | NOT_STARTED | P2-T008, P1-T044. | — | — | — | — | — | — | — | NONE | — |
+| P2-T010 | Implement the checkpoint schedule, persistence, and Regime-A global selection | NOT_STARTED | P2-T009, P2-T002, P1-T022. | — | — | — | — | — | — | — | NONE | — |
+| P2-T011 | Implement calibration, benign-test, and malicious-test scoring with atomic score bundles | NOT_STARTED | P2-T010, P1-T045. | — | — | — | — | — | — | — | NONE | — |
+| P2-T012 | Implement B0 centralized training branch | NOT_STARTED | P2-T006, P1-T044. | — | — | — | — | — | — | — | NONE | — |
+| P2-T013 | Implement canonical anchor B1 shared construction | NOT_STARTED | P2-T011, P1-T024. | — | — | — | — | — | — | — | NONE | — |
+| P2-T014 | Implement B2 per-client and B3 family constructions | NOT_STARTED | P2-T013. | — | — | — | — | — | — | — | NONE | — |
+| P2-T015 | Implement canonical anchor B4 exact k-means++ clustering and cluster-mean thresholds (K=3) | NOT_STARTED | P2-T014, P1-T025. | — | — | — | — | — | — | — | NONE | — |
+| P2-T016 | Implement per-client confusion counts and operating-point metrics | NOT_STARTED | P2-T013, P2-T014, P2-T015, P2-T023, P1-T026. | — | — | — | — | — | — | — | NONE | — |
+| P2-T017 | Implement detection-quality metrics (AUROC control, Macro-F1, P10, worst-client BA) | NOT_STARTED | P2-T016. | — | — | — | — | — | — | — | NONE | — |
+| P2-T018 | Implement paired deltas, BCa bootstrap, Wilcoxon, Cliff's delta, reference diagnostics | NOT_STARTED | P2-T017, P1-T046. | — | — | — | — | — | — | — | NONE | — |
+| P2-T019 | Implement anchor report models, expected-artifact inventory, and dry-run planner | NOT_STARTED | P2-T018, P1-T049. | — | — | — | — | — | — | — | NONE | — |
+| P2-T020 | Implement the anchor readiness evaluator and anchor-implementation audit | NOT_STARTED | P2-T019, P2-T002, P1-T040. | — | — | — | — | — | — | — | NONE | — |
+| P2-T021 | Implement B0 centralized checkpoint schedule and scientific checkpoint selection | NOT_STARTED | P2-T012, P2-T002, P1-T022. | — | — | — | — | — | — | — | NONE | — |
+| P2-T022 | Implement B0 centralized calibration and held-out score generation | NOT_STARTED | P2-T021, P1-T045. | — | — | — | — | — | — | — | NONE | — |
+| P2-T023 | Implement B0 pooled threshold, evaluation, statistics, and reporting route | NOT_STARTED | P2-T022, P1-T026, P1-T049. | — | — | — | — | — | — | — | NONE | — |
+
+## Notes on the Phase 2 register
+
+- Ticket-file and register statuses must always agree; mismatch is blocking.
+- `P2-T020` cannot be `DONE` until all mandatory responsibilities reach valid terminal states through the authoritative graph and the synthetic anchor simulation passes.
+- No implementation status, audit result, timestamp, evidence, or scientific result was fabricated by this conversion.
+
+
 ## Status values
 
 `NOT_STARTED` · `READY` · `IN_PROGRESS` · `BLOCKED` · `IN_REVIEW` · `DONE` · `REJECTED` · `NOT_APPLICABLE`
