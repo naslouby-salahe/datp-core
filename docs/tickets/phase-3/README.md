@@ -3,11 +3,11 @@
 ## Phase identity
 
 - **Canonical phase number and code.** 3 / `phase-3`.
-- **Purpose.** Freeze the ready anchor implementation, execute only the approved anchor campaign, preserve complete provenance, audit the resulting evidence, and make an integrity-based journal-unlock decision.
+- **Purpose.** Freeze the ready anchor implementation, execute only the approved anchor campaign, preserve complete provenance, audit the resulting evidence, and make a journal-unlock decision requiring integrity plus a passed anchor reproduction gate.
 - **Permitted work.** Readiness/freeze/audit work plus real anchor operations only for `ANCHOR_CAMPAIGN_ALLOWED` tickets under the frozen plan.
 - **Forbidden work.** Journal-track scientific execution, journal datasets or cells, result-driven tuning, invented seed values/order/subsets, generic rerun wording, and any scientific-configuration change hidden as an attempt.
 - **Entry criteria.** `P2-T020` is `DONE`, a clean worktree is verified, and resolved anchor configuration is frozen.
-- **Exit criteria.** Complete compatible B0–B4 anchor evidence, separate integrity and outcome records, immutable accepted evidence, and an integrity—not direction—based journal-unlock decision.
+- **Exit criteria.** Complete compatible B0–B4 anchor evidence, separate integrity and outcome records, immutable accepted evidence, and a journal-unlock decision requiring a `PassedAnchorReproductionResult`; direction never authorizes repetition or suppression.
 - **Expected and actual ticket count.** 11 / 11.
 - **Phase gate.** [`P3-T011`](P3-T011.md).
 - **Status register.** [TICKET_STATUS.md](../TICKET_STATUS.md).
@@ -39,5 +39,6 @@ The fixed FedAvg model and compatible calibration/test score artifacts feed B1�
 ## Responsibility ownership and unresolved blockers
 
 - `P3-T001`–`P3-T006` own readiness, freeze, campaign/attempt identity, and preflight; `P3-T007` owns frozen-plan execution; `P3-T008` owns conditional recovery; `P3-T009` owns completeness/compatibility; `P3-T010` owns historical reproduction and honesty analysis; `P3-T011` owns integrity, outcome, freeze, and journal unlock.
+- Architecture §18 permits a classified transient retry to remain in the same `ExecutionAttemptId`; this differs from master-log Section H for P3-T008. The standalone rule follows the architecture and records the discrepancy rather than silently changing lifecycle semantics.
 - The master-log canonical supporting-agent value `artifact-lineage-auditor` for `P3-T004` is not in the present agent catalogue; future implementation must record that role-catalogue discrepancy rather than silently rename it.
 - Canonical IDs `P3-T001`–`P3-T011` are preserved. No ticket was added, split, moved, or renumbered.

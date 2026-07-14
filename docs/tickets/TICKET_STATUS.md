@@ -98,12 +98,15 @@ All rows remain `NOT_STARTED`; documentation creation does not implement tickets
 
 ## Transition rules
 
-- `NOT_STARTED → READY` only when every dependency listed in the ticket's `Dependencies` field is `DONE` in this table.
+- `NOT_STARTED → READY` only when every dependency has the terminal state required by the consuming ticket; unconditional dependencies normally require `DONE`, while conditional/optional branches must honor their ticket-specific accepted-terminal-state rule.
 - `READY → IN_PROGRESS` immediately before implementation begins.
 - `IN_PROGRESS → IN_REVIEW` only after implementation and initial validation (the ticket's own Validation commands) are complete.
 - `IN_REVIEW → DONE` only after every mandatory audit (repository-wide, architecture, raw-dictionary, ticket-reference, documentation, determinism, and all three scientific-drift audits) and every quality gate (Ruff, Pyright strict, Pylance parity, import-linter, pytest-archon, Sonar, full test suite) named in the ticket passes.
 - Any active state (`READY`, `IN_PROGRESS`, `IN_REVIEW`) may become `BLOCKED`.
 - `BLOCKED` requires a precise cause and unblock condition recorded in the "Blocker" column below and in the ticket file's own "Failure and blocker behavior" evidence.
+- An eligible conditional or optional ticket may transition from `READY`, `IN_PROGRESS`, `IN_REVIEW`, or `BLOCKED` to `REJECTED` only with the ticket-defined feasibility/authority rejection evidence, the three completed audits, a terminal decision record, and synchronized ticket/register status.
+- An eligible conditional or optional ticket may transition from `NOT_STARTED`, `READY`, `IN_PROGRESS`, `IN_REVIEW`, or `BLOCKED` to `NOT_APPLICABLE` only with the ticket-defined authority-grounded withdrawal or non-selection evidence, the three completed audits, a terminal decision record, and synchronized ticket/register status.
+- `REJECTED` and `NOT_APPLICABLE` are valid terminal states only where the ticket explicitly permits them; they never substitute for incomplete implementation, missing evidence, or an unresolved blocker.
 - The standalone ticket file's `Status` field and this table's `Status` column must always show the same status; a mismatch is a blocking defect that must be corrected before further work continues.
 - Status must be updated at the time work starts, while it remains ongoing (current step), when it enters review, when it becomes blocked, and when it finishes — never reconstructed retroactively after the fact.
 
@@ -260,7 +263,7 @@ All rows are initialized `NOT_STARTED`. Creating a standalone ticket Markdown fi
 - **Phase gate.** `P4-T026` — journal implementation-completeness audit.
 - **Current active ticket.** NONE — documentation conversion does not start implementation.
 - **Next eligible ticket.** NONE — `P3-T011` and prior prerequisites are not `DONE`.
-- **Unresolved blockers.** `P4-T022` has a documented Section G/Section H dependency discrepancy; Section G/Section H also differ on the `P4-T023 → P5-T002` and `P4-T024 → P7-T008` downstream edges. Phase 4 remains fail-closed through `P4-T026`.
+- **Unresolved blockers.** `P4-T022` has a documented Section G/Section H dependency discrepancy; it must remain `BLOCKED` when reached until an authorized reconciliation chooses its dependency/block fields. Section G/Section H also differ on the `P4-T023 → P5-T002` and `P4-T024 → P7-T008` downstream edges. Phase 4 remains fail-closed through `P4-T026`.
 - **Dates and evidence.** No implementation timestamp, audit result, journal output, or scientific evidence is recorded by this documentation task.
 
 ## Ticket table — Phase 4
@@ -297,6 +300,6 @@ All rows are initialized `NOT_STARTED`. Creating a standalone ticket Markdown fi
 ## Notes on the Phase 3 and Phase 4 registers
 
 - Every ticket-file `Status` field and row above must match; a mismatch is blocking.
-- `P3-T011` records campaign integrity separately from scientific outcome. An integrity-valid weak, null, mixed, unfavorable, or opposite-direction anchor result is frozen evidence, not a retry condition.
+- `P3-T011` records integrity separately from scientific outcome. An integrity-valid weak, null, mixed, unfavorable, or opposite-direction anchor result is frozen evidence, not a retry condition; journal unlock also requires the authority-defined passed anchor reproduction result.
 - Phase 4 validation is synthetic, dry-run, or read-only artifact inspection only. No row may receive journal campaign evidence until a future authorized phase.
-- The `P4-T022` discrepancy is retained as an authority finding: Section G and Section H disagree on some dependencies/blocks. The standalone ticket fields follow Section H; `P4-T026` directly requires `P4-T022`–`P4-T025`, preserving phase-gate coverage.
+- The `P4-T022` discrepancy is retained as an authority finding: Section G and Section H disagree on some dependencies/blocks. The standalone fields preserve Section H for traceability but do not resolve the conflict; P4-T022 must be `BLOCKED` when reached until authorized reconciliation. `P4-T026` directly requires `P4-T022`–`P4-T025`, preserving fail-closed phase-gate coverage.

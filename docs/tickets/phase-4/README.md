@@ -6,7 +6,7 @@
 - **Purpose.** Implement every mandatory journal experiment family, analysis, feasibility/suppression path, claim/report model, and synthetic validation route without performing a journal campaign.
 - **Permitted work.** Synthetic tests, test doubles, dry-run expansion, expected-artifact planning, read-only frozen-anchor lineage inspection, and read-only dataset feasibility inspection where a ticket allows it.
 - **Forbidden work.** Every real journal training, scoring, threshold sweep, q-sensitivity, stress test, external/temporal experiment, reduced/one-cell/debug run, real-data smoke test, or scientific integration test.
-- **Entry criteria.** The integrity-based `P3-T011` journal-unlock gate has passed where required; an integrity-valid weak/null anchor is not rejected for direction.
+- **Entry criteria.** The `P3-T011` journal-unlock gate has passed with integrity-valid evidence, no unresolved authority blocker, and a `PassedAnchorReproductionResult`; an unfavorable direction is never a repetition or suppression trigger.
 - **Exit criteria.** All mandatory journal implementation paths are synthetically validated, every optional/conditional path has a valid terminal record, reporting/inventory is complete, and no journal campaign output exists.
 - **Expected and actual ticket count.** 26 / 26.
 - **Phase gate.** [`P4-T026`](P4-T026.md).
@@ -53,9 +53,9 @@ No ticket authorizes a journal `RunIdentity`, `ExecutionAttemptId`, scientific a
 
 ## Authority discrepancy and gate coverage
 
-`P4-T022`'s master-log Section G index lists `P4-T023`–`P4-T025` as dependencies and `P5-T001` as its block, while its detailed Section H body lists a different dependency set and blocks `P4-T026`. This extraction preserves the detailed ticket body as the standalone field source and records the discrepancy rather than silently rewriting the authority. Gate coverage remains fail-closed because `P4-T026` directly depends on `P4-T022`–`P4-T025`; it alone certifies terminal-state completeness before `P5-T001`.
+`P4-T022`'s master-log Section G index lists `P4-T023`–`P4-T025` as dependencies and `P5-T001` as its block, while its detailed Section H body lists a different dependency set and blocks `P4-T026`. The standalone Part A fields preserve the detailed body for traceability only; they do not choose between authorities. The discrepancy must keep P4-T022 `BLOCKED` pending authorized reconciliation. If the detailed-body form is selected, gate coverage remains fail-closed because `P4-T026` directly depends on `P4-T022`–`P4-T025`; it alone certifies terminal-state completeness before `P5-T001`.
 
-Section G and Section H also differ on downstream edges for `P4-T023` (`P5-T002` appears only in Section H) and `P4-T024` (`P7-T008` appears only in Section H). These cross-phase edges remain recorded in the standalone detailed fields and must be reconciled in the master authority by separately authorized work; this task does not choose a silent replacement.
+Section G and Section H also differ on downstream edges for `P4-T023` (`P5-T002` appears only in Section H) and `P4-T024` (`P7-T008` appears only in Section H). These cross-phase edges remain recorded for traceability and must be reconciled in the master authority by separately authorized work; this task does not choose a silent replacement.
 
 Several detailed `Architecture contracts/types owned` labels are master-log ownership labels rather than literal architecture type definitions. Future implementation must map them to existing architecture contracts or obtain an explicit architecture decision; this documentation does not falsely claim they already exist.
 
