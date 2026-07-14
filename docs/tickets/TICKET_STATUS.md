@@ -92,6 +92,7 @@ All rows remain `NOT_STARTED`; documentation creation does not implement tickets
 - No implementation status, audit result, timestamp, evidence, or scientific result was fabricated by this conversion.
 
 
+
 ## Status values
 
 `NOT_STARTED` · `READY` · `IN_PROGRESS` · `BLOCKED` · `IN_REVIEW` · `DONE` · `REJECTED` · `NOT_APPLICABLE`
@@ -303,3 +304,89 @@ All rows are initialized `NOT_STARTED`. Creating a standalone ticket Markdown fi
 - `P3-T011` records integrity separately from scientific outcome. An integrity-valid weak, null, mixed, unfavorable, or opposite-direction anchor result is frozen evidence, not a retry condition; journal unlock also requires the authority-defined passed anchor reproduction result.
 - Phase 4 validation is synthetic, dry-run, or read-only artifact inspection only. No row may receive journal campaign evidence until a future authorized phase.
 - The `P4-T022` discrepancy is retained as an authority finding: Section G and Section H disagree on some dependencies/blocks. The standalone fields preserve Section H for traceability but do not resolve the conflict; P4-T022 must be `BLOCKED` when reached until authorized reconciliation. `P4-T026` directly requires `P4-T022`–`P4-T025`, preserving fail-closed phase-gate coverage.
+## Register metadata — Phase 5
+
+- **Selected phase.** Phase 5 — Journal Campaign Planning and Readiness (phase-5; P5-).
+- **Expected / extracted ticket count.** 9 / 9 (P5-T001–P5-T009); no added, split, moved, retired, or renumbered ticket.
+- **Phase gate.** P5-T009 — frozen journal manifest and formal go/no-go decision.
+- **Current active ticket.** NONE — documentation conversion does not start planning or campaign work.
+- **Next eligible ticket.** NONE — P4-T026 and its prerequisites are NOT_STARTED.
+- **Unresolved blockers.** The documented Phase 4 Section G/H discrepancy remains fail-closed through P4-T026. P4-T024 is a direct P5-T004 input; unresolved temporal allocation produces a typed blocked/suppression outcome and cannot be inferred.
+- **Dates and evidence.** No implementation timestamp, audit result, frozen campaign identity, manifest, or scientific evidence is recorded by this documentation task.
+
+## Ticket table — Phase 5
+
+All rows are initialized NOT_STARTED; creating the standalone specifications performs no planning or scientific execution.
+
+| Ticket ID | Title | Status | Dependencies | Started | Last Updated | Finished | Current Step | Audit 1 | Audit 2 | Audit 3 | Blocker | Evidence |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| P5-T001 | Implementation-completeness and anchor-artifact-compatibility audit | NOT_STARTED | P4-T026, P3-T011 | — | — | — | — | — | — | — | NONE | — |
+| P5-T002 | Configuration expansion and journal experiment-cell enumeration | NOT_STARTED | P5-T001, P1-T038 | — | — | — | — | — | — | — | NONE | — |
+| P5-T003 | Cell-ID uniqueness and stage-identity enumeration | NOT_STARTED | P5-T002 | — | — | — | — | — | — | — | NONE | — |
+| P5-T004 | Feasibility-gate resolution, suppression cells, and unresolved-cell blocking | NOT_STARTED | P5-T003, P4-T013, P4-T024 | — | — | — | — | — | — | — | NONE | — |
+| P5-T005 | Reuse and invalidation verification against frozen anchor artifacts | NOT_STARTED | P5-T003, P1-T033 | — | — | — | — | — | — | — | NONE | — |
+| P5-T006 | Expected-artifact/table/figure/export inventory and experiment-to-claim/output mapping | NOT_STARTED | P5-T003 | — | — | — | — | — | — | — | NONE | — |
+| P5-T007 | Resource/storage estimation and worker/CUDA/process/resume-boundary planning | NOT_STARTED | P5-T005, P5-T006 | — | — | — | — | — | — | — | NONE | — |
+| P5-T008 | Clean-worktree check and freeze of code/dependency/environment/config/campaign identity | NOT_STARTED | P5-T004, P5-T007, P0-T004 | — | — | — | — | — | — | — | NONE | — |
+| P5-T009 | Journal campaign manifest and final go/no-go decision | NOT_STARTED | P5-T008 | — | — | — | — | — | — | — | NONE | — |
+
+## Register metadata — Phase 6
+
+- **Selected phase.** Phase 6 — Journal Campaign (phase-6; P6-).
+- **Expected / extracted ticket count.** 9 / 9 (P6-T001–P6-T009); no added, split, moved, retired, or renumbered ticket.
+- **Phase gate.** P6-T009 — complete-cell/statistics/output audit, immutable result freeze, rendered outputs, and separate integrity/outcome decision.
+- **Current active ticket.** NONE — documentation conversion does not create an attempt or execute a campaign.
+- **Next eligible ticket.** NONE — P5-T009 is NOT_STARTED.
+- **Unresolved blockers.** Regime D remains conditional on P5-T004 feasibility. P6-T007 is NOT_APPLICABLE only with uninterrupted-execution evidence; otherwise its recovery evidence is required before P6-T008.
+- **Dates and evidence.** No execution-attempt ID, journal artifact, output, result freeze, audit result, or scientific evidence is recorded by this documentation task.
+
+## Ticket table — Phase 6
+
+All rows are initialized NOT_STARTED; documentation creation does not create a journal campaign or authorize scientific execution.
+
+| Ticket ID | Title | Status | Dependencies | Started | Last Updated | Finished | Current Step | Audit 1 | Audit 2 | Audit 3 | Blocker | Evidence |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| P6-T001 | Final readiness confirmation and journal execution-attempt creation | NOT_STARTED | P5-T009 | — | — | — | — | — | — | — | NONE | — |
+| P6-T002 | Journal Regime-A identity completion, reuse validation, and threshold-only execution | NOT_STARTED | P6-T001 | — | — | — | — | — | — | — | NONE | — |
+| P6-T003 | Regime C execution | NOT_STARTED | P6-T001 | — | — | — | — | — | — | — | NONE | — |
+| P6-T004 | Accepted Regime D execution (external + temporal) | NOT_STARTED | P6-T001, P5-T004 | — | — | — | — | — | — | — | NONE | — |
+| P6-T005 | FedProx and model-personalization stress-test execution | NOT_STARTED | P6-T001 | — | — | — | — | — | — | — | NONE | — |
+| P6-T006 | Statistics execution, typed-failure and invalidated-artifact handling | NOT_STARTED | P6-T002, P6-T003, P6-T004, P6-T005 | — | — | — | — | — | — | — | NONE | — |
+| P6-T007 | Conditional journal recovery, resume, infrastructure retry, and immutable artifact commits | NOT_STARTED | P6-T001 | — | — | — | — | — | — | — | NONE | — |
+| P6-T008 | Complete-cell/statistics/output audits and result freeze | NOT_STARTED | P6-T006; P6-T007 when activated | — | — | — | — | — | — | — | NONE | — |
+| P6-T009 | Report rendering, journal integrity/outcome decision, technical-invalidity correction path | NOT_STARTED | P6-T008 | — | — | — | — | — | — | — | NONE | — |
+
+## Register metadata — Phase 7
+
+- **Selected phase.** Phase 7 — Final Result Freeze, Reporting, and Audit (phase-7; P7-).
+- **Expected / extracted ticket count.** 12 / 12 (P7-T001–P7-T012); no added, split, moved, retired, or renumbered ticket.
+- **Phase gate.** P7-T011 — terminal backlog-closure gate, requiring P7-T012 despite its later number and P4-T025 Appendix A evidence.
+- **Current active ticket.** NONE — documentation conversion does not audit, mutate, regenerate, or close scientific evidence.
+- **Next eligible ticket.** NONE — P6-T009 is NOT_STARTED.
+- **Unresolved blockers.** Phase 4 records a Section G/H conflict in which P4-T024 blocks P7-T008 only in one authority location. Canonical P7-T008 metadata remains unchanged, but the temporal claim audit is fail-closed pending authorized reconciliation or an evidence-defined P4-T024 terminal outcome.
+- **Dates and evidence.** No post-campaign audit result, regeneration evidence, originality verdict, or closure verdict is recorded by this documentation task.
+
+## Ticket table — Phase 7
+
+All rows are initialized NOT_STARTED; documentation creation performs no post-campaign work and cannot close the backlog.
+
+| Ticket ID | Title | Status | Dependencies | Started | Last Updated | Finished | Current Step | Audit 1 | Audit 2 | Audit 3 | Blocker | Evidence |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| P7-T001 | Immutable-result and artifact-hash verification; manifest completeness | NOT_STARTED | P6-T009 | — | — | — | — | — | — | — | NONE | — |
+| P7-T002 | Lineage closure and provenance verification | NOT_STARTED | P7-T001 | — | — | — | — | — | — | — | NONE | — |
+| P7-T003 | Seed-plan completeness and paired-seed validation | NOT_STARTED | P7-T001 | — | — | — | — | — | — | — | NONE | — |
+| P7-T004 | Same-model/same-score causal-ladder audit | NOT_STARTED | P7-T002 | — | — | — | — | — | — | — | NONE | — |
+| P7-T005 | Benign-only-calibration, attack-exclusion, and checkpoint-selection audit | NOT_STARTED | P7-T002 | — | — | — | — | — | — | — | NONE | — |
+| P7-T006 | Metric-orientation, CV(FPR), absolute-dispersion, and AUROC-control audit | NOT_STARTED | P7-T002 | — | — | — | — | — | — | — | NONE | — |
+| P7-T007 | BCa implementation, CI-direction, secondary-statistics, and degeneracy audit | NOT_STARTED | P7-T003 | — | — | — | — | — | — | — | NONE | — |
+| P7-T008 | Null/mixed retention, stress-test separation, external/temporal/alert-burden claim gates | NOT_STARTED | P7-T002 | — | — | — | — | — | — | — | P4-T024 authority conflict | — |
+| P7-T009 | Table/figure/export provenance and frozen-output regeneration | NOT_STARTED | P7-T002 | — | — | — | — | — | — | — | NONE | — |
+| P7-T010 | Repository cleanup, stale-output detection, and anchor/journal namespace protection | NOT_STARTED | P7-T001 | — | — | — | — | — | — | — | NONE | — |
+| P7-T012 | Audit conference-to-journal originality and manuscript handoff evidence | NOT_STARTED | P7-T002, P7-T009 | — | — | — | — | — | — | — | NONE | — |
+| P7-T011 | Reviewer red-team, architecture, and roadmap final audits; master-log closure | NOT_STARTED | P7-T004, P7-T005, P7-T006, P7-T007, P7-T008, P7-T009, P7-T010, P7-T012, P4-T025 | — | — | — | — | — | — | — | NONE | — |
+
+## Notes on the Phase 5 through Phase 7 registers
+
+- Ticket-file and register statuses must always agree; mismatch is blocking.
+- No row may advance because documentation exists. Every ticket requires its Part A evidence, Part B audits, valid dependencies, cleanup, and the global terminal-state rule.
+- The P4-T022 discrepancy and the Section-H-only P4-T023 → P5-T002 / P4-T024 → P7-T008 edges remain authority findings. This register records the resulting fail-closed conditions but does not alter canonical detailed-ticket dependencies.
