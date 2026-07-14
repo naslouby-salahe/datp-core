@@ -33,7 +33,7 @@ The frozen provenance chain is configuration → run → attempt → artifact �
 | [P7-T009](P7-T009.md) | Table/figure/export provenance and frozen-output regeneration | reporting | P0 — Blocking | P7-T002 | P7-T011 |
 | [P7-T010](P7-T010.md) | Repository cleanup, stale-output detection, and anchor/journal namespace protection | audit | P0 — Blocking | P7-T001 | P7-T011 |
 | [P7-T012](P7-T012.md) | Audit conference-to-journal originality and manuscript handoff evidence | audit | P0 — Blocking | P7-T002, P7-T009 | P7-T011 |
-| [P7-T011](P7-T011.md) | Reviewer red-team, architecture, and roadmap final audits; master-log closure | audit | P0 — Blocking | P7-T004–P7-T010, P7-T012, P4-T025 | — |
+| [P7-T011](P7-T011.md) | Reviewer red-team, architecture, and roadmap final audits; master-log closure | audit | P0 — Blocking | P7-T004, P7-T005, P7-T006, P7-T007, P7-T008, P7-T009, P7-T010, P7-T012, P4-T025 | — |
 
 `P6-T009 → P7-T001`; `P7-T001 → P7-T002, P7-T003, P7-T010`; `P7-T002 → P7-T004, P7-T005, P7-T006, P7-T008, P7-T009`; `P7-T003 → P7-T007`; `P7-T009 → P7-T012`; all listed closure inputs plus `P4-T025 → P7-T011`. P7-T012 is a required closure dependency despite its later number.
 
@@ -44,3 +44,5 @@ The frozen provenance chain is configuration → run → attempt → artifact �
 The authoritative P4-T024 detailed body lists `P7-T008` as a downstream block, while P7-T008's canonical dependency field lists only `P7-T002`. Existing Phase 4 documentation records this Section G/H discrepancy as fail-closed. This extraction preserves the canonical P7 metadata and records the discrepancy rather than silently adding a dependency: temporal claims remain blocked unless the P4-T024 authority condition is resolved through authorized reconciliation.
 
 Canonical IDs `P7-T001`–`P7-T012` are preserved. No ticket was added, split, moved, or renumbered.
+
+The master index and detailed bodies differ on P7-T007 title punctuation and P7-T012 priority formatting. Detailed-body values remain in the standalone records; the conflict is recorded for authorized reconciliation, not resolved with an alias or duplicate ticket.

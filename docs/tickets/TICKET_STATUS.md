@@ -311,7 +311,7 @@ All rows are initialized `NOT_STARTED`. Creating a standalone ticket Markdown fi
 - **Phase gate.** P5-T009 — frozen journal manifest and formal go/no-go decision.
 - **Current active ticket.** NONE — documentation conversion does not start planning or campaign work.
 - **Next eligible ticket.** NONE — P4-T026 and its prerequisites are NOT_STARTED.
-- **Unresolved blockers.** The documented Phase 4 Section G/H discrepancy remains fail-closed through P4-T026. P4-T024 is a direct P5-T004 input; unresolved temporal allocation produces a typed blocked/suppression outcome and cannot be inferred.
+- **Unresolved blockers.** The documented Phase 4 Section G/H discrepancy remains fail-closed through P4-T026. P4-T024 is a direct P5-T004 input; unresolved temporal allocation produces a typed blocked/suppression outcome and cannot be inferred. Master Section G/phase overview classify P5-T001–T005 as planning while detailed bodies classify them FORBIDDEN; both prohibit execution and the conflict must be resolved before an active status advance. The Section-H-only P4-T023 → P5-T002 edge likewise requires authorized reconciliation before P5-T002 advances.
 - **Dates and evidence.** No implementation timestamp, audit result, frozen campaign identity, manifest, or scientific evidence is recorded by this documentation task.
 
 ## Ticket table — Phase 5
@@ -337,7 +337,7 @@ All rows are initialized NOT_STARTED; creating the standalone specifications per
 - **Phase gate.** P6-T009 — complete-cell/statistics/output audit, immutable result freeze, rendered outputs, and separate integrity/outcome decision.
 - **Current active ticket.** NONE — documentation conversion does not create an attempt or execute a campaign.
 - **Next eligible ticket.** NONE — P5-T009 is NOT_STARTED.
-- **Unresolved blockers.** Regime D remains conditional on P5-T004 feasibility. P6-T007 is NOT_APPLICABLE only with uninterrupted-execution evidence; otherwise its recovery evidence is required before P6-T008.
+- **Unresolved blockers.** Regime D remains conditional on P5-T004 feasibility. P6-T007 is NOT_APPLICABLE only with uninterrupted-execution evidence; otherwise its recovery evidence is required before P6-T008. Master Section G makes P6-T007 unconditional for P6-T008 while detailed bodies make it conditional; preserve the detailed terminal-state rule and fail closed on an unresolved interpretation.
 - **Dates and evidence.** No execution-attempt ID, journal artifact, output, result freeze, audit result, or scientific evidence is recorded by this documentation task.
 
 ## Ticket table — Phase 6
@@ -351,9 +351,9 @@ All rows are initialized NOT_STARTED; documentation creation does not create a j
 | P6-T003 | Regime C execution | NOT_STARTED | P6-T001 | — | — | — | — | — | — | — | NONE | — |
 | P6-T004 | Accepted Regime D execution (external + temporal) | NOT_STARTED | P6-T001, P5-T004 | — | — | — | — | — | — | — | NONE | — |
 | P6-T005 | FedProx and model-personalization stress-test execution | NOT_STARTED | P6-T001 | — | — | — | — | — | — | — | NONE | — |
-| P6-T006 | Statistics execution, typed-failure and invalidated-artifact handling | NOT_STARTED | P6-T002, P6-T003, P6-T004, P6-T005 | — | — | — | — | — | — | — | NONE | — |
+| P6-T006 | Statistics execution, typed-failure and invalidated-artifact handling | NOT_STARTED | P6-T002, P6-T003, P6-T005; P6-T004 = DONE with artifacts or REJECTED/NOT_APPLICABLE with feasibility/suppression evidence; activated P6-T007 recovery evidence | — | — | — | — | — | — | — | NONE | — |
 | P6-T007 | Conditional journal recovery, resume, infrastructure retry, and immutable artifact commits | NOT_STARTED | P6-T001 | — | — | — | — | — | — | — | NONE | — |
-| P6-T008 | Complete-cell/statistics/output audits and result freeze | NOT_STARTED | P6-T006; P6-T007 when activated | — | — | — | — | — | — | — | NONE | — |
+| P6-T008 | Complete-cell/statistics/output audits and result freeze | NOT_STARTED | P6-T006; conditional P6-T007 = DONE with recovery/retry evidence or NOT_APPLICABLE with uninterrupted-completion evidence | — | — | — | — | — | — | — | NONE | — |
 | P6-T009 | Report rendering, journal integrity/outcome decision, technical-invalidity correction path | NOT_STARTED | P6-T008 | — | — | — | — | — | — | — | NONE | — |
 
 ## Register metadata — Phase 7
@@ -363,7 +363,7 @@ All rows are initialized NOT_STARTED; documentation creation does not create a j
 - **Phase gate.** P7-T011 — terminal backlog-closure gate, requiring P7-T012 despite its later number and P4-T025 Appendix A evidence.
 - **Current active ticket.** NONE — documentation conversion does not audit, mutate, regenerate, or close scientific evidence.
 - **Next eligible ticket.** NONE — P6-T009 is NOT_STARTED.
-- **Unresolved blockers.** Phase 4 records a Section G/H conflict in which P4-T024 blocks P7-T008 only in one authority location. Canonical P7-T008 metadata remains unchanged, but the temporal claim audit is fail-closed pending authorized reconciliation or an evidence-defined P4-T024 terminal outcome.
+- **Unresolved blockers.** Phase 4 records a Section G/H conflict in which P4-T024 blocks P7-T008 only in one authority location. Canonical P7-T008 metadata remains unchanged, but the temporal claim audit is fail-closed pending authorized reconciliation or an evidence-defined P4-T024 terminal outcome. Master index/detail also differ on P7-T007 title punctuation and P7-T012 priority formatting; detailed-body values are retained without aliases.
 - **Dates and evidence.** No post-campaign audit result, regeneration evidence, originality verdict, or closure verdict is recorded by this documentation task.
 
 ## Ticket table — Phase 7
@@ -379,7 +379,7 @@ All rows are initialized NOT_STARTED; documentation creation performs no post-ca
 | P7-T005 | Benign-only-calibration, attack-exclusion, and checkpoint-selection audit | NOT_STARTED | P7-T002 | — | — | — | — | — | — | — | NONE | — |
 | P7-T006 | Metric-orientation, CV(FPR), absolute-dispersion, and AUROC-control audit | NOT_STARTED | P7-T002 | — | — | — | — | — | — | — | NONE | — |
 | P7-T007 | BCa implementation, CI-direction, secondary-statistics, and degeneracy audit | NOT_STARTED | P7-T003 | — | — | — | — | — | — | — | NONE | — |
-| P7-T008 | Null/mixed retention, stress-test separation, external/temporal/alert-burden claim gates | NOT_STARTED | P7-T002 | — | — | — | — | — | — | — | P4-T024 authority conflict | — |
+| P7-T008 | Null/mixed retention, stress-test separation, external/temporal/alert-burden claim gates | NOT_STARTED | P7-T002 | — | — | — | — | — | — | — | Precondition authority conflict; status remains NOT_STARTED until eligible | — |
 | P7-T009 | Table/figure/export provenance and frozen-output regeneration | NOT_STARTED | P7-T002 | — | — | — | — | — | — | — | NONE | — |
 | P7-T010 | Repository cleanup, stale-output detection, and anchor/journal namespace protection | NOT_STARTED | P7-T001 | — | — | — | — | — | — | — | NONE | — |
 | P7-T012 | Audit conference-to-journal originality and manuscript handoff evidence | NOT_STARTED | P7-T002, P7-T009 | — | — | — | — | — | — | — | NONE | — |
@@ -390,3 +390,5 @@ All rows are initialized NOT_STARTED; documentation creation performs no post-ca
 - Ticket-file and register statuses must always agree; mismatch is blocking.
 - No row may advance because documentation exists. Every ticket requires its Part A evidence, Part B audits, valid dependencies, cleanup, and the global terminal-state rule.
 - The P4-T022 discrepancy and the Section-H-only P4-T023 → P5-T002 / P4-T024 → P7-T008 edges remain authority findings. This register records the resulting fail-closed conditions but does not alter canonical detailed-ticket dependencies.
+- Documentation repair never fills Started, Finished, Audit 1–3, or Evidence fields. Only future ticket work may enter evidence, and it must synchronize ticket and register records.
+- Before a Phase 6 row enters IN_REVIEW or DONE, its Evidence must name the frozen RunIdentity, relevant ExecutionAttemptId values, attempt/failure/recovery records, reuse/new/invalidated ledger, ResultFreeze identity, and separate integrity/outcome statuses. Before a Phase 7 row enters IN_REVIEW or DONE, its Evidence must name the accepted ResultFreeze identity/manifest hash and the provenance/ReportIdentity for every audited or regenerated output.

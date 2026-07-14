@@ -39,3 +39,5 @@ Every planned cell must have a collision-free identity, resolved feasibility, an
 `P5-T009` cannot pass without the frozen baseline from `P5-T008`. `P5-T004` must carry the unresolved `P4-T024` temporal-allocation authority condition forward: an unresolved or rejected temporal candidate becomes a typed blocked/suppression outcome, never an inferred allocation or silently executable cell. The master log's Phase 5 phase-wide `PLANNING_ONLY` label and P5-T001–T005 `FORBIDDEN` fields differ; each ticket preserves its detailed-body field, and neither permits execution.
 
 Canonical IDs `P5-T001`–`P5-T009` are preserved. No ticket was added, split, moved, or renumbered.
+
+P5-T009 also requires every P5 terminal evidence record and the explicit no-go conditions for identity collision or ambiguity, unresolved feasibility, failed preflight/storage/CUDA readiness, incomplete expected artifacts or lineage, and premature execution. The Section-H-only P4-T023 → P5-T002 edge is a recorded authority conflict: P5-T002 remains fail-closed until authorized reconciliation determines whether the optional-decision record is a direct dependency.
