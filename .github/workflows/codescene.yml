@@ -20,6 +20,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
       - name: Install CodeScene CLI
         run: |
           curl -sS -L https://downloads.codescene.io/enterprise/cli/install-cs-tool.sh | sh -s -- -y
@@ -85,8 +90,7 @@ jobs:
               --header 'Accept: application/json' \
               --header "Authorization: Bearer $CS_ACCESS_TOKEN" \
               "https://api.codescene.io/v2/projects/$CS_PROJECT_ID/analyses/latest")"
-            analyzed_revision="$(jq --raw-output --arg repository "$expected_repository" \
-              '.analysis_repo_revisions[] | select(.repo == $repository) | .revision' <<<"$analysis")"
+            analyzed_revision="$(python3 -c 'import json, sys; repository = sys.argv[1]; analysis = json.load(sys.stdin); print(next((entry["revision"] for entry in analysis["analysis_repo_revisions"] if entry["repo"] == repository), ""))' "$expected_repository" <<<"$analysis")"
 
             if [[ "$analyzed_revision" == "$expected_revision" ]]; then
               echo "CodeScene dashboard analysis completed for revision $analyzed_revision."
