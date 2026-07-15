@@ -21,6 +21,7 @@ dependencies = [
     "flwr==1.32.1",
     "scikit-learn==1.9.0",
     "scipy==1.18.0",
+    "matplotlib==3.10.8",
     # infrastructure.telemetry / infrastructure.persistence
     "structlog>=24.1",
     "filelock>=3.13",
@@ -70,6 +71,9 @@ packages = ["src/datp_core"]
 testpaths = ["tests"]
 addopts = "-ra --timeout=60 --cov=src/datp_core --cov-report=term-missing --cov-report=xml"
 pythonpath = ["."]
+filterwarnings = [
+    "ignore:The pynvml package is deprecated.*:FutureWarning:torch.cuda",
+]
 markers = [
     "unit: isolated unit-level behavior test",
     "property: property-based test over value-object ranges and locked pure functions",
@@ -107,5 +111,6 @@ select = ["E", "F", "I", "N", "UP", "B", "ICN"]
 include = ["src", "tests", "noxfile.py"]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
+stubPath = "typings"
 venvPath = "."
 venv = ".venv"

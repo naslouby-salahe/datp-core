@@ -575,7 +575,7 @@ This vocabulary is an `application` concern, not a `domain` one: log-rendering a
 
 ### 6.6 Reporting vocabulary
 
-Owned by `analysis/report_models.py` (`ReportArtifactType`, `TableType`, `FigureType`) and `application/reporting/tracing.py` (`RenderingStatus`).
+`ReportArtifactType`, `TableType`, and `FigureType` live in `domain/experiments/protocols.py` because they are closed members of the domain-owned `ReportingPolicy`; `RenderingStatus` lives in `application/reporting/tracing.py`. Framework-free table, figure, and wording specifications consume the vocabulary from `analysis/`.
 
 | Enum | Members | Purpose |
 |---|---|---|
@@ -629,11 +629,11 @@ Scalar value objects are co-located with the capability subpackage that owns the
 |---|---|---|---|---|
 | `ClientId` | str | non-empty, no whitespace | identity confusion, unstable rosters | — |
 | `ExperimentId` | str | `^E-[A-Z]+\d+$` | free-text roadmap experiment references | `ArchitectureCatalogueId` |
-| `ArchitectureCatalogueId` | str | uppercase snake case naming a roadmap-described activity that has no roadmap experiment identifier | fabricated manuscript experiment nomenclature | ExperimentId |
+| `ArchitectureCatalogueId` | str | `^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*$`; names a roadmap-described activity that has no roadmap experiment identifier | fabricated manuscript experiment nomenclature | ExperimentId |
 | `CellId` | str | `<ExperimentId>#<hash16>`; the 16-hex-character hash is derived from the canonical resolved sweep-cell specification, never raw configuration text or unordered fields; the planner checks every generated value for collisions | ambiguous sweep cells; silent collision reuse | ExperimentId |
-| `ArtifactId` | str | non-empty; deterministically derived from artifact type, the scope-specific `ArtifactKey`, stage identity, and protocol namespace (plus schema identity where required); never randomly generated | filename-based identity; random scientific-artifact identifiers | ExecutionAttemptId |
-| `RunIdentity` | str | derived from the resolved scientific configuration identity | ties multiple execution attempts to one unchanged scientific run | ExecutionAttemptId |
-| `ExecutionAttemptId` | str | opaque, randomly or monotonically generated per attempt; operational only, never scientific identity | attempt collision; mistaking an attempt for the scientific run itself | RunIdentity |
+| `ArtifactId` | str | `artifact-<hash64>`; the 64-lowercase-hex digest is deterministically derived from artifact type, the scope-specific `ArtifactKey`, stage identity, and protocol namespace (plus schema identity where required); never randomly generated | filename-based identity; random scientific-artifact identifiers | ExecutionAttemptId |
+| `RunIdentity` | str | `run-<hash64>`; the 64-lowercase-hex digest is derived from the resolved scientific configuration identity | ties multiple execution attempts to one unchanged scientific run | ExecutionAttemptId |
+| `ExecutionAttemptId` | str | `attempt-<uuid4>`; opaque, randomly generated per attempt; operational only, never scientific identity | attempt collision; mistaking an attempt for the scientific run itself | RunIdentity |
 | `StageRunIdentity` | tuple | `RunIdentity` plus `ExecutionAttemptId`, `PipelineStage`, and `StageFingerprint` | cross-attempt stage-run confusion | CheckpointId |
 | `CalibrationScoreArtifactId` | str | derived from calibration-scoring identity | calibration/test identifier confusion | TestScoreArtifactId |
 | `TestScoreArtifactId` | str | derived from test-scoring identity | evaluation/calibration identifier confusion | CalibrationScoreArtifactId |
@@ -641,8 +641,8 @@ Scalar value objects are co-located with the capability subpackage that owns the
 | `FeasibilityArtifactId` | str | derived from source and partition identities | cross-partition feasibility reuse | ArtifactId |
 | `ArtifactBundleId` | str | derived from immutable member manifest | partial bundle identity | ArtifactId |
 | `ArtifactSchemaVersion` | str | non-empty semantic schema identifier | unversioned persisted artifacts | package version |
-| `CheckpointId` | str | derived from (training identity, round, kind) | cross-seed/round collisions; mixing scientific and recovery | split-scoped score identifiers |
-| `StageFingerprint` | str | fixed-length hex | cross-stage identity confusion | per-stage newtypes below |
+| `CheckpointId` | str | `checkpoint-<hash64>`; derived from (training identity, round, kind) | cross-seed/round collisions; mixing scientific and recovery | split-scoped score identifiers |
+| `StageFingerprint` | str | exactly 64 lowercase hexadecimal characters | cross-stage identity confusion | per-stage newtypes below |
 | `Seed` | int | `>= 0` | negative or undefined seeds | — |
 | `RoundNumber` | int | `>= 1`; must be in schedule when selecting | off-schedule checkpoints | — |
 | `FederatedRoundId` | tuple | training identity plus scheduled round | cross-run round confusion | RoundNumber |
@@ -658,7 +658,7 @@ Scalar value objects are co-located with the capability subpackage that owns the
 | `BalancedAccuracyScore` / `AuRocScore` | float | finite, `0 <= r <= 1` | control/operating-point confusion | each other |
 | `ThresholdValue` | float | finite and non-negative under declared score schema | non-finite threshold | rates |
 | `ClusterCount` | int | `>= 1` | K = 0 | — |
-| `DirichletAlpha` | float > 0 or IID sentinel | `α > 0` or IID | α ≤ 0; IID/finite confusion | — |
+| `DirichletAlpha` | float > 0 or `DirichletAlphaSentinel.IID` | `α > 0` or the typed IID sentinel | α ≤ 0; IID/finite confusion | — |
 | `ShrinkageWeight` | float | `0 <= λ <= 1` | extrapolation beyond the B2↔global interval | — |
 | `CalibrationSampleCount` | int | `>= 0` | negative counts | — |
 | `CalibrationSampleCountRef` | tuple | calibration artifact id plus client id and recorded count | detached eligibility counts | CalibrationSampleCount |
@@ -714,6 +714,8 @@ Additional nominal identities include `DatasetSourceIdentity`, `FeatureSchemaIde
 Every value object wrapping a `float` rejects `NaN` and infinity in `__post_init__`, in addition to its range check. This is not cosmetic: a `NaN` slipping into a fingerprinted field (for example from an empty-slice mean) would make two otherwise identical specifications compare unequal, because `NaN != NaN`, silently breaking stage-identity reuse and deduplication. Rejecting non-finite values at construction removes that failure mode.
 
 `ThresholdPercentile`, `FprTarget`, `ConfidenceLevel`, `CoverageRatio`, and `Probability` wrap a canonical `Decimal` instead of a binary `float`. A boundary numeric or string input is converted to `Decimal` and quantized to a fixed, documented number of decimal places exactly once, inside `__post_init__`; the constructed value object stores only that canonical `Decimal` and rejects a non-finite (`NaN` or infinite) `Decimal` with the same `DomainValidationError` used for an out-of-range value. Every downstream comparison, arithmetic operation, and fingerprint serialization operates on this canonical `Decimal`, never on a raw binary float, so `q` and `1 - q` are exact and reproducible regardless of which computation path produced them. The `FprTarget == 1 - q` invariant is checked against these canonical `Decimal` values, not against a floating-point subtraction whose last bit can differ depending on how it was computed.
+
+The fixed canonical Decimal representation is twelve fractional decimal places, using `ROUND_HALF_EVEN` and exponent `Decimal("0.000000000001")`. This precision preserves every locked q, α, λ, coverage, and confidence value while giving all identity-bearing Decimal values one stable serialization.
 
 ### 7.4 Immutable mapping fields
 
@@ -2038,6 +2040,8 @@ There are no scattered global seed calls. `SeedRole` is finite and `SeedPlan` de
 def derive_seed(experiment_seed: Seed, role: SeedRole, stage_fp: StageFingerprint) -> Seed: ...
 ```
 
+`derive_seed` uses SHA-256 over the UTF-8 byte sequence `datp-core/seed/v1\\0<experiment-seed-decimal>\\0<seed-role>\\0<stage-fingerprint>`. It interprets the first eight digest bytes as an unsigned big-endian integer and clears the high bit, producing a `Seed` in `[0, 2**63 - 1]`. This domain-separated derivation is distinct from the BLAKE3 stage and artifact identity hashes in §13.4–§13.5.
+
 `DataLoaderSeedPlan` adds base shuffle, sampler, worker, client, epoch, and round derivations without exposing `torch.Generator` or `worker_init_fn`. The PyTorch adapter constructs both explicitly and seeds worker-local Python, NumPy, and Torch generators. Persistent-worker lifecycle is defined; CUDA processes spawn. If worker count affects order or numerics it becomes identity-bearing. Zero-versus-multiple workers, sequential-versus-parallel, repeated, and resumed executions compare row-order checksums and score arrays under the declared tolerance.
 
 ---
@@ -2048,7 +2052,7 @@ Scientific checkpoints and recovery state are distinct concepts with distinct ki
 
 ### 17.1 Scientific checkpoint
 
-`CheckpointDescriptor` with `kind = SCIENTIFIC` is saved only after completed roadmap rounds {25, 50, 75, 100, 125, 150, 200}. Infrastructure persists framework state privately and exposes only a typed descriptor/reference. `CheckpointSelector` examines every scheduled Regime A candidate under `CheckpointSelectionSpec`, records allowed evidence, deterministic ties, selected/rejected candidates and prohibited-input attestations, and persists one `CheckpointSelectionArtifact`. The selected round is used for every main-regime table; other regimes do not select independently. Test AUROC, attack labels, Regime D, FedProx, personalization, poisoned data, and downstream thresholds cannot enter the request type.
+`CheckpointDescriptor` with `kind = SCIENTIFIC` is saved only after completed roadmap rounds {25, 50, 75, 100, 125, 150, 200}. Infrastructure persists framework state privately and exposes only a typed descriptor/reference. `CheckpointSelector` examines every scheduled Regime A candidate under `CheckpointSelectionSpec`, records allowed evidence, deterministic ties, selected/rejected candidates and prohibited-input attestations, and persists one `CheckpointSelectionArtifact`. The selection rule `regime_a_weighted_benign_validation_loss_v1` selects the candidate with the lowest FedAvg-weighted benign validation reconstruction MSE; tie rule `earliest_scheduled_round_v1` selects the lower scheduled round. The selected round is used for every main-regime table; other regimes do not select independently. Test AUROC, attack labels, Regime D, FedProx, personalization, poisoned data, and downstream thresholds cannot enter the request type.
 
 ### 17.2 Recovery state
 
@@ -2366,7 +2370,7 @@ Reporting produces typed table, figure, and report artifacts, each traceable to 
 
 ### 22.1 Typed outputs
 
-Table and figure specifications live in framework-free `analysis/tables/` and `analysis/figures/`; wording selection lives in `analysis/wording.py`; framework-free report-model construction shared by both lives in `analysis/report_models.py`. Result-freezing and provenance-closure verification are `application/reporting/` concerns (`freeze.py`, `tracing.py`), not `analysis` ones — `analysis` never reads a repository, resolves a path, or verifies a lineage chain (Section 3.6, Section 3.5 ownership matrix). `infrastructure/reporting/markdown.py` and `latex.py` render CSV, Markdown, LaTeX and machine-readable Parquet/JSON where applicable; `matplotlib.py` renders SVG, PNG and PDF. Scientific analysis imports no plotting framework. B4 interpretability remains a contingency table or small heatmap; there is no Sankey type. `EligibilityCoverageResult` and `ConformalCoverageResult` occupy disjoint table/figure columns, report wording fields, statistical-contract fields, and manifest members; no renderer accepts a generic coverage field. A table/figure specification persists as `ArtifactType.TABLE_INPUT`/`FIGURE_INPUT`; its rendered output persists separately as `ArtifactType.RENDERED_TABLE`/`RENDERED_FIGURE`; a rendered wording block persists as `ArtifactType.WORDING_OUTPUT`. Rendered outputs are never folded back into the `TABLE_INPUT`/`FIGURE_INPUT` members that describe their pre-render specification.
+Table and figure specifications live in framework-free `analysis/tables/` and `analysis/figures/`; wording selection lives in `analysis/wording.py`. Result-freezing and provenance-closure verification are `application/reporting/` concerns (`freeze.py`, `tracing.py`), not `analysis` ones — `analysis` never reads a repository, resolves a path, or verifies a lineage chain (Section 3.6, Section 3.5 ownership matrix). `infrastructure/reporting/markdown.py` and `latex.py` render CSV, Markdown, LaTeX and machine-readable Parquet/JSON where applicable; `matplotlib.py` renders SVG, PNG and PDF. Scientific analysis imports no plotting framework. B4 interpretability remains a contingency table or small heatmap; there is no Sankey type. `EligibilityCoverageResult` and `ConformalCoverageResult` occupy disjoint table/figure columns, report wording fields, statistical-contract fields, and manifest members; no renderer accepts a generic coverage field. A table/figure specification persists as `ArtifactType.TABLE_INPUT`/`FIGURE_INPUT`; its rendered output persists separately as `ArtifactType.RENDERED_TABLE`/`RENDERED_FIGURE`; a rendered wording block persists as `ArtifactType.WORDING_OUTPUT`. Rendered outputs are never folded back into the `TABLE_INPUT`/`FIGURE_INPUT` members that describe their pre-render specification.
 
 ### 22.2 Traceability chain
 
@@ -2542,14 +2546,18 @@ Each extension touches only the listed places; discriminated unions, named profi
 
 Each blocker is carried into `ScientificReadinessResult`. A print-grade plan cannot schedule an affected stage until the named authority and evidence close it; smoke behavior is explicitly non-citable.
 
+### 27.1 Resolved implementation decisions
+
+The behavioral reference establishes the inherited fixed core-training profile: a mirrored ReLU autoencoder with encoder widths `(80, 40, 20)`, no BatchNorm, MSE loss, Adam at learning rate `0.001`, one local epoch, and full participation. The journal implementation freezes a micro-batch size of `256`, one gradient-accumulation step, effective batch size `256`, `FP32`, strict determinism, and no learning-rate scheduler. It trains to the locked 200-round journal schedule; convergence remains diagnostic and never stops training.
+
+FedProx is a Tier-4 stress-only profile whose pre-registered frozen proximal grid is `(0.001, 0.01, 0.1)`. It differs from the matched FedAvg profile only by aggregation strategy and this strictly positive `µ`; selection from confirmatory outcomes is forbidden.
+
+The Regime-A checkpoint rule and tie-break are fixed in §17.1. These decisions are identity-bearing, configuration-recorded, and must not be silently substituted at runtime.
+
 | Decision | Authority needed; affected identities | Blocked stages | Permitted smoke behavior | Prohibited scientific behavior | Readiness evidence |
 |---|---|---|---|---|---|
-| AE architecture | behavioral reference; training/checkpoint/scoring | TRAIN onward | reduced explicit AE | guessed/mainline architecture | verified `AutoencoderSpec` evidence |
-| Optimizer, learning rate, scheduler | behavioral reference; training | TRAIN onward | explicit non-citable values | hidden/default or tuned values | signed training-spec record |
 | Inherited preprocessing strategy/scope | behavioral reference; preprocessor onward | PREPROCESSOR_FIT onward | explicit smoke transform | fit on unauthorized rows or invented scope | verified preprocessing record |
-| Training batch semantics | behavioral reference plus equivalence/preflight; training | TRAIN onward | named, explicitly selected smoke profile | silent profile choice/change | registered frozen profile evidence |
 | Score batch semantics | behavioral reference/equivalence; scoring | scoring onward | named smoke batch | unrecorded output-affecting change | scoring equivalence or fixed identity evidence |
-| FedProx µ-grid | pre-registration; stress training | E-T1 | convergence smoke only | post-hoc µ search | versioned grid before results |
 | Personalization comparator/hyperparameters | documented pre-training decision; stress identities | E-T2 | interface smoke | mislabeled or post-hoc comparator | selected algorithm/spec record |
 | Edge-IIoTset partition details | first-principles audit; partition onward | D scientific stages | inspection/audit only | reuse of failed/relabelled partition | matching passed feasibility artifact |
 | Edge-IIoTset feature schema/input dimension | inspected source; schema onward | D materialization onward | schema inspection | guessed feature set | `FeatureSchemaManifest` |
@@ -2561,7 +2569,6 @@ Each blocker is carried into `ScientificReadinessResult`. A print-grade plan can
 | Zero-mean CV policy | statistical authority; evaluation/statistics | affected evaluation/report | persist typed `UndefinedCvResult` with absolute dispersion | silent divide/substitution or exception-based reporting | locked degeneracy policy |
 | Mixed-precision equivalence | pre-registered equivalence evidence; training/scoring | FP16/BF16 scientific stages | FP32 or non-citable precision smoke | silent precision change | tolerance-bound equivalence result |
 | Canonical B4 scaler/fit scope and `n_init`/`max_iter` constants | behavioral reference or explicit scientific pre-registration; threshold identity | canonical B4 print-grade stages | exact-k-means interface smoke | caller-controlled or invented scaler/constants | locked algorithm-constant record |
-| Regime A checkpoint-selection evidence/ranking rule | scientific protocol authority; checkpoint-selection identity | CHECKPOINT_SELECT and all main reporting | candidate enumeration smoke | invented metric, per-regime rule, or forbidden evidence | versioned selection rule and tie-break record before results |
 | Operational interpretation of “material movement toward zero” for the five-seed anchor | scientific/statistical authority; anchor-gate identity | journal-expansion plan | interval-comparison smoke | invented numeric tolerance or automatic pass | versioned gate rule preserving the roadmap's approximately-20%-wider condition |
 
 The roadmap already resolves the anchor interval, ten paired confirmatory seeds, checkpoint schedule, B4 K=3, the protocol eligibility rule and Regime-D 90% coverage gate, canonical temporal 70/30 boundary, and full FedStats variance/tie rule; those are definitions, not blockers.

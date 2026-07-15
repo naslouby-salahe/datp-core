@@ -1943,7 +1943,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Campaign scope.** NONE
 - **Roadmap experiment IDs.** —
 - **Architecture contracts/types owned.** `ReportArtifactType`, `TableType`, `FigureType` (no Sankey member), `RenderingStatus`.
-- **Objective.** Implement the reporting vocabulary in `analysis/report_models.py` (`ReportArtifactType`, `TableType`, `FigureType`) and `RenderingStatus` in `application/reporting/tracing.py`, with `FigureType` explicitly carrying no Sankey member.
+- **Objective.** Implement `ReportArtifactType`, `TableType`, and `FigureType` in `domain/experiments/protocols.py`, where the domain-owned `ReportingPolicy` consumes them, and `RenderingStatus` in `application/reporting/tracing.py`, with `FigureType` explicitly carrying no Sankey member.
 - **Why this ticket exists.** Split out of the former combined observability/reporting/test-vocabulary ticket because this vocabulary spans the `analysis` and `application` layers, distinct from the `application`-only telemetry vocabulary (P1-T051) and the test-only vocabulary (P1-T053); each layer/concern owns exactly one ticket type per Section D.
 - **Authority references.** Arch §6.6 (reporting vocabulary), §22.1 (no Sankey; B4 interpretability uses a contingency table or heatmap).
 - **Dependencies.** P0-T026.
@@ -1951,20 +1951,20 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Downstream consumers.** P1-T049 (analysis table/figure/wording/report-model specification layer) and P1-T067 (report renderers) both consume this vocabulary.
 - **Preconditions.** P0-T026 complete.
 - **Inputs.** Arch §6.6, §22.1.
-- **Allowed scope.** `analysis/report_models.py`, `application/reporting/tracing.py` (vocabulary only; the tracing service itself is P1-T040/gates work already scoped elsewhere).
-- **Forbidden actions.** No Sankey `FigureType` member; no generic coverage field shared by eligibility and conformal coverage (Arch §22.1); no persistence or rendering-library import in `analysis`.
+- **Allowed scope.** `domain/experiments/protocols.py`, `application/reporting/tracing.py`, and reporting-vocabulary tests (vocabulary only; the tracing service itself is P1-T040/gates work already scoped elsewhere).
+- **Forbidden actions.** No Sankey `FigureType` member; no generic coverage field shared by eligibility and conformal coverage (Arch §22.1); no domain-to-analysis import.
 - **Required configuration or NONE.** NONE.
 - **Implementation responsibilities.** Define `ReportArtifactType`, `TableType`, `FigureType` as `StrEnum`s with the exact roadmap-required members and no Sankey member; define `RenderingStatus` (`PENDING`, `RENDERED`, `TRACE_REFUSED`).
 - **Required unit tests.** No Sankey `FigureType` member exists; `TableType` and `FigureType` cover every roadmap table/figure family named in Road §5/§9.
 - **Required property tests.** NONE.
 - **Required contract tests.** NONE.
-- **Required architecture tests.** `analysis/report_models.py` imports no framework, no persistence adapter, and no `infrastructure` module.
+- **Required architecture tests.** `domain/experiments/protocols.py` imports no higher layer, framework, persistence adapter, or `infrastructure` module.
 - **Required integration tests.** NONE.
 - **Required CUDA tests.** NONE.
 - **Required system/end-to-end tests.** NONE.
 - **Validation commands.** Strict type; unit; architecture lanes.
 - **Acceptance criteria.** [ ] No Sankey figure type. [ ] `ReportArtifactType`/`TableType`/`FigureType` complete. [ ] `RenderingStatus` defined. [ ] `analysis` stays framework-free.
-- **Completion evidence.** Changed files (`analysis/report_models.py`, `application/reporting/tracing.py` vocabulary additions); commands run and results; cleanup confirmation; confirmation of no unrelated modification.
+- **Completion evidence.** Changed files (`domain/experiments/protocols.py`, `application/reporting/tracing.py` vocabulary additions); commands run and results; cleanup confirmation; confirmation of no unrelated modification.
 - **Failure and blocker behavior.** NONE expected.
 - **Stop conditions.** None.
 - **Deliverables.** Analysis reporting vocabulary.

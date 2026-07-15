@@ -38,7 +38,7 @@ def typecheck(session: nox.Session) -> None:
 @nox.session
 def architecture(session: nox.Session) -> None:
     session.run(_PYTHON, "-m", "importlinter.cli", "lint-imports", "--config", "importlinter.ini")
-    _run_pytest(session, "tests/architecture", "-m", "architecture")
+    _run_pytest(session, "tests/architecture", "-m", "architecture", "--no-cov")
 
 
 @nox.session(name="xdist_safe")

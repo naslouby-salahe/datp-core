@@ -1,0 +1,3 @@
+from collections.abc import Sequence
+
+def jensenshannon(first: Sequence[float], second: Sequence[float]) -> float: ...

@@ -55,7 +55,7 @@ Ordered by the same presentation order as `docs/MASTER_TICKET_LOG.md` Section H 
 | [P1-T008](P1-T008.md) | Implement storage/artifact/manifest vocabulary | domain | P0 | P0-T026 | P1-T054, P1-T055, P1-T056, P1-T057, P1-T058, P1-T059 |
 | [P1-T009](P1-T009.md) | Implement runtime/lifecycle/seed-role/pipeline-stage vocabulary | domain | P0 | P0-T026 | P1-T036, P1-T039 |
 | [P1-T051](P1-T051.md) | Implement application telemetry vocabulary and contracts | telemetry | P1 | P0-T026 | P1-T065 |
-| [P1-T052](P1-T052.md) | Implement analysis reporting vocabulary | reporting | P1 | P0-T026 | P1-T049 |
+| [P1-T052](P1-T052.md) | Implement reporting-policy vocabulary | reporting | P1 | P0-T026 | P1-T049 |
 | [P1-T053](P1-T053.md) | Implement test-support vocabulary and typed test profiles | test-support | P1 | P0-T026 | P1-T070 |
 | [P1-T011](P1-T011.md) | Implement finite-numeric and Decimal probability-like value objects | domain | P0 | P1-T001 | P1-T019, P1-T024 |
 | [P1-T012](P1-T012.md) | Implement identity, seed-plan, and stage-fingerprint value objects | domain | P0 | P1-T009 | P1-T013 |

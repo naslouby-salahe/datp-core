@@ -1,1 +1,3 @@
-__all__: list[str] = []
+from datp_core.cli.main import main
+
+__all__ = ["main"]
