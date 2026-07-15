@@ -14,6 +14,7 @@ from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import ClientTestScoreArtifact, ScoreSampleCount
 
 _BUNDLE_ID_PATTERN = r"bundle-[0-9a-f]{64}"
+_CONTENT_HASH_PATTERN = r"[0-9a-f]{64}"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -55,9 +56,9 @@ class DeclaredTestScoreMember:
                 type(self.fitted_preprocessor_identity) is FittedPreprocessorIdentity,
                 type(self.feature_schema_identity) is FeatureSchemaIdentity,
                 type(self.sample_count) is ScoreSampleCount,
-                fullmatch(r"[0-9a-f]{64}", self.split_manifest_hash) is not None,
-                fullmatch(r"[0-9a-f]{64}", self.scientific_checkpoint_content_hash) is not None,
-                fullmatch(r"[0-9a-f]{64}", self.content_hash) is not None,
+                fullmatch(_CONTENT_HASH_PATTERN, self.split_manifest_hash) is not None,
+                fullmatch(_CONTENT_HASH_PATTERN, self.scientific_checkpoint_content_hash) is not None,
+                fullmatch(_CONTENT_HASH_PATTERN, self.content_hash) is not None,
                 bool(self.row_order_checksum),
                 self.artifact.content_hash == self.content_hash,
             )

@@ -122,16 +122,16 @@ def test_runner_implements_the_bca_port_with_a_private_input_reader() -> None:
     assert isinstance(result, ConfirmatoryAnalysisResult)
     assert result.paired is paired
     assert isinstance(result.interval, ValidBootstrapIntervalResult)
+    unsupported_analysis = StatisticalAnalysisSpec(
+        method=StatisticalMethod.SPEARMAN,
+        confidence=ConfidenceLevel(value=Decimal("0.95")),
+        resamples=BootstrapResampleCount(value=500),
+        paired_seed_count=5,
+    )
+    unsupported_request = RunStatisticalAnalysisRequest(
+        analysis=unsupported_analysis,
+        input_artifacts=ArtifactReferenceCollection(references=()),
+    )
 
     with pytest.raises(StatisticsError, match="statistical procedure"):
-        runner.run(
-            RunStatisticalAnalysisRequest(
-                analysis=StatisticalAnalysisSpec(
-                    method=StatisticalMethod.SPEARMAN,
-                    confidence=ConfidenceLevel(value=Decimal("0.95")),
-                    resamples=BootstrapResampleCount(value=500),
-                    paired_seed_count=5,
-                ),
-                input_artifacts=ArtifactReferenceCollection(references=()),
-            )
-        )
+        runner.run(unsupported_request)

@@ -88,29 +88,30 @@ def test_anchor_and_feasibility_gates_block_failed_typed_evidence() -> None:
     )
 
     request = AnchorReproductionGateRequest(result=failed)
-    assert not AnchorReproductionGate().evaluate(request).readiness.is_ready
+    gate = AnchorReproductionGate()
+    assert not gate.evaluate(request).readiness.is_ready
     with pytest.raises(AnchorReproductionFailure):
-        AnchorReproductionGate().require_journal_expansion(request)
+        gate.require_journal_expansion(request)
     assert decision.readiness.blockers == (BlockingReason.INVALID_LINEAGE, BlockingReason.FAILED_FEASIBILITY)
 
 
 def test_tracer_refuses_a_provenance_gap_before_rendering() -> None:
     required = _artifact(character="a", artifact_type=ArtifactType.TABLE_INPUT)
     freeze = _artifact(character="b", artifact_type=ArtifactType.RESULT_FREEZE)
+    request = TraceReportArtifactRequest(
+        output=_artifact(character="c", artifact_type=ArtifactType.RENDERED_TABLE),
+        specification=_table_specification(),
+        required_inputs=ArtifactReferenceCollection(references=(required,)),
+        provenance_chain=ArtifactReferenceCollection(references=()),
+        result_freeze=ResultFreezeEligibility(
+            result_freeze=freeze,
+            readiness=ScientificReadinessResult(blockers=()),
+        ),
+    )
+    tracer = TableFigureTracer()
 
     with pytest.raises(ProvenanceError):
-        TableFigureTracer().trace(
-            TraceReportArtifactRequest(
-                output=_artifact(character="c", artifact_type=ArtifactType.RENDERED_TABLE),
-                specification=_table_specification(),
-                required_inputs=ArtifactReferenceCollection(references=(required,)),
-                provenance_chain=ArtifactReferenceCollection(references=()),
-                result_freeze=ResultFreezeEligibility(
-                    result_freeze=freeze,
-                    readiness=ScientificReadinessResult(blockers=()),
-                ),
-            )
-        )
+        tracer.trace(request)
 
 
 def test_feasibility_accepts_the_exact_minimum_coverage_for_matching_lineage() -> None:
@@ -155,19 +156,20 @@ def test_tracer_returns_a_closed_trace_only_after_a_eligible_freeze() -> None:
 
 
 def test_tracer_rejects_a_blocked_result_freeze_before_provenance_evaluation() -> None:
+    request = TraceReportArtifactRequest(
+        output=_artifact(character="a", artifact_type=ArtifactType.RENDERED_TABLE),
+        specification=_table_specification(),
+        required_inputs=ArtifactReferenceCollection(references=()),
+        provenance_chain=ArtifactReferenceCollection(references=()),
+        result_freeze=ResultFreezeEligibility(
+            result_freeze=_artifact(character="b", artifact_type=ArtifactType.RESULT_FREEZE),
+            readiness=ScientificReadinessResult(blockers=(BlockingReason.FAILED_ANCHOR_GATE,)),
+        ),
+    )
+    tracer = TableFigureTracer()
+
     with pytest.raises(DomainValidationError):
-        TableFigureTracer().trace(
-            TraceReportArtifactRequest(
-                output=_artifact(character="a", artifact_type=ArtifactType.RENDERED_TABLE),
-                specification=_table_specification(),
-                required_inputs=ArtifactReferenceCollection(references=()),
-                provenance_chain=ArtifactReferenceCollection(references=()),
-                result_freeze=ResultFreezeEligibility(
-                    result_freeze=_artifact(character="b", artifact_type=ArtifactType.RESULT_FREEZE),
-                    readiness=ScientificReadinessResult(blockers=(BlockingReason.FAILED_ANCHOR_GATE,)),
-                ),
-            )
-        )
+        tracer.trace(request)
 
 
 @given(st.lists(st.sampled_from(tuple(BlockingReason)), unique=True))

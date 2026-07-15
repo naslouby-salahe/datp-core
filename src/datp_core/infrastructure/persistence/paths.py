@@ -77,16 +77,14 @@ def _relative_path_value(*, key: ArtifactKey, artifact: ArtifactRef) -> str:
 def _key_segments(key: ArtifactKey) -> tuple[str, ...]:
     match key:
         case DatasetArtifactKey():
-            return (
-                key.namespace.value,
+            scope_segments = (
                 "dataset",
                 key.artifact_type.value,
                 key.dataset.value,
                 key.stage_identity.value,
             )
         case RegimeArtifactKey():
-            return (
-                key.namespace.value,
+            scope_segments = (
                 "regime",
                 key.artifact_type.value,
                 key.dataset.value,
@@ -94,8 +92,7 @@ def _key_segments(key: ArtifactKey) -> tuple[str, ...]:
                 key.stage_identity.value,
             )
         case SeedScopedArtifactKey():
-            return (
-                key.namespace.value,
+            scope_segments = (
                 "seed",
                 key.artifact_type.value,
                 key.dataset.value,
@@ -104,8 +101,7 @@ def _key_segments(key: ArtifactKey) -> tuple[str, ...]:
                 key.stage_identity.value,
             )
         case CrossSeedArtifactKey():
-            return (
-                key.namespace.value,
+            scope_segments = (
                 "cross_seed",
                 key.artifact_type.value,
                 key.dataset.value,
@@ -114,11 +110,12 @@ def _key_segments(key: ArtifactKey) -> tuple[str, ...]:
                 key.stage_identity.value,
             )
         case RunArtifactKey():
-            return (key.namespace.value, "run", key.artifact_type.value, key.stage_identity.value)
+            scope_segments = ("run", key.artifact_type.value, key.stage_identity.value)
         case ReportArtifactKey():
-            return (key.namespace.value, "report", key.artifact_type.value, key.stage_identity.value)
+            scope_segments = ("report", key.artifact_type.value, key.stage_identity.value)
         case _ as unreachable:
             assert_never(unreachable)
+    return (key.namespace.value, *scope_segments)
 
 
 def _contained_path(*, root: BoundStorageRoot, relative_path: RelativeArtifactPath, key: ArtifactKey) -> Path:

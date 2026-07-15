@@ -14,9 +14,7 @@ def _validated_finite_values(*, values: tuple[float, ...], name: str) -> None:
 
 
 def _validated_positive_integer(value: object, *, name: str) -> None:
-    if not isinstance(value, int):
-        raise DomainValidationError(detail=f"{name} must be an integer", value=repr(value), constraint="integer")
-    if isinstance(value, bool):
+    if not isinstance(value, int) or isinstance(value, bool):
         raise DomainValidationError(detail=f"{name} must be an integer", value=repr(value), constraint="integer")
     if value < 1:
         raise DomainValidationError(

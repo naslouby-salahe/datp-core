@@ -133,7 +133,7 @@ class ExecutionAttemptId:
                 value=self.value,
                 constraint="attempt-<uuid4>",
             ) from error
-        if not self.value.startswith("attempt-") or parsed.version != 4 or str(parsed) != self.value[8:]:
+        if not self.value.startswith("attempt-") or parsed.version != 4 or not self.value.endswith(str(parsed)):
             raise DomainValidationError(
                 detail="execution attempt id must contain a canonical UUID4",
                 value=self.value,

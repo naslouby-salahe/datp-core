@@ -68,11 +68,12 @@ def test_synthetic_writer_releases_its_lease_for_a_successor(tmp_path: Path) -> 
 
 def test_heartbeat_renewal_retains_a_synthetic_writer_lease(tmp_path: Path) -> None:
     provider = _provider(tmp_path)
+    contending_request = _request("contending-writer")
 
     with provider.acquire(_request("heartbeat-owner", heartbeat_seconds=1)) as lease:
         lease.renew()
         with pytest.raises(ArtifactLockConflict):
-            provider.acquire(_request("contending-writer"))
+            provider.acquire(contending_request)
 
 
 def test_slow_but_alive_owner_is_not_reclaimed_as_stale(tmp_path: Path) -> None:
@@ -81,9 +82,11 @@ def test_slow_but_alive_owner_is_not_reclaimed_as_stale(tmp_path: Path) -> None:
     owner = context.Process(target=_hold_live_lock, args=(str(tmp_path), ready))
     owner.start()
     assert ready.wait(timeout=5)
+    premature_reclaimer = _provider(tmp_path)
+    reclaimer_request = _request("premature-reclaimer", heartbeat_seconds=1)
 
     with pytest.raises(ArtifactLockConflict):
-        _provider(tmp_path).acquire(_request("premature-reclaimer", heartbeat_seconds=1))
+        premature_reclaimer.acquire(reclaimer_request)
 
     owner.join(timeout=5)
     assert owner.exitcode == 0

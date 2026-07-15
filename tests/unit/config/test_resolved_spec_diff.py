@@ -78,7 +78,7 @@ def test_compare_never_mutates_either_resolved_configuration() -> None:
 
     ResolvedSpecDiffer.compare(ResolvedSpecDiffRequest(previous=previous, current=current))
 
-    assert (previous, current) == before
+    assert before == (previous, current)
 
 
 def test_every_resolved_specification_field_has_a_closed_diff_classification() -> None:

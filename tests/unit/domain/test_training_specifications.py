@@ -73,39 +73,49 @@ def test_federation_enforces_the_fedavg_and_fedprox_coefficient_rules() -> None:
 
 
 def test_training_batch_rejects_non_exact_effective_batch_size() -> None:
+    micro_batch_size = BatchSize(value=8)
+    gradient_accumulation_steps = GradientAccumulationSteps(value=2)
+    effective_batch_size = BatchSize(value=15)
+    dataloader_batch_size = BatchSize(value=8)
+
     with pytest.raises(DomainValidationError):
         TrainingBatchSpec(
-            micro_batch_size=BatchSize(value=8),
-            gradient_accumulation_steps=GradientAccumulationSteps(value=2),
-            effective_batch_size=BatchSize(value=15),
-            dataloader_batch_size=BatchSize(value=8),
+            micro_batch_size=micro_batch_size,
+            gradient_accumulation_steps=gradient_accumulation_steps,
+            effective_batch_size=effective_batch_size,
+            dataloader_batch_size=dataloader_batch_size,
             client_batch_partitioning=ClientBatchPartitioning.WHOLE_CLIENT,
             optimizer_step_semantics=OptimizerStepSemantics.AFTER_GRADIENT_ACCUMULATION,
         )
 
 
 def test_core_training_rejects_personalization() -> None:
+    seed = Seed(value=17)
+    autoencoder = AutoencoderSpec(
+        input_dim=115,
+        hidden_dims=(80, 40),
+        bottleneck_dim=20,
+        activation=ActivationFunction.RELU,
+    )
+    federation = _federation(aggregation=AggregationStrategy.FEDAVG, fedprox_mu=None)
+    training_batch = TrainingBatchSpec(
+        micro_batch_size=BatchSize(value=256),
+        gradient_accumulation_steps=GradientAccumulationSteps(value=1),
+        effective_batch_size=BatchSize(value=256),
+        dataloader_batch_size=BatchSize(value=256),
+        client_batch_partitioning=ClientBatchPartitioning.WHOLE_CLIENT,
+        optimizer_step_semantics=OptimizerStepSemantics.AFTER_GRADIENT_ACCUMULATION,
+    )
+
     with pytest.raises(DomainValidationError):
         TrainingSpec(
-            seed=Seed(value=17),
-            autoencoder=AutoencoderSpec(
-                input_dim=115,
-                hidden_dims=(80, 40),
-                bottleneck_dim=20,
-                activation=ActivationFunction.RELU,
-            ),
-            federation=_federation(aggregation=AggregationStrategy.FEDAVG, fedprox_mu=None),
+            seed=seed,
+            autoencoder=autoencoder,
+            federation=federation,
             optimizer=OptimizerType.ADAM,
             lr=0.001,
             scheduler=LrSchedulerType.NONE,
-            training_batch=TrainingBatchSpec(
-                micro_batch_size=BatchSize(value=256),
-                gradient_accumulation_steps=GradientAccumulationSteps(value=1),
-                effective_batch_size=BatchSize(value=256),
-                dataloader_batch_size=BatchSize(value=256),
-                client_batch_partitioning=ClientBatchPartitioning.WHOLE_CLIENT,
-                optimizer_step_semantics=OptimizerStepSemantics.AFTER_GRADIENT_ACCUMULATION,
-            ),
+            training_batch=training_batch,
             precision=PrecisionMode.FP32,
             determinism=DeterminismLevel.STRICT,
             personalization=ModelPersonalizationStrategy.DITTO,

@@ -256,13 +256,14 @@ def test_checkpoint_selector_uses_lowest_regime_a_loss_then_earliest_round() -> 
 
 
 def test_checkpoint_selector_rejects_incomplete_schedule_before_deciding() -> None:
+    request = CheckpointSelectionRequest(
+        specification=_checkpoint_selection_spec(),
+        candidates=(_candidate(round_value=25, loss=0.1),),
+    )
+    selector = CheckpointSelector()
+
     with pytest.raises(CheckpointSelectionError):
-        CheckpointSelector().select(
-            CheckpointSelectionRequest(
-                specification=_checkpoint_selection_spec(),
-                candidates=(_candidate(round_value=25, loss=0.1),),
-            )
-        )
+        selector.select(request)
 
 
 class _FederatedTrainerDouble(FederatedTrainer):
@@ -393,9 +394,10 @@ def test_centralized_trainer_rejects_a_federated_checkpoint_identity() -> None:
     comparator = _centralized_comparator()
     object.__setattr__(comparator, "checkpoint_identity", CheckpointIdentity(value=_fingerprint("a")))
     trainer = CentralizedTorchTrainer(checkpoint_stager=_CentralizedCheckpointStager())
+    request = TrainCentralizedModelRequest(processed_splits=_processed_splits(), comparator=comparator)
 
     with pytest.raises(DomainValidationError, match="centralized training result"):
-        trainer.train(TrainCentralizedModelRequest(processed_splits=_processed_splits(), comparator=comparator))
+        trainer.train(request)
 
 
 def _checkpoint_schedule() -> CheckpointSchedule:
@@ -532,6 +534,10 @@ def test_data_stage_functions_build_a_named_request_for_each_port_double() -> No
     builder = _SplitManifestBuilderDouble()
     fitter = _PreprocessorFitterDouble()
     materializer = _MaterializerDouble()
+    partitioning = NaturalDevicePartitionSpec(
+        strategy=ClientDefinitionStrategy.NATURAL_DEVICE,
+        regime=Regime.A,
+    )
 
     with pytest.raises(_PortDoubleError):
         inspect_dataset(inspector=inspector, dataset=dataset)
@@ -539,10 +545,7 @@ def test_data_stage_functions_build_a_named_request_for_each_port_double() -> No
         partition_clients(
             partitioner=partitioner,
             inspection=inspection,
-            partitioning=NaturalDevicePartitionSpec(
-                strategy=ClientDefinitionStrategy.NATURAL_DEVICE,
-                regime=Regime.A,
-            ),
+            partitioning=partitioning,
         )
     with pytest.raises(_PortDoubleError):
         build_splits(builder=builder, partition=partition, splits=splits)
@@ -613,6 +616,13 @@ def test_score_stage_functions_build_role_specific_requests_for_the_score_port_d
     checkpoint = _checkpoint_descriptor()
     scoring = _scoring_specification()
     window_identity = TemporalWindowIdentity(value=_fingerprint("c"))
+    temporal_request = GenerateTemporalScoresStageRequest(
+        generator=generator,
+        processed_splits=processed_splits,
+        checkpoint=checkpoint,
+        scoring=scoring,
+        window_identity=window_identity,
+    )
 
     with pytest.raises(_PortDoubleError):
         generate_calibration_scores(
@@ -629,15 +639,7 @@ def test_score_stage_functions_build_role_specific_requests_for_the_score_port_d
             scoring=scoring,
         )
     with pytest.raises(_PortDoubleError):
-        generate_temporal_scores(
-            GenerateTemporalScoresStageRequest(
-                generator=generator,
-                processed_splits=processed_splits,
-                checkpoint=checkpoint,
-                scoring=scoring,
-                window_identity=window_identity,
-            )
-        )
+        generate_temporal_scores(temporal_request)
 
     assert generator.calibration_request is not None
     assert generator.test_request is not None
@@ -685,22 +687,24 @@ def test_threshold_and_statistics_stages_build_named_requests_for_port_doubles()
         resamples=BootstrapResampleCount(value=10),
         paired_seed_count=10,
     )
+    threshold_request = ConstructThresholdsRequest(
+        calibration_scores=calibration_scores,
+        construction=construction,
+        eligible_clients=eligible_clients,
+        assignment_metadata=assignment_metadata,
+    )
+    input_artifacts = ArtifactReferenceCollection(references=())
 
     with pytest.raises(_PortDoubleError):
         construct_thresholds(
             constructor=constructor,
-            request=ConstructThresholdsRequest(
-                calibration_scores=calibration_scores,
-                construction=construction,
-                eligible_clients=eligible_clients,
-                assignment_metadata=assignment_metadata,
-            ),
+            request=threshold_request,
         )
     with pytest.raises(_PortDoubleError):
         analyze_statistics(
             runner=runner,
             analysis=analysis,
-            input_artifacts=ArtifactReferenceCollection(references=()),
+            input_artifacts=input_artifacts,
         )
 
     assert constructor.request is not None and constructor.request.calibration_scores == calibration_scores
@@ -896,6 +900,7 @@ def test_policy_evaluator_rejects_a_calibration_score_set_in_the_test_position()
         ),
     )
     object.__setattr__(request, "score_set", calibration_score_set)
+    evaluator = PolicyEvaluator()
 
     with pytest.raises(EvaluationError, match="test-role score aggregate"):
-        PolicyEvaluator().evaluate(request)
+        evaluator.evaluate(request)

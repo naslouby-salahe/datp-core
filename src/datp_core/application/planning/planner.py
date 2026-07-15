@@ -66,7 +66,7 @@ def expand_cells(*, request: CreateExecutionPlanRequest) -> tuple[ExperimentCell
     cells: list[ExperimentCell] = []
     for specification in request.specifications:
         for protocol in specification.profile.authorized_protocols:
-            resolved_specification = replace(specification, scientific_protocol=protocol)
+            resolved_specification: ExperimentSpec = replace(specification, scientific_protocol=protocol)
             for seed in specification.profile.authorized_seed_plan.values:
                 cells.append(
                     _resolved_cell(

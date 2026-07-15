@@ -234,11 +234,14 @@ def test_event_sink_dispatches_every_constructed_event_variant() -> None:
 
 
 def test_structured_event_rejects_an_incompatible_detail() -> None:
+    context = _event_context()
+    detail = telemetry.ArtifactEventDetail(artifact=_artifact_reference())
+
     with pytest.raises(ValueError, match="event detail does not match"):
         telemetry.StructuredEvent(
             kind=telemetry.LogEventKind.RUN_PLANNED,
-            context=_event_context(),
-            detail=telemetry.ArtifactEventDetail(artifact=_artifact_reference()),
+            context=context,
+            detail=detail,
             status=RunStatus.PLANNED,
             error_code=None,
             message="invalid diagnostic event",

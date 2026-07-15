@@ -56,8 +56,10 @@ def test_decimal_value_objects_are_keyword_only_frozen_and_canonical(
 
     assert instance.value == value.quantize(DECIMAL_QUANTUM)
     assert signature(value_type).parameters["value"].kind is Parameter.KEYWORD_ONLY
+    replacement_value = Decimal("0.5")
+
     with pytest.raises(FrozenInstanceError):
-        _set_attribute(instance, "value", Decimal("0.5"))
+        _set_attribute(instance, "value", replacement_value)
 
 
 @pytest.mark.parametrize(
@@ -109,11 +111,10 @@ def test_fpr_target_is_derived_from_and_checked_against_percentile() -> None:
 
     assert target.value == Decimal("0.100000000000")
     validate_fpr_target(percentile=percentile, target=target)
+    invalid_target = FprTarget(value=Decimal("0.11"))
+
     with pytest.raises(DomainValidationError):
-        validate_fpr_target(
-            percentile=percentile,
-            target=FprTarget(value=Decimal("0.11")),
-        )
+        validate_fpr_target(percentile=percentile, target=invalid_target)
 
 
 def test_decimal_value_objects_reject_cross_value_object_construction() -> None:

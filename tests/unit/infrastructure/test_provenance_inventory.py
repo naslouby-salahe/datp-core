@@ -175,9 +175,10 @@ def test_dependency_lock_state_matches_the_synthetic_committed_lock_exactly(tmp_
 def test_missing_required_lock_version_raises_a_typed_environment_error(tmp_path: Path) -> None:
     lock_path = tmp_path / "uv.lock"
     lock_path.write_bytes(_lock_contents(include_msgspec=False))
+    provider = UvDependencyLockStateProvider(lock_path=lock_path)
 
     with pytest.raises(EnvironmentIncompatibilityError, match="required dependency lock value is unavailable"):
-        UvDependencyLockStateProvider(lock_path=lock_path).inspect()
+        provider.inspect()
 
 
 def test_environment_inventory_uses_lock_versions_and_an_explicit_frozen_clock() -> None:

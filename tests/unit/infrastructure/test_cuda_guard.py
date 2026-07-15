@@ -31,25 +31,31 @@ def test_guard_matches_the_cuda_port_signature() -> None:
 def test_cuda_unavailable_fails_loudly_without_setting_a_device(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(torch.cuda, "is_available", lambda: False)
     monkeypatch.setattr(torch.cuda, "set_device", _unexpected_device_selection)
+    guard = _guard()
+    device = _cuda_device()
 
     with pytest.raises(CudaUnavailableError, match="no CPU fallback"):
-        _guard().require_cuda(_cuda_device())
+        guard.require_cuda(device)
 
 
 def test_cpu_allowed_policy_is_rejected_as_an_invalid_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(torch.cuda, "set_device", _unexpected_device_selection)
+    guard = _guard()
+    device = DeviceSpec(policy=DevicePolicy.CPU_ALLOWED, gpu_index=None)
 
     with pytest.raises(InvalidCpuFallbackError, match="CPU-allowed"):
-        _guard().require_cuda(DeviceSpec(policy=DevicePolicy.CPU_ALLOWED, gpu_index=None))
+        guard.require_cuda(device)
 
 
 def test_unavailable_gpu_index_raises_a_typed_device_mismatch(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(torch.cuda, "is_available", lambda: True)
     monkeypatch.setattr(torch.cuda, "device_count", lambda: 1)
     monkeypatch.setattr(torch.cuda, "set_device", _unexpected_device_selection)
+    guard = _guard()
+    device = _cuda_device(index=1)
 
     with pytest.raises(CudaDeviceMismatchError, match="not visible"):
-        _guard().require_cuda(_cuda_device(index=1))
+        guard.require_cuda(device)
 
 
 def test_cuda_selection_failure_is_normalized_to_a_typed_device_mismatch(
@@ -62,9 +68,11 @@ def test_cuda_selection_failure_is_normalized_to_a_typed_device_mismatch(
         raise RuntimeError(f"cannot select {index}")
 
     monkeypatch.setattr(torch.cuda, "set_device", failing_selection)
+    guard = _guard()
+    device = _cuda_device()
 
     with pytest.raises(CudaDeviceMismatchError, match="could not select"):
-        _guard().require_cuda(_cuda_device())
+        guard.require_cuda(device)
 
 
 def test_guard_selects_the_requested_gpu_and_applies_strict_determinism(

@@ -141,8 +141,10 @@ def test_unknown_typed_error_is_rejected_instead_of_receiving_a_generic_exit_cod
     class UnknownError(DatpCoreError):
         pass
 
+    error = UnknownError(detail="unknown")
+
     with pytest.raises(TypeError, match="no process exit code"):
-        error_exit_code(UnknownError(detail="unknown"))
+        error_exit_code(error)
 
 
 def test_synthetic_composition_use_case_renders_a_boundary_success_and_exits_successfully() -> None:

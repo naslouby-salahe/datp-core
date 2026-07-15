@@ -124,9 +124,10 @@ def test_recovery_metadata_in_a_mismatched_namespace_is_rejected(tmp_path: Path)
     original = repository / f"{recovery.compatibility_identity.value.value}.json"
     mismatched = repository / f"{mismatched_identity.value.value}.json"
     original.replace(mismatched)
+    request = LoadRecoveryStateRequest(compatibility_identity=mismatched_identity)
 
     with pytest.raises(ResumeIncompatibilityError):
-        store.load_recovery(LoadRecoveryStateRequest(compatibility_identity=mismatched_identity))
+        store.load_recovery(request)
 
 
 def test_recovery_content_cannot_be_decoded_as_a_scientific_checkpoint(tmp_path: Path) -> None:
@@ -146,11 +147,10 @@ def test_recovery_content_cannot_be_decoded_as_a_scientific_checkpoint(tmp_path:
     )
     scientific_path.parent.mkdir(parents=True)
     scientific_path.write_bytes(recovery_path.read_bytes())
+    request = FindCheckpointRequest(
+        checkpoint_id=scientific_checkpoint.checkpoint_id,
+        training_identity=scientific_checkpoint.training_identity,
+    )
 
     with pytest.raises(CheckpointError):
-        store.find_compatible(
-            FindCheckpointRequest(
-                checkpoint_id=scientific_checkpoint.checkpoint_id,
-                training_identity=scientific_checkpoint.training_identity,
-            )
-        )
+        store.find_compatible(request)

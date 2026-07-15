@@ -56,8 +56,10 @@ def test_commit_lease_is_released_when_persistence_scope_exits(tmp_path: Path) -
         assert isinstance(lease, FileArtifactLockLease)
         assert lease.owner == "commit-writer"
         assert lease.scope is LockScope.COMMIT
+        competing_request = _request("competing-writer", scope=LockScope.COMMIT)
+
         with pytest.raises(ArtifactLockConflict):
-            provider.acquire(_request("competing-writer", scope=LockScope.COMMIT))
+            provider.acquire(competing_request)
 
     with provider.acquire(_request("next-writer", scope=LockScope.COMMIT)):
         pass
@@ -65,9 +67,10 @@ def test_commit_lease_is_released_when_persistence_scope_exits(tmp_path: Path) -
 
 def test_commit_scope_rejects_a_renewable_heartbeat(tmp_path: Path) -> None:
     provider = _provider(tmp_path)
+    request = _request("commit-writer", scope=LockScope.COMMIT, heartbeat_seconds=1)
 
     with pytest.raises(ArtifactLockConflict):
-        provider.acquire(_request("commit-writer", scope=LockScope.COMMIT, heartbeat_seconds=1))
+        provider.acquire(request)
 
 
 def test_expired_computation_lease_raises_a_typed_conflict_on_renewal(tmp_path: Path) -> None:
@@ -119,5 +122,7 @@ def test_renewal_preserves_an_active_computation_ownership_lease(tmp_path: Path)
 
     with provider.acquire(request) as lease:
         lease.renew()
+        competing_request = _request("competing-compute", timeout_seconds=1)
+
         with pytest.raises(ArtifactLockConflict):
-            provider.acquire(_request("competing-compute", timeout_seconds=1))
+            provider.acquire(competing_request)

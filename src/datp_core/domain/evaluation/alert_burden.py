@@ -26,9 +26,7 @@ class CostDerivationKind(StrEnum):
 
 
 def _validated_integer_at_least(*, value: object, name: str, minimum: int) -> None:
-    if not isinstance(value, int):
-        raise DomainValidationError(detail=f"{name} must be an integer", value=repr(value), constraint="integer")
-    if isinstance(value, bool):
+    if not isinstance(value, int) or isinstance(value, bool):
         raise DomainValidationError(detail=f"{name} must be an integer", value=repr(value), constraint="integer")
     if value < minimum:
         raise DomainValidationError(

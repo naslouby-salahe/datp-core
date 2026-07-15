@@ -14,9 +14,7 @@ REGIME_D_TEMPORAL_HISTORICAL_FRACTION: Final = Probability(value=Decimal("0.70")
 
 
 def _validated_integer(value: object, *, name: str, minimum: int) -> int:
-    if not isinstance(value, int):
-        raise DomainValidationError(detail=f"{name} must be an integer", value=repr(value), constraint="integer")
-    if isinstance(value, bool):
+    if not isinstance(value, int) or isinstance(value, bool):
         raise DomainValidationError(detail=f"{name} must be an integer", value=repr(value), constraint="integer")
     if value < minimum:
         raise DomainValidationError(

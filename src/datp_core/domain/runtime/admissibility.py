@@ -5,9 +5,7 @@ from datp_core.domain.errors import DomainValidationError
 
 
 def _validated_integer(*, value: object, name: str, minimum: int) -> None:
-    if not isinstance(value, int):
-        raise DomainValidationError(detail=f"{name} must be an integer", value=repr(value), constraint="integer")
-    if isinstance(value, bool):
+    if not isinstance(value, int) or isinstance(value, bool):
         raise DomainValidationError(detail=f"{name} must be an integer", value=repr(value), constraint="integer")
     if value < minimum:
         raise DomainValidationError(
@@ -26,13 +24,7 @@ def _validated_finite_float(*, value: object, name: str, minimum: float, inclusi
 
 
 def _validated_float_input(*, value: object, name: str) -> float | int | str:
-    if isinstance(value, bool):
-        raise DomainValidationError(
-            detail=f"{name} must be a finite number",
-            value=repr(value),
-            constraint="finite numeric value",
-        )
-    if not isinstance(value, (float, int, str)):
+    if isinstance(value, bool) or not isinstance(value, (float, int, str)):
         raise DomainValidationError(
             detail=f"{name} must be a finite number",
             value=repr(value),

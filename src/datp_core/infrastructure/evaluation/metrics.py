@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from math import ceil, fsum, isfinite, sqrt
-from typing import NoReturn, assert_never
+from typing import NoReturn, Protocol, assert_never
 
 from datp_core.domain.errors import EvaluationError
 from datp_core.domain.evaluation.metrics import (
@@ -16,9 +16,14 @@ from datp_core.domain.evaluation.metrics import (
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ComputedMetric[Metric]:
-    metric: Metric
+class ComputedMetric[MetricType]:
+    metric: MetricType
     value: float
+
+
+class _MetricWithValue(Protocol):
+    @property
+    def value(self) -> str: ...
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -159,12 +164,10 @@ class MetricCalculator:
         return ComputedMetric(metric=request.metric, value=value)
 
     def compute_distribution(self, request: DistributionMetricRequest) -> ComputedMetric[DistributionMetric]:
-        _require_non_negative(values=request.values, metric=request.metric.value)
-        return ComputedMetric(metric=request.metric, value=_mean(request.values))
+        return _computed_non_negative_mean(metric=request.metric, values=request.values)
 
     def compute_diagnostic(self, request: DiagnosticMetricRequest) -> ComputedMetric[DiagnosticRatio]:
-        _require_non_negative(values=request.values, metric=request.metric.value)
-        return ComputedMetric(metric=request.metric, value=_mean(request.values))
+        return _computed_non_negative_mean(metric=request.metric, values=request.values)
 
     def compute_resource(self, request: ResourceMetricRequest) -> ComputedMetric[ResourceMetric]:
         _require_non_negative(values=request.values, metric=request.metric.value)
@@ -180,6 +183,13 @@ def _require_non_negative(*, values: tuple[float, ...], metric: str) -> None:
     _require_finite_values(values=values, metric=metric)
     if any(value < 0 for value in values):
         _raise_invalid(metric=metric, reason="non-negative values required")
+
+
+def _computed_non_negative_mean[MetricType: _MetricWithValue](
+    *, metric: MetricType, values: tuple[float, ...]
+) -> ComputedMetric[MetricType]:
+    _require_non_negative(values=values, metric=metric.value)
+    return ComputedMetric(metric=metric, value=_mean(values))
 
 
 def _require_unit_interval(*, values: tuple[float, ...], metric: str) -> None:

@@ -12,7 +12,9 @@ def test_cliffs_delta_handles_disjoint_identical_and_tied_samples() -> None:
 
 
 def test_cliffs_delta_rejects_nonfinite_and_empty_samples() -> None:
+    nonfinite_sample = (float("nan"),)
+
     with pytest.raises(DomainValidationError):
         cliffs_delta(sample_a=(), sample_b=(1.0,))
     with pytest.raises(DomainValidationError):
-        cliffs_delta(sample_a=(float("nan"),), sample_b=(1.0,))
+        cliffs_delta(sample_a=nonfinite_sample, sample_b=(1.0,))

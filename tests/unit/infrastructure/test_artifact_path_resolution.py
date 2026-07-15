@@ -178,29 +178,22 @@ def test_recovery_and_test_namespaces_require_their_semantic_roots(tmp_path: Pat
         spec=StorageRootSpec(kind=StorageRootKind.TEST_SANDBOX, visibility=StorageVisibility.TEST_ISOLATED),
         absolute_path=tmp_path / "test",
     )
+    recovery_key = _keys(ArtifactNamespace.RECOVERY)[0]
+    default_key = _keys()[0]
+    test_key = _keys(ArtifactNamespace.TEST_SANDBOX)[0]
+    recovery_request = ResolveArtifactLocationRequest(key=recovery_key, root=report_root, artifact=_ARTIFACT)
+    report_request = ResolveArtifactLocationRequest(key=default_key, root=recovery_root, artifact=_ARTIFACT)
+    test_request = ResolveArtifactLocationRequest(key=test_key, root=report_root, artifact=_ARTIFACT)
+    sandbox_request = ResolveArtifactLocationRequest(key=default_key, root=test_root, artifact=_ARTIFACT)
 
     with pytest.raises(PathResolutionError):
-        resolver.resolve(
-            ResolveArtifactLocationRequest(
-                key=_keys(ArtifactNamespace.RECOVERY)[0], root=report_root, artifact=_ARTIFACT
-            )
-        )
+        resolver.resolve(recovery_request)
     with pytest.raises(PathResolutionError):
-        resolver.resolve(
-            ResolveArtifactLocationRequest(
-                key=_keys()[0],
-                root=recovery_root,
-                artifact=_ARTIFACT,
-            )
-        )
+        resolver.resolve(report_request)
     with pytest.raises(PathResolutionError):
-        resolver.resolve(
-            ResolveArtifactLocationRequest(
-                key=_keys(ArtifactNamespace.TEST_SANDBOX)[0], root=report_root, artifact=_ARTIFACT
-            )
-        )
+        resolver.resolve(test_request)
     with pytest.raises(PathResolutionError):
-        resolver.resolve(ResolveArtifactLocationRequest(key=_keys()[0], root=test_root, artifact=_ARTIFACT))
+        resolver.resolve(sandbox_request)
 
 
 def test_symlinked_namespace_escape_is_rejected(tmp_path: Path) -> None:
@@ -210,10 +203,10 @@ def test_symlinked_namespace_escape_is_rejected(tmp_path: Path) -> None:
         (tmp_path / ArtifactNamespace.DATP_ANCHOR.value).symlink_to(outside, target_is_directory=True)
     except OSError as error:
         pytest.skip(f"symlink creation unavailable: {error}")
+    resolver = ArtifactPathResolver()
+    request = ResolveArtifactLocationRequest(
+        key=_keys(ArtifactNamespace.DATP_ANCHOR)[0], root=_root(tmp_path), artifact=_ARTIFACT
+    )
 
     with pytest.raises(PathResolutionError):
-        ArtifactPathResolver().resolve(
-            ResolveArtifactLocationRequest(
-                key=_keys(ArtifactNamespace.DATP_ANCHOR)[0], root=_root(tmp_path), artifact=_ARTIFACT
-            )
-        )
+        resolver.resolve(request)

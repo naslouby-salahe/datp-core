@@ -20,5 +20,6 @@ def test_client_roster_rejects_generated_noncanonical_order(values: list[str]) -
     ordered = sorted(values)
     reversed_values = tuple(reversed(ordered))
     if reversed_values != tuple(ordered):
+        reversed_client_ids = tuple(ClientId(value=value) for value in reversed_values)
         with pytest.raises(DomainValidationError):
-            ClientRoster(client_ids=tuple(ClientId(value=value) for value in reversed_values))
+            ClientRoster(client_ids=reversed_client_ids)

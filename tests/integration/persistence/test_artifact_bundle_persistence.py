@@ -36,5 +36,6 @@ def test_interruption_before_marker_makes_synthetic_bundle_unreadable(
 
     bundle_directory = next((tmp_path / ".artifact-bundles").iterdir())
     assert {path.name for path in bundle_directory.iterdir()} == {"benign", "attack"}
+    bundle_id = ArtifactBundleId(value=bundle_directory.name)
     with pytest.raises(IncompleteArtifactBundleError):
-        store.read_bundle(ArtifactBundleId(value=bundle_directory.name))
+        store.read_bundle(bundle_id)

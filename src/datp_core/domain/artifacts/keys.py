@@ -110,9 +110,7 @@ def _expected_visibility(kind: StorageRootKind) -> StorageVisibility:
 
 
 def _validated_nonnegative_integer(*, value: object, name: str) -> None:
-    if not isinstance(value, int):
-        raise DomainValidationError(detail=f"{name} must be an integer", value=repr(value), constraint="integer")
-    if isinstance(value, bool):
+    if not isinstance(value, int) or isinstance(value, bool):
         raise DomainValidationError(detail=f"{name} must be an integer", value=repr(value), constraint="integer")
     if value < 0:
         raise DomainValidationError(

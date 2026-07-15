@@ -36,11 +36,11 @@ def _build_figure(request: RenderReportArtifactRequest) -> Figure:
     axes = figure.subplots()
     if isinstance(specification, SeriesFigureSpecification):
         _render_series_figure(axes, specification)
-        return figure
-    if isinstance(specification, HeatmapFigureSpecification):
+    elif isinstance(specification, HeatmapFigureSpecification):
         _render_heatmap_figure(axes, specification)
-        return figure
-    raise _rendering_error(request, "Matplotlib renderer accepts figure specifications only")
+    else:
+        raise _rendering_error(request, "Matplotlib renderer accepts figure specifications only")
+    return figure
 
 
 def _render_series_figure(axes: Axes, specification: SeriesFigureSpecification) -> None:

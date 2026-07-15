@@ -9,27 +9,24 @@ from datp_core.domain.experiments.protocols import ReportArtifactType
 
 class LatexReportRenderer:
     def render(self, request: RenderReportArtifactRequest) -> RenderedReportArtifact:
-        _validate_latex_request(request)
-        specification = request.traced_specification.specification
+        specification = _validated_latex_specification(request)
         if isinstance(specification, TableSpecification):
             content = _latex_table(specification)
-        elif isinstance(specification, ClaimWording):
-            content = specification.template
         else:
-            raise _rendering_error(request, "LaTex renderer accepts tables and wording blocks only")
+            content = specification.template
         return RenderedReportArtifact(artifact=request.traced_specification.output, content=content.encode())
 
 
-def _validate_latex_request(request: RenderReportArtifactRequest) -> None:
+def _validated_latex_specification(request: RenderReportArtifactRequest) -> TableSpecification | ClaimWording:
     if request.format is not SerializationFormat.LATEX:
         raise _rendering_error(request, "LaTex renderer received an unsupported serialization format")
     specification = request.traced_specification.specification
     if isinstance(specification, TableSpecification):
         _validate_table_request(request)
-        return
+        return specification
     if isinstance(specification, ClaimWording):
         _validate_wording_request(request)
-        return
+        return specification
     raise _rendering_error(request, "LaTex renderer accepts tables and wording blocks only")
 
 

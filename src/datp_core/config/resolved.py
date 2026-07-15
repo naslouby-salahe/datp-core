@@ -155,12 +155,12 @@ def _environment_changes(
     previous: EnvironmentSpecification,
     current: EnvironmentSpecification,
 ) -> tuple[EnvironmentChange, ...]:
-    if previous.storage_roots == current.storage_roots:
-        return ()
-    return (
+    return tuple(
         EnvironmentChange(
             field=EnvironmentField.STORAGE_ROOTS,
             affected_stages=(),
             reuse_impact=ReuseImpact.NO_OUTPUT_IMPACT,
-        ),
+        )
+        for storage_roots in (previous.storage_roots,)
+        if storage_roots != current.storage_roots
     )

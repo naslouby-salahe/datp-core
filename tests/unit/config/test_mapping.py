@@ -215,29 +215,28 @@ def _centralized_profile() -> CentralizedModelComparatorProfileSpec:
 def test_profile_resolution_precedes_closed_cell_mapping() -> None:
     schema = experiment_config()
     mapped = map_experiment_schema(schema)
+    request = ResolveExperimentProfileRequest(
+        experiment_id=ExperimentId(value="E-S1"),
+        profiles=schema.profile_request.profiles,
+    )
 
     assert mapped.scientific_protocol in mapped.profile.authorized_protocols
     with pytest.raises(ConfigurationError):
-        resolve_experiment_profile(
-            ResolveExperimentProfileRequest(
-                experiment_id=ExperimentId(value="E-S1"),
-                profiles=schema.profile_request.profiles,
-            )
-        )
+        resolve_experiment_profile(request)
 
 
 def test_fedprox_mapping_rejects_zero_and_requires_the_frozen_grid() -> None:
+    configuration = FedProxFederationConfig(
+        aggregation=AggregationStrategy.FEDPROX,
+        local_epochs=1,
+        participation=ParticipationStrategy.FULL,
+        rounds_max=200,
+        fedprox_mu=Decimal(0),
+        selection_source="pre_registered_grid",
+    )
+
     with pytest.raises(ConfigurationError):
-        map_federation_config(
-            FedProxFederationConfig(
-                aggregation=AggregationStrategy.FEDPROX,
-                local_epochs=1,
-                participation=ParticipationStrategy.FULL,
-                rounds_max=200,
-                fedprox_mu=Decimal(0),
-                selection_source="pre_registered_grid",
-            )
-        )
+        map_federation_config(configuration)
 
 
 def test_b0_uses_the_dedicated_centralized_comparator_mapper() -> None:
@@ -258,21 +257,23 @@ def test_b0_uses_the_dedicated_centralized_comparator_mapper() -> None:
 
 
 def test_canonical_temporal_mapping_rejects_pseudo_time() -> None:
+    configuration = CanonicalTemporalConfig(
+        historical_fraction=Decimal("0.70"),
+        timestamp_evidence_kind=TimestampEvidenceKind.GENUINE_CAPTURE_TIME,
+        capture_timestamp_field="file_order",
+        boundary_identity="b" * 64,
+    )
+
     with pytest.raises(ConfigurationError):
-        map_canonical_temporal_config(
-            CanonicalTemporalConfig(
-                historical_fraction=Decimal("0.70"),
-                timestamp_evidence_kind=TimestampEvidenceKind.GENUINE_CAPTURE_TIME,
-                capture_timestamp_field="file_order",
-                boundary_identity="b" * 64,
-            )
-        )
+        map_canonical_temporal_config(configuration)
 
 
 def test_canonical_temporal_schema_rejects_a_non_70_30_boundary() -> None:
+    historical_fraction = Decimal("0.60")
+
     with pytest.raises(ValidationError):
         CanonicalTemporalConfig(
-            historical_fraction=Decimal("0.60"),
+            historical_fraction=historical_fraction,
             timestamp_evidence_kind=TimestampEvidenceKind.GENUINE_CAPTURE_TIME,
             capture_timestamp_field="capture_time",
             boundary_identity="b" * 64,
@@ -285,7 +286,10 @@ def test_ordered_override_precedence_is_deterministic() -> None:
 
     assert OVERRIDE_PRECEDENCE == "ordered_override_wins"
     assert compose_configuration(base, (override,)) == override
-    assert compose_configuration(base, (override,)) == compose_configuration(base, (override,))
+    first_composition = compose_configuration(base, (override,))
+    second_composition = compose_configuration(base, (override,))
+
+    assert first_composition == second_composition
 
 
 def test_loader_validates_yaml_at_the_boundary() -> None:

@@ -23,13 +23,15 @@ def test_experiment_ids_reject_generated_noncanonical_values(value: str) -> None
 def test_seed_derivation_is_deterministic_for_generated_inputs(experiment_seed: int, fingerprint: str) -> None:
     seed = Seed(value=experiment_seed)
     stage_fingerprint = StageFingerprint(value=fingerprint)
-
-    assert derive_seed(
-        experiment_seed=seed,
-        role=SeedRole.TRAINING_INIT,
-        stage_fingerprint=stage_fingerprint,
-    ) == derive_seed(
+    first_derived_seed = derive_seed(
         experiment_seed=seed,
         role=SeedRole.TRAINING_INIT,
         stage_fingerprint=stage_fingerprint,
     )
+    repeated_derived_seed = derive_seed(
+        experiment_seed=seed,
+        role=SeedRole.TRAINING_INIT,
+        stage_fingerprint=stage_fingerprint,
+    )
+
+    assert first_derived_seed == repeated_derived_seed

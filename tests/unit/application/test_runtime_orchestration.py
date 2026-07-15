@@ -116,9 +116,10 @@ def test_pressure_rejects_a_profile_change_before_execution() -> None:
         load_usage_fraction=1.0,
         recommended_action=PauseDecision.PAUSE_AT_SAFE_BOUNDARY,
     )
+    orchestrator = CooperativePressureOrchestrator()
 
     with pytest.raises(DomainValidationError, match="cannot alter"):
-        CooperativePressureOrchestrator().respond(
+        orchestrator.respond(
             snapshot=snapshot,
             frozen_batch_profile=profile,
             proposed_batch_profile=changed,
@@ -149,10 +150,12 @@ def test_preflight_preserves_the_exact_profile_and_fails_before_execution_for_in
     request = _preflight_request()
 
     result = ExecutionPreflight().validate(request)
+    invalid_request = replace(request, hardware=replace(request.hardware, ram_bytes=0))
+    preflight = ExecutionPreflight()
 
     assert result.final_plan.resolved_batch_profile is request.resolved_batch_profile
     with pytest.raises(RamPreflightError):
-        ExecutionPreflight().validate(replace(request, hardware=replace(request.hardware, ram_bytes=0)))
+        preflight.validate(invalid_request)
 
 
 def test_preflight_raises_typed_disk_and_parallelism_failures_before_execution() -> None:
@@ -165,11 +168,14 @@ def test_preflight_raises_typed_disk_and_parallelism_failures_before_execution()
         request.resources,
         parallelism=replace(request.resources.parallelism, maximum_cpu_workers=WorkerCount(value=2)),
     )
+    preflight = ExecutionPreflight()
+    unwritable_request = replace(request, resources=unwritable_resources)
+    unsafe_request = replace(request, resources=unsafe_resources)
 
     with pytest.raises(DiskSpaceError):
-        ExecutionPreflight().validate(replace(request, resources=unwritable_resources))
+        preflight.validate(unwritable_request)
     with pytest.raises(UnsafeParallelismError):
-        ExecutionPreflight().validate(replace(request, resources=unsafe_resources))
+        preflight.validate(unsafe_request)
 
 
 def test_executor_rejects_a_sparse_stage_dispatch_registry_at_construction() -> None:

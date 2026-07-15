@@ -57,13 +57,15 @@ def _test() -> TestSplitSpec:
 
 def test_split_roles_are_constructor_locked_and_calibration_has_no_attack_admitting_field() -> None:
     calibration_fields = {entry.name for entry in fields(BenignCalibrationSplitSpec)}
+    split_identity = SplitIdentity(value=_fingerprint("e"))
+    partition_identity = _partition()
 
     assert calibration_fields == {"split_identity", "partition_identity", "role"}
     with pytest.raises(TypeError):
         type.__call__(
             BenignCalibrationSplitSpec,
-            split_identity=SplitIdentity(value=_fingerprint("e")),
-            partition_identity=_partition(),
+            split_identity=split_identity,
+            partition_identity=partition_identity,
             role="attack",
         )
 
@@ -72,12 +74,14 @@ def test_conformal_specification_rejects_test_split_in_each_threshold_fit_positi
     test_split = _test()
     percentile = ThresholdPercentile(value=Decimal("0.95"))
     alpha = FprTarget.from_percentile(percentile=percentile)
+    calibration_split = _calibration()
+    training_split = _training()
 
     with pytest.raises(DomainValidationError):
         type.__call__(
             ConformalSplitSpec,
             proper_fit_split=test_split,
-            calibration_split=_calibration(),
+            calibration_split=calibration_split,
             percentile=percentile,
             alpha=alpha,
             quantile_index_rule=ConformalQuantileIndexRule.CEILING_N_PLUS_ONE,
@@ -85,7 +89,7 @@ def test_conformal_specification_rejects_test_split_in_each_threshold_fit_positi
     with pytest.raises(DomainValidationError):
         type.__call__(
             ConformalSplitSpec,
-            proper_fit_split=_training(),
+            proper_fit_split=training_split,
             calibration_split=test_split,
             percentile=percentile,
             alpha=alpha,
@@ -112,13 +116,15 @@ def test_temporal_boundary_is_locked_to_genuine_capture_time_at_exactly_seventy_
             calibration_split=_calibration(),
         ),
     )
+    invalid_fraction = Probability(value=Decimal("0.69"))
+    invalid_boundary_identity = TemporalWindowIdentity(value=_fingerprint("f"))
 
     assert protocol.historical.boundary.historical_fraction.value == Decimal("0.700000000000")
     with pytest.raises(DomainValidationError):
         TemporalBoundary(
-            historical_fraction=Probability(value=Decimal("0.69")),
+            historical_fraction=invalid_fraction,
             timestamp_field=evidence,
-            boundary_identity=TemporalWindowIdentity(value=_fingerprint("f")),
+            boundary_identity=invalid_boundary_identity,
         )
     with pytest.raises(DomainValidationError):
         TimestampEvidence(kind=TimestampEvidenceKind.GENUINE_CAPTURE_TIME, capture_timestamp_field="file_order")
@@ -140,6 +146,11 @@ def test_partition_strategies_are_closed_and_dirichlet_fields_are_isolated() -> 
 
 def test_split_collection_requires_one_distinct_split_for_every_static_role() -> None:
     collection = SplitCollectionSpec(training=_training(), calibration=_calibration(), test=_test())
+    duplicate_training = _training()
+    duplicate_calibration = BenignCalibrationSplitSpec(
+        split_identity=SplitIdentity(value=_fingerprint("b")), partition_identity=_partition()
+    )
+    duplicate_test = _test()
 
     assert tuple(type(split) for split in (collection.training, collection.calibration, collection.test)) == (
         TrainingSplitSpec,
@@ -148,9 +159,7 @@ def test_split_collection_requires_one_distinct_split_for_every_static_role() ->
     )
     with pytest.raises(DomainValidationError):
         SplitCollectionSpec(
-            training=_training(),
-            calibration=BenignCalibrationSplitSpec(
-                split_identity=SplitIdentity(value=_fingerprint("b")), partition_identity=_partition()
-            ),
-            test=_test(),
+            training=duplicate_training,
+            calibration=duplicate_calibration,
+            test=duplicate_test,
         )

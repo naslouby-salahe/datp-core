@@ -299,10 +299,13 @@ def test_registered_threshold_strategies_satisfy_their_declared_port_operations(
 
 
 def test_stage_runner_registry_rejects_a_nonexhaustive_map_at_construction() -> None:
+    entries = (EnumMapEntry(key=PipelineStage.SOURCE_INSPECTION, value=_NoopStageRunner()),)
+    stages = tuple(PipelineStage)
+
     with pytest.raises(DomainValidationError, match="non-sparse enum map must be exhaustive"):
         EnumMap(
-            entries=(EnumMapEntry(key=PipelineStage.SOURCE_INSPECTION, value=_NoopStageRunner()),),
-            allowed_keys=tuple(PipelineStage),
+            entries=entries,
+            allowed_keys=stages,
             is_sparse=False,
         )
 
@@ -345,13 +348,14 @@ def test_composition_root_binds_every_port_and_constructs_every_application_serv
 
 def test_composition_configuration_rejects_a_resolved_execution_mismatch() -> None:
     configuration = _configuration()
+    resolved = replace(
+        configuration.resolved,
+        execution=replace(configuration.resolved.execution, execution_mode=ExecutionMode.SMOKE),
+    )
 
     with pytest.raises(DomainValidationError, match="must retain the resolved scientific and execution"):
         ResolvedExperimentConfiguration(
-            resolved=replace(
-                configuration.resolved,
-                execution=replace(configuration.resolved.execution, execution_mode=ExecutionMode.SMOKE),
-            ),
+            resolved=resolved,
             experiment=configuration.experiment,
         )
 

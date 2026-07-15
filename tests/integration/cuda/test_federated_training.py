@@ -15,25 +15,28 @@ def test_cuda_full_participation_and_fedprox_equivalence_on_synthetic_parameters
     skip_if_cuda_unavailable()
     expected = (ClientId(value="client-a"), ClientId(value="client-b"))
     valid_parameter = torch.ones(1, device="cuda")
+    round_number = RoundNumber(value=1)
+    incomplete_updates = (ClientModelUpdate(client_id=expected[0], tensors=(valid_parameter,), sample_count=1),)
+    nonfinite_updates = (
+        ClientModelUpdate(client_id=expected[0], tensors=(valid_parameter,), sample_count=1),
+        ClientModelUpdate(
+            client_id=expected[1],
+            tensors=(torch.tensor((float("nan"),), device="cuda"),),
+            sample_count=1,
+        ),
+    )
 
     with pytest.raises(RoundAbortedError):
         validate_full_participation_updates(
             expected_clients=expected,
-            updates=(ClientModelUpdate(client_id=expected[0], tensors=(valid_parameter,), sample_count=1),),
-            round_number=RoundNumber(value=1),
+            updates=incomplete_updates,
+            round_number=round_number,
         )
     with pytest.raises(NonFiniteClientUpdateError):
         validate_full_participation_updates(
             expected_clients=expected,
-            updates=(
-                ClientModelUpdate(client_id=expected[0], tensors=(valid_parameter,), sample_count=1),
-                ClientModelUpdate(
-                    client_id=expected[1],
-                    tensors=(torch.tensor((float("nan"),), device="cuda"),),
-                    sample_count=1,
-                ),
-            ),
-            round_number=RoundNumber(value=1),
+            updates=nonfinite_updates,
+            round_number=round_number,
         )
 
     fedavg = FlowerFedAvgStrategy(client_count=2).build()

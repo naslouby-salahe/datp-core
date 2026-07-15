@@ -14,6 +14,7 @@ from datp_core.domain.runtime.seeds import Seed, SeedRole, derive_seed
 from datp_core.domain.thresholding.policies import ThresholdPercentile, ThresholdValue
 
 _CONTENT_HASH_PATTERN = r"[0-9a-f]{64}"
+_POSITIVE_INTEGER_CONSTRAINT = "integer >= 1"
 
 
 class B4FingerprintField(StrEnum):
@@ -44,7 +45,7 @@ class ClusterCount:
             raise DomainValidationError(
                 detail="cluster count must be a positive integer",
                 value=repr(self.value),
-                constraint="integer >= 1",
+                constraint=_POSITIVE_INTEGER_CONSTRAINT,
             )
 
 
@@ -70,7 +71,7 @@ class KMeansInitializationCount:
             raise DomainValidationError(
                 detail="KMeans initialization count must be a positive integer",
                 value=repr(self.value),
-                constraint="integer >= 1",
+                constraint=_POSITIVE_INTEGER_CONSTRAINT,
             )
 
 
@@ -83,7 +84,7 @@ class KMeansMaximumIterations:
             raise DomainValidationError(
                 detail="KMeans maximum iterations must be a positive integer",
                 value=repr(self.value),
-                constraint="integer >= 1",
+                constraint=_POSITIVE_INTEGER_CONSTRAINT,
             )
 
 

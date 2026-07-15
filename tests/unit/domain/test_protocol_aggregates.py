@@ -457,15 +457,19 @@ def test_profile_rejects_unauthorized_dataset_and_regime_combinations(
     unauthorized_protocol: Callable[[ScientificProtocolSpec], ScientificProtocolSpec],
 ) -> None:
     profile = confirmatory_profile()
+    unauthorized = unauthorized_protocol(profile.authorized_protocols[0])
+    authorized_protocols = (unauthorized,)
 
     with pytest.raises(DomainValidationError):
-        replace(profile, authorized_protocols=(unauthorized_protocol(profile.authorized_protocols[0]),))
+        replace(profile, authorized_protocols=authorized_protocols)
 
 
 def test_b0_requires_the_disjoint_centralized_profile_route() -> None:
     profile = confirmatory_profile()
+    catalogue_id = ArchitectureCatalogueId(value="B0_CENTRALIZED_COMPARATOR")
+
     with pytest.raises(DomainValidationError):
-        replace(profile, catalogue_id=ArchitectureCatalogueId(value="B0_CENTRALIZED_COMPARATOR"))
+        replace(profile, catalogue_id=catalogue_id)
 
     centralized = CentralizedModelComparatorProfileSpec(
         catalogue_id=ArchitectureCatalogueId(value="B0_CENTRALIZED_COMPARATOR"),
@@ -514,8 +518,10 @@ def test_fallback_policy_requires_non_empty_unique_outcomes() -> None:
 
 
 def test_sweep_rejects_an_unauthorized_grid_value() -> None:
+    threshold = ThresholdPercentile(value=0.80)
+
     with pytest.raises(DomainValidationError):
-        SweepSpec(axis=SweepAxis.QUANTILE, values=(ThresholdPercentile(value=0.80),))
+        SweepSpec(axis=SweepAxis.QUANTILE, values=(threshold,))
 
 
 def test_profile_catalogue_uses_the_e_v3_fpr_target() -> None:

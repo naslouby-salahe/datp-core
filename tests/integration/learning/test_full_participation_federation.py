@@ -30,48 +30,55 @@ def _update(client: str, values: tuple[float, ...], *, samples: int = 1) -> Clie
 
 def test_full_participation_rejects_missing_and_malformed_updates() -> None:
     expected = (ClientId(value="client-a"), ClientId(value="client-b"))
+    round_number = RoundNumber(value=1)
+    incomplete_updates = (_update("client-a", (1.0,)),)
+    zero_sample_updates = (_update("client-a", (1.0,), samples=0), _update("client-b", (1.0,)))
+    non_tensor_updates = (
+        ClientModelUpdate(
+            client_id=ClientId(value="client-a"),
+            tensors=cast(tuple[torch.Tensor, ...], ("not-a-tensor",)),
+            sample_count=1,
+        ),
+        _update("client-b", (1.0,)),
+    )
 
     with pytest.raises(RoundAbortedError):
         validate_full_participation_updates(
             expected_clients=expected,
-            updates=(_update("client-a", (1.0,)),),
-            round_number=RoundNumber(value=1),
+            updates=incomplete_updates,
+            round_number=round_number,
         )
     with pytest.raises(MalformedClientUpdateError):
         validate_full_participation_updates(
             expected_clients=expected,
-            updates=(_update("client-a", (1.0,), samples=0), _update("client-b", (1.0,))),
-            round_number=RoundNumber(value=1),
+            updates=zero_sample_updates,
+            round_number=round_number,
         )
     with pytest.raises(MalformedClientUpdateError):
         validate_full_participation_updates(
             expected_clients=expected,
-            updates=(
-                ClientModelUpdate(
-                    client_id=ClientId(value="client-a"),
-                    tensors=cast(tuple[torch.Tensor, ...], ("not-a-tensor",)),
-                    sample_count=1,
-                ),
-                _update("client-b", (1.0,)),
-            ),
-            round_number=RoundNumber(value=1),
+            updates=non_tensor_updates,
+            round_number=round_number,
         )
 
 
 def test_full_participation_rejects_nonfinite_and_shape_incompatible_updates() -> None:
     expected = (ClientId(value="client-a"), ClientId(value="client-b"))
+    round_number = RoundNumber(value=1)
+    nonfinite_updates = (_update("client-a", (1.0,)), _update("client-b", (float("nan"),)))
+    shape_mismatch_updates = (_update("client-a", (1.0,)), _update("client-b", (1.0, 2.0)))
 
     with pytest.raises(NonFiniteClientUpdateError):
         validate_full_participation_updates(
             expected_clients=expected,
-            updates=(_update("client-a", (1.0,)), _update("client-b", (float("nan"),))),
-            round_number=RoundNumber(value=1),
+            updates=nonfinite_updates,
+            round_number=round_number,
         )
     with pytest.raises(ClientShapeMismatchError):
         validate_full_participation_updates(
             expected_clients=expected,
-            updates=(_update("client-a", (1.0,)), _update("client-b", (1.0, 2.0))),
-            round_number=RoundNumber(value=1),
+            updates=shape_mismatch_updates,
+            round_number=round_number,
         )
 
 

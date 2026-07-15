@@ -158,19 +158,20 @@ def test_matplotlib_renderer_renders_each_supported_figure_format_without_mutati
 
 def test_trace_refusal_prevents_any_renderer_request_from_existing() -> None:
     source = _artifact("a", ArtifactType.TABLE_INPUT, SerializationFormat.JSON)
+    request = TraceReportArtifactRequest(
+        output=_artifact("b", ArtifactType.RENDERED_TABLE, SerializationFormat.MARKDOWN),
+        specification=_table(),
+        required_inputs=ArtifactReferenceCollection(references=(source,)),
+        provenance_chain=ArtifactReferenceCollection(references=()),
+        result_freeze=ResultFreezeEligibility(
+            result_freeze=_artifact("c", ArtifactType.RESULT_FREEZE, SerializationFormat.JSON),
+            readiness=ScientificReadinessResult(blockers=()),
+        ),
+    )
+    tracer = TableFigureTracer()
+
     with pytest.raises(ProvenanceError):
-        TableFigureTracer().trace(
-            TraceReportArtifactRequest(
-                output=_artifact("b", ArtifactType.RENDERED_TABLE, SerializationFormat.MARKDOWN),
-                specification=_table(),
-                required_inputs=ArtifactReferenceCollection(references=(source,)),
-                provenance_chain=ArtifactReferenceCollection(references=()),
-                result_freeze=ResultFreezeEligibility(
-                    result_freeze=_artifact("c", ArtifactType.RESULT_FREEZE, SerializationFormat.JSON),
-                    readiness=ScientificReadinessResult(blockers=()),
-                ),
-            )
-        )
+        tracer.trace(request)
 
 
 @pytest.mark.parametrize("renderer", (MarkdownReportRenderer(), LatexReportRenderer(), MatplotlibReportRenderer()))

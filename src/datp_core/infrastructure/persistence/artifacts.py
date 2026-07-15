@@ -41,17 +41,7 @@ class FileArtifactStore:
         if existing is not None:
             _verify_existing_artifact(existing=existing, requested=request.artifact)
             return ArtifactWriteResult(artifact=existing)
-        match request.write_disposition:
-            case WriteDisposition.CREATE_IF_ABSENT | WriteDisposition.ATOMIC_STAGE_COMMIT:
-                pass
-            case WriteDisposition.VERIFY_OR_FAIL:
-                raise ArtifactError(
-                    detail="verification requested for an artifact without a completed manifest",
-                    artifact_id=request.artifact.artifact_id.value,
-                    stage="verify",
-                )
-            case _ as unreachable:
-                assert_never(unreachable)
+        _validate_write_disposition(request)
         final_path = self._location_for(request.key, request.artifact)
         if final_path.exists():
             _verify_existing_content(path=final_path, artifact=request.artifact)
@@ -165,6 +155,20 @@ def _verify_requested_content(request: WriteArtifactRequest) -> None:
             artifact_id=request.artifact.artifact_id.value,
             stage="verify",
         )
+
+
+def _validate_write_disposition(request: WriteArtifactRequest) -> None:
+    match request.write_disposition:
+        case WriteDisposition.CREATE_IF_ABSENT | WriteDisposition.ATOMIC_STAGE_COMMIT:
+            return
+        case WriteDisposition.VERIFY_OR_FAIL:
+            raise ArtifactError(
+                detail="verification requested for an artifact without a completed manifest",
+                artifact_id=request.artifact.artifact_id.value,
+                stage="verify",
+            )
+        case _ as unreachable:
+            assert_never(unreachable)
 
 
 def _verify_existing_artifact(*, existing: ArtifactRef, requested: ArtifactRef) -> None:

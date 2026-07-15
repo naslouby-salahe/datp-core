@@ -44,10 +44,13 @@ def test_client_roster_and_maps_require_unique_canonical_roster_members() -> Non
         ),
     )
     assert ClientCalibrationScoreMap(values=values).values.roster == ClientTestScoreMap(values=values).values.roster
+    reversed_roster = (ClientId(value="client-b"), ClientId(value="client-a"))
+    incomplete_entry = ClientMapEntry(client_id=ClientId(value="client-a"), value="first")
+
     with pytest.raises(DomainValidationError):
-        ClientRoster(client_ids=(ClientId(value="client-b"), ClientId(value="client-a")))
+        ClientRoster(client_ids=reversed_roster)
     with pytest.raises(DomainValidationError):
-        ClientMap(roster=roster, entries=(ClientMapEntry(client_id=ClientId(value="client-a"), value="first"),))
+        ClientMap(roster=roster, entries=(incomplete_entry,))
 
 
 def test_seed_collections_remain_nominally_distinct_and_collections_are_frozen() -> None:
@@ -68,13 +71,12 @@ def test_enum_metric_and_stage_dependency_collections_enforce_invariants() -> No
     assert MetricMap(entries=(MetricMapEntry(metric=OperatingPointMetric.FPR, value=1.0),)).entries[0].value == 1.0
     first = StageDependency(upstream=_fingerprint("a"), downstream=_fingerprint("b"))
     second = StageDependency(upstream=_fingerprint("b"), downstream=_fingerprint("c"))
+    reverse_dependency = StageDependency(upstream=_fingerprint("b"), downstream=_fingerprint("a"))
     assert StageDependencyCollection(dependencies=(first, second)).dependencies == (first, second)
     with pytest.raises(DomainValidationError):
         StageDependencyCollection(dependencies=(first, first))
     with pytest.raises(DomainValidationError):
-        StageDependencyCollection(
-            dependencies=(first, StageDependency(upstream=_fingerprint("b"), downstream=_fingerprint("a")))
-        )
+        StageDependencyCollection(dependencies=(first, reverse_dependency))
 
 
 def test_artifact_reference_collection_preserves_order_and_rejects_duplicate_identity_pairs() -> None:

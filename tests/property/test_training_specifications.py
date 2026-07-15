@@ -1,3 +1,5 @@
+from functools import partial
+
 import pytest
 from hypothesis import given
 from hypothesis import strategies as st
@@ -26,12 +28,14 @@ def test_effective_batch_accepts_only_the_exact_generated_product(
     )
 
     assert specification.effective_batch_size.value == expected
+    invalid_batch_specification = partial(
+        TrainingBatchSpec,
+        micro_batch_size=BatchSize(value=micro_batch_size),
+        gradient_accumulation_steps=GradientAccumulationSteps(value=accumulation_steps),
+        effective_batch_size=BatchSize(value=expected + 1),
+        dataloader_batch_size=BatchSize(value=micro_batch_size),
+        client_batch_partitioning=ClientBatchPartitioning.WHOLE_CLIENT,
+        optimizer_step_semantics=OptimizerStepSemantics.AFTER_GRADIENT_ACCUMULATION,
+    )
     with pytest.raises(DomainValidationError):
-        TrainingBatchSpec(
-            micro_batch_size=BatchSize(value=micro_batch_size),
-            gradient_accumulation_steps=GradientAccumulationSteps(value=accumulation_steps),
-            effective_batch_size=BatchSize(value=expected + 1),
-            dataloader_batch_size=BatchSize(value=micro_batch_size),
-            client_batch_partitioning=ClientBatchPartitioning.WHOLE_CLIENT,
-            optimizer_step_semantics=OptimizerStepSemantics.AFTER_GRADIENT_ACCUMULATION,
-        )
+        invalid_batch_specification()

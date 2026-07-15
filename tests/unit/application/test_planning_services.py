@@ -79,13 +79,13 @@ def test_planner_refuses_a_cell_id_collision_between_distinct_cells() -> None:
 
     with pytest.MonkeyPatch.context() as monkeypatch:
         monkeypatch.setattr(planner, "_cell_id", _collided_cell_id)
+        request = CreateExecutionPlanRequest(
+            specifications=specifications,
+            scientific_readiness=ScientificReadinessResult(blockers=()),
+        )
+        experiment_planner = ExperimentPlanner()
         with pytest.raises(AmbiguousPlanError, match="share a cell id"):
-            ExperimentPlanner().create_plan(
-                CreateExecutionPlanRequest(
-                    specifications=specifications,
-                    scientific_readiness=ScientificReadinessResult(blockers=()),
-                )
-            )
+            experiment_planner.create_plan(request)
 
 
 def test_planner_never_calls_a_persistence_spy() -> None:

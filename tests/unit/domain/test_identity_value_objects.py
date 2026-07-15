@@ -89,10 +89,14 @@ def test_scientific_identity_construction_is_deterministic_and_distinct_from_att
     artifact_id = f"artifact-{'a' * 64}"
     run_id = f"run-{'a' * 64}"
 
-    assert ArtifactId(value=artifact_id) == ArtifactId(value=artifact_id)
+    first_artifact_id = ArtifactId(value=artifact_id)
+    second_artifact_id = ArtifactId(value=artifact_id)
+    run_identity = RunIdentity(value=run_id)
+
+    assert first_artifact_id == second_artifact_id
     assert RunIdentity(value=run_id) != ExecutionAttemptId(value="attempt-123e4567-e89b-42d3-a456-426614174000")
     with pytest.raises(FrozenInstanceError):
-        _set_attribute(RunIdentity(value=run_id), "value", run_id)
+        _set_attribute(run_identity, "value", run_id)
 
 
 def test_seed_and_round_value_objects_enforce_nonnegative_and_positive_ranges() -> None:
@@ -120,10 +124,13 @@ def test_seed_collections_preserve_order_and_validate_membership() -> None:
     assert cohort.values[0] == Seed(value=0)
     assert roles.values[-1] is SeedRole.BOOTSTRAP
     assert seed_map.entries[-1].value == "second"
+    first_seed = Seed(value=0)
+    duplicate_seed = Seed(value=0)
+    only_entry = SeedMapEntry(seed=Seed(value=0), value="only")
     with pytest.raises(DomainValidationError):
-        SeedTuple(values=(Seed(value=0), Seed(value=0)))
+        SeedTuple(values=(first_seed, duplicate_seed))
     with pytest.raises(DomainValidationError):
-        SeedMap(cohort=cohort, entries=(SeedMapEntry(seed=Seed(value=0), value="only"),))
+        SeedMap(cohort=cohort, entries=(only_entry,))
 
 
 def test_confirmatory_seed_cohort_requires_exactly_ten_identically_paired_seeds() -> None:
@@ -134,8 +141,10 @@ def test_confirmatory_seed_cohort_requires_exactly_ten_identically_paired_seeds(
         invalid = _seed_tuple(invalid_count)
         with pytest.raises(DomainValidationError):
             ConfirmatorySeedCohort(b1_seeds=invalid, b2_seeds=invalid)
+    mismatched = _seed_tuple(10, start=1)
+
     with pytest.raises(DomainValidationError):
-        ConfirmatorySeedCohort(b1_seeds=paired, b2_seeds=_seed_tuple(10, start=1))
+        ConfirmatorySeedCohort(b1_seeds=paired, b2_seeds=mismatched)
 
 
 def test_seed_derivation_is_deterministic_and_role_and_stage_specific() -> None:
@@ -177,7 +186,10 @@ def test_data_loader_seed_plan_derives_bounded_stable_worker_seeds() -> None:
         worker_count=WorkerCount(value=2),
     )
 
-    assert seed_plan.worker_seed_for(0) == seed_plan.worker_seed_for(0)
+    first_worker_seed = seed_plan.worker_seed_for(0)
+    second_worker_seed = seed_plan.worker_seed_for(0)
+
+    assert first_worker_seed == second_worker_seed
     assert seed_plan.worker_seed_for(0) != seed_plan.worker_seed_for(1)
     for invalid_worker_index in (-1, 2, True):
         with pytest.raises(DomainValidationError):

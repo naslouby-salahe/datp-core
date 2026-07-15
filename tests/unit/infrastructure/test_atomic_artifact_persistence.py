@@ -89,9 +89,10 @@ def test_same_logical_id_with_different_content_raises_typed_integrity_error(tmp
     store = _store(tmp_path)
     original = _request(b"synthetic original")
     store.write_atomically(original)
+    replacement = _request(b"synthetic replacement")
 
     with pytest.raises(ArtifactError):
-        store.write_atomically(_request(b"synthetic replacement"))
+        store.write_atomically(replacement)
 
     validation = store.validate_integrity(ValidateArtifactRequest(key=original.key, artifact=original.artifact))
     assert validation.status.value == "valid"

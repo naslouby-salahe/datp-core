@@ -87,7 +87,9 @@ def test_streaming_batches_are_bounded_and_order_is_stable(tmp_path: Path) -> No
     assert tuple(batch.column(0).to_pylist() for batch in first_batches) == tuple(
         batch.column(0).to_pylist() for batch in second_batches
     )
-    assert stream.row_order_checksum() == stream.row_order_checksum()
+    first_checksum = stream.row_order_checksum()
+    repeated_checksum = stream.row_order_checksum()
+    assert first_checksum == repeated_checksum
 
 
 def test_chunked_statistics_match_the_single_pass_synthetic_reference(tmp_path: Path) -> None:
@@ -134,8 +136,9 @@ def test_inspector_validates_feature_schema_with_a_bounded_scan(tmp_path: Path) 
         feature_columns=("row", "missing"),
         result=_inspection_result(),
     )
+    inspection_request = _inspection_request()
     with pytest.raises(DatasetError):
-        missing_column_inspector.inspect(_inspection_request())
+        missing_column_inspector.inspect(inspection_request)
 
 
 def test_partitioned_materialization_preserves_synthetic_source_rows_and_order(tmp_path: Path) -> None:

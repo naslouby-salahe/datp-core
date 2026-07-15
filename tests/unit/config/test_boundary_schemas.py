@@ -93,8 +93,10 @@ def test_confirmatory_statistics_shape_is_locked(field: str, value: str | int) -
         case _:
             pytest.fail(f"unexpected confirmatory field: {field}")
 
+    payload = _scientific_payload_json().replace(old, new)
+
     with pytest.raises(ValidationError):
-        ScientificConfig.model_validate_json(_scientific_payload_json().replace(old, new))
+        ScientificConfig.model_validate_json(payload)
 
 
 def test_boundary_schema_fields_have_no_defaults() -> None:

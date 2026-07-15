@@ -36,8 +36,10 @@ def test_missing_benign_or_attack_member_is_rejected(tmp_path: Path) -> None:
     request = bundle_request()
 
     for members in ((request.members[0],), (request.members[1],)):
+        invalid_request = replace(request, members=members)
+
         with pytest.raises(IncompleteArtifactBundleError):
-            store.commit_bundle(replace(request, members=members))
+            store.commit_bundle(invalid_request)
 
 
 def _different_artifact(member: DeclaredTestScoreMember) -> DeclaredTestScoreMember:
@@ -130,9 +132,10 @@ def test_each_declared_member_field_must_match_the_aggregate(
     request = bundle_request()
     mismatched = mutate(request.members[1].declared_member)
     changed_member = replace(request.members[1], declared_member=mismatched)
+    invalid_request = replace(request, members=(request.members[0], changed_member))
 
     with pytest.raises(IncompleteArtifactBundleError):
-        store.commit_bundle(replace(request, members=(request.members[0], changed_member)))
+        store.commit_bundle(invalid_request)
 
 
 def test_member_logical_key_must_match_its_declared_artifact(tmp_path: Path) -> None:
@@ -142,9 +145,10 @@ def test_member_logical_key_must_match_its_declared_artifact(tmp_path: Path) -> 
         request.members[0],
         key=replace(request.members[0].key, artifact_type=ArtifactType.METRIC_OUTPUT),
     )
+    invalid_request = replace(request, members=(changed_member, request.members[1]))
 
     with pytest.raises(IncompleteArtifactBundleError):
-        store.commit_bundle(replace(request, members=(changed_member, request.members[1])))
+        store.commit_bundle(invalid_request)
 
 
 def test_absent_or_invalid_commit_marker_makes_a_bundle_unreadable(tmp_path: Path) -> None:

@@ -5,11 +5,7 @@ from datp_core.domain.thresholding.policies import FprTarget, ThresholdPercentil
 
 
 def _validated_positive_weight(value: object) -> None:
-    if not isinstance(value, int):
-        raise DomainValidationError(
-            detail="exact weighted quantile weights must be integers", value=repr(value), constraint="integer weights"
-        )
-    if isinstance(value, bool):
+    if not isinstance(value, int) or isinstance(value, bool):
         raise DomainValidationError(
             detail="exact weighted quantile weights must be integers", value=repr(value), constraint="integer weights"
         )

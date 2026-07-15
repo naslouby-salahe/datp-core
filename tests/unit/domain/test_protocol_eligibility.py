@@ -22,8 +22,10 @@ def test_locked_protocol_constants_have_the_authoritative_values_and_single_spec
     assert REGIME_D_TEMPORAL_HISTORICAL_FRACTION.value == Decimal("0.700000000000")
     assert specification.minimum_calibration_samples is PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES
     assert fields(ProtocolEligibilitySpec)[0].default is MISSING
+    minimum_calibration_samples = CalibrationSampleCount(value=99)
+
     with pytest.raises(TypeError):
-        type.__call__(ProtocolEligibilitySpec, minimum_calibration_samples=CalibrationSampleCount(value=99))
+        type.__call__(ProtocolEligibilitySpec, minimum_calibration_samples=minimum_calibration_samples)
 
 
 @pytest.mark.parametrize(

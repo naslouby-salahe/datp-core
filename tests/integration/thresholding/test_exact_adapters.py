@@ -134,14 +134,13 @@ def test_exact_b4_clustering_is_repeatable_with_perfect_adjusted_rand() -> None:
         clustering_identity=StageFingerprint(value="f" * 64),
     )
     object.__setattr__(invalid_specification, "n_init", KMeansInitializationCount(value=1))
+    invalid_request = B4ClusteringRequest(
+        calibration_scores=score_set,
+        clustering=invalid_specification,
+        eligible_clients=eligible_clients,
+    )
     with pytest.raises(ThresholdError, match="locked canonical specification"):
-        strategy.cluster(
-            B4ClusteringRequest(
-                calibration_scores=score_set,
-                clustering=invalid_specification,
-                eligible_clients=eligible_clients,
-            )
-        )
+        strategy.cluster(invalid_request)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -338,14 +337,14 @@ def test_fed_stats_strategy_uses_its_locked_identity_and_scores() -> None:
 @pytest.mark.integration
 def test_fed_stats_rejects_an_unrelated_declared_policy() -> None:
     context = _strategy_context()
+    strategy = FedStatsThresholdStrategy(reader=context.reader)
+    request = _request(
+        context=context,
+        construction=FedStatsBenignThresholdSpec(kind=ThresholdConstructionKind.FED_STATS_BENIGN),
+        policy=CoreThresholdPolicy.B1,
+    )
     with pytest.raises(ThresholdError, match="declared policy"):
-        FedStatsThresholdStrategy(reader=context.reader).assign(
-            _request(
-                context=context,
-                construction=FedStatsBenignThresholdSpec(kind=ThresholdConstructionKind.FED_STATS_BENIGN),
-                policy=CoreThresholdPolicy.B1,
-            )
-        )
+        strategy.assign(request)
 
 
 def _request(
