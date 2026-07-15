@@ -188,11 +188,7 @@ class ArtifactDependencySpec:
     required_artifacts: tuple[ArtifactType, ...]
 
     def __post_init__(self) -> None:
-        if (
-            not self.required_artifacts
-            or any(type(artifact) is not ArtifactType for artifact in self.required_artifacts)
-            or len(set(self.required_artifacts)) != len(self.required_artifacts)
-        ):
+        if not _has_unique_typed_artifact_dependencies(self.required_artifacts):
             raise DomainValidationError(
                 detail="profile artifact dependencies must be a non-empty unique typed tuple",
                 value=repr(self.required_artifacts),
@@ -200,21 +196,37 @@ class ArtifactDependencySpec:
             )
 
 
+def _has_unique_typed_artifact_dependencies(required_artifacts: tuple[ArtifactType, ...]) -> bool:
+    return all(
+        (
+            bool(required_artifacts),
+            all(type(artifact) is ArtifactType for artifact in required_artifacts),
+            len(set(required_artifacts)) == len(required_artifacts),
+        )
+    )
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FallbackPolicySpec:
     outcomes: tuple[ClaimOutcome, ...]
 
     def __post_init__(self) -> None:
-        if (
-            not self.outcomes
-            or any(type(outcome) is not ClaimOutcome for outcome in self.outcomes)
-            or len(set(self.outcomes)) != len(self.outcomes)
-        ):
+        if not _has_unique_typed_fallback_outcomes(self.outcomes):
             raise DomainValidationError(
                 detail="fallback policy requires unique declared claim outcomes",
                 value=repr(self.outcomes),
                 constraint="unique tuple[ClaimOutcome, ...]",
             )
+
+
+def _has_unique_typed_fallback_outcomes(outcomes: tuple[ClaimOutcome, ...]) -> bool:
+    return all(
+        (
+            bool(outcomes),
+            all(type(outcome) is ClaimOutcome for outcome in outcomes),
+            len(set(outcomes)) == len(outcomes),
+        )
+    )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

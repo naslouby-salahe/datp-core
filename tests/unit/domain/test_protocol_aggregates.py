@@ -495,6 +495,24 @@ def test_b0_requires_the_disjoint_centralized_profile_route() -> None:
     assert type(centralized.comparator.model_identity) is CentralizedModelIdentity
 
 
+def test_artifact_dependency_requires_non_empty_unique_artifacts() -> None:
+    with pytest.raises(DomainValidationError):
+        ArtifactDependencySpec(required_artifacts=())
+
+    with pytest.raises(DomainValidationError):
+        ArtifactDependencySpec(
+            required_artifacts=(ArtifactType.CALIBRATION_SCORE_SET, ArtifactType.CALIBRATION_SCORE_SET)
+        )
+
+
+def test_fallback_policy_requires_non_empty_unique_outcomes() -> None:
+    with pytest.raises(DomainValidationError):
+        FallbackPolicySpec(outcomes=())
+
+    with pytest.raises(DomainValidationError):
+        FallbackPolicySpec(outcomes=(ClaimOutcome.NULL, ClaimOutcome.NULL))
+
+
 def test_sweep_rejects_an_unauthorized_grid_value() -> None:
     with pytest.raises(DomainValidationError):
         SweepSpec(axis=SweepAxis.QUANTILE, values=(ThresholdPercentile(value=0.80),))
