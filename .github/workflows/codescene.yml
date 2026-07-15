@@ -82,7 +82,7 @@ jobs:
       - name: Verify CodeScene dashboard analysis
         run: |
           expected_revision="$GITHUB_SHA"
-          expected_repository="$(git config --get remote.origin.url)"
+          expected_repository="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
           deadline=$((SECONDS + 600))
 
           while (( SECONDS < deadline )); do
