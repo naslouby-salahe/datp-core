@@ -107,6 +107,11 @@ src = ["src", "tests"]
 # N: naming conventions; UP: modern-syntax upgrades; B: common bug patterns; ICN: import conventions.
 select = ["E", "F", "I", "N", "UP", "B", "ICN"]
 
+[tool.ruff.lint.per-file-ignores]
+# Type stubs mirror third-party symbol names exactly; they cannot rename an external
+# exception class (e.g. pyarrow's ArrowInvalid) to satisfy our internal naming convention.
+"typings/**/*.pyi" = ["N818"]
+
 [tool.pyright]
 include = ["src", "tests", "noxfile.py"]
 pythonVersion = "3.12"

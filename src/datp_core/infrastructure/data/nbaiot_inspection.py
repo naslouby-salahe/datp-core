@@ -43,7 +43,7 @@ class NBaIoTSourceInspector:
         feature_columns: tuple[str, ...] | None = None
         source_files: list[SourceFileManifestEntry] = []
         for device_dir in device_dirs:
-            for csv_path, label in _device_csv_files(device_dir):
+            for csv_path, label in device_csv_files(device_dir):
                 columns, row_count = _inspect_csv(csv_path)
                 if columns is None:
                     raise _dataset_error(request, f"{csv_path} contains no rows")
@@ -86,11 +86,12 @@ class NBaIoTSourceInspector:
         feature_schema_manifest_ref, _ = self._persist(
             request.dataset.dataset, feature_schema_manifest, ArtifactType.FEATURE_SCHEMA_MANIFEST
         )
+        _reject_unexpected_timestamp_column(feature_columns)
         return DatasetSourceInspectionResult(
             source_manifest=source_manifest_ref,
             feature_schema_manifest=feature_schema_manifest_ref,
             source_row_identity=DatasetSourceIdentity(value=StageFingerprint(value=source_content_hash)),
-            timestamp_evidence=_timestamp_evidence(feature_columns),
+            timestamp_evidence=None,
         )
 
     def _persist(
@@ -123,7 +124,7 @@ def _sorted_device_directories(raw_root: Path) -> tuple[Path, ...]:
     return tuple(sorted((entry for entry in raw_root.iterdir() if entry.is_dir()), key=lambda entry: entry.name))
 
 
-def _device_csv_files(device_dir: Path) -> tuple[tuple[Path, SourceTrafficLabel], ...]:
+def device_csv_files(device_dir: Path) -> tuple[tuple[Path, SourceTrafficLabel], ...]:
     entries: list[tuple[Path, SourceTrafficLabel]] = []
     benign_path = device_dir / "benign_traffic.csv"
     if benign_path.is_file():
@@ -150,7 +151,7 @@ def _inspect_csv(path: Path) -> tuple[tuple[str, ...] | None, int]:
     return columns, row_count
 
 
-def _timestamp_evidence(feature_columns: tuple[str, ...]) -> None:
+def _reject_unexpected_timestamp_column(feature_columns: tuple[str, ...]) -> None:
     for column in feature_columns:
         if any(keyword in column.casefold() for keyword in _TIMESTAMP_KEYWORDS):
             raise DatasetError(
@@ -159,7 +160,6 @@ def _timestamp_evidence(feature_columns: tuple[str, ...]) -> None:
                 coverage=f"unexpected timestamp-like column {column!r} requires typed evidence, not a silent guess",
                 detail=f"unexpected timestamp-like column {column!r} requires typed evidence, not a silent guess",
             )
-    return None
 
 
 def _dataset_error(request: InspectDatasetSourceRequest, coverage: str) -> DatasetError:

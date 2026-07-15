@@ -98,8 +98,6 @@ def _numeric_column_indexes(schema: pa.Schema, columns: tuple[str, ...]) -> tupl
 
 def update_row_order_checksum(hasher: blake3, batch: pa.RecordBatch) -> None:
     columns = tuple(batch.column(index).to_pylist() for index in range(len(batch.schema.names)))
-    for name in batch.schema.names:
-        _update_length_delimited(hasher, name.encode())
     for row_index in range(batch.num_rows):
         hasher.update(b"\\x1e")
         for column in columns:

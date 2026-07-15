@@ -92,6 +92,16 @@ def test_streaming_batches_are_bounded_and_order_is_stable(tmp_path: Path) -> No
     assert first_checksum == repeated_checksum
 
 
+def test_row_order_checksum_is_independent_of_the_batch_size(tmp_path: Path) -> None:
+    path = tmp_path / "synthetic.parquet"
+    _write_synthetic_parquet(path)
+
+    single_batch_checksum = ParquetBatchStream(path=path, batch_rows=ChunkRowCount(value=17)).row_order_checksum()
+    many_batch_checksum = ParquetBatchStream(path=path, batch_rows=ChunkRowCount(value=1)).row_order_checksum()
+
+    assert single_batch_checksum == many_batch_checksum
+
+
 def test_chunked_statistics_match_the_single_pass_synthetic_reference(tmp_path: Path) -> None:
     path = tmp_path / "synthetic.parquet"
     _write_synthetic_parquet(path)
