@@ -69,6 +69,7 @@ jobs:
             -Dsonar.scm.revision=${{ github.sha }}
 
       - name: Verify SonarQube analysis is current
+        if: always()
         env:
           PREVIOUS_ANALYSIS_KEY: ${{ steps.previous-analysis.outputs.key }}
           PUSHED_REVISION: ${{ github.sha }}
