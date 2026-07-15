@@ -98,6 +98,33 @@ class SourceTrafficLabel(StrEnum):
     MIRAI = "mirai"
 
 
+def _validated_relative_path(value: str) -> None:
+    if not value or value.startswith("/"):
+        raise DomainValidationError(
+            detail="source file manifest entry requires a non-empty relative path",
+            value=repr(value),
+            constraint="non-empty relative path",
+        )
+
+
+def _validated_device_id(value: str) -> None:
+    if not value:
+        raise DomainValidationError(
+            detail="source file manifest entry requires a non-empty device id",
+            value=repr(value),
+            constraint="non-empty device id",
+        )
+
+
+def _validated_entry_row_count(value: int) -> None:
+    if isinstance(value, bool) or value < 0:
+        raise DomainValidationError(
+            detail="source file manifest entry row count must be a non-negative integer",
+            value=repr(value),
+            constraint="row count >= 0",
+        )
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SourceFileManifestEntry:
     relative_path: str
@@ -107,24 +134,56 @@ class SourceFileManifestEntry:
     content_hash: str
 
     def __post_init__(self) -> None:
-        if not self.relative_path or self.relative_path.startswith("/"):
-            raise DomainValidationError(
-                detail="source file manifest entry requires a non-empty relative path",
-                value=repr(self.relative_path),
-                constraint="non-empty relative path",
-            )
-        if not self.device_id:
-            raise DomainValidationError(
-                detail="source file manifest entry requires a non-empty device id",
-                value=repr(self.device_id),
-                constraint="non-empty device id",
-            )
-        if isinstance(self.row_count, bool) or self.row_count < 0:
-            raise DomainValidationError(
-                detail="source file manifest entry row count must be a non-negative integer",
-                value=repr(self.row_count),
-                constraint="row count >= 0",
-            )
+        _validated_relative_path(self.relative_path)
+        _validated_device_id(self.device_id)
+        _validated_entry_row_count(self.row_count)
+
+
+def _validated_device_ids(device_ids: tuple[str, ...]) -> None:
+    if not device_ids or len(set(device_ids)) != len(device_ids):
+        raise DomainValidationError(
+            detail="dataset source manifest requires at least one unique device id",
+            value=repr(device_ids),
+            constraint="non-empty unique device ids",
+        )
+
+
+def _validated_source_files_present(source_files: tuple[SourceFileManifestEntry, ...]) -> None:
+    if not source_files:
+        raise DomainValidationError(
+            detail="dataset source manifest requires at least one source file entry",
+            value=repr(source_files),
+            constraint="non-empty source files",
+        )
+
+
+def _validated_unique_relative_paths(source_files: tuple[SourceFileManifestEntry, ...]) -> None:
+    relative_paths = tuple(entry.relative_path for entry in source_files)
+    if len(set(relative_paths)) != len(relative_paths):
+        raise DomainValidationError(
+            detail="dataset source manifest file paths must be unique",
+            value=repr(relative_paths),
+            constraint="unique relative paths",
+        )
+
+
+def _validated_known_devices(*, source_files: tuple[SourceFileManifestEntry, ...], device_ids: tuple[str, ...]) -> None:
+    unknown_devices = {entry.device_id for entry in source_files} - set(device_ids)
+    if unknown_devices:
+        raise DomainValidationError(
+            detail="dataset source manifest file entries reference an undeclared device id",
+            value=repr(sorted(unknown_devices)),
+            constraint="device id declared in device_ids",
+        )
+
+
+def _validated_total_row_count(*, total_row_count: int, source_files: tuple[SourceFileManifestEntry, ...]) -> None:
+    if total_row_count != sum(entry.row_count for entry in source_files):
+        raise DomainValidationError(
+            detail="dataset source manifest total row count must equal the sum of its file entries",
+            value=repr(total_row_count),
+            constraint="total_row_count == sum(source_files.row_count)",
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -135,44 +194,29 @@ class DatasetSourceManifest:
     total_row_count: int
 
     def __post_init__(self) -> None:
-        if not self.device_ids:
-            raise DomainValidationError(
-                detail="dataset source manifest requires at least one device id",
-                value=repr(self.device_ids),
-                constraint="non-empty device ids",
-            )
-        if len(set(self.device_ids)) != len(self.device_ids):
-            raise DomainValidationError(
-                detail="dataset source manifest device ids must be unique",
-                value=repr(self.device_ids),
-                constraint="unique device ids",
-            )
-        if not self.source_files:
-            raise DomainValidationError(
-                detail="dataset source manifest requires at least one source file entry",
-                value=repr(self.source_files),
-                constraint="non-empty source files",
-            )
-        relative_paths = tuple(entry.relative_path for entry in self.source_files)
-        if len(set(relative_paths)) != len(relative_paths):
-            raise DomainValidationError(
-                detail="dataset source manifest file paths must be unique",
-                value=repr(relative_paths),
-                constraint="unique relative paths",
-            )
-        unknown_devices = set(entry.device_id for entry in self.source_files) - set(self.device_ids)
-        if unknown_devices:
-            raise DomainValidationError(
-                detail="dataset source manifest file entries reference an undeclared device id",
-                value=repr(sorted(unknown_devices)),
-                constraint="device id declared in device_ids",
-            )
-        if self.total_row_count != sum(entry.row_count for entry in self.source_files):
-            raise DomainValidationError(
-                detail="dataset source manifest total row count must equal the sum of its file entries",
-                value=repr(self.total_row_count),
-                constraint="total_row_count == sum(source_files.row_count)",
-            )
+        _validated_device_ids(self.device_ids)
+        _validated_source_files_present(self.source_files)
+        _validated_unique_relative_paths(self.source_files)
+        _validated_known_devices(source_files=self.source_files, device_ids=self.device_ids)
+        _validated_total_row_count(total_row_count=self.total_row_count, source_files=self.source_files)
+
+
+def _validated_feature_columns_present(feature_columns: tuple[str, ...]) -> None:
+    if not feature_columns or len(set(feature_columns)) != len(feature_columns):
+        raise DomainValidationError(
+            detail="feature schema manifest requires at least one unique feature column",
+            value=repr(feature_columns),
+            constraint="non-empty unique feature columns",
+        )
+
+
+def _validated_input_dim_matches(*, input_dim: int, feature_columns: tuple[str, ...]) -> None:
+    if input_dim != len(feature_columns):
+        raise DomainValidationError(
+            detail="feature schema manifest input dimension must equal the feature column count",
+            value=repr(input_dim),
+            constraint="input_dim == len(feature_columns)",
+        )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -182,21 +226,5 @@ class FeatureSchemaManifest:
     input_dim: int
 
     def __post_init__(self) -> None:
-        if not self.feature_columns:
-            raise DomainValidationError(
-                detail="feature schema manifest requires at least one feature column",
-                value=repr(self.feature_columns),
-                constraint="non-empty feature columns",
-            )
-        if len(set(self.feature_columns)) != len(self.feature_columns):
-            raise DomainValidationError(
-                detail="feature schema manifest feature columns must be unique",
-                value=repr(self.feature_columns),
-                constraint="unique feature columns",
-            )
-        if self.input_dim != len(self.feature_columns):
-            raise DomainValidationError(
-                detail="feature schema manifest input dimension must equal the feature column count",
-                value=repr(self.input_dim),
-                constraint="input_dim == len(feature_columns)",
-            )
+        _validated_feature_columns_present(self.feature_columns)
+        _validated_input_dim_matches(input_dim=self.input_dim, feature_columns=self.feature_columns)

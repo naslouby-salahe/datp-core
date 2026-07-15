@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pyarrow as pa
@@ -23,6 +23,42 @@ class NBaIoTDeviceMaterialization:
     row_order_checksum: str
 
 
+@dataclass(slots=True)
+class _MaterializationState:
+    destination: Path
+    hasher: blake3 = field(default_factory=blake3)
+    row_count: int = 0
+    expected_schema: pa.Schema | None = None
+    writer: pq.ParquetWriter | None = None
+
+
+def _write_labeled_batch(*, state: _MaterializationState, labeled_batch: pa.RecordBatch, csv_path: Path) -> None:
+    if state.expected_schema is None:
+        state.expected_schema = labeled_batch.schema
+        state.writer = pq.ParquetWriter(state.destination, state.expected_schema)
+    elif labeled_batch.schema != state.expected_schema:
+        raise _dataset_error(f"{csv_path} changed schema mid-stream during materialization")
+    if state.writer is None:
+        raise _dataset_error(f"{csv_path} could not open a parquet writer")
+    state.writer.write_batch(labeled_batch)
+    update_row_order_checksum(state.hasher, labeled_batch)
+    state.row_count += labeled_batch.num_rows
+
+
+def _materialize_one_file(
+    *, csv_path: Path, label: SourceTrafficLabel, csv_block_bytes: int, state: _MaterializationState
+) -> None:
+    try:
+        reader = pa_csv.open_csv(csv_path, read_options=pa_csv.ReadOptions(block_size=csv_block_bytes))
+        for batch in reader:
+            _write_labeled_batch(state=state, labeled_batch=_with_label_column(batch, label), csv_path=csv_path)
+    except pa.ArrowInvalid as error:
+        raise _dataset_error(
+            f"{csv_path} could not be parsed at the configured CSV block size "
+            f"({csv_block_bytes} bytes); it may be too small to hold one row"
+        ) from error
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class NBaIoTChunkedSourceAdapter:
     raw_root: Path
@@ -35,41 +71,20 @@ class NBaIoTChunkedSourceAdapter:
             raise _dataset_error(f"no source files found for device {device_id!r}")
         destination = self.output_root / device_id / "source.parquet"
         destination.parent.mkdir(parents=True, exist_ok=True)
-        hasher = blake3()
-        row_count = 0
-        expected_schema: pa.Schema | None = None
-        writer: pq.ParquetWriter | None = None
+        state = _MaterializationState(destination=destination)
         try:
             for csv_path, label in files:
-                try:
-                    reader = pa_csv.open_csv(csv_path, read_options=pa_csv.ReadOptions(block_size=self.csv_block_bytes))
-                    for batch in reader:
-                        labeled_batch = _with_label_column(batch, label)
-                        if expected_schema is None:
-                            expected_schema = labeled_batch.schema
-                            writer = pq.ParquetWriter(destination, expected_schema)
-                        elif labeled_batch.schema != expected_schema:
-                            raise _dataset_error(f"{csv_path} changed schema mid-stream during materialization")
-                        if writer is None:
-                            raise _dataset_error(f"{csv_path} could not open a parquet writer")
-                        writer.write_batch(labeled_batch)
-                        update_row_order_checksum(hasher, labeled_batch)
-                        row_count += labeled_batch.num_rows
-                except pa.ArrowInvalid as error:
-                    raise _dataset_error(
-                        f"{csv_path} could not be parsed at the configured CSV block size "
-                        f"({self.csv_block_bytes} bytes); it may be too small to hold one row"
-                    ) from error
+                _materialize_one_file(csv_path=csv_path, label=label, csv_block_bytes=self.csv_block_bytes, state=state)
         finally:
-            if writer is not None:
-                writer.close()
-        if expected_schema is None:
+            if state.writer is not None:
+                state.writer.close()
+        if state.expected_schema is None:
             raise _dataset_error(f"device {device_id!r} produced no rows to materialize")
         return NBaIoTDeviceMaterialization(
             device_id=device_id,
             path=destination,
-            row_count=row_count,
-            row_order_checksum=hasher.hexdigest(),
+            row_count=state.row_count,
+            row_order_checksum=state.hasher.hexdigest(),
         )
 
 

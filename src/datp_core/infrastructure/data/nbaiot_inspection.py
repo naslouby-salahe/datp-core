@@ -40,39 +40,12 @@ class NBaIoTSourceInspector:
         device_dirs = sorted_device_directories(self.raw_root)
         if not device_dirs:
             raise _dataset_error(request, f"no device directories found beneath {self.raw_root}")
-        feature_columns: tuple[str, ...] | None = None
-        source_files: list[SourceFileManifestEntry] = []
-        for device_dir in device_dirs:
-            for csv_path, label in device_csv_files(device_dir):
-                columns, row_count = _inspect_csv(csv_path)
-                if columns is None:
-                    raise _dataset_error(request, f"{csv_path} contains no rows")
-                if feature_columns is None:
-                    feature_columns = columns
-                elif columns != feature_columns:
-                    raise _dataset_error(
-                        request, f"{csv_path} has a feature schema that differs from the first inspected file"
-                    )
-                source_files.append(
-                    SourceFileManifestEntry(
-                        relative_path=csv_path.relative_to(self.raw_root).as_posix(),
-                        device_id=device_dir.name,
-                        label=label,
-                        row_count=row_count,
-                        content_hash=blake3_file_content_hash(csv_path),
-                    )
-                )
-        if feature_columns is None:
-            raise _dataset_error(request, "no source files were found to inspect")
-        if len(feature_columns) != request.dataset.input_dim:
-            raise _dataset_error(
-                request,
-                "inspected feature column count does not match the configured input dimension",
-            )
+        feature_columns, source_files = _scan_source_files(device_dirs, raw_root=self.raw_root, request=request)
+        _validate_feature_dimension(feature_columns, request=request)
         source_manifest = DatasetSourceManifest(
             dataset=request.dataset.dataset,
             device_ids=tuple(device_dir.name for device_dir in device_dirs),
-            source_files=tuple(source_files),
+            source_files=source_files,
             total_row_count=sum(entry.row_count for entry in source_files),
         )
         feature_schema_manifest = FeatureSchemaManifest(
@@ -164,3 +137,54 @@ def _reject_unexpected_timestamp_column(feature_columns: tuple[str, ...]) -> Non
 
 def _dataset_error(request: InspectDatasetSourceRequest, coverage: str) -> DatasetError:
     return DatasetError(dataset=request.dataset.dataset.value, regime="unresolved", coverage=coverage, detail=coverage)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _ScannedCsvFile:
+    csv_path: Path
+    label: SourceTrafficLabel
+    device_id: str
+    row_count: int
+
+
+def _scanned_entry(scanned: _ScannedCsvFile, *, raw_root: Path) -> SourceFileManifestEntry:
+    return SourceFileManifestEntry(
+        relative_path=scanned.csv_path.relative_to(raw_root).as_posix(),
+        device_id=scanned.device_id,
+        label=scanned.label,
+        row_count=scanned.row_count,
+        content_hash=blake3_file_content_hash(scanned.csv_path),
+    )
+
+
+def _reconciled_feature_columns(
+    *, columns: tuple[str, ...], previous: tuple[str, ...] | None, csv_path: Path, request: InspectDatasetSourceRequest
+) -> tuple[str, ...]:
+    if previous is not None and columns != previous:
+        raise _dataset_error(request, f"{csv_path} has a feature schema that differs from the first inspected file")
+    return previous if previous is not None else columns
+
+
+def _scan_source_files(
+    device_dirs: tuple[Path, ...], *, raw_root: Path, request: InspectDatasetSourceRequest
+) -> tuple[tuple[str, ...], tuple[SourceFileManifestEntry, ...]]:
+    feature_columns: tuple[str, ...] | None = None
+    source_files: list[SourceFileManifestEntry] = []
+    for device_dir in device_dirs:
+        for csv_path, label in device_csv_files(device_dir):
+            columns, row_count = _inspect_csv(csv_path)
+            if columns is None:
+                raise _dataset_error(request, f"{csv_path} contains no rows")
+            feature_columns = _reconciled_feature_columns(
+                columns=columns, previous=feature_columns, csv_path=csv_path, request=request
+            )
+            scanned = _ScannedCsvFile(csv_path=csv_path, label=label, device_id=device_dir.name, row_count=row_count)
+            source_files.append(_scanned_entry(scanned, raw_root=raw_root))
+    if feature_columns is None:
+        raise _dataset_error(request, "no source files were found to inspect")
+    return feature_columns, tuple(source_files)
+
+
+def _validate_feature_dimension(feature_columns: tuple[str, ...], *, request: InspectDatasetSourceRequest) -> None:
+    if len(feature_columns) != request.dataset.input_dim:
+        raise _dataset_error(request, "inspected feature column count does not match the configured input dimension")

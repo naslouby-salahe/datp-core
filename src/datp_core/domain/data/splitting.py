@@ -3,11 +3,15 @@ from enum import StrEnum
 from typing import ClassVar
 
 from datp_core.domain.artifacts.lineage import PartitionIdentity, SplitIdentity, TemporalWindowIdentity
-from datp_core.domain.artifacts.references import ArtifactRef
+from datp_core.domain.artifacts.references import ArtifactRef, StageFingerprint
 from datp_core.domain.data.datasets import TimestampEvidence
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.evaluation.statistical_results import Probability
-from datp_core.domain.mathematics.pooled_statistics import REGIME_D_TEMPORAL_HISTORICAL_FRACTION
+from datp_core.domain.experiments.identities import ClientId
+from datp_core.domain.mathematics.pooled_statistics import (
+    REGIME_D_TEMPORAL_HISTORICAL_FRACTION,
+    EligibilityClassification,
+)
 from datp_core.domain.thresholding.policies import FprTarget, ThresholdPercentile, validate_fpr_target
 
 
@@ -94,6 +98,61 @@ class SplitManifestResult:
                 value=repr(self.partition_identity),
                 constraint="split collection partition identity",
             )
+
+
+def _validated_split_row_count(value: int, *, name: str) -> None:
+    if isinstance(value, bool) or value < 0:
+        raise DomainValidationError(
+            detail=f"{name} must be a non-negative integer", value=repr(value), constraint=f"{name} >= 0"
+        )
+
+
+def _validated_split_checksum(value: str, *, name: str) -> None:
+    if not value:
+        raise DomainValidationError(
+            detail=f"{name} must be a non-empty row-order checksum", value=repr(value), constraint="non-empty"
+        )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClientSplitMembership:
+    client_id: ClientId
+    train_row_count: int
+    train_row_order_checksum: str
+    calibration_row_count: int
+    calibration_row_order_checksum: str
+    test_row_count: int
+    test_row_order_checksum: str
+    eligibility: EligibilityClassification
+
+    def __post_init__(self) -> None:
+        _validated_split_row_count(self.train_row_count, name="train row count")
+        _validated_split_checksum(self.train_row_order_checksum, name="train row-order checksum")
+        _validated_split_row_count(self.calibration_row_count, name="calibration row count")
+        _validated_split_checksum(self.calibration_row_order_checksum, name="calibration row-order checksum")
+        _validated_split_row_count(self.test_row_count, name="test row count")
+        _validated_split_checksum(self.test_row_order_checksum, name="test row-order checksum")
+
+
+def _validated_unique_membership_client_ids(memberships: tuple[ClientSplitMembership, ...]) -> None:
+    client_ids = tuple(membership.client_id.value for membership in memberships)
+    if not client_ids or len(set(client_ids)) != len(client_ids):
+        raise DomainValidationError(
+            detail="split manifest requires at least one client with unique client ids",
+            value=repr(client_ids),
+            constraint="non-empty unique client ids",
+        )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SplitManifest:
+    partition_identity: PartitionIdentity
+    split_identities: SplitCollectionSpec
+    client_memberships: tuple[ClientSplitMembership, ...]
+    eligible_client_set_identity: StageFingerprint
+
+    def __post_init__(self) -> None:
+        _validated_unique_membership_client_ids(self.client_memberships)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
