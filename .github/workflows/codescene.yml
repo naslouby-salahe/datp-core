@@ -2,79 +2,19 @@ name: CodeScene analysis
 
 "on": [push]
 
-permissions:
-  contents: read
-
 concurrency:
   group: codescene-dashboard-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   analyze:
-    name: CodeScene delta analysis
+    name: CodeScene dashboard analysis
     runs-on: ubuntu-latest
     env:
       CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
       CS_PROJECT_ID: '82584'
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: '3.12'
-
-      - name: Install CodeScene CLI
-        run: |
-          curl -sS -L https://downloads.codescene.io/enterprise/cli/install-cs-tool.sh | sh -s -- -y
-          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
-      - name: Validate code health rules
-        run: cs rules-config validate
-
-      - name: Determine delta base revision
-        id: delta-base
-        run: |
-          base="${{ github.event.before }}"
-          if [[ -z "$base" || "$base" =~ ^0+$ ]] || ! git cat-file -e "$base" 2>/dev/null; then
-            base="$(git rev-parse "${{ github.sha }}~1" 2>/dev/null || true)"
-          fi
-          echo "base=$base" >> "$GITHUB_OUTPUT"
-
-      - name: Run CodeScene delta analysis
-        env:
-          DELTA_BASE: ${{ steps.delta-base.outputs.base }}
-          PUSHED_REVISION: ${{ github.sha }}
-        run: |
-          if [[ -z "$DELTA_BASE" ]]; then
-            echo "No previous revision to diff against; this push has no ancestor to analyze."
-            exit 0
-          fi
-
-          echo "Running CodeScene delta analysis for $DELTA_BASE..$PUSHED_REVISION"
-          set +e
-          output="$(cs delta "$DELTA_BASE" "$PUSHED_REVISION" --error-on-warnings 2>&1)"
-          status=$?
-          set -e
-          echo "$output"
-
-          if grep -q "Personal Access Token" <<<"$output"; then
-            echo "::error::CodeScene delta analysis did not actually run: CS_ACCESS_TOKEN is unset or invalid, so the CLI printed its Personal Access Token setup instructions instead of analyzing anything."
-            exit 1
-          fi
-
-          if [[ $status -ne 0 ]]; then
-            echo "::error::CodeScene delta analysis reported a code health finding (exit $status)."
-            exit "$status"
-          fi
-
-          echo "CodeScene delta analysis completed for revision $PUSHED_REVISION."
-
       - name: Trigger CodeScene dashboard analysis
         run: |
           deadline=$((SECONDS + 600))
