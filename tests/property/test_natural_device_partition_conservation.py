@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import msgspec
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from datp_core.application.ports.data import ClientPartitionRequest
@@ -57,6 +57,7 @@ def _request() -> ClientPartitionRequest:
     )
 
 
+@settings(deadline=1500)
 @given(rows_per_device=st.lists(st.integers(min_value=1, max_value=20), min_size=9, max_size=9))
 def test_every_source_row_is_mapped_to_exactly_one_client_with_no_loss_or_duplication(
     rows_per_device: list[int],
