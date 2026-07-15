@@ -1,4 +1,4 @@
-from dataclasses import dataclass, fields, is_dataclass, replace
+from dataclasses import dataclass, fields, is_dataclass
 from decimal import Decimal
 from enum import Enum
 from math import isfinite
@@ -37,6 +37,7 @@ from datp_core.domain.artifacts.references import ArtifactReferenceCollection, S
 from datp_core.domain.errors import AmbiguousPlanError, CyclicPlanError, DomainValidationError
 from datp_core.domain.experiments.feasibility import ScientificReadinessResult
 from datp_core.domain.experiments.identities import CellId
+from datp_core.domain.experiments.protocols import ScientificProtocolSpec
 from datp_core.domain.experiments.specifications import ExperimentCell, ExperimentSpec
 from datp_core.domain.runtime.policies import PipelineStage
 from datp_core.domain.runtime.seeds import Seed
@@ -66,7 +67,7 @@ def expand_cells(*, request: CreateExecutionPlanRequest) -> tuple[ExperimentCell
     cells: list[ExperimentCell] = []
     for specification in request.specifications:
         for protocol in specification.profile.authorized_protocols:
-            resolved_specification: ExperimentSpec = replace(specification, scientific_protocol=protocol)
+            resolved_specification = _with_scientific_protocol(specification=specification, protocol=protocol)
             for seed in specification.profile.authorized_seed_plan.values:
                 cells.append(
                     _resolved_cell(
@@ -76,6 +77,17 @@ def expand_cells(*, request: CreateExecutionPlanRequest) -> tuple[ExperimentCell
                     )
                 )
     return tuple(cells)
+
+
+def _with_scientific_protocol(*, specification: ExperimentSpec, protocol: ScientificProtocolSpec) -> ExperimentSpec:
+    return ExperimentSpec(
+        identity=specification.identity,
+        profile=specification.profile,
+        scientific_protocol=protocol,
+        execution_policy=specification.execution_policy,
+        artifact_policy=specification.artifact_policy,
+        reporting_policy=specification.reporting_policy,
+    )
 
 
 def _resolved_cell(

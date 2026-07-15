@@ -225,7 +225,8 @@ def test_policy_evaluation_table_uses_typed_result_values_and_eligibility_covera
 
 def test_claim_wording_is_closed_and_deterministic_for_every_outcome() -> None:
     selections = tuple(select_claim_wording(outcome) for outcome in ClaimOutcome)
+    null_wording = next(selection for selection in selections if selection.outcome is ClaimOutcome.NULL)
 
     assert tuple(selection.outcome for selection in selections) == tuple(ClaimOutcome)
     assert all(selection.template for selection in selections)
-    assert select_claim_wording(ClaimOutcome.NULL) == select_claim_wording(ClaimOutcome.NULL)
+    assert select_claim_wording(ClaimOutcome.NULL) == null_wording
