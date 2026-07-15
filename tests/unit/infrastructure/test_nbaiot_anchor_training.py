@@ -81,8 +81,10 @@ def _unauthorized_training_spec() -> TrainingSpec:
 
 
 def test_build_anchor_optimizer_rejects_an_unauthorized_optimizer_choice(fixed_anchor_model: FixedAutoencoder) -> None:
+    unauthorized_training = _unauthorized_training_spec()
+
     with pytest.raises(TrainingError):
-        build_anchor_optimizer(model=fixed_anchor_model, training=_unauthorized_training_spec())
+        build_anchor_optimizer(model=fixed_anchor_model, training=unauthorized_training)
 
 
 def test_build_anchor_optimizer_returns_an_adam_optimizer_over_the_model_parameters(
