@@ -6,6 +6,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: codescene-dashboard-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: CodeScene delta analysis
@@ -73,11 +77,33 @@ jobs:
 
       - name: Trigger CodeScene dashboard analysis
         run: |
-          curl --fail-with-body --silent --show-error \
-            --request POST \
-            --header 'Content-Type: application/json' \
-            --header "Authorization: Bearer $CS_ACCESS_TOKEN" \
-            "https://api.codescene.io/v2/projects/$CS_PROJECT_ID/run-analysis"
+          deadline=$((SECONDS + 600))
+
+          while (( SECONDS < deadline )); do
+            set +e
+            response="$(curl --fail-with-body --silent --show-error \
+              --request POST \
+              --header 'Content-Type: application/json' \
+              --header "Authorization: Bearer $CS_ACCESS_TOKEN" \
+              "https://api.codescene.io/v2/projects/$CS_PROJECT_ID/run-analysis" 2>&1)"
+            status=$?
+            set -e
+
+            if [[ $status -eq 0 ]]; then
+              echo "CodeScene dashboard analysis scheduled."
+              exit 0
+            fi
+            if grep -q "another analysis already running" <<<"$response"; then
+              sleep 15
+              continue
+            fi
+
+            echo "$response"
+            exit "$status"
+          done
+
+          echo "::error::CodeScene did not accept an analysis request within ten minutes."
+          exit 1
 
       - name: Verify CodeScene dashboard analysis
         run: |
