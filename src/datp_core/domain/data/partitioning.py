@@ -2,10 +2,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from math import isfinite
 
-from datp_core.domain.artifacts.lineage import PartitionIdentity
+from datp_core.domain.artifacts.lineage import DatasetSourceIdentity, PartitionIdentity
 from datp_core.domain.artifacts.references import ArtifactRef
-from datp_core.domain.data.datasets import Regime
+from datp_core.domain.data.datasets import Dataset, Regime
 from datp_core.domain.errors import DomainValidationError
+from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import ClientRoster
 
 
@@ -132,3 +133,64 @@ class ClientPartitionResult:
     partition_manifest: ArtifactRef
     client_roster: ClientRoster
     partition_identity: PartitionIdentity
+
+
+def _validated_row_count(value: int) -> None:
+    if isinstance(value, bool) or value < 1:
+        raise DomainValidationError(
+            detail="client row membership requires a positive row count",
+            value=repr(value),
+            constraint="row count >= 1",
+        )
+
+
+def _validated_row_order_checksum(value: str) -> None:
+    if not value:
+        raise DomainValidationError(
+            detail="client row membership requires a non-empty row-order checksum",
+            value=repr(value),
+            constraint="non-empty row-order checksum",
+        )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClientRowMembership:
+    client_id: ClientId
+    row_count: int
+    row_order_checksum: str
+
+    def __post_init__(self) -> None:
+        _validated_row_count(self.row_count)
+        _validated_row_order_checksum(self.row_order_checksum)
+
+
+def _validated_membership_matches_roster(*, membership_ids: tuple[str, ...], roster: ClientRoster) -> None:
+    if sorted(membership_ids) != sorted(client_id.value for client_id in roster.client_ids):
+        raise DomainValidationError(
+            detail="client partition manifest membership must exactly match the client roster",
+            value=repr(membership_ids),
+            constraint="membership client ids == roster client ids",
+        )
+
+
+def _validated_unique_membership_ids(membership_ids: tuple[str, ...]) -> None:
+    if len(set(membership_ids)) != len(membership_ids):
+        raise DomainValidationError(
+            detail="client partition manifest membership client ids must be unique",
+            value=repr(membership_ids),
+            constraint="unique membership client ids",
+        )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClientPartitionManifest:
+    dataset: Dataset
+    strategy: ClientDefinitionStrategy
+    source_row_identity: DatasetSourceIdentity
+    client_roster: ClientRoster
+    client_row_memberships: tuple[ClientRowMembership, ...]
+
+    def __post_init__(self) -> None:
+        membership_ids = tuple(membership.client_id.value for membership in self.client_row_memberships)
+        _validated_membership_matches_roster(membership_ids=membership_ids, roster=self.client_roster)
+        _validated_unique_membership_ids(membership_ids)

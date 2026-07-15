@@ -37,7 +37,7 @@ class NBaIoTSourceInspector:
     artifact_store: FileArtifactStore
 
     def inspect(self, request: InspectDatasetSourceRequest) -> DatasetSourceInspectionResult:
-        device_dirs = _sorted_device_directories(self.raw_root)
+        device_dirs = sorted_device_directories(self.raw_root)
         if not device_dirs:
             raise _dataset_error(request, f"no device directories found beneath {self.raw_root}")
         feature_columns: tuple[str, ...] | None = None
@@ -120,7 +120,7 @@ class NBaIoTSourceInspector:
         return result.artifact, content_hash
 
 
-def _sorted_device_directories(raw_root: Path) -> tuple[Path, ...]:
+def sorted_device_directories(raw_root: Path) -> tuple[Path, ...]:
     return tuple(sorted((entry for entry in raw_root.iterdir() if entry.is_dir()), key=lambda entry: entry.name))
 
 
