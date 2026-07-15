@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
+      CS_PROJECT_ID: '82584'
 
     steps:
       - name: Check out repository
@@ -64,3 +65,36 @@ jobs:
           fi
 
           echo "CodeScene delta analysis completed for revision $PUSHED_REVISION."
+
+      - name: Trigger CodeScene dashboard analysis
+        run: |
+          curl --fail-with-body --silent --show-error \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --header "Authorization: Bearer $CS_ACCESS_TOKEN" \
+            "https://api.codescene.io/v2/projects/$CS_PROJECT_ID/run-analysis"
+
+      - name: Verify CodeScene dashboard analysis
+        run: |
+          expected_revision="$GITHUB_SHA"
+          expected_repository="$(git config --get remote.origin.url)"
+          deadline=$((SECONDS + 600))
+
+          while (( SECONDS < deadline )); do
+            analysis="$(curl --fail-with-body --silent --show-error \
+              --header 'Accept: application/json' \
+              --header "Authorization: Bearer $CS_ACCESS_TOKEN" \
+              "https://api.codescene.io/v2/projects/$CS_PROJECT_ID/analyses/latest")"
+            analyzed_revision="$(jq --raw-output --arg repository "$expected_repository" \
+              '.analysis_repo_revisions[] | select(.repo == $repository) | .revision' <<<"$analysis")"
+
+            if [[ "$analyzed_revision" == "$expected_revision" ]]; then
+              echo "CodeScene dashboard analysis completed for revision $analyzed_revision."
+              exit 0
+            fi
+
+            sleep 15
+          done
+
+          echo "::error::CodeScene dashboard did not analyze revision $expected_revision within ten minutes."
+          exit 1
