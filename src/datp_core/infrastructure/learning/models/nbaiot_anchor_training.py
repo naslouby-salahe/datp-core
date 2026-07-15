@@ -20,13 +20,6 @@ from datp_core.domain.runtime.admissibility import BatchSize, GradientAccumulati
 from datp_core.domain.runtime.seeds import Seed
 from datp_core.infrastructure.learning.models.autoencoder import FixedAutoencoder
 
-# Recovered from the reference repository per P2-T001 (docs/MASTER_TICKET_LOG.md register
-# items 1, 2, 3, 7): encoder_dims=[80,40,20], input_dim=115 (N-BaIoT), Adam lr=0.001, no
-# scheduler, batch size 256. local_epochs=1 and rounds_max=200 are the domain-locked new-ladder
-# policy (FederationSpec), not a claim of historical E/round reproduction: the reference
-# repository default and every proven-executed anchor artifact show local_epochs=5, an
-# unresolved conflict with the published paper's E=1 (ANCHOR_LOCAL_EPOCH_PROTOCOL_UNRESOLVED,
-# carried open to P2-T020).
 ANCHOR_AUTOENCODER_SPECIFICATION = AutoencoderSpec(
     input_dim=115,
     hidden_dims=(80, 40),

@@ -47,18 +47,18 @@ This file and each standalone ticket file's own `Status` field must always agree
 - **Expected ticket count.** 23 (`P2-T001`–`P2-T023`) per `docs/MASTER_TICKET_LOG.md`.
 - **Extracted ticket count.** 23; all IDs preserved with no addition, split, renumbering, or retirement.
 - **Phase gate.** `P2-T020`; direct dependencies: `P2-T019`, `P2-T002`, and `P1-T040`; all Phase 2 routes are transitively covered.
-- **Current active ticket.** NONE — implementation has not yet started.
-- **Next eligible ticket.** `P2-T001` — `P1-T070` is `DONE` (finished 2026-07-15T17:15:45Z, PASS/PASS/PASS), so the Phase 2 entry gate is satisfied.
+- **Current active ticket.** NONE — `P2-T009` is complete.
+- **Next eligible ticket.** `P2-T010` — `P2-T009` and its other direct dependencies are `DONE`.
 - **Unresolved blockers.** Recovered anchor semantics, including the historical checkpoint protocol, must be resolved or carried to readiness; never guessed or resolved by real execution.
 - **Authority finding.** The master log conflicts about the reconstruction status of `P2-T021`–`P2-T023`. Its Phase 2 index and detailed bodies also differ for `P2-T003` (scientific-execution classification and roadmap ID), `P2-T008` (dependency), `P2-T011` (block), `P2-T012` (type), and `P2-T023` (dependency/block), with further roadmap-ID drift. The standalone files preserve the detailed ticket bodies; the authority is unchanged.
-- **Last updated.** 2026-07-15 (corrected stale "P1-T070 NOT_STARTED" entry-gate note left over from the 2026-07-14 documentation-conversion pass; no implementation/scientific execution performed by this correction).
+- **Last updated.** 2026-07-15T22:59:10Z (`P2-T009` implementation, validation, audits, and cleanup complete; no scientific execution performed).
 - **Roadmap last-read timestamp.** 2026-07-14 (complete authority read).
 - **Architecture last-read timestamp.** 2026-07-14 (complete authority read).
 - **Master-log last-read timestamp.** 2026-07-14 (complete authority read; Phase 2 bodies re-read).
 
 ## Ticket table — Phase 2
 
-All rows remain `NOT_STARTED`; documentation creation does not implement tickets.
+Rows record independently verified implementation status; no row authorizes scientific execution.
 
 | Ticket ID | Title | Status | Dependencies | Started | Last Updated | Finished | Current Step | Audit 1 | Audit 2 | Audit 3 | Blocker | Evidence |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
@@ -70,7 +70,7 @@ All rows remain `NOT_STARTED`; documentation creation does not implement tickets
 | P2-T006 | Implement benign train/calibration and held-out benign/malicious test splits | DONE | P2-T005. | 2026-07-15 | 2026-07-15 | 2026-07-15 | Complete | PASS | PASS | PASS | NONE | Completion record in `P2-T006.md`; real-data split arithmetic verified exact against P2-T003's numbers; fixed real Sonar/CodeScene dashboard findings across P2-T003-T006 |
 | P2-T007 | Implement preprocessing fit authorization and streaming transform | DONE | P2-T006, P1-T020. | 2026-07-15 | 2026-07-15 | 2026-07-15 | Complete | PASS | PASS | PASS | NONE | Completion record in `P2-T007.md`; TRAIN-only two-pass fit + streaming transform, chunk/reference equivalence proven via deterministic re-fit; `cs check` 10.00 |
 | P2-T008 | Implement the fixed autoencoder, optimizer, and scheduler | DONE | P2-T007, P1-T043, P2-T001. | 2026-07-15 | 2026-07-15 | 2026-07-15 | Complete | PASS | PASS | PASS | ANCHOR_LOCAL_EPOCH_PROTOCOL_UNRESOLVED (print-grade, carried to P2-T020; does not block ticket completion) | Completion record in `P2-T008.md`; recovered AE/optimizer/scheduler already matched P1-T043's fixed architecture and TrainingSpec exactly; added locked `anchor_training_spec`/`build_anchor_optimizer`; `cs check` 10.00; real CUDA smoke test passed |
-| P2-T009 | Implement FedAvg training (E=1, full participation, deterministic CUDA) | NOT_STARTED | P2-T008, P1-T044. | — | — | — | — | — | — | — | NONE | — |
+| P2-T009 | Implement FedAvg training (E=1, full participation, deterministic CUDA) | DONE | P2-T008, P1-T044. | 2026-07-15T22:52:12Z | 2026-07-15T22:59:10Z | 2026-07-15T22:59:10Z | Complete | PASS | PASS | PASS | ANCHOR_LOCAL_EPOCH_PROTOCOL_UNRESOLVED (print-grade, carried to P2-T020; does not change locked E=1 implementation) | Completion record in `P2-T009.md`; deterministic typed anchor executor, CPU/CUDA resume equivalence, full-participation lifecycle checks, Nox/Sonar/CodeScene and three audits passed; synthetic-only |
 | P2-T010 | Implement the checkpoint schedule, persistence, and Regime-A global selection | NOT_STARTED | P2-T009, P2-T002, P1-T022. | — | — | — | — | — | — | — | NONE | — |
 | P2-T011 | Implement calibration, benign-test, and malicious-test scoring with atomic score bundles | NOT_STARTED | P2-T010, P1-T045. | — | — | — | — | — | — | — | NONE | — |
 | P2-T012 | Implement B0 centralized training branch | NOT_STARTED | P2-T006, P1-T044. | — | — | — | — | — | — | — | NONE | — |

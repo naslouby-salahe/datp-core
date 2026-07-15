@@ -62,9 +62,7 @@ def _validate_locked_preprocessing_policy(preprocessing: PreprocessingSpec) -> N
         strategy=preprocessing.strategy, scope=preprocessing.scope, fitted_stat_policy=preprocessing.fitted_stat_policy
     ):
         return
-    raise _preprocessing_error(
-        "N-BaIoT anchor preprocessing requires STANDARD/PER_CLIENT_TRAIN/EXACT_TWO_PASS, per P2-T001 recovered evidence"
-    )
+    raise _preprocessing_error("N-BaIoT anchor preprocessing requires STANDARD/PER_CLIENT_TRAIN/EXACT_TWO_PASS")
 
 
 def _count_benign_rows(stream: ParquetBatchStream, label_column_index: int) -> int:
