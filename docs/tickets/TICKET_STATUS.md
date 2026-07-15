@@ -30,10 +30,10 @@ This file and each standalone ticket file's own `Status` field must always agree
 - **Extracted ticket count (this register).** 66 (`P1-T001`–`P1-T070`, exactly matching the master log's post-decomposition set, preserved verbatim by canonical ID). No ticket was added or split during this extraction.
 - **Added ticket.** NONE. Every cross-cutting responsibility this conversion task requires (Sonar, Pyright/Pylance parity, raw-dictionary prohibition, ticket/document-reference prohibition, stale-documentation enforcement, ticket-status governance, repository-wide post-implementation audits, the scientific-drift audit mechanism) is already owned by an existing Phase 0 ticket per `docs/tickets/phase-0/README.md`; every Phase 1 ticket defers to those owners in its own Part B, Section B13. See `docs/tickets/phase-1/README.md` for full detail.
 - **Phase-gate ticket.** `P1-T070` — Implement the lineage/reuse/atomicity/determinism validation and synthetic end-to-end socle test. Depends on all 65 other Phase 1 tickets; blocks `P2-T001` (outside this extracted phase).
-- **Current active ticket.** `P1-T064` — run-state persistence and lifecycle storage implementation is active.
-- **Next eligible ticket.** P1-T065; P1-T042, P1-T045, P1-T046, and P1-T060–P1-T063 remain in review pending the shared batch gate.
+- **Current active ticket.** NONE — all 66 Phase 1 tickets are `DONE`; Phase 1 is complete.
+- **Next eligible ticket.** NONE within Phase 1 — `P1-T070` finished at 2026-07-15T17:15:45Z with PASS/PASS/PASS audits, unblocking `P2-T001`.
 - **Unresolved blockers.** NONE — Architecture §§7.3, 16.7, 17.1, and 27.1 resolve the former precision, identity/seed, training, and checkpoint decisions.
-- **Last updated.** 2026-07-15T14:14:38Z.
+- **Last updated.** 2026-07-15T17:15:45Z (P1-T070 completion; this metadata block was stale from the 2026-07-14 conversion pass and is corrected here to match the Phase 1 ticket table, which already recorded P1-T070 as DONE).
 - **Roadmap last-read timestamp.** 2026-07-14 (`docs/Journal_Extension_Master_Roadmap.md`, read in full during extraction).
 - **Architecture last-read timestamp.** 2026-07-14 (`docs/DATP Core Architecture.md`, Sections 1–8 read in full during extraction; Sections 9, 12, 15–22, 25, 27, 29 read section-by-section as cited by individual Phase 1 tickets during their reconstruction).
 - **Master-log last-read timestamp.** 2026-07-14 (`docs/MASTER_TICKET_LOG.md`, Sections A–H, Phase 1 in full — all 66 ticket bodies read completely).
@@ -47,11 +47,11 @@ This file and each standalone ticket file's own `Status` field must always agree
 - **Expected ticket count.** 23 (`P2-T001`–`P2-T023`) per `docs/MASTER_TICKET_LOG.md`.
 - **Extracted ticket count.** 23; all IDs preserved with no addition, split, renumbering, or retirement.
 - **Phase gate.** `P2-T020`; direct dependencies: `P2-T019`, `P2-T002`, and `P1-T040`; all Phase 2 routes are transitively covered.
-- **Current active ticket.** NONE — conversion is not implementation.
-- **Next eligible ticket.** NONE — `P1-T070` is `NOT_STARTED`.
+- **Current active ticket.** NONE — implementation has not yet started.
+- **Next eligible ticket.** `P2-T001` — `P1-T070` is `DONE` (finished 2026-07-15T17:15:45Z, PASS/PASS/PASS), so the Phase 2 entry gate is satisfied.
 - **Unresolved blockers.** Recovered anchor semantics, including the historical checkpoint protocol, must be resolved or carried to readiness; never guessed or resolved by real execution.
 - **Authority finding.** The master log conflicts about the reconstruction status of `P2-T021`–`P2-T023`. Its Phase 2 index and detailed bodies also differ for `P2-T003` (scientific-execution classification and roadmap ID), `P2-T008` (dependency), `P2-T011` (block), `P2-T012` (type), and `P2-T023` (dependency/block), with further roadmap-ID drift. The standalone files preserve the detailed ticket bodies; the authority is unchanged.
-- **Last updated.** 2026-07-14 (Phase 2 documentation conversion; no implementation/scientific execution).
+- **Last updated.** 2026-07-15 (corrected stale "P1-T070 NOT_STARTED" entry-gate note left over from the 2026-07-14 documentation-conversion pass; no implementation/scientific execution performed by this correction).
 - **Roadmap last-read timestamp.** 2026-07-14 (complete authority read).
 - **Architecture last-read timestamp.** 2026-07-14 (complete authority read).
 - **Master-log last-read timestamp.** 2026-07-14 (complete authority read; Phase 2 bodies re-read).
@@ -62,8 +62,8 @@ All rows remain `NOT_STARTED`; documentation creation does not implement tickets
 
 | Ticket ID | Title | Status | Dependencies | Started | Last Updated | Finished | Current Step | Audit 1 | Audit 2 | Audit 3 | Blocker | Evidence |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| P2-T001 | Recover DATP behavioral semantics from the reference repository (read-only) | NOT_STARTED | P1-T070. | — | — | — | — | — | — | — | NONE | — |
-| P2-T002 | Record the recovered-semantics register in the master log | NOT_STARTED | P2-T001. | — | — | — | — | — | — | — | NONE | — |
+| P2-T001 | Recover DATP behavioral semantics from the reference repository (read-only) | DONE | P1-T070. | 2026-07-15 | 2026-07-15 | 2026-07-15 | Complete (corrected) | PASS | PASS | PASS | ANCHOR_LOCAL_EPOCH_PROTOCOL_UNRESOLVED (print-grade, carried to P2-T020; does not block ticket completion — recorded per acceptance criteria) | Completion record in `P2-T001.md`; 12/13 semantics resolved, 1/13 (E) an explicit evidenced blocker; `AnchorHistoricalCheckpointProtocol` accepted provisionally; register in `docs/MASTER_TICKET_LOG.md` §N (corrected) |
+| P2-T002 | Record the recovered-semantics register in the master log | DONE | P2-T001. | 2026-07-15 | 2026-07-15 | 2026-07-15 | Complete (corrected) | PASS | PASS | PASS | ANCHOR_LOCAL_EPOCH_PROTOCOL_UNRESOLVED (print-grade, carried to P2-T020; does not block ticket completion — recorded per acceptance criteria) | Completion record in `P2-T002.md`; register in `docs/MASTER_TICKET_LOG.md` §N (N.1 corrected table, N.2 AnchorHistoricalCheckpointProtocol, N.2b new AnchorLocalEpochProtocol blocker, N.3 authority-conflict findings, N.4 one print-grade blocker) |
 | P2-T003 | Inspect the N-BaIoT source and feature schema | NOT_STARTED | P2-T001, P1-T032. | — | — | — | — | — | — | — | NONE | — |
 | P2-T004 | Implement the N-BaIoT source adapter and deterministic source-row identity | NOT_STARTED | P2-T003, P1-T042. | — | — | — | — | — | — | — | NONE | — |
 | P2-T005 | Implement physical-device (9-client) partitioning | NOT_STARTED | P2-T004, P1-T019. | — | — | — | — | — | — | — | NONE | — |
