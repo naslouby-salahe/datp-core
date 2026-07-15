@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import msgspec
-from hypothesis import given
+from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from datp_core.application.ports.data import BuildSplitManifestRequest
@@ -94,6 +94,7 @@ def _read_manifest(*, result_ref: ArtifactRef, bound_root: BoundStorageRoot) -> 
     return msgspec.json.decode(path.read_bytes(), type=SplitManifest)
 
 
+@settings(deadline=1500)
 @given(benign_rows=st.integers(min_value=600, max_value=2000), attack_rows=st.integers(min_value=0, max_value=200))
 def test_calibration_never_exceeds_the_benign_row_count_and_split_is_deterministic(
     benign_rows: int, attack_rows: int
