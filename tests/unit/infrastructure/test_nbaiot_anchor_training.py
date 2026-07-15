@@ -6,7 +6,7 @@ from datp_core.domain.errors import TrainingError
 from datp_core.domain.learning.models import ActivationFunction, AutoencoderSpec
 from datp_core.domain.learning.training import LrSchedulerType, OptimizerType, TrainingSpec
 from datp_core.domain.runtime.seeds import Seed
-from datp_core.infrastructure.learning.models.autoencoder import build_fixed_autoencoder
+from datp_core.infrastructure.learning.models.autoencoder import FixedAutoencoder, build_fixed_autoencoder
 from datp_core.infrastructure.learning.models.nbaiot_anchor_training import (
     ANCHOR_AUTOENCODER_SPECIFICATION,
     anchor_scheduler,
@@ -18,12 +18,16 @@ from datp_core.infrastructure.learning.models.nbaiot_anchor_training import (
 _BATCH_NORMALIZATION_TYPES = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.SyncBatchNorm)
 
 
+def _fixed_anchor_model() -> FixedAutoencoder:
+    return build_fixed_autoencoder(specification=ANCHOR_AUTOENCODER_SPECIFICATION, initialization_seed=Seed(value=1))
+
+
 def test_anchor_specification_matches_the_recovered_architecture_and_has_no_batch_normalization() -> None:
     assert ANCHOR_AUTOENCODER_SPECIFICATION == AutoencoderSpec(
         input_dim=115, hidden_dims=(80, 40), bottleneck_dim=20, activation=ActivationFunction.RELU
     )
 
-    model = build_fixed_autoencoder(specification=ANCHOR_AUTOENCODER_SPECIFICATION, initialization_seed=Seed(value=1))
+    model = _fixed_anchor_model()
 
     assert not any(isinstance(module, _BATCH_NORMALIZATION_TYPES) for module in model.modules())
 
@@ -76,17 +80,18 @@ def _unauthorized_training_spec() -> TrainingSpec:
 
 
 def test_build_anchor_optimizer_rejects_an_unauthorized_optimizer_choice() -> None:
-    model = build_fixed_autoencoder(specification=ANCHOR_AUTOENCODER_SPECIFICATION, initialization_seed=Seed(value=1))
+    model = _fixed_anchor_model()
 
     with pytest.raises(TrainingError):
         build_anchor_optimizer(model=model, training=_unauthorized_training_spec())
 
 
 def test_build_anchor_optimizer_returns_an_adam_optimizer_over_the_model_parameters() -> None:
-    model = build_fixed_autoencoder(specification=ANCHOR_AUTOENCODER_SPECIFICATION, initialization_seed=Seed(value=1))
+    model = _fixed_anchor_model()
     training = anchor_training_spec(seed=Seed(value=1))
 
     optimizer = build_anchor_optimizer(model=model, training=training)
 
     assert isinstance(optimizer, torch.optim.Adam)
     assert optimizer.param_groups[0]["lr"] == 0.001
+    assert optimizer.param_groups[0]["weight_decay"] == 0.0

@@ -29,6 +29,7 @@ ANCHOR_AUTOENCODER_SPECIFICATION = AutoencoderSpec(
 
 _ANCHOR_OPTIMIZER = OptimizerType.ADAM
 _ANCHOR_LEARNING_RATE = 0.001
+_ANCHOR_WEIGHT_DECAY = 0.0
 _ANCHOR_SCHEDULER = LrSchedulerType.NONE
 _ANCHOR_BATCH_SIZE = 256
 
@@ -86,7 +87,7 @@ def build_anchor_optimizer(*, model: FixedAutoencoder, training: TrainingSpec) -
             "anchor optimizer construction requires the recovered Adam/lr=0.001/no-scheduler/fixed-AE policy",
             seed=training.seed,
         )
-    return torch.optim.Adam(model.parameters(), lr=training.lr)
+    return torch.optim.Adam(model.parameters(), lr=training.lr, weight_decay=_ANCHOR_WEIGHT_DECAY)
 
 
 def anchor_scheduler(*, training: TrainingSpec) -> None:
