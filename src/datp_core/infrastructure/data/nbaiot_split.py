@@ -34,7 +34,7 @@ _BENIGN_LABEL = "benign"
 _DEFAULT_BATCH_ROWS = 50_000
 
 
-def _benign_split_boundaries(benign_total: int) -> tuple[int, int, int, int]:
+def benign_split_boundaries(benign_total: int) -> tuple[int, int, int, int]:
     train_end = int(benign_total * _TRAIN_FRACTION)
     gap1_end = int(benign_total * (_TRAIN_FRACTION + _GAP_FRACTION))
     calibration_end = int(benign_total * (_TRAIN_FRACTION + _GAP_FRACTION + _CALIBRATION_FRACTION))
@@ -55,7 +55,7 @@ def _role_for_index(index: int, *, boundaries: tuple[int, int, int, int]) -> Spl
     return SplitRole.TEST
 
 
-def _row_range_roles(
+def row_range_roles(
     *, batch_start: int, batch_length: int, boundaries: tuple[int, int, int, int]
 ) -> tuple[tuple[int, int, SplitRole | None], ...]:
     train_end, gap1_end, calibration_end, gap2_end = boundaries
@@ -99,7 +99,7 @@ def _accumulate_client_split(
     }
     global_index = 0
     for batch in stream.batches():
-        for offset, length, role in _row_range_roles(
+        for offset, length, role in row_range_roles(
             batch_start=global_index, batch_length=batch.num_rows, boundaries=boundaries
         ):
             if role is None:
@@ -117,7 +117,7 @@ def _client_split_membership(*, client_id: ClientId, materialized_path: Path) ->
     if label_column_index < 0:
         raise _split_error(f"{materialized_path} is missing the {_LABEL_COLUMN_NAME!r} column")
     benign_total = _count_benign_rows(stream, label_column_index)
-    boundaries = _benign_split_boundaries(benign_total)
+    boundaries = benign_split_boundaries(benign_total)
     accumulators = _accumulate_client_split(stream, boundaries=boundaries)
     train, calibration, test = (
         accumulators[SplitRole.TRAIN],
