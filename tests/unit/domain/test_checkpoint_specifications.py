@@ -1,5 +1,7 @@
 from dataclasses import fields
 
+import pytest
+
 from datp_core.domain.artifacts.keys import SerializationFormat
 from datp_core.domain.artifacts.lineage import (
     CheckpointSelectionIdentity,
@@ -14,12 +16,20 @@ from datp_core.domain.artifacts.references import (
     CheckpointId,
     StageFingerprint,
 )
+from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.learning.checkpoints import (
+    ANCHOR_CHECKPOINT_ROUNDS_INITIAL,
+    ANCHOR_CHECKPOINT_ROUNDS_MAX,
     EARLIEST_SCHEDULED_ROUND_TIE_BREAK_RULE,
     REGIME_A_SELECTION_RULE_VERSION,
     SCHEDULED_CHECKPOINT_ROUNDS,
+    AnchorCheckpointSelectionArtifact,
+    AnchorCheckpointTerminationPolicy,
+    AnchorTerminationCheckpointResult,
+    AnchorTerminationReason,
     CheckpointCandidateResult,
     CheckpointDescriptor,
+    CheckpointProtocol,
     CheckpointSchedule,
     CheckpointSelectionArtifact,
     CheckpointSelectionResult,
@@ -116,6 +126,7 @@ def test_recovery_state_is_distinct_from_scientific_checkpoint_and_selection_art
         round=RoundNumber(value=25),
         seed=Seed(value=1),
         training_identity=TrainingIdentity(value=_fingerprint("1")),
+        protocol=CheckpointProtocol.JOURNAL_SCHEDULED,
         artifact_ref=_artifact(artifact_type=ArtifactType.SCIENTIFIC_CHECKPOINT, character="2"),
         content_hash="2" * 64,
         schema_version=ArtifactSchemaVersion(value="v1"),
@@ -124,3 +135,76 @@ def test_recovery_state_is_distinct_from_scientific_checkpoint_and_selection_art
     assert not isinstance(recovery_state, CheckpointDescriptor)
     assert not isinstance(recovery_state, CheckpointSelectionArtifact)
     assert selection_artifact.result.selected_round == checkpoint_descriptor.round
+
+
+def test_anchor_termination_policy_is_locked_to_the_recovered_bounds() -> None:
+    policy = AnchorCheckpointTerminationPolicy(
+        rounds_initial=RoundNumber(value=ANCHOR_CHECKPOINT_ROUNDS_INITIAL),
+        rounds_max=RoundNumber(value=ANCHOR_CHECKPOINT_ROUNDS_MAX),
+    )
+    rounds_initial = RoundNumber(value=ANCHOR_CHECKPOINT_ROUNDS_INITIAL)
+    unlocked_rounds_max = RoundNumber(value=200)
+
+    assert policy.rounds_initial.value == 40
+    assert policy.rounds_max.value == 150
+    with pytest.raises(DomainValidationError):
+        AnchorCheckpointTerminationPolicy(rounds_initial=rounds_initial, rounds_max=unlocked_rounds_max)
+
+
+def test_anchor_termination_result_rejects_a_false_attestation() -> None:
+    selected_round = RoundNumber(value=118)
+
+    with pytest.raises(DomainValidationError):
+        AnchorTerminationCheckpointResult(
+            selected_round=selected_round,
+            termination_reason=AnchorTerminationReason.CONVERGED,
+            prohibited_input_attestation=False,
+        )
+
+
+def test_anchor_checkpoint_descriptor_accepts_an_unscheduled_terminal_round() -> None:
+    checkpoint_descriptor = CheckpointDescriptor(
+        checkpoint_id=CheckpointId(value=f"checkpoint-{'a' * 64}"),
+        round=RoundNumber(value=118),
+        seed=Seed(value=1),
+        training_identity=TrainingIdentity(value=_fingerprint("2")),
+        protocol=CheckpointProtocol.ANCHOR_TERMINATION,
+        artifact_ref=_artifact(artifact_type=ArtifactType.SCIENTIFIC_CHECKPOINT, character="3"),
+        content_hash="3" * 64,
+        schema_version=ArtifactSchemaVersion(value="v1"),
+    )
+    checkpoint_id = CheckpointId(value=f"checkpoint-{'b' * 64}")
+    beyond_round_budget = RoundNumber(value=ANCHOR_CHECKPOINT_ROUNDS_MAX + 1)
+    seed = Seed(value=1)
+    training_identity = TrainingIdentity(value=_fingerprint("4"))
+    artifact_ref = _artifact(artifact_type=ArtifactType.SCIENTIFIC_CHECKPOINT, character="5")
+    schema_version = ArtifactSchemaVersion(value="v1")
+
+    assert checkpoint_descriptor.round.value == 118
+    with pytest.raises(DomainValidationError):
+        CheckpointDescriptor(
+            checkpoint_id=checkpoint_id,
+            round=beyond_round_budget,
+            seed=seed,
+            training_identity=training_identity,
+            protocol=CheckpointProtocol.ANCHOR_TERMINATION,
+            artifact_ref=artifact_ref,
+            content_hash="5" * 64,
+            schema_version=schema_version,
+        )
+
+
+def test_anchor_checkpoint_selection_artifact_is_distinct_from_the_journal_artifact() -> None:
+    anchor_artifact = AnchorCheckpointSelectionArtifact(
+        selection_identity=CheckpointSelectionIdentity(value=_fingerprint("6")),
+        result=AnchorTerminationCheckpointResult(
+            selected_round=RoundNumber(value=118),
+            termination_reason=AnchorTerminationReason.CONVERGED,
+            prohibited_input_attestation=True,
+        ),
+        content_hash="7" * 64,
+        schema_version=ArtifactSchemaVersion(value="v1"),
+    )
+
+    assert not isinstance(anchor_artifact, CheckpointSelectionArtifact)
+    assert anchor_artifact.result.selected_round.value == 118

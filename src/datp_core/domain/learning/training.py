@@ -3,11 +3,13 @@ from enum import StrEnum
 from math import isfinite
 
 from datp_core.domain.errors import DomainValidationError
+from datp_core.domain.learning.checkpoints import ANCHOR_CHECKPOINT_ROUNDS_MAX, SCHEDULED_CHECKPOINT_ROUNDS
 from datp_core.domain.learning.models import AutoencoderSpec
 from datp_core.domain.runtime.admissibility import BatchSize, GradientAccumulationSteps
 from datp_core.domain.runtime.seeds import Seed
 
 FEDPROX_MU_GRID = (0.001, 0.01, 0.1)
+LOCKED_ROUNDS_MAX_VALUES = (ANCHOR_CHECKPOINT_ROUNDS_MAX, SCHEDULED_CHECKPOINT_ROUNDS[-1])
 
 
 class AggregationStrategy(StrEnum):
@@ -104,11 +106,11 @@ def _validate_participation(participation: ParticipationStrategy) -> None:
 
 
 def _validate_rounds_max(rounds_max: int) -> None:
-    if type(rounds_max) is not int or rounds_max != 200:
+    if type(rounds_max) is not int or rounds_max not in LOCKED_ROUNDS_MAX_VALUES:
         raise DomainValidationError(
-            detail="federation round budget is locked to 200",
+            detail="federation round budget must equal a locked recovered value",
             value=repr(rounds_max),
-            constraint="rounds_max == 200",
+            constraint=repr(LOCKED_ROUNDS_MAX_VALUES),
         )
 
 

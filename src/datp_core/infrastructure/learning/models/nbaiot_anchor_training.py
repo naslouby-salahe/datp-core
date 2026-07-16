@@ -1,6 +1,7 @@
 import torch
 
 from datp_core.domain.errors import TrainingError
+from datp_core.domain.learning.checkpoints import ANCHOR_CHECKPOINT_ROUNDS_MAX
 from datp_core.domain.learning.models import AutoencoderSpec
 from datp_core.domain.learning.training import (
     AggregationStrategy,
@@ -67,7 +68,7 @@ def anchor_training_spec(*, seed: Seed) -> TrainingSpec:
         aggregation=AggregationStrategy.FEDAVG,
         local_epochs=1,
         participation=ParticipationStrategy.FULL,
-        rounds_max=200,
+        rounds_max=ANCHOR_CHECKPOINT_ROUNDS_MAX,
         fedprox_mu=None,
     )
     return TrainingSpec(

@@ -19,7 +19,7 @@ from datp_core.domain.artifacts.references import (
     CheckpointId,
     StageFingerprint,
 )
-from datp_core.domain.learning.checkpoints import CheckpointDescriptor
+from datp_core.domain.learning.checkpoints import CheckpointDescriptor, CheckpointProtocol
 from datp_core.domain.runtime.seeds import RoundNumber, Seed
 from datp_core.infrastructure.persistence.checkpoints import FileCheckpointStore
 from datp_core.infrastructure.persistence.hashing import blake3_file_content_hash
@@ -49,6 +49,7 @@ def test_synthetic_cuda_model_checkpoint_descriptor_round_trips(tmp_path: Path) 
         round=RoundNumber(value=25),
         seed=Seed(value=1),
         training_identity=TrainingIdentity(value=StageFingerprint(value="c" * 64)),
+        protocol=CheckpointProtocol.JOURNAL_SCHEDULED,
         artifact_ref=artifact,
         content_hash=content_hash,
         schema_version=artifact.schema_version,

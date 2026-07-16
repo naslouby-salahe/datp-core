@@ -2,6 +2,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from math import isfinite
 from re import fullmatch
+from typing import assert_never
 
 from datp_core.domain.artifacts.lineage import (
     CheckpointSelectionIdentity,
@@ -22,6 +23,8 @@ from datp_core.domain.runtime.seeds import RoundNumber, Seed
 SCHEDULED_CHECKPOINT_ROUNDS = (25, 50, 75, 100, 125, 150, 200)
 REGIME_A_SELECTION_RULE_VERSION = "regime_a_weighted_benign_validation_loss_v1"
 EARLIEST_SCHEDULED_ROUND_TIE_BREAK_RULE = "earliest_scheduled_round_v1"
+ANCHOR_CHECKPOINT_ROUNDS_INITIAL = 40
+ANCHOR_CHECKPOINT_ROUNDS_MAX = 150
 
 
 class CheckpointKind(StrEnum):
@@ -29,8 +32,18 @@ class CheckpointKind(StrEnum):
     RECOVERY = "recovery"
 
 
+class CheckpointProtocol(StrEnum):
+    JOURNAL_SCHEDULED = "journal_scheduled"
+    ANCHOR_TERMINATION = "anchor_termination"
+
+
 class CheckpointSelectionStrategy(StrEnum):
     REGIME_A_GLOBAL_PRIMARY = "regime_a_global_primary"
+
+
+class AnchorTerminationReason(StrEnum):
+    CONVERGED = "converged"
+    ROUND_BUDGET_EXHAUSTED = "round_budget_exhausted"
 
 
 class RecoveryCadence(StrEnum):
@@ -50,6 +63,15 @@ def _validated_rounds(*, rounds: tuple[RoundNumber, ...], name: str) -> None:
             detail=f"{name} must equal the locked checkpoint schedule",
             value=repr(rounds),
             constraint=repr(SCHEDULED_CHECKPOINT_ROUNDS),
+        )
+
+
+def _validated_anchor_policy_round(*, value: RoundNumber, expected: int, name: str) -> None:
+    if type(value) is not RoundNumber or value.value != expected:
+        raise DomainValidationError(
+            detail=f"{name} must equal its locked recovered anchor value",
+            value=repr(value),
+            constraint=repr(expected),
         )
 
 
@@ -104,6 +126,26 @@ class CheckpointSelectionSpec:
             expected=EARLIEST_SCHEDULED_ROUND_TIE_BREAK_RULE,
             name="checkpoint tie-break rule",
         )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AnchorCheckpointTerminationPolicy:
+    rounds_initial: RoundNumber
+    rounds_max: RoundNumber
+
+    def __post_init__(self) -> None:
+        _validated_anchor_policy_round(
+            value=self.rounds_initial, expected=ANCHOR_CHECKPOINT_ROUNDS_INITIAL, name="anchor rounds_initial"
+        )
+        _validated_anchor_policy_round(
+            value=self.rounds_max, expected=ANCHOR_CHECKPOINT_ROUNDS_MAX, name="anchor rounds_max"
+        )
+
+
+LOCKED_ANCHOR_CHECKPOINT_TERMINATION_POLICY = AnchorCheckpointTerminationPolicy(
+    rounds_initial=RoundNumber(value=ANCHOR_CHECKPOINT_ROUNDS_INITIAL),
+    rounds_max=RoundNumber(value=ANCHOR_CHECKPOINT_ROUNDS_MAX),
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -295,11 +337,61 @@ class CheckpointSelectionArtifact:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class AnchorTerminationCheckpointResult:
+    selected_round: RoundNumber
+    termination_reason: AnchorTerminationReason
+    prohibited_input_attestation: bool
+
+    def __post_init__(self) -> None:
+        if not _is_valid_anchor_termination_result(self):
+            raise DomainValidationError(
+                detail="anchor termination checkpoint result requires a typed round, reason, and attestation",
+                value=repr(self),
+                constraint="RoundNumber, AnchorTerminationReason, prohibited_input_attestation is True",
+            )
+
+
+def _is_valid_anchor_termination_result(result: AnchorTerminationCheckpointResult) -> bool:
+    return (
+        type(result.selected_round) is RoundNumber
+        and type(result.termination_reason) is AnchorTerminationReason
+        and result.prohibited_input_attestation is True
+    )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AnchorCheckpointSelectionArtifact:
+    selection_identity: CheckpointSelectionIdentity
+    result: AnchorTerminationCheckpointResult
+    content_hash: str
+    schema_version: ArtifactSchemaVersion
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.selection_identity) is not CheckpointSelectionIdentity
+            or type(self.result) is not AnchorTerminationCheckpointResult
+        ):
+            raise DomainValidationError(
+                detail="anchor checkpoint selection artifact requires typed identity and result",
+                value=repr(self),
+                constraint="CheckpointSelectionIdentity and AnchorTerminationCheckpointResult",
+            )
+        _validated_content_hash(value=self.content_hash)
+        if type(self.schema_version) is not ArtifactSchemaVersion:
+            raise DomainValidationError(
+                detail="anchor checkpoint selection artifact requires a typed schema version",
+                value=repr(self.schema_version),
+                constraint="ArtifactSchemaVersion",
+            )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class CheckpointDescriptor:
     checkpoint_id: CheckpointId
     round: RoundNumber
     seed: Seed
     training_identity: TrainingIdentity
+    protocol: CheckpointProtocol
     artifact_ref: ArtifactRef
     content_hash: str
     schema_version: ArtifactSchemaVersion
@@ -308,7 +400,7 @@ class CheckpointDescriptor:
     def __post_init__(self) -> None:
         if not _is_valid_checkpoint_descriptor(self):
             raise DomainValidationError(
-                detail="scientific checkpoint descriptor requires typed scheduled integrity-bound contents",
+                detail="scientific checkpoint descriptor requires typed protocol-consistent integrity-bound contents",
                 value=repr(self),
                 constraint="typed scientific checkpoint with matching artifact integrity metadata",
             )
@@ -318,7 +410,7 @@ def _is_valid_checkpoint_descriptor(descriptor: CheckpointDescriptor) -> bool:
     return all(
         (
             _has_checkpoint_descriptor_identity_types(descriptor),
-            _is_scheduled_round(descriptor.round),
+            _is_valid_checkpoint_round(round_=descriptor.round, protocol=descriptor.protocol),
             _has_scientific_checkpoint_artifact(descriptor.artifact_ref),
             _is_valid_content_hash(descriptor.content_hash),
             _has_matching_descriptor_integrity(descriptor),
@@ -333,9 +425,20 @@ def _has_checkpoint_descriptor_identity_types(descriptor: CheckpointDescriptor) 
             type(descriptor.round) is RoundNumber,
             type(descriptor.seed) is Seed,
             type(descriptor.training_identity) is TrainingIdentity,
+            type(descriptor.protocol) is CheckpointProtocol,
             type(descriptor.schema_version) is ArtifactSchemaVersion,
         )
     )
+
+
+def _is_valid_checkpoint_round(*, round_: RoundNumber, protocol: CheckpointProtocol) -> bool:
+    if type(round_) is not RoundNumber:
+        return False
+    if protocol is CheckpointProtocol.JOURNAL_SCHEDULED:
+        return _is_scheduled_round(round_)
+    if protocol is CheckpointProtocol.ANCHOR_TERMINATION:
+        return 1 <= round_.value <= ANCHOR_CHECKPOINT_ROUNDS_MAX
+    assert_never(protocol)
 
 
 def _has_scientific_checkpoint_artifact(artifact_ref: ArtifactRef) -> bool:

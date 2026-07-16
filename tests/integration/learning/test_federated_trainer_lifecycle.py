@@ -30,7 +30,12 @@ from datp_core.domain.artifacts.references import (
 )
 from datp_core.domain.data.preprocessing import ProcessedSplitResult
 from datp_core.domain.experiments.identities import ClientId
-from datp_core.domain.learning.checkpoints import SCHEDULED_CHECKPOINT_ROUNDS, CheckpointDescriptor, CheckpointSchedule
+from datp_core.domain.learning.checkpoints import (
+    SCHEDULED_CHECKPOINT_ROUNDS,
+    CheckpointDescriptor,
+    CheckpointProtocol,
+    CheckpointSchedule,
+)
 from datp_core.domain.learning.models import ActivationFunction, AutoencoderSpec
 from datp_core.domain.learning.training import (
     AggregationStrategy,
@@ -166,6 +171,7 @@ class _CheckpointStager:
                 round=round_number,
                 seed=request.training.seed,
                 training_identity=TrainingIdentity(value=_fingerprint("f")),
+                protocol=CheckpointProtocol.JOURNAL_SCHEDULED,
                 artifact_ref=artifact,
                 content_hash=artifact.content_hash,
                 schema_version=artifact.schema_version,

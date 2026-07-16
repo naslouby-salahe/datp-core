@@ -2,11 +2,15 @@ from dataclasses import dataclass
 
 from datp_core.domain.errors import CheckpointSelectionError
 from datp_core.domain.learning.checkpoints import (
+    AnchorCheckpointTerminationPolicy,
+    AnchorTerminationCheckpointResult,
+    AnchorTerminationReason,
     CheckpointCandidateResult,
     CheckpointSelectionResult,
     CheckpointSelectionSpec,
     TieBreakEvidence,
 )
+from datp_core.domain.runtime.seeds import RoundNumber
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -53,3 +57,52 @@ def _candidates_in_specification_order(request: CheckpointSelectionRequest) -> t
             prohibited_input="no accepted Regime-A candidate",
         )
     return request.candidates
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AnchorCheckpointTerminationEvidence:
+    terminal_round: RoundNumber
+    termination_reason: AnchorTerminationReason
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AnchorCheckpointTerminationRequest:
+    policy: AnchorCheckpointTerminationPolicy
+    evidence: AnchorCheckpointTerminationEvidence
+
+
+class AnchorCheckpointSelector:
+    def select(self, request: AnchorCheckpointTerminationRequest) -> AnchorTerminationCheckpointResult:
+        _validated_anchor_termination_evidence(request)
+        return AnchorTerminationCheckpointResult(
+            selected_round=request.evidence.terminal_round,
+            termination_reason=request.evidence.termination_reason,
+            prohibited_input_attestation=True,
+        )
+
+
+def _validated_anchor_termination_evidence(request: AnchorCheckpointTerminationRequest) -> None:
+    round_value = request.evidence.terminal_round.value
+    rounds_max = request.policy.rounds_max.value
+    rounds_initial = request.policy.rounds_initial.value
+    if round_value > rounds_max:
+        raise CheckpointSelectionError(
+            detail="anchor checkpoint terminal round cannot exceed the locked anchor round budget",
+            candidate_evidence=repr(round_value),
+            prohibited_input="terminal round beyond the locked anchor rounds_max",
+        )
+    if (
+        request.evidence.termination_reason is AnchorTerminationReason.ROUND_BUDGET_EXHAUSTED
+        and round_value != rounds_max
+    ):
+        raise CheckpointSelectionError(
+            detail="round-budget-exhausted termination must occur exactly at the locked round cap",
+            candidate_evidence=repr(round_value),
+            prohibited_input="round-budget-exhausted reason claimed at a non-terminal round",
+        )
+    if request.evidence.termination_reason is AnchorTerminationReason.CONVERGED and round_value < rounds_initial:
+        raise CheckpointSelectionError(
+            detail="convergence termination cannot occur before the locked initial-round threshold",
+            candidate_evidence=repr(round_value),
+            prohibited_input="convergence claimed before the locked anchor rounds_initial",
+        )

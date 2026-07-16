@@ -26,7 +26,7 @@ from datp_core.domain.artifacts.references import (
     StageFingerprint,
 )
 from datp_core.domain.errors import CheckpointError, ResumeIncompatibilityError
-from datp_core.domain.learning.checkpoints import CheckpointDescriptor, RecoveryState
+from datp_core.domain.learning.checkpoints import CheckpointDescriptor, CheckpointProtocol, RecoveryState
 from datp_core.domain.runtime.seeds import RoundNumber, Seed
 from datp_core.infrastructure.persistence.checkpoints import FileCheckpointStore
 from datp_core.infrastructure.persistence.roots import bind_storage_root
@@ -65,6 +65,7 @@ def _checkpoint() -> CheckpointDescriptor:
         round=RoundNumber(value=25),
         seed=Seed(value=1),
         training_identity=TrainingIdentity(value=StageFingerprint(value="b" * 64)),
+        protocol=CheckpointProtocol.JOURNAL_SCHEDULED,
         artifact_ref=reference,
         content_hash=reference.content_hash,
         schema_version=reference.schema_version,

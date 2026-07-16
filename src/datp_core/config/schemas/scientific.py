@@ -169,6 +169,11 @@ type FederationConfig = Annotated[
 ]
 
 
+class AnchorCheckpointTerminationConfig(ScientificSchema):
+    rounds_initial: Literal[40]
+    rounds_max: Literal[150]
+
+
 class CanonicalTemporalConfig(ScientificSchema):
     historical_fraction: CanonicalTemporalFraction
     timestamp_evidence_kind: Literal[TimestampEvidenceKind.GENUINE_CAPTURE_TIME]

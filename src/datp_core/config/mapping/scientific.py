@@ -9,6 +9,7 @@ from datp_core.config.schemas.artifacts import ArtifactConfig
 from datp_core.config.schemas.execution import ExecutionConfig
 from datp_core.config.schemas.reporting import ReportingConfig
 from datp_core.config.schemas.scientific import (
+    AnchorCheckpointTerminationConfig,
     BcaBootstrapStatisticalConfig,
     CalibrationSizeFallbackThresholdConfig,
     CanonicalTemporalConfig,
@@ -68,7 +69,9 @@ from datp_core.domain.experiments.specifications import (
     ExperimentProfileSpec,
     ExperimentSpec,
 )
+from datp_core.domain.learning.checkpoints import AnchorCheckpointTerminationPolicy
 from datp_core.domain.learning.training import FEDPROX_MU_GRID, FederationSpec
+from datp_core.domain.runtime.seeds import RoundNumber
 from datp_core.domain.thresholding.federated_statistics import FedStatsBenignThresholdSpec
 from datp_core.domain.thresholding.policies import (
     ClusterThresholdSpec,
@@ -214,6 +217,23 @@ def map_regime_a_static_split_config(schema: RegimeAStaticSplitConfig) -> Regime
             detail="Regime A static split mapping requires the locked recovered 0.60/0.01/0.20 boundary fractions",
             section="scientific",
             field="regime_a_static_split",
+            mode="mapping",
+        ) from error
+
+
+def map_anchor_checkpoint_termination_config(
+    schema: AnchorCheckpointTerminationConfig,
+) -> AnchorCheckpointTerminationPolicy:
+    try:
+        return AnchorCheckpointTerminationPolicy(
+            rounds_initial=RoundNumber(value=schema.rounds_initial),
+            rounds_max=RoundNumber(value=schema.rounds_max),
+        )
+    except DomainValidationError as error:
+        raise ConfigurationError(
+            detail="anchor checkpoint termination mapping requires the locked recovered 40/150 round boundary",
+            section="scientific",
+            field="anchor_checkpoint_termination",
             mode="mapping",
         ) from error
 

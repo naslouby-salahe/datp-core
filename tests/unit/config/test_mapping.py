@@ -11,6 +11,7 @@ from datp_core.config.mapping.execution import map_streaming_chunk_config
 from datp_core.config.mapping.scientific import (
     ExperimentConfigSchema,
     ResolveExperimentProfileRequest,
+    map_anchor_checkpoint_termination_config,
     map_canonical_temporal_config,
     map_centralized_comparator_config,
     map_experiment_schema,
@@ -31,6 +32,7 @@ from datp_core.config.schemas.execution import (
 )
 from datp_core.config.schemas.reporting import ReportingConfig
 from datp_core.config.schemas.scientific import (
+    AnchorCheckpointTerminationConfig,
     BcaBootstrapStatisticalConfig,
     CanonicalTemporalConfig,
     CentralizedComparatorConfig,
@@ -76,7 +78,7 @@ from datp_core.domain.experiments.specifications import (
     CentralizedModelComparatorProfileSpec,
     CentralizedModelComparatorSpec,
 )
-from datp_core.domain.learning.checkpoints import RecoveryCadence
+from datp_core.domain.learning.checkpoints import LOCKED_ANCHOR_CHECKPOINT_TERMINATION_POLICY, RecoveryCadence
 from datp_core.domain.learning.scores import QuantileEstimatorType
 from datp_core.domain.learning.training import AggregationStrategy, ParticipationStrategy
 from datp_core.domain.runtime.admissibility import ChunkRowCount
@@ -296,11 +298,15 @@ def test_canonical_temporal_schema_rejects_a_non_70_30_boundary() -> None:
 
 
 def test_regime_a_static_split_schema_rejects_a_non_locked_fraction() -> None:
+    non_locked_train_fraction = Decimal("0.50")
+    gap_fraction = Decimal("0.01")
+    calibration_fraction = Decimal("0.20")
+
     with pytest.raises(ValidationError):
         RegimeAStaticSplitConfig(
-            train_fraction=Decimal("0.50"),
-            gap_fraction=Decimal("0.01"),
-            calibration_fraction=Decimal("0.20"),
+            train_fraction=non_locked_train_fraction,
+            gap_fraction=gap_fraction,
+            calibration_fraction=calibration_fraction,
         )
 
 
@@ -320,6 +326,27 @@ def test_regime_a_static_split_yaml_file_loads_and_maps_to_the_locked_boundary()
     schema = load_yaml(yaml_path.read_text(), RegimeAStaticSplitConfig)
 
     assert map_regime_a_static_split_config(schema) == LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY
+
+
+def test_anchor_checkpoint_termination_schema_rejects_a_non_locked_rounds_max() -> None:
+    payload = {"rounds_initial": 40, "rounds_max": 200}
+
+    with pytest.raises(ValidationError):
+        AnchorCheckpointTerminationConfig.model_validate(payload)
+
+
+def test_anchor_checkpoint_termination_mapping_produces_the_locked_policy() -> None:
+    configuration = AnchorCheckpointTerminationConfig(rounds_initial=40, rounds_max=150)
+
+    assert map_anchor_checkpoint_termination_config(configuration) == LOCKED_ANCHOR_CHECKPOINT_TERMINATION_POLICY
+
+
+def test_anchor_checkpoint_termination_yaml_file_loads_and_maps_to_the_locked_policy() -> None:
+    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "anchor_checkpoint_termination.yaml"
+
+    schema = load_yaml(yaml_path.read_text(), AnchorCheckpointTerminationConfig)
+
+    assert map_anchor_checkpoint_termination_config(schema) == LOCKED_ANCHOR_CHECKPOINT_TERMINATION_POLICY
 
 
 def test_streaming_chunk_schema_rejects_a_non_positive_value() -> None:
