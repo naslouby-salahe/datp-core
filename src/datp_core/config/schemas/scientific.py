@@ -174,6 +174,10 @@ class AnchorCheckpointTerminationConfig(ScientificSchema):
     rounds_max: Literal[150]
 
 
+class B0PooledThresholdConfig(ScientificSchema):
+    percentile: Literal[95]
+
+
 class CanonicalTemporalConfig(ScientificSchema):
     historical_fraction: CanonicalTemporalFraction
     timestamp_evidence_kind: Literal[TimestampEvidenceKind.GENUINE_CAPTURE_TIME]

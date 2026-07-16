@@ -265,6 +265,27 @@ class ClusterThresholdSpec:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class B0PooledThresholdSpec:
+    percentile: ThresholdPercentile
+
+    def __post_init__(self) -> None:
+        if self.percentile.value != Decimal("0.95"):
+            raise DomainValidationError(
+                detail="B0's pooled threshold percentile is locked to the recovered p95 value",
+                value=str(self.percentile.value),
+                constraint="percentile == 0.95",
+            )
+
+
+def compute_b0_pooled_threshold(
+    *, pooled_calibration_scores: tuple[float, ...], spec: B0PooledThresholdSpec
+) -> ThresholdValue:
+    from datp_core.domain.mathematics.quantiles import exact_quantile
+
+    return ThresholdValue(value=exact_quantile(values=pooled_calibration_scores, percentile=spec.percentile))
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ThresholdSuiteSpec:
     constructions: tuple[ThresholdConstructionSpec, ...]
 

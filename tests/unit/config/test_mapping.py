@@ -16,6 +16,7 @@ from datp_core.config.mapping.scientific import (
     ExperimentConfigSchema,
     ResolveExperimentProfileRequest,
     map_anchor_checkpoint_termination_config,
+    map_b0_pooled_threshold_config,
     map_canonical_temporal_config,
     map_centralized_comparator_config,
     map_experiment_schema,
@@ -39,6 +40,7 @@ from datp_core.config.schemas.execution import (
 from datp_core.config.schemas.reporting import ReportingConfig
 from datp_core.config.schemas.scientific import (
     AnchorCheckpointTerminationConfig,
+    B0PooledThresholdConfig,
     BcaBootstrapStatisticalConfig,
     CanonicalTemporalConfig,
     CentralizedComparatorConfig,
@@ -98,7 +100,11 @@ from datp_core.domain.runtime.policies import (
     StageConcurrency,
 )
 from datp_core.domain.runtime.seeds import EnumMap, SeedRole
-from datp_core.domain.thresholding.policies import SharedThresholdConstruction
+from datp_core.domain.thresholding.policies import (
+    B0PooledThresholdSpec,
+    SharedThresholdConstruction,
+    ThresholdPercentile,
+)
 from tests.unit.domain.test_protocol_aggregates import confirmatory_profile
 
 
@@ -379,6 +385,27 @@ def test_anchor_checkpoint_termination_yaml_file_loads_and_maps_to_the_locked_po
     schema = load_yaml(yaml_path.read_text(), AnchorCheckpointTerminationConfig)
 
     assert map_anchor_checkpoint_termination_config(schema) == LOCKED_ANCHOR_CHECKPOINT_TERMINATION_POLICY
+
+
+def test_b0_pooled_threshold_schema_rejects_a_non_locked_percentile() -> None:
+    with pytest.raises(ValidationError):
+        B0PooledThresholdConfig.model_validate({"percentile": 90})
+
+
+def test_b0_pooled_threshold_mapping_produces_the_locked_spec() -> None:
+    configuration = B0PooledThresholdConfig(percentile=95)
+
+    mapped = map_b0_pooled_threshold_config(configuration)
+
+    assert mapped == B0PooledThresholdSpec(percentile=ThresholdPercentile(value="0.95"))
+
+
+def test_b0_pooled_threshold_yaml_file_loads_and_maps_to_the_locked_spec() -> None:
+    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "b0_pooled_threshold.yaml"
+
+    schema = load_yaml(yaml_path.read_text(), B0PooledThresholdConfig)
+
+    assert map_b0_pooled_threshold_config(schema) == B0PooledThresholdSpec(percentile=ThresholdPercentile(value="0.95"))
 
 
 def test_streaming_chunk_schema_rejects_a_non_positive_value() -> None:

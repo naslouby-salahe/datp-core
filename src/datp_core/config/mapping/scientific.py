@@ -10,6 +10,7 @@ from datp_core.config.schemas.execution import ExecutionConfig
 from datp_core.config.schemas.reporting import ReportingConfig
 from datp_core.config.schemas.scientific import (
     AnchorCheckpointTerminationConfig,
+    B0PooledThresholdConfig,
     BcaBootstrapStatisticalConfig,
     CalibrationSizeFallbackThresholdConfig,
     CanonicalTemporalConfig,
@@ -74,10 +75,12 @@ from datp_core.domain.learning.training import FEDPROX_MU_GRID, FederationSpec
 from datp_core.domain.runtime.seeds import RoundNumber
 from datp_core.domain.thresholding.federated_statistics import FedStatsBenignThresholdSpec
 from datp_core.domain.thresholding.policies import (
+    B0PooledThresholdSpec,
     ClusterThresholdSpec,
     FamilyThresholdSpec,
     LocalThresholdSpec,
     SharedThresholdSpec,
+    ThresholdPercentile,
     ThresholdSuiteSpec,
 )
 from datp_core.domain.thresholding.variants import (
@@ -234,6 +237,18 @@ def map_anchor_checkpoint_termination_config(
             detail="anchor checkpoint termination mapping requires the locked recovered 40/150 round boundary",
             section="scientific",
             field="anchor_checkpoint_termination",
+            mode="mapping",
+        ) from error
+
+
+def map_b0_pooled_threshold_config(schema: B0PooledThresholdConfig) -> B0PooledThresholdSpec:
+    try:
+        return B0PooledThresholdSpec(percentile=ThresholdPercentile(value=Decimal(schema.percentile) / Decimal(100)))
+    except DomainValidationError as error:
+        raise ConfigurationError(
+            detail="B0 pooled threshold mapping requires the locked p95 percentile",
+            section="scientific",
+            field="b0_pooled_threshold",
             mode="mapping",
         ) from error
 
