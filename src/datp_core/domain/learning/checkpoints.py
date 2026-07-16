@@ -20,6 +20,7 @@ from datp_core.domain.artifacts.references import (
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.runtime.seeds import RoundNumber, Seed
 
+# TODO - Move these constants to a configuration file 
 SCHEDULED_CHECKPOINT_ROUNDS = (25, 50, 75, 100, 125, 150, 200)
 REGIME_A_SELECTION_RULE_VERSION = "regime_a_weighted_benign_validation_loss_v1"
 EARLIEST_SCHEDULED_ROUND_TIE_BREAK_RULE = "earliest_scheduled_round_v1"

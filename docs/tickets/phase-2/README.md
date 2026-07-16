@@ -15,6 +15,19 @@ The phase implements and validates the anchor pipeline without conducting an anc
 - **Ticket count.** 23 expected / 23 extracted; `P2-T001`–`P2-T023` are preserved with no additions, splits, renumbering, or retirement.
 - **Status register.** [TICKET_STATUS.md](../TICKET_STATUS.md).
 
+## Configuration boundary
+
+Phase 2 consumes the bounded configuration catalogue only:
+
+- `configs/scientific/{protocol,datasets,regimes,models,thresholds,evaluation,experiments}.yaml`
+- `configs/execution/profiles.yaml`
+- `configs/artifacts/policy.yaml`
+- `configs/reporting/policy.yaml`
+- `configs/tests/profiles.yaml`
+- `configs/locks/protocol-lock.json`
+
+The composition boundary loads each named document once, validates it through the strict schema boundary, resolves named profile references, and verifies the protocol lock. Concrete values are not supplied by scalar per-setting inputs, supplemental experiment documents, or composition overlays.
+
 ## Ordered tickets
 
 | ID | Title | Type | Priority | Sci-exec | Dependencies |

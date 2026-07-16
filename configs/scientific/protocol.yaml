@@ -1,0 +1,7 @@
+confirmatory:
+  track: journal_extension
+  metric: cv_fpr
+  direction: b1_minus_b2
+  statistical_method: bca_bootstrap
+  confidence: "0.95"
+  paired_seed_count: 10

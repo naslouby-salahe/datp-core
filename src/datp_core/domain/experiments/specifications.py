@@ -18,7 +18,7 @@ from datp_core.domain.artifacts.lineage import (
 from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.data.datasets import Dataset, Regime, TimestampEvidence
-from datp_core.domain.data.partitioning import ClientDefinitionStrategy, DirichletAlpha, DirichletAlphaSentinel
+from datp_core.domain.data.partitioning import ClientDefinitionStrategy, DirichletAlpha
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.evaluation.alert_burden import CalibrationSampleCount
 from datp_core.domain.evaluation.metrics import (
@@ -51,12 +51,8 @@ from datp_core.domain.experiments.protocols import (
     ScientificProtocolSpec,
 )
 from datp_core.domain.learning.training import AggregationStrategy, ParticipationStrategy
-from datp_core.domain.mathematics.pooled_statistics import (
-    PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES,
-    REGIME_D_MINIMUM_COVERAGE,
-)
-from datp_core.domain.runtime.seeds import CONFIRMATORY_PAIRED_SEED_COUNT, EnumMap, SeedTuple
-from datp_core.domain.thresholding.federated_statistics import FED_STATS_SUPPLEMENTARY_K_VALUES, FedStatsK
+from datp_core.domain.runtime.seeds import EnumMap, SeedTuple
+from datp_core.domain.thresholding.federated_statistics import FedStatsK
 from datp_core.domain.thresholding.policies import (
     FprTarget,
     LocalThresholdSpec,
@@ -103,6 +99,14 @@ class AbsorptionGateSpec:
     strongly_useful_fraction: Probability
     partial_absorption_fraction: Probability
     alternative_path_distance: Probability
+
+    def __post_init__(self) -> None:
+        if self.partial_absorption_fraction.value >= self.strongly_useful_fraction.value:
+            raise DomainValidationError(
+                detail="the partial-absorption band must sit strictly below the strongly-useful band",
+                value=repr(self),
+                constraint="partial_absorption_fraction < strongly_useful_fraction",
+            )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -383,6 +387,7 @@ def _matches_timestamp_evidence(
 class SweepSpec:
     axis: SweepAxis
     values: tuple[SweepValue, ...]
+    catalogue: ProfileCatalogueSpec
 
     def __post_init__(self) -> None:
         if not _is_authorized_sweep(self):
@@ -397,13 +402,21 @@ class SweepSpec:
 
 
 def _is_authorized_sweep(sweep: SweepSpec) -> bool:
-    if type(sweep.axis) is not SweepAxis or not sweep.values:
+    if not _has_authorized_sweep_shape(sweep):
         return False
+    return _has_authorized_sweep_values(sweep)
+
+
+def _has_authorized_sweep_shape(sweep: SweepSpec) -> bool:
+    return type(sweep.axis) is SweepAxis and bool(sweep.values) and type(sweep.catalogue) is ProfileCatalogueSpec
+
+
+def _has_authorized_sweep_values(sweep: SweepSpec) -> bool:
     expected_type = _sweep_value_type(sweep.axis)
     return (
         all(type(value) is expected_type for value in sweep.values)
         and len(set(sweep.values)) == len(sweep.values)
-        and set(sweep.values).issubset(PROFILE_CATALOGUE.grid_for(axis=sweep.axis))
+        and set(sweep.values).issubset(sweep.catalogue.grid_for(axis=sweep.axis))
     )
 
 
@@ -556,7 +569,7 @@ def _has_confirmatory_identity(profile: ConfirmatoryExperimentProfileSpec) -> bo
 def _has_confirmatory_statistical_contract(profile: ConfirmatoryExperimentProfileSpec) -> bool:
     return (
         profile.statistical_procedure.is_confirmatory_locked
-        and len(profile.authorized_seed_plan.values) == CONFIRMATORY_PAIRED_SEED_COUNT
+        and len(profile.authorized_seed_plan.values) == profile.statistical_procedure.paired_seed_count
     )
 
 
@@ -714,28 +727,6 @@ class ExperimentCell:
     scientific_readiness: ScientificReadinessResult
 
 
-Q_SENSITIVITY_GRID = tuple(ThresholdPercentile(value=value) for value in (0.90, 0.95, 0.975, 0.99))
-DIRICHLET_ALPHA_GRID = tuple(
-    DirichletAlpha(value=value) for value in (0.1, 0.3, 0.5, 1.0, 10.0, DirichletAlphaSentinel.IID)
-)
-CALIBRATION_SIZE_GRID = tuple(CalibrationSampleCount(value=value) for value in (50, 100, 250, 500, 1000, 5000))
-SHRINKAGE_WEIGHT_GRID = tuple(ShrinkageWeight(value=value) for value in (0.00, 0.25, 0.50, 0.75, 1.00))
-CONFORMAL_ALPHA = FprTarget(value=0.05)
-FED_STATS_K_GRID = tuple(FedStatsK(value=value) for value in FED_STATS_SUPPLEMENTARY_K_VALUES)
-ABSORPTION_GATES = AbsorptionGateSpec(
-    strongly_useful_fraction=Probability(value=0.75),
-    partial_absorption_fraction=Probability(value=0.25),
-    alternative_path_distance=Probability(value=0.05),
-)
-TEMPORAL_RECOVERY_GATE = TemporalRecoveryGateSpec(meaningful_recovery_fraction=Probability(value=0.50))
-REGIME_D_VIABILITY_GATE = RegimeDViabilityGateSpec(
-    minimum_eligibility_coverage=REGIME_D_MINIMUM_COVERAGE,
-    minimum_calibration_samples=PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES,
-)
-CONFIRMATORY_SIGN_REQUIREMENT = ConfirmatorySignRequirement(direction=PairedDeltaDirection.B1_MINUS_B2)
-SUPPRESSION_GATE = SuppressionGateSpec(outcome=ClaimOutcome.SUPPRESSED)
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ProfileCatalogueSpec:
     quantile_grid: tuple[ThresholdPercentile, ...]
@@ -790,24 +781,42 @@ def _is_closed_profile_catalogue(catalogue: ProfileCatalogueSpec) -> bool:
 def _has_catalogue_grids(catalogue: ProfileCatalogueSpec) -> bool:
     return all(
         (
-            catalogue.quantile_grid == Q_SENSITIVITY_GRID,
-            catalogue.dirichlet_alpha_grid == DIRICHLET_ALPHA_GRID,
-            catalogue.calibration_size_grid == CALIBRATION_SIZE_GRID,
-            catalogue.shrinkage_weight_grid == SHRINKAGE_WEIGHT_GRID,
-            catalogue.conformal_alpha == CONFORMAL_ALPHA,
-            catalogue.fed_stats_k_grid == FED_STATS_K_GRID,
+            _is_strictly_increasing_grid(catalogue.quantile_grid, value_type=ThresholdPercentile),
+            _is_unique_grid(catalogue.dirichlet_alpha_grid, value_type=DirichletAlpha),
+            _is_strictly_increasing_grid(catalogue.calibration_size_grid, value_type=CalibrationSampleCount),
+            _is_unit_interval_grid(catalogue.shrinkage_weight_grid),
+            type(catalogue.conformal_alpha) is FprTarget,
+            _is_unique_grid(catalogue.fed_stats_k_grid, value_type=FedStatsK),
         )
     )
+
+
+def _is_strictly_increasing_grid(grid: tuple[SweepValue, ...], *, value_type: type) -> bool:
+    if not grid or any(type(item) is not value_type for item in grid):
+        return False
+    values = tuple(item.value for item in grid)
+    return values == tuple(sorted(set(values)))
+
+
+def _is_unique_grid(grid: tuple[SweepValue, ...], *, value_type: type) -> bool:
+    return bool(grid) and all(type(item) is value_type for item in grid) and len(set(grid)) == len(grid)
+
+
+def _is_unit_interval_grid(grid: tuple[ShrinkageWeight, ...]) -> bool:
+    if not _is_strictly_increasing_grid(grid, value_type=ShrinkageWeight):
+        return False
+    values = tuple(item.value for item in grid)
+    return values[0] == 0.0 and values[-1] == 1.0
 
 
 def _has_catalogue_gates(catalogue: ProfileCatalogueSpec) -> bool:
     return all(
         (
-            catalogue.absorption_gates == ABSORPTION_GATES,
-            catalogue.temporal_recovery_gate == TEMPORAL_RECOVERY_GATE,
-            catalogue.regime_d_viability_gate == REGIME_D_VIABILITY_GATE,
-            catalogue.suppression_gate == SUPPRESSION_GATE,
-            catalogue.confirmatory_sign_requirement == CONFIRMATORY_SIGN_REQUIREMENT,
+            type(catalogue.absorption_gates) is AbsorptionGateSpec,
+            type(catalogue.temporal_recovery_gate) is TemporalRecoveryGateSpec,
+            type(catalogue.regime_d_viability_gate) is RegimeDViabilityGateSpec,
+            type(catalogue.suppression_gate) is SuppressionGateSpec,
+            type(catalogue.confirmatory_sign_requirement) is ConfirmatorySignRequirement,
         )
     )
 
@@ -818,21 +827,3 @@ def _has_catalogue_reporting_contract(catalogue: ProfileCatalogueSpec) -> bool:
         and catalogue.main_placement is ManuscriptPlacement.MAIN
         and catalogue.supplementary_placement is ManuscriptPlacement.SUPPLEMENT
     )
-
-
-PROFILE_CATALOGUE = ProfileCatalogueSpec(
-    quantile_grid=Q_SENSITIVITY_GRID,
-    dirichlet_alpha_grid=DIRICHLET_ALPHA_GRID,
-    calibration_size_grid=CALIBRATION_SIZE_GRID,
-    shrinkage_weight_grid=SHRINKAGE_WEIGHT_GRID,
-    conformal_alpha=CONFORMAL_ALPHA,
-    fed_stats_k_grid=FED_STATS_K_GRID,
-    absorption_gates=ABSORPTION_GATES,
-    temporal_recovery_gate=TEMPORAL_RECOVERY_GATE,
-    regime_d_viability_gate=REGIME_D_VIABILITY_GATE,
-    suppression_gate=SUPPRESSION_GATE,
-    confirmatory_sign_requirement=CONFIRMATORY_SIGN_REQUIREMENT,
-    evidence_roles=tuple(ExperimentRole),
-    main_placement=ManuscriptPlacement.MAIN,
-    supplementary_placement=ManuscriptPlacement.SUPPLEMENT,
-)

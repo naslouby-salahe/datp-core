@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from datp_core.domain.artifacts.references import CONTENT_HASH_PATTERN
 from datp_core.domain.data.datasets import Regime, TimestampEvidenceKind
@@ -10,7 +10,6 @@ from datp_core.domain.data.preprocessing import FittedStatisticPolicy, Normaliza
 from datp_core.domain.data.splitting import ConformalQuantileIndexRule
 from datp_core.domain.evaluation.metrics import OperatingPointMetric
 from datp_core.domain.experiments.protocols import ProtocolTrack
-from datp_core.domain.experiments.specifications import ABSORPTION_GATES, CONFORMAL_ALPHA, TEMPORAL_RECOVERY_GATE
 from datp_core.domain.learning.scores import QuantileEstimatorType
 from datp_core.domain.learning.training import AggregationStrategy, ParticipationStrategy
 from datp_core.domain.mathematics.pooled_statistics import (
@@ -31,35 +30,11 @@ type CanonicalTemporalFraction = Annotated[
     Field(ge=REGIME_D_TEMPORAL_HISTORICAL_FRACTION.value, le=REGIME_D_TEMPORAL_HISTORICAL_FRACTION.value),
 ]
 type StageFingerprintText = Annotated[str, Field(pattern=f"^{CONTENT_HASH_PATTERN}$")]
-type ConformalTargetAlpha = Annotated[Decimal, Field(ge=CONFORMAL_ALPHA.value, le=CONFORMAL_ALPHA.value)]
-type AbsorptionStronglyUsefulFraction = Annotated[
-    Decimal,
-    Field(
-        ge=ABSORPTION_GATES.strongly_useful_fraction.value,
-        le=ABSORPTION_GATES.strongly_useful_fraction.value,
-    ),
-]
-type AbsorptionPartialFraction = Annotated[
-    Decimal,
-    Field(
-        ge=ABSORPTION_GATES.partial_absorption_fraction.value,
-        le=ABSORPTION_GATES.partial_absorption_fraction.value,
-    ),
-]
-type AbsorptionAlternativePathDistance = Annotated[
-    Decimal,
-    Field(
-        ge=ABSORPTION_GATES.alternative_path_distance.value,
-        le=ABSORPTION_GATES.alternative_path_distance.value,
-    ),
-]
-type TemporalRecoveryFraction = Annotated[
-    Decimal,
-    Field(
-        ge=TEMPORAL_RECOVERY_GATE.meaningful_recovery_fraction.value,
-        le=TEMPORAL_RECOVERY_GATE.meaningful_recovery_fraction.value,
-    ),
-]
+type ConformalTargetAlpha = OpenUnitInterval
+type AbsorptionStronglyUsefulFraction = ClosedUnitInterval
+type AbsorptionPartialFraction = ClosedUnitInterval
+type AbsorptionAlternativePathDistance = ClosedUnitInterval
+type TemporalRecoveryFraction = ClosedUnitInterval
 type FedStatsSupplementaryKValues = tuple[
     Annotated[
         Decimal,
@@ -131,6 +106,17 @@ class ConformalThresholdConfig(ScientificSchema):
 
 class FedStatsBenignThresholdConfig(ScientificSchema):
     kind: Literal["fed_stats_benign"]
+
+
+class QSensitivityGridConfig(ScientificSchema):
+    values: tuple[OpenUnitInterval, ...]
+
+    @field_validator("values")
+    @classmethod
+    def _values_are_unique_and_ordered(cls, values: tuple[Decimal, ...]) -> tuple[Decimal, ...]:
+        if not values or tuple(sorted(set(values))) != tuple(values):
+            raise ValueError("q-sensitivity grid values must be non-empty, unique, and strictly increasing")
+        return values
 
 
 type ThresholdConstructionConfig = Annotated[
@@ -270,6 +256,12 @@ class AbsorptionGateConfig(ScientificSchema):
     partial_absorption_fraction: AbsorptionPartialFraction
     alternative_path_distance: AbsorptionAlternativePathDistance
 
+    @model_validator(mode="after")
+    def _partial_is_below_strongly_useful(self) -> "AbsorptionGateConfig":
+        if self.partial_absorption_fraction >= self.strongly_useful_fraction:
+            raise ValueError("partial_absorption_fraction must be strictly below strongly_useful_fraction")
+        return self
+
 
 class TemporalRecoveryGateConfig(ScientificSchema):
     meaningful_recovery_fraction: TemporalRecoveryFraction
@@ -328,6 +320,60 @@ class CentralizedComparatorConfig(ScientificSchema):
     test_score_identity: StageFingerprintText
     threshold_identity: StageFingerprintText
     evaluation_identity: StageFingerprintText
+
+
+class DirichletAlphaGridConfig(ScientificSchema):
+    values: tuple[float | DirichletAlphaSentinel, ...]
+
+    @field_validator("values")
+    @classmethod
+    def _values_are_unique_positive(
+        cls, values: tuple[float | DirichletAlphaSentinel, ...]
+    ) -> tuple[float | DirichletAlphaSentinel, ...]:
+        numeric = [value for value in values if value is not DirichletAlphaSentinel.IID]
+        if not _has_unique_values(values) or not _has_positive_values(numeric):
+            raise ValueError("Dirichlet alpha grid values must be non-empty, unique, and strictly positive")
+        return values
+
+
+class CalibrationSizeGridConfig(ScientificSchema):
+    values: tuple[PositiveInteger, ...]
+
+    @field_validator("values")
+    @classmethod
+    def _values_are_unique_and_ordered(cls, values: tuple[int, ...]) -> tuple[int, ...]:
+        if not values or tuple(sorted(set(values))) != tuple(values):
+            raise ValueError("calibration-size grid values must be non-empty, unique, and strictly increasing")
+        return values
+
+
+class ShrinkageWeightGridConfig(ScientificSchema):
+    values: tuple[ClosedUnitInterval, ...]
+
+    @field_validator("values")
+    @classmethod
+    def _values_span_zero_to_one(cls, values: tuple[Decimal, ...]) -> tuple[Decimal, ...]:
+        if not _is_complete_shrinkage_weight_grid(values):
+            raise ValueError("shrinkage-weight grid must be unique, strictly increasing, and span 0 to 1")
+        return values
+
+
+def _has_unique_values[Value](values: tuple[Value, ...]) -> bool:
+    return bool(values) and len(set(values)) == len(values)
+
+
+def _has_positive_values(values: list[float]) -> bool:
+    return all(value > 0 for value in values)
+
+
+def _is_complete_shrinkage_weight_grid(values: tuple[Decimal, ...]) -> bool:
+    if not values or tuple(sorted(set(values))) != values:
+        return False
+    return values[0] == Decimal("0") and values[-1] == Decimal("1")
+
+
+class ConformalAlphaConfig(ScientificSchema):
+    alpha: OpenUnitInterval
 
 
 class ScientificConfig(ScientificSchema):

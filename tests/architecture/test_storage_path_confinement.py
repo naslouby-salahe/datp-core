@@ -5,6 +5,7 @@ from pathlib import Path
 def test_only_storage_adapters_and_the_provenance_inventory_construct_filesystem_paths() -> None:
     source_root = Path("src/datp_core")
     allowed_roots = (
+        source_root / "config",
         source_root / "infrastructure" / "data",
         source_root / "infrastructure" / "persistence",
     )

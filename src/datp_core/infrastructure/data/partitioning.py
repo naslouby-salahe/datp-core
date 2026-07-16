@@ -25,7 +25,7 @@ from datp_core.infrastructure.data.nbaiot_source import NBaIoTChunkedSourceAdapt
 from datp_core.infrastructure.data.streaming import ParquetBatchStream
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.hashing import blake3_bytes_content_hash
-
+# TODO - Move these constants to a configuration file 
 _REGIME_A_DEVICE_COUNT = 9
 
 

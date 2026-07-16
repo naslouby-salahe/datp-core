@@ -19,6 +19,7 @@ from datp_core.domain.experiments.feasibility import ReuseIncompatibilityReason,
 from datp_core.domain.experiments.specifications import ExperimentSpec
 from datp_core.domain.runtime.policies import PipelineStage
 from datp_core.domain.thresholding.policies import LocalThresholdSpec, ThresholdPercentile, ThresholdSuiteSpec
+from tests.support.composed_configuration import composed_profile_catalogue
 from tests.support.score_artifacts import calibration_scores_and_eligible_clients
 from tests.unit.application.test_stage_services import evaluation_request
 from tests.unit.config.test_mapping import experiment_config
@@ -29,7 +30,7 @@ def _fingerprint(value: int) -> StageFingerprint:
 
 
 def _specifications(*, threshold_percentile: float) -> tuple[ExperimentSpec, ...]:
-    specification = map_experiment_schema(experiment_config())
+    specification = map_experiment_schema(experiment_config(), catalogue=composed_profile_catalogue())
     _, local_policy = specification.scientific_protocol.thresholds.constructions
     assert isinstance(local_policy, LocalThresholdSpec)
     threshold_policy = LocalThresholdSpec(

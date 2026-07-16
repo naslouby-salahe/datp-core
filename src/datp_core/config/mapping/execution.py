@@ -1,6 +1,6 @@
 from datp_core.config.schemas.execution import (
-    B0ScoreGenerationConfig,
     ExecutionConfig,
+    ExecutionProfileConfig,
     ParallelismConfig,
     ScoringBatchConfig,
     StreamingChunkConfig,
@@ -23,6 +23,7 @@ from datp_core.domain.runtime.admissibility import (
     VramFraction,
     WorkerCount,
 )
+from datp_core.domain.runtime.execution_profiles import ExecutionProfileSpec
 from datp_core.domain.runtime.policies import (
     DeviceSpec,
     ExecutionMode,
@@ -119,8 +120,14 @@ def map_scoring_batch_config(schema: ScoringBatchConfig) -> ScoringBatchSpec:
     )
 
 
-def map_b0_score_generation_config(schema: B0ScoreGenerationConfig) -> B0ScoringBatchSpec:
-    return B0ScoringBatchSpec(
-        calibration_batch_size=BatchSize(value=schema.calibration_batch_size),
-        test_batch_size=BatchSize(value=schema.test_batch_size),
+def map_execution_profile_config(schema: ExecutionProfileConfig) -> ExecutionProfileSpec:
+    scoring = map_scoring_batch_config(schema.scoring_batch)
+    return ExecutionProfileSpec(
+        profile_id=schema.profile_id,
+        scoring_batch=scoring,
+        b0_scoring_batch=B0ScoringBatchSpec(
+            calibration_batch_size=scoring.calibration_batch_size,
+            test_batch_size=scoring.test_batch_size,
+        ),
+        streaming_chunk=map_streaming_chunk_config(schema.streaming_chunk),
     )

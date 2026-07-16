@@ -21,7 +21,7 @@ from datp_core.domain.errors import ArtifactError, IncompleteArtifactBundleError
 from datp_core.domain.learning.scores import ClientTestScoreArtifact
 from datp_core.infrastructure.persistence.hashing import blake3_bytes_content_hash, blake3_file_content_hash
 from datp_core.infrastructure.persistence.roots import BoundStorageRoot
-
+# TODO - Move these constants to a configuration file 
 _MARKER_NAME = "commit-marker.json"
 _MEMBER_NAMES = ("benign", "attack")
 _ARTIFACT_BUNDLES_NAMESPACE = ".artifact-bundles"

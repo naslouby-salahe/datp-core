@@ -5,7 +5,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Final
 
 from datp_core.domain.runtime.admissibility import GpuIndex
-
+# TODO - Move these constants to a configuration file 
 MAXIMUM_CONCURRENT_GPU_JOBS: Final = 1
 
 if TYPE_CHECKING:

@@ -1,3 +1,0 @@
-train_fraction: "0.60"
-gap_fraction: "0.01"
-calibration_fraction: "0.20"

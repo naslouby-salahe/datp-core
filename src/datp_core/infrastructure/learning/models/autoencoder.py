@@ -7,7 +7,7 @@ from torch import Tensor, nn
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.learning.models import ActivationFunction, AutoencoderSpec
 from datp_core.domain.runtime.seeds import Seed
-
+# TODO - Move these constants to a configuration file 
 FIXED_ENCODER_HIDDEN_DIMS: Final = (80, 40)
 FIXED_ENCODER_BOTTLENECK_DIM: Final = 20
 FIXED_ENCODER_ACTIVATION: Final = ActivationFunction.RELU

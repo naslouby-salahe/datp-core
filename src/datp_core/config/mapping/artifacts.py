@@ -11,6 +11,6 @@ def map_artifact_config(schema: ArtifactConfig) -> ArtifactPolicy:
     return ArtifactPolicy(
         namespace=schema.namespace,
         write_disposition=schema.write_disposition,
-        serialization_defaults=EnumMap(entries=entries, allowed_keys=tuple(ArtifactType), is_sparse=False),
+        serialization_defaults=EnumMap(entries=entries, allowed_keys=tuple(ArtifactType), is_sparse=True),
         retention=schema.retention,
     )

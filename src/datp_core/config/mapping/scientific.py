@@ -14,12 +14,15 @@ from datp_core.config.schemas.scientific import (
     B0PooledThresholdConfig,
     BcaBootstrapStatisticalConfig,
     CalibrationSizeFallbackThresholdConfig,
+    CalibrationSizeGridConfig,
     CanonicalTemporalConfig,
     CentralizedComparatorConfig,
     CliffsDeltaStatisticalConfig,
     ClusterThresholdConfig,
+    ConformalAlphaConfig,
     ConformalThresholdConfig,
     DeviceClientPartitionConfig,
+    DirichletAlphaGridConfig,
     DirichletPartitionConfig,
     EvaluationConfig,
     FamilyThresholdConfig,
@@ -35,12 +38,14 @@ from datp_core.config.schemas.scientific import (
     NaturalDevicePartitionConfig,
     PartitioningConfig,
     PercentileBootstrapStatisticalConfig,
+    QSensitivityGridConfig,
     RegimeAPreprocessingConfig,
     RegimeAStaticSplitConfig,
     RobustClusterMedianThresholdConfig,
     ScientificConfig,
     SharedThresholdConfig,
     ShrinkageThresholdConfig,
+    ShrinkageWeightGridConfig,
     SpearmanStatisticalConfig,
     StatisticalConfig,
     TemporalRecoveryGateConfig,
@@ -62,7 +67,6 @@ from datp_core.domain.data.partitioning import (
     ClientPartitionSpec,
     DeviceClientPartitionSpec,
     DirichletAlpha,
-    DirichletAlphaSentinel,
     DirichletPartitionSpec,
     FilePseudoClientPartitionSpec,
     GroupClientPartitionSpec,
@@ -83,18 +87,13 @@ from datp_core.domain.evaluation.statistical_results import (
 from datp_core.domain.experiments.identities import ExperimentId
 from datp_core.domain.experiments.protocols import ScientificProtocolSpec
 from datp_core.domain.experiments.specifications import (
-    ABSORPTION_GATES,
-    CALIBRATION_SIZE_GRID,
-    DIRICHLET_ALPHA_GRID,
-    Q_SENSITIVITY_GRID,
-    SHRINKAGE_WEIGHT_GRID,
-    TEMPORAL_RECOVERY_GATE,
     AbsorptionGateSpec,
     CentralizedModelComparatorProfileSpec,
     CentralizedModelComparatorSpec,
     ConfirmatoryExperimentProfileSpec,
     ExperimentProfileSpec,
     ExperimentSpec,
+    ProfileCatalogueSpec,
     TemporalRecoveryGateSpec,
 )
 from datp_core.domain.learning.checkpoints import AnchorCheckpointTerminationPolicy
@@ -109,6 +108,7 @@ from datp_core.domain.thresholding.policies import (
     B0PooledThresholdSpec,
     ClusterThresholdSpec,
     FamilyThresholdSpec,
+    FprTarget,
     LocalThresholdSpec,
     SharedThresholdSpec,
     ThresholdPercentile,
@@ -155,9 +155,9 @@ def resolve_experiment_profile(request: ResolveExperimentProfileRequest) -> Expe
     return matches[0]
 
 
-def map_experiment_schema(schema: ExperimentConfigSchema) -> ExperimentSpec:
+def map_experiment_schema(schema: ExperimentConfigSchema, *, catalogue: ProfileCatalogueSpec) -> ExperimentSpec:
     profile = resolve_experiment_profile(schema.profile_request)
-    protocol = _resolve_authorized_protocol(schema.scientific, profile)
+    protocol = _resolve_authorized_protocol(schema.scientific, profile, catalogue=catalogue)
     return ExperimentSpec(
         identity=profile.identity,
         profile=profile,
@@ -287,48 +287,24 @@ def map_b0_pooled_threshold_config(schema: B0PooledThresholdConfig) -> B0PooledT
 
 def map_absorption_gate_config(schema: AbsorptionGateConfig) -> AbsorptionGateSpec:
     try:
-        candidate = AbsorptionGateSpec(
+        return AbsorptionGateSpec(
             strongly_useful_fraction=Probability(value=schema.strongly_useful_fraction),
             partial_absorption_fraction=Probability(value=schema.partial_absorption_fraction),
             alternative_path_distance=Probability(value=schema.alternative_path_distance),
         )
     except DomainValidationError as error:
         raise ConfigurationError(
-            detail="absorption gate mapping requires the locked 0.75/0.25/0.05 roadmap bands",
+            detail=(
+                "absorption gate mapping requires the partial-absorption band strictly below the strongly-useful band"
+            ),
             section="scientific",
             field="absorption_gates",
             mode="mapping",
         ) from error
-    if candidate != ABSORPTION_GATES:
-        raise ConfigurationError(
-            detail="absorption gate configuration must match the locked roadmap catalogue",
-            section="scientific",
-            field="absorption_gates",
-            mode="mapping",
-        )
-    return candidate
 
 
 def map_temporal_recovery_gate_config(schema: TemporalRecoveryGateConfig) -> TemporalRecoveryGateSpec:
-    try:
-        candidate = TemporalRecoveryGateSpec(
-            meaningful_recovery_fraction=Probability(value=schema.meaningful_recovery_fraction),
-        )
-    except DomainValidationError as error:
-        raise ConfigurationError(
-            detail="temporal recovery gate mapping requires the locked 0.50 recovery fraction",
-            section="scientific",
-            field="temporal_recovery_gate",
-            mode="mapping",
-        ) from error
-    if candidate != TEMPORAL_RECOVERY_GATE:
-        raise ConfigurationError(
-            detail="temporal recovery gate configuration must match the locked roadmap catalogue",
-            section="scientific",
-            field="temporal_recovery_gate",
-            mode="mapping",
-        )
-    return candidate
+    return TemporalRecoveryGateSpec(meaningful_recovery_fraction=Probability(value=schema.meaningful_recovery_fraction))
 
 
 def map_fed_stats_supplementary_k_config(schema: FedStatsSupplementaryKConfig) -> tuple[Decimal, ...]:
@@ -342,7 +318,7 @@ def map_fed_stats_supplementary_k_config(schema: FedStatsSupplementaryKConfig) -
     return schema.values
 
 
-def map_partitioning_config(schema: PartitioningConfig) -> ClientPartitionSpec:
+def map_partitioning_config(schema: PartitioningConfig, *, catalogue: ProfileCatalogueSpec) -> ClientPartitionSpec:
     match schema:
         case NaturalDevicePartitionConfig():
             return NaturalDevicePartitionSpec(strategy=schema.strategy, regime=schema.regime)
@@ -353,7 +329,7 @@ def map_partitioning_config(schema: PartitioningConfig) -> ClientPartitionSpec:
         case GroupClientPartitionConfig():
             return GroupClientPartitionSpec(strategy=schema.strategy, regime=schema.regime)
         case DirichletPartitionConfig():
-            if not _is_authorized_dirichlet_alpha(schema.alpha):
+            if DirichletAlpha(value=schema.alpha) not in catalogue.dirichlet_alpha_grid:
                 raise ConfigurationError(
                     detail="Dirichlet alpha must be a frozen pre-registered profile grid member",
                     section="scientific",
@@ -369,8 +345,8 @@ def map_partitioning_config(schema: PartitioningConfig) -> ClientPartitionSpec:
             assert_never(schema)
 
 
-def _is_authorized_dirichlet_alpha(value: float | DirichletAlphaSentinel) -> bool:
-    return DirichletAlpha(value=value) in DIRICHLET_ALPHA_GRID
+def map_q_sensitivity_grid_config(schema: QSensitivityGridConfig) -> tuple[ThresholdPercentile, ...]:
+    return tuple(ThresholdPercentile(value=value) for value in schema.values)
 
 
 def map_regime_a_preprocessing_config(
@@ -382,6 +358,22 @@ def map_regime_a_preprocessing_config(
         fitted_stat_policy=schema.fitted_stat_policy,
         chunking=chunking,
     )
+
+
+def map_dirichlet_alpha_grid_config(schema: DirichletAlphaGridConfig) -> tuple[DirichletAlpha, ...]:
+    return tuple(DirichletAlpha(value=value) for value in schema.values)
+
+
+def map_calibration_size_grid_config(schema: CalibrationSizeGridConfig) -> tuple[CalibrationSampleCount, ...]:
+    return tuple(CalibrationSampleCount(value=value) for value in schema.values)
+
+
+def map_shrinkage_weight_grid_config(schema: ShrinkageWeightGridConfig) -> tuple[ShrinkageWeight, ...]:
+    return tuple(ShrinkageWeight(value=float(value)) for value in schema.values)
+
+
+def map_conformal_alpha_config(schema: ConformalAlphaConfig) -> FprTarget:
+    return FprTarget(value=float(schema.alpha))
 
 
 def map_statistical_config(schema: StatisticalConfig) -> StatisticalAnalysisSpec:
@@ -416,9 +408,13 @@ def _resample_count(schema: StatisticalConfig) -> int:
     return schema.resamples
 
 
-def _resolve_authorized_protocol(schema: ScientificConfig, profile: ExperimentProfileSpec) -> ScientificProtocolSpec:
+def _resolve_authorized_protocol(
+    schema: ScientificConfig, profile: ExperimentProfileSpec, *, catalogue: ProfileCatalogueSpec
+) -> ScientificProtocolSpec:
     candidates = tuple(
-        protocol for protocol in profile.authorized_protocols if _matches_scientific_config(schema, protocol)
+        protocol
+        for protocol in profile.authorized_protocols
+        if _matches_scientific_config(schema, protocol, catalogue=catalogue)
     )
     if len(candidates) != 1:
         raise ConfigurationError(
@@ -430,12 +426,14 @@ def _resolve_authorized_protocol(schema: ScientificConfig, profile: ExperimentPr
     return candidates[0]
 
 
-def _matches_scientific_config(schema: ScientificConfig, protocol: ScientificProtocolSpec) -> bool:
+def _matches_scientific_config(
+    schema: ScientificConfig, protocol: ScientificProtocolSpec, *, catalogue: ProfileCatalogueSpec
+) -> bool:
     return all(
         (
             schema.protocol_track is protocol.track,
-            map_partitioning_config(schema.partitioning) == protocol.partitioning,
-            _matches_threshold_suite(schema.threshold_constructions, protocol.thresholds),
+            map_partitioning_config(schema.partitioning, catalogue=catalogue) == protocol.partitioning,
+            _matches_threshold_suite(schema.threshold_constructions, protocol.thresholds, catalogue=catalogue),
             _matches_evaluation(schema.evaluation, protocol.evaluation),
             map_statistical_config(schema.statistics) == protocol.statistics,
             map_federation_config(schema.federation) == protocol.training.federation,
@@ -447,59 +445,63 @@ def _matches_scientific_config(schema: ScientificConfig, protocol: ScientificPro
 def _matches_threshold_suite(
     configurations: tuple[ThresholdConstructionConfig, ...],
     suite: ThresholdSuiteSpec,
+    *,
+    catalogue: ProfileCatalogueSpec,
 ) -> bool:
     return len(configurations) == len(suite.constructions) and all(
-        _matches_threshold_configuration(configuration, construction)
+        _matches_threshold_configuration(configuration, construction, catalogue=catalogue)
         for configuration, construction in zip(configurations, suite.constructions, strict=True)
     )
 
 
-def _matches_threshold_configuration(configuration: ThresholdConstructionConfig, construction: object) -> bool:
+def _matches_threshold_configuration(
+    configuration: ThresholdConstructionConfig, construction: object, *, catalogue: ProfileCatalogueSpec
+) -> bool:
     match configuration, construction:
         case SharedThresholdConfig(), SharedThresholdSpec():
             return (
-                _is_authorized_percentile(configuration.percentile)
+                _is_authorized_percentile(configuration.percentile, catalogue=catalogue)
                 and construction.percentile.value == configuration.percentile
                 and construction.construction is configuration.construction
                 and construction.estimator is configuration.estimator
             )
         case LocalThresholdConfig(), LocalThresholdSpec():
             return (
-                _is_authorized_percentile(configuration.percentile)
+                _is_authorized_percentile(configuration.percentile, catalogue=catalogue)
                 and construction.percentile.value == configuration.percentile
                 and construction.estimator is configuration.estimator
             )
         case FamilyThresholdConfig(), FamilyThresholdSpec():
             return (
-                _is_authorized_percentile(configuration.percentile)
+                _is_authorized_percentile(configuration.percentile, catalogue=catalogue)
                 and construction.percentile.value == configuration.percentile
                 and construction.family_manifest_identity.value == configuration.family_taxonomy_id
             )
         case ClusterThresholdConfig(), ClusterThresholdSpec():
             return (
-                _is_authorized_percentile(configuration.percentile)
+                _is_authorized_percentile(configuration.percentile, catalogue=catalogue)
                 and construction.percentile.value == configuration.percentile
             )
         case RobustClusterMedianThresholdConfig(), RobustClusterMedianThresholdSpec():
             return True
         case ShrinkageThresholdConfig(), ShrinkageThresholdSpec():
             return (
-                _is_authorized_percentile(configuration.percentile)
-                and _is_authorized_shrinkage_weight(configuration.shrinkage_weight)
+                _is_authorized_percentile(configuration.percentile, catalogue=catalogue)
+                and _is_authorized_shrinkage_weight(configuration.shrinkage_weight, catalogue=catalogue)
                 and construction.percentile.value == configuration.percentile
                 and construction.shrinkage_weight.value == float(configuration.shrinkage_weight)
             )
         case CalibrationSizeFallbackThresholdConfig(), CalibrationSizeFallbackThresholdSpec():
             return (
-                _is_authorized_percentile(configuration.percentile)
-                and _is_authorized_calibration_sample_count(configuration.calibration_sample_count)
+                _is_authorized_percentile(configuration.percentile, catalogue=catalogue)
+                and _is_authorized_calibration_sample_count(configuration.calibration_sample_count, catalogue=catalogue)
                 and construction.percentile.value == configuration.percentile
                 and construction.fallback_rule_version == configuration.fallback_rule_version
                 and construction.calibration_sample_count.value == configuration.calibration_sample_count
             )
         case ConformalThresholdConfig(), ConformalThresholdSpec():
             return (
-                _is_authorized_percentile(configuration.percentile)
+                _is_authorized_percentile(configuration.percentile, catalogue=catalogue)
                 and construction.mode.value == configuration.mode
                 and construction.conformal_split.alpha.value == configuration.alpha
                 and construction.conformal_split.percentile.value == configuration.percentile
@@ -511,16 +513,16 @@ def _matches_threshold_configuration(configuration: ThresholdConstructionConfig,
             return False
 
 
-def _is_authorized_percentile(value: Decimal) -> bool:
-    return ThresholdPercentile(value=value) in Q_SENSITIVITY_GRID
+def _is_authorized_percentile(value: Decimal, *, catalogue: ProfileCatalogueSpec) -> bool:
+    return ThresholdPercentile(value=value) in catalogue.quantile_grid
 
 
-def _is_authorized_shrinkage_weight(value: Decimal) -> bool:
-    return ShrinkageWeight(value=float(value)) in SHRINKAGE_WEIGHT_GRID
+def _is_authorized_shrinkage_weight(value: Decimal, *, catalogue: ProfileCatalogueSpec) -> bool:
+    return ShrinkageWeight(value=float(value)) in catalogue.shrinkage_weight_grid
 
 
-def _is_authorized_calibration_sample_count(value: int) -> bool:
-    return CalibrationSampleCount(value=value) in CALIBRATION_SIZE_GRID
+def _is_authorized_calibration_sample_count(value: int, *, catalogue: ProfileCatalogueSpec) -> bool:
+    return CalibrationSampleCount(value=value) in catalogue.calibration_size_grid
 
 
 def _matches_evaluation(configuration: EvaluationConfig, evaluation: EvaluationSuiteSpec) -> bool:

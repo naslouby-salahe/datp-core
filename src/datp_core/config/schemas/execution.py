@@ -1,7 +1,7 @@
 from decimal import Decimal
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from datp_core.domain.learning.checkpoints import RecoveryCadence
 from datp_core.domain.runtime.policies import (
@@ -72,9 +72,24 @@ class ScoringBatchConfig(ExecutionSchema):
     temporal_batch_size: PositiveInteger
 
 
-class B0ScoreGenerationConfig(ExecutionSchema):
-    calibration_batch_size: PositiveInteger
-    test_batch_size: PositiveInteger
+class ExecutionProfileConfig(ExecutionSchema):
+    profile_id: str
+    scoring_batch: ScoringBatchConfig
+    streaming_chunk: StreamingChunkConfig
+
+
+class ExecutionProfilesConfig(ExecutionSchema):
+    profiles: tuple[ExecutionProfileConfig, ...]
+
+    @field_validator("profiles")
+    @classmethod
+    def _unique_profile_ids(cls, values: tuple[ExecutionProfileConfig, ...]) -> tuple[ExecutionProfileConfig, ...]:
+        profile_ids = tuple(value.profile_id for value in values)
+        if not values or len(set(profile_ids)) != len(profile_ids):
+            raise ValueError("execution profile catalogue must contain unique non-empty profiles")
+        if any(not profile_id for profile_id in profile_ids):
+            raise ValueError("execution profile identifiers must be non-empty")
+        return values
 
 
 class ExecutionConfig(ExecutionSchema):

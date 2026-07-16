@@ -1,0 +1,16 @@
+profiles:
+  - dataset: n_baiot
+    feature_schema_id: nbaiot_115_feature_schema
+    input_dimension: 115
+    timestamp_evidence: unavailable
+    allowed_regimes: [a, c]
+  - dataset: ciciot2023
+    feature_schema_id: ciciot2023_feature_schema_unverified
+    input_dimension: unverified
+    timestamp_evidence: unavailable
+    allowed_regimes: [b_a]
+  - dataset: edge_iiotset
+    feature_schema_id: edge_iiotset_feature_schema_unverified
+    input_dimension: unverified
+    timestamp_evidence: genuine_capture_time
+    allowed_regimes: [d, d_temporal]

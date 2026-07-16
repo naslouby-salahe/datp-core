@@ -15,6 +15,7 @@ class ReportingFormatConfig(ReportingSchema):
 
 
 class ReportingConfig(ReportingSchema):
+    policy_id: str
     tables: tuple[TableType, ...]
     figures: tuple[FigureType, ...]
     report_artifacts: tuple[ReportArtifactType, ...]

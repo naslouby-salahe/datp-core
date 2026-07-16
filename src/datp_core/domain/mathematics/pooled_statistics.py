@@ -7,7 +7,7 @@ from datp_core.domain.evaluation.alert_burden import CalibrationSampleCount
 from datp_core.domain.evaluation.operating_points import ClientEligibilityReason, ClientEligibilityStatus
 from datp_core.domain.evaluation.statistical_results import CoverageRatio, Probability
 from datp_core.domain.thresholding.clustering import CANONICAL_CLUSTER_K
-
+# TODO - Move these constants to a configuration file 
 CANONICAL_CLUSTER_COUNT: Final = CANONICAL_CLUSTER_K.value
 PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES: Final = CalibrationSampleCount(value=100)
 REGIME_D_MINIMUM_COVERAGE: Final = CoverageRatio(value=Decimal("0.90"))

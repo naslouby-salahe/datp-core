@@ -5,10 +5,10 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from datp_core.config.compose import OVERRIDE_PRECEDENCE, compose_configuration
-from datp_core.config.loader import load_yaml
+from datp_core.config.documents import ConfigurationDocument
+from datp_core.config.loader import ValidatedSchema, load_yaml_document
 from datp_core.config.mapping.execution import (
-    map_b0_score_generation_config,
+    map_execution_profile_config,
     map_scoring_batch_config,
     map_streaming_chunk_config,
 )
@@ -18,21 +18,27 @@ from datp_core.config.mapping.scientific import (
     map_absorption_gate_config,
     map_anchor_checkpoint_termination_config,
     map_b0_pooled_threshold_config,
+    map_calibration_size_grid_config,
     map_canonical_temporal_config,
     map_centralized_comparator_config,
+    map_conformal_alpha_config,
+    map_dirichlet_alpha_grid_config,
     map_experiment_schema,
     map_fed_stats_supplementary_k_config,
     map_federation_config,
     map_partitioning_config,
+    map_q_sensitivity_grid_config,
     map_regime_a_preprocessing_config,
     map_regime_a_static_split_config,
+    map_shrinkage_weight_grid_config,
     map_temporal_recovery_gate_config,
     resolve_experiment_profile,
 )
 from datp_core.config.schemas.artifacts import ArtifactConfig, ArtifactSerializationConfig
 from datp_core.config.schemas.execution import (
-    B0ScoreGenerationConfig,
     ExecutionConfig,
+    ExecutionProfileConfig,
+    ExecutionProfilesConfig,
     ParallelismConfig,
     RecoveryConfig,
     ResourceBudgetConfig,
@@ -47,9 +53,12 @@ from datp_core.config.schemas.scientific import (
     AnchorCheckpointTerminationConfig,
     B0PooledThresholdConfig,
     BcaBootstrapStatisticalConfig,
+    CalibrationSizeGridConfig,
     CanonicalTemporalConfig,
     CentralizedComparatorConfig,
+    ConformalAlphaConfig,
     ConformalThresholdConfig,
+    DirichletAlphaGridConfig,
     DirichletPartitionConfig,
     EvaluationConfig,
     FedAvgFederationConfig,
@@ -57,10 +66,12 @@ from datp_core.config.schemas.scientific import (
     FedStatsSupplementaryKConfig,
     LocalThresholdConfig,
     NaturalDevicePartitionConfig,
+    QSensitivityGridConfig,
     RegimeAPreprocessingConfig,
     RegimeAStaticSplitConfig,
     ScientificConfig,
     SharedThresholdConfig,
+    ShrinkageWeightGridConfig,
     TemporalRecoveryGateConfig,
 )
 from datp_core.domain.artifacts.keys import (
@@ -80,7 +91,12 @@ from datp_core.domain.artifacts.lineage import (
 from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.data.datasets import Regime, TimestampEvidenceKind
-from datp_core.domain.data.partitioning import ClientDefinitionStrategy, DirichletAlpha, DirichletPartitionSpec
+from datp_core.domain.data.partitioning import (
+    ClientDefinitionStrategy,
+    DirichletAlpha,
+    DirichletAlphaSentinel,
+    DirichletPartitionSpec,
+)
 from datp_core.domain.data.preprocessing import (
     FittedStatisticPolicy,
     NormalizationScope,
@@ -89,14 +105,13 @@ from datp_core.domain.data.preprocessing import (
 )
 from datp_core.domain.data.splitting import LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY, ConformalQuantileIndexRule
 from datp_core.domain.errors import ConfigurationError
+from datp_core.domain.evaluation.alert_burden import CalibrationSampleCount
 from datp_core.domain.evaluation.metrics import OperatingPointMetric
 from datp_core.domain.experiments.claims import ClaimTier, ExperimentRole
 from datp_core.domain.experiments.identities import ArchitectureCatalogueId, ExperimentId
 from datp_core.domain.experiments.protocols import ProtocolTrack, ReportingPolicy
 from datp_core.domain.experiments.specifications import (
-    ABSORPTION_GATES,
     LOCKED_B0_CENTRALIZED_COMPARATOR_PROFILE,
-    TEMPORAL_RECOVERY_GATE,
     CentralizedModelComparatorProfileSpec,
     CentralizedModelComparatorSpec,
 )
@@ -116,10 +131,20 @@ from datp_core.domain.runtime.seeds import EnumMap, SeedRole
 from datp_core.domain.thresholding.federated_statistics import FED_STATS_SUPPLEMENTARY_K_VALUES
 from datp_core.domain.thresholding.policies import (
     B0PooledThresholdSpec,
+    FprTarget,
     SharedThresholdConstruction,
     ThresholdPercentile,
 )
+from tests.support.composed_configuration import composed_profile_catalogue
 from tests.unit.domain.test_protocol_aggregates import confirmatory_profile
+
+
+def _load_schema[Schema: ValidatedSchema](text: str, schema_type: type[Schema]) -> Schema:
+    return load_yaml_document(
+        text=text,
+        schema_type=schema_type,
+        document=ConfigurationDocument.SCIENTIFIC_THRESHOLDS,
+    )
 
 
 def _execution_config(*, mode: ExecutionMode, unresolved_fields: tuple[str, ...] = ()) -> ExecutionConfig:
@@ -168,6 +193,7 @@ def _execution_config(*, mode: ExecutionMode, unresolved_fields: tuple[str, ...]
 
 def _artifact_config() -> ArtifactConfig:
     return ArtifactConfig(
+        policy_id="test",
         namespace=ArtifactNamespace.DATP_ANCHOR,
         write_disposition=WriteDisposition.CREATE_IF_ABSENT,
         retention=ArtifactRetentionPolicy.RETAIN_ALWAYS,
@@ -227,7 +253,14 @@ def experiment_config() -> ExperimentConfigSchema:
         scientific=_scientific_config(),
         execution=_execution_config(mode=ExecutionMode.DEVELOPMENT),
         artifacts=_artifact_config(),
-        reporting=ReportingConfig(tables=(), figures=(), report_artifacts=(), formats=(), wording_outcomes=()),
+        reporting=ReportingConfig(
+            policy_id="test",
+            tables=(),
+            figures=(),
+            report_artifacts=(),
+            formats=(),
+            wording_outcomes=(),
+        ),
     )
 
 
@@ -262,7 +295,7 @@ def _centralized_profile() -> CentralizedModelComparatorProfileSpec:
 
 def test_profile_resolution_precedes_closed_cell_mapping() -> None:
     schema = experiment_config()
-    mapped = map_experiment_schema(schema)
+    mapped = map_experiment_schema(schema, catalogue=composed_profile_catalogue())
     request = ResolveExperimentProfileRequest(
         experiment_id=ExperimentId(value="E-S1"),
         profiles=schema.profile_request.profiles,
@@ -319,16 +352,6 @@ def test_b0_mapping_rejects_an_identity_that_does_not_match_the_locked_profile()
         map_centralized_comparator_config(mismatched_schema, profile)
 
 
-def test_b0_centralized_comparator_yaml_file_loads_and_maps_to_the_locked_profile() -> None:
-    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "b0_centralized_comparator.yaml"
-    profile = LOCKED_B0_CENTRALIZED_COMPARATOR_PROFILE
-
-    schema = load_yaml(yaml_path.read_text(), CentralizedComparatorConfig)
-    mapped = map_centralized_comparator_config(schema, profile)
-
-    assert mapped == profile.comparator
-
-
 def test_canonical_temporal_mapping_rejects_pseudo_time() -> None:
     configuration = CanonicalTemporalConfig(
         historical_fraction=Decimal("0.70"),
@@ -376,14 +399,6 @@ def test_regime_a_static_split_mapping_produces_the_locked_boundary() -> None:
     assert map_regime_a_static_split_config(configuration) == LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY
 
 
-def test_regime_a_static_split_yaml_file_loads_and_maps_to_the_locked_boundary() -> None:
-    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "regime_a_static_split.yaml"
-
-    schema = load_yaml(yaml_path.read_text(), RegimeAStaticSplitConfig)
-
-    assert map_regime_a_static_split_config(schema) == LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY
-
-
 def test_anchor_checkpoint_termination_schema_rejects_a_non_locked_rounds_max() -> None:
     payload = {"rounds_initial": 40, "rounds_max": 200}
 
@@ -395,14 +410,6 @@ def test_anchor_checkpoint_termination_mapping_produces_the_locked_policy() -> N
     configuration = AnchorCheckpointTerminationConfig(rounds_initial=40, rounds_max=150)
 
     assert map_anchor_checkpoint_termination_config(configuration) == LOCKED_ANCHOR_CHECKPOINT_TERMINATION_POLICY
-
-
-def test_anchor_checkpoint_termination_yaml_file_loads_and_maps_to_the_locked_policy() -> None:
-    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "anchor_checkpoint_termination.yaml"
-
-    schema = load_yaml(yaml_path.read_text(), AnchorCheckpointTerminationConfig)
-
-    assert map_anchor_checkpoint_termination_config(schema) == LOCKED_ANCHOR_CHECKPOINT_TERMINATION_POLICY
 
 
 def test_b0_pooled_threshold_schema_rejects_a_non_locked_percentile() -> None:
@@ -418,18 +425,10 @@ def test_b0_pooled_threshold_mapping_produces_the_locked_spec() -> None:
     assert mapped == B0PooledThresholdSpec(percentile=ThresholdPercentile(value="0.95"))
 
 
-def test_b0_pooled_threshold_yaml_file_loads_and_maps_to_the_locked_spec() -> None:
-    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "b0_pooled_threshold.yaml"
-
-    schema = load_yaml(yaml_path.read_text(), B0PooledThresholdConfig)
-
-    assert map_b0_pooled_threshold_config(schema) == B0PooledThresholdSpec(percentile=ThresholdPercentile(value="0.95"))
-
-
-def test_absorption_gate_schema_rejects_a_non_locked_fraction() -> None:
+def test_absorption_gate_schema_rejects_an_out_of_range_fraction() -> None:
     with pytest.raises(ValidationError):
         AbsorptionGateConfig(
-            strongly_useful_fraction=Decimal("0.80"),
+            strongly_useful_fraction=Decimal("1.50"),
             partial_absorption_fraction=Decimal("0.25"),
             alternative_path_distance=Decimal("0.05"),
         )
@@ -442,48 +441,24 @@ def test_absorption_gate_mapping_produces_the_locked_catalogue() -> None:
         alternative_path_distance=Decimal("0.05"),
     )
 
-    assert map_absorption_gate_config(configuration) == ABSORPTION_GATES
+    assert map_absorption_gate_config(configuration) == composed_profile_catalogue().absorption_gates
 
 
-def test_absorption_gate_yaml_file_loads_and_maps_to_the_locked_catalogue() -> None:
-    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "absorption_gates.yaml"
-
-    schema = load_yaml(yaml_path.read_text(), AbsorptionGateConfig)
-
-    assert map_absorption_gate_config(schema) == ABSORPTION_GATES
-
-
-def test_temporal_recovery_gate_schema_rejects_a_non_locked_fraction() -> None:
+def test_temporal_recovery_gate_schema_rejects_an_out_of_range_fraction() -> None:
     with pytest.raises(ValidationError):
-        TemporalRecoveryGateConfig(meaningful_recovery_fraction=Decimal("0.40"))
+        TemporalRecoveryGateConfig(meaningful_recovery_fraction=Decimal("-0.10"))
 
 
 def test_temporal_recovery_gate_mapping_produces_the_locked_catalogue() -> None:
     configuration = TemporalRecoveryGateConfig(meaningful_recovery_fraction=Decimal("0.50"))
 
-    assert map_temporal_recovery_gate_config(configuration) == TEMPORAL_RECOVERY_GATE
-
-
-def test_temporal_recovery_gate_yaml_file_loads_and_maps_to_the_locked_catalogue() -> None:
-    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "temporal_recovery_gate.yaml"
-
-    schema = load_yaml(yaml_path.read_text(), TemporalRecoveryGateConfig)
-
-    assert map_temporal_recovery_gate_config(schema) == TEMPORAL_RECOVERY_GATE
+    assert map_temporal_recovery_gate_config(configuration) == composed_profile_catalogue().temporal_recovery_gate
 
 
 def test_fed_stats_supplementary_k_mapping_produces_the_locked_grid() -> None:
     configuration = FedStatsSupplementaryKConfig(values=(Decimal("2.0"), Decimal("2.5"), Decimal("3.0")))
 
     assert map_fed_stats_supplementary_k_config(configuration) == FED_STATS_SUPPLEMENTARY_K_VALUES
-
-
-def test_fed_stats_supplementary_k_yaml_file_loads_and_maps_to_the_locked_grid() -> None:
-    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "fed_stats_supplementary_k.yaml"
-
-    schema = load_yaml(yaml_path.read_text(), FedStatsSupplementaryKConfig)
-
-    assert map_fed_stats_supplementary_k_config(schema) == FED_STATS_SUPPLEMENTARY_K_VALUES
 
 
 def test_fed_stats_supplementary_k_schema_rejects_a_non_locked_value() -> None:
@@ -499,7 +474,7 @@ def test_dirichlet_partitioning_rejects_an_unauthorized_alpha() -> None:
     )
 
     with pytest.raises(ConfigurationError):
-        map_partitioning_config(unauthorized_partitioning)
+        map_partitioning_config(unauthorized_partitioning, catalogue=composed_profile_catalogue())
 
 
 def test_dirichlet_partitioning_accepts_an_authorized_alpha() -> None:
@@ -509,7 +484,7 @@ def test_dirichlet_partitioning_accepts_an_authorized_alpha() -> None:
         alpha=0.3,
     )
 
-    mapped = map_partitioning_config(authorized_partitioning)
+    mapped = map_partitioning_config(authorized_partitioning, catalogue=composed_profile_catalogue())
 
     assert mapped == DirichletPartitionSpec(
         strategy=ClientDefinitionStrategy.DIRICHLET_SYNTHETIC,
@@ -518,12 +493,12 @@ def test_dirichlet_partitioning_accepts_an_authorized_alpha() -> None:
     )
 
 
-def test_conformal_threshold_schema_rejects_a_non_locked_alpha() -> None:
+def test_conformal_threshold_schema_rejects_an_out_of_range_alpha() -> None:
     with pytest.raises(ValidationError):
         ConformalThresholdConfig(
             kind="conformal",
             mode="split",
-            alpha=Decimal("0.10"),
+            alpha=Decimal("1.10"),
             percentile=Decimal("0.95"),
             quantile_index_rule=ConformalQuantileIndexRule.CEILING_N_PLUS_ONE,
         )
@@ -540,7 +515,20 @@ def test_shared_threshold_configuration_rejects_an_unauthorized_percentile() -> 
     unauthorized_schema = replace(schema, scientific=unauthorized_scientific)
 
     with pytest.raises(ConfigurationError):
-        map_experiment_schema(unauthorized_schema)
+        map_experiment_schema(unauthorized_schema, catalogue=composed_profile_catalogue())
+
+
+def test_q_sensitivity_grid_mapping_produces_ordered_typed_percentiles() -> None:
+    configuration = QSensitivityGridConfig(values=(Decimal("0.90"), Decimal("0.95"), Decimal("0.975"), Decimal("0.99")))
+
+    mapped = map_q_sensitivity_grid_config(configuration)
+
+    assert mapped == tuple(ThresholdPercentile(value=value) for value in configuration.values)
+
+
+def test_q_sensitivity_grid_schema_rejects_a_duplicate_value() -> None:
+    with pytest.raises(ValidationError):
+        QSensitivityGridConfig(values=(Decimal("0.90"), Decimal("0.90")))
 
 
 def test_streaming_chunk_schema_rejects_a_non_positive_value() -> None:
@@ -552,16 +540,6 @@ def test_streaming_chunk_mapping_produces_typed_domain_values() -> None:
     configuration = StreamingChunkConfig(csv_block_bytes=8 * 1024 * 1024, parquet_batch_rows=50_000)
 
     mapped = map_streaming_chunk_config(configuration)
-
-    assert mapped.csv_block_bytes.value == 8 * 1024 * 1024
-    assert mapped.parquet_batch_rows.value == 50_000
-
-
-def test_streaming_chunk_yaml_file_loads_and_maps() -> None:
-    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "execution" / "streaming_chunks.yaml"
-
-    schema = load_yaml(yaml_path.read_text(), StreamingChunkConfig)
-    mapped = map_streaming_chunk_config(schema)
 
     assert mapped.csv_block_bytes.value == 8 * 1024 * 1024
     assert mapped.parquet_batch_rows.value == 50_000
@@ -582,39 +560,32 @@ def test_scoring_batch_mapping_produces_typed_domain_values() -> None:
     assert mapped.temporal_batch_size.value == 64
 
 
-def test_scoring_batch_yaml_file_loads_and_maps() -> None:
-    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "execution" / "scoring_batches.yaml"
-
-    schema = load_yaml(yaml_path.read_text(), ScoringBatchConfig)
-    mapped = map_scoring_batch_config(schema)
-
-    assert mapped.calibration_batch_size.value == 256
-    assert mapped.test_batch_size.value == 256
-    assert mapped.temporal_batch_size.value == 256
-
-
-def test_b0_score_generation_schema_rejects_a_non_positive_value() -> None:
+def test_execution_profile_schema_rejects_a_non_positive_scoring_batch() -> None:
     with pytest.raises(ValidationError):
-        B0ScoreGenerationConfig(calibration_batch_size=0, test_batch_size=256)
+        ExecutionProfileConfig(
+            profile_id="invalid",
+            scoring_batch=ScoringBatchConfig(calibration_batch_size=0, test_batch_size=256, temporal_batch_size=256),
+            streaming_chunk=StreamingChunkConfig(csv_block_bytes=8 * 1024 * 1024, parquet_batch_rows=50_000),
+        )
 
 
-def test_b0_score_generation_mapping_produces_typed_domain_values() -> None:
-    configuration = B0ScoreGenerationConfig(calibration_batch_size=128, test_batch_size=64)
+def test_execution_profile_yaml_loads_once_and_derives_b0_batching() -> None:
+    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "execution" / "profiles.yaml"
+    schema = load_yaml_document(
+        text=yaml_path.read_text(),
+        schema_type=ExecutionProfilesConfig,
+        document=ConfigurationDocument.EXECUTION_PROFILES,
+    )
 
-    mapped = map_b0_score_generation_config(configuration)
+    mapped = map_execution_profile_config(schema.profiles[0])
 
-    assert mapped.calibration_batch_size.value == 128
-    assert mapped.test_batch_size.value == 64
-
-
-def test_b0_score_generation_yaml_file_loads_and_maps() -> None:
-    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "execution" / "b0_score_generation.yaml"
-
-    schema = load_yaml(yaml_path.read_text(), B0ScoreGenerationConfig)
-    mapped = map_b0_score_generation_config(schema)
-
-    assert mapped.calibration_batch_size.value == 256
-    assert mapped.test_batch_size.value == 256
+    assert mapped.scoring_batch.calibration_batch_size.value == 256
+    assert mapped.scoring_batch.test_batch_size.value == 256
+    assert mapped.scoring_batch.temporal_batch_size.value == 256
+    assert mapped.b0_scoring_batch.calibration_batch_size == mapped.scoring_batch.calibration_batch_size
+    assert mapped.b0_scoring_batch.test_batch_size == mapped.scoring_batch.test_batch_size
+    assert mapped.streaming_chunk.csv_block_bytes.value == 8 * 1024 * 1024
+    assert mapped.streaming_chunk.parquet_batch_rows.value == 50_000
 
 
 def test_regime_a_preprocessing_schema_rejects_a_non_locked_strategy() -> None:
@@ -643,39 +614,46 @@ def test_regime_a_preprocessing_mapping_carries_the_injected_chunking() -> None:
     assert mapped.chunking == chunking
 
 
-def test_regime_a_preprocessing_yaml_file_loads_and_maps() -> None:
-    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "regime_a_preprocessing.yaml"
-    chunk_rows = ChunkRowCount(value=50_000)
-    chunking = PreprocessingChunkSpec(
-        source_scan_batch_rows=chunk_rows, preprocessing_chunk_rows=chunk_rows, parquet_write_batch_rows=chunk_rows
+def test_dirichlet_alpha_grid_mapping_includes_the_iid_sentinel() -> None:
+    configuration = DirichletAlphaGridConfig(values=(0.1, 0.3, 0.5, 1.0, 10.0, DirichletAlphaSentinel.IID))
+
+    mapped = map_dirichlet_alpha_grid_config(configuration)
+
+    assert mapped[-1] == DirichletAlpha(value=DirichletAlphaSentinel.IID)
+    assert mapped[0] == DirichletAlpha(value=0.1)
+
+
+def test_calibration_size_grid_mapping_is_ordered() -> None:
+    configuration = CalibrationSizeGridConfig(values=(50, 100, 250, 500, 1000, 5000))
+
+    assert map_calibration_size_grid_config(configuration) == tuple(
+        CalibrationSampleCount(value=value) for value in (50, 100, 250, 500, 1000, 5000)
     )
 
-    schema = load_yaml(yaml_path.read_text(), RegimeAPreprocessingConfig)
-    mapped = map_regime_a_preprocessing_config(schema, chunking=chunking)
 
-    assert mapped.strategy is NormalizationStrategy.STANDARD
-    assert mapped.scope is NormalizationScope.PER_CLIENT_TRAIN
-    assert mapped.fitted_stat_policy is FittedStatisticPolicy.EXACT_TWO_PASS
+def test_shrinkage_weight_grid_mapping_spans_zero_to_one() -> None:
+    configuration = ShrinkageWeightGridConfig(
+        values=(Decimal("0.00"), Decimal("0.25"), Decimal("0.50"), Decimal("0.75"), Decimal("1.00"))
+    )
+
+    mapped = map_shrinkage_weight_grid_config(configuration)
+
+    assert mapped[0].value == 0.0
+    assert mapped[-1].value == 1.0
 
 
-def test_ordered_override_precedence_is_deterministic() -> None:
-    base = _scientific_config()
-    override = _scientific_config(protocol_track=ProtocolTrack.JOURNAL_EXTENSION)
+def test_conformal_alpha_mapping_produces_an_fpr_target() -> None:
+    configuration = ConformalAlphaConfig(alpha=Decimal("0.05"))
 
-    assert OVERRIDE_PRECEDENCE == "ordered_override_wins"
-    assert compose_configuration(base, (override,)) == override
-    first_composition = compose_configuration(base, (override,))
-    second_composition = compose_configuration(base, (override,))
-
-    assert first_composition == second_composition
+    assert map_conformal_alpha_config(configuration) == FprTarget(value=0.05)
 
 
 def test_loader_validates_yaml_at_the_boundary() -> None:
-    schema = load_yaml(
+    schema = _load_schema(
         """
-        primary: cv_fpr
-        controls: []
-        """,
+primary: cv_fpr
+controls: []
+""",
         EvaluationConfig,
     )
 
@@ -687,4 +665,4 @@ def test_scientific_modes_reject_unresolved_execution_fields() -> None:
     scientific = replace(schema, execution=_execution_config(mode=ExecutionMode.SCIENTIFIC, unresolved_fields=("gpu",)))
 
     with pytest.raises(ConfigurationError):
-        map_experiment_schema(scientific)
+        map_experiment_schema(scientific, catalogue=composed_profile_catalogue())

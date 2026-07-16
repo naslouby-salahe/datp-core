@@ -10,5 +10,6 @@ def test_pydantic_is_confined_to_the_configuration_schema_boundary() -> None:
     importers = tuple(path for path in source_root.rglob("*.py") if "pydantic" in path.read_text().lower())
 
     assert frozenset(importers) == frozenset(
-        schema_root / filename for filename in ("artifacts.py", "execution.py", "reporting.py", "scientific.py")
+        schema_root / filename
+        for filename in ("artifacts.py", "catalog.py", "execution.py", "reporting.py", "scientific.py")
     )

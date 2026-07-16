@@ -18,6 +18,10 @@ One resolved scientific configuration defines a `RunIdentity`; operational attem
 
 A valid weak, null, mixed, unfavorable, or opposite-direction outcome is immutable evidence and must use the roadmap fallback wording. It never authorizes another run. Only a diagnosed technical invalidity may use the recorded corrective path, preserving failed evidence and limiting recomputation to invalidated stages.
 
+## Frozen configuration-catalogue boundary
+
+Phase 6 executes only the Phase 5-frozen named scientific catalogue (`configs/scientific/protocol.yaml`, `configs/scientific/datasets.yaml`, `configs/scientific/regimes.yaml`, `configs/scientific/models.yaml`, `configs/scientific/thresholds.yaml`, `configs/scientific/evaluation.yaml`, and `configs/scientific/experiments.yaml`), selected profile from `configs/execution/profiles.yaml`, artifact/reporting policies, and verified `configs/locks/protocol-lock.json`. The campaign manifest records their digests. No overlay, layered-configuration rule, scalar protocol document, or replacement execution profile is permitted during an attempt.
+
 ## Ordered tickets and dependency sequence
 
 | ID | Title | Type | Priority | Sci-exec | Dependencies | Blocks |

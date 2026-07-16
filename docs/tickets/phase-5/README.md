@@ -18,6 +18,10 @@ Phase 5 is planning only. The individual Part A classifications are authoritativ
 
 Every planned cell must have a collision-free identity, resolved feasibility, and a complete typed reuse classification. Similar paths, artifact names, seed positions, or the anchor's first five seeds do not establish compatibility. A scientific-configuration change creates a new campaign identity; a threshold-only change must not create retraining or rescoring work. A no-go decision is valid and blocks Phase 6.
 
+## Configuration-catalogue boundary
+
+Planning resolves the named scientific documents `configs/scientific/protocol.yaml`, `configs/scientific/datasets.yaml`, `configs/scientific/regimes.yaml`, `configs/scientific/models.yaml`, `configs/scientific/thresholds.yaml`, `configs/scientific/evaluation.yaml`, and `configs/scientific/experiments.yaml` together with `configs/execution/profiles.yaml`. Artifact and reporting policy are read from `configs/artifacts/policy.yaml` and `configs/reporting/policy.yaml`. `configs/locks/protocol-lock.json` must verify the scientific and execution source documents before a campaign baseline or manifest is frozen. No scalar protocol document, overlay, or layered-configuration path is a valid planning input.
+
 ## Ordered tickets and dependency sequence
 
 | ID | Title | Type | Priority | Sci-exec | Dependencies | Blocks |

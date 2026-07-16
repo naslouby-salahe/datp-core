@@ -18,6 +18,10 @@ One frozen scientific configuration yields one `RunIdentity`; operational attemp
 
 The fixed FedAvg model and compatible calibration/test score artifacts feed B1–B4; B0 is separate, calibration is benign-only, CV(FPR) is primary, and AUROC is control. The five-seed anchor reproduction/honesty diagnostic is not the ten-seed journal E-C1 confirmatory verdict. No journal execution is permitted in this phase.
 
+## Configuration boundary
+
+Scientific and execution inputs resolve only from the fixed named configuration catalogue. Scientific entries belong in `configs/scientific/protocol.yaml`, `datasets.yaml`, `regimes.yaml`, `models.yaml`, `thresholds.yaml`, `evaluation.yaml`, or `experiments.yaml`; operational settings belong in `configs/execution/profiles.yaml`; artifact and reporting policy belong in `configs/artifacts/policy.yaml` and `configs/reporting/policy.yaml`. No ticket may add a per-experiment YAML file, ad hoc composition layer, or legacy protocol document.
+
 ## Ordered tickets and dependency sequence
 
 | ID | Title | Type | Priority | Sci-exec | Dependencies | Blocks |

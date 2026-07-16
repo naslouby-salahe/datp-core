@@ -3,7 +3,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from blake3 import blake3
-
+# TODO - Move these constants to a configuration file 
 DEFAULT_HASH_CHUNK_SIZE = 1024 * 1024
 
 

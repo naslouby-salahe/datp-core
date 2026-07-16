@@ -18,6 +18,10 @@ All tickets are `POST_CAMPAIGN_ONLY`. They audit and report immutable evidence; 
 
 The frozen provenance chain is configuration → run → attempt → artifact → checkpoint → score → threshold → evaluation → statistics → result freeze → rendered output. Anchor and journal cohorts, seed plans, namespaces, and reuse evidence remain distinct.
 
+## Frozen configuration-catalogue evidence
+
+Post-campaign audits verify the campaign-manifest digests for the named scientific catalogue (`configs/scientific/protocol.yaml`, `configs/scientific/datasets.yaml`, `configs/scientific/regimes.yaml`, `configs/scientific/models.yaml`, `configs/scientific/thresholds.yaml`, `configs/scientific/evaluation.yaml`, and `configs/scientific/experiments.yaml`), the selected `configs/execution/profiles.yaml` profile, artifact/reporting policies, and `configs/locks/protocol-lock.json`. These are immutable evidence inputs; no scalar protocol document, overlay, layered-configuration rule, or profile substitution is valid in Phase 7.
+
 ## Ordered tickets and dependency sequence
 
 | ID | Title | Type | Priority | Dependencies | Blocks |

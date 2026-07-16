@@ -32,7 +32,7 @@ ANCHOR_AUTOENCODER_SPECIFICATION = AutoencoderSpec(
     bottleneck_dim=FIXED_ENCODER_BOTTLENECK_DIM,
     activation=FIXED_ENCODER_ACTIVATION,
 )
-
+# TODO - Move these constants to a configuration file 
 _ANCHOR_OPTIMIZER = OptimizerType.ADAM
 _ANCHOR_LEARNING_RATE = 0.001
 _ANCHOR_WEIGHT_DECAY = 0.0

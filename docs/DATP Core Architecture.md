@@ -334,6 +334,7 @@ src/datp_core/
       telemetry.py          # EventSink; StructuredEvent envelope and typed event details
   config/
     schemas/
+      catalog.py            # bounded catalog documents and explicit reference schemas
       scientific.py         # dataset/partition/split/preprocessing/training/threshold/evaluation/
                              # statistics schema sections
       execution.py          # execution-mode/device/resource/parallelism schema sections
@@ -344,8 +345,11 @@ src/datp_core/
       execution.py          # schema to `ExecutionPolicy` (pure)
       artifacts.py          # schema to `ArtifactPolicy` (pure)
       reporting.py          # schema to `ReportingPolicy` (pure)
-    loader.py               # YAML text to schema objects
-    compose.py               # explicit base plus override composition, eager resolution
+    documents.py            # fixed document identities and root-bounded paths
+    loader.py               # strict YAML/JSON boundary loading
+    resolver.py             # explicit catalog reference resolution
+    locking.py              # explicit source and resolved-profile lock operations
+    compose.py               # single typed composition boundary
   analysis/
     tables/                 # one module per `TableType` family needing a distinct specification
     figures/                # one module per `FigureType` family needing a distinct specification
@@ -402,12 +406,12 @@ src/datp_core/
 datp-core/
 ├── src/datp_core/            # tracked; source of truth for structure and behavior
 ├── configs/                  # tracked; external data only, no `__init__.py`, no executable code
-│   ├── protocols/            # scientific-protocol YAML (dataset/partition/split/model/threshold defaults)
-│   ├── experiments/           # one YAML per roadmap experiment id (E-C1.yaml, ...)
-│   ├── execution/             # named execution profiles (device/batch/parallelism)
-│   ├── artifacts/              # namespace/retention/serialization configuration
-│   ├── reporting/              # table/figure/format/wording configuration
-│   └── tests/                  # typed test-profile files (Section 21) — test-only configuration
+│   ├── scientific/            # protocol, datasets, regimes, models, thresholds, evaluation, experiments
+│   ├── execution/              # one bounded named-profile catalog
+│   ├── artifacts/              # one policy catalog
+│   ├── reporting/              # one policy catalog
+│   ├── tests/                  # one typed test-profile catalog
+│   └── locks/                  # deterministic protocol-lock manifest
 ├── data/                      # gitignored; external inputs, read-only at runtime
 │   ├── raw/                   # immutable external dataset copies (`StorageVisibility.EXTERNAL_READONLY`)
 │   └── manifests/              # tracked; committed `DatasetSourceManifest`/`FeatureSchemaManifest` snapshots
@@ -721,17 +725,9 @@ The fixed canonical Decimal representation is twelve fractional decimal places, 
 
 A frozen dataclass never holds a live `dict`. A constructor that accepts a `Mapping` stores an immutable snapshot (a `types.MappingProxyType` over a copied dictionary, or a frozen tuple of items) in `__post_init__`, so a `Mapping`-typed field cannot be mutated after construction.
 
-### 7.5 Locked domain definitions
+### 7.5 Configuration-owned protocol values
 
-The following values live once in `domain/mathematics/pooled_statistics.py` and have no configuration override:
-
-```python
-PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES: Final = CalibrationSampleCount(100)
-REGIME_D_MINIMUM_COVERAGE: Final = CoverageRatio(Decimal("0.90"))
-REGIME_D_TEMPORAL_HISTORICAL_FRACTION: Final = Probability(Decimal("0.70"))
-```
-
-`ProtocolEligibilitySpec(minimum_calibration_samples=PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES)` is the sole authority for the minimum client-calibration count. It applies to every per-client operating-point dispersion evaluation in Regimes A, B-a, C, and D; it is neither a dataset-ingestion minimum nor a Regime-D feasibility value. A Regime D partition passes only when at least `REGIME_D_MINIMUM_COVERAGE` of its clients meet that protocol rule. Reducing K creates a new `PartitionIdentity` and requires a new first-principles feasibility artifact; no prior failed result can be relabeled. The canonical D-temporal mapper accepts only the locked 70/30 chronological boundary and genuine capture timestamps. It rejects file, row, merge, directory, and synthetic ordering as pseudo-time. The allocation between training and calibration inside the first 70% remains an inherited-semantics blocker until authoritative evidence resolves it.
+Concrete protocol values are validated external inputs, owned once by the bounded YAML catalog and protected by the protocol lock. The domain owns `CalibrationSampleCount`, `CoverageRatio`, `Probability`, formulas, and cross-value invariants; it never provides an experiment-specific fallback value. `ProtocolEligibilitySpec` therefore receives its minimum calibration count from the resolved evaluation catalog. Regime D coverage and the temporal boundary are resolved from the regime catalog. Reducing K creates a new `PartitionIdentity` and requires a new first-principles feasibility artifact; no prior failed result can be relabeled. The temporal mapper accepts only the resolved genuine-capture-time variant and rejects file, row, merge, directory, and synthetic ordering as pseudo-time. The allocation between training and calibration inside the resolved historical fraction remains blocked until authoritative evidence resolves it.
 
 ---
 
@@ -1310,11 +1306,11 @@ A keyed collection is permitted only when the mapping itself represents a genuin
 
 ## 11. Configuration architecture
 
-Two distinct things are both called "configuration" and must not be confused. `src/datp_core/config/` is Python boundary code: Pydantic schemas (`config/schemas/*.py`), pure mapping functions to domain specifications (`config/mapping/*.py`), YAML loading (`config/loader.py`), and explicit override composition (`config/compose.py`). `configs/` at the repository root is external data: YAML files with no `__init__.py`, no executable Python, no implicit plugin behavior, and no dynamic imports, organized into precise groups rather than one vague `profiles/` catch-all — `configs/protocols/`, `configs/experiments/`, `configs/execution/`, `configs/artifacts/`, `configs/reporting/`, and `configs/tests/` (Section 5.2). Every configuration field has exactly one schema owner in `config/schemas/` and exactly one mapped internal type; after mapping completes, no Pydantic model or raw mapping enters application execution. Configuration is grouped into three fingerprint categories so they cannot be confused. Only scientific configuration, and the output-affecting subset of execution configuration, enters stage fingerprints.
+Two distinct things are both called "configuration" and must not be confused. `src/datp_core/config/` is the inbound boundary: strict schemas, document loading, explicit reference resolution, pure mapping, deterministic locking, and one typed composer. `configs/` is external data only. Its bounded catalog is `scientific/{protocol,datasets,regimes,models,thresholds,evaluation,experiments}.yaml`, `execution/profiles.yaml`, `artifacts/policy.yaml`, `reporting/policy.yaml`, `tests/profiles.yaml`, and `locks/protocol-lock.json`. No document uses inheritance, merge keys, base-plus-override composition, or an implicit default. Every configuration field has exactly one schema owner and one mapped internal type; after mapping completes, no Pydantic model or raw mapping enters application execution. Only scientific configuration and the output-affecting execution subset enter stage fingerprints.
 
 ### 11.1 Scientific configuration (fingerprinted)
 
-Anything that can change weights, scores, thresholds, metrics, or interpretation, validated by `config/schemas/scientific.py` and mapped by `config/mapping/scientific.py`. Sections: protocol track; dataset/partition/split/preprocessing; model/federation/training; checkpoint schedule and Regime-A selection; scoring; the discriminated threshold union; evaluation and traffic evidence; statistics; temporal; and resource-cost reporting. Dataset/regime are owned by `ScientificProtocolSpec`, precision/determinism by the relevant training/scoring specs, training batch semantics by `TrainingSpec.training_batch: TrainingBatchSpec`, scoring batch semantics by `ScoreGenerationSpec.scoring_batch: ScoringBatchSpec`, and preprocessing chunk semantics by `PreprocessingSpec.chunking: PreprocessingChunkSpec`; derived read-only views may expose them, but no second configuration owner exists. Experiment YAML data itself lives in `configs/experiments/` (one file per roadmap experiment id), never as Python inside `src/datp_core`.
+Anything that can change weights, scores, thresholds, metrics, or interpretation is catalogued under `configs/scientific/`, mapped once to immutable domain specifications, and hashed after reference resolution. The experiments document holds explicit references to registered protocol, dataset, regime, model, threshold, evaluation, execution, artifact, and reporting entries; it does not duplicate their definitions.
 
 ### 11.2 Execution configuration (recorded; fingerprinted only where output-affecting)
 
@@ -1339,7 +1335,7 @@ Validated by `config/schemas/execution.py` and mapped by `config/mapping/executi
 - Mixed precision is rejected for `SCIENTIFIC` and `PRINT_GRADE` runs unless explicitly pre-registered, equivalence-tested, and fingerprinted; the default is `FP32`.
 - Any field marked unresolved is accepted for `DEVELOPMENT` and `SMOKE` runs and rejected for `SCIENTIFIC` and `PRINT_GRADE`.
 
-There are no hidden defaults, no silent environment overrides, no untyped configuration merging, no YAML parsing in application services or tests, no Pydantic model beyond the mapping boundary, and no ambiguous override precedence: `config/compose.py` resolves base and override eagerly with a single declared precedence.
+There are no hidden defaults, no silent environment overrides, no untyped configuration merging, no YAML parsing outside `config`, no Pydantic model beyond the mapping boundary, and no ambiguous precedence. `config/compose.py` loads, resolves, verifies, maps, and returns only immutable domain specifications.
 
 ### 11.5 Typed resolved-specification diff
 

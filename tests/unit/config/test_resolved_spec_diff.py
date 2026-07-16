@@ -21,11 +21,12 @@ from datp_core.domain.experiments.specification_changes import (
 )
 from datp_core.domain.runtime.policies import PipelineStage
 from datp_core.domain.thresholding.policies import ThresholdPercentile, ThresholdSuiteSpec
+from tests.support.composed_configuration import composed_profile_catalogue
 from tests.unit.config.test_mapping import experiment_config
 
 
 def _resolved_configuration(*, descriptor: str = "machine-one") -> ResolvedConfigurationArtifact:
-    specification = map_experiment_schema(experiment_config())
+    specification = map_experiment_schema(experiment_config(), catalogue=composed_profile_catalogue())
     return ResolvedConfigurationArtifact(
         identity=ResolvedConfigurationIdentity(value=StageFingerprint(value="a" * 64)),
         schema_version=ArtifactSchemaVersion(value="v1"),

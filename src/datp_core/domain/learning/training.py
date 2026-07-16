@@ -7,7 +7,7 @@ from datp_core.domain.learning.checkpoints import ANCHOR_CHECKPOINT_ROUNDS_MAX, 
 from datp_core.domain.learning.models import AutoencoderSpec
 from datp_core.domain.runtime.admissibility import BatchSize, GradientAccumulationSteps
 from datp_core.domain.runtime.seeds import Seed
-
+# TODO - Move these constants to a configuration file 
 FEDPROX_MU_GRID = (0.001, 0.01, 0.1)
 LOCKED_ROUNDS_MAX_VALUES = (ANCHOR_CHECKPOINT_ROUNDS_MAX, SCHEDULED_CHECKPOINT_ROUNDS[-1])
 

@@ -1,0 +1,28 @@
+quantile_grid: ["0.90", "0.95", "0.975", "0.99"]
+conformal_percentile: "0.95"
+dirichlet_alpha_grid: [0.1, 0.3, 0.5, 1.0, 10.0, iid]
+calibration_size_grid: [50, 100, 250, 500, 1000, 5000]
+shrinkage_weight_grid: ["0.00", "0.25", "0.50", "0.75", "1.00"]
+conformal_derivation: one_minus_percentile
+fed_stats_supplementary_k: ["2.0", "2.5", "3.0"]
+b4_profiles:
+  - profile_id: canonical
+    cluster_count: 3
+    fingerprint_fields: [mean, std, skew, p95]
+    scaler: standard_scaler
+    scaler_fit_scope: eligible_client_fingerprints
+    algorithm: kmeans++
+    n_init: 10
+    max_iter: 300
+    fixed_percentile: "0.95"
+    is_canonical: true
+  - profile_id: exploratory_k9
+    cluster_count: 9
+    fingerprint_fields: [mean, std, skew, p95]
+    scaler: standard_scaler
+    scaler_fit_scope: eligible_client_fingerprints
+    algorithm: kmeans++
+    n_init: 10
+    max_iter: 300
+    fixed_percentile: "0.95"
+    is_canonical: false

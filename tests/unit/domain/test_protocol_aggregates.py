@@ -44,6 +44,7 @@ from datp_core.domain.evaluation.operating_points import AlertBurdenEvaluationSu
 from datp_core.domain.evaluation.statistical_results import (
     ClaimOutcome,
     ConfidenceLevel,
+    Probability,
     StatisticalAnalysisSpec,
     StatisticalMethod,
 )
@@ -58,7 +59,7 @@ from datp_core.domain.experiments.protocols import (
     policy_field_names,
 )
 from datp_core.domain.experiments.specifications import (
-    CONFORMAL_ALPHA,
+    AbsorptionGateSpec,
     ArtifactDependencySpec,
     CentralizedModelComparatorProfileSpec,
     CentralizedModelComparatorSpec,
@@ -111,6 +112,7 @@ from datp_core.domain.thresholding.variants import (
     ShrinkageThresholdSpec,
     ShrinkageWeight,
 )
+from tests.support.composed_configuration import composed_profile_catalogue
 
 type NonConfirmatoryConstruction = FamilyThresholdSpec | RobustClusterMedianThresholdSpec | ShrinkageThresholdSpec
 
@@ -522,8 +524,27 @@ def test_sweep_rejects_an_unauthorized_grid_value() -> None:
     threshold = ThresholdPercentile(value=0.80)
 
     with pytest.raises(DomainValidationError):
-        SweepSpec(axis=SweepAxis.QUANTILE, values=(threshold,))
+        SweepSpec(axis=SweepAxis.QUANTILE, values=(threshold,), catalogue=composed_profile_catalogue())
 
 
-def test_profile_catalogue_uses_the_e_v3_fpr_target() -> None:
-    assert CONFORMAL_ALPHA.value == Decimal("0.05")
+def test_absorption_gate_spec_rejects_a_partial_fraction_at_or_above_the_strongly_useful_fraction() -> None:
+    with pytest.raises(DomainValidationError):
+        AbsorptionGateSpec(
+            strongly_useful_fraction=Probability(value=Decimal("0.50")),
+            partial_absorption_fraction=Probability(value=Decimal("0.50")),
+            alternative_path_distance=Probability(value=Decimal("0.05")),
+        )
+
+
+def test_absorption_gate_spec_accepts_any_partial_fraction_below_strongly_useful() -> None:
+    gate = AbsorptionGateSpec(
+        strongly_useful_fraction=Probability(value=Decimal("0.60")),
+        partial_absorption_fraction=Probability(value=Decimal("0.10")),
+        alternative_path_distance=Probability(value=Decimal("0.02")),
+    )
+
+    assert gate.strongly_useful_fraction.value == Decimal("0.60")
+
+
+def test_profile_catalogue_derives_the_configured_conformal_fpr_target() -> None:
+    assert composed_profile_catalogue().conformal_alpha.value == Decimal("0.05")

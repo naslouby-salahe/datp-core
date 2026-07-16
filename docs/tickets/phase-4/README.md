@@ -18,6 +18,10 @@ E-C1 remains the sole confirmatory endpoint: Regime A, B1 versus B2, CV(FPR), pa
 
 No ticket authorizes a journal `RunIdentity`, `ExecutionAttemptId`, scientific artifact write, or real journal result. Synthetic validation must use test-only namespaces. Frozen anchor artifacts are read-only and cannot be substituted across the five-seed anchor cohort and the distinct ten-seed E-C1 cohort merely because schemas look compatible.
 
+## Configuration boundary
+
+Scientific additions must extend the corresponding fixed scientific catalogue document: `configs/scientific/protocol.yaml`, `datasets.yaml`, `regimes.yaml`, `models.yaml`, `thresholds.yaml`, `evaluation.yaml`, or `experiments.yaml`. Operational settings belong only in `configs/execution/profiles.yaml`; artifact and reporting policy belong only in `configs/artifacts/policy.yaml` and `configs/reporting/policy.yaml`. The catalogue has no per-experiment YAML files, ad hoc composition layer, or legacy protocol documents.
+
 ## Ordered tickets and dependency sequence
 
 | ID | Title | Type | Priority | Sci-exec | Dependencies | Blocks |

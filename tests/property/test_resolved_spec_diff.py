@@ -15,11 +15,12 @@ from datp_core.domain.artifacts.references import ArtifactSchemaVersion, StageFi
 from datp_core.domain.experiments.specification_changes import EnvironmentSpecification, StorageRootDescriptor
 from datp_core.domain.runtime.policies import ExecutionMode
 from datp_core.domain.thresholding.policies import ThresholdPercentile, ThresholdSuiteSpec
+from tests.support.composed_configuration import composed_profile_catalogue
 from tests.unit.config.test_mapping import experiment_config
 
 
 def _resolved_configuration() -> ResolvedConfigurationArtifact:
-    specification = map_experiment_schema(experiment_config())
+    specification = map_experiment_schema(experiment_config(), catalogue=composed_profile_catalogue())
     return ResolvedConfigurationArtifact(
         identity=ResolvedConfigurationIdentity(value=StageFingerprint(value="a" * 64)),
         schema_version=ArtifactSchemaVersion(value="v1"),

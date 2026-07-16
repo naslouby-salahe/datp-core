@@ -3,6 +3,7 @@ from inspect import signature
 from typing import NoReturn, overload
 
 import pytest
+from tests.support.composed_configuration import composed_profile_catalogue
 from tests.support.runtime_orchestration import runtime_preflight_request
 from tests.unit.config.test_mapping import experiment_config
 
@@ -189,7 +190,7 @@ class _UnavailablePort:
 
 
 def _configuration() -> ResolvedExperimentConfiguration:
-    experiment = map_experiment_schema(experiment_config())
+    experiment = map_experiment_schema(experiment_config(), catalogue=composed_profile_catalogue())
     return ResolvedExperimentConfiguration(
         resolved=ResolvedConfigurationArtifact(
             identity=ResolvedConfigurationIdentity(value=StageFingerprint(value="a" * 64)),

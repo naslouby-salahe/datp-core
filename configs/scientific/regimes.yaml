@@ -1,0 +1,59 @@
+profiles:
+  - regime: a
+    dataset: n_baiot
+    client_strategy: natural_device
+    client_count: 9
+    static_split:
+      kind: configured
+      train_fraction: "0.60"
+      gap_fraction: "0.01"
+      calibration_fraction: "0.20"
+      test_fraction_kind: derived_remainder
+    eligibility_coverage:
+      kind: disabled
+    temporal:
+      kind: disabled
+  - regime: b_a
+    dataset: ciciot2023
+    client_strategy: file_pseudo_client
+    client_count: 63
+    static_split:
+      kind: disabled
+    eligibility_coverage:
+      kind: disabled
+    temporal:
+      kind: disabled
+  - regime: c
+    dataset: n_baiot
+    client_strategy: dirichlet_synthetic
+    client_count: 20
+    static_split:
+      kind: disabled
+    eligibility_coverage:
+      kind: disabled
+    temporal:
+      kind: disabled
+  - regime: d
+    dataset: edge_iiotset
+    client_strategy: device_client
+    client_count: derived
+    static_split:
+      kind: disabled
+    eligibility_coverage:
+      kind: required
+      minimum_fraction: "0.90"
+    temporal:
+      kind: disabled
+  - regime: d_temporal
+    dataset: edge_iiotset
+    client_strategy: device_client
+    client_count: derived
+    static_split:
+      kind: disabled
+    eligibility_coverage:
+      kind: required
+      minimum_fraction: "0.90"
+    temporal:
+      kind: chronological
+      historical_fraction: "0.70"
+      timestamp_evidence: genuine_capture_time

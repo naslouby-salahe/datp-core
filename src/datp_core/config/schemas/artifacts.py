@@ -19,6 +19,7 @@ class ArtifactSerializationConfig(ArtifactSchema):
 
 
 class ArtifactConfig(ArtifactSchema):
+    policy_id: str
     namespace: ArtifactNamespace
     write_disposition: WriteDisposition
     retention: ArtifactRetentionPolicy
