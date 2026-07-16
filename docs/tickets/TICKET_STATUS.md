@@ -82,7 +82,7 @@ Rows record independently verified implementation status; no row authorizes scie
 | P2-T018 | Implement paired deltas, BCa bootstrap, Wilcoxon, Cliff's delta, reference diagnostics | NOT_STARTED | P2-T017, P1-T046. | — | — | — | — | — | — | — | NONE | — |
 | P2-T019 | Implement anchor report models, expected-artifact inventory, and dry-run planner | NOT_STARTED | P2-T018, P1-T049. | — | — | — | — | — | — | — | NONE | — |
 | P2-T020 | Implement the anchor readiness evaluator and anchor-implementation audit | NOT_STARTED | P2-T019, P2-T002, P1-T040. | — | — | — | — | — | — | — | NONE | — |
-| P2-T021 | Implement B0 centralized checkpoint schedule and scientific checkpoint selection | NOT_STARTED | P2-T012, P2-T002, P1-T022. | — | — | — | — | — | — | — | NONE | — |
+| P2-T021 | Implement B0 centralized checkpoint schedule and scientific checkpoint selection | IN_REVIEW | P2-T012, P2-T002, P1-T022. | 2026-07-16T17:45:00Z | 2026-07-16T17:55:00Z | — | — | PASS | PASS | PENDING | NONE | B0CentralizedCheckpointStager + validating select_centralized_checkpoint() implemented reusing P1-T044's CentralizedTrainingRunResult; no B0-specific schedule evidence exists so NONE config state preserved per ticket's own template; 5 new tests pass; awaiting Checkpoint 3 closure |
 | P2-T022 | Implement B0 centralized calibration and held-out score generation | NOT_STARTED | P2-T021, P1-T045. | — | — | — | — | — | — | — | NONE | — |
 | P2-T023 | Implement B0 pooled threshold, evaluation, statistics, and reporting route | NOT_STARTED | P2-T022, P1-T026, P1-T049. | — | — | — | — | — | — | — | NONE | — |
 
