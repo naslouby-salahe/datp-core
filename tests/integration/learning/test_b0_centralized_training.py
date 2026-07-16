@@ -45,9 +45,10 @@ def test_centralized_identities_are_structurally_distinct_from_fedavg_identities
 
 def test_executor_rejects_a_fedavg_identity_in_place_of_a_centralized_comparator() -> None:
     fedavg_training_identity = TrainingIdentity(value=_fingerprint("7"))
+    seed = Seed(value=1)
 
     with pytest.raises(DomainValidationError):
-        CentralizedPooledBenignTrainingExecutor(comparator=fedavg_training_identity, seed=Seed(value=1))  # type: ignore[arg-type]
+        CentralizedPooledBenignTrainingExecutor(comparator=fedavg_training_identity, seed=seed)  # type: ignore[arg-type]
 
 
 def test_executor_requires_sequential_epoch_numbers() -> None:

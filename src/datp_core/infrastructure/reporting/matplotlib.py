@@ -7,8 +7,8 @@ from datp_core.analysis.report_models import HeatmapFigureSpecification, SeriesF
 from datp_core.application.ports.reporting import RenderedReportArtifact, RenderReportArtifactRequest
 from datp_core.domain.artifacts.keys import SerializationFormat
 from datp_core.domain.artifacts.manifests import ArtifactType
-from datp_core.domain.errors import ReportingError
 from datp_core.domain.experiments.protocols import ReportArtifactType
+from datp_core.infrastructure.reporting.validation import rendering_error
 
 
 class MatplotlibReportRenderer:
@@ -22,11 +22,11 @@ class MatplotlibReportRenderer:
 
 def _validate_matplotlib_request(request: RenderReportArtifactRequest) -> None:
     if request.format not in (SerializationFormat.SVG, SerializationFormat.PNG, SerializationFormat.PDF):
-        raise _rendering_error(request, "Matplotlib renderer received an unsupported serialization format")
+        raise rendering_error(request, "Matplotlib renderer received an unsupported serialization format")
     if request.traced_specification.output.artifact_type is not ArtifactType.RENDERED_FIGURE:
-        raise _rendering_error(request, "traced output artifact type does not match the figure specification")
+        raise rendering_error(request, "traced output artifact type does not match the figure specification")
     if request.artifact_type is not ReportArtifactType.FIGURE:
-        raise _rendering_error(request, "figure specification received a non-figure report artifact type")
+        raise rendering_error(request, "figure specification received a non-figure report artifact type")
 
 
 def _build_figure(request: RenderReportArtifactRequest) -> Figure:
@@ -39,7 +39,7 @@ def _build_figure(request: RenderReportArtifactRequest) -> Figure:
     elif isinstance(specification, HeatmapFigureSpecification):
         _render_heatmap_figure(axes, specification)
     else:
-        raise _rendering_error(request, "Matplotlib renderer accepts figure specifications only")
+        raise rendering_error(request, "Matplotlib renderer accepts figure specifications only")
     return figure
 
 
@@ -63,9 +63,3 @@ def _render_heatmap_figure(axes: Axes, specification: HeatmapFigureSpecification
     )
     axes.set_xlabel(specification.horizontal_label)
     axes.set_ylabel(specification.vertical_label)
-
-
-def _rendering_error(request: RenderReportArtifactRequest, cause: str) -> ReportingError:
-    return ReportingError(
-        detail="report rendering failed", output_id=request.traced_specification.output.artifact_id.value, cause=cause
-    )

@@ -264,10 +264,11 @@ def test_centralized_policy_evaluation_result_validation_rules() -> None:
     assert res.policy is ThresholdComparatorRole.CENTRALIZED_MODEL_B0
 
     # Invalid policy role type
+    evaluation_identity = CentralizedEvaluationIdentity(value=_identity("0"))
     with pytest.raises(DomainValidationError):
         CentralizedPolicyEvaluationResult(
             policy=CoreThresholdPolicy.B1,  # type: ignore[arg-type]
-            evaluation_identity=CentralizedEvaluationIdentity(value=_identity("0")),
+            evaluation_identity=evaluation_identity,
             eligible_client_set=eligible_client_set,
             client_results=(client_result,),
             fleet_dispersion=dispersion,
@@ -277,10 +278,11 @@ def test_centralized_policy_evaluation_result_validation_rules() -> None:
         )
 
     # Invalid evaluation identity type
+    invalid_evaluation_identity = _identity("0")
     with pytest.raises(DomainValidationError):
         CentralizedPolicyEvaluationResult(
             policy=ThresholdComparatorRole.CENTRALIZED_MODEL_B0,
-            evaluation_identity=_identity("0"),  # type: ignore[arg-type]
+            evaluation_identity=invalid_evaluation_identity,  # type: ignore[arg-type]
             eligible_client_set=eligible_client_set,
             client_results=(client_result,),
             fleet_dispersion=dispersion,
