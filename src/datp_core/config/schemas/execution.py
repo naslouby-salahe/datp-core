@@ -72,6 +72,11 @@ class ScoringBatchConfig(ExecutionSchema):
     temporal_batch_size: PositiveInteger
 
 
+class B0ScoreGenerationConfig(ExecutionSchema):
+    calibration_batch_size: PositiveInteger
+    test_batch_size: PositiveInteger
+
+
 class ExecutionConfig(ExecutionSchema):
     mode: ExecutionMode
     device_policy: DevicePolicy

@@ -7,6 +7,9 @@ from typing import TYPE_CHECKING
 
 from datp_core.domain.artifacts.lineage import (
     CalibrationScoringIdentity,
+    CentralizedCalibrationScoringIdentity,
+    CentralizedCheckpointIdentity,
+    CentralizedTestScoringIdentity,
     CheckpointIdentity,
     DatasetSourceIdentity,
     FeatureSchemaIdentity,
@@ -445,3 +448,118 @@ class SplitScopedScoreBundle:
     calibration: CalibrationScoreArtifactSet
     test: TestScoreArtifactSet
     temporal: TemporalScoreArtifactSet | None
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class B0ScoringBatchSpec:
+    calibration_batch_size: BatchSize
+    test_batch_size: BatchSize
+
+    def __post_init__(self) -> None:
+        if type(self.calibration_batch_size) is not BatchSize or type(self.test_batch_size) is not BatchSize:
+            raise DomainValidationError(
+                detail="B0 score generation batching requires typed batch sizes",
+                value=repr(self),
+                constraint="BatchSize for calibration and test scoring",
+            )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CentralizedClientCalibrationScoreArtifact:
+    client_id: ClientId
+    calibration_split_identity: SplitIdentity
+    split_manifest_hash: str
+    scoring_identity: CentralizedCalibrationScoringIdentity
+    centralized_checkpoint_identity: CentralizedCheckpointIdentity
+    centralized_checkpoint_content_hash: str
+    sample_count: ScoreSampleCount
+    schema_version: ArtifactSchemaVersion
+    content_hash: str
+    row_order_checksum: str
+    artifact_ref: ArtifactRef
+
+    def __post_init__(self) -> None:
+        if not _is_valid_centralized_calibration_score_artifact(self):
+            raise DomainValidationError(
+                detail="B0 calibration score artifact requires complete typed centralized-only lineage",
+                value=repr(self),
+                constraint="typed centralized calibration fields, valid checksums, and matching reference hash",
+            )
+
+
+def _is_valid_centralized_calibration_score_artifact(
+    artifact: CentralizedClientCalibrationScoreArtifact,
+) -> bool:
+    return all(
+        (
+            type(artifact.client_id) is ClientId,
+            type(artifact.calibration_split_identity) is SplitIdentity,
+            type(artifact.scoring_identity) is CentralizedCalibrationScoringIdentity,
+            type(artifact.centralized_checkpoint_identity) is CentralizedCheckpointIdentity,
+            type(artifact.sample_count) is ScoreSampleCount,
+            type(artifact.schema_version) is ArtifactSchemaVersion,
+            type(artifact.artifact_ref) is ArtifactRef,
+            _are_valid_content_hashes(
+                artifact.split_manifest_hash,
+                artifact.centralized_checkpoint_content_hash,
+                artifact.content_hash,
+            ),
+            bool(artifact.row_order_checksum),
+            artifact.artifact_ref.content_hash == artifact.content_hash,
+        )
+    )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CentralizedClientTestScoreArtifact:
+    client_id: ClientId
+    test_split_identity: SplitIdentity
+    split_manifest_hash: str
+    test_scoring_identity: CentralizedTestScoringIdentity
+    centralized_checkpoint_identity: CentralizedCheckpointIdentity
+    centralized_checkpoint_content_hash: str
+    benign_scores_ref: ArtifactRef
+    benign_sample_count: ScoreSampleCount
+    benign_content_hash: str
+    benign_row_order_checksum: str
+    attack_scores_ref: ArtifactRef
+    attack_sample_count: ScoreSampleCount
+    attack_content_hash: str
+    attack_row_order_checksum: str
+    aggregate_manifest_hash: str
+    score_schema_version: ArtifactSchemaVersion
+
+    def __post_init__(self) -> None:
+        if not _is_valid_centralized_test_score_artifact(self):
+            raise DomainValidationError(
+                detail="B0 test score artifact requires complete typed centralized-only lineage",
+                value=repr(self),
+                constraint="typed centralized test fields, valid checksums, and matching child hashes",
+            )
+
+
+def _is_valid_centralized_test_score_artifact(artifact: CentralizedClientTestScoreArtifact) -> bool:
+    return all(
+        (
+            type(artifact.client_id) is ClientId,
+            type(artifact.test_split_identity) is SplitIdentity,
+            type(artifact.test_scoring_identity) is CentralizedTestScoringIdentity,
+            type(artifact.centralized_checkpoint_identity) is CentralizedCheckpointIdentity,
+            type(artifact.benign_scores_ref) is ArtifactRef,
+            type(artifact.attack_scores_ref) is ArtifactRef,
+            type(artifact.benign_sample_count) is ScoreSampleCount,
+            type(artifact.attack_sample_count) is ScoreSampleCount,
+            type(artifact.score_schema_version) is ArtifactSchemaVersion,
+            _are_valid_content_hashes(
+                artifact.split_manifest_hash,
+                artifact.centralized_checkpoint_content_hash,
+                artifact.benign_content_hash,
+                artifact.attack_content_hash,
+                artifact.aggregate_manifest_hash,
+            ),
+            bool(artifact.benign_row_order_checksum),
+            bool(artifact.attack_row_order_checksum),
+            artifact.benign_scores_ref.content_hash == artifact.benign_content_hash,
+            artifact.attack_scores_ref.content_hash == artifact.attack_content_hash,
+        )
+    )

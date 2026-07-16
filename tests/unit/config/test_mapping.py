@@ -7,7 +7,11 @@ from pydantic import ValidationError
 
 from datp_core.config.compose import OVERRIDE_PRECEDENCE, compose_configuration
 from datp_core.config.loader import load_yaml
-from datp_core.config.mapping.execution import map_scoring_batch_config, map_streaming_chunk_config
+from datp_core.config.mapping.execution import (
+    map_b0_score_generation_config,
+    map_scoring_batch_config,
+    map_streaming_chunk_config,
+)
 from datp_core.config.mapping.scientific import (
     ExperimentConfigSchema,
     ResolveExperimentProfileRequest,
@@ -22,6 +26,7 @@ from datp_core.config.mapping.scientific import (
 )
 from datp_core.config.schemas.artifacts import ArtifactConfig, ArtifactSerializationConfig
 from datp_core.config.schemas.execution import (
+    B0ScoreGenerationConfig,
     ExecutionConfig,
     ParallelismConfig,
     RecoveryConfig,
@@ -424,6 +429,30 @@ def test_scoring_batch_yaml_file_loads_and_maps() -> None:
     assert mapped.calibration_batch_size.value == 256
     assert mapped.test_batch_size.value == 256
     assert mapped.temporal_batch_size.value == 256
+
+
+def test_b0_score_generation_schema_rejects_a_non_positive_value() -> None:
+    with pytest.raises(ValidationError):
+        B0ScoreGenerationConfig(calibration_batch_size=0, test_batch_size=256)
+
+
+def test_b0_score_generation_mapping_produces_typed_domain_values() -> None:
+    configuration = B0ScoreGenerationConfig(calibration_batch_size=128, test_batch_size=64)
+
+    mapped = map_b0_score_generation_config(configuration)
+
+    assert mapped.calibration_batch_size.value == 128
+    assert mapped.test_batch_size.value == 64
+
+
+def test_b0_score_generation_yaml_file_loads_and_maps() -> None:
+    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "execution" / "b0_score_generation.yaml"
+
+    schema = load_yaml(yaml_path.read_text(), B0ScoreGenerationConfig)
+    mapped = map_b0_score_generation_config(schema)
+
+    assert mapped.calibration_batch_size.value == 256
+    assert mapped.test_batch_size.value == 256
 
 
 def test_regime_a_preprocessing_schema_rejects_a_non_locked_strategy() -> None:

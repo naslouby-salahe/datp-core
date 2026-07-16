@@ -1,4 +1,5 @@
 from datp_core.config.schemas.execution import (
+    B0ScoreGenerationConfig,
     ExecutionConfig,
     ParallelismConfig,
     ScoringBatchConfig,
@@ -9,7 +10,7 @@ from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.errors import ConfigurationError
 from datp_core.domain.experiments.protocols import ExecutionPolicy
 from datp_core.domain.learning.checkpoints import RecoveryCheckpointPolicy
-from datp_core.domain.learning.scores import ScoringBatchSpec
+from datp_core.domain.learning.scores import B0ScoringBatchSpec, ScoringBatchSpec
 from datp_core.domain.runtime.admissibility import (
     BatchSize,
     ChunkRowCount,
@@ -115,4 +116,11 @@ def map_scoring_batch_config(schema: ScoringBatchConfig) -> ScoringBatchSpec:
         calibration_batch_size=BatchSize(value=schema.calibration_batch_size),
         test_batch_size=BatchSize(value=schema.test_batch_size),
         temporal_batch_size=BatchSize(value=schema.temporal_batch_size),
+    )
+
+
+def map_b0_score_generation_config(schema: B0ScoreGenerationConfig) -> B0ScoringBatchSpec:
+    return B0ScoringBatchSpec(
+        calibration_batch_size=BatchSize(value=schema.calibration_batch_size),
+        test_batch_size=BatchSize(value=schema.test_batch_size),
     )
