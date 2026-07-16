@@ -24,6 +24,7 @@ from datp_core.infrastructure.persistence.roots import BoundStorageRoot
 
 _MARKER_NAME = "commit-marker.json"
 _MEMBER_NAMES = ("benign", "attack")
+_ARTIFACT_BUNDLES_NAMESPACE = ".artifact-bundles"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -33,7 +34,7 @@ class FileArtifactBundleStore:
     def commit_bundle(self, request: CommitArtifactBundleRequest) -> ArtifactBundleCommitResult:
         _verify_declared_members(request)
         bundle_id = _bundle_id(request)
-        directory = self.root.absolute_path / ".artifact-bundles" / bundle_id.value
+        directory = self.root.absolute_path / _ARTIFACT_BUNDLES_NAMESPACE / bundle_id.value
         marker_path = directory / _MARKER_NAME
         if directory.exists():
             if marker_path.exists():
@@ -55,7 +56,7 @@ class FileArtifactBundleStore:
         return self.read_bundle(bundle_id)
 
     def read_bundle(self, bundle_id: ArtifactBundleId) -> ArtifactBundleCommitResult:
-        directory = self.root.absolute_path / ".artifact-bundles" / bundle_id.value
+        directory = self.root.absolute_path / _ARTIFACT_BUNDLES_NAMESPACE / bundle_id.value
         marker_path = directory / _MARKER_NAME
         manifest = _read_manifest(bundle_id, marker_path)
         _verify_manifest_identity(bundle_id, manifest)

@@ -4,6 +4,10 @@ from flwr.server.strategy import FedProx
 
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.learning.training import FEDPROX_MU_GRID
+from datp_core.infrastructure.learning.federation.strategies import (
+    FULL_PARTICIPATION_ACCEPT_FAILURES,
+    FULL_PARTICIPATION_FRACTION,
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -27,11 +31,11 @@ class FlowerFedProxStrategy:
 
     def build(self) -> FedProx:
         return FedProx(
-            fraction_fit=1.0,
-            fraction_evaluate=1.0,
+            fraction_fit=FULL_PARTICIPATION_FRACTION,
+            fraction_evaluate=FULL_PARTICIPATION_FRACTION,
             min_fit_clients=self.client_count,
             min_evaluate_clients=self.client_count,
             min_available_clients=self.client_count,
-            accept_failures=False,
+            accept_failures=FULL_PARTICIPATION_ACCEPT_FAILURES,
             proximal_mu=self.proximal_mu,
         )

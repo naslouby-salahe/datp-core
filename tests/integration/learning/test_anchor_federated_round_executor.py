@@ -9,7 +9,7 @@ from datp_core.domain.artifacts.references import ArtifactId, ArtifactRef, Artif
 from datp_core.domain.data.preprocessing import ProcessedSplitResult
 from datp_core.domain.errors import RoundAbortedError
 from datp_core.domain.experiments.identities import ClientId
-from datp_core.domain.learning.checkpoints import CheckpointSchedule
+from datp_core.domain.learning.checkpoints import SCHEDULED_CHECKPOINT_ROUNDS, CheckpointSchedule
 from datp_core.domain.learning.training import DeterminismLevel
 from datp_core.domain.runtime.admissibility import WorkerCount
 from datp_core.domain.runtime.seeds import DataLoaderSeedPlan, RoundNumber, Seed
@@ -48,7 +48,7 @@ def _request(*, seed: Seed) -> TrainFederatedModelRequest:
         processed_splits=_split_result(),
         training=anchor_training_spec(seed=seed),
         checkpoint_schedule=CheckpointSchedule(
-            rounds=tuple(RoundNumber(value=value) for value in (25, 50, 75, 100, 125, 150, 200))
+            rounds=tuple(RoundNumber(value=value) for value in SCHEDULED_CHECKPOINT_ROUNDS)
         ),
         resolved_batch_profile=runtime_profile(),
         dataloader_seed_plan=DataLoaderSeedPlan(

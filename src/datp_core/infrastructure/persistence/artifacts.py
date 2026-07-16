@@ -3,7 +3,7 @@ from os import O_DIRECTORY, O_RDONLY, close, fsync, replace
 from os import open as open_file
 from pathlib import Path
 from tempfile import NamedTemporaryFile
-from typing import assert_never
+from typing import Final, assert_never
 
 import msgspec
 
@@ -22,6 +22,8 @@ from datp_core.domain.errors import ArtifactError, PartialArtifactError
 from datp_core.infrastructure.persistence.hashing import blake3_bytes_content_hash, blake3_file_content_hash
 from datp_core.infrastructure.persistence.paths import ArtifactPathResolver, ResolveArtifactLocationRequest
 from datp_core.infrastructure.persistence.roots import BoundStorageRoot
+
+ARTIFACT_MANIFESTS_NAMESPACE: Final = ".artifact-manifests"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -113,7 +115,7 @@ class FileArtifactStore:
                 temporary_path.unlink(missing_ok=True)
 
     def _read_manifest(self, artifact_id: str) -> ArtifactRef | None:
-        path = self.root.absolute_path / ".artifact-manifests" / artifact_id
+        path = self.root.absolute_path / ARTIFACT_MANIFESTS_NAMESPACE / artifact_id
         if not path.exists():
             return None
         try:
@@ -126,7 +128,7 @@ class FileArtifactStore:
             ) from error
 
     def _write_manifest(self, artifact: ArtifactRef) -> None:
-        path = self.root.absolute_path / ".artifact-manifests" / artifact.artifact_id.value
+        path = self.root.absolute_path / ARTIFACT_MANIFESTS_NAMESPACE / artifact.artifact_id.value
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary_path: Path | None = None
         try:

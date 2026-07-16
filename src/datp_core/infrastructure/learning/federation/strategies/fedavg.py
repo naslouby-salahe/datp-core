@@ -3,6 +3,10 @@ from dataclasses import dataclass
 from flwr.server.strategy import FedAvg
 
 from datp_core.domain.errors import DomainValidationError
+from datp_core.infrastructure.learning.federation.strategies import (
+    FULL_PARTICIPATION_ACCEPT_FAILURES,
+    FULL_PARTICIPATION_FRACTION,
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -19,10 +23,10 @@ class FlowerFedAvgStrategy:
 
     def build(self) -> FedAvg:
         return FedAvg(
-            fraction_fit=1.0,
-            fraction_evaluate=1.0,
+            fraction_fit=FULL_PARTICIPATION_FRACTION,
+            fraction_evaluate=FULL_PARTICIPATION_FRACTION,
             min_fit_clients=self.client_count,
             min_evaluate_clients=self.client_count,
             min_available_clients=self.client_count,
-            accept_failures=False,
+            accept_failures=FULL_PARTICIPATION_ACCEPT_FAILURES,
         )

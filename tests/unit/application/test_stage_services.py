@@ -129,6 +129,7 @@ from datp_core.domain.learning import scores as learning_scores
 from datp_core.domain.learning.checkpoints import (
     EARLIEST_SCHEDULED_ROUND_TIE_BREAK_RULE,
     REGIME_A_SELECTION_RULE_VERSION,
+    SCHEDULED_CHECKPOINT_ROUNDS,
     CheckpointCandidateResult,
     CheckpointDescriptor,
     CheckpointSchedule,
@@ -218,7 +219,7 @@ def _artifact_ref(*, character: str, artifact_type: ArtifactType) -> ArtifactRef
 def _checkpoint_selection_spec() -> CheckpointSelectionSpec:
     return CheckpointSelectionSpec(
         strategy=CheckpointSelectionStrategy.REGIME_A_GLOBAL_PRIMARY,
-        candidate_rounds=tuple(RoundNumber(value=value) for value in (25, 50, 75, 100, 125, 150, 200)),
+        candidate_rounds=tuple(RoundNumber(value=value) for value in SCHEDULED_CHECKPOINT_ROUNDS),
         selection_rule_version=REGIME_A_SELECTION_RULE_VERSION,
         tie_break_rule=EARLIEST_SCHEDULED_ROUND_TIE_BREAK_RULE,
     )

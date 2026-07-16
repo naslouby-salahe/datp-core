@@ -30,7 +30,7 @@ from datp_core.domain.artifacts.references import (
 )
 from datp_core.domain.data.preprocessing import ProcessedSplitResult
 from datp_core.domain.experiments.identities import ClientId
-from datp_core.domain.learning.checkpoints import CheckpointDescriptor, CheckpointSchedule
+from datp_core.domain.learning.checkpoints import SCHEDULED_CHECKPOINT_ROUNDS, CheckpointDescriptor, CheckpointSchedule
 from datp_core.domain.learning.models import ActivationFunction, AutoencoderSpec
 from datp_core.domain.learning.training import (
     AggregationStrategy,
@@ -111,7 +111,7 @@ def _request() -> TrainFederatedModelRequest:
             personalization=ModelPersonalizationStrategy.NONE,
         ),
         checkpoint_schedule=CheckpointSchedule(
-            rounds=tuple(RoundNumber(value=value) for value in (25, 50, 75, 100, 125, 150, 200))
+            rounds=tuple(RoundNumber(value=value) for value in SCHEDULED_CHECKPOINT_ROUNDS)
         ),
         resolved_batch_profile=runtime_profile(),
         dataloader_seed_plan=DataLoaderSeedPlan(
@@ -206,7 +206,7 @@ def test_trainer_completes_all_rounds_and_persists_only_the_fixed_schedule() -> 
         checkpoint_store=store,
     ).train(_request())
 
-    scheduled_rounds = (25, 50, 75, 100, 125, 150, 200)
+    scheduled_rounds = SCHEDULED_CHECKPOINT_ROUNDS
     assert tuple(round_number.value for round_number in executor.executed_rounds) == tuple(range(1, 201))
     assert tuple(round_number.value for round_number in stager.staged_rounds) == scheduled_rounds
     assert tuple(request.checkpoint.round.value for request in store.saved_requests) == scheduled_rounds

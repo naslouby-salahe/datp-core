@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-from math import ceil
 
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.errors import EvaluationError
@@ -42,6 +41,7 @@ from datp_core.domain.learning.scores import (
     TemporalScoreArtifactSet,
     TestScoreArtifactSet,
 )
+from datp_core.domain.mathematics.quantiles import nearest_rank_value
 from datp_core.domain.thresholding.policies import CoreThresholdPolicy, ThresholdAssignment, ThresholdValue
 
 
@@ -317,7 +317,7 @@ def _fleet_detection(
     f1_values = tuple(sorted(result.f1.value for result in client_results))
     return FleetDetectionResult(
         macro_f1=F1Score(value=sum(f1_values) / len(f1_values)),
-        p10_macro_f1=F1Score(value=f1_values[ceil(len(f1_values) * 0.1) - 1]),
+        p10_macro_f1=F1Score(value=nearest_rank_value(values=f1_values, percentile=0.1)),
         worst_client_balanced_accuracy=BalancedAccuracyScore(
             value=min(result.balanced_accuracy.value for result in client_results)
         ),

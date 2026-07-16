@@ -12,6 +12,9 @@ from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import CalibrationScoreArtifactSet
 from datp_core.domain.mathematics.quantiles import exact_quantile
 from datp_core.domain.thresholding.clustering import (
+    CANONICAL_KMEANS_MAX_ITER,
+    CANONICAL_KMEANS_N_INIT,
+    PINNED_SCIKIT_LEARN_VERSION,
     B4ClusteringAlgorithm,
     B4ClusteringSpec,
     B4Fingerprint,
@@ -84,9 +87,9 @@ class ExactB4ClusteringStrategy(ClusteringStrategy):
                 specification.scaler is B4FingerprintScalerSpec.STANDARD_SCALER,
                 specification.scaler_fit_scope is B4FingerprintFitScope.ELIGIBLE_CLIENT_FINGERPRINTS,
                 specification.algorithm is B4ClusteringAlgorithm.KMEANS_PLUS_PLUS,
-                specification.n_init.value == 10,
-                specification.max_iter.value == 300,
-                specification.scikit_learn_version.value == "1.9.0",
+                specification.n_init.value == CANONICAL_KMEANS_N_INIT.value,
+                specification.max_iter.value == CANONICAL_KMEANS_MAX_ITER.value,
+                specification.scikit_learn_version.value == PINNED_SCIKIT_LEARN_VERSION.value,
             )
         ):
             raise ThresholdError(

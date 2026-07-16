@@ -33,6 +33,12 @@ def exact_quantile(*, values: tuple[float, ...], percentile: ThresholdPercentile
     return ordered_values[index]
 
 
+def nearest_rank_value(*, values: tuple[float, ...], percentile: float) -> float:
+    ordered_values = tuple(sorted(values))
+    index = max(0, ceil(percentile * len(ordered_values)) - 1)
+    return ordered_values[index]
+
+
 def exact_weighted_quantile(
     *,
     values: tuple[float, ...],

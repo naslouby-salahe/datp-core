@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from math import ceil, fsum, isfinite, sqrt
+from math import fsum, isfinite, sqrt
 from typing import NoReturn, Protocol, assert_never
 
 from datp_core.domain.errors import EvaluationError
@@ -13,6 +13,7 @@ from datp_core.domain.evaluation.metrics import (
     OperatingPointMetric,
     ResourceMetric,
 )
+from datp_core.domain.mathematics.quantiles import nearest_rank_value
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -104,7 +105,7 @@ class MetricCalculator:
         _require_unit_interval(values=request.values, metric=request.metric.value)
         match request.metric:
             case DetectionQualityMetric.P10_MACRO_F1:
-                value = _nearest_rank(request.values, percentile=0.1)
+                value = nearest_rank_value(values=request.values, percentile=0.1)
             case DetectionQualityMetric.WORST_CLIENT_BA:
                 value = min(request.values)
             case (
@@ -244,12 +245,6 @@ def _interquartile_range(values: tuple[float, ...]) -> float:
     if middle == 0:
         return 0.0
     return _mean(ordered[-middle:]) - _mean(ordered[:middle])
-
-
-def _nearest_rank(values: tuple[float, ...], *, percentile: float) -> float:
-    ordered = tuple(sorted(values))
-    index = max(0, ceil(percentile * len(ordered)) - 1)
-    return ordered[index]
 
 
 def _jain_index(values: tuple[float, ...]) -> float:

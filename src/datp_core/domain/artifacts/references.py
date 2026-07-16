@@ -20,11 +20,10 @@ class ValidationStatus(StrEnum):
     UNVERIFIED = "unverified"
 
 
-_ARTIFACT_ID_PATTERN = r"artifact-[0-9a-f]{64}"
-_RUN_IDENTITY_PATTERN = r"run-[0-9a-f]{64}"
-_CHECKPOINT_ID_PATTERN = r"checkpoint-[0-9a-f]{64}"
-_STAGE_FINGERPRINT_PATTERN = r"[0-9a-f]{64}"
 CONTENT_HASH_PATTERN = r"[0-9a-f]{64}"
+_ARTIFACT_ID_PATTERN = f"artifact-{CONTENT_HASH_PATTERN}"
+_RUN_IDENTITY_PATTERN = f"run-{CONTENT_HASH_PATTERN}"
+_CHECKPOINT_ID_PATTERN = f"checkpoint-{CONTENT_HASH_PATTERN}"
 
 
 def _validated_identity(*, value: str, pattern: str, name: str) -> str:
@@ -154,7 +153,7 @@ class StageFingerprint:
     value: str
 
     def __post_init__(self) -> None:
-        _validated_identity(value=self.value, pattern=_STAGE_FINGERPRINT_PATTERN, name="stage fingerprint")
+        _validated_identity(value=self.value, pattern=CONTENT_HASH_PATTERN, name="stage fingerprint")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

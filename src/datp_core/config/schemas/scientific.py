@@ -3,6 +3,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from datp_core.domain.artifacts.references import CONTENT_HASH_PATTERN
 from datp_core.domain.data.datasets import TimestampEvidenceKind
 from datp_core.domain.data.preprocessing import FittedStatisticPolicy, NormalizationScope, NormalizationStrategy
 from datp_core.domain.evaluation.metrics import OperatingPointMetric
@@ -16,7 +17,7 @@ type ClosedUnitInterval = Annotated[Decimal, Field(ge=Decimal(0), le=Decimal(1))
 type PositiveInteger = Annotated[int, Field(gt=0)]
 type ConfirmatoryConfidence = Annotated[Decimal, Field(ge=Decimal("0.95"), le=Decimal("0.95"))]
 type CanonicalTemporalFraction = Annotated[Decimal, Field(ge=Decimal("0.70"), le=Decimal("0.70"))]
-type StageFingerprintText = Annotated[str, Field(pattern=r"^[0-9a-f]{64}$")]
+type StageFingerprintText = Annotated[str, Field(pattern=f"^{CONTENT_HASH_PATTERN}$")]
 
 
 class ScientificSchema(BaseModel):

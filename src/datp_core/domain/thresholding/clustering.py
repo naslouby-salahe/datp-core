@@ -107,6 +107,11 @@ class PinnedScikitLearnVersion:
             )
 
 
+CANONICAL_KMEANS_N_INIT: Final = KMeansInitializationCount(value=10)
+CANONICAL_KMEANS_MAX_ITER: Final = KMeansMaximumIterations(value=300)
+PINNED_SCIKIT_LEARN_VERSION: Final = PinnedScikitLearnVersion(value="1.9.0")
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class KMeansRandomState:
     value: int
@@ -157,8 +162,8 @@ class B4ClusteringSpec:
         object.__setattr__(self, "scaler_fit_scope", B4FingerprintFitScope.ELIGIBLE_CLIENT_FINGERPRINTS)
         object.__setattr__(self, "algorithm", B4ClusteringAlgorithm.KMEANS_PLUS_PLUS)
         object.__setattr__(self, "cluster_count", CANONICAL_CLUSTER_K)
-        object.__setattr__(self, "n_init", KMeansInitializationCount(value=10))
-        object.__setattr__(self, "max_iter", KMeansMaximumIterations(value=300))
+        object.__setattr__(self, "n_init", CANONICAL_KMEANS_N_INIT)
+        object.__setattr__(self, "max_iter", CANONICAL_KMEANS_MAX_ITER)
         derived_seed = derive_seed(
             experiment_seed=experiment_seed,
             role=SeedRole.CLUSTERING,
@@ -169,7 +174,7 @@ class B4ClusteringSpec:
             "random_state",
             KMeansRandomState(value=derived_seed.value % (2**32)),
         )
-        object.__setattr__(self, "scikit_learn_version", PinnedScikitLearnVersion(value="1.9.0"))
+        object.__setattr__(self, "scikit_learn_version", PINNED_SCIKIT_LEARN_VERSION)
 
     @property
     def is_canonical_k(self) -> bool:
