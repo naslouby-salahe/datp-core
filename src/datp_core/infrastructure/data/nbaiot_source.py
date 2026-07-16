@@ -11,8 +11,7 @@ from datp_core.domain.errors import DatasetError
 from datp_core.infrastructure.data.nbaiot_inspection import device_csv_files
 from datp_core.infrastructure.data.streaming import update_row_order_checksum
 
-_DEFAULT_CSV_BLOCK_BYTES = 8 * 1024 * 1024
-_LABEL_COLUMN_NAME = "source_label"
+SOURCE_LABEL_COLUMN_NAME = "source_label"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -63,7 +62,7 @@ def _materialize_one_file(
 class NBaIoTChunkedSourceAdapter:
     raw_root: Path
     output_root: Path
-    csv_block_bytes: int = _DEFAULT_CSV_BLOCK_BYTES
+    csv_block_bytes: int
 
     def materialize_device(self, device_id: str) -> NBaIoTDeviceMaterialization:
         files = device_csv_files(self.raw_root / device_id)
@@ -91,7 +90,7 @@ class NBaIoTChunkedSourceAdapter:
 def _with_label_column(batch: pa.RecordBatch, label: SourceTrafficLabel) -> pa.RecordBatch:
     label_array = pa.array([label.value] * batch.num_rows, type=pa.string())
     columns = [batch.column(index) for index in range(batch.num_columns)]
-    names = [*batch.schema.names, _LABEL_COLUMN_NAME]
+    names = [*batch.schema.names, SOURCE_LABEL_COLUMN_NAME]
     return pa.RecordBatch.from_arrays([*columns, label_array], names)
 
 

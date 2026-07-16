@@ -1,5 +1,5 @@
 from math import sqrt
-from typing import assert_never
+from typing import Final, assert_never
 
 import torch
 from torch import Tensor, nn
@@ -7,6 +7,10 @@ from torch import Tensor, nn
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.learning.models import ActivationFunction, AutoencoderSpec
 from datp_core.domain.runtime.seeds import Seed
+
+FIXED_ENCODER_HIDDEN_DIMS: Final = (80, 40)
+FIXED_ENCODER_BOTTLENECK_DIM: Final = 20
+FIXED_ENCODER_ACTIVATION: Final = ActivationFunction.RELU
 
 
 class FixedAutoencoder(nn.Module):
@@ -80,7 +84,7 @@ def _validate_fixed_architecture(specification: AutoencoderSpec) -> None:
         specification.bottleneck_dim,
         specification.activation,
     )
-    fixed_architecture = ((80, 40), 20, ActivationFunction.RELU)
+    fixed_architecture = (FIXED_ENCODER_HIDDEN_DIMS, FIXED_ENCODER_BOTTLENECK_DIM, FIXED_ENCODER_ACTIVATION)
     if actual_architecture == fixed_architecture:
         return
     raise DomainValidationError(

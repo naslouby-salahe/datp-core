@@ -1,4 +1,5 @@
 from collections.abc import Callable
+from importlib.metadata import version
 
 import pytest
 
@@ -76,6 +77,15 @@ def test_canonical_b4_locks_fingerprint_scaling_algorithm_and_derived_seed() -> 
     assert specification.n_init.value == 10
     assert specification.max_iter.value == 300
     assert specification.random_state != specification.experiment_seed
+
+
+def test_scikit_learn_version_lock_matches_installed_dependency() -> None:
+    specification = B4ClusteringSpec(
+        experiment_seed=Seed(value=7),
+        clustering_identity=StageFingerprint(value="c" * 64),
+    )
+
+    assert specification.scikit_learn_version.value == version("scikit-learn")
 
 
 def test_b4_fingerprint_rejects_q_as_a_field() -> None:

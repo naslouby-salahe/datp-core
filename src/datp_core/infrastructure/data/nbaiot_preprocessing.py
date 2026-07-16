@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import msgspec
@@ -12,7 +12,7 @@ from datp_core.domain.artifacts.keys import ArtifactNamespace, DatasetArtifactKe
 from datp_core.domain.artifacts.lineage import DatasetSourceIdentity, FittedPreprocessorIdentity
 from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import ArtifactId, ArtifactRef, ArtifactSchemaVersion, StageFingerprint
-from datp_core.domain.data.datasets import Dataset
+from datp_core.domain.data.datasets import Dataset, SourceTrafficLabel
 from datp_core.domain.data.preprocessing import (
     ClientFeatureStatistics,
     FeatureStatistics,
@@ -25,11 +25,12 @@ from datp_core.domain.data.preprocessing import (
     PreprocessingSpec,
     ProcessedSplitResult,
 )
-from datp_core.domain.data.splitting import SplitRole
+from datp_core.domain.data.splitting import RegimeAStaticSplitBoundarySpec, SplitRole
 from datp_core.domain.errors import PreprocessingError
 from datp_core.domain.experiments.identities import ClientId
-from datp_core.domain.runtime.admissibility import ChunkRowCount
+from datp_core.domain.runtime.policies import StreamingChunkPolicy
 from datp_core.infrastructure.data.nbaiot_inspection import sorted_device_directories
+from datp_core.infrastructure.data.nbaiot_source import SOURCE_LABEL_COLUMN_NAME
 from datp_core.infrastructure.data.nbaiot_split import benign_split_boundaries, row_range_roles
 from datp_core.infrastructure.data.preprocessing import TwoPassNumericPreprocessor
 from datp_core.infrastructure.data.streaming import ParquetBatchStream, update_row_order_checksum
@@ -37,10 +38,6 @@ from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.hashing import blake3_bytes_content_hash, blake3_file_content_hash
 from datp_core.infrastructure.persistence.paths import ArtifactPathResolver, ResolveArtifactLocationRequest
 from datp_core.infrastructure.persistence.roots import BoundStorageRoot
-
-_LABEL_COLUMN_NAME = "source_label"
-_BENIGN_LABEL = "benign"
-_DEFAULT_BATCH_ROWS = 50_000
 
 
 def _preprocessing_error(coverage: str) -> PreprocessingError:
@@ -69,19 +66,24 @@ def _count_benign_rows(stream: ParquetBatchStream, label_column_index: int) -> i
     count = 0
     for batch in stream.batches():
         labels = batch.column(label_column_index).to_pylist()
-        matching = sum(1 for label in labels if label == _BENIGN_LABEL)
+        matching = sum(1 for label in labels if label == SourceTrafficLabel.BENIGN.value)
         count += matching
         if matching != batch.num_rows:
             break
     return count
 
 
-def _client_boundaries(materialized_path: Path) -> tuple[int, int, int, int]:
-    stream = ParquetBatchStream(path=materialized_path, batch_rows=ChunkRowCount(value=_DEFAULT_BATCH_ROWS))
-    label_column_index = stream.schema().get_field_index(_LABEL_COLUMN_NAME)
+def _client_boundaries(
+    materialized_path: Path,
+    *,
+    boundary_spec: RegimeAStaticSplitBoundarySpec,
+    streaming_chunk_policy: StreamingChunkPolicy,
+) -> tuple[int, int, int, int]:
+    stream = ParquetBatchStream(path=materialized_path, batch_rows=streaming_chunk_policy.parquet_batch_rows)
+    label_column_index = stream.schema().get_field_index(SOURCE_LABEL_COLUMN_NAME)
     if label_column_index < 0:
-        raise _preprocessing_error(f"{materialized_path} is missing the {_LABEL_COLUMN_NAME!r} column")
-    return benign_split_boundaries(_count_benign_rows(stream, label_column_index))
+        raise _preprocessing_error(f"{materialized_path} is missing the {SOURCE_LABEL_COLUMN_NAME!r} column")
+    return benign_split_boundaries(_count_benign_rows(stream, label_column_index), boundary_spec=boundary_spec)
 
 
 def _feature_only_batch(batch: pa.RecordBatch, feature_columns: tuple[str, ...]) -> pa.RecordBatch:
@@ -89,15 +91,24 @@ def _feature_only_batch(batch: pa.RecordBatch, feature_columns: tuple[str, ...])
     return pa.RecordBatch.from_arrays(columns, list(feature_columns))
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _ClientFitPlan:
+    feature_columns: tuple[str, ...]
+    scratch_root: Path
+    boundary_spec: RegimeAStaticSplitBoundarySpec
+    streaming_chunk_policy: StreamingChunkPolicy
+    preprocessing: PreprocessingSpec
+
+
 def _extract_train_raw(
     *,
     materialized_path: Path,
-    feature_columns: tuple[str, ...],
+    plan: _ClientFitPlan,
     boundaries: tuple[int, int, int, int],
     destination: Path,
 ) -> tuple[int, str]:
     destination.parent.mkdir(parents=True, exist_ok=True)
-    stream = ParquetBatchStream(path=materialized_path, batch_rows=ChunkRowCount(value=_DEFAULT_BATCH_ROWS))
+    stream = ParquetBatchStream(path=materialized_path, batch_rows=plan.streaming_chunk_policy.parquet_batch_rows)
     hasher = blake3()
     row_count = 0
     writer: pq.ParquetWriter | None = None
@@ -109,7 +120,7 @@ def _extract_train_raw(
             ):
                 if role is not SplitRole.TRAIN:
                     continue
-                feature_batch = _feature_only_batch(batch.slice(offset, length), feature_columns)
+                feature_batch = _feature_only_batch(batch.slice(offset, length), plan.feature_columns)
                 if writer is None:
                     writer = pq.ParquetWriter(destination, feature_batch.schema)
                 writer.write_batch(feature_batch)
@@ -133,31 +144,31 @@ def _client_feature_statistics(
     )
 
 
-def _fit_client(
-    *, client_id: ClientId, materialized_path: Path, feature_columns: tuple[str, ...], scratch_root: Path
-) -> ClientFeatureStatistics:
-    boundaries = _client_boundaries(materialized_path)
-    train_raw_path = scratch_root / client_id.value / "train_raw.parquet"
+def _fit_client(*, client_id: ClientId, materialized_path: Path, plan: _ClientFitPlan) -> ClientFeatureStatistics:
+    boundaries = _client_boundaries(
+        materialized_path, boundary_spec=plan.boundary_spec, streaming_chunk_policy=plan.streaming_chunk_policy
+    )
+    feature_columns = plan.feature_columns
+    train_raw_path = plan.scratch_root / client_id.value / "train_raw.parquet"
     row_count, checksum = _extract_train_raw(
         materialized_path=materialized_path,
-        feature_columns=feature_columns,
+        plan=plan,
         boundaries=boundaries,
         destination=train_raw_path,
     )
-    chunk_rows = ChunkRowCount(value=_DEFAULT_BATCH_ROWS)
+    chunk_rows = plan.streaming_chunk_policy.parquet_batch_rows
+    resolved_preprocessing = replace(
+        plan.preprocessing,
+        chunking=PreprocessingChunkSpec(
+            source_scan_batch_rows=chunk_rows,
+            preprocessing_chunk_rows=chunk_rows,
+            parquet_write_batch_rows=chunk_rows,
+        ),
+    )
     fitted = TwoPassNumericPreprocessor(
         training=ParquetBatchStream(path=train_raw_path, batch_rows=chunk_rows),
         feature_columns=feature_columns,
-        preprocessing=PreprocessingSpec(
-            strategy=NormalizationStrategy.STANDARD,
-            scope=NormalizationScope.PER_CLIENT_TRAIN,
-            fitted_stat_policy=FittedStatisticPolicy.EXACT_TWO_PASS,
-            chunking=PreprocessingChunkSpec(
-                source_scan_batch_rows=chunk_rows,
-                preprocessing_chunk_rows=chunk_rows,
-                parquet_write_batch_rows=chunk_rows,
-            ),
-        ),
+        preprocessing=resolved_preprocessing,
     ).fit()
     means = tuple(_finite_or_error(statistic.mean, "mean") for statistic in fitted.statistics)
     variances = tuple(_finite_or_error(statistic.variance, "variance") for statistic in fitted.statistics)
@@ -217,16 +228,24 @@ class NBaIoTPreprocessorFitter:
     scratch_root: Path
     artifact_store: FileArtifactStore
     feature_columns: tuple[str, ...]
+    boundary_spec: RegimeAStaticSplitBoundarySpec
+    streaming_chunk_policy: StreamingChunkPolicy
 
     def fit(self, request: FitPreprocessorRequest) -> FittedPreprocessorResult:
         _validate_locked_preprocessing_policy(request.preprocessing)
         device_ids = tuple(path.name for path in sorted_device_directories(self.raw_root))
+        plan = _ClientFitPlan(
+            feature_columns=self.feature_columns,
+            scratch_root=self.scratch_root,
+            boundary_spec=self.boundary_spec,
+            streaming_chunk_policy=self.streaming_chunk_policy,
+            preprocessing=request.preprocessing,
+        )
         client_statistics = tuple(
             _fit_client(
                 client_id=ClientId(value=device_id),
                 materialized_path=self.materialized_root / device_id / "source.parquet",
-                feature_columns=self.feature_columns,
-                scratch_root=self.scratch_root,
+                plan=plan,
             )
             for device_id in device_ids
         )
@@ -336,14 +355,31 @@ def _write_batch_roles(*, batch: pa.RecordBatch, global_index: int, plan: _RoleW
         )
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _ClientMaterializationPlan:
+    processed_root: Path
+    boundary_spec: RegimeAStaticSplitBoundarySpec
+    streaming_chunk_policy: StreamingChunkPolicy
+
+
 def _materialize_client(
-    *, client_id: ClientId, materialized_path: Path, processed_root: Path, context: _ClientTransformContext
+    *,
+    client_id: ClientId,
+    materialized_path: Path,
+    materialization_plan: _ClientMaterializationPlan,
+    context: _ClientTransformContext,
 ) -> tuple[Path, ...]:
-    boundaries = _client_boundaries(materialized_path)
-    stream = ParquetBatchStream(path=materialized_path, batch_rows=ChunkRowCount(value=_DEFAULT_BATCH_ROWS))
-    states = _role_write_states(client_id=client_id, processed_root=processed_root)
-    plan = _RoleWritePlan(boundaries=boundaries, states=states, context=context)
-    _write_all_roles(stream=stream, plan=plan)
+    boundaries = _client_boundaries(
+        materialized_path,
+        boundary_spec=materialization_plan.boundary_spec,
+        streaming_chunk_policy=materialization_plan.streaming_chunk_policy,
+    )
+    stream = ParquetBatchStream(
+        path=materialized_path, batch_rows=materialization_plan.streaming_chunk_policy.parquet_batch_rows
+    )
+    states = _role_write_states(client_id=client_id, processed_root=materialization_plan.processed_root)
+    role_write_plan = _RoleWritePlan(boundaries=boundaries, states=states, context=context)
+    _write_all_roles(stream=stream, plan=role_write_plan)
     return tuple(state.destination for state in states.values() if state.row_count > 0)
 
 
@@ -377,11 +413,18 @@ class NBaIoTProcessedSplitMaterializer:
     manifest_root: BoundStorageRoot
     feature_columns: tuple[str, ...]
     source_row_identity: DatasetSourceIdentity
+    boundary_spec: RegimeAStaticSplitBoundarySpec
+    streaming_chunk_policy: StreamingChunkPolicy
 
     def materialize(self, request: MaterializeProcessedSplitsRequest) -> ProcessedSplitResult:
         manifest = _read_fitted_manifest(artifact=request.fitted_preprocessor.artifact, bound_root=self.manifest_root)
         statistics_by_client = {entry.client_id.value: entry.statistics for entry in manifest.client_statistics}
         device_ids = tuple(path.name for path in sorted_device_directories(self.raw_root))
+        materialization_plan = _ClientMaterializationPlan(
+            processed_root=self.processed_root,
+            boundary_spec=self.boundary_spec,
+            streaming_chunk_policy=self.streaming_chunk_policy,
+        )
         artifacts: list[ArtifactRef] = []
         for device_id in device_ids:
             if device_id not in statistics_by_client:
@@ -389,7 +432,7 @@ class NBaIoTProcessedSplitMaterializer:
             paths = _materialize_client(
                 client_id=ClientId(value=device_id),
                 materialized_path=self.materialized_root / device_id / "source.parquet",
-                processed_root=self.processed_root,
+                materialization_plan=materialization_plan,
                 context=_ClientTransformContext(
                     feature_columns=self.feature_columns, statistics=statistics_by_client[device_id]
                 ),

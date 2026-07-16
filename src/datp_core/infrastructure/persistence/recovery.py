@@ -13,6 +13,8 @@ from datp_core.domain.errors import ResumeIncompatibilityError
 from datp_core.domain.learning.checkpoints import RecoveryState
 from datp_core.infrastructure.persistence.roots import BoundStorageRoot
 
+CHECKPOINT_STORE_NAMESPACE = ".checkpoint-store"
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RecoveryStateRepository:
@@ -42,7 +44,8 @@ class RecoveryStateRepository:
         _write_recovery_state(path=path, recovery_state=recovery_state)
 
     def _path(self, compatibility_identity: RecoveryCompatibilityIdentity) -> Path:
-        return self.root.absolute_path / ".checkpoint-store" / "recovery" / f"{compatibility_identity.value.value}.json"
+        filename = f"{compatibility_identity.value.value}.json"
+        return self.root.absolute_path / CHECKPOINT_STORE_NAMESPACE / "recovery" / filename
 
     def _read(self, *, path: Path, expected_identity: RecoveryCompatibilityIdentity) -> RecoveryState:
         try:

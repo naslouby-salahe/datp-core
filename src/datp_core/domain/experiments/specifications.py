@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
 from enum import StrEnum
 from typing import TYPE_CHECKING, assert_never
 
@@ -50,8 +49,12 @@ from datp_core.domain.experiments.protocols import (
     ScientificProtocolSpec,
 )
 from datp_core.domain.learning.training import AggregationStrategy, ParticipationStrategy
-from datp_core.domain.runtime.seeds import SeedTuple
-from datp_core.domain.thresholding.federated_statistics import FedStatsK
+from datp_core.domain.mathematics.pooled_statistics import (
+    PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES,
+    REGIME_D_MINIMUM_COVERAGE,
+)
+from datp_core.domain.runtime.seeds import CONFIRMATORY_PAIRED_SEED_COUNT, SeedTuple
+from datp_core.domain.thresholding.federated_statistics import FED_STATS_SUPPLEMENTARY_K_VALUES, FedStatsK
 from datp_core.domain.thresholding.policies import (
     FprTarget,
     LocalThresholdSpec,
@@ -549,7 +552,10 @@ def _has_confirmatory_identity(profile: ConfirmatoryExperimentProfileSpec) -> bo
 
 
 def _has_confirmatory_statistical_contract(profile: ConfirmatoryExperimentProfileSpec) -> bool:
-    return profile.statistical_procedure.is_confirmatory_locked and len(profile.authorized_seed_plan.values) == 10
+    return (
+        profile.statistical_procedure.is_confirmatory_locked
+        and len(profile.authorized_seed_plan.values) == CONFIRMATORY_PAIRED_SEED_COUNT
+    )
 
 
 def _has_confirmatory_protocols(profile: ConfirmatoryExperimentProfileSpec) -> bool:
@@ -683,7 +689,7 @@ DIRICHLET_ALPHA_GRID = tuple(
 CALIBRATION_SIZE_GRID = tuple(CalibrationSampleCount(value=value) for value in (50, 100, 250, 500, 1000, 5000))
 SHRINKAGE_WEIGHT_GRID = tuple(ShrinkageWeight(value=value) for value in (0.00, 0.25, 0.50, 0.75, 1.00))
 CONFORMAL_ALPHA = FprTarget(value=0.05)
-FED_STATS_K_GRID = tuple(FedStatsK(value=Decimal(value)) for value in ("2.0", "2.5", "3.0"))
+FED_STATS_K_GRID = tuple(FedStatsK(value=value) for value in FED_STATS_SUPPLEMENTARY_K_VALUES)
 ABSORPTION_GATES = AbsorptionGateSpec(
     strongly_useful_fraction=Probability(value=0.75),
     partial_absorption_fraction=Probability(value=0.25),
@@ -691,8 +697,8 @@ ABSORPTION_GATES = AbsorptionGateSpec(
 )
 TEMPORAL_RECOVERY_GATE = TemporalRecoveryGateSpec(meaningful_recovery_fraction=Probability(value=0.50))
 REGIME_D_VIABILITY_GATE = RegimeDViabilityGateSpec(
-    minimum_eligibility_coverage=CoverageRatio(value=0.90),
-    minimum_calibration_samples=CalibrationSampleCount(value=100),
+    minimum_eligibility_coverage=REGIME_D_MINIMUM_COVERAGE,
+    minimum_calibration_samples=PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES,
 )
 CONFIRMATORY_SIGN_REQUIREMENT = ConfirmatorySignRequirement(direction=PairedDeltaDirection.B1_MINUS_B2)
 SUPPRESSION_GATE = SuppressionGateSpec(outcome=ClaimOutcome.SUPPRESSED)

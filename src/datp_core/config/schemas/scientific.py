@@ -4,6 +4,7 @@ from typing import Annotated, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from datp_core.domain.data.datasets import TimestampEvidenceKind
+from datp_core.domain.data.preprocessing import FittedStatisticPolicy, NormalizationScope, NormalizationStrategy
 from datp_core.domain.evaluation.metrics import OperatingPointMetric
 from datp_core.domain.experiments.protocols import ProtocolTrack
 from datp_core.domain.learning.scores import QuantileEstimatorType
@@ -172,6 +173,23 @@ class CanonicalTemporalConfig(ScientificSchema):
     timestamp_evidence_kind: Literal[TimestampEvidenceKind.GENUINE_CAPTURE_TIME]
     capture_timestamp_field: str
     boundary_identity: StageFingerprintText
+
+
+type RegimeAStaticTrainFraction = Annotated[Decimal, Field(ge=Decimal("0.60"), le=Decimal("0.60"))]
+type RegimeAStaticGapFraction = Annotated[Decimal, Field(ge=Decimal("0.01"), le=Decimal("0.01"))]
+type RegimeAStaticCalibrationFraction = Annotated[Decimal, Field(ge=Decimal("0.20"), le=Decimal("0.20"))]
+
+
+class RegimeAStaticSplitConfig(ScientificSchema):
+    train_fraction: RegimeAStaticTrainFraction
+    gap_fraction: RegimeAStaticGapFraction
+    calibration_fraction: RegimeAStaticCalibrationFraction
+
+
+class RegimeAPreprocessingConfig(ScientificSchema):
+    strategy: Literal[NormalizationStrategy.STANDARD]
+    scope: Literal[NormalizationScope.PER_CLIENT_TRAIN]
+    fitted_stat_policy: Literal[FittedStatisticPolicy.EXACT_TWO_PASS]
 
 
 class CentralizedComparatorConfig(ScientificSchema):

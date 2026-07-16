@@ -58,7 +58,9 @@ def test_materialization_checksum_is_identical_across_different_csv_block_sizes(
 def test_materialization_rejects_a_device_with_no_source_files(tmp_path: Path) -> None:
     raw_root = tmp_path / "raw"
     (raw_root / "DeviceEmpty").mkdir(parents=True)
-    adapter = NBaIoTChunkedSourceAdapter(raw_root=raw_root, output_root=tmp_path / "processed")
+    adapter = NBaIoTChunkedSourceAdapter(
+        raw_root=raw_root, output_root=tmp_path / "processed", csv_block_bytes=8 * 1024 * 1024
+    )
 
     with pytest.raises(DatasetError):
         adapter.materialize_device("DeviceEmpty")

@@ -9,6 +9,7 @@ from datp_core.config.schemas.execution import (
     ResourceBudgetConfig,
     ResourcePressureConfig,
     StageExecutionConfig,
+    StreamingChunkConfig,
 )
 from datp_core.config.schemas.reporting import ReportingConfig, ReportingFormatConfig
 from datp_core.config.schemas.scientific import (
@@ -27,6 +28,8 @@ from datp_core.config.schemas.scientific import (
     LinearRegressionStatisticalConfig,
     LocalThresholdConfig,
     PercentileBootstrapStatisticalConfig,
+    RegimeAPreprocessingConfig,
+    RegimeAStaticSplitConfig,
     RobustClusterMedianThresholdConfig,
     ScientificConfig,
     SharedThresholdConfig,
@@ -122,12 +125,15 @@ def test_boundary_schema_fields_have_no_defaults() -> None:
         FedProxFederationConfig,
         CanonicalTemporalConfig,
         CentralizedComparatorConfig,
+        RegimeAStaticSplitConfig,
+        RegimeAPreprocessingConfig,
         ExecutionConfig,
         ResourceBudgetConfig,
         StageExecutionConfig,
         ParallelismConfig,
         ResourcePressureConfig,
         RecoveryConfig,
+        StreamingChunkConfig,
         ArtifactConfig,
         ArtifactSerializationConfig,
         ReportingConfig,

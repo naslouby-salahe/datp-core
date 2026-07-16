@@ -41,6 +41,7 @@ from datp_core.domain.experiments.protocols import ScientificProtocolSpec
 from datp_core.domain.experiments.specifications import ExperimentCell, ExperimentSpec
 from datp_core.domain.runtime.policies import PipelineStage
 from datp_core.domain.runtime.seeds import Seed
+from datp_core.domain.thresholding.policies import DECIMAL_QUANTUM
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -235,7 +236,7 @@ def _canonical_float(value: object) -> bytes:
             value=repr(value),
             constraint="finite canonical quantized float",
         )
-    return _encoded("float", format(Decimal(str(value)).quantize(Decimal("0.000000000001")), "f").encode())
+    return _encoded("float", format(Decimal(str(value)).quantize(DECIMAL_QUANTUM), "f").encode())
 
 
 def _canonical_tuple(value: tuple[object, ...]) -> bytes:

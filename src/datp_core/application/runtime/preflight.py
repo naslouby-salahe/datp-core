@@ -29,6 +29,7 @@ from datp_core.domain.learning.scores import (
 )
 from datp_core.domain.learning.training import TrainingBatchSpec
 from datp_core.domain.runtime.policies import (
+    MAXIMUM_CONCURRENT_GPU_JOBS,
     DevicePolicy,
     DeviceSpec,
     HardwareInventory,
@@ -343,12 +344,12 @@ def _validate_gpu_parallelism(
     *, hardware: HardwareInventory, resources: ResourcePreflightRequirements, device: DeviceSpec
 ) -> None:
     requested_jobs = resources.parallelism.maximum_gpu_jobs.value
-    if requested_jobs > min(1, hardware.gpu_count):
+    if requested_jobs > min(MAXIMUM_CONCURRENT_GPU_JOBS, hardware.gpu_count):
         raise UnsafeParallelismError(
             detail="preflight permits at most one GPU job on an available selected GPU",
             requested_concurrency=requested_jobs,
         )
-    if device.policy is DevicePolicy.CUDA_REQUIRED and requested_jobs != 1:
+    if device.policy is DevicePolicy.CUDA_REQUIRED and requested_jobs != MAXIMUM_CONCURRENT_GPU_JOBS:
         raise UnsafeParallelismError(
             detail="CUDA-required execution must reserve exactly one GPU job",
             requested_concurrency=requested_jobs,

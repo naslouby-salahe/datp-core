@@ -61,6 +61,11 @@ class RecoveryConfig(ExecutionSchema):
     compatibility_identity: str
 
 
+class StreamingChunkConfig(ExecutionSchema):
+    csv_block_bytes: PositiveInteger
+    parquet_batch_rows: PositiveInteger
+
+
 class ExecutionConfig(ExecutionSchema):
     mode: ExecutionMode
     device_policy: DevicePolicy

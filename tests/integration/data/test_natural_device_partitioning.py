@@ -10,11 +10,16 @@ from datp_core.domain.artifacts.references import ArtifactId, ArtifactRef, Artif
 from datp_core.domain.data.datasets import DatasetSourceInspectionResult, Regime
 from datp_core.domain.data.partitioning import ClientDefinitionStrategy, NaturalDevicePartitionSpec
 from datp_core.domain.errors import PartitionError
+from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
+from datp_core.domain.runtime.policies import StreamingChunkPolicy
 from datp_core.infrastructure.data.partitioning import NaturalDevicePartitioner
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.roots import bind_storage_root
 
 _FEATURE_COLUMNS = "feature_a,feature_b,feature_c"
+_STREAMING_CHUNK_POLICY = StreamingChunkPolicy(
+    csv_block_bytes=CsvBlockBytes(value=8 * 1024 * 1024), parquet_batch_rows=ChunkRowCount(value=50_000)
+)
 
 
 def _write_csv(path: Path, *, rows: int) -> None:
@@ -43,7 +48,10 @@ def _partitioner(raw_root: Path, tmp_path: Path) -> NaturalDevicePartitioner:
         )
     )
     return NaturalDevicePartitioner(
-        raw_root=raw_root, materialized_root=tmp_path / "materialized", artifact_store=store
+        raw_root=raw_root,
+        materialized_root=tmp_path / "materialized",
+        artifact_store=store,
+        streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
     )
 
 

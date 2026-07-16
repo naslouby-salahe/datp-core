@@ -9,14 +9,19 @@ from datp_core.domain.artifacts.lineage import (
     TrainingIdentity,
 )
 from datp_core.domain.artifacts.manifests import ArtifactType
-from datp_core.domain.artifacts.references import ArtifactRef, ArtifactSchemaVersion, CheckpointId, StageFingerprint
+from datp_core.domain.artifacts.references import (
+    CONTENT_HASH_PATTERN,
+    ArtifactRef,
+    ArtifactSchemaVersion,
+    CheckpointId,
+    StageFingerprint,
+)
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.runtime.seeds import RoundNumber, Seed
 
 SCHEDULED_CHECKPOINT_ROUNDS = (25, 50, 75, 100, 125, 150, 200)
 REGIME_A_SELECTION_RULE_VERSION = "regime_a_weighted_benign_validation_loss_v1"
 EARLIEST_SCHEDULED_ROUND_TIE_BREAK_RULE = "earliest_scheduled_round_v1"
-_CONTENT_HASH_PATTERN = r"[0-9a-f]{64}"
 
 
 class CheckpointKind(StrEnum):
@@ -58,11 +63,11 @@ def _validated_version(*, value: str, expected: str, name: str) -> None:
 
 
 def _validated_content_hash(*, value: str) -> None:
-    if fullmatch(_CONTENT_HASH_PATTERN, value) is None:
+    if fullmatch(CONTENT_HASH_PATTERN, value) is None:
         raise DomainValidationError(
             detail="checkpoint content hash must be a canonical digest",
             value=repr(value),
-            constraint=_CONTENT_HASH_PATTERN,
+            constraint=CONTENT_HASH_PATTERN,
         )
 
 
@@ -338,7 +343,7 @@ def _has_scientific_checkpoint_artifact(artifact_ref: ArtifactRef) -> bool:
 
 
 def _is_valid_content_hash(value: str) -> bool:
-    return fullmatch(_CONTENT_HASH_PATTERN, value) is not None
+    return fullmatch(CONTENT_HASH_PATTERN, value) is not None
 
 
 def _has_matching_descriptor_integrity(descriptor: CheckpointDescriptor) -> bool:

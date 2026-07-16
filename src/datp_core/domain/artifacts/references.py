@@ -24,7 +24,7 @@ _ARTIFACT_ID_PATTERN = r"artifact-[0-9a-f]{64}"
 _RUN_IDENTITY_PATTERN = r"run-[0-9a-f]{64}"
 _CHECKPOINT_ID_PATTERN = r"checkpoint-[0-9a-f]{64}"
 _STAGE_FINGERPRINT_PATTERN = r"[0-9a-f]{64}"
-_CONTENT_HASH_PATTERN = r"[0-9a-f]{64}"
+CONTENT_HASH_PATTERN = r"[0-9a-f]{64}"
 
 
 def _validated_identity(*, value: str, pattern: str, name: str) -> str:
@@ -95,7 +95,7 @@ class ArtifactRef:
     serialization_format: SerializationFormat
 
     def __post_init__(self) -> None:
-        _validated_identity(value=self.content_hash, pattern=_CONTENT_HASH_PATTERN, name="artifact content hash")
+        _validated_identity(value=self.content_hash, pattern=CONTENT_HASH_PATTERN, name="artifact content hash")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

@@ -25,6 +25,8 @@ from datp_core.config.schemas.scientific import (
     LinearRegressionStatisticalConfig,
     LocalThresholdConfig,
     PercentileBootstrapStatisticalConfig,
+    RegimeAPreprocessingConfig,
+    RegimeAStaticSplitConfig,
     RobustClusterMedianThresholdConfig,
     ScientificConfig,
     SharedThresholdConfig,
@@ -45,7 +47,8 @@ from datp_core.domain.artifacts.lineage import (
 )
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.data.datasets import TimestampEvidence
-from datp_core.domain.data.splitting import TemporalBoundary
+from datp_core.domain.data.preprocessing import PreprocessingChunkSpec, PreprocessingSpec
+from datp_core.domain.data.splitting import RegimeAStaticSplitBoundarySpec, TemporalBoundary
 from datp_core.domain.errors import ConfigurationError, DomainValidationError
 from datp_core.domain.evaluation.alert_burden import BootstrapResampleCount
 from datp_core.domain.evaluation.metrics import METRIC_SPECS, OperatingPointMetric
@@ -65,7 +68,7 @@ from datp_core.domain.experiments.specifications import (
     ExperimentProfileSpec,
     ExperimentSpec,
 )
-from datp_core.domain.learning.training import FederationSpec
+from datp_core.domain.learning.training import FEDPROX_MU_GRID, FederationSpec
 from datp_core.domain.thresholding.federated_statistics import FedStatsBenignThresholdSpec
 from datp_core.domain.thresholding.policies import (
     ClusterThresholdSpec,
@@ -162,11 +165,7 @@ def map_federation_config(schema: FederationConfig) -> FederationSpec:
                 fedprox_mu=None,
             )
         case FedProxFederationConfig():
-            if schema.selection_source != "pre_registered_grid" or schema.fedprox_mu not in {
-                Decimal("0.001"),
-                Decimal("0.01"),
-                Decimal("0.1"),
-            }:
+            if schema.selection_source != "pre_registered_grid" or float(schema.fedprox_mu) not in FEDPROX_MU_GRID:
                 raise ConfigurationError(
                     detail="FedProx coefficients must be strictly positive frozen grid members",
                     section="scientific",
@@ -201,6 +200,33 @@ def map_canonical_temporal_config(schema: CanonicalTemporalConfig) -> TemporalBo
             field="canonical_temporal",
             mode="mapping",
         ) from error
+
+
+def map_regime_a_static_split_config(schema: RegimeAStaticSplitConfig) -> RegimeAStaticSplitBoundarySpec:
+    try:
+        return RegimeAStaticSplitBoundarySpec(
+            train_fraction=Probability(value=schema.train_fraction),
+            gap_fraction=Probability(value=schema.gap_fraction),
+            calibration_fraction=Probability(value=schema.calibration_fraction),
+        )
+    except DomainValidationError as error:
+        raise ConfigurationError(
+            detail="Regime A static split mapping requires the locked recovered 0.60/0.01/0.20 boundary fractions",
+            section="scientific",
+            field="regime_a_static_split",
+            mode="mapping",
+        ) from error
+
+
+def map_regime_a_preprocessing_config(
+    schema: RegimeAPreprocessingConfig, *, chunking: PreprocessingChunkSpec
+) -> PreprocessingSpec:
+    return PreprocessingSpec(
+        strategy=schema.strategy,
+        scope=schema.scope,
+        fitted_stat_policy=schema.fitted_stat_policy,
+        chunking=chunking,
+    )
 
 
 def map_statistical_config(schema: StatisticalConfig) -> StatisticalAnalysisSpec:

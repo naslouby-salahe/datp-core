@@ -1,10 +1,12 @@
-from datp_core.config.schemas.execution import ExecutionConfig, ParallelismConfig
+from datp_core.config.schemas.execution import ExecutionConfig, ParallelismConfig, StreamingChunkConfig
 from datp_core.domain.artifacts.lineage import RecoveryCompatibilityIdentity
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.errors import ConfigurationError
 from datp_core.domain.experiments.protocols import ExecutionPolicy
 from datp_core.domain.learning.checkpoints import RecoveryCheckpointPolicy
 from datp_core.domain.runtime.admissibility import (
+    ChunkRowCount,
+    CsvBlockBytes,
     DiskBudgetBytes,
     GpuIndex,
     PrefetchCapacity,
@@ -19,6 +21,7 @@ from datp_core.domain.runtime.policies import (
     ParallelismSpec,
     ResourceBudget,
     ResourcePressurePolicy,
+    StreamingChunkPolicy,
 )
 from datp_core.domain.runtime.seeds import EnumMap, EnumMapEntry, SeedRoleTuple
 
@@ -90,4 +93,11 @@ def _map_parallelism(schema: ParallelismConfig) -> ParallelismSpec:
             is_sparse=False,
         ),
         thread_limit=WorkerCount(value=schema.thread_limit),
+    )
+
+
+def map_streaming_chunk_config(schema: StreamingChunkConfig) -> StreamingChunkPolicy:
+    return StreamingChunkPolicy(
+        csv_block_bytes=CsvBlockBytes(value=schema.csv_block_bytes),
+        parquet_batch_rows=ChunkRowCount(value=schema.parquet_batch_rows),
     )

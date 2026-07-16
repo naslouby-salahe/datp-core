@@ -1,7 +1,7 @@
 import torch
 
 from datp_core.domain.errors import TrainingError
-from datp_core.domain.learning.models import ActivationFunction, AutoencoderSpec
+from datp_core.domain.learning.models import AutoencoderSpec
 from datp_core.domain.learning.training import (
     AggregationStrategy,
     ClientBatchPartitioning,
@@ -18,13 +18,18 @@ from datp_core.domain.learning.training import (
 )
 from datp_core.domain.runtime.admissibility import BatchSize, GradientAccumulationSteps
 from datp_core.domain.runtime.seeds import Seed
-from datp_core.infrastructure.learning.models.autoencoder import FixedAutoencoder
+from datp_core.infrastructure.learning.models.autoencoder import (
+    FIXED_ENCODER_ACTIVATION,
+    FIXED_ENCODER_BOTTLENECK_DIM,
+    FIXED_ENCODER_HIDDEN_DIMS,
+    FixedAutoencoder,
+)
 
 ANCHOR_AUTOENCODER_SPECIFICATION = AutoencoderSpec(
     input_dim=115,
-    hidden_dims=(80, 40),
-    bottleneck_dim=20,
-    activation=ActivationFunction.RELU,
+    hidden_dims=FIXED_ENCODER_HIDDEN_DIMS,
+    bottleneck_dim=FIXED_ENCODER_BOTTLENECK_DIM,
+    activation=FIXED_ENCODER_ACTIVATION,
 )
 
 _ANCHOR_OPTIMIZER = OptimizerType.ADAM

@@ -19,6 +19,7 @@ from datp_core.domain.artifacts.lineage import (
     TrainingIdentity,
 )
 from datp_core.domain.artifacts.references import (
+    CONTENT_HASH_PATTERN,
     ArtifactRef,
     ArtifactSchemaVersion,
     CalibrationScoreArtifactId,
@@ -32,8 +33,6 @@ from datp_core.domain.runtime.admissibility import BatchSize
 
 if TYPE_CHECKING:
     from datp_core.domain.thresholding.policies import ThresholdValue
-
-_CONTENT_HASH_PATTERN = r"[0-9a-f]{64}"
 
 
 class QuantileEstimatorType(StrEnum):
@@ -222,7 +221,7 @@ def _has_calibration_score_artifact_types(artifact: ClientCalibrationScoreArtifa
 
 
 def _are_valid_content_hashes(*values: str) -> bool:
-    return all(fullmatch(_CONTENT_HASH_PATTERN, value) is not None for value in values)
+    return all(fullmatch(CONTENT_HASH_PATTERN, value) is not None for value in values)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

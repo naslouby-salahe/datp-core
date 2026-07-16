@@ -6,7 +6,7 @@ from math import isfinite
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.errors import AnchorReproductionFailure, DomainValidationError
 from datp_core.domain.evaluation.alert_burden import BootstrapResampleCount
-from datp_core.domain.runtime.seeds import SeedTuple
+from datp_core.domain.runtime.seeds import CONFIRMATORY_PAIRED_SEED_COUNT, SeedTuple
 from datp_core.domain.thresholding.policies import DecimalValue, FiniteFloatValue
 
 
@@ -82,7 +82,7 @@ class StatisticalAnalysisSpec:
         return (
             self.method is StatisticalMethod.BCA_BOOTSTRAP
             and self.confidence == ConfidenceLevel(value=0.95)
-            and self.paired_seed_count == 10
+            and self.paired_seed_count == CONFIRMATORY_PAIRED_SEED_COUNT
         )
 
 

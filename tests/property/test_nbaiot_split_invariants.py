@@ -20,6 +20,7 @@ from datp_core.domain.artifacts.references import ArtifactId, ArtifactRef, Artif
 from datp_core.domain.data.datasets import Dataset
 from datp_core.domain.data.partitioning import ClientPartitionResult
 from datp_core.domain.data.splitting import (
+    LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
     BenignCalibrationSplitSpec,
     SplitCollectionSpec,
     SplitManifest,
@@ -28,6 +29,8 @@ from datp_core.domain.data.splitting import (
 )
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import ClientRoster
+from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
+from datp_core.domain.runtime.policies import StreamingChunkPolicy
 from datp_core.infrastructure.data.nbaiot_source import NBaIoTChunkedSourceAdapter
 from datp_core.infrastructure.data.nbaiot_split import RegimeAStaticSplitBuilder
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
@@ -35,6 +38,9 @@ from datp_core.infrastructure.persistence.paths import ArtifactPathResolver, Res
 from datp_core.infrastructure.persistence.roots import BoundStorageRoot, bind_storage_root
 
 _FEATURE_COLUMNS = "feature_a,feature_b,feature_c"
+_STREAMING_CHUNK_POLICY = StreamingChunkPolicy(
+    csv_block_bytes=CsvBlockBytes(value=8 * 1024 * 1024), parquet_batch_rows=ChunkRowCount(value=50_000)
+)
 
 
 def _write_csv(path: Path, *, rows: int) -> None:
@@ -105,13 +111,22 @@ def test_calibration_never_exceeds_the_benign_row_count_and_split_is_determinist
         if attack_rows:
             _write_csv(raw_root / "DeviceOne" / "gafgyt_attacks" / "combo.csv", rows=attack_rows)
         materialized_root = Path(manifest_directory) / "materialized"
-        NBaIoTChunkedSourceAdapter(raw_root=raw_root, output_root=materialized_root).materialize_device("DeviceOne")
+        NBaIoTChunkedSourceAdapter(
+            raw_root=raw_root,
+            output_root=materialized_root,
+            csv_block_bytes=_STREAMING_CHUNK_POLICY.csv_block_bytes.value,
+        ).materialize_device("DeviceOne")
         bound_root = bind_storage_root(
             spec=StorageRootSpec(kind=StorageRootKind.PROCESSED_DATA, visibility=StorageVisibility.SCIENTIFIC_OUTPUT),
             absolute_path=Path(manifest_directory) / "manifests",
         )
         store = FileArtifactStore(root=bound_root)
-        builder = RegimeAStaticSplitBuilder(materialized_root=materialized_root, artifact_store=store)
+        builder = RegimeAStaticSplitBuilder(
+            materialized_root=materialized_root,
+            artifact_store=store,
+            boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
+            streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
+        )
         request = _request()
 
         first = builder.build(request)

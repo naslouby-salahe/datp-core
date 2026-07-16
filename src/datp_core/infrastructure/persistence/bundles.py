@@ -105,15 +105,20 @@ def _verify_member_content(member: ArtifactBundleMemberWrite) -> None:
         )
 
 
+def _bundle_id_from_parts(
+    *, aggregate: ClientTestScoreArtifact, member_references: tuple[ArtifactRef, ...]
+) -> ArtifactBundleId:
+    descriptor = msgspec.json.encode((aggregate, member_references))
+    return ArtifactBundleId(value="bundle-" + blake3_bytes_content_hash(descriptor))
+
+
 def _bundle_id(request: CommitArtifactBundleRequest) -> ArtifactBundleId:
     member_references = tuple(member.declared_member.artifact for member in request.members)
-    descriptor = msgspec.json.encode((request.aggregate, member_references))
-    return ArtifactBundleId(value="bundle-" + blake3_bytes_content_hash(descriptor))
+    return _bundle_id_from_parts(aggregate=request.aggregate, member_references=member_references)
 
 
 def _bundle_id_from_manifest(manifest: ArtifactBundleManifest) -> ArtifactBundleId:
-    descriptor = msgspec.json.encode((manifest.aggregate, manifest.members.references))
-    return ArtifactBundleId(value="bundle-" + blake3_bytes_content_hash(descriptor))
+    return _bundle_id_from_parts(aggregate=manifest.aggregate, member_references=manifest.members.references)
 
 
 def _manifest(*, bundle_id: ArtifactBundleId, request: CommitArtifactBundleRequest) -> ArtifactBundleManifest:

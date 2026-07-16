@@ -9,6 +9,9 @@ from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.evaluation.statistical_results import Probability
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.mathematics.pooled_statistics import (
+    REGIME_A_STATIC_SPLIT_CALIBRATION_FRACTION,
+    REGIME_A_STATIC_SPLIT_GAP_FRACTION,
+    REGIME_A_STATIC_SPLIT_TRAIN_FRACTION,
     REGIME_D_TEMPORAL_HISTORICAL_FRACTION,
     EligibilityClassification,
 )
@@ -168,6 +171,38 @@ class TemporalBoundary:
                 value=str(self.historical_fraction.value),
                 constraint=str(REGIME_D_TEMPORAL_HISTORICAL_FRACTION.value),
             )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RegimeAStaticSplitBoundarySpec:
+    train_fraction: Probability
+    gap_fraction: Probability
+    calibration_fraction: Probability
+
+    def __post_init__(self) -> None:
+        if (
+            self.train_fraction != REGIME_A_STATIC_SPLIT_TRAIN_FRACTION
+            or self.gap_fraction != REGIME_A_STATIC_SPLIT_GAP_FRACTION
+            or self.calibration_fraction != REGIME_A_STATIC_SPLIT_CALIBRATION_FRACTION
+        ):
+            raise DomainValidationError(
+                detail="Regime A static split boundary must use the locked recovered fractions",
+                value=repr((self.train_fraction.value, self.gap_fraction.value, self.calibration_fraction.value)),
+                constraint=repr(
+                    (
+                        REGIME_A_STATIC_SPLIT_TRAIN_FRACTION.value,
+                        REGIME_A_STATIC_SPLIT_GAP_FRACTION.value,
+                        REGIME_A_STATIC_SPLIT_CALIBRATION_FRACTION.value,
+                    )
+                ),
+            )
+
+
+LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY = RegimeAStaticSplitBoundarySpec(
+    train_fraction=REGIME_A_STATIC_SPLIT_TRAIN_FRACTION,
+    gap_fraction=REGIME_A_STATIC_SPLIT_GAP_FRACTION,
+    calibration_fraction=REGIME_A_STATIC_SPLIT_CALIBRATION_FRACTION,
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True, init=False)

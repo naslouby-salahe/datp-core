@@ -19,6 +19,7 @@ from datp_core.domain.data.partitioning import (
 from datp_core.domain.errors import PartitionError
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import ClientRoster
+from datp_core.domain.runtime.policies import StreamingChunkPolicy
 from datp_core.infrastructure.data.nbaiot_inspection import sorted_device_directories
 from datp_core.infrastructure.data.nbaiot_source import NBaIoTChunkedSourceAdapter
 from datp_core.infrastructure.data.streaming import ParquetBatchStream
@@ -40,7 +41,7 @@ class NaturalDevicePartitioner:
     raw_root: Path
     materialized_root: Path
     artifact_store: FileArtifactStore
-    csv_block_bytes: int = 8 * 1024 * 1024
+    streaming_chunk_policy: StreamingChunkPolicy
 
     def partition(self, request: ClientPartitionRequest) -> ClientPartitionResult:
         if type(request.partitioning) is not NaturalDevicePartitionSpec:
@@ -52,7 +53,9 @@ class NaturalDevicePartitioner:
                 f"found {len(device_ids)}"
             )
         adapter = NBaIoTChunkedSourceAdapter(
-            raw_root=self.raw_root, output_root=self.materialized_root, csv_block_bytes=self.csv_block_bytes
+            raw_root=self.raw_root,
+            output_root=self.materialized_root,
+            csv_block_bytes=self.streaming_chunk_policy.csv_block_bytes.value,
         )
         memberships: list[ClientRowMembership] = []
         for device_id in device_ids:

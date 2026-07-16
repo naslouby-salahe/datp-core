@@ -23,12 +23,17 @@ from datp_core.domain.data.partitioning import (
     ClientPartitionManifest,
     NaturalDevicePartitionSpec,
 )
+from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
+from datp_core.domain.runtime.policies import StreamingChunkPolicy
 from datp_core.infrastructure.data.partitioning import NaturalDevicePartitioner
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.paths import ArtifactPathResolver, ResolveArtifactLocationRequest
 from datp_core.infrastructure.persistence.roots import bind_storage_root
 
 _FEATURE_COLUMNS = "feature_a,feature_b,feature_c"
+_STREAMING_CHUNK_POLICY = StreamingChunkPolicy(
+    csv_block_bytes=CsvBlockBytes(value=8 * 1024 * 1024), parquet_batch_rows=ChunkRowCount(value=50_000)
+)
 
 
 def _write_csv(path: Path, *, rows: int) -> None:
@@ -74,7 +79,10 @@ def test_every_source_row_is_mapped_to_exactly_one_client_with_no_loss_or_duplic
         )
         store = FileArtifactStore(root=bound_root)
         partitioner = NaturalDevicePartitioner(
-            raw_root=raw_root, materialized_root=Path(manifest_directory) / "materialized", artifact_store=store
+            raw_root=raw_root,
+            materialized_root=Path(manifest_directory) / "materialized",
+            artifact_store=store,
+            streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
         )
 
         result = partitioner.partition(_request())

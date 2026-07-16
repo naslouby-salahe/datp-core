@@ -8,11 +8,16 @@ from datp_core.domain.artifacts.lineage import FeatureSchemaIdentity
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.data.datasets import Dataset, DatasetSpec
 from datp_core.domain.errors import DatasetError
+from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
+from datp_core.domain.runtime.policies import StreamingChunkPolicy
 from datp_core.infrastructure.data.nbaiot_inspection import NBaIoTSourceInspector
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.roots import bind_storage_root
 
 _FEATURE_COLUMNS = "feature_a,feature_b,feature_c"
+_STREAMING_CHUNK_POLICY = StreamingChunkPolicy(
+    csv_block_bytes=CsvBlockBytes(value=8 * 1024 * 1024), parquet_batch_rows=ChunkRowCount(value=50_000)
+)
 
 
 def _write_csv(path: Path, *, rows: int) -> None:
@@ -37,7 +42,9 @@ def _inspector(raw_root: Path, artifact_root: Path) -> NBaIoTSourceInspector:
             absolute_path=artifact_root,
         )
     )
-    return NBaIoTSourceInspector(raw_root=raw_root, artifact_store=store)
+    return NBaIoTSourceInspector(
+        raw_root=raw_root, artifact_store=store, streaming_chunk_policy=_STREAMING_CHUNK_POLICY
+    )
 
 
 def _request(input_dim: int) -> InspectDatasetSourceRequest:

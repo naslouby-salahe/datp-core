@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 from math import fsum, isfinite, sqrt
+from typing import Final
 
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.mathematics.dispersion import ClientMoment
@@ -16,6 +17,7 @@ from datp_core.domain.thresholding.policies import (
 
 _GRID_STEP = Decimal("0.01")
 _GRID_MAXIMUM = Decimal("5.00")
+FED_STATS_SUPPLEMENTARY_K_VALUES: Final = (Decimal("2.0"), Decimal("2.5"), Decimal("3.0"))
 
 
 class ThresholdComparatorRole(StrEnum):
@@ -133,7 +135,7 @@ class FedStatsBenignThresholdSpec:
         object.__setattr__(
             self,
             "fixed_k_supplementary",
-            (FedStatsK(value=Decimal("2.0")), FedStatsK(value=Decimal("2.5")), FedStatsK(value=Decimal("3.0"))),
+            tuple(FedStatsK(value=value) for value in FED_STATS_SUPPLEMENTARY_K_VALUES),
         )
 
     def pooled_evidence(self, *, client_moments: tuple[ClientMoment, ...]) -> FedStatsPooledEvidence:

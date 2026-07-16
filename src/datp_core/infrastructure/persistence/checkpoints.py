@@ -19,7 +19,7 @@ from datp_core.application.ports.persistence import (
 from datp_core.domain.artifacts.keys import StorageRootKind
 from datp_core.domain.errors import CheckpointError
 from datp_core.domain.learning.checkpoints import CheckpointDescriptor
-from datp_core.infrastructure.persistence.recovery import RecoveryStateRepository
+from datp_core.infrastructure.persistence.recovery import CHECKPOINT_STORE_NAMESPACE, RecoveryStateRepository
 from datp_core.infrastructure.persistence.roots import BoundStorageRoot
 
 
@@ -73,7 +73,7 @@ class FileCheckpointStore:
 
 
 def _scientific_path(*, root: BoundStorageRoot, checkpoint_id: str) -> Path:
-    return root.absolute_path / ".checkpoint-store" / "scientific" / f"{checkpoint_id}.json"
+    return root.absolute_path / CHECKPOINT_STORE_NAMESPACE / "scientific" / f"{checkpoint_id}.json"
 
 
 def _write_record(*, path: Path, record: CheckpointDescriptor) -> None:

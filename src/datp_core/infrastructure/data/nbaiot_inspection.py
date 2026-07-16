@@ -24,10 +24,10 @@ from datp_core.domain.data.datasets import (
     SourceTrafficLabel,
 )
 from datp_core.domain.errors import DatasetError
+from datp_core.domain.runtime.policies import StreamingChunkPolicy
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.hashing import blake3_bytes_content_hash, blake3_file_content_hash
 
-_CSV_STREAM_BLOCK_BYTES = 8 * 1024 * 1024
 _TIMESTAMP_KEYWORDS = ("timestamp", "capture_time", "packet_time", "event_time")
 
 
@@ -35,12 +35,18 @@ _TIMESTAMP_KEYWORDS = ("timestamp", "capture_time", "packet_time", "event_time")
 class NBaIoTSourceInspector:
     raw_root: Path
     artifact_store: FileArtifactStore
+    streaming_chunk_policy: StreamingChunkPolicy
 
     def inspect(self, request: InspectDatasetSourceRequest) -> DatasetSourceInspectionResult:
         device_dirs = sorted_device_directories(self.raw_root)
         if not device_dirs:
             raise _dataset_error(request, f"no device directories found beneath {self.raw_root}")
-        feature_columns, source_files = _scan_source_files(device_dirs, raw_root=self.raw_root, request=request)
+        feature_columns, source_files = _scan_source_files(
+            device_dirs,
+            raw_root=self.raw_root,
+            request=request,
+            csv_block_bytes=self.streaming_chunk_policy.csv_block_bytes.value,
+        )
         _validate_feature_dimension(feature_columns, request=request)
         source_manifest = DatasetSourceManifest(
             dataset=request.dataset.dataset,
@@ -113,8 +119,8 @@ def device_csv_files(device_dir: Path) -> tuple[tuple[Path, SourceTrafficLabel],
     return tuple(entries)
 
 
-def _inspect_csv(path: Path) -> tuple[tuple[str, ...] | None, int]:
-    reader = pa_csv.open_csv(path, read_options=pa_csv.ReadOptions(block_size=_CSV_STREAM_BLOCK_BYTES))
+def _inspect_csv(path: Path, *, csv_block_bytes: int) -> tuple[tuple[str, ...] | None, int]:
+    reader = pa_csv.open_csv(path, read_options=pa_csv.ReadOptions(block_size=csv_block_bytes))
     columns: tuple[str, ...] | None = None
     row_count = 0
     for batch in reader:
@@ -166,13 +172,13 @@ def _reconciled_feature_columns(
 
 
 def _scan_source_files(
-    device_dirs: tuple[Path, ...], *, raw_root: Path, request: InspectDatasetSourceRequest
+    device_dirs: tuple[Path, ...], *, raw_root: Path, request: InspectDatasetSourceRequest, csv_block_bytes: int
 ) -> tuple[tuple[str, ...], tuple[SourceFileManifestEntry, ...]]:
     feature_columns: tuple[str, ...] | None = None
     source_files: list[SourceFileManifestEntry] = []
     for device_dir in device_dirs:
         for csv_path, label in device_csv_files(device_dir):
-            columns, row_count = _inspect_csv(csv_path)
+            columns, row_count = _inspect_csv(csv_path, csv_block_bytes=csv_block_bytes)
             if columns is None:
                 raise _dataset_error(request, f"{csv_path} contains no rows")
             feature_columns = _reconciled_feature_columns(

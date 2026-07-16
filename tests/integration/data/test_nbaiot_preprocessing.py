@@ -16,6 +16,7 @@ from datp_core.domain.data.preprocessing import (
     PreprocessingSpec,
 )
 from datp_core.domain.data.splitting import (
+    LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
     BenignCalibrationSplitSpec,
     SplitCollectionSpec,
     SplitManifestResult,
@@ -23,7 +24,8 @@ from datp_core.domain.data.splitting import (
     TrainingSplitSpec,
 )
 from datp_core.domain.errors import PreprocessingError
-from datp_core.domain.runtime.admissibility import ChunkRowCount
+from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
+from datp_core.domain.runtime.policies import StreamingChunkPolicy
 from datp_core.infrastructure.data.nbaiot_preprocessing import (
     NBaIoTPreprocessorFitter,
     NBaIoTProcessedSplitMaterializer,
@@ -36,6 +38,9 @@ _FEATURE_COLUMNS = ("feature_a", "feature_b", "feature_c")
 _HEADER = ",".join(_FEATURE_COLUMNS)
 _PARTITION_IDENTITY = PartitionIdentity(value=StageFingerprint(value="d" * 64))
 _SOURCE_ROW_IDENTITY = DatasetSourceIdentity(value=StageFingerprint(value="a" * 64))
+_STREAMING_CHUNK_POLICY = StreamingChunkPolicy(
+    csv_block_bytes=CsvBlockBytes(value=8 * 1024 * 1024), parquet_batch_rows=ChunkRowCount(value=50_000)
+)
 
 
 def _write_csv(path: Path, *, rows: int, offset: int = 0) -> None:
@@ -50,7 +55,9 @@ def _materialize(
 ) -> None:
     _write_csv(raw_root / device_id / "benign_traffic.csv", rows=benign_rows)
     _write_csv(raw_root / device_id / "gafgyt_attacks" / "combo.csv", rows=attack_rows, offset=benign_rows)
-    NBaIoTChunkedSourceAdapter(raw_root=raw_root, output_root=materialized_root).materialize_device(device_id)
+    NBaIoTChunkedSourceAdapter(
+        raw_root=raw_root, output_root=materialized_root, csv_block_bytes=_STREAMING_CHUNK_POLICY.csv_block_bytes.value
+    ).materialize_device(device_id)
 
 
 def _dummy_ref() -> ArtifactRef:
@@ -114,6 +121,8 @@ def test_fit_uses_only_train_rows_and_transform_preserves_feature_order_with_chu
         scratch_root=tmp_path / "scratch",
         artifact_store=FileArtifactStore(root=bound_root),
         feature_columns=_FEATURE_COLUMNS,
+        boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
+        streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
     )
     fitted = fitter.fit(
         FitPreprocessorRequest(split_manifest=_split_manifest_result(), preprocessing=_preprocessing_spec())
@@ -126,6 +135,8 @@ def test_fit_uses_only_train_rows_and_transform_preserves_feature_order_with_chu
         manifest_root=bound_root,
         feature_columns=_FEATURE_COLUMNS,
         source_row_identity=_SOURCE_ROW_IDENTITY,
+        boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
+        streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
     )
     result = materializer.materialize(
         MaterializeProcessedSplitsRequest(split_manifest=_split_manifest_result(), fitted_preprocessor=fitted)
@@ -152,6 +163,8 @@ def test_transform_is_deterministic_across_repeated_runs(tmp_path: Path) -> None
         scratch_root=tmp_path / "scratch",
         artifact_store=FileArtifactStore(root=bound_root),
         feature_columns=_FEATURE_COLUMNS,
+        boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
+        streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
     )
     request = FitPreprocessorRequest(split_manifest=_split_manifest_result(), preprocessing=_preprocessing_spec())
 
@@ -173,6 +186,8 @@ def test_fit_rejects_an_unauthorized_preprocessing_policy(tmp_path: Path) -> Non
         scratch_root=tmp_path / "scratch",
         artifact_store=store,
         feature_columns=_FEATURE_COLUMNS,
+        boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
+        streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
     )
     request = FitPreprocessorRequest(
         split_manifest=_split_manifest_result(),

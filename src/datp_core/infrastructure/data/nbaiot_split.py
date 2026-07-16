@@ -9,8 +9,14 @@ from datp_core.application.ports.persistence import WriteArtifactRequest
 from datp_core.domain.artifacts.keys import ArtifactNamespace, DatasetArtifactKey, SerializationFormat, WriteDisposition
 from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import ArtifactId, ArtifactRef, ArtifactSchemaVersion, StageFingerprint
-from datp_core.domain.data.datasets import Dataset
-from datp_core.domain.data.splitting import ClientSplitMembership, SplitManifest, SplitManifestResult, SplitRole
+from datp_core.domain.data.datasets import Dataset, SourceTrafficLabel
+from datp_core.domain.data.splitting import (
+    ClientSplitMembership,
+    RegimeAStaticSplitBoundarySpec,
+    SplitManifest,
+    SplitManifestResult,
+    SplitRole,
+)
 from datp_core.domain.errors import SplitError
 from datp_core.domain.evaluation.alert_burden import CalibrationSampleCount
 from datp_core.domain.evaluation.operating_points import (
@@ -20,25 +26,28 @@ from datp_core.domain.evaluation.operating_points import (
 )
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import ClientRoster
-from datp_core.domain.mathematics.pooled_statistics import ProtocolEligibilitySpec, classify_protocol_eligibility
-from datp_core.domain.runtime.admissibility import ChunkRowCount
+from datp_core.domain.mathematics.pooled_statistics import (
+    PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES,
+    ProtocolEligibilitySpec,
+    classify_protocol_eligibility,
+)
+from datp_core.domain.runtime.policies import StreamingChunkPolicy
+from datp_core.infrastructure.data.nbaiot_source import SOURCE_LABEL_COLUMN_NAME
 from datp_core.infrastructure.data.streaming import ParquetBatchStream, update_row_order_checksum
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.hashing import blake3_bytes_content_hash
 
-_TRAIN_FRACTION = 0.60
-_GAP_FRACTION = 0.01
-_CALIBRATION_FRACTION = 0.20
-_LABEL_COLUMN_NAME = "source_label"
-_BENIGN_LABEL = "benign"
-_DEFAULT_BATCH_ROWS = 50_000
 
-
-def benign_split_boundaries(benign_total: int) -> tuple[int, int, int, int]:
-    train_end = int(benign_total * _TRAIN_FRACTION)
-    gap1_end = int(benign_total * (_TRAIN_FRACTION + _GAP_FRACTION))
-    calibration_end = int(benign_total * (_TRAIN_FRACTION + _GAP_FRACTION + _CALIBRATION_FRACTION))
-    gap2_end = int(benign_total * (_TRAIN_FRACTION + 2 * _GAP_FRACTION + _CALIBRATION_FRACTION))
+def benign_split_boundaries(
+    benign_total: int, *, boundary_spec: RegimeAStaticSplitBoundarySpec
+) -> tuple[int, int, int, int]:
+    train_fraction = float(boundary_spec.train_fraction.value)
+    gap_fraction = float(boundary_spec.gap_fraction.value)
+    calibration_fraction = float(boundary_spec.calibration_fraction.value)
+    train_end = int(benign_total * train_fraction)
+    gap1_end = int(benign_total * (train_fraction + gap_fraction))
+    calibration_end = int(benign_total * (train_fraction + gap_fraction + calibration_fraction))
+    gap2_end = int(benign_total * (train_fraction + 2 * gap_fraction + calibration_fraction))
     return train_end, gap1_end, calibration_end, gap2_end
 
 
@@ -82,7 +91,7 @@ def _count_benign_rows(stream: ParquetBatchStream, label_column_index: int) -> i
     count = 0
     for batch in stream.batches():
         labels = batch.column(label_column_index).to_pylist()
-        matching = sum(1 for label in labels if label == _BENIGN_LABEL)
+        matching = sum(1 for label in labels if label == SourceTrafficLabel.BENIGN.value)
         count += matching
         if matching != batch.num_rows:
             break
@@ -111,13 +120,19 @@ def _accumulate_client_split(
     return accumulators
 
 
-def _client_split_membership(*, client_id: ClientId, materialized_path: Path) -> ClientSplitMembership:
-    stream = ParquetBatchStream(path=materialized_path, batch_rows=ChunkRowCount(value=_DEFAULT_BATCH_ROWS))
-    label_column_index = stream.schema().get_field_index(_LABEL_COLUMN_NAME)
+def _client_split_membership(
+    *,
+    client_id: ClientId,
+    materialized_path: Path,
+    boundary_spec: RegimeAStaticSplitBoundarySpec,
+    streaming_chunk_policy: StreamingChunkPolicy,
+) -> ClientSplitMembership:
+    stream = ParquetBatchStream(path=materialized_path, batch_rows=streaming_chunk_policy.parquet_batch_rows)
+    label_column_index = stream.schema().get_field_index(SOURCE_LABEL_COLUMN_NAME)
     if label_column_index < 0:
-        raise _split_error(f"{materialized_path} is missing the {_LABEL_COLUMN_NAME!r} column")
+        raise _split_error(f"{materialized_path} is missing the {SOURCE_LABEL_COLUMN_NAME!r} column")
     benign_total = _count_benign_rows(stream, label_column_index)
-    boundaries = benign_split_boundaries(benign_total)
+    boundaries = benign_split_boundaries(benign_total, boundary_spec=boundary_spec)
     accumulators = _accumulate_client_split(stream, boundaries=boundaries)
     train, calibration, test = (
         accumulators[SplitRole.TRAIN],
@@ -185,7 +200,9 @@ def _split_error(coverage: str) -> SplitError:
 
 
 _PROTOCOL_ELIGIBILITY_RULE_IDENTITY = StageFingerprint(
-    value=blake3_bytes_content_hash(b"protocol_eligibility:n_min=100")
+    value=blake3_bytes_content_hash(
+        f"protocol_eligibility:n_min={PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES.value}".encode()
+    )
 )
 
 
@@ -193,12 +210,17 @@ _PROTOCOL_ELIGIBILITY_RULE_IDENTITY = StageFingerprint(
 class RegimeAStaticSplitBuilder:
     materialized_root: Path
     artifact_store: FileArtifactStore
+    boundary_spec: RegimeAStaticSplitBoundarySpec
+    streaming_chunk_policy: StreamingChunkPolicy
 
     def build(self, request: BuildSplitManifestRequest) -> SplitManifestResult:
         roster = request.partition.client_roster
         memberships = tuple(
             _client_split_membership(
-                client_id=client_id, materialized_path=self.materialized_root / client_id.value / "source.parquet"
+                client_id=client_id,
+                materialized_path=self.materialized_root / client_id.value / "source.parquet",
+                boundary_spec=self.boundary_spec,
+                streaming_chunk_policy=self.streaming_chunk_policy,
             )
             for client_id in roster.client_ids
         )

@@ -1,10 +1,17 @@
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 from hashlib import sha256
+from typing import Final
 
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.runtime.admissibility import WorkerCount
+
+CONFIRMATORY_PAIRED_SEED_COUNT: Final = 10
+
+
+def _derive_seed_value(seed_material: bytes) -> int:
+    return int.from_bytes(sha256(seed_material).digest()[:8], byteorder="big") & ((1 << 63) - 1)
 
 
 class SeedRole(StrEnum):
@@ -147,7 +154,10 @@ class ConfirmatorySeedCohort:
     b2_seeds: SeedTuple
 
     def __post_init__(self) -> None:
-        if len(self.b1_seeds.values) != 10 or len(self.b2_seeds.values) != 10:
+        if (
+            len(self.b1_seeds.values) != CONFIRMATORY_PAIRED_SEED_COUNT
+            or len(self.b2_seeds.values) != CONFIRMATORY_PAIRED_SEED_COUNT
+        ):
             raise DomainValidationError(
                 detail="confirmatory seed cohort requires exactly ten paired seeds",
                 value=f"{len(self.b1_seeds.values)}/{len(self.b2_seeds.values)}",
@@ -179,8 +189,7 @@ class DataLoaderSeedPlan:
                 constraint=f"0 <= worker index < {self.worker_count.value}",
             )
         seed_material = f"datp-core/dataloader-worker/v1\0{self.worker_seed.value}\0{worker_index}".encode()
-        derived_value = int.from_bytes(sha256(seed_material).digest()[:8], byteorder="big") & ((1 << 63) - 1)
-        return Seed(value=derived_value)
+        return Seed(value=_derive_seed_value(seed_material))
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -192,5 +201,4 @@ class SeedPlan:
 
 def derive_seed(*, experiment_seed: Seed, role: SeedRole, stage_fingerprint: StageFingerprint) -> Seed:
     seed_material = f"datp-core/seed/v1\0{experiment_seed.value}\0{role.value}\0{stage_fingerprint.value}".encode()
-    derived_value = int.from_bytes(sha256(seed_material).digest()[:8], byteorder="big") & ((1 << 63) - 1)
-    return Seed(value=derived_value)
+    return Seed(value=_derive_seed_value(seed_material))

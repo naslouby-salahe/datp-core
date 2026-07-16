@@ -1,0 +1,2 @@
+csv_block_bytes: 8388608
+parquet_batch_rows: 50000

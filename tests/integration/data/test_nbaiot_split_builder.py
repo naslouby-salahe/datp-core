@@ -20,6 +20,7 @@ from datp_core.domain.artifacts.references import ArtifactId, ArtifactRef, Artif
 from datp_core.domain.data.datasets import Dataset
 from datp_core.domain.data.partitioning import ClientPartitionResult
 from datp_core.domain.data.splitting import (
+    LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
     BenignCalibrationSplitSpec,
     SplitCollectionSpec,
     SplitManifest,
@@ -30,6 +31,8 @@ from datp_core.domain.errors import SplitError
 from datp_core.domain.evaluation.operating_points import ClientEligibilityStatus
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import ClientRoster
+from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
+from datp_core.domain.runtime.policies import StreamingChunkPolicy
 from datp_core.infrastructure.data.nbaiot_source import NBaIoTChunkedSourceAdapter
 from datp_core.infrastructure.data.nbaiot_split import RegimeAStaticSplitBuilder
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
@@ -37,6 +40,9 @@ from datp_core.infrastructure.persistence.paths import ArtifactPathResolver, Res
 from datp_core.infrastructure.persistence.roots import BoundStorageRoot, bind_storage_root
 
 _FEATURE_COLUMNS = "feature_a,feature_b,feature_c"
+_STREAMING_CHUNK_POLICY = StreamingChunkPolicy(
+    csv_block_bytes=CsvBlockBytes(value=8 * 1024 * 1024), parquet_batch_rows=ChunkRowCount(value=50_000)
+)
 
 
 def _write_csv(path: Path, *, rows: int) -> None:
@@ -51,7 +57,9 @@ def _materialize_device(
 ) -> None:
     _write_csv(raw_root / device_id / "benign_traffic.csv", rows=benign_rows)
     _write_csv(raw_root / device_id / "gafgyt_attacks" / "combo.csv", rows=attack_rows)
-    NBaIoTChunkedSourceAdapter(raw_root=raw_root, output_root=materialized_root).materialize_device(device_id)
+    NBaIoTChunkedSourceAdapter(
+        raw_root=raw_root, output_root=materialized_root, csv_block_bytes=_STREAMING_CHUNK_POLICY.csv_block_bytes.value
+    ).materialize_device(device_id)
 
 
 def _bound_root(tmp_path: Path) -> BoundStorageRoot:
@@ -127,7 +135,10 @@ def test_split_builder_excludes_attack_rows_from_calibration_and_reports_no_over
     _materialize_device(raw_root, materialized_root, device_id="DeviceOne", benign_rows=1000, attack_rows=200)
     bound_root = _bound_root(tmp_path)
     builder = RegimeAStaticSplitBuilder(
-        materialized_root=materialized_root, artifact_store=FileArtifactStore(root=bound_root)
+        materialized_root=materialized_root,
+        artifact_store=FileArtifactStore(root=bound_root),
+        boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
+        streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
     )
 
     result = builder.build(_request(("DeviceOne",)))
@@ -147,10 +158,16 @@ def test_split_builder_is_deterministic_across_repeated_runs(tmp_path: Path) -> 
     request = _request(("DeviceOne",))
 
     first = RegimeAStaticSplitBuilder(
-        materialized_root=materialized_root, artifact_store=FileArtifactStore(root=_bound_root(tmp_path / "first"))
+        materialized_root=materialized_root,
+        artifact_store=FileArtifactStore(root=_bound_root(tmp_path / "first")),
+        boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
+        streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
     ).build(request)
     second = RegimeAStaticSplitBuilder(
-        materialized_root=materialized_root, artifact_store=FileArtifactStore(root=_bound_root(tmp_path / "second"))
+        materialized_root=materialized_root,
+        artifact_store=FileArtifactStore(root=_bound_root(tmp_path / "second")),
+        boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
+        streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
     ).build(request)
 
     assert first.split_manifest.content_hash == second.split_manifest.content_hash
@@ -163,7 +180,10 @@ def test_split_builder_marks_a_small_client_as_fallback_and_a_large_client_as_el
     _materialize_device(raw_root, materialized_root, device_id="BigDevice", benign_rows=5000, attack_rows=500)
     bound_root = _bound_root(tmp_path)
     builder = RegimeAStaticSplitBuilder(
-        materialized_root=materialized_root, artifact_store=FileArtifactStore(root=bound_root)
+        materialized_root=materialized_root,
+        artifact_store=FileArtifactStore(root=bound_root),
+        boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
+        streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
     )
 
     result = builder.build(_request(("TinyDevice", "BigDevice")))
@@ -182,7 +202,10 @@ def test_split_builder_rejects_a_materialized_file_missing_the_label_column(tmp_
     device_dir.mkdir(parents=True)
     pq.write_table(pa.table({"feature_a": [1.0, 2.0, 3.0]}), device_dir / "source.parquet")
     builder = RegimeAStaticSplitBuilder(
-        materialized_root=materialized_root, artifact_store=FileArtifactStore(root=_bound_root(tmp_path))
+        materialized_root=materialized_root,
+        artifact_store=FileArtifactStore(root=_bound_root(tmp_path)),
+        boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
+        streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
     )
     request = _request(("DeviceOne",))
 

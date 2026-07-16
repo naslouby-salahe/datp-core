@@ -2,13 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from datp_core.domain.runtime.admissibility import GpuIndex
+
+MAXIMUM_CONCURRENT_GPU_JOBS: Final = 1
 
 if TYPE_CHECKING:
     from datp_core.domain.experiments.identities import CellId
     from datp_core.domain.runtime.admissibility import (
+        ChunkRowCount,
+        CsvBlockBytes,
         DiskBudgetBytes,
         PrefetchCapacity,
         RamBudgetBytes,
@@ -168,6 +172,22 @@ class ResourceBudget:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class StreamingChunkPolicy:
+    csv_block_bytes: CsvBlockBytes
+    parquet_batch_rows: ChunkRowCount
+
+    def __post_init__(self) -> None:
+        from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
+
+        if type(self.csv_block_bytes) is not CsvBlockBytes or type(self.parquet_batch_rows) is not ChunkRowCount:
+            _validation_error(
+                detail="streaming chunk policy must contain typed CSV block bytes and parquet batch rows",
+                value=repr(self),
+                constraint="CsvBlockBytes and ChunkRowCount",
+            )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class ParallelismSpec:
     maximum_cpu_workers: WorkerCount
     maximum_gpu_jobs: WorkerCount
@@ -196,7 +216,7 @@ def _is_valid_parallelism_specification(
     return all(
         (
             _has_parallelism_component_types(specification, worker_count_type, enum_map_type),
-            specification.maximum_gpu_jobs.value <= 1,
+            specification.maximum_gpu_jobs.value <= MAXIMUM_CONCURRENT_GPU_JOBS,
             _has_matching_parallelism_stage_keys(specification),
             _has_non_empty_parallelism_reasons(specification),
         )

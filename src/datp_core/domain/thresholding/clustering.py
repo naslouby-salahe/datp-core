@@ -7,13 +7,12 @@ from math import comb, isfinite
 from re import fullmatch
 from typing import Final
 
-from datp_core.domain.artifacts.references import StageFingerprint
+from datp_core.domain.artifacts.references import CONTENT_HASH_PATTERN, StageFingerprint
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.runtime.seeds import Seed, SeedRole, derive_seed
 from datp_core.domain.thresholding.policies import ThresholdPercentile, ThresholdValue
 
-_CONTENT_HASH_PATTERN = r"[0-9a-f]{64}"
 _POSITIVE_INTEGER_CONSTRAINT = "integer >= 1"
 
 
@@ -333,7 +332,7 @@ def _has_canonical_centroid_indexes(references: tuple[ClusterCentroidReference, 
 
 
 def _is_content_hash(value: str) -> bool:
-    return fullmatch(_CONTENT_HASH_PATTERN, value) is not None
+    return fullmatch(CONTENT_HASH_PATTERN, value) is not None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

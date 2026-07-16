@@ -123,6 +123,14 @@ class PrefetchCapacity:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class CsvBlockBytes:
+    value: int
+
+    def __post_init__(self) -> None:
+        _validated_integer(value=self.value, name="CSV block bytes", minimum=1)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class VramFraction:
     value: float
 

@@ -1,11 +1,13 @@
 from dataclasses import replace
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
 
 from datp_core.config.compose import OVERRIDE_PRECEDENCE, compose_configuration
 from datp_core.config.loader import load_yaml
+from datp_core.config.mapping.execution import map_streaming_chunk_config
 from datp_core.config.mapping.scientific import (
     ExperimentConfigSchema,
     ResolveExperimentProfileRequest,
@@ -13,6 +15,8 @@ from datp_core.config.mapping.scientific import (
     map_centralized_comparator_config,
     map_experiment_schema,
     map_federation_config,
+    map_regime_a_preprocessing_config,
+    map_regime_a_static_split_config,
     resolve_experiment_profile,
 )
 from datp_core.config.schemas.artifacts import ArtifactConfig, ArtifactSerializationConfig
@@ -23,6 +27,7 @@ from datp_core.config.schemas.execution import (
     ResourceBudgetConfig,
     ResourcePressureConfig,
     StageExecutionConfig,
+    StreamingChunkConfig,
 )
 from datp_core.config.schemas.reporting import ReportingConfig
 from datp_core.config.schemas.scientific import (
@@ -33,6 +38,8 @@ from datp_core.config.schemas.scientific import (
     FedAvgFederationConfig,
     FedProxFederationConfig,
     LocalThresholdConfig,
+    RegimeAPreprocessingConfig,
+    RegimeAStaticSplitConfig,
     ScientificConfig,
     SharedThresholdConfig,
 )
@@ -53,6 +60,13 @@ from datp_core.domain.artifacts.lineage import (
 from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.data.datasets import TimestampEvidenceKind
+from datp_core.domain.data.preprocessing import (
+    FittedStatisticPolicy,
+    NormalizationScope,
+    NormalizationStrategy,
+    PreprocessingChunkSpec,
+)
+from datp_core.domain.data.splitting import LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY
 from datp_core.domain.errors import ConfigurationError
 from datp_core.domain.evaluation.metrics import OperatingPointMetric
 from datp_core.domain.experiments.claims import ClaimTier, ExperimentRole
@@ -65,6 +79,7 @@ from datp_core.domain.experiments.specifications import (
 from datp_core.domain.learning.checkpoints import RecoveryCadence
 from datp_core.domain.learning.scores import QuantileEstimatorType
 from datp_core.domain.learning.training import AggregationStrategy, ParticipationStrategy
+from datp_core.domain.runtime.admissibility import ChunkRowCount
 from datp_core.domain.runtime.policies import (
     DevicePolicy,
     ExecutionMode,
@@ -278,6 +293,98 @@ def test_canonical_temporal_schema_rejects_a_non_70_30_boundary() -> None:
             capture_timestamp_field="capture_time",
             boundary_identity="b" * 64,
         )
+
+
+def test_regime_a_static_split_schema_rejects_a_non_locked_fraction() -> None:
+    with pytest.raises(ValidationError):
+        RegimeAStaticSplitConfig(
+            train_fraction=Decimal("0.50"),
+            gap_fraction=Decimal("0.01"),
+            calibration_fraction=Decimal("0.20"),
+        )
+
+
+def test_regime_a_static_split_mapping_produces_the_locked_boundary() -> None:
+    configuration = RegimeAStaticSplitConfig(
+        train_fraction=Decimal("0.60"),
+        gap_fraction=Decimal("0.01"),
+        calibration_fraction=Decimal("0.20"),
+    )
+
+    assert map_regime_a_static_split_config(configuration) == LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY
+
+
+def test_regime_a_static_split_yaml_file_loads_and_maps_to_the_locked_boundary() -> None:
+    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "regime_a_static_split.yaml"
+
+    schema = load_yaml(yaml_path.read_text(), RegimeAStaticSplitConfig)
+
+    assert map_regime_a_static_split_config(schema) == LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY
+
+
+def test_streaming_chunk_schema_rejects_a_non_positive_value() -> None:
+    with pytest.raises(ValidationError):
+        StreamingChunkConfig(csv_block_bytes=0, parquet_batch_rows=50_000)
+
+
+def test_streaming_chunk_mapping_produces_typed_domain_values() -> None:
+    configuration = StreamingChunkConfig(csv_block_bytes=8 * 1024 * 1024, parquet_batch_rows=50_000)
+
+    mapped = map_streaming_chunk_config(configuration)
+
+    assert mapped.csv_block_bytes.value == 8 * 1024 * 1024
+    assert mapped.parquet_batch_rows.value == 50_000
+
+
+def test_streaming_chunk_yaml_file_loads_and_maps() -> None:
+    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "execution" / "streaming_chunks.yaml"
+
+    schema = load_yaml(yaml_path.read_text(), StreamingChunkConfig)
+    mapped = map_streaming_chunk_config(schema)
+
+    assert mapped.csv_block_bytes.value == 8 * 1024 * 1024
+    assert mapped.parquet_batch_rows.value == 50_000
+
+
+def test_regime_a_preprocessing_schema_rejects_a_non_locked_strategy() -> None:
+    with pytest.raises(ValidationError):
+        RegimeAPreprocessingConfig.model_validate(
+            {"strategy": "min_max", "scope": "per_client_train", "fitted_stat_policy": "exact_two_pass"}
+        )
+
+
+def test_regime_a_preprocessing_mapping_carries_the_injected_chunking() -> None:
+    configuration = RegimeAPreprocessingConfig(
+        strategy=NormalizationStrategy.STANDARD,
+        scope=NormalizationScope.PER_CLIENT_TRAIN,
+        fitted_stat_policy=FittedStatisticPolicy.EXACT_TWO_PASS,
+    )
+    chunk_rows = ChunkRowCount(value=50_000)
+    chunking = PreprocessingChunkSpec(
+        source_scan_batch_rows=chunk_rows, preprocessing_chunk_rows=chunk_rows, parquet_write_batch_rows=chunk_rows
+    )
+
+    mapped = map_regime_a_preprocessing_config(configuration, chunking=chunking)
+
+    assert mapped.strategy is NormalizationStrategy.STANDARD
+    assert mapped.scope is NormalizationScope.PER_CLIENT_TRAIN
+    assert mapped.fitted_stat_policy is FittedStatisticPolicy.EXACT_TWO_PASS
+    assert mapped.chunking == chunking
+
+
+def test_regime_a_preprocessing_yaml_file_loads_and_maps() -> None:
+    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "regime_a_preprocessing.yaml"
+    chunk_rows = ChunkRowCount(value=50_000)
+    chunking = PreprocessingChunkSpec(
+        source_scan_batch_rows=chunk_rows, preprocessing_chunk_rows=chunk_rows, parquet_write_batch_rows=chunk_rows
+    )
+
+    schema = load_yaml(yaml_path.read_text(), RegimeAPreprocessingConfig)
+    mapped = map_regime_a_preprocessing_config(schema, chunking=chunking)
+
+    assert mapped.strategy is NormalizationStrategy.STANDARD
+    assert mapped.scope is NormalizationScope.PER_CLIENT_TRAIN
+    assert mapped.fitted_stat_policy is FittedStatisticPolicy.EXACT_TWO_PASS
 
 
 def test_ordered_override_precedence_is_deterministic() -> None:

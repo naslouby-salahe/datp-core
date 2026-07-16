@@ -1,0 +1,3 @@
+strategy: "standard"
+scope: "per_client_train"
+fitted_stat_policy: "exact_two_pass"
