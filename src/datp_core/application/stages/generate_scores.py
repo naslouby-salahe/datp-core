@@ -1,8 +1,14 @@
 from dataclasses import dataclass
 
+from datp_core.application.ports.learning import CentralizedTrainingRunResult
 from datp_core.application.ports.scoring import (
     CalibrationScoreGenerationResult,
+    CentralizedCalibrationScoreGenerationResult,
+    CentralizedScoreGenerator,
+    CentralizedTestScoreGenerationResult,
     GenerateCalibrationScoresRequest,
+    GenerateCentralizedCalibrationScoresRequest,
+    GenerateCentralizedTestScoresRequest,
     GenerateTemporalScoresRequest,
     GenerateTestScoresRequest,
     ScoreGenerator,
@@ -12,7 +18,7 @@ from datp_core.application.ports.scoring import (
 from datp_core.domain.artifacts.lineage import TemporalWindowIdentity
 from datp_core.domain.data.preprocessing import ProcessedSplitResult
 from datp_core.domain.learning.checkpoints import CheckpointDescriptor
-from datp_core.domain.learning.scores import ScoreGenerationSpec
+from datp_core.domain.learning.scores import B0ScoringBatchSpec, ScoreGenerationSpec
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -58,4 +64,30 @@ def generate_temporal_scores(
             scoring=request.scoring,
             window_identity=request.window_identity,
         )
+    )
+
+
+def generate_centralized_calibration_scores(
+    *,
+    generator: CentralizedScoreGenerator,
+    processed_splits: ProcessedSplitResult,
+    checkpoint: CentralizedTrainingRunResult,
+    scoring: B0ScoringBatchSpec,
+) -> CentralizedCalibrationScoreGenerationResult:
+    return generator.generate_calibration_scores(
+        GenerateCentralizedCalibrationScoresRequest(
+            processed_splits=processed_splits, checkpoint=checkpoint, scoring=scoring
+        )
+    )
+
+
+def generate_centralized_test_scores(
+    *,
+    generator: CentralizedScoreGenerator,
+    processed_splits: ProcessedSplitResult,
+    checkpoint: CentralizedTrainingRunResult,
+    scoring: B0ScoringBatchSpec,
+) -> CentralizedTestScoreGenerationResult:
+    return generator.generate_test_scores(
+        GenerateCentralizedTestScoresRequest(processed_splits=processed_splits, checkpoint=checkpoint, scoring=scoring)
     )

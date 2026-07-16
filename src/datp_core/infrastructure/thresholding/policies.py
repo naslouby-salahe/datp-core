@@ -5,6 +5,9 @@ from typing import Protocol
 
 from datp_core.application.ports.thresholding import (
     AssignThresholdRequest,
+    CentralizedThresholdConstructionResult,
+    CentralizedThresholdConstructor,
+    ConstructCentralizedThresholdRequest,
     ConstructThresholdsRequest,
     ThresholdConstructionResult,
     ThresholdConstructor,
@@ -12,10 +15,16 @@ from datp_core.application.ports.thresholding import (
 )
 from datp_core.domain.errors import ThresholdError
 from datp_core.domain.experiments.identities import ClientId
-from datp_core.domain.learning.scores import ClientMap, ClientMapEntry, ThresholdAssignmentSet
+from datp_core.domain.learning.scores import (
+    CentralizedClientCalibrationScoreArtifact,
+    ClientMap,
+    ClientMapEntry,
+    ThresholdAssignmentSet,
+)
 from datp_core.domain.mathematics.quantiles import exact_quantile, exact_weighted_quantile
 from datp_core.domain.thresholding.clustering import ClusterAssignmentArtifact
 from datp_core.domain.thresholding.policies import (
+    CentralizedThresholdAssignment,
     ClusterThresholdSpec,
     CoreThresholdPolicy,
     FamilyThresholdSpec,
@@ -25,6 +34,7 @@ from datp_core.domain.thresholding.policies import (
     ThresholdAssignment,
     ThresholdPercentile,
     ThresholdValue,
+    compute_b0_pooled_threshold,
     unweighted_shared_threshold,
 )
 from datp_core.infrastructure.thresholding.quantiles import CalibrationScoreReader
@@ -404,6 +414,27 @@ def require_fpr_target(*, request: AssignThresholdRequest, percentile: Threshold
 
 def roster_clients(request: AssignThresholdRequest) -> tuple[ClientId, ...]:
     return request.calibration_scores.per_client.values.roster.client_ids
+
+
+class CentralizedCalibrationScoreReader(Protocol):
+    def read(self, *, artifact: CentralizedClientCalibrationScoreArtifact) -> tuple[float, ...]: ...
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class B0PooledThresholdConstructor(CentralizedThresholdConstructor):
+    reader: CentralizedCalibrationScoreReader
+
+    def construct(self, request: ConstructCentralizedThresholdRequest) -> CentralizedThresholdConstructionResult:
+        pooled_scores = tuple(
+            value for artifact in request.pooled_calibration_scores for value in self.reader.read(artifact=artifact)
+        )
+        tau = compute_b0_pooled_threshold(pooled_calibration_scores=pooled_scores, spec=request.spec)
+        assignment = CentralizedThresholdAssignment(
+            tau=tau,
+            centralized_calibration_score_identity=request.centralized_calibration_score_identity,
+            threshold_identity=request.threshold_identity,
+        )
+        return CentralizedThresholdConstructionResult(assignment=assignment)
 
 
 def unexpected_construction(request: AssignThresholdRequest) -> ThresholdError:

@@ -5,15 +5,21 @@ import msgspec
 import torch
 from torch import Tensor
 
+from datp_core.application.ports.scoring import (
+    CentralizedCalibrationScoreGenerationResult,
+    CentralizedTestScoreGenerationResult,
+    GenerateCentralizedCalibrationScoresRequest,
+    GenerateCentralizedTestScoresRequest,
+)
 from datp_core.domain.artifacts.keys import SerializationFormat
 from datp_core.domain.artifacts.lineage import (
     CentralizedCalibrationScoringIdentity,
     CentralizedCheckpointIdentity,
     CentralizedTestScoringIdentity,
-    SplitIdentity,
 )
 from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import ArtifactId, ArtifactRef, ArtifactSchemaVersion, StageFingerprint
+from datp_core.domain.data.splitting import SplitIdentity
 from datp_core.domain.errors import ScoringError
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import (
@@ -49,33 +55,40 @@ def _ordered_clients(batches: Mapping[ClientId, Tensor]) -> tuple[ClientId, ...]
 class B0CalibrationScoreGenerationWorkflow:
     model: torch.nn.Module
     device: torch.device
-    centralized_checkpoint_identity: CentralizedCheckpointIdentity
-    centralized_checkpoint_content_hash: str
-    calibration_split_identity: SplitIdentity
     calibration_batches: Mapping[ClientId, Tensor]
 
-    def generate(self, *, batch_size: int) -> tuple[CentralizedClientCalibrationScoreArtifact, ...]:
+    def generate_calibration_scores(
+        self, request: GenerateCentralizedCalibrationScoresRequest
+    ) -> CentralizedCalibrationScoreGenerationResult:
+        checkpoint_identity = request.checkpoint.checkpoint_identity
         if not self.calibration_batches:
             raise ScoringError(
                 detail="B0 calibration scoring requires at least one client batch",
-                checkpoint_id=self.centralized_checkpoint_identity.value.value,
+                checkpoint_id=checkpoint_identity.value.value,
                 split="calibration",
             )
-        split_manifest_hash = self.calibration_split_identity.value.value
+        checkpoint_content_hash = request.checkpoint.checkpoint_artifact.content_hash
+        split_identity = request.processed_splits.split_manifest_identity
+        split_manifest_hash = split_identity.value.value
+        batch_size = request.scoring.calibration_batch_size.value
         scoring_identity = CentralizedCalibrationScoringIdentity(
             value=StageFingerprint(
-                value=_derived_identity("b0-calibration", self.centralized_checkpoint_content_hash, split_manifest_hash)
+                value=_derived_identity("b0-calibration", checkpoint_content_hash, split_manifest_hash)
             )
         )
-        return tuple(
+        artifacts = tuple(
             self._client_artifact(
                 client_id=client_id,
                 batch_size=batch_size,
                 scoring_identity=scoring_identity,
+                split_identity=split_identity,
                 split_manifest_hash=split_manifest_hash,
+                checkpoint_identity=checkpoint_identity,
+                checkpoint_content_hash=checkpoint_content_hash,
             )
             for client_id in _ordered_clients(self.calibration_batches)
         )
+        return CentralizedCalibrationScoreGenerationResult(scores=artifacts)
 
     def _client_artifact(
         self,
@@ -83,7 +96,10 @@ class B0CalibrationScoreGenerationWorkflow:
         client_id: ClientId,
         batch_size: int,
         scoring_identity: CentralizedCalibrationScoringIdentity,
+        split_identity: SplitIdentity,
         split_manifest_hash: str,
+        checkpoint_identity: CentralizedCheckpointIdentity,
+        checkpoint_content_hash: str,
     ) -> CentralizedClientCalibrationScoreArtifact:
         scores = score_client_batch(
             model=self.model, device=self.device, batch=self.calibration_batches[client_id], batch_size=batch_size
@@ -98,11 +114,11 @@ class B0CalibrationScoreGenerationWorkflow:
         )
         return CentralizedClientCalibrationScoreArtifact(
             client_id=client_id,
-            calibration_split_identity=self.calibration_split_identity,
+            calibration_split_identity=split_identity,
             split_manifest_hash=split_manifest_hash,
             scoring_identity=scoring_identity,
-            centralized_checkpoint_identity=self.centralized_checkpoint_identity,
-            centralized_checkpoint_content_hash=self.centralized_checkpoint_content_hash,
+            centralized_checkpoint_identity=checkpoint_identity,
+            centralized_checkpoint_content_hash=checkpoint_content_hash,
             sample_count=ScoreSampleCount(value=scores.shape[0]),
             schema_version=_SCORE_SCHEMA_VERSION,
             content_hash=content_hash,
@@ -115,9 +131,6 @@ class B0CalibrationScoreGenerationWorkflow:
 class B0TestScoreGenerationWorkflow:
     model: torch.nn.Module
     device: torch.device
-    centralized_checkpoint_identity: CentralizedCheckpointIdentity
-    centralized_checkpoint_content_hash: str
-    test_split_identity: SplitIdentity
     benign_batches: Mapping[ClientId, Tensor]
     attack_batches: Mapping[ClientId, Tensor]
 
@@ -125,32 +138,40 @@ class B0TestScoreGenerationWorkflow:
         if set(self.benign_batches.keys()) != set(self.attack_batches.keys()):
             raise ScoringError(
                 detail="B0 test scoring requires a matching benign and attack client roster",
-                checkpoint_id=self.centralized_checkpoint_identity.value.value,
+                checkpoint_id="unresolved",
                 split="test",
             )
         if not self.benign_batches:
             raise ScoringError(
                 detail="B0 test scoring requires at least one client batch",
-                checkpoint_id=self.centralized_checkpoint_identity.value.value,
+                checkpoint_id="unresolved",
                 split="test",
             )
 
-    def generate(self, *, batch_size: int) -> tuple[CentralizedClientTestScoreArtifact, ...]:
-        split_manifest_hash = self.test_split_identity.value.value
+    def generate_test_scores(
+        self, request: GenerateCentralizedTestScoresRequest
+    ) -> CentralizedTestScoreGenerationResult:
+        checkpoint_identity = request.checkpoint.checkpoint_identity
+        checkpoint_content_hash = request.checkpoint.checkpoint_artifact.content_hash
+        split_identity = request.processed_splits.split_manifest_identity
+        split_manifest_hash = split_identity.value.value
+        batch_size = request.scoring.test_batch_size.value
         scoring_identity = CentralizedTestScoringIdentity(
-            value=StageFingerprint(
-                value=_derived_identity("b0-test", self.centralized_checkpoint_content_hash, split_manifest_hash)
-            )
+            value=StageFingerprint(value=_derived_identity("b0-test", checkpoint_content_hash, split_manifest_hash))
         )
-        return tuple(
+        artifacts = tuple(
             self._client_artifact(
                 client_id=client_id,
                 batch_size=batch_size,
                 scoring_identity=scoring_identity,
+                split_identity=split_identity,
                 split_manifest_hash=split_manifest_hash,
+                checkpoint_identity=checkpoint_identity,
+                checkpoint_content_hash=checkpoint_content_hash,
             )
             for client_id in _ordered_clients(self.benign_batches)
         )
+        return CentralizedTestScoreGenerationResult(scores=artifacts)
 
     def _client_artifact(
         self,
@@ -158,7 +179,10 @@ class B0TestScoreGenerationWorkflow:
         client_id: ClientId,
         batch_size: int,
         scoring_identity: CentralizedTestScoringIdentity,
+        split_identity: SplitIdentity,
         split_manifest_hash: str,
+        checkpoint_identity: CentralizedCheckpointIdentity,
+        checkpoint_content_hash: str,
     ) -> CentralizedClientTestScoreArtifact:
         benign_scores = score_client_batch(
             model=self.model, device=self.device, batch=self.benign_batches[client_id], batch_size=batch_size
@@ -184,11 +208,11 @@ class B0TestScoreGenerationWorkflow:
         )
         return CentralizedClientTestScoreArtifact(
             client_id=client_id,
-            test_split_identity=self.test_split_identity,
+            test_split_identity=split_identity,
             split_manifest_hash=split_manifest_hash,
             test_scoring_identity=scoring_identity,
-            centralized_checkpoint_identity=self.centralized_checkpoint_identity,
-            centralized_checkpoint_content_hash=self.centralized_checkpoint_content_hash,
+            centralized_checkpoint_identity=checkpoint_identity,
+            centralized_checkpoint_content_hash=checkpoint_content_hash,
             benign_scores_ref=benign_ref,
             benign_sample_count=ScoreSampleCount(value=benign_scores.shape[0]),
             benign_content_hash=benign_hash,

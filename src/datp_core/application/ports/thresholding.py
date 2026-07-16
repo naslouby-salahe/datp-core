@@ -3,12 +3,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
-from datp_core.domain.artifacts.lineage import ThresholdIdentity
+from datp_core.domain.artifacts.lineage import (
+    CentralizedCalibrationScoringIdentity,
+    CentralizedThresholdIdentity,
+    ThresholdIdentity,
+)
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.evaluation.operating_points import EligibleClientSet
-from datp_core.domain.learning.scores import CalibrationScoreArtifactSet, ThresholdAssignmentSet
+from datp_core.domain.learning.scores import (
+    CalibrationScoreArtifactSet,
+    CentralizedClientCalibrationScoreArtifact,
+    ThresholdAssignmentSet,
+)
 from datp_core.domain.thresholding.clustering import B4ClusteringSpec, ClusterAssignmentArtifact
 from datp_core.domain.thresholding.policies import (
+    B0PooledThresholdSpec,
+    CentralizedThresholdAssignment,
     CoreThresholdPolicy,
     FprTarget,
     ThresholdAssignment,
@@ -82,3 +92,20 @@ class ClusteringStrategy(Protocol):
 
 class QuantileEstimator(Protocol):
     def estimate(self, request: QuantileEstimateRequest) -> QuantileEstimateResult: ...
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ConstructCentralizedThresholdRequest:
+    pooled_calibration_scores: tuple[CentralizedClientCalibrationScoreArtifact, ...]
+    spec: B0PooledThresholdSpec
+    centralized_calibration_score_identity: CentralizedCalibrationScoringIdentity
+    threshold_identity: CentralizedThresholdIdentity
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CentralizedThresholdConstructionResult:
+    assignment: CentralizedThresholdAssignment
+
+
+class CentralizedThresholdConstructor(Protocol):
+    def construct(self, request: ConstructCentralizedThresholdRequest) -> CentralizedThresholdConstructionResult: ...

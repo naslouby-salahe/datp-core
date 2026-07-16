@@ -6,7 +6,11 @@ from enum import StrEnum
 from math import isfinite
 from typing import TYPE_CHECKING
 
-from datp_core.domain.artifacts.lineage import ThresholdIdentity
+from datp_core.domain.artifacts.lineage import (
+    CentralizedCalibrationScoringIdentity,
+    CentralizedThresholdIdentity,
+    ThresholdIdentity,
+)
 from datp_core.domain.artifacts.references import CalibrationScoreArtifactId, StageFingerprint
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.learning.scores import QuantileEstimatorType
@@ -283,6 +287,25 @@ def compute_b0_pooled_threshold(
     from datp_core.domain.mathematics.quantiles import exact_quantile
 
     return ThresholdValue(value=exact_quantile(values=pooled_calibration_scores, percentile=spec.percentile))
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CentralizedThresholdAssignment:
+    tau: ThresholdValue
+    centralized_calibration_score_identity: CentralizedCalibrationScoringIdentity
+    threshold_identity: CentralizedThresholdIdentity
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.tau) is not ThresholdValue
+            or type(self.centralized_calibration_score_identity) is not CentralizedCalibrationScoringIdentity
+            or type(self.threshold_identity) is not CentralizedThresholdIdentity
+        ):
+            raise DomainValidationError(
+                detail="B0's centralized threshold assignment requires typed pooled tau and centralized lineage",
+                value=repr(self),
+                constraint="ThresholdValue, CentralizedCalibrationScoringIdentity, CentralizedThresholdIdentity",
+            )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
