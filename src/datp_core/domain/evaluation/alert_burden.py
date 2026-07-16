@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 
+from datp_core.domain.artifacts.lineage import CentralizedCalibrationScoringIdentity
 from datp_core.domain.artifacts.references import CalibrationScoreArtifactId, StageFingerprint
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.experiments.identities import ClientId
@@ -55,11 +56,15 @@ def _validated_calibration_count_reference(
     client_id: object,
     recorded_count: object,
 ) -> None:
-    if not isinstance(calibration_artifact_id, CalibrationScoreArtifactId):
+    if not isinstance(calibration_artifact_id, CalibrationScoreArtifactId) and not isinstance(
+        calibration_artifact_id, CentralizedCalibrationScoringIdentity
+    ):
         raise DomainValidationError(
-            detail="calibration sample count reference requires a calibration artifact id",
+            detail=(
+                "calibration sample count reference requires a calibration artifact id or centralized scoring identity"
+            ),
             value=repr(calibration_artifact_id),
-            constraint="CalibrationScoreArtifactId",
+            constraint="CalibrationScoreArtifactId | CentralizedCalibrationScoringIdentity",
         )
     if not isinstance(client_id, ClientId):
         raise DomainValidationError(
@@ -126,7 +131,7 @@ class CalibrationSampleCount:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CalibrationSampleCountRef:
-    calibration_artifact_id: CalibrationScoreArtifactId
+    calibration_artifact_id: CalibrationScoreArtifactId | CentralizedCalibrationScoringIdentity
     client_id: ClientId
     recorded_count: CalibrationSampleCount
 

@@ -73,10 +73,8 @@ def _construct_alert_burden_with_unwrapped_traffic_rate(
     )
 
 
-def test_client_results_share_the_same_persisted_eligible_set_identity() -> None:
-    eligible_set = _eligible_set()
-    client = eligible_set.roster.client_ids[0]
-    result = ClientEvaluationResult(
+def _make_test_client_result(client: ClientId, eligible_client_set: EligibleClientSet) -> ClientEvaluationResult:
+    return ClientEvaluationResult(
         client_id=client,
         true_positive=ConfusionCount(value=8),
         false_positive=ConfusionCount(value=2),
@@ -98,11 +96,17 @@ def test_client_results_share_the_same_persisted_eligible_set_identity() -> None
             client_id=client,
             recorded_count=CalibrationSampleCount(value=100),
         ),
-        eligible_client_set_identity=eligible_set.identity,
+        eligible_client_set_identity=eligible_client_set.identity,
         fallback_fingerprint=_identity("d"),
         test_split_identity=_identity("e"),
         zero_denominator_policy=ZeroDenominatorPolicy.ZERO,
     )
+
+
+def test_client_results_share_the_same_persisted_eligible_set_identity() -> None:
+    eligible_set = _eligible_set()
+    client = eligible_set.roster.client_ids[0]
+    result = _make_test_client_result(client, eligible_set)
 
     assert result.eligible_client_set_identity is eligible_set.identity
     assert not isinstance(
@@ -161,3 +165,109 @@ def test_zero_mean_cv_is_a_typed_outcome_not_an_exception() -> None:
 
     assert isinstance(result, UndefinedCvResult)
     assert result.mean_value == 0
+
+
+def _centralized_policy_evaluation_setup():
+    from decimal import Decimal
+
+    from datp_core.domain.evaluation.operating_points import (
+        EligibilityCoverage,
+        EligibilityCoverageResult,
+        FleetDetectionResult,
+        FleetDispersionResult,
+        UndefinedCvResult,
+    )
+    from datp_core.domain.evaluation.statistical_results import AuRocScore
+
+    client = ClientId(value="client-a")
+    eligible_client_set = EligibleClientSet(
+        roster=ClientRoster(client_ids=(client,)),
+        protocol_eligibility_rule_identity=_identity("a"),
+        eligible_clients=(client,),
+        ineligible_reasons=(),
+        identity=_identity("b"),
+    )
+    client_result = _make_test_client_result(client, eligible_client_set)
+    coverage = EligibilityCoverageResult(
+        eligible_count=1,
+        roster_count=1,
+        coverage=EligibilityCoverage(value=Decimal("1")),
+        eligible_client_set_identity=eligible_client_set.identity,
+    )
+    dispersion = FleetDispersionResult(
+        cv_fpr=UndefinedCvResult(
+            reason="zero_mean_rate",
+            mean_value=0.0,
+            iqr=0.0,
+            value_range=0.0,
+            affected_scope_identity=_identity("f"),
+            wording_outcome=ClaimOutcome.NULL,
+        ),
+        cv_tpr=UndefinedCvResult(
+            reason="zero_mean_rate",
+            mean_value=0.0,
+            iqr=0.0,
+            value_range=0.0,
+            affected_scope_identity=_identity("f"),
+            wording_outcome=ClaimOutcome.NULL,
+        ),
+        iqr_fpr=0.0,
+        fpr_range=0.0,
+        worst_client_fpr=FalsePositiveRate(value=0.15),
+        eligibility_coverage=coverage,
+    )
+    detection = FleetDetectionResult(
+        macro_f1=F1Score(value=0.8),
+        p10_macro_f1=F1Score(value=0.7),
+        worst_client_balanced_accuracy=BalancedAccuracyScore(value=0.6),
+        auroc_control=AuRocScore(value=0.9),
+    )
+    return client_result, dispersion, detection, eligible_client_set
+
+
+def test_centralized_policy_evaluation_result_validation_rules() -> None:
+    from datp_core.domain.artifacts.lineage import CentralizedEvaluationIdentity
+    from datp_core.domain.evaluation.operating_points import CentralizedPolicyEvaluationResult
+    from datp_core.domain.thresholding.federated_statistics import ThresholdComparatorRole
+    from datp_core.domain.thresholding.policies import CoreThresholdPolicy
+
+    client_result, dispersion, detection, eligible_client_set = _centralized_policy_evaluation_setup()
+
+    # Valid instantiation
+    res = CentralizedPolicyEvaluationResult(
+        policy=ThresholdComparatorRole.CENTRALIZED_MODEL_B0,
+        evaluation_identity=CentralizedEvaluationIdentity(value=_identity("0")),
+        eligible_client_set=eligible_client_set,
+        client_results=(client_result,),
+        fleet_dispersion=dispersion,
+        fleet_detection=detection,
+        fleet_equity=None,
+        cluster_dispersion=None,
+    )
+    assert res.policy is ThresholdComparatorRole.CENTRALIZED_MODEL_B0
+
+    # Invalid policy role type
+    with pytest.raises(DomainValidationError):
+        CentralizedPolicyEvaluationResult(
+            policy=CoreThresholdPolicy.B1,  # type: ignore[arg-type]
+            evaluation_identity=CentralizedEvaluationIdentity(value=_identity("0")),
+            eligible_client_set=eligible_client_set,
+            client_results=(client_result,),
+            fleet_dispersion=dispersion,
+            fleet_detection=detection,
+            fleet_equity=None,
+            cluster_dispersion=None,
+        )
+
+    # Invalid evaluation identity type
+    with pytest.raises(DomainValidationError):
+        CentralizedPolicyEvaluationResult(
+            policy=ThresholdComparatorRole.CENTRALIZED_MODEL_B0,
+            evaluation_identity=_identity("0"),  # type: ignore[arg-type]
+            eligible_client_set=eligible_client_set,
+            client_results=(client_result,),
+            fleet_dispersion=dispersion,
+            fleet_detection=detection,
+            fleet_equity=None,
+            cluster_dispersion=None,
+        )

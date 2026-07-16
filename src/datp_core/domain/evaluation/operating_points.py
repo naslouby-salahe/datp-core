@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from math import isclose, isfinite, sqrt
 
+from datp_core.domain.artifacts.lineage import CentralizedEvaluationIdentity
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.evaluation.alert_burden import (
@@ -22,6 +23,7 @@ from datp_core.domain.evaluation.statistical_results import (
 )
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import ClientRoster
+from datp_core.domain.thresholding.federated_statistics import ThresholdComparatorRole
 from datp_core.domain.thresholding.policies import CoreThresholdPolicy, ThresholdValue
 
 
@@ -526,6 +528,59 @@ def _is_valid_policy_evaluation_result(result: PolicyEvaluationResult) -> bool:
 
 
 def _has_matching_eligible_client_set_identity(result: PolicyEvaluationResult) -> bool:
+    return all(
+        client_result.eligible_client_set_identity == result.eligible_client_set.identity
+        for client_result in result.client_results
+    )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CentralizedPolicyEvaluationResult:
+    policy: ThresholdComparatorRole
+    evaluation_identity: CentralizedEvaluationIdentity
+    eligible_client_set: EligibleClientSet
+    client_results: tuple[ClientEvaluationResult, ...]
+    fleet_dispersion: FleetDispersionResult
+    fleet_detection: FleetDetectionResult
+    fleet_equity: FleetEquityResult | None
+    cluster_dispersion: ClusterDispersionResult | None
+
+    def __post_init__(self) -> None:
+        if self.policy is not ThresholdComparatorRole.CENTRALIZED_MODEL_B0:
+            raise DomainValidationError(
+                detail="centralized policy evaluation is locked to the B0 comparator role",
+                value=repr(self.policy),
+                constraint="ThresholdComparatorRole.CENTRALIZED_MODEL_B0",
+            )
+        if type(self.evaluation_identity) is not CentralizedEvaluationIdentity:
+            raise DomainValidationError(
+                detail="centralized policy evaluation requires a CentralizedEvaluationIdentity",
+                value=repr(self.evaluation_identity),
+                constraint="CentralizedEvaluationIdentity",
+            )
+        if not _is_valid_centralized_policy_evaluation_result(self):
+            raise DomainValidationError(
+                detail=(
+                    "centralized policy evaluation must preserve one paired "
+                    "eligible-client-set identity for its full roster"
+                ),
+                value=repr(self),
+                constraint="ordered complete roster with one EligibleClientSet identity",
+            )
+
+
+def _is_valid_centralized_policy_evaluation_result(result: CentralizedPolicyEvaluationResult) -> bool:
+    clients = tuple(client_result.client_id for client_result in result.client_results)
+    return all(
+        (
+            bool(clients),
+            clients == result.eligible_client_set.roster.client_ids,
+            _has_matching_eligible_client_set_identity_centralized(result),
+        )
+    )
+
+
+def _has_matching_eligible_client_set_identity_centralized(result: CentralizedPolicyEvaluationResult) -> bool:
     return all(
         client_result.eligible_client_set_identity == result.eligible_client_set.identity
         for client_result in result.client_results

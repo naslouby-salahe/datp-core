@@ -1,6 +1,10 @@
 from dataclasses import dataclass
 
-from datp_core.domain.artifacts.references import StageFingerprint
+from datp_core.domain.artifacts.lineage import (
+    CentralizedCalibrationScoringIdentity,
+    CentralizedEvaluationIdentity,
+)
+from datp_core.domain.artifacts.references import CalibrationScoreArtifactId, StageFingerprint
 from datp_core.domain.errors import EvaluationError
 from datp_core.domain.evaluation.alert_burden import (
     CalibrationSampleCount,
@@ -10,6 +14,7 @@ from datp_core.domain.evaluation.alert_burden import (
 )
 from datp_core.domain.evaluation.operating_points import (
     BalancedAccuracyScore,
+    CentralizedPolicyEvaluationResult,
     ClientEligibilityReason,
     ClientEligibilityStatus,
     ClientEvaluationResult,
@@ -36,13 +41,20 @@ from datp_core.domain.evaluation.statistical_results import (
 )
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import (
+    CentralizedClientTestScoreArtifact,
     ClientEvaluationMap,
     ClientTestScoreArtifact,
     TemporalScoreArtifactSet,
     TestScoreArtifactSet,
 )
 from datp_core.domain.mathematics.quantiles import nearest_rank_value
-from datp_core.domain.thresholding.policies import CoreThresholdPolicy, ThresholdAssignment, ThresholdValue
+from datp_core.domain.thresholding.federated_statistics import ThresholdComparatorRole
+from datp_core.domain.thresholding.policies import (
+    CentralizedThresholdAssignment,
+    CoreThresholdPolicy,
+    ThresholdAssignment,
+    ThresholdValue,
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -79,6 +91,19 @@ class EvaluateTemporalPolicyRequest:
     zero_mean_cv_wording_outcome: ClaimOutcome
     cluster_dispersion: ClusterDispersionResult | None
     assignment_identity: StageFingerprint
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class EvaluateCentralizedPolicyRequest:
+    policy: ThresholdComparatorRole
+    evaluation_identity: CentralizedEvaluationIdentity
+    score_artifacts: tuple[CentralizedClientTestScoreArtifact, ...]
+    assignment: CentralizedThresholdAssignment
+    eligible_client_set: EligibleClientSet
+    confusion_evidence: ClientEvaluationMap[ClientConfusionEvidence]
+    auroc_control: AuRocScore
+    zero_mean_cv_wording_outcome: ClaimOutcome
+    cluster_dispersion: ClusterDispersionResult | None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -150,6 +175,9 @@ class PolicyEvaluator:
             policy_evaluation=result,
         )
 
+    def evaluate_centralized(self, request: EvaluateCentralizedPolicyRequest) -> CentralizedPolicyEvaluationResult:
+        return _evaluate_centralized_policy(request)
+
 
 def _evaluate_policy(inputs: EvaluationInputs) -> PolicyEvaluationResult:
     _validate_evaluation_inputs(inputs)
@@ -187,27 +215,82 @@ def _evaluate_policy(inputs: EvaluationInputs) -> PolicyEvaluationResult:
     )
 
 
-def _validate_evaluation_inputs(inputs: EvaluationInputs) -> None:
-    expected_roster = inputs.eligible_client_set.roster.client_ids
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CentralizedClientEvaluationInputs:
+    client_id: ClientId
+    score_artifact: CentralizedClientTestScoreArtifact
+    threshold: ThresholdValue
+    evidence: ClientConfusionEvidence
+    assignment: CentralizedThresholdAssignment
+    eligible_client_set: EligibleClientSet
+
+
+def _evaluate_centralized_policy(
+    request: EvaluateCentralizedPolicyRequest,
+) -> CentralizedPolicyEvaluationResult:
+    _validate_centralized_evaluation_inputs(request)
+    results: list[ClientEvaluationResult] = []
+    for score_artifact, evidence_entry in zip(
+        request.score_artifacts,
+        request.confusion_evidence.values.entries,
+        strict=True,
+    ):
+        results.append(
+            _centralized_client_result(
+                CentralizedClientEvaluationInputs(
+                    client_id=score_artifact.client_id,
+                    score_artifact=score_artifact,
+                    threshold=request.assignment.tau,
+                    evidence=evidence_entry.value,
+                    assignment=request.assignment,
+                    eligible_client_set=request.eligible_client_set,
+                )
+            )
+        )
+    client_results = tuple(results)
+    return CentralizedPolicyEvaluationResult(
+        policy=request.policy,
+        evaluation_identity=request.evaluation_identity,
+        eligible_client_set=request.eligible_client_set,
+        client_results=client_results,
+        fleet_dispersion=_fleet_dispersion(
+            client_results=client_results,
+            eligible_client_set=request.eligible_client_set,
+            zero_mean_cv_wording_outcome=request.zero_mean_cv_wording_outcome,
+        ),
+        fleet_detection=_fleet_detection(client_results=client_results, auroc_control=request.auroc_control),
+        fleet_equity=_fleet_equity(client_results=client_results),
+        cluster_dispersion=request.cluster_dispersion,
+    )
+
+
+def _validate_centralized_evaluation_inputs(request: EvaluateCentralizedPolicyRequest) -> None:
+    expected_roster = request.eligible_client_set.roster.client_ids
+    score_roster = tuple(artifact.client_id for artifact in request.score_artifacts)
     if not all(
         (
-            type(inputs.policy) is CoreThresholdPolicy,
-            inputs.score_roster == expected_roster,
-            tuple(artifact.client_id for artifact in inputs.score_artifacts) == expected_roster,
-            inputs.assignment.policy is inputs.policy,
-            inputs.assignment.per_client_tau.values.roster.client_ids == expected_roster,
-            inputs.confusion_evidence.values.roster.client_ids == expected_roster,
-            inputs.assignment.eligible_client_set_identity == inputs.eligible_client_set.identity,
+            request.policy is ThresholdComparatorRole.CENTRALIZED_MODEL_B0,
+            score_roster == expected_roster,
+            type(request.assignment.tau) is ThresholdValue,
+            request.confusion_evidence.values.roster.client_ids == expected_roster,
         )
     ):
         raise EvaluationError(
-            detail="policy evaluation requires aligned committed test aggregates, assignments, and fixed eligibility",
+            detail=(
+                "centralized policy evaluation requires aligned committed test aggregates, "
+                "assignments, and fixed eligibility"
+            ),
             metric="policy_evaluation",
-            scope="test-score aggregate and eligible-client-set alignment",
+            scope="centralized test-score aggregate and eligible-client-set alignment",
         )
 
 
-def _client_result(inputs: ClientEvaluationInputs) -> ClientEvaluationResult:
+def _make_client_result(
+    inputs: ClientEvaluationInputs | CentralizedClientEvaluationInputs,
+    *,
+    calibration_artifact_id: CalibrationScoreArtifactId | CentralizedCalibrationScoringIdentity,
+    fallback_fingerprint: StageFingerprint,
+) -> ClientEvaluationResult:
     if inputs.score_artifact.client_id != inputs.client_id:
         raise EvaluationError(
             detail="client score aggregate must remain aligned with its client identifier",
@@ -255,15 +338,51 @@ def _client_result(inputs: ClientEvaluationInputs) -> ClientEvaluationResult:
         eligibility_status=status,
         eligibility_reason=reason,
         calibration_sample_count_reference=CalibrationSampleCountRef(
-            calibration_artifact_id=inputs.assignment.calibration_score_artifact_id,
+            calibration_artifact_id=calibration_artifact_id,
             client_id=inputs.client_id,
             recorded_count=inputs.evidence.calibration_sample_count,
         ),
         eligible_client_set_identity=inputs.eligible_client_set.identity,
-        fallback_fingerprint=inputs.assignment.fallback_fingerprint,
+        fallback_fingerprint=fallback_fingerprint,
         test_split_identity=inputs.score_artifact.test_split_identity.value,
         zero_denominator_policy=ZeroDenominatorPolicy.ZERO,
     )
+
+
+def _centralized_client_result(inputs: CentralizedClientEvaluationInputs) -> ClientEvaluationResult:
+    return _make_client_result(
+        inputs,
+        calibration_artifact_id=inputs.assignment.centralized_calibration_score_identity,
+        fallback_fingerprint=inputs.assignment.threshold_identity.value,
+    )
+
+
+def _client_result(inputs: ClientEvaluationInputs) -> ClientEvaluationResult:
+    return _make_client_result(
+        inputs,
+        calibration_artifact_id=inputs.assignment.calibration_score_artifact_id,
+        fallback_fingerprint=inputs.assignment.fallback_fingerprint,
+    )
+
+
+def _validate_evaluation_inputs(inputs: EvaluationInputs) -> None:
+    expected_roster = inputs.eligible_client_set.roster.client_ids
+    if not all(
+        (
+            type(inputs.policy) is CoreThresholdPolicy,
+            inputs.score_roster == expected_roster,
+            tuple(artifact.client_id for artifact in inputs.score_artifacts) == expected_roster,
+            inputs.assignment.policy is inputs.policy,
+            inputs.assignment.per_client_tau.values.roster.client_ids == expected_roster,
+            inputs.confusion_evidence.values.roster.client_ids == expected_roster,
+            inputs.assignment.eligible_client_set_identity == inputs.eligible_client_set.identity,
+        )
+    ):
+        raise EvaluationError(
+            detail="policy evaluation requires aligned committed test aggregates, assignments, and fixed eligibility",
+            metric="policy_evaluation",
+            scope="test-score aggregate and eligible-client-set alignment",
+        )
 
 
 def _eligibility_for(
