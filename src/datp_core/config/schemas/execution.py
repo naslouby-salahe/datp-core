@@ -66,6 +66,12 @@ class StreamingChunkConfig(ExecutionSchema):
     parquet_batch_rows: PositiveInteger
 
 
+class ScoringBatchConfig(ExecutionSchema):
+    calibration_batch_size: PositiveInteger
+    test_batch_size: PositiveInteger
+    temporal_batch_size: PositiveInteger
+
+
 class ExecutionConfig(ExecutionSchema):
     mode: ExecutionMode
     device_policy: DevicePolicy

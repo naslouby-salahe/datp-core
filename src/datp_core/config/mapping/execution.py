@@ -1,10 +1,17 @@
-from datp_core.config.schemas.execution import ExecutionConfig, ParallelismConfig, StreamingChunkConfig
+from datp_core.config.schemas.execution import (
+    ExecutionConfig,
+    ParallelismConfig,
+    ScoringBatchConfig,
+    StreamingChunkConfig,
+)
 from datp_core.domain.artifacts.lineage import RecoveryCompatibilityIdentity
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.errors import ConfigurationError
 from datp_core.domain.experiments.protocols import ExecutionPolicy
 from datp_core.domain.learning.checkpoints import RecoveryCheckpointPolicy
+from datp_core.domain.learning.scores import ScoringBatchSpec
 from datp_core.domain.runtime.admissibility import (
+    BatchSize,
     ChunkRowCount,
     CsvBlockBytes,
     DiskBudgetBytes,
@@ -100,4 +107,12 @@ def map_streaming_chunk_config(schema: StreamingChunkConfig) -> StreamingChunkPo
     return StreamingChunkPolicy(
         csv_block_bytes=CsvBlockBytes(value=schema.csv_block_bytes),
         parquet_batch_rows=ChunkRowCount(value=schema.parquet_batch_rows),
+    )
+
+
+def map_scoring_batch_config(schema: ScoringBatchConfig) -> ScoringBatchSpec:
+    return ScoringBatchSpec(
+        calibration_batch_size=BatchSize(value=schema.calibration_batch_size),
+        test_batch_size=BatchSize(value=schema.test_batch_size),
+        temporal_batch_size=BatchSize(value=schema.temporal_batch_size),
     )

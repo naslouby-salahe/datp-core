@@ -7,7 +7,7 @@ from pydantic import ValidationError
 
 from datp_core.config.compose import OVERRIDE_PRECEDENCE, compose_configuration
 from datp_core.config.loader import load_yaml
-from datp_core.config.mapping.execution import map_streaming_chunk_config
+from datp_core.config.mapping.execution import map_scoring_batch_config, map_streaming_chunk_config
 from datp_core.config.mapping.scientific import (
     ExperimentConfigSchema,
     ResolveExperimentProfileRequest,
@@ -27,6 +27,7 @@ from datp_core.config.schemas.execution import (
     RecoveryConfig,
     ResourceBudgetConfig,
     ResourcePressureConfig,
+    ScoringBatchConfig,
     StageExecutionConfig,
     StreamingChunkConfig,
 )
@@ -371,6 +372,32 @@ def test_streaming_chunk_yaml_file_loads_and_maps() -> None:
 
     assert mapped.csv_block_bytes.value == 8 * 1024 * 1024
     assert mapped.parquet_batch_rows.value == 50_000
+
+
+def test_scoring_batch_schema_rejects_a_non_positive_value() -> None:
+    with pytest.raises(ValidationError):
+        ScoringBatchConfig(calibration_batch_size=0, test_batch_size=256, temporal_batch_size=256)
+
+
+def test_scoring_batch_mapping_produces_typed_domain_values() -> None:
+    configuration = ScoringBatchConfig(calibration_batch_size=256, test_batch_size=128, temporal_batch_size=64)
+
+    mapped = map_scoring_batch_config(configuration)
+
+    assert mapped.calibration_batch_size.value == 256
+    assert mapped.test_batch_size.value == 128
+    assert mapped.temporal_batch_size.value == 64
+
+
+def test_scoring_batch_yaml_file_loads_and_maps() -> None:
+    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "execution" / "scoring_batches.yaml"
+
+    schema = load_yaml(yaml_path.read_text(), ScoringBatchConfig)
+    mapped = map_scoring_batch_config(schema)
+
+    assert mapped.calibration_batch_size.value == 256
+    assert mapped.test_batch_size.value == 256
+    assert mapped.temporal_batch_size.value == 256
 
 
 def test_regime_a_preprocessing_schema_rejects_a_non_locked_strategy() -> None:
