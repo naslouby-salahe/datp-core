@@ -2,6 +2,7 @@ import pytest
 import torch
 
 from datp_core.application.ports.learning import CentralizedTrainingRunResult, TrainCentralizedModelRequest
+from datp_core.application.stages.select_checkpoint import select_centralized_checkpoint
 from datp_core.domain.artifacts.keys import SerializationFormat
 from datp_core.domain.artifacts.lineage import (
     CentralizedCalibrationScoringIdentity,
@@ -22,7 +23,6 @@ from datp_core.domain.errors import CheckpointSelectionError, DomainValidationEr
 from datp_core.domain.experiments.specifications import CentralizedModelComparatorSpec
 from datp_core.infrastructure.learning.centralized.nbaiot_b0_checkpoint import (
     B0CentralizedCheckpointStager,
-    select_centralized_checkpoint,
 )
 
 

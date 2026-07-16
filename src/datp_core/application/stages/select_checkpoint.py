@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from datp_core.application.ports.learning import CentralizedTrainingRunResult
+from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.errors import CheckpointSelectionError
 from datp_core.domain.learning.checkpoints import (
     AnchorCheckpointTerminationPolicy,
@@ -106,3 +108,14 @@ def _validated_anchor_termination_evidence(request: AnchorCheckpointTerminationR
             candidate_evidence=repr(round_value),
             prohibited_input="convergence claimed before the locked anchor rounds_initial",
         )
+
+
+def select_centralized_checkpoint(result: CentralizedTrainingRunResult) -> CentralizedTrainingRunResult:
+    # One run per seed, no schedule to rank; only artifact_type isn't already constructor-checked.
+    if result.checkpoint_artifact.artifact_type is not ArtifactType.SCIENTIFIC_CHECKPOINT:
+        raise CheckpointSelectionError(
+            detail="B0 checkpoint selection requires a scientific checkpoint artifact reference",
+            candidate_evidence=repr(result.checkpoint_artifact),
+            prohibited_input="non-scientific-checkpoint artifact",
+        )
+    return result
