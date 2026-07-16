@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from hashlib import sha256
 from typing import TYPE_CHECKING, assert_never
 
 from datp_core.domain.artifacts.keys import ArtifactNamespace
@@ -15,6 +16,7 @@ from datp_core.domain.artifacts.lineage import (
     StageIdentity,
 )
 from datp_core.domain.artifacts.manifests import ArtifactType
+from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.data.datasets import Dataset, Regime, TimestampEvidence
 from datp_core.domain.data.partitioning import ClientDefinitionStrategy, DirichletAlpha, DirichletAlphaSentinel
 from datp_core.domain.errors import DomainValidationError
@@ -37,7 +39,7 @@ from datp_core.domain.evaluation.statistical_results import (
     Probability,
     StatisticalAnalysisSpec,
 )
-from datp_core.domain.experiments.claims import ClaimTier, ExperimentRole
+from datp_core.domain.experiments.claims import ClaimTier, ExecutionStatus, ExperimentRole
 from datp_core.domain.experiments.feasibility import FeasibilityStatus, ScientificReadinessResult
 from datp_core.domain.experiments.identities import ArchitectureCatalogueId, CellId, ExperimentId, ExperimentIdentity
 from datp_core.domain.experiments.protocols import (
@@ -53,7 +55,7 @@ from datp_core.domain.mathematics.pooled_statistics import (
     PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES,
     REGIME_D_MINIMUM_COVERAGE,
 )
-from datp_core.domain.runtime.seeds import CONFIRMATORY_PAIRED_SEED_COUNT, SeedTuple
+from datp_core.domain.runtime.seeds import CONFIRMATORY_PAIRED_SEED_COUNT, EnumMap, SeedTuple
 from datp_core.domain.thresholding.federated_statistics import FED_STATS_SUPPLEMENTARY_K_VALUES, FedStatsK
 from datp_core.domain.thresholding.policies import (
     FprTarget,
@@ -610,6 +612,36 @@ class CentralizedModelComparatorProfileSpec:
                     "ArchitectureCatalogueId, ExperimentIdentity, CentralizedModelComparatorSpec, ReportingPolicy"
                 ),
             )
+
+
+def _b0_identity(role: str) -> StageFingerprint:
+    return StageFingerprint(value=sha256(f"b0-centralized-comparator-{role}".encode()).hexdigest())
+
+
+LOCKED_B0_CENTRALIZED_COMPARATOR_PROFILE = CentralizedModelComparatorProfileSpec(
+    catalogue_id=ArchitectureCatalogueId(value="B0_CENTRALIZED_COMPARATOR"),
+    identity=ExperimentIdentity(
+        experiment_id=ExperimentId(value="E-B0"),
+        evidence_role=ExperimentRole.SUPPORTIVE,
+        tier=ClaimTier.TIER_2,
+        execution_status=ExecutionStatus.MANDATORY,
+    ),
+    comparator=CentralizedModelComparatorSpec(
+        model_identity=CentralizedModelIdentity(value=_b0_identity("model")),
+        checkpoint_identity=CentralizedCheckpointIdentity(value=_b0_identity("checkpoint")),
+        calibration_score_identity=CentralizedCalibrationScoringIdentity(value=_b0_identity("calibration-score")),
+        test_score_identity=CentralizedTestScoringIdentity(value=_b0_identity("test-score")),
+        threshold_identity=CentralizedThresholdIdentity(value=_b0_identity("threshold")),
+        evaluation_identity=CentralizedEvaluationIdentity(value=_b0_identity("evaluation")),
+    ),
+    reporting_policy=ReportingPolicy(
+        tables=(),
+        figures=(),
+        report_artifacts=(),
+        formats=EnumMap(entries=(), allowed_keys=(), is_sparse=False),
+        wording_outcomes=(),
+    ),
+)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

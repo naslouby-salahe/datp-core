@@ -76,6 +76,7 @@ from datp_core.domain.experiments.claims import ClaimTier, ExperimentRole
 from datp_core.domain.experiments.identities import ArchitectureCatalogueId, ExperimentId
 from datp_core.domain.experiments.protocols import ProtocolTrack, ReportingPolicy
 from datp_core.domain.experiments.specifications import (
+    LOCKED_B0_CENTRALIZED_COMPARATOR_PROFILE,
     CentralizedModelComparatorProfileSpec,
     CentralizedModelComparatorSpec,
 )
@@ -272,6 +273,31 @@ def test_b0_uses_the_dedicated_centralized_comparator_mapper() -> None:
     )
 
     assert type(mapped) is CentralizedModelComparatorSpec
+
+
+def test_b0_mapping_rejects_an_identity_that_does_not_match_the_locked_profile() -> None:
+    profile = LOCKED_B0_CENTRALIZED_COMPARATOR_PROFILE
+    mismatched_schema = CentralizedComparatorConfig(
+        model_identity="9" * 64,
+        checkpoint_identity=profile.comparator.checkpoint_identity.value.value,
+        calibration_score_identity=profile.comparator.calibration_score_identity.value.value,
+        test_score_identity=profile.comparator.test_score_identity.value.value,
+        threshold_identity=profile.comparator.threshold_identity.value.value,
+        evaluation_identity=profile.comparator.evaluation_identity.value.value,
+    )
+
+    with pytest.raises(ConfigurationError):
+        map_centralized_comparator_config(mismatched_schema, profile)
+
+
+def test_b0_centralized_comparator_yaml_file_loads_and_maps_to_the_locked_profile() -> None:
+    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "b0_centralized_comparator.yaml"
+    profile = LOCKED_B0_CENTRALIZED_COMPARATOR_PROFILE
+
+    schema = load_yaml(yaml_path.read_text(), CentralizedComparatorConfig)
+    mapped = map_centralized_comparator_config(schema, profile)
+
+    assert mapped == profile.comparator
 
 
 def test_canonical_temporal_mapping_rejects_pseudo_time() -> None:
