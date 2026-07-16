@@ -5,6 +5,7 @@ from enum import StrEnum
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.data.splitting import ConformalSplitSpec
 from datp_core.domain.errors import DomainValidationError
+from datp_core.domain.evaluation.alert_burden import CalibrationSampleCount
 from datp_core.domain.thresholding.policies import (
     DecimalValue,
     FiniteFloatValue,
@@ -63,6 +64,7 @@ class CalibrationSizeFallbackThresholdSpec:
     kind: ThresholdConstructionKind
     percentile: ThresholdPercentile
     fallback_rule_version: str
+    calibration_sample_count: CalibrationSampleCount
 
     def __post_init__(self) -> None:
         validate_construction_kind(value=self.kind, expected=ThresholdConstructionKind.CALIB_SIZE_FALLBACK)
@@ -71,6 +73,12 @@ class CalibrationSizeFallbackThresholdSpec:
                 detail="calibration-size fallback requires an explicit rule version",
                 value=repr(self.fallback_rule_version),
                 constraint="non-empty rule version",
+            )
+        if type(self.calibration_sample_count) is not CalibrationSampleCount:
+            raise DomainValidationError(
+                detail="calibration-size fallback requires a typed calibration sample count",
+                value=repr(self.calibration_sample_count),
+                constraint="CalibrationSampleCount",
             )
 
 

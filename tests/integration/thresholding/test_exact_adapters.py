@@ -19,6 +19,7 @@ from datp_core.domain.data.splitting import (
     TrainingSplitSpec,
 )
 from datp_core.domain.errors import ThresholdError
+from datp_core.domain.evaluation.alert_burden import CalibrationSampleCount
 from datp_core.domain.evaluation.operating_points import EligibleClientSet
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import CalibrationScoreArtifactSet, QuantileEstimatorType
@@ -284,6 +285,7 @@ def test_shrinkage_and_fallback_variants_use_their_locked_identity_and_scores() 
                 kind=ThresholdConstructionKind.CALIB_SIZE_FALLBACK,
                 percentile=context.percentile,
                 fallback_rule_version="locked-v1",
+                calibration_sample_count=CalibrationSampleCount(value=100),
             ),
             policy=ThresholdVariant.CALIB_SIZE_FALLBACK,
         )

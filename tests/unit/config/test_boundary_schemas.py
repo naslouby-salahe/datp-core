@@ -13,6 +13,7 @@ from datp_core.config.schemas.execution import (
 )
 from datp_core.config.schemas.reporting import ReportingConfig, ReportingFormatConfig
 from datp_core.config.schemas.scientific import (
+    AbsorptionGateConfig,
     BcaBootstrapStatisticalConfig,
     CalibrationSizeFallbackThresholdConfig,
     CanonicalTemporalConfig,
@@ -20,13 +21,19 @@ from datp_core.config.schemas.scientific import (
     CliffsDeltaStatisticalConfig,
     ClusterThresholdConfig,
     ConformalThresholdConfig,
+    DeviceClientPartitionConfig,
+    DirichletPartitionConfig,
     EvaluationConfig,
     FamilyThresholdConfig,
     FedAvgFederationConfig,
     FedProxFederationConfig,
     FedStatsBenignThresholdConfig,
+    FedStatsSupplementaryKConfig,
+    FilePseudoClientPartitionConfig,
+    GroupClientPartitionConfig,
     LinearRegressionStatisticalConfig,
     LocalThresholdConfig,
+    NaturalDevicePartitionConfig,
     PercentileBootstrapStatisticalConfig,
     RegimeAPreprocessingConfig,
     RegimeAStaticSplitConfig,
@@ -35,6 +42,7 @@ from datp_core.config.schemas.scientific import (
     SharedThresholdConfig,
     ShrinkageThresholdConfig,
     SpearmanStatisticalConfig,
+    TemporalRecoveryGateConfig,
     WilcoxonStatisticalConfig,
 )
 
@@ -43,6 +51,7 @@ def _scientific_payload_json() -> str:
     return """
     {
       "protocol_track": "journal_extension",
+      "partitioning": {"strategy": "natural_device", "regime": "a"},
       "threshold_constructions": [{
         "kind": "shared",
         "percentile": "0.95",
@@ -127,6 +136,14 @@ def test_boundary_schema_fields_have_no_defaults() -> None:
         CentralizedComparatorConfig,
         RegimeAStaticSplitConfig,
         RegimeAPreprocessingConfig,
+        AbsorptionGateConfig,
+        TemporalRecoveryGateConfig,
+        FedStatsSupplementaryKConfig,
+        NaturalDevicePartitionConfig,
+        FilePseudoClientPartitionConfig,
+        DeviceClientPartitionConfig,
+        GroupClientPartitionConfig,
+        DirichletPartitionConfig,
         ExecutionConfig,
         ResourceBudgetConfig,
         StageExecutionConfig,

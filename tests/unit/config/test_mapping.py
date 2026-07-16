@@ -15,14 +15,18 @@ from datp_core.config.mapping.execution import (
 from datp_core.config.mapping.scientific import (
     ExperimentConfigSchema,
     ResolveExperimentProfileRequest,
+    map_absorption_gate_config,
     map_anchor_checkpoint_termination_config,
     map_b0_pooled_threshold_config,
     map_canonical_temporal_config,
     map_centralized_comparator_config,
     map_experiment_schema,
+    map_fed_stats_supplementary_k_config,
     map_federation_config,
+    map_partitioning_config,
     map_regime_a_preprocessing_config,
     map_regime_a_static_split_config,
+    map_temporal_recovery_gate_config,
     resolve_experiment_profile,
 )
 from datp_core.config.schemas.artifacts import ArtifactConfig, ArtifactSerializationConfig
@@ -39,19 +43,25 @@ from datp_core.config.schemas.execution import (
 )
 from datp_core.config.schemas.reporting import ReportingConfig
 from datp_core.config.schemas.scientific import (
+    AbsorptionGateConfig,
     AnchorCheckpointTerminationConfig,
     B0PooledThresholdConfig,
     BcaBootstrapStatisticalConfig,
     CanonicalTemporalConfig,
     CentralizedComparatorConfig,
+    ConformalThresholdConfig,
+    DirichletPartitionConfig,
     EvaluationConfig,
     FedAvgFederationConfig,
     FedProxFederationConfig,
+    FedStatsSupplementaryKConfig,
     LocalThresholdConfig,
+    NaturalDevicePartitionConfig,
     RegimeAPreprocessingConfig,
     RegimeAStaticSplitConfig,
     ScientificConfig,
     SharedThresholdConfig,
+    TemporalRecoveryGateConfig,
 )
 from datp_core.domain.artifacts.keys import (
     ArtifactNamespace,
@@ -69,21 +79,24 @@ from datp_core.domain.artifacts.lineage import (
 )
 from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import StageFingerprint
-from datp_core.domain.data.datasets import TimestampEvidenceKind
+from datp_core.domain.data.datasets import Regime, TimestampEvidenceKind
+from datp_core.domain.data.partitioning import ClientDefinitionStrategy, DirichletAlpha, DirichletPartitionSpec
 from datp_core.domain.data.preprocessing import (
     FittedStatisticPolicy,
     NormalizationScope,
     NormalizationStrategy,
     PreprocessingChunkSpec,
 )
-from datp_core.domain.data.splitting import LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY
+from datp_core.domain.data.splitting import LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY, ConformalQuantileIndexRule
 from datp_core.domain.errors import ConfigurationError
 from datp_core.domain.evaluation.metrics import OperatingPointMetric
 from datp_core.domain.experiments.claims import ClaimTier, ExperimentRole
 from datp_core.domain.experiments.identities import ArchitectureCatalogueId, ExperimentId
 from datp_core.domain.experiments.protocols import ProtocolTrack, ReportingPolicy
 from datp_core.domain.experiments.specifications import (
+    ABSORPTION_GATES,
     LOCKED_B0_CENTRALIZED_COMPARATOR_PROFILE,
+    TEMPORAL_RECOVERY_GATE,
     CentralizedModelComparatorProfileSpec,
     CentralizedModelComparatorSpec,
 )
@@ -100,6 +113,7 @@ from datp_core.domain.runtime.policies import (
     StageConcurrency,
 )
 from datp_core.domain.runtime.seeds import EnumMap, SeedRole
+from datp_core.domain.thresholding.federated_statistics import FED_STATS_SUPPLEMENTARY_K_VALUES
 from datp_core.domain.thresholding.policies import (
     B0PooledThresholdSpec,
     SharedThresholdConstruction,
@@ -167,6 +181,10 @@ def _artifact_config() -> ArtifactConfig:
 def _scientific_config(*, protocol_track: ProtocolTrack = ProtocolTrack.DATP_ANCHOR) -> ScientificConfig:
     return ScientificConfig(
         protocol_track=protocol_track,
+        partitioning=NaturalDevicePartitionConfig(
+            strategy=ClientDefinitionStrategy.NATURAL_DEVICE,
+            regime=Regime.A,
+        ),
         threshold_constructions=(
             SharedThresholdConfig(
                 kind="shared",
@@ -406,6 +424,123 @@ def test_b0_pooled_threshold_yaml_file_loads_and_maps_to_the_locked_spec() -> No
     schema = load_yaml(yaml_path.read_text(), B0PooledThresholdConfig)
 
     assert map_b0_pooled_threshold_config(schema) == B0PooledThresholdSpec(percentile=ThresholdPercentile(value="0.95"))
+
+
+def test_absorption_gate_schema_rejects_a_non_locked_fraction() -> None:
+    with pytest.raises(ValidationError):
+        AbsorptionGateConfig(
+            strongly_useful_fraction=Decimal("0.80"),
+            partial_absorption_fraction=Decimal("0.25"),
+            alternative_path_distance=Decimal("0.05"),
+        )
+
+
+def test_absorption_gate_mapping_produces_the_locked_catalogue() -> None:
+    configuration = AbsorptionGateConfig(
+        strongly_useful_fraction=Decimal("0.75"),
+        partial_absorption_fraction=Decimal("0.25"),
+        alternative_path_distance=Decimal("0.05"),
+    )
+
+    assert map_absorption_gate_config(configuration) == ABSORPTION_GATES
+
+
+def test_absorption_gate_yaml_file_loads_and_maps_to_the_locked_catalogue() -> None:
+    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "absorption_gates.yaml"
+
+    schema = load_yaml(yaml_path.read_text(), AbsorptionGateConfig)
+
+    assert map_absorption_gate_config(schema) == ABSORPTION_GATES
+
+
+def test_temporal_recovery_gate_schema_rejects_a_non_locked_fraction() -> None:
+    with pytest.raises(ValidationError):
+        TemporalRecoveryGateConfig(meaningful_recovery_fraction=Decimal("0.40"))
+
+
+def test_temporal_recovery_gate_mapping_produces_the_locked_catalogue() -> None:
+    configuration = TemporalRecoveryGateConfig(meaningful_recovery_fraction=Decimal("0.50"))
+
+    assert map_temporal_recovery_gate_config(configuration) == TEMPORAL_RECOVERY_GATE
+
+
+def test_temporal_recovery_gate_yaml_file_loads_and_maps_to_the_locked_catalogue() -> None:
+    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "temporal_recovery_gate.yaml"
+
+    schema = load_yaml(yaml_path.read_text(), TemporalRecoveryGateConfig)
+
+    assert map_temporal_recovery_gate_config(schema) == TEMPORAL_RECOVERY_GATE
+
+
+def test_fed_stats_supplementary_k_mapping_produces_the_locked_grid() -> None:
+    configuration = FedStatsSupplementaryKConfig(values=(Decimal("2.0"), Decimal("2.5"), Decimal("3.0")))
+
+    assert map_fed_stats_supplementary_k_config(configuration) == FED_STATS_SUPPLEMENTARY_K_VALUES
+
+
+def test_fed_stats_supplementary_k_yaml_file_loads_and_maps_to_the_locked_grid() -> None:
+    yaml_path = Path(__file__).resolve().parents[3] / "configs" / "protocols" / "fed_stats_supplementary_k.yaml"
+
+    schema = load_yaml(yaml_path.read_text(), FedStatsSupplementaryKConfig)
+
+    assert map_fed_stats_supplementary_k_config(schema) == FED_STATS_SUPPLEMENTARY_K_VALUES
+
+
+def test_fed_stats_supplementary_k_schema_rejects_a_non_locked_value() -> None:
+    with pytest.raises(ValidationError):
+        FedStatsSupplementaryKConfig(values=(Decimal("2.0"), Decimal("2.5"), Decimal("4.0")))
+
+
+def test_dirichlet_partitioning_rejects_an_unauthorized_alpha() -> None:
+    unauthorized_partitioning = DirichletPartitionConfig(
+        strategy=ClientDefinitionStrategy.DIRICHLET_SYNTHETIC,
+        regime=Regime.C,
+        alpha=0.2,
+    )
+
+    with pytest.raises(ConfigurationError):
+        map_partitioning_config(unauthorized_partitioning)
+
+
+def test_dirichlet_partitioning_accepts_an_authorized_alpha() -> None:
+    authorized_partitioning = DirichletPartitionConfig(
+        strategy=ClientDefinitionStrategy.DIRICHLET_SYNTHETIC,
+        regime=Regime.C,
+        alpha=0.3,
+    )
+
+    mapped = map_partitioning_config(authorized_partitioning)
+
+    assert mapped == DirichletPartitionSpec(
+        strategy=ClientDefinitionStrategy.DIRICHLET_SYNTHETIC,
+        regime=Regime.C,
+        alpha=DirichletAlpha(value=0.3),
+    )
+
+
+def test_conformal_threshold_schema_rejects_a_non_locked_alpha() -> None:
+    with pytest.raises(ValidationError):
+        ConformalThresholdConfig(
+            kind="conformal",
+            mode="split",
+            alpha=Decimal("0.10"),
+            percentile=Decimal("0.95"),
+            quantile_index_rule=ConformalQuantileIndexRule.CEILING_N_PLUS_ONE,
+        )
+
+
+def test_shared_threshold_configuration_rejects_an_unauthorized_percentile() -> None:
+    schema = experiment_config()
+    unauthorized_shared = schema.scientific.threshold_constructions[0].model_copy(
+        update={"percentile": Decimal("0.93")}
+    )
+    unauthorized_scientific = schema.scientific.model_copy(
+        update={"threshold_constructions": (unauthorized_shared, schema.scientific.threshold_constructions[1])}
+    )
+    unauthorized_schema = replace(schema, scientific=unauthorized_scientific)
+
+    with pytest.raises(ConfigurationError):
+        map_experiment_schema(unauthorized_schema)
 
 
 def test_streaming_chunk_schema_rejects_a_non_positive_value() -> None:

@@ -9,6 +9,7 @@ from datp_core.config.schemas.artifacts import ArtifactConfig
 from datp_core.config.schemas.execution import ExecutionConfig
 from datp_core.config.schemas.reporting import ReportingConfig
 from datp_core.config.schemas.scientific import (
+    AbsorptionGateConfig,
     AnchorCheckpointTerminationConfig,
     B0PooledThresholdConfig,
     BcaBootstrapStatisticalConfig,
@@ -18,14 +19,21 @@ from datp_core.config.schemas.scientific import (
     CliffsDeltaStatisticalConfig,
     ClusterThresholdConfig,
     ConformalThresholdConfig,
+    DeviceClientPartitionConfig,
+    DirichletPartitionConfig,
     EvaluationConfig,
     FamilyThresholdConfig,
     FedAvgFederationConfig,
     FederationConfig,
     FedProxFederationConfig,
     FedStatsBenignThresholdConfig,
+    FedStatsSupplementaryKConfig,
+    FilePseudoClientPartitionConfig,
+    GroupClientPartitionConfig,
     LinearRegressionStatisticalConfig,
     LocalThresholdConfig,
+    NaturalDevicePartitionConfig,
+    PartitioningConfig,
     PercentileBootstrapStatisticalConfig,
     RegimeAPreprocessingConfig,
     RegimeAStaticSplitConfig,
@@ -35,6 +43,7 @@ from datp_core.config.schemas.scientific import (
     ShrinkageThresholdConfig,
     SpearmanStatisticalConfig,
     StatisticalConfig,
+    TemporalRecoveryGateConfig,
     ThresholdConstructionConfig,
     WilcoxonStatisticalConfig,
 )
@@ -49,10 +58,20 @@ from datp_core.domain.artifacts.lineage import (
 )
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.data.datasets import TimestampEvidence
+from datp_core.domain.data.partitioning import (
+    ClientPartitionSpec,
+    DeviceClientPartitionSpec,
+    DirichletAlpha,
+    DirichletAlphaSentinel,
+    DirichletPartitionSpec,
+    FilePseudoClientPartitionSpec,
+    GroupClientPartitionSpec,
+    NaturalDevicePartitionSpec,
+)
 from datp_core.domain.data.preprocessing import PreprocessingChunkSpec, PreprocessingSpec
 from datp_core.domain.data.splitting import RegimeAStaticSplitBoundarySpec, TemporalBoundary
 from datp_core.domain.errors import ConfigurationError, DomainValidationError
-from datp_core.domain.evaluation.alert_burden import BootstrapResampleCount
+from datp_core.domain.evaluation.alert_burden import BootstrapResampleCount, CalibrationSampleCount
 from datp_core.domain.evaluation.metrics import METRIC_SPECS, OperatingPointMetric
 from datp_core.domain.evaluation.operating_points import EvaluationSuiteSpec
 from datp_core.domain.evaluation.statistical_results import (
@@ -64,16 +83,28 @@ from datp_core.domain.evaluation.statistical_results import (
 from datp_core.domain.experiments.identities import ExperimentId
 from datp_core.domain.experiments.protocols import ScientificProtocolSpec
 from datp_core.domain.experiments.specifications import (
+    ABSORPTION_GATES,
+    CALIBRATION_SIZE_GRID,
+    DIRICHLET_ALPHA_GRID,
+    Q_SENSITIVITY_GRID,
+    SHRINKAGE_WEIGHT_GRID,
+    TEMPORAL_RECOVERY_GATE,
+    AbsorptionGateSpec,
     CentralizedModelComparatorProfileSpec,
     CentralizedModelComparatorSpec,
     ConfirmatoryExperimentProfileSpec,
     ExperimentProfileSpec,
     ExperimentSpec,
+    TemporalRecoveryGateSpec,
 )
 from datp_core.domain.learning.checkpoints import AnchorCheckpointTerminationPolicy
 from datp_core.domain.learning.training import FEDPROX_MU_GRID, FederationSpec
+from datp_core.domain.mathematics.pooled_statistics import REGIME_D_TEMPORAL_HISTORICAL_FRACTION
 from datp_core.domain.runtime.seeds import RoundNumber
-from datp_core.domain.thresholding.federated_statistics import FedStatsBenignThresholdSpec
+from datp_core.domain.thresholding.federated_statistics import (
+    FED_STATS_SUPPLEMENTARY_K_VALUES,
+    FedStatsBenignThresholdSpec,
+)
 from datp_core.domain.thresholding.policies import (
     B0PooledThresholdSpec,
     ClusterThresholdSpec,
@@ -88,6 +119,7 @@ from datp_core.domain.thresholding.variants import (
     ConformalThresholdSpec,
     RobustClusterMedianThresholdSpec,
     ShrinkageThresholdSpec,
+    ShrinkageWeight,
 )
 
 
@@ -253,6 +285,94 @@ def map_b0_pooled_threshold_config(schema: B0PooledThresholdConfig) -> B0PooledT
         ) from error
 
 
+def map_absorption_gate_config(schema: AbsorptionGateConfig) -> AbsorptionGateSpec:
+    try:
+        candidate = AbsorptionGateSpec(
+            strongly_useful_fraction=Probability(value=schema.strongly_useful_fraction),
+            partial_absorption_fraction=Probability(value=schema.partial_absorption_fraction),
+            alternative_path_distance=Probability(value=schema.alternative_path_distance),
+        )
+    except DomainValidationError as error:
+        raise ConfigurationError(
+            detail="absorption gate mapping requires the locked 0.75/0.25/0.05 roadmap bands",
+            section="scientific",
+            field="absorption_gates",
+            mode="mapping",
+        ) from error
+    if candidate != ABSORPTION_GATES:
+        raise ConfigurationError(
+            detail="absorption gate configuration must match the locked roadmap catalogue",
+            section="scientific",
+            field="absorption_gates",
+            mode="mapping",
+        )
+    return candidate
+
+
+def map_temporal_recovery_gate_config(schema: TemporalRecoveryGateConfig) -> TemporalRecoveryGateSpec:
+    try:
+        candidate = TemporalRecoveryGateSpec(
+            meaningful_recovery_fraction=Probability(value=schema.meaningful_recovery_fraction),
+        )
+    except DomainValidationError as error:
+        raise ConfigurationError(
+            detail="temporal recovery gate mapping requires the locked 0.50 recovery fraction",
+            section="scientific",
+            field="temporal_recovery_gate",
+            mode="mapping",
+        ) from error
+    if candidate != TEMPORAL_RECOVERY_GATE:
+        raise ConfigurationError(
+            detail="temporal recovery gate configuration must match the locked roadmap catalogue",
+            section="scientific",
+            field="temporal_recovery_gate",
+            mode="mapping",
+        )
+    return candidate
+
+
+def map_fed_stats_supplementary_k_config(schema: FedStatsSupplementaryKConfig) -> tuple[Decimal, ...]:
+    if schema.values != FED_STATS_SUPPLEMENTARY_K_VALUES:
+        raise ConfigurationError(
+            detail="FedStats supplementary k configuration must match the locked 2.0/2.5/3.0 roadmap grid",
+            section="scientific",
+            field="fed_stats_supplementary_k",
+            mode="mapping",
+        )
+    return schema.values
+
+
+def map_partitioning_config(schema: PartitioningConfig) -> ClientPartitionSpec:
+    match schema:
+        case NaturalDevicePartitionConfig():
+            return NaturalDevicePartitionSpec(strategy=schema.strategy, regime=schema.regime)
+        case FilePseudoClientPartitionConfig():
+            return FilePseudoClientPartitionSpec(strategy=schema.strategy, regime=schema.regime)
+        case DeviceClientPartitionConfig():
+            return DeviceClientPartitionSpec(strategy=schema.strategy, regime=schema.regime)
+        case GroupClientPartitionConfig():
+            return GroupClientPartitionSpec(strategy=schema.strategy, regime=schema.regime)
+        case DirichletPartitionConfig():
+            if not _is_authorized_dirichlet_alpha(schema.alpha):
+                raise ConfigurationError(
+                    detail="Dirichlet alpha must be a frozen pre-registered profile grid member",
+                    section="scientific",
+                    field="partitioning",
+                    mode="mapping",
+                )
+            return DirichletPartitionSpec(
+                strategy=schema.strategy,
+                regime=schema.regime,
+                alpha=DirichletAlpha(value=schema.alpha),
+            )
+        case _:
+            assert_never(schema)
+
+
+def _is_authorized_dirichlet_alpha(value: float | DirichletAlphaSentinel) -> bool:
+    return DirichletAlpha(value=value) in DIRICHLET_ALPHA_GRID
+
+
 def map_regime_a_preprocessing_config(
     schema: RegimeAPreprocessingConfig, *, chunking: PreprocessingChunkSpec
 ) -> PreprocessingSpec:
@@ -314,6 +434,7 @@ def _matches_scientific_config(schema: ScientificConfig, protocol: ScientificPro
     return all(
         (
             schema.protocol_track is protocol.track,
+            map_partitioning_config(schema.partitioning) == protocol.partitioning,
             _matches_threshold_suite(schema.threshold_constructions, protocol.thresholds),
             _matches_evaluation(schema.evaluation, protocol.evaluation),
             map_statistical_config(schema.statistics) == protocol.statistics,
@@ -337,40 +458,69 @@ def _matches_threshold_configuration(configuration: ThresholdConstructionConfig,
     match configuration, construction:
         case SharedThresholdConfig(), SharedThresholdSpec():
             return (
-                construction.percentile.value == configuration.percentile
+                _is_authorized_percentile(configuration.percentile)
+                and construction.percentile.value == configuration.percentile
                 and construction.construction is configuration.construction
                 and construction.estimator is configuration.estimator
             )
         case LocalThresholdConfig(), LocalThresholdSpec():
             return (
-                construction.percentile.value == configuration.percentile
+                _is_authorized_percentile(configuration.percentile)
+                and construction.percentile.value == configuration.percentile
                 and construction.estimator is configuration.estimator
             )
         case FamilyThresholdConfig(), FamilyThresholdSpec():
             return (
-                construction.percentile.value == configuration.percentile
+                _is_authorized_percentile(configuration.percentile)
+                and construction.percentile.value == configuration.percentile
                 and construction.family_manifest_identity.value == configuration.family_taxonomy_id
             )
         case ClusterThresholdConfig(), ClusterThresholdSpec():
-            return construction.percentile.value == configuration.percentile
+            return (
+                _is_authorized_percentile(configuration.percentile)
+                and construction.percentile.value == configuration.percentile
+            )
         case RobustClusterMedianThresholdConfig(), RobustClusterMedianThresholdSpec():
             return True
         case ShrinkageThresholdConfig(), ShrinkageThresholdSpec():
             return (
-                construction.percentile.value == configuration.percentile
+                _is_authorized_percentile(configuration.percentile)
+                and _is_authorized_shrinkage_weight(configuration.shrinkage_weight)
+                and construction.percentile.value == configuration.percentile
                 and construction.shrinkage_weight.value == float(configuration.shrinkage_weight)
             )
         case CalibrationSizeFallbackThresholdConfig(), CalibrationSizeFallbackThresholdSpec():
             return (
-                construction.percentile.value == configuration.percentile
+                _is_authorized_percentile(configuration.percentile)
+                and _is_authorized_calibration_sample_count(configuration.calibration_sample_count)
+                and construction.percentile.value == configuration.percentile
                 and construction.fallback_rule_version == configuration.fallback_rule_version
+                and construction.calibration_sample_count.value == configuration.calibration_sample_count
             )
         case ConformalThresholdConfig(), ConformalThresholdSpec():
-            return construction.mode.value == configuration.mode
+            return (
+                _is_authorized_percentile(configuration.percentile)
+                and construction.mode.value == configuration.mode
+                and construction.conformal_split.alpha.value == configuration.alpha
+                and construction.conformal_split.percentile.value == configuration.percentile
+                and construction.conformal_split.quantile_index_rule == configuration.quantile_index_rule
+            )
         case FedStatsBenignThresholdConfig(), FedStatsBenignThresholdSpec():
             return True
         case _:
             return False
+
+
+def _is_authorized_percentile(value: Decimal) -> bool:
+    return ThresholdPercentile(value=value) in Q_SENSITIVITY_GRID
+
+
+def _is_authorized_shrinkage_weight(value: Decimal) -> bool:
+    return ShrinkageWeight(value=float(value)) in SHRINKAGE_WEIGHT_GRID
+
+
+def _is_authorized_calibration_sample_count(value: int) -> bool:
+    return CalibrationSampleCount(value=value) in CALIBRATION_SIZE_GRID
 
 
 def _matches_evaluation(configuration: EvaluationConfig, evaluation: EvaluationSuiteSpec) -> bool:
@@ -393,6 +543,7 @@ def _matches_canonical_temporal(
     if configuration is None:
         return True
     mapped_boundary = map_canonical_temporal_config(configuration)
-    return protocol.partitioning.regime.value == "d_temporal" and mapped_boundary.historical_fraction == Probability(
-        value=Decimal("0.70")
+    return (
+        protocol.partitioning.regime.value == "d_temporal"
+        and mapped_boundary.historical_fraction == REGIME_D_TEMPORAL_HISTORICAL_FRACTION
     )
