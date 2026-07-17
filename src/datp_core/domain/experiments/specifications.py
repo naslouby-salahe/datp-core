@@ -56,6 +56,7 @@ from datp_core.domain.experiments.protocols import (
 )
 from datp_core.domain.learning.training import AggregationStrategy, ParticipationStrategy
 from datp_core.domain.runtime.seeds import EnumMap, SeedTuple
+from datp_core.domain.thresholding.clustering import CanonicalB4ClusteringProfile
 from datp_core.domain.thresholding.federated_statistics import FedStatsK
 from datp_core.domain.thresholding.policies import (
     B0PooledThresholdSpec,
@@ -818,6 +819,7 @@ class ProfileCatalogueSpec:
     conformal_alpha: FprTarget
     fed_stats_k_grid: tuple[FedStatsK, ...]
     b0_pooled_threshold: B0PooledThresholdSpec
+    canonical_b4_profile: CanonicalB4ClusteringProfile
     absorption_gates: AbsorptionGateSpec
     temporal_recovery_gate: TemporalRecoveryGateSpec
     regime_d_viability_gate: RegimeDViabilityGateSpec
@@ -871,6 +873,7 @@ def _has_catalogue_grids(catalogue: ProfileCatalogueSpec) -> bool:
             type(catalogue.conformal_alpha) is FprTarget,
             _is_unique_grid(catalogue.fed_stats_k_grid, value_type=FedStatsK),
             type(catalogue.b0_pooled_threshold) is B0PooledThresholdSpec,
+            type(catalogue.canonical_b4_profile) is CanonicalB4ClusteringProfile,
         )
     )
 

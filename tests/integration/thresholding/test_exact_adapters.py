@@ -20,17 +20,28 @@ from datp_core.domain.data.splitting import (
 )
 from datp_core.domain.errors import ThresholdError
 from datp_core.domain.evaluation.alert_burden import CalibrationSampleCount
-from datp_core.domain.evaluation.operating_points import EligibleClientSet
+from datp_core.domain.evaluation.operating_points import (
+    ClientEligibilityReason,
+    EligibleClientSet,
+    IneligibleClientReason,
+)
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import CalibrationScoreArtifactSet, QuantileEstimatorType
 from datp_core.domain.runtime.seeds import Seed
 from datp_core.domain.thresholding.clustering import (
+    B4ClusteringAlgorithm,
     B4ClusteringSpec,
+    B4FingerprintField,
+    B4FingerprintFitScope,
+    B4FingerprintScalerSpec,
+    CanonicalB4ClusteringProfile,
     ClusterAssignmentArtifact,
     ClusterAssignmentEntry,
     ClusterCentroidReference,
     ClusterThresholdAggregationSpec,
     KMeansInitializationCount,
+    KMeansMaximumIterations,
+    PinnedScikitLearnVersion,
     ScaledB4Fingerprint,
     ScaledFingerprintReference,
     adjusted_rand_index,
@@ -101,6 +112,23 @@ def test_exact_quantile_estimators_return_their_locked_constructions() -> None:
     assert tuple(entry.value.value for entry in oracle.estimate(request).estimates.values.entries) == (10.0, 10.0)
 
 
+def _canonical_b4_profile() -> CanonicalB4ClusteringProfile:
+    return CanonicalB4ClusteringProfile(
+        fingerprint_fields=(
+            B4FingerprintField.MEAN,
+            B4FingerprintField.STANDARD_DEVIATION,
+            B4FingerprintField.SKEW,
+            B4FingerprintField.P95,
+        ),
+        scaler=B4FingerprintScalerSpec.STANDARD_SCALER,
+        scaler_fit_scope=B4FingerprintFitScope.ELIGIBLE_CLIENT_FINGERPRINTS,
+        algorithm=B4ClusteringAlgorithm.KMEANS_PLUS_PLUS,
+        n_init=KMeansInitializationCount(value=10),
+        max_iter=KMeansMaximumIterations(value=300),
+        scikit_learn_version=PinnedScikitLearnVersion(value="1.9.0"),
+    )
+
+
 @pytest.mark.integration
 def test_exact_b4_clustering_is_repeatable_with_perfect_adjusted_rand() -> None:
     values = (
@@ -115,6 +143,7 @@ def test_exact_b4_clustering_is_repeatable_with_perfect_adjusted_rand() -> None:
     specification = B4ClusteringSpec(
         experiment_seed=Seed(value=13),
         clustering_identity=StageFingerprint(value="a" * 64),
+        profile=_canonical_b4_profile(),
     )
     request = B4ClusteringRequest(
         calibration_scores=score_set,
@@ -133,6 +162,7 @@ def test_exact_b4_clustering_is_repeatable_with_perfect_adjusted_rand() -> None:
     invalid_specification = B4ClusteringSpec(
         experiment_seed=Seed(value=13),
         clustering_identity=StageFingerprint(value="f" * 64),
+        profile=_canonical_b4_profile(),
     )
     object.__setattr__(invalid_specification, "n_init", KMeansInitializationCount(value=1))
     invalid_request = B4ClusteringRequest(
@@ -242,6 +272,104 @@ def test_shared_local_and_family_strategies_use_their_locked_identity_and_scores
 
 
 @pytest.mark.integration
+def test_b1_shared_mean_excludes_an_ineligible_client() -> None:
+    context = _strategy_context()
+    excluded_client = context.eligible.roster.client_ids[2]
+    partial_eligible = EligibleClientSet(
+        roster=context.eligible.roster,
+        protocol_eligibility_rule_identity=context.eligible.protocol_eligibility_rule_identity,
+        eligible_clients=context.eligible.roster.client_ids[:2],
+        ineligible_reasons=(
+            IneligibleClientReason(
+                client_id=excluded_client, reason=ClientEligibilityReason.INSUFFICIENT_CALIBRATION_GLOBAL_FALLBACK
+            ),
+        ),
+        identity=StageFingerprint(value="9" * 64),
+    )
+    partial_context = _StrategyContext(
+        score_set=context.score_set,
+        eligible=partial_eligible,
+        reader=context.reader,
+        percentile=context.percentile,
+        identity=context.identity,
+        assignments=context.assignments,
+        family=context.family,
+    )
+
+    shared = SharedThresholdStrategy(reader=context.reader).assign(
+        _request(
+            context=partial_context,
+            construction=SharedThresholdSpec(
+                kind=ThresholdConstructionKind.SHARED,
+                percentile=context.percentile,
+                construction=SharedThresholdConstruction.MEAN,
+                estimator=QuantileEstimatorType.LOCAL_EXACT,
+            ),
+            policy=CoreThresholdPolicy.B1,
+        )
+    )
+
+    # Client-02's local threshold (5.0) is excluded; the mean uses only client-00 (1.0) and client-01 (3.0).
+    assert _values(shared) == (2.0, 2.0, 2.0)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class _OtherOnlyFamilyMemberships:
+    """A family manifest whose members never include the querying client itself."""
+
+    other: ClientId
+
+    def members(self, *, family_manifest: str, client_id: ClientId) -> tuple[ClientId, ...]:
+        del family_manifest, client_id
+        return (self.other,)
+
+
+@pytest.mark.integration
+def test_b3_family_construction_rejects_a_family_with_no_eligible_members() -> None:
+    context = _strategy_context()
+    querying_client = context.family.first
+    ineligible_family_member = context.family.second
+    eligible_clients = EligibleClientSet(
+        roster=context.eligible.roster,
+        protocol_eligibility_rule_identity=context.eligible.protocol_eligibility_rule_identity,
+        eligible_clients=(querying_client,),
+        ineligible_reasons=tuple(
+            IneligibleClientReason(
+                client_id=client_id, reason=ClientEligibilityReason.INSUFFICIENT_CALIBRATION_GLOBAL_FALLBACK
+            )
+            for client_id in context.eligible.roster.client_ids
+            if client_id != querying_client
+        ),
+        identity=StageFingerprint(value="8" * 64),
+    )
+    empty_family_context = _StrategyContext(
+        score_set=context.score_set,
+        eligible=eligible_clients,
+        reader=context.reader,
+        percentile=context.percentile,
+        identity=context.identity,
+        assignments=context.assignments,
+        family=context.family,
+    )
+
+    with pytest.raises(ThresholdError, match="no eligible family members"):
+        FamilyThresholdStrategy(
+            reader=context.reader,
+            family_memberships=_OtherOnlyFamilyMemberships(other=ineligible_family_member),
+        ).assign(
+            _request(
+                context=empty_family_context,
+                construction=FamilyThresholdSpec(
+                    kind=ThresholdConstructionKind.FAMILY,
+                    percentile=context.percentile,
+                    family_manifest_identity=context.identity,
+                ),
+                policy=CoreThresholdPolicy.B3,
+            )
+        )
+
+
+@pytest.mark.integration
 def test_cluster_strategy_uses_the_locked_identity_and_scores() -> None:
     context = _strategy_context()
     cluster = ClusterThresholdStrategy(reader=context.reader, assignments=context.assignments).assign(
@@ -250,7 +378,9 @@ def test_cluster_strategy_uses_the_locked_identity_and_scores() -> None:
             construction=ClusterThresholdSpec(
                 kind=ThresholdConstructionKind.CLUSTER,
                 percentile=context.percentile,
-                clustering=B4ClusteringSpec(experiment_seed=Seed(value=9), clustering_identity=context.identity),
+                clustering=B4ClusteringSpec(
+                    experiment_seed=Seed(value=9), clustering_identity=context.identity, profile=_canonical_b4_profile()
+                ),
                 aggregation=ClusterThresholdAggregationSpec(
                     percentile=context.percentile,
                     member_local_thresholds=(ThresholdValue(value=1),),

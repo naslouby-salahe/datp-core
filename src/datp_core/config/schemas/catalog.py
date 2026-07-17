@@ -190,6 +190,7 @@ class B4ClusteringProfileConfig(CatalogSchema):
     max_iter: PositiveInteger
     fixed_percentile: OpenUnitInterval
     is_canonical: bool
+    scikit_learn_version: Annotated[str, Field(pattern=r"^\d+\.\d+\.\d+$")]
 
 
 class ThresholdCatalogConfig(CatalogSchema):

@@ -15,15 +15,36 @@ from datp_core.domain.thresholding.clustering import (
     B4FingerprintField,
     B4FingerprintFitScope,
     B4FingerprintScalerSpec,
+    CanonicalB4ClusteringProfile,
     ClusterAssignmentArtifact,
     ClusterAssignmentEntry,
     ClusterCentroidReference,
     ClusterThresholdAggregationSpec,
+    KMeansInitializationCount,
+    KMeansMaximumIterations,
+    PinnedScikitLearnVersion,
     ScaledB4Fingerprint,
     ScaledFingerprintReference,
     adjusted_rand_index,
 )
 from datp_core.domain.thresholding.policies import ThresholdPercentile, ThresholdValue
+
+
+def _canonical_b4_profile() -> CanonicalB4ClusteringProfile:
+    return CanonicalB4ClusteringProfile(
+        fingerprint_fields=(
+            B4FingerprintField.MEAN,
+            B4FingerprintField.STANDARD_DEVIATION,
+            B4FingerprintField.SKEW,
+            B4FingerprintField.P95,
+        ),
+        scaler=B4FingerprintScalerSpec.STANDARD_SCALER,
+        scaler_fit_scope=B4FingerprintFitScope.ELIGIBLE_CLIENT_FINGERPRINTS,
+        algorithm=B4ClusteringAlgorithm.KMEANS_PLUS_PLUS,
+        n_init=KMeansInitializationCount(value=10),
+        max_iter=KMeansMaximumIterations(value=300),
+        scikit_learn_version=PinnedScikitLearnVersion(value="1.9.0"),
+    )
 
 
 def _scaled_fingerprint(*, offset: float) -> ScaledB4Fingerprint:
@@ -62,6 +83,7 @@ def test_canonical_b4_locks_fingerprint_scaling_algorithm_and_derived_seed() -> 
     specification = B4ClusteringSpec(
         experiment_seed=Seed(value=7),
         clustering_identity=StageFingerprint(value="c" * 64),
+        profile=_canonical_b4_profile(),
     )
 
     assert specification.fingerprint_fields == (
@@ -83,6 +105,7 @@ def test_scikit_learn_version_lock_matches_installed_dependency() -> None:
     specification = B4ClusteringSpec(
         experiment_seed=Seed(value=7),
         clustering_identity=StageFingerprint(value="c" * 64),
+        profile=_canonical_b4_profile(),
     )
 
     assert specification.scikit_learn_version.value == version("scikit-learn")

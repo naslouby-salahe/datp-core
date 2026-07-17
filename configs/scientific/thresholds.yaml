@@ -18,6 +18,7 @@ b4_profiles:
     max_iter: 300
     fixed_percentile: "0.95"
     is_canonical: true
+    scikit_learn_version: "1.9.0"
   - profile_id: exploratory_k9
     cluster_count: 9
     fingerprint_fields: [mean, std, skew, p95]
@@ -28,3 +29,4 @@ b4_profiles:
     max_iter: 300
     fixed_percentile: "0.95"
     is_canonical: false
+    scikit_learn_version: "1.9.0"

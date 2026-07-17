@@ -110,6 +110,47 @@ class PinnedScikitLearnVersion:
 CANONICAL_KMEANS_N_INIT: Final = KMeansInitializationCount(value=10)
 CANONICAL_KMEANS_MAX_ITER: Final = KMeansMaximumIterations(value=300)
 PINNED_SCIKIT_LEARN_VERSION: Final = PinnedScikitLearnVersion(value="1.9.0")
+_CANONICAL_B4_FINGERPRINT_FIELDS: Final = (
+    B4FingerprintField.MEAN,
+    B4FingerprintField.STANDARD_DEVIATION,
+    B4FingerprintField.SKEW,
+    B4FingerprintField.P95,
+)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CanonicalB4ClusteringProfile:
+    fingerprint_fields: tuple[B4FingerprintField, ...]
+    scaler: B4FingerprintScalerSpec
+    scaler_fit_scope: B4FingerprintFitScope
+    algorithm: B4ClusteringAlgorithm
+    n_init: KMeansInitializationCount
+    max_iter: KMeansMaximumIterations
+    scikit_learn_version: PinnedScikitLearnVersion
+
+    def __post_init__(self) -> None:
+        if not _is_canonical_b4_clustering_profile(self):
+            raise DomainValidationError(
+                detail="canonical B4 clustering profile must match the locked fingerprint/scaler/algorithm/"
+                "n_init/max_iter/scikit-learn-version invariant",
+                value=repr(self),
+                constraint="fixed [mean,std,skew,p95] fingerprint, standard_scaler, kmeans++, n_init=10, "
+                "max_iter=300, scikit-learn 1.9.0",
+            )
+
+
+def _is_canonical_b4_clustering_profile(profile: CanonicalB4ClusteringProfile) -> bool:
+    return all(
+        (
+            profile.fingerprint_fields == _CANONICAL_B4_FINGERPRINT_FIELDS,
+            profile.scaler is B4FingerprintScalerSpec.STANDARD_SCALER,
+            profile.scaler_fit_scope is B4FingerprintFitScope.ELIGIBLE_CLIENT_FINGERPRINTS,
+            profile.algorithm is B4ClusteringAlgorithm.KMEANS_PLUS_PLUS,
+            profile.n_init == CANONICAL_KMEANS_N_INIT,
+            profile.max_iter == CANONICAL_KMEANS_MAX_ITER,
+            profile.scikit_learn_version == PINNED_SCIKIT_LEARN_VERSION,
+        )
+    )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -139,31 +180,32 @@ class B4ClusteringSpec:
     random_state: KMeansRandomState
     scikit_learn_version: PinnedScikitLearnVersion
 
-    def __init__(self, *, experiment_seed: Seed, clustering_identity: StageFingerprint) -> None:
-        if type(experiment_seed) is not Seed or type(clustering_identity) is not StageFingerprint:
+    def __init__(
+        self,
+        *,
+        experiment_seed: Seed,
+        clustering_identity: StageFingerprint,
+        profile: CanonicalB4ClusteringProfile,
+    ) -> None:
+        if (
+            type(experiment_seed) is not Seed
+            or type(clustering_identity) is not StageFingerprint
+            or type(profile) is not CanonicalB4ClusteringProfile
+        ):
             raise DomainValidationError(
-                detail="canonical B4 clustering requires typed seed and stage identity",
-                value=repr((experiment_seed, clustering_identity)),
-                constraint="Seed and StageFingerprint",
+                detail="canonical B4 clustering requires a typed seed, stage identity, and canonical profile",
+                value=repr((experiment_seed, clustering_identity, profile)),
+                constraint="Seed, StageFingerprint, and CanonicalB4ClusteringProfile",
             )
         object.__setattr__(self, "experiment_seed", experiment_seed)
         object.__setattr__(self, "clustering_identity", clustering_identity)
-        object.__setattr__(
-            self,
-            "fingerprint_fields",
-            (
-                B4FingerprintField.MEAN,
-                B4FingerprintField.STANDARD_DEVIATION,
-                B4FingerprintField.SKEW,
-                B4FingerprintField.P95,
-            ),
-        )
-        object.__setattr__(self, "scaler", B4FingerprintScalerSpec.STANDARD_SCALER)
-        object.__setattr__(self, "scaler_fit_scope", B4FingerprintFitScope.ELIGIBLE_CLIENT_FINGERPRINTS)
-        object.__setattr__(self, "algorithm", B4ClusteringAlgorithm.KMEANS_PLUS_PLUS)
+        object.__setattr__(self, "fingerprint_fields", profile.fingerprint_fields)
+        object.__setattr__(self, "scaler", profile.scaler)
+        object.__setattr__(self, "scaler_fit_scope", profile.scaler_fit_scope)
+        object.__setattr__(self, "algorithm", profile.algorithm)
         object.__setattr__(self, "cluster_count", CANONICAL_CLUSTER_K)
-        object.__setattr__(self, "n_init", CANONICAL_KMEANS_N_INIT)
-        object.__setattr__(self, "max_iter", CANONICAL_KMEANS_MAX_ITER)
+        object.__setattr__(self, "n_init", profile.n_init)
+        object.__setattr__(self, "max_iter", profile.max_iter)
         derived_seed = derive_seed(
             experiment_seed=experiment_seed,
             role=SeedRole.CLUSTERING,
@@ -174,7 +216,7 @@ class B4ClusteringSpec:
             "random_state",
             KMeansRandomState(value=derived_seed.value % (2**32)),
         )
-        object.__setattr__(self, "scikit_learn_version", PINNED_SCIKIT_LEARN_VERSION)
+        object.__setattr__(self, "scikit_learn_version", profile.scikit_learn_version)
 
     @property
     def is_canonical_k(self) -> bool:

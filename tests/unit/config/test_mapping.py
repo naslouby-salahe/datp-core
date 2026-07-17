@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from datp_core.config.documents import ConfigurationDocument
 from datp_core.config.loader import ValidatedSchema, load_yaml_document
+from datp_core.config.mapping.catalog import map_canonical_b4_clustering_profile_config
 from datp_core.config.mapping.execution import (
     map_execution_profile_config,
     map_scoring_batch_config,
@@ -36,6 +37,7 @@ from datp_core.config.mapping.scientific import (
     resolve_experiment_profile,
 )
 from datp_core.config.schemas.artifacts import ArtifactConfig, ArtifactSerializationConfig
+from datp_core.config.schemas.catalog import B4ClusteringProfileConfig
 from datp_core.config.schemas.execution import (
     ExecutionConfig,
     ExecutionProfileConfig,
@@ -131,6 +133,16 @@ from datp_core.domain.runtime.policies import (
     StageConcurrency,
 )
 from datp_core.domain.runtime.seeds import EnumMap, SeedRole
+from datp_core.domain.thresholding.clustering import (
+    B4ClusteringAlgorithm,
+    B4FingerprintField,
+    B4FingerprintFitScope,
+    B4FingerprintScalerSpec,
+    CanonicalB4ClusteringProfile,
+    KMeansInitializationCount,
+    KMeansMaximumIterations,
+    PinnedScikitLearnVersion,
+)
 from datp_core.domain.thresholding.federated_statistics import FED_STATS_SUPPLEMENTARY_K_VALUES
 from datp_core.domain.thresholding.policies import (
     B0PooledThresholdSpec,
@@ -459,6 +471,76 @@ def test_composed_profile_catalogue_resolves_the_b0_pooled_threshold_from_the_na
     catalogue = composed_profile_catalogue()
 
     assert catalogue.b0_pooled_threshold == B0PooledThresholdSpec(percentile=ThresholdPercentile(value="0.95"))
+
+
+def _canonical_b4_profile_config_dict() -> dict[str, object]:
+    return {
+        "profile_id": "canonical",
+        "cluster_count": 3,
+        "fingerprint_fields": ("mean", "std", "skew", "p95"),
+        "scaler": "standard_scaler",
+        "scaler_fit_scope": "eligible_client_fingerprints",
+        "algorithm": "kmeans++",
+        "n_init": 10,
+        "max_iter": 300,
+        "fixed_percentile": Decimal("0.95"),
+        "is_canonical": True,
+        "scikit_learn_version": "1.9.0",
+    }
+
+
+def _canonical_b4_profile_config() -> B4ClusteringProfileConfig:
+    return B4ClusteringProfileConfig.model_validate(_canonical_b4_profile_config_dict())
+
+
+def test_b4_clustering_profile_schema_rejects_a_malformed_scikit_learn_version() -> None:
+    with pytest.raises(ValidationError):
+        B4ClusteringProfileConfig.model_validate({**_canonical_b4_profile_config_dict(), "scikit_learn_version": "1.9"})
+
+
+def test_canonical_b4_clustering_profile_mapping_produces_the_locked_spec() -> None:
+    mapped = map_canonical_b4_clustering_profile_config(_canonical_b4_profile_config())
+
+    assert mapped == CanonicalB4ClusteringProfile(
+        fingerprint_fields=(
+            B4FingerprintField.MEAN,
+            B4FingerprintField.STANDARD_DEVIATION,
+            B4FingerprintField.SKEW,
+            B4FingerprintField.P95,
+        ),
+        scaler=B4FingerprintScalerSpec.STANDARD_SCALER,
+        scaler_fit_scope=B4FingerprintFitScope.ELIGIBLE_CLIENT_FINGERPRINTS,
+        algorithm=B4ClusteringAlgorithm.KMEANS_PLUS_PLUS,
+        n_init=KMeansInitializationCount(value=10),
+        max_iter=KMeansMaximumIterations(value=300),
+        scikit_learn_version=PinnedScikitLearnVersion(value="1.9.0"),
+    )
+
+
+def test_canonical_b4_clustering_profile_mapping_rejects_a_non_locked_n_init() -> None:
+    non_locked_profile = B4ClusteringProfileConfig.model_validate({**_canonical_b4_profile_config_dict(), "n_init": 1})
+
+    with pytest.raises(ConfigurationError):
+        map_canonical_b4_clustering_profile_config(non_locked_profile)
+
+
+def test_composed_profile_catalogue_resolves_the_canonical_b4_profile_from_the_named_document() -> None:
+    catalogue = composed_profile_catalogue()
+
+    assert catalogue.canonical_b4_profile == CanonicalB4ClusteringProfile(
+        fingerprint_fields=(
+            B4FingerprintField.MEAN,
+            B4FingerprintField.STANDARD_DEVIATION,
+            B4FingerprintField.SKEW,
+            B4FingerprintField.P95,
+        ),
+        scaler=B4FingerprintScalerSpec.STANDARD_SCALER,
+        scaler_fit_scope=B4FingerprintFitScope.ELIGIBLE_CLIENT_FINGERPRINTS,
+        algorithm=B4ClusteringAlgorithm.KMEANS_PLUS_PLUS,
+        n_init=KMeansInitializationCount(value=10),
+        max_iter=KMeansMaximumIterations(value=300),
+        scikit_learn_version=PinnedScikitLearnVersion(value="1.9.0"),
+    )
 
 
 def test_absorption_gate_schema_rejects_an_out_of_range_fraction() -> None:

@@ -3,7 +3,12 @@ from typing import Literal, assert_never
 
 from datp_core.config.mapping.scientific import map_b0_pooled_threshold_config
 from datp_core.config.resolver import ResolvedScientificCatalog
-from datp_core.config.schemas.catalog import EligibilityCoverageRequiredConfig, ModelProfileConfig
+from datp_core.config.schemas.catalog import (
+    B4ClusteringProfileConfig,
+    EligibilityCoverageRequiredConfig,
+    ModelProfileConfig,
+    ThresholdCatalogConfig,
+)
 from datp_core.domain.data.datasets import Regime
 from datp_core.domain.data.partitioning import DirichletAlpha
 from datp_core.domain.errors import ConfigurationError, DomainValidationError
@@ -27,6 +32,13 @@ from datp_core.domain.experiments.specifications import (
 from datp_core.domain.learning.models import ActivationFunction, AutoencoderSpec
 from datp_core.domain.learning.training import LrSchedulerType, ModelTrainingProfileSpec, OptimizerType
 from datp_core.domain.runtime.admissibility import BatchSize
+from datp_core.domain.thresholding.clustering import (
+    B4FingerprintField,
+    CanonicalB4ClusteringProfile,
+    KMeansInitializationCount,
+    KMeansMaximumIterations,
+    PinnedScikitLearnVersion,
+)
 from datp_core.domain.thresholding.federated_statistics import FedStatsK
 from datp_core.domain.thresholding.policies import FprTarget, ThresholdPercentile
 from datp_core.domain.thresholding.variants import ShrinkageWeight
@@ -44,6 +56,7 @@ def map_profile_catalogue(schema: ResolvedScientificCatalog) -> ProfileCatalogue
         conformal_alpha=FprTarget(value=float(Decimal("1") - thresholds.conformal_percentile)),
         fed_stats_k_grid=tuple(FedStatsK(value=value) for value in thresholds.fed_stats_supplementary_k),
         b0_pooled_threshold=map_b0_pooled_threshold_config(thresholds.b0_pooled_threshold),
+        canonical_b4_profile=map_canonical_b4_clustering_profile_config(_canonical_b4_profile_config(thresholds)),
         absorption_gates=AbsorptionGateSpec(
             strongly_useful_fraction=Probability(value=evaluation.absorption_strongly_useful_fraction),
             partial_absorption_fraction=Probability(value=evaluation.absorption_partial_fraction),
@@ -62,6 +75,39 @@ def map_profile_catalogue(schema: ResolvedScientificCatalog) -> ProfileCatalogue
         main_placement=ManuscriptPlacement.MAIN,
         supplementary_placement=ManuscriptPlacement.SUPPLEMENT,
     )
+
+
+def map_canonical_b4_clustering_profile_config(schema: B4ClusteringProfileConfig) -> CanonicalB4ClusteringProfile:
+    try:
+        return CanonicalB4ClusteringProfile(
+            fingerprint_fields=tuple(B4FingerprintField(value) for value in schema.fingerprint_fields),
+            scaler=schema.scaler,
+            scaler_fit_scope=schema.scaler_fit_scope,
+            algorithm=schema.algorithm,
+            n_init=KMeansInitializationCount(value=schema.n_init),
+            max_iter=KMeansMaximumIterations(value=schema.max_iter),
+            scikit_learn_version=PinnedScikitLearnVersion(value=schema.scikit_learn_version),
+        )
+    except DomainValidationError as error:
+        raise ConfigurationError(
+            detail="canonical B4 clustering profile mapping requires the locked fingerprint/scaler/algorithm/"
+            "n_init/max_iter/scikit-learn-version invariant",
+            section="scientific",
+            field=f"thresholds.b4_profiles.{schema.profile_id}",
+            mode="mapping",
+        ) from error
+
+
+def _canonical_b4_profile_config(thresholds: ThresholdCatalogConfig) -> B4ClusteringProfileConfig:
+    profiles = tuple(profile for profile in thresholds.b4_profiles if profile.is_canonical)
+    if len(profiles) != 1:
+        raise ConfigurationError(
+            detail="threshold catalogue must resolve exactly one canonical B4 profile",
+            section="scientific",
+            field="thresholds.b4_profiles",
+            mode="mapping",
+        )
+    return profiles[0]
 
 
 def map_model_training_profile_config(schema: ModelProfileConfig, *, input_dim: int) -> ModelTrainingProfileSpec:
