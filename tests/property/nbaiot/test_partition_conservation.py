@@ -25,7 +25,7 @@ from datp_core.domain.data.partitioning import (
 )
 from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
 from datp_core.domain.runtime.policies import StreamingChunkPolicy
-from datp_core.infrastructure.data.partitioning import NaturalDevicePartitioner
+from datp_core.infrastructure.data.nbaiot.partitioning import NBaIoTNaturalDevicePartitioner
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.paths import ArtifactPathResolver, ResolveArtifactLocationRequest
 from datp_core.infrastructure.persistence.roots import bind_storage_root
@@ -78,7 +78,7 @@ def test_every_source_row_is_mapped_to_exactly_one_client_with_no_loss_or_duplic
             absolute_path=Path(manifest_directory),
         )
         store = FileArtifactStore(root=bound_root)
-        partitioner = NaturalDevicePartitioner(
+        partitioner = NBaIoTNaturalDevicePartitioner(
             raw_root=raw_root,
             materialized_root=Path(manifest_directory) / "materialized",
             artifact_store=store,

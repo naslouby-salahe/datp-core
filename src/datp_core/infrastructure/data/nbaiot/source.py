@@ -6,9 +6,9 @@ import pyarrow.csv as pa_csv
 import pyarrow.parquet as pq
 from blake3 import blake3
 
-from datp_core.domain.data.datasets import SourceTrafficLabel
 from datp_core.domain.errors import DatasetError
-from datp_core.infrastructure.data.nbaiot_inspection import device_csv_files
+from datp_core.infrastructure.data.nbaiot.inspection import device_csv_files
+from datp_core.infrastructure.data.nbaiot.vocabulary import SourceTrafficLabel
 from datp_core.infrastructure.data.streaming import update_row_order_checksum
 
 SOURCE_LABEL_COLUMN_NAME = "source_label"

@@ -9,7 +9,7 @@ from datp_core.application.ports.persistence import WriteArtifactRequest
 from datp_core.domain.artifacts.keys import ArtifactNamespace, DatasetArtifactKey, SerializationFormat, WriteDisposition
 from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import ArtifactId, ArtifactRef, ArtifactSchemaVersion, StageFingerprint
-from datp_core.domain.data.datasets import Dataset, SourceTrafficLabel
+from datp_core.domain.data.datasets import Dataset
 from datp_core.domain.data.splitting import (
     ClientSplitMembership,
     RegimeAStaticSplitBoundarySpec,
@@ -28,7 +28,8 @@ from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import ClientRoster
 from datp_core.domain.mathematics.pooled_statistics import ProtocolEligibilitySpec, classify_protocol_eligibility
 from datp_core.domain.runtime.policies import StreamingChunkPolicy
-from datp_core.infrastructure.data.nbaiot_source import SOURCE_LABEL_COLUMN_NAME
+from datp_core.infrastructure.data.nbaiot.source import SOURCE_LABEL_COLUMN_NAME
+from datp_core.infrastructure.data.nbaiot.vocabulary import SourceTrafficLabel
 from datp_core.infrastructure.data.streaming import ParquetBatchStream, update_row_order_checksum
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.hashing import blake3_bytes_content_hash
@@ -127,7 +128,7 @@ def _client_split_membership(
     stream = ParquetBatchStream(path=materialized_path, batch_rows=streaming_chunk_policy.parquet_batch_rows)
     label_column_index = stream.schema().get_field_index(SOURCE_LABEL_COLUMN_NAME)
     if label_column_index < 0:
-        raise _split_error(f"{materialized_path} is missing the {SOURCE_LABEL_COLUMN_NAME!r} column")
+        raise _nbaiot_split_error(f"{materialized_path} is missing the {SOURCE_LABEL_COLUMN_NAME!r} column")
     benign_total = _count_benign_rows(stream, label_column_index)
     boundaries = benign_split_boundaries(benign_total, boundary_spec=boundary_spec)
     accumulators = _accumulate_client_split(stream, boundaries=boundaries)
@@ -192,7 +193,7 @@ def _build_eligible_client_set(
     )
 
 
-def _split_error(coverage: str) -> SplitError:
+def _nbaiot_split_error(coverage: str) -> SplitError:
     return SplitError(dataset="n_baiot", regime="a", coverage=coverage, detail=coverage)
 
 
@@ -205,7 +206,7 @@ def _protocol_eligibility_rule_identity(specification: ProtocolEligibilitySpec) 
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class RegimeAStaticSplitBuilder:
+class NBaIoTRegimeAStaticSplitBuilder:
     materialized_root: Path
     artifact_store: FileArtifactStore
     boundary_spec: RegimeAStaticSplitBoundarySpec

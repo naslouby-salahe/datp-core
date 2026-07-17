@@ -26,11 +26,11 @@ from datp_core.domain.data.splitting import (
 from datp_core.domain.errors import PreprocessingError
 from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
 from datp_core.domain.runtime.policies import StreamingChunkPolicy
-from datp_core.infrastructure.data.nbaiot_preprocessing import (
+from datp_core.infrastructure.data.nbaiot.preprocessing import (
     NBaIoTPreprocessorFitter,
     NBaIoTProcessedSplitMaterializer,
 )
-from datp_core.infrastructure.data.nbaiot_source import NBaIoTChunkedSourceAdapter
+from datp_core.infrastructure.data.nbaiot.source import NBaIoTChunkedSourceAdapter
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.roots import BoundStorageRoot, bind_storage_root
 

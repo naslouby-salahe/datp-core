@@ -2,7 +2,7 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from datp_core.domain.data.preprocessing import FittedStatisticPolicy, NormalizationScope, NormalizationStrategy
-from datp_core.infrastructure.data.nbaiot_preprocessing import is_authorized_nbaiot_policy
+from datp_core.infrastructure.data.nbaiot.preprocessing import is_authorized_nbaiot_policy
 
 _ONLY_AUTHORIZED_COMBINATION = (
     NormalizationStrategy.STANDARD,

@@ -4,7 +4,7 @@ from tempfile import TemporaryDirectory
 from hypothesis import given
 from hypothesis import strategies as st
 
-from datp_core.infrastructure.data.nbaiot_source import NBaIoTChunkedSourceAdapter
+from datp_core.infrastructure.data.nbaiot.source import NBaIoTChunkedSourceAdapter
 
 _FEATURE_COLUMNS = "feature_a,feature_b,feature_c"
 

@@ -183,7 +183,7 @@ class FittedPreprocessorManifest:
     def __post_init__(self) -> None:
         if self.scope is not NormalizationScope.PER_CLIENT_TRAIN:
             raise DomainValidationError(
-                detail="the N-BaIoT anchor preprocessing scope is per-client TRAIN only",
+                detail="the fitted preprocessor scope is per-client TRAIN only",
                 value=self.scope.value,
                 constraint="PER_CLIENT_TRAIN",
             )

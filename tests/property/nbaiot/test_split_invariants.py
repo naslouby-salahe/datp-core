@@ -35,8 +35,8 @@ from datp_core.domain.mathematics.pooled_statistics import (
 )
 from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
 from datp_core.domain.runtime.policies import StreamingChunkPolicy
-from datp_core.infrastructure.data.nbaiot_source import NBaIoTChunkedSourceAdapter
-from datp_core.infrastructure.data.nbaiot_split import RegimeAStaticSplitBuilder
+from datp_core.infrastructure.data.nbaiot.source import NBaIoTChunkedSourceAdapter
+from datp_core.infrastructure.data.nbaiot.split import NBaIoTRegimeAStaticSplitBuilder
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.paths import ArtifactPathResolver, ResolveArtifactLocationRequest
 from datp_core.infrastructure.persistence.roots import BoundStorageRoot, bind_storage_root
@@ -128,7 +128,7 @@ def test_calibration_never_exceeds_the_benign_row_count_and_split_is_determinist
             absolute_path=Path(manifest_directory) / "manifests",
         )
         store = FileArtifactStore(root=bound_root)
-        builder = RegimeAStaticSplitBuilder(
+        builder = NBaIoTRegimeAStaticSplitBuilder(
             materialized_root=materialized_root,
             artifact_store=store,
             boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,

@@ -10,7 +10,7 @@ from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import ClientRoster
 
-REGIME_A_NATURAL_DEVICE_COUNT: Final = 9
+N_BAIOT_NATURAL_DEVICE_COUNT: Final = 9
 
 
 class ClientDefinitionStrategy(StrEnum):

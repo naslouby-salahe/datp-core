@@ -21,10 +21,10 @@ from datp_core.domain.data.datasets import (
     DatasetSourceManifest,
     FeatureSchemaManifest,
     SourceFileManifestEntry,
-    SourceTrafficLabel,
 )
 from datp_core.domain.errors import DatasetError
 from datp_core.domain.runtime.policies import StreamingChunkPolicy
+from datp_core.infrastructure.data.nbaiot.vocabulary import SourceTrafficLabel
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.hashing import (
     DEFAULT_HASH_CHUNK_SIZE,

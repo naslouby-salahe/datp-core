@@ -12,7 +12,7 @@ from datp_core.domain.artifacts.keys import ArtifactNamespace, DatasetArtifactKe
 from datp_core.domain.artifacts.lineage import DatasetSourceIdentity, FittedPreprocessorIdentity
 from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import ArtifactId, ArtifactRef, ArtifactSchemaVersion, StageFingerprint
-from datp_core.domain.data.datasets import Dataset, SourceTrafficLabel
+from datp_core.domain.data.datasets import Dataset
 from datp_core.domain.data.preprocessing import (
     ClientFeatureStatistics,
     FeatureStatistics,
@@ -29,9 +29,10 @@ from datp_core.domain.data.splitting import RegimeAStaticSplitBoundarySpec, Spli
 from datp_core.domain.errors import PreprocessingError
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.runtime.policies import StreamingChunkPolicy
-from datp_core.infrastructure.data.nbaiot_inspection import sorted_device_directories
-from datp_core.infrastructure.data.nbaiot_source import SOURCE_LABEL_COLUMN_NAME
-from datp_core.infrastructure.data.nbaiot_split import benign_split_boundaries, row_range_roles
+from datp_core.infrastructure.data.nbaiot.inspection import sorted_device_directories
+from datp_core.infrastructure.data.nbaiot.source import SOURCE_LABEL_COLUMN_NAME
+from datp_core.infrastructure.data.nbaiot.split import benign_split_boundaries, row_range_roles
+from datp_core.infrastructure.data.nbaiot.vocabulary import SourceTrafficLabel
 from datp_core.infrastructure.data.preprocessing import TwoPassNumericPreprocessor
 from datp_core.infrastructure.data.streaming import ParquetBatchStream, update_row_order_checksum
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore

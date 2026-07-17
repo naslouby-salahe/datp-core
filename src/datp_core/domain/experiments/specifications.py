@@ -19,7 +19,7 @@ from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.data.datasets import Dataset, Regime, TimestampEvidence
 from datp_core.domain.data.partitioning import (
-    REGIME_A_NATURAL_DEVICE_COUNT,
+    N_BAIOT_NATURAL_DEVICE_COUNT,
     ClientDefinitionStrategy,
     DirichletAlpha,
 )
@@ -306,7 +306,7 @@ def _matches_natural_regime_a(specification: RegimeCompatibilitySpec) -> bool:
     ) == (
         Dataset.N_BAIOT,
         ClientDefinitionStrategy.NATURAL_DEVICE,
-        REGIME_A_NATURAL_DEVICE_COUNT,
+        N_BAIOT_NATURAL_DEVICE_COUNT,
         FeasibilityStatus.FEASIBLE,
         False,
         None,

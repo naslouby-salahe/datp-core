@@ -92,12 +92,6 @@ class DatasetSourceInspectionResult:
     timestamp_evidence: TimestampEvidence | None
 
 
-class SourceTrafficLabel(StrEnum):
-    BENIGN = "benign"
-    GAFGYT = "gafgyt"
-    MIRAI = "mirai"
-
-
 def _validated_relative_path(value: str) -> None:
     if not value or value.startswith("/"):
         raise DomainValidationError(
@@ -129,7 +123,7 @@ def _validated_entry_row_count(value: int) -> None:
 class SourceFileManifestEntry:
     relative_path: str
     device_id: str
-    label: SourceTrafficLabel
+    label: str
     row_count: int
     content_hash: str
 

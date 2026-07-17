@@ -10,7 +10,7 @@ from datp_core.domain.data.datasets import Dataset, DatasetSpec
 from datp_core.domain.errors import DatasetError
 from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
 from datp_core.domain.runtime.policies import StreamingChunkPolicy
-from datp_core.infrastructure.data.nbaiot_inspection import NBaIoTSourceInspector
+from datp_core.infrastructure.data.nbaiot.inspection import NBaIoTSourceInspector
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.roots import bind_storage_root
 

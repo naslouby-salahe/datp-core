@@ -12,7 +12,7 @@ from datp_core.domain.data.partitioning import ClientDefinitionStrategy, Natural
 from datp_core.domain.errors import PartitionError
 from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
 from datp_core.domain.runtime.policies import StreamingChunkPolicy
-from datp_core.infrastructure.data.partitioning import NaturalDevicePartitioner
+from datp_core.infrastructure.data.nbaiot.partitioning import NBaIoTNaturalDevicePartitioner
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.roots import bind_storage_root
 
@@ -40,14 +40,14 @@ def _write_nine_devices(raw_root: Path) -> dict[str, int]:
     return device_row_counts
 
 
-def _partitioner(raw_root: Path, tmp_path: Path) -> NaturalDevicePartitioner:
+def _partitioner(raw_root: Path, tmp_path: Path) -> NBaIoTNaturalDevicePartitioner:
     store = FileArtifactStore(
         root=bind_storage_root(
             spec=StorageRootSpec(kind=StorageRootKind.PROCESSED_DATA, visibility=StorageVisibility.SCIENTIFIC_OUTPUT),
             absolute_path=tmp_path / "manifests",
         )
     )
-    return NaturalDevicePartitioner(
+    return NBaIoTNaturalDevicePartitioner(
         raw_root=raw_root,
         materialized_root=tmp_path / "materialized",
         artifact_store=store,
