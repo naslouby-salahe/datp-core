@@ -1,9 +1,0 @@
-profiles:
-  - profile_id: unit
-    data_scale: tiny
-    execution_profile_id: scientific_cuda
-    scientific_fixture: canonical_anchor
-  - profile_id: synthetic_system
-    data_scale: small
-    execution_profile_id: scientific_cuda
-    scientific_fixture: synthetic

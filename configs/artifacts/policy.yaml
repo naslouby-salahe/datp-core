@@ -1,5 +1,0 @@
-policy_id: complete
-namespace: complete
-write_disposition: create_if_absent
-retention: retain_always
-serialization_defaults: []

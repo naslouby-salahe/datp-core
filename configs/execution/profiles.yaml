@@ -1,9 +1,0 @@
-profiles:
-  - profile_id: scientific_cuda
-    scoring_batch:
-      calibration_batch_size: 256
-      test_batch_size: 256
-      temporal_batch_size: 256
-    streaming_chunk:
-      csv_block_bytes: 8388608
-      parquet_batch_rows: 50000

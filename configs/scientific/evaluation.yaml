@@ -1,7 +1,0 @@
-minimum_eligible_calibration_samples: 100
-primary_metric: cv_fpr
-controls: [auroc]
-absorption_strongly_useful_fraction: "0.75"
-absorption_partial_fraction: "0.25"
-alternative_path_distance: "0.05"
-temporal_recovery_fraction: "0.50"

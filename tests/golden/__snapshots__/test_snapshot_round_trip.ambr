@@ -1,4 +1,0 @@
-# serializer version: 1
-# name: test_placeholder_shape_round_trips
-  _PlaceholderShape(label='placeholder', count=1)
-# ---
