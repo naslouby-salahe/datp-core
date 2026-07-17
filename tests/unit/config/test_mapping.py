@@ -455,6 +455,12 @@ def test_b0_pooled_threshold_mapping_produces_the_locked_spec() -> None:
     assert mapped == B0PooledThresholdSpec(percentile=ThresholdPercentile(value="0.95"))
 
 
+def test_composed_profile_catalogue_resolves_the_b0_pooled_threshold_from_the_named_document() -> None:
+    catalogue = composed_profile_catalogue()
+
+    assert catalogue.b0_pooled_threshold == B0PooledThresholdSpec(percentile=ThresholdPercentile(value="0.95"))
+
+
 def test_absorption_gate_schema_rejects_an_out_of_range_fraction() -> None:
     with pytest.raises(ValidationError):
         AbsorptionGateConfig(

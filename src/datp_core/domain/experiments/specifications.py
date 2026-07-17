@@ -58,6 +58,7 @@ from datp_core.domain.learning.training import AggregationStrategy, Participatio
 from datp_core.domain.runtime.seeds import EnumMap, SeedTuple
 from datp_core.domain.thresholding.federated_statistics import FedStatsK
 from datp_core.domain.thresholding.policies import (
+    B0PooledThresholdSpec,
     FprTarget,
     LocalThresholdSpec,
     SharedThresholdConstruction,
@@ -816,6 +817,7 @@ class ProfileCatalogueSpec:
     shrinkage_weight_grid: tuple[ShrinkageWeight, ...]
     conformal_alpha: FprTarget
     fed_stats_k_grid: tuple[FedStatsK, ...]
+    b0_pooled_threshold: B0PooledThresholdSpec
     absorption_gates: AbsorptionGateSpec
     temporal_recovery_gate: TemporalRecoveryGateSpec
     regime_d_viability_gate: RegimeDViabilityGateSpec
@@ -868,6 +870,7 @@ def _has_catalogue_grids(catalogue: ProfileCatalogueSpec) -> bool:
             _is_unit_interval_grid(catalogue.shrinkage_weight_grid),
             type(catalogue.conformal_alpha) is FprTarget,
             _is_unique_grid(catalogue.fed_stats_k_grid, value_type=FedStatsK),
+            type(catalogue.b0_pooled_threshold) is B0PooledThresholdSpec,
         )
     )
 

@@ -5,6 +5,8 @@ calibration_size_grid: [50, 100, 250, 500, 1000, 5000]
 shrinkage_weight_grid: ["0.00", "0.25", "0.50", "0.75", "1.00"]
 conformal_derivation: one_minus_percentile
 fed_stats_supplementary_k: ["2.0", "2.5", "3.0"]
+b0_pooled_threshold:
+  percentile: 95
 b4_profiles:
   - profile_id: canonical
     cluster_count: 3

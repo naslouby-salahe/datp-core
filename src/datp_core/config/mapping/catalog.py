@@ -1,6 +1,7 @@
 from decimal import Decimal
 from typing import Literal, assert_never
 
+from datp_core.config.mapping.scientific import map_b0_pooled_threshold_config
 from datp_core.config.resolver import ResolvedScientificCatalog
 from datp_core.config.schemas.catalog import EligibilityCoverageRequiredConfig, ModelProfileConfig
 from datp_core.domain.data.datasets import Regime
@@ -42,6 +43,7 @@ def map_profile_catalogue(schema: ResolvedScientificCatalog) -> ProfileCatalogue
         shrinkage_weight_grid=tuple(ShrinkageWeight(value=float(value)) for value in thresholds.shrinkage_weight_grid),
         conformal_alpha=FprTarget(value=float(Decimal("1") - thresholds.conformal_percentile)),
         fed_stats_k_grid=tuple(FedStatsK(value=value) for value in thresholds.fed_stats_supplementary_k),
+        b0_pooled_threshold=map_b0_pooled_threshold_config(thresholds.b0_pooled_threshold),
         absorption_gates=AbsorptionGateSpec(
             strongly_useful_fraction=Probability(value=evaluation.absorption_strongly_useful_fraction),
             partial_absorption_fraction=Probability(value=evaluation.absorption_partial_fraction),

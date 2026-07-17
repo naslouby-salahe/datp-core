@@ -3,6 +3,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from datp_core.config.schemas.scientific import B0PooledThresholdConfig
 from datp_core.domain.data.datasets import Dataset, Regime, TimestampEvidenceKind
 from datp_core.domain.data.partitioning import ClientDefinitionStrategy, DirichletAlphaSentinel
 from datp_core.domain.evaluation.metrics import DetectionQualityMetric, OperatingPointMetric
@@ -200,6 +201,7 @@ class ThresholdCatalogConfig(CatalogSchema):
     conformal_derivation: Literal["one_minus_percentile"]
     fed_stats_supplementary_k: tuple[Annotated[Decimal, Field(gt=Decimal("0"))], ...]
     b4_profiles: tuple[B4ClusteringProfileConfig, ...]
+    b0_pooled_threshold: B0PooledThresholdConfig
 
     @field_validator("quantile_grid", "calibration_size_grid", "shrinkage_weight_grid")
     @classmethod
