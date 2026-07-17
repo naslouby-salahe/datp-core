@@ -103,7 +103,7 @@ def _scientific_changes(
     return tuple(
         _scientific_change(rule.field, rule.reuse_impact)
         for rule in SCIENTIFIC_CHANGE_RULES
-        if getattr(previous, rule.field.value) != getattr(current, rule.field.value)
+        if previous.value_for(rule.field) != current.value_for(rule.field)
     )
 
 

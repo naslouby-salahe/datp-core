@@ -21,7 +21,7 @@ from datp_core.domain.data.preprocessing import ProcessedSplitResult
 from datp_core.domain.data.splitting import SplitIdentity
 from datp_core.domain.errors import CheckpointSelectionError, DomainValidationError
 from datp_core.domain.experiments.specifications import CentralizedModelComparatorSpec
-from datp_core.infrastructure.learning.centralized.nbaiot_b0_checkpoint import (
+from datp_core.infrastructure.learning.centralized.b0_checkpoint import (
     B0CentralizedCheckpointStager,
 )
 

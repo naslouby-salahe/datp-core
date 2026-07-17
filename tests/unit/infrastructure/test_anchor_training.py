@@ -6,14 +6,14 @@ from datp_core.domain.errors import TrainingError
 from datp_core.domain.learning.models import ActivationFunction, AutoencoderSpec
 from datp_core.domain.learning.training import LrSchedulerType, OptimizerType, TrainingSpec
 from datp_core.domain.runtime.seeds import Seed
-from datp_core.infrastructure.learning.models.autoencoder import FixedAutoencoder, build_fixed_autoencoder
-from datp_core.infrastructure.learning.models.nbaiot_anchor_training import (
+from datp_core.infrastructure.learning.models.anchor_training import (
     ANCHOR_AUTOENCODER_SPECIFICATION,
     anchor_scheduler,
     anchor_training_spec,
     build_anchor_optimizer,
     is_authorized_anchor_training_policy,
 )
+from datp_core.infrastructure.learning.models.autoencoder import FixedAutoencoder, build_fixed_autoencoder
 
 _BATCH_NORMALIZATION_TYPES = (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d, nn.SyncBatchNorm)
 

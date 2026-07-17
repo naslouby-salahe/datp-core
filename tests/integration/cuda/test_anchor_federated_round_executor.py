@@ -12,8 +12,8 @@ from datp_core.domain.learning.checkpoints import CheckpointSchedule
 from datp_core.domain.learning.training import DeterminismLevel
 from datp_core.domain.runtime.admissibility import WorkerCount
 from datp_core.domain.runtime.seeds import DataLoaderSeedPlan, RoundNumber, Seed
-from datp_core.infrastructure.learning.federation.nbaiot_anchor_round_executor import AnchorFederatedRoundExecutor
-from datp_core.infrastructure.learning.models.nbaiot_anchor_training import (
+from datp_core.infrastructure.learning.federation.anchor_round_executor import AnchorFederatedRoundExecutor
+from datp_core.infrastructure.learning.models.anchor_training import (
     ANCHOR_AUTOENCODER_SPECIFICATION,
     anchor_training_spec,
 )
@@ -48,9 +48,7 @@ def _request(*, seed: Seed) -> TrainFederatedModelRequest:
     return TrainFederatedModelRequest(
         processed_splits=_split_result(),
         training=anchor_training_spec(seed=seed),
-        checkpoint_schedule=CheckpointSchedule(
-            rounds=tuple(RoundNumber(value=value) for value in _CHECKPOINT_ROUNDS)
-        ),
+        checkpoint_schedule=CheckpointSchedule(rounds=tuple(RoundNumber(value=value) for value in _CHECKPOINT_ROUNDS)),
         resolved_batch_profile=runtime_profile(),
         dataloader_seed_plan=DataLoaderSeedPlan(
             shuffle_seed=Seed(value=11),

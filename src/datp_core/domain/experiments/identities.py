@@ -7,6 +7,8 @@ from datp_core.domain.experiments.claims import ClaimTier, ExecutionStatus, Expe
 _EXPERIMENT_ID_PATTERN = r"E-[A-Z]+\d+"
 _ARCHITECTURE_CATALOGUE_ID_PATTERN = r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*"
 _CELL_ID_PATTERN = rf"{_EXPERIMENT_ID_PATTERN}#[0-9a-f]{{16}}"
+_DETECTOR_BRANCH_ID_PATTERN = r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*"
+_EVALUATION_ARM_ID_PATTERN = r"[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)*"
 
 
 def _validated_identity(*, value: str, pattern: str, name: str) -> str:
@@ -68,6 +70,22 @@ class CellId:
 
     def __post_init__(self) -> None:
         _validated_identity(value=self.value, pattern=_CELL_ID_PATTERN, name="cell id")
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DetectorBranchId:
+    value: str
+
+    def __post_init__(self) -> None:
+        _validated_identity(value=self.value, pattern=_DETECTOR_BRANCH_ID_PATTERN, name="detector branch id")
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class EvaluationArmId:
+    value: str
+
+    def __post_init__(self) -> None:
+        _validated_identity(value=self.value, pattern=_EVALUATION_ARM_ID_PATTERN, name="evaluation arm id")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

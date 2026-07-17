@@ -50,9 +50,19 @@ from datp_core.domain.evaluation.statistical_results import (
 )
 from datp_core.domain.experiments.claims import ClaimTier, ExecutionStatus, ExperimentRole
 from datp_core.domain.experiments.feasibility import FeasibilityStatus
-from datp_core.domain.experiments.identities import ArchitectureCatalogueId, ExperimentId, ExperimentIdentity
+from datp_core.domain.experiments.identities import (
+    ArchitectureCatalogueId,
+    DetectorBranchId,
+    EvaluationArmId,
+    ExperimentId,
+    ExperimentIdentity,
+)
 from datp_core.domain.experiments.protocols import (
+    DetectorBranchRole,
+    DetectorBranchSpec,
+    EvaluationArmSpec,
     ProtocolTrack,
+    RegimeDataSpec,
     ReportingPolicy,
     ScientificProtocolField,
     ScientificProtocolSpec,
@@ -63,7 +73,9 @@ from datp_core.domain.experiments.specifications import (
     ArtifactDependencySpec,
     CentralizedModelComparatorProfileSpec,
     CentralizedModelComparatorSpec,
+    ClaimSpec,
     ConfirmatoryExperimentProfileSpec,
+    ExperimentProfileSpec,
     FallbackPolicySpec,
     ManuscriptPlacement,
     ManuscriptRoleSpec,
@@ -124,25 +136,44 @@ def _metric(metric: OperatingPointMetric):
     return next(specification for specification in METRIC_SPECS if specification.metric is metric)
 
 
-def _protocol() -> ScientificProtocolSpec:
-    batch = BatchSize(value=8)
-    return ScientificProtocolSpec(
-        track=ProtocolTrack.DATP_ANCHOR,
-        dataset=_dataset_specification(),
-        partitioning=_partition_specification(),
-        splits=_split_collection(),
-        preprocessing=_preprocessing_specification(),
+def _detector_branch(batch: BatchSize) -> DetectorBranchSpec:
+    return DetectorBranchSpec(
+        branch_id=DetectorBranchId(value="FEDAVG_CORE"),
+        role=DetectorBranchRole.CORE_FEDAVG,
         training=_training_specification(batch),
         checkpointing=CheckpointSchedule(rounds=_checkpoint_rounds()),
         checkpoint_selection=_checkpoint_selection(),
         scoring=_score_generation_specification(batch),
+    )
+
+
+def _evaluation_arm(*, detector_branch_id: DetectorBranchId) -> EvaluationArmSpec:
+    return EvaluationArmSpec(
+        arm_id=EvaluationArmId(value="B1_SHARED"),
+        detector_branch_id=detector_branch_id,
         thresholds=_threshold_suite(),
         evaluation=StandardEvaluationSuiteSpec(
             primary_metric=OperatingPointMetric.CV_FPR,
             metrics=(_metric(OperatingPointMetric.CV_FPR),),
         ),
-        statistics=_statistical_analysis_specification(),
         resource_costs=None,
+    )
+
+
+def _protocol() -> ScientificProtocolSpec:
+    batch = BatchSize(value=8)
+    branch = _detector_branch(batch)
+    return ScientificProtocolSpec(
+        track=ProtocolTrack.DATP_ANCHOR,
+        regime_data=RegimeDataSpec(
+            dataset=_dataset_specification(),
+            partitioning=_partition_specification(),
+            splits=_split_collection(),
+            preprocessing=_preprocessing_specification(),
+        ),
+        detector_branch=branch,
+        evaluation_arm=_evaluation_arm(detector_branch_id=branch.branch_id),
+        statistics=_statistical_analysis_specification(),
     )
 
 
@@ -272,15 +303,18 @@ def confirmatory_profile() -> ConfirmatoryExperimentProfileSpec:
     base_protocol = _protocol()
     protocol = replace(
         base_protocol,
-        thresholds=ThresholdSuiteSpec(
-            constructions=(
-                base_protocol.thresholds.constructions[0],
-                LocalThresholdSpec(
-                    kind=ThresholdConstructionKind.LOCAL,
-                    percentile=ThresholdPercentile(value=0.95),
-                    estimator=QuantileEstimatorType.LOCAL_EXACT,
-                ),
-            )
+        evaluation_arm=replace(
+            base_protocol.evaluation_arm,
+            thresholds=ThresholdSuiteSpec(
+                constructions=(
+                    base_protocol.evaluation_arm.thresholds.constructions[0],
+                    LocalThresholdSpec(
+                        kind=ThresholdConstructionKind.LOCAL,
+                        percentile=ThresholdPercentile(value=0.95),
+                        estimator=QuantileEstimatorType.LOCAL_EXACT,
+                    ),
+                )
+            ),
         ),
     )
     identity = ExperimentIdentity(
@@ -289,9 +323,14 @@ def confirmatory_profile() -> ConfirmatoryExperimentProfileSpec:
         tier=ClaimTier.TIER_1,
         execution_status=ExecutionStatus.MANDATORY,
     )
+    claim = ClaimSpec(
+        identity=identity,
+        fallback_policy=FallbackPolicySpec(outcomes=(ClaimOutcome.NULL, ClaimOutcome.OPPOSITE)),
+        manuscript_role=ManuscriptRoleSpec(placement=ManuscriptPlacement.MAIN, report_artifacts=()),
+    )
     return ConfirmatoryExperimentProfileSpec(
         catalogue_id=identity.experiment_id,
-        identity=identity,
+        claim=claim,
         regime_compatibility=RegimeCompatibilitySpec(
             regime=Regime.A,
             dataset=Dataset.N_BAIOT,
@@ -307,19 +346,20 @@ def confirmatory_profile() -> ConfirmatoryExperimentProfileSpec:
         secondary_metrics=(),
         statistical_procedure=protocol.statistics,
         artifact_dependencies=ArtifactDependencySpec(required_artifacts=(ArtifactType.CALIBRATION_SCORE_SET,)),
-        fallback_policy=FallbackPolicySpec(outcomes=(ClaimOutcome.NULL, ClaimOutcome.OPPOSITE)),
-        manuscript_role=ManuscriptRoleSpec(placement=ManuscriptPlacement.MAIN, report_artifacts=()),
     )
 
 
-def test_scientific_protocol_is_the_only_aggregate_with_scientific_field_placement() -> None:
+def test_scientific_protocol_identity_inputs_cover_every_field_without_policy_collision() -> None:
     protocol = _protocol()
 
-    assert tuple(field.name for field in fields(ScientificProtocolSpec)) == tuple(
-        field.value for field in ScientificProtocolField
-    )
     assert {input_.field for input_ in protocol.identity_inputs()} == set(ScientificProtocolField)
-    assert not set(field.name for field in fields(ScientificProtocolSpec)).intersection(
+    scientific_component_field_names = (
+        {"track", "statistics"}
+        | {field.name for field in fields(RegimeDataSpec)}
+        | {field.name for field in fields(DetectorBranchSpec)}
+        | {field.name for field in fields(EvaluationArmSpec)}
+    )
+    assert not scientific_component_field_names.intersection(
         name for policy_fields in policy_field_names() for name in policy_fields
     )
 
@@ -392,6 +432,23 @@ def test_confirmatory_profile_rejects_an_alternate_primary_metric() -> None:
         replace(profile, primary_metrics=(OperatingPointMetric.CV_TPR,))
 
 
+def test_confirmatory_claim_requires_the_confirmatory_profile_subtype() -> None:
+    profile = confirmatory_profile()
+
+    with pytest.raises(DomainValidationError):
+        ExperimentProfileSpec(
+            catalogue_id=profile.catalogue_id,
+            claim=profile.claim,
+            regime_compatibility=profile.regime_compatibility,
+            authorized_protocols=profile.authorized_protocols,
+            authorized_seed_plan=profile.authorized_seed_plan,
+            primary_metrics=profile.primary_metrics,
+            secondary_metrics=profile.secondary_metrics,
+            statistical_procedure=profile.statistical_procedure,
+            artifact_dependencies=profile.artifact_dependencies,
+        )
+
+
 @pytest.mark.parametrize(
     "non_confirmatory_construction",
     (
@@ -418,8 +475,11 @@ def test_confirmatory_profile_rejects_b3_b4_and_variant_arms(
     protocol = profile.authorized_protocols[0]
     unauthorized_protocol = replace(
         protocol,
-        thresholds=ThresholdSuiteSpec(
-            constructions=(protocol.thresholds.constructions[0], non_confirmatory_construction())
+        evaluation_arm=replace(
+            protocol.evaluation_arm,
+            thresholds=ThresholdSuiteSpec(
+                constructions=(protocol.evaluation_arm.thresholds.constructions[0], non_confirmatory_construction())
+            ),
         ),
     )
 
@@ -430,15 +490,18 @@ def test_confirmatory_profile_rejects_b3_b4_and_variant_arms(
 def test_confirmatory_profile_rejects_an_alternate_shared_policy() -> None:
     profile = confirmatory_profile()
     protocol = profile.authorized_protocols[0]
-    shared = protocol.thresholds.constructions[0]
+    shared = protocol.evaluation_arm.thresholds.constructions[0]
     assert type(shared) is SharedThresholdSpec
     unauthorized_protocol = replace(
         protocol,
-        thresholds=ThresholdSuiteSpec(
-            constructions=(
-                replace(shared, construction=SharedThresholdConstruction.POOLED),
-                protocol.thresholds.constructions[1],
-            )
+        evaluation_arm=replace(
+            protocol.evaluation_arm,
+            thresholds=ThresholdSuiteSpec(
+                constructions=(
+                    replace(shared, construction=SharedThresholdConstruction.POOLED),
+                    protocol.evaluation_arm.thresholds.constructions[1],
+                )
+            ),
         ),
     )
 
@@ -447,11 +510,21 @@ def test_confirmatory_profile_rejects_an_alternate_shared_policy() -> None:
 
 
 def _protocol_with_unauthorized_dataset(protocol: ScientificProtocolSpec) -> ScientificProtocolSpec:
-    return replace(protocol, dataset=replace(protocol.dataset, dataset=Dataset.EDGE_IIOTSET))
+    return replace(
+        protocol,
+        regime_data=replace(
+            protocol.regime_data, dataset=replace(protocol.regime_data.dataset, dataset=Dataset.EDGE_IIOTSET)
+        ),
+    )
 
 
 def _protocol_with_unauthorized_regime(protocol: ScientificProtocolSpec) -> ScientificProtocolSpec:
-    return replace(protocol, partitioning=replace(protocol.partitioning, regime=Regime.C))
+    return replace(
+        protocol,
+        regime_data=replace(
+            protocol.regime_data, partitioning=replace(protocol.regime_data.partitioning, regime=Regime.C)
+        ),
+    )
 
 
 @pytest.mark.parametrize(
@@ -479,7 +552,7 @@ def test_b0_requires_the_disjoint_centralized_profile_route() -> None:
     centralized = CentralizedModelComparatorProfileSpec(
         catalogue_id=ArchitectureCatalogueId(value="B0_CENTRALIZED_COMPARATOR"),
         identity=replace(
-            profile.identity,
+            profile.claim.identity,
             experiment_id=ExperimentId(value="E-S1"),
             evidence_role=ExperimentRole.SUPPORTIVE,
             tier=ClaimTier.TIER_2,

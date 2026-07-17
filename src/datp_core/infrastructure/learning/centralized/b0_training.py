@@ -6,14 +6,14 @@ from torch import Tensor
 from datp_core.domain.errors import DomainValidationError, TrainingError
 from datp_core.domain.experiments.specifications import CentralizedModelComparatorSpec
 from datp_core.domain.runtime.seeds import Seed
-from datp_core.infrastructure.learning.models.autoencoder import FixedAutoencoder, build_fixed_autoencoder
-from datp_core.infrastructure.learning.models.nbaiot_anchor_training import (
+from datp_core.infrastructure.learning.models.anchor_training import (
     ANCHOR_AUTOENCODER_SPECIFICATION,
     build_anchor_optimizer,
 )
-from datp_core.infrastructure.learning.models.nbaiot_anchor_training import (
+from datp_core.infrastructure.learning.models.anchor_training import (
     anchor_training_spec as _b0_training_spec,
 )
+from datp_core.infrastructure.learning.models.autoencoder import FixedAutoencoder, build_fixed_autoencoder
 
 
 @dataclass(slots=True)

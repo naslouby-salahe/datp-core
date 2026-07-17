@@ -117,9 +117,7 @@ def _request() -> TrainFederatedModelRequest:
             determinism=DeterminismLevel.STRICT,
             personalization=ModelPersonalizationStrategy.NONE,
         ),
-        checkpoint_schedule=CheckpointSchedule(
-            rounds=tuple(RoundNumber(value=value) for value in _CHECKPOINT_ROUNDS)
-        ),
+        checkpoint_schedule=CheckpointSchedule(rounds=tuple(RoundNumber(value=value) for value in _CHECKPOINT_ROUNDS)),
         resolved_batch_profile=runtime_profile(),
         dataloader_seed_plan=DataLoaderSeedPlan(
             shuffle_seed=Seed(value=11),

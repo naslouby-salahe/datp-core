@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from decimal import Decimal
 from enum import Enum, StrEnum
 from hashlib import sha256
 from typing import Final
@@ -8,6 +9,7 @@ from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.runtime.admissibility import WorkerCount
 
 CONFIRMATORY_PAIRED_SEED_COUNT: Final = 10
+CONFIRMATORY_CONFIDENCE_LEVEL: Final = Decimal("0.95")
 
 
 def _derive_seed_value(seed_material: bytes) -> int:

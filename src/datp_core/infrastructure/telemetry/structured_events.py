@@ -58,6 +58,7 @@ def _renderer(format: LogFormat) -> structlog.types.Processor:
         case _ as unreachable:
             assert_never(unreachable)
 
+
 # TODO - Try if possible to not use dict
 def _context(event: StructuredEvent) -> dict[str, object]:
     context = event.context

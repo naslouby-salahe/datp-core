@@ -1,10 +1,7 @@
 from decimal import Decimal
 
-import pytest
-
 from datp_core.config.mapping.catalog import map_model_training_profile_config
 from datp_core.config.schemas.catalog import ModelProfileConfig
-from datp_core.domain.errors import ConfigurationError
 from datp_core.domain.learning.models import ActivationFunction, AutoencoderSpec
 from datp_core.domain.learning.training import (
     LrSchedulerType,

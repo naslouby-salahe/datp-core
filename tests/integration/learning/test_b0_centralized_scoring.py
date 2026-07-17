@@ -21,7 +21,7 @@ from datp_core.domain.errors import ScoringError
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import B0ScoringBatchSpec
 from datp_core.domain.runtime.admissibility import BatchSize
-from datp_core.infrastructure.learning.centralized.nbaiot_b0_scoring import (
+from datp_core.infrastructure.learning.centralized.b0_scoring import (
     B0CalibrationScoreGenerationWorkflow,
     B0TestScoreGenerationWorkflow,
 )

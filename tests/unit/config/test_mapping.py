@@ -106,13 +106,13 @@ from datp_core.domain.data.preprocessing import (
     PreprocessingChunkSpec,
 )
 from datp_core.domain.data.splitting import LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY, ConformalQuantileIndexRule
-from datp_core.domain.errors import ConfigurationError
+from datp_core.domain.errors import ConfigurationError, DomainValidationError
 from datp_core.domain.evaluation.alert_burden import CalibrationSampleCount
 from datp_core.domain.evaluation.metrics import OperatingPointMetric
 from datp_core.domain.evaluation.statistical_results import AnchorReferenceInterval
 from datp_core.domain.experiments.claims import ClaimTier, ExperimentRole
 from datp_core.domain.experiments.identities import ArchitectureCatalogueId, ExperimentId
-from datp_core.domain.experiments.protocols import ProtocolTrack, ReportingPolicy
+from datp_core.domain.experiments.protocols import ProtocolTrack, ReportArtifactType, ReportingPolicy
 from datp_core.domain.experiments.specifications import (
     LOCKED_B0_CENTRALIZED_COMPARATOR_PROFILE,
     CentralizedModelComparatorProfileSpec,
@@ -250,7 +250,7 @@ def experiment_config() -> ExperimentConfigSchema:
     profile = confirmatory_profile()
     return ExperimentConfigSchema(
         profile_request=ResolveExperimentProfileRequest(
-            experiment_id=profile.identity.experiment_id,
+            experiment_id=profile.claim.identity.experiment_id,
             profiles=(profile,),
         ),
         scientific=_scientific_config(),
@@ -280,7 +280,7 @@ def _centralized_profile() -> CentralizedModelComparatorProfileSpec:
     return CentralizedModelComparatorProfileSpec(
         catalogue_id=ArchitectureCatalogueId(value="B0_CENTRALIZED_COMPARATOR"),
         identity=replace(
-            profile.identity,
+            profile.claim.identity,
             experiment_id=ExperimentId(value="E-S1"),
             evidence_role=ExperimentRole.SUPPORTIVE,
             tier=ClaimTier.TIER_2,
@@ -307,6 +307,20 @@ def test_profile_resolution_precedes_closed_cell_mapping() -> None:
     assert mapped.scientific_protocol in mapped.profile.authorized_protocols
     with pytest.raises(ConfigurationError):
         resolve_experiment_profile(request)
+
+
+def test_experiment_spec_rejects_a_manuscript_reporting_artifact_mismatch() -> None:
+    schema = experiment_config()
+    mapped = map_experiment_schema(schema, catalogue=composed_profile_catalogue())
+    mismatched_claim = replace(
+        mapped.claim,
+        manuscript_role=replace(mapped.claim.manuscript_role, report_artifacts=(ReportArtifactType.MAIN_TABLE,)),
+    )
+
+    # Both `claim` and `profile.claim` are updated identically so `_has_profile_authorized_protocol`'s
+    # claim-equality check stays satisfied, isolating the manuscript/reporting-policy mismatch check.
+    with pytest.raises(DomainValidationError):
+        replace(mapped, claim=mismatched_claim, profile=replace(mapped.profile, claim=mismatched_claim))
 
 
 def test_fedprox_mapping_rejects_zero_and_requires_the_frozen_grid() -> None:

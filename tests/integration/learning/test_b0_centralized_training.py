@@ -15,7 +15,7 @@ from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.errors import DomainValidationError, TrainingError
 from datp_core.domain.experiments.specifications import CentralizedModelComparatorSpec
 from datp_core.domain.runtime.seeds import Seed
-from datp_core.infrastructure.learning.centralized.nbaiot_b0_training import (
+from datp_core.infrastructure.learning.centralized.b0_training import (
     CentralizedPooledBenignTrainingExecutor,
 )
 

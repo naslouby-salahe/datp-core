@@ -10,7 +10,14 @@ from datp_core.domain.artifacts.keys import (
 )
 from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.data.datasets import DatasetSpec
-from datp_core.domain.data.partitioning import ClientPartitionSpec
+from datp_core.domain.data.partitioning import (
+    ClientPartitionSpec,
+    DeviceClientPartitionSpec,
+    DirichletPartitionSpec,
+    FilePseudoClientPartitionSpec,
+    GroupClientPartitionSpec,
+    NaturalDevicePartitionSpec,
+)
 from datp_core.domain.data.preprocessing import PreprocessingSpec
 from datp_core.domain.data.splitting import (
     BenignCalibrationSplitSpec,
@@ -27,9 +34,10 @@ from datp_core.domain.evaluation.operating_points import (
     StandardEvaluationSuiteSpec,
 )
 from datp_core.domain.evaluation.statistical_results import ClaimOutcome, StatisticalAnalysisSpec
+from datp_core.domain.experiments.identities import DetectorBranchId, EvaluationArmId
 from datp_core.domain.learning.checkpoints import CheckpointSchedule, CheckpointSelectionSpec, RecoveryCheckpointPolicy
 from datp_core.domain.learning.scores import ScoreGenerationSpec
-from datp_core.domain.learning.training import TrainingSpec
+from datp_core.domain.learning.training import AggregationStrategy, ModelPersonalizationStrategy, TrainingSpec
 from datp_core.domain.runtime.policies import (
     DeviceSpec,
     ExecutionMode,
@@ -92,6 +100,12 @@ class ScientificProtocolField(StrEnum):
     RESOURCE_COSTS = "resource_costs"
 
 
+class DetectorBranchRole(StrEnum):
+    CORE_FEDAVG = "core_fedavg"
+    FEDPROX_STRESS_TEST = "fedprox_stress_test"
+    PERSONALIZATION_STRESS_TEST = "personalization_stress_test"
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ResourceCostSuiteSpec:
     metrics: tuple[ResourceMetric, ...]
@@ -134,20 +148,141 @@ class ScientificIdentityInput:
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ScientificProtocolSpec:
-    track: ProtocolTrack
+class RegimeDataSpec:
     dataset: DatasetSpec
     partitioning: ClientPartitionSpec
     splits: SplitCollectionSpec
     preprocessing: PreprocessingSpec
+
+    def __post_init__(self) -> None:
+        if not _has_regime_data_component_types(self):
+            raise DomainValidationError(
+                detail="regime data requires every dataset/partition/split/preprocessing specification typed",
+                value=repr(self),
+                constraint="Architecture section 5.4 regime-data ownership",
+            )
+        if not _has_regime_data_split_types(self.splits):
+            raise DomainValidationError(
+                detail="regime data requires exactly one training, benign-calibration, and test split",
+                value=repr(self.splits),
+                constraint="TrainingSplitSpec, BenignCalibrationSplitSpec, TestSplitSpec",
+            )
+
+
+_PARTITION_SPECIFICATION_TYPES = (
+    NaturalDevicePartitionSpec,
+    FilePseudoClientPartitionSpec,
+    DeviceClientPartitionSpec,
+    GroupClientPartitionSpec,
+    DirichletPartitionSpec,
+)
+
+
+def _has_regime_data_component_types(regime_data: RegimeDataSpec) -> bool:
+    return all(
+        (
+            type(regime_data.dataset) is DatasetSpec,
+            type(regime_data.partitioning) in _PARTITION_SPECIFICATION_TYPES,
+            type(regime_data.splits) is SplitCollectionSpec,
+            type(regime_data.preprocessing) is PreprocessingSpec,
+        )
+    )
+
+
+def _has_regime_data_split_types(splits: SplitCollectionSpec) -> bool:
+    return all(
+        (
+            type(splits.training) is TrainingSplitSpec,
+            type(splits.calibration) is BenignCalibrationSplitSpec,
+            type(splits.test) is TestSplitSpec,
+        )
+    )
+
+
+def _detector_branch_role_for(training: TrainingSpec) -> DetectorBranchRole:
+    if training.personalization is not ModelPersonalizationStrategy.NONE:
+        return DetectorBranchRole.PERSONALIZATION_STRESS_TEST
+    match training.federation.aggregation:
+        case AggregationStrategy.FEDAVG:
+            return DetectorBranchRole.CORE_FEDAVG
+        case AggregationStrategy.FEDPROX:
+            return DetectorBranchRole.FEDPROX_STRESS_TEST
+        case _:
+            assert_never(training.federation.aggregation)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DetectorBranchSpec:
+    branch_id: DetectorBranchId
+    role: DetectorBranchRole
     training: TrainingSpec
     checkpointing: CheckpointSchedule
     checkpoint_selection: CheckpointSelectionSpec
     scoring: ScoreGenerationSpec
+
+    def __post_init__(self) -> None:
+        if not _has_detector_branch_component_types(self):
+            raise DomainValidationError(
+                detail="detector branch requires typed training, checkpoint, and scoring specifications",
+                value=repr(self),
+                constraint="Architecture section 5.5 detector-branch ownership",
+            )
+        expected_role = _detector_branch_role_for(self.training)
+        if self.role is not expected_role:
+            raise DomainValidationError(
+                detail="detector branch role must match the aggregation/personalization it actually trains",
+                value=repr(self.role),
+                constraint=repr(expected_role),
+            )
+
+
+def _has_detector_branch_component_types(branch: DetectorBranchSpec) -> bool:
+    return all(
+        (
+            type(branch.branch_id) is DetectorBranchId,
+            type(branch.role) is DetectorBranchRole,
+            type(branch.training) is TrainingSpec,
+            type(branch.checkpointing) is CheckpointSchedule,
+            type(branch.checkpoint_selection) is CheckpointSelectionSpec,
+            type(branch.scoring) is ScoreGenerationSpec,
+        )
+    )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class EvaluationArmSpec:
+    arm_id: EvaluationArmId
+    detector_branch_id: DetectorBranchId
     thresholds: ThresholdSuiteSpec
     evaluation: EvaluationSuiteSpec
-    statistics: StatisticalAnalysisSpec
     resource_costs: ResourceCostSuiteSpec | None
+
+    def __post_init__(self) -> None:
+        if not _has_evaluation_arm_component_types(self):
+            raise DomainValidationError(
+                detail="evaluation arm requires a typed detector-branch reference, thresholds, and evaluation suite",
+                value=repr(self),
+                constraint="Architecture section 5.6 evaluation-arm ownership",
+            )
+
+
+def _has_evaluation_arm_component_types(arm: EvaluationArmSpec) -> bool:
+    return (
+        type(arm.arm_id) is EvaluationArmId
+        and type(arm.detector_branch_id) is DetectorBranchId
+        and type(arm.thresholds) is ThresholdSuiteSpec
+        and type(arm.evaluation) in {StandardEvaluationSuiteSpec, AlertBurdenEvaluationSuiteSpec}
+        and (arm.resource_costs is None or type(arm.resource_costs) is ResourceCostSuiteSpec)
+    )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ScientificProtocolSpec:
+    track: ProtocolTrack
+    regime_data: RegimeDataSpec
+    detector_branch: DetectorBranchSpec
+    evaluation_arm: EvaluationArmSpec
+    statistics: StatisticalAnalysisSpec
 
     def __post_init__(self) -> None:
         if not _has_protocol_component_types(self):
@@ -156,11 +291,11 @@ class ScientificProtocolSpec:
                 value=repr(self),
                 constraint="Architecture section 8.1 scientific aggregate",
             )
-        if not _has_protocol_split_types(self.splits):
+        if self.evaluation_arm.detector_branch_id != self.detector_branch.branch_id:
             raise DomainValidationError(
-                detail="scientific protocol requires exactly one training, benign-calibration, and test split",
-                value=repr(self.splits),
-                constraint="TrainingSplitSpec, BenignCalibrationSplitSpec, TestSplitSpec",
+                detail="an evaluation arm must reference the detector branch it was resolved alongside",
+                value=repr(self.evaluation_arm.detector_branch_id),
+                constraint=repr(self.detector_branch.branch_id),
             )
 
     def identity_inputs(self) -> tuple[ScientificIdentityInput, ...]:
@@ -168,10 +303,41 @@ class ScientificProtocolSpec:
             ScientificIdentityInput(
                 field=field,
                 earliest_stage=self.earliest_identity_stage_for(field),
-                value=getattr(self, field.value),
+                value=self.value_for(field),
             )
             for field in ScientificProtocolField
         )
+
+    def value_for(self, field: ScientificProtocolField) -> object:
+        match field:
+            case ScientificProtocolField.TRACK:
+                return self.track
+            case ScientificProtocolField.DATASET:
+                return self.regime_data.dataset
+            case ScientificProtocolField.PARTITIONING:
+                return self.regime_data.partitioning
+            case ScientificProtocolField.SPLITS:
+                return self.regime_data.splits
+            case ScientificProtocolField.PREPROCESSING:
+                return self.regime_data.preprocessing
+            case ScientificProtocolField.TRAINING:
+                return self.detector_branch.training
+            case ScientificProtocolField.CHECKPOINTING:
+                return self.detector_branch.checkpointing
+            case ScientificProtocolField.CHECKPOINT_SELECTION:
+                return self.detector_branch.checkpoint_selection
+            case ScientificProtocolField.SCORING:
+                return self.detector_branch.scoring
+            case ScientificProtocolField.THRESHOLDS:
+                return self.evaluation_arm.thresholds
+            case ScientificProtocolField.EVALUATION:
+                return self.evaluation_arm.evaluation
+            case ScientificProtocolField.STATISTICS:
+                return self.statistics
+            case ScientificProtocolField.RESOURCE_COSTS:
+                return self.evaluation_arm.resource_costs
+            case _:
+                assert_never(field)
 
     @staticmethod
     def earliest_identity_stage_for(field: ScientificProtocolField) -> PipelineStage:
@@ -203,54 +369,12 @@ class ScientificProtocolSpec:
 
 
 def _has_protocol_component_types(protocol: ScientificProtocolSpec) -> bool:
-    return all(
-        (
-            _has_protocol_core_types(protocol),
-            _has_protocol_training_types(protocol),
-            _has_protocol_evaluation_types(protocol),
-        )
-    )
-
-
-def _has_protocol_core_types(protocol: ScientificProtocolSpec) -> bool:
-    return all(
-        (
-            type(protocol.track) is ProtocolTrack,
-            type(protocol.dataset) is DatasetSpec,
-            type(protocol.partitioning) is not ClientPartitionSpec,
-            type(protocol.splits) is SplitCollectionSpec,
-            type(protocol.preprocessing) is PreprocessingSpec,
-        )
-    )
-
-
-def _has_protocol_training_types(protocol: ScientificProtocolSpec) -> bool:
-    return all(
-        (
-            type(protocol.training) is TrainingSpec,
-            type(protocol.checkpointing) is CheckpointSchedule,
-            type(protocol.checkpoint_selection) is CheckpointSelectionSpec,
-            type(protocol.scoring) is ScoreGenerationSpec,
-            type(protocol.thresholds) is ThresholdSuiteSpec,
-        )
-    )
-
-
-def _has_protocol_evaluation_types(protocol: ScientificProtocolSpec) -> bool:
     return (
-        type(protocol.evaluation) in {StandardEvaluationSuiteSpec, AlertBurdenEvaluationSuiteSpec}
+        type(protocol.track) is ProtocolTrack
+        and type(protocol.regime_data) is RegimeDataSpec
+        and type(protocol.detector_branch) is DetectorBranchSpec
+        and type(protocol.evaluation_arm) is EvaluationArmSpec
         and type(protocol.statistics) is StatisticalAnalysisSpec
-        and (protocol.resource_costs is None or type(protocol.resource_costs) is ResourceCostSuiteSpec)
-    )
-
-
-def _has_protocol_split_types(splits: SplitCollectionSpec) -> bool:
-    return all(
-        (
-            type(splits.training) is TrainingSplitSpec,
-            type(splits.calibration) is BenignCalibrationSplitSpec,
-            type(splits.test) is TestSplitSpec,
-        )
     )
 
 

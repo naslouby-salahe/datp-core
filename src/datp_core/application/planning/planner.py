@@ -82,7 +82,7 @@ def expand_cells(*, request: CreateExecutionPlanRequest) -> tuple[ExperimentCell
 
 def _with_scientific_protocol(*, specification: ExperimentSpec, protocol: ScientificProtocolSpec) -> ExperimentSpec:
     return ExperimentSpec(
-        identity=specification.identity,
+        claim=specification.claim,
         profile=specification.profile,
         scientific_protocol=protocol,
         execution_policy=specification.execution_policy,
@@ -100,7 +100,7 @@ def _resolved_cell(
     identities = _stage_identities(specification=specification, seed=seed)
     return ExperimentCell(
         cell_id=_cell_id(specification=specification, seed=seed),
-        experiment_id=specification.identity.experiment_id,
+        experiment_id=specification.claim.identity.experiment_id,
         scientific_protocol=specification.scientific_protocol,
         execution_policy=specification.execution_policy,
         artifact_policy=specification.artifact_policy,
@@ -112,49 +112,50 @@ def _resolved_cell(
 
 def _cell_id(*, specification: ExperimentSpec, seed: Seed) -> CellId:
     digest = _fingerprint(("cell", specification, seed)).value[:16]
-    return CellId(value=f"{specification.identity.experiment_id.value}#{digest}")
+    return CellId(value=f"{specification.claim.identity.experiment_id.value}#{digest}")
 
 
 def _stage_identities(*, specification: ExperimentSpec, seed: Seed) -> StageIdentity:
     protocol = specification.scientific_protocol
+    regime_data = protocol.regime_data
+    branch = protocol.detector_branch
+    arm = protocol.evaluation_arm
     dataset_source = DatasetSourceIdentity(
-        value=_fingerprint((PipelineStage.SOURCE_INSPECTION, protocol.track, protocol.dataset))
+        value=_fingerprint((PipelineStage.SOURCE_INSPECTION, protocol.track, regime_data.dataset))
     )
-    feature_schema = FeatureSchemaIdentity(value=_fingerprint(("feature_schema", dataset_source, protocol.dataset)))
+    feature_schema = FeatureSchemaIdentity(value=_fingerprint(("feature_schema", dataset_source, regime_data.dataset)))
     partition = PartitionIdentity(
-        value=_fingerprint((PipelineStage.PARTITION, feature_schema, protocol.partitioning, seed))
+        value=_fingerprint((PipelineStage.PARTITION, feature_schema, regime_data.partitioning, seed))
     )
-    split = SplitIdentity(value=_fingerprint((PipelineStage.SPLIT_BUILD, partition, protocol.splits)))
+    split = SplitIdentity(value=_fingerprint((PipelineStage.SPLIT_BUILD, partition, regime_data.splits)))
     fitted_preprocessor = FittedPreprocessorIdentity(
-        value=_fingerprint((PipelineStage.PREPROCESSOR_FIT, split, protocol.preprocessing))
+        value=_fingerprint((PipelineStage.PREPROCESSOR_FIT, split, regime_data.preprocessing))
     )
     processed_split = ProcessedSplitIdentity(
         value=_fingerprint((PipelineStage.SPLIT_MATERIALIZE, split, fitted_preprocessor))
     )
-    training = TrainingIdentity(value=_fingerprint((PipelineStage.TRAIN, processed_split, protocol.training, seed)))
-    checkpoint = CheckpointIdentity(value=_fingerprint(("scientific_checkpoint", training, protocol.checkpointing)))
+    training = TrainingIdentity(value=_fingerprint((PipelineStage.TRAIN, processed_split, branch.training, seed)))
+    checkpoint = CheckpointIdentity(value=_fingerprint(("scientific_checkpoint", training, branch.checkpointing)))
     checkpoint_selection = CheckpointSelectionIdentity(
-        value=_fingerprint((PipelineStage.CHECKPOINT_SELECT, checkpoint, protocol.checkpoint_selection))
+        value=_fingerprint((PipelineStage.CHECKPOINT_SELECT, checkpoint, branch.checkpoint_selection))
     )
     calibration_scoring = CalibrationScoringIdentity(
-        value=_fingerprint((PipelineStage.CALIBRATION_SCORE, checkpoint_selection, protocol.scoring))
+        value=_fingerprint((PipelineStage.CALIBRATION_SCORE, checkpoint_selection, branch.scoring))
     )
     test_scoring = TestScoringIdentity(
-        value=_fingerprint((PipelineStage.TEST_SCORE, checkpoint_selection, protocol.scoring))
+        value=_fingerprint((PipelineStage.TEST_SCORE, checkpoint_selection, branch.scoring))
     )
     temporal_scoring = TemporalScoringIdentity(
-        value=_fingerprint((PipelineStage.TEMPORAL_SCORE, checkpoint_selection, protocol.scoring))
+        value=_fingerprint((PipelineStage.TEMPORAL_SCORE, checkpoint_selection, branch.scoring))
     )
-    threshold = ThresholdIdentity(
-        value=_fingerprint((PipelineStage.THRESHOLD, calibration_scoring, protocol.thresholds))
-    )
+    threshold = ThresholdIdentity(value=_fingerprint((PipelineStage.THRESHOLD, calibration_scoring, arm.thresholds)))
     evaluation = EvaluationIdentity(
-        value=_fingerprint((PipelineStage.EVALUATE, threshold, test_scoring, temporal_scoring, protocol.evaluation))
+        value=_fingerprint((PipelineStage.EVALUATE, threshold, test_scoring, temporal_scoring, arm.evaluation))
     )
     statistical = StatisticalIdentity(
         value=_fingerprint((PipelineStage.ANALYZE, evaluation, protocol.statistics, seed))
     )
-    resource_cost = _resource_cost_fingerprint(statistical=statistical, resource_costs=protocol.resource_costs)
+    resource_cost = _resource_cost_fingerprint(statistical=statistical, resource_costs=arm.resource_costs)
     result_freeze = ResultFreezeIdentity(value=_fingerprint((PipelineStage.RESULT_FREEZE, statistical, resource_cost)))
     report = ReportIdentity(value=_fingerprint((PipelineStage.REPORT, result_freeze, specification.reporting_policy)))
     return StageIdentity(
@@ -314,10 +315,14 @@ def _stages_for_cell(
     identities = cell.stage_identities
     resource_cost = _resource_cost_fingerprint(
         statistical=identities.statistical,
-        resource_costs=cell.scientific_protocol.resource_costs,
+        resource_costs=cell.scientific_protocol.evaluation_arm.resource_costs,
     )
     feasibility_audit = _fingerprint(
-        (PipelineStage.FEASIBILITY_AUDIT, identities.dataset_source, cell.scientific_protocol.partitioning)
+        (
+            PipelineStage.FEASIBILITY_AUDIT,
+            identities.dataset_source,
+            cell.scientific_protocol.regime_data.partitioning,
+        )
     )
     stage_specs = (
         (PipelineStage.SOURCE_INSPECTION, identities.dataset_source.value),

@@ -128,10 +128,7 @@ class AnchorCheckpointTerminationPolicy:
     rounds_max: RoundNumber
 
     def __post_init__(self) -> None:
-        if (
-            type(self.rounds_initial) is not RoundNumber
-            or type(self.rounds_max) is not RoundNumber
-        ):
+        if type(self.rounds_initial) is not RoundNumber or type(self.rounds_max) is not RoundNumber:
             raise DomainValidationError(
                 detail="anchor checkpoint termination policy requires typed rounds",
                 value=repr(self),

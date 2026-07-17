@@ -7,7 +7,7 @@ from typing import Final
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.errors import AnchorReproductionFailure, DomainValidationError
 from datp_core.domain.evaluation.alert_burden import BootstrapResampleCount
-from datp_core.domain.runtime.seeds import CONFIRMATORY_PAIRED_SEED_COUNT, SeedTuple
+from datp_core.domain.runtime.seeds import CONFIRMATORY_CONFIDENCE_LEVEL, CONFIRMATORY_PAIRED_SEED_COUNT, SeedTuple
 from datp_core.domain.thresholding.policies import DecimalValue, FiniteFloatValue
 
 
@@ -82,7 +82,7 @@ class StatisticalAnalysisSpec:
     def is_confirmatory_locked(self) -> bool:
         return (
             self.method is StatisticalMethod.BCA_BOOTSTRAP
-            and self.confidence == ConfidenceLevel(value=0.95)
+            and self.confidence == ConfidenceLevel(value=CONFIRMATORY_CONFIDENCE_LEVEL)
             and self.paired_seed_count == CONFIRMATORY_PAIRED_SEED_COUNT
         )
 

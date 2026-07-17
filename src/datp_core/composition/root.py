@@ -161,7 +161,7 @@ class ResolvedExperimentConfiguration:
         ):
             raise DomainValidationError(
                 detail="composition configuration must retain the resolved scientific and execution specifications",
-                value=repr(self.experiment.identity.experiment_id),
+                value=repr(self.experiment.claim.identity.experiment_id),
                 constraint="ExperimentSpec agrees with ResolvedConfigurationArtifact",
             )
         if type(self.profile_catalogue) is not ProfileCatalogueSpec:

@@ -253,11 +253,12 @@ src/datp_core/
                              # ConfirmatoryAnalysisResult, AnchorReferenceInterval/GateSpec/Result,
                              # AbsorptionResult, TemporalRecoveryResult
     experiments/
-      identities.py         # ExperimentId, ArchitectureCatalogueId, CellId; ExperimentIdentity
+      identities.py         # ExperimentId, ArchitectureCatalogueId, CellId, DetectorBranchId,
+                             # EvaluationArmId; ExperimentIdentity
       claims.py             # ExperimentRole, ClaimTier, ExecutionStatus; the role/tier invariant
-      protocols.py          # ProtocolTrack; ScientificProtocolSpec, ExecutionPolicy, ArtifactPolicy,
-                             # ReportingPolicy
-      specifications.py     # ExperimentSpec, ExperimentProfileSpec, ExperimentCell,
+      protocols.py          # ProtocolTrack; RegimeDataSpec, DetectorBranchSpec, EvaluationArmSpec,
+                             # ScientificProtocolSpec, ExecutionPolicy, ArtifactPolicy, ReportingPolicy
+      specifications.py     # ExperimentSpec, ExperimentProfileSpec, ExperimentCell, ClaimSpec,
                              # RegimeCompatibilitySpec, ConfirmatoryExperimentProfileSpec,
                              # CentralizedModelComparatorProfileSpec, SweepSpec
       feasibility.py         # FeasibilityStatus, RejectionReason, ReuseIncompatibilityReason,
@@ -464,7 +465,7 @@ There is no single, centralized `vocabulary.py`. Each finite vocabulary is co-lo
 
 ### 6.1 Scientific vocabulary
 
-This table spans several capability subpackages rather than one module: `Dataset`, `Regime`, `ClientDefinitionStrategy` live in `domain/data/datasets.py`/`partitioning.py`; `SplitRole` in `domain/data/splitting.py`; `ProtocolTrack` in `domain/experiments/protocols.py`; the threshold-construction rows in `domain/thresholding/policies.py`/`variants.py`/`federated_statistics.py`; `AggregationStrategy`/`ModelPersonalizationStrategy` in `domain/learning/training.py`; `ExperimentRole`/`ClaimTier`/`ExecutionStatus` in `domain/experiments/claims.py`; the feasibility/rejection/reuse/blocking rows in `domain/experiments/feasibility.py`; the metric-family rows in `domain/evaluation/metrics.py`; `TrafficRateUnit`/`TrafficRateEvidenceKind`/`CostDerivationKind` in `domain/evaluation/alert_burden.py`; `StatisticalMethod`/`ClaimOutcome`/`AbsorptionBand` in `domain/evaluation/statistical_results.py`; `CheckpointSelectionStrategy`/`ParticipationStrategy` in `domain/learning/checkpoints.py`/`training.py`; and `RecalibrationMode`/`TemporalOutcome` in `domain/data/splitting.py`.
+This table spans several capability subpackages rather than one module: `Dataset`, `Regime`, `ClientDefinitionStrategy` live in `domain/data/datasets.py`/`partitioning.py`; `SplitRole` in `domain/data/splitting.py`; `ProtocolTrack`/`DetectorBranchRole` in `domain/experiments/protocols.py`; the threshold-construction rows in `domain/thresholding/policies.py`/`variants.py`/`federated_statistics.py`; `AggregationStrategy`/`ModelPersonalizationStrategy` in `domain/learning/training.py`; `ExperimentRole`/`ClaimTier`/`ExecutionStatus` in `domain/experiments/claims.py`; the feasibility/rejection/reuse/blocking rows in `domain/experiments/feasibility.py`; the metric-family rows in `domain/evaluation/metrics.py`; `TrafficRateUnit`/`TrafficRateEvidenceKind`/`CostDerivationKind` in `domain/evaluation/alert_burden.py`; `StatisticalMethod`/`ClaimOutcome`/`AbsorptionBand` in `domain/evaluation/statistical_results.py`; `CheckpointSelectionStrategy`/`ParticipationStrategy` in `domain/learning/checkpoints.py`/`training.py`; and `RecalibrationMode`/`TemporalOutcome` in `domain/data/splitting.py`.
 
 | Enum | Members (abbreviated) | Reason it is finite |
 |---|---|---|
@@ -473,6 +474,7 @@ This table spans several capability subpackages rather than one module: `Dataset
 | `ClientDefinitionStrategy` | `NATURAL_DEVICE`, `FILE_PSEUDO_CLIENT`, `DEVICE_CLIENT`, `GROUP_CLIENT`, `DIRICHLET_SYNTHETIC` | Finite partition semantics |
 | `SplitRole` | `TRAIN`, `CALIBRATION`, `TEST`, `TEMPORAL_EVALUATION` | Separates threshold-fitting and evaluation substrates |
 | `ProtocolTrack` | `DATP_ANCHOR`, `COMPLETE` | Separates anchor reproduction from complete-study artifacts and output namespaces |
+| `DetectorBranchRole` | `CORE_FEDAVG`, `FEDPROX_STRESS_TEST`, `PERSONALIZATION_STRESS_TEST` | Re-derived and checked against the branch's own `TrainingSpec` at construction, never a caller-supplied label; `PERSONALIZATION_STRESS_TEST` is representable but currently unreachable |
 | `CoreThresholdPolicy` | `B1`, `B2`, `B3`, `B4` | The causal ladder only |
 | `ThresholdConstructionKind` | `SHARED`, `LOCAL`, `FAMILY`, `CLUSTER`, `ROBUST_CLUSTER_MEDIAN`, `SHRINKAGE`, `CALIB_SIZE_FALLBACK`, `CONFORMAL`, `FED_STATS_BENIGN` | Explicit discriminator tag for a FedAvg-derived `ThresholdConstructionSpec`; the variant is never inferred from optional-field presence |
 | `SharedThresholdConstruction` | `MEAN`, `POOLED`, `WEIGHTED` | Separates B1 construction from its identity |
@@ -737,30 +739,49 @@ Scientific meaning is composed from nested, meaningful specification objects rat
 
 ### 8.1 Scientific protocol aggregate
 
-`ScientificProtocolSpec` composes the complete scientific definition of one experiment cell. Each scientific field contributes to the earliest stage identity whose output it can affect and, through upstream lineage, to every compatible downstream identity; it does not enter any unrelated upstream identity (Section 13). For example, a threshold percentile changes `ThresholdIdentity` and downstream identities only; a reporting format changes `ReportIdentity` only; the statistical resample count changes `StatisticalIdentity` and downstream reporting only; a scoring batch size changes the relevant scoring identity only when declared output-affecting; training batch semantics change `TrainingIdentity` and every downstream model-derived identity; a partition seed changes `PartitionIdentity` and every downstream identity; and a machine path changes no scientific identity at all.
+`ScientificProtocolSpec` composes the complete scientific definition of one experiment cell from three owned sub-aggregates: regime-owned data, detector-branch-owned training/checkpointing/scoring, and evaluation-arm-owned thresholding/evaluation. Each scientific field contributes to the earliest stage identity whose output it can affect and, through upstream lineage, to every compatible downstream identity; it does not enter any unrelated upstream identity (Section 13). For example, a threshold percentile changes `ThresholdIdentity` and downstream identities only; a reporting format changes `ReportIdentity` only; the statistical resample count changes `StatisticalIdentity` and downstream reporting only; a scoring batch size changes the relevant scoring identity only when declared output-affecting; training batch semantics change `TrainingIdentity` and every downstream model-derived identity; a partition seed changes `PartitionIdentity` and every downstream identity; and a machine path changes no scientific identity at all.
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ScientificProtocolSpec:
-    track: ProtocolTrack
+class RegimeDataSpec:
     dataset: DatasetSpec
     partitioning: ClientPartitionSpec
     splits: SplitCollectionSpec
     preprocessing: PreprocessingSpec
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DetectorBranchSpec:
+    branch_id: DetectorBranchId
+    role: DetectorBranchRole          # CORE_FEDAVG | FEDPROX_STRESS_TEST | PERSONALIZATION_STRESS_TEST
     training: TrainingSpec
     checkpointing: CheckpointSchedule
     checkpoint_selection: CheckpointSelectionSpec
     scoring: ScoreGenerationSpec
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class EvaluationArmSpec:
+    arm_id: EvaluationArmId
+    detector_branch_id: DetectorBranchId
     thresholds: ThresholdSuiteSpec
     evaluation: EvaluationSuiteSpec
-    statistics: StatisticalAnalysisSpec
     resource_costs: ResourceCostSuiteSpec | None
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ScientificProtocolSpec:
+    track: ProtocolTrack
+    regime_data: RegimeDataSpec
+    detector_branch: DetectorBranchSpec
+    evaluation_arm: EvaluationArmSpec
+    statistics: StatisticalAnalysisSpec
 ```
 
+- `RegimeDataSpec` owns dataset identity, partitioning, splits, and preprocessing — the regime's data protocol. It is never duplicated by a detector branch or evaluation arm.
+- `DetectorBranchSpec.role` is not a caller-supplied label: it is re-derived from the branch's own `training.federation.aggregation` and `training.personalization` at construction and rejected if it disagrees, so a FedAvg branch cannot be mislabeled `FEDPROX_STRESS_TEST` or vice versa. `PERSONALIZATION_STRESS_TEST` is representable in the type but currently unreachable — core-ladder `TrainingSpec` construction still hard-rejects any personalization strategy other than `NONE` (Section 9.2).
+- `EvaluationArmSpec.detector_branch_id` must equal the co-resolved `DetectorBranchSpec.branch_id`; `ScientificProtocolSpec.__post_init__` rejects an arm that references a different branch than the one actually present. An evaluation arm never embeds its own training specification.
 - `SplitCollectionSpec` holds exactly one `TrainingSplitSpec`, one `BenignCalibrationSplitSpec`, and one `TestSplitSpec`; `SplitSpec` is their closed union. The calibration variant has no label-policy field capable of permitting attack rows.
-- `ThresholdSuiteSpec` holds an ordered tuple of closed-union `ThresholdConstructionSpec` variants evaluated over the same typed calibration score set. It does not own scoring configuration; `ScientificProtocolSpec.scoring` is the single authority.
+- `ThresholdSuiteSpec` holds an ordered tuple of closed-union `ThresholdConstructionSpec` variants evaluated over the same typed calibration score set. It does not own scoring configuration; `DetectorBranchSpec.scoring` is the single authority, reached only through the arm's `detector_branch_id` reference. A suite legitimately bundles more than one construction (for example B1 and B2 together) when they must be evaluated from identical calibration/test-score identities for a paired comparison (Section 8.3's confirmatory lock); this is why evaluation-arm role is not collapsed into one caller-supplied enum tag — the roadmap traceability table (Section 22.5) routinely combines core-ladder and variant/comparator constructions within one experiment row, and forcing a single role per arm would either misclassify a legitimate joint arm or require a cross-cell `Comparison` aggregate this repository does not yet have a wired consumer for.
 - `EvaluationSuiteSpec` is a closed union of `StandardEvaluationSuiteSpec` and `AlertBurdenEvaluationSuiteSpec`. The alert-burden variant requires `TrafficRateEvidence`; therefore `ALERT_BURDEN` cannot be requested with missing or bare rate data.
-- `StatisticalAnalysisSpec` fixes the method, confidence level, resample count, and paired-seed count; for a confirmatory cell it is locked to BCa, 0.95, and ten seeds.
+- `StatisticalAnalysisSpec` fixes the method, confidence level, resample count, and paired-seed count; for a confirmatory cell it is locked to BCa, `CONFIRMATORY_CONFIDENCE_LEVEL` (0.95, single canonical owner in `domain/runtime/seeds.py`), and ten seeds.
 - `ProtocolTrack.DATP_ANCHOR` uses its own five-seed manifest and namespace. `ProtocolTrack.COMPLETE` requires a passed `AnchorReproductionResult` in planning but can never overwrite or reinterpret anchor artifacts.
 - `ExperimentSpec` construction requires `DATP_ANCHOR ↔ ArtifactNamespace.DATP_ANCHOR` or `COMPLETE ↔ ArtifactNamespace.COMPLETE`; cross-track write namespaces are invalid.
 
@@ -799,7 +820,7 @@ class ReportingPolicy:
 
 ### 8.3 Experiment aggregate
 
-`ExperimentIdentity` isolates the naming and role of an experiment from its scientific content. Every named roadmap experiment is constructed only through a closed `ExperimentProfileSpec`; `ExperimentSpec` composes that resolved profile with the three policy aggregates. Generic `SweepSpec` remains an internal expansion utility, but no named experiment accepts an arbitrary sweep or a caller-supplied scientific protocol.
+`ExperimentIdentity` isolates the naming and role of an experiment from its scientific content. `ClaimSpec` consolidates the previously scattered evidentiary-claim fields — identity (role/tier), fallback behavior, and manuscript role — into one owner, so a reader no longer has to cross-reference `ExperimentProfileSpec` and a catalogue-level type to see an experiment's complete claim. Every named roadmap experiment is constructed only through a closed `ExperimentProfileSpec`; `ExperimentSpec` composes that resolved profile's claim with the scientific protocol and the three operational policy aggregates. Generic `SweepSpec` remains an internal expansion utility, but no named experiment accepts an arbitrary sweep or a caller-supplied scientific protocol.
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -810,8 +831,14 @@ class ExperimentIdentity:
     execution_status: ExecutionStatus
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ExperimentSpec:
+class ClaimSpec:
     identity: ExperimentIdentity
+    fallback_policy: FallbackPolicySpec
+    manuscript_role: ManuscriptRoleSpec
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExperimentSpec:
+    claim: ClaimSpec
     profile: ExperimentProfileSpec
     scientific_protocol: ScientificProtocolSpec
     execution_policy: ExecutionPolicy
@@ -821,7 +848,7 @@ class ExperimentSpec:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentProfileSpec:
     catalogue_id: ExperimentId | ArchitectureCatalogueId
-    identity: ExperimentIdentity
+    claim: ClaimSpec
     regime_compatibility: RegimeCompatibilitySpec
     authorized_protocols: tuple[ScientificProtocolSpec, ...]
     authorized_seed_plan: SeedTuple
@@ -829,8 +856,6 @@ class ExperimentProfileSpec:
     secondary_metrics: tuple[MetricId, ...]
     statistical_procedure: StatisticalAnalysisSpec
     artifact_dependencies: ArtifactDependencySpec
-    fallback_policy: FallbackPolicySpec
-    manuscript_role: ManuscriptRoleSpec
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CentralizedModelComparatorProfileSpec:
@@ -851,7 +876,7 @@ class ExperimentCell:
     scientific_readiness: ScientificReadinessResult
 ```
 
-`ExperimentProfileSpec` validates the exact experiment identifier, evidence role, dataset, regime, client definition, training strategy, policy set, threshold construction, parameter grid, seed plan, metrics, statistical procedure, artifact dependencies, allowed fallback behavior, and manuscript role before it can yield an `ExperimentSpec`. Its `authorized_protocols` are the exhaustive expansion of the profile's closed cells; a generic sweep can expand only those cells and cannot introduce another value. A changed model, preprocessing, batch/scoring semantics, split, quantile method, seed derivation, or training setting is rejected before planning rather than merely producing a different fingerprint. `CentralizedModelComparatorProfileSpec` is disjoint from this FedAvg-profile path and is the only named-profile route for B0.
+`ExperimentProfileSpec` validates the exact experiment identifier, evidence role, dataset, regime, client definition, training strategy, policy set, threshold construction, parameter grid, seed plan, metrics, statistical procedure, artifact dependencies, allowed fallback behavior, and manuscript role — the last three now reached through `claim` — before it can yield an `ExperimentSpec`. Its `authorized_protocols` are the exhaustive expansion of the profile's closed cells; a generic sweep can expand only those cells and cannot introduce another value. A changed model, preprocessing, batch/scoring semantics, split, quantile method, seed derivation, or training setting is rejected before planning rather than merely producing a different fingerprint. `ExperimentSpec.__post_init__` additionally rejects a `claim.manuscript_role.report_artifacts` that disagrees with `reporting_policy.report_artifacts`, so a claim cannot silently ask for a manuscript artifact the reporting policy never declares. `ExperimentCell` validates every one of its own fields is present with its declared type, matching every sibling dataclass in this module. `CentralizedModelComparatorProfileSpec` is disjoint from this FedAvg-profile path and is the only named-profile route for B0; it deliberately keeps a bare `ExperimentIdentity` rather than a `ClaimSpec` because B0 has no fallback-policy or manuscript-role concept of its own.
 
 The authoritative profile catalogue contains the roadmap's fixed values: E-S2 q ∈ {0.90, 0.95, 0.975, 0.99}; E-S3 α ∈ {0.1, 0.3, 0.5, 1.0, 10.0, IID} with 20 synthetic clients; E-V1 n ∈ {50, 100, 250, 500, 1000, 5000}; E-V2 λ ∈ {0.00, 0.25, 0.50, 0.75, 1.00}; E-V3 α = 0.05; and E-Q5 k ∈ {2.0, 2.5, 3.0}. The profile catalogue also owns every roadmap-defined absorption cutoff, temporal-recovery cutoff, Regime-D viability gate, suppression gate, sign requirement, evidence classification, and main-versus-supplementary boundary. A value absent from the roadmap remains an explicit readiness blocker, never an open parameter.
 
@@ -866,7 +891,7 @@ A role/tier invariant is enforced at construction: `evidence_role == CONFIRMATOR
 ```mermaid
 classDiagram
     class ExperimentSpec {
-      +ExperimentIdentity identity
+      +ClaimSpec claim
       +ExperimentProfileSpec profile
       +ScientificProtocolSpec scientific_protocol
       +ExecutionPolicy execution_policy
@@ -875,11 +900,17 @@ classDiagram
     }
     class ExperimentProfileSpec {
       +ExperimentId or ArchitectureCatalogueId catalogue_id
+      +ClaimSpec claim
       +RegimeCompatibilitySpec regime_compatibility
       +ScientificProtocolSpec authorized_protocols
       +SeedTuple authorized_seed_plan
       +MetricId primary_metrics
       +StatisticalAnalysisSpec statistical_procedure
+    }
+    class ClaimSpec {
+      +ExperimentIdentity identity
+      +FallbackPolicySpec fallback_policy
+      +ManuscriptRoleSpec manuscript_role
     }
     class ExperimentIdentity {
       +ExperimentId experiment_id
@@ -889,17 +920,30 @@ classDiagram
     }
     class ScientificProtocolSpec {
       +ProtocolTrack track
+      +RegimeDataSpec regime_data
+      +DetectorBranchSpec detector_branch
+      +EvaluationArmSpec evaluation_arm
+      +StatisticalAnalysisSpec statistics
+    }
+    class RegimeDataSpec {
       +DatasetSpec dataset
       +ClientPartitionSpec partitioning
       +SplitCollectionSpec splits
       +PreprocessingSpec preprocessing
+    }
+    class DetectorBranchSpec {
+      +DetectorBranchId branch_id
+      +DetectorBranchRole role
       +TrainingSpec training
       +CheckpointSchedule checkpointing
       +CheckpointSelectionSpec checkpoint_selection
       +ScoreGenerationSpec scoring
+    }
+    class EvaluationArmSpec {
+      +EvaluationArmId arm_id
+      +DetectorBranchId detector_branch_id
       +ThresholdSuiteSpec thresholds
       +EvaluationSuiteSpec evaluation
-      +StatisticalAnalysisSpec statistics
       +ResourceCostSuiteSpec resource_costs
     }
     class ExecutionPolicy {
@@ -919,25 +963,30 @@ classDiagram
       +SerializationFormat formats
       +ClaimOutcome wording_outcomes
     }
-    ExperimentSpec *-- ExperimentIdentity
+    ExperimentSpec *-- ClaimSpec
     ExperimentSpec *-- ExperimentProfileSpec
     ExperimentSpec *-- ScientificProtocolSpec
     ExperimentSpec *-- ExecutionPolicy
     ExperimentSpec *-- ArtifactPolicy
     ExperimentSpec *-- ReportingPolicy
-    ScientificProtocolSpec *-- DatasetSpec
-    ScientificProtocolSpec *-- ClientPartitionSpec
-    ScientificProtocolSpec *-- SplitCollectionSpec
-    ScientificProtocolSpec *-- PreprocessingSpec
-    ScientificProtocolSpec *-- TrainingSpec
-    ScientificProtocolSpec *-- CheckpointSchedule
-    ScientificProtocolSpec *-- ScoreGenerationSpec
-    ScientificProtocolSpec *-- ThresholdSuiteSpec
-    ScientificProtocolSpec *-- EvaluationSuiteSpec
-    ScientificProtocolSpec *-- StatisticalAnalysisSpec
+    ExperimentProfileSpec *-- ClaimSpec
+    ClaimSpec *-- ExperimentIdentity
+    ScientificProtocolSpec *-- RegimeDataSpec
+    ScientificProtocolSpec *-- DetectorBranchSpec
+    ScientificProtocolSpec *-- EvaluationArmSpec
+    EvaluationArmSpec ..> DetectorBranchSpec : detector_branch_id references
+    RegimeDataSpec *-- DatasetSpec
+    RegimeDataSpec *-- ClientPartitionSpec
+    RegimeDataSpec *-- SplitCollectionSpec
+    RegimeDataSpec *-- PreprocessingSpec
+    DetectorBranchSpec *-- TrainingSpec
+    DetectorBranchSpec *-- CheckpointSchedule
+    DetectorBranchSpec *-- ScoreGenerationSpec
+    EvaluationArmSpec *-- ThresholdSuiteSpec
+    EvaluationArmSpec *-- EvaluationSuiteSpec
 ```
 
-**Guarantee.** The scientific meaning of an experiment lives entirely inside `ScientificProtocolSpec`; execution, artifact, and reporting concerns are separate composed policies. Only fields reachable through `ScientificProtocolSpec` enter any stage fingerprint, and each field enters only the earliest stage identity it can affect plus its compatible downstream identities — never an unrelated upstream identity.
+**Guarantee.** The scientific meaning of an experiment lives entirely inside `ScientificProtocolSpec`, itself split into regime-owned data, detector-branch-owned training/checkpointing/scoring, and evaluation-arm-owned thresholding/evaluation; execution, artifact, and reporting concerns are separate composed policies, and the experiment's evidentiary claim (identity, fallback, manuscript role) is separately composed as `ClaimSpec`. Only fields reachable through `ScientificProtocolSpec` enter any stage fingerprint, and each field enters only the earliest stage identity it can affect plus its compatible downstream identities — never an unrelated upstream identity.
 
 ---
 

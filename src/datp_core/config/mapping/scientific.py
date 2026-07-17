@@ -145,7 +145,7 @@ def resolve_experiment_profile(request: ResolveExperimentProfileRequest) -> Expe
         profile
         for profile in request.profiles
         if type(profile) in {ExperimentProfileSpec, ConfirmatoryExperimentProfileSpec}
-        and profile.identity.experiment_id == request.experiment_id
+        and profile.claim.identity.experiment_id == request.experiment_id
     )
     if len(matches) != 1:
         raise ConfigurationError(
@@ -161,7 +161,7 @@ def map_experiment_schema(schema: ExperimentConfigSchema, *, catalogue: ProfileC
     profile = resolve_experiment_profile(schema.profile_request)
     protocol = _resolve_authorized_protocol(schema.scientific, profile, catalogue=catalogue)
     return ExperimentSpec(
-        identity=profile.identity,
+        claim=profile.claim,
         profile=profile,
         scientific_protocol=protocol,
         execution_policy=map_execution_config(schema.execution),
@@ -452,11 +452,13 @@ def _matches_scientific_config(
     return all(
         (
             schema.protocol_track is protocol.track,
-            map_partitioning_config(schema.partitioning, catalogue=catalogue) == protocol.partitioning,
-            _matches_threshold_suite(schema.threshold_constructions, protocol.thresholds, catalogue=catalogue),
-            _matches_evaluation(schema.evaluation, protocol.evaluation),
+            map_partitioning_config(schema.partitioning, catalogue=catalogue) == protocol.regime_data.partitioning,
+            _matches_threshold_suite(
+                schema.threshold_constructions, protocol.evaluation_arm.thresholds, catalogue=catalogue
+            ),
+            _matches_evaluation(schema.evaluation, protocol.evaluation_arm.evaluation),
             map_statistical_config(schema.statistics) == protocol.statistics,
-            map_federation_config(schema.federation) == protocol.training.federation,
+            map_federation_config(schema.federation) == protocol.detector_branch.training.federation,
             _matches_canonical_temporal(schema.canonical_temporal, protocol),
         )
     )
@@ -566,6 +568,6 @@ def _matches_canonical_temporal(
         return True
     mapped_boundary = map_canonical_temporal_config(configuration)
     return (
-        protocol.partitioning.regime.value == "d_temporal"
+        protocol.regime_data.partitioning.regime.value == "d_temporal"
         and mapped_boundary.historical_fraction == REGIME_D_TEMPORAL_HISTORICAL_FRACTION
     )

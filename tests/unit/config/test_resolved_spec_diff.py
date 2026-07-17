@@ -11,7 +11,7 @@ from datp_core.config.resolved import (
 from datp_core.domain.artifacts.keys import StorageRootKind
 from datp_core.domain.artifacts.lineage import ResolvedConfigurationIdentity, ReuseImpact
 from datp_core.domain.artifacts.references import ArtifactSchemaVersion, StageFingerprint
-from datp_core.domain.experiments.protocols import ExecutionPolicy, ScientificProtocolField, ScientificProtocolSpec
+from datp_core.domain.experiments.protocols import ExecutionPolicy, ScientificProtocolField
 from datp_core.domain.experiments.specification_changes import (
     EnvironmentChange,
     EnvironmentSpecification,
@@ -39,14 +39,21 @@ def _resolved_configuration(*, descriptor: str = "machine-one") -> ResolvedConfi
 
 
 def _with_threshold_change(configuration: ResolvedConfigurationArtifact) -> ResolvedConfigurationArtifact:
-    original = configuration.scientific.thresholds.constructions[0]
+    arm = configuration.scientific.evaluation_arm
+    original = arm.thresholds.constructions[0]
     changed_thresholds = ThresholdSuiteSpec(
         constructions=(
             replace(original, percentile=ThresholdPercentile(value="0.90")),
-            *configuration.scientific.thresholds.constructions[1:],
+            *arm.thresholds.constructions[1:],
         )
     )
-    return replace(configuration, scientific=replace(configuration.scientific, thresholds=changed_thresholds))
+    return replace(
+        configuration,
+        scientific=replace(
+            configuration.scientific,
+            evaluation_arm=replace(arm, thresholds=changed_thresholds),
+        ),
+    )
 
 
 def test_threshold_only_change_invalidates_threshold_artifacts() -> None:
@@ -83,10 +90,9 @@ def test_compare_never_mutates_either_resolved_configuration() -> None:
 
 
 def test_every_resolved_specification_field_has_a_closed_diff_classification() -> None:
-    assert tuple(field.name for field in fields(ScientificProtocolSpec)) == tuple(
-        field.value for field in ScientificProtocolField
-    )
     assert tuple(rule.field for rule in SCIENTIFIC_CHANGE_RULES) == tuple(ScientificProtocolField)
+    protocol = _resolved_configuration().scientific
+    assert {rule.field for rule in SCIENTIFIC_CHANGE_RULES} == {input_.field for input_ in protocol.identity_inputs()}
     assert tuple(field.name for field in fields(ExecutionPolicy)) == (
         "execution_mode",
         "device",

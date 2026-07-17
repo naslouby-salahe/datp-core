@@ -9,6 +9,7 @@ from datp_core.domain.runtime.admissibility import BatchSize, GradientAccumulati
 from datp_core.domain.runtime.seeds import Seed
 
 FEDPROX_MU_GRID = (0.001, 0.01, 0.1)
+_POSITIVE_INT_CONSTRAINT: Final = "int >= 1"
 
 
 class AggregationStrategy(StrEnum):
@@ -96,13 +97,13 @@ class ModelTrainingProfileSpec:
             raise DomainValidationError(
                 detail="local epochs must be a positive integer",
                 value=repr(self.local_epochs),
-                constraint="int >= 1",
+                constraint=_POSITIVE_INT_CONSTRAINT,
             )
         if not (type(self.rounds_max) is int and self.rounds_max >= 1):
             raise DomainValidationError(
                 detail="rounds_max must be a positive integer",
                 value=repr(self.rounds_max),
-                constraint="int >= 1",
+                constraint=_POSITIVE_INT_CONSTRAINT,
             )
 
 
@@ -174,7 +175,7 @@ def _validate_rounds_max(rounds_max: int) -> None:
         raise DomainValidationError(
             detail="federation round budget must be a positive integer",
             value=repr(rounds_max),
-            constraint="int >= 1",
+            constraint=_POSITIVE_INT_CONSTRAINT,
         )
 
 

@@ -38,14 +38,18 @@ def _with_changes(
 ) -> ResolvedConfigurationArtifact:
     changed = configuration
     if "threshold" in change_kinds:
-        original = changed.scientific.thresholds.constructions[0]
+        arm = changed.scientific.evaluation_arm
+        original = arm.thresholds.constructions[0]
         changed_thresholds = ThresholdSuiteSpec(
             constructions=(
                 replace(original, percentile=ThresholdPercentile(value="0.90")),
-                *changed.scientific.thresholds.constructions[1:],
+                *arm.thresholds.constructions[1:],
             )
         )
-        changed = replace(changed, scientific=replace(changed.scientific, thresholds=changed_thresholds))
+        changed = replace(
+            changed,
+            scientific=replace(changed.scientific, evaluation_arm=replace(arm, thresholds=changed_thresholds)),
+        )
     if "execution" in change_kinds:
         changed = replace(changed, execution=replace(changed.execution, execution_mode=ExecutionMode.SMOKE))
     if "environment" in change_kinds:

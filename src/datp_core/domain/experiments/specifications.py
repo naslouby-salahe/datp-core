@@ -117,11 +117,30 @@ class AbsorptionGateSpec:
 class TemporalRecoveryGateSpec:
     meaningful_recovery_fraction: Probability
 
+    def __post_init__(self) -> None:
+        if type(self.meaningful_recovery_fraction) is not Probability:
+            raise DomainValidationError(
+                detail="temporal recovery gate requires a typed recovery fraction",
+                value=repr(self),
+                constraint="Probability",
+            )
+
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RegimeDViabilityGateSpec:
     minimum_eligibility_coverage: CoverageRatio
     minimum_calibration_samples: CalibrationSampleCount
+
+    def __post_init__(self) -> None:
+        if (
+            type(self.minimum_eligibility_coverage) is not CoverageRatio
+            or type(self.minimum_calibration_samples) is not CalibrationSampleCount
+        ):
+            raise DomainValidationError(
+                detail="Regime D viability gate requires typed eligibility coverage and calibration samples",
+                value=repr(self),
+                constraint="CoverageRatio and CalibrationSampleCount",
+            )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -151,7 +170,7 @@ class SuppressionGateSpec:
 
 
 def _is_confirmatory_protocol(protocol: ScientificProtocolSpec, statistics: StatisticalAnalysisSpec) -> bool:
-    constructions = protocol.thresholds.constructions
+    constructions = protocol.evaluation_arm.thresholds.constructions
     return all(
         (
             _has_confirmatory_threshold_constructions(constructions),
@@ -175,13 +194,13 @@ def _has_confirmatory_threshold_constructions(
 
 def _has_confirmatory_dataset_and_partitioning(protocol: ScientificProtocolSpec) -> bool:
     return (
-        protocol.dataset.dataset is Dataset.N_BAIOT
-        and protocol.partitioning.strategy is ClientDefinitionStrategy.NATURAL_DEVICE
+        protocol.regime_data.dataset.dataset is Dataset.N_BAIOT
+        and protocol.regime_data.partitioning.strategy is ClientDefinitionStrategy.NATURAL_DEVICE
     )
 
 
 def _has_confirmatory_training(protocol: ScientificProtocolSpec) -> bool:
-    federation = protocol.training.federation
+    federation = protocol.detector_branch.training.federation
     return (
         federation.aggregation is AggregationStrategy.FEDAVG
         and federation.local_epochs == 1
@@ -193,7 +212,10 @@ def _has_confirmatory_evaluation(
     protocol: ScientificProtocolSpec,
     statistics: StatisticalAnalysisSpec,
 ) -> bool:
-    return protocol.evaluation.primary_metric is OperatingPointMetric.CV_FPR and protocol.statistics == statistics
+    return (
+        protocol.evaluation_arm.evaluation.primary_metric is OperatingPointMetric.CV_FPR
+        and protocol.statistics == statistics
+    )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -258,6 +280,29 @@ class ManuscriptRoleSpec:
                 value=repr(self),
                 constraint="ManuscriptPlacement and unique tuple[ReportArtifactType, ...]",
             )
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClaimSpec:
+    identity: ExperimentIdentity
+    fallback_policy: FallbackPolicySpec
+    manuscript_role: ManuscriptRoleSpec
+
+    def __post_init__(self) -> None:
+        if not _has_claim_component_types(self):
+            raise DomainValidationError(
+                detail="claim requires a typed experiment identity, fallback policy, and manuscript role",
+                value=repr(self),
+                constraint="ExperimentIdentity, FallbackPolicySpec, ManuscriptRoleSpec",
+            )
+
+
+def _has_claim_component_types(claim: ClaimSpec) -> bool:
+    return (
+        type(claim.identity) is ExperimentIdentity
+        and type(claim.fallback_policy) is FallbackPolicySpec
+        and type(claim.manuscript_role) is ManuscriptRoleSpec
+    )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -443,7 +488,7 @@ def _sweep_value_type(axis: SweepAxis) -> type[SweepValue]:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentProfileSpec:
     catalogue_id: ExperimentId | ArchitectureCatalogueId
-    identity: ExperimentIdentity
+    claim: ClaimSpec
     regime_compatibility: RegimeCompatibilitySpec
     authorized_protocols: tuple[ScientificProtocolSpec, ...]
     authorized_seed_plan: SeedTuple
@@ -451,8 +496,6 @@ class ExperimentProfileSpec:
     secondary_metrics: tuple[MetricId, ...]
     statistical_procedure: StatisticalAnalysisSpec
     artifact_dependencies: ArtifactDependencySpec
-    fallback_policy: FallbackPolicySpec
-    manuscript_role: ManuscriptRoleSpec
 
     def __post_init__(self) -> None:
         if not _is_valid_experiment_profile(self):
@@ -471,20 +514,25 @@ def _is_valid_experiment_profile(profile: ExperimentProfileSpec) -> bool:
             _has_valid_profile_metrics(profile),
             _has_matching_catalogue_identity(profile),
             _has_matching_regime_protocols(profile),
+            _has_confirmatory_role_matching_subtype(profile),
         )
     )
+
+
+def _has_confirmatory_role_matching_subtype(profile: ExperimentProfileSpec) -> bool:
+    if profile.claim.identity.evidence_role is ExperimentRole.CONFIRMATORY:
+        return type(profile) is ConfirmatoryExperimentProfileSpec
+    return True
 
 
 def _has_profile_component_types(profile: ExperimentProfileSpec) -> bool:
     return all(
         (
-            type(profile.identity) is ExperimentIdentity,
+            type(profile.claim) is ClaimSpec,
             type(profile.regime_compatibility) is RegimeCompatibilitySpec,
             type(profile.authorized_seed_plan) is SeedTuple,
             type(profile.statistical_procedure) is StatisticalAnalysisSpec,
             type(profile.artifact_dependencies) is ArtifactDependencySpec,
-            type(profile.fallback_policy) is FallbackPolicySpec,
-            type(profile.manuscript_role) is ManuscriptRoleSpec,
         )
     )
 
@@ -516,7 +564,7 @@ def _are_unique_metric_identifiers(metrics: tuple[MetricId, ...]) -> bool:
 def _has_matching_catalogue_identity(profile: ExperimentProfileSpec) -> bool:
     catalogue_id = profile.catalogue_id
     if type(catalogue_id) is ExperimentId:
-        return profile.identity.experiment_id == catalogue_id
+        return profile.claim.identity.experiment_id == catalogue_id
     if type(catalogue_id) is ArchitectureCatalogueId:
         return catalogue_id.value == "B_A_APPLICABILITY_BOUNDARY"
     return False
@@ -532,9 +580,9 @@ def _matches_profile_regime(
     compatibility: RegimeCompatibilitySpec,
 ) -> bool:
     return (
-        protocol.dataset.dataset is compatibility.dataset
-        and protocol.partitioning.regime is compatibility.regime
-        and protocol.partitioning.strategy is compatibility.client_strategy
+        protocol.regime_data.dataset.dataset is compatibility.dataset
+        and protocol.regime_data.partitioning.regime is compatibility.regime
+        and protocol.regime_data.partitioning.strategy is compatibility.client_strategy
     )
 
 
@@ -563,8 +611,8 @@ def _is_locked_confirmatory_profile(profile: ConfirmatoryExperimentProfileSpec) 
 def _has_confirmatory_identity(profile: ConfirmatoryExperimentProfileSpec) -> bool:
     return (
         profile.catalogue_id == ExperimentId(value="E-C1")
-        and profile.identity.evidence_role is ExperimentRole.CONFIRMATORY
-        and profile.identity.tier is ClaimTier.TIER_1
+        and profile.claim.identity.evidence_role is ExperimentRole.CONFIRMATORY
+        and profile.claim.identity.tier is ClaimTier.TIER_1
         and profile.regime_compatibility.regime is Regime.A
         and profile.primary_metrics == (OperatingPointMetric.CV_FPR,)
     )
@@ -663,7 +711,7 @@ LOCKED_B0_CENTRALIZED_COMPARATOR_PROFILE = CentralizedModelComparatorProfileSpec
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentSpec:
-    identity: ExperimentIdentity
+    claim: ClaimSpec
     profile: ExperimentProfileSpec
     scientific_protocol: ScientificProtocolSpec
     execution_policy: ExecutionPolicy
@@ -674,8 +722,8 @@ class ExperimentSpec:
         if not _is_valid_experiment_specification(self):
             raise DomainValidationError(
                 detail="experiment specifications can be constructed only from their closed profile authorization",
-                value=repr(self.identity),
-                constraint="profile identity and authorized scientific protocol",
+                value=repr(self.claim.identity),
+                constraint="profile claim and authorized scientific protocol",
             )
 
 
@@ -685,6 +733,7 @@ def _is_valid_experiment_specification(specification: ExperimentSpec) -> bool:
             _has_experiment_specification_types(specification),
             _has_profile_authorized_protocol(specification),
             _has_matching_artifact_namespace(specification),
+            _has_matching_manuscript_report_artifacts(specification),
         )
     )
 
@@ -692,7 +741,7 @@ def _is_valid_experiment_specification(specification: ExperimentSpec) -> bool:
 def _has_experiment_specification_types(specification: ExperimentSpec) -> bool:
     return all(
         (
-            type(specification.identity) is ExperimentIdentity,
+            type(specification.claim) is ClaimSpec,
             type(specification.profile) in {ExperimentProfileSpec, ConfirmatoryExperimentProfileSpec},
             type(specification.scientific_protocol) is ScientificProtocolSpec,
             type(specification.execution_policy) is ExecutionPolicy,
@@ -704,7 +753,7 @@ def _has_experiment_specification_types(specification: ExperimentSpec) -> bool:
 
 def _has_profile_authorized_protocol(specification: ExperimentSpec) -> bool:
     return (
-        specification.identity == specification.profile.identity
+        specification.claim == specification.profile.claim
         and specification.scientific_protocol in specification.profile.authorized_protocols
     )
 
@@ -719,6 +768,10 @@ def _has_matching_artifact_namespace(specification: ExperimentSpec) -> bool:
             assert_never(specification.scientific_protocol.track)
 
 
+def _has_matching_manuscript_report_artifacts(specification: ExperimentSpec) -> bool:
+    return specification.claim.manuscript_role.report_artifacts == specification.reporting_policy.report_artifacts
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentCell:
     cell_id: CellId
@@ -729,6 +782,30 @@ class ExperimentCell:
     reporting_policy: ReportingPolicy
     stage_identities: StageIdentity
     scientific_readiness: ScientificReadinessResult
+
+    def __post_init__(self) -> None:
+        if not _has_cell_component_types(self):
+            raise DomainValidationError(
+                detail="experiment cell requires every resolved specification in its declared typed position",
+                value=repr(self.cell_id),
+                constraint="CellId, ExperimentId, ScientificProtocolSpec, ExecutionPolicy, "
+                "ArtifactPolicy, ReportingPolicy, StageIdentity, ScientificReadinessResult",
+            )
+
+
+def _has_cell_component_types(cell: ExperimentCell) -> bool:
+    return all(
+        (
+            type(cell.cell_id) is CellId,
+            type(cell.experiment_id) is ExperimentId,
+            type(cell.scientific_protocol) is ScientificProtocolSpec,
+            type(cell.execution_policy) is ExecutionPolicy,
+            type(cell.artifact_policy) is ArtifactPolicy,
+            type(cell.reporting_policy) is ReportingPolicy,
+            type(cell.stage_identities) is StageIdentity,
+            type(cell.scientific_readiness) is ScientificReadinessResult,
+        )
+    )
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

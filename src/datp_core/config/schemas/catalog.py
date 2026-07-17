@@ -10,6 +10,7 @@ from datp_core.domain.experiments.claims import ClaimTier, ExperimentRole
 from datp_core.domain.experiments.protocols import ProtocolTrack
 from datp_core.domain.learning.training import ParticipationStrategy
 from datp_core.domain.runtime.policies import ExecutionMode
+from datp_core.domain.runtime.seeds import CONFIRMATORY_CONFIDENCE_LEVEL, CONFIRMATORY_PAIRED_SEED_COUNT
 from datp_core.domain.thresholding.clustering import (
     B4ClusteringAlgorithm,
     B4FingerprintField,
@@ -37,7 +38,7 @@ class ConfirmatoryProtocolConfig(CatalogSchema):
 
     @model_validator(mode="after")
     def _confirmatory_contract(self) -> "ConfirmatoryProtocolConfig":
-        if self.confidence != Decimal("0.95") or self.paired_seed_count != 10:
+        if self.confidence != CONFIRMATORY_CONFIDENCE_LEVEL or self.paired_seed_count != CONFIRMATORY_PAIRED_SEED_COUNT:
             raise ValueError("confirmatory protocol must use the configured 95% BCa ten-paired-seed contract")
         return self
 

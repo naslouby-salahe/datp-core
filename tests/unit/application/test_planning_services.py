@@ -31,7 +31,8 @@ def _fingerprint(value: int) -> StageFingerprint:
 
 def _specifications(*, threshold_percentile: float) -> tuple[ExperimentSpec, ...]:
     specification = map_experiment_schema(experiment_config(), catalogue=composed_profile_catalogue())
-    _, local_policy = specification.scientific_protocol.thresholds.constructions
+    arm = specification.scientific_protocol.evaluation_arm
+    _, local_policy = arm.thresholds.constructions
     assert isinstance(local_policy, LocalThresholdSpec)
     threshold_policy = LocalThresholdSpec(
         kind=local_policy.kind,
@@ -40,8 +41,9 @@ def _specifications(*, threshold_percentile: float) -> tuple[ExperimentSpec, ...
     )
     threshold_protocol = replace(
         specification.scientific_protocol,
-        thresholds=ThresholdSuiteSpec(
-            constructions=(specification.scientific_protocol.thresholds.constructions[0], threshold_policy)
+        evaluation_arm=replace(
+            arm,
+            thresholds=ThresholdSuiteSpec(constructions=(arm.thresholds.constructions[0], threshold_policy)),
         ),
     )
     profile = replace(

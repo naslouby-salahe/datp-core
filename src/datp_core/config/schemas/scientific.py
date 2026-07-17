@@ -23,13 +23,16 @@ from datp_core.domain.mathematics.pooled_statistics import (
     REGIME_A_STATIC_SPLIT_TRAIN_FRACTION,
     REGIME_D_TEMPORAL_HISTORICAL_FRACTION,
 )
+from datp_core.domain.runtime.seeds import CONFIRMATORY_CONFIDENCE_LEVEL
 from datp_core.domain.thresholding.federated_statistics import FED_STATS_SUPPLEMENTARY_K_VALUES
 from datp_core.domain.thresholding.policies import SharedThresholdConstruction
 
 type OpenUnitInterval = Annotated[Decimal, Field(gt=Decimal(0), lt=Decimal(1))]
 type ClosedUnitInterval = Annotated[Decimal, Field(ge=Decimal(0), le=Decimal(1))]
 type PositiveInteger = Annotated[int, Field(gt=0)]
-type ConfirmatoryConfidence = Annotated[Decimal, Field(ge=Decimal("0.95"), le=Decimal("0.95"))]
+type ConfirmatoryConfidence = Annotated[
+    Decimal, Field(ge=CONFIRMATORY_CONFIDENCE_LEVEL, le=CONFIRMATORY_CONFIDENCE_LEVEL)
+]
 type CanonicalTemporalFraction = Annotated[
     Decimal,
     Field(ge=REGIME_D_TEMPORAL_HISTORICAL_FRACTION.value, le=REGIME_D_TEMPORAL_HISTORICAL_FRACTION.value),

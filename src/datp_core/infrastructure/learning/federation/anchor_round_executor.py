@@ -14,8 +14,8 @@ from datp_core.infrastructure.learning.federation.trainer import (
     FederatedRoundUpdates,
     weighted_fedavg,
 )
+from datp_core.infrastructure.learning.models.anchor_training import build_anchor_optimizer
 from datp_core.infrastructure.learning.models.autoencoder import FixedAutoencoder, build_fixed_autoencoder
-from datp_core.infrastructure.learning.models.nbaiot_anchor_training import build_anchor_optimizer
 
 
 def _local_epoch(
