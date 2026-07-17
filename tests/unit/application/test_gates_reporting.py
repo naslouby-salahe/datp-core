@@ -101,7 +101,7 @@ def test_anchor_and_feasibility_gates_block_failed_typed_evidence() -> None:
     gate = AnchorReproductionGate()
     assert not gate.evaluate(request).readiness.is_ready
     with pytest.raises(AnchorReproductionFailure):
-        gate.require_journal_expansion(request)
+        gate.require_anchor_passage(request)
     assert decision.readiness.blockers == (BlockingReason.INVALID_LINEAGE, BlockingReason.FAILED_FEASIBILITY)
 
 

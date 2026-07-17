@@ -20,13 +20,13 @@ def test_storage_and_namespace_vocabularies_are_complete() -> None:
     )
     assert tuple(ArtifactNamespace) == (
         ArtifactNamespace.DATP_ANCHOR,
-        ArtifactNamespace.JOURNAL_EXTENSION,
+        ArtifactNamespace.COMPLETE,
         ArtifactNamespace.RECOVERY,
         ArtifactNamespace.CACHE,
         ArtifactNamespace.STAGING,
         ArtifactNamespace.TEST_SANDBOX,
     )
-    assert ArtifactNamespace.DATP_ANCHOR is not ArtifactNamespace.JOURNAL_EXTENSION
+    assert ArtifactNamespace.DATP_ANCHOR is not ArtifactNamespace.COMPLETE
 
 
 def test_serialization_and_write_vocabularies_are_complete() -> None:

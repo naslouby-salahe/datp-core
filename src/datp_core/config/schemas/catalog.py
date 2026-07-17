@@ -28,7 +28,7 @@ class CatalogSchema(BaseModel):
 
 
 class ConfirmatoryProtocolConfig(CatalogSchema):
-    track: Literal[ProtocolTrack.JOURNAL_EXTENSION]
+    track: Literal[ProtocolTrack.COMPLETE]
     metric: Literal[OperatingPointMetric.CV_FPR]
     direction: Literal["b1_minus_b2"]
     statistical_method: Literal["bca_bootstrap"]

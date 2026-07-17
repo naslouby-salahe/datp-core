@@ -44,7 +44,7 @@ from datp_core.domain.thresholding.policies import ThresholdSuiteSpec
 
 class ProtocolTrack(StrEnum):
     DATP_ANCHOR = "datp_anchor"
-    JOURNAL_EXTENSION = "journal_extension"
+    COMPLETE = "complete"
 
 
 class ReportArtifactType(StrEnum):

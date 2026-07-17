@@ -50,7 +50,7 @@ from datp_core.config.schemas.scientific import (
 def _scientific_payload_json() -> str:
     return """
     {
-      "protocol_track": "journal_extension",
+      "protocol_track": "complete",
       "partitioning": {"strategy": "natural_device", "regime": "a"},
       "threshold_constructions": [{
         "kind": "shared",

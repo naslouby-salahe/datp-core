@@ -418,7 +418,7 @@ datp-core/
 ├── checkpoints/               # gitignored, recoverable; scientific model weights (`SCIENTIFIC_CHECKPOINTS`)
 ├── outputs/
 │   ├── anchor/                 # gitignored, recoverable; `DATP_ANCHOR` namespace scientific outputs
-│   └── journal/                 # gitignored, recoverable; `JOURNAL_EXTENSION` namespace scientific outputs
+│   └── complete/                 # gitignored, recoverable; `COMPLETE` namespace scientific outputs
 ├── results/                    # tracked, append-only, publishable; curated tables/figures/exports
 │   ├── tables/  figures/  exports/
 ├── .runtime/                    # gitignored, ephemeral, runtime-only; never scientific evidence
@@ -472,7 +472,7 @@ This table spans several capability subpackages rather than one module: `Dataset
 | `Regime` | `A`, `B_A`, `C`, `D`, `D_TEMPORAL` | Executable regimes; Regime B-b absent |
 | `ClientDefinitionStrategy` | `NATURAL_DEVICE`, `FILE_PSEUDO_CLIENT`, `DEVICE_CLIENT`, `GROUP_CLIENT`, `DIRICHLET_SYNTHETIC` | Finite partition semantics |
 | `SplitRole` | `TRAIN`, `CALIBRATION`, `TEST`, `TEMPORAL_EVALUATION` | Separates threshold-fitting and evaluation substrates |
-| `ProtocolTrack` | `DATP_ANCHOR`, `JOURNAL_EXTENSION` | Separates five-seed reproduction from journal artifacts and output namespaces |
+| `ProtocolTrack` | `DATP_ANCHOR`, `COMPLETE` | Separates anchor reproduction from complete-study artifacts and output namespaces |
 | `CoreThresholdPolicy` | `B1`, `B2`, `B3`, `B4` | The causal ladder only |
 | `ThresholdConstructionKind` | `SHARED`, `LOCAL`, `FAMILY`, `CLUSTER`, `ROBUST_CLUSTER_MEDIAN`, `SHRINKAGE`, `CALIB_SIZE_FALLBACK`, `CONFORMAL`, `FED_STATS_BENIGN` | Explicit discriminator tag for a FedAvg-derived `ThresholdConstructionSpec`; the variant is never inferred from optional-field presence |
 | `SharedThresholdConstruction` | `MEAN`, `POOLED`, `WEIGHTED` | Separates B1 construction from its identity |
@@ -557,7 +557,7 @@ Owned by `domain/artifacts/keys.py` (`StorageRootKind`, `StorageVisibility`, `Ar
 |---|---|---|
 | `StorageRootKind` | `RAW_DATA`, `PROCESSED_DATA`, `SCIENTIFIC_CHECKPOINTS`, `RECOVERY_STATE`, `SCORES`, `METRICS`, `STATISTICS`, `REPORTS`, `RUN_STATE`, `CACHE`, `LOCKS`, `STAGING`, `TEST_SANDBOX` | Semantic storage roots (never concrete paths) |
 | `StorageVisibility` | `EXTERNAL_READONLY`, `SCIENTIFIC_OUTPUT`, `EPHEMERAL`, `TEST_ISOLATED` | Read/write and lifecycle class of a root |
-| `ArtifactNamespace` | `DATP_ANCHOR`, `JOURNAL_EXTENSION`, `RECOVERY`, `CACHE`, `STAGING`, `TEST_SANDBOX` | Semantic separation prevents anchor/journal overwrite and recovery/test leakage |
+| `ArtifactNamespace` | `DATP_ANCHOR`, `COMPLETE`, `RECOVERY`, `CACHE`, `STAGING`, `TEST_SANDBOX` | Semantic separation prevents anchor/complete overwrite and recovery/test leakage |
 | `SerializationFormat` | `PARQUET`, `JSON`, `CSV`, `MARKDOWN`, `LATEX`, `SVG`, `PNG`, `PDF`, `TORCH_STATE` | Artifact and report serialization |
 | `WriteDisposition` | `CREATE_IF_ABSENT`, `VERIFY_OR_FAIL`, `ATOMIC_STAGE_COMMIT` | Write semantics at the persistence boundary |
 | `ManifestType` | `DATASET_SOURCE`, `FEATURE_SCHEMA`, `CLIENT_PARTITION`, `SPLIT`, `FITTED_PREPROCESSOR`, `CHECKPOINT_SELECTION`, `REGIME_D_FEASIBILITY`, `RESOLVED_CONFIGURATION`, `EXPERIMENT`, `RESULT_FREEZE`, `RUN_STATE`, `REUSE_LEDGER`, `ARTIFACT_BUNDLE` | Manifest kind |
@@ -761,8 +761,8 @@ class ScientificProtocolSpec:
 - `ThresholdSuiteSpec` holds an ordered tuple of closed-union `ThresholdConstructionSpec` variants evaluated over the same typed calibration score set. It does not own scoring configuration; `ScientificProtocolSpec.scoring` is the single authority.
 - `EvaluationSuiteSpec` is a closed union of `StandardEvaluationSuiteSpec` and `AlertBurdenEvaluationSuiteSpec`. The alert-burden variant requires `TrafficRateEvidence`; therefore `ALERT_BURDEN` cannot be requested with missing or bare rate data.
 - `StatisticalAnalysisSpec` fixes the method, confidence level, resample count, and paired-seed count; for a confirmatory cell it is locked to BCa, 0.95, and ten seeds.
-- `ProtocolTrack.DATP_ANCHOR` uses its own five-seed manifest and namespace. `ProtocolTrack.JOURNAL_EXTENSION` requires a passed `AnchorReproductionResult` in planning but can never overwrite or reinterpret anchor artifacts.
-- `ExperimentSpec` construction requires `DATP_ANCHOR ↔ ArtifactNamespace.DATP_ANCHOR` or `JOURNAL_EXTENSION ↔ ArtifactNamespace.JOURNAL_EXTENSION`; cross-track write namespaces are invalid.
+- `ProtocolTrack.DATP_ANCHOR` uses its own five-seed manifest and namespace. `ProtocolTrack.COMPLETE` requires a passed `AnchorReproductionResult` in planning but can never overwrite or reinterpret anchor artifacts.
+- `ExperimentSpec` construction requires `DATP_ANCHOR ↔ ArtifactNamespace.DATP_ANCHOR` or `COMPLETE ↔ ArtifactNamespace.COMPLETE`; cross-track write namespaces are invalid.
 
 ### 8.2 Policy aggregates
 
@@ -1726,7 +1726,7 @@ A Regime A cell at one seed shares one `TrainingIdentity`, one calibration-scori
 ```mermaid
 graph LR
     AR[DATP_ANCHOR five-seed plan] --> AG[AnchorReproductionGate]
-    AG -->|passed| JP[JOURNAL_EXTENSION draft]
+    AG -->|passed| JP[COMPLETE draft]
     DI[dataset source inspection] --> FA[feasibility audit]
     FA --> FS[immutable FeasibilityCatalogSnapshot]
     FS -->|missing/pending/failed| AUD[audit and boundary records only]
@@ -1904,7 +1904,7 @@ class ResolvedArtifactLocation:
     absolute_path: Path
 ```
 
-An `ArtifactKey` is a closed union of scope-specific logical-address variants, never a single generic key with optional dataset, regime, or seed fields: `DatasetArtifactKey` for source-level artifacts before regime selection, `RegimeArtifactKey` for regime-scoped manifests and feasibility evidence, `SeedScopedArtifactKey` for seed-level training/checkpoint/score/threshold artifacts, `CrossSeedArtifactKey` for cross-seed paired and cohort-level results, `RunArtifactKey` for run-level artifacts with no dataset/regime/seed scope, and `ReportArtifactKey` for result-freeze and rendered report inputs. `ArtifactPathResolver.resolve(ResolveArtifactLocationRequest)` maps a key and a selected `BoundStorageRoot` to a `ResolvedArtifactLocation`, exhaustively matching the key variant with `assert_never`, deriving a `RelativeArtifactPath` from that variant's typed fields, and joining it beneath the root's `absolute_path`. `ResolvedArtifactLocation` is an infrastructure-facing result; it never enters a domain identity, scientific specification, stage fingerprint, artifact key, or scientific manifest. Manifests retain the `StorageRootKind`, the root-relative path, and the logical artifact key only. The namespace keeps `DATP_ANCHOR`, `JOURNAL_EXTENSION`, recovery, cache, staging, and test artifacts on structurally separate branches; journal output can depend on an anchor result but cannot resolve to the anchor's write namespace.
+An `ArtifactKey` is a closed union of scope-specific logical-address variants, never a single generic key with optional dataset, regime, or seed fields: `DatasetArtifactKey` for source-level artifacts before regime selection, `RegimeArtifactKey` for regime-scoped manifests and feasibility evidence, `SeedScopedArtifactKey` for seed-level training/checkpoint/score/threshold artifacts, `CrossSeedArtifactKey` for cross-seed paired and cohort-level results, `RunArtifactKey` for run-level artifacts with no dataset/regime/seed scope, and `ReportArtifactKey` for result-freeze and rendered report inputs. `ArtifactPathResolver.resolve(ResolveArtifactLocationRequest)` maps a key and a selected `BoundStorageRoot` to a `ResolvedArtifactLocation`, exhaustively matching the key variant with `assert_never`, deriving a `RelativeArtifactPath` from that variant's typed fields, and joining it beneath the root's `absolute_path`. `ResolvedArtifactLocation` is an infrastructure-facing result; it never enters a domain identity, scientific specification, stage fingerprint, artifact key, or scientific manifest. Manifests retain the `StorageRootKind`, the root-relative path, and the logical artifact key only. The namespace keeps `DATP_ANCHOR`, `COMPLETE`, recovery, cache, staging, and test artifacts on structurally separate branches; complete-study output can depend on an anchor result but cannot resolve to the anchor's write namespace.
 
 ### 15.3 Path rules
 

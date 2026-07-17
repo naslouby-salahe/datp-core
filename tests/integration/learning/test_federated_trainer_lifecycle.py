@@ -31,7 +31,6 @@ from datp_core.domain.artifacts.references import (
 from datp_core.domain.data.preprocessing import ProcessedSplitResult
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.checkpoints import (
-    SCHEDULED_CHECKPOINT_ROUNDS,
     CheckpointDescriptor,
     CheckpointProtocol,
     CheckpointSchedule,
@@ -64,6 +63,9 @@ from tests.support.runtime_orchestration import runtime_profile
 
 def _fingerprint(character: str) -> StageFingerprint:
     return StageFingerprint(value=character * 64)
+
+
+_CHECKPOINT_ROUNDS = (25, 50, 75, 100, 125, 150, 200)
 
 
 def _artifact_ref(character: str, artifact_type: ArtifactType) -> ArtifactRef:
@@ -116,7 +118,7 @@ def _request() -> TrainFederatedModelRequest:
             personalization=ModelPersonalizationStrategy.NONE,
         ),
         checkpoint_schedule=CheckpointSchedule(
-            rounds=tuple(RoundNumber(value=value) for value in SCHEDULED_CHECKPOINT_ROUNDS)
+            rounds=tuple(RoundNumber(value=value) for value in _CHECKPOINT_ROUNDS)
         ),
         resolved_batch_profile=runtime_profile(),
         dataloader_seed_plan=DataLoaderSeedPlan(
@@ -171,7 +173,7 @@ class _CheckpointStager:
                 round=round_number,
                 seed=request.training.seed,
                 training_identity=TrainingIdentity(value=_fingerprint("f")),
-                protocol=CheckpointProtocol.JOURNAL_SCHEDULED,
+                protocol=CheckpointProtocol.COMPLETE_SCHEDULED,
                 artifact_ref=artifact,
                 content_hash=artifact.content_hash,
                 schema_version=artifact.schema_version,
@@ -212,7 +214,7 @@ def test_trainer_completes_all_rounds_and_persists_only_the_fixed_schedule() -> 
         checkpoint_store=store,
     ).train(_request())
 
-    scheduled_rounds = SCHEDULED_CHECKPOINT_ROUNDS
+    scheduled_rounds = _CHECKPOINT_ROUNDS
     assert tuple(round_number.value for round_number in executor.executed_rounds) == tuple(range(1, 201))
     assert tuple(round_number.value for round_number in stager.staged_rounds) == scheduled_rounds
     assert tuple(request.checkpoint.round.value for request in store.saved_requests) == scheduled_rounds

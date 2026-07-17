@@ -57,7 +57,7 @@ def test_synthetic_checkpoint_and_recovery_use_separate_roots_and_profiles(tmp_p
         round=RoundNumber(value=25),
         seed=Seed(value=1),
         training_identity=TrainingIdentity(value=StageFingerprint(value="c" * 64)),
-        protocol=CheckpointProtocol.JOURNAL_SCHEDULED,
+        protocol=CheckpointProtocol.COMPLETE_SCHEDULED,
         artifact_ref=checkpoint_artifact,
         content_hash=checkpoint_artifact.content_hash,
         schema_version=checkpoint_artifact.schema_version,

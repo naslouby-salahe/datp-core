@@ -49,7 +49,7 @@ def test_synthetic_cuda_model_checkpoint_descriptor_round_trips(tmp_path: Path) 
         round=RoundNumber(value=25),
         seed=Seed(value=1),
         training_identity=TrainingIdentity(value=StageFingerprint(value="c" * 64)),
-        protocol=CheckpointProtocol.JOURNAL_SCHEDULED,
+        protocol=CheckpointProtocol.COMPLETE_SCHEDULED,
         artifact_ref=artifact,
         content_hash=content_hash,
         schema_version=artifact.schema_version,

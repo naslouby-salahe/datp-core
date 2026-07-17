@@ -6,9 +6,6 @@ from torch import Tensor, nn
 
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.learning.models import (
-    FIXED_ENCODER_ACTIVATION,
-    FIXED_ENCODER_BOTTLENECK_DIM,
-    FIXED_ENCODER_HIDDEN_DIMS,
     ActivationFunction,
     AutoencoderSpec,
 )
@@ -86,8 +83,7 @@ def _validate_fixed_architecture(specification: AutoencoderSpec) -> None:
         specification.bottleneck_dim,
         specification.activation,
     )
-    fixed_architecture = (FIXED_ENCODER_HIDDEN_DIMS, FIXED_ENCODER_BOTTLENECK_DIM, FIXED_ENCODER_ACTIVATION)
-    if actual_architecture == fixed_architecture:
+    if actual_architecture == ((80, 40), 20, ActivationFunction.RELU):
         return
     raise DomainValidationError(
         detail="the fixed autoencoder requires ReLU encoder widths 80, 40, and 20",

@@ -12,7 +12,7 @@ from datp_core.domain.runtime.policies import PipelineStage, RunStatus
 from datp_core.infrastructure.persistence.roots import bind_storage_root
 from datp_core.infrastructure.persistence.run_state import (
     FileRunStateStore,
-    LifecycleJournalEntry,
+    LifecycleLogEntry,
     StageBlockRecord,
     StageCompletionRecord,
     StageFailureRecord,
@@ -83,7 +83,7 @@ def test_each_lifecycle_record_persists_its_common_required_fields(tmp_path: Pat
         store.append(record)
 
     entries = tuple(
-        msgspec.json.decode(line, type=LifecycleJournalEntry)
+        msgspec.json.decode(line, type=LifecycleLogEntry)
         for line in (tmp_path / "lifecycle.jsonl").read_bytes().splitlines()
     )
     assert tuple(entry.sequence for entry in entries) == (1, 2, 3, 4, 5, 6)
@@ -97,7 +97,7 @@ def test_failure_lifecycle_entry_preserves_its_error_family(tmp_path: Path) -> N
         store.append(record)
 
     entries = tuple(
-        msgspec.json.decode(line, type=LifecycleJournalEntry)
+        msgspec.json.decode(line, type=LifecycleLogEntry)
         for line in (tmp_path / "lifecycle.jsonl").read_bytes().splitlines()
     )
     assert entries[4].error_family == "CudaOutOfMemoryError"

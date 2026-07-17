@@ -1,5 +1,5 @@
 confirmatory:
-  track: journal_extension
+  track: complete
   metric: cv_fpr
   direction: b1_minus_b2
   statistical_method: bca_bootstrap

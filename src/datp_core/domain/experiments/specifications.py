@@ -713,8 +713,8 @@ def _has_matching_artifact_namespace(specification: ExperimentSpec) -> bool:
     match specification.scientific_protocol.track:
         case ProtocolTrack.DATP_ANCHOR:
             return specification.artifact_policy.namespace is ArtifactNamespace.DATP_ANCHOR
-        case ProtocolTrack.JOURNAL_EXTENSION:
-            return specification.artifact_policy.namespace is ArtifactNamespace.JOURNAL_EXTENSION
+        case ProtocolTrack.COMPLETE:
+            return specification.artifact_policy.namespace is ArtifactNamespace.COMPLETE
         case _:
             assert_never(specification.scientific_protocol.track)
 

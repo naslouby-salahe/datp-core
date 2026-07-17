@@ -37,14 +37,14 @@ def test_synthetic_keys_resolve_beneath_their_independent_bound_roots(tmp_path: 
             artifact_type=ArtifactType.RESULT_FREEZE,
             dataset=Dataset.N_BAIOT,
             stage_identity=_STAGE,
-            namespace=ArtifactNamespace.JOURNAL_EXTENSION,
+            namespace=ArtifactNamespace.COMPLETE,
         ),
         RegimeArtifactKey(
             artifact_type=ArtifactType.RESULT_FREEZE,
             dataset=Dataset.N_BAIOT,
             regime=Regime.A,
             stage_identity=_STAGE,
-            namespace=ArtifactNamespace.JOURNAL_EXTENSION,
+            namespace=ArtifactNamespace.COMPLETE,
         ),
         SeedScopedArtifactKey(
             artifact_type=ArtifactType.RESULT_FREEZE,
@@ -52,7 +52,7 @@ def test_synthetic_keys_resolve_beneath_their_independent_bound_roots(tmp_path: 
             regime=Regime.A,
             seed=Seed(value=7),
             stage_identity=_STAGE,
-            namespace=ArtifactNamespace.JOURNAL_EXTENSION,
+            namespace=ArtifactNamespace.COMPLETE,
         ),
         CrossSeedArtifactKey(
             artifact_type=ArtifactType.RESULT_FREEZE,
@@ -60,17 +60,17 @@ def test_synthetic_keys_resolve_beneath_their_independent_bound_roots(tmp_path: 
             regime=Regime.A,
             seed_cohort_identity=_STAGE,
             stage_identity=_STAGE,
-            namespace=ArtifactNamespace.JOURNAL_EXTENSION,
+            namespace=ArtifactNamespace.COMPLETE,
         ),
         RunArtifactKey(
             artifact_type=ArtifactType.RESULT_FREEZE,
             stage_identity=_STAGE,
-            namespace=ArtifactNamespace.JOURNAL_EXTENSION,
+            namespace=ArtifactNamespace.COMPLETE,
         ),
         ReportArtifactKey(
             artifact_type=ArtifactType.RESULT_FREEZE,
             stage_identity=_STAGE,
-            namespace=ArtifactNamespace.JOURNAL_EXTENSION,
+            namespace=ArtifactNamespace.COMPLETE,
         ),
     )
     root_kinds = (

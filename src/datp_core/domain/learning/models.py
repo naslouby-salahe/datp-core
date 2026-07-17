@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Final
 
 from datp_core.domain.errors import DomainValidationError
 
@@ -11,14 +10,6 @@ class ActivationFunction(StrEnum):
     TANH = "tanh"
     SIGMOID = "sigmoid"
     ELU = "elu"
-
-
-# Locked core-training architecture (architecture doc section 27.1: mirrored ReLU autoencoder,
-# encoder widths 80/40, bottleneck 20). Domain-owned so config mapping can validate against it
-# without infrastructure importing into config (config -> domain is the only allowed direction).
-FIXED_ENCODER_HIDDEN_DIMS: Final = (80, 40)
-FIXED_ENCODER_BOTTLENECK_DIM: Final = 20
-FIXED_ENCODER_ACTIVATION: Final = ActivationFunction.RELU
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

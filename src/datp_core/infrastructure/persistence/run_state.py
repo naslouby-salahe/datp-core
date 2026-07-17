@@ -94,7 +94,7 @@ type LifecycleRecord = (
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class LifecycleJournalEntry:
+class LifecycleLogEntry:
     sequence: int
     status: RunStatus
     stage: PipelineStage
@@ -114,11 +114,11 @@ class FileRunStateStore:
 
     def append(self, record: object) -> None:
         lifecycle_record = _require_lifecycle_record(record)
-        journal_path = self.root.absolute_path / "lifecycle.jsonl"
-        journal_path.parent.mkdir(parents=True, exist_ok=True)
-        with FileLock(str(journal_path.with_suffix(".lock"))):
-            entry = LifecycleJournalEntry(
-                sequence=_next_sequence(journal_path),
+        lifecycle_log_path = self.root.absolute_path / "lifecycle.jsonl"
+        lifecycle_log_path.parent.mkdir(parents=True, exist_ok=True)
+        with FileLock(str(lifecycle_log_path.with_suffix(".lock"))):
+            entry = LifecycleLogEntry(
+                sequence=_next_sequence(lifecycle_log_path),
                 status=_status_for(lifecycle_record),
                 stage=lifecycle_record.stage,
                 cell_id=lifecycle_record.cell_id,
@@ -126,17 +126,17 @@ class FileRunStateStore:
                 timestamp=lifecycle_record.timestamp,
                 error_family=_error_family(lifecycle_record),
             )
-            with journal_path.open("ab") as journal:
-                journal.write(msgspec.json.encode(entry) + b"\n")
-                journal.flush()
-                fsync(journal.fileno())
+            with lifecycle_log_path.open("ab") as log_file:
+                log_file.write(msgspec.json.encode(entry) + b"\n")
+                log_file.flush()
+                fsync(log_file.fileno())
 
     def status_of(self, stage_fingerprint: StageFingerprint) -> RunStatus:
-        journal_path = self.root.absolute_path / "lifecycle.jsonl"
-        if not journal_path.exists():
+        lifecycle_log_path = self.root.absolute_path / "lifecycle.jsonl"
+        if not lifecycle_log_path.exists():
             return RunStatus.PLANNED
         entries = tuple(
-            msgspec.json.decode(line, type=LifecycleJournalEntry) for line in journal_path.read_bytes().splitlines()
+            msgspec.json.decode(line, type=LifecycleLogEntry) for line in lifecycle_log_path.read_bytes().splitlines()
         )
         return _latest_status(entries=entries, stage_fingerprint=stage_fingerprint)
 
@@ -188,13 +188,13 @@ def _status_for(record: LifecycleRecord) -> RunStatus:
             assert_never(unreachable)
 
 
-def _next_sequence(journal_path: Path) -> int:
-    if not journal_path.exists():
+def _next_sequence(lifecycle_log_path: Path) -> int:
+    if not lifecycle_log_path.exists():
         return 1
-    return sum(1 for line in journal_path.read_bytes().splitlines() if line) + 1
+    return sum(1 for line in lifecycle_log_path.read_bytes().splitlines() if line) + 1
 
 
-def _latest_status(*, entries: tuple[LifecycleJournalEntry, ...], stage_fingerprint: StageFingerprint) -> RunStatus:
+def _latest_status(*, entries: tuple[LifecycleLogEntry, ...], stage_fingerprint: StageFingerprint) -> RunStatus:
     matching_entries = tuple(entry for entry in entries if entry.stage_fingerprint == stage_fingerprint)
     if not matching_entries:
         return RunStatus.PLANNED

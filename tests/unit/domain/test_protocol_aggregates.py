@@ -74,7 +74,6 @@ from datp_core.domain.experiments.specifications import (
 from datp_core.domain.learning.checkpoints import (
     EARLIEST_SCHEDULED_ROUND_TIE_BREAK_RULE,
     REGIME_A_SELECTION_RULE_VERSION,
-    SCHEDULED_CHECKPOINT_ROUNDS,
     CheckpointSchedule,
     CheckpointSelectionSpec,
     CheckpointSelectionStrategy,
@@ -223,8 +222,11 @@ def _training_batch_specification(batch: BatchSize) -> TrainingBatchSpec:
     )
 
 
+_CHECKPOINT_ROUNDS = (25, 50, 75, 100, 125, 150, 200)
+
+
 def _checkpoint_rounds() -> tuple[RoundNumber, ...]:
-    return tuple(RoundNumber(value=value) for value in SCHEDULED_CHECKPOINT_ROUNDS)
+    return tuple(RoundNumber(value=value) for value in _CHECKPOINT_ROUNDS)
 
 
 def _checkpoint_selection() -> CheckpointSelectionSpec:

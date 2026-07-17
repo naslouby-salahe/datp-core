@@ -8,7 +8,7 @@ from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import ArtifactId, ArtifactRef, ArtifactSchemaVersion, StageFingerprint
 from datp_core.domain.data.preprocessing import ProcessedSplitResult
 from datp_core.domain.experiments.identities import ClientId
-from datp_core.domain.learning.checkpoints import SCHEDULED_CHECKPOINT_ROUNDS, CheckpointSchedule
+from datp_core.domain.learning.checkpoints import CheckpointSchedule
 from datp_core.domain.learning.training import DeterminismLevel
 from datp_core.domain.runtime.admissibility import WorkerCount
 from datp_core.domain.runtime.seeds import DataLoaderSeedPlan, RoundNumber, Seed
@@ -22,6 +22,8 @@ from tests.support.cuda_lane import skip_if_cuda_unavailable
 from tests.support.runtime_orchestration import runtime_profile
 
 _INPUT_DIM = ANCHOR_AUTOENCODER_SPECIFICATION.input_dim
+
+_CHECKPOINT_ROUNDS = (25, 50, 75, 100, 125, 150, 200)
 
 
 def _split_result() -> ProcessedSplitResult:
@@ -47,7 +49,7 @@ def _request(*, seed: Seed) -> TrainFederatedModelRequest:
         processed_splits=_split_result(),
         training=anchor_training_spec(seed=seed),
         checkpoint_schedule=CheckpointSchedule(
-            rounds=tuple(RoundNumber(value=value) for value in SCHEDULED_CHECKPOINT_ROUNDS)
+            rounds=tuple(RoundNumber(value=value) for value in _CHECKPOINT_ROUNDS)
         ),
         resolved_batch_profile=runtime_profile(),
         dataloader_seed_plan=DataLoaderSeedPlan(

@@ -11,7 +11,7 @@ profiles:
     participation: full
     maximum_rounds: 150
     checkpoint_rounds: [40, 150]
-  - profile_id: journal_fedavg
+  - profile_id: complete_fedavg
     hidden_dimensions: [80, 40]
     bottleneck_dimension: 20
     activation: relu

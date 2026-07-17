@@ -40,7 +40,7 @@ class StorageVisibility(StrEnum):
 
 class ArtifactNamespace(StrEnum):
     DATP_ANCHOR = "datp_anchor"
-    JOURNAL_EXTENSION = "journal_extension"
+    COMPLETE = "complete"
     RECOVERY = "recovery"
     CACHE = "cache"
     STAGING = "staging"

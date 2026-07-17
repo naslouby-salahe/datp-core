@@ -62,7 +62,7 @@ def _visibility(kind: StorageRootKind) -> StorageVisibility:
     return StorageVisibility.EPHEMERAL
 
 
-def _keys(namespace: ArtifactNamespace = ArtifactNamespace.JOURNAL_EXTENSION):
+def _keys(namespace: ArtifactNamespace = ArtifactNamespace.COMPLETE):
     return (
         DatasetArtifactKey(
             artifact_type=ArtifactType.RESULT_FREEZE,
@@ -160,11 +160,11 @@ def test_namespace_branches_cannot_collide(tmp_path: Path) -> None:
     anchor = resolver.resolve(
         ResolveArtifactLocationRequest(key=_keys(ArtifactNamespace.DATP_ANCHOR)[0], root=root, artifact=_ARTIFACT)
     )
-    journal = resolver.resolve(
-        ResolveArtifactLocationRequest(key=_keys(ArtifactNamespace.JOURNAL_EXTENSION)[0], root=root, artifact=_ARTIFACT)
+    complete = resolver.resolve(
+        ResolveArtifactLocationRequest(key=_keys(ArtifactNamespace.COMPLETE)[0], root=root, artifact=_ARTIFACT)
     )
 
-    assert anchor.absolute_path != journal.absolute_path
+    assert anchor.absolute_path != complete.absolute_path
 
 
 def test_recovery_and_test_namespaces_require_their_semantic_roots(tmp_path: Path) -> None:

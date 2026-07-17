@@ -43,7 +43,7 @@ class AnchorReproductionGate:
             )
         return AnchorGateDecision(readiness=ScientificReadinessResult(blockers=()))
 
-    def require_journal_expansion(self, request: AnchorReproductionGateRequest) -> None:
+    def require_anchor_passage(self, request: AnchorReproductionGateRequest) -> None:
         if isinstance(request.result, FailedAnchorReproductionResult):
             raise request.result.failure
 

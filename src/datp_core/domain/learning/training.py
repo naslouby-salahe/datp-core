@@ -4,21 +4,11 @@ from math import isfinite
 from typing import Final, assert_never
 
 from datp_core.domain.errors import DomainValidationError
-from datp_core.domain.learning.checkpoints import ANCHOR_CHECKPOINT_ROUNDS_MAX, SCHEDULED_CHECKPOINT_ROUNDS
-from datp_core.domain.learning.models import (
-    FIXED_ENCODER_ACTIVATION,
-    FIXED_ENCODER_BOTTLENECK_DIM,
-    FIXED_ENCODER_HIDDEN_DIMS,
-    AutoencoderSpec,
-)
+from datp_core.domain.learning.models import AutoencoderSpec
 from datp_core.domain.runtime.admissibility import BatchSize, GradientAccumulationSteps
 from datp_core.domain.runtime.seeds import Seed
 
-# FedProx is a Tier-4 stress-test-only profile (architecture doc section 27.1); no experiment
-# currently exercises it, so no configs/scientific/*.yaml grid exists yet — this stays the sole
-# code-owned source until a FedProx experiment profile is implemented.
 FEDPROX_MU_GRID = (0.001, 0.01, 0.1)
-LOCKED_ROUNDS_MAX_VALUES = (ANCHOR_CHECKPOINT_ROUNDS_MAX, SCHEDULED_CHECKPOINT_ROUNDS[-1])
 
 
 class AggregationStrategy(StrEnum):
@@ -65,16 +55,6 @@ class LrSchedulerType(StrEnum):
     PLATEAU = "plateau"
 
 
-# Locked core-training optimizer/batch profile (architecture doc section 27.1): Adam, lr=0.001,
-# no weight decay, no LR scheduler, micro-batch 256. Domain-owned so config mapping can validate
-# against it (config -> domain is the only allowed direction; infrastructure imports it back).
-ANCHOR_OPTIMIZER: Final = OptimizerType.ADAM
-ANCHOR_LEARNING_RATE: Final = 0.001
-ANCHOR_WEIGHT_DECAY: Final = 0.0
-ANCHOR_SCHEDULER: Final = LrSchedulerType.NONE
-ANCHOR_BATCH_SIZE: Final = 256
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ModelTrainingProfileSpec:
     autoencoder: AutoencoderSpec
@@ -88,34 +68,42 @@ class ModelTrainingProfileSpec:
     rounds_max: int
 
     def __post_init__(self) -> None:
-        if not _is_locked_model_training_profile(self):
+        if (
+            type(self.autoencoder) is not AutoencoderSpec
+            or type(self.optimizer) is not OptimizerType
+            or type(self.scheduler) is not LrSchedulerType
+            or type(self.micro_batch_size) is not BatchSize
+            or type(self.participation) is not ParticipationStrategy
+        ):
             raise DomainValidationError(
-                detail="model training profile must match the locked core-training architecture and optimizer",
+                detail="model training profile requires typed fields",
                 value=repr(self),
-                constraint=(
-                    "hidden_dims=(80, 40); bottleneck_dim=20; activation=RELU; optimizer=ADAM; "
-                    "learning_rate=0.001; weight_decay=0.0; scheduler=NONE; micro_batch_size=256; "
-                    "local_epochs=1; participation=FULL; rounds_max in LOCKED_ROUNDS_MAX_VALUES"
-                ),
+                constraint="typed AutoencoderSpec, OptimizerType, LrSchedulerType, BatchSize, ParticipationStrategy",
             )
-
-
-def _is_locked_model_training_profile(profile: ModelTrainingProfileSpec) -> bool:
-    return all(
-        (
-            profile.autoencoder.hidden_dims == FIXED_ENCODER_HIDDEN_DIMS,
-            profile.autoencoder.bottleneck_dim == FIXED_ENCODER_BOTTLENECK_DIM,
-            profile.autoencoder.activation is FIXED_ENCODER_ACTIVATION,
-            profile.optimizer is ANCHOR_OPTIMIZER,
-            profile.learning_rate == ANCHOR_LEARNING_RATE,
-            profile.weight_decay == ANCHOR_WEIGHT_DECAY,
-            profile.scheduler is ANCHOR_SCHEDULER,
-            profile.micro_batch_size.value == ANCHOR_BATCH_SIZE,
-            profile.local_epochs == 1,
-            profile.participation is ParticipationStrategy.FULL,
-            profile.rounds_max in LOCKED_ROUNDS_MAX_VALUES,
-        )
-    )
+        if not (type(self.learning_rate) is float and isfinite(self.learning_rate) and self.learning_rate > 0):
+            raise DomainValidationError(
+                detail="learning rate must be a positive finite float",
+                value=repr(self.learning_rate),
+                constraint="finite float > 0",
+            )
+        if not (type(self.weight_decay) is float and isfinite(self.weight_decay) and self.weight_decay >= 0):
+            raise DomainValidationError(
+                detail="weight decay must be a non-negative finite float",
+                value=repr(self.weight_decay),
+                constraint="finite float >= 0",
+            )
+        if not (type(self.local_epochs) is int and self.local_epochs >= 1):
+            raise DomainValidationError(
+                detail="local epochs must be a positive integer",
+                value=repr(self.local_epochs),
+                constraint="int >= 1",
+            )
+        if not (type(self.rounds_max) is int and self.rounds_max >= 1):
+            raise DomainValidationError(
+                detail="rounds_max must be a positive integer",
+                value=repr(self.rounds_max),
+                constraint="int >= 1",
+            )
 
 
 class PrecisionMode(StrEnum):
@@ -182,11 +170,11 @@ def _validate_participation(participation: ParticipationStrategy) -> None:
 
 
 def _validate_rounds_max(rounds_max: int) -> None:
-    if type(rounds_max) is not int or rounds_max not in LOCKED_ROUNDS_MAX_VALUES:
+    if type(rounds_max) is not int or rounds_max < 1:
         raise DomainValidationError(
-            detail="federation round budget must equal a locked recovered value",
+            detail="federation round budget must be a positive integer",
             value=repr(rounds_max),
-            constraint=repr(LOCKED_ROUNDS_MAX_VALUES),
+            constraint="int >= 1",
         )
 
 

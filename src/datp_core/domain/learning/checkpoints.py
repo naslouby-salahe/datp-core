@@ -20,15 +20,8 @@ from datp_core.domain.artifacts.references import (
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.runtime.seeds import RoundNumber, Seed
 
-# Locked journal checkpoint schedule and anchor termination bounds (architecture doc section
-# 27.1), mirrored in configs/scientific/models.yaml (journal_fedavg.checkpoint_rounds and
-# anchor_nbaiot.checkpoint_rounds) and mapped/equality-checked by
-# config/mapping/scientific.py::map_anchor_checkpoint_termination_config for the anchor pair.
-SCHEDULED_CHECKPOINT_ROUNDS = (25, 50, 75, 100, 125, 150, 200)
 REGIME_A_SELECTION_RULE_VERSION = "regime_a_weighted_benign_validation_loss_v1"
 EARLIEST_SCHEDULED_ROUND_TIE_BREAK_RULE = "earliest_scheduled_round_v1"
-ANCHOR_CHECKPOINT_ROUNDS_INITIAL = 40
-ANCHOR_CHECKPOINT_ROUNDS_MAX = 150
 
 
 class CheckpointKind(StrEnum):
@@ -37,7 +30,7 @@ class CheckpointKind(StrEnum):
 
 
 class CheckpointProtocol(StrEnum):
-    JOURNAL_SCHEDULED = "journal_scheduled"
+    COMPLETE_SCHEDULED = "complete_scheduled"
     ANCHOR_TERMINATION = "anchor_termination"
 
 
@@ -62,20 +55,17 @@ def _validated_rounds(*, rounds: tuple[RoundNumber, ...], name: str) -> None:
             value=repr(rounds),
             constraint="tuple[RoundNumber, ...]",
         )
-    if tuple(round_.value for round_ in rounds) != SCHEDULED_CHECKPOINT_ROUNDS:
+    if not rounds:
         raise DomainValidationError(
-            detail=f"{name} must equal the locked checkpoint schedule",
+            detail=f"{name} must not be empty",
             value=repr(rounds),
-            constraint=repr(SCHEDULED_CHECKPOINT_ROUNDS),
+            constraint="non-empty tuple of RoundNumber",
         )
-
-
-def _validated_anchor_policy_round(*, value: RoundNumber, expected: int, name: str) -> None:
-    if type(value) is not RoundNumber or value.value != expected:
+    if tuple(round_.value for round_ in rounds) != tuple(sorted(round_.value for round_ in rounds)):
         raise DomainValidationError(
-            detail=f"{name} must equal its locked recovered anchor value",
-            value=repr(value),
-            constraint=repr(expected),
+            detail=f"{name} rounds must be in ascending order",
+            value=repr(rounds),
+            constraint="sorted ascending",
         )
 
 
@@ -138,17 +128,32 @@ class AnchorCheckpointTerminationPolicy:
     rounds_max: RoundNumber
 
     def __post_init__(self) -> None:
-        _validated_anchor_policy_round(
-            value=self.rounds_initial, expected=ANCHOR_CHECKPOINT_ROUNDS_INITIAL, name="anchor rounds_initial"
-        )
-        _validated_anchor_policy_round(
-            value=self.rounds_max, expected=ANCHOR_CHECKPOINT_ROUNDS_MAX, name="anchor rounds_max"
-        )
+        if (
+            type(self.rounds_initial) is not RoundNumber
+            or type(self.rounds_max) is not RoundNumber
+        ):
+            raise DomainValidationError(
+                detail="anchor checkpoint termination policy requires typed rounds",
+                value=repr(self),
+                constraint="RoundNumber for both rounds_initial and rounds_max",
+            )
+        if self.rounds_initial.value < 1:
+            raise DomainValidationError(
+                detail="anchor rounds_initial must be positive",
+                value=repr(self.rounds_initial),
+                constraint="positive RoundNumber",
+            )
+        if self.rounds_max.value < self.rounds_initial.value:
+            raise DomainValidationError(
+                detail="anchor rounds_max must be at least rounds_initial",
+                value=repr(self),
+                constraint="rounds_max >= rounds_initial",
+            )
 
 
 LOCKED_ANCHOR_CHECKPOINT_TERMINATION_POLICY = AnchorCheckpointTerminationPolicy(
-    rounds_initial=RoundNumber(value=ANCHOR_CHECKPOINT_ROUNDS_INITIAL),
-    rounds_max=RoundNumber(value=ANCHOR_CHECKPOINT_ROUNDS_MAX),
+    rounds_initial=RoundNumber(value=40),
+    rounds_max=RoundNumber(value=150),
 )
 
 
@@ -189,7 +194,7 @@ class CheckpointCandidateResult:
 def _is_valid_checkpoint_candidate(candidate: CheckpointCandidateResult) -> bool:
     return all(
         (
-            _is_scheduled_round(candidate.round),
+            _is_positive_round(candidate.round),
             type(candidate.regime_a_evidence_identity) is StageFingerprint,
             type(candidate.allowed_diagnostics) is RegimeASelectionDiagnostics,
             _has_coherent_candidate_verdict(candidate),
@@ -197,8 +202,8 @@ def _is_valid_checkpoint_candidate(candidate: CheckpointCandidateResult) -> bool
     )
 
 
-def _is_scheduled_round(round_: RoundNumber) -> bool:
-    return type(round_) is RoundNumber and round_.value in SCHEDULED_CHECKPOINT_ROUNDS
+def _is_positive_round(round_: RoundNumber) -> bool:
+    return type(round_) is RoundNumber and round_.value >= 1
 
 
 def _has_coherent_candidate_verdict(candidate: CheckpointCandidateResult) -> bool:
@@ -217,15 +222,15 @@ class TieBreakEvidence:
     def __post_init__(self) -> None:
         if not _has_typed_tie_break_rounds(self):
             raise DomainValidationError(
-                detail="tie-break evidence requires scheduled candidate rounds",
+                detail="tie-break evidence requires typed candidate rounds",
                 value=repr(self.tied_rounds),
-                constraint="non-empty tuple of scheduled rounds",
+                constraint="non-empty tuple of RoundNumber",
             )
-        if not all(_is_scheduled_round(round_) for round_ in self.tied_rounds):
+        if not all(_is_positive_round(round_) for round_ in self.tied_rounds):
             raise DomainValidationError(
-                detail="tie-break evidence may contain only scheduled rounds",
+                detail="tie-break evidence may contain only positive rounds",
                 value=repr(self.tied_rounds),
-                constraint=repr(SCHEDULED_CHECKPOINT_ROUNDS),
+                constraint="positive RoundNumber values",
             )
         if not _selects_earliest_distinct_tied_round(self):
             raise DomainValidationError(
@@ -438,10 +443,10 @@ def _has_checkpoint_descriptor_identity_types(descriptor: CheckpointDescriptor) 
 def _is_valid_checkpoint_round(*, round_: RoundNumber, protocol: CheckpointProtocol) -> bool:
     if type(round_) is not RoundNumber:
         return False
-    if protocol is CheckpointProtocol.JOURNAL_SCHEDULED:
-        return _is_scheduled_round(round_)
+    if protocol is CheckpointProtocol.COMPLETE_SCHEDULED:
+        return _is_positive_round(round_)
     if protocol is CheckpointProtocol.ANCHOR_TERMINATION:
-        return 1 <= round_.value <= ANCHOR_CHECKPOINT_ROUNDS_MAX
+        return _is_positive_round(round_)
     assert_never(protocol)
 
 

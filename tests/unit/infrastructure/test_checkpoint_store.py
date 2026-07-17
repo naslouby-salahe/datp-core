@@ -65,7 +65,7 @@ def _checkpoint() -> CheckpointDescriptor:
         round=RoundNumber(value=25),
         seed=Seed(value=1),
         training_identity=TrainingIdentity(value=StageFingerprint(value="b" * 64)),
-        protocol=CheckpointProtocol.JOURNAL_SCHEDULED,
+        protocol=CheckpointProtocol.COMPLETE_SCHEDULED,
         artifact_ref=reference,
         content_hash=reference.content_hash,
         schema_version=reference.schema_version,

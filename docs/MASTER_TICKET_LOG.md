@@ -37,7 +37,7 @@
 
 ## A. Project identity and scientific locks
 
-These locks are restated concisely from the roadmap and architecture. They are binding on every ticket in every phase, reconstructed or not. The full definitions live in the authoritative documents; this section is an index, not a replacement. Every scientific artifact carries exactly one `ProtocolTrack` (`ProtocolTrack.DATP_ANCHOR` or `ProtocolTrack.JOURNAL_EXTENSION`; Architecture §6.1) and resolves only beneath the matching `ArtifactNamespace` (`DATP_ANCHOR` or `JOURNAL_EXTENSION`; Architecture §6.4, §15.2); the two tracks and their namespaces are never merged or substituted for each other.
+These locks are restated concisely from the roadmap and architecture. They are binding on every ticket in every phase, reconstructed or not. The full definitions live in the authoritative documents; this section is an index, not a replacement. Every scientific artifact carries exactly one `ProtocolTrack` (`ProtocolTrack.DATP_ANCHOR` or `ProtocolTrack.COMPLETE`; Architecture §6.1) and resolves only beneath the matching `ArtifactNamespace` (`DATP_ANCHOR` or `COMPLETE`; Architecture §6.4, §15.2); the two tracks and their namespaces are never merged or substituted for each other.
 
 - **Fixed encoder for the core B1–B4 ladder.** One FedAvg autoencoder is trained per seed and then frozen; the same selected model state, seeds, calibration-score artifacts, and test-score artifacts feed B1, B2, B3, and B4 without retraining. (Roadmap §2; Architecture §1.2, §29.1.)
 - **FedAvg core baseline.** FedAvg is the training baseline of the causal ladder. (Roadmap §2; Architecture §1.2.)
@@ -62,7 +62,7 @@ No seed identifiers, seed ordering, or execution counts appear anywhere in this 
 
 ## B. Campaign semantics
 
-The project has two top-level **protocol tracks** (`ProtocolTrack.DATP_ANCHOR`, `ProtocolTrack.JOURNAL_EXTENSION`; Architecture §6.1), realized operationally as two **campaign scopes**: the DATP anchor campaign (Phase 3) and the journal-extension campaign (Phase 6). These are groupings of coordinated execution under one scientific `RunIdentity`, not new scientific-protocol constraints, and the two tracks are never merged.
+The project has two top-level **protocol tracks** (`ProtocolTrack.DATP_ANCHOR`, `ProtocolTrack.COMPLETE`; Architecture §6.1), realized operationally as two **campaign scopes**: the DATP anchor campaign (Phase 3) and the complete-study campaign (Phase 6). These are groupings of coordinated execution under one scientific `RunIdentity`, not new scientific-protocol constraints, and the two tracks are never merged.
 
 - Anchor and journal are top-level operational campaign scopes only; neither defines seed values or seed ordering.
 - Campaign scope does **not** imply one operating-system process, one CLI invocation, one machine job, or one uninterrupted session.
@@ -109,11 +109,11 @@ The project has two top-level **protocol tracks** (`ProtocolTrack.DATP_ANCHOR`, 
 
 **Ticket types (controlled vocabulary; exactly one per ticket; no compound or slash-joined type is valid).** `foundation` · `architecture` · `domain` · `configuration` · `application` · `infrastructure` · `composition` · `cli` · `telemetry` · `persistence` · `reporting` · `agent-governance` · `skill` · `hook` · `contract` · `workflow` · `command` · `data` · `preprocessing` · `training` · `checkpoint` · `scoring` · `threshold` · `evaluation` · `statistics` · `feasibility` · `experiment` · `campaign` · `audit` · `test-support`. `domain/application` and `composition/CLI` are explicitly invalid ticket types: `domain` and `application` are distinct layers owned by distinct tickets, and `composition` and `cli` are distinct layers owned by distinct tickets (Architecture §3.1, §12.5). A ticket found to require two of these types is overloaded and must be split before it is scheduled.
 
-**Scientific-execution classification (per ticket).** `FORBIDDEN` · `PLANNING_ONLY` · `ANCHOR_CAMPAIGN_ALLOWED` · `JOURNAL_CAMPAIGN_ALLOWED` · `POST_CAMPAIGN_ONLY`. No other value is valid.
+**Scientific-execution classification (per ticket).** `FORBIDDEN` · `PLANNING_ONLY` · `ANCHOR_CAMPAIGN_ALLOWED` · `COMPLETE_CAMPAIGN_ALLOWED` · `POST_CAMPAIGN_ONLY`. No other value is valid.
 
 **Campaign scope (per ticket).** `NONE` · `ANCHOR` · `JOURNAL` · `POST_CAMPAIGN`. A ticket has exactly one campaign scope; `BOTH_TRACKS` and any combined-track value are invalid.
 
-**Protocol track (per scientific artifact; Architecture §6.1).** `ProtocolTrack.DATP_ANCHOR` · `ProtocolTrack.JOURNAL_EXTENSION`. Every artifact produced by an `ANCHOR_CAMPAIGN_ALLOWED` or `JOURNAL_CAMPAIGN_ALLOWED` ticket carries exactly one of these; they are never mixed within one artifact or manifest.
+**Protocol track (per scientific artifact; Architecture §6.1).** `ProtocolTrack.DATP_ANCHOR` · `ProtocolTrack.COMPLETE`. Every artifact produced by an `ANCHOR_CAMPAIGN_ALLOWED` or `COMPLETE_CAMPAIGN_ALLOWED` ticket carries exactly one of these; they are never mixed within one artifact or manifest.
 
 ---
 
@@ -225,7 +225,7 @@ For Phase 3 and Phase 6 tickets that perform real execution, completion addition
 ### Phase 6 — Journal Campaign
 
 - **Purpose.** Execute the complete resolved journal experiment program; reuse compatible anchor artifacts; compute threshold-only stages from compatible scores; execute genuinely new training and scoring identities; resume safely; persist failures explicitly; freeze complete journal results; render planned outputs; decide campaign acceptance.
-- **Permitted work.** Real journal scientific training/scoring — **only** in tickets classified `JOURNAL_CAMPAIGN_ALLOWED`; reuse validation; threshold-only stage execution; audits; result freeze; rendering.
+- **Permitted work.** Real complete-study scientific training/scoring — **only** in tickets classified `COMPLETE_CAMPAIGN_ALLOWED`; reuse validation; threshold-only stage execution; audits; result freeze; rendering.
 - **Forbidden work.** Treating stages as independent mini-campaigns; interpreting the phase as one process/one job/one attempt/one seed order/one physical write per artifact; blanket "exactly once" wording.
 - **Entry criteria.** Phase 5 go decision recorded; frozen journal campaign manifest.
 - **Exit criteria.** The coordinated journal campaign completes; complete-cell/statistics/output audits pass; journal results are frozen; planned outputs render; campaign acceptance is decided.
@@ -250,7 +250,7 @@ For Phase 3 and Phase 6 tickets that perform real execution, completion addition
 
 ## G. Master ticket index
 
-All tickets are `NOT_STARTED`. Scientific-execution classification (Sci-Exec) is abbreviated: `FORB` = FORBIDDEN, `PLAN` = PLANNING_ONLY, `ANCH` = ANCHOR_CAMPAIGN_ALLOWED, `JOUR` = JOURNAL_CAMPAIGN_ALLOWED, `POST` = POST_CAMPAIGN_ONLY. `Campaign scope` (Scope) uses the same abbreviation set plus `NONE` (no campaign scope, Phases 0–1). Dependencies and Blocks list explicit ticket IDs only — no phase-wide prose such as "all Phase 1 tickets" is used; where a ticket is a dependency of every subsequent ticket in a phase, it is expressed as blocking that phase's single defined gate ticket. Roadmap IDs list roadmap experiment identifiers where applicable. **All 182 rows below (P0-T001–P7-T012) are fully reconstructed and mechanically cross-checked against their Section H bodies in this revision, including the `Campaign scope` column, added by extracting each ticket's own `Campaign scope` field from Section H (no new value invented).**
+All tickets are `NOT_STARTED`. Scientific-execution classification (Sci-Exec) is abbreviated: `FORB` = FORBIDDEN, `PLAN` = PLANNING_ONLY, `ANCH` = ANCHOR_CAMPAIGN_ALLOWED, `COMP` = COMPLETE_CAMPAIGN_ALLOWED, `POST` = POST_CAMPAIGN_ONLY. `Campaign scope` (Scope) uses the same abbreviation set plus `NONE` (no campaign scope, Phases 0–1). Dependencies and Blocks list explicit ticket IDs only — no phase-wide prose such as "all Phase 1 tickets" is used; where a ticket is a dependency of every subsequent ticket in a phase, it is expressed as blocking that phase's single defined gate ticket. Roadmap IDs list roadmap experiment identifiers where applicable. **All 182 rows below (P0-T001–P7-T012) are fully reconstructed and mechanically cross-checked against their Section H bodies in this revision, including the `Campaign scope` column, added by extracting each ticket's own `Campaign scope` field from Section H (no new value invented).**
 
 <div style="overflow-x:auto">
 
@@ -382,50 +382,50 @@ All tickets are `NOT_STARTED`. Scientific-execution classification (Sci-Exec) is
 | P3-T009 | Completeness and same-model/same-score compatibility audits; typed failure persistence | audit | P0 | PLAN | ANCH | P3-T007; P3-T008 when activated | P3-T010 | ANCHOR-B0–B4 |
 | P3-T010 | Historical-reference diagnostic and full configured anchor statistical analysis | statistics | P0 | ANCH | ANCH | P3-T009 | P3-T011 | ANCHOR-B0–B4 |
 | P3-T011 | Anchor integrity decision, technical-invalidity correction path, artifact freeze, journal-unlock gate | audit | P0 | PLAN | ANCH | P3-T010 | P4-T001 | ANCHOR-B0–B4 |
-| P4-T001 | Implement E-C1 confirmatory experiment specification and identity | experiment | P0 | FORB | JOUR | P3-T011,P1-T029 | P4-T022 | E-C1 |
-| P4-T002 | Implement E-S1 construction-sensitivity and E-S2 q-sensitivity | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-S1,E-S2 |
-| P4-T003 | Implement E-S3 Dirichlet severity (Regime C) | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-S3 |
-| P4-T004 | Implement E-M1 cluster/family granularity and stability | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-M1 |
-| P4-T005 | Implement E-M2 B4 cluster-feature ablation and contingency | experiment | P1 | FORB | JOUR | P4-T004 | P4-T022 | E-M2 |
-| P4-T006 | Implement E-M3 per-client CDF overlays and Ennio deep dive | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-M3 |
-| P4-T007 | Implement E-M4 JS↔gain association and E-M5 threshold-shift scatter | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-M4,E-M5 |
-| P4-T008 | Implement E-V1 calibration-size sweep and size-aware fallback | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-V1 |
-| P4-T009 | Implement E-V2 local-global shrinkage (τ-shrink) | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-V2 |
-| P4-T010 | Implement E-V3 split-conformal B2-conf and conformal coverage | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-V3 |
-| P4-T011 | Implement the B-a CICIoT2023 boundary | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | B-a |
-| P4-T012 | Implement B-b/temporal CICIoT2023 rejection and suppression records | feasibility | P1 | PLAN | JOUR | P1-T007,P4-T011 | P4-T022 | E-R1,E-R2,E-R3,E-R4,E-R5,E-R6,E-R7,E-R8 |
-| P4-T013 | Implement the Regime D Edge-IIoTset source/schema/feasibility audit | feasibility | P2 | FORB | JOUR | P4-T001,P1-T040 | P4-T014 | E-X1 |
-| P4-T014 | Implement Regime D partitioning, preprocessing, training, and scoring | data | P2 | FORB | JOUR | P4-T013 | P4-T015,P4-T019 | E-X1 |
-| P4-T015 | Implement E-X1 external validation | experiment | P2 | FORB | JOUR | P4-T014,P4-T018 | P4-T022 | E-X1 |
-| P4-T016 | Implement E-T1 FedProx aggregation stress test | experiment | P1 | FORB | JOUR | P4-T001,P1-T044 | P4-T022 | E-T1 |
-| P4-T017 | Implement E-T2 model-personalization stress test and absorption bands | experiment | P1 | FORB | JOUR | P4-T001 | P4-T022 | E-T2 |
-| P4-T018 | Implement E-T3 B-FedStatsBenign matched comparator | experiment | P1 | FORB | JOUR | P4-T001,P1-T025 | P4-T015,P4-T022 | E-T3 |
-| P4-T019 | Implement E-B1 temporal recalibration MVE | experiment | P2 | FORB | JOUR | P4-T014,P4-T024 | P4-T022 | E-B1 |
-| P4-T020 | Implement mandatory E-O1 alert burden evidence and suppression route | experiment | P1 | FORB | JOUR | P4-T001 | P4-T026 | E-O1 |
-| P4-T021 | Implement claim tiers, fallback wording, and report schemas/renderers | reporting | P0 | FORB | JOUR | P4-T001,P1-T049 | P4-T022 | — |
-| P4-T022 | Implement journal expected-artifact/table/figure inventory and completeness audit | audit | P0 | PLAN | JOUR | P4-T002,P4-T003,P4-T004,P4-T005,P4-T006,P4-T007,P4-T008,P4-T009,P4-T010,P4-T011,P4-T012,P4-T015,P4-T016,P4-T017,P4-T018,P4-T019,P4-T020,P4-T021,P4-T023,P4-T024,P4-T025 | P5-T001 | all |
-| P4-T023 | Record optional E-Q1–E-Q6 selections and implement selected supplements | experiment | P3 | FORB | JOUR | P4-T001 | P4-T026 | E-Q1,E-Q2,E-Q3,E-Q4,E-Q5,E-Q6 |
-| P4-T024 | Resolve chronological temporal training/calibration allocation | feasibility | P0 | PLAN | JOUR | P4-T001 | P4-T019,P5-T004,P6-T004 | E-B1 |
-| P4-T025 | Produce Appendix A B2 calibration-versus-held-out FPR analysis | reporting | P1 | FORB | JOUR | P4-T001,P4-T008,P4-T009,P4-T010 | P4-T026,P7-T011 | E-C1,E-V1,E-V2,E-V3 |
-| P4-T026 | Complete journal implementation audit and phase gate | audit | P0 | PLAN | JOUR | P4-T022,P4-T023,P4-T024,P4-T025 | P5-T001 | all |
-| P5-T001 | Implementation-completeness and anchor-artifact-compatibility audit | audit | P0 | PLAN | JOUR | P4-T026,P3-T011 | P5-T002 | — |
-| P5-T002 | Configuration expansion and journal experiment-cell enumeration | campaign | P0 | PLAN | JOUR | P5-T001,P1-T038 | P5-T003 | all |
-| P5-T003 | Cell-ID uniqueness and stage-identity enumeration | campaign | P0 | PLAN | JOUR | P5-T002 | P5-T004 | all |
-| P5-T004 | Feasibility-gate resolution, suppression cells, and unresolved-cell blocking | feasibility | P0 | PLAN | JOUR | P5-T003,P4-T013,P4-T024 | P5-T005 | E-X1,E-B1,B-a |
-| P5-T005 | Reuse and invalidation verification against frozen anchor artifacts | campaign | P0 | PLAN | JOUR | P5-T003,P1-T033 | P5-T006 | — |
-| P5-T006 | Expected-artifact/table/figure/export inventory and experiment-to-claim/output mapping | reporting | P0 | PLAN | JOUR | P5-T003 | P5-T007 | all |
-| P5-T007 | Resource/storage estimation and worker/CUDA/process/resume-boundary planning | campaign | P0 | PLAN | JOUR | P5-T005,P5-T006 | P5-T008 | — |
-| P5-T008 | Clean-worktree check and freeze of code/dependency/environment/config/campaign identity | campaign | P0 | PLAN | JOUR | P5-T004,P5-T007,P0-T004 | P5-T009 | — |
-| P5-T009 | Journal campaign manifest and final go/no-go decision | campaign | P0 | PLAN | JOUR | P5-T008 | P6-T001 | all |
-| P6-T001 | Final readiness confirmation and journal execution-attempt creation | campaign | P0 | PLAN | JOUR | P5-T009 | P6-T002 | — |
-| P6-T002 | Journal Regime-A identity completion, reuse validation, and threshold-only execution | campaign | P0 | JOUR | JOUR | P6-T001 | P6-T006 | E-C1,E-S1,E-S2,E-V1,E-V2,E-V3,E-T3,E-M1,E-M2,E-M3,E-M4,E-M5,B0,B-a,E-Q1,E-Q2,E-Q3,E-Q4,E-Q5,E-Q6 |
-| P6-T003 | Regime C execution | campaign | P1 | JOUR | JOUR | P6-T001 | P6-T006 | E-S3 |
-| P6-T004 | Accepted Regime D execution (external + temporal) | campaign | P2 | JOUR | JOUR | P6-T001,P5-T004 | P6-T006 | E-X1,E-B1 |
-| P6-T005 | FedProx and model-personalization stress-test execution | campaign | P1 | JOUR | JOUR | P6-T001 | P6-T006 | E-T1,E-T2 |
-| P6-T006 | Statistics execution, typed-failure and invalidated-artifact handling | statistics | P0 | JOUR | JOUR | P6-T002,P6-T003,P6-T004,P6-T005 | P6-T008 | all |
-| P6-T007 | Conditional journal recovery, resume, infrastructure retry, and immutable artifact commits | campaign | P0 | JOUR | JOUR | P6-T001 | P6-T008 | — |
-| P6-T008 | Complete-cell/statistics/output audits and result freeze | audit | P0 | PLAN | JOUR | P6-T006,P6-T007 | P6-T009 | all |
-| P6-T009 | Report rendering, journal integrity/outcome decision, technical-invalidity correction path | reporting | P0 | PLAN | JOUR | P6-T008 | P7-T001 | all |
+| P4-T001 | Implement E-C1 confirmatory experiment specification and identity | experiment | P0 | FORB | COMP | P3-T011,P1-T029 | P4-T022 | E-C1 |
+| P4-T002 | Implement E-S1 construction-sensitivity and E-S2 q-sensitivity | experiment | P1 | FORB | COMP | P4-T001 | P4-T022 | E-S1,E-S2 |
+| P4-T003 | Implement E-S3 Dirichlet severity (Regime C) | experiment | P1 | FORB | COMP | P4-T001 | P4-T022 | E-S3 |
+| P4-T004 | Implement E-M1 cluster/family granularity and stability | experiment | P1 | FORB | COMP | P4-T001 | P4-T022 | E-M1 |
+| P4-T005 | Implement E-M2 B4 cluster-feature ablation and contingency | experiment | P1 | FORB | COMP | P4-T004 | P4-T022 | E-M2 |
+| P4-T006 | Implement E-M3 per-client CDF overlays and Ennio deep dive | experiment | P1 | FORB | COMP | P4-T001 | P4-T022 | E-M3 |
+| P4-T007 | Implement E-M4 JS↔gain association and E-M5 threshold-shift scatter | experiment | P1 | FORB | COMP | P4-T001 | P4-T022 | E-M4,E-M5 |
+| P4-T008 | Implement E-V1 calibration-size sweep and size-aware fallback | experiment | P1 | FORB | COMP | P4-T001 | P4-T022 | E-V1 |
+| P4-T009 | Implement E-V2 local-global shrinkage (τ-shrink) | experiment | P1 | FORB | COMP | P4-T001 | P4-T022 | E-V2 |
+| P4-T010 | Implement E-V3 split-conformal B2-conf and conformal coverage | experiment | P1 | FORB | COMP | P4-T001 | P4-T022 | E-V3 |
+| P4-T011 | Implement the B-a CICIoT2023 boundary | experiment | P1 | FORB | COMP | P4-T001 | P4-T022 | B-a |
+| P4-T012 | Implement B-b/temporal CICIoT2023 rejection and suppression records | feasibility | P1 | PLAN | COMP | P1-T007,P4-T011 | P4-T022 | E-R1,E-R2,E-R3,E-R4,E-R5,E-R6,E-R7,E-R8 |
+| P4-T013 | Implement the Regime D Edge-IIoTset source/schema/feasibility audit | feasibility | P2 | FORB | COMP | P4-T001,P1-T040 | P4-T014 | E-X1 |
+| P4-T014 | Implement Regime D partitioning, preprocessing, training, and scoring | data | P2 | FORB | COMP | P4-T013 | P4-T015,P4-T019 | E-X1 |
+| P4-T015 | Implement E-X1 external validation | experiment | P2 | FORB | COMP | P4-T014,P4-T018 | P4-T022 | E-X1 |
+| P4-T016 | Implement E-T1 FedProx aggregation stress test | experiment | P1 | FORB | COMP | P4-T001,P1-T044 | P4-T022 | E-T1 |
+| P4-T017 | Implement E-T2 model-personalization stress test and absorption bands | experiment | P1 | FORB | COMP | P4-T001 | P4-T022 | E-T2 |
+| P4-T018 | Implement E-T3 B-FedStatsBenign matched comparator | experiment | P1 | FORB | COMP | P4-T001,P1-T025 | P4-T015,P4-T022 | E-T3 |
+| P4-T019 | Implement E-B1 temporal recalibration MVE | experiment | P2 | FORB | COMP | P4-T014,P4-T024 | P4-T022 | E-B1 |
+| P4-T020 | Implement mandatory E-O1 alert burden evidence and suppression route | experiment | P1 | FORB | COMP | P4-T001 | P4-T026 | E-O1 |
+| P4-T021 | Implement claim tiers, fallback wording, and report schemas/renderers | reporting | P0 | FORB | COMP | P4-T001,P1-T049 | P4-T022 | — |
+| P4-T022 | Implement journal expected-artifact/table/figure inventory and completeness audit | audit | P0 | PLAN | COMP | P4-T002,P4-T003,P4-T004,P4-T005,P4-T006,P4-T007,P4-T008,P4-T009,P4-T010,P4-T011,P4-T012,P4-T015,P4-T016,P4-T017,P4-T018,P4-T019,P4-T020,P4-T021,P4-T023,P4-T024,P4-T025 | P5-T001 | all |
+| P4-T023 | Record optional E-Q1–E-Q6 selections and implement selected supplements | experiment | P3 | FORB | COMP | P4-T001 | P4-T026 | E-Q1,E-Q2,E-Q3,E-Q4,E-Q5,E-Q6 |
+| P4-T024 | Resolve chronological temporal training/calibration allocation | feasibility | P0 | PLAN | COMP | P4-T001 | P4-T019,P5-T004,P6-T004 | E-B1 |
+| P4-T025 | Produce Appendix A B2 calibration-versus-held-out FPR analysis | reporting | P1 | FORB | COMP | P4-T001,P4-T008,P4-T009,P4-T010 | P4-T026,P7-T011 | E-C1,E-V1,E-V2,E-V3 |
+| P4-T026 | Complete journal implementation audit and phase gate | audit | P0 | PLAN | COMP | P4-T022,P4-T023,P4-T024,P4-T025 | P5-T001 | all |
+| P5-T001 | Implementation-completeness and anchor-artifact-compatibility audit | audit | P0 | PLAN | COMP | P4-T026,P3-T011 | P5-T002 | — |
+| P5-T002 | Configuration expansion and journal experiment-cell enumeration | campaign | P0 | PLAN | COMP | P5-T001,P1-T038 | P5-T003 | all |
+| P5-T003 | Cell-ID uniqueness and stage-identity enumeration | campaign | P0 | PLAN | COMP | P5-T002 | P5-T004 | all |
+| P5-T004 | Feasibility-gate resolution, suppression cells, and unresolved-cell blocking | feasibility | P0 | PLAN | COMP | P5-T003,P4-T013,P4-T024 | P5-T005 | E-X1,E-B1,B-a |
+| P5-T005 | Reuse and invalidation verification against frozen anchor artifacts | campaign | P0 | PLAN | COMP | P5-T003,P1-T033 | P5-T006 | — |
+| P5-T006 | Expected-artifact/table/figure/export inventory and experiment-to-claim/output mapping | reporting | P0 | PLAN | COMP | P5-T003 | P5-T007 | all |
+| P5-T007 | Resource/storage estimation and worker/CUDA/process/resume-boundary planning | campaign | P0 | PLAN | COMP | P5-T005,P5-T006 | P5-T008 | — |
+| P5-T008 | Clean-worktree check and freeze of code/dependency/environment/config/campaign identity | campaign | P0 | PLAN | COMP | P5-T004,P5-T007,P0-T004 | P5-T009 | — |
+| P5-T009 | Journal campaign manifest and final go/no-go decision | campaign | P0 | PLAN | COMP | P5-T008 | P6-T001 | all |
+| P6-T001 | Final readiness confirmation and journal execution-attempt creation | campaign | P0 | PLAN | COMP | P5-T009 | P6-T002 | — |
+| P6-T002 | Journal Regime-A identity completion, reuse validation, and threshold-only execution | campaign | P0 | COMP | COMP | P6-T001 | P6-T006 | E-C1,E-S1,E-S2,E-V1,E-V2,E-V3,E-T3,E-M1,E-M2,E-M3,E-M4,E-M5,B0,B-a,E-Q1,E-Q2,E-Q3,E-Q4,E-Q5,E-Q6 |
+| P6-T003 | Regime C execution | campaign | P1 | COMP | COMP | P6-T001 | P6-T006 | E-S3 |
+| P6-T004 | Accepted Regime D execution (external + temporal) | campaign | P2 | COMP | COMP | P6-T001,P5-T004 | P6-T006 | E-X1,E-B1 |
+| P6-T005 | FedProx and model-personalization stress-test execution | campaign | P1 | COMP | COMP | P6-T001 | P6-T006 | E-T1,E-T2 |
+| P6-T006 | Statistics execution, typed-failure and invalidated-artifact handling | statistics | P0 | COMP | COMP | P6-T002,P6-T003,P6-T004,P6-T005 | P6-T008 | all |
+| P6-T007 | Conditional journal recovery, resume, infrastructure retry, and immutable artifact commits | campaign | P0 | COMP | COMP | P6-T001 | P6-T008 | — |
+| P6-T008 | Complete-cell/statistics/output audits and result freeze | audit | P0 | PLAN | COMP | P6-T006,P6-T007 | P6-T009 | all |
+| P6-T009 | Report rendering, journal integrity/outcome decision, technical-invalidity correction path | reporting | P0 | PLAN | COMP | P6-T008 | P7-T001 | all |
 | P7-T001 | Immutable-result and artifact-hash verification; manifest completeness | audit | P0 | POST | POST | P6-T009 | P7-T002 | — |
 | P7-T002 | Lineage closure and provenance verification | audit | P0 | POST | POST | P7-T001 | P7-T009 | — |
 | P7-T003 | Seed-plan completeness and paired-seed validation | audit | P0 | POST | POST | P7-T001 | P7-T007 | E-C1 |
@@ -1819,8 +1819,8 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Scientific-execution classification.** FORBIDDEN
 - **Campaign scope.** NONE
 - **Roadmap experiment IDs.** —
-- **Architecture contracts/types owned.** `StorageRootKind`, `StorageVisibility`, `ArtifactNamespace` (DATP_ANCHOR, JOURNAL_EXTENSION, RECOVERY, CACHE, STAGING, TEST_SANDBOX), `SerializationFormat`, `WriteDisposition`, `ManifestType`, `ArtifactType`, `LockScope`, `ValidationStatus`, `IntegrityStatus`, `SchemaCompatibility`.
-- **Objective.** Implement `domain/artifacts/` enums: `StorageRootKind`, `StorageVisibility`, `ArtifactNamespace` (DATP_ANCHOR, JOURNAL_EXTENSION, RECOVERY, CACHE, STAGING, TEST_SANDBOX), `SerializationFormat`, `WriteDisposition`, `ManifestType`, `ArtifactType`, `LockScope`, `ValidationStatus`, `IntegrityStatus`, `SchemaCompatibility`.
+- **Architecture contracts/types owned.** `StorageRootKind`, `StorageVisibility`, `ArtifactNamespace` (DATP_ANCHOR, COMPLETE, RECOVERY, CACHE, STAGING, TEST_SANDBOX), `SerializationFormat`, `WriteDisposition`, `ManifestType`, `ArtifactType`, `LockScope`, `ValidationStatus`, `IntegrityStatus`, `SchemaCompatibility`.
+- **Objective.** Implement `domain/artifacts/` enums: `StorageRootKind`, `StorageVisibility`, `ArtifactNamespace` (DATP_ANCHOR, COMPLETE, RECOVERY, CACHE, STAGING, TEST_SANDBOX), `SerializationFormat`, `WriteDisposition`, `ManifestType`, `ArtifactType`, `LockScope`, `ValidationStatus`, `IntegrityStatus`, `SchemaCompatibility`.
 - **Why this ticket exists.** Encodes semantic roots (never paths), anchor/journal namespace separation, and the artifact/manifest provenance vocabulary; every persisted entity maps to exactly one precise `ArtifactType`.
 - **Authority references.** Arch §6.4, §15.1, §15.2, §9.5.
 - **Dependencies.** P0-T026.
@@ -7076,7 +7076,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 
 ### Phase 6 — Journal Campaign
 
-> **Phase-wide note (applies to every P6 ticket).** This phase contains the journal scientific campaign. Only tickets classified `JOURNAL_CAMPAIGN_ALLOWED` perform real training/scoring; others are `PLANNING_ONLY`. The stages below are internal campaign stages / resumable work units / dependency partitions of one frozen journal plan — not independent mini-campaigns. Nothing is described as "executed exactly once": execute when the resolved graph requires, reuse only when lineage compatibility passes, skip completed compatible stages on resume, recompute invalidated stages, and preserve execution-attempt/provenance records. A scientific configuration change creates a new campaign identity. Campaign scope is `JOURNAL`. "Completion evidence" is the standard five-heading report plus campaign/attempt identities.
+> **Phase-wide note (applies to every P6 ticket).** This phase contains the complete-study scientific campaign. Only tickets classified `COMPLETE_CAMPAIGN_ALLOWED` perform real training/scoring; others are `PLANNING_ONLY`. The stages below are internal campaign stages / resumable work units / dependency partitions of one frozen journal plan — not independent mini-campaigns. Nothing is described as "executed exactly once": execute when the resolved graph requires, reuse only when lineage compatibility passes, skip completed compatible stages on resume, recompute invalidated stages, and preserve execution-attempt/provenance records. A scientific configuration change creates a new campaign identity. Campaign scope is `JOURNAL`. "Completion evidence" is the standard five-heading report plus campaign/attempt identities.
 
 #### P6-T001 — Final readiness confirmation and journal execution-attempt creation
 
@@ -7132,9 +7132,9 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Scientific-execution classification.** **JOURNAL_CAMPAIGN_ALLOWED**
 - **Campaign scope.** JOURNAL
 - **Roadmap experiment IDs.** E-C1, E-S1, E-S2, E-V1, E-V2, E-V3, E-T3, E-M1, E-M2, E-M3, E-M4, E-M5, B0, B-a, E-Q1, E-Q2, E-Q3, E-Q4, E-Q5, E-Q6
-- **Architecture contracts/types owned.** Journal Regime-A training/checkpoint/calibration-score/test-score/threshold/evaluation identities.
+- **Architecture contracts/types owned.** Complete-study Regime-A training/checkpoint/calibration-score/test-score/threshold/evaluation identities.
 - **Objective.** Classify every journal Regime-A training, checkpoint-selection, calibration-score, and test-score identity as `REUSABLE_FROM_COMPATIBLE_ANCHOR`, `REQUIRES_NEW_JOURNAL_COMPUTATION`, or `BLOCKED_BY_UNRESOLVED_IDENTITY`; execute every required new journal identity before threshold-only work; then execute E-C1's complete ten-paired-seed B1-vs-B2 threshold/evaluation/statistics input path and the selected threshold-only Regime-A/B-a/optional cells.
-- **Why this ticket exists.** The journal ten-seed confirmatory cohort cannot depend on a five-seed or scientifically distinct anchor campaign. Reuse is full typed-lineage compatibility only; missing journal identities must be computed under `JOURNAL_EXTENSION` even when an anchor artifact is read-only reusable.
+- **Why this ticket exists.** The complete-study ten-seed confirmatory cohort cannot depend on a five-seed or scientifically distinct anchor campaign. Reuse is full typed-lineage compatibility only; missing complete-study identities must be computed under `COMPLETE` even when an anchor artifact is read-only reusable.
 - **Authority references.** Arch §13.3, §29.1; Road §20 (immediate-start extensions); this backlog §B.
 - **Dependencies.** P6-T001.
 - **Blocks.** P6-T006.
@@ -7982,7 +7982,7 @@ graph TD
 
 ## J. Artifact and protocol-track lineage
 
-> **Node labels verified against the fully reconstructed Section H (this revision).** The diagram below correctly shows the general reuse/fan-out shape (shared calibration/test scores feeding B1–B4 and compatible variants; distinct B0/FedProx/personalization branches; anchor/journal namespace separation) described in Architecture §13.6. Its labels were cross-checked against the reconstructed Phase 2–7 ticket bodies in this pass (e.g. `B1`–`B4` against P2-T013–P2-T015/P2-T023 and P7-T004; `FPXe`/`PERSe`/`B0e` against P6-T005/P6-T002 and P7-T004; the `JOURNAL_EXTENSION` namespace-write rule against P4-T001–P4-T026 and P6-T002); no node label or edge was changed in this pass. This note replaces the prior revision's "[LEGACY]" caveat, which is no longer accurate now that all 8 phases use the mandatory template.
+> **Node labels verified against the fully reconstructed Section H (this revision).** The diagram below correctly shows the general reuse/fan-out shape (shared calibration/test scores feeding B1–B4 and compatible variants; distinct B0/FedProx/personalization branches; anchor/journal namespace separation) described in Architecture §13.6. Its labels were cross-checked against the reconstructed Phase 2–7 ticket bodies in this pass (e.g. `B1`–`B4` against P2-T013–P2-T015/P2-T023 and P7-T004; `FPXe`/`PERSe`/`B0e` against P6-T005/P6-T002 and P7-T004; the `COMPLETE` namespace-write rule against P4-T001–P4-T026 and P6-T002); no node label or edge was changed in this pass. This note replaces the prior revision's "[LEGACY]" caveat, which is no longer accurate now that all 8 phases use the mandatory template.
 
 ```mermaid
 graph TD
@@ -8033,8 +8033,8 @@ graph TD
     subgraph ANCHOR[DATP_ANCHOR namespace]
       SI
     end
-    subgraph JOURNAL[JOURNAL_EXTENSION namespace]
-      RC2[journal cells depend on frozen anchor results but write only to JOURNAL_EXTENSION]
+    subgraph COMPLETE[COMPLETE namespace]
+      RC2[complete-study cells depend on frozen anchor results but write only to COMPLETE]
     end
 
     %% Invalidation note (no edge is labeled "run once")
@@ -8048,7 +8048,7 @@ graph TD
     class FPX,PERS,B0T,FPXs,PERSs,B0s distinct;
 ```
 
-**Reading.** One selected checkpoint yields one calibration-score identity and one test-score identity per compatible seed; B1–B4 and every compatible threshold-only variant fan out from the shared calibration scores and join the shared test scores at evaluation — no retraining or rescoring for a threshold-only change. Training-side stress tests (FedProx, personalization) and the centralized B0 reference carry **distinct** training/score identities and never fan off the core score set. Anchor and journal namespaces are structurally separate: journal cells may depend on frozen anchor results but write only to `JOURNAL_EXTENSION`. Any identity-bearing upstream change invalidates that identity and its compatible downstream identities, forcing recomputation. No edge is a "run once" rule; physical generation is governed by lineage compatibility and the resolved execution graph.
+**Reading.** One selected checkpoint yields one calibration-score identity and one test-score identity per compatible seed; B1–B4 and every compatible threshold-only variant fan out from the shared calibration scores and join the shared test scores at evaluation — no retraining or rescoring for a threshold-only change. Training-side stress tests (FedProx, personalization) and the centralized B0 reference carry **distinct** training/score identities and never fan off the core score set. Anchor and complete-study namespaces are structurally separate: complete-study cells may depend on frozen anchor results but write only to `COMPLETE`. Any identity-bearing upstream change invalidates that identity and its compatible downstream identities, forcing recomputation. No edge is a "run once" rule; physical generation is governed by lineage compatibility and the resolved execution graph.
 
 ---
 
