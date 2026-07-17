@@ -472,6 +472,7 @@ class CentralizedClientCalibrationScoreArtifact:
     scoring_identity: CentralizedCalibrationScoringIdentity
     centralized_checkpoint_identity: CentralizedCheckpointIdentity
     centralized_checkpoint_content_hash: str
+    scoring_batch_size: BatchSize
     sample_count: ScoreSampleCount
     schema_version: ArtifactSchemaVersion
     content_hash: str
@@ -496,6 +497,7 @@ def _is_valid_centralized_calibration_score_artifact(
             type(artifact.calibration_split_identity) is SplitIdentity,
             type(artifact.scoring_identity) is CentralizedCalibrationScoringIdentity,
             type(artifact.centralized_checkpoint_identity) is CentralizedCheckpointIdentity,
+            type(artifact.scoring_batch_size) is BatchSize,
             type(artifact.sample_count) is ScoreSampleCount,
             type(artifact.schema_version) is ArtifactSchemaVersion,
             type(artifact.artifact_ref) is ArtifactRef,
@@ -518,6 +520,7 @@ class CentralizedClientTestScoreArtifact:
     test_scoring_identity: CentralizedTestScoringIdentity
     centralized_checkpoint_identity: CentralizedCheckpointIdentity
     centralized_checkpoint_content_hash: str
+    scoring_batch_size: BatchSize
     benign_scores_ref: ArtifactRef
     benign_sample_count: ScoreSampleCount
     benign_content_hash: str
@@ -545,6 +548,7 @@ def _is_valid_centralized_test_score_artifact(artifact: CentralizedClientTestSco
             type(artifact.test_split_identity) is SplitIdentity,
             type(artifact.test_scoring_identity) is CentralizedTestScoringIdentity,
             type(artifact.centralized_checkpoint_identity) is CentralizedCheckpointIdentity,
+            type(artifact.scoring_batch_size) is BatchSize,
             type(artifact.benign_scores_ref) is ArtifactRef,
             type(artifact.attack_scores_ref) is ArtifactRef,
             type(artifact.benign_sample_count) is ScoreSampleCount,

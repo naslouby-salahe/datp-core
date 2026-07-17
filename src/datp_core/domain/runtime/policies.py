@@ -5,7 +5,10 @@ from enum import StrEnum
 from typing import TYPE_CHECKING, Final
 
 from datp_core.domain.runtime.admissibility import GpuIndex
-# TODO - Move these constants to a configuration file 
+
+# Phase 0 scientific execution is one host and one selected CUDA GPU per training or scoring
+# process (architecture doc section 16.1); multi-GPU/multi-node concurrency is deferred
+# architecture work, so this ceiling is a locked domain invariant, not a configurable value.
 MAXIMUM_CONCURRENT_GPU_JOBS: Final = 1
 
 if TYPE_CHECKING:

@@ -3,7 +3,11 @@ from hashlib import sha256
 from pathlib import Path
 
 from blake3 import blake3
-# TODO - Move these constants to a configuration file 
+
+# Pure I/O read-buffer granularity for file hashing; confirmed not output-affecting (incremental
+# hashing is chunk-boundary-invariant, so the resulting content hash never depends on this
+# value). Required explicitly at each call site below rather than a function-signature default,
+# so no caller silently inherits an unstated chunk size.
 DEFAULT_HASH_CHUNK_SIZE = 1024 * 1024
 
 
@@ -18,7 +22,7 @@ def blake3_chunks_content_hash(chunks: Iterable[bytes]) -> str:
     return hasher.hexdigest()
 
 
-def blake3_file_content_hash(path: Path, *, chunk_size: int = DEFAULT_HASH_CHUNK_SIZE) -> str:
+def blake3_file_content_hash(path: Path, *, chunk_size: int) -> str:
     return blake3_chunks_content_hash(_file_chunks(path=path, chunk_size=chunk_size))
 
 
@@ -26,7 +30,7 @@ def sha256_bytes_content_hash(content: bytes) -> str:
     return sha256(content).hexdigest()
 
 
-def sha256_file_content_hash(path: Path, *, chunk_size: int = DEFAULT_HASH_CHUNK_SIZE) -> str:
+def sha256_file_content_hash(path: Path, *, chunk_size: int) -> str:
     hasher = sha256()
     for chunk in _file_chunks(path=path, chunk_size=chunk_size):
         hasher.update(chunk)

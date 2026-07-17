@@ -24,6 +24,7 @@ from datp_core.domain.learning.scores import (
     ScoringBatchSpec,
     SplitScopedScoreBundle,
 )
+from datp_core.domain.runtime.admissibility import BatchSize
 
 
 def test_calibration_score_artifact_has_no_attack_surface() -> None:
@@ -88,6 +89,7 @@ def test_centralized_calibration_score_artifact_rejects_a_fedavg_checkpoint_iden
             scoring_identity=scoring_identity,
             centralized_checkpoint_identity=fedavg_checkpoint_identity,  # type: ignore[arg-type]
             centralized_checkpoint_content_hash="d" * 64,
+            scoring_batch_size=BatchSize(value=4),
             sample_count=sample_count,
             schema_version=schema_version,
             content_hash="a" * 64,
@@ -104,6 +106,7 @@ def test_centralized_calibration_score_artifact_accepts_only_centralized_identit
         scoring_identity=CentralizedCalibrationScoringIdentity(value=_fingerprint("e")),
         centralized_checkpoint_identity=CentralizedCheckpointIdentity(value=_fingerprint("f")),
         centralized_checkpoint_content_hash="d" * 64,
+        scoring_batch_size=BatchSize(value=4),
         sample_count=ScoreSampleCount(value=10),
         schema_version=ArtifactSchemaVersion(value="v1"),
         content_hash="a" * 64,

@@ -9,7 +9,7 @@ from datp_core.domain.evaluation.statistical_results import (
     PassedAnchorReproductionResult,
 )
 from datp_core.domain.experiments.feasibility import BlockingReason, ScientificReadinessResult
-from datp_core.domain.mathematics.pooled_statistics import REGIME_D_MINIMUM_COVERAGE
+from datp_core.domain.experiments.specifications import RegimeDViabilityGateSpec
 
 
 class ScientificReadinessEvaluator:
@@ -90,7 +90,18 @@ class FeasibilityGateRequest:
             )
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FeasibilityGateEvaluator:
+    viability: RegimeDViabilityGateSpec
+
+    def __post_init__(self) -> None:
+        if type(self.viability) is not RegimeDViabilityGateSpec:
+            raise DomainValidationError(
+                detail="feasibility gate requires a typed Regime D viability specification",
+                value=repr(self.viability),
+                constraint="RegimeDViabilityGateSpec",
+            )
+
     def evaluate(self, request: FeasibilityGateRequest) -> FeasibilityGateDecision:
         evidence = request.evidence
         blockers: list[BlockingReason] = []
@@ -98,7 +109,7 @@ class FeasibilityGateEvaluator:
             evidence.audited_partition_identity != evidence.requested_partition_identity
         ):
             blockers.append(BlockingReason.INVALID_LINEAGE)
-        if evidence.eligibility_coverage.value < REGIME_D_MINIMUM_COVERAGE.value:
+        if evidence.eligibility_coverage.value < self.viability.minimum_eligibility_coverage.value:
             blockers.append(BlockingReason.FAILED_FEASIBILITY)
         return FeasibilityGateDecision(
             readiness=ScientificReadinessResult(blockers=tuple(blockers)),

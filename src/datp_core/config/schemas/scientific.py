@@ -9,6 +9,11 @@ from datp_core.domain.data.partitioning import ClientDefinitionStrategy, Dirichl
 from datp_core.domain.data.preprocessing import FittedStatisticPolicy, NormalizationScope, NormalizationStrategy
 from datp_core.domain.data.splitting import ConformalQuantileIndexRule
 from datp_core.domain.evaluation.metrics import OperatingPointMetric
+from datp_core.domain.evaluation.statistical_results import (
+    CANONICAL_ANCHOR_REFERENCE_LOWER,
+    CANONICAL_ANCHOR_REFERENCE_UPPER,
+    CANONICAL_ANCHOR_TOLERANCE_MULTIPLIER,
+)
 from datp_core.domain.experiments.protocols import ProtocolTrack
 from datp_core.domain.learning.scores import QuantileEstimatorType
 from datp_core.domain.learning.training import AggregationStrategy, ParticipationStrategy
@@ -218,6 +223,23 @@ type FederationConfig = Annotated[
 class AnchorCheckpointTerminationConfig(ScientificSchema):
     rounds_initial: Literal[40]
     rounds_max: Literal[150]
+
+
+type AnchorReferenceLower = Annotated[
+    float, Field(ge=CANONICAL_ANCHOR_REFERENCE_LOWER, le=CANONICAL_ANCHOR_REFERENCE_LOWER)
+]
+type AnchorReferenceUpper = Annotated[
+    float, Field(ge=CANONICAL_ANCHOR_REFERENCE_UPPER, le=CANONICAL_ANCHOR_REFERENCE_UPPER)
+]
+type AnchorToleranceMultiplier = Annotated[
+    float, Field(ge=CANONICAL_ANCHOR_TOLERANCE_MULTIPLIER, le=CANONICAL_ANCHOR_TOLERANCE_MULTIPLIER)
+]
+
+
+class AnchorReferenceIntervalConfig(ScientificSchema):
+    lower: AnchorReferenceLower
+    upper: AnchorReferenceUpper
+    tolerance_multiplier: AnchorToleranceMultiplier
 
 
 class B0PooledThresholdConfig(ScientificSchema):

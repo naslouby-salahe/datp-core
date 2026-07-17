@@ -27,6 +27,7 @@ from datp_core.domain.learning.scores import (
     CentralizedClientTestScoreArtifact,
     ScoreSampleCount,
 )
+from datp_core.domain.runtime.admissibility import BatchSize
 from datp_core.infrastructure.persistence.hashing import blake3_bytes_content_hash
 from datp_core.infrastructure.scoring.anchor import score_client_batch
 
@@ -73,7 +74,7 @@ class B0CalibrationScoreGenerationWorkflow:
         batch_size = request.scoring.calibration_batch_size.value
         scoring_identity = CentralizedCalibrationScoringIdentity(
             value=StageFingerprint(
-                value=_derived_identity("b0-calibration", checkpoint_content_hash, split_manifest_hash)
+                value=_derived_identity("b0-calibration", checkpoint_content_hash, split_manifest_hash, str(batch_size))
             )
         )
         artifacts = tuple(
@@ -119,6 +120,7 @@ class B0CalibrationScoreGenerationWorkflow:
             scoring_identity=scoring_identity,
             centralized_checkpoint_identity=checkpoint_identity,
             centralized_checkpoint_content_hash=checkpoint_content_hash,
+            scoring_batch_size=BatchSize(value=batch_size),
             sample_count=ScoreSampleCount(value=scores.shape[0]),
             schema_version=_SCORE_SCHEMA_VERSION,
             content_hash=content_hash,
@@ -157,7 +159,9 @@ class B0TestScoreGenerationWorkflow:
         split_manifest_hash = split_identity.value.value
         batch_size = request.scoring.test_batch_size.value
         scoring_identity = CentralizedTestScoringIdentity(
-            value=StageFingerprint(value=_derived_identity("b0-test", checkpoint_content_hash, split_manifest_hash))
+            value=StageFingerprint(
+                value=_derived_identity("b0-test", checkpoint_content_hash, split_manifest_hash, str(batch_size))
+            )
         )
         artifacts = tuple(
             self._client_artifact(
@@ -213,6 +217,7 @@ class B0TestScoreGenerationWorkflow:
             test_scoring_identity=scoring_identity,
             centralized_checkpoint_identity=checkpoint_identity,
             centralized_checkpoint_content_hash=checkpoint_content_hash,
+            scoring_batch_size=BatchSize(value=batch_size),
             benign_scores_ref=benign_ref,
             benign_sample_count=ScoreSampleCount(value=benign_scores.shape[0]),
             benign_content_hash=benign_hash,

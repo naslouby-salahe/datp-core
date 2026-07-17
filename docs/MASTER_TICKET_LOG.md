@@ -2311,8 +2311,8 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Scientific-execution classification.** FORBIDDEN
 - **Campaign scope.** NONE
 - **Roadmap experiment IDs.** —
-- **Architecture contracts/types owned.** `PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES`, `REGIME_D_MINIMUM_COVERAGE`, `REGIME_D_TEMPORAL_HISTORICAL_FRACTION`, `ProtocolEligibilitySpec`. Eligibility feeds evaluation identity.
-- **Objective.** Implement the locked constants of Arch §7.5 (`PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES = 100`, `REGIME_D_MINIMUM_COVERAGE = 0.90`, `REGIME_D_TEMPORAL_HISTORICAL_FRACTION = 0.70`) and `ProtocolEligibilitySpec` as the sole authority for the minimum client-calibration count, with no configuration override.
+- **Architecture contracts/types owned.** `PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES`, `REGIME_D_TEMPORAL_HISTORICAL_FRACTION`, and `ProtocolEligibilitySpec`; Regime D coverage is owned by the mapped `RegimeDViabilityGateSpec`. Eligibility feeds evaluation identity.
+- **Objective.** Implement the locked domain constants of Arch §7.5 (`PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES = 100`, `REGIME_D_TEMPORAL_HISTORICAL_FRACTION = 0.70`) and `ProtocolEligibilitySpec` as the sole authority for the minimum client-calibration count. The Regime D coverage threshold is validated, mapped, and injected into the feasibility gate.
 - **Why this ticket exists.** The n_min=100 eligibility rule, 90% Regime-D coverage gate, and 70/30 temporal boundary are protocol definitions owned once; they must not be config-overridable.
 - **Authority references.** Arch §7.5, §9.3 (eligibility), §11.4; Road §10 (n_min=100), §7 (Regime-D coverage), §11 (70/30).
 - **Dependencies.** P1-T011, P1-T016.
@@ -5284,7 +5284,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Inputs.** Arch §8.1, §11, §7.5; Road §3, §10.
 - **Allowed scope.** Configuration resolution/freeze; seed-plan verification.
 - **Forbidden actions.** No invented seed values/ordering; no "first-five" subset; no unresolved print-grade field; no execution.
-- **Required configuration or NONE.** Anchor scientific configuration (`configs/protocols/`, `configs/experiments/E-C1.yaml`).
+- **Required configuration or NONE.** The anchor scientific configuration (E-C1 experiment, Regime-A static split, DATP protocol, five-seed DATP_ANCHOR cohort, B1/B2 pairing) is a genuine scientific choice and must be represented via `Literal`-typed fields (when values are locked) or normally-typed fields (when tunable) in `config/schemas/scientific.py`, mapped through a pure `map_scientific_config(schema) -> DomainSpec` function in `config/mapping/scientific.py`, and backed by entries in the fixed scientific catalogue documents `configs/scientific/protocol.yaml`, `configs/scientific/regimes.yaml`, `configs/scientific/models.yaml`, `configs/scientific/thresholds.yaml`, `configs/scientific/evaluation.yaml`, and `configs/scientific/experiments.yaml`—never per-experiment YAML files or bare Python module constants.
 - **Implementation responsibilities.** Resolve anchor config; verify the seed plan cardinality/pairing against the authoritative spec; freeze the resolved-configuration artifact.
 - **Required unit tests.** Resolved config frozen and identity-stable; seed plan matches the authoritative spec.
 - **Required property tests.** NONE.
@@ -5655,7 +5655,7 @@ Every ticket below uses the exact mandatory template (37 named fields, in this o
 - **Downstream consumers.** P4-T022 consumes E-C1 confirmatory endpoint and experiment identity.
 - **Preconditions.** P3-T011 (anchor accepted), P1-T029 complete.
 - **Inputs.** Arch §8.3, §29.1; Road §3, §5.1, §9.1; frozen anchor score identities.
-- **Allowed scope.** E-C1 config (`configs/experiments/E-C1.yaml`) and its domain profile.
+- **Allowed scope.** The E-C1 entries in `configs/scientific/protocol.yaml` and `configs/scientific/experiments.yaml`, plus its domain profile.
 - **Forbidden actions.** No B0/B3/B4/variant arm on E-C1; no alternate primary metric; no unpaired cohort; no journal execution; no invented seeds.
 - **Required configuration or NONE.** E-C1 scientific config locked to BCa/0.95/ten.
 - **Implementation responsibilities.** Compose the confirmatory profile; bind to the ten-paired-seed authoritative plan; reference frozen anchor score identities for reuse validation.

@@ -10,10 +10,7 @@ from datp_core.domain.mathematics.dispersion import (
     cv_fpr,
     pooled_variance,
 )
-from datp_core.domain.mathematics.pooled_statistics import (
-    has_minimum_eligible_calibration_count,
-    is_canonical_k,
-)
+from datp_core.domain.mathematics.pooled_statistics import has_minimum_eligible_calibration_count
 from datp_core.domain.mathematics.quantiles import exact_quantile, exact_weighted_quantile, fpr_target
 from datp_core.domain.thresholding.policies import ThresholdPercentile
 
@@ -43,9 +40,7 @@ def test_fpr_target_and_exact_quantile_helpers_are_locked() -> None:
     assert exact_weighted_quantile(values=(1.0, 10.0), weights=(3, 1), percentile=percentile) == 1.0
 
 
-def test_canonical_k_and_eligibility_helpers_have_no_configuration_surface() -> None:
-    assert is_canonical_k(cluster_count=3)
-    assert not is_canonical_k(cluster_count=2)
+def test_eligibility_helper_has_no_configuration_surface() -> None:
     assert has_minimum_eligible_calibration_count(calibration_count=100, minimum_count=100)
     assert not has_minimum_eligible_calibration_count(calibration_count=99, minimum_count=100)
     with pytest.raises(DomainValidationError):

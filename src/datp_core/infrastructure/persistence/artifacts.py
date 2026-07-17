@@ -19,7 +19,11 @@ from datp_core.domain.artifacts.keys import ArtifactKey, WriteDisposition
 from datp_core.domain.artifacts.lineage import IntegrityStatus, SchemaCompatibility
 from datp_core.domain.artifacts.references import ArtifactRef, ValidationStatus
 from datp_core.domain.errors import ArtifactError, PartialArtifactError
-from datp_core.infrastructure.persistence.hashing import blake3_bytes_content_hash, blake3_file_content_hash
+from datp_core.infrastructure.persistence.hashing import (
+    DEFAULT_HASH_CHUNK_SIZE,
+    blake3_bytes_content_hash,
+    blake3_file_content_hash,
+)
 from datp_core.infrastructure.persistence.paths import ArtifactPathResolver, ResolveArtifactLocationRequest
 from datp_core.infrastructure.persistence.roots import BoundStorageRoot
 
@@ -60,7 +64,7 @@ class FileArtifactStore:
         if not path.exists():
             return _invalid_result(request.artifact, IntegrityStatus.MISSING, SchemaCompatibility.COMPATIBLE)
         try:
-            content_hash = blake3_file_content_hash(path)
+            content_hash = blake3_file_content_hash(path, chunk_size=DEFAULT_HASH_CHUNK_SIZE)
         except OSError as error:
             raise ArtifactError(
                 detail="persisted artifact content is unavailable",
@@ -184,7 +188,7 @@ def _verify_existing_artifact(*, existing: ArtifactRef, requested: ArtifactRef) 
 
 def _verify_existing_content(*, path: Path, artifact: ArtifactRef) -> None:
     try:
-        content_hash = blake3_file_content_hash(path)
+        content_hash = blake3_file_content_hash(path, chunk_size=DEFAULT_HASH_CHUNK_SIZE)
     except OSError as error:
         raise ArtifactError(
             detail="persisted artifact content is unavailable",

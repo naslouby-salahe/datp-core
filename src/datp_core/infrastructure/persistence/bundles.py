@@ -19,9 +19,13 @@ from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import ArtifactId, ArtifactRef, ArtifactReferenceCollection
 from datp_core.domain.errors import ArtifactError, IncompleteArtifactBundleError, PartialArtifactError
 from datp_core.domain.learning.scores import ClientTestScoreArtifact
-from datp_core.infrastructure.persistence.hashing import blake3_bytes_content_hash, blake3_file_content_hash
+from datp_core.infrastructure.persistence.hashing import (
+    DEFAULT_HASH_CHUNK_SIZE,
+    blake3_bytes_content_hash,
+    blake3_file_content_hash,
+)
 from datp_core.infrastructure.persistence.roots import BoundStorageRoot
-# TODO - Move these constants to a configuration file 
+
 _MARKER_NAME = "commit-marker.json"
 _MEMBER_NAMES = ("benign", "attack")
 _ARTIFACT_BUNDLES_NAMESPACE = ".artifact-bundles"
@@ -180,7 +184,8 @@ def _write_member(*, path: Path, member: ArtifactBundleMemberWrite) -> None:
         member_file.write(member.content)
         member_file.flush()
         fsync(member_file.fileno())
-    if blake3_file_content_hash(path) != member.declared_member.artifact.content_hash:
+    written_hash = blake3_file_content_hash(path, chunk_size=DEFAULT_HASH_CHUNK_SIZE)
+    if written_hash != member.declared_member.artifact.content_hash:
         raise ArtifactError(
             detail="persisted bundle member content hash does not match its artifact reference",
             artifact_id=member.declared_member.artifact.artifact_id.value,
@@ -217,7 +222,7 @@ def _verify_directory_members(directory: Path, bundle_id: ArtifactBundleId) -> N
 
 
 def _verify_member_file(path: Path, artifact: ArtifactRef, bundle_id: ArtifactBundleId) -> None:
-    if blake3_file_content_hash(path) != artifact.content_hash:
+    if blake3_file_content_hash(path, chunk_size=DEFAULT_HASH_CHUNK_SIZE) != artifact.content_hash:
         raise _incomplete(bundle_id, "bundle member hash does not match the committed manifest")
 
 

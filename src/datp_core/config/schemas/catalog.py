@@ -158,6 +158,8 @@ class ModelProfileConfig(CatalogSchema):
     activation: Literal["relu"]
     optimizer: Literal["adam"]
     learning_rate: Annotated[Decimal, Field(gt=Decimal("0"))]
+    weight_decay: Annotated[Decimal, Field(ge=Decimal("0"))]
+    micro_batch_size: PositiveInteger
     local_epochs: PositiveInteger
     participation: ParticipationStrategy
     maximum_rounds: PositiveInteger

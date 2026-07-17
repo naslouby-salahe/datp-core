@@ -11,6 +11,7 @@ from datp_core.config.schemas.reporting import ReportingConfig
 from datp_core.config.schemas.scientific import (
     AbsorptionGateConfig,
     AnchorCheckpointTerminationConfig,
+    AnchorReferenceIntervalConfig,
     B0PooledThresholdConfig,
     BcaBootstrapStatisticalConfig,
     CalibrationSizeFallbackThresholdConfig,
@@ -79,6 +80,7 @@ from datp_core.domain.evaluation.alert_burden import BootstrapResampleCount, Cal
 from datp_core.domain.evaluation.metrics import METRIC_SPECS, OperatingPointMetric
 from datp_core.domain.evaluation.operating_points import EvaluationSuiteSpec
 from datp_core.domain.evaluation.statistical_results import (
+    AnchorReferenceInterval,
     ConfidenceLevel,
     Probability,
     StatisticalAnalysisSpec,
@@ -269,6 +271,24 @@ def map_anchor_checkpoint_termination_config(
             detail="anchor checkpoint termination mapping requires the locked recovered 40/150 round boundary",
             section="scientific",
             field="anchor_checkpoint_termination",
+            mode="mapping",
+        ) from error
+
+
+def map_anchor_reference_interval_config(schema: AnchorReferenceIntervalConfig) -> AnchorReferenceInterval:
+    try:
+        return AnchorReferenceInterval(
+            lower=schema.lower,
+            upper=schema.upper,
+            tolerance_multiplier=schema.tolerance_multiplier,
+        )
+    except DomainValidationError as error:
+        raise ConfigurationError(
+            detail=(
+                "anchor reference interval mapping requires the locked recovered 5-seed bounds and ~20%-wider tolerance"
+            ),
+            section="scientific",
+            field="anchor_reference_interval",
             mode="mapping",
         ) from error
 

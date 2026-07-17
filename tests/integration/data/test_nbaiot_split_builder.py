@@ -31,6 +31,10 @@ from datp_core.domain.errors import SplitError
 from datp_core.domain.evaluation.operating_points import ClientEligibilityStatus
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import ClientRoster
+from datp_core.domain.mathematics.pooled_statistics import (
+    PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES,
+    ProtocolEligibilitySpec,
+)
 from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
 from datp_core.domain.runtime.policies import StreamingChunkPolicy
 from datp_core.infrastructure.data.nbaiot_source import NBaIoTChunkedSourceAdapter
@@ -42,6 +46,9 @@ from datp_core.infrastructure.persistence.roots import BoundStorageRoot, bind_st
 _FEATURE_COLUMNS = "feature_a,feature_b,feature_c"
 _STREAMING_CHUNK_POLICY = StreamingChunkPolicy(
     csv_block_bytes=CsvBlockBytes(value=8 * 1024 * 1024), parquet_batch_rows=ChunkRowCount(value=50_000)
+)
+_PROTOCOL_ELIGIBILITY = ProtocolEligibilitySpec(
+    minimum_calibration_samples=PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES
 )
 
 
@@ -139,6 +146,7 @@ def test_split_builder_excludes_attack_rows_from_calibration_and_reports_no_over
         artifact_store=FileArtifactStore(root=bound_root),
         boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
         streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
+        protocol_eligibility=_PROTOCOL_ELIGIBILITY,
     )
 
     result = builder.build(_request(("DeviceOne",)))
@@ -162,12 +170,14 @@ def test_split_builder_is_deterministic_across_repeated_runs(tmp_path: Path) -> 
         artifact_store=FileArtifactStore(root=_bound_root(tmp_path / "first")),
         boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
         streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
+        protocol_eligibility=_PROTOCOL_ELIGIBILITY,
     ).build(request)
     second = RegimeAStaticSplitBuilder(
         materialized_root=materialized_root,
         artifact_store=FileArtifactStore(root=_bound_root(tmp_path / "second")),
         boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
         streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
+        protocol_eligibility=_PROTOCOL_ELIGIBILITY,
     ).build(request)
 
     assert first.split_manifest.content_hash == second.split_manifest.content_hash
@@ -184,6 +194,7 @@ def test_split_builder_marks_a_small_client_as_fallback_and_a_large_client_as_el
         artifact_store=FileArtifactStore(root=bound_root),
         boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
         streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
+        protocol_eligibility=_PROTOCOL_ELIGIBILITY,
     )
 
     result = builder.build(_request(("TinyDevice", "BigDevice")))
@@ -206,6 +217,7 @@ def test_split_builder_rejects_a_materialized_file_missing_the_label_column(tmp_
         artifact_store=FileArtifactStore(root=_bound_root(tmp_path)),
         boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
         streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
+        protocol_eligibility=_PROTOCOL_ELIGIBILITY,
     )
     request = _request(("DeviceOne",))
 

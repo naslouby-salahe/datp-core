@@ -1,16 +1,18 @@
 from math import sqrt
-from typing import Final, assert_never
+from typing import assert_never
 
 import torch
 from torch import Tensor, nn
 
 from datp_core.domain.errors import DomainValidationError
-from datp_core.domain.learning.models import ActivationFunction, AutoencoderSpec
+from datp_core.domain.learning.models import (
+    FIXED_ENCODER_ACTIVATION,
+    FIXED_ENCODER_BOTTLENECK_DIM,
+    FIXED_ENCODER_HIDDEN_DIMS,
+    ActivationFunction,
+    AutoencoderSpec,
+)
 from datp_core.domain.runtime.seeds import Seed
-# TODO - Move these constants to a configuration file 
-FIXED_ENCODER_HIDDEN_DIMS: Final = (80, 40)
-FIXED_ENCODER_BOTTLENECK_DIM: Final = 20
-FIXED_ENCODER_ACTIVATION: Final = ActivationFunction.RELU
 
 
 class FixedAutoencoder(nn.Module):

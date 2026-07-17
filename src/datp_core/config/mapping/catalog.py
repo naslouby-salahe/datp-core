@@ -1,9 +1,11 @@
 from decimal import Decimal
+from typing import Literal, assert_never
 
 from datp_core.config.resolver import ResolvedScientificCatalog
-from datp_core.config.schemas.catalog import EligibilityCoverageRequiredConfig
+from datp_core.config.schemas.catalog import EligibilityCoverageRequiredConfig, ModelProfileConfig
 from datp_core.domain.data.datasets import Regime
 from datp_core.domain.data.partitioning import DirichletAlpha
+from datp_core.domain.errors import ConfigurationError, DomainValidationError
 from datp_core.domain.evaluation.alert_burden import CalibrationSampleCount
 from datp_core.domain.evaluation.statistical_results import (
     ClaimOutcome,
@@ -21,6 +23,9 @@ from datp_core.domain.experiments.specifications import (
     SuppressionGateSpec,
     TemporalRecoveryGateSpec,
 )
+from datp_core.domain.learning.models import ActivationFunction, AutoencoderSpec
+from datp_core.domain.learning.training import LrSchedulerType, ModelTrainingProfileSpec, OptimizerType
+from datp_core.domain.runtime.admissibility import BatchSize
 from datp_core.domain.thresholding.federated_statistics import FedStatsK
 from datp_core.domain.thresholding.policies import FprTarget, ThresholdPercentile
 from datp_core.domain.thresholding.variants import ShrinkageWeight
@@ -55,6 +60,49 @@ def map_profile_catalogue(schema: ResolvedScientificCatalog) -> ProfileCatalogue
         main_placement=ManuscriptPlacement.MAIN,
         supplementary_placement=ManuscriptPlacement.SUPPLEMENT,
     )
+
+
+def map_model_training_profile_config(schema: ModelProfileConfig, *, input_dim: int) -> ModelTrainingProfileSpec:
+    try:
+        return ModelTrainingProfileSpec(
+            autoencoder=AutoencoderSpec(
+                input_dim=input_dim,
+                hidden_dims=schema.hidden_dimensions,
+                bottleneck_dim=schema.bottleneck_dimension,
+                activation=_activation_from_literal(schema.activation),
+            ),
+            optimizer=_optimizer_from_literal(schema.optimizer),
+            learning_rate=float(schema.learning_rate),
+            weight_decay=float(schema.weight_decay),
+            scheduler=LrSchedulerType.NONE,
+            micro_batch_size=BatchSize(value=schema.micro_batch_size),
+            local_epochs=schema.local_epochs,
+            participation=schema.participation,
+            rounds_max=schema.maximum_rounds,
+        )
+    except DomainValidationError as error:
+        raise ConfigurationError(
+            detail="model training profile mapping requires the locked core-training architecture and optimizer",
+            section="scientific",
+            field=f"models.{schema.profile_id}",
+            mode="mapping",
+        ) from error
+
+
+def _activation_from_literal(value: Literal["relu"]) -> ActivationFunction:
+    match value:
+        case "relu":
+            return ActivationFunction.RELU
+        case _:
+            assert_never(value)
+
+
+def _optimizer_from_literal(value: Literal["adam"]) -> OptimizerType:
+    match value:
+        case "adam":
+            return OptimizerType.ADAM
+        case _:
+            assert_never(value)
 
 
 def _regime_d_coverage(*, schema: ResolvedScientificCatalog) -> Decimal:

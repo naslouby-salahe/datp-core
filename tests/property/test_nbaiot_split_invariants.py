@@ -29,6 +29,10 @@ from datp_core.domain.data.splitting import (
 )
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import ClientRoster
+from datp_core.domain.mathematics.pooled_statistics import (
+    PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES,
+    ProtocolEligibilitySpec,
+)
 from datp_core.domain.runtime.admissibility import ChunkRowCount, CsvBlockBytes
 from datp_core.domain.runtime.policies import StreamingChunkPolicy
 from datp_core.infrastructure.data.nbaiot_source import NBaIoTChunkedSourceAdapter
@@ -40,6 +44,9 @@ from datp_core.infrastructure.persistence.roots import BoundStorageRoot, bind_st
 _FEATURE_COLUMNS = "feature_a,feature_b,feature_c"
 _STREAMING_CHUNK_POLICY = StreamingChunkPolicy(
     csv_block_bytes=CsvBlockBytes(value=8 * 1024 * 1024), parquet_batch_rows=ChunkRowCount(value=50_000)
+)
+_PROTOCOL_ELIGIBILITY = ProtocolEligibilitySpec(
+    minimum_calibration_samples=PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES
 )
 
 
@@ -126,6 +133,7 @@ def test_calibration_never_exceeds_the_benign_row_count_and_split_is_determinist
             artifact_store=store,
             boundary_spec=LOCKED_REGIME_A_STATIC_SPLIT_BOUNDARY,
             streaming_chunk_policy=_STREAMING_CHUNK_POLICY,
+            protocol_eligibility=_PROTOCOL_ELIGIBILITY,
         )
         request = _request()
 

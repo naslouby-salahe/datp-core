@@ -6,7 +6,6 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from datp_core.domain.mathematics.dispersion import ClientMoment, DefinedCvFpr, cv_fpr, pooled_variance
-from datp_core.domain.mathematics.pooled_statistics import is_canonical_k
 from datp_core.domain.mathematics.quantiles import fpr_target
 from datp_core.domain.thresholding.policies import ThresholdPercentile
 
@@ -49,8 +48,3 @@ def test_fpr_target_is_exactly_one_minus_the_canonical_percentile(numerator: int
     percentile = ThresholdPercentile(value=Decimal(numerator) / Decimal("1000000000000"))
     if Decimal(0) < percentile.value < Decimal(1):
         assert fpr_target(percentile=percentile).value == Decimal(1) - percentile.value
-
-
-@given(st.integers(min_value=-100, max_value=100))
-def test_only_three_is_the_canonical_cluster_count(cluster_count: int) -> None:
-    assert is_canonical_k(cluster_count=cluster_count) is (cluster_count == 3)

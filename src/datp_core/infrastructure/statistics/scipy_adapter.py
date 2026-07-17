@@ -24,7 +24,7 @@ from datp_core.domain.evaluation.statistical_results import (
 )
 from datp_core.domain.mathematics.effect_sizes import cliffs_delta
 from datp_core.domain.runtime.seeds import Seed
-# TODO - Move these constants to a configuration file 
+
 _MINIMUM_BCA_SAMPLE_SIZE = 3
 _MINIMUM_BCA_RESAMPLES = 2
 

@@ -114,29 +114,30 @@ class _NumericAccumulator:
     row_count: int = 0
     minimum: float | None = None
     maximum: float | None = None
-    total: float = 0.0
-    sum_of_squares: float = 0.0
+    mean: float = 0.0
+    sum_of_squared_deviations: float = 0.0
 
     def add(self, values: list[float | int | str | bool | Decimal | None]) -> None:
         numeric_values = tuple(float(value) for value in values if value is not None)
         if not numeric_values:
             return
-        self.row_count += len(numeric_values)
         batch_minimum = min(numeric_values)
         batch_maximum = max(numeric_values)
         self.minimum = batch_minimum if self.minimum is None else min(self.minimum, batch_minimum)
         self.maximum = batch_maximum if self.maximum is None else max(self.maximum, batch_maximum)
-        self.total += sum(numeric_values)
-        self.sum_of_squares += sum(value * value for value in numeric_values)
+        for value in numeric_values:
+            self.row_count += 1
+            delta = value - self.mean
+            self.mean += delta / self.row_count
+            self.sum_of_squared_deviations += delta * (value - self.mean)
 
     def statistics(self) -> StreamingColumnStatistics:
         if self.row_count == 0:
             return StreamingColumnStatistics(row_count=0, minimum=None, maximum=None, mean=None, variance=None)
-        mean = self.total / self.row_count
         return StreamingColumnStatistics(
             row_count=self.row_count,
             minimum=self.minimum,
             maximum=self.maximum,
-            mean=mean,
-            variance=max(0.0, (self.sum_of_squares / self.row_count) - (mean * mean)),
+            mean=self.mean,
+            variance=max(0.0, self.sum_of_squared_deviations / self.row_count),
         )

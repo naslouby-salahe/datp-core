@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 from math import isfinite
+from typing import Final
 
 from datp_core.domain.artifacts.lineage import DatasetSourceIdentity, PartitionIdentity
 from datp_core.domain.artifacts.references import ArtifactRef
@@ -8,6 +9,8 @@ from datp_core.domain.data.datasets import Dataset, Regime
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import ClientRoster
+
+REGIME_A_NATURAL_DEVICE_COUNT: Final = 9
 
 
 class ClientDefinitionStrategy(StrEnum):

@@ -5,6 +5,8 @@ profiles:
     activation: relu
     optimizer: adam
     learning_rate: "0.001"
+    weight_decay: "0.0"
+    micro_batch_size: 256
     local_epochs: 1
     participation: full
     maximum_rounds: 150
@@ -15,6 +17,8 @@ profiles:
     activation: relu
     optimizer: adam
     learning_rate: "0.001"
+    weight_decay: "0.0"
+    micro_batch_size: 256
     local_epochs: 1
     participation: full
     maximum_rounds: 200

@@ -26,8 +26,12 @@ from datp_core.domain.data.datasets import (
 from datp_core.domain.errors import DatasetError
 from datp_core.domain.runtime.policies import StreamingChunkPolicy
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
-from datp_core.infrastructure.persistence.hashing import blake3_bytes_content_hash, blake3_file_content_hash
-# TODO - Move these constants to a configuration file 
+from datp_core.infrastructure.persistence.hashing import (
+    DEFAULT_HASH_CHUNK_SIZE,
+    blake3_bytes_content_hash,
+    blake3_file_content_hash,
+)
+
 _TIMESTAMP_KEYWORDS = ("timestamp", "capture_time", "packet_time", "event_time")
 
 
@@ -159,7 +163,7 @@ def _scanned_entry(scanned: _ScannedCsvFile, *, raw_root: Path) -> SourceFileMan
         device_id=scanned.device_id,
         label=scanned.label,
         row_count=scanned.row_count,
-        content_hash=blake3_file_content_hash(scanned.csv_path),
+        content_hash=blake3_file_content_hash(scanned.csv_path, chunk_size=DEFAULT_HASH_CHUNK_SIZE),
     )
 
 

@@ -26,7 +26,7 @@ from datp_core.domain.artifacts.references import (
     StageFingerprint,
 )
 from datp_core.domain.errors import AnchorReproductionFailure, DomainValidationError, ProvenanceError
-from datp_core.domain.evaluation.alert_burden import BootstrapResampleCount
+from datp_core.domain.evaluation.alert_burden import BootstrapResampleCount, CalibrationSampleCount
 from datp_core.domain.evaluation.statistical_results import (
     AnchorMovementAssessment,
     ConfidenceLevel,
@@ -37,6 +37,7 @@ from datp_core.domain.evaluation.statistical_results import (
 )
 from datp_core.domain.experiments.feasibility import BlockingReason, ScientificReadinessResult
 from datp_core.domain.experiments.protocols import TableType
+from datp_core.domain.experiments.specifications import RegimeDViabilityGateSpec
 
 
 def _artifact(*, character: str, artifact_type: ArtifactType) -> ArtifactRef:
@@ -54,6 +55,15 @@ def _table_specification() -> TableSpecification:
         table_type=TableType.CONFIRMATORY_INTERVAL,
         columns=(ReportColumn(key="metric", label="Metric"),),
         rows=(ReportRow(values=(0.1,)),),
+    )
+
+
+def _regime_d_gate() -> FeasibilityGateEvaluator:
+    return FeasibilityGateEvaluator(
+        viability=RegimeDViabilityGateSpec(
+            minimum_eligibility_coverage=CoverageRatio(value=Decimal("0.90")),
+            minimum_calibration_samples=CalibrationSampleCount(value=100),
+        )
     )
 
 
@@ -75,7 +85,7 @@ def test_anchor_and_feasibility_gates_block_failed_typed_evidence() -> None:
     )
     source = DatasetSourceIdentity(value=StageFingerprint(value="a" * 64))
     partition = PartitionIdentity(value=StageFingerprint(value="b" * 64))
-    decision = FeasibilityGateEvaluator().evaluate(
+    decision = _regime_d_gate().evaluate(
         FeasibilityGateRequest(
             evidence=RegimeDFeasibilityEvidence(
                 audited_source_identity=source,
@@ -118,7 +128,7 @@ def test_feasibility_accepts_the_exact_minimum_coverage_for_matching_lineage() -
     source = DatasetSourceIdentity(value=StageFingerprint(value="a" * 64))
     partition = PartitionIdentity(value=StageFingerprint(value="b" * 64))
 
-    decision = FeasibilityGateEvaluator().evaluate(
+    decision = _regime_d_gate().evaluate(
         FeasibilityGateRequest(
             evidence=RegimeDFeasibilityEvidence(
                 audited_source_identity=source,

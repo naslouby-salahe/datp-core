@@ -44,7 +44,7 @@ class ArtifactPathResolver:
             absolute_path=absolute_path,
         )
 
-# TODO - Move these constants to a configuration file 
+
 _ROOT_NAMESPACE_REQUIREMENTS: dict[StorageRootKind, ArtifactNamespace] = {
     StorageRootKind.RECOVERY_STATE: ArtifactNamespace.RECOVERY,
     StorageRootKind.TEST_SANDBOX: ArtifactNamespace.TEST_SANDBOX,

@@ -18,7 +18,11 @@ from datp_core.domain.artifacts.lineage import (
 from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.data.datasets import Dataset, Regime, TimestampEvidence
-from datp_core.domain.data.partitioning import ClientDefinitionStrategy, DirichletAlpha
+from datp_core.domain.data.partitioning import (
+    REGIME_A_NATURAL_DEVICE_COUNT,
+    ClientDefinitionStrategy,
+    DirichletAlpha,
+)
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.evaluation.alert_burden import CalibrationSampleCount
 from datp_core.domain.evaluation.metrics import (
@@ -302,7 +306,7 @@ def _matches_natural_regime_a(specification: RegimeCompatibilitySpec) -> bool:
     ) == (
         Dataset.N_BAIOT,
         ClientDefinitionStrategy.NATURAL_DEVICE,
-        9,
+        REGIME_A_NATURAL_DEVICE_COUNT,
         FeasibilityStatus.FEASIBLE,
         False,
         None,

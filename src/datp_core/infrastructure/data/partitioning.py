@@ -11,6 +11,7 @@ from datp_core.domain.artifacts.manifests import ArtifactType
 from datp_core.domain.artifacts.references import ArtifactId, ArtifactRef, ArtifactSchemaVersion, StageFingerprint
 from datp_core.domain.data.datasets import Dataset
 from datp_core.domain.data.partitioning import (
+    REGIME_A_NATURAL_DEVICE_COUNT,
     ClientPartitionManifest,
     ClientPartitionResult,
     ClientRowMembership,
@@ -25,8 +26,6 @@ from datp_core.infrastructure.data.nbaiot_source import NBaIoTChunkedSourceAdapt
 from datp_core.infrastructure.data.streaming import ParquetBatchStream
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
 from datp_core.infrastructure.persistence.hashing import blake3_bytes_content_hash
-# TODO - Move these constants to a configuration file 
-_REGIME_A_DEVICE_COUNT = 9
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -47,9 +46,9 @@ class NaturalDevicePartitioner:
         if type(request.partitioning) is not NaturalDevicePartitionSpec:
             raise _partition_error("natural-device partitioner requires a NaturalDevicePartitionSpec")
         device_ids = tuple(path.name for path in sorted_device_directories(self.raw_root))
-        if len(device_ids) != _REGIME_A_DEVICE_COUNT:
+        if len(device_ids) != REGIME_A_NATURAL_DEVICE_COUNT:
             raise _partition_error(
-                f"natural-device partitioning requires exactly {_REGIME_A_DEVICE_COUNT} physical devices, "
+                f"natural-device partitioning requires exactly {REGIME_A_NATURAL_DEVICE_COUNT} physical devices, "
                 f"found {len(device_ids)}"
             )
         adapter = NBaIoTChunkedSourceAdapter(

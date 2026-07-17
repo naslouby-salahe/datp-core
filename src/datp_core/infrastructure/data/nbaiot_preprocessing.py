@@ -35,7 +35,11 @@ from datp_core.infrastructure.data.nbaiot_split import benign_split_boundaries, 
 from datp_core.infrastructure.data.preprocessing import TwoPassNumericPreprocessor
 from datp_core.infrastructure.data.streaming import ParquetBatchStream, update_row_order_checksum
 from datp_core.infrastructure.persistence.artifacts import FileArtifactStore
-from datp_core.infrastructure.persistence.hashing import blake3_bytes_content_hash, blake3_file_content_hash
+from datp_core.infrastructure.persistence.hashing import (
+    DEFAULT_HASH_CHUNK_SIZE,
+    blake3_bytes_content_hash,
+    blake3_file_content_hash,
+)
 from datp_core.infrastructure.persistence.paths import ArtifactPathResolver, ResolveArtifactLocationRequest
 from datp_core.infrastructure.persistence.roots import BoundStorageRoot
 
@@ -395,7 +399,7 @@ def _write_normalized_segment(
 
 
 def _registered_parquet_artifact(path: Path) -> ArtifactRef:
-    content_hash = blake3_file_content_hash(path)
+    content_hash = blake3_file_content_hash(path, chunk_size=DEFAULT_HASH_CHUNK_SIZE)
     return ArtifactRef(
         artifact_id=ArtifactId(value=f"artifact-{content_hash}"),
         artifact_type=ArtifactType.PROCESSED_SPLIT,

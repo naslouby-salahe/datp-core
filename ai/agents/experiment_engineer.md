@@ -25,7 +25,7 @@ Prepare and validate experiment configuration, execution paths, and artifact pro
 - Cleanup hook.
 
 ## Required Inputs
-The experiment configuration under `configs/experiments/`, the experiment-readiness check skill, and the current artifact catalogue.
+The experiment configuration in the bounded `configs/scientific/experiments.yaml` document, the experiment-readiness check skill, and the current artifact catalogue.
 
 ## Escalation
 If an experiment appears ready to run outside an approved campaign phase, escalate to `datp-protocol-guardian` rather than starting it.

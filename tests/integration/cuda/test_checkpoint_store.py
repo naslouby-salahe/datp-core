@@ -22,7 +22,7 @@ from datp_core.domain.artifacts.references import (
 from datp_core.domain.learning.checkpoints import CheckpointDescriptor, CheckpointProtocol
 from datp_core.domain.runtime.seeds import RoundNumber, Seed
 from datp_core.infrastructure.persistence.checkpoints import FileCheckpointStore
-from datp_core.infrastructure.persistence.hashing import blake3_file_content_hash
+from datp_core.infrastructure.persistence.hashing import DEFAULT_HASH_CHUNK_SIZE, blake3_file_content_hash
 from datp_core.infrastructure.persistence.roots import bind_storage_root
 from tests.support.cuda_lane import skip_if_cuda_unavailable
 
@@ -36,7 +36,7 @@ def test_synthetic_cuda_model_checkpoint_descriptor_round_trips(tmp_path: Path) 
     restored_state = torch.load(staged_state, map_location="cuda", weights_only=True)
     assert torch.equal(restored_state["weight"], model.state_dict()["weight"])
 
-    content_hash = blake3_file_content_hash(staged_state)
+    content_hash = blake3_file_content_hash(staged_state, chunk_size=DEFAULT_HASH_CHUNK_SIZE)
     artifact = ArtifactRef(
         artifact_id=ArtifactId(value="artifact-" + "a" * 64),
         artifact_type=ArtifactType.SCIENTIFIC_CHECKPOINT,

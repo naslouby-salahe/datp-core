@@ -10,7 +10,7 @@ from datp_core.domain.data.datasets import SourceTrafficLabel
 from datp_core.domain.errors import DatasetError
 from datp_core.infrastructure.data.nbaiot_inspection import device_csv_files
 from datp_core.infrastructure.data.streaming import update_row_order_checksum
-# TODO - Move these constants to a configuration file 
+
 SOURCE_LABEL_COLUMN_NAME = "source_label"
 
 

@@ -120,6 +120,22 @@ def test_chunked_statistics_match_the_single_pass_synthetic_reference(tmp_path: 
     assert statistics.variance == (sum(value * value for value in expected) / len(expected)) - statistics.mean**2
 
 
+def test_streaming_statistics_are_independent_of_batch_boundaries(tmp_path: Path) -> None:
+    path = tmp_path / "synthetic.parquet"
+    _write_synthetic_parquet(path)
+
+    single_row = numeric_column_statistics(
+        ParquetBatchStream(path=path, batch_rows=ChunkRowCount(value=1)),
+        "value",
+    )
+    full_batch = numeric_column_statistics(
+        ParquetBatchStream(path=path, batch_rows=ChunkRowCount(value=17)),
+        "value",
+    )
+
+    assert single_row == full_batch
+
+
 def test_bounded_pandas_conversion_never_exceeds_the_declared_batch_size(tmp_path: Path) -> None:
     path = tmp_path / "synthetic.parquet"
     _write_synthetic_parquet(path)

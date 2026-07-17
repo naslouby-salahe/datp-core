@@ -17,6 +17,7 @@ from datp_core.config.mapping.scientific import (
     ResolveExperimentProfileRequest,
     map_absorption_gate_config,
     map_anchor_checkpoint_termination_config,
+    map_anchor_reference_interval_config,
     map_b0_pooled_threshold_config,
     map_calibration_size_grid_config,
     map_canonical_temporal_config,
@@ -51,6 +52,7 @@ from datp_core.config.schemas.reporting import ReportingConfig
 from datp_core.config.schemas.scientific import (
     AbsorptionGateConfig,
     AnchorCheckpointTerminationConfig,
+    AnchorReferenceIntervalConfig,
     B0PooledThresholdConfig,
     BcaBootstrapStatisticalConfig,
     CalibrationSizeGridConfig,
@@ -107,6 +109,7 @@ from datp_core.domain.data.splitting import LOCKED_REGIME_A_STATIC_SPLIT_BOUNDAR
 from datp_core.domain.errors import ConfigurationError
 from datp_core.domain.evaluation.alert_burden import CalibrationSampleCount
 from datp_core.domain.evaluation.metrics import OperatingPointMetric
+from datp_core.domain.evaluation.statistical_results import AnchorReferenceInterval
 from datp_core.domain.experiments.claims import ClaimTier, ExperimentRole
 from datp_core.domain.experiments.identities import ArchitectureCatalogueId, ExperimentId
 from datp_core.domain.experiments.protocols import ProtocolTrack, ReportingPolicy
@@ -410,6 +413,19 @@ def test_anchor_checkpoint_termination_mapping_produces_the_locked_policy() -> N
     configuration = AnchorCheckpointTerminationConfig(rounds_initial=40, rounds_max=150)
 
     assert map_anchor_checkpoint_termination_config(configuration) == LOCKED_ANCHOR_CHECKPOINT_TERMINATION_POLICY
+
+
+def test_anchor_reference_interval_schema_rejects_a_non_locked_bound() -> None:
+    with pytest.raises(ValidationError):
+        AnchorReferenceIntervalConfig.model_validate({"lower": 0.6, "upper": 0.769, "tolerance_multiplier": 1.2})
+
+
+def test_anchor_reference_interval_mapping_produces_the_locked_interval() -> None:
+    configuration = AnchorReferenceIntervalConfig(lower=0.647, upper=0.769, tolerance_multiplier=1.2)
+
+    assert map_anchor_reference_interval_config(configuration) == AnchorReferenceInterval(
+        lower=0.647, upper=0.769, tolerance_multiplier=1.2
+    )
 
 
 def test_b0_pooled_threshold_schema_rejects_a_non_locked_percentile() -> None:

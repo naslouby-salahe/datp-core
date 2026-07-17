@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from enum import StrEnum
 from math import isfinite
+from typing import Final
 
 from datp_core.domain.artifacts.references import StageFingerprint
 from datp_core.domain.errors import AnchorReproductionFailure, DomainValidationError
@@ -309,14 +310,31 @@ type StatisticalAnalysisResult = (
 )
 
 
-@dataclass(frozen=True, slots=True, kw_only=True, init=False)
+CANONICAL_ANCHOR_REFERENCE_LOWER: Final = 0.647
+CANONICAL_ANCHOR_REFERENCE_UPPER: Final = 0.769
+CANONICAL_ANCHOR_TOLERANCE_MULTIPLIER: Final = 1.2
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class AnchorReferenceInterval:
     lower: float
     upper: float
+    tolerance_multiplier: float
 
-    def __init__(self) -> None:
-        object.__setattr__(self, "lower", 0.647)
-        object.__setattr__(self, "upper", 0.769)
+    def __post_init__(self) -> None:
+        if (
+            self.lower != CANONICAL_ANCHOR_REFERENCE_LOWER
+            or self.upper != CANONICAL_ANCHOR_REFERENCE_UPPER
+            or self.tolerance_multiplier != CANONICAL_ANCHOR_TOLERANCE_MULTIPLIER
+        ):
+            raise DomainValidationError(
+                detail="anchor reference interval is locked to the recovered 5-seed bounds and tolerance",
+                value=repr(self),
+                constraint=(
+                    f"lower={CANONICAL_ANCHOR_REFERENCE_LOWER}, upper={CANONICAL_ANCHOR_REFERENCE_UPPER}, "
+                    f"tolerance_multiplier={CANONICAL_ANCHOR_TOLERANCE_MULTIPLIER}"
+                ),
+            )
 
     @property
     def width(self) -> float:
@@ -338,7 +356,7 @@ class AnchorReproductionGateSpec:
 
     @property
     def maximum_width(self) -> float:
-        return self.reference_interval.width * 1.2
+        return self.reference_interval.width * self.reference_interval.tolerance_multiplier
 
 
 def _is_valid_anchor_reproduction_gate(specification: AnchorReproductionGateSpec) -> bool:

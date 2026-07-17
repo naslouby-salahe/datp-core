@@ -43,6 +43,7 @@ from datp_core.domain.learning.scores import (
     ClientRoster,
     ScoreSampleCount,
 )
+from datp_core.domain.runtime.admissibility import BatchSize
 from datp_core.domain.thresholding.federated_statistics import ThresholdComparatorRole
 from datp_core.domain.thresholding.policies import (
     CentralizedThresholdAssignment,
@@ -73,6 +74,7 @@ def _test_artifact(*, client_id: ClientId, character: str) -> CentralizedClientT
         test_scoring_identity=CentralizedTestScoringIdentity(value=_fingerprint("c")),
         centralized_checkpoint_identity=CentralizedCheckpointIdentity(value=_fingerprint("d")),
         centralized_checkpoint_content_hash="e" * 64,
+        scoring_batch_size=BatchSize(value=4),
         benign_scores_ref=score_ref,
         benign_sample_count=ScoreSampleCount(value=10),
         benign_content_hash=character * 64,

@@ -91,7 +91,7 @@ from datp_core.domain.errors import (
     TrainingError,
     UnsafeParallelismError,
 )
-from datp_core.domain.experiments.specifications import ExperimentCell, ExperimentSpec
+from datp_core.domain.experiments.specifications import ExperimentCell, ExperimentSpec, ProfileCatalogueSpec
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -152,6 +152,7 @@ class CompositionPortBindings:
 class ResolvedExperimentConfiguration:
     resolved: ResolvedConfigurationArtifact
     experiment: ExperimentSpec
+    profile_catalogue: ProfileCatalogueSpec
 
     def __post_init__(self) -> None:
         if (
@@ -162,6 +163,12 @@ class ResolvedExperimentConfiguration:
                 detail="composition configuration must retain the resolved scientific and execution specifications",
                 value=repr(self.experiment.identity.experiment_id),
                 constraint="ExperimentSpec agrees with ResolvedConfigurationArtifact",
+            )
+        if type(self.profile_catalogue) is not ProfileCatalogueSpec:
+            raise DomainValidationError(
+                detail="composition configuration must retain the mapped profile catalogue",
+                value=repr(self.profile_catalogue),
+                constraint="ProfileCatalogueSpec",
             )
 
 
@@ -362,7 +369,9 @@ def compose_application(request: ComposeApplicationRequest) -> CompositionRoot:
             checkpoint_selector=CheckpointSelector(),
             policy_evaluator=PolicyEvaluator(),
             anchor_reproduction_gate=AnchorReproductionGate(),
-            feasibility_gate_evaluator=FeasibilityGateEvaluator(),
+            feasibility_gate_evaluator=FeasibilityGateEvaluator(
+                viability=request.configuration.profile_catalogue.regime_d_viability_gate
+            ),
             plan_executor=request.stage_runners.create_executor(),
             table_figure_tracer=TableFigureTracer(),
             threshold_registry=threshold_registry,

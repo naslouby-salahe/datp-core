@@ -79,10 +79,17 @@ def test_paired_delta_direction_is_locked_to_b1_minus_b2() -> None:
         _paired_delta_with_unsupported_direction()
 
 
+def test_anchor_reference_interval_rejects_a_non_locked_bound_or_tolerance() -> None:
+    with pytest.raises(DomainValidationError):
+        AnchorReferenceInterval(lower=0.6, upper=0.769, tolerance_multiplier=1.2)
+    with pytest.raises(DomainValidationError):
+        AnchorReferenceInterval(lower=0.647, upper=0.769, tolerance_multiplier=1.5)
+
+
 def test_anchor_gate_blocks_a_wider_than_twenty_percent_reproduction() -> None:
     gate = AnchorReproductionGateSpec(
         seed_cohort=SeedTuple(values=tuple(Seed(value=value) for value in range(5))),
-        reference_interval=AnchorReferenceInterval(),
+        reference_interval=AnchorReferenceInterval(lower=0.647, upper=0.769, tolerance_multiplier=1.2),
     )
     result = assess_anchor_reproduction(
         gate=gate,

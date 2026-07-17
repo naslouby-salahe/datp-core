@@ -20,7 +20,10 @@ from datp_core.domain.artifacts.references import (
 from datp_core.domain.errors import DomainValidationError
 from datp_core.domain.runtime.seeds import RoundNumber, Seed
 
-# TODO - Move these constants to a configuration file 
+# Locked journal checkpoint schedule and anchor termination bounds (architecture doc section
+# 27.1), mirrored in configs/scientific/models.yaml (journal_fedavg.checkpoint_rounds and
+# anchor_nbaiot.checkpoint_rounds) and mapped/equality-checked by
+# config/mapping/scientific.py::map_anchor_checkpoint_termination_config for the anchor pair.
 SCHEDULED_CHECKPOINT_ROUNDS = (25, 50, 75, 100, 125, 150, 200)
 REGIME_A_SELECTION_RULE_VERSION = "regime_a_weighted_benign_validation_loss_v1"
 EARLIEST_SCHEDULED_ROUND_TIE_BREAK_RULE = "earliest_scheduled_round_v1"

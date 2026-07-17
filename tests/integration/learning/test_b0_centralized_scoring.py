@@ -110,6 +110,29 @@ def test_calibration_workflow_produces_one_artifact_per_client_in_canonical_orde
     for artifact in result.scores:
         assert artifact.sample_count.value == batches[artifact.client_id].shape[0]
         assert artifact.centralized_checkpoint_identity == _checkpoint_identity()
+        assert artifact.scoring_batch_size == BatchSize(value=4)
+
+
+def test_calibration_score_identity_includes_the_scoring_batch_size() -> None:
+    client = ClientId(value="client-a")
+    workflow = _calibration_workflow(batches={client: torch.rand(8, 3, dtype=torch.float32)})
+
+    first = workflow.generate_calibration_scores(
+        GenerateCentralizedCalibrationScoresRequest(
+            processed_splits=_processed_splits(split_character="3"),
+            checkpoint=_checkpoint(),
+            scoring=_scoring(batch_size=4),
+        )
+    ).scores[0]
+    second = workflow.generate_calibration_scores(
+        GenerateCentralizedCalibrationScoresRequest(
+            processed_splits=_processed_splits(split_character="3"),
+            checkpoint=_checkpoint(),
+            scoring=_scoring(batch_size=2),
+        )
+    ).scores[0]
+
+    assert first.scoring_identity != second.scoring_identity
 
 
 def _test_workflow(*, benign: dict[ClientId, Tensor], attack: dict[ClientId, Tensor]) -> B0TestScoreGenerationWorkflow:
@@ -144,3 +167,29 @@ def test_test_workflow_produces_a_benign_attack_pair_per_client() -> None:
     assert artifact.benign_sample_count.value == 6
     assert artifact.attack_sample_count.value == 4
     assert artifact.centralized_checkpoint_identity == _checkpoint_identity()
+    assert artifact.scoring_batch_size == BatchSize(value=4)
+
+
+def test_test_score_identity_includes_the_scoring_batch_size() -> None:
+    client = ClientId(value="client-a")
+    workflow = _test_workflow(
+        benign={client: torch.rand(8, 3, dtype=torch.float32)},
+        attack={client: torch.rand(8, 3, dtype=torch.float32)},
+    )
+
+    first = workflow.generate_test_scores(
+        GenerateCentralizedTestScoresRequest(
+            processed_splits=_processed_splits(split_character="4"),
+            checkpoint=_checkpoint(),
+            scoring=_scoring(batch_size=4),
+        )
+    ).scores[0]
+    second = workflow.generate_test_scores(
+        GenerateCentralizedTestScoresRequest(
+            processed_splits=_processed_splits(split_character="4"),
+            checkpoint=_checkpoint(),
+            scoring=_scoring(batch_size=2),
+        )
+    ).scores[0]
+
+    assert first.test_scoring_identity != second.test_scoring_identity

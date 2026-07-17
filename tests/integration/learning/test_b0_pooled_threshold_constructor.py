@@ -10,6 +10,7 @@ from datp_core.domain.artifacts.references import ArtifactId, ArtifactRef, Artif
 from datp_core.domain.data.splitting import SplitIdentity
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import CentralizedClientCalibrationScoreArtifact, ScoreSampleCount
+from datp_core.domain.runtime.admissibility import BatchSize
 from datp_core.domain.thresholding.policies import B0PooledThresholdSpec, ThresholdPercentile
 from datp_core.infrastructure.thresholding.policies import B0PooledThresholdConstructor
 
@@ -26,6 +27,7 @@ def _artifact(*, client_id: ClientId, character: str) -> CentralizedClientCalibr
         scoring_identity=CentralizedCalibrationScoringIdentity(value=_fingerprint("c")),
         centralized_checkpoint_identity=CentralizedCheckpointIdentity(value=_fingerprint("d")),
         centralized_checkpoint_content_hash="e" * 64,
+        scoring_batch_size=BatchSize(value=4),
         sample_count=ScoreSampleCount(value=1),
         schema_version=ArtifactSchemaVersion(value="v1"),
         content_hash=character * 64,

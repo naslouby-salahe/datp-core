@@ -190,7 +190,8 @@ class _UnavailablePort:
 
 
 def _configuration() -> ResolvedExperimentConfiguration:
-    experiment = map_experiment_schema(experiment_config(), catalogue=composed_profile_catalogue())
+    profile_catalogue = composed_profile_catalogue()
+    experiment = map_experiment_schema(experiment_config(), catalogue=profile_catalogue)
     return ResolvedExperimentConfiguration(
         resolved=ResolvedConfigurationArtifact(
             identity=ResolvedConfigurationIdentity(value=StageFingerprint(value="a" * 64)),
@@ -202,6 +203,7 @@ def _configuration() -> ResolvedExperimentConfiguration:
             ),
         ),
         experiment=experiment,
+        profile_catalogue=profile_catalogue,
     )
 
 
@@ -345,6 +347,10 @@ def test_composition_root_binds_every_port_and_constructs_every_application_serv
     assert root.configuration.experiment is not None
     assert root.services.plan_executor is not None
     assert root.services.threshold_registry.constructor is not None
+    assert (
+        root.services.feasibility_gate_evaluator.viability
+        is root.configuration.profile_catalogue.regime_d_viability_gate
+    )
 
 
 def test_composition_configuration_rejects_a_resolved_execution_mismatch() -> None:
@@ -358,6 +364,7 @@ def test_composition_configuration_rejects_a_resolved_execution_mismatch() -> No
         ResolvedExperimentConfiguration(
             resolved=resolved,
             experiment=configuration.experiment,
+            profile_catalogue=configuration.profile_catalogue,
         )
 
 

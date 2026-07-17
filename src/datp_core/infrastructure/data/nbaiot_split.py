@@ -26,11 +26,7 @@ from datp_core.domain.evaluation.operating_points import (
 )
 from datp_core.domain.experiments.identities import ClientId
 from datp_core.domain.learning.scores import ClientRoster
-from datp_core.domain.mathematics.pooled_statistics import (
-    PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES,
-    ProtocolEligibilitySpec,
-    classify_protocol_eligibility,
-)
+from datp_core.domain.mathematics.pooled_statistics import ProtocolEligibilitySpec, classify_protocol_eligibility
 from datp_core.domain.runtime.policies import StreamingChunkPolicy
 from datp_core.infrastructure.data.nbaiot_source import SOURCE_LABEL_COLUMN_NAME
 from datp_core.infrastructure.data.streaming import ParquetBatchStream, update_row_order_checksum
@@ -126,6 +122,7 @@ def _client_split_membership(
     materialized_path: Path,
     boundary_spec: RegimeAStaticSplitBoundarySpec,
     streaming_chunk_policy: StreamingChunkPolicy,
+    protocol_eligibility: ProtocolEligibilitySpec,
 ) -> ClientSplitMembership:
     stream = ParquetBatchStream(path=materialized_path, batch_rows=streaming_chunk_policy.parquet_batch_rows)
     label_column_index = stream.schema().get_field_index(SOURCE_LABEL_COLUMN_NAME)
@@ -141,7 +138,7 @@ def _client_split_membership(
     )
     eligibility = classify_protocol_eligibility(
         calibration_count=CalibrationSampleCount(value=calibration.count),
-        specification=ProtocolEligibilitySpec(),
+        specification=protocol_eligibility,
     )
     return ClientSplitMembership(
         client_id=client_id,
@@ -199,11 +196,12 @@ def _split_error(coverage: str) -> SplitError:
     return SplitError(dataset="n_baiot", regime="a", coverage=coverage, detail=coverage)
 
 
-_PROTOCOL_ELIGIBILITY_RULE_IDENTITY = StageFingerprint(
-    value=blake3_bytes_content_hash(
-        f"protocol_eligibility:n_min={PROTOCOL_MINIMUM_ELIGIBLE_CALIBRATION_SAMPLES.value}".encode()
+def _protocol_eligibility_rule_identity(specification: ProtocolEligibilitySpec) -> StageFingerprint:
+    return StageFingerprint(
+        value=blake3_bytes_content_hash(
+            f"protocol_eligibility:n_min={specification.minimum_calibration_samples.value}".encode()
+        )
     )
-)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -212,6 +210,7 @@ class RegimeAStaticSplitBuilder:
     artifact_store: FileArtifactStore
     boundary_spec: RegimeAStaticSplitBoundarySpec
     streaming_chunk_policy: StreamingChunkPolicy
+    protocol_eligibility: ProtocolEligibilitySpec
 
     def build(self, request: BuildSplitManifestRequest) -> SplitManifestResult:
         roster = request.partition.client_roster
@@ -221,11 +220,14 @@ class RegimeAStaticSplitBuilder:
                 materialized_path=self.materialized_root / client_id.value / "source.parquet",
                 boundary_spec=self.boundary_spec,
                 streaming_chunk_policy=self.streaming_chunk_policy,
+                protocol_eligibility=self.protocol_eligibility,
             )
             for client_id in roster.client_ids
         )
         eligible_client_set = _build_eligible_client_set(
-            memberships, roster=roster, rule_identity=_PROTOCOL_ELIGIBILITY_RULE_IDENTITY
+            memberships,
+            roster=roster,
+            rule_identity=_protocol_eligibility_rule_identity(self.protocol_eligibility),
         )
         manifest = SplitManifest(
             partition_identity=request.partition.partition_identity,
