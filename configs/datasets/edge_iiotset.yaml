@@ -80,7 +80,7 @@ field_schema:
     row_identity: source_row_order
     benign_group_identity: { source: path, derived_from: normal_traffic_group_folder }
     attack_row_group_identity: unavailable
-    device_identity: { source: column, column: ip.src_host, usable: false }
+    device_identity: { source: column, column: ip.src_host, usable: false, superseded_by: endpoint_identity }
     timestamp_field: { column: frame.time, semantics: time_of_day_no_month_day }
     provenance_fields: [source_file_path, normal_traffic_group_folder, attack_file_basename]
   label_fields:
@@ -89,15 +89,47 @@ field_schema:
     family_taxonomy: unavailable
   attack_row_group_assignment:
     available: false
-    reason: attack_files_organized_by_attack_type_not_sensor_group
+    reason: attack_traffic_confined_to_attacker_subnet
     evidence: >-
-      Benign rows carry a deterministic sensor-type group identity (the ten Normal-traffic
-      folders). The fourteen Attack-traffic files share the identical 63-column schema but carry
-      no sensor-type or group column; the only device linkage, ip.src_host, is rejected by the
-      client_granularity_feasibility audit (19,090 distinct values, three addresses covering
-      ~83% of rows, plus placeholder/near-singleton noise). No source field assigns an attack row
-      to one of the ten benign sensor groups, so a per-client benign+attack evaluation cannot be
-      built without fabricating a mapping.
+      Direction-normalized internal-endpoint resolution over all four endpoint fields
+      (ip.src_host, ip.dst_host, arp.src.proto_ipv4, arp.dst.proto_ipv4), keyed on the paper
+      TABLE VI testbed topology (the third octet of 192.168.X.Y identifies the sensor /24),
+      resolves 99.95% of the 9,729,709 attack rows to exactly one subnet: subnet 0
+      (Temperature_and_Humidity / Modbus), the /24 that hosts both the Kali attacker
+      (192.168.0.170) and its primary victim (192.168.0.128). No attack row carries any subnet
+      1-8 endpoint in any field, so eight of the nine sensor clients receive zero attack rows.
+      A per-client benign+attack evaluation across the B1-B4 ladder is therefore impossible
+      without fabricating attack traffic for clients that have none. See endpoint_identity and
+      CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.3.
+  endpoint_identity:
+    resolution: direction_normalized_internal_endpoint
+    fields: [ip.src_host, ip.dst_host, arp.src.proto_ipv4, arp.dst.proto_ipv4]
+    internal_prefix: "192.168"
+    subnet_role_source: dataset_paper_table_vi
+    subnet_to_group:
+      0: [Temperature_and_Humidity, Modbus]   # shared /24; also hosts the attacker
+      1: Distance
+      2: phValue
+      3: Heart_Rate
+      4: Water_Level
+      5: IR_Receiver
+      6: Sound_Sensor
+      7: [Flame_Sensor, Modbus]               # Modbus server row shares Flame_Sensor's /24
+      8: Soil_Moisture
+    excluded_endpoints:
+      attacker: [192.168.0.170, 192.168.0.152]
+      ambiguous_dual_role: [192.168.0.101]    # Temperature IoT node and attacker impersonation IP
+      placeholder: ["0", "0.0.0.0"]
+      public_external: spoofed_flood_or_incidental_background
+    direction_normalization: prefer_non_attacker_internal_endpoint_then_smallest_nonzero_subnet
+    unresolved_row_policy: excluded_from_client_assignment
+    resolved_coverage:
+      benign: { rows: 11209913, resolved_fraction: 0.975 }
+      attack: { rows: 9729709, resolved_fraction: 0.9995, resolved_subnets: [0] }
+      clients_with_benign_and_attack: 1
+      required_client_coverage_ratio: 0.90
+      joint_client_coverage_ratio: 0.11
+    verdict: benign_group_identity_confirmed_attack_partition_infeasible
   retained_numeric_features:
     role: model_feature
     type: numeric_float
@@ -165,9 +197,14 @@ observed_facts:
   timestamp_unusable_files: [Modbus, DDoS_UDP_Flood_attack, MITM_attack]
   exact_duplicate_rate: 0.000125
   family_taxonomy_available: false
+  temperature_subnet: 0                       # corrected: shares subnet 0 with Modbus, not public-IP dominated
+  attack_resolved_subnets: [0]
+  attack_rows_in_sensor_subnets_1_8: 0
+  benign_subnet_consistency: one_subnet_per_folder_except_modbus_spans_0_and_7
 readiness:
   source_schema_complete: true
   benign_group_partition_recoverable: true
+  benign_endpoint_identity_recoverable: true
   attack_row_group_assignment_recoverable: false
   external_validation_executable: false
 audits:
@@ -181,18 +218,21 @@ audits:
     operations: { execution: dataset_audit, report: { table_type: source_inspection_report, output_formats: [markdown] } }
   - check: client_granularity_feasibility
     inspection:
-      expected_facts: [per_candidate_client_benign_counts]
-      candidate_granularities: [device, group]
+      expected_facts: [per_candidate_client_benign_counts, per_candidate_client_attack_counts]
+      candidate_granularities: [device, resolved_endpoint, group]
       target_client_counts: [6, 15]
     feasibility:
       rule: eligibility_coverage_gate
       minimum_calibration_sample_count: 100
       minimum_client_coverage_ratio: 0.90
-      required_evidence: [per_client_benign_counts]
+      required_evidence: [per_client_benign_counts, per_client_attack_counts]
     outcome:
       device_granularity: rejected
-      group_granularity: authorized
+      resolved_endpoint_granularity: benign_only
+      group_granularity: authorized_benign_only
       group_count: 10
+      joint_benign_attack_partition: infeasible
+      joint_client_coverage_ratio: 0.11
     operations: { execution: dataset_audit, report: { table_type: feasibility_report, output_formats: [markdown] } }
   - check: timestamp_semantics_verification
     inspection:
@@ -229,10 +269,11 @@ setups:
     suppression:
       reason: attack_row_client_assignment_unavailable
       evidence: >-
-        The benign sensor-type group partition is recoverable, but attack rows cannot be assigned
-        to those same groups (field_schema.attack_row_group_assignment). A per-client
-        benign+attack external-validation evaluation cannot be constructed without fabricating a
-        mapping, so the group partition alone is insufficient.
+        The benign sensor-type group partition is recoverable and is now independently confirmed
+        from endpoint IPs (field_schema.endpoint_identity), but every attack row resolves to a
+        single subnet (subnet 0, Temperature/Modbus); eight of the nine sensor clients receive
+        zero attack rows, so a per-client benign+attack external-validation evaluation cannot be
+        constructed without fabricating attack traffic. The group partition alone is insufficient.
   chronological:
     materialization: group_benign
     client_construction: { method: external_group_clients, group_count: 9, excluded_groups: [Modbus] }
@@ -246,5 +287,6 @@ setups:
       reason: attack_row_client_assignment_unavailable
       evidence: >-
         Within-client benign time-of-day ordering is defensible, but the chronological evaluation
-        still requires per-client attack rows at the temporal boundary; the same attack-row group
-        assignment gap that suppresses external_group applies here.
+        still requires per-client attack rows at the temporal boundary; the same attack-row
+        subnet-0 confinement that suppresses external_group (field_schema.endpoint_identity)
+        applies here.

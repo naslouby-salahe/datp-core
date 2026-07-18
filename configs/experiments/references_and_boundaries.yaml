@@ -61,9 +61,10 @@ experiments:
           reason: attack_row_client_assignment_unavailable
           evidence: >-
             The roadmap requires E-T3 on Regime A + D. The Regime A cell runs on N-BaIoT. The
-            Regime D cell on Edge-IIoTset is suppressed because attack rows cannot be assigned to
-            the sensor groups (see external_device_dataset_validation); the matched-comparator
-            scope under Regime D is preserved as intended but non-executable.
+            Regime D cell on Edge-IIoTset is suppressed because attack rows resolve only to the
+            attacker's subnet 0 (see external_device_dataset_validation), leaving eight of nine
+            sensor clients with no attack rows; the matched-comparator scope under Regime D is
+            preserved as intended but non-executable.
         data: { dataset: edge_iiotset, setup: external_group }
     evaluations:
       - label: shared_mean

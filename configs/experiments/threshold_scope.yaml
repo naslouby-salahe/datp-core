@@ -170,8 +170,9 @@ experiments:
         reason: attack_row_client_assignment_unavailable
         evidence: >-
           The roadmap marks the q-sensitivity sweep's Regime D extension as "+ Regime D". It is
-          infeasible because Edge-IIoTset attack rows cannot be assigned to the sensor groups (see
-          external_device_dataset_validation); the seam is preserved but non-executable.
+          infeasible because Edge-IIoTset attack rows resolve only to the attacker's subnet 0 (see
+          external_device_dataset_validation), leaving eight of nine sensor clients with no attack
+          rows; the seam is preserved but non-executable.
     model: autoencoder
     checkpoint_profile: datp_core
     training:

@@ -453,8 +453,9 @@ Edge-IIoTset external validation is **suppressed**, not runtime-selected. The
 `edge_iiotset.yaml` no longer carries an `external_device` setup at all; it
 keeps the benign-only `external_group` setup (`granularity: group`, K = 10)
 and the `chronological` setup, but each is authored `executable: false` with
-an explicit `suppression` block, because attack rows cannot be assigned to the
-benign sensor groups (`§11.3`). The `external_device_dataset_validation`
+an explicit `suppression` block, because attack traffic resolves only to the
+single attacker subnet, leaving eight of the nine sensor clients with no attack
+rows (`§11.3`). The `external_device_dataset_validation`
 experiment is therefore `run_requirement: suppressed` (`§16.3`). The
 no-runtime-fallback principle is unchanged: no scientific experiment's
 configuration ever contains a runtime rule choosing between device clients,
@@ -942,8 +943,9 @@ handling policy (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`).
 `client_granularity_feasibility` audit rejects device granularity, so it owns
 **no `external_device` setup**; it keeps a benign-only `external_group` setup
 and a `chronological` setup, but both are authored `executable: false` with an
-explicit `suppression` block, because attack rows cannot be assigned to the ten
-benign sensor groups (the full 63-column source schema and 39-entry
+explicit `suppression` block, because attack traffic resolves only to the
+single attacker subnet, leaving eight of the nine sensor clients with no attack
+rows (the full 63-column source schema and 39-entry
 `retained_numeric_features.order` are authored verbatim in the file; elided
 here for brevity):
 
@@ -970,12 +972,19 @@ field_schema:
     family_taxonomy: unavailable                 # no family/B3 taxonomy on Edge-IIoTset
   attack_row_group_assignment:
     available: false
-    reason: attack_files_organized_by_attack_type_not_sensor_group
+    reason: attack_traffic_confined_to_attacker_subnet
     evidence: >-
-      Benign rows carry a deterministic sensor-type group identity (the ten Normal-traffic
-      folders). The fourteen Attack-traffic files share the identical schema but carry no
-      sensor/group column; the only device linkage, ip.src_host, is rejected by
-      client_granularity_feasibility. No source field assigns an attack row to a benign group.
+      Direction-normalized internal-endpoint resolution over all four endpoint fields (keyed on
+      the paper TABLE VI subnet topology) resolves 99.95% of the 9,729,709 attack rows to a
+      single subnet: subnet 0 (Temperature/Modbus), the /24 hosting the Kali attacker and its
+      victim. No attack row carries any subnet 1-8 endpoint, so eight of nine sensor clients
+      receive zero attack rows. See endpoint_identity.
+  endpoint_identity:                             # direction-normalized resolution; benign confirmed, attack subnet-0 confined
+    resolution: direction_normalized_internal_endpoint
+    subnet_to_group: { 0: [Temperature_and_Humidity, Modbus], 1: Distance, 2: phValue, 3: Heart_Rate, 4: Water_Level, 5: IR_Receiver, 6: Sound_Sensor, 7: [Flame_Sensor, Modbus], 8: Soil_Moisture }
+    excluded_endpoints: { attacker: [192.168.0.170, 192.168.0.152], ambiguous_dual_role: [192.168.0.101], placeholder: ["0", "0.0.0.0"], public_external: spoofed_flood_or_incidental_background }
+    resolved_coverage: { attack: { resolved_subnets: [0] }, clients_with_benign_and_attack: 1, joint_client_coverage_ratio: 0.11 }
+    verdict: benign_group_identity_confirmed_attack_partition_infeasible
   retained_numeric_features: { role: model_feature, type: numeric_float, count: 39, order: [arp.opcode, ..., mbtcp.unit_id] }
   categorical_encoding:
     strategy: one_hot
@@ -988,12 +997,13 @@ field_schema:
 readiness:
   source_schema_complete: true
   benign_group_partition_recoverable: true
+  benign_endpoint_identity_recoverable: true
   attack_row_group_assignment_recoverable: false
   external_validation_executable: false
 audits:
   - { check: source_inspection, ... }
   - check: client_granularity_feasibility
-    outcome: { device_granularity: rejected, group_granularity: authorized, group_count: 10 }
+    outcome: { device_granularity: rejected, resolved_endpoint_granularity: benign_only, group_granularity: authorized_benign_only, group_count: 10, joint_benign_attack_partition: infeasible, joint_client_coverage_ratio: 0.11 }
     # ...inspection + feasibility as before
   - check: timestamp_semantics_verification
     outcome: { within_client_ordering: time_of_day_with_midnight_rollover_correction, cross_client_wall_clock_ordering: unavailable, temporal_group_count: 9, excluded_groups: [Modbus] }
@@ -1014,9 +1024,10 @@ setups:
     suppression:
       reason: attack_row_client_assignment_unavailable
       evidence: >-
-        The benign sensor-type group partition is recoverable, but attack rows cannot be assigned
-        to those groups; a per-client benign+attack external validation cannot be built without
-        fabricating a mapping.
+        The benign sensor-type group partition is recoverable (now confirmed from endpoints), but
+        all attack traffic resolves to the single attacker subnet 0, leaving eight of nine sensor
+        clients with no attack rows; a per-client benign+attack external validation cannot be
+        built without fabricating attack traffic.
   chronological:
     materialization: group_benign
     client_construction: { method: external_group_clients, group_count: 9, excluded_groups: [Modbus] }
@@ -1064,15 +1075,19 @@ multi-class label (verified 15 distinct values in the ML file: `Normal`
 plus 14 attack types matching the 14 `Attack traffic/` files exactly, with
 `DDoS_ICMP`/`DDoS_UDP`/`DDoS_TCP`/`DDoS_HTTP` merged from the
 flood-specific file names into shorter type labels). **Group identity is
-folder-derived, not `ip.src_host`-derived:** each `Normal traffic/`
-sensor-type folder occupies its own distinct `/24` subnet
-(`Distance→192.168.1.x`, `Flame_Sensor→192.168.7.x`, `Heart_Rate→192.168.3.x`,
-`IR_Receiver→192.168.5.x`, `Modbus→192.168.0.x`, `Soil_Moisture→192.168.8.x`,
-`Sound_Sensor→192.168.6.x`, `Water_Level→192.168.4.x`, `phValue→192.168.2.x`;
-`Temperature_and_Humidity` is the one exception, dominated by public IPs in
-sampling — worth a dedicated feasibility-audit check, not assumed
-consistent with the other nine), so the ten sensor-type folder names are a
-clean, verified candidate `GROUP_IDENTITY`/device-type taxonomy, while
+folder-derived, and now independently confirmed from the endpoint IPs:**
+a direction-normalized full-corpus audit (below) resolves each `Normal traffic/`
+sensor-type folder to its own distinct `/24` subnet
+(`Distance→192.168.1.x`, `phValue→192.168.2.x`, `Heart_Rate→192.168.3.x`,
+`Water_Level→192.168.4.x`, `IR_Receiver→192.168.5.x`, `Sound_Sensor→192.168.6.x`,
+`Flame_Sensor→192.168.7.x`, `Soil_Moisture→192.168.8.x`,
+`Temperature_and_Humidity→192.168.0.x`; `Modbus` spans `192.168.0.x` (client)
+and a dominant `192.168.7.x` (server), overlapping both `Temperature_and_Humidity`
+and `Flame_Sensor`). The earlier note that `Temperature_and_Humidity` was
+"dominated by public IPs" was a small-sample artifact: over the full corpus it
+is a clean subnet-0 folder whose 17% non-resolving rows are MAC-address source
+values, not public IPs. So the ten sensor-type folder names are a clean,
+verified candidate `GROUP_IDENTITY`/device-type taxonomy, while
 `ip.src_host` read directly is **not** clean (see below).
 
 **`ip.src_host` is not usable as client identity without cleaning.**
@@ -1088,6 +1103,65 @@ plus thousands of near-singleton pseudo-clients — concretely
 demonstrating, from the actual data, why `external_device_validation`'s
 device-vs-group granularity is feasibility-gated
 (`SCIENTIFIC_FOUNDATION.md §5.1`) rather than assumed.
+
+**Reopened full-corpus endpoint audit (direction-normalized).** Because the
+single-field `ip.src_host` view above is confounded by spoofed flood sources,
+MAC-address rows, and the attacker's own address, the feasibility question was
+reopened over the **complete** corpus (11,209,913 benign rows across the ten
+folders; 9,729,709 attack rows across the fourteen files) using **all four**
+endpoint fields (`ip.src_host`, `ip.dst_host`, `arp.src.proto_ipv4`,
+`arp.dst.proto_ipv4`) with **direction normalization** — each row is reduced to
+one internal endpoint, preferring the non-attacker `192.168.X.Y` address, keyed
+on the dataset paper's TABLE VI testbed topology (the third octet identifies the
+sensor `/24`). This resolves benign client identity **directly from the data**:
+97.5% of benign rows resolve to their own sensor subnet (≈99.99% per folder
+except `Temperature_and_Humidity`, whose 17% MAC-address source rows are
+unresolvable), independently confirming the folder taxonomy.
+
+**Attack traffic is confined to the attacker's subnet — the decisive
+suppression evidence.** Every attack row resolves to **one** subnet: subnet 0
+(`192.168.0.x`, Temperature/Modbus), the `/24` hosting both the Kali attacker
+`192.168.0.170` (present in 1,586,635 attack rows) and its primary victim
+`192.168.0.128` (9,724,050 attack rows). Only 0.048% of attack rows are
+unresolved (chiefly MITM/ARP MAC rows), and **no attack row carries any subnet
+1–8 endpoint in any of the four fields** — verified exhaustively across all
+fourteen files. The DDoS floods spoof public source IPs (ICMP 77% public,
+TCP-SYN 52%), but direction normalization recovers the internal victim
+`192.168.0.128` and still resolves them to subnet 0. Per-client joint coverage:
+
+| Sensor client (subnet) | Benign rows | Attack rows |
+|---|---|---|
+| 0 Temperature_and_Humidity / Modbus | 1,341,883 | 9,725,008 |
+| 1 Distance | 1,143,398 | 0 |
+| 2 phValue | 746,618 | 0 |
+| 3 Heart_Rate | 165,206 | 0 |
+| 4 Water_Level | 2,295,078 | 0 |
+| 5 IR_Receiver | 1,307,660 | 0 |
+| 6 Sound_Sensor | 1,512,754 | 0 |
+| 7 Flame_Sensor / Modbus-server | 1,225,711 | 0 |
+| 8 Soil_Moisture | 1,192,245 | 0 |
+
+Exactly **one** of the nine sensor clients (subnet 0) ever receives attack
+traffic — joint benign+attack coverage 1/9 ≈ 11%, far below the ≥ 90%
+eligibility gate. Three partition strategies were audited and all fail:
+(1) **resolved internal-endpoint clients** — eight of nine clients have zero
+attack test rows; (2) **source-grounded endpoint/service groups containing both
+benign and attack rows** — only subnet 0 qualifies, a single group that cannot
+form a multi-client dispersion ladder; (3) **controlled non-IID synthetic
+clients** — would require fabricating attack traffic for subnets 1–8 that have
+none, and would misrepresent Regime D's device-partitioned external-validation
+claim (RQ6) while duplicating Regime C's heterogeneity role. Because no
+source-grounded multi-client benign+attack partition exists, Regime D and
+D-temporal are **preserved as suppressed** cells
+(`attack_row_client_assignment_unavailable`), never deleted; the benign
+endpoint mapping and the excluded attacker/placeholder/public/malformed values
+are recorded machine-readably in `edge_iiotset.yaml`
+(`field_schema.endpoint_identity`). `Modbus` benign traffic is itself split
+across subnet 0 (client, 3,455 rows) and subnet 7 (server, 155,614 rows),
+overlapping both `Temperature_and_Humidity` and `Flame_Sensor`, so an
+IP-subnet client identity would also silently merge those folders — a further
+reason the folder-derived benign grouping, not a subnet client id, is the
+authorized benign taxonomy.
 
 **Raw schema, 63 columns, in exact source order, classified by role
 against the dataset authors' own documented preprocessing recipe**
@@ -1208,23 +1282,25 @@ values survive row-filtering), but the total width is no longer a blocker.
 
 **Suppression and blockers.** The post-encoding model-feature width is
 resolved (`39 + 76 = 115`; names `runtime_captured`). The decisive finding is
-that **external validation is suppressed, not merely gated**: benign rows map
-cleanly to the ten Normal-traffic sensor groups, but attack rows are organized
-by attack type across fourteen testbed-wide files with no sensor/group column,
-and the only device linkage (`ip.src_host`) is rejected by
-`client_granularity_feasibility`. Attack rows therefore cannot be
-deterministically assigned to the benign groups, so a per-client
-benign+attack external validation is impossible without fabricating a mapping.
+that **external validation is suppressed, not merely gated**: a reopened
+direction-normalized full-corpus endpoint audit confirms benign client identity
+directly from the endpoints (each sensor folder maps to its own `/24`), but
+**all attack traffic resolves to the single attacker subnet 0**
+(Temperature/Modbus) — no attack row carries any subnet 1–8 endpoint, so eight
+of the nine sensor clients receive zero attack rows. A per-client benign+attack
+external validation is therefore impossible without fabricating attack traffic.
 The audit records `device_granularity: rejected`, `group_granularity:
-authorized` (K = 10); `readiness.external_validation_executable` is `false`;
+authorized_benign_only` (K = 10), `joint_benign_attack_partition: infeasible`;
+`readiness.external_validation_executable` is `false`;
 the `external_group` and `chronological` setups are both `executable: false`
 with a `suppression` block; and no `family_taxonomy` exists, so the B3 family
 threshold is not authored on Edge-IIoTset. The group partition is retained
 only as a benign-only extension seam. Remaining open items are corroborating,
 not gating: the `frame.time` malformed-value distribution (relevant only to
-the now-suppressed temporal evaluation), the `Temperature_and_Humidity`
-subnet-consistency exception, and the full-corpus duplicate-row rate (only a
-30,000-row sample was checked).
+the now-suppressed temporal evaluation) and the full-corpus duplicate-row rate
+(only a 30,000-row sample was checked). The `Temperature_and_Humidity`
+subnet-consistency question is resolved — it is a clean subnet-0 folder (see
+above).
 
 ## 12. Reusable model configuration
 

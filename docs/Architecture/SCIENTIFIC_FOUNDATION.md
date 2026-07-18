@@ -37,9 +37,11 @@ temporal-recalibration experiment. Six mechanism analyses and a dedicated
 tautology-defense appendix support these. The confirmatory endpoint is
 singular and unchanged by the extension. The external device-partitioned and
 chronological cells are designed in full but currently execute as
-*suppressed* cells, because Edge-IIoTset attack rows cannot be assigned to
-its benign sensor groups (`§5`, `§5.1`); the confirmatory Regime A endpoint
-is unaffected by that suppression.
+*suppressed* cells, because Edge-IIoTset attack traffic resolves — under
+direction-normalized internal-endpoint identity — exclusively to the single
+attacker subnet, leaving eight of the nine sensor clients with no attack rows
+(`§5`, `§5.1`); the confirmatory Regime A endpoint is unaffected by that
+suppression.
 
 ## 2. Anchor relationship
 
@@ -167,7 +169,7 @@ the roadmap names is represented below, executable or not:
 | `file_pseudo_client_evaluation` | CICIoT2023, `DatasetFilePseudoClients` (63 pseudo-clients, matching the `MERGED_CSV/` file count exactly; feature count d = 39 manually corroborated against the mounted corpus, `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.2` — the `processed_feature_verification` audit's own run remains the citable gate) | B-a | `LOCKED`, boundary only; never generalized beyond itself |
 | `device_mac_repartition` | CICIoT2023, a device/MAC-scoped client construction | B-b | `REJECTED` — the available CSV artifact lacks MAC, device, IP, capture-source, and timestamp columns; no pseudo-client substitute and no PCAP-reprocessing branch exist |
 | `chronological_probe_ciciot2023` | CICIoT2023, a genuine-timestamp temporal protocol | — | `REJECTED` — no timestamp column and no file/row/merge/directory pseudo-time substitute |
-| `external_device_validation` | Edge-IIoTset, `ExternalDeviceOrGroupClients` (benign sensor-type group granularity K = 10 recoverable; device granularity rejected by the `client_granularity_feasibility` audit) | D | `SUPPRESSED` — attack rows cannot be assigned to the benign sensor groups (`attack_row_client_assignment_unavailable`); a per-client benign+attack evaluation cannot be built without fabricating a mapping (`§5.1`) |
+| `external_device_validation` | Edge-IIoTset, `ExternalDeviceOrGroupClients` (benign sensor-type group granularity K = 10 recoverable, now also confirmed directly from endpoints; naive per-`ip.src_host` device granularity rejected by the `client_granularity_feasibility` audit) | D | `SUPPRESSED` — all attack traffic resolves to the single attacker subnet 0 (Temperature/Modbus), so eight of nine sensor clients receive zero attack rows (`attack_row_client_assignment_unavailable`); a per-client benign+attack evaluation cannot be built without fabricating attack traffic (`§5.1`) |
 | `chronological_recalibration_evaluation` | `external_device_validation` composition, chronological 70/30 split, frozen-versus-one-shot recalibration | D-temporal | `SUPPRESSED` — the temporal MVE also needs per-client attack rows at the boundary; the same `attack_row_client_assignment_unavailable` gap applies (`§5.1`) |
 
 A rejected setting is a non-executable `RejectionRecord`
@@ -215,17 +217,26 @@ clients, group clients, or a fallback pseudo-client construction
 
 In the resolved Edge-IIoTset campaign this sequence terminates before its
 final scientific step. The `client_granularity_feasibility` audit authorizes
-the benign sensor-type **group** granularity (K = 10) and rejects the device
-granularity, but no source field assigns an *attack* row to one of those ten
-benign groups: the fourteen attack-type files carry no sensor/group column,
-and the only device linkage, `ip.src_host`, is the rejected one. The
-human-authored `external_group` setup is therefore marked `executable: false`
-with suppression reason `attack_row_client_assignment_unavailable`, and the
-scientific `external_device_dataset_validation` run — together with the
-chronological temporal MVE, which additionally needs per-client attack rows at
-the boundary — is suppressed rather than resolved. The feasibility ordering
-above remains the design; the suppression is a data-availability outcome
-recorded at authoring time, never a silent fallback or a fabricated mapping.
+the benign sensor-type **group** granularity (K = 10) and rejects the naive
+per-`ip.src_host` device granularity; a reopened audit additionally resolves
+benign client identity directly from the endpoints, using direction-normalized
+internal-endpoint resolution over all four endpoint fields keyed on the paper
+TABLE VI subnet topology (the third octet of `192.168.X.Y` names the sensor
+`/24`). That reopened audit confirms the benign group taxonomy from the data
+(97.5% of the 11.2M benign rows resolve to their own sensor subnet) but shows
+that **all 9.7M attack rows resolve to a single subnet — subnet 0
+(Temperature/Modbus), the `/24` hosting both the Kali attacker
+`192.168.0.170` and its victim `192.168.0.128`**. No attack row carries any
+subnet 1–8 endpoint in any field, so eight of the nine sensor clients receive
+zero attack rows (joint benign+attack coverage 1/9 ≈ 11%, below the 90% gate).
+The human-authored `external_group` setup is therefore marked
+`executable: false` with suppression reason
+`attack_row_client_assignment_unavailable`, and the scientific
+`external_device_dataset_validation` run — together with the chronological
+temporal MVE, which additionally needs per-client attack rows at the boundary
+— is suppressed rather than resolved. The feasibility ordering above remains
+the design; the suppression is a data-availability outcome recorded at
+authoring time, never a silent fallback or a fabricated mapping.
 
 ## 6. Threshold and comparator nomenclature
 

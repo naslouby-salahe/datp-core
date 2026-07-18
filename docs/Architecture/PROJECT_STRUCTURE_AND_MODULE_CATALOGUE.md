@@ -273,7 +273,8 @@ explicitly boundary-role only (`SCIENTIFIC_FOUNDATION.md §5`); its single
 granularity authorized) and `chronological` setups are retained, and both
 are non-executable (`executable: false`,
 `suppression.reason = attack_row_client_assignment_unavailable`) because
-Edge-IIoTset attack rows cannot be assigned to the benign sensor groups
+Edge-IIoTset attack traffic resolves only to the single attacker subnet 0,
+leaving eight of the nine sensor clients with no attack rows
 (`SCIENTIFIC_FOUNDATION.md §5.1`). Worked examples:
 `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11`.
 

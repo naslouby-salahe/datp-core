@@ -192,8 +192,9 @@ burst (27 min to 2.58 days), so a linear day-extrapolation of raw row counts
 would misrepresent deployment density — the hypothetical-number-as-measurement
 pattern SB-20 forbids — and no externally cited real-world IoT traffic rate
 is authorized. Edge external validation is itself suppressed
-(`attack_row_client_assignment_unavailable`: attack rows cannot be assigned
-to the benign sensor groups, §6 of the Edge dataset document and
+(`attack_row_client_assignment_unavailable`: all attack traffic resolves to the
+single attacker subnet 0, leaving eight of nine sensor clients with no attack
+rows, §6 of the Edge dataset document and
 `external_device_dataset_validation`), so no host experiment for the metric
 exists either. The suite and metric remain defined for a future run that
 supplies a validated traffic rate.
