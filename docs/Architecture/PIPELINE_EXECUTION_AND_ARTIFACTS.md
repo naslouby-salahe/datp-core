@@ -1,5 +1,17 @@
 # PIPELINE_EXECUTION_AND_ARTIFACTS
 
+## Purpose
+
+Define stage planning, execution, generic reuse, persistence, and recovery.
+
+## Authoritative for
+
+The current stage catalogue and artifact lifecycle.
+
+## Not authoritative for
+
+Scientific experiment meaning, configuration composition, or report layout.
+
 ## 1. Required lifecycle
 
 The shared execution engine owns the complete stage lifecycle; a stage
@@ -38,18 +50,20 @@ consumes another stage's output.
 | `DETECTOR_TRAIN` | processed training split, `TrainingProtocol` | `TrainingRunResult` (scheduled checkpoints) | `PROCESSED_SPLIT` | `SCIENTIFIC_CHECKPOINT` (one per scheduled round) |
 | `CHECKPOINT_SELECT` | scheduled checkpoints, natural-device evidence only | `CheckpointSelectionResult` | `SCIENTIFIC_CHECKPOINT` | `CHECKPOINT_SELECTION` |
 | `CALIBRATION_SCORE` | selected checkpoint, calibration split | `CalibrationScoreArtifactSet` | `CHECKPOINT_SELECTION`, `PROCESSED_SPLIT` | `SCORE_SET` (`SplitRole = CALIBRATION`) |
+| `CALIBRATION_SUBSET_SELECT` | calibration score set, `CalibrationSubsetDefinition` | `CalibrationSubsetResult` | `SCORE_SET` (`SplitRole = CALIBRATION`) | `CALIBRATION_SUBSET` |
 | `TEST_SCORE` | selected checkpoint, test split | `TestScoreArtifactSet` | `CHECKPOINT_SELECTION`, `PROCESSED_SPLIT` | `SCORE_SET` (`SplitRole = TEST`) |
 | `TEMPORAL_SCORE` | selected checkpoint, chronological split | `TemporalScoreArtifactSet` | `CHECKPOINT_SELECTION`, `PROCESSED_SPLIT` | `SCORE_SET` (`SplitRole = TEMPORAL_EVALUATION`) |
-| `THRESHOLD_CONSTRUCT` | calibration scores, `ThresholdConstruction` | `ThresholdConstructionResult` | `SCORE_SET` (`CALIBRATION`) | `THRESHOLD_OUTPUT` |
+| `THRESHOLD_CONSTRUCT` | calibration score set or selected subset, `ThresholdConstruction` | `ThresholdConstructionResult` | `SCORE_SET` (`CALIBRATION`), `CALIBRATION_SUBSET` when applicable | `THRESHOLD_OUTPUT` |
 | `EVALUATE` | threshold, test or temporal scores | `PolicyEvaluationResult` | `THRESHOLD_OUTPUT`, `SCORE_SET` (`TEST`/`TEMPORAL_EVALUATION`) | `METRIC_OUTPUT` |
 | `STATISTICAL_ANALYZE` | paired evaluation results, `AnalysisDefinition` | `StatisticalAnalysisResult` | `METRIC_OUTPUT` | `STATISTICAL_OUTPUT` |
 | `ANCHOR_EQUIVALENCE` | anchor `StatisticalAnalysisResult`, reference interval | `AnchorEquivalenceResult` | `STATISTICAL_OUTPUT` | `ANCHOR_EQUIVALENCE_RESULT` |
 | `RESOURCE_COST` | manifests, upstream artifact byte sizes | `ResourceCostResult` | multiple upstream families | `RESOURCE_COST_OUTPUT` |
-| `RESULT_FREEZE` | statistical / resource-cost results | `ResultFreezeManifest` | `STATISTICAL_OUTPUT`, `RESOURCE_COST_OUTPUT` | `RESULT_FREEZE` |
+| `RESULT_FREEZE` | selected report inputs and claim assessment | `ResultFreezeManifest` | conditional metric, statistics, anchor, resource, feasibility, suppression, and claim artifacts | `RESULT_FREEZE` |
 | `REPORT` | frozen result | rendered table, figure, or wording | `RESULT_FREEZE` | `RENDERED_TABLE`, `RENDERED_FIGURE`, `WORDING_OUTPUT` |
 
-Eighteen stages, merged only where lifecycle and artifact semantics
-genuinely coincide (the three role-scoped scoring stages are kept separate
+The registry contains the complete current stage catalogue; it has no
+permanent numeric stage-count invariant. The three role-scoped scoring stages
+are kept separate
 because each produces an independently reusable, independently
 fingerprinted artifact and each has distinct failure/recovery semantics — a
 calibration-scoring failure must not invalidate an already-committed test
@@ -89,7 +103,7 @@ class ExperimentStage(Protocol[InputT, OutputT]):
 
     def build_identity(
         self, definition: ExperimentDefinition, upstream: tuple[ArtifactRef, ...],
-    ) -> StageIdentity | ScoreIdentity: ...
+    ) -> StageIdentity: ...
 
     def execute(self, stage_input: InputT, context: StageExecutionContext) -> OutputT: ...
 ```
@@ -129,32 +143,14 @@ dictionary, global mutable registry, or service locator is used;
 `StageRunnerRegistry` is populated explicitly, once, at the composition
 root.
 
-### 4.1 Worked example: adding a future analysis stage
-
-Suppose a future `EQUITY_SUITE` analysis stage is added (consuming
-`METRIC_OUTPUT`, producing a new `EQUITY_OUTPUT` artifact family for the
-optional equity evaluation attached to `confirmatory_threshold_scope_effect`,
-`SCIENTIFIC_FOUNDATION.md §7.4`). The complete change set is:
-
-1. `domain/evaluation.py` gains `FleetEquityResult` (already catalogued,
-   §`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §6.5`) and, if genuinely new, an
-   `EQUITY_OUTPUT` member on `ArtifactType`.
-2. `application/stages/equity_suite.py` implements `ExperimentStage` with
-   `dependencies = (STATISTICAL_ANALYZE,)`.
-3. `composition/registries.py` gains one line:
-   `StageRunnerRegistry[PipelineStage.EQUITY_SUITE] = EquitySuiteStage()`.
-
-The core executor (`§1`), the reuse gate (`§5`), persistence (`§6`), and
-recovery (`§8`) are unchanged; no existing stage implementation is edited.
+Equity is an optional `EVALUATE` output, not a pipeline stage.
 
 ## 5. Artifact reuse
 
-A `StageIdentity` or `ScoreIdentity` is compared field-for-field against a
-candidate artifact's recorded identity. A change confined to threshold
-construction changes only `ThresholdIdentity` and its downstream
-identities; the calibration and test `ScoreIdentity` values — and therefore
-the trained checkpoint — are untouched and reused without retraining or
-rescoring. A change confined to a statistical procedure never recomputes
+A `StageIdentity` and its `ArtifactKey` are compared against a candidate's
+recorded key and producer compatibility. A threshold-only change preserves
+the compatible calibration and test score artifact keys and therefore never
+retrain or rescore. A statistical-procedure change never recomputes
 scores or thresholds when a compatible `PolicyEvaluationResult` already
 exists. Reuse is never decided by file existence, filename, directory name,
 modification time, human-readable label, or partial field comparison; an
@@ -163,20 +159,17 @@ incompatible existing artifact yields `RECOMPUTE` with a typed
 with a typed `BlockingReason`.
 
 ```python
-class ScoreReuseGate:
+class ArtifactReuseGate:
     def decide(
-        self, required: ScoreIdentity, candidate: ArtifactRef | None,
+        self, required: ArtifactKey, candidate: ArtifactRef | None,
     ) -> ReuseDecision: ...
 ```
 
 ### 5.1 Required invalidation rules
 
-One generic mechanism — `StageIdentity`/`ScoreIdentity` field comparison,
-`ArtifactType`, required input artifact fingerprints, the scientific
-identity projection, and execution identity only where it is genuinely
-output-affecting — governs every invalidation decision below; no
-score-specific or stage-specific reuse mechanism exists anywhere else in
-this design.
+One generic mechanism — `StageIdentity`, `ArtifactKey`, required upstream
+references, producer implementation identity, resolved scientific inputs,
+and output-affecting runtime choices — governs every invalidation decision.
 
 - A client-partition change invalidates the split, every downstream
   processed split, training, checkpoint, and score, and every artifact
@@ -205,22 +198,20 @@ this design.
 
 ## 6. Artifact identity and lineage
 
-- **`ArtifactRef`** — `{artifact_type: ArtifactType, scope:
-  ArtifactScopeKey, content_hash: Blake3Digest}`. `ArtifactScopeKey` is a
-  closed union of scope-specific variants — dataset-level, partition-level,
-  seed-scoped, cross-seed, run-level, and report-level — mirroring the six
-  genuinely distinct addressing needs of the prior design's separate
-  artifact-key types, but expressed as one reference type with a
-  discriminated scope rather than six sibling key classes.
+- **`ArtifactKey`** — `{artifact_type, scope, producer_identity}`; exists
+  before computation for lookup, locking, and reuse.
+- **`ArtifactRef`** — `{key, content_hash}`; exists only after verified
+  persistence. One key with differing content is an integrity error.
+- **`ProducerImplementationIdentity`** — `{component_revision,
+  algorithm_revision, dependency_compatibility_signature}`; stage-scoped
+  compatibility, not a whole-repository fingerprint.
 - **Scientific identity** — the subset of `ExperimentDefinition` fields
   that determine whether two computations are the same science
   (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §6`).
 - **Execution identity** — output-affecting execution choices not already in
   scientific identity (for example a worker count proven non-deterministic).
-- **Content hash** — a blake3 digest of the persisted bytes, independent of
-  the logical `ArtifactRef`; the same logical reference appearing with a
-  different hash is a typed integrity error, never resolved by minting a
-  new identifier.
+- **Content hash** — a blake3 digest of persisted bytes. Lookup never uses a
+  filename, timestamp, directory existence, or storage location.
 - **Storage location** — a `BoundStorageRoot` plus a relative path; never
   scientific identity, and never visible outside `infrastructure/persistence`.
 - **`ProvenanceRecord`** — resolved-configuration-snapshot reference,
@@ -257,7 +248,7 @@ member.
 | `RECOVERY_CHECKPOINT` | `DETECTOR_TRAIN` (safe boundary) | resume-only state; never scientific evidence |
 | `CHECKPOINT_SELECTION` | `CHECKPOINT_SELECT` | selected round, candidate evidence, tie-break record |
 | `SCORE_SET` | `CALIBRATION_SCORE` / `TEST_SCORE` / `TEMPORAL_SCORE` | discriminated by `SplitRole`; test/temporal variants additionally carry benign and attack members |
-| `THRESHOLD_OUTPUT` | `THRESHOLD_CONSTRUCT` | per-client threshold assignment, calibration `ScoreIdentity` consumed |
+| `THRESHOLD_OUTPUT` | `THRESHOLD_CONSTRUCT` | per-client threshold assignment, calibration `ArtifactRef` consumed |
 | `METRIC_OUTPUT` | `EVALUATE` | per-client and fleet evaluation results |
 | `STATISTICAL_OUTPUT` | `STATISTICAL_ANALYZE` | paired delta, interval, claim outcome |
 | `ANCHOR_EQUIVALENCE_RESULT` | `ANCHOR_EQUIVALENCE` | passed/failed comparison against the reference interval |

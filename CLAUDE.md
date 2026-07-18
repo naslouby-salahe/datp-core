@@ -1,14 +1,10 @@
-Read `AGENTS.md` first.
-Read `ai/README.md`.
-Use `ai/` as the source of truth.
+# CLAUDE.md
 
-Before any task, use a contract from `ai/contracts/`.
-Select the workflow from `ai/workflows/`.
-Use relevant role files from `ai/agents/`.
-Use `ai/skills/` as checks.
-Use `ai/hooks/` as checklist gates.
+Read `AGENTS.md` first — it is the single source of governance.
+Use `ai/` for detailed procedures: `ai/commands/` (task workflows), `ai/skills/` (checks),
+`ai/agents/` (roles), `ai/hooks/` (gates).
 
-No backward compatibility by default.
-No shims, redirects, aliases, fake compatibility, deprecated APIs, or legacy preservation.
-Do not perform release, tag, or versioning work.
-Final response must follow `AGENTS.md`.
+Claude-specific: subagents are registered in `.claude/agents/`, slash-commands in `.claude/commands/`;
+both are thin pointers to `ai/`. Do not duplicate policy in `.claude/`.
+
+Every final response follows the final-report format in `AGENTS.md`.

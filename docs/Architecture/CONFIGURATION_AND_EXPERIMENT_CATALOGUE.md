@@ -1,78 +1,86 @@
 # CONFIGURATION_AND_EXPERIMENT_CATALOGUE
 
-## 1. Minimal YAML organization
+## Purpose
+
+Define boundary ownership, composition, sweeps, registry, CLI, and Make.
+
+## Authoritative for
+
+Configuration schemas and resolution contracts.
+
+## Not authoritative for
+
+Scientific meaning, execution mechanics, or report rendering.
+
+## 1. Configuration directories
 
 ```text
 configs/
-├── experiments/     # one document per swept or standalone ExperimentDefinition
-├── datasets/          # reusable DataDefinition documents
-├── detectors/           # reusable DetectorDefinition and EvaluationDefinition fragments
-├── runtime/               # named ExecutionDefinition profiles
-└── reporting/               # ReportingDefinition catalogues
+├── experiments/      # scientific experiment roots
+├── dataset_audits/   # source-inspection and feasibility-audit roots
+├── datasets/         # reusable data definitions
+├── detectors/        # reusable detector definitions
+├── runtime/          # named execution profiles
+└── reporting/        # presentation definitions
 ```
 
-Five directories, each with exactly one schema owner (`config/schemas/`, one
-module per directory). Every document under `experiments/` is a complete,
-resolvable root that references, but never duplicates, entries under the
-other four directories. There is no per-dataclass directory and no deep
-nesting. `detectors/` replaces the prior `protocols/` name throughout this
-package: the directory, its schema module, every YAML path, and the
-experiment-document reference field are all named for what the directory
-owns — a `DetectorDefinition` — not for the generic word "protocol," which
-remains only as an ordinary English term inside field names such as
-`training_protocol`.
+Each directory has one boundary schema owner. Experiment and audit documents
+are complete roots that reference, but never duplicate, their reusable
+definitions. The `detectors/` directory owns detector definitions only;
+evaluation and threshold definitions are experiment-owned.
 
 ## 2. Schema ownership
 
 | Directory | Owns | Schema module |
 |---|---|---|
-| `experiments/` | identity, dataset/detector/runtime/reporting references, seed cohort, prerequisites, anchor reference interval, any sweep dimension | `config/schemas/experiment.py` |
-| `datasets/` | dataset, client construction, split definition, preprocessing, calibration-window selection | `config/schemas/data.py` |
-| `detectors/` | training protocol, model architecture, optimizer/scheduler, checkpoint policy, training/scoring batch definitions, threshold construction, evaluation suite | `config/schemas/detector.py` |
-| `runtime/` | execution mode, device policy, resource budget, concurrency, batch-execution profile | `config/schemas/runtime.py` |
-| `reporting/` | table/figure/report-artifact catalogue and formats | `config/schemas/reporting.py` |
+| `experiments/` | scientific identity, evidence role/tier, run requirement, dataset/detector/runtime/reporting references, evaluations, analyses, seed cohort, prerequisites, sweeps/bindings, component evidence/placement | `config/schemas/experiment.py` |
+| `dataset_audits/` | source inspection, feasibility audit, source reference, audit rules, runtime/reporting references | `config/schemas/dataset_audit.py` |
+| `datasets/` | dataset identity/version, source, client/partition/split semantics, scientific preprocessing | `config/schemas/data.py` |
+| `detectors/` | architecture, reconstruction objective/loss, training, optimizer/scheduler, participation, checkpoint production, training/scoring batches, precision, deterministic computation | `config/schemas/detector.py` |
+| `runtime/` | device/CUDA, RAM/VRAM/disk/worker limits, concurrency, process policies, chunks/prefetch, timeouts, telemetry/logging | `config/schemas/runtime.py` |
+| `reporting/` | presentation, formats, ordering, placement, and display labels | `config/schemas/reporting.py` |
 
-A field absent from its owning document is a validation failure at load
-time; it is never satisfied by another document. Statistical procedure and
-comparison direction are owned by the `analyses` block of `experiments/`,
-never by `detectors/` (`§6` below, `DOMAIN_AND_APPLICATION_ARCHITECTURE.md
-§3.3`).
+A field absent from its owner fails boundary validation. Dataset audits never
+carry detector, threshold, seed, evidence-role, or claim-tier fields.
+Reporting never owns a scientific setting or a runtime artifact reference.
 
 ## 3. Canonical execution lifecycle
 
-The complete lifecycle, from invocation to rendered output, in order:
+Configuration resolution is pre-pipeline composition. Its required order is:
 
 ```text
-CLI command or zero-input Make target (§21)
-  → experiment configuration selection (YAML path or registered slug)
-    → root experiment YAML loading
-      → referenced YAML resolution (dataset / detector / runtime / reporting)
-        → Pydantic boundary validation (one schema per directory, §2)
-          → enum and discriminated-union construction
-            → frozen domain dataclass construction (ExperimentDefinition)
-              → cross-document scientific validation (§4)
-                → resolved-configuration snapshot creation
-                  → resolved-configuration fingerprinting and persistence (§22)
-                    → sweep expansion into resolved ExperimentCell objects (§17)
-                      → prerequisite and scientific-readiness checks (§19,
-                        ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7)
-                        → stage planning (PIPELINE_EXECUTION_AND_ARTIFACTS.md §§1–4)
-                          → artifact-reuse decisions (PIPELINE_EXECUTION_AND_ARTIFACTS.md §5)
-                            → stage execution (PIPELINE_EXECUTION_AND_ARTIFACTS.md §§1–15)
-                              → evaluation
-                                → statistical analysis
-                                  → result freeze
-                                    → reporting
+load root boundary document
+  → load referenced boundary documents
+    → validate each document schema
+      → resolve typed references
+        → validate typed sweep bindings
+          → expand sweep coordinates
+            → resolve one complete configuration per coordinate
+              → construct frozen resolved domain objects
+                → run cross-document scientific validation
+                  → create one canonical resolved snapshot per resolved cell
+                    → return the resolution result to the application layer
+                      → persist snapshots through an application port
+                        → run readiness and prerequisite checks
+                          → create the execution plan
 ```
 
-Every step through "resolved-configuration fingerprinting and persistence"
-is a pre-pipeline composition operation performed entirely by
-`config/compose.py`; nothing before that line is a `PipelineStage` member,
-and nothing after it re-enters `config` (`ARCH-04`). `config/compose.py` is
-the single typed composer performing every composition step exactly once
-per invocation. No Pydantic model, YAML mapping, or raw dictionary exists
-past the frozen-definition step; `application`, `analysis`, and
-`infrastructure` never import `config`.
+`config/compose.py` performs validation and composition only. It neither
+persists artifacts nor imports infrastructure. The application use case
+persists snapshots through `ArtifactStore` after receiving:
+
+```text
+ConfigurationResolutionResult
+├── authored_root_snapshot
+├── resolved_runs
+├── resolved_run_snapshots
+└── boundary_blockers
+```
+
+Resolved runs are complete frozen domain objects. Draft boundary blockers,
+operational profile requirements, source-inspection results, feasibility
+decisions, and optional telemetry preferences are distinct states; none is a
+generic domain sentinel.
 
 ## 4. Scientific authorization
 
@@ -87,7 +95,8 @@ every affected document:
   `{SharedThreshold(MEAN), LocalThreshold}`, a `seed_cohort.paired_seed_count`
   other than ten, a primary metric other than `CV_FPR`, or `tier ≠ TIER_1`.
 - `evidence_role = ANCHOR` with a `seed_cohort.paired_seed_count` other than
-  five, or without an `anchor_reference_interval`.
+  five, or without an `AnchorEquivalenceAnalysis` owning the reference
+  interval.
 - A `BenignCalibrationSplit` reachable from any field capable of carrying an
   attack label.
 - `training_protocol = FederatedAveragingTraining` or
@@ -97,14 +106,11 @@ every affected document:
 - `TrainingProtocol.FederatedProxTraining.mu` equal to zero, equal to a
   FedAvg-equivalent value, or absent from the pre-registered grid
   `{0.001, 0.01, 0.1}`.
-- Any non-`SCIENTIFIC`/`PRINT_GRADE` field explicitly marked `unresolved`
-  reaching a `SCIENTIFIC` or `PRINT_GRADE` execution mode.
+- Any incomplete boundary document reaching resolve, plan, or run.
 - Any experiment whose `identity.slug` matches a rejected or out-of-scope
   entry (`SCIENTIFIC_FOUNDATION.md §7.6`).
-- A `regime_label` present in an authored YAML document at all — it is
-  computed post-resolution by `derive_regime_label`
-  (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §3.1`) and is never a legal
-  input field.
+- A publication regime label present in authored YAML; it is derived only
+  by `derive_publication_regime(data)` for reporting.
 - An `effective_batch_size`, `rounds_max`, `batch_normalization`, or
   artifact `namespace` field present in an authored YAML document — each is
   computed post-resolution (`effective_batch_size` and `rounds_max` by the
@@ -149,7 +155,7 @@ strategy") and never an omitted required value.
 |---|---:|---:|---:|---:|---:|
 | Dataset, dataset version | Yes | No | Yes | No | Yes |
 | `execution_status` (`MANDATORY`/`OPTIONAL`/`SUPPRESSED`) | No (does not affect a computed value) | No | Yes | Yes (governs whether a result is main-paper or supplement) | Yes |
-| `regime_label` | No — derived, never authored | No | Yes (citation only) | Yes | No — computed by `derive_regime_label`, rejected if supplied in YAML |
+| publication regime | No — reporting projection only | No | Yes | Yes | No — derived by `derive_publication_regime` |
 | Feature schema | Yes | No | Yes | No | Runtime-captured (source-inspected), never authored |
 | Client construction, partition seed | Yes | No | Yes | No | Yes |
 | Split boundaries (chronological fraction, timestamp field) | Yes | No | Yes | No | Yes |
@@ -174,8 +180,7 @@ strategy") and never an omitted required value.
 | Traffic rate (alert burden) | Yes (when requested) | No | Yes | Yes | Yes, when `AlertBurdenEvaluationSuite` is selected |
 | `seed_cohort.paired_seed_count`, `seed_cohort.derivation` | Yes | No | Yes | No | Yes |
 | `analyses[*].statistical_procedure.confidence_level` | Yes | No | Yes | Yes | Yes |
-| `analyses[*].statistical_procedure.resample_count` | Yes | No | Yes | Yes | Yes; **unresolved in both source documents — genuine blocker, `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`** |
-| `analyses[*].statistical_procedure.include_wilcoxon` / `include_cliffs_delta` | Yes (descriptive only) | No | Yes | Yes | Yes |
+| `analyses[*].primary_procedure` / `secondary_procedures` | Yes | No | Yes | Yes | Yes; bootstrap resample count remains a blocker until pre-registered |
 | Runtime device / CUDA requirement | No | Yes | Yes | No | Yes |
 | GPU model, driver version | No | No | Yes | No | Runtime-captured only |
 | RAM / VRAM budget | No | Yes | Yes | No | Yes; **not numerically specified in either source document — genuine blocker** |
@@ -199,7 +204,7 @@ client_construction:
 
 ## 8. Fingerprinting rules
 
-A `StageIdentity` or `ScoreIdentity` fingerprint is a blake3 digest of a
+A `StageIdentity` and `ArtifactKey` fingerprint are blake3 digests of a
 canonical tuple of typed, quantized fields — never a JSON serialization of a
 specification. `ThresholdPercentile`, `ShrinkageWeight`, `CoverageRatio`,
 and similar identity-bearing decimals are canonicalized once, at
@@ -530,7 +535,7 @@ only — never as a domain-level `ExperimentTemplate`
 the roadmap specifies:
 
 ```yaml
-# configs/experiments/threshold_quantile_sensitivity.yaml
+# Non-executable fragment: configs/experiments/threshold_quantile_sensitivity.yaml
 schema_version: 1
 slug: threshold_quantile_sensitivity
 evidence_role: supportive
@@ -538,43 +543,43 @@ roadmap_reference: E-S2
 dataset: datasets/natural_device_nbaiot.yaml
 detector: detectors/core_federated_averaging.yaml
 sweep:
-  axis: quantile
-  values: [0.90, 0.95, 0.975, 0.99]
+  parameters:
+    threshold_quantile:
+      values: [0.90, 0.95, 0.975, 0.99]
 evaluations:
   - label: shared_mean
-    threshold: { policy: shared_threshold, construction: mean, quantile: "{sweep}" }
+    threshold:
+      policy: shared_threshold
+      construction: mean
+      quantile: { from_sweep: threshold_quantile }
   - label: local
-    threshold: { policy: local_threshold, quantile: "{sweep}" }
+    threshold: { policy: local_threshold, quantile: { from_sweep: threshold_quantile } }
   - label: cluster_k3
-    threshold: { policy: cluster_threshold, aggregation: mean, cluster_count: 3, quantile: "{sweep}" }
+    threshold: { policy: cluster_threshold, aggregation: mean, cluster_count: 3, quantile: { from_sweep: threshold_quantile } }
 seed_cohort:
   paired_seed_count: 10
   derivation: deterministic_from_experiment_seed
-  experiment_seed: unresolved
+  # Exact pre-registered seed cohort is required before this fragment becomes executable.
 prerequisites:
   - requires: anchor_reproduction
     required_outcome: anchor_equivalence_passed
 ```
 
-The composer expands this boundary document directly into four resolved
-`ExperimentCell` values, one per quantile, each with an
-`ExperimentCellIdentity` derived from `(experiment_slug,
-sweep_coordinate_hash)`; a collision between two distinct resolved cells is
-a planning error, never a silent overwrite. No intermediate
-`ExperimentTemplate` object is constructed — the boundary schema's `sweep`
-block is consumed once, inside `config/compose.py`, and never crosses into
-`domain` or `application`. Other sweep grids follow the identical mechanism
+The composer validates a binding's declared parameter and value-object type,
+then expands one complete resolved run and canonical snapshot per coordinate.
+Bindings are consumed in composition and never enter the domain. Other sweep
+grids follow the identical mechanism
 using their own source-given values: alpha `{0.1, 0.3, 0.5, 1.0, 10.0, IID}`
 (`controlled_heterogeneity_response`), lambda `{0, .25, .5, .75, 1}`
 (`local_global_threshold_shrinkage`), calibration size
 `{50, 100, 250, 500, 1000, 5000}` (`calibration_window_size_stability`, each
-point additionally resolving a `CalibrationWindowSelection`), and fixed-k
+point additionally resolving a `CalibrationSubsetDefinition`), and fixed-k
 `{2.0, 2.5, 3.0}` (the `federated_summary_comparator`'s optional
 supplementary evaluation).
 
 ## 18. A second worked sweep: controlled heterogeneity response
 
-`configs/experiments/controlled_heterogeneity_response.yaml`, using only
+Non-executable fragment — `configs/experiments/controlled_heterogeneity_response.yaml`, using only
 the roadmap's own Dirichlet grid and client count:
 
 ```yaml
@@ -585,8 +590,9 @@ roadmap_reference: E-S3
 dataset: datasets/dirichlet_nbaiot.yaml
 detector: detectors/core_federated_averaging.yaml
 sweep:
-  axis: alpha
-  values: [0.1, 0.3, 0.5, 1.0, 10.0, iid]
+  parameters:
+    dirichlet_alpha:
+      values: [0.1, 0.3, 0.5, 1.0, 10.0, iid]
 evaluations:
   - label: shared_mean
     threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
@@ -595,27 +601,23 @@ evaluations:
   - label: cluster_k3
     threshold: { policy: cluster_threshold, aggregation: mean, cluster_count: 3, quantile: 0.95 }
 analyses:
-  - kind: paired_threshold_analysis
-    first_evaluation: shared_mean
-    second_evaluation: local
-    primary_metric: pairwise_js_divergence   # heterogeneity–threshold-benefit association (E-M4)
-    delta_orientation: shared_minus_local
-    statistical_procedure:
-      method: spearman_correlation
-      confidence_level: 0.95
-      resample_count: unresolved
-      include_wilcoxon: false
-      include_cliffs_delta: false
+  - label: heterogeneity_benefit_association
+    kind: metric_association_analysis
+    predictor_metric: pairwise_js_divergence
+    outcome_metric: cv_fpr_delta
+    grouping_dimension: dirichlet_alpha
+    primary_procedure: { method: spearman_correlation }
+    secondary_procedures: [{ method: linear_regression }]
 seed_cohort:
   paired_seed_count: 10
   derivation: deterministic_from_experiment_seed
-  experiment_seed: unresolved
+  # Exact pre-registered seed cohort is required before this fragment becomes executable.
 prerequisites:
   - requires: anchor_reproduction
     required_outcome: anchor_equivalence_passed
 ```
 
-`configs/datasets/dirichlet_nbaiot.yaml`:
+Non-executable fragment — `configs/datasets/dirichlet_nbaiot.yaml`:
 
 ```yaml
 schema_version: 1
@@ -623,15 +625,14 @@ dataset: n_baiot
 client_construction:
   method: dirichlet_partitioned_clients
   client_count: 20
-  alpha: "{sweep}"
-  partition_seed: unresolved   # BLOCKED — see §6
+  alpha: { from_sweep: dirichlet_alpha }
+  # The required partition seed is pre-registered before execution.
 split_definition:
   train: { role: train }
   calibration: { role: calibration, benign_only: true }
   test: { role: test }
 preprocessing:
   normalization: { strategy: min_max, scope: global_train }
-  chunk_profile: { chunk_row_count: 50000 }
 ```
 
 Two templates sharing the identical `detectors/core_federated_averaging.yaml`
@@ -676,12 +677,12 @@ actions:
 
 ```bash
 datp-core experiment list
-datp-core experiment validate --config <experiment.yaml>
-datp-core experiment resolve --config <experiment.yaml>
-datp-core experiment plan --config <experiment.yaml>
-datp-core experiment run --config <experiment.yaml>
-datp-core experiment status --config <experiment.yaml>
-datp-core experiment report --config <experiment.yaml>
+datp-core experiment validate --config <slug-or-path>
+datp-core experiment resolve --config <slug-or-path>
+datp-core experiment plan --config <slug-or-path>
+datp-core experiment run --config <slug-or-path>
+datp-core experiment status --config <slug-or-path>
+datp-core experiment report --config <slug-or-path>
 ```
 
 `--config` accepts either a YAML path or a registered experiment slug
@@ -697,7 +698,19 @@ preprocessing, training protocol, model architecture, optimizer, learning
 rate, round or checkpoint schedule, batch size, threshold policy or
 quantile, seed cohort, runtime execution mode, statistical procedure,
 reporting content, or any other scientific, identity-bearing, or
-output-affecting value. A scientific change occurs only through an edited,
+output-affecting value. Dataset audits expose the identical lifecycle:
+
+```bash
+datp-core dataset-audit list
+datp-core dataset-audit validate --config <slug-or-path>
+datp-core dataset-audit resolve --config <slug-or-path>
+datp-core dataset-audit plan --config <slug-or-path>
+datp-core dataset-audit run --config <slug-or-path>
+datp-core dataset-audit status --config <slug-or-path>
+datp-core dataset-audit report --config <slug-or-path>
+```
+
+A scientific change occurs only through an edited,
 reviewed configuration document, which produces a new resolved snapshot and
 new affected identities (`CFG-09`).
 
@@ -856,15 +869,10 @@ report-all-completed:
 	datp-core experiment report --config configs/experiments/confirmatory_threshold_scope_effect.yaml
 	# one explicit line per completed registered configuration
 
-mandatory-run: anchor-run confirmatory-run
-	# sequentially invokes the fixed, explicitly listed mandatory CLI configurations;
-	# never discovers or alters a scientific value dynamically
+mandatory-run:
+	datp-core experiment run --mandatory
 ```
 
-`mandatory-run`'s ordering runs `anchor-run` before `confirmatory-run`
-because `confirmatory_threshold_scope_effect.yaml`'s typed `prerequisites`
-entry requires the anchor's passed result — but the enforcement itself is
-the application's `AnchorEquivalenceGate` consulted by the planner
-(`PIPELINE_EXECUTION_AND_ARTIFACTS.md §7`), never the Make target order
-alone; running `confirmatory-run` directly, out of order, is blocked by the
-same gate with a typed error, not silently accepted.
+Mandatory orchestration and prerequisite enforcement belong to the
+application. Make never encodes dependencies, so parallel Make execution
+cannot bypass the typed `AnchorEquivalenceGate`.

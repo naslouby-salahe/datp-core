@@ -1,5 +1,18 @@
 # SCIENTIFIC_FOUNDATION
 
+## Purpose
+
+Define scientific identity, datasets, thresholds, experiments, claim gates,
+and scope boundaries.
+
+## Authoritative for
+
+Scientific meaning and publication disposition.
+
+## Not authoritative for
+
+Configuration composition, runtime execution, persistence, or rendering.
+
 ## 1. DATP-Core scientific identity
 
 DATP-Core is a fixed-detector, threshold-calibration-scope study. One

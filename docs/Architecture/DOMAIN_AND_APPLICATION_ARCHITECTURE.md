@@ -1,48 +1,49 @@
 # DOMAIN_AND_APPLICATION_ARCHITECTURE
 
-## 1. Dependency layers and exact import rules
+## Purpose
 
-Seven layers, one allowed direction. Every rule below is enforceable through
-static import contracts; none is qualified by "usually" or "when
-unavoidable."
+Define dependency layers, frozen contracts, unions, application use cases,
+and ports.
+
+## Authoritative for
+
+Domain/application ownership and type contracts.
+
+## Not authoritative for
+
+Scientific meaning, YAML composition, stage mechanics, or rendering.
+
+## 1. Dependency layers and import rules
+
+Six layers, one allowed direction.
 
 | Layer | May import | Must not import |
 |---|---|---|
-| `domain` | standard library, other `domain` modules | Pydantic, PyYAML, Torch, NumPy, pandas, PyArrow, scikit-learn, SciPy, Flower, any filesystem or CLI framework |
-| `application` | `domain` | `config`, `infrastructure` concretely (ports only), `analysis`, `cli`, any framework |
+| `domain` | standard library, other `domain` modules | Pydantic, PyYAML, scientific frameworks, filesystem, CLI frameworks |
+| `application` | `domain` | `config`, concrete infrastructure, `cli`, frameworks |
 | `config` | `domain` | `application`, `infrastructure`, `cli`, scientific computation |
-| `analysis` | `domain` | `infrastructure`, persistence, `cli`, any framework in its scientific parts |
-| `infrastructure` | `application`, `domain`; `infrastructure/reporting` additionally imports `analysis` | `config`, `cli` |
-| `composition` | `config`, `application`, `infrastructure`, `analysis`, `domain` | any framework directly (reached only through `infrastructure` adapters it constructs) |
-| `cli` | `composition` and shared boundary result/error types | `infrastructure`, `config`, any framework; never constructs an adapter, binds a port, or resolves a path |
+| `infrastructure` | `application`, `domain` | `config`, `cli` |
+| `composition` | `domain`, `application`, `config`, `infrastructure` | direct framework use |
+| `cli` | `composition` and shared boundary result/error types | `infrastructure`, `config`, direct adapter construction |
 
-`analysis` remains a distinct layer because its consumers differ from
-`application`'s: it is read by both the reporting gate
-(`application/reporting`) and infrastructure renderers, and it must stay
-framework-free so a table or figure specification is unit-testable without a
-plotting library. It imports only `domain`, or — narrowly — a stable,
-framework-free application reporting contract (a result-freeze or trace
-type) when unavoidable; it never imports a persistence adapter.
+Framework-free analysis and reporting specifications belong in
+`application/reporting`; infrastructure provides only adapters.
 
 ```mermaid
 graph TD
     DOM[domain]
     APP[application]
     CFG[config]
-    ANA[analysis]
     INFRA[infrastructure]
     COMP[composition]
     CLI[cli]
     APP --> DOM
     CFG --> DOM
-    ANA --> DOM
     INFRA --> APP
     INFRA --> DOM
-    INFRA --> ANA
     COMP --> CFG
     COMP --> APP
     COMP --> INFRA
-    COMP --> ANA
     COMP --> DOM
     CLI --> COMP
 ```
@@ -50,20 +51,22 @@ graph TD
 ## 2. Compact aggregate hierarchy
 
 ```text
-ExperimentCell
-├── identity: ExperimentCellIdentity
-└── definition: ExperimentDefinition
-    ├── identity: ExperimentIdentity
-    ├── data: DataDefinition
-    ├── detector: DetectorDefinition
-    ├── evaluations: tuple[EvaluationDefinition, ...]
-    ├── analyses: tuple[AnalysisDefinition, ...]
-    ├── seed_cohort: SeedCohortDefinition
-    ├── prerequisites: tuple[ExperimentPrerequisite, ...]
-    ├── anchor_reference_interval: AnchorReferenceInterval | None
-    └── operations: OperationsDefinition
-        ├── execution: ExecutionDefinition
-        └── reporting: ReportingDefinition
+RunDefinition
+├── ScientificExperimentDefinition
+│   ├── metadata
+│   ├── data
+│   ├── detector
+│   ├── evaluations
+│   ├── analyses
+│   ├── seed_cohort
+│   ├── prerequisites
+│   └── operations
+└── DatasetAuditDefinition
+    ├── metadata
+    ├── dataset_source
+    ├── inspection_definition
+    ├── feasibility_definition
+    └── operations
 ```
 
 ```python
@@ -73,12 +76,11 @@ class ExperimentIdentity:
     display_name: str
     evidence_role: EvidenceRole
     tier: ClaimTier | None          # required and TIER_1 iff evidence_role is CONFIRMATORY
-    execution_status: ExecutionStatus   # MANDATORY | OPTIONAL | SUPPRESSED | REJECTED | FUTURE
+    run_requirement: RunRequirement     # MANDATORY | OPTIONAL | SUPPRESSED
     roadmap_reference: str | None    # source-traceability metadata only
-    regime_label: Regime | None        # derived, publication-only; see §3.1
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ExperimentDefinition:
+class ScientificExperimentDefinition:
     identity: ExperimentIdentity
     data: DataDefinition
     detector: DetectorDefinition
@@ -86,55 +88,24 @@ class ExperimentDefinition:
     analyses: tuple[AnalysisDefinition, ...]
     seed_cohort: SeedCohortDefinition
     prerequisites: tuple[ExperimentPrerequisite, ...]
-    anchor_reference_interval: AnchorReferenceInterval | None
     operations: OperationsDefinition
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ExperimentCellIdentity:
-    experiment_slug: ExperimentSlug
-    sweep_coordinate_hash: StageFingerprint   # derived from the resolved sweep value, never raw text
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ExperimentCell:
-    identity: ExperimentCellIdentity
-    definition: ExperimentDefinition        # fully resolved; no sweep placeholder remains
+class DatasetAuditDefinition:
+    metadata: DatasetAuditMetadata
+    dataset_source: DatasetSourceDefinition
+    inspection_definition: SourceInspectionDefinition
+    feasibility_definition: FeasibilityDefinition
+    operations: AuditOperationsDefinition
 ```
 
-`evidence_role` and `execution_status` are kept as two distinct fields
-because they answer two distinct questions the prior architecture also kept
-separate: `evidence_role` classifies a claim's scientific weight (is this
-confirmatory, supportive, a mechanism analysis…), while `execution_status`
-classifies whether the study is required to run it at all (`MANDATORY`,
-`OPTIONAL`, `SUPPRESSED`, `REJECTED`, `FUTURE`). An earlier draft of this
-package collapsed the optional/supplementary items into a fifth
-`evidence_role` value and lost this distinction; it is restored here as its
-own field. `execution_status` is a field of `ExperimentIdentity` only —
-never of an individual `EvaluationDefinition` or `AnalysisDefinition` — so
-a rejected roadmap item such as `broad_personalized_fl_benchmark` is
-correctly represented as `evidence_role = EXPLORATORY (or its roadmap
-classification), execution_status = REJECTED` at the experiment level,
-rather than forcing one enum to carry two independent facts. An attached
-evaluation inside a `MANDATORY` experiment (for example the
-`federated_summary_comparator`'s fixed-k sensitivity axis, `§7.3` of
-`SCIENTIFIC_FOUNDATION.md`) is scientifically supplementary — "never
-primary" — without a second, evaluation-scoped `execution_status` value to
-express it, because that fact is about evidentiary weight, not about
-whether the study runs at all. `REJECTED` and `FUTURE` experiments never
-actually reach an `ExperimentDefinition` instance — they exist only as
-non-executable `RejectionRecord` values
-(`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §4`) — so `execution_status` is
-meaningful chiefly for `MANDATORY`, `OPTIONAL`, and `SUPPRESSED`.
+Evidence role and run requirement remain distinct. Rejected, out-of-scope,
+and future ideas use `CatalogueDisposition` and never enter a resolved
+`RunDefinition`.
 
-`EvaluationDefinition` is owned directly as a tuple field, not referenced by
-id from a separate arm collection: the confirmatory pair, for example, is
-one `ExperimentDefinition` with two `EvaluationDefinition` entries (shared,
-local), each sharing the same `detector`. This removes the cross-reference
-validation the prior design needed to keep an evaluation arm and its
-detector branch in agreement. `ExperimentCell` is the sole root every
-pipeline stage, the planner, and the reuse gate consume; a non-sweeping
-experiment (for example `anchor_reproduction`) resolves to exactly one
-`ExperimentCell`, never a bare `ExperimentDefinition` floating outside a
-cell (`§4` below).
+Evaluations and analyses are owned by their scientific experiment. A
+resolved sweep coordinate produces one complete scientific run; sweep
+bindings do not enter its domain object.
 
 ## 3. Ownership by branch
 
@@ -147,7 +118,7 @@ class DataDefinition:
     client_construction: ClientConstruction
     split_definition: SplitDefinition
     preprocessing: PreprocessingDefinition
-    calibration_window: CalibrationWindowSelection | None   # populated only by calibration_window_size_stability cells
+    calibration_subset: CalibrationSubsetDefinition | None
 ```
 
 ```text
@@ -156,10 +127,8 @@ ClientConstruction
 ├── DatasetFilePseudoClients      (pseudo_client_count; boundary role only)
 ├── DirichletPartitionedClients    (client_count, alpha, partition_seed)
 └── ExternalDeviceOrGroupClients    (granularity: DEVICE | GROUP, fixed by human authorization;
-                                       feasibility_artifact_ref: ArtifactRef, provenance-only citation
-                                       of the prior audit that authorized granularity — never a value
-                                       this experiment's own resolution or run resolves live, `§5.1`
-                                       of `SCIENTIFIC_FOUNDATION.md`)
+                                       feasibility_result_ref: FeasibilityResultRef,
+                                       provenance-only; never resolved during execution)
 ```
 
 `SplitDefinition` owns `TrainSplit`, `BenignCalibrationSplit`, `TestSplit`,
@@ -168,34 +137,31 @@ fraction locked at 0.70, genuine capture-time field, boundary identity). The
 calibration variant has no field capable of admitting an attack-labeled row
 — benign-only membership is a type-level property, not a runtime check
 (`SCI-04`). `PreprocessingDefinition` owns normalization strategy and scope
-(fit rows restricted to authorized `TrainSplit` rows) and references a
-`PreprocessingChunkDefinition` (`§12`); it is the sole owner of
-preprocessing chunk sizing.
+(fit rows restricted to authorized `TrainSplit` rows). Runtime owns
+preprocessing chunk sizing and execution.
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class CalibrationWindowSelection:
+class CalibrationSubsetDefinition:
     requested_sample_count: CalibrationSampleCount
-    selection_strategy: CalibrationWindowSelectionStrategy   # RANDOM_SUBSAMPLE | NESTED_SUBSAMPLE
+    selection_strategy: CalibrationSubsetSelectionStrategy
     selection_seed: Seed
-    nested: bool                          # whether smaller windows are subsets of larger ones
-    selected_row_manifest: ArtifactRef    # identity of the exact selected-row manifest
-    source_population_provenance: ArtifactRef   # the calibration population this window was drawn from
+    nesting_policy: CalibrationSubsetNestingPolicy
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CalibrationSubsetResult:
+    source_score_set: ArtifactRef
+    selected_score_set: ArtifactRef
+    selected_row_manifest: ArtifactRef
+    selected_count: CalibrationSampleCount
+    source_population_identity: ArtifactKey
 ```
 
-**`Regime` is retained as a type, derived and non-authoritative.** An
-earlier draft of this package eliminated `Regime` entirely, per this
-package's own naming rule that no letter-based type may drive control flow
-(`SCIENTIFIC_FOUNDATION.md §5`, `NAME-01`). That rule is unchanged: no
-stage, port, planner branch, or artifact key is ever keyed on `Regime`.
-But the roadmap's five letters (`A`, `B_A`, `C`, `D`, `D_TEMPORAL`) are
-themselves citable scientific vocabulary — every table, figure, and claim
-in the roadmap refers to "Regime A," not to
-`natural_device_evaluation` — so the enum is restored as a **closed,
-derived, publication-facing label**, never a constructor input:
+Publication regime is a reporting-only projection, never an identity or
+control-flow input:
 
 ```python
-class Regime(StrEnum):
+class PublicationRegimeLabel(StrEnum):
     A = "a"
     B_A = "b_a"
     C = "c"
@@ -203,40 +169,30 @@ class Regime(StrEnum):
     D_TEMPORAL = "d_temporal"
     # B_B intentionally absent: rejected, non-executable (SCIENTIFIC_FOUNDATION.md §5)
 
-def derive_regime_label(data: DataDefinition) -> Regime | None:
-    """Pure, total function from an already-resolved DataDefinition to its
-    roadmap letter, for citation and backward reference only. Returns None
-    for any composition the current roadmap has not named a letter for —
-    which is the expected case for a dataset evaluation setting introduced
-    after this roadmap, and is not an error."""
+def derive_publication_regime(
+    data: DataDefinition,
+) -> PublicationRegimeLabel | None:
     ...
 ```
 
-No `ExperimentDefinition` constructor accepts a `Regime` value; every
-`ExperimentIdentity.regime_label` is computed by `derive_regime_label` from
-the already-resolved `DataDefinition` and cached for reporting, never
-supplied independently — so a `Regime` and its `DataDefinition` can never
-disagree the way `ProtocolTrack` and the fields it duplicated once could
-(`§11` below). Adding a new dataset evaluation setting still requires
-nothing beyond composing `DataDefinition` (`SCIENTIFIC_FOUNDATION.md §8`
-extension test); it only additionally gains a citable letter if a future
-roadmap revision assigns it one and a corresponding `Regime` member and
-`derive_regime_label` branch are added — a one-line, non-breaking, purely
-additive change confined to this one function, never a change to
-`domain/data.py`'s `ClientConstruction` union, the planner, or any stage.
+It is absent from YAML, run identity, stage identity, artifact keys, planner
+branching, and scientific control flow.
 
 ### 3.2 `DetectorDefinition`
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DetectorDefinition:
+    architecture: AutoencoderArchitecture
+    reconstruction_objective: ReconstructionObjective
     training_protocol: TrainingProtocol
-    autoencoder: AutoencoderArchitecture
     optimizer: OptimizerDefinition
-    checkpoint_schedule: CheckpointSchedule
-    checkpoint_selection: CheckpointSelectionPolicy
+    checkpoint_production: CheckpointProductionDefinition
     training_batch: TrainingBatchDefinition
     score_generation: ScoreGenerationDefinition
+    scoring_batch: ScoringBatchDefinition
+    numerical_precision: NumericalPrecision
+    deterministic_computation_requirement: DeterministicComputationRequirement
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OptimizerDefinition:
@@ -295,12 +251,9 @@ round) — a single frozen decision, not an enum, because — unlike
 `ParticipationStrategy` — the roadmap names no forthcoming second selection
 rule; if one is ever introduced, `CheckpointSelectionPolicy` becomes a
 discriminated union at that point, not before.
-`ScoreGenerationDefinition` owns calibration, test, and temporal batch
-sizing exclusively through its own `ScoringBatchDefinition` (`batch_size`,
-never duplicated in `TrainingBatchDefinition` or `PreprocessingDefinition`).
-`PreprocessingDefinition.chunk_profile` is a `PreprocessingChunkDefinition`
-(`chunk_row_count`), the sole owner of preprocessing chunk sizing (`§1` of
-`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §6`).
+`ScoreGenerationDefinition` describes score behavior. Its separate
+`ScoringBatchDefinition` owns scoring batch size. Runtime owns preprocessing
+chunks, prefetch, and execution concurrency.
 
 ### 3.3 `EvaluationDefinition` and `AnalysisDefinition`
 
@@ -319,10 +272,14 @@ introduced and this split removes.
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class EvaluationDefinition:
-    label: EvaluationLabel               # e.g. "shared_mean", "local", "cluster_k3"; referenced by AnalysisDefinition
+    label: EvaluationLabel
     threshold: ThresholdConstruction
     evaluation_suite: EvaluationSuiteDefinition
     requested_metrics: tuple[MetricId, ...]
+    eligibility: EligibilityDefinition
+    execution_requirement: ExecutionRequirement
+    evidence_use: EvidenceUse
+    publication_placement: PublicationPlacement
 ```
 
 The eight `ThresholdConstruction` variants are defined completely in
@@ -335,43 +292,82 @@ requested with missing or bare rate data (`EVAL-06`).
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class StatisticalProcedureDefinition:
-    method: StatisticalMethod
-    confidence_level: ConfidenceLevel
-    resample_count: BootstrapResampleCount
-    include_wilcoxon: bool          # descriptive secondary evidence only
-    include_cliffs_delta: bool      # descriptive secondary evidence only
-
 AnalysisDefinition = (
-    PairedThresholdAnalysis
+    PairedPolicyEffectAnalysis
+    | MetricAssociationAnalysis
+    | DistributionMechanismAnalysis
+    | ClusterStabilityAnalysis
+    | QuantileEstimationAnalysis
     | AbsorptionAnalysis
     | TemporalRecoveryAnalysis
     | AnchorEquivalenceAnalysis
 )
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class PairedThresholdAnalysis:
+class AnalysisMetadata:
+    label: AnalysisLabel
+    execution_requirement: ExecutionRequirement
+    evidence_use: EvidenceUse
+    publication_placement: PublicationPlacement
+    primary_procedure: StatisticalProcedure
+    secondary_procedures: tuple[StatisticalProcedure, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PairedPolicyEffectAnalysis:
+    metadata: AnalysisMetadata
     first_evaluation: EvaluationLabel
     second_evaluation: EvaluationLabel
     primary_metric: MetricId
-    delta_orientation: DeltaOrientation      # explicit and unambiguous for the confirmatory pair
-    statistical_procedure: StatisticalProcedureDefinition
+    delta_orientation: DeltaOrientation
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class MetricAssociationAnalysis:
+    metadata: AnalysisMetadata
+    predictor_metric: MetricId
+    outcome_metric: MetricId
+    grouping_dimension: GroupingDimension
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DistributionMechanismAnalysis:
+    metadata: AnalysisMetadata
+    source_evaluations: tuple[EvaluationLabel, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClusterStabilityAnalysis:
+    metadata: AnalysisMetadata
+    source_evaluation: EvaluationLabel
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class QuantileEstimationAnalysis:
+    metadata: AnalysisMetadata
+    source_evaluations: tuple[EvaluationLabel, ...]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AbsorptionAnalysis:
-    core_analysis: PairedThresholdAnalysis          # unpersonalized shared-vs-local delta
-    personalized_analysis: PairedThresholdAnalysis   # personalized shared-vs-local delta
+    metadata: AnalysisMetadata
+    core_analysis: AnalysisLabel
+    personalized_analysis: AnalysisLabel
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TemporalRecoveryAnalysis:
+    metadata: AnalysisMetadata
     frozen_evaluation: EvaluationLabel
     recalibrated_evaluation: EvaluationLabel
-    statistical_procedure: StatisticalProcedureDefinition
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AnchorEquivalenceAnalysis:
-    confirmatory_analysis_label: str        # references the PairedThresholdAnalysis producing the CV_FPR delta
+    metadata: AnalysisMetadata
+    source_analysis: AnalysisLabel
     reference_interval: AnchorReferenceInterval
+
+StatisticalProcedure = (
+    BcaBootstrap
+    | PercentileBootstrap
+    | WilcoxonSignedRank
+    | CliffsDelta
+    | SpearmanCorrelation
+    | LinearRegression
+)
 ```
 
 For `evidence_role ∈ {ANCHOR, CONFIRMATORY}`, the owning
@@ -410,28 +406,15 @@ domain field.
 ### 3.5 No duplicate ownership
 
 Every scientific and operational field above has exactly one authoritative
-owner. A field is never copied between two aggregates and then validated for
-equality; a downstream branch that needs an upstream value holds a stable
-typed reference (`ArtifactRef`, `StageIdentity`, `ScoreIdentity`) instead.
+owner. A field is never copied between aggregates; a downstream branch holds
+an `ArtifactRef` or `StageIdentity`.
 
 ## 4. Lifecycle concepts
 
-There is no domain-level `ExperimentTemplate`. A sweep dimension (seed,
-quantile, alpha, lambda, calibration size, K) is declared only as a
-boundary-schema construct — a Pydantic sweep placeholder living in
-`config/schemas/experiment.py`, never a `domain` dataclass
-(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §17`). `config/compose.py`
-expands every declared sweep directly into an ordered tuple of fully
-resolved `ExperimentCell` values (`§2` above) as part of the same
-composition pass that produces the frozen `ExperimentDefinition`; no
-intermediate sweep-capable domain object is ever constructed, held, or
-passed to `application`. A non-sweeping experiment (for example
-`anchor_reproduction`, whose only varying dimension is the five fixed seeds
-already enumerated in its `seed_cohort`) resolves to a single-element
-`tuple[ExperimentCell]` through the identical composer path — there is no
-separate non-sweeping resolution branch. `resolve_experiment_configuration`
-(`§7.1`) therefore always returns `tuple[ExperimentCell, ...]`, never a
-union with an unresolved template type.
+There is no domain-level sweep template. A boundary sweep is expanded during
+composition into complete `ScientificExperimentDefinition` values. Bindings
+are consumed before domain construction; a non-sweeping root follows the
+same resolution path and produces one resolved run.
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -494,7 +477,8 @@ catalogued.
 | `ExperimentPrerequisite` | domain | as part of `ExperimentDefinition` | no (references another identity) | planner, anchor gate |
 | `OperationsDefinition` | domain | yes (execution subset recorded) | conditional (§7 batch rule) | preflight, persistence, reporting |
 | `ExperimentDefinition` | domain | yes | yes | planner, every stage |
-| `ExperimentCellIdentity` / `ExperimentCell` | domain | yes | yes | planner, reuse gate, reporting |
+| `ScientificExperimentDefinition` | domain | yes | yes | planner, reuse gate, reporting |
+| `DatasetAuditDefinition` | domain | yes | yes | audit planner and reporting |
 
 There is no domain-level `ExperimentTemplate` or `SweepDefinition`; sweep
 placeholders exist only in the `config` boundary schema and never reach
@@ -547,7 +531,8 @@ members: `PairedThresholdAnalysis`, `AbsorptionAnalysis`,
 | Type | Purpose |
 |---|---|
 | `StageIdentity` | `{stage: PipelineStage, fingerprint: StageFingerprint}`; covers the linear single-purpose lineage chain (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §2` cross-ref; full derivation in `PIPELINE_EXECUTION_AND_ARTIFACTS.md §3`) |
-| `ScoreIdentity` | `{split_role: SplitRole, stage: PipelineStage, fingerprint: StageFingerprint}`; covers calibration, test, and temporal score artifacts |
+| `ArtifactKey` | `{artifact_type, scope, producer_identity}`; lookup/locking/reuse identity for every artifact role |
+| `ArtifactRef` | `{key, content_hash}`; verified persisted artifact identity |
 | `ArtifactType` | closed enum of every independently persisted artifact family (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §5`) |
 | `ArtifactScopeKey` | the scope-specific coordinates one `ArtifactRef` needs (experiment slug, cell identity, stage, split role, client id — only the fields the artifact type actually uses) |
 | `ArtifactRef` | `{artifact_type, scope: ArtifactScopeKey, content_hash}` |
@@ -588,8 +573,8 @@ members: `PairedThresholdAnalysis`, `AbsorptionAnalysis`,
 | `FittedPreprocessorResult` | immutable fitted state; contains no processed split and no test-derived statistic |
 | `ProcessedSplitResult` | transformed split materialization; retains row order and source-row lineage |
 | `TrainingRunResult` | scheduled checkpoints plus convergence diagnostics (diagnostic only, never a stop condition) |
-| `CalibrationScoreArtifactSet` / `TestScoreArtifactSet` / `TemporalScoreArtifactSet` | role-scoped score substrates, each referenced by exactly one `ScoreIdentity`; a test-score set additionally carries both a benign and an attack member, committed atomically as one aggregate (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §6`) |
-| `ThresholdConstructionResult` | resulting per-client threshold assignment plus the exact calibration `ScoreIdentity` it consumed |
+| `CalibrationScoreArtifactSet` / `TestScoreArtifactSet` / `TemporalScoreArtifactSet` | role-scoped score substrates referenced by `ArtifactRef`; a test-score set atomically commits benign and attack members as one aggregate |
+| `ThresholdConstructionResult` | resulting per-client threshold assignment plus the calibration `ArtifactRef` it consumed |
 
 The only authoritative data flow is source inspection → client-partition
 result → split-definition result → fitted preprocessor → processed split →
@@ -603,7 +588,7 @@ prepare-or-fit-transform contract exists.
 
 | Use case | Input | Output |
 |---|---|---|
-| `resolve_experiment_configuration` | `ResolveConfigurationRequest` | `tuple[ExperimentCell, ...]` (sweep expansion already applied; a single element for a non-sweeping experiment) |
+| `resolve_configuration` | `ResolveConfigurationRequest` | `ConfigurationResolutionResult` |
 | `create_execution_plan` | `CreatePlanRequest` | `DraftExecutionPlan` |
 | `run_preflight` | `PreflightRequest` | `FinalExecutionPlan` |
 | `run_experiment` | plan reference | `ExecutionSummary` |

@@ -1,5 +1,18 @@
 # ENGINEERING_DECISIONS_AND_CONFORMANCE
 
+## Purpose
+
+Record active decisions, blockers, errors, tests, extension rules, and final
+conformance.
+
+## Authoritative for
+
+Non-scientific architecture decisions and verification gates.
+
+## Not authoritative for
+
+Scientific scope, configuration examples, or execution implementation.
+
 ## 1. Status vocabulary
 
 | Status | Meaning |
@@ -37,10 +50,10 @@ identifier rather than repeat the text.
 
 | ID | Rule |
 |---|---|
-| `ANCHOR-01` | The anchor is an `ExperimentDefinition` with `evidence_role = ANCHOR`; no separate technical system exists. |
-| `ANCHOR-02` | `AnchorEquivalenceGate` is a decision service, not a pipeline fork; it runs the same eighteen stages as every experiment. |
+| `ANCHOR-01` | The anchor is a `ScientificExperimentDefinition` with `evidence_role = ANCHOR`; no separate technical system exists. |
+| `ANCHOR-02` | `AnchorEquivalenceGate` is a decision service, not a pipeline fork; only applicable stages are planned. |
 | `ANCHOR-03` | A less-favorable ten-seed confirmatory result is never suppressed in favor of a more-favorable five-seed anchor result. |
-| `ANCHOR-04` | The centralized reference (B0) reuses `StageIdentity`/`ScoreIdentity`; it never gains a parallel identity hierarchy. |
+| `ANCHOR-04` | The centralized reference (B0) reuses `StageIdentity`/`ArtifactKey`; it never gains a parallel identity hierarchy. |
 | `ANCHOR-05` | Artifact namespace is derived from `evidence_role`, never supplied as an independently settable field. |
 | `ANCHOR-06` | An anchor artifact is reusable only when its scientific identity is compatible with the current anchor definition; provenance from the original reference project never substitutes for this check. |
 
@@ -59,18 +72,18 @@ identifier rather than repeat the text.
 
 | ID | Rule |
 |---|---|
-| `ARCH-01` | `ExperimentDefinition` has exactly eight owned branches: `data`, `detector`, `evaluations`, `analyses`, `seed_cohort`, `prerequisites`, `anchor_reference_interval`, `operations`. |
+| `ARCH-01` | `ScientificExperimentDefinition` owns metadata, data, detector, evaluations, analyses, seed cohort, prerequisites, and operations; `DatasetAuditDefinition` owns only audit fields. |
 | `ARCH-02` | Statistics are owned by `AnalysisDefinition`, never duplicated per `EvaluationDefinition` or across evaluations of the same comparison. |
 | `ARCH-03` | No backward-compatibility shim, alias layer, or migration facade toward the prior architecture or the original reference project exists. |
 | `ARCH-04` | No root `experiments/` package exists; experiment identity lives in `domain/experiments.py`, YAML in `configs/experiments/`, mapping in `config/mapping/`, expansion in `application/planning/`. |
-| `ARCH-05` | `analysis` imports only `domain`, or narrowly a stable framework-free application reporting contract; never a persistence adapter. |
+| `ARCH-05` | Framework-free analysis/reporting specifications live in `application/reporting`; no separate analysis layer exists. |
 | `ARCH-06` | `cli` never constructs an adapter, binds a port, or resolves a path; it only invokes `composition`. |
 
 ### `TYPE-*` — typing and dataclasses
 
 | ID | Rule |
 |---|---|
-| `TYPE-01` | Cross-stage or cross-role identity confusion is prevented by a tagged value (`StageIdentity`/`ScoreIdentity`), never by a structural alias. |
+| `TYPE-01` | Cross-stage or cross-role identity confusion is prevented by `StageIdentity`, `ArtifactKey`, and `ArtifactRef`, never by a structural alias. |
 | `TYPE-02` | No bare `Result`, `Payload`, `Context`, `Manager`, or `Handler` type exists. |
 | `TYPE-03` | `Any`, `object`, and generic mappings are absent from every `domain` and `application` contract. |
 | `TYPE-04` | Every multi-variant type carries an explicit discriminator tag, exhaustively matched with `typing.assert_never`. |
@@ -90,8 +103,8 @@ identifier rather than repeat the text.
 | `CFG-07` | An unsupported configuration schema version fails clearly; no automatic migration exists. |
 | `CFG-08` | Experiment authorization is enforced by construction validators on closed unions and cross-field validators, never by a duplicate "authorized profile" object. |
 | `CFG-09` | The CLI accepts no scientific override flag; a scientific change requires an edited, reviewed configuration document. |
-| `CFG-10` | A value neither source document specifies is marked `unresolved` and blocks `SCIENTIFIC`/`PRINT_GRADE` scheduling; it is never given a plausible invented value. |
-| `CFG-11` | The CLI exposes exactly the seven `datp-core experiment <action>` verbs (`list`, `validate`, `resolve`, `plan`, `run`, `status`, `report`) and no other scientific-affecting verb or flag. |
+| `CFG-10` | An incomplete boundary document reports a typed blocker; resolve, plan, and run reject it and no frozen domain value carries a sentinel. |
+| `CFG-11` | Experiment and dataset-audit CLIs expose the same seven lifecycle verbs and no scientific-affecting override. |
 | `CFG-12` | A zero-input Make target selects exactly one CLI action and one registered experiment configuration, contains no user-supplied parameter, and fails if its referenced configuration does not exist; a generic parameterized target (`make run EXPERIMENT=...`) is never defined. |
 
 ### `PIPE-*` — stages and planning
@@ -102,7 +115,7 @@ identifier rather than repeat the text.
 | `PIPE-02` | Reuse is decided by comparing typed stage identities, never by filename or modification time. |
 | `PIPE-03` | The planner deduplicates every compatible stage across confirmatory, supportive, mechanism, variant, and comparator evaluations sharing a seed. |
 | `PIPE-04` | `RUNNING → REUSED` does not exist; reuse is always decided before computation. |
-| `PIPE-05` | An `ExperimentCellIdentity` collision between two distinct resolved cells is a typed planning error. |
+| `PIPE-05` | A collision between distinct resolved-run snapshots is a typed planning error. |
 
 ### `EXEC-*` — runtime and lifecycle
 

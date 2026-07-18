@@ -1,41 +1,37 @@
-# AI Operating System
+# AI operating system — DATP Core
 
-This directory defines the permanent AI governance structure for the DATP journal-extension repository.
+`ai/` is the source of truth for AI governance. `AGENTS.md` (repo root) is the auto-loaded entry
+point and holds the non-negotiable rules; everything here is read on demand. Tool adapters
+(`.github/`, `.claude/`, `.agents/`) are thin pointers and never copy policy.
 
-## Directory Purpose
+## Layout
 
-- `ai/agents/`: role definitions for agent behavior, ownership, and blockers.
-- `ai/skills/`: focused checks that can be applied across workflows.
-- `ai/hooks/`: mandatory gates that block completion when quality, scope, science, or cleanup fails.
-- `ai/contracts/`: task templates that define scope, forbidden actions, tests, and done criteria before work starts.
-- `ai/workflows/`: approved task paths for implementation, experiments, audits, manuscripts, and cleanup.
+- `agents/` — five roles with distinct permissions: `implementation-engineer`, `auditor` (read-only),
+  `experiment-engineer`, `manuscript-editor`, `orchestrator`.
+- `commands/` — five complete task workflows, each with an embedded contract (scope, permissions,
+  forbidden actions, done criteria): `implement`, `audit`, `experiment`, `manuscript`, `cleanup`.
+- `skills/` — reusable deterministic checks referenced by commands and agents.
+- `hooks/` — two cheap gates: `pre-edit-gate`, `pre-completion-gate`.
 
-## Mandatory Task Lifecycle
+## Lifecycle
 
-1. Intake
-2. Contract
-3. Pre-edit gate
-4. Implementation or audit
-5. Post-edit gate
-6. No-backward-compatibility gate
-7. Impacted tests
-8. Structure/comment/typing/dependency gates
-9. Cleanup
-10. Final report
+1. Select a command and confirm scope (`hooks/pre-edit-gate.md`).
+2. Work within scope, applying the relevant `skills/`.
+3. Run the per-change quality gate (`skills/quality-gate.md`).
+4. Pass `hooks/pre-completion-gate.md`.
+5. Report using the `AGENTS.md` final-report format.
 
-No agent may skip the contract, scope check, no-backward-compatibility check, cleanup check, or final report.
+## Skills index
 
-## Universal Rule
+- `quality-gate.md` — per-change vs checkpoint commands (the one quality workflow).
+- `datp-scope-guard.md` — scientific scope, threshold semantics, stress-test boundary.
+- `evidence-and-statistics.md` — claim↔evidence mapping, confirmatory endpoint, statistics, reviewer risk.
+- `scientific-config.md` — validated-config ownership, no invented values, seeds, no leakage, fixed batches.
+- `cuda-safety.md` — serialized deterministic CUDA, no auto batch reduction, no silent CPU fallback.
+- `no-backward-compatibility.md` — clean-break replacement.
+- `typed-immutable-domain.md` — typed protocol state, immutable domain, artifact identity and reuse.
+- `architecture-and-dependencies.md` — layer direction, framework confinement, dependency policy.
+- `code-hygiene.md` — naming, comments, structure, tests, diff cleanliness.
 
-A task is not complete because the code works.
-A task is complete only when scope, science, structure, naming, typing, comments, tests, claims, cleanup, and final report all pass.
-
-## DATP Boundary
-
-The project is a fixed-encoder, fixed-federated-model, threshold-calibration-scope study. B1-B4 vary threshold scope while preserving the same trained model and score artifacts. Stress tests and comparators support the study but do not replace the causal ladder.
-
-Block drift into poisoning, Dynamic DATP, privacy guarantees, deployment profiling, backdoor, evasion, full drift detection, generic FL-IDS expansion, release work, tag work, or versioning work unless explicitly requested as future-work wording.
-
-## Default Compatibility Position
-
-No backward compatibility. No old aliases, redirects, shims, fake compatibility, deprecated APIs, legacy config keys, legacy CLI flags, or legacy output names. Replace stale behavior directly and update all impacted callers, tests, docs, configs, and outputs.
+A separate agent, skill, command, or hook exists only when it has a distinct, repeated purpose.
+Merge or delete anything that duplicates another file.

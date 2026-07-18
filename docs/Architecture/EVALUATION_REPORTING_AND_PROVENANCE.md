@@ -1,5 +1,18 @@
 # EVALUATION_REPORTING_AND_PROVENANCE
 
+## Purpose
+
+Define metric derivation, analysis, claims, result freeze, reporting, and
+provenance.
+
+## Authoritative for
+
+Evaluation, analysis, reporting, and traceability contracts.
+
+## Not authoritative for
+
+Scientific catalogue selection, runtime execution, or persistence adapters.
+
 ## 1. Primitive evaluation evidence
 
 The evaluator derives every outcome from lineage-bound primitives only:
@@ -7,7 +20,7 @@ The evaluator derives every outcome from lineage-bound primitives only:
 - the committed test or temporal score artifact (benign and attack members)
 - the ground-truth label implied by each member
 - client identity
-- the threshold assignment and the calibration `ScoreIdentity` it consumed
+- the threshold assignment and the calibration `ArtifactRef` it consumed
 - the persisted `EligibleClientSet` for the paired comparison
 - the declared evaluation population (`EvaluationSuiteDefinition`)
 
@@ -74,44 +87,45 @@ owning stage, and its persistence status:
 
 ## 4. Complete metric catalogue and ownership
 
-| Family | Member | Direction | Control-only | Eligible-only | Notes |
+| Family | Member | Direction | Metric role | Eligible-only | Notes |
 |---|---|---|---|---|---|
-| Operating point | `FPR` | lower is better | no | yes | per-client rate |
-| Operating point | `TPR` | higher is better | no | yes | per-client rate |
-| Operating point | `CV_FPR` | lower is better | **no — primary** | yes | `σ_FPR / µ_FPR` over eligible clients |
-| Operating point | `CV_TPR` | context-dependent | no | yes | secondary dispersion |
-| Operating point | `IQR_FPR` | lower is better | no | yes | absolute-dispersion companion, guards small-mean artifacts |
-| Operating point | `FPR_RANGE` (max − min) | lower is better | no | yes | absolute-dispersion companion |
-| Operating point | `WORST_CLIENT_FPR` | lower is better | no | yes | tail behavior |
-| Operating point | `ALERT_BURDEN` | lower is better | no | yes | requires valid `TrafficRateEvidence` |
-| Operating point | `FPR_TARGET_ATTAINMENT` | closer to zero is better | no | yes | `|achieved exceedance − (1 − q)|` |
-| Detection quality | `AUROC` | higher is better | **yes — never the thresholding verdict** | no | threshold-independent, computed from scores/labels directly |
-| Detection quality | `MACRO_F1` | higher is better | yes | no | |
-| Detection quality | `P10_MACRO_F1` | higher is better | yes | no | tenth-percentile client Macro-F1 |
-| Detection quality | `BALANCED_ACCURACY` | higher is better | yes | no | |
-| Detection quality | `WORST_CLIENT_BA` | higher is better | yes | yes | |
-| Equity (optional) | `JAIN_INDEX` | higher is better | no | yes | supplements `CV_FPR`, never replaces it |
-| Equity (optional) | `GINI_COEFFICIENT` | lower is better | no | yes | |
-| Equity (optional) | `WITHIN_CLUSTER_DISPERSION` | lower is better | no | yes | B4 mechanism only |
-| Equity (optional) | `ACROSS_CLUSTER_DISPERSION` | context-dependent | no | yes | B4 mechanism only |
-| Estimation | `QUANTILE_ESTIMATION_ERROR` | lower is better | no | n/a | federated-quantile backbone |
-| Estimation | `THRESHOLD_VARIANCE` | lower is better | no | n/a | calibration-size sweep |
-| Estimation | `CALIBRATION_SAMPLE_EFFICIENCY` | higher is better | no | n/a | |
-| Estimation | `ELIGIBILITY_COVERAGE` | higher is better | no | n/a | protocol-rule coverage; disjoint from conformal coverage |
-| Estimation | `CONFORMAL_COVERAGE` | closer to target is better | no | n/a | B2-conf empirical coverage; disjoint from eligibility coverage |
-| Cluster | `ADJUSTED_RAND_INDEX` | higher is better | no | n/a | cluster-assignment stability across seeds |
-| Cluster | `SILHOUETTE` | higher is better | no | n/a | supplementary diagnostic |
-| Distribution | `PAIRWISE_JS_DIVERGENCE` | context-dependent | no | n/a | heterogeneity measure |
-| Diagnostic ratio | `ABSORPTION_RATIO` | see §6.4 bands | no | n/a | model-personalization stress test |
-| Diagnostic ratio | `BETWEEN_RATIO` | reported, not a pass rule | no | n/a | `FederatedSummaryStatisticThreshold` between/within decomposition |
-| Diagnostic ratio | `RECOVERY_RATIO` | see §6.5 outcomes | no | n/a | temporal recalibration |
-| Resource | `COMMUNICATION_BYTES_PER_ROUND`, `TOTAL_COMMUNICATION_BYTES`, `CLIENT_TO_SERVER_BYTES`, `SERVER_TO_CLIENT_BYTES`, `THRESHOLD_MESSAGE_BYTES`, `CHECKPOINT_STORAGE_BYTES`, `SCORE_ARTIFACT_STORAGE_BYTES`, `RESULT_STORAGE_BYTES` | lower is better | no | n/a | each `MEASURED` or `ESTIMATED`; never conflated |
+| Operating point | `FPR` | lower is better | SECONDARY_THRESHOLD_OUTCOME | yes | per-client rate |
+| Operating point | `TPR` | higher is better | SECONDARY_THRESHOLD_OUTCOME | yes | per-client rate |
+| Operating point | `CV_FPR` | lower is better | PRIMARY_ENDPOINT | yes | `σ_FPR / µ_FPR` over eligible clients |
+| Operating point | `CV_TPR` | context-dependent | SECONDARY_THRESHOLD_OUTCOME | yes | secondary dispersion |
+| Operating point | `IQR_FPR` | lower is better | SECONDARY_THRESHOLD_OUTCOME | yes | absolute-dispersion companion, guards small-mean artifacts |
+| Operating point | `FPR_RANGE` (max − min) | lower is better | SECONDARY_THRESHOLD_OUTCOME | yes | absolute-dispersion companion |
+| Operating point | `WORST_CLIENT_FPR` | lower is better | SECONDARY_THRESHOLD_OUTCOME | yes | tail behavior |
+| Operating point | `ALERT_BURDEN` | lower is better | SECONDARY_THRESHOLD_OUTCOME | yes | requires valid `TrafficRateEvidence` |
+| Operating point | `FPR_TARGET_ATTAINMENT` | closer to zero is better | MECHANISM_DIAGNOSTIC | yes | `|achieved exceedance − (1 − q)|` |
+| Detection quality | `AUROC` | higher is better | MODEL_QUALITY_CONTROL | no | threshold-independent, computed from scores/labels directly |
+| Detection quality | `MACRO_F1` | higher is better | SECONDARY_THRESHOLD_OUTCOME | no | |
+| Detection quality | `P10_MACRO_F1` | higher is better | SECONDARY_THRESHOLD_OUTCOME | no | tenth-percentile client Macro-F1 |
+| Detection quality | `BALANCED_ACCURACY` | higher is better | SECONDARY_THRESHOLD_OUTCOME | no | |
+| Detection quality | `WORST_CLIENT_BA` | higher is better | SECONDARY_THRESHOLD_OUTCOME | yes | |
+| Equity (optional) | `JAIN_INDEX` | higher is better | MECHANISM_DIAGNOSTIC | yes | supplements `CV_FPR`, never replaces it |
+| Equity (optional) | `GINI_COEFFICIENT` | lower is better | MECHANISM_DIAGNOSTIC | yes | |
+| Equity (optional) | `WITHIN_CLUSTER_DISPERSION` | lower is better | MECHANISM_DIAGNOSTIC | yes | B4 mechanism only |
+| Equity (optional) | `ACROSS_CLUSTER_DISPERSION` | context-dependent | MECHANISM_DIAGNOSTIC | yes | B4 mechanism only |
+| Estimation | `QUANTILE_ESTIMATION_ERROR` | lower is better | MECHANISM_DIAGNOSTIC | n/a | federated-quantile backbone |
+| Estimation | `THRESHOLD_VARIANCE` | lower is better | MECHANISM_DIAGNOSTIC | n/a | calibration-size sweep |
+| Estimation | `CALIBRATION_SAMPLE_EFFICIENCY` | higher is better | MECHANISM_DIAGNOSTIC | n/a | |
+| Estimation | `ELIGIBILITY_COVERAGE` | higher is better | MECHANISM_DIAGNOSTIC | n/a | protocol-rule coverage; disjoint from conformal coverage |
+| Estimation | `CONFORMAL_COVERAGE` | closer to target is better | MECHANISM_DIAGNOSTIC | n/a | B2-conf empirical coverage; disjoint from eligibility coverage |
+| Cluster | `ADJUSTED_RAND_INDEX` | higher is better | MECHANISM_DIAGNOSTIC | n/a | cluster-assignment stability across seeds |
+| Cluster | `SILHOUETTE` | higher is better | MECHANISM_DIAGNOSTIC | n/a | supplementary diagnostic |
+| Distribution | `PAIRWISE_JS_DIVERGENCE` | context-dependent | MECHANISM_DIAGNOSTIC | n/a | heterogeneity measure |
+| Diagnostic ratio | `ABSORPTION_RATIO` | see §6.4 bands | MECHANISM_DIAGNOSTIC | n/a | model-personalization stress test |
+| Diagnostic ratio | `BETWEEN_RATIO` | reported, not a pass rule | MECHANISM_DIAGNOSTIC | n/a | `FederatedSummaryStatisticThreshold` between/within decomposition |
+| Diagnostic ratio | `RECOVERY_RATIO` | see §6.5 outcomes | MECHANISM_DIAGNOSTIC | n/a | temporal recalibration |
+| Resource | `COMMUNICATION_BYTES_PER_ROUND`, `TOTAL_COMMUNICATION_BYTES`, `CLIENT_TO_SERVER_BYTES`, `SERVER_TO_CLIENT_BYTES`, `THRESHOLD_MESSAGE_BYTES`, `CHECKPOINT_STORAGE_BYTES`, `SCORE_ARTIFACT_STORAGE_BYTES`, `RESULT_STORAGE_BYTES` | lower is better | RESOURCE_OUTCOME | n/a | each `MEASURED` or `ESTIMATED`; never conflated |
 
-Thirty-seven metric identifiers across eight disjoint families; a metric
-identifier belongs to exactly one family, so `MetricId` is an unambiguous
-union. Every metric family has one calculator owner and one `MetricSpec`
-(`family`, `is_control`, `needs_eligible_only`, `higher_is_better`); no
-metric name is duplicated across families.
+`MetricRole` is PRIMARY_ENDPOINT, SECONDARY_THRESHOLD_OUTCOME,
+MODEL_QUALITY_CONTROL, MECHANISM_DIAGNOSTIC, or RESOURCE_OUTCOME. The
+remaining operating, equity, estimation, cluster, distribution, and
+diagnostic-ratio metrics are MECHANISM_DIAGNOSTIC unless their row states a
+secondary threshold role; resource metrics are RESOURCE_OUTCOME. Each metric
+has one calculator owner and one role, with no `is_control` boolean.
 
 ## 5. Undefined metric outcomes
 
@@ -215,26 +229,20 @@ disclosed `ESTIMATED` label) or the metric is omitted for that construction
 
 ## 8. Statistical procedure architecture
 
-`StatisticalProcedureDefinition` — owned by `AnalysisDefinition`, never by
-`EvaluationDefinition` (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §3.3`) —
-fixes method, confidence level, and resample count; every choice is
-pre-specified in configuration, never selected after observing results
-(`STAT-01`). Paired-seed count is owned once, by the experiment's
-`SeedCohortDefinition`, and read by every `AnalysisDefinition` comparing
-that experiment's evaluations — never re-declared per analysis. Required
-procedures: BCa bootstrap (primary for the confirmatory and anchor
-endpoints), Wilcoxon signed-rank and Cliff's delta (descriptive secondary
-evidence only, requested via `StatisticalProcedureDefinition.include_wilcoxon`/
-`include_cliffs_delta` on the same `PairedThresholdAnalysis` rather than a
-second, standalone analysis), Spearman correlation and linear regression
-(mechanism association analyses), percentile bootstrap (never substituted
-for BCa without an explicit, separately named procedure).
+`AnalysisDefinition` owns one `primary_procedure` and typed
+`secondary_procedures`. `StatisticalProcedure` is the discriminated union
+of `BcaBootstrap`, `PercentileBootstrap`, `WilcoxonSignedRank`,
+`CliffsDelta`, `SpearmanCorrelation`, and `LinearRegression`; each variant
+contains only applicable fields. Paired-seed count is owned once by
+`SeedCohortDefinition`. The confirmatory/anchor primary is BCa; Wilcoxon
+and Cliff's delta remain secondary evidence and percentile bootstrap is
+never substituted silently.
 
 ### 8.1 Confirmatory isolation
 
 The confirmatory (and anchor) statistical contract — enforced on
 `confirmatory_threshold_scope_effect`'s (and `anchor_reproduction`'s) single
-`PairedThresholdAnalysis` — rejects: a dataset setting other than
+`PairedPolicyEffectAnalysis` — rejects: a dataset setting other than
 `natural_device_evaluation`; a threshold pair other than
 `{SharedThreshold(MEAN), LocalThreshold}`; any extra threshold construction
 on the same pair of evaluations; an unpaired or wrong-count `seed_cohort`;
@@ -254,9 +262,9 @@ ClaimOutcome = STRONG_POSITIVE | WEAK_POSITIVE | MIXED | NULL | OPPOSITE
              | FEASIBILITY_REJECTION | SUPPRESSED
 ```
 
-Outcome selection follows the roadmap's locked interpretation rules and
-occurs only after result freeze; wording is never inferred favorably at
-render time (`REPORT-04`).
+Outcome selection follows the roadmap's locked interpretation rules before
+result freeze. Rendering projects the frozen assessment and never infers
+favorable wording (`REPORT-04`).
 
 ## 9. Safe reporting architecture
 
@@ -272,13 +280,12 @@ publication-facing report row.
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ReportDefinition:
     report_identity: ReportArtifactType
-    schema_version: str
-    columns: tuple[SemanticColumn, ...]   # each: name, unit, metric_direction
+    schema_version: SchemaVersion
+    columns: tuple[SemanticColumn, ...]
     row_projection: RowProjectionRule
     ordering: DeterministicOrdering
     missing_value_policy: MissingValuePolicy
-    source_result_types: tuple[type, ...]
-    source_artifact_refs: tuple[ArtifactRef, ...]
+    source_result_types: tuple[ResultTypeId, ...]
     output_formats: tuple[SerializationFormat, ...]
 ```
 
@@ -337,11 +344,13 @@ family or introduces one new `ReportDefinition`, never a bespoke row type
 
 ## 10. Result freeze and provenance closure
 
-Before rendering, `RESULT_FREEZE` validates every required source artifact,
-its content hash, its schema version, the experiment identity, the
-configuration fingerprint, and the claim outcome, then persists an
-immutable `ResultFreezeManifest`. `TableFigureTracer.trace` requires this
-manifest's expected inputs and hashes to close; otherwise it returns
+Before rendering, evaluation and statistical analysis produce a claim
+assessment. `RESULT_FREEZE` then validates and freezes only the selected
+report's required metric, statistical, anchor-equivalence, resource-cost,
+feasibility, suppression, and claim artifacts. Runtime source references
+belong in the resulting immutable `ResultFreezeManifest`, not
+`ReportDefinition`. `TableFigureTracer.trace` requires this manifest's
+expected inputs and hashes to close; otherwise it returns
 `TRACE_REFUSED` and raises `ProvenanceError` rather than rendering a
 possibly stale artifact. A rendered file remains traceable to its frozen
 input set through `TableProvenance`/`FigureProvenance`, which record output

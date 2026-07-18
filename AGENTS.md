@@ -1,65 +1,71 @@
-# Repository AI Entry Point
+# AGENTS.md — DATP Core
 
-Every AI agent must read this file first, then read `ai/README.md` and the relevant files under `ai/`.
+Entry point for every AI agent. This is the only governance file loaded automatically.
+`ai/` is the source of truth for detailed procedures; read from it on demand, never copy it here.
 
-## Repository AI Rules
+## Project identity
 
-- Keep the repository small, explicit, typed, and clean.
-- Preserve DATP journal-extension scope: fixed encoder, fixed federated model, threshold-calibration-scope study, B1-B4 vary threshold scope, same trained model and score artifacts preserved.
-- Keep stress tests and comparators supportive. They do not replace the B1-B4 causal ladder.
-- Block drift into poisoning, Dynamic DATP, privacy guarantees, deployment profiling, backdoor, evasion, full drift detection, generic FL-IDS expansion, release work, tag work, or versioning work unless explicitly requested as future-work wording.
-- Do not touch experiment logic, scientific code, model code, result artifacts, manuscript content, datasets, or unrelated documentation unless the task contract allows it.
+DATP Core is a **fixed-encoder, fixed-federated-model, threshold-calibration-scope study**.
+A shared FedAvg autoencoder is trained once per seed and frozen; only the *scope* at which the
+anomaly threshold is calibrated varies across the ladder B1 (shared), B2 (per-client),
+B3 (family), B4 (cluster). The causal question is whether calibration scope changes per-client
+FPR dispersion — not model quality. The full scientific definition lives in
+`docs/Journal_Extension_Master_Roadmap.md`; system design lives in `docs/Architecture/`.
 
-## Mandatory Workflow Lifecycle
+## Non-negotiable rules
 
-1. Intake
-2. Contract
-3. Pre-edit gate
-4. Implementation or audit
-5. Post-edit gate
-6. No-backward-compatibility gate
-7. Impacted tests
-8. Structure/comment/typing/dependency gates
-9. Cleanup
-10. Final report
+- **Never invent a scientific value.** A missing scientific or execution value is a blocker, not a guess.
+- **Scientific and output-affecting settings come from validated configuration** (`config/schemas/` → `config/mapping/` → `configs/`), with exactly one canonical owner per value.
+- **Do not change scientific behavior** (threshold semantics, dataset role, seeds, metrics, model behavior, artifact meaning, claim strength) without checking the roadmap and getting explicit task approval.
+- **No backward compatibility.** No aliases, redirects, shims, fake compatibility, deprecated APIs, legacy config keys, legacy CLI flags, or legacy output names. Update callers, tests, docs, configs, and outputs directly.
+- **Do not reduce batch/chunk sizes automatically** under memory pressure, and **do not silently fall back from required CUDA execution** to CPU. A CUDA OOM terminates the current attempt.
+- **No calibration/test leakage.** Calibration is benign-only; attack and test-split data never fit or tune a threshold.
+- **Do not expand task scope silently.** Stay inside the selected command's scope. No release, tag, or versioning work unless explicitly requested.
+- **Run impacted tests for every change; run full quality checks only at checkpoints** (see `ai/skills/quality-gate.md`).
+- **Report exact files changed and validations run** using the final-report format below.
 
-## No-Backward-Compatibility Policy
+## Choose a command, then read only what it needs
 
-No backward compatibility by default. No old aliases, redirects, shims, fake compatibility, deprecated APIs, legacy config keys, legacy CLI flags, or legacy output names. Update callers, tests, docs, configs, and outputs directly.
+Pick the matching command in `ai/commands/`; it states permissions, scope, procedure, and done criteria.
 
-## Universal Blocker Checklist
+| Task | Command | Also read |
+| --- | --- | --- |
+| Change code/behavior | `ai/commands/implement.md` | `ai/skills/` for touched areas |
+| Inspect without editing | `ai/commands/audit.md` (read-only) | `ai/skills/evidence-and-statistics.md` |
+| Configs, runners, seeds, artifacts | `ai/commands/experiment.md` | roadmap; `ai/skills/scientific-config.md` |
+| Paper / README / prose | `ai/commands/manuscript.md` | `ai/skills/evidence-and-statistics.md` |
+| Structure/naming/stale cleanup | `ai/commands/cleanup.md` | `ai/skills/code-hygiene.md` |
 
-Block completion for stale comments or docstrings, AI-generated comments, banner comments, decorative comments, weird names, vague names, stale names, raw protocol strings, raw protocol dicts, hidden defaults, mutable defaults, redirect modules, shims, fake compatibility, compatibility aliases, wrapper classes without behavior, temp files, audit clutter, unsupported claims, DATP scope drift, or failing impacted tests.
+Read the roadmap or architecture docs **only when the task touches scientific meaning, protocol, or
+layer design** — not for every change. If no command fits, define an explicit contract inline using
+the field set in `ai/commands/implement.md`.
 
-## Final Report Format
+## Standard workflow
 
-Every final report must use Markdown headings and bullet lists.
+1. Select the command and confirm scope, permissions, and forbidden actions (`ai/hooks/pre-edit-gate.md`).
+2. Do the work within scope, using the relevant `ai/skills/` as checks.
+3. Run the per-change quality gate on affected files (`ai/skills/quality-gate.md`).
+4. Pass `ai/hooks/pre-completion-gate.md`.
+5. Write the final report.
 
-Required headings:
-- Changed Files
-- Checks Run
-- Cleanup Result
-- Remaining Risks
-- Skipped Checks
+## Testing and quality
 
-Each changed file, check, risk, and skipped check must be listed as a bullet with a reason or status. Use `None` when a required heading has no items. Do not claim checks ran unless they did.
+- Per change: format + lint + type-check the affected files, run impacted tests (twice in different orders for order-independence), and run affected architecture/scientific invariant tests.
+- Checkpoint: full lint, type-check, tests, and architecture/config validation.
+- Exact commands live in `ai/skills/quality-gate.md`. Sonar and CodeScene run in CI on push.
 
-## AI Operating Structure
+## AI structure
 
-- `ai/README.md`: operating overview and lifecycle.
-- `ai/agents/`: agent roles and blocker responsibilities.
-- `ai/skills/`: reusable checks and pass/fail criteria.
-- `ai/hooks/`: mandatory gates and failure behavior.
-- `ai/contracts/`: task contract templates.
-- `ai/workflows/`: workflow-specific gate order and completion rules.
+- `ai/README.md` — index and lifecycle.
+- `ai/agents/` — five roles (implementation, audit, experiment, manuscript, orchestrator).
+- `ai/skills/` — reusable deterministic checks.
+- `ai/commands/` — complete task workflows with embedded contracts.
+- `ai/hooks/` — two cheap gates (pre-edit, pre-completion).
 
-## Native Adapter Policy
+Tool adapters (`.github/`, `.claude/`, `.agents/`) are thin pointers to `ai/` and must not duplicate policy.
 
-- `ai/` is the single source of truth for governance.
-- Tool-specific folders are thin adapters only and must point back to `AGENTS.md` and `ai/`.
-- Adapters must not duplicate full governance content or become a second source of truth.
-- Hooks under `ai/hooks/` are checklist gates.
-- Contracts under `ai/contracts/` are mandatory before work starts.
-- Workflows under `ai/workflows/` define approved task paths.
-- Allowed native adapter folders are `.github/`, `.claude/`, `.agents/`, and `.codex/`.
-- No backward compatibility remains the default.
+## Final report format
+
+Every final report uses Markdown headings and bullet lists, with these exact headings, each with its
+own list (use `None` when empty): **Changed Files**, **Checks Run**, **Cleanup Result**,
+**Remaining Risks**, **Skipped Checks**. Do not claim a check ran unless it did.

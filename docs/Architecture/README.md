@@ -2,72 +2,62 @@
 
 ## Purpose
 
-This package is a complete, consolidated, implementation-ready architectural
-specification for DATP-Core, derived entirely from two source documents: the
-prior DATP-Core technical architecture and the DATP-Core master roadmap. It
-is a design, not an implementation. No statement in the source documents
-about existing code, tests, YAML files, or repository layout is treated as
-verified fact; such statements are source material this package classifies
-and, where retained, marks with an explicit status
-(`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §1`).
+- Complete, consolidated, implementation-ready architecture specification.
+- Derived from the technical architecture and master roadmap.
+- A design, not an implementation claim.
+- Statements about code, tests, YAML, or repository layout remain
+  unverified source material until classified with a status in
+  `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §1`.
+
+## Authoritative for
+
+- Package navigation, authority order, and the architecture lifecycle.
+
+## Not authoritative for
+
+- Scientific, domain, configuration, pipeline, metric, or reporting details
+  owned by the linked documents.
 
 ## Authority order
 
-1. **The DATP-Core master roadmap** is authoritative for scientific scope,
-   identity, datasets, client definitions, splits, detector and threshold
-   roles, comparator definitions, experiment purposes, evidence roles,
-   research questions, the claim hierarchy, metrics, statistical procedures,
-   seed requirements, eligibility, feasibility, suppression, null-result
-   handling, publication placement, forbidden claims, and deferred or
-   out-of-scope work. This architecture never alters scientific meaning to
-   simplify itself.
-2. **This package** is authoritative for architectural consolidation,
-   semantic naming, type-system design, configuration structure, pipeline
-   extensibility, artifact architecture, reporting safety, and rejection of
-   backward compatibility.
-3. **The prior technical architecture** is an audited redesign target: a
-   source of requirements and candidate decisions, not an immutable
-   contract. Every major concept in it is given an explicit disposition in
-   `ENGINEERING_DECISIONS_AND_CONFORMANCE.md` — retained, renamed, merged,
-   simplified, relocated, replaced, removed, deferred, or blocked. Nothing
-   disappears silently.
+1. **The DATP-Core master roadmap:** scientific scope, identity, datasets,
+   splits, detector/threshold roles, comparators, experiments, evidence,
+   claims, metrics, statistics, seeds, eligibility, feasibility,
+   suppression, publication placement, and scope boundaries.
+2. **This package:** architecture consolidation, naming, type design,
+   configuration, pipeline/artifact design, reporting safety, and clean
+   replacement.
+3. **The technical architecture:** audited requirements and candidate
+   decisions; each major concept has a disposition in
+   `ENGINEERING_DECISIONS_AND_CONFORMANCE.md`.
 
-When the two sources conflict on a scientific question, the roadmap wins and
-the technical mechanism is redesigned accordingly. When the roadmap itself
-contains an internal inconsistency, this package does not silently pick a
-side: it records the conflicting concepts, marks the affected decision
-`BLOCKED`, states the minimum evidence that would resolve it, and shapes the
-architecture so either resolution is representable without a structural
-rewrite. Where neither source specifies a scientific value, this package
-never invents one; it marks the value unresolved and blocks the affected
-configuration from scientific execution.
+- The roadmap wins scientific conflicts.
+- Roadmap inconsistencies are recorded as `BLOCKED` with their minimum
+  resolving evidence.
+- Missing scientific values are never invented; affected configurations are
+  blocked from scientific execution.
 
 ## DATP-Core
 
-`DATP-Core` names the current, expanded scientific system: its architecture,
-configurations, experiments, pipeline, artifacts, analyses, reports, and
-extension mechanisms. It is never called the journal system, the journal
-architecture, the journal extension, the new DATP version, or the complete
-version. Publication context, where it must be discussed, uses manuscript,
-article, publication evidence, main analysis, or supplementary analysis —
-never a venue name as a software concept.
+- Names the architecture, configurations, experiments, pipeline, artifacts,
+  analyses, reports, and extension mechanisms.
+- Never uses publication or version wording as a software-system name.
+- Uses manuscript, article, publication evidence, main analysis, or
+  supplementary analysis for publication context.
 
 ## Anchor
 
-`anchor` names the original DATP scientific behavior that DATP-Core must
-reproduce where required: a scientific behavioral reference, a
-reproducibility target, a locked experiment definition, and — for every
-experiment other than source inspection and feasibility auditing — a
-prerequisite gate. The anchor is represented as an ordinary DATP-Core
-experiment using the same configuration resolver, domain model, pipeline
-stages, lifecycle, artifact-identity rules, persistence rules, provenance
-model, evaluation services, statistical services, and reporting system as
-every other experiment; only its scientific definition, evidence role,
-expected evidence, and equivalence condition differ
-(`SCIENTIFIC_FOUNDATION.md §2`, `PIPELINE_EXECUTION_AND_ARTIFACTS.md §7`). It
-is never called legacy, old, reference, previous, or historical DATP, and it
-never gains a separate pipeline, planner, persistence layer, report engine,
-compatibility facade, or legacy adapter.
+- Reproduces required DATP scientific behavior and acts as a locked
+  reproducibility prerequisite, except for source inspection and feasibility
+  audits.
+- Uses the same resolver, domain model, stages, lifecycle, artifacts,
+  persistence, provenance, evaluation, statistics, and reporting as other
+  experiments.
+- Differs only in scientific definition, evidence role, expected evidence,
+  and equivalence condition (`SCIENTIFIC_FOUNDATION.md §2`,
+  `PIPELINE_EXECUTION_AND_ARTIFACTS.md §7`).
+- Has no separate execution path, planner, persistence, reporting, or
+  compatibility layer.
 
 ## Package navigation
 
@@ -171,7 +161,7 @@ CLI command or zero-input Make target
               → cross-document scientific validation
                 → resolved-configuration snapshot creation
                   → resolved-configuration fingerprinting and persistence
-                    → sweep expansion into resolved ExperimentCell objects
+                    → typed sweep expansion into resolved runs
                       → prerequisite and scientific-readiness checks
                         → stage planning
                           → artifact-reuse decisions
