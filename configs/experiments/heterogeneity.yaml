@@ -1,0 +1,100 @@
+schema_version: 1
+family: heterogeneity
+experiments:
+  - slug: controlled_heterogeneity_response
+    display_name: Controlled Heterogeneity Response
+    evidence_role: supportive
+    run_requirement: mandatory
+    tier: tier_2
+    roadmap_reference: E-S3
+    data: { dataset: nbaiot, setup: dirichlet_partitioned }
+    model: autoencoder
+    training:
+      profile: federated_averaging
+      parameters: {}
+    sweep:
+      parameters:
+        dirichlet_alpha:
+          values: [0.1, 0.3, 0.5, 1.0, 10.0, iid]
+    evaluations:
+      - label: shared_mean
+        threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+      - label: local
+        threshold: { policy: local_threshold, quantile: 0.95 }
+      - label: cluster_k3_mean
+        threshold:
+          policy: cluster_threshold
+          aggregation: mean
+          cluster_count: 3
+          fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+          quantile: 0.95
+          initialization: k_means_plus_plus
+          initialization_runs: 10
+          maximum_iterations: 300
+          random_seed: 42
+    analyses:
+      - label: heterogeneity_scope_effect
+        kind: paired_threshold_analysis
+        first_evaluation: shared_mean
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: shared_minus_local
+        primary_procedure:
+          method: bca_bootstrap
+          confidence_level: 0.95
+          resample_count: 10000
+        secondary_procedures: []
+      - label: heterogeneity_threshold_benefit_association
+        kind: metric_association_analysis
+        # E-M4 (`heterogeneity_threshold_benefit_association`): regresses pairwise JS divergence
+        # against the paired CV(FPR) delta, reusing this experiment's own evaluated results.
+        predictor_metric: pairwise_js_divergence
+        outcome_metric: cv_fpr_delta
+        grouping_dimension: dirichlet_alpha
+        primary_procedure: { method: spearman_correlation }
+        secondary_procedures:
+          - { method: linear_regression }
+          # weak R² is a real, reportable result (roadmap §5.5, Tier 5).
+    seed_cohort:
+      paired_seed_count: 10
+      derivation: deterministic_from_experiment_seed
+      experiment_seed: 0
+      # applies the same locked ten-seed DATP-Core cohort as every other non-anchor experiment;
+      # the roadmap names no distinct seed count for Regime C.
+    prerequisites:
+      - requires: anchor_reproduction
+        required_outcome: anchor_equivalence_passed
+    operations:
+      execution: scientific
+      report:
+        report_artifacts:
+          - artifact_type: main_table
+            table_type: dispersion_ladder
+            columns:
+              - { name: dirichlet_alpha, unit: none, direction: none }
+              - { name: threshold_construction, unit: none, direction: none }
+              - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+              - { name: delta, unit: ratio, direction: higher_is_better }
+            ordering: deterministic_by_threshold_construction
+            missing_value_policy: render_typed_unavailable
+            source_result_types: [policy_evaluation_result, confirmatory_analysis_result]
+            output_formats: [markdown, latex]
+          - artifact_type: figure
+            figure_type: severity_trend
+            series:
+              - { name: dirichlet_alpha, unit: none, direction: none }
+              - { name: cv_fpr_delta, unit: ratio, direction: higher_is_better }
+            ordering: deterministic_by_dirichlet_alpha
+            missing_value_policy: render_typed_unavailable
+            source_result_types: [confirmatory_analysis_result]
+            output_formats: [markdown, latex]
+          - artifact_type: figure
+            figure_type: scatter
+            series:
+              - { name: pairwise_js_divergence, unit: none, direction: none }
+              - { name: cv_fpr_delta, unit: ratio, direction: higher_is_better }
+            ordering: deterministic_by_dirichlet_alpha
+            missing_value_policy: render_typed_unavailable
+            source_result_types: [metric_association_result]
+            output_formats: [markdown, latex]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]

@@ -1,0 +1,205 @@
+schema_version: 1
+family: references_and_boundaries
+experiments:
+  - slug: centralized_pooled_reference
+    display_name: Centralized Pooled Reference
+    evidence_role: supportive
+    run_requirement: mandatory
+    roadmap_reference: B0
+    # own centralized identity chain; never fused with federated-averaging artifacts
+    # (ANCHOR-04, ART-06); supports the "not a mean-construction artifact" reasoning rather than
+    # bearing its own claim tier.
+    data: { dataset: nbaiot, setup: natural_devices }
+    model: autoencoder
+    training_profile: centralized_pooled
+    evaluations:
+      - label: centralized_pooled
+        threshold: { policy: centralized_pooled_threshold, quantile: 0.95 }
+        # `CentralizedPooledThreshold` is not a member of the shared `ThresholdConstruction`
+        # union; it is reachable only from a `CentralizedPooledTrainingProfile` model
+        # (DOMAIN_AND_APPLICATION_ARCHITECTURE.md §16.2).
+    analyses: []
+    seed_cohort:
+      paired_seed_count: 10
+      derivation: deterministic_from_experiment_seed
+      # BLOCKED (statistical/operational authority, ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7):
+      # experiment_seed required.
+    prerequisites: []
+    operations:
+      execution: scientific
+      report: { table_type: dispersion_ladder, source_result_types: [policy_evaluation_result], output_formats: [markdown, latex], wording_outcomes: [strong_positive, weak_positive, mixed, null] }
+
+  - slug: federated_summary_comparator
+    display_name: Federated Summary-Statistic Comparator
+    evidence_role: stress_test
+    run_requirement: mandatory
+    tier: tier_4
+    roadmap_reference: [E-T3, E-Q1, E-Q5]
+    # one merged experiment: matched benign-summary comparison (mandatory primary, former E-T3),
+    # quantile-estimation-error backbone analysis (mandatory, former E-Q1), and fixed-k
+    # sensitivity (optional supplementary, never primary, former E-Q5).
+    data: { dataset: nbaiot, setup: natural_devices }
+    model: autoencoder
+    training_profile: federated_averaging
+    sweep:
+      parameters:
+        federated_summary_fixed_k:
+          values: [2.0, 2.5, 3.0]
+    evaluations:
+      - label: shared_mean
+        threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+      - label: shared_pooled
+        threshold: { policy: shared_threshold, construction: pooled, quantile: 0.95 }
+      - label: shared_weighted
+        threshold: { policy: shared_threshold, construction: weighted, quantile: 0.95 }
+      - label: local
+        threshold: { policy: local_threshold, quantile: 0.95 }
+      - label: federated_summary_matched
+        threshold: { policy: federated_summary_statistic_threshold, fixed_k: null }
+        requested_metrics: [cv_fpr, between_ratio]
+        # matched-exceedance operating point (primary; SB-27); full pooled variance including
+        # the between-client mean-shift term and the larger-k tie rule are structural, never
+        # configurable (SCI-17). BLOCKED (authoritative protocol record,
+        # ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7): the candidate grid τ(k) = µ_global +
+        # k·σ_global spans k ∈ {0.00 … 5.00}, but its step size is a genuine, currently open
+        # blocker.
+      - label: federated_summary_fixed_k
+        threshold: { policy: federated_summary_statistic_threshold, fixed_k: [{ from_sweep: federated_summary_fixed_k }] }
+        execution_requirement: optional
+        publication_placement: supplementary
+        # fixed-k sensitivity only; never the primary comparator result (SB-27, SCI-18).
+    analyses:
+      - label: matched_comparator_vs_local
+        kind: paired_threshold_analysis
+        first_evaluation: local
+        second_evaluation: federated_summary_matched
+        primary_metric: cv_fpr
+        delta_orientation: local_minus_federated_summary
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+          # BLOCKED (statistical authority): bootstrap resample count required.
+        secondary_procedures: []
+      - label: matched_comparator_vs_shared
+        kind: paired_threshold_analysis
+        first_evaluation: shared_mean
+        second_evaluation: federated_summary_matched
+        primary_metric: cv_fpr
+        delta_orientation: shared_minus_federated_summary
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+          # BLOCKED (statistical authority): bootstrap resample count required.
+        secondary_procedures: []
+        # "reduces dispersion vs B1 but less than B2, or result reported honestly" (roadmap E-T3).
+      - label: quantile_estimation_backbone
+        kind: quantile_estimation_analysis
+        # no novel-estimator claim (L11); reproducibility/comparability device only
+        # (roadmap §12.6).
+        source_evaluations: [shared_mean, shared_pooled, shared_weighted, local, federated_summary_matched]
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+          # BLOCKED (statistical authority): bootstrap resample count required.
+        secondary_procedures: []
+    seed_cohort:
+      paired_seed_count: 10
+      derivation: deterministic_from_experiment_seed
+      # BLOCKED (statistical/operational authority, ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7):
+      # experiment_seed required.
+    prerequisites:
+      - requires: anchor_reproduction
+        required_outcome: anchor_equivalence_passed
+    operations:
+      execution: scientific
+      report: { table_type: comparator, source_result_types: [confirmatory_analysis_result, quantile_estimation_result], output_formats: [markdown, latex], wording_outcomes: [strong_positive, weak_positive, mixed, null] }
+
+  - slug: federated_summary_comparator_edge_iiotset
+    display_name: Federated Summary-Statistic Comparator (Edge-IIoTset)
+    evidence_role: stress_test
+    run_requirement: mandatory
+    tier: tier_4
+    roadmap_reference: [E-T3, E-Q1, E-Q5]
+    data:
+      dataset: edge_iiotset
+      # BLOCKED: identical `client_granularity_feasibility` gate as
+      # `external_device_dataset_validation`.
+    model: autoencoder
+    training_profile: federated_averaging
+    sweep:
+      parameters:
+        federated_summary_fixed_k:
+          values: [2.0, 2.5, 3.0]
+    evaluations:
+      - label: local
+        threshold: { policy: local_threshold, quantile: 0.95 }
+      - label: federated_summary_matched
+        threshold: { policy: federated_summary_statistic_threshold, fixed_k: null }
+        requested_metrics: [cv_fpr, between_ratio]
+        # BLOCKED (authoritative protocol record): same matched-exceedance k-grid-step blocker
+        # as the N-BaIoT sibling entry above.
+      - label: federated_summary_fixed_k
+        threshold: { policy: federated_summary_statistic_threshold, fixed_k: [{ from_sweep: federated_summary_fixed_k }] }
+        execution_requirement: optional
+        publication_placement: supplementary
+    analyses:
+      - label: matched_comparator_vs_local
+        kind: paired_threshold_analysis
+        first_evaluation: local
+        second_evaluation: federated_summary_matched
+        primary_metric: cv_fpr
+        delta_orientation: local_minus_federated_summary
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+          # BLOCKED (statistical authority): bootstrap resample count required.
+        secondary_procedures: []
+    seed_cohort:
+      paired_seed_count: 10
+      derivation: deterministic_from_experiment_seed
+      # BLOCKED (statistical/operational authority): experiment_seed required.
+    prerequisites:
+      - requires: anchor_reproduction
+        required_outcome: anchor_equivalence_passed
+      - requires: external_device_dataset_validation
+        required_outcome: completed
+    operations:
+      execution: scientific
+      report: { table_type: comparator, source_result_types: [confirmatory_analysis_result], output_formats: [markdown, latex], wording_outcomes: [strong_positive, weak_positive, mixed, null] }
+
+  - slug: file_pseudo_client_applicability_boundary
+    display_name: File-Pseudo-Client Applicability Boundary
+    evidence_role: boundary
+    run_requirement: mandatory
+    tier: tier_6
+    roadmap_reference: B_A_APPLICABILITY_BOUNDARY
+    data: { dataset: ciciot2023, setup: file_pseudo_clients }
+    model: autoencoder
+    training_profile: federated_averaging
+    evaluations:
+      - label: shared_mean
+        threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+      - label: local
+        threshold: { policy: local_threshold, quantile: 0.95 }
+      - label: cluster_k3_mean
+        threshold: { policy: cluster_threshold, aggregation: mean, cluster_count: 3, fingerprint_features: [mean_error, std_error, skew_error, p95_error], quantile: 0.95 }
+    analyses:
+      - label: pseudo_client_scope_effect
+        kind: paired_threshold_analysis
+        first_evaluation: shared_mean
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: shared_minus_local
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+          # BLOCKED (statistical authority): bootstrap resample count required.
+        secondary_procedures: []
+    seed_cohort:
+      paired_seed_count: 10
+      derivation: deterministic_from_experiment_seed
+      # BLOCKED (statistical/operational authority, ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7):
+      # neither the roadmap nor the architecture package states a paired-seed count specific to
+      # Regime B-a; experiment_seed is also required.
+    prerequisites:
+      - requires: anchor_reproduction
+        required_outcome: anchor_equivalence_passed
+      # `ciciot2023`'s `processed_feature_verification` dataset audit is referenced as upstream
+      # provenance by `ArtifactRef`, never as an `ExperimentPrerequisite` gate
+      # (SCIENTIFIC_FOUNDATION.md §5.1, §7.7); any quantitative claim from this experiment is
+      # nonetheless blocked until that audit's own run has executed
+      # (ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7).
+    operations:
+      execution: scientific
+      report: { table_type: boundary_null, source_result_types: [confirmatory_analysis_result], output_formats: [markdown, latex], wording_outcomes: [null, feasibility_rejection] }
+      # boundary report only, never generalized to a natural-device claim (SB-16, roadmap §12.10).

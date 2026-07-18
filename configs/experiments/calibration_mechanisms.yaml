@@ -1,0 +1,345 @@
+schema_version: 1
+family: calibration_mechanisms
+experiments:
+  - slug: cluster_mechanism
+    display_name: Cluster / Family Threshold Mechanism
+    evidence_role: mechanism
+    run_requirement: mandatory
+    tier: tier_5
+    roadmap_reference: [E-M1, E-M2, E-Q2]
+    data: { dataset: nbaiot, setup: natural_devices }
+    # Regime A only in this configuration pass. The roadmap's "+ D where feasible" extension
+    # (SCIENTIFIC_FOUNDATION.md §7.2) is now data-feasible (edge_iiotset/external_group is
+    # resolved, `configs/datasets/edge_iiotset.yaml`), but is deliberately not added as a second
+    # dataset axis on this entry: this experiment already carries an internal
+    # `fingerprint_feature_subset` sweep, and combining it with a second, experiment-wide
+    # `regime` sweep on the same entry would replicate every non-ablation evaluation across
+    # dataset scope for no scientific reason. The Regime-D extension is an explicit, preserved
+    # seam (`SCIENTIFIC_FOUNDATION.md §7.2`'s own "where feasible" wording already frames it as
+    # additive, not mandatory) rather than a mechanism defined here.
+    model: autoencoder
+    training:
+      profile: federated_averaging
+      parameters: {}
+    sweep:
+      parameters:
+        fingerprint_feature_subset:
+          values:
+            - [mean_error]
+            - [p95_error]
+            - [mean_error, std_error]
+            - [mean_error, std_error, skew_error, p95_error]
+    evaluations:
+      - label: shared_mean
+        threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+      - label: local
+        threshold: { policy: local_threshold, quantile: 0.95 }
+      - label: family
+        threshold: { policy: family_threshold, quantile: 0.95 }
+      - label: cluster_k3_mean
+        threshold:
+          policy: cluster_threshold
+          aggregation: mean
+          cluster_count: 3
+          fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+          quantile: 0.95
+          initialization: k_means_plus_plus
+          initialization_runs: 10
+          maximum_iterations: 300
+          random_seed: 42
+        # B4 canonical; SB-32 locks K = 3 as the sole mandatory cluster count.
+      - label: cluster_k9_mean
+        threshold:
+          policy: cluster_threshold
+          aggregation: mean
+          cluster_count: 9
+          fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+          quantile: 0.95
+          initialization: k_means_plus_plus
+          initialization_runs: 10
+          maximum_iterations: 300
+          random_seed: 42
+        execution_requirement: optional
+        publication_placement: supplementary
+        # exploratory granularity sensitivity only (Tier 7); never promoted to canonical (SB-32).
+      - label: cluster_k3_robust_median
+        threshold:
+          policy: cluster_threshold
+          aggregation: robust_median
+          cluster_count: 3
+          fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+          quantile: 0.95
+          initialization: k_means_plus_plus
+          initialization_runs: 10
+          maximum_iterations: 300
+          random_seed: 42
+        execution_requirement: optional
+        publication_placement: supplementary
+        # E-Q2 robust-median sensitivity; cannot replace canonical mean-aggregated B4.
+      - label: cluster_k3_ablation
+        threshold:
+          policy: cluster_threshold
+          aggregation: mean
+          cluster_count: 3
+          fingerprint_features: { from_sweep: fingerprint_feature_subset }
+          quantile: 0.95
+          initialization: k_means_plus_plus
+          initialization_runs: 10
+          maximum_iterations: 300
+          random_seed: 42
+        execution_requirement: optional
+        publication_placement: supplementary
+        # E-M2 fingerprint-feature ablation across the four locked subsets above.
+    analyses:
+      - label: family_vs_local
+        kind: paired_threshold_analysis
+        first_evaluation: family
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: family_minus_local
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        secondary_procedures: []
+      - label: cluster_vs_local
+        kind: paired_threshold_analysis
+        first_evaluation: cluster_k3_mean
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: cluster_minus_local
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        secondary_procedures: []
+      - label: shared_vs_cluster_recovery
+        kind: paired_threshold_analysis
+        first_evaluation: shared_mean
+        second_evaluation: cluster_k3_mean
+        primary_metric: cv_fpr
+        delta_orientation: shared_minus_cluster
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        secondary_procedures: []
+        # recovery framing: what fraction of the shared-to-local gain B4 recovers (Tier 7
+        # exploratory claim, roadmap §12.2 fallback wording).
+      - label: cluster_stability
+        kind: cluster_stability_analysis
+        source_evaluation: cluster_k3_mean
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        secondary_procedures: []
+        # adjusted-Rand stability across the paired seed cohort (roadmap §12.3).
+    seed_cohort:
+      paired_seed_count: 10
+      derivation: deterministic_from_experiment_seed
+      experiment_seed: 0
+    prerequisites:
+      - requires: anchor_reproduction
+        required_outcome: anchor_equivalence_passed
+    operations:
+      execution: scientific
+      report:
+        report_artifacts:
+          - artifact_type: main_table
+            table_type: cluster_stability
+            columns:
+              - { name: threshold_construction, unit: none, direction: none }
+              - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+              - { name: worst_client_fpr, unit: ratio, direction: lower_is_better }
+              - { name: within_cluster_dispersion, unit: ratio, direction: lower_is_better }
+              - { name: across_cluster_dispersion, unit: ratio, direction: none }
+              - { name: adjusted_rand_index, unit: none, direction: higher_is_better }
+            ordering: deterministic_by_threshold_construction
+            missing_value_policy: render_typed_unavailable
+            source_result_types: [policy_evaluation_result, cluster_stability_result]
+            output_formats: [markdown, latex]
+          - artifact_type: supplementary_table
+            table_type: contingency
+            columns:
+              - { name: cluster_assignment, unit: none, direction: none }
+              - { name: device, unit: none, direction: none }
+            ordering: deterministic_by_threshold_construction
+            missing_value_policy: render_typed_unavailable
+            source_result_types: [cluster_stability_result]
+            output_formats: [markdown]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null]
+
+  - slug: calibration_window_size_stability
+    display_name: Calibration-Window-Size Stability
+    evidence_role: boundary
+    run_requirement: mandatory
+    tier: tier_6
+    roadmap_reference: E-V1
+    data:
+      dataset: nbaiot
+      setup: natural_devices
+      calibration_subset:
+        requested_sample_count: { from_sweep: calibration_sample_count }
+        selection_strategy: deterministic_prefix
+        nesting_policy: nested_by_size
+        selection_seed: 0
+        # locked to the same base experiment_seed as `seed_cohort` below (single owner,
+        # `ENGINEERING_DECISIONS_AND_CONFORMANCE.md` seed-derivation rule).
+    model: autoencoder
+    training:
+      profile: federated_averaging
+      parameters: {}
+    sweep:
+      parameters:
+        calibration_sample_count:
+          values: [50, 100, 250, 500, 1000, 5000]
+    evaluations:
+      - label: shared_mean
+        threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+      - label: local
+        threshold: { policy: local_threshold, quantile: 0.95 }
+      - label: cluster_k3_mean
+        threshold:
+          policy: cluster_threshold
+          aggregation: mean
+          cluster_count: 3
+          fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+          quantile: 0.95
+          initialization: k_means_plus_plus
+          initialization_runs: 10
+          maximum_iterations: 300
+          random_seed: 42
+      - label: calibration_size_aware_fallback
+        threshold: { policy: calibration_size_aware_fallback_threshold, quantile: 0.95 }
+        # replaces, rather than follows, the ordinary hard n_min = 100 fallback for its own
+        # declared cells (EVALUATION_REPORTING_AND_PROVENANCE.md §6.1).
+    analyses:
+      - label: window_size_vs_local
+        kind: paired_threshold_analysis
+        first_evaluation: shared_mean
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: shared_minus_local
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        secondary_procedures: []
+    seed_cohort:
+      paired_seed_count: 10
+      derivation: deterministic_from_experiment_seed
+      experiment_seed: 0
+    prerequisites:
+      - requires: anchor_reproduction
+        required_outcome: anchor_equivalence_passed
+    operations:
+      execution: scientific
+      report:
+        report_artifacts:
+          - artifact_type: main_table
+            table_type: sensitivity_grid
+            columns:
+              - { name: calibration_sample_count, unit: count, direction: none }
+              - { name: threshold_construction, unit: none, direction: none }
+              - { name: threshold_variance, unit: ratio, direction: lower_is_better }
+              - { name: worst_client_fpr, unit: ratio, direction: lower_is_better }
+            ordering: deterministic_by_threshold_construction
+            missing_value_policy: render_typed_unavailable
+            source_result_types: [policy_evaluation_result, confirmatory_analysis_result]
+            output_formats: [markdown, latex]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null]
+
+  - slug: local_global_threshold_shrinkage
+    display_name: Local-Global Threshold Shrinkage
+    evidence_role: supportive
+    run_requirement: mandatory
+    tier: tier_6
+    roadmap_reference: E-V2
+    data: { dataset: nbaiot, setup: natural_devices }
+    model: autoencoder
+    training:
+      profile: federated_averaging
+      parameters: {}
+    sweep:
+      parameters:
+        shrinkage_weight:
+          values: [0.0, 0.25, 0.5, 0.75, 1.0]
+    evaluations:
+      - label: shared_mean
+        threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+      - label: local
+        threshold: { policy: local_threshold, quantile: 0.95 }
+      - label: shrinkage
+        threshold: { policy: local_global_shrinkage_threshold, shrinkage_weight: { from_sweep: shrinkage_weight }, quantile: 0.95 }
+        requested_metrics: [cv_fpr, p10_macro_f1]
+    analyses:
+      - label: shrinkage_vs_local
+        kind: paired_threshold_analysis
+        first_evaluation: shrinkage
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: shrinkage_minus_local
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        secondary_procedures: []
+    seed_cohort:
+      paired_seed_count: 10
+      derivation: deterministic_from_experiment_seed
+      experiment_seed: 0
+    prerequisites:
+      - requires: anchor_reproduction
+        required_outcome: anchor_equivalence_passed
+    operations:
+      execution: scientific
+      report:
+        report_artifacts:
+          - artifact_type: figure
+            figure_type: lambda_curve
+            series:
+              - { name: shrinkage_weight, unit: none, direction: none }
+              - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+              - { name: p10_macro_f1, unit: ratio, direction: higher_is_better }
+            ordering: deterministic_by_shrinkage_weight
+            missing_value_policy: render_typed_unavailable
+            source_result_types: [policy_evaluation_result]
+            output_formats: [markdown, latex]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null]
+
+  - slug: conformal_local_threshold_coverage
+    display_name: Conformal Local-Threshold Coverage
+    evidence_role: supportive
+    run_requirement: mandatory
+    tier: tier_1
+    # Tier-1 tautology defense (Appendix A / L04), non-confirmatory itself.
+    roadmap_reference: E-V3
+    data: { dataset: nbaiot, setup: natural_devices }
+    # Regime A only in this configuration pass; see `cluster_mechanism`'s note above for the
+    # preserved (not mechanized here) Regime-D extension seam.
+    model: autoencoder
+    training:
+      profile: federated_averaging
+      parameters: {}
+    evaluations:
+      - label: local
+        threshold: { policy: local_threshold, quantile: 0.95 }
+      - label: conformal_local
+        threshold: { policy: conformal_local_threshold, conformal_mode: split_conformal, coverage_alpha: 0.05 }
+    analyses:
+      - label: conformal_vs_local
+        kind: paired_threshold_analysis
+        first_evaluation: conformal_local
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: conformal_minus_local
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        secondary_procedures: []
+    seed_cohort:
+      paired_seed_count: 10
+      derivation: deterministic_from_experiment_seed
+      experiment_seed: 0
+    prerequisites:
+      - requires: anchor_reproduction
+        required_outcome: anchor_equivalence_passed
+    operations:
+      execution: scientific
+      report:
+        report_artifacts:
+          - artifact_type: main_table
+            table_type: dispersion_ladder
+            columns:
+              - { name: threshold_construction, unit: none, direction: none }
+              - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+              - { name: conformal_coverage, unit: ratio, direction: closer_to_target }
+            ordering: deterministic_by_threshold_construction
+            missing_value_policy: render_typed_unavailable
+            source_result_types: [policy_evaluation_result, eligibility_coverage_result]
+            output_formats: [markdown, latex]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null]
+        # `EligibilityCoverageResult` and `ConformalCoverageResult` remain disjoint identities and
+        # never share a table column (EVALUATION_REPORTING_AND_PROVENANCE.md §6.2); the
+        # `conformal_coverage` column above sources `ConformalCoverageResult` only.

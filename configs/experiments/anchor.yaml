@@ -1,0 +1,64 @@
+schema_version: 1
+family: anchor
+experiments:
+  - slug: anchor_reproduction
+    display_name: Anchor Reproduction
+    evidence_role: anchor
+    run_requirement: mandatory
+    data: { dataset: nbaiot, setup: natural_devices }
+    model: autoencoder
+    training:
+      profile: federated_averaging
+      parameters: {}
+    evaluations:
+      - label: shared_mean
+        threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+      - label: local
+        threshold: { policy: local_threshold, quantile: 0.95 }
+    analyses:
+      - label: anchor_scope_effect
+        kind: paired_threshold_analysis
+        first_evaluation: shared_mean
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: shared_minus_local
+        primary_procedure:
+          method: bca_bootstrap
+          confidence_level: 0.95
+          resample_count: 10000
+        secondary_procedures: []
+      - label: anchor_equivalence
+        kind: anchor_equivalence_analysis
+        source_analysis: anchor_scope_effect
+        reference_interval:
+          metric: cv_fpr_delta
+          confidence_level: 0.95
+          lower_bound: 0.647
+          upper_bound: 0.769
+    seed_cohort:
+      paired_seed_count: 5
+      derivation: deterministic_from_experiment_seed
+      experiment_seed: 0
+      # derives training seeds {0,1,2,3,4} and analysis (bootstrap-RNG) seeds
+      # {300,301,302,303,304} via the locked formula in
+      # `ENGINEERING_DECISIONS_AND_CONFORMANCE.md` §2 (`SeedCohortDefinition` derivation rule):
+      # training_seed[i] = experiment_seed + i; analysis_seed[i] = experiment_seed + 300 + i, for
+      # i in [0, paired_seed_count).
+    prerequisites: []
+    operations:
+      execution: scientific
+      report:
+        report_artifacts:
+          - artifact_type: main_table
+            table_type: confirmatory_interval
+            columns:
+              - { name: threshold_construction, unit: none, direction: none }
+              - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+              - { name: delta, unit: ratio, direction: higher_is_better }
+              - { name: bca_lower_bound, unit: ratio, direction: none }
+              - { name: bca_upper_bound, unit: ratio, direction: none }
+            ordering: deterministic_by_threshold_construction
+            missing_value_policy: render_typed_unavailable
+            source_result_types: [confirmatory_analysis_result]
+            output_formats: [markdown, latex]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]

@@ -1,0 +1,62 @@
+schema_version: 1
+dataset: n_baiot
+dataset_version: coldstart_dropped_deduplicated
+# Descriptive name for the one processed artifact this design authorizes: raw N-BaIoT with the
+# row-1 cold-start row dropped and exact-duplicate rows removed (see `preprocessing` below). No
+# second N-BaIoT artifact exists that would require distinguishing from a plain "raw" pass-through.
+audits:
+  - check: source_inspection
+    inspection:
+      expected_facts:
+        - feature_schema_present
+        - benign_and_attack_members_present
+        - per_device_membership_recoverable
+      source_row_identity_scheme: required
+    feasibility:
+      rule: source_schema_complete
+      required_evidence: [feature_schema_manifest, per_device_counts]
+    operations:
+      execution: dataset_audit
+      report: { table_type: source_inspection_report, output_formats: [markdown] }
+eligibility:
+  minimum_calibration_sample_count: 100
+setups:
+  natural_devices:
+    client_construction: { method: physical_device_clients, device_count: 9 }
+  dirichlet_partitioned:
+    client_construction:
+      method: dirichlet_partitioned_clients
+      client_count: 20
+      alpha: { from_sweep: dirichlet_alpha }
+      partition_seed: 0
+      # locked to the same base experiment_seed used everywhere else in this study
+      # (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md` seed-derivation rule, documented once).
+split_definition:
+  train: { role: train }
+  calibration: { role: calibration, benign_only: true }
+  test: { role: test }
+preprocessing:
+  normalization: { strategy: min_max, scope: global_train }
+  chunk_profile: { chunk_row_count: 50000 }
+  row_exclusion:
+    # DECISION (full-corpus verified, not a spot check — every one of the 89 non-header CSV
+    # members under `N-BaIoT/` was inspected):
+    #
+    # 1. Row-1 cold-start artifact: confirmed present, identically, in all 89 raw files (9
+    #    benign + 80 attack). Its `*_weight` columns read `1`(.0), `*_variance`/`*_std` columns
+    #    read `0`(.0), and `HH_jit_L*_mean` reads a raw Unix-epoch timestamp instead of a jitter
+    #    statistic — an extractor cold-start artifact, off-scale by ~9 orders of magnitude. It is
+    #    dropped before model-feature materialization; it is never averaged, scaled, flagged, or
+    #    calibrated against, because no schema field exists to carry a per-row flag and an
+    #    unhandled cold-start row would corrupt every downstream statistic that touches it.
+    # 2. Exact-duplicate rows: a full-corpus row-level scan (not the single-file spot check the
+    #    prior documentation draft relied on) found duplicate rates far above that spot check's
+    #    0.015% (Ecobee_Thermostat only): benign corpus-wide 7.633% (555,932 rows, 42,432 excess
+    #    duplicate rows; per-device range 0.015%–18.473%), attack corpus-wide 1.773% (6,506,674
+    #    rows, 115,347 excess). Exact duplicates are dropped (first occurrence in source row
+    #    order kept), because Kitsune's continuous incremental statistics make bit-identical
+    #    feature rows carry no distinguishing new information for either benign-quantile
+    #    calibration or reconstruction training, and retaining them would materially inflate the
+    #    weight of the over-represented rows in both.
+    cold_start_row: drop_first_row_per_source_file
+    duplicate_rows: drop_exact_duplicates_keep_first

@@ -1,0 +1,88 @@
+schema_version: 1
+architecture:
+  hidden_dims: [80, 40, 20]
+  activation: relu
+reconstruction_objective: mse
+optimizer:
+  optimizer_type: adam
+  learning_rate: 0.001
+  scheduler: null
+precision: fp32
+determinism: strict
+checkpoint_schedule:
+  rounds: [25, 50, 75, 100, 125, 150, 200]
+  # DATP-Core (non-anchor) journal checkpoint protocol (roadmap §10, locked): train once to a
+  # maximum of 200 rounds; save and evaluate checkpoints at every listed round. `rounds_max` is
+  # the pure derivation `max(rounds) = 200`, never authored directly.
+anchor_checkpoint_schedule:
+  rounds: [200]
+  # Historical anchor protocol, preserved separately from the DATP-Core schedule above (this is
+  # the confirmed contradiction the prior draft left unresolved: `models/autoencoder.yaml`
+  # previously owned exactly one model-wide `checkpoint_schedule`, but the anchor's historical
+  # conference-era protocol trains and evaluates a single checkpoint at training termination,
+  # while DATP-Core's journal-extension protocol adds the seven-point stability sweep). Both
+  # schedules share the identical `rounds_max = 200` training budget — "the same final AE state,
+  # seeds, and per-client score artifacts are reused across B1–B4" (roadmap §2) requires the
+  # anchor and the confirmatory experiment to reach the same terminal state; they differ only in
+  # which intermediate rounds are additionally saved and evaluated. Selection between the two
+  # schedules is a pure function of the referencing experiment's `evidence_role`
+  # (`derive_checkpoint_schedule(evidence_role)`; `ANCHOR = anchor_checkpoint_schedule`, every
+  # other role `= checkpoint_schedule`), mirroring the existing `derive_artifact_namespace`
+  # pattern (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md` §3.4) — never a second authored field on
+  # the experiment itself.
+training_batch:
+  micro_batch_size: 256
+  gradient_accumulation_steps: 1
+training_profiles:
+  federated_averaging:
+    kind: federated_averaging_training
+    local_epochs: 1
+    participation: full
+    personalization: none
+    checkpoint_selection:
+      rule: lowest_federated_averaging_weighted_benign_validation_reconstruction_error
+      tie_break: earliest_scheduled_round
+  federated_averaging_personalized:
+    kind: federated_averaging_training
+    local_epochs: 1
+    participation: full
+    personalization: ditto
+    personalization_proximal_weight: 1.0
+    # DECISION: genuine Ditto (Li, Hu, Chu & Smith, "Ditto: Fair and Robust Federated Learning
+    # Through Personalization", ICML 2021), not the FedRep-AE/FedPer-AE fallback, and therefore
+    # authorized to be named "Ditto" (SB-24, NAME-05). Rationale: (1) Ditto's local objective is
+    # reconstruction_loss(θ_k) + (personalization_proximal_weight / 2) · ‖θ_k − θ_global‖²,
+    # architecture-agnostic and requiring no head/representation split — it applies to the fixed
+    # autoencoder exactly as specified, whereas FedRep/FedPer require an invented decision about
+    # which AE layers count as a "shared representation" versus a "personalized head", a
+    # decision with no precedent in this package or in the FedRep/FedPer literature (both
+    # developed for classifier heads, not autoencoders). (2) The roadmap's own comparator table
+    # already describes "Ditto" using exactly this proximal-regularization mechanism, so
+    # implementing it faithfully needs no reinterpretation. (3) `personalization_proximal_weight
+    # = 1.0` matches Ditto's own paper's moderate-regularization setting, reported there as a
+    # robust default absent task-specific tuning; it sits structurally alongside `personalization`
+    # as a direct sibling field, mirroring the precedent `federated_proximal.mu` already
+    # established for `FederatedProximalTrainingProfile` (`SCIENTIFIC_FOUNDATION.md §6`).
+    checkpoint_selection:
+      rule: lowest_federated_averaging_weighted_benign_validation_reconstruction_error
+      tie_break: earliest_scheduled_round
+  federated_proximal:
+    kind: federated_prox_training
+    mu: 0.001
+    # the pre-registered µ-grid {0.001, 0.01, 0.1} is bound per resolved cell by the referencing
+    # experiment's `training.parameters.mu: { from_sweep: federated_proximal_mu }`
+    # (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md` §14, canonical binding shape); `0.001` here is
+    # this profile's own authored base value, matched to `federated_averaging` in every
+    # non-strategy field, never a caller-supplied value outside the grid.
+    local_epochs: 1
+    participation: full
+    personalization: none
+    checkpoint_selection:
+      rule: lowest_federated_averaging_weighted_benign_validation_reconstruction_error
+      tie_break: earliest_scheduled_round
+  centralized_pooled:
+    kind: centralized_pooled_training
+    # not federated; not in the causal ladder (ANCHOR-04)
+    checkpoint_selection:
+      rule: lowest_pooled_benign_validation_reconstruction_error
+      tie_break: earliest_scheduled_round

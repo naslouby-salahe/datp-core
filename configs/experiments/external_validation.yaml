@@ -1,0 +1,179 @@
+schema_version: 1
+family: external_validation
+experiments:
+  - slug: external_device_dataset_validation
+    display_name: External Device-Dataset Validation
+    evidence_role: external_validation
+    run_requirement: mandatory
+    tier: tier_3
+    roadmap_reference: E-X1
+    data: { dataset: edge_iiotset, setup: external_group }
+    # RESOLVED: `client_granularity_feasibility` (`configs/datasets/edge_iiotset.yaml`) closes in
+    # favor of `group` granularity, K = 10 — `device` granularity is rejected outright
+    # (ip.src_host dominated by 3 addresses plus placeholder/near-singleton noise; see the
+    # dataset document's audit decision record for the full-corpus evidence).
+    model: autoencoder
+    training:
+      profile: federated_averaging
+      parameters: {}
+    sweep:
+      parameters:
+        threshold_quantile:
+          values: [0.90, 0.95, 0.975, 0.99]
+          # sole owner of the external-dataset quantile-sensitivity axis
+          # (SCIENTIFIC_FOUNDATION.md §7.2; `threshold_quantile_sensitivity` owns the
+          # natural-device axis only).
+    evaluations:
+      - label: shared_mean
+        threshold: { policy: shared_threshold, construction: mean, quantile: { from_sweep: threshold_quantile } }
+      - label: local
+        threshold: { policy: local_threshold, quantile: { from_sweep: threshold_quantile } }
+      - label: family
+        threshold: { policy: family_threshold, quantile: { from_sweep: threshold_quantile } }
+      - label: cluster_k3_mean
+        threshold:
+          policy: cluster_threshold
+          aggregation: mean
+          cluster_count: 3
+          fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+          quantile: { from_sweep: threshold_quantile }
+          initialization: k_means_plus_plus
+          initialization_runs: 10
+          maximum_iterations: 300
+          random_seed: 42
+      - label: federated_summary_benign
+        threshold: { policy: federated_summary_statistic_threshold, fixed_k: null, matched_exceedance_k_grid_step: 0.05 }
+        requested_metrics: [cv_fpr, between_ratio]
+        # matched-exceedance (primary; SB-27). `matched_exceedance_k_grid_step` is authored
+        # directly here as this evaluation's own field (see `federated_summary_comparator` in
+        # `references_and_boundaries.yaml` for the full rationale behind the 0.05 step, locked
+        # identically everywhere `federated_summary_statistic_threshold` is evaluated).
+    analyses:
+      - label: external_scope_effect
+        kind: paired_threshold_analysis
+        first_evaluation: shared_mean
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: shared_minus_local
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        secondary_procedures:
+          - { method: wilcoxon_signed_rank }
+          - { method: cliffs_delta }
+    seed_cohort:
+      paired_seed_count: 10
+      derivation: deterministic_from_experiment_seed
+      experiment_seed: 0
+    prerequisites:
+      - requires: anchor_reproduction
+        required_outcome: anchor_equivalence_passed
+    operations:
+      execution: scientific
+      report:
+        report_artifacts:
+          - artifact_type: main_table
+            table_type: confirmatory_interval
+            columns:
+              - { name: threshold_construction, unit: none, direction: none }
+              - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+              - { name: delta, unit: ratio, direction: higher_is_better }
+              - { name: bca_lower_bound, unit: ratio, direction: none }
+              - { name: bca_upper_bound, unit: ratio, direction: none }
+            ordering: deterministic_by_threshold_construction
+            missing_value_policy: render_typed_unavailable
+            source_result_types: [confirmatory_analysis_result]
+            output_formats: [markdown, latex]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite, feasibility_rejection]
+    # DECISION — alert burden (E-O1, `operational_alert_burden_analysis`) is explicitly
+    # suppressed, not left incomplete: `AlertBurdenEvaluationSuite` requires validated
+    # `TrafficRateEvidence` (Measured or Cited). A full-corpus timestamp scan of the nine
+    # timestamp-usable `Normal traffic/` groups was performed to look for a genuine measured
+    # rate; every capture session turned out to be a short lab burst (27 minutes to 2.58 days),
+    # so a linear day-extrapolation of raw row counts (e.g. Distance: 1,143,540 rows in 0.0187
+    # days → ≈61,000,000 "rows/day") would misrepresent operational deployment density, exactly
+    # the hypothetical-number-as-measurement pattern SB-20 forbids — it is a lab-capture-density
+    # artifact, not a deployment rate. No externally cited real-world IoT traffic rate is
+    # authorized by the roadmap or architecture package to substitute. `ALERT_BURDEN` is
+    # therefore never requested by any evaluation on this experiment; this is the final,
+    # documented disposition, not an open item.
+
+  - slug: chronological_recalibration_evaluation
+    display_name: Chronological Recalibration Evaluation
+    evidence_role: boundary
+    run_requirement: mandatory
+    tier: tier_6
+    roadmap_reference: E-B1
+    data: { dataset: edge_iiotset, setup: chronological }
+    # RESOLVED: `timestamp_semantics_verification` closes with a per-client, midnight-corrected
+    # time-of-day ordering (see the dataset document's audit decision record); `modbus` is
+    # excluded (100% malformed `frame.time`), leaving `temporal_group_count = 9`.
+    model: autoencoder
+    training:
+      profile: federated_averaging
+      parameters: {}
+    evaluations:
+      - label: shared_mean_frozen
+        threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+        recalibration_mode: frozen
+      - label: local_frozen
+        threshold: { policy: local_threshold, quantile: 0.95 }
+        recalibration_mode: frozen
+      - label: cluster_k3_mean_frozen
+        threshold:
+          policy: cluster_threshold
+          aggregation: mean
+          cluster_count: 3
+          fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+          quantile: 0.95
+          initialization: k_means_plus_plus
+          initialization_runs: 10
+          maximum_iterations: 300
+          random_seed: 42
+        recalibration_mode: frozen
+      - label: shared_mean_one_shot
+        threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+        recalibration_mode: one_shot
+      - label: local_one_shot
+        threshold: { policy: local_threshold, quantile: 0.95 }
+        recalibration_mode: one_shot
+      - label: cluster_k3_mean_one_shot
+        threshold:
+          policy: cluster_threshold
+          aggregation: mean
+          cluster_count: 3
+          fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+          quantile: 0.95
+          initialization: k_means_plus_plus
+          initialization_runs: 10
+          maximum_iterations: 300
+          random_seed: 42
+        recalibration_mode: one_shot
+    analyses:
+      - label: local_temporal_recovery
+        kind: temporal_recovery_analysis
+        frozen_evaluation: local_frozen
+        recalibrated_evaluation: local_one_shot
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        secondary_procedures: []
+    seed_cohort:
+      paired_seed_count: 10
+      derivation: deterministic_from_experiment_seed
+      experiment_seed: 0
+    prerequisites:
+      - requires: anchor_reproduction
+        required_outcome: anchor_equivalence_passed
+    operations:
+      execution: scientific
+      report:
+        report_artifacts:
+          - artifact_type: figure
+            figure_type: recovery_curve
+            series:
+              - { name: temporal_window, unit: none, direction: none }
+              - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+            ordering: deterministic_by_threshold_construction
+            missing_value_policy: render_typed_unavailable
+            source_result_types: [temporal_recovery_result]
+            output_formats: [markdown, latex]
+        wording_outcomes: [recal_helps, recal_insufficient, no_meaningful_drift]
+        # one of the three pre-specified temporal outcomes (roadmap §11.1); no streaming detector
+        # is added retroactively to rescue a `recal_insufficient` result.

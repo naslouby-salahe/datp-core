@@ -1,0 +1,150 @@
+schema_version: 1
+dataset: edge_iiotset
+dataset_version: group_partitioned_deduplicated
+# Descriptive name for the one processed artifact this design authorizes: the group-partitioned
+# (folder-derived) 63-column raw corpus, one-hot encoded per the author recipe, with
+# exact-duplicate rows removed (see `preprocessing` below).
+source_layout:
+  normal_traffic_root: "Edge-IIoTset dataset/Normal traffic"
+  attack_traffic_root: "Edge-IIoTset dataset/Attack traffic"
+  normal_file_pattern: "*/*.csv"        # ten sensor-type folders, one CSV each (verified)
+  attack_file_pattern: "*_attack.csv"   # fourteen attack-type files (verified)
+  # The "Selected dataset for ML and DL" tree (`ML-EdgeIIoT-dataset.csv`,
+  # `DNN-EdgeIIoT-dataset.csv`) is a curated row selection of the same data, not a distinct
+  # feature-engineered artifact, and carries no recoverable group/client provenance; it is not a
+  # materialization source for any client-construction setup below.
+audits:
+  - check: source_inspection
+    inspection:
+      expected_facts: [feature_schema_present, device_identity_recoverable, capture_timestamp_present_or_absent]
+      source_row_identity_scheme: required
+    feasibility:
+      rule: source_schema_complete
+      required_evidence: [feature_schema_manifest, per_device_counts, timestamp_evidence]
+    operations: { execution: dataset_audit, report: { table_type: source_inspection_report, output_formats: [markdown] } }
+  - check: client_granularity_feasibility
+    inspection:
+      expected_facts: [per_candidate_client_benign_counts]
+      candidate_granularities: [device, group]
+      target_client_counts: [6, 15]
+    feasibility:
+      rule: eligibility_coverage_gate
+      minimum_calibration_sample_count: 100
+      minimum_client_coverage_ratio: 0.90
+      required_evidence: [per_client_benign_counts]
+    operations: { execution: dataset_audit, report: { table_type: feasibility_report, output_formats: [markdown] } }
+    # RESOLVED (full-corpus streamed inspection during this task, not a spot check):
+    # `device` granularity is REJECTED. A full-file scan of the "Selected" ML file's
+    # `ip.src_host` (157,801 rows, corroborated by the same pattern in the raw per-sensor files)
+    # found 19,090 distinct values, with three addresses covering ≈83% of rows, the placeholder
+    # literal `"0"` covering 7,991 rows, `"0.0.0.0"` covering 208, and the remainder a long tail
+    # of near-singleton public/incidental IPs. A naive per-`ip.src_host` partition yields one
+    # extreme majority handful of clients plus thousands of near-singleton pseudo-clients — it
+    # cannot meet the 90%-of-clients-at-n_k≥100 coverage gate at any target K, and no
+    # unauthorized IP-clustering heuristic is invented to force one.
+    # `group` granularity is AUTHORIZED, K = 10 (folder-derived, not `ip.src_host`-derived): the
+    # ten `Normal traffic/` sensor-type folders. Every folder's benign row count comfortably
+    # clears n_k ≥ 100 (raw, pre-filter): Distance 1,143,540; Flame_Sensor 1,070,196; Heart_Rate
+    # 165,319 (smallest); IR_Receiver 1,307,778; Modbus 159,502; Soil_Moisture 1,192,777;
+    # Sound_Sensor 1,512,883; Temperature_and_Humidity 1,615,722; Water_Level 2,295,288; phValue
+    # 746,908 — 10/10 clients clear the gate, 100% coverage, far above the 90% minimum. The
+    # roadmap's own candidate `target_client_counts: [6, 15]` names neither value the audit
+    # actually produces; K = 10 is the genuine group count and is reported as such rather than
+    # forced to a nearer target.
+  - check: timestamp_semantics_verification
+    inspection:
+      expected_facts: [genuine_capture_time_field_present, per_client_temporal_ordering_recoverable]
+    feasibility:
+      rule: timestamp_semantics_verified
+      required_evidence: [timestamp_evidence, per_client_time_span]
+    operations: { execution: dataset_audit, report: { table_type: feasibility_report, output_formats: [markdown] } }
+    # RESOLVED (full-corpus streamed inspection, all 24 raw `Normal traffic`/`Attack traffic`
+    # files, every row): `frame.time` carries `"YYYY HH:MM:SS.nnnnnnnnn"` — year and
+    # time-of-day, with NO month/day component — in 21 of 24 files. Three files
+    # (`Normal traffic/Modbus/Modbus.csv`, `Attack traffic/DDoS_UDP_Flood_attack.csv`,
+    # `Attack traffic/MITM_attack.csv`) are 100% malformed: every row's `frame.time` cell holds
+    # an IP-address literal or `"0.0"`, never a timestamp, in that entire file (not a partial or
+    # sampled malformed rate — a clean, complete, per-file split). The missing month/day means
+    # `frame.time` alone cannot establish absolute cross-client wall-clock order, but the
+    # `chronological` setup below only requires WITHIN-client relative order (each client's own
+    # benign rows are split into the first 70% / last 30% by capture time independently); the
+    # time-of-day component, corrected for midnight rollover (a deterministic +24h added to the
+    # running clock whenever time-of-day decreases versus the immediately preceding row in the
+    # same file — verified: `Water_Level` shows 0 rollovers, `Distance` shows 1,
+    # `Temperature_and_Humidity` shows 3, consistent with capture sessions ranging from ~27
+    # minutes to several days), is sufficient for that within-client ordering. `Modbus` has no
+    # usable timestamp at all and is excluded from `chronological` (`temporal_group_count = 9`);
+    # it remains fully valid for `external_group`/`external_device`, which never read
+    # `frame.time` (dropped before modeling regardless of validity).
+eligibility:
+  minimum_calibration_sample_count: 100
+setups:
+  external_device:
+    client_construction:
+      method: external_device_or_group_clients
+      granularity: device
+      feasibility_result_ref: client_granularity_feasibility
+    # authored for schema completeness (`ExternalDeviceOrGroupClients` is a two-member
+    # discriminated granularity); never referenced by an experiment, because the audit above
+    # rejects `device` granularity outright — no experiment resolves against it.
+  external_group:
+    client_construction:
+      method: external_device_or_group_clients
+      granularity: group
+      feasibility_result_ref: client_granularity_feasibility
+      group_count: 10
+  chronological:
+    client_construction:
+      method: external_device_or_group_clients
+      granularity: group
+      feasibility_result_ref: client_granularity_feasibility
+      group_count: 9
+      excluded_groups: [modbus]
+      exclusion_reason: timestamp_semantics_unusable
+    temporal_window:
+      role: temporal_evaluation
+      historical_fraction: 0.70
+      capture_time_field: frame.time
+      ordering_derivation: time_of_day_with_midnight_rollover_correction
+      # per-client relative ordering only (see `timestamp_semantics_verification` above); never
+      # an absolute cross-client wall-clock claim.
+split_definition:
+  train: { role: train }
+  calibration: { role: calibration, benign_only: true }
+  test: { role: test }
+preprocessing:
+  normalization: { strategy: min_max, scope: global_train }
+  row_exclusion:
+    # DECISION (full-corpus streamed, all 24 raw files, every row):
+    # Exact-duplicate rows: 20,939,622 total rows, 2,622 excess duplicates (0.0125%) — negligible
+    # but genuine and nonzero (concentrated in a handful of files; cross-file duplicates are
+    # structurally impossible here because different sensor-type/attack-type files carry
+    # different group/label identity by construction, unlike CICIoT2023's shuffled
+    # `MERGED_CSV`). Dropped for consistency with the same policy applied to N-BaIoT and
+    # CICIoT2023 (first occurrence in source row order kept).
+    # Row filter (author-documented recipe, `Edge-IIoTset/Readme.txt` "Step 4"): drop any row
+    # with a null in a retained column, then drop exact-duplicate rows, before encoding — applied
+    # in that order.
+    null_in_retained_column: drop_row
+    duplicate_rows: drop_exact_duplicates_keep_first
+  categorical_encoding:
+    strategy: one_hot
+    columns: [http.request.method, http.referer, http.request.version, dns.qry.name.len, mqtt.conack.flags, mqtt.protoname, mqtt.topic]
+    # Post-encoding width MEASURED directly from the full corpus (20,939,622 rows, all 24 raw
+    # files, pre-null-filter distinct-value scan): http.request.method=9, http.referer=6,
+    # http.request.version=14, dns.qry.name.len=17, mqtt.conack.flags=14, mqtt.protoname=4,
+    # mqtt.topic=12 → 76 one-hot columns. Combined with the 39 retained non-encoded numeric
+    # columns (46 retained non-label columns − 7 one-hot-encoded), the final
+    # `model_feature_order` width is 115. The null-row-drop step above could in principle narrow
+    # a column's observed category set before encoding; no category value in this measurement is
+    # known to appear only in a row that also carries a null in another retained column, and this
+    # is treated as the closing width unless a future `SOURCE_INSPECTION` run observes otherwise.
+    encoded_feature_count: 76
+    retained_numeric_feature_count: 39
+    total_model_feature_count: 115
+  excluded_columns: [frame.time, ip.src_host, ip.dst_host, arp.src.proto_ipv4, arp.dst.proto_ipv4, http.file_data, http.request.full_uri, icmp.transmit_timestamp, http.request.uri.query, tcp.options, tcp.payload, tcp.srcport, tcp.dstport, udp.port, mqtt.msg]
+    # the 15 columns marked EXCLUDED_LEAKAGE_RISK / EXCLUDED_HIGH_CARDINALITY / TIMESTAMP /
+    # CLIENT_IDENTITY (author recipe, `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md` §11.3); type
+    # alone never determines exclusion, only the documented role does (`http.file_data` is
+    # retained despite being constant in-sample; `icmp.transmit_timestamp` is dropped despite
+    # being numeric).
