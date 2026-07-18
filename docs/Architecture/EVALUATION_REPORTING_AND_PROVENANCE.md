@@ -84,9 +84,14 @@ union declared there.
 | `PairedDeltaResult` | `STATISTICAL_ANALYZE` | yes, within `STATISTICAL_OUTPUT` | per-seed delta, locked orientation |
 | `BootstrapIntervalOutcome` | `STATISTICAL_ANALYZE` | yes | valid or expected-degenerate BCa result |
 | `WilcoxonSignedRankResult` / `CliffsDeltaResult` | `STATISTICAL_ANALYZE` (descriptive) | yes | secondary evidence only |
-| `ConfirmatoryAnalysisResult` | `STATISTICAL_ANALYZE` (confirmatory/anchor only) | yes | the Tier-1 or anchor verdict |
+| `ConfirmatoryAnalysisResult` | `STATISTICAL_ANALYZE` (every `PairedPolicyEffectAnalysis`) | yes | the paired delta/interval verdict; the Tier-1 or anchor verdict when confirmatory/anchor |
+| `MetricAssociationResult` | `STATISTICAL_ANALYZE` (`MetricAssociationAnalysis`) | yes | Spearman ρ, regression R², sample size |
+| `DistributionMechanismResult` | `STATISTICAL_ANALYZE` (`DistributionMechanismAnalysis`) | yes | source evaluations, per-client `(Δτ, ΔFPR, ΔTPR)` shift |
+| `ClusterStabilityResult` | `STATISTICAL_ANALYZE` (`ClusterStabilityAnalysis`) | yes | adjusted-Rand, silhouette, within/across-cluster dispersion |
+| `QuantileEstimationResult` | `STATISTICAL_ANALYZE` (`QuantileEstimationAnalysis`) | yes | estimation error, threshold variance, FPR-target attainment, sample efficiency |
 | `AbsorptionResult` | `STATISTICAL_ANALYZE` (`model_personalization_absorption_test`) | yes | delta ratio and band |
 | `TemporalRecoveryResult` | `STATISTICAL_ANALYZE` (`chronological_recalibration_evaluation`) | yes | recovery ratio and outcome |
+| `StatisticalAnalysisResult` | closed union of the seven `STATISTICAL_ANALYZE` results above | via its member | the `STATISTICAL_ANALYZE` stage / `StatisticalProcedureBackend` return type (`DOMAIN §16.6`) |
 | `AnchorEquivalenceResult` | `ANCHOR_EQUIVALENCE` | yes, within `ANCHOR_EQUIVALENCE_RESULT` | pass/fail against the reference interval |
 | `ResourceCostResult` | `RESOURCE_COST` | yes, within `RESOURCE_COST_OUTPUT` | communication/storage cost, `MEASURED`/`ESTIMATED` |
 
@@ -234,14 +239,17 @@ disclosed `ESTIMATED` label) or the metric is omitted for that construction
 
 ## 8. Statistical procedure architecture
 
-`AnalysisDefinition` owns one `primary_procedure` and typed
-`secondary_procedures`. `StatisticalProcedure` is the discriminated union
-of `BcaBootstrap`, `PercentileBootstrap`, `WilcoxonSignedRank`,
-`CliffsDelta`, `SpearmanCorrelation`, and `LinearRegression`; each variant
-contains only applicable fields. Paired-seed count is owned once by
-`SeedCohortDefinition`. The confirmatory/anchor primary is BCa; Wilcoxon
-and Cliff's delta remain secondary evidence and percentile bootstrap is
-never substituted silently.
+Every procedure-bearing `AnalysisDefinition` variant owns one
+`primary_procedure` and typed `secondary_procedures` directly (the shared
+`AnalysisMetadata` header carries neither, so `AnchorEquivalenceAnalysis` — a
+deterministic interval-vs-reference gate that runs no resampling — declares no
+procedure field at all, `DOMAIN §3.3`). `StatisticalProcedure` is the
+discriminated union of `BcaBootstrap`, `PercentileBootstrap`,
+`WilcoxonSignedRank`, `CliffsDelta`, `SpearmanCorrelation`, and
+`LinearRegression`; each variant contains only applicable fields. Paired-seed
+count is owned once by `SeedCohortDefinition`. The confirmatory/anchor primary
+is BCa; Wilcoxon and Cliff's delta remain secondary evidence and percentile
+bootstrap is never substituted silently.
 
 ### 8.1 Confirmatory isolation
 
@@ -282,19 +290,34 @@ publication-facing report row.
 ### 9.2 Safe report model
 
 ```python
+# WordingOutcome is the closed union of every outcome vocabulary that keys a pre-committed
+# wording block: the general ClaimOutcome, the temporal-recalibration TemporalOutcome
+# (recal_helps / recal_insufficient / no_meaningful_drift), and the AbsorptionBand.
+WordingOutcome = ClaimOutcome | TemporalOutcome | AbsorptionBand
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ReportArtifactSpec:
+    artifact_type: ReportArtifactType             # MAIN_TABLE | SUPPLEMENTARY_TABLE | FIGURE | WORDING
+    body: TableDefinition | FigureDefinition      # the concrete per-artifact spec (DOMAIN §16.7)
+    source_result_types: tuple[ResultTypeId, ...] # the frozen result types this artifact consumes
+    output_formats: tuple[SerializationFormat, ...]
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ReportDefinition:
-    report_identity: ReportArtifactType
     schema_version: SchemaVersion
-    columns: tuple[SemanticColumn, ...]
-    row_projection: RowProjectionRule
-    ordering: DeterministicOrdering
-    missing_value_policy: MissingValuePolicy
-    source_result_types: tuple[ResultTypeId, ...]
-    output_formats: tuple[SerializationFormat, ...]
+    report_artifacts: tuple[ReportArtifactSpec, ...]
+    wording_outcomes: tuple[WordingOutcome, ...]   # ClaimOutcome for most reports; TemporalOutcome
+                                                   #   for the recovery report; AbsorptionBand for
+                                                   #   the absorption stress test
 ```
 
-One row dataclass per table is used only where tables have genuinely
+A `ReportDefinition` is a container of one or more `ReportArtifactSpec`
+entries (the authored `report_artifacts` list, `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §15`);
+each entry's `body` is a `TableDefinition` or `FigureDefinition` owning that
+artifact's `columns`/`series`, `ordering`, and `missing_value_policy`. A
+table's `RowProjectionRule` is a pure derivation from its `TableType`
+(`derive_row_projection`), never authored — which is why the reporting YAML
+omits it. One row dataclass per table is used only where tables have genuinely
 distinct scientific schemas (for example a dispersion-ladder table and a
 cluster-stability table); a shared schema is reused rather than duplicated.
 Reports never recompute a metric or a statistic, infer experiment meaning

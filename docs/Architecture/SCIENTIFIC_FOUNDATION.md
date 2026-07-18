@@ -84,9 +84,18 @@ favor of the five-seed anchor result (`ANCHOR-03`, `SCI-13`).
 
 Evidence roles used throughout this package: `ANCHOR`, `CONFIRMATORY`,
 `SUPPORTIVE`, `EXTERNAL_VALIDATION`, `STRESS_TEST`, `MECHANISM`, `BOUNDARY`,
-`EXPLORATORY`, `FUTURE_WORK`, `FORBIDDEN` — ten members, matching the prior
-architecture's `ExperimentRole` exactly plus `ANCHOR`. Publication tier
-numbers (Tier 1–9) survive only as `tier` traceability metadata on
+`EXPLORATORY` — eight members, every role an *executable* experiment can
+carry. The prior architecture's `ExperimentRole` also listed `FUTURE_WORK`
+and `FORBIDDEN`; neither names an executable experiment — a future-work or
+forbidden item has no `configs/experiments/` document and never resolves into
+a `RunDefinition`, so it is not an evidence role at all. A named future-work
+item is a `CatalogueDisposition.FUTURE_WORK` entry (`§7.6`), and a forbidden
+claim is a manuscript-discipline rule (roadmap Tier 9), never an experiment.
+This narrowing mirrors `RunRequirement`, which for the identical reason keeps
+only `MANDATORY`/`OPTIONAL`/`SUPPRESSED` and routes rejected and future
+entries to `CatalogueDisposition`
+(`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §4`). Publication tier numbers
+(Tier 1–9) survive only as `tier` traceability metadata on
 `ExperimentIdentity`; only `CONFIRMATORY` may carry `TIER_1`, and no other
 role may (`SCI-14`).
 

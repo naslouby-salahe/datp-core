@@ -115,6 +115,7 @@ bindings do not enter its domain object.
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DataDefinition:
     dataset: Dataset                                   # N_BAIOT | CICIOT2023 | EDGE_IIOTSET
+    dataset_version: DatasetVersion                    # identity-bearing; feeds DatasetScope (§16.5)
     client_construction: ClientConstruction
     split_definition: SplitDefinition
     preprocessing: PreprocessingDefinition
@@ -289,10 +290,35 @@ class EvaluationDefinition:
     evaluation_suite: EvaluationSuiteDefinition
     requested_metrics: tuple[MetricId, ...]
     eligibility: EligibilityDefinition
+    recalibration_mode: RecalibrationMode | None    # FROZEN | ONE_SHOT for the chronological
+                                                    #   setting only; None (never authored) for
+                                                    #   every non-temporal evaluation (CFG-05)
     execution_requirement: ExecutionRequirement
     evidence_use: EvidenceUse
     publication_placement: PublicationPlacement
 ```
+
+`recalibration_mode` is the sole per-evaluation field that lets one threshold
+construction appear twice under a chronological setting — once `FROZEN`, once
+`ONE_SHOT` — so that `TemporalRecoveryAnalysis` can name a frozen and a
+recalibrated evaluation by label. It is identity-bearing (it changes what is
+computed), so it enters the `EVALUATE`/`THRESHOLD_CONSTRUCT` fingerprint when
+populated; it is `None` and unauthored for every non-chronological experiment,
+where `None` is the meaningful "no recalibration boundary" state, never an
+omitted required value (`CFG-05`).
+
+`execution_requirement`, `evidence_use`, and `publication_placement` are the
+only three fields in the whole aggregate permitted a documented boundary
+default (`REQUIRED`, `PRIMARY`, `MAIN`), because none is scientific,
+identity-bearing, or output-affecting — each is presentation metadata that
+enters no fingerprint (`§17`). This is why the worked evaluations author them
+only where they diverge from the default (for example the supplementary fixed-k
+evaluation's `execution_requirement: optional`,
+`publication_placement: supplementary`,
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §24.1`). Every scientific,
+identity-bearing, or output-affecting field remains default-free (`CFG-01`,
+`CFG-05`). `AnalysisMetadata` carries the same three presentation-metadata
+fields under the same default rule.
 
 The eight `ThresholdConstruction` variants are defined completely in
 `SCIENTIFIC_FOUNDATION.md §6`; `CentralizedPooledThreshold` is not a member
@@ -304,25 +330,15 @@ requested with missing or bare rate data (`EVAL-06`).
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-AnalysisDefinition = (
-    PairedPolicyEffectAnalysis
-    | MetricAssociationAnalysis
-    | DistributionMechanismAnalysis
-    | ClusterStabilityAnalysis
-    | QuantileEstimationAnalysis
-    | AbsorptionAnalysis
-    | TemporalRecoveryAnalysis
-    | AnchorEquivalenceAnalysis
-)
-
-@dataclass(frozen=True, slots=True, kw_only=True)
 class AnalysisMetadata:
     label: AnalysisLabel
     execution_requirement: ExecutionRequirement
     evidence_use: EvidenceUse
     publication_placement: PublicationPlacement
-    primary_procedure: StatisticalProcedure
-    secondary_procedures: tuple[StatisticalProcedure, ...]
+    # Statistical procedures are NOT owned here: AnchorEquivalenceAnalysis runs no resampling
+    # procedure (it is a deterministic interval-vs-reference gate), so a procedure field on the
+    # shared header would be a field an AnchorEquivalenceAnalysis does not own (CFG-02). Every
+    # procedure-bearing variant declares primary_procedure / secondary_procedures directly.
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PairedPolicyEffectAnalysis:
@@ -331,28 +347,38 @@ class PairedPolicyEffectAnalysis:
     second_evaluation: EvaluationLabel
     primary_metric: MetricId
     delta_orientation: DeltaOrientation
+    primary_procedure: StatisticalProcedure
+    secondary_procedures: tuple[StatisticalProcedure, ...]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class MetricAssociationAnalysis:
     metadata: AnalysisMetadata
     predictor_metric: MetricId
     outcome_metric: MetricId
-    grouping_dimension: GroupingDimension
+    grouping_dimension: SweepParameterName
+    primary_procedure: StatisticalProcedure
+    secondary_procedures: tuple[StatisticalProcedure, ...]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DistributionMechanismAnalysis:
     metadata: AnalysisMetadata
     source_evaluations: tuple[EvaluationLabel, ...]
+    primary_procedure: StatisticalProcedure
+    secondary_procedures: tuple[StatisticalProcedure, ...]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ClusterStabilityAnalysis:
     metadata: AnalysisMetadata
     source_evaluation: EvaluationLabel
+    primary_procedure: StatisticalProcedure
+    secondary_procedures: tuple[StatisticalProcedure, ...]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class QuantileEstimationAnalysis:
     metadata: AnalysisMetadata
     source_evaluations: tuple[EvaluationLabel, ...]
+    primary_procedure: StatisticalProcedure
+    secondary_procedures: tuple[StatisticalProcedure, ...]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CrossExperimentAnalysisRef:
@@ -366,18 +392,39 @@ class AbsorptionAnalysis:
                                                 #   confirmatory experiment (2×2 FedAvg row);
                                                 #   resolved against a `completed` prerequisite
     personalized_analysis: AnalysisLabel        # this experiment's personalized 2×2 row delta
+    primary_procedure: StatisticalProcedure
+    secondary_procedures: tuple[StatisticalProcedure, ...]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TemporalRecoveryAnalysis:
     metadata: AnalysisMetadata
     frozen_evaluation: EvaluationLabel
     recalibrated_evaluation: EvaluationLabel
+    primary_procedure: StatisticalProcedure
+    secondary_procedures: tuple[StatisticalProcedure, ...]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class AnchorEquivalenceAnalysis:
     metadata: AnalysisMetadata
-    source_analysis: AnalysisLabel
+    source_analysis: AnalysisLabel               # the owning experiment's paired analysis label,
+                                                 #   whose committed BCa interval is compared here
     reference_interval: AnchorReferenceInterval
+    # No primary/secondary procedure: this is the deterministic interval-vs-reference gate the
+    # ANCHOR_EQUIVALENCE stage runs, never a resampling procedure (EVALUATION_REPORTING §8).
+
+# The closed AnalysisDefinition union is declared after its members so the alias
+# never forward-references an undefined name; it is a plain type alias, never a
+# dataclass, and every consumer matches it exhaustively with typing.assert_never.
+AnalysisDefinition = (
+    PairedPolicyEffectAnalysis
+    | MetricAssociationAnalysis
+    | DistributionMechanismAnalysis
+    | ClusterStabilityAnalysis
+    | QuantileEstimationAnalysis
+    | AbsorptionAnalysis
+    | TemporalRecoveryAnalysis
+    | AnchorEquivalenceAnalysis
+)
 
 StatisticalProcedure = (
     BcaBootstrap
@@ -554,7 +601,9 @@ members: `PairedPolicyEffectAnalysis`, `MetricAssociationAnalysis`,
 (`ValidBootstrapIntervalResult`, `DegenerateBootstrapIntervalResult`),
 `ReuseDecision` (`Reuse`, `Recompute`, `Blocked`), `FeasibilityGateDecision`
 (`AllowAudit`, `AllowScientific`, `Block`), `AnchorEquivalenceResult`
-(`Passed`, `Failed`).
+(`Passed`, `Failed`), and `StatisticalAnalysisResult` (`§16.6`, 7 members —
+one per `STATISTICAL_ANALYZE`-eligible `AnalysisDefinition` kind; excludes
+`AnchorEquivalenceResult`, which the `ANCHOR_EQUIVALENCE` stage owns).
 
 ### 6.4 Artifact and lineage types (domain)
 
@@ -586,10 +635,15 @@ members: `PairedPolicyEffectAnalysis`, `MetricAssociationAnalysis`,
 | `PairedDeltaResult` | per-seed delta, orientation locked |
 | `BootstrapIntervalOutcome` | valid or expected-degenerate BCa result |
 | `WilcoxonSignedRankResult` / `CliffsDeltaResult` | descriptive secondary evidence only |
-| `ConfirmatoryAnalysisResult` | the Tier-1 verdict: paired delta, interval, sign consistency, pass flag, claim outcome |
+| `ConfirmatoryAnalysisResult` | every `PairedPolicyEffectAnalysis` verdict: paired delta, interval, sign consistency, pass flag, claim outcome (its name reflects its headline confirmatory use) |
+| `MetricAssociationResult` | `MetricAssociationAnalysis`: Spearman ρ, regression R², sample size |
+| `DistributionMechanismResult` | `DistributionMechanismAnalysis`: source evaluations and per-client `(Δτ, ΔFPR, ΔTPR)` shift table |
+| `ClusterStabilityResult` | `ClusterStabilityAnalysis`: adjusted-Rand, silhouette, within/across-cluster dispersion |
+| `QuantileEstimationResult` | `QuantileEstimationAnalysis`: estimation error, threshold variance, FPR-target attainment, sample efficiency |
 | `AbsorptionResult` | model-personalization stress-test delta ratio and band |
 | `TemporalRecoveryResult` | frozen-versus-recalibrated CV, recovery ratio, outcome |
-| `AnchorReferenceInterval` / `AnchorEquivalenceResult` | the locked `[0.647, 0.769]` reference and the pass/fail comparison |
+| `StatisticalAnalysisResult` | closed union of the seven results above (all `STATISTICAL_ANALYZE` outputs); the `STATISTICAL_ANALYZE` stage and `StatisticalProcedureBackend` port return type |
+| `AnchorReferenceInterval` / `AnchorEquivalenceResult` | the locked `[0.647, 0.769]` reference and the pass/fail comparison (produced by `ANCHOR_EQUIVALENCE`, not `STATISTICAL_ANALYZE`) |
 | `ResourceCostResult` | communication or storage cost, `MEASURED` or `ESTIMATED`, never conflated |
 
 ### 6.6 Data and detector pipeline result types
@@ -855,7 +909,7 @@ groups so it can be checked side by side against it.
 | `ThresholdComparatorRole` | eliminated | `B0` never enters the shared union at all (its own detector's `CentralizedPooledThreshold`); "outside the ladder" is expressed by the owning experiment's `evidence_role = STRESS_TEST`, not a per-threshold field |
 | `AggregationStrategy` | kept, renamed | now the tag of `TrainingProtocol` (`FederatedAveragingTraining`, `FederatedProxTraining`) plus the separate `CentralizedPooledTraining` variant |
 | `ModelPersonalizationStrategy` | kept | `NONE`, `DITTO`, `FEDREP_AE`, `FEDPER_AE`, field of `FederatedAveragingTraining` |
-| `ExperimentRole` | kept, renamed | now `EvidenceRole`, with `ANCHOR` added (`SCIENTIFIC_FOUNDATION.md §4`) |
+| `ExperimentRole` | kept, renamed, narrowed | now `EvidenceRole`, with `ANCHOR` added and the two non-executable members `FUTURE_WORK`/`FORBIDDEN` dropped (they carry no `configs/experiments/` document; future work is `CatalogueDisposition.FUTURE_WORK`, forbidden is a Tier-9 manuscript rule) — eight executable roles (`SCIENTIFIC_FOUNDATION.md §4`) |
 | `ClaimTier` | kept | `TIER_1`…`TIER_9`, `IntEnum`, unchanged |
 | `RunRequirement` | kept | `MANDATORY`, `OPTIONAL`, `SUPPRESSED` only; rejected and future catalogue entries use `CatalogueDisposition`, never executable run status |
 | `FeasibilityStatus` | **kept, restored** | `FEASIBLE`, `GATED`, `PENDING_VERIFICATION`, `REJECTED`; a field of the persisted `FEASIBILITY_RESULT` artifact, distinct from the transient `FeasibilityGateDecision` result union |
@@ -939,11 +993,15 @@ imported by production code (`TEST-01`): `TestSuiteKind`, `TestDataScale`,
 ### 14.8 Totals
 
 Ninety-one enum members' worth of vocabulary in the prior catalogue maps
-onto this package as: seventy-nine kept unchanged or renamed only to
+onto this package as: seventy-seven kept unchanged or renamed only to
 remove a letter or redundant word; seven merged into an existing
 discriminated union or enum with no loss of distinction; five eliminated
-as genuinely redundant, each with its replacement named above. Nothing is
-missing without a stated reason; nothing was removed merely for brevity.
+as genuinely redundant, each with its replacement named above; and the two
+non-executable `ExperimentRole` members (`FUTURE_WORK`, `FORBIDDEN`)
+relocated out of the executable `EvidenceRole` enum — future work to
+`CatalogueDisposition.FUTURE_WORK`, forbidden to Tier-9 manuscript
+discipline (`SCIENTIFIC_FOUNDATION.md §4`). Nothing is missing without a
+stated reason; nothing was removed merely for brevity.
 
 ## 15. Execution and runtime types (was prior architecture §9.4)
 
@@ -998,9 +1056,25 @@ class ExperimentSlug(str): ...        # lowercase snake_case, non-empty; registr
 class DatasetAuditSlug(str): ...      # lowercase snake_case, non-empty; registry-validated
 class EvaluationLabel(str): ...       # unique within one ScientificExperimentDefinition.evaluations
 class AnalysisLabel(str): ...         # unique within one ScientificExperimentDefinition.analyses
+class SweepParameterName(str): ...    # a declared sweep axis (threshold_quantile, dirichlet_alpha,
+                                      #   shrinkage_weight, calibration_sample_count, fixed_k,
+                                      #   fingerprint_feature_subset); also a MetricAssociation grouping
+class DatasetVersion(str): ...        # processed-artifact version tag (e.g. "v1", "processed_v1")
+class ResultTypeId(str): ...          # names a frozen result type a ReportDefinition consumes
 class ClientId(str): ...              # opaque per-construction client identity
 class DeviceFamilyId(str): ...        # authorized taxonomy family (FamilyThreshold only)
 class ClusterId(int): ...             # 0 ≤ id < cluster_count
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SchemaVersion:
+    value: int                        # ≥ 1; the authored schema_version of a configuration document
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SweepCoordinateComponent:
+    parameter: SweepParameterName
+    value: SweepValue                 # the bound value object for that axis (a ThresholdPercentile,
+                                      #   DirichletAlpha, ShrinkageWeight, CalibrationSampleCount, …),
+                                      #   never a bare float — SweepValue is the union of those
 
 @dataclass(frozen=True, slots=True)
 class Seed:
@@ -1055,6 +1129,14 @@ class WorkerCount:
 @dataclass(frozen=True, slots=True)
 class BootstrapResampleCount:
     value: int                        # ≥ 1; never defaulted — a blocker until pre-registered
+
+# SweepValue is the closed union of the value objects a sweep axis can bind (used by
+# SweepCoordinateComponent above); never a bare float or int.
+SweepValue = (
+    ThresholdPercentile | DirichletAlpha | ShrinkageWeight
+    | CalibrationSampleCount | ClusterCount
+    | tuple[FingerprintFeature, ...]   # the fingerprint-feature-subset axis
+)
 
 @dataclass(frozen=True, slots=True)
 class TrafficRate:
@@ -1646,6 +1728,57 @@ class TemporalRecoveryResult:
     outcome: TemporalOutcome
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class MetricAssociationResult:                   # MetricAssociationAnalysis (E-M4)
+    predictor_metric: MetricId
+    outcome_metric: MetricId
+    correlation: CanonicalDecimal                # Spearman ρ (primary procedure)
+    r_squared: CanonicalDecimal                  # linear-regression R² (secondary procedure)
+    sample_size: int
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClusterStabilityResult:                    # ClusterStabilityAnalysis (E-M1 stability axis)
+    adjusted_rand_index: CanonicalDecimal
+    silhouette: CanonicalDecimal
+    within_cluster_dispersion: CanonicalDecimal
+    across_cluster_dispersion: CanonicalDecimal
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class QuantileEstimationResult:                  # QuantileEstimationAnalysis (E-Q1 backbone)
+    quantile_estimation_error: CanonicalDecimal
+    threshold_variance: CanonicalDecimal
+    fpr_target_attainment: CanonicalDecimal
+    calibration_sample_efficiency: CanonicalDecimal
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClientThresholdShift:
+    client: ClientId
+    delta_threshold: CanonicalDecimal
+    delta_fpr: CanonicalDecimal
+    delta_tpr: CanonicalDecimal
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DistributionMechanismResult:               # DistributionMechanismAnalysis (E-M3 overlay, E-M5 shift)
+    source_evaluations: tuple[EvaluationLabel, ...]
+    per_client_shift: tuple[ClientThresholdShift, ...]   # empty for a pure CDF-overlay analysis,
+                                                         #   populated for the threshold-shift tradeoff
+
+# StatisticalAnalysisResult is the closed result of the STATISTICAL_ANALYZE stage and the
+# StatisticalProcedureBackend port: exactly one variant per AnalysisDefinition kind that runs
+# there, matched exhaustively with typing.assert_never. AnchorEquivalenceAnalysis is deliberately
+# absent — it is consumed by the separate ANCHOR_EQUIVALENCE stage, which returns
+# AnchorEquivalenceResult, not a StatisticalAnalysisResult (PIPELINE §2).
+StatisticalAnalysisResult = (
+    ConfirmatoryAnalysisResult      # every PairedPolicyEffectAnalysis (confirmatory, anchor,
+                                    #   and every non-confirmatory paired comparison)
+    | MetricAssociationResult
+    | DistributionMechanismResult
+    | ClusterStabilityResult
+    | QuantileEstimationResult
+    | AbsorptionResult
+    | TemporalRecoveryResult
+)
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class AnchorReferenceInterval:
     metric: MetricId                             # cv_fpr_delta
     confidence_level: ConfidenceLevel
@@ -1671,6 +1804,12 @@ class ResourceCostResult:
 ```
 
 ### 16.7 Reporting types (concrete)
+
+The container `ReportDefinition` and its `ReportArtifactSpec` entries are
+declared in `EVALUATION_REPORTING_AND_PROVENANCE.md §9.2` (the reporting
+authority); a `ReportArtifactSpec.body` is one of the two per-artifact
+specifications declared below. `RowProjectionRule` is derived from a table's
+`TableType`, never authored, so `TableDefinition` carries no such field.
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -1728,6 +1867,8 @@ this section is the final member list.
 | `ClientGranularity` | `DEVICE`, `GROUP` | `domain/data.py` | yes | yes |
 | `NormalizationStrategy` | `MIN_MAX`, `STANDARD` | `domain/data.py` | yes | yes |
 | `NormalizationScope` | `GLOBAL_TRAIN` | `domain/data.py` | yes | yes |
+| `CalibrationSubsetSelectionStrategy` | `DETERMINISTIC_PREFIX` (sole current strategy; a category axis) | `domain/data.py` | yes | yes (when populated) |
+| `CalibrationSubsetNestingPolicy` | `NESTED_BY_SIZE`, `INDEPENDENT` | `domain/data.py` | yes | yes (when populated) |
 | `SharedThresholdConstruction` | `MEAN`, `POOLED`, `WEIGHTED` | `domain/thresholding.py` | yes | yes |
 | `ClusterAggregation` | `MEAN`, `ROBUST_MEDIAN` | `domain/thresholding.py` | yes | yes |
 | `FingerprintFeature` | `MEAN_ERROR`, `STD_ERROR`, `SKEW_ERROR`, `P95_ERROR` | `domain/thresholding.py` | yes | yes |
@@ -1740,12 +1881,18 @@ this section is the final member list.
 | `ModelPersonalizationStrategy` | `NONE`, `DITTO`, `FEDREP_AE`, `FEDPER_AE` | `domain/detection.py` | yes | yes |
 | `NumericalPrecision` / `PrecisionMode` | `FP32` | `domain/detection.py` | yes | yes |
 | `DeterminismLevel` | `STRICT` | `domain/detection.py` | yes | yes |
-| `EvidenceRole` | `ANCHOR`, `CONFIRMATORY`, `SUPPORTIVE`, `EXTERNAL_VALIDATION`, `STRESS_TEST`, `MECHANISM`, `BOUNDARY`, `EXPLORATORY`, `FUTURE_WORK`, `FORBIDDEN` | `domain/experiments.py` | yes | yes (namespace derivation) |
+| `EvidenceRole` | `ANCHOR`, `CONFIRMATORY`, `SUPPORTIVE`, `EXTERNAL_VALIDATION`, `STRESS_TEST`, `MECHANISM`, `BOUNDARY`, `EXPLORATORY` (eight executable roles; `FUTURE_WORK`/`FORBIDDEN` dropped — non-executable, `SCIENTIFIC_FOUNDATION.md §4`) | `domain/experiments.py` | yes | yes (namespace derivation) |
 | `RunRequirement` | `MANDATORY`, `OPTIONAL`, `SUPPRESSED` | `domain/experiments.py` | yes | no |
 | `ClaimTier` | `TIER_1`…`TIER_9` (`IntEnum`) | `domain/experiments.py` | yes (metadata) | no |
 | `CatalogueDisposition` | `REJECTED`, `OUT_OF_SCOPE`, `FUTURE_WORK` | `domain/experiments.py` | yes | no |
-| `RecalibrationMode` | `FROZEN`, `ONE_SHOT` | `domain/evaluation.py` | yes | yes |
+| `SeedDerivationRule` | `DETERMINISTIC_FROM_EXPERIMENT_SEED` (sole current rule; a category axis, like `OptimizerType`) | `domain/experiments.py` | yes | yes |
+| `PrerequisiteOutcome` | `ANCHOR_EQUIVALENCE_PASSED`, `COMPLETED` | `domain/experiments.py` | yes | no |
+| `RecalibrationMode` | `FROZEN`, `ONE_SHOT` | `domain/evaluation.py` | yes | yes (when populated) |
 | `DeltaOrientation` | `SHARED_MINUS_LOCAL`, `CLUSTER_MINUS_LOCAL`, `COMPARATOR_MINUS_LOCAL` | `domain/evaluation.py` | yes | yes |
+| `ExecutionRequirement` | `REQUIRED`, `OPTIONAL` | `domain/evaluation.py` | yes | no |
+| `EvidenceUse` | `PRIMARY`, `SUPPLEMENTARY` | `domain/evaluation.py` | yes | no |
+| `PublicationPlacement` | `MAIN`, `SUPPLEMENTARY` | `domain/evaluation.py` | yes | no |
+| `MetricId` (+ `MetricFamily`) | the thirty-seven metric members in their eight families, fully enumerated in `EVALUATION_REPORTING_AND_PROVENANCE.md §4` | `domain/evaluation.py` | yes | no (metric selection is authored; a metric result is not identity) |
 | `MetricRole` | `PRIMARY_ENDPOINT`, `SECONDARY_THRESHOLD_OUTCOME`, `MODEL_QUALITY_CONTROL`, `MECHANISM_DIAGNOSTIC`, `RESOURCE_OUTCOME` | `domain/evaluation.py` | yes | no |
 | `MetricDirection` | `LOWER_IS_BETTER`, `HIGHER_IS_BETTER`, `CLOSER_TO_TARGET`, `CONTEXT_DEPENDENT`, `NONE` | `domain/evaluation.py` | yes | no |
 | `MetricUnit` | `NONE`, `RATIO`, `BYTES`, `COUNT`, `RATE` | `domain/evaluation.py` | yes | no |
@@ -1765,6 +1912,9 @@ this section is the final member list.
 | `ReportArtifactType` | `MAIN_TABLE`, `SUPPLEMENTARY_TABLE`, `FIGURE`, `WORDING` | `domain/reporting.py` | yes | no |
 | `TableType` / `FigureType` | fully enumerated in `EVALUATION_REPORTING_AND_PROVENANCE.md §9.3` | `domain/reporting.py` | yes | no |
 | `RenderingStatus` | `RENDERED`, `TRACE_REFUSED` | `domain/reporting.py` | yes | no |
+| `MissingValuePolicy` | `RENDER_TYPED_UNAVAILABLE` (sole policy; zero/`NaN`/empty is never a valid substitute, `EVAL §5`) | `domain/reporting.py` | yes | no |
+| `DeterministicOrdering` | `BY_THRESHOLD_CONSTRUCTION`, `BY_SWEEP_POINT`, `BY_TEMPORAL_WINDOW`, `BY_SEED`, `BY_CLIENT` | `domain/reporting.py` | yes | no |
+| `RowProjectionRule` | `ONE_ROW_PER_THRESHOLD_CONSTRUCTION`, `ONE_ROW_PER_SWEEP_POINT`, `ONE_ROW_PER_CLIENT`, `ONE_ROW_PER_SEED`, `ONE_ROW_PER_TEMPORAL_WINDOW` (derived from `TableType`, never authored — `EVAL §9.2`) | `domain/reporting.py` | yes | no |
 | `ExecutionMode` | `SCIENTIFIC`, `PRINT_GRADE`, `DEVELOPMENT`, `SMOKE` | `domain/operations.py` | yes | no (citability, not a computed value) |
 | `DevicePolicy` | `CUDA_REQUIRED`, `CPU_ONLY` | `domain/operations.py` | yes | no |
 | `ProcessStartMethod` | `SPAWN`, `FORK` | `domain/operations.py` | yes | no |

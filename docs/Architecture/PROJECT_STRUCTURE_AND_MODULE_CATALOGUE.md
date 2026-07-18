@@ -91,10 +91,10 @@ src/datp_core/
 │   │                       #   ExecutionMode, DevicePolicy, ResourceBudget, DeviceSpec, ParallelismSpec,
 │   │                       #   SeedPlan/SeedDerivationRule, ResolvedRuntimePlan, ResolvedBatchExecutionProfile,
 │   │                       #   RunStatus/lifecycle states, FailureDisposition, ScientificReadinessResult
-│   ├── reporting.py             # ReportDefinition, SemanticColumn, TableDefinition, FigureDefinition,
-│   │                       #   RowProjectionRule, DeterministicOrdering, MissingValuePolicy,
-│   │                       #   TableType/FigureType, ReportArtifactType, SerializationFormat, RenderingStatus,
-│   │                       #   TableProvenance/FigureProvenance  (framework-free specs only)
+│   ├── reporting.py             # ReportDefinition, ReportArtifactSpec, SemanticColumn, TableDefinition,
+│   │                       #   FigureDefinition, RowProjectionRule (derived), DeterministicOrdering,
+│   │                       #   MissingValuePolicy, TableType/FigureType, ReportArtifactType,
+│   │                       #   SerializationFormat, RenderingStatus, TableProvenance/FigureProvenance
 │   ├── mathematics.py            # canonical Decimal quantization, blake3 fingerprint tuple helpers,
 │   │                       #   pure numeric routines (cv, pooled variance, Cliff's delta) with no framework
 │   ├── identifiers.py             # ExperimentSlug, EvaluationLabel, AnalysisLabel, DatasetAuditSlug,

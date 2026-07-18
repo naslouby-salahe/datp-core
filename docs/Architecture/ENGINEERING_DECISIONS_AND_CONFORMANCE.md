@@ -241,7 +241,7 @@ Defined in `§8` below.
 | `RobustClusterMedianThresholdSpec` | Merged | Into `ClusterThreshold.aggregation` |
 | `Regime` enum | Kept, redefined | Restored as a derived, publication-only label computed from `DataDefinition` (`SCIENTIFIC_FOUNDATION.md §5`); never a constructor input or discriminator |
 | `RegimeCompatibilitySpec` | Removed | Composition of `DataDefinition` plus ordinary cross-field validation (`SCIENTIFIC_FOUNDATION.md §8`) replaces its closed compatibility mapping |
-| `ExperimentRole` | Kept, renamed | `EvidenceRole`, ten members (`ANCHOR` added) |
+| `ExperimentRole` | Kept, renamed, narrowed | `EvidenceRole`, eight executable members (`ANCHOR` added; the non-executable `FUTURE_WORK`/`FORBIDDEN` dropped — future work is `CatalogueDisposition.FUTURE_WORK`, forbidden is a Tier-9 manuscript rule, `SCIENTIFIC_FOUNDATION.md §4`) |
 | `RunRequirement` | Kept, narrowed | `MANDATORY`, `OPTIONAL`, `SUPPRESSED`; rejected and future catalogue entries use `CatalogueDisposition` rather than executable run status |
 | `FeasibilityStatus` | Kept unchanged | field of the persisted `FEASIBILITY_RESULT` artifact, distinct from the transient `FeasibilityGateDecision` result union |
 | `ParticipationStrategy` | Kept unchanged | retained as a real, single-member-today enum because the roadmap names `PARTIAL` as future work |

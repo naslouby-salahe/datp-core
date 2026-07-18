@@ -177,6 +177,7 @@ strategy") and never an omitted required value.
 | Precision, determinism level | Yes | No | Yes | No | Yes |
 | Checkpoint-selection rule | Yes | No | Yes | No | Yes (locked; one value) |
 | Threshold construction and its parameters (quantile, K, λ, α) | Yes | No | Yes | Yes (units, direction) | Yes |
+| `recalibration_mode` (`FROZEN`/`ONE_SHOT`) | Yes (when populated) | No | Yes | No | Yes, only for `chronological_recalibration_evaluation` evaluations; `None` (unauthored) elsewhere |
 | Cluster-count canonicality, clustering `n_init`/`max_iter` | Yes | No | Yes | No | Yes |
 | Shrinkage weight | Yes | No | Yes | Yes | Yes |
 | Conformal coverage / alpha | Yes | No | Yes | Yes | Yes |
@@ -246,7 +247,8 @@ evaluations:
   - label: local
     threshold: { policy: local_threshold, quantile: 0.95 }
 analyses:
-  - kind: paired_threshold_analysis
+  - label: anchor_scope_effect
+    kind: paired_threshold_analysis
     first_evaluation: shared_mean
     second_evaluation: local
     primary_metric: cv_fpr
@@ -256,8 +258,9 @@ analyses:
       confidence_level: 0.95
       # BLOCKED: bootstrap resample count must be supplied by statistical authority.
     secondary_procedures: []
-  - kind: anchor_equivalence_analysis
-    confirmatory_analysis_label: paired_threshold_analysis   # the entry above
+  - label: anchor_equivalence
+    kind: anchor_equivalence_analysis
+    source_analysis: anchor_scope_effect          # the paired analysis above, by label
     reference_interval:
       metric: cv_fpr_delta
       confidence_level: 0.95
@@ -314,7 +317,8 @@ evaluations:
   - label: local
     threshold: { policy: local_threshold, quantile: 0.95 }
 analyses:
-  - kind: paired_threshold_analysis
+  - label: confirmatory_scope_effect
+    kind: paired_threshold_analysis
     first_evaluation: shared_mean
     second_evaluation: local
     primary_metric: cv_fpr
@@ -351,6 +355,7 @@ physical-device client count for N-BaIoT:
 ```yaml
 schema_version: 1
 dataset: n_baiot
+dataset_version: v1
 client_construction:
   method: physical_device_clients
   device_count: 9
@@ -498,6 +503,7 @@ report_artifacts:
       - { name: bca_lower_bound, unit: ratio, direction: none }
       - { name: bca_upper_bound, unit: ratio, direction: none }
     ordering: deterministic_by_threshold_construction
+    source_result_types: [confirmatory_analysis_result]   # frozen result(s) this table consumes (§9.4)
     output_formats: [markdown, latex]
 wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]
 ```
@@ -618,6 +624,7 @@ Non-executable fragment — `configs/datasets/dirichlet_nbaiot.yaml`:
 ```yaml
 schema_version: 1
 dataset: n_baiot
+dataset_version: v1
 client_construction:
   method: dirichlet_partitioned_clients
   client_count: 20
@@ -1271,7 +1278,7 @@ analyses:
     kind: absorption_analysis
     core_analysis:
       experiment: confirmatory_threshold_scope_effect   # cross-experiment core corner (reused)
-      analysis: paired_threshold_analysis
+      analysis: confirmatory_scope_effect               # that experiment's paired analysis label
     personalized_analysis: personalized_delta
     primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
       # BLOCKED: bootstrap resample count required.
@@ -1888,6 +1895,7 @@ report_artifacts:
       - { name: worst_client_fpr, unit: ratio, direction: lower_is_better }
     ordering: deterministic_by_threshold_construction
     missing_value_policy: render_typed_unavailable   # never zero/NaN (EVAL §5)
+    source_result_types: [policy_evaluation_result]   # frozen result(s) this table consumes (§9.4)
     output_formats: [markdown, latex]
 wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]
 ```
@@ -1904,6 +1912,7 @@ report_artifacts:
       - { name: recalibrated_cv_fpr, unit: ratio, direction: lower_is_better }
     ordering: deterministic_by_temporal_window
     missing_value_policy: render_typed_unavailable
+    source_result_types: [temporal_recovery_result]   # frozen result(s) this figure consumes (§9.4)
     output_formats: [pdf, png]
 wording_outcomes: [recal_helps, recal_insufficient, no_meaningful_drift]
 ```
