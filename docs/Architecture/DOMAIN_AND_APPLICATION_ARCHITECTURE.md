@@ -197,7 +197,7 @@ class DetectorDefinition:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OptimizerDefinition:
     optimizer_type: OptimizerType
-    learning_rate: float
+    learning_rate: LearningRate
     scheduler: SchedulerDefinition | None
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -220,6 +220,10 @@ def rounds_max(schedule: CheckpointSchedule) -> RoundNumber:
     never an independently authored YAML field."""
     return max(schedule.rounds)
 ```
+
+`LearningRate` and every other continuous value that enters a fingerprint are
+validated, canonical `Decimal` value objects; raw `float` is never a
+scientific or artifact-identity input.
 
 ```text
 TrainingProtocol
@@ -254,6 +258,14 @@ discriminated union at that point, not before.
 `ScoreGenerationDefinition` describes score behavior. Its separate
 `ScoringBatchDefinition` owns scoring batch size. Runtime owns preprocessing
 chunks, prefetch, and execution concurrency.
+
+Checkpoint authority has two distinct values. `PrimaryCheckpointRoundSelection`
+authorizes the natural-device primary round from permitted benign evidence.
+`CheckpointArtifactSelection` selects each independently trained
+dataset/detector branch's own artifact at that authorized round. This keeps
+input-dimension and training-protocol compatibility explicit, prevents
+per-regime/test-driven selection, and keeps the names neutral for FedAvg and
+FedProx.
 
 ### 3.3 `EvaluationDefinition` and `AnalysisDefinition`
 
@@ -371,10 +383,10 @@ StatisticalProcedure = (
 ```
 
 For `evidence_role ∈ {ANCHOR, CONFIRMATORY}`, the owning
-`PairedThresholdAnalysis.statistical_procedure` is locked to
+`PairedPolicyEffectAnalysis.primary_procedure` is locked to
 `BCA_BOOTSTRAP`, confidence `0.95`, and the role-appropriate paired-seed
 count (five for the anchor, ten for the confirmatory experiment, drawn from
-`ExperimentDefinition.seed_cohort`, `§4` below) — never re-specified per
+`ScientificExperimentDefinition.seed_cohort`, `§4` below) — never re-specified per
 threshold evaluation (`ARCH-02`).
 
 ### 3.4 `OperationsDefinition`
@@ -468,15 +480,15 @@ catalogued.
 
 | Type | Layer | Persisted | Identity-bearing | Consumers |
 |---|---|---|---|---|
-| `ExperimentIdentity` | domain | as part of `ExperimentDefinition` | yes (`evidence_role`, `tier`) | planner, reporting |
+| `ExperimentIdentity` | domain | as part of `ScientificExperimentDefinition` | yes (`evidence_role`, `tier`) | planner, reporting |
 | `DataDefinition` | domain | yes | yes | planner, stages, reuse gate |
 | `DetectorDefinition` | domain | yes | yes | planner, stages, reuse gate |
 | `EvaluationDefinition` | domain | yes | yes (threshold only) | evaluator |
 | `AnalysisDefinition` | domain | yes | yes (statistical procedure) | statistics runner, anchor gate |
 | `SeedCohortDefinition` | domain | yes | yes | planner, statistics runner |
-| `ExperimentPrerequisite` | domain | as part of `ExperimentDefinition` | no (references another identity) | planner, anchor gate |
+| `ExperimentPrerequisite` | domain | as part of `ScientificExperimentDefinition` | no (references another identity) | planner, anchor gate |
 | `OperationsDefinition` | domain | yes (execution subset recorded) | conditional (§7 batch rule) | preflight, persistence, reporting |
-| `ExperimentDefinition` | domain | yes | yes | planner, every stage |
+| `ScientificExperimentDefinition` | domain | yes | yes | planner, every stage |
 | `ScientificExperimentDefinition` | domain | yes | yes | planner, reuse gate, reporting |
 | `DatasetAuditDefinition` | domain | yes | yes | audit planner and reporting |
 
@@ -489,7 +501,7 @@ placeholders exist only in the `config` boundary schema and never reach
 | Value object | Wraps | Validation | Distinct from |
 |---|---|---|---|
 | `ExperimentSlug` | str | lowercase snake_case, non-empty | `ArtifactScopeKey` |
-| `EvaluationLabel` | str | lowercase snake_case, unique within one `ExperimentDefinition.evaluations` | `ExperimentSlug` |
+| `EvaluationLabel` | str | lowercase snake_case, unique within one `ScientificExperimentDefinition.evaluations` | `ExperimentSlug` |
 | `ThresholdPercentile`, `FprTarget`, `ConfidenceLevel`, `CoverageRatio`, `Probability` | canonical `Decimal` | fixed twelve-fractional-digit round-half-even representation; range check; rejects `NaN`/infinity | mutually distinct; never interchanged |
 | `ShrinkageWeight` | float | `0 ≤ λ ≤ 1` | — |
 | `Seed` | int | `≥ 0` | — |
@@ -534,13 +546,12 @@ members: `PairedThresholdAnalysis`, `AbsorptionAnalysis`,
 | `ArtifactKey` | `{artifact_type, scope, producer_identity}`; lookup/locking/reuse identity for every artifact role |
 | `ArtifactRef` | `{key, content_hash}`; verified persisted artifact identity |
 | `ArtifactType` | closed enum of every independently persisted artifact family (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §5`) |
-| `ArtifactScopeKey` | the scope-specific coordinates one `ArtifactRef` needs (experiment slug, cell identity, stage, split role, client id — only the fields the artifact type actually uses) |
-| `ArtifactRef` | `{artifact_type, scope: ArtifactScopeKey, content_hash}` |
+| `ArtifactScopeKey` | closed typed scope variants carrying only coordinates the artifact type needs (current experiment/cell/stage/split/client coordinates; future temporal or intervention scope is a new variant) |
 | `ProvenanceRecord` | resolved-configuration reference, upstream `ArtifactRef` values, code state, dependency-lock state, environment inventory, execution attempt, production time, content hash |
 | `ResolvedConfigurationSnapshot` | canonical byte-stable rendering of every field contributing to a resolved definition, its fingerprint, and its source-document identities |
 | `PreSpecificationRecord` | subject (absorption bands, temporal outcome bands), roadmap-lock revision, lock timestamp |
 | `ResultFreezeManifest` | immutable evaluation/statistical/resource-cost input references and hashes approved for rendering |
-| `ScientificReadinessResult` | `{is_ready: bool, execution_mode: ExecutionMode, blockers: tuple[ReadinessBlocker, ...]}`; computed before planning for every `SCIENTIFIC`/`PRINT_GRADE` cell, naming every `unresolved` field it found (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §19`, `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`) |
+| `ScientificReadinessResult` | `{is_ready: bool, execution_mode: ExecutionMode, blockers: tuple[ReadinessBlocker, ...]}`; computed before planning for every `SCIENTIFIC`/`PRINT_GRADE` cell. A blocker prevents construction of a resolved run; it is not a field carried by one. |
 
 ### 6.5 Evaluation and statistical result types (domain)
 
@@ -696,7 +707,7 @@ pattern applied throughout:
   `ScientificProtocolSpec.__post_init__` then had to validate that the
   reference agreed with the branch actually present. Because
   `EvaluationDefinition` is now owned directly as a tuple field of
-  `ExperimentDefinition` rather than looked up from a separate collection,
+  `ScientificExperimentDefinition` rather than looked up from a separate collection,
   no such reference — and no such validator — exists at all; the
   consolidation removed a field and the failure mode it existed to guard
   against simultaneously.
@@ -711,7 +722,7 @@ pattern applied throughout:
 - The prior design's six centralized (`CentralizedModelIdentity` through
   `CentralizedEvaluationIdentity`) identity classes existed only to
   guarantee that a centralized artifact could never be substituted for a
-  federated one. `StageIdentity` and `ScoreIdentity` already guarantee this,
+  federated one. `StageIdentity` and `ArtifactKey` already guarantee this,
   because a `CentralizedPooledTraining` detector produces a structurally
   different `stage_fingerprint` input than a `FederatedAveragingTraining`
   detector at the very first stage that depends on `training_protocol`; a
@@ -723,7 +734,7 @@ pattern applied throughout:
 ```python
 def resolve_experiment_configuration(
     request: ResolveConfigurationRequest,
-) -> tuple[ExperimentCell, ...]: ...
+) -> ConfigurationResolutionResult: ...
 
 class ExperimentPlanner:
     def create_plan(self, request: CreatePlanRequest) -> DraftExecutionPlan: ...
@@ -731,9 +742,9 @@ class ExperimentPlanner:
 class AnchorEquivalenceGate:
     def evaluate(self, request: AnchorEquivalenceRequest) -> AnchorEquivalenceResult: ...
 
-class ScoreReuseGate:
+class ArtifactReuseGate:
     def decide(
-        self, required: ScoreIdentity, candidate: ArtifactRef | None,
+        self, required: ArtifactKey, candidate: ArtifactRef | None,
     ) -> ReuseDecision: ...
 
 class CheckpointSelector:
@@ -759,11 +770,11 @@ generic mapping.
 
 ```mermaid
 classDiagram
-    class ExperimentCell {
+    class ScientificExperimentCell {
       +ExperimentCellIdentity identity
-      +ExperimentDefinition definition
+      +ScientificExperimentDefinition definition
     }
-    class ExperimentDefinition {
+    class ScientificExperimentDefinition {
       +ExperimentIdentity identity
       +DataDefinition data
       +DetectorDefinition detector
@@ -771,7 +782,6 @@ classDiagram
       +AnalysisDefinition[] analyses
       +SeedCohortDefinition seed_cohort
       +ExperimentPrerequisite[] prerequisites
-      +AnchorReferenceInterval anchor_reference_interval
       +OperationsDefinition operations
     }
     class DataDefinition
@@ -785,15 +795,15 @@ classDiagram
       +ReportingDefinition reporting
     }
     class ExperimentIdentity
-    ExperimentCell *-- ExperimentDefinition
-    ExperimentDefinition *-- ExperimentIdentity
-    ExperimentDefinition *-- DataDefinition
-    ExperimentDefinition *-- DetectorDefinition
-    ExperimentDefinition *-- EvaluationDefinition
-    ExperimentDefinition *-- AnalysisDefinition
-    ExperimentDefinition *-- SeedCohortDefinition
-    ExperimentDefinition *-- ExperimentPrerequisite
-    ExperimentDefinition *-- OperationsDefinition
+    ScientificExperimentCell *-- ScientificExperimentDefinition
+    ScientificExperimentDefinition *-- ExperimentIdentity
+    ScientificExperimentDefinition *-- DataDefinition
+    ScientificExperimentDefinition *-- DetectorDefinition
+    ScientificExperimentDefinition *-- EvaluationDefinition
+    ScientificExperimentDefinition *-- AnalysisDefinition
+    ScientificExperimentDefinition *-- SeedCohortDefinition
+    ScientificExperimentDefinition *-- ExperimentPrerequisite
+    ScientificExperimentDefinition *-- OperationsDefinition
 ```
 
 ## 14. Complete enum catalogue
@@ -817,7 +827,7 @@ groups so it can be checked side by side against it.
 | `ProtocolTrack` | eliminated | `DATP_ANCHOR`/`COMPLETE` replaced by `EvidenceRole.ANCHOR`; namespace is derived, not a stored field (`ANCHOR-05`) |
 | `DetectorBranchRole` | eliminated | replaced by the pure function `classify_detector` (`§3.2`, `§11`) |
 | `CoreThresholdPolicy` | eliminated | redundant with the `ThresholdConstruction` union's own discriminator; "is this core-ladder" is `isinstance` on the variant, never a parallel enum |
-| `ThresholdConstructionKind` | kept, renamed | now the implicit tag of the `ThresholdConstruction` union (`SharedThreshold`, `LocalThreshold`, `FamilyThreshold`, `ClusterThreshold`, `LocalGlobalShrinkageThreshold`, `CalibrationSizeAwareFallbackThreshold`, `ConformalLocalThreshold`, `FederatedSummaryStatisticThreshold`); `ROBUST_CLUSTER_MEDIAN` folded into `ClusterThreshold.aggregation` |
+| `ThresholdConstructionKind` | eliminated | the `ThresholdConstruction` union discriminator identifies `SharedThreshold`, `LocalThreshold`, `FamilyThreshold`, `ClusterThreshold`, `LocalGlobalShrinkageThreshold`, `CalibrationSizeAwareFallbackThreshold`, `ConformalLocalThreshold`, or `FederatedSummaryStatisticThreshold`; `ROBUST_CLUSTER_MEDIAN` remains `ClusterThreshold.aggregation` |
 | `SharedThresholdConstruction` | kept | now `SharedThreshold.construction`: `MEAN`, `POOLED`, `WEIGHTED` |
 | `ThresholdVariant` | eliminated | redundant listing of names already distinct in `ThresholdConstruction`; no second "which of these is a variant" tag needed |
 | `ThresholdComparatorRole` | eliminated | `B0` never enters the shared union at all (its own detector's `CentralizedPooledThreshold`); "outside the ladder" is expressed by the owning experiment's `evidence_role = STRESS_TEST`, not a per-threshold field |
@@ -825,7 +835,7 @@ groups so it can be checked side by side against it.
 | `ModelPersonalizationStrategy` | kept | `NONE`, `DITTO`, `FEDREP_AE`, `FEDPER_AE`, field of `FederatedAveragingTraining` |
 | `ExperimentRole` | kept, renamed | now `EvidenceRole`, with `ANCHOR` added (`SCIENTIFIC_FOUNDATION.md §4`) |
 | `ClaimTier` | kept | `TIER_1`…`TIER_9`, `IntEnum`, unchanged |
-| `ExecutionStatus` | **kept, restored** | `MANDATORY`, `OPTIONAL`, `SUPPRESSED`, `REJECTED`, `FUTURE` — see `§2` above; a distinct field from `evidence_role` |
+| `RunRequirement` | kept | `MANDATORY`, `OPTIONAL`, `SUPPRESSED` only; rejected and future catalogue entries use `CatalogueDisposition`, never executable run status |
 | `FeasibilityStatus` | **kept, restored** | `FEASIBLE`, `GATED`, `PENDING_VERIFICATION`, `REJECTED`; a field of the persisted `FEASIBILITY_RESULT` artifact, distinct from the transient `FeasibilityGateDecision` result union |
 | `ClientEligibilityStatus` | kept | `ELIGIBLE`, `FALLBACK_ASSIGNED`, `EXCLUDED` |
 | `ClientEligibilityReason` | kept | four members, unchanged |
@@ -834,7 +844,7 @@ groups so it can be checked side by side against it.
 | `BlockingReason` | kept | seven members, unchanged |
 | `MetricFamily` + 8 per-family metric enums | kept | presented as one unified table in `EVALUATION_REPORTING_AND_PROVENANCE.md §4` for readability; all thirty-seven members and their eight family groupings are unchanged underneath |
 | `TrafficRateUnit`, `TrafficRateEvidenceKind`, `CostDerivationKind` | kept | unchanged |
-| `StatisticalMethod` | kept | unchanged |
+| `StatisticalMethod` | eliminated | each `StatisticalProcedure` union variant is its own method identity |
 | `CheckpointSelectionStrategy` | eliminated | single-member enum with no documented future variant, replaced by the locked value `CheckpointSelectionPolicy` (`§3.2`) |
 | `ParticipationStrategy` | **kept, restored as a real enum** | see `§3.2`; kept rather than hardcoded specifically because the roadmap names `PARTIAL` as future work |
 | `RecalibrationMode` | kept | `FROZEN`, `ONE_SHOT` |
@@ -941,6 +951,6 @@ this package (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §§10, 14`):
 | `StageCostEstimate` / `ExecutionCostEstimate` | advisory, non-scientific; never enters identity, reuse, or a scientific report |
 
 None of these types is scientific identity-bearing except where a field is
-explicitly promoted into a `StageIdentity`/`ScoreIdentity` because it is
+explicitly promoted into a `StageIdentity`/`ArtifactKey` because it is
 output-affecting (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §6`); the rest
 remain execution-only, recorded in provenance but never fingerprinted.

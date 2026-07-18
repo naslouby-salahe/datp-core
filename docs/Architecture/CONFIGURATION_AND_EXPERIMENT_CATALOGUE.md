@@ -65,8 +65,10 @@ load root boundary document
                           → create the execution plan
 ```
 
-`config/compose.py` performs validation and composition only. It neither
-persists artifacts nor imports infrastructure. The application use case
+`config/compose.py` performs parsing, reference resolution, sweep expansion,
+mapping, and validation only. It neither persists artifacts, imports
+infrastructure, creates execution resources, nor runs scientific computation.
+The application use case
 persists snapshots through `ArtifactStore` after receiving:
 
 ```text
@@ -154,7 +156,7 @@ strategy") and never an omitted required value.
 | Field family | Scientific identity | Execution identity | Provenance | Reporting presentation | YAML required |
 |---|---:|---:|---:|---:|---:|
 | Dataset, dataset version | Yes | No | Yes | No | Yes |
-| `execution_status` (`MANDATORY`/`OPTIONAL`/`SUPPRESSED`) | No (does not affect a computed value) | No | Yes | Yes (governs whether a result is main-paper or supplement) | Yes |
+| `run_requirement` (`MANDATORY`/`OPTIONAL`/`SUPPRESSED`) | No (does not affect a computed value) | No | Yes | Yes (governs whether a result is main-paper or supplement) | Yes |
 | publication regime | No — reporting projection only | No | Yes | Yes | No — derived by `derive_publication_regime` |
 | Feature schema | Yes | No | Yes | No | Runtime-captured (source-inspected), never authored |
 | Client construction, partition seed | Yes | No | Yes | No | Yes |
@@ -179,7 +181,7 @@ strategy") and never an omitted required value.
 | Metric selection | Yes | No | Yes | Yes | Yes |
 | Traffic rate (alert burden) | Yes (when requested) | No | Yes | Yes | Yes, when `AlertBurdenEvaluationSuite` is selected |
 | `seed_cohort.paired_seed_count`, `seed_cohort.derivation` | Yes | No | Yes | No | Yes |
-| `analyses[*].statistical_procedure.confidence_level` | Yes | No | Yes | Yes | Yes |
+| `analyses[*].primary_procedure` / `secondary_procedures` | Yes | No | Yes | Yes | Yes |
 | `analyses[*].primary_procedure` / `secondary_procedures` | Yes | No | Yes | Yes | Yes; bootstrap resample count remains a blocker until pre-registered |
 | Runtime device / CUDA requirement | No | Yes | Yes | No | Yes |
 | GPU model, driver version | No | No | Yes | No | Runtime-captured only |
@@ -198,8 +200,8 @@ client_construction:
   method: dirichlet_partitioned_clients
   client_count: 20
   alpha: 0.3
-  # partition_seed: unresolved — no explicit partition seed integer is
-  # given by either source document; recorded as a blocker, not defaulted.
+  # A complete document supplies partition_seed. Until its authority is
+  # recorded, this draft fails validation and cannot resolve.
 ```
 
 ## 8. Fingerprinting rules
@@ -222,16 +224,17 @@ invalidates every downstream checkpoint and score
 
 ## 9. Anchor configuration
 
-`configs/experiments/anchor_reproduction.yaml`. Every value below is either
-explicitly given by a source document or explicitly marked unresolved; none
-is invented.
+`configs/experiments/anchor_reproduction.yaml`. The fragment below preserves
+the source-given fields and illustrates where draft validation reports a
+boundary blocker. A draft with either commented requirement cannot resolve,
+plan, or run; no resolved object carries a placeholder value.
 
 ```yaml
 schema_version: 1
 slug: anchor_reproduction
 display_name: Anchor Reproduction
 evidence_role: anchor
-execution_status: mandatory
+run_requirement: mandatory
 dataset: datasets/natural_device_nbaiot.yaml
 detector: detectors/core_federated_averaging.yaml
 evaluations:
@@ -245,12 +248,11 @@ analyses:
     second_evaluation: local
     primary_metric: cv_fpr
     delta_orientation: shared_minus_local
-    statistical_procedure:
+    primary_procedure:
       method: bca_bootstrap
       confidence_level: 0.95
-      resample_count: unresolved   # BLOCKED — see field-ownership matrix, §6
-      include_wilcoxon: false
-      include_cliffs_delta: false
+      # BLOCKED: bootstrap resample count must be supplied by statistical authority.
+    secondary_procedures: []
   - kind: anchor_equivalence_analysis
     confirmatory_analysis_label: paired_threshold_analysis   # the entry above
     reference_interval:
@@ -261,13 +263,8 @@ analyses:
 seed_cohort:
   paired_seed_count: 5
   derivation: deterministic_from_experiment_seed
-  experiment_seed: unresolved      # BLOCKED — no base seed integer is given by either source
+  # BLOCKED: experiment_seed must be supplied before this draft is resolved.
 prerequisites: []
-anchor_reference_interval:
-  metric: cv_fpr_delta
-  confidence_level: 0.95
-  lower_bound: 0.647
-  upper_bound: 0.769
 operations:
   execution: runtime/scientific.yaml
   reporting: reporting/anchor_reporting.yaml
@@ -278,21 +275,17 @@ evidence role, dataset, both threshold constructions, the quantile `0.95`,
 the five-seed count, the confidence level `0.95`, and the reference interval
 `[0.647, 0.769]` — is explicit here, none defaulted in Python. The two
 fields the source documents do not supply (`resample_count`,
-`experiment_seed`) are marked `unresolved`; per `§4` this blocks the
-document from `SCIENTIFIC`/`PRINT_GRADE` scheduling until an authority
-supplies them; there is no `anchor: true` switch anywhere that bypasses this
-document. `anchor_reference_interval` appears twice above for readability
-only in this worked example — the resolved domain object holds it exactly
-once, as `ExperimentDefinition.anchor_reference_interval`; the `analyses`
-entry references the same value rather than duplicating an independent
-copy.
+`experiment_seed`) remain boundary blockers until an authority supplies
+them; there is no `anchor: true` switch that bypasses this requirement. The
+resolved domain object owns the reference interval exactly once, in
+`AnchorEquivalenceAnalysis.reference_interval`.
 
 ### 9.1 No dynamic client-construction fallback
 
 An `external_device_validation`-family experiment's `client_construction`
 is always a fully resolved, explicit `ExternalDeviceOrGroupClients`
-document — `granularity: device` or `granularity: group`, never
-`unresolved` — because it is authored only after the standalone feasibility
+document — `granularity: device` or `granularity: group`, never a
+placeholder — because it is authored only after the standalone feasibility
 audit closes (`SCIENTIFIC_FOUNDATION.md §5.1`). No scientific experiment's
 configuration ever contains a runtime selection rule choosing between
 device clients, group clients, or a pseudo-client fallback; that would
@@ -307,7 +300,7 @@ schema_version: 1
 slug: confirmatory_threshold_scope_effect
 display_name: Confirmatory Threshold-Scope Effect
 evidence_role: confirmatory
-execution_status: mandatory
+run_requirement: mandatory
 tier: tier_1
 roadmap_reference: E-C1
 dataset: datasets/natural_device_nbaiot.yaml
@@ -323,20 +316,20 @@ analyses:
     second_evaluation: local
     primary_metric: cv_fpr
     delta_orientation: shared_minus_local
-    statistical_procedure:
+    primary_procedure:
       method: bca_bootstrap
       confidence_level: 0.95
-      resample_count: unresolved
-      include_wilcoxon: true    # E-Q4 descriptive secondary evidence, attached here rather than
-      include_cliffs_delta: true # standing up a second bootstrap definition or a separate experiment
+      # BLOCKED: bootstrap resample count must be supplied by statistical authority.
+    secondary_procedures:
+      - { method: wilcoxon_signed_rank }
+      - { method: cliffs_delta }
 seed_cohort:
   paired_seed_count: 10
   derivation: deterministic_from_experiment_seed
-  experiment_seed: unresolved
+  # BLOCKED: experiment_seed must be supplied before this draft is resolved.
 prerequisites:
   - requires: anchor_reproduction
     required_outcome: anchor_equivalence_passed
-anchor_reference_interval: null
 operations:
   execution: runtime/scientific.yaml
   reporting: reporting/main_confirmatory_table.yaml
@@ -414,7 +407,8 @@ here — both are pure derivations (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md
 
 ## 13. Runtime configuration
 
-`configs/runtime/scientific.yaml`:
+`configs/runtime/scientific.yaml` is shown as a non-resolvable draft until
+the authority supplies its operational limits:
 
 ```yaml
 schema_version: 1
@@ -422,24 +416,23 @@ execution_mode: scientific
 device_policy: cuda_required
 determinism: strict
 resource_budget:
-  ram_budget_bytes: unresolved     # BLOCKED — no numeric ceiling given by either source
-  vram_fraction: unresolved         # BLOCKED
+  # BLOCKED: concrete RAM and VRAM limits are required here.
 concurrency:
-  worker_count: unresolved             # BLOCKED — no worker count given by either source
+  # BLOCKED: concrete worker count is required here.
   training_concurrency: 1
   scoring_concurrency: 1
 process_start_method: spawn           # locked rule for any CUDA-touching stage
-log_interval_rounds: unresolved        # cosmetic only; still requires an explicit owner value
+# BLOCKED: log_interval_rounds requires its explicit operational owner value.
 ```
 
 `process_start_method: spawn` is not fabricated: it follows directly from
 the source architecture's fixed rule that any stage touching CUDA must use a
 spawn context established before any CUDA call in the parent process, never
-the global `set_start_method`. Every other field above marked `unresolved`
-is a genuine blocker carried into `ScientificReadinessResult`
-(`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`); a `DEVELOPMENT` or `SMOKE`
-profile may carry these unresolved, but a `SCIENTIFIC` or `PRINT_GRADE` run
-cannot schedule until a named authority supplies them.
+the global `set_start_method`. The commented requirements are genuine
+boundary blockers reported before a domain value is constructed. Every
+execution mode, including development and smoke, requires an explicit,
+complete runtime profile; scientific and print-grade modes additionally
+require the roadmap's scientific evidence.
 
 ## 14. Stress-test detector configuration
 
@@ -626,7 +619,7 @@ client_construction:
   method: dirichlet_partitioned_clients
   client_count: 20
   alpha: { from_sweep: dirichlet_alpha }
-  # The required partition seed is pre-registered before execution.
+  # The required partition seed is pre-registered before resolution.
 split_definition:
   train: { role: train }
   calibration: { role: calibration, benign_only: true }
@@ -645,30 +638,27 @@ differ (`SCIENTIFIC_FOUNDATION.md §8` extension test).
 Attempting to schedule `anchor_reproduction.yaml` (§9) as a `scientific`
 execution mode is rejected by `ScientificReadinessResult` before any
 network, CUDA, or storage resource is touched, because
-`analyses[0].statistical_procedure.resample_count` and
-`seed_cohort.experiment_seed` are both marked `unresolved`. The rejection
-names both fields, cites the blocker table entries in
+`analyses[0].primary_procedure.resample_count` and
+`seed_cohort.experiment_seed` are absent from the draft. The rejection names
+both fields, cites the blocker table entries in
 `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`, and proposes no substitute
-value. The same document under `development` or `smoke` execution mode is
-accepted, and every rendered output from that run is marked non-citable,
-because `unresolved` fields are permitted only in those two modes and never
-silently promoted to a citable result.
+value. The same draft is rejected in development and smoke as well: those
+modes use complete explicit reduced values and are non-citable because of
+execution mode, not incomplete configuration.
 
 ## 20. Validation failure examples
 
-Removing `anchor_reference_interval.lower_bound` from §9 fails schema
-validation with a missing-field error naming the field and the document; it
+Removing `AnchorEquivalenceAnalysis.reference_interval.lower_bound` from §9
+fails schema validation with a missing-field error naming the field and the document; it
 never activates a Python default, a Pydantic default, a loader fallback, or
 a library default. Supplying `cluster_count` on a
 `local_global_shrinkage_threshold` variant (§7) fails for the same reason in
 the opposite direction. Supplying `effective_batch_size` or `rounds_max` on
 a `detectors/` document (§12) fails because the schema owns no such field —
 both are computed after resolution, never accepted as input. A
-`SCIENTIFIC`- or `PRINT_GRADE`-mode document containing any field marked
-`unresolved` fails `ScientificReadinessResult` validation and is blocked
-from scheduling; only `DEVELOPMENT` and `SMOKE` profiles may carry an
-unresolved field, and never a field this table marks
-scientific-identity-bearing without an explicit smoke-only exemption.
+`SCIENTIFIC`- or `PRINT_GRADE`-mode document that is incomplete fails
+boundary validation before `ScientificReadinessResult`;
+no execution profile may carry a placeholder field.
 
 ## 21. CLI contract
 
@@ -716,15 +706,15 @@ new affected identities (`CFG-09`).
 
 ## 22. Resolved configuration snapshot persistence
 
-`config/compose.py` returns both the frozen `tuple[ExperimentCell, ...]`
-and a `ResolvedConfigurationSnapshot` — the exact byte-stable rendering of
-every field that contributed to it, its fingerprint, and the
-source-document identities it was built from. The snapshot is persisted as
-a `RESOLVED_CONFIGURATION` artifact before planning, so a later audit
-compares a stored result against the exact configuration that produced it
-without re-parsing YAML. An unsupported configuration schema version fails
-clearly at load time; no automatic migration or backward-compatibility
-logic exists (`CFG-10`).
+`config/compose.py` returns `ConfigurationResolutionResult`: the authored
+root snapshot, complete frozen `RunDefinition` values, canonical resolved
+run snapshots, and typed boundary blockers. Scientific sweep coordinates are
+represented by `ScientificExperimentCell` within the resolved run result.
+The application—not the composer—persists each `RESOLVED_CONFIGURATION`
+artifact before planning, so a later audit compares a stored result against
+the exact configuration that produced it without re-parsing YAML. An
+unsupported configuration schema version fails clearly at load time; no
+automatic migration or backward-compatibility logic exists (`CFG-10`).
 
 ## 23. Zero-input Make targets
 
@@ -841,7 +831,7 @@ help:
 	@echo "  <family>-{validate,plan,run,status,report} for every family in §23.1"
 	@echo "  experiments            list every registered experiment (datp-core experiment list)"
 	@echo "  validate-all           validate every registered experiment configuration"
-	@echo "  plan-all-mandatory     plan every execution_status=MANDATORY experiment"
+	@echo "  plan-all-mandatory     plan every run_requirement=MANDATORY experiment"
 	@echo "  status-all             report status for every registered experiment"
 	@echo "  report-all-completed   render reports for every completed experiment"
 	@echo "  mandatory-run          run the fixed, explicitly listed mandatory sequence below"

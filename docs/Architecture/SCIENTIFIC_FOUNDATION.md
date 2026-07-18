@@ -90,27 +90,25 @@ numbers (Tier 1–9) survive only as `tier` traceability metadata on
 `ExperimentIdentity`; only `CONFIRMATORY` may carry `TIER_1`, and no other
 role may (`SCI-14`).
 
-`EvidenceRole` is not the only classification an experiment carries. A
-separate field, `execution_status` (`MANDATORY`, `OPTIONAL`, `SUPPRESSED`,
-`REJECTED`, `FUTURE`; `DOMAIN_AND_APPLICATION_ARCHITECTURE.md §2`), answers
-a different question — is the study required to run this at all — and is
-never collapsed into `evidence_role`. `execution_status` is a field of
-`ExperimentIdentity` only — it is never carried by an individual
+`EvidenceRole` is not the only classification an experiment carries.
+`RunRequirement` (`MANDATORY`, `OPTIONAL`, `SUPPRESSED`) answers the
+different executable question—whether the study is required to run—and is
+never collapsed into `evidence_role`. It is a field of `ExperimentIdentity`
+only; it is never carried by an individual
 `EvaluationDefinition` or `AnalysisDefinition` inside an experiment, so an
 attached evaluation such as the `federated_summary_comparator`'s
 fixed-k sensitivity axis (`§7.3`) is scientifically a distinct, supplementary
 evaluation while sharing its owning experiment's single
-`execution_status = MANDATORY` — "supplementary, never primary" is a fact
-about evidentiary weight, not a second `execution_status` value. A
+`run_requirement = MANDATORY` — "supplementary, never primary" is a fact
+about evidentiary weight, not a second run-requirement value. Rejected,
+out-of-scope, and future catalogue entries use `CatalogueDisposition`. A
 third vocabulary — `LOCKED`, `DESIGNED_NOT_IMPLEMENTED`, `BLOCKED`,
 `DEFERRED`, `OUT_OF_SCOPE`, `REJECTED`, `SUPPRESSED`
 (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §1`) — is a third, still
 distinct thing: it tags an *architectural design commitment* in this
-package (a type, a rule, a field), never an experiment. `REJECTED` and
-`SUPPRESSED` appear in both `ExecutionStatus` and the package-wide status
-vocabulary because both objects can genuinely be rejected or suppressed,
-but an experiment's `execution_status` and a design commitment's package
-status are never read from the same field.
+package (a type, a rule, a field), never an experiment. `SUPPRESSED` may
+appear in both run requirement and package vocabulary with their respective
+meanings, but the fields are never conflated.
 
 ## 5. Complete dataset and evaluation-setting model
 
@@ -154,7 +152,7 @@ source inspection (edge_iiotset_source_inspection, non-scientific)
     → persisted FEASIBILITY_RESULT (device-vs-group decision, target
       K ∈ {6, 15}, n_k ≥ 100 for ≥ 90% of clients)
       → explicit human-authorized ExternalDeviceOrGroupClients document
-        (granularity fixed to DEVICE or GROUP, never `unresolved`, never a
+        (granularity fixed to DEVICE or GROUP before resolution, never a
         runtime choice)
         → scientific external_device_validation configuration resolution
           (references the audit's FEASIBILITY_RESULT by `ArtifactRef` as
@@ -257,7 +255,7 @@ never gain their own `configs/experiments/` document.
 | E-M3 | `client_score_distribution_mechanism_analysis` | `confirmatory_threshold_scope_effect` | per-client benign/attack score-distribution overlay `AnalysisDefinition`, reusing its committed `SCORE_SET` artifacts |
 | E-M5 | `threshold_shift_detection_tradeoff` | `confirmatory_threshold_scope_effect` | shared-to-local per-client shift `AnalysisDefinition`, reusing its two evaluations |
 | E-Q3 | `operating_point_equity_suite` | `confirmatory_threshold_scope_effect` | optional `FleetEquityResult` evaluation (Jain index, Gini coefficient), never replacing `CV_FPR` |
-| E-Q4 | `secondary_confidence_intervals_and_effect_sizes` | `confirmatory_threshold_scope_effect` | descriptive-only `include_wilcoxon`/`include_cliffs_delta` flags on its `PairedThresholdAnalysis.statistical_procedure` (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §3.3`), never a second bootstrap definition |
+| E-Q4 | `secondary_confidence_intervals_and_effect_sizes` | `confirmatory_threshold_scope_effect` | descriptive-only `WilcoxonSignedRank` and `CliffsDelta` entries in the owning analysis's `secondary_procedures`, never a second bootstrap definition |
 | E-Q6 | `communication_storage_cost_analysis` | any experiment requesting it (chiefly `confirmatory_threshold_scope_effect`, `anchor_reproduction`) | the optional `RESOURCE_COST` stage (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §2`), consuming manifests and artifact metadata only; `MEASURED`/`ESTIMATED` values, never conflated |
 | E-M4 | `heterogeneity_threshold_benefit_association` | `controlled_heterogeneity_response` | see `§7.2` |
 
@@ -301,9 +299,9 @@ anywhere in this design.
 ## 8. Experiment authorization
 
 A generic YAML combination cannot produce a scientifically unauthorized
-experiment. Every experiment is either (a) an `ExperimentDefinition` fully
+experiment. Every experiment is either (a) an `ScientificExperimentDefinition` fully
 resolved from a named `configs/experiments/` document with every field
-explicit, or (b) a concrete `ExperimentCell` expanded from a declared sweep
+explicit, or (b) a concrete `ScientificExperimentCell` expanded from a declared sweep
 dimension inside such a document. There is no separate "authorized profile"
 layer duplicating the resolved definition's fields: authorization is
 enforced by construction validators on the closed discriminated unions

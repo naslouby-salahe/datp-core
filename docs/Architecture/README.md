@@ -105,7 +105,8 @@ for every consolidated or removed concept.
 
 ```text
 configs/
-├── experiments/     # one document per swept or standalone ExperimentDefinition
+├── experiments/     # one document per swept or standalone ScientificExperimentDefinition
+├── dataset_audits/   # source-inspection and feasibility-audit roots
 ├── datasets/          # reusable DataDefinition documents
 ├── detectors/           # reusable DetectorDefinition and EvaluationDefinition fragments
 ├── runtime/               # named ExecutionDefinition profiles

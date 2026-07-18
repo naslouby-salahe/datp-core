@@ -28,6 +28,30 @@ Scientific scope, configuration examples, or execution implementation.
 Nothing in this package is asserted `implemented`, `tested`, `passing`, or
 `complete`; every design commitment carries one of the seven statuses above.
 
+## Roadmap ownership map
+
+| Roadmap requirement | Single architectural owner |
+|---|---|
+| Dataset and client construction | `DataDefinition` and `SCIENTIFIC_FOUNDATION.md §5`. |
+| Splits and preprocessing | `DataDefinition`; dataset schemas and mapping. |
+| Detector and training protocol | `DetectorDefinition`; detector schemas and mapping. |
+| Checkpoint production and selection | `PIPELINE_EXECUTION_AND_ARTIFACTS.md §7`; separate primary-round and artifact selection values. |
+| Calibration and score generation | Typed split/score artifacts and registered scoring stages. |
+| Threshold construction | `EvaluationDefinition` and the closed threshold union. |
+| Evaluations and metrics | `EVALUATION_REPORTING_AND_PROVENANCE.md`. |
+| Statistical analyses | `AnalysisDefinition` and `StatisticalProcedure` variants. |
+| Experiments and sweeps | Experiment schemas and `ConfigurationResolutionResult`. |
+| External feasibility | `DatasetAuditDefinition`, source inspection, and feasibility audit stages. |
+| Stress tests | Stress-test scientific definitions, outside the core ladder. |
+| Temporal evaluation | Chronological data/split definitions and `TEMPORAL_SCORE`. |
+| Reporting and provenance | Result freeze, reporting definitions, and artifact lineage. |
+| Rejected, suppressed, and future work | `CatalogueDisposition`; never an executable run definition. |
+
+The roadmap is complete enough to define the architecture. When an authority
+or source inspection must supply a value before execution, it is reported as
+a typed boundary blocker by configuration validation; it is never preserved
+as a value in a resolved definition.
+
 ## 2. Canonical rule register
 
 Every rule is defined exactly once here; other files reference the
@@ -131,7 +155,7 @@ identifier rather than repeat the text.
 
 | ID | Rule |
 |---|---|
-| `ART-01` | An `ArtifactRef` is derived deterministically from artifact type, scope key, and stage identity; never randomly generated for a scientific artifact. |
+| `ART-01` | An `ArtifactKey` is derived deterministically from artifact type, typed scope, and stage identity; an `ArtifactRef` exists only after verified persistence and adds the content hash. |
 | `ART-02` | The same logical artifact identifier appearing with a different content hash is a typed integrity error, never resolved by minting a new identifier. |
 | `ART-03` | A multi-file bundle is reader-visible only after every declared member is verified and a final commit marker is written. |
 | `ART-04` | Recovery state and a scientific checkpoint occupy distinct kinds, roots, and namespaces; recovery state can never be selected as scientific evidence. |
@@ -171,61 +195,61 @@ Defined in `§8` below.
 ## 3. Accepted decisions
 
 - The anchor is represented as `evidence_role = ANCHOR` on an ordinary
-  `ExperimentDefinition` (`ANCHOR-01`, `LOCKED`).
+  `ScientificExperimentDefinition` (`ANCHOR-01`, `LOCKED`).
 - No `Regime` type controls behavior; a dataset evaluation setting is
   composed. `Regime` itself is restored as a derived, publication-only
   label (`NAME-01`, `LOCKED`; `SCIENTIFIC_FOUNDATION.md §5`).
-- `ExecutionStatus`, `FeasibilityStatus`, and `ParticipationStrategy` are
+- `RunRequirement`, `FeasibilityStatus`, and `ParticipationStrategy` are
   restored as explicit enums, each kept distinct from a field it might
   otherwise be collapsed into (`evidence_role`, a transient gate result,
   and a hardcoded literal, respectively) — see
   `DOMAIN_AND_APPLICATION_ARCHITECTURE.md §§2, 3.2, 14`.
 - Per-stage identity dataclasses collapse to `StageIdentity` and
-  `ScoreIdentity` (`TYPE-01`, `LOCKED`).
+  `ArtifactKey` (`TYPE-01`, `LOCKED`).
 - `ExperimentSpec`/`ExperimentProfileSpec`/`ScientificProtocolSpec`/`ClaimSpec`
-  collapse to `ExperimentDefinition` with eight owned branches (`ARCH-01`,
+  collapse to `ScientificExperimentDefinition` with eight owned branches (`ARCH-01`,
   `LOCKED`).
 - There is no domain-level `ExperimentTemplate`; a sweep dimension exists
   only as a boundary-schema construct in `config`, expanded directly into
-  `tuple[ExperimentCell, ...]` by `config/compose.py`
+  `tuple[ScientificExperimentCell, ...]` by `config/compose.py`
   (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §4`, `LOCKED`).
 - `OperationsDefinition` has two owned sub-fields, `execution` and
   `reporting`; artifact namespace is a pure derivation
   (`derive_artifact_namespace`) from `evidence_role`, never a third stored
   sub-field (`ANCHOR-05`, `LOCKED`).
 - Bootstrap resample count and every numeric resource-budget ceiling are
-  explicitly marked `unresolved` rather than defaulted (`CFG-10`,
-  `BLOCKED`; §7).
+  boundary-blocked rather than defaulted. They cannot enter a resolved run
+  (`CFG-10`, `BLOCKED`; §7).
 
 ## 4. Old-concept disposition table
 
 | Prior concept | Disposition | Notes |
 |---|---|---|
-| `ExperimentSpec` | Merged | Into `ExperimentDefinition` |
-| `ExperimentProfileSpec` | Split | Into a boundary-only sweep schema in `config` (never a `domain` type) and the resolved `ExperimentDefinition`; `config/compose.py` expands the former directly into `tuple[ExperimentCell, ...]` |
+| `ExperimentSpec` | Merged | Into `ScientificExperimentDefinition` |
+| `ExperimentProfileSpec` | Split | Into a boundary-only sweep schema in `config` (never a `domain` type) and the resolved `ScientificExperimentDefinition`; `config/compose.py` expands the former directly into `tuple[ScientificExperimentCell, ...]` |
 | `ScientificProtocolSpec` | Removed | Fields redistributed directly to `data`/`detector`/`evaluations`/`analyses` |
 | `ClaimSpec` | Removed | `evidence_role`/`tier` moved to `ExperimentIdentity`; fallback wording moved to `EVALUATION_REPORTING_AND_PROVENANCE.md §§8.2, 12` |
 | `RegimeDataSpec` | Renamed | `DataDefinition` |
 | `DetectorBranchSpec` | Renamed | `DetectorDefinition`; the stored `DetectorBranchRole` field is removed and replaced by the pure `classify_detector` function |
-| `EvaluationArmSpec` | Split | `EvaluationDefinition` (threshold, suite, metrics) owned directly by `ExperimentDefinition`, plus `AnalysisDefinition` (comparison, statistics) as its own sibling branch — removing both the prior arm/branch cross-reference check and the prior per-evaluation statistics duplication (`ARCH-02`) |
+| `EvaluationArmSpec` | Split | `EvaluationDefinition` (threshold, suite, metrics) owned directly by `ScientificExperimentDefinition`, plus `AnalysisDefinition` (comparison, statistics) as its own sibling branch — removing both the prior arm/branch cross-reference check and the prior per-evaluation statistics duplication (`ARCH-02`) |
 | `ExecutionPolicy` / `ArtifactPolicy` / `ReportingPolicy` | Merged | Into `OperationsDefinition` with two named sub-fields (`execution`, `reporting`); `ArtifactPolicy`'s sole live field, namespace, is a pure derivation from `evidence_role` (`derive_artifact_namespace`) rather than a third stored sub-field |
 | `ProtocolTrack` (`DATP_ANCHOR` / `COMPLETE`) | Removed | Replaced by `EvidenceRole.ANCHOR`; namespace is derived, not an independent scientific type |
-| ~20 per-stage identity dataclasses | Merged | Into `StageIdentity` and `ScoreIdentity` |
+| ~20 per-stage identity dataclasses | Merged | Into `StageIdentity` and `ArtifactKey` |
 | Per-role score artifact IDs (calibration/test/temporal) | Merged | Into `ArtifactRef` discriminated by `SplitRole` |
-| Six parallel centralized (B0) identity classes | Removed | `CentralizedPooledTraining` reuses `StageIdentity`/`ScoreIdentity` (`ANCHOR-04`) |
+| Six parallel centralized (B0) identity classes | Removed | `CentralizedPooledTraining` reuses `StageIdentity`/`ArtifactKey` (`ANCHOR-04`) |
 | `CoreThresholdPolicy` (parallel to `ThresholdConstructionKind`) | Removed | One discriminated `ThresholdConstruction` union is sufficient |
 | `RobustClusterMedianThresholdSpec` | Merged | Into `ClusterThreshold.aggregation` |
 | `Regime` enum | Kept, redefined | Restored as a derived, publication-only label computed from `DataDefinition` (`SCIENTIFIC_FOUNDATION.md §5`); never a constructor input or discriminator |
 | `RegimeCompatibilitySpec` | Removed | Composition of `DataDefinition` plus ordinary cross-field validation (`SCIENTIFIC_FOUNDATION.md §8`) replaces its closed compatibility mapping |
 | `ExperimentRole` | Kept, renamed | `EvidenceRole`, ten members (`ANCHOR` added) |
-| `ExecutionStatus` | Kept unchanged | `MANDATORY`, `OPTIONAL`, `SUPPRESSED`, `REJECTED`, `FUTURE`; a field of `ExperimentIdentity` distinct from `evidence_role` |
+| `RunRequirement` | Kept, narrowed | `MANDATORY`, `OPTIONAL`, `SUPPRESSED`; rejected and future catalogue entries use `CatalogueDisposition` rather than executable run status |
 | `FeasibilityStatus` | Kept unchanged | field of the persisted `FEASIBILITY_RESULT` artifact, distinct from the transient `FeasibilityGateDecision` result union |
 | `ParticipationStrategy` | Kept unchanged | retained as a real, single-member-today enum because the roadmap names `PARTIAL` as future work |
 | `CheckpointSelectionStrategy` | Removed | single-member enum with no documented future variant; replaced by the locked value `CheckpointSelectionPolicy` |
 | `ManifestType` | Merged | into `ArtifactType`; each of its thirteen members already names a specific `ArtifactType` member (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §14.4`) |
 | `ThresholdComparatorRole` | Removed | B0 never enters the shared `ThresholdConstruction` union; "outside the ladder" is expressed by the owning experiment's `evidence_role = STRESS_TEST` |
 | `ThresholdVariant` | Removed | redundant with the `ThresholdConstruction` union's own members |
-| Six scope-specific `ArtifactKey` variant classes | Merged | Into one `ArtifactRef` with a discriminated `ArtifactScopeKey` |
+| Six scope-specific key classes | Merged | Into one `ArtifactKey` with a discriminated `ArtifactScopeKey`; `ArtifactRef` adds only verified content identity |
 | `DraftPlannedStage`/`FinalPlannedStage` | Retained | Same shape; still carry no reuse decision pre-preflight and a classified reuse decision post-preflight respectively |
 | `ResourceBudget`, `ParallelismSpec`, `SeedPlan`, `HardwareInventory` | Retained | Execution-only types, unchanged in role |
 | Letter-based labels (`B1`–`B5`, `A`/`B-a`/`C`/`D`) | Retained as metadata | `roadmap_reference` field only, never a discriminator |
@@ -234,7 +258,8 @@ Defined in `§8` below.
 ## 5. Rejected alternatives
 
 - **A separate anchor pipeline, runner, or compatibility facade** —
-  rejected; the anchor uses the same eighteen stages as every experiment.
+  rejected; the anchor uses the same generic stage machinery and only its
+  applicable registered contracts.
 - **Letter-based identifiers as control flow** — rejected everywhere; a
   roadmap code survives only as metadata.
 - **A universal `Result`, `Payload`, `Context`, or `Manager` type** —
@@ -268,12 +293,12 @@ Defined in `§8` below.
   resolution is confined to `infrastructure/persistence`.
 - **A domain-level `ExperimentTemplate`** — rejected; a sweep exists only
   as a boundary-schema construct in `config`, expanded directly into
-  `ExperimentCell` values by the composer.
+  `ScientificExperimentCell` values by the composer.
 - **A stored `ArtifactDefinition.namespace` field** — rejected; namespace
   is a pure derivation from `evidence_role` (`derive_artifact_namespace`),
   removing the caller-supplied-inconsistency failure mode a stored,
   independently settable field would reintroduce.
-- **A per-evaluation `statistical_procedure` field** — rejected; statistics
+- **A per-evaluation procedure field** — rejected; statistics
   are owned once per comparison, by `AnalysisDefinition`, never repeated
   under each compared threshold's `EvaluationDefinition`.
 - **A parameterized CLI scientific override or Make-target argument** —
@@ -369,7 +394,7 @@ is never imported by production `src/datp_core` (`TEST-01`).
 
 ### 8.1 Scientific metamorphic tests
 
-- Changing only a threshold policy does not change a `ScoreIdentity`.
+- Changing only a threshold policy does not change compatible score artifact keys.
 - Changing only a report format does not invalidate a scientific artifact.
 - The core ladder's threshold constructions consume identical compatible
   calibration and test score sets.
@@ -380,7 +405,7 @@ is never imported by production `src/datp_core` (`TEST-01`).
   set for both compared policies.
 - A missing required YAML field fails rather than defaulting.
 - An incompatible artifact is recomputed or blocked, never reused.
-- The anchor executes through the same stage sequence as every experiment.
+- The anchor uses the same generic planner, executor, persistence, and registry machinery; only its applicable stage contracts are planned.
 - Adding a pipeline stage requires no change to the core executor.
 - An `ExperimentCellIdentity` collision between two distinct resolved cells
   raises a typed planning error rather than overwriting silently.
@@ -398,7 +423,7 @@ is never imported by production `src/datp_core` (`TEST-01`).
 3. **New threshold policy** — the correct `ThresholdConstruction` variant, a
    discriminated configuration arm with exactly its own fields, an
    infrastructure implementation, one registry line. Scores are reused
-   automatically because the threshold change preserves `ScoreIdentity`.
+   automatically because the threshold change preserves compatible score artifact keys.
 4. **New metric** — a `MetricId` member in its correct family, a
    `MetricSpec`, a typed per-family calculator, reporting metadata. No
    renderer edited per metric, no raw dictionary.
@@ -431,7 +456,7 @@ is never imported by production `src/datp_core` (`TEST-01`).
 | Prior architecture §§1–2 (purpose, principles) | `SCIENTIFIC_FOUNDATION.md §3`, this file §2 | retained, restated as rule IDs |
 | Prior architecture §3 (dependency model) | `DOMAIN_AND_APPLICATION_ARCHITECTURE.md §1` | retained, six-to-seven-layer shape preserved |
 | Prior architecture §§6–7 (enums, value objects) | `DOMAIN_AND_APPLICATION_ARCHITECTURE.md §§3, 6.2, 14` | every enum given an explicit disposition in the complete catalogue (§14); no silent omission |
-| Prior architecture §8 (aggregate specifications) | `DOMAIN_AND_APPLICATION_ARCHITECTURE.md §§2–3` | merged into the four-branch `ExperimentDefinition` |
+| Prior architecture §8 (aggregate specifications) | `DOMAIN_AND_APPLICATION_ARCHITECTURE.md §§2–3` | merged into the four-branch `ScientificExperimentDefinition` |
 | Prior architecture §9 (spec/request/result catalogue) | `DOMAIN_AND_APPLICATION_ARCHITECTURE.md §6` | consolidated into the complete public contract catalogue |
 | Prior architecture §§12–14 (ports, lineage, planning) | `DOMAIN_AND_APPLICATION_ARCHITECTURE.md §7`, `PIPELINE_EXECUTION_AND_ARTIFACTS.md §§1–7` | retained |
 | Prior architecture §15 (path/storage) | `PIPELINE_EXECUTION_AND_ARTIFACTS.md §8` | retained, six scope-specific key classes merged into one discriminated `ArtifactScopeKey` |
@@ -458,7 +483,8 @@ explicit removal reason recorded in §4 or §5 above.
 - ☐ The anchor has no separate pipeline, port, or artifact type.
 - ☐ Every multi-variant type carries an explicit, exhaustively matched tag.
 - ☐ No identity-bearing field has a Python, dataclass, or Pydantic default;
-  every unresolved value is marked, not invented.
+  incomplete boundary input is reported as a blocker and never mapped into a
+  resolved value.
 - ☐ `Any`, `object`, and generic mappings are absent from `domain` and
   `application` contracts.
 - ☐ No two aggregates own the same field.
@@ -469,12 +495,13 @@ explicit removal reason recorded in §4 or §5 above.
 - ☐ Every genuine blocker in §7 above is recorded, none silently resolved.
 - ☐ Exactly seven Markdown files exist in this package, none exceeding its
   approximate word target without cause.
-- ☐ `PipelineStage` has exactly eighteen executable members; configuration
-  resolution is a pre-pipeline composition operation, never one of them.
+- ☐ Configuration resolution is a pre-pipeline composition operation, never
+  a stage; plans contain only applicable registered stages and have no fixed
+  stage-count invariant.
 - ☐ No domain-level `ExperimentTemplate` exists; every sweep is a boundary
-  schema construct expanded by `config/compose.py` into `ExperimentCell`
+  schema construct expanded by `config/compose.py` into `ScientificExperimentCell`
   values before planning.
-- ☐ No `EvaluationDefinition` carries a `statistical_procedure` field;
+- ☐ No `EvaluationDefinition` carries a procedure field;
   every statistical procedure is owned by an `AnalysisDefinition`.
 - ☐ `configs/detectors/` is the only detector-configuration directory name
   used anywhere in this package; no `configs/protocols/` reference remains.

@@ -99,10 +99,10 @@ class ExperimentStage(Protocol[InputT, OutputT]):
                                                              # produces SOURCE_INSPECTION and
                                                              # FEATURE_SCHEMA_MANIFEST)
 
-    def is_applicable(self, definition: ExperimentDefinition) -> bool: ...
+    def is_applicable(self, definition: RunDefinition) -> bool: ...
 
     def build_identity(
-        self, definition: ExperimentDefinition, upstream: tuple[ArtifactRef, ...],
+        self, definition: RunDefinition, upstream: tuple[ArtifactRef, ...],
     ) -> StageIdentity: ...
 
     def execute(self, stage_input: InputT, context: StageExecutionContext) -> OutputT: ...
@@ -111,6 +111,9 @@ class ExperimentStage(Protocol[InputT, OutputT]):
 `is_applicable` is the single mechanism behind every optional-stage
 omission in `§2` above; a stage the planner does not need is never planned
 as a disabled or skipped no-op, it is simply absent from the plan.
+Dataset-audit stages return false for `ScientificExperimentDefinition` and
+scientific stages return false for `DatasetAuditDefinition`; no run is
+required to execute the whole stage catalogue.
 `build_identity` replaces an earlier draft's `scientific_identity_contribution`
 name with one that states what it returns, not just that it contributes to
 something (`NAME` rules, `§19` of `ENGINEERING_DECISIONS_AND_CONFORMANCE.md`).
@@ -202,10 +205,10 @@ and output-affecting runtime choices — governs every invalidation decision.
   before computation for lookup, locking, and reuse.
 - **`ArtifactRef`** — `{key, content_hash}`; exists only after verified
   persistence. One key with differing content is an integrity error.
-- **`ProducerImplementationIdentity`** — `{component_revision,
-  algorithm_revision, dependency_compatibility_signature}`; stage-scoped
-  compatibility, not a whole-repository fingerprint.
-- **Scientific identity** — the subset of `ExperimentDefinition` fields
+- **Producer compatibility inputs** — component revision, algorithm revision,
+  and dependency compatibility signature are fields of the producing
+  `StageIdentity`, not a parallel artifact-identity type.
+- **Scientific identity** — the subset of `ScientificExperimentDefinition` fields
   that determine whether two computations are the same science
   (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §6`).
 - **Execution identity** — output-affecting execution choices not already in
@@ -265,23 +268,23 @@ member.
 ## 7. Score and checkpoint reuse; anchor execution
 
 One trained checkpoint, identified by `StageIdentity(stage=DETECTOR_TRAIN,
-...)`, produces one compatible calibration `ScoreIdentity` and one
-compatible test `ScoreIdentity`. Calibration scores fan out to every
+...)`, produces compatible calibration and test score artifacts whose
+`ArtifactKey` values remain reusable across threshold policies. Calibration scores fan out to every
 compatible threshold construction; test scores fan out to every compatible
-evaluation. A checkpoint is selected once, by `CHECKPOINT_SELECT`, using
-only `natural_device_evaluation` evidence under the locked rule (lowest
-federated-averaging-weighted benign validation reconstruction error, ties
-broken toward the earlier scheduled round); no other dataset setting
-selects its own checkpoint, and no attack label, held-out AUROC, external
-dataset result, or downstream threshold outcome may influence the
-selection.
+evaluation. `PrimaryCheckpointRoundSelection` authorizes the round once,
+from only the locked natural-device benign evidence. Each independently
+trained branch then performs `CheckpointArtifactSelection` against its own
+scheduled artifacts at that round. No branch loads an incompatible model
+checkpoint, and no attack label, held-out AUROC, external dataset result, or
+downstream threshold outcome may influence either decision.
 
-The anchor's `ExperimentDefinition` is planned and executed by the
-identical eighteen-stage sequence and the identical `StageRunnerRegistry` as
-every other experiment. Its only distinguishing behavior is a downstream
-decision, not an upstream fork: `ANCHOR_EQUIVALENCE` consumes the frozen
-anchor `StatisticalAnalysisResult` and the `anchor_reference_interval` from
-its own configuration and returns `AnchorEquivalenceResult.Passed` or
+The anchor's `ScientificExperimentDefinition` is planned by the same generic
+registry, reuse, persistence, and lifecycle machinery as every other run.
+Its only distinguishing behavior is a downstream decision, not an upstream
+fork: `ANCHOR_EQUIVALENCE` consumes the frozen anchor
+`StatisticalAnalysisResult` and its owning
+`AnchorEquivalenceAnalysis.reference_interval`, then returns
+`AnchorEquivalenceResult.Passed` or
 `.Failed`. `Failed` carries the exact comparison — material movement toward
 zero, or a reproduced interval wider than approximately 1.20× the reference
 width — never an invented numeric tolerance or an automatic pass. The
@@ -292,7 +295,7 @@ slug; no stage, port, or artifact type exists solely for the anchor
 
 `centralized_pooled_reference` (B0) is executed by the same stage sequence
 under `training_protocol = CentralizedPooledTraining`; its `StageIdentity`
-and `ScoreIdentity` values are ordinary instances of the same two identity
+and `ArtifactKey` values are ordinary instances of the same two identity
 types (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §6.4`), never a parallel
 identity hierarchy — no stage, port, or registry accepts a federated
 checkpoint or federated-derived score set where a centralized identity is
@@ -302,17 +305,17 @@ inputs (`ANCHOR-04`).
 
 ## 7.1 Experiment deduplication
 
-Sweep expansion into `tuple[ExperimentCell, ...]` is already complete by
+Sweep expansion into `tuple[ScientificExperimentCell, ...]` is already complete by
 the time `ExperimentPlanner.create_plan` receives its input — it happens
 inside `config/compose.py`, before planning
 (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §§3, 17`); the planner never
 expands a template itself, because no domain-level `ExperimentTemplate`
 exists to expand (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §4`).
 `ExperimentPlanner.create_plan` derives every stage identity from each
-cell's fully resolved `ExperimentDefinition`, and deduplicates compatible
+cell's fully resolved `ScientificExperimentDefinition`, and deduplicates compatible
 stages before emitting a `DraftPlannedStage` sequence: a
 `natural_device_evaluation` cell at one seed shares one `StageIdentity` for
-training and one `ScoreIdentity` each for calibration and test scoring
+training and one `ArtifactKey` each for calibration and test scoring
 across every compatible confirmatory, supportive, mechanism, variant, and
 comparator evaluation drawing on that seed. The planner emits one train
 stage, one checkpoint-selection dependency, two role-scoped scoring stages,
@@ -479,7 +482,7 @@ sequenceDiagram
     participant Store as ArtifactStore
 
     Cli->>Root: run_experiment(slug)
-    Root->>Cfg: resolve_experiment_configuration -> tuple[ExperimentCell, ...]
+    Root->>Cfg: resolve_experiment_configuration -> tuple[ScientificExperimentCell, ...]
     Root->>Plan: create_plan(cells)
     Plan->>Anchor: consult passed/failed result for the cell's prerequisites
     Anchor-->>Plan: pass / block
