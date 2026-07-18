@@ -185,6 +185,19 @@ an uncited assumed rate, or an incompatible unit is rejected before
 evaluation; alert burden is omitted, never estimated, when no valid rate
 exists.
 
+No experiment currently requests `ALERT_BURDEN` (the E-O1 operational
+alert-burden cell), because no validated `TrafficRateEvidence` (`Measured`
+or `Cited`) is available. Every Edge-IIoTset capture session is a short lab
+burst (27 min to 2.58 days), so a linear day-extrapolation of raw row counts
+would misrepresent deployment density — the hypothetical-number-as-measurement
+pattern SB-20 forbids — and no externally cited real-world IoT traffic rate
+is authorized. Edge external validation is itself suppressed
+(`attack_row_client_assignment_unavailable`: attack rows cannot be assigned
+to the benign sensor groups, §6 of the Edge dataset document and
+`external_device_dataset_validation`), so no host experiment for the metric
+exists either. The suite and metric remain defined for a future run that
+supplies a validated traffic rate.
+
 ### 6.4 Model-personalization absorption bands
 
 Locked, applied without adjustment: let `Δ_core = CV_FPR[core+shared] −
@@ -314,7 +327,10 @@ class ReportDefinition:
 A `ReportDefinition` is a container of one or more `ReportArtifactSpec`
 entries (the authored `report_artifacts` list, `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §15`);
 each entry's `body` is a `TableDefinition` or `FigureDefinition` owning that
-artifact's `columns`/`series`, `ordering`, and `missing_value_policy`. A
+artifact's `columns`/`series`, `ordering`, and `missing_value_policy`. By
+convention a table declares `output_formats: [markdown, latex]` and a figure
+declares `output_formats: [pdf, png]`; a figure never serializes to a table
+format. A
 table's `RowProjectionRule` is a pure derivation from its `TableType`
 (`derive_row_projection`), never authored — which is why the reporting YAML
 omits it. One row dataclass per table is used only where tables have genuinely
@@ -353,7 +369,7 @@ explicitly.
 | `COMPARATOR` | `federated_summary_comparator` (matched benign-summary comparison, quantile-estimation backbone analysis, and optional fixed-k sensitivity, all as evaluations of this one merged experiment) |
 | `STRESS_TEST` | `fedprox_aggregation_stress_test`, `model_personalization_absorption_test` |
 | `RECOVERY_CURVE` | `chronological_recalibration_evaluation` |
-| `ALERT_BURDEN` | `external_device_dataset_validation` (attached alert-burden evaluation, formerly `operational_alert_burden_analysis`/E-O1, requiring validated `TrafficRateEvidence`) |
+| `ALERT_BURDEN` | defined but requested by no experiment (E-O1 disposition, §6.3): no validated `TrafficRateEvidence` is available, and its former host `external_device_dataset_validation` is itself suppressed |
 | `COMMUNICATION_STORAGE_COST` | any experiment requesting the optional `RESOURCE_COST` stage (chiefly `confirmatory_threshold_scope_effect`, `anchor_reproduction`; formerly the standalone `communication_storage_cost_analysis`/E-Q6) |
 | `BOUNDARY_NULL` | `file_pseudo_client_applicability_boundary`, any experiment whose claim outcome is `NULL` or `FEASIBILITY_REJECTION` |
 

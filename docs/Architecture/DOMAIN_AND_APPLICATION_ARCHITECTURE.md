@@ -128,7 +128,9 @@ bindings do not enter its domain object.
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DataDefinition:
     dataset: Dataset                                   # N_BAIOT | CICIOT2023 | EDGE_IIOTSET
-    dataset_version: DatasetVersion                    # identity-bearing; feeds DatasetScope (§16.5)
+    schema_id: SchemaId                                # dataset-level source-schema identity
+    materialization_id: MaterializationId              # the named processed-artifact identity a setup
+                                                       #   references; identity-bearing, feeds DatasetScope (§16.5)
     client_construction: ClientConstruction
     split_definition: SplitDefinition
     preprocessing: PreprocessingDefinition
@@ -151,8 +153,17 @@ fraction locked at 0.70, genuine capture-time field, boundary identity). The
 calibration variant has no field capable of admitting an attack-labeled row
 — benign-only membership is a type-level property, not a runtime check
 (`SCI-04`). `PreprocessingDefinition` owns normalization strategy and scope
-(fit rows restricted to authorized `TrainSplit` rows). Runtime owns
-preprocessing chunk sizing and execution.
+(fit rows restricted to authorized `TrainSplit` rows) together with the
+row-exclusion and split policy that make up one named **materialization**. A
+dataset authors a `schema_id` and a `materializations` map; each
+`ClientConstruction` setup references one materialization, and
+`DataDefinition.materialization_id` carries that processed-artifact identity.
+This is why N-BaIoT exposes two distinct materializations: `datp_core`
+(`MIN_MAX` normalization, cold-start-row and exact-duplicate removal) and
+`anchor` (`STANDARD` / `StandardScaler` normalization, raw rows retained), so
+the anchor's distinct preprocessing is a first-class identity referenced by
+the `anchor_natural_devices` setup, never a silent inheritance of the
+DATP-Core policy. Runtime owns preprocessing chunk sizing and execution.
 
 #### Field-level schema (`DatasetFieldSchema`)
 
@@ -200,7 +211,7 @@ class SourceFieldDescriptor:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DatasetFieldSchema:
     dataset: Dataset
-    dataset_version: DatasetVersion
+    schema_id: SchemaId
     source_fields: tuple[SourceFieldDescriptor, ...]      # every column, in exact source order
     model_feature_order: tuple[CanonicalFieldId, ...]     # the ordered MODEL_FEATURE subset only
     schema_fingerprint: StageFingerprint                  # blake3 of the canonical tuple above (§8 of
@@ -212,8 +223,9 @@ class DatasetFieldSchema:
 field of the committed `DatasetFieldSchema`, so a later source-schema drift
 (a column renamed, reordered, or added upstream) is a detected
 `SchemaCompatibility` mismatch rather than a silent feature-vector reshuffle.
-A `CanonicalFieldId` is stable across dataset versions that share the same
-underlying feature; it is never reused for two different source columns.
+A `CanonicalFieldId` is stable across materializations of the same `schema_id`
+that share the underlying feature; it is never reused for two different source
+columns.
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -260,7 +272,7 @@ branching, and scientific control flow.
 class ModelDefinition:
     architecture: AutoencoderArchitecture
     reconstruction_objective: ReconstructionObjective
-    training_profile: TrainingProfile
+    training: TrainingDefinition
     optimizer: OptimizerDefinition
     checkpoint_production: CheckpointProductionDefinition
     training_batch: TrainingBatchDefinition
@@ -268,6 +280,17 @@ class ModelDefinition:
     scoring_batch: ScoringBatchDefinition
     numerical_precision: NumericalPrecision
     deterministic_computation_requirement: DeterministicComputationRequirement
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TrainingDefinition:
+    profile: TrainingProfile             # the named training profile (FedAvg, FedProx, Ditto-personalized, centralized)
+    parameters: TrainingParameters       # per-experiment bound values; empty for every profile except FedProx
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TrainingParameters:
+    mu: FedProxMu | None                 # the only per-experiment training parameter today: a strictly
+                                         #   positive pre-registered value bound from the federated_proximal_mu
+                                         #   sweep, populated only for a FederatedProximalTrainingProfile (None otherwise)
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OptimizerDefinition:
@@ -296,6 +319,15 @@ def rounds_max(schedule: CheckpointSchedule) -> RoundNumber:
     return max(schedule.rounds)
 ```
 
+`CheckpointProductionDefinition` names one of the model's authored
+`checkpoint_profiles` — for example `datp_core` with rounds
+[25, 50, 75, 100, 125, 150, 200], or `anchor_terminal` with the single
+terminal round [150]. The owning experiment selects the profile through an
+explicit `checkpoint_profile` reference; the schedule is never derived from
+`evidence_role`. `rounds_max` is then the pure `max(rounds)` of the selected
+profile (150 for the anchor, 200 for DATP-Core), never an independently
+authored field.
+
 `LearningRate` and every other continuous value that enters a fingerprint are
 validated, canonical `Decimal` value objects; raw `float` is never a
 scientific or artifact-identity input.
@@ -304,9 +336,10 @@ scientific or artifact-identity input.
 TrainingProfile
 ├── FederatedAveragingTrainingProfile   (local_epochs=1, participation: ParticipationStrategy,
 │                                  personalization: ModelPersonalizationStrategy)
-├── FederatedProximalTrainingProfile         (mu: a strictly positive pre-registered value,
-│                                   same non-strategy fields as the matched
-│                                   FederatedAveragingTrainingProfile)
+├── FederatedProximalTrainingProfile         (carries no literal mu — µ is bound per experiment via
+│                                   the owning experiment's training.parameters.mu from the
+│                                   federated_proximal_mu sweep; same non-strategy fields as the
+│                                   matched FederatedAveragingTrainingProfile)
 └── CentralizedPooledTrainingProfile      (pooled-benign; not federated; not in the ladder)
 
 class ParticipationStrategy(StrEnum):
@@ -1154,8 +1187,10 @@ class AnalysisLabel(str): ...         # unique within one ScientificExperimentDe
 class SweepParameterName(str): ...    # a declared sweep axis (threshold_quantile, dirichlet_alpha,
                                       #   shrinkage_weight, calibration_sample_count, fixed_k,
                                       #   fingerprint_feature_subset); also a MetricAssociation grouping
-class DatasetVersion(str): ...        # semantic artifact name (e.g. "processed"); never a meaningless
-                                      #   counter such as "v1" (CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11)
+class SchemaId(str): ...              # dataset-level source-schema identity (e.g. "nbaiot_kitsune_115");
+                                      #   semantic, never a meaningless counter (CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11)
+class MaterializationId(str): ...     # a named processed-artifact identity (e.g. "nbaiot_datp_core",
+                                      #   "nbaiot_anchor_historical"); one per authored materialization
 class ResultTypeId(str): ...          # names a frozen result type a ReportDefinition consumes
 class ClientId(str): ...              # opaque per-construction client identity
 class DeviceFamilyId(str): ...        # authorized taxonomy family (FamilyThreshold only)
@@ -1195,6 +1230,8 @@ class CoverageRatio(CanonicalDecimal): ...         # 0 ≤ r ≤ 1
 class Probability(CanonicalDecimal): ...           # 0 ≤ p ≤ 1
 class ShrinkageWeight(CanonicalDecimal): ...       # 0 ≤ λ ≤ 1
 class LearningRate(CanonicalDecimal): ...          # > 0
+class FedProxMu(CanonicalDecimal): ...             # > 0; the FedProx proximal weight, bound per experiment
+                                                   #   from the federated_proximal_mu sweep {0.001, 0.01, 0.1}
 
 @dataclass(frozen=True, slots=True)
 class DirichletAlpha:
@@ -1358,11 +1395,22 @@ class ConformalLocalThreshold:
     coverage_alpha: CanonicalDecimal           # 0.05
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class MatchedExceedanceMode:
+    matched_exceedance_k_grid_step: CanonicalDecimal   # pre-registered grid step, 0.05
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FixedKMode:
+    fixed_k: CanonicalDecimal                          # a single scalar k; supplementary sensitivity only
+
+FederatedSummaryThresholdMode = MatchedExceedanceMode | FixedKMode
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class FederatedSummaryStatisticThreshold:
-    fixed_k: tuple[CanonicalDecimal, ...] | None   # None ⇒ matched-exceedance (primary); values ⇒ supplementary
+    mode: FederatedSummaryThresholdMode        # explicit discriminator: matched_exceedance (primary) or
+                                               #   fixed_k (supplementary) — never a `fixed_k = null` sentinel
     # full pooled variance incl. the between-client term and the larger-k tie rule are
-    # structural, never configurable booleans (SCI-17). The matched-exceedance k-grid step
-    # is a genuine blocker until an authoritative protocol record supplies it.
+    # structural, never configurable booleans (SCI-17). The matched-exceedance k-grid step is now
+    # supplied (0.05) on the matched_exceedance mode, no longer an open blocker.
 
 ThresholdConstruction = (
     SharedThreshold | LocalThreshold | FamilyThreshold | ClusterThreshold
@@ -1590,7 +1638,7 @@ class StageIdentity:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DatasetScope:
     dataset: Dataset
-    dataset_version: DatasetVersion
+    materialization_id: MaterializationId
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PartitionScope:

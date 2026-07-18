@@ -4,15 +4,23 @@ experiments:
   - slug: external_device_dataset_validation
     display_name: External Device-Dataset Validation
     evidence_role: external_validation
-    run_requirement: mandatory
+    run_requirement: suppressed
+    suppression:
+      reason: attack_row_client_assignment_unavailable
+      evidence: >-
+        Edge-IIoTset benign rows partition deterministically by the ten Normal-traffic sensor
+        folders (group granularity, K = 10), but attack rows are organized by attack type across
+        fourteen testbed-wide files with no sensor/group column, and the only device linkage
+        (ip.src_host) is rejected by client_granularity_feasibility. No source field assigns an
+        attack row to one of the ten benign groups, so the Regime D per-client benign+attack
+        external validation cannot be executed without fabricating a mapping. The roadmap Tier 3
+        scope (B1-B4 + B-FedStatsBenign + q-sensitivity on Edge-IIoTset) is preserved below as the
+        intended, currently non-executable evaluation.
     tier: tier_3
     roadmap_reference: E-X1
     data: { dataset: edge_iiotset, setup: external_group }
-    # RESOLVED: `client_granularity_feasibility` (`configs/datasets/edge_iiotset.yaml`) closes in
-    # favor of `group` granularity, K = 10 — `device` granularity is rejected outright
-    # (ip.src_host dominated by 3 addresses plus placeholder/near-singleton noise; see the
-    # dataset document's audit decision record for the full-corpus evidence).
     model: autoencoder
+    checkpoint_profile: datp_core
     training:
       profile: federated_averaging
       parameters: {}
@@ -20,16 +28,11 @@ experiments:
       parameters:
         threshold_quantile:
           values: [0.90, 0.95, 0.975, 0.99]
-          # sole owner of the external-dataset quantile-sensitivity axis
-          # (SCIENTIFIC_FOUNDATION.md §7.2; `threshold_quantile_sensitivity` owns the
-          # natural-device axis only).
     evaluations:
       - label: shared_mean
         threshold: { policy: shared_threshold, construction: mean, quantile: { from_sweep: threshold_quantile } }
       - label: local
         threshold: { policy: local_threshold, quantile: { from_sweep: threshold_quantile } }
-      - label: family
-        threshold: { policy: family_threshold, quantile: { from_sweep: threshold_quantile } }
       - label: cluster_k3_mean
         threshold:
           policy: cluster_threshold
@@ -42,12 +45,8 @@ experiments:
           maximum_iterations: 300
           random_seed: 42
       - label: federated_summary_benign
-        threshold: { policy: federated_summary_statistic_threshold, fixed_k: null, matched_exceedance_k_grid_step: 0.05 }
+        threshold: { policy: federated_summary_statistic_threshold, mode: matched_exceedance, matched_exceedance_k_grid_step: 0.05 }
         requested_metrics: [cv_fpr, between_ratio]
-        # matched-exceedance (primary; SB-27). `matched_exceedance_k_grid_step` is authored
-        # directly here as this evaluation's own field (see `federated_summary_comparator` in
-        # `references_and_boundaries.yaml` for the full rationale behind the 0.05 step, locked
-        # identically everywhere `federated_summary_statistic_threshold` is evaluated).
     analyses:
       - label: external_scope_effect
         kind: paired_threshold_analysis
@@ -83,30 +82,24 @@ experiments:
             source_result_types: [confirmatory_analysis_result]
             output_formats: [markdown, latex]
         wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite, feasibility_rejection]
-    # DECISION — alert burden (E-O1, `operational_alert_burden_analysis`) is explicitly
-    # suppressed, not left incomplete: `AlertBurdenEvaluationSuite` requires validated
-    # `TrafficRateEvidence` (Measured or Cited). A full-corpus timestamp scan of the nine
-    # timestamp-usable `Normal traffic/` groups was performed to look for a genuine measured
-    # rate; every capture session turned out to be a short lab burst (27 minutes to 2.58 days),
-    # so a linear day-extrapolation of raw row counts (e.g. Distance: 1,143,540 rows in 0.0187
-    # days → ≈61,000,000 "rows/day") would misrepresent operational deployment density, exactly
-    # the hypothetical-number-as-measurement pattern SB-20 forbids — it is a lab-capture-density
-    # artifact, not a deployment rate. No externally cited real-world IoT traffic rate is
-    # authorized by the roadmap or architecture package to substitute. `ALERT_BURDEN` is
-    # therefore never requested by any evaluation on this experiment; this is the final,
-    # documented disposition, not an open item.
 
   - slug: chronological_recalibration_evaluation
     display_name: Chronological Recalibration Evaluation
     evidence_role: boundary
-    run_requirement: mandatory
+    run_requirement: suppressed
+    suppression:
+      reason: attack_row_client_assignment_unavailable
+      evidence: >-
+        Within-client benign time-of-day ordering (midnight-corrected, temporal_group_count = 9,
+        Modbus excluded) is defensible, but the chronological recalibration evaluation still
+        requires per-client attack rows at the temporal boundary. Edge-IIoTset attack rows cannot
+        be assigned to the sensor groups (see external_device_dataset_validation), so the Regime
+        D-temporal cell is preserved here as the intended, currently non-executable evaluation.
     tier: tier_6
     roadmap_reference: E-B1
     data: { dataset: edge_iiotset, setup: chronological }
-    # RESOLVED: `timestamp_semantics_verification` closes with a per-client, midnight-corrected
-    # time-of-day ordering (see the dataset document's audit decision record); `modbus` is
-    # excluded (100% malformed `frame.time`), leaving `temporal_group_count = 9`.
     model: autoencoder
+    checkpoint_profile: datp_core
     training:
       profile: federated_averaging
       parameters: {}
@@ -173,7 +166,5 @@ experiments:
             ordering: deterministic_by_threshold_construction
             missing_value_policy: render_typed_unavailable
             source_result_types: [temporal_recovery_result]
-            output_formats: [markdown, latex]
+            output_formats: [pdf, png]
         wording_outcomes: [recal_helps, recal_insufficient, no_meaningful_drift]
-        # one of the three pre-specified temporal outcomes (roadmap §11.1); no streaming detector
-        # is added retroactively to rescue a `recal_insufficient` result.

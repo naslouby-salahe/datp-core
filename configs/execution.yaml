@@ -1,29 +1,16 @@
 schema_version: 1
-# Operational limits below are derived from the actual machine this task inspected
-# (`nvidia-smi`, `/proc/meminfo`, `nproc`, `df -h`), not invented defaults, and are set below
-# actual capacity with an explicit headroom margin documented per profile. Re-verify against the
-# eventual training host before a real `scientific`/`print_grade` run if that host differs.
-#
-# Inspected: 1× NVIDIA GeForce RTX 5060 Ti, 16,311 MiB (15.93 GiB) total VRAM, ~1.6 GiB already
-# held by the display/desktop session; MemTotal 12,249,204 kB (11.68 GiB) total RAM; 6 logical
-# CPUs (AMD Ryzen 5 7600, `nproc` = 6); 581 GiB free on the root filesystem.
 profiles:
   scientific:
     device_policy: cuda_required
     determinism: strict
     resource_budget: { max_ram_gib: 10, max_vram_gib: 12 }
-    # 10/11.68 GiB RAM leaves ~1.68 GiB headroom for the OS/WSL2 host; 12/15.93 GiB VRAM leaves
-    # ~4 GiB headroom over the ~1.6 GiB already held by the desktop session.
     concurrency:
       training_concurrency: 1
       scoring_concurrency: 1
       worker_count: 4
-      # 4 of 6 logical CPUs; 2 reserved for the OS/host and I/O.
-    process_start_method: spawn           # locked rule for any CUDA-touching stage
+    data_loading: { chunk_row_count: 50000, streaming: true }
+    process_start_method: spawn
     log_interval_rounds: 25
-    # tied to the locked DATP-Core checkpoint schedule {25,50,75,100,125,150,200} — logging
-    # exactly at checkpoint rounds avoids both silence across a 200-round run and log-volume
-    # overhead from per-round logging.
   print_grade:
     device_policy: cuda_required
     determinism: strict
@@ -32,13 +19,15 @@ profiles:
       training_concurrency: 1
       scoring_concurrency: 1
       worker_count: 4
+    data_loading: { chunk_row_count: 50000, streaming: true }
     process_start_method: spawn
     log_interval_rounds: 25
   development:
     device_policy: cuda_required
     determinism: strict
-    resource_budget: { max_ram_gib: 8, max_vram_gib: 8 }   # explicit reduced value; non-citable by mode
+    resource_budget: { max_ram_gib: 8, max_vram_gib: 8 }
     concurrency: { training_concurrency: 1, scoring_concurrency: 1, worker_count: 2 }
+    data_loading: { chunk_row_count: 10000, streaming: true }
     process_start_method: spawn
     log_interval_rounds: 5
   smoke:
@@ -46,19 +35,22 @@ profiles:
     determinism: strict
     resource_budget: { max_ram_gib: 6, max_vram_gib: 6 }
     concurrency: { training_concurrency: 1, scoring_concurrency: 1, worker_count: 1 }
+    data_loading: { chunk_row_count: 1000, streaming: true }
     process_start_method: spawn
     log_interval_rounds: 1
   dataset_audit:
-    device_policy: cpu_only          # audits touch no CUDA stage; fork is permitted for CPU-only workers
+    device_policy: cpu_only
     determinism: strict
     resource_budget: { max_ram_gib: 8 }
     concurrency: { worker_count: 4 }
+    data_loading: { chunk_row_count: 50000, streaming: true }
     process_start_method: fork
     log_interval_rounds: 10
   test_smoke:
-    device_policy: cpu_only          # test-only; resolves storage beneath TEST_SANDBOX; never scientific evidence
+    device_policy: cpu_only
     determinism: strict
     resource_budget: { max_ram_gib: 4 }
     concurrency: { worker_count: 1 }
+    data_loading: { chunk_row_count: 1000, streaming: true }
     process_start_method: spawn
     log_interval_rounds: 1

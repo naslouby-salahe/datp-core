@@ -8,16 +8,18 @@ experiments:
     tier: tier_5
     roadmap_reference: [E-M1, E-M2, E-Q2]
     data: { dataset: nbaiot, setup: natural_devices }
-    # Regime A only in this configuration pass. The roadmap's "+ D where feasible" extension
-    # (SCIENTIFIC_FOUNDATION.md §7.2) is now data-feasible (edge_iiotset/external_group is
-    # resolved, `configs/datasets/edge_iiotset.yaml`), but is deliberately not added as a second
-    # dataset axis on this entry: this experiment already carries an internal
-    # `fingerprint_feature_subset` sweep, and combining it with a second, experiment-wide
-    # `regime` sweep on the same entry would replicate every non-ablation evaluation across
-    # dataset scope for no scientific reason. The Regime-D extension is an explicit, preserved
-    # seam (`SCIENTIFIC_FOUNDATION.md §7.2`'s own "where feasible" wording already frames it as
-    # additive, not mandatory) rather than a mechanism defined here.
+    regime_d_extension:
+      run_requirement: suppressed
+      data: { dataset: edge_iiotset, setup: external_group }
+      suppression:
+        reason: attack_row_client_assignment_unavailable
+        evidence: >-
+          The roadmap marks the cluster/family mechanism's Regime D extension as "+ D where
+          feasible". It is infeasible because Edge-IIoTset attack rows cannot be assigned to the
+          sensor groups (see external_device_dataset_validation); the seam is preserved but
+          non-executable.
     model: autoencoder
+    checkpoint_profile: datp_core
     training:
       profile: federated_averaging
       parameters: {}
@@ -47,7 +49,6 @@ experiments:
           initialization_runs: 10
           maximum_iterations: 300
           random_seed: 42
-        # B4 canonical; SB-32 locks K = 3 as the sole mandatory cluster count.
       - label: cluster_k9_mean
         threshold:
           policy: cluster_threshold
@@ -61,7 +62,6 @@ experiments:
           random_seed: 42
         execution_requirement: optional
         publication_placement: supplementary
-        # exploratory granularity sensitivity only (Tier 7); never promoted to canonical (SB-32).
       - label: cluster_k3_robust_median
         threshold:
           policy: cluster_threshold
@@ -75,7 +75,6 @@ experiments:
           random_seed: 42
         execution_requirement: optional
         publication_placement: supplementary
-        # E-Q2 robust-median sensitivity; cannot replace canonical mean-aggregated B4.
       - label: cluster_k3_ablation
         threshold:
           policy: cluster_threshold
@@ -89,7 +88,6 @@ experiments:
           random_seed: 42
         execution_requirement: optional
         publication_placement: supplementary
-        # E-M2 fingerprint-feature ablation across the four locked subsets above.
     analyses:
       - label: family_vs_local
         kind: paired_threshold_analysis
@@ -115,14 +113,11 @@ experiments:
         delta_orientation: shared_minus_cluster
         primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
         secondary_procedures: []
-        # recovery framing: what fraction of the shared-to-local gain B4 recovers (Tier 7
-        # exploratory claim, roadmap §12.2 fallback wording).
       - label: cluster_stability
         kind: cluster_stability_analysis
         source_evaluation: cluster_k3_mean
         primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
         secondary_procedures: []
-        # adjusted-Rand stability across the paired seed cohort (roadmap §12.3).
     seed_cohort:
       paired_seed_count: 10
       derivation: deterministic_from_experiment_seed
@@ -155,7 +150,7 @@ experiments:
             ordering: deterministic_by_threshold_construction
             missing_value_policy: render_typed_unavailable
             source_result_types: [cluster_stability_result]
-            output_formats: [markdown]
+            output_formats: [markdown, latex]
         wording_outcomes: [strong_positive, weak_positive, mixed, null]
 
   - slug: calibration_window_size_stability
@@ -172,9 +167,8 @@ experiments:
         selection_strategy: deterministic_prefix
         nesting_policy: nested_by_size
         selection_seed: 0
-        # locked to the same base experiment_seed as `seed_cohort` below (single owner,
-        # `ENGINEERING_DECISIONS_AND_CONFORMANCE.md` seed-derivation rule).
     model: autoencoder
+    checkpoint_profile: datp_core
     training:
       profile: federated_averaging
       parameters: {}
@@ -200,8 +194,6 @@ experiments:
           random_seed: 42
       - label: calibration_size_aware_fallback
         threshold: { policy: calibration_size_aware_fallback_threshold, quantile: 0.95 }
-        # replaces, rather than follows, the ordinary hard n_min = 100 fallback for its own
-        # declared cells (EVALUATION_REPORTING_AND_PROVENANCE.md §6.1).
     analyses:
       - label: window_size_vs_local
         kind: paired_threshold_analysis
@@ -243,6 +235,7 @@ experiments:
     roadmap_reference: E-V2
     data: { dataset: nbaiot, setup: natural_devices }
     model: autoencoder
+    checkpoint_profile: datp_core
     training:
       profile: federated_averaging
       parameters: {}
@@ -287,7 +280,7 @@ experiments:
             ordering: deterministic_by_shrinkage_weight
             missing_value_policy: render_typed_unavailable
             source_result_types: [policy_evaluation_result]
-            output_formats: [markdown, latex]
+            output_formats: [pdf, png]
         wording_outcomes: [strong_positive, weak_positive, mixed, null]
 
   - slug: conformal_local_threshold_coverage
@@ -295,12 +288,19 @@ experiments:
     evidence_role: supportive
     run_requirement: mandatory
     tier: tier_1
-    # Tier-1 tautology defense (Appendix A / L04), non-confirmatory itself.
     roadmap_reference: E-V3
     data: { dataset: nbaiot, setup: natural_devices }
-    # Regime A only in this configuration pass; see `cluster_mechanism`'s note above for the
-    # preserved (not mechanized here) Regime-D extension seam.
+    regime_d_extension:
+      run_requirement: suppressed
+      data: { dataset: edge_iiotset, setup: external_group }
+      suppression:
+        reason: attack_row_client_assignment_unavailable
+        evidence: >-
+          The roadmap marks the split-conformal variant's Regime D extension as "+ Regime D". It
+          is infeasible because Edge-IIoTset attack rows cannot be assigned to the sensor groups
+          (see external_device_dataset_validation); the seam is preserved but non-executable.
     model: autoencoder
+    checkpoint_profile: datp_core
     training:
       profile: federated_averaging
       parameters: {}
@@ -340,6 +340,3 @@ experiments:
             source_result_types: [policy_evaluation_result, eligibility_coverage_result]
             output_formats: [markdown, latex]
         wording_outcomes: [strong_positive, weak_positive, mixed, null]
-        # `EligibilityCoverageResult` and `ConformalCoverageResult` remain disjoint identities and
-        # never share a table column (EVALUATION_REPORTING_AND_PROVENANCE.md §6.2); the
-        # `conformal_coverage` column above sources `ConformalCoverageResult` only.

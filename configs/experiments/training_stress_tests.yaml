@@ -2,36 +2,42 @@ schema_version: 1
 family: training_stress_tests
 experiments:
   - slug: fedprox_aggregation_stress_test
-    display_name: FedProx Aggregation Stress Test (N-BaIoT)
+    display_name: FedProx Aggregation Stress Test
     evidence_role: stress_test
     run_requirement: mandatory
     tier: tier_4
     roadmap_reference: E-T1
-    data: { dataset: nbaiot, setup: natural_devices }
     model: autoencoder
-    training_profile: federated_proximal
+    checkpoint_profile: datp_core
+    training:
+      profile: federated_proximal
+      parameters:
+        mu: { from_sweep: federated_proximal_mu }
     sweep:
       parameters:
         federated_proximal_mu:
           values: [0.001, 0.01, 0.1]
-          # the pre-registered µ-grid (SCIENTIFIC_FOUNDATION.md §6; rejected by construction
-          # outside this grid, CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §4). BLOCKED: no
-          # worked example in the source documents shows the concrete binding from this sweep
-          # coordinate onto `ModelDefinition.training_profile.mu` — unlike `threshold.quantile`,
-          # `models/autoencoder.yaml`'s own `federated_proximal` profile authors a single literal
-          # `mu: 0.001` (CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §12), and `training_profiles`
-          # is a map of four named profiles, not one-per-grid-point. This sweep is declared here
-          # for traceability and to preserve "a separate resolved profile per grid point" as
-          # documented intent; the actual binding mechanism (a schema extension permitting a
-          # per-experiment `mu` override, or three separately named model profiles) is a genuine
-          # blocker for a statistical/operational authority to resolve, never invented here.
+    regimes:
+      - id: regime_a
+        run_requirement: mandatory
+        data: { dataset: nbaiot, setup: natural_devices }
+      - id: regime_d
+        run_requirement: suppressed
+        suppression:
+          reason: attack_row_client_assignment_unavailable
+          evidence: >-
+            The roadmap requires E-T1 on Regime A + D. The Regime A cell runs on N-BaIoT. The
+            Regime D cell on Edge-IIoTset is suppressed because attack rows cannot be assigned to
+            the sensor groups (see external_device_dataset_validation); the FedProx-under-Regime-D
+            scope is preserved as intended but non-executable.
+        data: { dataset: edge_iiotset, setup: external_group }
     evaluations:
       - label: shared_mean
         threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
       - label: local
         threshold: { policy: local_threshold, quantile: 0.95 }
       - label: cluster_k3_mean
-        threshold: { policy: cluster_threshold, aggregation: mean, cluster_count: 3, fingerprint_features: [mean_error, std_error, skew_error, p95_error], quantile: 0.95 }
+        threshold: { policy: cluster_threshold, aggregation: mean, cluster_count: 3, fingerprint_features: [mean_error, std_error, skew_error, p95_error], quantile: 0.95, initialization: k_means_plus_plus, initialization_runs: 10, maximum_iterations: 300, random_seed: 42 }
       - label: family
         threshold: { policy: family_threshold, quantile: 0.95 }
     analyses:
@@ -41,85 +47,58 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: shared_minus_local
-        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
-          # BLOCKED (statistical authority): bootstrap resample count required.
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
         secondary_procedures: []
     seed_cohort:
       paired_seed_count: 10
       derivation: deterministic_from_experiment_seed
-      # BLOCKED (statistical/operational authority, ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7):
-      # experiment_seed required.
+      experiment_seed: 0
     prerequisites:
       - requires: anchor_reproduction
         required_outcome: anchor_equivalence_passed
       - requires: confirmatory_threshold_scope_effect
         required_outcome: completed
-        # the FedAvg-vs-FedProx comparison reads the confirmatory experiment's committed FedAvg
-        # delta; convergence failure is reported non-retroactively — no post-hoc µ search
-        # (roadmap §12.8, SB-22).
     operations:
       execution: scientific
-      report: { table_type: stress_test, source_result_types: [confirmatory_analysis_result], output_formats: [markdown, latex], wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite] }
-
-  - slug: fedprox_aggregation_stress_test_edge_iiotset
-    display_name: FedProx Aggregation Stress Test (Edge-IIoTset)
-    evidence_role: stress_test
-    run_requirement: mandatory
-    tier: tier_4
-    roadmap_reference: E-T1
-    data:
-      dataset: edge_iiotset
-      # BLOCKED: identical `client_granularity_feasibility` gate as
-      # `external_device_dataset_validation` (SCIENTIFIC_FOUNDATION.md §5.1); no setup is
-      # authored until that audit closes.
-    model: autoencoder
-    training_profile: federated_proximal
-    sweep:
-      parameters:
-        federated_proximal_mu:
-          values: [0.001, 0.01, 0.1]
-          # BLOCKED: same binding-mechanism gap as the N-BaIoT sibling entry above.
-    evaluations:
-      - label: shared_mean
-        threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
-      - label: local
-        threshold: { policy: local_threshold, quantile: 0.95 }
-    analyses:
-      - label: fedprox_scope_effect
-        kind: paired_threshold_analysis
-        first_evaluation: shared_mean
-        second_evaluation: local
-        primary_metric: cv_fpr
-        delta_orientation: shared_minus_local
-        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
-          # BLOCKED (statistical authority): bootstrap resample count required.
-        secondary_procedures: []
-    seed_cohort:
-      paired_seed_count: 10
-      derivation: deterministic_from_experiment_seed
-      # BLOCKED (statistical/operational authority): experiment_seed required.
-    prerequisites:
-      - requires: anchor_reproduction
-        required_outcome: anchor_equivalence_passed
-      - requires: external_device_dataset_validation
-        required_outcome: completed
-    operations:
-      execution: scientific
-      report: { table_type: stress_test, source_result_types: [confirmatory_analysis_result], output_formats: [markdown, latex], wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite] }
+      report:
+        report_artifacts:
+          - artifact_type: main_table
+            table_type: stress_test
+            columns:
+              - { name: threshold_construction, unit: none, direction: none }
+              - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+              - { name: delta, unit: ratio, direction: higher_is_better }
+            ordering: deterministic_by_threshold_construction
+            missing_value_policy: render_typed_unavailable
+            source_result_types: [confirmatory_analysis_result]
+            output_formats: [markdown, latex]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]
 
   - slug: model_personalization_absorption_test
-    display_name: Model-Personalization Absorption Test (N-BaIoT)
+    display_name: Model-Personalization Absorption Test
     evidence_role: stress_test
     run_requirement: mandatory
     tier: tier_4
     roadmap_reference: E-T2
-    data: { dataset: nbaiot, setup: natural_devices }
     model: autoencoder
-    training_profile: federated_averaging_personalized
-    # BLOCKED (documented pre-training decision, ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7):
-    # this experiment cannot resolve until `models/autoencoder.yaml`'s
-    # `federated_averaging_personalized` profile's comparator choice and hyperparameters are
-    # supplied; never labeled "Ditto" unless the genuine Ditto algorithm is implemented (SB-24).
+    checkpoint_profile: datp_core
+    training:
+      profile: federated_averaging_personalized
+      parameters: {}
+    regimes:
+      - id: regime_a
+        run_requirement: mandatory
+        data: { dataset: nbaiot, setup: natural_devices }
+      - id: regime_d
+        run_requirement: suppressed
+        suppression:
+          reason: attack_row_client_assignment_unavailable
+          evidence: >-
+            The roadmap requires E-T2 on Regime A + D. The Regime A cell runs on N-BaIoT. The
+            Regime D cell on Edge-IIoTset is suppressed because attack rows cannot be assigned to
+            the sensor groups (see external_device_dataset_validation); the absorption scope under
+            Regime D is preserved as intended but non-executable.
+        data: { dataset: edge_iiotset, setup: external_group }
     evaluations:
       - label: shared_mean_personalized
         threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
@@ -132,22 +111,18 @@ experiments:
         second_evaluation: local_personalized
         primary_metric: cv_fpr
         delta_orientation: shared_minus_local
-        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
-          # BLOCKED (statistical authority): bootstrap resample count required.
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
         secondary_procedures: []
       - label: absorption
         kind: absorption_analysis
         core_analysis: { experiment: confirmatory_threshold_scope_effect, analysis: confirmatory_scope_effect }
         personalized_analysis: personalized_scope_effect
-        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
-          # BLOCKED (statistical authority): bootstrap resample count required.
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
         secondary_procedures: []
-        # the four pre-specified absorption bands (EVALUATION_REPORTING_AND_PROVENANCE.md §6.4)
-        # apply exactly as locked; all four outcomes are reportable, none hidden.
     seed_cohort:
       paired_seed_count: 10
       derivation: deterministic_from_experiment_seed
-      # BLOCKED (statistical/operational authority): experiment_seed required.
+      experiment_seed: 0
     prerequisites:
       - requires: anchor_reproduction
         required_outcome: anchor_equivalence_passed
@@ -155,52 +130,17 @@ experiments:
         required_outcome: completed
     operations:
       execution: scientific
-      report: { table_type: stress_test, source_result_types: [confirmatory_analysis_result, absorption_result], output_formats: [markdown, latex], wording_outcomes: [strongly_useful, partial, largely_absorbed, alternative_path] }
-
-  - slug: model_personalization_absorption_test_edge_iiotset
-    display_name: Model-Personalization Absorption Test (Edge-IIoTset)
-    evidence_role: stress_test
-    run_requirement: mandatory
-    tier: tier_4
-    roadmap_reference: E-T2
-    data:
-      dataset: edge_iiotset
-      # BLOCKED: identical `client_granularity_feasibility` gate as
-      # `external_device_dataset_validation`.
-    model: autoencoder
-    training_profile: federated_averaging_personalized
-    # BLOCKED: same personalization-comparator blocker as the N-BaIoT sibling entry above.
-    evaluations:
-      - label: shared_mean_personalized
-        threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
-      - label: local_personalized
-        threshold: { policy: local_threshold, quantile: 0.95 }
-    analyses:
-      - label: personalized_scope_effect
-        kind: paired_threshold_analysis
-        first_evaluation: shared_mean_personalized
-        second_evaluation: local_personalized
-        primary_metric: cv_fpr
-        delta_orientation: shared_minus_local
-        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
-          # BLOCKED (statistical authority): bootstrap resample count required.
-        secondary_procedures: []
-      - label: absorption
-        kind: absorption_analysis
-        core_analysis: { experiment: external_device_dataset_validation, analysis: external_scope_effect }
-        personalized_analysis: personalized_scope_effect
-        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
-          # BLOCKED (statistical authority): bootstrap resample count required.
-        secondary_procedures: []
-    seed_cohort:
-      paired_seed_count: 10
-      derivation: deterministic_from_experiment_seed
-      # BLOCKED (statistical/operational authority): experiment_seed required.
-    prerequisites:
-      - requires: anchor_reproduction
-        required_outcome: anchor_equivalence_passed
-      - requires: external_device_dataset_validation
-        required_outcome: completed
-    operations:
-      execution: scientific
-      report: { table_type: stress_test, source_result_types: [confirmatory_analysis_result, absorption_result], output_formats: [markdown, latex], wording_outcomes: [strongly_useful, partial, largely_absorbed, alternative_path] }
+      report:
+        report_artifacts:
+          - artifact_type: main_table
+            table_type: stress_test
+            columns:
+              - { name: threshold_construction, unit: none, direction: none }
+              - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+              - { name: delta, unit: ratio, direction: higher_is_better }
+              - { name: absorption_ratio, unit: ratio, direction: none }
+            ordering: deterministic_by_threshold_construction
+            missing_value_policy: render_typed_unavailable
+            source_result_types: [confirmatory_analysis_result, absorption_result]
+            output_formats: [markdown, latex]
+        wording_outcomes: [strongly_useful, partial, largely_absorbed, alternative_path]

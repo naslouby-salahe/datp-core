@@ -35,7 +35,11 @@ two training-side stress tests outside the causal ladder; four threshold
 variants deepening the calibration story; and one chronological-split
 temporal-recalibration experiment. Six mechanism analyses and a dedicated
 tautology-defense appendix support these. The confirmatory endpoint is
-singular and unchanged by the extension.
+singular and unchanged by the extension. The external device-partitioned and
+chronological cells are designed in full but currently execute as
+*suppressed* cells, because Edge-IIoTset attack rows cannot be assigned to
+its benign sensor groups (`§5`, `§5.1`); the confirmatory Regime A endpoint
+is unaffected by that suppression.
 
 ## 2. Anchor relationship
 
@@ -53,6 +57,27 @@ than the reference width (wider than approximately `0.147`). The ten-seed
 confirmatory extension is a separate, later experiment sharing the anchor's
 scientific shape; a less-favorable ten-seed result is never suppressed in
 favor of the five-seed anchor result (`ANCHOR-03`, `SCI-13`).
+
+The anchor is a *distinct historical materialization*, not the DATP-Core
+pipeline re-labeled. It trains to a maximum of 150 rounds with a single
+terminal checkpoint at round 150 (the `anchor_terminal` checkpoint profile,
+`rounds: [150]`), over training seeds 0–4 and analysis seeds 300–304
+(`paired_seed_count = 5`, `experiment_seed = 0`), and consumes the
+`anchor_natural_devices` setup whose `anchor` materialization applies
+`StandardScaler` normalization (`STANDARD`) with the raw rows retained — no
+cold-start-first-row removal and no exact-duplicate removal — and a
+`chronological_gapped` benign-only calibration split (train 0.60 / gap 0.01 /
+calibration 0.20 / gap 0.01 / test remainder). DATP-Core instead trains to a
+maximum of 200 rounds with the seven `datp_core` checkpoints
+[25, 50, 75, 100, 125, 150, 200], over training seeds 0–9 and analysis seeds
+300–309 (`paired_seed_count = 10`), on the `natural_devices` setup whose
+`datp_core` materialization uses `MIN_MAX` normalization with cold-start-row
+and exact-duplicate removal. The two do not share a terminal autoencoder
+state or a `rounds_max`, and anchor preprocessing must never silently inherit
+the DATP-Core dedup, cold-start drop, or min-max normalization. Each
+experiment authors its checkpoint schedule explicitly through a named
+`checkpoint_profile` (`anchor_terminal` or `datp_core`); the schedule is
+never derived from `evidence_role`.
 
 ## 3. Consolidated scientific invariants
 
@@ -137,17 +162,23 @@ the roadmap names is represented below, executable or not:
 
 | Semantic setting | Composition | Roadmap letter | Status |
 |---|---|---|---|
-| `natural_device_evaluation` | N-BaIoT, `PhysicalDeviceClients` (K = 9) | A | `LOCKED`, confirmatory + anchor |
+| `natural_device_evaluation` | N-BaIoT, `PhysicalDeviceClients` (K = 9) | A | `LOCKED`, confirmatory (`datp_core` materialization) + anchor (distinct `anchor` materialization, `§2`) |
 | `controlled_heterogeneity_evaluation` | N-BaIoT, `DirichletPartitionedClients` (K = 20, α ∈ {0.1, 0.3, 0.5, 1.0, 10.0, IID}) | C | `LOCKED`, supportive |
 | `file_pseudo_client_evaluation` | CICIoT2023, `DatasetFilePseudoClients` (63 pseudo-clients, matching the `MERGED_CSV/` file count exactly; feature count d = 39 manually corroborated against the mounted corpus, `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.2` — the `processed_feature_verification` audit's own run remains the citable gate) | B-a | `LOCKED`, boundary only; never generalized beyond itself |
 | `device_mac_repartition` | CICIoT2023, a device/MAC-scoped client construction | B-b | `REJECTED` — the available CSV artifact lacks MAC, device, IP, capture-source, and timestamp columns; no pseudo-client substitute and no PCAP-reprocessing branch exist |
 | `chronological_probe_ciciot2023` | CICIoT2023, a genuine-timestamp temporal protocol | — | `REJECTED` — no timestamp column and no file/row/merge/directory pseudo-time substitute |
-| `external_device_validation` | Edge-IIoTset, `ExternalDeviceOrGroupClients`, device-versus-group resolved by a first-principles feasibility audit (target K ∈ {6, 15}; requires n_k ≥ 100 for ≥ 90% of clients) | D | `LOCKED`, external validation; feasibility-gated |
-| `chronological_recalibration_evaluation` | `external_device_validation` composition, chronological 70/30 split, frozen-versus-one-shot recalibration | D-temporal | `LOCKED`, boundary/exploratory; feasibility- and timestamp-gated |
+| `external_device_validation` | Edge-IIoTset, `ExternalDeviceOrGroupClients` (benign sensor-type group granularity K = 10 recoverable; device granularity rejected by the `client_granularity_feasibility` audit) | D | `SUPPRESSED` — attack rows cannot be assigned to the benign sensor groups (`attack_row_client_assignment_unavailable`); a per-client benign+attack evaluation cannot be built without fabricating a mapping (`§5.1`) |
+| `chronological_recalibration_evaluation` | `external_device_validation` composition, chronological 70/30 split, frozen-versus-one-shot recalibration | D-temporal | `SUPPRESSED` — the temporal MVE also needs per-client attack rows at the boundary; the same `attack_row_client_assignment_unavailable` gap applies (`§5.1`) |
 
 A rejected setting is a non-executable `RejectionRecord`
 (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §5`), never a planner branch, a
-threshold-construction union member, or a configuration variant.
+threshold-construction union member, or a configuration variant. A
+*suppressed* setting (Regime D and D-temporal above) differs from a rejected
+one: it is a fully authored, non-executable cell carrying a typed
+`attack_row_client_assignment_unavailable` reason and source-grounded
+evidence, preserved so the roadmap scope survives, and is never deleted. The
+Regime A confirmatory claim is unaffected by the Regime D / D-temporal
+suppression.
 
 ### 5.1 Feasibility audit ordering (no circular dependency)
 
@@ -182,6 +213,20 @@ live. The scientific experiment never dynamically selects between device
 clients, group clients, or a fallback pseudo-client construction
 (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §9.1`).
 
+In the resolved Edge-IIoTset campaign this sequence terminates before its
+final scientific step. The `client_granularity_feasibility` audit authorizes
+the benign sensor-type **group** granularity (K = 10) and rejects the device
+granularity, but no source field assigns an *attack* row to one of those ten
+benign groups: the fourteen attack-type files carry no sensor/group column,
+and the only device linkage, `ip.src_host`, is the rejected one. The
+human-authored `external_group` setup is therefore marked `executable: false`
+with suppression reason `attack_row_client_assignment_unavailable`, and the
+scientific `external_device_dataset_validation` run — together with the
+chronological temporal MVE, which additionally needs per-client attack rows at
+the boundary — is suppressed rather than resolved. The feasibility ordering
+above remains the design; the suppression is a data-availability outcome
+recorded at authoring time, never a silent fallback or a fabricated mapping.
+
 ## 6. Threshold and comparator nomenclature
 
 Publication codes (`B0`–`B4`, `B-FedStatsBenign`, `B-LaridiFaithful`) appear
@@ -195,14 +240,14 @@ artifact identity (`NAME-03`).
 | `SharedThreshold(construction=POOLED)` | B1-pool | pooled shared quantile | supportive variant |
 | `SharedThreshold(construction=WEIGHTED)` | B1-wt | sample-weighted shared quantile | supportive variant |
 | `LocalThreshold` | B2 | per-client benign quantile | core ladder; confirmatory comparator |
-| `FamilyThreshold` | B3 | device-family mean of member local quantiles; requires an authorized taxonomy | core ladder; mechanism baseline |
+| `FamilyThreshold` | B3 | device-family mean of member local quantiles; requires an authorized taxonomy | core ladder; mechanism baseline; N-BaIoT (Regime A) only — Edge-IIoTset has no authorized family taxonomy, so B3 is never evaluated there |
 | `ClusterThreshold(aggregation=MEAN)` | B4 | k-means-cluster (K = 3 canonical) mean of member local quantiles over a fixed four-scalar fingerprint `[mean(error), std(error), skew(error), p95(error)]` | core ladder; cluster mechanism |
 | `ClusterThreshold(aggregation=ROBUST_MEDIAN)` | — | canonical B4 assignment, median instead of mean member aggregation | optional supplementary variant; cannot replace canonical B4 |
 | `LocalGlobalShrinkageThreshold` | τ-shrink / LGS | `τ_k(λ) = λ·τ_k,local + (1−λ)·τ_global`, λ ∈ {0, .25, .5, .75, 1} | supportive threshold variant |
 | `CalibrationSizeAwareFallbackThreshold` | — | size-dependent `λ(n_k)` replacing the ordinary hard `n_min = 100` fallback for its own declared cells | supportive threshold variant |
 | `ConformalLocalThreshold` | B2-conf | split- or federated-conformal local threshold at marginal coverage `1 − α`, α = 0.05 | supportive threshold variant; closes the tautology critique |
-| `FederatedSummaryStatisticThreshold` | `B-FedStatsBenign` | benign-only client-disclosed `(n_k, mean_k, variance_k)`; sample-weighted global mean; full pooled variance including the between-client mean-shift term; matched-exceedance candidate grid `τ(k) = µ_global + k·σ_global`, k ∈ {0.00 … 5.00}, ties broken toward larger k | comparator primitive; matched, non-ladder |
-| `FederatedSummaryStatisticThreshold` (fixed-k) | fixed-k sensitivity | the same construction evaluated at fixed k ∈ {2.0, 2.5, 3.0} | supplementary sensitivity only; never the primary comparator result |
+| `FederatedSummaryStatisticThreshold` (`mode = matched_exceedance`) | `B-FedStatsBenign` | benign-only client-disclosed `(n_k, mean_k, variance_k)`; sample-weighted global mean; full pooled variance including the between-client mean-shift term; matched-exceedance candidate grid `τ(k) = µ_global + k·σ_global`, k ∈ {0.00 … 5.00} at the pre-registered `matched_exceedance_k_grid_step = 0.05`, ties broken toward larger k | comparator primitive; matched, non-ladder |
+| `FederatedSummaryStatisticThreshold` (`mode = fixed_k`) | fixed-k sensitivity | the same construction evaluated at a scalar fixed k ∈ {2.0, 2.5, 3.0} | supplementary sensitivity only; never the primary comparator result |
 | `CentralizedPooledThreshold` | B0 | centralized pooled-benign quantile from a separately trained centralized model | non-ladder reference; never fused with federated-averaging scores |
 | — (disclosure only, non-executable) | `B-LaridiFaithful` | anomaly-labeled Laridi-style reproduction | `OUT_OF_SCOPE` — violates the benign-only calibration contract; named disclosure record only |
 
@@ -210,8 +255,10 @@ Every remaining threshold construction requirement — that B1 and B3 use
 unweighted arithmetic means of eligible local quantiles, that B4 requires
 canonical K = 3 and never a q-mutated fingerprint, that `B-FedStatsBenign`
 never uses a simplified variance formula or a caller-controlled tie rule,
-and that fixed-k can never become primary — is a structural algorithm rule
-of the corresponding discriminated variant, never a configurable boolean
+that its matched-exceedance-versus-fixed-k choice is an explicit `mode`
+discriminator (never a `fixed_k = null` sentinel), and that fixed-k can never
+become primary — is a structural algorithm rule of the corresponding
+discriminated variant, never a configurable boolean
 (`SCI-15`–`SCI-18`, `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §2`).
 
 ## 7. Complete experiment catalogue
@@ -234,24 +281,38 @@ All `MANDATORY` unless noted.
 | Semantic slug | Roadmap ref | Role; tier | Dataset setting | Threshold construction(s) |
 |---|---|---|---|---|
 | `shared_threshold_construction_sensitivity` | E-S1 | `SUPPORTIVE`; `TIER_2` | `natural_device_evaluation` | `SharedThreshold(MEAN\|POOLED\|WEIGHTED)`, `LocalThreshold` |
-| `threshold_quantile_sensitivity` | E-S2 | `SUPPORTIVE`; `TIER_2` | `natural_device_evaluation` (sole owner of this sweep; `external_device_dataset_validation` owns the external-dataset quantile axis, `§15`) | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`; q ∈ {.90, .95, .975, .99} |
-| `controlled_heterogeneity_response` | E-S3 | `SUPPORTIVE`; `TIER_2` | `controlled_heterogeneity_evaluation` | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold` across α; carries the heterogeneity–threshold-benefit association (formerly E-M4) as an attached `AnalysisDefinition` regressing distributional divergence against gain, reusing this experiment's own evaluated results — no separate source inspection, partitioning, training, scoring, or threshold construction |
-| `cluster_mechanism` | E-M1 / E-M2 / E-Q2 | `MECHANISM`; `TIER_5` (+`TIER_7` exploratory for non-canonical K and `ROBUST_MEDIAN`) | `natural_device_evaluation` (+ external where feasible) | One merged experiment with four typed axes: threshold grouping (`FamilyThreshold` vs `ClusterThreshold`), fingerprint feature set (single-feature through all-four-feature subsets), cluster aggregation (`MEAN` vs `ROBUST_MEDIAN`), and authorized cluster count (canonical `K = 3`, mandatory; other K, exploratory only). Granularity comparison, adjusted-Rand stability, fingerprint ablation, and robust-median sensitivity are four `EvaluationDefinition`/`AnalysisDefinition` entries of this one experiment, never four experiment roots |
+| `threshold_quantile_sensitivity` | E-S2 | `SUPPORTIVE`; `TIER_2` | `natural_device_evaluation` (sole owner of this sweep; its external-dataset quantile axis is a suppressed `regime_d_extension`, `attack_row_client_assignment_unavailable`, since `external_device_dataset_validation` is itself suppressed, `§7.3`) | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`; q ∈ {.90, .95, .975, .99} |
+| `controlled_heterogeneity_response` | E-S3 | `SUPPORTIVE`; `TIER_2` | `controlled_heterogeneity_evaluation` (Regime A; the E-M4 "+ Regime D points" seam is a suppressed `regime_d_extension`, `attack_row_client_assignment_unavailable`) | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold` across α; carries the heterogeneity–threshold-benefit association (formerly E-M4) as an attached `AnalysisDefinition` regressing distributional divergence against gain, reusing this experiment's own evaluated results — no separate source inspection, partitioning, training, scoring, or threshold construction |
+| `cluster_mechanism` | E-M1 / E-M2 / E-Q2 | `MECHANISM`; `TIER_5` (+`TIER_7` exploratory for non-canonical K and `ROBUST_MEDIAN`) | `natural_device_evaluation` (Regime A; the "+ D where feasible" external seam is a suppressed `regime_d_extension`, `attack_row_client_assignment_unavailable`) | One merged experiment with four typed axes: threshold grouping (`FamilyThreshold` vs `ClusterThreshold`), fingerprint feature set (single-feature through all-four-feature subsets), cluster aggregation (`MEAN` vs `ROBUST_MEDIAN`), and authorized cluster count (canonical `K = 3`, mandatory; other K, exploratory only). Granularity comparison, adjusted-Rand stability, fingerprint ablation, and robust-median sensitivity are four `EvaluationDefinition`/`AnalysisDefinition` entries of this one experiment, never four experiment roots |
 | `calibration_window_size_stability` | E-V1 | `BOUNDARY`; `TIER_6` (RQ3) | `natural_device_evaluation`, subsampled calibration n ∈ {50, 100, 250, 500, 1000, 5000} | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, `CalibrationSizeAwareFallbackThreshold`; each sweep point is a `CalibrationWindowSelection` (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §12`) |
 | `local_global_threshold_shrinkage` | E-V2 | `SUPPORTIVE`; RQ3 | `natural_device_evaluation` | `LocalGlobalShrinkageThreshold`, λ ∈ {0, .25, .5, .75, 1} |
-| `conformal_local_threshold_coverage` | E-V3 | `SUPPORTIVE`, Tier-1 tautology defense; non-confirmatory | `natural_device_evaluation` (+ external) | `ConformalLocalThreshold`, α = 0.05 |
+| `conformal_local_threshold_coverage` | E-V3 | `SUPPORTIVE`, Tier-1 tautology defense; non-confirmatory | `natural_device_evaluation` (the "+ external" seam is a suppressed `regime_d_extension`, `attack_row_client_assignment_unavailable`) | `ConformalLocalThreshold`, α = 0.05 |
 
 ### 7.3 External validation and stress tests
 
-All `MANDATORY`.
+All `MANDATORY`, but two carry a `SUPPRESSED` Edge-IIoTset cell and the three
+stress tests express their Regime A + Regime D coverage as a typed `regimes`
+list (`regime_a`, run; `regime_d`, suppressed) rather than three invented
+per-dataset sibling experiments.
 
 | Semantic slug | Roadmap ref | Role; tier | Dataset setting | Threshold construction(s) |
 |---|---|---|---|---|
-| `external_device_dataset_validation` | E-X1 | `EXTERNAL_VALIDATION`; `TIER_3` | `external_device_validation` | `SharedThreshold`, `LocalThreshold`, `FamilyThreshold`, `ClusterThreshold`, `FederatedSummaryStatisticThreshold`; sole owner of the external-dataset quantile-sensitivity sweep (`§15`); carries the operational alert-burden analysis (formerly E-O1) as an attached `EvaluationDefinition` using `AlertBurdenEvaluationSuite` off its own committed threshold/scores when validated `TrafficRateEvidence` is available |
-| `fedprox_aggregation_stress_test` | E-T1 | `STRESS_TEST`; `TIER_4` | `natural_device_evaluation` + `external_device_validation` | core ladder, under `FederatedProxTraining`, µ ∈ {0.001, 0.01, 0.1} |
-| `model_personalization_absorption_test` | E-T2 | `STRESS_TEST`; `TIER_4` | `natural_device_evaluation` + `external_device_validation` | `SharedThreshold`, `LocalThreshold`, under the authorized personalization comparator |
-| `federated_summary_comparator` | E-T3 / E-Q1 / E-Q5 | `STRESS_TEST` (comparator); `TIER_4` | `natural_device_evaluation` + `external_device_validation` | One merged experiment: matched benign-summary `LocalThreshold` vs `FederatedSummaryStatisticThreshold` comparison (mandatory primary, former E-T3), a quantile-estimation-error analysis framed as distributed quantile estimation (mandatory backbone, former E-Q1), and fixed-k `FederatedSummaryStatisticThreshold` sensitivity at k ∈ {2.0, 2.5, 3.0} (optional supplementary evaluation, never primary, former E-Q5) |
-| `chronological_recalibration_evaluation` | E-B1 | `BOUNDARY`; `TIER_6` | `chronological_recalibration_evaluation` | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, frozen vs one-shot recalibration |
+| `external_device_dataset_validation` | E-X1 | `EXTERNAL_VALIDATION`; `TIER_3` | `external_device_validation` | `SUPPRESSED` (`attack_row_client_assignment_unavailable`, `§5.1`): `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, `FederatedSummaryStatisticThreshold` (no `FamilyThreshold` — Edge-IIoTset has no authorized family taxonomy); designed as sole owner of the external-dataset quantile-sensitivity sweep (`§15`) and the operational alert-burden analysis (formerly E-O1), preserved in full but currently non-executable |
+| `fedprox_aggregation_stress_test` | E-T1 | `STRESS_TEST`; `TIER_4` | `regimes`: `regime_a` (`natural_device_evaluation`, run) + `regime_d` (`external_device_validation`, `SUPPRESSED`) | core ladder, under `FederatedProxTraining`; µ bound per cell from `training.parameters.mu = {from_sweep: federated_proximal_mu}` over the pre-registered grid {0.001, 0.01, 0.1} |
+| `model_personalization_absorption_test` | E-T2 | `STRESS_TEST`; `TIER_4` | `regimes`: `regime_a` (`natural_device_evaluation`, run) + `regime_d` (`external_device_validation`, `SUPPRESSED`) | `SharedThreshold`, `LocalThreshold`, under the resolved Ditto personalization comparator (see below) |
+| `federated_summary_comparator` | E-T3 / E-Q1 / E-Q5 | `STRESS_TEST` (comparator); `TIER_4` | `regimes`: `regime_a` (`natural_device_evaluation`, run) + `regime_d` (`external_device_validation`, `SUPPRESSED`) | One merged experiment: matched benign-summary (`mode = matched_exceedance`) `LocalThreshold` vs `FederatedSummaryStatisticThreshold` comparison (mandatory primary, former E-T3), a quantile-estimation-error analysis framed as distributed quantile estimation (mandatory backbone, former E-Q1), and `mode = fixed_k` `FederatedSummaryStatisticThreshold` sensitivity at scalar k ∈ {2.0, 2.5, 3.0} (optional supplementary evaluation, never primary, former E-Q5) |
+| `chronological_recalibration_evaluation` | E-B1 | `BOUNDARY`; `TIER_6` | `chronological_recalibration_evaluation` | `SUPPRESSED` (`attack_row_client_assignment_unavailable`, `§5.1`): `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, frozen vs one-shot recalibration; designed in full but non-executable because the temporal boundary still needs per-client attack rows |
+
+The E-T2 personalization comparator is resolved to genuine **Ditto** (Li et
+al., ICML 2021): `personalization: ditto`, `personalization_proximal_weight:
+1.0` on the `federated_averaging_personalized` training profile. Ditto's
+architecture-agnostic proximal regularization pulls each client's
+personalized parameters toward the shared federated-averaging solution
+without a head/representation split, so it applies to the fixed autoencoder
+unchanged — unlike FedRep or FedPer, which require a separable personalized
+head the fixed-encoder identity (`SCI-01`, `SCI-19`) forbids. This is a
+documented pre-training design decision, not a runtime choice, and is no
+longer an open blocker.
 
 ### 7.4 Attached, non-root analyses
 

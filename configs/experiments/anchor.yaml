@@ -5,8 +5,9 @@ experiments:
     display_name: Anchor Reproduction
     evidence_role: anchor
     run_requirement: mandatory
-    data: { dataset: nbaiot, setup: natural_devices }
+    data: { dataset: nbaiot, setup: anchor_natural_devices }
     model: autoencoder
+    checkpoint_profile: anchor_terminal
     training:
       profile: federated_averaging
       parameters: {}
@@ -39,11 +40,6 @@ experiments:
       paired_seed_count: 5
       derivation: deterministic_from_experiment_seed
       experiment_seed: 0
-      # derives training seeds {0,1,2,3,4} and analysis (bootstrap-RNG) seeds
-      # {300,301,302,303,304} via the locked formula in
-      # `ENGINEERING_DECISIONS_AND_CONFORMANCE.md` §2 (`SeedCohortDefinition` derivation rule):
-      # training_seed[i] = experiment_seed + i; analysis_seed[i] = experiment_seed + 300 + i, for
-      # i in [0, paired_seed_count).
     prerequisites: []
     operations:
       execution: scientific

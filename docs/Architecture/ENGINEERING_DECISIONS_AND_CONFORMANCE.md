@@ -218,9 +218,10 @@ Defined in `§8` below.
   `reporting`; artifact namespace is a pure derivation
   (`derive_artifact_namespace`) from `evidence_role`, never a third stored
   sub-field (`ANCHOR-05`, `LOCKED`).
-- Bootstrap resample count and every numeric resource-budget ceiling are
-  boundary-blocked rather than defaulted. They cannot enter a resolved run
-  (`CFG-10`, `BLOCKED`; §7).
+- Bootstrap resample count (`10000` for every BCa procedure) and every
+  numeric resource-budget ceiling are supplied by validated configuration
+  rather than boundary-blocked; they enter a resolved run as authored values
+  (`CFG-01`; §7).
 
 ## 4. Old-concept disposition table
 
@@ -352,10 +353,6 @@ non-citable.
 
 | Decision | Authority needed | Blocked stages | Status |
 |---|---|---|---|
-| Bootstrap resample count | statistical authority | every bootstrap analysis | `BLOCKED` |
-| Numeric RAM/VRAM/disk ceilings, worker count | operational authority | preflight for every `SCIENTIFIC`/`PRINT_GRADE` run | `BLOCKED` |
-| Base `experiment_seed` integer for deterministic seed derivation | statistical/operational authority | every seed-dependent stage | `BLOCKED` |
-| Personalization comparator choice and hyperparameters | documented pre-training decision | `model_personalization_absorption_test` | `BLOCKED` |
 | External-device (Edge-IIoTset) partition granularity (device vs. group) | first-principles feasibility audit | every `external_device_validation` stage | `BLOCKED` |
 | External-device post-encoding `model_feature_order` width | source inspection (data-dependent one-hot expansion) | materialization onward for `external_device_validation` | `BLOCKED`; the 63-column raw schema and its 15-drop/7-encode column lists are verified (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.3`) — only the final encoded width is open |
 | CICIoT2023 feature count (conference value d = 39) | `processed_feature_verification` audit's own run | any quantitative `file_pseudo_client_applicability_boundary` claim | `BLOCKED` pending the audit's own execution; manually corroborated at exactly 39 against the mounted corpus (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.2`) |
@@ -364,17 +361,33 @@ non-citable.
 | N-BaIoT / CICIoT2023 duplicate-row handling policy | scientific authority | materialization for `natural_device_evaluation`, `file_pseudo_client_evaluation` | `BLOCKED`; a low, nonzero duplicate rate is confirmed on sampled files (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §§11.1–11.2`); the full-corpus rate for either dataset is unmeasured |
 | CICIoT2023 `Rate = inf` / empty `Std`,`Variance` degenerate-window handling policy | scientific authority | materialization for `file_pseudo_client_evaluation` and any experiment referencing `ciciot2023` | `BLOCKED`; confirmed recurring on real rows (single-packet flow windows), never a transcription error (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.2`) |
 | Edge-IIoTset `Temperature_and_Humidity` subnet-consistency anomaly | source inspection | `edge_iiotset_client_granularity_feasibility` | `BLOCKED`; the other nine `Normal traffic/` sensor folders each occupy one consistent `/24` subnet, this one does not in the sampled rows (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.3`) |
-| Matched-exceedance k-grid step for `FederatedSummaryStatisticThreshold` | authoritative protocol record | `federated_summary_comparator` (matched comparison and fixed-k sensitivity evaluations) | `BLOCKED` |
 | Canonical clustering `n_init`/`max_iter` constants | pre-registration | canonical `ClusterThreshold` in `SCIENTIFIC`/`PRINT_GRADE` runs | `BLOCKED` |
 | "Material movement toward zero" numeric tolerance for anchor equivalence | scientific/statistical authority | journal-expansion planning | `BLOCKED`; the approximately-20%-wider-than-reference rule is already locked (`SCIENTIFIC_FOUNDATION.md §2`) |
 
-Already resolved and therefore **not** blockers: the anchor reference
+Already resolved and therefore **not** blockers: the bootstrap resample
+count `10000` for every BCa procedure; the base `experiment_seed = 0` for
+every experiment and its deterministic derivation rule
+(`training_seed[i] = experiment_seed + i`,
+`analysis_seed[i] = experiment_seed + 300 + i`, for `i ∈ [0, paired_seed_count)` —
+anchor `paired_seed_count = 5` giving seeds 0–4 / 300–304, DATP-Core
+`paired_seed_count = 10` giving seeds 0–9 / 300–309); the RAM/VRAM ceilings
+and worker count sized from an inspected host (execution-budget provenance
+note below); the genuine-Ditto model-personalization comparator
+(`personalization: ditto`, `personalization_proximal_weight: 1.0`); the
+matched-exceedance k-grid step `0.05`; the anchor reference
 interval `[0.647, 0.769]`; the ten-paired-seed confirmatory cohort size; the
-`{25,50,75,100,125,150,200}` checkpoint schedule and its selection rule; B4
+named `checkpoint_profiles` (`datp_core` = `{25,50,75,100,125,150,200}`,
+`anchor_terminal` = `{150}`), each experiment referencing one via
+`checkpoint_profile` — the anchor a single terminal checkpoint at round 150
+(`rounds_max = 150`) and DATP-Core the seven checkpoints through round 200
+(`rounds_max = 200`), two distinct schedules that never share a `rounds_max`
+or a terminal state — and their selection rule; B4
 canonical `K = 3`; the `n_min = 100` eligibility rule and Regime-D-equivalent
 90% coverage gate; the canonical chronological 70/30 boundary; the full
 `FederatedSummaryStatisticThreshold` variance and tie rule; the FedProx
-µ-grid `{0.001, 0.01, 0.1}`; the encoder architecture, optimizer, batch
+µ-grid `{0.001, 0.01, 0.1}` bound per experiment through
+`training.parameters.mu: { from_sweep: federated_proximal_mu }` so the
+reusable `federated_proximal` profile carries no literal µ; the encoder architecture, optimizer, batch
 size, precision, and determinism level (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md
 §12`); the N-BaIoT 115-column feature schema and its exact
 aggregation/window/statistic generation rule; the CICIoT2023 39-column raw
@@ -383,6 +396,21 @@ feature schema and its 63-vs-309-file structure; the Edge-IIoTset
 (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §§11.1–11.3` — feature-*schema
 identity* is closed by direct inspection for all three datasets even where
 a downstream numeric *value* remains blocked).
+
+**Execution-budget provenance.** The `execution.yaml` resource budgets were
+sized from an inspected host: 1× NVIDIA GeForce RTX 5060 Ti with 16,311 MiB
+(15.93 GiB) total VRAM (~1.6 GiB held by the desktop session), `MemTotal`
+11.68 GiB RAM, 6 logical CPUs (AMD Ryzen 5 7600), and 581 GiB free disk. The
+`scientific` and `print_grade` profiles set `max_ram_gib = 10`,
+`max_vram_gib = 12`, and `worker_count = 4` (4 of 6 CPUs);
+`process_start_method = spawn` is the locked rule for every CUDA-touching
+stage (`EXEC-04`), and `fork` is permitted only for the `cpu_only` profiles
+(`dataset_audit`). Data-loading mechanics are execution-owned: each profile
+carries a `data_loading` block (`chunk_row_count`, `streaming`) — 50000 for
+`scientific`/`print_grade`/`dataset_audit`, 10000 for `development`, 1000 for
+`smoke`/`test_smoke` — and datasets no longer carry a `chunk_profile`. These
+budgets must be re-verified against the real training host before any
+`SCIENTIFIC` or `PRINT_GRADE` run.
 
 ## 8. Test architecture
 

@@ -37,13 +37,16 @@ configs/
 ```
 
 Four boundary owners, not six: `datasets/` owns one document per real dataset
-(source, feasibility, client-construction setups, splits, preprocessing,
+(source, feasibility, machine-readable field schema, named materializations —
+each pairing a normalization, preprocessing sequence, row-exclusion policy,
+and split — client-construction setups that reference a materialization, and
 eligibility); `models/` owns one document per model family (architecture,
 objective, optimizer, checkpointing, and every named training profile that
 shares that family); `experiments/` groups scientifically related
 experiments into family documents, each experiment independently
 addressable by a semantic slug; `execution.yaml` owns every named execution
-profile in one file. `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md §3`
+profile in one file, including each profile's data-loading chunk size and
+streaming policy. `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md §3`
 reproduces this identical tree with per-file schema-module ownership.
 
 There is no `dataset_audits/`, `data_sources/`, `detectors/`, `protocols/`,
@@ -65,10 +68,10 @@ duplicated, and none survives as an empty or redirect path.
 
 | File | Owns | Schema module |
 |---|---|---|
-| `datasets/<dataset>.yaml` | dataset identity/version, source location and integrity, raw/processed source distinction where genuinely required, source-readiness and feasibility audits, feature-schema discovery, client-identity availability, timestamp semantics, named client-construction setups, split definitions, preprocessing, dataset-specific eligibility rules, required readiness evidence and blockers | `config/schemas/data.py` |
+| `datasets/<dataset>.yaml` | dataset identity and `schema_id`, source location and integrity, machine-readable field schema (ordered source columns, identity/label fields, ordered model features, leakage exclusions, fingerprint inputs), source-readiness and feasibility audits, client-identity availability, timestamp semantics, named materializations (normalization, preprocessing sequence, row exclusion, split), named client-construction setups that reference a materialization, dataset-specific eligibility rules, required readiness evidence and blockers | `config/schemas/data.py` |
 | `models/autoencoder.yaml` | architecture, reconstruction objective, optimizer/scheduler, checkpoint production and selection, scientific training/scoring batches, precision, determinism, and every named `training_profile` (federated averaging, federated proximal, centralized pooled, the authorized personalization comparator) | `config/schemas/model.py` |
 | `experiments/<family>.yaml` | one family's scientific identity, evidence role/tier, run requirement, dataset+setup and model+training-profile references, evaluations, analyses, seed cohort, prerequisites, sweeps/bindings, inline report, per-experiment scientific blockers — one entry per experiment, every entry independently resolvable | `config/schemas/experiment.py` |
-| `execution.yaml` | every named execution profile: CUDA/CPU requirement, RAM/VRAM/disk/worker/concurrency limits, process-start policy, chunking/prefetch, timeouts, logging/telemetry | `config/schemas/execution.py` |
+| `execution.yaml` | every named execution profile: CUDA/CPU requirement, RAM/VRAM/disk/worker/concurrency limits, process-start policy, data-loading chunk size and streaming, prefetch, timeouts, logging/telemetry | `config/schemas/execution.py` |
 
 A field absent from its owner fails boundary validation. A dataset document
 never carries a model, threshold, seed, evidence-role, or claim-tier field;
@@ -184,12 +187,16 @@ every affected document:
   interval.
 - A `BenignCalibrationSplit` reachable from any field capable of carrying an
   attack label.
-- `training_profile = federated_averaging` or `federated_proximal` with a
+- `training.profile = federated_averaging` or `federated_proximal` with a
   non-`NONE` personalization strategy on any experiment other than the one
   authorized `model_personalization_absorption_test` slug (which selects the
   dedicated `federated_averaging_personalized` profile, `§7`).
-- `federated_proximal.mu` equal to zero, equal to a FedAvg-equivalent value,
-  or absent from the pre-registered grid `{0.001, 0.01, 0.1}`.
+- A FedProx `training.parameters.mu` binding equal to zero, equal to a
+  FedAvg-equivalent value, or drawn from anything other than the experiment's
+  own pre-registered `federated_proximal_mu` sweep grid `{0.001, 0.01, 0.1}`
+  (`§7`); `mu` is no longer a field of the reusable `federated_proximal`
+  profile — it is bound per experiment through the discriminated
+  `training.parameters`.
 - Any incomplete boundary document reaching resolve, plan, or run.
 - Any experiment whose `identity.slug` matches a rejected or out-of-scope
   entry (`SCIENTIFIC_FOUNDATION.md §7.6`).
@@ -243,18 +250,18 @@ strategy") and never an omitted required value.
 
 | Field family | Scientific identity | Execution identity | Provenance | Reporting presentation | YAML required |
 |---|---:|---:|---:|---:|---:|
-| Dataset, dataset version | Yes | No | Yes | No | Yes |
+| Dataset identity, `schema_id`, materialization | Yes | No | Yes | No | Yes |
 | `run_requirement` (`MANDATORY`/`OPTIONAL`/`SUPPRESSED`) | No (does not affect a computed value) | No | Yes | Yes (governs whether a result is main-paper or supplement) | Yes |
 | publication regime | No — reporting projection only | No | Yes | Yes | No — derived by `derive_publication_regime` |
 | Feature schema | Yes | No | Yes | No | Runtime-captured (source-inspected), never authored |
 | Client construction (dataset setup), partition seed | Yes | No | Yes | No | Yes |
-| Split boundaries (chronological fraction, timestamp field) | Yes | No | Yes | No | Yes |
-| Preprocessing (strategy, scope) | Yes | No | Yes | No | Yes |
+| Split boundaries (per-materialization: method, fractions, split seed) | Yes | No | Yes | No | Yes |
+| Preprocessing & normalization (per-materialization sequence, scope) | Yes | No | Yes | No | Yes |
 | Calibration-window selection (`§12` of `DOMAIN_AND_APPLICATION_ARCHITECTURE.md`) | Yes (when populated) | No | Yes | Yes | Yes, only for `calibration_window_size_stability` cells |
 | Model architecture (hidden dims, activation) | Yes | No | Yes | No | Yes |
 | Optimizer, learning rate | Yes | No | Yes | No | Yes |
-| Training rounds (checkpoint schedule) | Yes | No | Yes | No | Yes |
-| `rounds_max` | No — derived from the checkpoint schedule | No | Yes | No | No — computed, rejected if authored |
+| Training rounds (named checkpoint profile) | Yes | No | Yes | No | Yes |
+| `rounds_max` | No — derived from the referenced checkpoint profile's rounds | No | Yes | No | No — computed, rejected if authored |
 | Local epochs, participation | Yes | No | Yes | No | Yes |
 | Micro-batch size, gradient accumulation | Yes | No | Yes | No | Yes |
 | `effective_batch_size` | No — derived (`micro_batch_size × gradient_accumulation_steps`) | No | Yes | No | No — computed, rejected if authored |
@@ -270,10 +277,10 @@ strategy") and never an omitted required value.
 | Metric selection | Yes | No | Yes | Yes | Yes |
 | Traffic rate (alert burden) | Yes (when requested) | No | Yes | Yes | Yes, when `AlertBurdenEvaluationSuite` is selected |
 | `seed_cohort.paired_seed_count`, `seed_cohort.derivation` | Yes | No | Yes | No | Yes |
-| `analyses[*].primary_procedure` / `secondary_procedures` | Yes | No | Yes | Yes | Yes; bootstrap resample count remains a blocker until pre-registered |
+| `analyses[*].primary_procedure` / `secondary_procedures` | Yes | No | Yes | Yes | Yes; bootstrap `resample_count` is pre-registered at `10000` |
 | Runtime device / CUDA requirement | No | Yes | Yes | No | Yes, once, on the named execution profile |
 | GPU model, driver version | No | No | Yes | No | Runtime-captured only |
-| RAM / VRAM budget | No | Yes | Yes | No | Yes; **not numerically specified in either source document — genuine blocker** |
+| RAM / VRAM budget | No | Yes | Yes | No | Yes, once, on the named execution profile |
 | Output format | No | No | Yes | Yes | Yes |
 | Report ordering | No | No | Yes | Yes | Yes |
 | Log interval | No | No | Yes | No | Yes (cosmetic; documented single owner, the execution profile) |
@@ -286,11 +293,12 @@ inferred shape. Example, client construction (a dataset setup):
 ```yaml
 setups:
   dirichlet_partitioned:
-    method: dirichlet_partitioned_clients
-    client_count: 20
-    alpha: 0.3
-    # A complete document supplies partition_seed. Until its authority is
-    # recorded, this draft fails validation and cannot resolve.
+    materialization: datp_core_dirichlet
+    client_construction:
+      method: dirichlet_partitioned_clients
+      client_count: 20
+      alpha: { from_sweep: dirichlet_alpha }   # bound by the owning experiment's sweep
+      partition_seed: 0
 ```
 
 Example, training profile — every profile shares the model family's
@@ -308,18 +316,35 @@ training_profiles:
     kind: federated_averaging_training
     local_epochs: 1
     participation: full
-    personalization: fedrep_ae   # or ditto / fedper_ae — never "Ditto" unless genuine Ditto (NAME-05)
-      # BLOCKED: personalization comparator choice and hyperparameters (documented pre-training decision).
+    personalization: ditto                 # genuine Ditto, not a renamed FedRep/FedPer (NAME-05)
+    personalization_proximal_weight: 1.0
   federated_proximal:
     kind: federated_prox_training
-    mu: 0.001   # or 0.01, or 0.1 — a separate resolved profile per grid point,
-                # never a caller-supplied value outside {0.001, 0.01, 0.1}
     local_epochs: 1
     participation: full
     personalization: none
+    # no literal `mu` here: the FedProx strength is bound per experiment through the
+    # discriminated `training.parameters` (below), sweeping the experiment's own
+    # pre-registered `federated_proximal_mu` grid {0.001, 0.01, 0.1}
   centralized_pooled:
     kind: centralized_pooled_training
     # not federated; not in the causal ladder (ANCHOR-04)
+```
+
+An experiment never re-declares a profile's body; it references a profile by
+name and supplies only that profile's own discriminated `training.parameters`
+(empty when the profile binds no per-experiment value, populated only for
+FedProx's swept `mu`):
+
+```yaml
+# FedAvg / personalized / centralized-pooled experiment — no bound parameters
+training: { profile: federated_averaging, parameters: {} }
+
+# FedProx experiment — binds mu from its own pre-registered sweep grid
+training:
+  profile: federated_proximal
+  parameters:
+    mu: { from_sweep: federated_proximal_mu }
 ```
 
 ## 8. Fingerprinting rules
@@ -343,10 +368,12 @@ invalidates every downstream checkpoint and score
 ## 9. Anchor experiment family
 
 `configs/experiments/anchor.yaml` holds exactly one experiment entry. The
-fragment below preserves the source-given fields and illustrates where
-draft validation reports a boundary blocker. A draft with either commented
-requirement cannot resolve, plan, or run; no resolved object carries a
-placeholder value.
+fragment below preserves the source-given fields; every scientific value it
+needs is now supplied, so the draft resolves without a boundary blocker. It
+references the `anchor` materialization (`§11.1`) through the
+`anchor_natural_devices` setup and the `anchor_terminal` checkpoint profile
+(one terminal checkpoint at round 150), never the DATP-Core materialization
+or round schedule.
 
 ```yaml
 schema_version: 1
@@ -356,9 +383,12 @@ experiments:
     display_name: Anchor Reproduction
     evidence_role: anchor
     run_requirement: mandatory
-    data: { dataset: nbaiot, setup: natural_devices }
+    data: { dataset: nbaiot, setup: anchor_natural_devices }
     model: autoencoder
-    training_profile: federated_averaging
+    checkpoint_profile: anchor_terminal
+    training:
+      profile: federated_averaging
+      parameters: {}
     evaluations:
       - label: shared_mean
         threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
@@ -374,7 +404,7 @@ experiments:
         primary_procedure:
           method: bca_bootstrap
           confidence_level: 0.95
-          # BLOCKED: bootstrap resample count must be supplied by statistical authority.
+          resample_count: 10000
         secondary_procedures: []
       - label: anchor_equivalence
         kind: anchor_equivalence_analysis
@@ -387,7 +417,7 @@ experiments:
     seed_cohort:
       paired_seed_count: 5
       derivation: deterministic_from_experiment_seed
-      # BLOCKED: experiment_seed must be supplied before this draft is resolved.
+      experiment_seed: 0
     prerequisites: []
     operations:
       execution: scientific
@@ -407,26 +437,30 @@ experiments:
         wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]
 ```
 
-Every anchor-identity value that the source documents actually supply —
-evidence role, dataset+setup, both threshold constructions, the quantile
-`0.95`, the five-seed count, the confidence level `0.95`, and the reference
-interval `[0.647, 0.769]` — is explicit here, none defaulted in Python. The
-two fields the source documents do not supply (`resample_count`,
-`experiment_seed`) remain boundary blockers until an authority supplies
-them; there is no `anchor: true` switch that bypasses this requirement. The
-resolved domain object owns the reference interval exactly once, in
-`AnchorEquivalenceAnalysis.reference_interval`.
+Every anchor-identity value that the source documents supply — evidence
+role, dataset+setup, both threshold constructions, the quantile `0.95`, the
+five-seed count, the confidence level `0.95`, the bootstrap `resample_count`
+`10000`, the `experiment_seed` `0`, and the reference interval
+`[0.647, 0.769]` — is explicit here, none defaulted in Python. Nothing in
+this draft is a boundary blocker; there is no `anchor: true` switch, because
+none is needed. The resolved domain object owns the reference interval
+exactly once, in `AnchorEquivalenceAnalysis.reference_interval`.
 
 ### 9.1 No dynamic client-construction fallback
 
-An `external_device_validation`-family experiment's dataset setup is always
-a fully resolved, explicit `external_device` or `external_group` setup on
-`edge_iiotset.yaml` — `granularity: device` or `granularity: group`, never a
-placeholder — because it is authored only after the standalone feasibility
-audit closes (`SCIENTIFIC_FOUNDATION.md §5.1`). No scientific experiment's
-configuration ever contains a runtime selection rule choosing between
-device clients, group clients, or a pseudo-client fallback; that would
-reintroduce the circular dependency this package removes.
+Edge-IIoTset external validation is **suppressed**, not runtime-selected. The
+`client_granularity_feasibility` audit rejects device granularity outright, so
+`edge_iiotset.yaml` no longer carries an `external_device` setup at all; it
+keeps the benign-only `external_group` setup (`granularity: group`, K = 10)
+and the `chronological` setup, but each is authored `executable: false` with
+an explicit `suppression` block, because attack rows cannot be assigned to the
+benign sensor groups (`§11.3`). The `external_device_dataset_validation`
+experiment is therefore `run_requirement: suppressed` (`§16.3`). The
+no-runtime-fallback principle is unchanged: no scientific experiment's
+configuration ever contains a runtime rule choosing between device clients,
+group clients, or a pseudo-client fallback; the group partition is documented
+only as a benign-only extension seam, never a resolved executable setup, so
+the circular dependency this package removes never returns.
 
 ## 10. Threshold-scope experiment family
 
@@ -452,7 +486,10 @@ experiments:
     roadmap_reference: E-C1
     data: { dataset: nbaiot, setup: natural_devices }
     model: autoencoder
-    training_profile: federated_averaging
+    checkpoint_profile: datp_core
+    training:
+      profile: federated_averaging
+      parameters: {}
     evaluations:
       - label: shared_mean
         threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
@@ -468,14 +505,14 @@ experiments:
         primary_procedure:
           method: bca_bootstrap
           confidence_level: 0.95
-          # BLOCKED: bootstrap resample count must be supplied by statistical authority.
+          resample_count: 10000
         secondary_procedures:
           - { method: wilcoxon_signed_rank }
           - { method: cliffs_delta }
     seed_cohort:
       paired_seed_count: 10
       derivation: deterministic_from_experiment_seed
-      # BLOCKED: experiment_seed must be supplied before this draft is resolved.
+      experiment_seed: 0
     prerequisites:
       - requires: anchor_reproduction
         required_outcome: anchor_equivalence_passed
@@ -492,7 +529,10 @@ experiments:
     roadmap_reference: E-S1
     data: { dataset: nbaiot, setup: natural_devices }
     model: autoencoder
-    training_profile: federated_averaging
+    checkpoint_profile: datp_core
+    training:
+      profile: federated_averaging
+      parameters: {}
     evaluations:
       - label: shared_mean
         threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
@@ -509,13 +549,12 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: shared_minus_local
-        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
-          # BLOCKED: bootstrap resample count required from statistical authority.
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
         secondary_procedures: []
     seed_cohort:
       paired_seed_count: 10
       derivation: deterministic_from_experiment_seed
-      # BLOCKED: experiment_seed required.
+      experiment_seed: 0
     prerequisites:
       - requires: anchor_reproduction
         required_outcome: anchor_equivalence_passed
@@ -531,7 +570,10 @@ experiments:
     roadmap_reference: E-S2
     data: { dataset: nbaiot, setup: natural_devices }
     model: autoencoder
-    training_profile: federated_averaging
+    checkpoint_profile: datp_core
+    training:
+      profile: federated_averaging
+      parameters: {}
     sweep:
       parameters:
         threshold_quantile:
@@ -546,7 +588,7 @@ experiments:
     seed_cohort:
       paired_seed_count: 10
       derivation: deterministic_from_experiment_seed
-      # Exact pre-registered seed cohort is required before this fragment becomes executable.
+      experiment_seed: 0
     prerequisites:
       - requires: anchor_reproduction
         required_outcome: anchor_equivalence_passed
@@ -564,12 +606,16 @@ domain.
 
 ## 11. Reusable dataset configuration
 
-`dataset_version` never carries a meaningless counter such as `v1` or
-`processed_v1`; a semantic source name is authored only when a dataset
-genuinely has more than one artifact in play (for example a future
-raw-versus-reprocessed distinction). None of the three datasets below
-currently does, so each authors the one descriptive name that actually
-identifies its artifact.
+Datasets no longer carry a `dataset_version` field. Each dataset authors a
+semantic `schema_id` (identifying its verified field schema) plus a
+`materializations:` map — one entry per distinct normalization + preprocessing
+sequence + row-exclusion + split combination — and named `setups` that each
+reference a materialization by name. Where a dataset genuinely needs more than
+one processed form (N-BaIoT's DATP-Core versus historical `anchor`
+materialization, `§11.1`), each is a named materialization, never a version
+counter. Chunk sizes and streaming are no longer dataset fields; they live per
+execution profile in `execution.yaml` (`data_loading: { chunk_row_count: N,
+streaming: true }`, `§13`).
 
 ### 11.0 Field-level schema evidence base
 
@@ -587,46 +633,62 @@ settle a question, the table says so explicitly and
 `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7` carries the corresponding
 blocker; nothing below is invented.
 
-`configs/datasets/nbaiot.yaml` — the sole N-BaIoT document, owning both of
-its authorized client-construction setups plus its source-audit trail:
+`configs/datasets/nbaiot.yaml` — the sole N-BaIoT document, owning its
+machine-readable schema, three materializations, and three client-construction
+setups (the full 115-column `model_features.order` and 9-entry `family_map`
+are authored verbatim in the file; both are elided here for brevity):
 
 ```yaml
 schema_version: 1
-dataset: n_baiot
-dataset_version: processed   # semantic name, not a meaningless "v1"; no second N-BaIoT
-                              # artifact exists yet that would require a distinguishing name
-audits:
-  - check: source_inspection
-    inspection:
-      expected_facts:
-        - feature_schema_present
-        - benign_and_attack_members_present
-        - per_device_membership_recoverable
-      source_row_identity_scheme: required
-    feasibility:
-      rule: source_schema_complete
-      required_evidence: [feature_schema_manifest, per_device_counts]
-    operations:
-      execution: dataset_audit
-      report: { table_type: source_inspection_report, output_formats: [markdown] }
+dataset: nbaiot
+display_name: N-BaIoT
+schema_id: nbaiot_kitsune_115
+source_layout:
+  root: N-BaIoT
+  device_dirs: [Danmini_Doorbell, Ecobee_Thermostat, Ennio_Doorbell, ...]   # 9 device directories
+  benign_file: benign_traffic.csv
+  attack_family_dirs: [gafgyt_attacks, mirai_attacks]
+field_schema:
+  source_column_count: 115
+  identity_scheme:
+    row_identity: source_row_order
+    client_identity: { source: path, derived_from: device_directory_name }
+    label_identity: { source: path, benign_rule: file_is_benign_traffic_csv, attack_rule: file_under_attack_family_dir }
+    timestamp_field: none
+  label_fields:
+    family_taxonomy: device_type
+    family_map: { Danmini_Doorbell: doorbell, Ennio_Doorbell: doorbell, Provision_PT_838_Security_Camera: camera, Ecobee_Thermostat: other, ... }   # doorbell | camera | other
+  model_features: { role: model_feature, type: numeric_float, order: [MI_dir_L5_weight, ..., HpHp_L0.01_pcc] }   # 115 ordered Kitsune columns
+  post_encoding_feature_order: same_as_model_features
+  categorical_encoding: none
+  leakage_exclusions: []
+observed_facts: { device_count: 9, devices_without_mirai_family: [Ennio_Doorbell, Samsung_SNH_1011_N_Webcam], benign_exact_duplicate_rate: 0.07633 }
+readiness: { source_schema_complete: true, feature_schema_verified: true, per_device_membership_recoverable: true }
 eligibility:
   minimum_calibration_sample_count: 100
+materializations:
+  datp_core:
+    materialization_id: nbaiot_datp_core
+    normalization: { strategy: min_max, scope: global_train }
+    preprocessing_sequence: [drop_cold_start_row, drop_exact_duplicate_rows, chronological_gapped_split, min_max_normalization_fit_on_train]
+    row_exclusion: { cold_start_row: drop_first_row_per_source_file, duplicate_rows: drop_exact_duplicates_keep_first }
+    split: { method: chronological_gapped, calibration_benign_only: true, ratios: { train: 0.60, gap_1: 0.01, calibration: 0.20, gap_2: 0.01 } }
+  datp_core_dirichlet:
+    materialization_id: nbaiot_datp_core_dirichlet
+    normalization: { strategy: min_max, scope: global_train }
+    preprocessing_sequence: [drop_cold_start_row, drop_exact_duplicate_rows, random_fractional_split, min_max_normalization_fit_on_train]
+    row_exclusion: { cold_start_row: drop_first_row_per_source_file, duplicate_rows: drop_exact_duplicates_keep_first }
+    split: { method: random_fractional, calibration_benign_only: true, split_seed: 0, ratios: { train: 0.70, calibration: 0.15, test: 0.15 } }
+  anchor:
+    materialization_id: nbaiot_anchor_historical
+    normalization: { strategy: standard, scope: global_train }   # StandardScaler, recovered from the DATP reference project
+    preprocessing_sequence: [chronological_gapped_split, standard_normalization_fit_on_train]
+    row_exclusion: { cold_start_row: retain, duplicate_rows: retain }   # raw rows retained: no cold-start drop, no dedup
+    split: { method: chronological_gapped, calibration_benign_only: true, ratios: { train: 0.60, gap_1: 0.01, calibration: 0.20, gap_2: 0.01 } }
 setups:
-  natural_devices:
-    client_construction: { method: physical_device_clients, device_count: 9 }
-  dirichlet_partitioned:
-    client_construction:
-      method: dirichlet_partitioned_clients
-      client_count: 20
-      alpha: { from_sweep: dirichlet_alpha }   # bound by the owning experiment's sweep
-      # The required partition seed is pre-registered before resolution.
-split_definition:
-  train: { role: train }
-  calibration: { role: calibration, benign_only: true }
-  test: { role: test }
-preprocessing:
-  normalization: { strategy: min_max, scope: global_train }
-  chunk_profile: { chunk_row_count: 50000 }
+  natural_devices:        { materialization: datp_core,           client_construction: { method: physical_device_clients, device_count: 9 } }
+  anchor_natural_devices: { materialization: anchor,              client_construction: { method: physical_device_clients, device_count: 9 } }
+  dirichlet_partitioned:  { materialization: datp_core_dirichlet, client_construction: { method: dirichlet_partitioned_clients, client_count: 20, alpha: { from_sweep: dirichlet_alpha }, partition_seed: 0 } }
 ```
 
 ### 11.1 N-BaIoT field-level schema
@@ -704,75 +766,79 @@ order, verified identical across every one of the eighteen inspected files
   epoch timestamp (2017-09-17), not a jitter statistic; row 2 of the same
   file already shows an ordinary small jitter mean (`≈4.98`). This is a
   genuine artifact of the extractor's cold start, not a transcription
-  error: it reproduces on every file checked. **Preprocessing rule:** row 1
-  of every raw N-BaIoT file is either dropped before model-feature
-  materialization or explicitly flagged as a cold-start row; it is never
-  averaged, scaled, or calibrated against without this handling, because
-  its `HH_jit_*_mean` values are off-scale by roughly nine orders of
-  magnitude relative to every other row.
+  error: it reproduces on every file checked. **Preprocessing rule (now
+  resolved per materialization):** the DATP-Core `datp_core` and
+  `datp_core_dirichlet` materializations drop row 1 of every raw N-BaIoT file
+  before model-feature materialization; the historical `anchor` materialization
+  retains it (raw pass-through). It is never averaged, scaled, or calibrated
+  against under the DATP-Core materializations, because its `HH_jit_*_mean`
+  values are off-scale by roughly nine orders of magnitude relative to every
+  other row.
 - **Low-rate exact-duplicate rows.** `Ecobee_Thermostat/benign_traffic.csv`
   (13,113 rows) contains 2 exact-duplicate rows (0.015%); no non-numeric or
   empty cell and no constant column were found in the same file. Duplicate
-  handling is a stated, explicit policy (kept or deduplicated), never
-  silently assumed.
+  handling is now explicit per materialization: the DATP-Core materializations
+  drop exact duplicates (keep first), while the `anchor` materialization
+  retains them.
 - **No missing/non-numeric cells** were found in any sampled file beyond
   the row-1 artifact above; every cell parses as a finite float.
 
-**Blockers.** None for feature-schema identity (fully verified, closed by
-inspection). The row-1 cold-start handling policy and the duplicate-row
-policy are genuine open decisions — `ScientificReadinessResult` blockers,
-not invented defaults — until an authority fixes one
-(`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`).
+**Materializations and blockers.** Feature-schema identity is verified
+(closed by inspection). The row-1 cold-start and duplicate-row policies are no
+longer open decisions: the DATP-Core `datp_core`/`datp_core_dirichlet`
+materializations min-max normalize (fit on train), drop the cold-start row,
+and deduplicate; the `anchor` materialization is a **distinct historical
+materialization** recovered from the DATP reference project — StandardScaler
+normalization with raw rows retained (no cold-start drop, no dedup) —
+reproducing the original anchor pipeline exactly. The two never share a
+materialization, a normalizer, or a terminal state, which is why the anchor
+experiment binds `anchor_natural_devices` + `anchor_terminal` while DATP-Core
+binds `natural_devices` + `datp_core` (`§9`, `§12`).
 
-`configs/datasets/ciciot2023.yaml` — boundary-role dataset only, carrying
-its feature-count re-verification audit as a blocker:
+`configs/datasets/ciciot2023.yaml` — boundary-role dataset, carrying its
+feature-count re-verification audit and one `datp_core` materialization (the
+full 39-column `model_features.order` is authored verbatim in the file;
+elided here for brevity):
 
 ```yaml
 schema_version: 1
 dataset: ciciot2023
-dataset_version: processed   # the only artifact in scope is the processed CSV;
-                              # feature count is source-inspected below, never guessed from the name
-audits:
-  - check: source_inspection
-    inspection:
-      expected_facts:
-        - feature_schema_present
-        - file_level_membership_recoverable
-        - mac_device_ip_capture_timestamp_columns_present_or_absent   # records absence explicitly
-      source_row_identity_scheme: required
-    feasibility:
-      rule: source_schema_complete
-      required_evidence: [feature_schema_manifest, file_member_manifest]
-    operations: { execution: dataset_audit, report: { table_type: source_inspection_report, output_formats: [markdown] } }
-  - check: processed_feature_verification
-    inspection:
-      expected_facts: [processed_feature_count_matches_conference_value]
-      reference_feature_count: 39
-    feasibility:
-      rule: processed_feature_count_verified
-      required_evidence: [processed_feature_schema_manifest]
-      # feature count of the actual processed artifact; mirror distributions differ (roadmap §7).
-      # Manually re-verified against the mounted corpus (`§11.2` below): both the per-class
-      # CSV/ tree and the MERGED_CSV/ tree carry exactly 39 feature columns, matching the
-      # conference value exactly. This audit's automated SOURCE_INSPECTION run is still the
-      # authoritative gate that must execute and persist its own FEASIBILITY_RESULT before any
-      # experiment cites it — a manual documentation inspection is corroborating evidence, never
-      # a substitute for the pipeline's own check.
-    operations: { execution: dataset_audit, report: { table_type: source_inspection_report, output_formats: [markdown] } }
+display_name: CICIoT2023
+schema_id: ciciot2023_flow_39
+source_layout:
+  root: CIC_IOT_Dataset2023/CSV
+  per_class_root: CIC_IOT_Dataset2023/CSV/CSV
+  merged_root: CIC_IOT_Dataset2023/CSV/MERGED_CSV
+field_schema:
+  source_column_count: { per_class: 39, merged: 40 }
+  identity_scheme:
+    row_identity: source_row_order
+    client_identity: { source: file, derived_from: merged_file_name }
+    label_identity: { source: column, column: Label, present_in: merged_only }
+    timestamp_field: none
+    device_mac_ip_field: none
+  label_fields:
+    multiclass_label: { column: Label, type: categorical_string }
+    binary_label: { derivation: label_equals_benign, benign_value: BENIGN }
+  model_features: { role: model_feature, type: numeric_float, order: [Header_Length, "Protocol Type", ..., Variance] }   # 39 ordered flow features
+  post_encoding_feature_order: same_as_model_features
+  categorical_encoding: none
+  leakage_exclusions: [Label]
+observed_facts: { pseudo_client_count: 63, per_class_file_count: 309, model_feature_count: 39, device_mac_ip_capture_timestamp_columns_present: false }
+readiness: { source_schema_complete: true, processed_feature_count_verified: true }
 eligibility:
   minimum_calibration_sample_count: 100
+materializations:
+  datp_core:
+    materialization_id: ciciot2023_datp_core
+    normalization: { strategy: min_max, scope: global_train }
+    preprocessing_sequence: [exclude_degenerate_window_rows, drop_exact_duplicate_rows_per_file, random_fractional_split, min_max_normalization_fit_on_train]
+    row_exclusion: { degenerate_window: exclude_rate_inf_or_blank_std_variance, duplicate_rows: drop_exact_duplicates_keep_first_per_file }
+    split: { method: random_fractional, calibration_benign_only: true, split_seed: 0, ratios: { train: 0.70, calibration: 0.15, test: 0.15 } }
 setups:
   file_pseudo_clients:
+    materialization: datp_core
     client_construction: { method: dataset_file_pseudo_clients, pseudo_client_count: 63 }
-split_definition:
-  train: { role: train }
-  calibration: { role: calibration, benign_only: true }
-  test: { role: test }
-preprocessing:
-  normalization: { strategy: min_max, scope: global_train }
-  # feature count d is source-inspected, never authored; the conference value of 39 is
-  # corroborated by manual inspection (`§11.2`) but the processed_feature_verification audit's
-  # own run remains the citable gate for any quantitative claim.
 ```
 
 ### 11.2 CICIoT2023 field-level schema
@@ -872,77 +938,96 @@ of every one of the 309 `CSV/` files and 63 `MERGED_CSV/` files (only a
 subset was directly inspected); the `Rate`/`Std`/`Variance` degenerate-window
 handling policy (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`).
 
-`configs/datasets/edge_iiotset.yaml` — the external-validation dataset,
-owning three setups (device, group, chronological) and every audit that
-gates them:
+`configs/datasets/edge_iiotset.yaml` — the external-validation dataset. Its
+`client_granularity_feasibility` audit rejects device granularity, so it owns
+**no `external_device` setup**; it keeps a benign-only `external_group` setup
+and a `chronological` setup, but both are authored `executable: false` with an
+explicit `suppression` block, because attack rows cannot be assigned to the ten
+benign sensor groups (the full 63-column source schema and 39-entry
+`retained_numeric_features.order` are authored verbatim in the file; elided
+here for brevity):
 
 ```yaml
 schema_version: 1
 dataset: edge_iiotset
-dataset_version: processed   # semantic name; no second Edge-IIoTset artifact exists yet
+display_name: Edge-IIoTset
+schema_id: edge_iiotset_wireshark_63
+source_layout:
+  root: "Edge-IIoTset dataset"
+  normal_group_folders: [Distance, Flame_Sensor, Heart_Rate, IR_Receiver, Modbus, Soil_Moisture, Sound_Sensor, Temperature_and_Humidity, Water_Level, phValue]   # 10 sensor-type groups
+  attack_files: [Backdoor_attack.csv, ..., XSS_attack.csv]   # 14 attack-type files, no group column
+field_schema:
+  source_column_count: 63
+  identity_scheme:
+    row_identity: source_row_order
+    benign_group_identity: { source: path, derived_from: normal_traffic_group_folder }
+    attack_row_group_identity: unavailable
+    device_identity: { source: column, column: ip.src_host, usable: false }
+    timestamp_field: { column: frame.time, semantics: time_of_day_no_month_day }
+  label_fields:
+    binary_label: { column: Attack_label, values: [0, 1] }
+    multiclass_label: { column: Attack_type }
+    family_taxonomy: unavailable                 # no family/B3 taxonomy on Edge-IIoTset
+  attack_row_group_assignment:
+    available: false
+    reason: attack_files_organized_by_attack_type_not_sensor_group
+    evidence: >-
+      Benign rows carry a deterministic sensor-type group identity (the ten Normal-traffic
+      folders). The fourteen Attack-traffic files share the identical schema but carry no
+      sensor/group column; the only device linkage, ip.src_host, is rejected by
+      client_granularity_feasibility. No source field assigns an attack row to a benign group.
+  retained_numeric_features: { role: model_feature, type: numeric_float, count: 39, order: [arp.opcode, ..., mbtcp.unit_id] }
+  categorical_encoding:
+    strategy: one_hot
+    columns: [http.request.method, http.referer, http.request.version, dns.qry.name.len, mqtt.conack.flags, mqtt.protoname, mqtt.topic]   # 7 columns
+    encoded_feature_count: 76
+    retained_numeric_feature_count: 39
+    total_model_feature_count: 115           # 76 dummies + 39 numeric
+    post_encoding_feature_names: runtime_captured
+  leakage_exclusions: { columns: [frame.time, ip.src_host, ip.dst_host, ...], role_basis: leakage_or_high_cardinality_or_client_identity_or_timestamp }   # 15 dropped
+readiness:
+  source_schema_complete: true
+  benign_group_partition_recoverable: true
+  attack_row_group_assignment_recoverable: false
+  external_validation_executable: false
 audits:
-  - check: source_inspection
-    inspection:
-      expected_facts: [feature_schema_present, device_identity_recoverable, capture_timestamp_present_or_absent]
-      source_row_identity_scheme: required
-    feasibility:
-      rule: source_schema_complete
-      required_evidence: [feature_schema_manifest, per_device_counts, timestamp_evidence]
-    operations: { execution: dataset_audit, report: { table_type: source_inspection_report, output_formats: [markdown] } }
+  - { check: source_inspection, ... }
   - check: client_granularity_feasibility
-    inspection:
-      expected_facts: [per_candidate_client_benign_counts]
-      candidate_granularities: [device, group]
-      target_client_counts: [6, 15]
-    feasibility:
-      rule: eligibility_coverage_gate
-      minimum_calibration_sample_count: 100
-      minimum_client_coverage_ratio: 0.90     # n_k ≥ 100 for ≥ 90% of clients
-      required_evidence: [per_client_benign_counts]
-      # produces the device-vs-group FEASIBILITY_RESULT; a human then fixes the setup's
-      # granularity below (SCIENTIFIC_FOUNDATION.md §5.1).
-    operations: { execution: dataset_audit, report: { table_type: feasibility_report, output_formats: [markdown] } }
+    outcome: { device_granularity: rejected, group_granularity: authorized, group_count: 10 }
+    # ...inspection + feasibility as before
   - check: timestamp_semantics_verification
-    inspection:
-      expected_facts: [genuine_capture_time_field_present, per_client_temporal_ordering_recoverable]
-    feasibility:
-      rule: timestamp_semantics_verified
-      required_evidence: [timestamp_evidence, per_client_time_span]
-      # gates the chronological setup below; absence blocks the temporal MVE.
-    operations: { execution: dataset_audit, report: { table_type: feasibility_report, output_formats: [markdown] } }
+    outcome: { within_client_ordering: time_of_day_with_midnight_rollover_correction, cross_client_wall_clock_ordering: unavailable, temporal_group_count: 9, excluded_groups: [Modbus] }
+    # ...
 eligibility:
   minimum_calibration_sample_count: 100
+materializations:
+  group_benign:
+    materialization_id: edge_iiotset_group_benign
+    normalization: { strategy: min_max, scope: global_train }
+    preprocessing_sequence: [drop_row_with_null_in_retained_column, drop_exact_duplicate_rows, one_hot_encode_categoricals, min_max_normalization_fit_on_train]
+    split: { method: random_fractional, calibration_benign_only: true, split_seed: 0, ratios: { train: 0.70, calibration: 0.15, test: 0.15 } }
 setups:
-  external_device:
-    client_construction:
-      method: external_device_or_group_clients
-      granularity: device                 # fixed by human authorization post-audit
-      feasibility_result_ref: client_granularity_feasibility   # provenance only
   external_group:
-    client_construction:
-      method: external_device_or_group_clients
-      granularity: group
-      feasibility_result_ref: client_granularity_feasibility
+    materialization: group_benign
+    client_construction: { method: external_group_clients, group_count: 10 }
+    executable: false
+    suppression:
+      reason: attack_row_client_assignment_unavailable
+      evidence: >-
+        The benign sensor-type group partition is recoverable, but attack rows cannot be assigned
+        to those groups; a per-client benign+attack external validation cannot be built without
+        fabricating a mapping.
   chronological:
-    client_construction:
-      method: external_device_or_group_clients
-      granularity: device
-      feasibility_result_ref: client_granularity_feasibility
-    temporal_window:
-      role: temporal_evaluation
-      historical_fraction: 0.70          # locked chronological boundary
-      capture_time_field: capture_timestamp
-      # requires the timestamp_semantics_verification audit to have passed.
-split_definition:
-  train: { role: train }
-  calibration: { role: calibration, benign_only: true }
-  test: { role: test }
-preprocessing:
-  normalization: { strategy: min_max, scope: global_train }
-  # The 63-column raw source schema and its 15-column drop list / 7-column dummy-encoding
-  # list are verified (`§11.3`); the exact post-encoding input dimension remains BLOCKED
-  # because one-hot expansion width is data-dependent (varies with the distinct category
-  # values surviving dropna/dedup), never guessed ahead of running the actual preprocessing.
+    materialization: group_benign
+    client_construction: { method: external_group_clients, group_count: 9, excluded_groups: [Modbus] }
+    temporal_window: { role: temporal_evaluation, historical_fraction: 0.70, capture_time_field: frame.time, ordering_derivation: time_of_day_with_midnight_rollover_correction }
+    executable: false
+    suppression:
+      reason: attack_row_client_assignment_unavailable
+      evidence: >-
+        Within-client benign time-of-day ordering is defensible, but the chronological evaluation
+        still requires per-client attack rows at the temporal boundary; the same attack-row
+        assignment gap applies.
 ```
 
 ### 11.3 Edge-IIoTset field-level schema
@@ -1091,12 +1176,12 @@ the 7 columns marked "author dummy-encodes" above
 (`http.request.method`, `http.referer`, `http.request.version`,
 `dns.qry.name.len`, `mqtt.conack.flags`, `mqtt.protoname`, `mqtt.topic`).
 Row filter: drop any row with a null in a retained column, then drop exact
-duplicate rows, before encoding. The remaining 46 retained non-label
-columns (63 − 15 dropped − 2 label) are deterministic and fully verified;
-the *final* ordered `model_feature_order` width is not, because one-hot
-expansion produces one column per distinct category value that survives
-row-filtering — data-dependent, never estimated or guessed ahead of
-actually running this pipeline.
+duplicate rows, before encoding. The 39 retained numeric non-label columns
+and the 7 one-hot-encoded columns are deterministic and fully verified; the
+one-hot expansion has now been measured on the mounted corpus at 76 dummy
+columns, for `39 + 76 = 115` total model features. The exact post-encoding
+column *names* remain `runtime_captured` (they depend on which category
+values survive row-filtering), but the total width is no longer a blocker.
 
 **Verified data-quality findings.**
 - **`ip.src_host` literal `"0"` and `"0.0.0.0"` placeholders** occur in
@@ -1121,16 +1206,25 @@ actually running this pipeline.
   concentrated in a small row subset and their global variance is
   therefore not representative of their conditional variance.
 
-**Blockers.** Final post-encoding `model_feature_order` width (data-dependent
-one-hot expansion, `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`);
-`frame.time` malformed-value distribution and true timestamp semantics
-(gates `chronological_recalibration_evaluation`); `Temperature_and_Humidity`
-folder's subnet-consistency exception (candidate group-identity anomaly,
-unresolved); full-corpus duplicate-row rate (only a 30,000-row sample was
-checked). Device-vs-group granularity itself remains gated by
-`edge_iiotset_client_granularity_feasibility` exactly as already documented
-(`SCIENTIFIC_FOUNDATION.md §5.1`) — the `ip.src_host` noise findings above
-are additional evidence for why that gate exists, not a resolution of it.
+**Suppression and blockers.** The post-encoding model-feature width is
+resolved (`39 + 76 = 115`; names `runtime_captured`). The decisive finding is
+that **external validation is suppressed, not merely gated**: benign rows map
+cleanly to the ten Normal-traffic sensor groups, but attack rows are organized
+by attack type across fourteen testbed-wide files with no sensor/group column,
+and the only device linkage (`ip.src_host`) is rejected by
+`client_granularity_feasibility`. Attack rows therefore cannot be
+deterministically assigned to the benign groups, so a per-client
+benign+attack external validation is impossible without fabricating a mapping.
+The audit records `device_granularity: rejected`, `group_granularity:
+authorized` (K = 10); `readiness.external_validation_executable` is `false`;
+the `external_group` and `chronological` setups are both `executable: false`
+with a `suppression` block; and no `family_taxonomy` exists, so the B3 family
+threshold is not authored on Edge-IIoTset. The group partition is retained
+only as a benign-only extension seam. Remaining open items are corroborating,
+not gating: the `frame.time` malformed-value distribution (relevant only to
+the now-suppressed temporal evaluation), the `Temperature_and_Humidity`
+subnet-consistency exception, and the full-corpus duplicate-row rate (only a
+30,000-row sample was checked).
 
 ## 12. Reusable model configuration
 
@@ -1149,8 +1243,11 @@ optimizer:
   scheduler: null
 precision: fp32
 determinism: strict
-checkpoint_schedule:
-  rounds: [25, 50, 75, 100, 125, 150, 200]
+checkpoint_profiles:
+  datp_core:
+    rounds: [25, 50, 75, 100, 125, 150, 200]
+  anchor_terminal:
+    rounds: [150]
 training_batch:
   micro_batch_size: 256
   gradient_accumulation_steps: 1
@@ -1167,18 +1264,18 @@ training_profiles:
     kind: federated_averaging_training
     local_epochs: 1
     participation: full
-    personalization: fedrep_ae   # or ditto / fedper_ae — never "Ditto" unless genuine Ditto (NAME-05)
-      # BLOCKED: personalization comparator choice and hyperparameters (documented pre-training decision).
+    personalization: ditto                 # genuine Ditto, not a renamed FedRep/FedPer (NAME-05)
+    personalization_proximal_weight: 1.0
     checkpoint_selection:
       rule: lowest_federated_averaging_weighted_benign_validation_reconstruction_error
       tie_break: earliest_scheduled_round
   federated_proximal:
     kind: federated_prox_training
-    mu: 0.001   # or 0.01, or 0.1 — a separate resolved profile per grid point,
-                # never a caller-supplied value outside {0.001, 0.01, 0.1}
     local_epochs: 1
     participation: full
     personalization: none
+    # no literal `mu`: bound per experiment via training.parameters (§7),
+    # sweeping the federated_proximal_mu grid {0.001, 0.01, 0.1}
     checkpoint_selection:
       rule: lowest_federated_averaging_weighted_benign_validation_reconstruction_error
       tie_break: earliest_scheduled_round
@@ -1193,14 +1290,20 @@ training_profiles:
 Every value above — the encoder widths `(80, 40, 20)`, no batch
 normalization (structurally absent from the schema, `SCI-19`, never an
 authored boolean), MSE reconstruction objective, Adam at `0.001`, one local
-epoch, full participation, the fixed `{25,50,75,100,125,150,200}` schedule,
+epoch, full participation, the two named checkpoint profiles
+(`datp_core` = `{25,50,75,100,125,150,200}`, `anchor_terminal` = `{150}`),
 batch size `256`, one gradient-accumulation step, `FP32`, strict
-determinism, and the FedProx µ-grid `{0.001, 0.01, 0.1}` — is given
-explicitly in the source architecture's resolved-implementation-decisions
-record; none is invented. `rounds_max` (`200`) and `effective_batch_size`
-(`256`) are never authored here — both are pure derivations
-(`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §3.2`) computed after this document
-resolves. Eligibility (`minimum_calibration_sample_count = 100`) is **not**
+determinism, and genuine Ditto personalization
+(`personalization_proximal_weight: 1.0`) — is given explicitly in the source
+architecture's resolved-implementation-decisions record; none is invented.
+FedProx `mu` is no longer a model field: it is bound per experiment from the
+`federated_proximal_mu` sweep grid `{0.001, 0.01, 0.1}` (`§7`). `rounds_max`
+and `effective_batch_size` (`256`) are never authored here — both are pure
+derivations (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §3.2`) computed after
+this document resolves; `rounds_max` is the maximum of the *referenced*
+checkpoint profile's rounds, so it is `200` for a `datp_core` experiment but
+`150` for the anchor's `anchor_terminal` profile — the anchor and DATP-Core
+do not share a terminal round, checkpoint set, or terminal state. Eligibility (`minimum_calibration_sample_count = 100`) is **not**
 authored here; it is the referencing experiment's dataset that owns it
 (`§2`), removing the duplicate-ownership defect a prior draft of this
 package carried (a detector document and its owning dataset both declaring
@@ -1223,51 +1326,49 @@ profiles:
   scientific:
     device_policy: cuda_required
     determinism: strict
-    resource_budget:
-      # BLOCKED: concrete RAM and VRAM limits are required here.
-    concurrency:
-      # BLOCKED: concrete worker count is required here.
-      training_concurrency: 1
-      scoring_concurrency: 1
+    resource_budget: { max_ram_gib: 10, max_vram_gib: 12 }
+    concurrency: { training_concurrency: 1, scoring_concurrency: 1, worker_count: 4 }
+    data_loading: { chunk_row_count: 50000, streaming: true }
     process_start_method: spawn           # locked rule for any CUDA-touching stage
-    # BLOCKED: log_interval_rounds requires its explicit operational owner value.
+    log_interval_rounds: 25
   print_grade:
     device_policy: cuda_required
     determinism: strict
-    resource_budget:
-      # BLOCKED: concrete RAM and VRAM limits required.
-    concurrency:
-      training_concurrency: 1
-      scoring_concurrency: 1
-      # BLOCKED: concrete worker count required.
+    resource_budget: { max_ram_gib: 10, max_vram_gib: 12 }
+    concurrency: { training_concurrency: 1, scoring_concurrency: 1, worker_count: 4 }
+    data_loading: { chunk_row_count: 50000, streaming: true }
     process_start_method: spawn
-    # BLOCKED: log_interval_rounds requires its explicit operational owner value.
+    log_interval_rounds: 25
   development:
     device_policy: cuda_required
     determinism: strict
-    resource_budget: { max_ram_gib: 32, max_vram_gib: 12 }   # explicit reduced value; non-citable by mode
+    resource_budget: { max_ram_gib: 8, max_vram_gib: 8 }
     concurrency: { training_concurrency: 1, scoring_concurrency: 1, worker_count: 2 }
+    data_loading: { chunk_row_count: 10000, streaming: true }
     process_start_method: spawn
     log_interval_rounds: 5
   smoke:
     device_policy: cuda_required
     determinism: strict
-    resource_budget: { max_ram_gib: 16, max_vram_gib: 8 }
+    resource_budget: { max_ram_gib: 6, max_vram_gib: 6 }
     concurrency: { training_concurrency: 1, scoring_concurrency: 1, worker_count: 1 }
+    data_loading: { chunk_row_count: 1000, streaming: true }
     process_start_method: spawn
     log_interval_rounds: 1
   dataset_audit:
     device_policy: cpu_only          # audits touch no CUDA stage; fork is permitted for CPU-only workers
     determinism: strict
-    resource_budget: { max_ram_gib: 16 }
+    resource_budget: { max_ram_gib: 8 }
     concurrency: { worker_count: 4 }
+    data_loading: { chunk_row_count: 50000, streaming: true }
     process_start_method: fork
     log_interval_rounds: 10
   test_smoke:
     device_policy: cpu_only          # test-only; resolves storage beneath TEST_SANDBOX; never scientific evidence
     determinism: strict
-    resource_budget: { max_ram_gib: 8 }
+    resource_budget: { max_ram_gib: 4 }
     concurrency: { worker_count: 1 }
+    data_loading: { chunk_row_count: 1000, streaming: true }
     process_start_method: spawn
     log_interval_rounds: 1
 ```
@@ -1275,8 +1376,9 @@ profiles:
 `process_start_method: spawn` is not fabricated: it follows directly from
 the source architecture's fixed rule that any stage touching CUDA must use a
 spawn context established before any CUDA call in the parent process, never
-the global `set_start_method`. The commented requirements are genuine
-boundary blockers reported before a domain value is constructed. Every
+the global `set_start_method`. Each profile now supplies complete operational
+limits, including its own data-loading chunk size and streaming flag; no field
+is a boundary blocker. Every
 profile, including `development` and `smoke`, requires an explicit,
 complete set of fields; `scientific` and `print_grade` additionally require
 the roadmap's scientific evidence before a `SCIENTIFIC`/`PRINT_GRADE` cell
@@ -1332,10 +1434,11 @@ directory mirroring the experiment catalogue.
 
 Every family below follows the identical shape worked in full in `§§9–10`:
 one `configs/experiments/<family>.yaml` document, a `family` name, and an
-`experiments` list of independently resolvable entries, each carrying
-`data` (dataset + setup), `model` + `training_profile`, `evaluations`,
-optional `sweep`, `analyses`, `seed_cohort`, `prerequisites`, and
-`operations` (`execution` profile name + inline `report`). Only the
+`experiments` list of independently resolvable entries, each carrying either
+`data` (dataset + setup) or a `regimes:` list of regime cells, `model` +
+`checkpoint_profile` + a `training` block (`profile` + `parameters`),
+`evaluations`, optional `sweep`, `analyses`, `seed_cohort`, `prerequisites`,
+and `operations` (`execution` profile name + inline `report`). Only the
 identity-bearing content that differs from `§§9–10` is given here; no field
 family, blocker, or scientific value described elsewhere in this package is
 altered by moving an experiment into a family file.
@@ -1344,37 +1447,37 @@ altered by moving an experiment into a family file.
 
 | Slug | Roadmap ref | Role; tier | Dataset + setup | Sweep | Notes |
 |---|---|---|---|---|---|
-| `controlled_heterogeneity_response` | E-S3 | supportive; tier_2 | `nbaiot` / `dirichlet_partitioned` | `dirichlet_alpha ∈ {0.1, 0.3, 0.5, 1.0, 10.0, iid}` | carries the heterogeneity–threshold-benefit association (formerly E-M4) as an attached `metric_association_analysis` regressing pairwise JS divergence against `cv_fpr_delta`; report: `severity_trend` figure + `scatter` figure |
+| `controlled_heterogeneity_response` | E-S3 | supportive; tier_2 | `nbaiot` / `dirichlet_partitioned` | `dirichlet_alpha ∈ {0.1, 0.3, 0.5, 1.0, 10.0, iid}` | carries the heterogeneity–threshold-benefit association (formerly E-M4) as an attached `metric_association_analysis` regressing pairwise JS divergence against `cv_fpr_delta`; carries a suppressed `regime_d_extension` (`edge_iiotset`/`external_group`) preserving the roadmap "+ Regime D points" seam; report: `severity_trend` figure + `scatter` figure |
 
 ### 16.2 `calibration_mechanisms.yaml`
 
 | Slug | Roadmap ref | Role; tier | Dataset + setup | Sweep | Notes |
 |---|---|---|---|---|---|
-| `cluster_mechanism` | E-M1/E-M2/E-Q2 | mechanism; tier_5 (+tier_7 exploratory) | `nbaiot` / `natural_devices` (+ `edge_iiotset` where feasible) | `fingerprint_feature_subset` (4 subsets) | one merged experiment, four typed axes: grouping (`family_threshold` vs `cluster_threshold`), fingerprint feature set, aggregation (`mean`/`robust_median`), authorized K (canonical `3`, mandatory; other K exploratory); report: `cluster_stability` table + `contingency` table |
+| `cluster_mechanism` | E-M1/E-M2/E-Q2 | mechanism; tier_5 (+tier_7 exploratory) | `nbaiot` / `natural_devices`; suppressed `regime_d_extension` (`edge_iiotset`/`external_group`) | `fingerprint_feature_subset` (4 subsets) | one merged experiment, four typed axes: grouping (`family_threshold` vs `cluster_threshold`), fingerprint feature set, aggregation (`mean`/`robust_median`), authorized K (canonical `3`, mandatory; other K exploratory); report: `cluster_stability` table + `contingency` table |
 | `calibration_window_size_stability` | E-V1 | boundary; tier_6 (RQ3) | `nbaiot` / `natural_devices` | `calibration_sample_count ∈ {50,100,250,500,1000,5000}` | each point resolves a `CalibrationSubsetDefinition`; includes `calibration_size_aware_fallback_threshold`; report: `sensitivity_grid` |
 | `local_global_threshold_shrinkage` | E-V2 | supportive; RQ3 | `nbaiot` / `natural_devices` | `shrinkage_weight ∈ {0, .25, .5, .75, 1}` | report: `lambda_curve` figure |
-| `conformal_local_threshold_coverage` | E-V3 | supportive; Tier-1 tautology defense | `nbaiot` / `natural_devices` (+ `edge_iiotset`) | — | `coverage_alpha = 0.05`; report: conformal coverage table |
+| `conformal_local_threshold_coverage` | E-V3 | supportive; Tier-1 tautology defense | `nbaiot` / `natural_devices`; suppressed `regime_d_extension` (`edge_iiotset`/`external_group`) | — | `coverage_alpha = 0.05`; report: conformal coverage table |
 
 ### 16.3 `external_validation.yaml`
 
 | Slug | Roadmap ref | Role; tier | Dataset + setup | Sweep | Notes |
 |---|---|---|---|---|---|
-| `external_device_dataset_validation` | E-X1 | external_validation; tier_3 | `edge_iiotset` / `external_device` (or `external_group`, audit-assigned) | `threshold_quantile ∈ {.90,.95,.975,.99}` (sole owner of the external-dataset q-sensitivity axis) | carries the operational alert-burden evaluation (formerly E-O1) requiring validated `TrafficRateEvidence`; report: external `confirmatory_interval` + `alert_burden` |
-| `chronological_recalibration_evaluation` | E-B1 | boundary; tier_6 | `edge_iiotset` / `chronological` | — | frozen vs one-shot recalibration; report: `recovery_curve` figure |
+| `external_device_dataset_validation` | E-X1 | external_validation; tier_3; **suppressed** | `edge_iiotset` / `external_group` (device granularity rejected) | `threshold_quantile ∈ {.90,.95,.975,.99}` | `run_requirement: suppressed` with an `attack_row_client_assignment_unavailable` suppression block (`§9.1`, `§11.3`); the intended B1–B4 + matched-summary + q-sensitivity scope is preserved as non-executable; report: external `confirmatory_interval` |
+| `chronological_recalibration_evaluation` | E-B1 | boundary; tier_6; **suppressed** | `edge_iiotset` / `chronological` | — | `run_requirement: suppressed` (same attack-row-assignment gap); frozen vs one-shot recalibration preserved as non-executable; report: `recovery_curve` figure |
 
 ### 16.4 `training_stress_tests.yaml`
 
 | Slug | Roadmap ref | Role; tier | Dataset + setup | Training profile | Notes |
 |---|---|---|---|---|---|
-| `fedprox_aggregation_stress_test` | E-T1 | stress_test; tier_4 | `nbaiot` / `natural_devices` (+ `edge_iiotset`, sibling entry) | `training_profiles.federated_proximal` (µ-grid, `§14`) | report: `stress_test` table |
-| `model_personalization_absorption_test` | E-T2 | stress_test; tier_4 | `nbaiot` / `natural_devices` (+ `edge_iiotset`, sibling entry) | `training_profiles.federated_averaging_personalized` | its `AbsorptionAnalysis` reuses the confirmatory experiment's FedAvg core delta by cross-experiment reference, never retraining it; report: `stress_test` table |
+| `fedprox_aggregation_stress_test` | E-T1 | stress_test; tier_4 | `regimes:` — `regime_a` (`nbaiot`/`natural_devices`, run) + `regime_d` (`edge_iiotset`/`external_group`, suppressed) | `federated_proximal` with `training.parameters.mu` bound from the `federated_proximal_mu` grid (`§7`, `§14`) | one experiment, no top-level `data:`; report: `stress_test` table |
+| `model_personalization_absorption_test` | E-T2 | stress_test; tier_4 | `regimes:` — `regime_a` (`nbaiot`/`natural_devices`, run) + `regime_d` (`edge_iiotset`/`external_group`, suppressed) | `federated_averaging_personalized` (genuine Ditto) | one experiment, no top-level `data:`; its `AbsorptionAnalysis` reuses the confirmatory experiment's FedAvg core delta by cross-experiment reference, never retraining it; report: `stress_test` table |
 
 ### 16.5 `references_and_boundaries.yaml`
 
 | Slug | Roadmap ref | Role; tier | Dataset + setup | Training profile | Notes |
 |---|---|---|---|---|---|
 | `centralized_pooled_reference` | B0 | supportive; mandatory wherever cited | `nbaiot` / `natural_devices` | `training_profiles.centralized_pooled` | own centralized identity chain; never fused with federated artifacts (`ANCHOR-04`, `ART-06`); report: `dispersion_ladder` |
-| `federated_summary_comparator` | E-T3/E-Q1/E-Q5 | stress_test (comparator); tier_4 | `nbaiot` / `natural_devices` (+ `edge_iiotset`) | `training_profiles.federated_averaging` | merged: matched benign-summary comparison (mandatory primary), quantile-estimation-error backbone analysis (mandatory), fixed-k `{2.0, 2.5, 3.0}` sensitivity evaluation carrying `execution_requirement: optional`, `publication_placement: supplementary` — optional and supplementary because it can never become the primary comparator result (`SCI-18`); report: `comparator` table |
+| `federated_summary_comparator` | E-T3/E-Q1/E-Q5 | stress_test (comparator); tier_4 | `regimes:` — `regime_a` (`nbaiot`/`natural_devices`, run) + `regime_d` (`edge_iiotset`/`external_group`, suppressed) | `federated_averaging` | merged: matched benign-summary comparison (`mode: matched_exceedance`, `matched_exceedance_k_grid_step: 0.05`, mandatory primary), quantile-estimation-error backbone analysis (mandatory), and a `mode: fixed_k` evaluation with a scalar `fixed_k: { from_sweep: federated_summary_fixed_k }` over `{2.0, 2.5, 3.0}` carrying `execution_requirement: optional`, `publication_placement: supplementary` (`SCI-18`); report: `comparator` table |
 | `file_pseudo_client_applicability_boundary` | `B_A_APPLICABILITY_BOUNDARY` | boundary; tier_6 | `ciciot2023` / `file_pseudo_clients` | `training_profiles.federated_averaging` | boundary report only, never generalized; report: `boundary_null` table |
 
 ## 17. Sweep representation
@@ -1398,16 +1501,17 @@ second composition mechanism.
 
 ## 18. Blocked-value handling, worked
 
-Attempting to schedule `anchor_reproduction` (`§9`) under the `scientific`
-execution profile is rejected by `ScientificReadinessResult` before any
-network, CUDA, or storage resource is touched, because
-`analyses[0].primary_procedure.resample_count` and
-`seed_cohort.experiment_seed` are absent from the draft. The rejection names
-both fields, cites the blocker table entries in
-`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`, and proposes no substitute
-value. The same draft is rejected under `development` and `smoke` as well:
-those profiles use complete explicit reduced values and are non-citable
-because of execution mode, not incomplete configuration.
+`anchor_reproduction` (`§9`) now supplies every scientific value it needs —
+`analyses[0].primary_procedure.resample_count: 10000` and
+`seed_cohort.experiment_seed: 0` are both present — so it resolves, plans, and
+runs under the `scientific` execution profile without a boundary blocker. The
+mechanism that would reject an incomplete draft is unchanged: were either
+field removed, `ScientificReadinessResult` would reject the draft before any
+network, CUDA, or storage resource is touched, name the missing field, cite
+the blocker table in `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`, and
+propose no substitute value. A reduced profile such as `development` or
+`smoke` is non-citable because of execution mode, never because of an
+incomplete configuration.
 
 ## 19. Validation failure examples
 
@@ -1511,11 +1615,11 @@ backs it:
 | `calibration-window` | `calibration_window_size_stability` | validate, plan, run, status, report |
 | `threshold-shrinkage` | `local_global_threshold_shrinkage` | validate, plan, run, status, report |
 | `conformal-threshold` | `conformal_local_threshold_coverage` | validate, plan, run, status, report |
-| `external-validation` | `external_device_dataset_validation` | plan, run, status, report (feasibility-gated; `§9.1`) |
+| `external-validation` | `external_device_dataset_validation` | validate, status, report (suppressed — attack-row client assignment unavailable; `§9.1`) |
 | `fedprox-stress-test` | `fedprox_aggregation_stress_test` | plan, run, status, report |
 | `personalization-stress-test` | `model_personalization_absorption_test` | plan, run, status, report |
 | `federated-summary-comparator` | `federated_summary_comparator` | validate, plan, run, status, report |
-| `temporal-recalibration` | `chronological_recalibration_evaluation` | plan, run, status, report (feasibility- and timestamp-gated) |
+| `temporal-recalibration` | `chronological_recalibration_evaluation` | validate, status, report (suppressed — attack-row client assignment unavailable; `§9.1`) |
 | `centralized-reference` | `centralized_pooled_reference` | validate, plan, run, status, report |
 | `pseudo-client-boundary` | `file_pseudo_client_applicability_boundary` | validate, plan, run, status, report |
 

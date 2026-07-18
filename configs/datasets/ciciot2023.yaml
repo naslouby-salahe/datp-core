@@ -1,17 +1,86 @@
 schema_version: 1
 dataset: ciciot2023
-dataset_version: degenerate_rows_excluded_deduplicated
-# Descriptive name for the one processed artifact this design authorizes: the 39-feature
-# per-class/`MERGED_CSV` corpus with degenerate-window rows excluded and exact-duplicate rows
-# removed (see `preprocessing` below).
+display_name: CICIoT2023
+schema_id: ciciot2023_flow_39
 source_layout:
-  # DOCUMENTATION CORRECTION (full-corpus verified during this task): the actual mounted corpus
-  # nests one level deeper than the architecture package previously stated. Corrected here and
-  # in `docs/Architecture/CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md` §11.2 together.
+  root: CIC_IOT_Dataset2023/CSV
   per_class_root: CIC_IOT_Dataset2023/CSV/CSV
   merged_root: CIC_IOT_Dataset2023/CSV/MERGED_CSV
-  per_class_file_pattern: "*/*.pcap.csv"     # 34 class folders, 309 files total (verified count)
-  merged_file_pattern: "Merged*.csv"         # 63 files (verified count, matches pseudo_client_count)
+  per_class_file_pattern: "*/*.pcap.csv"
+  merged_file_pattern: "Merged*.csv"
+field_schema:
+  source_column_count: { per_class: 39, merged: 40 }
+  identity_scheme:
+    row_identity: source_row_order
+    client_identity: { source: file, derived_from: merged_file_name }
+    label_identity: { source: column, column: Label, present_in: merged_only }
+    timestamp_field: none
+    device_mac_ip_field: none
+    provenance_fields: [source_file_name]
+  label_fields:
+    multiclass_label: { column: Label, type: categorical_string }
+    binary_label: { derivation: label_equals_benign, benign_value: BENIGN }
+  model_features:
+    role: model_feature
+    type: numeric_float
+    order:
+      - Header_Length
+      - "Protocol Type"
+      - Time_To_Live
+      - Rate
+      - fin_flag_number
+      - syn_flag_number
+      - rst_flag_number
+      - psh_flag_number
+      - ack_flag_number
+      - ece_flag_number
+      - cwr_flag_number
+      - ack_count
+      - syn_count
+      - fin_count
+      - rst_count
+      - HTTP
+      - HTTPS
+      - DNS
+      - Telnet
+      - SMTP
+      - SSH
+      - IRC
+      - TCP
+      - UDP
+      - DHCP
+      - ARP
+      - ICMP
+      - IGMP
+      - IPv
+      - LLC
+      - "Tot sum"
+      - Min
+      - Max
+      - AVG
+      - Std
+      - "Tot size"
+      - IAT
+      - Number
+      - Variance
+  post_encoding_feature_order: same_as_model_features
+  categorical_encoding: none
+  leakage_exclusions: [Label]
+  fingerprint_inputs:
+    source: [source_layout.merged_root, field_schema.source_column_count]
+    schema: [schema_id, field_schema.model_features.order]
+observed_facts:
+  pseudo_client_count: 63
+  per_class_file_count: 309
+  model_feature_count: 39
+  merged_column_count: 40
+  merged_excess_duplicate_rate: 0.53340
+  degenerate_window_rate: 0.000022
+  merged_files_are_shuffled_mixture_of_all_classes: true
+  device_mac_ip_capture_timestamp_columns_present: false
+readiness:
+  source_schema_complete: true
+  processed_feature_count_verified: true
 audits:
   - check: source_inspection
     inspection:
@@ -32,41 +101,22 @@ audits:
       rule: processed_feature_count_verified
       required_evidence: [processed_feature_schema_manifest]
     operations: { execution: dataset_audit, report: { table_type: source_inspection_report, output_formats: [markdown] } }
-    # Corroborated by direct full-corpus header inspection during this task: every one of the 309
-    # `CSV/CSV/*/*.pcap.csv` files and all 63 `CSV/MERGED_CSV/*.csv` files carry exactly 39 feature
-    # columns (plus the trailing `Label` column on the `MERGED_CSV` member only). This audit's own
-    # `dataset_audit`-profile run remains the system's runtime-executed, citable gate before any
-    # quantitative claim reaches print; the manual corroboration above does not substitute for it.
 eligibility:
   minimum_calibration_sample_count: 100
+materializations:
+  datp_core:
+    materialization_id: ciciot2023_datp_core
+    normalization: { strategy: min_max, scope: global_train }
+    preprocessing_sequence: [exclude_degenerate_window_rows, drop_exact_duplicate_rows_per_file, random_fractional_split, min_max_normalization_fit_on_train]
+    row_exclusion:
+      degenerate_window: exclude_rate_inf_or_blank_std_variance
+      duplicate_rows: drop_exact_duplicates_keep_first_per_file
+    split:
+      method: random_fractional
+      calibration_benign_only: true
+      split_seed: 0
+      ratios: { train: 0.70, calibration: 0.15, test: 0.15 }
 setups:
   file_pseudo_clients:
+    materialization: datp_core
     client_construction: { method: dataset_file_pseudo_clients, pseudo_client_count: 63 }
-split_definition:
-  train: { role: train }
-  calibration: { role: calibration, benign_only: true }
-  test: { role: test }
-preprocessing:
-  normalization: { strategy: min_max, scope: global_train }
-  row_exclusion:
-    # DECISION (full-corpus streamed, not a spot check):
-    # 1. Degenerate-window rows (`Rate == inf`, blank `Std`, blank `Variance`): confirmed rare
-    #    but genuinely recurring across the full corpus — `CSV/CSV` (46,740,945 rows):
-    #    `Rate==inf` in 1,035 rows (0.0022%), blank `Std` in 702, blank `Variance` in 703;
-    #    `MERGED_CSV` (45,019,243 rows): `Rate==inf` in 991 rows (0.0022%), blank `Std` in 677,
-    #    blank `Variance` in 679. These are single-packet flow windows where the rate computation
-    #    divides by a zero time delta and variance/std of one sample is undefined — a genuine,
-    #    recurring degenerate condition, never a transcription error. Rows with `Rate == inf` or
-    #    a blank `Std`/`Variance` in a retained column are excluded before model-feature
-    #    materialization; no sentinel fill (`0`/`NaN`) is substituted.
-    # 2. Exact-duplicate rows: a full-corpus, cross-file scan of `MERGED_CSV` (the tree this
-    #    dataset's sole `file_pseudo_clients` setup materializes from) found 21,005,822 distinct
-    #    rows out of 45,019,234 total — a 53.340% excess-duplicate rate (24,013,412 redundant
-    #    rows). This is far above the low, single-file-checked rate a prior spot check reported,
-    #    and is large enough that retaining duplicates would materially distort both the
-    #    quantile-estimation backbone and any calibration/training statistic. Exact duplicates
-    #    are dropped (first occurrence in each file's row order kept, applied per file since
-    #    `MERGED_CSV`'s own shuffle already randomizes row placement — a global cross-file
-    #    ordering carries no additional scientific meaning to preserve).
-    degenerate_window: exclude_rate_inf_or_blank_std_variance
-    duplicate_rows: drop_exact_duplicates_keep_first

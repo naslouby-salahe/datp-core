@@ -8,7 +8,18 @@ experiments:
     tier: tier_2
     roadmap_reference: E-S3
     data: { dataset: nbaiot, setup: dirichlet_partitioned }
+    regime_d_extension:
+      run_requirement: suppressed
+      data: { dataset: edge_iiotset, setup: external_group }
+      suppression:
+        reason: attack_row_client_assignment_unavailable
+        evidence: >-
+          The roadmap marks the heterogeneity/JS-association analysis (E-M4) Regime D extension as
+          "+ Regime D points". It is infeasible because Edge-IIoTset attack rows cannot be
+          assigned to the sensor groups (see external_device_dataset_validation); the seam is
+          preserved but non-executable.
     model: autoencoder
+    checkpoint_profile: datp_core
     training:
       profile: federated_averaging
       parameters: {}
@@ -46,21 +57,16 @@ experiments:
         secondary_procedures: []
       - label: heterogeneity_threshold_benefit_association
         kind: metric_association_analysis
-        # E-M4 (`heterogeneity_threshold_benefit_association`): regresses pairwise JS divergence
-        # against the paired CV(FPR) delta, reusing this experiment's own evaluated results.
         predictor_metric: pairwise_js_divergence
         outcome_metric: cv_fpr_delta
         grouping_dimension: dirichlet_alpha
         primary_procedure: { method: spearman_correlation }
         secondary_procedures:
           - { method: linear_regression }
-          # weak R² is a real, reportable result (roadmap §5.5, Tier 5).
     seed_cohort:
       paired_seed_count: 10
       derivation: deterministic_from_experiment_seed
       experiment_seed: 0
-      # applies the same locked ten-seed DATP-Core cohort as every other non-anchor experiment;
-      # the roadmap names no distinct seed count for Regime C.
     prerequisites:
       - requires: anchor_reproduction
         required_outcome: anchor_equivalence_passed
@@ -87,7 +93,7 @@ experiments:
             ordering: deterministic_by_dirichlet_alpha
             missing_value_policy: render_typed_unavailable
             source_result_types: [confirmatory_analysis_result]
-            output_formats: [markdown, latex]
+            output_formats: [pdf, png]
           - artifact_type: figure
             figure_type: scatter
             series:
@@ -96,5 +102,5 @@ experiments:
             ordering: deterministic_by_dirichlet_alpha
             missing_value_policy: render_typed_unavailable
             source_result_types: [metric_association_result]
-            output_formats: [markdown, latex]
+            output_formats: [pdf, png]
         wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]

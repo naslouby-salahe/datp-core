@@ -1,9 +1,184 @@
 schema_version: 1
-dataset: n_baiot
-dataset_version: coldstart_dropped_deduplicated
-# Descriptive name for the one processed artifact this design authorizes: raw N-BaIoT with the
-# row-1 cold-start row dropped and exact-duplicate rows removed (see `preprocessing` below). No
-# second N-BaIoT artifact exists that would require distinguishing from a plain "raw" pass-through.
+dataset: nbaiot
+display_name: N-BaIoT
+schema_id: nbaiot_kitsune_115
+source_layout:
+  root: N-BaIoT
+  device_dirs:
+    - Danmini_Doorbell
+    - Ecobee_Thermostat
+    - Ennio_Doorbell
+    - Philips_B120N10_Baby_Monitor
+    - Provision_PT_737E_Security_Camera
+    - Provision_PT_838_Security_Camera
+    - Samsung_SNH_1011_N_Webcam
+    - SimpleHome_XCS7_1002_WHT_Security_Camera
+    - SimpleHome_XCS7_1003_WHT_Security_Camera
+  benign_file: benign_traffic.csv
+  attack_family_dirs: [gafgyt_attacks, mirai_attacks]
+  attack_file_pattern: "*.csv"
+field_schema:
+  source_column_count: 115
+  identity_scheme:
+    row_identity: source_row_order
+    client_identity: { source: path, derived_from: device_directory_name }
+    label_identity:
+      source: path
+      benign_rule: file_is_benign_traffic_csv
+      attack_rule: file_under_attack_family_dir
+    attack_family_identity: { source: path, derived_from: attack_family_directory_name }
+    attack_type_identity: { source: path, derived_from: attack_file_basename }
+    timestamp_field: none
+    provenance_fields: [source_file_path, device_directory_name, attack_family_directory_name, attack_file_basename]
+  label_fields:
+    binary_label: { benign: benign_traffic, attack: [gafgyt, mirai] }
+    family_taxonomy: device_type
+    family_map:
+      Danmini_Doorbell: doorbell
+      Ennio_Doorbell: doorbell
+      Ecobee_Thermostat: other
+      Philips_B120N10_Baby_Monitor: other
+      Provision_PT_737E_Security_Camera: camera
+      Provision_PT_838_Security_Camera: camera
+      Samsung_SNH_1011_N_Webcam: camera
+      SimpleHome_XCS7_1002_WHT_Security_Camera: camera
+      SimpleHome_XCS7_1003_WHT_Security_Camera: camera
+  model_features:
+    role: model_feature
+    type: numeric_float
+    order:
+      - MI_dir_L5_weight
+      - MI_dir_L5_mean
+      - MI_dir_L5_variance
+      - MI_dir_L3_weight
+      - MI_dir_L3_mean
+      - MI_dir_L3_variance
+      - MI_dir_L1_weight
+      - MI_dir_L1_mean
+      - MI_dir_L1_variance
+      - MI_dir_L0.1_weight
+      - MI_dir_L0.1_mean
+      - MI_dir_L0.1_variance
+      - MI_dir_L0.01_weight
+      - MI_dir_L0.01_mean
+      - MI_dir_L0.01_variance
+      - H_L5_weight
+      - H_L5_mean
+      - H_L5_variance
+      - H_L3_weight
+      - H_L3_mean
+      - H_L3_variance
+      - H_L1_weight
+      - H_L1_mean
+      - H_L1_variance
+      - H_L0.1_weight
+      - H_L0.1_mean
+      - H_L0.1_variance
+      - H_L0.01_weight
+      - H_L0.01_mean
+      - H_L0.01_variance
+      - HH_L5_weight
+      - HH_L5_mean
+      - HH_L5_std
+      - HH_L5_magnitude
+      - HH_L5_radius
+      - HH_L5_covariance
+      - HH_L5_pcc
+      - HH_L3_weight
+      - HH_L3_mean
+      - HH_L3_std
+      - HH_L3_magnitude
+      - HH_L3_radius
+      - HH_L3_covariance
+      - HH_L3_pcc
+      - HH_L1_weight
+      - HH_L1_mean
+      - HH_L1_std
+      - HH_L1_magnitude
+      - HH_L1_radius
+      - HH_L1_covariance
+      - HH_L1_pcc
+      - HH_L0.1_weight
+      - HH_L0.1_mean
+      - HH_L0.1_std
+      - HH_L0.1_magnitude
+      - HH_L0.1_radius
+      - HH_L0.1_covariance
+      - HH_L0.1_pcc
+      - HH_L0.01_weight
+      - HH_L0.01_mean
+      - HH_L0.01_std
+      - HH_L0.01_magnitude
+      - HH_L0.01_radius
+      - HH_L0.01_covariance
+      - HH_L0.01_pcc
+      - HH_jit_L5_weight
+      - HH_jit_L5_mean
+      - HH_jit_L5_variance
+      - HH_jit_L3_weight
+      - HH_jit_L3_mean
+      - HH_jit_L3_variance
+      - HH_jit_L1_weight
+      - HH_jit_L1_mean
+      - HH_jit_L1_variance
+      - HH_jit_L0.1_weight
+      - HH_jit_L0.1_mean
+      - HH_jit_L0.1_variance
+      - HH_jit_L0.01_weight
+      - HH_jit_L0.01_mean
+      - HH_jit_L0.01_variance
+      - HpHp_L5_weight
+      - HpHp_L5_mean
+      - HpHp_L5_std
+      - HpHp_L5_magnitude
+      - HpHp_L5_radius
+      - HpHp_L5_covariance
+      - HpHp_L5_pcc
+      - HpHp_L3_weight
+      - HpHp_L3_mean
+      - HpHp_L3_std
+      - HpHp_L3_magnitude
+      - HpHp_L3_radius
+      - HpHp_L3_covariance
+      - HpHp_L3_pcc
+      - HpHp_L1_weight
+      - HpHp_L1_mean
+      - HpHp_L1_std
+      - HpHp_L1_magnitude
+      - HpHp_L1_radius
+      - HpHp_L1_covariance
+      - HpHp_L1_pcc
+      - HpHp_L0.1_weight
+      - HpHp_L0.1_mean
+      - HpHp_L0.1_std
+      - HpHp_L0.1_magnitude
+      - HpHp_L0.1_radius
+      - HpHp_L0.1_covariance
+      - HpHp_L0.1_pcc
+      - HpHp_L0.01_weight
+      - HpHp_L0.01_mean
+      - HpHp_L0.01_std
+      - HpHp_L0.01_magnitude
+      - HpHp_L0.01_radius
+      - HpHp_L0.01_covariance
+      - HpHp_L0.01_pcc
+  post_encoding_feature_order: same_as_model_features
+  categorical_encoding: none
+  leakage_exclusions: []
+  fingerprint_inputs:
+    source: [source_layout.root, source_layout.device_dirs, field_schema.source_column_count]
+    schema: [schema_id, field_schema.model_features.order]
+observed_facts:
+  device_count: 9
+  model_feature_count: 115
+  devices_without_mirai_family: [Ennio_Doorbell, Samsung_SNH_1011_N_Webcam]
+  benign_exact_duplicate_rate: 0.07633
+  attack_exact_duplicate_rate: 0.01773
+  cold_start_first_row_present_in_every_source_file: true
+readiness:
+  source_schema_complete: true
+  feature_schema_verified: true
+  per_device_membership_recoverable: true
 audits:
   - check: source_inspection
     inspection:
@@ -20,43 +195,52 @@ audits:
       report: { table_type: source_inspection_report, output_formats: [markdown] }
 eligibility:
   minimum_calibration_sample_count: 100
+materializations:
+  datp_core:
+    materialization_id: nbaiot_datp_core
+    normalization: { strategy: min_max, scope: global_train }
+    preprocessing_sequence: [drop_cold_start_row, drop_exact_duplicate_rows, chronological_gapped_split, min_max_normalization_fit_on_train]
+    row_exclusion:
+      cold_start_row: drop_first_row_per_source_file
+      duplicate_rows: drop_exact_duplicates_keep_first
+    split:
+      method: chronological_gapped
+      calibration_benign_only: true
+      ratios: { train: 0.60, gap_1: 0.01, calibration: 0.20, gap_2: 0.01 }
+  datp_core_dirichlet:
+    materialization_id: nbaiot_datp_core_dirichlet
+    normalization: { strategy: min_max, scope: global_train }
+    preprocessing_sequence: [drop_cold_start_row, drop_exact_duplicate_rows, random_fractional_split, min_max_normalization_fit_on_train]
+    row_exclusion:
+      cold_start_row: drop_first_row_per_source_file
+      duplicate_rows: drop_exact_duplicates_keep_first
+    split:
+      method: random_fractional
+      calibration_benign_only: true
+      split_seed: 0
+      ratios: { train: 0.70, calibration: 0.15, test: 0.15 }
+  anchor:
+    materialization_id: nbaiot_anchor_historical
+    normalization: { strategy: standard, scope: global_train }
+    preprocessing_sequence: [chronological_gapped_split, standard_normalization_fit_on_train]
+    row_exclusion:
+      cold_start_row: retain
+      duplicate_rows: retain
+    split:
+      method: chronological_gapped
+      calibration_benign_only: true
+      ratios: { train: 0.60, gap_1: 0.01, calibration: 0.20, gap_2: 0.01 }
 setups:
   natural_devices:
+    materialization: datp_core
+    client_construction: { method: physical_device_clients, device_count: 9 }
+  anchor_natural_devices:
+    materialization: anchor
     client_construction: { method: physical_device_clients, device_count: 9 }
   dirichlet_partitioned:
+    materialization: datp_core_dirichlet
     client_construction:
       method: dirichlet_partitioned_clients
       client_count: 20
       alpha: { from_sweep: dirichlet_alpha }
       partition_seed: 0
-      # locked to the same base experiment_seed used everywhere else in this study
-      # (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md` seed-derivation rule, documented once).
-split_definition:
-  train: { role: train }
-  calibration: { role: calibration, benign_only: true }
-  test: { role: test }
-preprocessing:
-  normalization: { strategy: min_max, scope: global_train }
-  chunk_profile: { chunk_row_count: 50000 }
-  row_exclusion:
-    # DECISION (full-corpus verified, not a spot check — every one of the 89 non-header CSV
-    # members under `N-BaIoT/` was inspected):
-    #
-    # 1. Row-1 cold-start artifact: confirmed present, identically, in all 89 raw files (9
-    #    benign + 80 attack). Its `*_weight` columns read `1`(.0), `*_variance`/`*_std` columns
-    #    read `0`(.0), and `HH_jit_L*_mean` reads a raw Unix-epoch timestamp instead of a jitter
-    #    statistic — an extractor cold-start artifact, off-scale by ~9 orders of magnitude. It is
-    #    dropped before model-feature materialization; it is never averaged, scaled, flagged, or
-    #    calibrated against, because no schema field exists to carry a per-row flag and an
-    #    unhandled cold-start row would corrupt every downstream statistic that touches it.
-    # 2. Exact-duplicate rows: a full-corpus row-level scan (not the single-file spot check the
-    #    prior documentation draft relied on) found duplicate rates far above that spot check's
-    #    0.015% (Ecobee_Thermostat only): benign corpus-wide 7.633% (555,932 rows, 42,432 excess
-    #    duplicate rows; per-device range 0.015%–18.473%), attack corpus-wide 1.773% (6,506,674
-    #    rows, 115,347 excess). Exact duplicates are dropped (first occurrence in source row
-    #    order kept), because Kitsune's continuous incremental statistics make bit-identical
-    #    feature rows carry no distinguishing new information for either benign-quantile
-    #    calibration or reconstruction training, and retaining them would materially inflate the
-    #    weight of the over-represented rows in both.
-    cold_start_row: drop_first_row_per_source_file
-    duplicate_rows: drop_exact_duplicates_keep_first

@@ -9,6 +9,7 @@ experiments:
     roadmap_reference: E-C1
     data: { dataset: nbaiot, setup: natural_devices }
     model: autoencoder
+    checkpoint_profile: datp_core
     training:
       profile: federated_averaging
       parameters: {}
@@ -19,10 +20,6 @@ experiments:
       - label: local
         threshold: { policy: local_threshold, quantile: 0.95 }
         requested_metrics: [cv_fpr, fpr, tpr, iqr_fpr, fpr_range, worst_client_fpr, auroc, macro_f1, p10_macro_f1, balanced_accuracy, worst_client_ba, jain_index, gini_coefficient]
-        # jain_index / gini_coefficient realize the optional operating-point equity suite (E-Q3,
-        # `operating_point_equity_suite`), attached as additional requested metrics per
-        # `EVALUATION_REPORTING_AND_PROVENANCE.md` §7.4 — never replacing cv_fpr as the primary
-        # endpoint.
     analyses:
       - label: confirmatory_scope_effect
         kind: paired_threshold_analysis
@@ -37,20 +34,13 @@ experiments:
         secondary_procedures:
           - { method: wilcoxon_signed_rank }
           - { method: cliffs_delta }
-          # E-Q4 (`secondary_confidence_intervals_and_effect_sizes`) — descriptive only, never a
-          # second bootstrap definition.
       - label: client_score_distribution_mechanism
         kind: distribution_mechanism_analysis
-        # E-M3 (`client_score_distribution_mechanism_analysis`): reuses this experiment's
-        # committed SCORE_SET artifacts, no separate source inspection, partitioning, training,
-        # scoring, or threshold construction.
         source_evaluations: [shared_mean, local]
         primary_procedure: { method: spearman_correlation }
         secondary_procedures: []
       - label: threshold_shift_detection_tradeoff
         kind: distribution_mechanism_analysis
-        # E-M5 (`threshold_shift_detection_tradeoff`): per-client (Δτ, ΔFPR, ΔTPR) shift table
-        # across all nine devices, no device filtering.
         source_evaluations: [shared_mean, local]
         primary_procedure: { method: spearman_correlation }
         secondary_procedures: []
@@ -85,7 +75,7 @@ experiments:
             ordering: deterministic_by_threshold_construction
             missing_value_policy: render_typed_unavailable
             source_result_types: [distribution_mechanism_result]
-            output_formats: [markdown, latex]
+            output_formats: [pdf, png]
           - artifact_type: figure
             figure_type: scatter
             series:
@@ -95,11 +85,9 @@ experiments:
             ordering: deterministic_by_threshold_construction
             missing_value_policy: render_typed_unavailable
             source_result_types: [distribution_mechanism_result]
-            output_formats: [markdown, latex]
+            output_formats: [pdf, png]
           - artifact_type: supplementary_table
             table_type: communication_storage_cost
-            # optional RESOURCE_COST stage (E-Q6, `communication_storage_cost_analysis`); MEASURED
-            # or ESTIMATED values, never conflated, covering SharedThreshold/LocalThreshold.
             columns:
               - { name: threshold_construction, unit: none, direction: none }
               - { name: communication_bytes_per_round, unit: bytes, direction: lower_is_better }
@@ -107,7 +95,7 @@ experiments:
             ordering: deterministic_by_threshold_construction
             missing_value_policy: render_typed_unavailable
             source_result_types: [resource_cost_result]
-            output_formats: [markdown]
+            output_formats: [markdown, latex]
         wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]
 
   - slug: shared_threshold_construction_sensitivity
@@ -118,6 +106,7 @@ experiments:
     roadmap_reference: E-S1
     data: { dataset: nbaiot, setup: natural_devices }
     model: autoencoder
+    checkpoint_profile: datp_core
     training:
       profile: federated_averaging
       parameters: {}
@@ -174,7 +163,17 @@ experiments:
     tier: tier_2
     roadmap_reference: E-S2
     data: { dataset: nbaiot, setup: natural_devices }
+    regime_d_extension:
+      run_requirement: suppressed
+      data: { dataset: edge_iiotset, setup: external_group }
+      suppression:
+        reason: attack_row_client_assignment_unavailable
+        evidence: >-
+          The roadmap marks the q-sensitivity sweep's Regime D extension as "+ Regime D". It is
+          infeasible because Edge-IIoTset attack rows cannot be assigned to the sensor groups (see
+          external_device_dataset_validation); the seam is preserved but non-executable.
     model: autoencoder
+    checkpoint_profile: datp_core
     training:
       profile: federated_averaging
       parameters: {}

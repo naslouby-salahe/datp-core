@@ -73,14 +73,14 @@ src/datp_core/
 │   │                       #   derive_artifact_namespace
 │   ├── data.py             # DataDefinition, ClientConstruction union, SplitDefinition union,
 │   │                       #   PreprocessingDefinition, CalibrationSubsetDefinition/Result,
-│   │                       #   Dataset, SplitRole, DatasetVersion,
+│   │                       #   Dataset, SplitRole, DatasetSchemaId, MaterializationId, DatasetMaterialization,
 │   │                       #   SourceFieldType, SourceFieldRole, SourceFieldDescriptor,
 │   │                       #   DatasetFieldSchema (field-level schema identity, DOMAIN §3.1),
 │   │                       #   SourceInspectionDefinition, FeasibilityDefinition (dataset-owned audits),
 │   │                       #   EligibilityDefinition's single owner value (minimum_calibration_sample_count)
 │   ├── model.py             # ModelDefinition, AutoencoderArchitecture, ReconstructionObjective,
 │   │                       #   TrainingProfile union, OptimizerDefinition, SchedulerDefinition,
-│   │                       #   CheckpointProductionDefinition/Schedule, CheckpointSelectionPolicy,
+│   │                       #   CheckpointProductionDefinition/Schedule, CheckpointProfile/CheckpointProfileId, CheckpointSelectionPolicy,
 │   │                       #   ParticipationStrategy, ModelPersonalizationStrategy,
 │   │                       #   Training/ScoringBatchDefinition, classify_training_profile,
 │   │                       #   effective_batch_size, rounds_max, PrimaryCheckpointRoundSelection,
@@ -267,10 +267,13 @@ that dataset, its split definition, its preprocessing, and its one
 `eligibility.minimum_calibration_sample_count` value. `ciciot2023.yaml` is
 explicitly boundary-role only (`SCIENTIFIC_FOUNDATION.md §5`); its single
 `file_pseudo_clients` setup never generalizes beyond
-`file_pseudo_client_applicability_boundary`. `edge_iiotset.yaml`'s
-`external_device`/`external_group` setups are authored only after the
-`client_granularity_feasibility` check closes, and its `chronological` setup
-only after `timestamp_semantics_verification` closes
+`file_pseudo_client_applicability_boundary`. `edge_iiotset.yaml` authors no
+`external_device` setup — device granularity is rejected by the
+`client_granularity_feasibility` check; only its `external_group` (group
+granularity authorized) and `chronological` setups are retained, and both
+are non-executable (`executable: false`,
+`suppression.reason = attack_row_client_assignment_unavailable`) because
+Edge-IIoTset attack rows cannot be assigned to the benign sensor groups
 (`SCIENTIFIC_FOUNDATION.md §5.1`). Worked examples:
 `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11`.
 
@@ -278,10 +281,16 @@ only after `timestamp_semantics_verification` closes
 
 One document, `autoencoder.yaml` — the only model family this design
 authorizes. It owns architecture, reconstruction objective, optimizer,
-checkpoint schedule, precision, determinism, and training-batch definition
-exactly once, plus a `training_profiles` map naming every authorized
-variant: `federated_averaging` (core ladder), `federated_averaging_personalized`
-(the one authorized personalization comparator, `SCI-07`),
+named `checkpoint_profiles` (`datp_core` = `{25,50,75,100,125,150,200}`,
+`anchor_terminal` = `{150}`), precision, determinism, and training-batch
+definition exactly once; each experiment selects one schedule by an explicit
+`checkpoint_profile` reference (the anchor a single terminal checkpoint at
+round 150, DATP-Core the seven checkpoints through round 200), never derived
+from `evidence_role`. It also owns a `training_profiles` map naming every
+authorized variant: `federated_averaging` (core ladder),
+`federated_averaging_personalized` (genuine Ditto — `personalization: ditto`,
+`personalization_proximal_weight: 1.0` — the one authorized personalization
+comparator, `SCI-07`),
 `federated_proximal` (the FedProx µ-grid stress test, matched to
 `federated_averaging` in every non-strategy field), and `centralized_pooled`
 (B0, its own identity chain, never fused with a federated artifact,
@@ -319,12 +328,15 @@ dataset identity/construction/split/preprocessing/eligibility and never
 execution limits, model settings, thresholds, metrics, or report formats;
 `models/autoencoder.yaml` owns model definition only (eligibility is
 dataset-owned, never re-authored here); `execution.yaml` owns execution
-only; an experiment entry's inline `report` owns presentation only and
-never a scientific value. A reduced smoke profile is a named entry in
-`execution.yaml`, never a runtime backoff (`EXEC-02`).
-`models/autoencoder.yaml`'s `federated_averaging_personalized` training
-profile remains a genuine blocker until the comparator and its
-hyperparameters are documented (`ENGINEERING §7`).
+only — including per-profile resource budgets, concurrency,
+`process_start_method`, and the `data_loading` block (`chunk_row_count`,
+`streaming`) that datasets no longer carry; an experiment entry's inline
+`report` owns presentation only and never a scientific value. A reduced
+smoke profile is a named entry in `execution.yaml`, never a runtime backoff
+(`EXEC-02`). `models/autoencoder.yaml`'s `federated_averaging_personalized`
+training profile is resolved as genuine Ditto (`personalization: ditto`,
+`personalization_proximal_weight: 1.0`) and is no longer a blocker
+(`ENGINEERING §7`).
 
 ## 4. `tests/` tree
 
