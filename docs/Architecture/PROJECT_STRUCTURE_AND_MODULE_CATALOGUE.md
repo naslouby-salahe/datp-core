@@ -73,7 +73,9 @@ src/datp_core/
 │   │                       #   derive_artifact_namespace
 │   ├── data.py             # DataDefinition, ClientConstruction union, SplitDefinition union,
 │   │                       #   PreprocessingDefinition, CalibrationSubsetDefinition/Result,
-│   │                       #   Dataset, SplitRole, DatasetVersion, feature-schema identity,
+│   │                       #   Dataset, SplitRole, DatasetVersion,
+│   │                       #   SourceFieldType, SourceFieldRole, SourceFieldDescriptor,
+│   │                       #   DatasetFieldSchema (field-level schema identity, DOMAIN §3.1),
 │   │                       #   SourceInspectionDefinition, FeasibilityDefinition (dataset-owned audits),
 │   │                       #   EligibilityDefinition's single owner value (minimum_calibration_sample_count)
 │   ├── model.py             # ModelDefinition, AutoencoderArchitecture, ReconstructionObjective,
@@ -338,7 +340,8 @@ tests/
 │   │                      #   canonical-K derivation, eligibility, non-finite rejection
 │   ├── application/       # use-case behavior with typed test doubles
 │   ├── config/           # schema→domain mapping; missing/extra-field failure; no-hidden-default;
-│   │                      #   experiment-family expansion (one document → many independent entries)
+│   │                      #   experiment-family expansion (one document → many independent entries);
+│   │                      #   DatasetFieldSchema drift detection (renamed/reordered/added source column)
 │   └── reporting/        # framework-free specification construction (was analysis/)
 ├── property/             # value-object ranges/finiteness; cv_fpr; pooled variance; fpr_target = 1 − q;
 │                          #   Cliff's-delta antisymmetry and bounds
@@ -430,7 +433,7 @@ or executor branch, a replacement identity system, or a compatibility shim.
 
 | New thing | Files touched | Never touched |
 |---|---|---|
-| **Dataset** | `Dataset`/registry entry in `domain/identifiers.py`; a new `configs/datasets/<name>.yaml` document (audits, setups, split, preprocessing, eligibility all in this one file); a source-inspector/partitioner adapter in `infrastructure/data/`; one binding in `composition/registries.py`; contract + memory-equivalence tests | any threshold, metric, evaluation, reporting module, `models/autoencoder.yaml`, or any `configs/experiments/` family |
+| **Dataset** | `Dataset`/registry entry in `domain/identifiers.py`; a new `configs/datasets/<name>.yaml` document (audits, setups, split, preprocessing, eligibility, and its `SOURCE_INSPECTION`-derived `DatasetFieldSchema` all traced to this one file); a source-inspector/partitioner adapter in `infrastructure/data/`; one binding in `composition/registries.py`; contract + memory-equivalence + schema-drift-detection tests | any threshold, metric, evaluation, reporting module, `models/autoencoder.yaml`, or any `configs/experiments/` family |
 | **Client construction (dataset setup)** | a `ClientConstruction` variant in `domain/data.py`; its schema arm in `config/schemas/data.py` + mapping; its `infrastructure/data/` implementation; one binding; one new `setups` entry on the owning dataset document | any experiment file, any letter-based label |
 | **Threshold policy** | a `ThresholdConstruction` variant in `domain/thresholding.py`; a discriminated schema arm carrying only its own fields; an `infrastructure/thresholding/` implementation; one registry line | score-generation code (scores are reused via preserved keys) |
 | **Training profile of the existing model family** | one new entry in `models/autoencoder.yaml`'s `training_profiles` map; a `TrainingProfile` variant in `domain/model.py` if it introduces a genuinely new `kind` | a new `configs/models/` document, any dataset, threshold, or experiment file |
@@ -476,7 +479,7 @@ point. Allowed/forbidden imports follow the layer of the module exactly
 | Module | Layer | Responsibility | Owns (representative) | Framework code | Tests | Extension point |
 |---|---|---|---|---|---|---|
 | `domain/experiments.py` | domain | run/experiment identity and aggregate roots | `RunDefinition`, `ScientificExperimentDefinition`, `ScientificExperimentCell`, `DatasetAuditDefinition`, `EvidenceRole`, `RunRequirement`, `CatalogueDisposition`, `derive_publication_regime`, `derive_artifact_namespace` | no | `unit/domain` | a new `RunDefinition` variant |
-| `domain/data.py` | domain | dataset/client/split/preprocessing/audit definitions | `DataDefinition`, `ClientConstruction`, `SplitDefinition`, `PreprocessingDefinition`, `Dataset`, `SplitRole`, `SourceInspectionDefinition`, `FeasibilityDefinition` | no | `unit/domain`, benign-only test | a `ClientConstruction`/`SplitDefinition` variant; a new dataset-owned audit check |
+| `domain/data.py` | domain | dataset/client/split/preprocessing/audit/field-schema definitions | `DataDefinition`, `ClientConstruction`, `SplitDefinition`, `PreprocessingDefinition`, `Dataset`, `SplitRole`, `SourceInspectionDefinition`, `FeasibilityDefinition`, `DatasetFieldSchema`, `SourceFieldDescriptor` | no | `unit/domain`, benign-only test, schema-drift-detection test | a `ClientConstruction`/`SplitDefinition` variant; a new dataset-owned audit check; a new `SourceFieldRole` |
 | `domain/model.py` | domain | model/training-profile/checkpoint definitions | `ModelDefinition`, `TrainingProfile`, `CheckpointSelectionPolicy`, `classify_training_profile` | no | `unit/domain` | a `TrainingProfile` variant |
 | `domain/thresholding.py` | domain | threshold constructions | `ThresholdConstruction` (8), `CentralizedPooledThreshold` | no | `property`, threshold-only-change test | a `ThresholdConstruction` variant |
 | `domain/evaluation.py` | domain | evaluation/analysis/metric/result types | `EvaluationDefinition`, `AnalysisDefinition`, `StatisticalProcedure`, every result type, `MetricId`/role/direction | no | `unit/domain`, `property` | a `MetricId`/family, an `AnalysisDefinition` variant |

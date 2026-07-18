@@ -195,11 +195,14 @@ every affected document:
   entry (`SCIENTIFIC_FOUNDATION.md §7.6`).
 - A publication regime label present in authored YAML; it is derived only
   by `derive_publication_regime(data)` for reporting.
-- An `effective_batch_size`, `rounds_max`, `batch_normalization`, or
-  artifact `namespace` field present in an authored YAML document — each is
-  computed post-resolution (`effective_batch_size` and `rounds_max` by the
-  pure functions in `DOMAIN_AND_APPLICATION_ARCHITECTURE.md §3.2`;
-  `namespace` by `derive_artifact_namespace`, `§3.4` of the same file); the
+- An `effective_batch_size`, `rounds_max`, `batch_normalization`,
+  `input_dim`, or artifact `namespace` field present in an authored YAML
+  document — each is computed post-resolution (`effective_batch_size` and
+  `rounds_max` by the pure functions in
+  `DOMAIN_AND_APPLICATION_ARCHITECTURE.md §3.2`; `input_dim` as
+  `len(model_feature_order)` from the resolved dataset's
+  `DatasetFieldSchema`, `§3.1` of the same file; `namespace` by
+  `derive_artifact_namespace`, `§3.4` of the same file); the
   model schema has no `batch_normalization` field at all, because the
   encoder architecture structurally forbids it (`SCI-19`) and an
   always-`false` boolean would only invite a future, silently-ignored
@@ -568,6 +571,22 @@ raw-versus-reprocessed distinction). None of the three datasets below
 currently does, so each authors the one descriptive name that actually
 identifies its artifact.
 
+### 11.0 Field-level schema evidence base
+
+Every field claim in `§§11.1–11.3` below is sourced directly from the
+mounted raw corpus (`data/raw/`, a symlink to the shared external data
+root) — header inspection, targeted row sampling, and the dataset
+authors' own documentation shipped alongside the files. Nothing is
+inferred from the roadmap or from memory of the published papers alone. A
+`DatasetFieldSchema` (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §3.1`) is the
+resolved, fingerprinted form of each table below; `SOURCE_INSPECTION`
+(`PIPELINE_EXECUTION_AND_ARTIFACTS.md §2`) is the stage that re-derives it
+from the actual mounted files at run time rather than trusting this
+document as a substitute for inspection. Where the raw corpus does not
+settle a question, the table says so explicitly and
+`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7` carries the corresponding
+blocker; nothing below is invented.
+
 `configs/datasets/nbaiot.yaml` — the sole N-BaIoT document, owning both of
 its authorized client-construction setups plus its source-audit trail:
 
@@ -610,6 +629,101 @@ preprocessing:
   chunk_profile: { chunk_row_count: 50000 }
 ```
 
+### 11.1 N-BaIoT field-level schema
+
+**Source layout (verified against the mounted corpus).** Nine per-device
+directories (`Danmini_Doorbell`, `Ecobee_Thermostat`, `Ennio_Doorbell`,
+`Philips_B120N10_Baby_Monitor`, `Provision_PT_737E_Security_Camera`,
+`Provision_PT_838_Security_Camera`, `Samsung_SNH_1011_N_Webcam`,
+`SimpleHome_XCS7_1002_WHT_Security_Camera`,
+`SimpleHome_XCS7_1003_WHT_Security_Camera` — exactly `device_count: 9`,
+confirming `PhysicalDeviceClients`). Each device directory holds
+`benign_traffic.csv` plus zero or more attack-family subdirectories: every
+device has `gafgyt_attacks/` (BASHLITE; five files —
+`combo.csv`, `junk.csv`, `scan.csv`, `tcp.csv`, `udp.csv`); seven of the
+nine devices additionally have `mirai_attacks/` (five files — `ack.csv`,
+`scan.csv`, `syn.csv`, `udp.csv`, `udpplain.csv`). **`Ennio_Doorbell` and
+`Samsung_SNH_1011_N_Webcam` have no `mirai_attacks/` directory at all** —
+confirmed by directory listing, not merely undocumented; any experiment
+computing a per-family (Mirai-specific) statistic must treat these two
+clients as structurally ineligible for that family, never as
+zero-count/absent-but-expected. A top-level `demonstrate_structure.csv`
+and `N_BaIoT_dataset_description_v1.txt` exist alongside the nine device
+directories; the former is a header-only file (zero data rows) and is not
+a data source.
+
+**Row identity, client identity, label.** No CSV carries an identity, MAC,
+IP, device, or timestamp column of any kind — confirmed: every
+`benign_traffic.csv` and every attack file has exactly the same 115
+comma-separated numeric fields and nothing else. Client identity is
+therefore **path-derived only** (the device directory name); the binary
+label is **path-derived only** (`benign_traffic.csv` → benign,
+any file under `gafgyt_attacks/` or `mirai_attacks/` → attack); the
+attack-family label is the subdirectory name (`gafgyt` | `mirai`) and the
+attack-type label is the file's base name (`combo`, `junk`, `scan`, `tcp`,
+`udp` under `gafgyt`; `ack`, `scan`, `syn`, `udp`, `udpplain` under
+`mirai` — note `scan` and `udp` are reused file names under both families
+and are only unambiguous together with the family directory). There is no
+row-level provenance field distinguishing individual capture sessions
+within one file.
+
+**Feature schema (all 115 columns, header-verified byte-identical across
+all nine devices and both attack families).** The columns are Kitsune
+stream-aggregation statistics (`N_BaIoT_dataset_description_v1.txt`,
+shipped with the corpus), a regular product of five aggregation scopes,
+five damped-window decay factors, and each scope's own statistic set —
+every one of the 115 names was enumerated from the actual header, not
+computed from the rule alone:
+
+| Aggregation scope | Meaning | Statistics | Per-window count | × 5 windows (`L5,L3,L1,L0.1,L0.01`) |
+|---|---|---|---|---|
+| `MI_dir` | stats of recent traffic from this packet's host (IP+MAC) | `weight, mean, variance` | 3 | 15 |
+| `H` | stats of recent traffic from this packet's host (IP) | `weight, mean, variance` | 3 | 15 |
+| `HH` | stats of traffic from this host to the destination host | `weight, mean, std, magnitude, radius, covariance, pcc` | 7 | 35 |
+| `HH_jit` | jitter of traffic from this host to the destination host | `weight, mean, variance` | 3 | 15 |
+| `HpHp` | stats of traffic from this host+port to the destination host+port | `weight, mean, std, magnitude, radius, covariance, pcc` | 7 | 35 |
+
+`15+15+35+15+35 = 115`, matching the header column count exactly (no
+undocumented 116th column, no short row observed). Column naming is
+`{scope}_L{window}_{statistic}` (`HH_jit` is the one scope whose own name
+contains an underscore, e.g. `HH_jit_L0.01_variance`). Every one of the 115
+columns is `role: MODEL_FEATURE`, `inferred_type: NUMERIC_FLOAT`; there is
+no excluded, identity, or label column to carry — canonical field IDs are
+the lowercased, dot-normalized source names (`HH_L0.1_pcc` →
+`hh_l0_1_pcc`) and `model_feature_order` is the literal 115-column header
+order, verified identical across every one of the eighteen inspected files
+(nine devices × {benign, one gafgyt file, one mirai file where present}).
+
+**Verified data-quality findings.**
+- **Row-1 cold-start artifact (every raw file).** The very first data row
+  of every N-BaIoT CSV is the stream's first-ever observed packet under
+  Kitsune's incremental damped-window statistics. For that row only, every
+  `*_weight` column reads `1`, every `*_variance`/`*_std` column reads `0`,
+  and — verified on `Danmini_Doorbell/benign_traffic.csv` — every
+  `HH_jit_L*_mean` column reads the literal value `1505661693`, a Unix
+  epoch timestamp (2017-09-17), not a jitter statistic; row 2 of the same
+  file already shows an ordinary small jitter mean (`≈4.98`). This is a
+  genuine artifact of the extractor's cold start, not a transcription
+  error: it reproduces on every file checked. **Preprocessing rule:** row 1
+  of every raw N-BaIoT file is either dropped before model-feature
+  materialization or explicitly flagged as a cold-start row; it is never
+  averaged, scaled, or calibrated against without this handling, because
+  its `HH_jit_*_mean` values are off-scale by roughly nine orders of
+  magnitude relative to every other row.
+- **Low-rate exact-duplicate rows.** `Ecobee_Thermostat/benign_traffic.csv`
+  (13,113 rows) contains 2 exact-duplicate rows (0.015%); no non-numeric or
+  empty cell and no constant column were found in the same file. Duplicate
+  handling is a stated, explicit policy (kept or deduplicated), never
+  silently assumed.
+- **No missing/non-numeric cells** were found in any sampled file beyond
+  the row-1 artifact above; every cell parses as a finite float.
+
+**Blockers.** None for feature-schema identity (fully verified, closed by
+inspection). The row-1 cold-start handling policy and the duplicate-row
+policy are genuine open decisions — `ScientificReadinessResult` blockers,
+not invented defaults — until an authority fixes one
+(`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`).
+
 `configs/datasets/ciciot2023.yaml` — boundary-role dataset only, carrying
 its feature-count re-verification audit as a blocker:
 
@@ -638,6 +752,12 @@ audits:
       rule: processed_feature_count_verified
       required_evidence: [processed_feature_schema_manifest]
       # feature count of the actual processed artifact; mirror distributions differ (roadmap §7).
+      # Manually re-verified against the mounted corpus (`§11.2` below): both the per-class
+      # CSV/ tree and the MERGED_CSV/ tree carry exactly 39 feature columns, matching the
+      # conference value exactly. This audit's automated SOURCE_INSPECTION run is still the
+      # authoritative gate that must execute and persist its own FEASIBILITY_RESULT before any
+      # experiment cites it — a manual documentation inspection is corroborating evidence, never
+      # a substitute for the pipeline's own check.
     operations: { execution: dataset_audit, report: { table_type: source_inspection_report, output_formats: [markdown] } }
 eligibility:
   minimum_calibration_sample_count: 100
@@ -650,9 +770,107 @@ split_definition:
   test: { role: test }
 preprocessing:
   normalization: { strategy: min_max, scope: global_train }
-  # feature count d is source-inspected, never authored; BLOCKED for any quantitative claim
-  # until the processed_feature_verification audit closes (conference value 39).
+  # feature count d is source-inspected, never authored; the conference value of 39 is
+  # corroborated by manual inspection (`§11.2`) but the processed_feature_verification audit's
+  # own run remains the citable gate for any quantitative claim.
 ```
+
+### 11.2 CICIoT2023 field-level schema
+
+**Source layout (verified against the mounted corpus).** Two parallel
+trees under `CIC_IOT_Dataset2023/CSV/`: `CSV/` holds 34 class-labeled
+folders (33 attack classes plus `Benign_Final`), each containing one or
+more `<Capture>.pcap.csv` per-capture-chunk files — **309 files in total**,
+counted directly (matching the shipped `README_CSV.pdf`'s "All 309 .csv
+files" statement; an unrelated "169 .csv files" sentence earlier in the
+same PDF is leftover boilerplate from a different CIC release and does not
+describe this corpus — verified false by direct count, not used).
+`MERGED_CSV/` holds exactly **63 files** (`Merged01.csv` … `Merged63.csv`),
+matching `DatasetFilePseudoClients.pseudo_client_count: 63` exactly. Per
+the dataset authors' own `README.pdf`: "The `MERGED_CSV` folder contains
+the same exact data as within each of the attack folders under `CSV`
+subfolder, except they have been **merged, shuffled and split** into
+multiple files for easy loading into machine learning scripts." **Each of
+the 63 files is therefore an arbitrary shuffled slice of the full
+34-class distribution, not a naturally distinct capture, source, or
+device** — confirmed directly: `Merged01.csv` alone contains rows from all
+34 distinct `Label` values. This is the concrete mechanism behind the
+roadmap's "near-homogeneous" framing of Regime B-a
+(`SCIENTIFIC_FOUNDATION.md §5`): the 63 pseudo-clients are close to i.i.d.
+samples of the same mixture, so a threshold-scope effect is not expected to
+appear across them, and any effect that did appear would need separate
+scrutiny as a possible sampling artifact rather than genuine heterogeneity.
+
+**Row identity, client identity, label.** No row-identity, MAC, device, IP,
+or capture-source column exists in either tree — confirmed by header
+inspection of both `CSV/` and `MERGED_CSV/` files: neither carries any of
+`mac`, `device`, `ip`, `capture`, or a genuine wall-clock timestamp field
+(`IAT` is inter-arrival *time delta*, a computed flow feature, not an
+absolute timestamp). This directly confirms the roadmap's rejection basis
+for `device_mac_repartition` (E-R1) and `chronological_probe_ciciot2023`
+(E-R2) from the actual files, not merely from the roadmap's own assertion.
+Client identity for `file_pseudo_client_evaluation` is **file-derived
+only** (one `MERGED_CSV/MergedNN.csv` file = one pseudo-client). The binary
+label is derived from the `Label` column present only in `MERGED_CSV/`
+files (`BENIGN` → benign, any of the other 33 values → attack); the
+per-class `CSV/` tree instead derives its label from the folder name and
+carries no `Label` column at all (39 columns, not 40) — the two trees are
+schema-siblings differing by exactly one column, never silently assumed
+interchangeable.
+
+**Feature schema (39 columns, per-class `CSV/` tree; verified
+byte-identical header across every sampled class folder).** In exact source
+order:
+
+```text
+Header_Length, Protocol Type, Time_To_Live, Rate, fin_flag_number, syn_flag_number,
+rst_flag_number, psh_flag_number, ack_flag_number, ece_flag_number, cwr_flag_number,
+ack_count, syn_count, fin_count, rst_count, HTTP, HTTPS, DNS, Telnet, SMTP, SSH, IRC,
+TCP, UDP, DHCP, ARP, ICMP, IGMP, IPv, LLC, Tot sum, Min, Max, AVG, Std, Tot size, IAT,
+Number, Variance
+```
+
+All 39 are `role: MODEL_FEATURE`; canonical field IDs are the
+lowercased, space/dot-normalized source names (`Tot sum` → `tot_sum`,
+`Protocol Type` → `protocol_type`). `MERGED_CSV/` carries the identical 39
+in the identical order, plus a 40th trailing column, `Label`
+(`role: MULTICLASS_LABEL`, `inferred_type: CATEGORICAL_STRING`, 34 distinct
+values verified in `Merged01.csv`: `BACKDOOR_MALWARE`, `BENIGN`,
+`BROWSERHIJACKING`, `COMMANDINJECTION`, ten `DDOS-*` variants,
+`DICTIONARYBRUTEFORCE`, `DNS_SPOOFING`, four `DOS-*` variants, three
+`MIRAI-*` variants, `MITM-ARPSPOOFING`, four `RECON-*` variants,
+`SQLINJECTION`, `UPLOADING_ATTACK`, `VULNERABILITYSCAN`, `XSS`); the binary
+`role: BINARY_LABEL` is a pure derivation, `Label == "BENIGN"`, never a
+second authored column.
+
+**Verified data-quality findings.**
+- **`Std` and `Variance` can be empty (missing), and `Rate` can be the
+  literal string `inf`.** Sampled directly in
+  `CSV/Benign_Final/BenignTraffic1.pcap.csv`: rows 8940 and 16401 (of a
+  20,000-row sample) have `Rate = inf` and `Std = ""`, `Variance = ""` in
+  the same row — a degenerate single-packet flow window where the rate
+  computation divides by a zero time delta and the variance/std of a
+  single sample is undefined. **Preprocessing rule:** `Rate == inf` and
+  blank `Std`/`Variance` are a genuine, recurring degenerate-window
+  condition, never a transcription error; they require an explicit,
+  typed handling policy (e.g. a typed sentinel or row exclusion) before
+  numeric materialization — never a silent `0`/`NaN`-fill.
+- **Three quasi-constant protocol-indicator columns observed in a
+  single-class sample.** `Telnet`, `SMTP`, `IRC` were constant (`0`) across
+  the entire 20,001-row `BenignTraffic1.pcap.csv` sample — expected,
+  since these are per-protocol presence flags and this capture contains no
+  Telnet/SMTP/IRC traffic; not evidence that these columns are globally
+  constant across the full 309-file corpus, and never dropped on the
+  strength of a single-file sample.
+- No non-numeric cell was found outside the `inf`/empty pattern above; no
+  duplicate-row check has been run over the full corpus (scale: 8.4–8.7 GB
+  per tree) — an open item, not a finding either way.
+
+**Blockers.** Feature-schema identity is verified (closed). Open:
+the full-corpus duplicate-row rate; the exact row count and class balance
+of every one of the 309 `CSV/` files and 63 `MERGED_CSV/` files (only a
+subset was directly inspected); the `Rate`/`Std`/`Variance` degenerate-window
+handling policy (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`).
 
 `configs/datasets/edge_iiotset.yaml` — the external-validation dataset,
 owning three setups (device, group, chronological) and every audit that
@@ -721,8 +939,198 @@ split_definition:
   test: { role: test }
 preprocessing:
   normalization: { strategy: min_max, scope: global_train }
-  # BLOCKED: external-device feature schema / input dimension from source inspection.
+  # The 63-column raw source schema and its 15-column drop list / 7-column dummy-encoding
+  # list are verified (`§11.3`); the exact post-encoding input dimension remains BLOCKED
+  # because one-hot expansion width is data-dependent (varies with the distinct category
+  # values surviving dropna/dedup), never guessed ahead of running the actual preprocessing.
 ```
+
+### 11.3 Edge-IIoTset field-level schema
+
+**Source layout (verified against the mounted corpus).** Three top-level
+roots: `Normal traffic/` (ten sensor-type subfolders, each with one
+`<Name>.csv` + one `<Name>.pcap`: `Distance`, `Flame_Sensor`, `Heart_Rate`,
+`IR_Receiver`, `Modbus`, `Soil_Moisture`, `Sound_Sensor`,
+`Temperature_and_Humidity`, `Water_Level`, `phValue`); `Attack traffic/`
+(14 `<Name>_attack.csv`/`.pcap` pairs — `Backdoor`, `DDoS_HTTP_Flood`,
+`DDoS_ICMP_Flood`, `DDoS_TCP_SYN_Flood`, `DDoS_UDP_Flood`, `MITM`,
+`OS_Fingerprinting`, `Password`, `Port_Scanning`, `Ransomware`,
+`SQL_injection`, `Uploading`, `Vulnerability_scanner`, `XSS`); and
+`Selected dataset for ML and DL/` (`ML-EdgeIIoT-dataset.csv`,
+157,801 rows; `DNN-EdgeIIoT-dataset.csv`, 2,219,202 rows). **All three
+roots share the identical 63-column raw header** — confirmed by diffing
+`Normal traffic/Distance/Distance.csv`, `Attack traffic/Backdoor_attack.csv`,
+and both "Selected" files. Unlike N-BaIoT and CICIoT2023, Edge-IIoTset
+ships **raw Wireshark dissector fields, not pre-engineered numeric flow
+statistics** — the "Selected dataset for ML and DL" files are a curated
+*row selection*, not a feature-engineered artifact; no further-reduced
+numeric-only file exists anywhere in the corpus. This is a genuine,
+verified raw-versus-processed distinction this dataset alone has among the
+three (`SCIENTIFIC_FOUNDATION.md §5` cross-reference).
+
+**Row identity, client/group identity, timestamp, label — all confirmed
+present, unlike the other two datasets.** `frame.time` is a genuine capture
+timestamp (raw per-sensor files show Wireshark-format strings, e.g.
+`" 2021 23:58:21.314757000 "`); `ip.src_host`/`ip.dst_host` are genuine
+per-row IP-address identity fields; `Attack_label` is binary (`0`/`1`,
+confirmed both values present in the full `ML-EdgeIIoT-dataset.csv`:
+133,499 rows labeled `1`, 24,301 labeled `0`); `Attack_type` is the
+multi-class label (verified 15 distinct values in the ML file: `Normal`
+plus 14 attack types matching the 14 `Attack traffic/` files exactly, with
+`DDoS_ICMP`/`DDoS_UDP`/`DDoS_TCP`/`DDoS_HTTP` merged from the
+flood-specific file names into shorter type labels). **Group identity is
+folder-derived, not `ip.src_host`-derived:** each `Normal traffic/`
+sensor-type folder occupies its own distinct `/24` subnet
+(`Distance→192.168.1.x`, `Flame_Sensor→192.168.7.x`, `Heart_Rate→192.168.3.x`,
+`IR_Receiver→192.168.5.x`, `Modbus→192.168.0.x`, `Soil_Moisture→192.168.8.x`,
+`Sound_Sensor→192.168.6.x`, `Water_Level→192.168.4.x`, `phValue→192.168.2.x`;
+`Temperature_and_Humidity` is the one exception, dominated by public IPs in
+sampling — worth a dedicated feasibility-audit check, not assumed
+consistent with the other nine), so the ten sensor-type folder names are a
+clean, verified candidate `GROUP_IDENTITY`/device-type taxonomy, while
+`ip.src_host` read directly is **not** clean (see below).
+
+**`ip.src_host` is not usable as client identity without cleaning.**
+Full-file scan of `ML-EdgeIIoT-dataset.csv` (157,801 rows): 19,090 distinct
+`ip.src_host` values, but three IPs (`192.168.0.128`, `192.168.0.170`,
+`192.168.0.101`) account for ≈83% of rows, the literal string `"0"`
+(a placeholder, not a real address) accounts for 7,991 rows, `"0.0.0.0"`
+for 208, and the remaining several thousand distinct values are
+long-tail public/incidental IPs each appearing 1–17 times (background
+DNS/NTP/CDN traffic, not IoT clients). A naive per-`ip.src_host` client
+partition would therefore produce one extreme majority handful of clients
+plus thousands of near-singleton pseudo-clients — concretely
+demonstrating, from the actual data, why `external_device_validation`'s
+device-vs-group granularity is feasibility-gated
+(`SCIENTIFIC_FOUNDATION.md §5.1`) rather than assumed.
+
+**Raw schema, 63 columns, in exact source order, classified by role
+against the dataset authors' own documented preprocessing recipe**
+(`Edge-IIoTset/Readme.txt`, "Step 4: Dropping data" / "Step 5: Categorical
+data encoding" — this is the creators' own canonical script, not a DATP-Core
+invention):
+
+| # | Source field | Inferred type | Role | Basis |
+|---|---|---|---|---|
+| 1 | `frame.time` | timestamp_string | `TIMESTAMP` | author-dropped before modeling |
+| 2 | `ip.src_host` | ip_address_string | `CLIENT_IDENTITY` | author-dropped before modeling |
+| 3 | `ip.dst_host` | ip_address_string | `EXCLUDED_LEAKAGE_RISK` | author-dropped before modeling |
+| 4 | `arp.dst.proto_ipv4` | ip_address_string | `EXCLUDED_LEAKAGE_RISK` | author-dropped before modeling |
+| 5 | `arp.opcode` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 6 | `arp.hw.size` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 7 | `arp.src.proto_ipv4` | ip_address_string | `EXCLUDED_LEAKAGE_RISK` | author-dropped before modeling |
+| 8 | `icmp.checksum` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 9 | `icmp.seq_le` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 10 | `icmp.transmit_timestamp` | numeric_int | `EXCLUDED_LEAKAGE_RISK` | author-dropped before modeling |
+| 11 | `icmp.unused` | numeric_int | `MODEL_FEATURE` | retained by author recipe (constant `0.0` in sample) |
+| 12 | `http.file_data` | numeric_int | `MODEL_FEATURE` | retained by author recipe (constant `0.0` in sample) |
+| 13 | `http.content_length` | numeric_int | `MODEL_FEATURE` | retained by author recipe (constant `0.0` in sample) |
+| 14 | `http.request.uri.query` | free_text | `EXCLUDED_LEAKAGE_RISK` | author-dropped before modeling; sampled values contain literal SQL-injection payload text |
+| 15 | `http.request.method` | categorical_string | `MODEL_FEATURE` | author dummy-encodes (one-hot) |
+| 16 | `http.referer` | categorical_string | `MODEL_FEATURE` | author dummy-encodes (one-hot) |
+| 17 | `http.request.full_uri` | free_text | `EXCLUDED_LEAKAGE_RISK` | author-dropped before modeling; sampled values contain literal SQL-injection/XSS payload text |
+| 18 | `http.request.version` | categorical_string | `MODEL_FEATURE` | author dummy-encodes (one-hot) |
+| 19 | `http.response` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 20 | `http.tls_port` | numeric_int | `MODEL_FEATURE` | retained by author recipe (constant `0.0` in sample) |
+| 21 | `tcp.ack` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 22 | `tcp.ack_raw` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 23 | `tcp.checksum` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 24 | `tcp.connection.fin` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 25 | `tcp.connection.rst` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 26 | `tcp.connection.syn` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 27 | `tcp.connection.synack` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 28 | `tcp.dstport` | numeric_int | `EXCLUDED_HIGH_CARDINALITY` | author-dropped before modeling |
+| 29 | `tcp.flags` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 30 | `tcp.flags.ack` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 31 | `tcp.len` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 32 | `tcp.options` | free_text | `EXCLUDED_HIGH_CARDINALITY` | author-dropped before modeling; opaque hex payload |
+| 33 | `tcp.payload` | free_text | `EXCLUDED_HIGH_CARDINALITY` | author-dropped before modeling; opaque hex payload |
+| 34 | `tcp.seq` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 35 | `tcp.srcport` | numeric_int | `EXCLUDED_HIGH_CARDINALITY` | author-dropped before modeling |
+| 36 | `udp.port` | numeric_int | `EXCLUDED_HIGH_CARDINALITY` | author-dropped before modeling |
+| 37 | `udp.stream` | numeric_int | `MODEL_FEATURE` | retained by author recipe (constant `0.0` in sample) |
+| 38 | `udp.time_delta` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 39 | `dns.qry.name` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 40 | `dns.qry.name.len` | numeric_int | `MODEL_FEATURE` | author dummy-encodes (one-hot) despite the numeric-looking values |
+| 41 | `dns.qry.qu` | numeric_int | `MODEL_FEATURE` | retained by author recipe |
+| 42 | `dns.qry.type` | numeric_int | `MODEL_FEATURE` | retained by author recipe (constant `0.0` in sample) |
+| 43 | `dns.retransmission` | numeric_int | `MODEL_FEATURE` | retained by author recipe (constant `0.0` in sample) |
+| 44 | `dns.retransmit_request` | numeric_int | `MODEL_FEATURE` | retained by author recipe (constant `0.0` in sample) |
+| 45 | `dns.retransmit_request_in` | numeric_int | `MODEL_FEATURE` | retained by author recipe (constant `0.0` in sample) |
+| 46 | `mqtt.conack.flags` | categorical_string | `MODEL_FEATURE` | author dummy-encodes (one-hot); protocol-conditional placeholder `0.0` outside MQTT rows |
+| 47 | `mqtt.conflag.cleansess` | numeric_int | `MODEL_FEATURE` | retained by author recipe; protocol-conditional placeholder |
+| 48 | `mqtt.conflags` | numeric_int | `MODEL_FEATURE` | retained by author recipe; protocol-conditional placeholder |
+| 49 | `mqtt.hdrflags` | numeric_int | `MODEL_FEATURE` | retained by author recipe; protocol-conditional placeholder |
+| 50 | `mqtt.len` | numeric_int | `MODEL_FEATURE` | retained by author recipe; protocol-conditional placeholder |
+| 51 | `mqtt.msg_decoded_as` | numeric_int | `MODEL_FEATURE` | retained by author recipe; protocol-conditional placeholder |
+| 52 | `mqtt.msg` | numeric_int | `EXCLUDED_LEAKAGE_RISK` | author-dropped before modeling |
+| 53 | `mqtt.msgtype` | numeric_int | `MODEL_FEATURE` | retained by author recipe; protocol-conditional placeholder |
+| 54 | `mqtt.proto_len` | numeric_int | `MODEL_FEATURE` | retained by author recipe; protocol-conditional placeholder |
+| 55 | `mqtt.protoname` | categorical_string | `MODEL_FEATURE` | author dummy-encodes (one-hot); protocol-conditional placeholder |
+| 56 | `mqtt.topic` | categorical_string | `MODEL_FEATURE` | author dummy-encodes (one-hot); protocol-conditional placeholder |
+| 57 | `mqtt.topic_len` | numeric_int | `MODEL_FEATURE` | retained by author recipe; protocol-conditional placeholder |
+| 58 | `mqtt.ver` | numeric_int | `MODEL_FEATURE` | retained by author recipe; protocol-conditional placeholder |
+| 59 | `mbtcp.len` | numeric_int | `MODEL_FEATURE` | retained by author recipe; protocol-conditional placeholder |
+| 60 | `mbtcp.trans_id` | numeric_int | `MODEL_FEATURE` | retained by author recipe; protocol-conditional placeholder |
+| 61 | `mbtcp.unit_id` | numeric_int | `MODEL_FEATURE` | retained by author recipe; protocol-conditional placeholder |
+| 62 | `Attack_label` | numeric_int | `BINARY_LABEL` | — |
+| 63 | `Attack_type` | categorical_string | `MULTICLASS_LABEL` | — |
+
+**Preprocessing and feature-group rules (author-verified, `Readme.txt`
+"Step 4"/"Step 5").** Drop exactly the 15 columns marked
+`EXCLUDED_LEAKAGE_RISK`/`EXCLUDED_HIGH_CARDINALITY`/`TIMESTAMP`/
+`CLIENT_IDENTITY` above (`frame.time`, `ip.src_host`, `ip.dst_host`,
+`arp.src.proto_ipv4`, `arp.dst.proto_ipv4`, `http.file_data`,
+`http.request.full_uri`, `icmp.transmit_timestamp`,
+`http.request.uri.query`, `tcp.options`, `tcp.payload`, `tcp.srcport`,
+`tcp.dstport`, `udp.port`, `mqtt.msg`) — note `http.file_data` is
+author-*retained* despite being constant in-sample, and `icmp.transmit_timestamp`
+is author-*dropped* despite being numeric, so type alone never determines
+exclusion, only the documented role does. One-hot ("dummy") encode exactly
+the 7 columns marked "author dummy-encodes" above
+(`http.request.method`, `http.referer`, `http.request.version`,
+`dns.qry.name.len`, `mqtt.conack.flags`, `mqtt.protoname`, `mqtt.topic`).
+Row filter: drop any row with a null in a retained column, then drop exact
+duplicate rows, before encoding. The remaining 46 retained non-label
+columns (63 − 15 dropped − 2 label) are deterministic and fully verified;
+the *final* ordered `model_feature_order` width is not, because one-hot
+expansion produces one column per distinct category value that survives
+row-filtering — data-dependent, never estimated or guessed ahead of
+actually running this pipeline.
+
+**Verified data-quality findings.**
+- **`ip.src_host` literal `"0"` and `"0.0.0.0"` placeholders** occur in
+  every one of the ten `Normal traffic/` sensor folders (both appear among
+  the first five distinct values in every folder checked) — a systematic,
+  not incidental, missing-value pattern; never treated as a real address.
+- **`frame.time` format is inconsistent between the raw per-sensor files
+  and the combined "Selected" files.** Raw `Normal traffic/Distance/Distance.csv`
+  carries proper Wireshark timestamp strings (`" 2021 23:58:21.314757000 "`);
+  a sampled row of `ML-EdgeIIoT-dataset.csv` carries `frame.time = "6.0"`,
+  which is not a valid Wireshark timestamp. Since `frame.time` is dropped
+  before modeling regardless (author recipe), this does not affect the
+  feature schema, but it **blocks** any temporal-ordering claim
+  (`chronological_recalibration_evaluation`'s `capture_time_field`) until
+  the actual distribution of malformed values across the corpus is
+  characterized by `edge_iiotset_timestamp_semantics_verification`.
+- **Many `mqtt.*`/`mbtcp.*` columns are constant (`0.0`) except in rows from
+  their own protocol's captures** (`role` notes above) — a genuine,
+  systematic protocol-conditional placeholder pattern (confirmed on a
+  30,000-row sample of `ML-EdgeIIoT-dataset.csv`), not a defect, but a
+  required normalization consideration: these columns' informativeness is
+  concentrated in a small row subset and their global variance is
+  therefore not representative of their conditional variance.
+
+**Blockers.** Final post-encoding `model_feature_order` width (data-dependent
+one-hot expansion, `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`);
+`frame.time` malformed-value distribution and true timestamp semantics
+(gates `chronological_recalibration_evaluation`); `Temperature_and_Humidity`
+folder's subnet-consistency exception (candidate group-identity anomaly,
+unresolved); full-corpus duplicate-row rate (only a 30,000-row sample was
+checked). Device-vs-group granularity itself remains gated by
+`edge_iiotset_client_granularity_feasibility` exactly as already documented
+(`SCIENTIFIC_FOUNDATION.md §5.1`) — the `ip.src_host` noise findings above
+are additional evidence for why that gate exists, not a resolution of it.
 
 ## 12. Reusable model configuration
 

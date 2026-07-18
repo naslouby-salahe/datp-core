@@ -139,7 +139,7 @@ the roadmap names is represented below, executable or not:
 |---|---|---|---|
 | `natural_device_evaluation` | N-BaIoT, `PhysicalDeviceClients` (K = 9) | A | `LOCKED`, confirmatory + anchor |
 | `controlled_heterogeneity_evaluation` | N-BaIoT, `DirichletPartitionedClients` (K = 20, α ∈ {0.1, 0.3, 0.5, 1.0, 10.0, IID}) | C | `LOCKED`, supportive |
-| `file_pseudo_client_evaluation` | CICIoT2023, `DatasetFilePseudoClients` (63 pseudo-clients, feature count d = 39 pending re-verification against the actual processed artifact) | B-a | `LOCKED`, boundary only; never generalized beyond itself |
+| `file_pseudo_client_evaluation` | CICIoT2023, `DatasetFilePseudoClients` (63 pseudo-clients, matching the `MERGED_CSV/` file count exactly; feature count d = 39 manually corroborated against the mounted corpus, `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.2` — the `processed_feature_verification` audit's own run remains the citable gate) | B-a | `LOCKED`, boundary only; never generalized beyond itself |
 | `device_mac_repartition` | CICIoT2023, a device/MAC-scoped client construction | B-b | `REJECTED` — the available CSV artifact lacks MAC, device, IP, capture-source, and timestamp columns; no pseudo-client substitute and no PCAP-reprocessing branch exist |
 | `chronological_probe_ciciot2023` | CICIoT2023, a genuine-timestamp temporal protocol | — | `REJECTED` — no timestamp column and no file/row/merge/directory pseudo-time substitute |
 | `external_device_validation` | Edge-IIoTset, `ExternalDeviceOrGroupClients`, device-versus-group resolved by a first-principles feasibility audit (target K ∈ {6, 15}; requires n_k ≥ 100 for ≥ 90% of clients) | D | `LOCKED`, external validation; feasibility-gated |

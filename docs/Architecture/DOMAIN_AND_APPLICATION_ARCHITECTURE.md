@@ -154,6 +154,67 @@ calibration variant has no field capable of admitting an attack-labeled row
 (fit rows restricted to authorized `TrainSplit` rows). Runtime owns
 preprocessing chunk sizing and execution.
 
+#### Field-level schema (`DatasetFieldSchema`)
+
+Every source column of every dataset — raw or already-numeric — is a typed
+`SourceFieldDescriptor`; there is no untyped, unclassified, or silently
+dropped column anywhere in the pipeline. `SOURCE_INSPECTION`
+(`PIPELINE_EXECUTION_AND_ARTIFACTS.md §2`) produces exactly one
+`DatasetFieldSchema` per dataset as its `FEATURE_SCHEMA_MANIFEST` artifact;
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11` gives the concrete,
+source-verified content of this manifest for all three datasets this design
+authorizes.
+
+```python
+class SourceFieldType(StrEnum):
+    NUMERIC_FLOAT = "numeric_float"
+    NUMERIC_INT = "numeric_int"
+    CATEGORICAL_STRING = "categorical_string"
+    FREE_TEXT = "free_text"                # unbounded-cardinality payload/query/hex content
+    TIMESTAMP_STRING = "timestamp_string"
+    IP_ADDRESS_STRING = "ip_address_string"
+
+class SourceFieldRole(StrEnum):
+    MODEL_FEATURE = "model_feature"                                    # enters model_feature_order
+    CLIENT_IDENTITY = "client_identity"                                # device/IP-derived
+    GROUP_IDENTITY = "group_identity"                                  # sensor-type/subnet/family grouping
+    BINARY_LABEL = "binary_label"                                      # benign-vs-attack
+    MULTICLASS_LABEL = "multiclass_label"                              # attack family/type
+    TIMESTAMP = "timestamp"                                            # capture wall-clock time
+    ROW_PROVENANCE = "row_provenance"                                  # source file/path/capture identity
+    EXCLUDED_LEAKAGE_RISK = "excluded_leakage_risk"                    # attack signature reachable in raw text
+    EXCLUDED_HIGH_CARDINALITY = "excluded_high_cardinality"            # port/hex/opaque payload
+    EXCLUDED_PROTOCOL_CONDITIONAL_PLACEHOLDER = "excluded_protocol_conditional_placeholder"
+                                                                        # zero-filled unless a specific protocol fires
+    EXCLUDED_UNRESOLVED = "excluded_unresolved"                        # genuinely unclassified; ScientificReadinessResult blocker
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SourceFieldDescriptor:
+    source_name: str                       # exact verbatim source column name
+    canonical_field_id: CanonicalFieldId
+    inferred_type: SourceFieldType
+    role: SourceFieldRole
+    note: str | None                       # non-obvious behavior only (cold-start artifact, placeholder
+                                           #   value, dataset-author-recommended exclusion), never filler
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DatasetFieldSchema:
+    dataset: Dataset
+    dataset_version: DatasetVersion
+    source_fields: tuple[SourceFieldDescriptor, ...]      # every column, in exact source order
+    model_feature_order: tuple[CanonicalFieldId, ...]     # the ordered MODEL_FEATURE subset only
+    schema_fingerprint: StageFingerprint                  # blake3 of the canonical tuple above (§8 of
+                                                          #   CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md)
+```
+
+`model_feature_order` is never re-derived at training or scoring time from a
+`role == MODEL_FEATURE` filter applied live — it is a persisted, fingerprinted
+field of the committed `DatasetFieldSchema`, so a later source-schema drift
+(a column renamed, reordered, or added upstream) is a detected
+`SchemaCompatibility` mismatch rather than a silent feature-vector reshuffle.
+A `CanonicalFieldId` is stable across dataset versions that share the same
+underlying feature; it is never reused for two different source columns.
+
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CalibrationSubsetDefinition:
@@ -261,7 +322,13 @@ stress test — is never a stored field; it is computed by
 self-validation the prior design needed to check a stored role against its
 own training specification. `AutoencoderArchitecture` is a value object
 (`hidden_dims`, `bottleneck_dim`, `activation`; no batch normalization
-anywhere, `SCI-19`). `CheckpointSelectionPolicy` is a locked value naming
+anywhere, `SCI-19`). It carries no authored `input_dim` field: input width
+is the pure derivation `len(model_feature_order)` from the resolved
+experiment's `DatasetFieldSchema` (`§3.1`), computed after dataset
+resolution exactly like `effective_batch_size` and `rounds_max` (`§3.2`
+below) — never authored, and never guessed ahead of `SOURCE_INSPECTION`
+actually running (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §4`).
+`CheckpointSelectionPolicy` is a locked value naming
 the fixed evidence source (`natural_device_evaluation` only) and the two
 locked deterministic rules (lowest federated-averaging-weighted benign
 validation reconstruction error; ties broken toward the earlier scheduled
@@ -675,7 +742,7 @@ one per `STATISTICAL_ANALYZE`-eligible `AnalysisDefinition` kind; excludes
 
 | Type | Purpose |
 |---|---|
-| `DatasetSourceInspectionResult` | inspected source facts: source manifest, feature-schema manifest, source-row identity scheme, timestamp evidence; never partitions or preprocesses |
+| `DatasetSourceInspectionResult` | inspected source facts: source manifest, `DatasetFieldSchema` (`§3.1`) as the `FEATURE_SCHEMA_MANIFEST` content, source-row identity scheme, timestamp evidence; never partitions or preprocesses |
 | `ClientPartitionResult` | authoritative client mapping: partition manifest, client roster, `PartitionIdentity` |
 | `SplitDefinitionResult` | exact row membership: split manifest, split identities, row-order checksums |
 | `FittedPreprocessorResult` | immutable fitted state; contains no processed split and no test-derived statistic |
@@ -1087,11 +1154,14 @@ class AnalysisLabel(str): ...         # unique within one ScientificExperimentDe
 class SweepParameterName(str): ...    # a declared sweep axis (threshold_quantile, dirichlet_alpha,
                                       #   shrinkage_weight, calibration_sample_count, fixed_k,
                                       #   fingerprint_feature_subset); also a MetricAssociation grouping
-class DatasetVersion(str): ...        # processed-artifact version tag (e.g. "v1", "processed_v1")
+class DatasetVersion(str): ...        # semantic artifact name (e.g. "processed"); never a meaningless
+                                      #   counter such as "v1" (CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11)
 class ResultTypeId(str): ...          # names a frozen result type a ReportDefinition consumes
 class ClientId(str): ...              # opaque per-construction client identity
 class DeviceFamilyId(str): ...        # authorized taxonomy family (FamilyThreshold only)
 class ClusterId(int): ...             # 0 ≤ id < cluster_count
+class CanonicalFieldId(str): ...      # stable snake_case source-column identifier (§3.1); registry-validated
+                                      #   per dataset, never reused across two distinct source columns
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SchemaVersion:
@@ -1891,6 +1961,8 @@ this section is the final member list.
 | Enum | Members | Owner | Serialized | Enters identity |
 |---|---|---|---|---|
 | `Dataset` | `N_BAIOT`, `CICIOT2023`, `EDGE_IIOTSET` | `domain/data.py` | yes | yes |
+| `SourceFieldType` | `NUMERIC_FLOAT`, `NUMERIC_INT`, `CATEGORICAL_STRING`, `FREE_TEXT`, `TIMESTAMP_STRING`, `IP_ADDRESS_STRING` | `domain/data.py` | yes | no (schema-manifest metadata only) |
+| `SourceFieldRole` | `MODEL_FEATURE`, `CLIENT_IDENTITY`, `GROUP_IDENTITY`, `BINARY_LABEL`, `MULTICLASS_LABEL`, `TIMESTAMP`, `ROW_PROVENANCE`, `EXCLUDED_LEAKAGE_RISK`, `EXCLUDED_HIGH_CARDINALITY`, `EXCLUDED_PROTOCOL_CONDITIONAL_PLACEHOLDER`, `EXCLUDED_UNRESOLVED` | `domain/data.py` | yes | yes (`model_feature_order` derivation) |
 | `SplitRole` | `TRAIN`, `CALIBRATION`, `TEST`, `TEMPORAL_EVALUATION` | `domain/data.py` | yes | yes |
 | `ClientGranularity` | `DEVICE`, `GROUP` | `domain/data.py` | yes | yes |
 | `NormalizationStrategy` | `MIN_MAX`, `STANDARD` | `domain/data.py` | yes | yes |

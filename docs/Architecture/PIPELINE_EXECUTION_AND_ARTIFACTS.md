@@ -243,7 +243,7 @@ member.
 |---|---|---|
 | `RAW_DATASET_REF` | external input | immutable external dataset copy reference |
 | `SOURCE_INSPECTION` | `SOURCE_INSPECTION` | source manifest, member hashes, source-row identity scheme |
-| `FEATURE_SCHEMA_MANIFEST` | `SOURCE_INSPECTION` | ordered feature names, types, roles |
+| `FEATURE_SCHEMA_MANIFEST` | `SOURCE_INSPECTION` | one `DatasetFieldSchema` (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §3.1`): every source column's name, inferred type, and `SourceFieldRole`, the ordered `model_feature_order` subset, and the schema's own `schema_fingerprint` |
 | `FEASIBILITY_RESULT` | `FEASIBILITY_AUDIT` | eligible/total client counts, coverage, locked minimum evidence, status |
 | `PARTITION_MANIFEST` | `CLIENT_PARTITION` | client roster, exact source-row membership |
 | `SPLIT_MANIFEST` | `SPLIT_DEFINITION` | exact train/calibration/test row membership, row-order checksums |
@@ -542,7 +542,7 @@ else is provenance-only.
 
 | Stage | Request → Result | Identity projection (fingerprinted fields) | Reuse invalidated by | Failure (disposition) | Retry | Test |
 |---|---|---|---|---|---|---|
-| `SOURCE_INSPECTION` | `InspectDatasetSourceRequest` → `DatasetSourceInspectionResult` | dataset, dataset_version | dataset/version change | `DatasetError` (STAGE_BLOCKING) | no | `integration/data` chunked-vs-reference |
+| `SOURCE_INSPECTION` | `InspectDatasetSourceRequest` → `DatasetSourceInspectionResult` | dataset, dataset_version, resolved `DatasetFieldSchema.schema_fingerprint` | dataset/version change; a source-column rename, reorder, addition, or type change | `DatasetError` (STAGE_BLOCKING); a `SchemaCompatibility` mismatch against the authored `DatasetFieldSchema` is a `DomainValidationError` (STAGE_BLOCKING), never a silent reshuffle | no | `integration/data` chunked-vs-reference; `unit/config` schema-drift-detection test |
 | `FEASIBILITY_AUDIT` | audit request → `FeasibilityRecord` | dataset, candidate construction, coverage rule | source-inspection change, rule change | `FeasibilityRejection` (RUN_BLOCKING) | no | `unit/domain` coverage-gate |
 | `CLIENT_PARTITION` | `ClientPartitionRequest` → `ClientPartitionResult` | `ClientConstruction` variant + fields, source identity | construction change, source change | `PartitionError` (STAGE_BLOCKING) | no | `unit/domain` partition invariants |
 | `SPLIT_DEFINITION` | `BuildSplitRequest` → `SplitDefinitionResult` | `SplitDefinition`, partition identity | partition change, split change | `SplitError` (STAGE_BLOCKING) | no | benign-only calibration test |

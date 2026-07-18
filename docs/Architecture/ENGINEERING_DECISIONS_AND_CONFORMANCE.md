@@ -130,6 +130,7 @@ identifier rather than repeat the text.
 | `CFG-10` | An incomplete boundary document reports a typed blocker; resolve, plan, and run reject it and no frozen domain value carries a sentinel. |
 | `CFG-11` | Experiment and dataset-audit CLIs expose the same seven lifecycle verbs and no scientific-affecting override. |
 | `CFG-12` | A zero-input Make target selects exactly one CLI action and one registered experiment configuration, contains no user-supplied parameter, and fails if its referenced configuration does not exist; a generic parameterized target (`make run EXPERIMENT=...`) is never defined. |
+| `CFG-13` | Every source column of every dataset is a typed `SourceFieldDescriptor` with a named `SourceFieldRole`; `model_feature_order` never includes a column carrying identity, label, timestamp, provenance, or a documented leakage/high-cardinality risk, and an excluded column always carries a cited reason (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11`). |
 
 ### `PIPE-*` — stages and planning
 
@@ -356,9 +357,13 @@ non-citable.
 | Base `experiment_seed` integer for deterministic seed derivation | statistical/operational authority | every seed-dependent stage | `BLOCKED` |
 | Personalization comparator choice and hyperparameters | documented pre-training decision | `model_personalization_absorption_test` | `BLOCKED` |
 | External-device (Edge-IIoTset) partition granularity (device vs. group) | first-principles feasibility audit | every `external_device_validation` stage | `BLOCKED` |
-| External-device feature schema / input dimension | source inspection | materialization onward for `external_device_validation` | `BLOCKED` |
-| CICIoT2023 feature count (conference value d = 39) | inspected actual artifact | any quantitative `file_pseudo_client_applicability_boundary` claim | `BLOCKED` |
-| Genuine Edge-IIoTset timestamp semantics | source inspection | `chronological_recalibration_evaluation` | `BLOCKED` |
+| External-device post-encoding `model_feature_order` width | source inspection (data-dependent one-hot expansion) | materialization onward for `external_device_validation` | `BLOCKED`; the 63-column raw schema and its 15-drop/7-encode column lists are verified (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.3`) — only the final encoded width is open |
+| CICIoT2023 feature count (conference value d = 39) | `processed_feature_verification` audit's own run | any quantitative `file_pseudo_client_applicability_boundary` claim | `BLOCKED` pending the audit's own execution; manually corroborated at exactly 39 against the mounted corpus (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.2`) |
+| Genuine Edge-IIoTset timestamp semantics | source inspection | `chronological_recalibration_evaluation` | `BLOCKED`; `frame.time` is confirmed well-formed in the raw per-sensor captures but malformed in sampled rows of the combined "Selected" files — the malformed-value distribution across the full corpus is unresolved (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.3`) |
+| N-BaIoT row-1 cold-start handling policy | scientific authority | any `natural_device_evaluation`/`controlled_heterogeneity_evaluation` materialization | `BLOCKED`; the artifact itself is verified (every raw file's first row carries a raw epoch timestamp in its `HH_jit_*_mean` columns instead of a jitter statistic) — only the drop-vs-flag policy is open (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.1`) |
+| N-BaIoT / CICIoT2023 duplicate-row handling policy | scientific authority | materialization for `natural_device_evaluation`, `file_pseudo_client_evaluation` | `BLOCKED`; a low, nonzero duplicate rate is confirmed on sampled files (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §§11.1–11.2`); the full-corpus rate for either dataset is unmeasured |
+| CICIoT2023 `Rate = inf` / empty `Std`,`Variance` degenerate-window handling policy | scientific authority | materialization for `file_pseudo_client_evaluation` and any experiment referencing `ciciot2023` | `BLOCKED`; confirmed recurring on real rows (single-packet flow windows), never a transcription error (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.2`) |
+| Edge-IIoTset `Temperature_and_Humidity` subnet-consistency anomaly | source inspection | `edge_iiotset_client_granularity_feasibility` | `BLOCKED`; the other nine `Normal traffic/` sensor folders each occupy one consistent `/24` subnet, this one does not in the sampled rows (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.3`) |
 | Matched-exceedance k-grid step for `FederatedSummaryStatisticThreshold` | authoritative protocol record | `federated_summary_comparator` (matched comparison and fixed-k sensitivity evaluations) | `BLOCKED` |
 | Canonical clustering `n_init`/`max_iter` constants | pre-registration | canonical `ClusterThreshold` in `SCIENTIFIC`/`PRINT_GRADE` runs | `BLOCKED` |
 | "Material movement toward zero" numeric tolerance for anchor equivalence | scientific/statistical authority | journal-expansion planning | `BLOCKED`; the approximately-20%-wider-than-reference rule is already locked (`SCIENTIFIC_FOUNDATION.md §2`) |
@@ -371,7 +376,13 @@ canonical `K = 3`; the `n_min = 100` eligibility rule and Regime-D-equivalent
 `FederatedSummaryStatisticThreshold` variance and tie rule; the FedProx
 µ-grid `{0.001, 0.01, 0.1}`; the encoder architecture, optimizer, batch
 size, precision, and determinism level (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md
-§12`).
+§12`); the N-BaIoT 115-column feature schema and its exact
+aggregation/window/statistic generation rule; the CICIoT2023 39-column raw
+feature schema and its 63-vs-309-file structure; the Edge-IIoTset
+63-column raw source schema and its 15-drop/7-encode preprocessing recipe
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §§11.1–11.3` — feature-*schema
+identity* is closed by direct inspection for all three datasets even where
+a downstream numeric *value* remains blocked).
 
 ## 8. Test architecture
 
@@ -405,6 +416,10 @@ is never imported by production `src/datp_core` (`TEST-01`).
   set for both compared policies.
 - A missing required YAML field fails rather than defaulting.
 - An incompatible artifact is recomputed or blocked, never reused.
+- A source column absent from the authored `DatasetFieldSchema`, or an
+  authored `model_feature_order` entry absent from the actual source
+  header, fails `SOURCE_INSPECTION` rather than silently reshuffling or
+  padding the feature vector.
 - The anchor uses the same generic planner, executor, persistence, and registry machinery; only its applicable stage contracts are planned.
 - Adding a pipeline stage requires no change to the core executor.
 - An `ExperimentCellIdentity` collision between two distinct resolved cells
@@ -415,10 +430,12 @@ is never imported by production `src/datp_core` (`TEST-01`).
 ## 9. Extension proofs
 
 1. **New dataset** — a `Dataset` member; a source-inspection/partitioner
-   adapter; one new `configs/datasets/<name>.yaml` document (audits, setups,
-   split, preprocessing, and eligibility all in that one file); one
-   composition binding; contract and memory-equivalence tests. No
-   evaluation, reporting, or metric edit.
+   adapter that derives the dataset's own `DatasetFieldSchema` from its
+   actual source columns (`CFG-13`); one new `configs/datasets/<name>.yaml`
+   document (audits, setups, split, preprocessing, and eligibility all in
+   that one file); one composition binding; contract, memory-equivalence,
+   and schema-drift-detection tests. No evaluation, reporting, or metric
+   edit.
 2. **New client construction** — a new `ClientConstruction` variant, its
    implementation, its validation, one composition binding. No letter-based
    label, no copied experiment.
