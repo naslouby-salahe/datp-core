@@ -34,7 +34,7 @@ Nothing in this package is asserted `implemented`, `tested`, `passing`, or
 |---|---|
 | Dataset and client construction | `DataDefinition` and `SCIENTIFIC_FOUNDATION.md §5`. |
 | Splits and preprocessing | `DataDefinition`; dataset schemas and mapping. |
-| Detector and training protocol | `DetectorDefinition`; detector schemas and mapping. |
+| Model and training profile | `ModelDefinition`; model schemas and mapping. |
 | Checkpoint production and selection | `PIPELINE_EXECUTION_AND_ARTIFACTS.md §7`; separate primary-round and artifact selection values. |
 | Calibration and score generation | Typed split/score artifacts and registered scoring stages. |
 | Threshold construction | `EvaluationDefinition` and the closed threshold union. |
@@ -68,7 +68,7 @@ identifier rather than repeat the text.
 | `SCI-16` | `ClusterThreshold` requires canonical `K = 3` for any claim rendered as canonical; other K is exploratory only, and its per-quantile assignment is the unweighted mean of member local quantiles, never a q-mutated fingerprint. |
 | `SCI-17` | `FederatedSummaryStatisticThreshold` always uses the full pooled variance including the between-client mean-shift term and a larger-k tie rule; neither is a configurable boolean. |
 | `SCI-18` | Fixed-k `FederatedSummaryStatisticThreshold` sensitivity can never become the primary comparator result. |
-| `SCI-19` | The detector architecture carries no batch normalization. |
+| `SCI-19` | The model architecture carries no batch normalization. |
 
 ### `ANCHOR-*` — anchor reproduction and equivalence
 
@@ -96,7 +96,7 @@ identifier rather than repeat the text.
 
 | ID | Rule |
 |---|---|
-| `ARCH-01` | `ScientificExperimentDefinition` owns metadata, data, detector, evaluations, analyses, seed cohort, prerequisites, and operations; `DatasetAuditDefinition` owns only audit fields. |
+| `ARCH-01` | `ScientificExperimentDefinition` owns metadata, data, model, evaluations, analyses, seed cohort, prerequisites, and operations; `DatasetAuditDefinition` owns only audit fields. |
 | `ARCH-02` | Statistics are owned by `AnalysisDefinition`, never duplicated per `EvaluationDefinition` or across evaluations of the same comparison. |
 | `ARCH-03` | No backward-compatibility shim, alias layer, or migration facade toward the prior architecture or the original reference project exists. |
 | `ARCH-04` | No root `experiments/` package exists; experiment identity lives in `domain/experiments.py`, YAML in `configs/experiments/`, mapping in `config/mapping/`, expansion in `application/planning/`. |
@@ -227,12 +227,12 @@ Defined in `§8` below.
 |---|---|---|
 | `ExperimentSpec` | Merged | Into `ScientificExperimentDefinition` |
 | `ExperimentProfileSpec` | Split | Into a boundary-only sweep schema in `config` (never a `domain` type) and the resolved `ScientificExperimentDefinition`; `config/compose.py` expands the former directly into `tuple[ScientificExperimentCell, ...]` |
-| `ScientificProtocolSpec` | Removed | Fields redistributed directly to `data`/`detector`/`evaluations`/`analyses` |
+| `ScientificProtocolSpec` | Removed | Fields redistributed directly to `data`/`model`/`evaluations`/`analyses` |
 | `ClaimSpec` | Removed | `evidence_role`/`tier` moved to `ExperimentIdentity`; fallback wording moved to `EVALUATION_REPORTING_AND_PROVENANCE.md §§8.2, 12` |
 | `RegimeDataSpec` | Renamed | `DataDefinition` |
-| `DetectorBranchSpec` | Renamed | `DetectorDefinition`; the stored `DetectorBranchRole` field is removed and replaced by the pure `classify_detector` function |
+| `DetectorBranchSpec` | Renamed | `ModelDefinition`; the stored `DetectorBranchRole` field is removed and replaced by the pure `classify_training_profile` function |
 | `EvaluationArmSpec` | Split | `EvaluationDefinition` (threshold, suite, metrics) owned directly by `ScientificExperimentDefinition`, plus `AnalysisDefinition` (comparison, statistics) as its own sibling branch — removing both the prior arm/branch cross-reference check and the prior per-evaluation statistics duplication (`ARCH-02`) |
-| `ExecutionPolicy` / `ArtifactPolicy` / `ReportingPolicy` | Merged | Into `OperationsDefinition` with two named sub-fields (`execution`, `reporting`); `ArtifactPolicy`'s sole live field, namespace, is a pure derivation from `evidence_role` (`derive_artifact_namespace`) rather than a third stored sub-field |
+| `ExecutionPolicy` / `ArtifactPolicy` / `ReportingPolicy` | Merged | Into `OperationsDefinition` with two named sub-fields (`execution`, `report`); `ArtifactPolicy`'s sole live field, namespace, is a pure derivation from `evidence_role` (`derive_artifact_namespace`) rather than a third stored sub-field |
 | `ProtocolTrack` (`DATP_ANCHOR` / `COMPLETE`) | Removed | Replaced by `EvidenceRole.ANCHOR`; namespace is derived, not an independent scientific type |
 | ~20 per-stage identity dataclasses | Merged | Into `StageIdentity` and `ArtifactKey` |
 | Per-role score artifact IDs (calibration/test/temporal) | Merged | Into `ArtifactRef` discriminated by `SplitRole` |
@@ -415,8 +415,10 @@ is never imported by production `src/datp_core` (`TEST-01`).
 ## 9. Extension proofs
 
 1. **New dataset** — a `Dataset` member; a source-inspection/partitioner
-   adapter; a `datasets/` YAML document; one composition binding; contract
-   and memory-equivalence tests. No evaluation, reporting, or metric edit.
+   adapter; one new `configs/datasets/<name>.yaml` document (audits, setups,
+   split, preprocessing, and eligibility all in that one file); one
+   composition binding; contract and memory-equivalence tests. No
+   evaluation, reporting, or metric edit.
 2. **New client construction** — a new `ClientConstruction` variant, its
    implementation, its validation, one composition binding. No letter-based
    label, no copied experiment.
@@ -430,9 +432,11 @@ is never imported by production `src/datp_core` (`TEST-01`).
 5. **New pipeline stage** — worked in full in
    `PIPELINE_EXECUTION_AND_ARTIFACTS.md §4.1`; the core executor,
    persistence engine, and lifecycle logic are unchanged.
-6. **New experiment** — a new `configs/experiments/` document referencing
-   existing dataset/detector/runtime/reporting entries; no random code, no
-   new planner or executor branch.
+6. **New experiment** — one new entry appended to the `configs/experiments/`
+   family document matching its scientific role, referencing existing
+   dataset/setup, model/training-profile, and execution-profile identities,
+   with its report inlined; no random code, no new planner or executor
+   branch, no new family document required.
 7. **New report** — a new `ReportDefinition` consuming a frozen result and
    its provenance; it never recomputes a scientific value.
 
@@ -472,7 +476,7 @@ replacement identity system, or a compatibility shim.
 | **Multi-time-coordinate evaluation** (streaming windows) | `SplitDefinition` + `ArtifactScopeKey` | a temporal `SplitDefinition` member; a windowed scope variant; a scoring/eval stage | existing single-window evaluations |
 | **Stateful policy** (a policy carrying immutable state across runs) | artifact model | an immutable state/policy `ArtifactType` + scope variant; a stage that reads/writes it | the stateless-artifact reuse path |
 | **Transformation / intervention workflow** (a run that mutates state) | provenance model | an explicit transformation/intervention `ProvenanceRecord` field set; a stage; a scope variant | existing clean-run provenance |
-| **New detector family** (different training lifecycle) | `TrainingProtocol` union | a `TrainingProtocol` variant; a training/scoring adapter; `classify_detector` gains one arm | the checkpoint identity model, existing detectors |
+| **New model family** (different architecture or training lifecycle) | `TrainingProfile` union, `configs/models/` | a new `configs/models/<name>.yaml` document; a `TrainingProfile` variant if the lifecycle genuinely differs; a training/scoring adapter; `classify_training_profile` gains one arm | the checkpoint identity model, existing model documents |
 | **New dataset / client construction** | `Dataset` registry + `ClientConstruction` union | a registry entry / a construction variant + adapter; one binding | central enums, thresholds, metrics, reports |
 
 Each seam is already load-bearing in the current design (the `RunDefinition`
@@ -550,23 +554,28 @@ explicit removal reason recorded in §4 or §5 above.
   values before planning.
 - ☐ No `EvaluationDefinition` carries a procedure field;
   every statistical procedure is owned by an `AnalysisDefinition`.
-- ☐ `configs/detectors/` is the only detector-configuration directory name
-  used anywhere in this package; no `configs/protocols/` reference remains.
+- ☐ `configs/models/` is the only model-configuration directory name used
+  anywhere in this package; no `configs/detectors/`, `configs/protocols/`,
+  `configs/dataset_audits/`, `configs/data_sources/`, `configs/runtime/`, or
+  `configs/reporting/` reference remains — the four-directory tree
+  (`datasets/`, `models/`, `experiments/`, `execution.yaml`) is identical,
+  file for file, in `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §1` and
+  `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md §3`.
 - ☐ The CLI exposes exactly the seven `datp-core experiment <action>`
   verbs and accepts no scientific override flag.
 - ☐ Every regularly executed root experiment in
-  `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §23.1` has a discoverable
+  `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §22.1` has a discoverable
   zero-input Make target for each of its meaningful actions; no
   parameterized Make target exists.
 - ☐ No standalone experiment root exists for an item this package
   classifies as an attached analysis (`SCIENTIFIC_FOUNDATION.md §7.4`); the
   cluster and federated-summary families are each a single merged
-  experiment root.
+  experiment entry within its family document.
 - ☐ Every `schema_version` example in this package is the integer `1`.
-- ☐ Every root experiment, dataset audit, dataset setting, detector, runtime
-  profile, and reporting profile has a concrete configuration document
-  (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §24`); each unresolved value is
-  a marked boundary blocker, never a default.
+- ☐ Every root experiment, dataset audit check, dataset setup, model
+  training profile, and execution profile has a concrete configuration
+  document (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §§9–16`); each
+  unresolved value is a marked boundary blocker, never a default.
 - ☐ Every public value object, identifier, union member, request, result,
   planning/execution/artifact/provenance type has a concrete frozen
   declaration (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §16`); every closed

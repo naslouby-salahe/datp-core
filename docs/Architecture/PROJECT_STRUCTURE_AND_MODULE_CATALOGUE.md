@@ -44,13 +44,17 @@ datp-core/
 ├── uv.lock              # pinned dependency lock (DEPENDENCY_LOCK_STATE source)
 ├── importlinter.ini     # enforces the §2.1 layer-direction contract
 ├── noxfile.py           # quality-gate task entry points
-└── Makefile             # zero-input CLI aliases (CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §23)
+└── Makefile             # zero-input CLI aliases (CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §22)
 ```
 
 `src/`, `configs/`, `tests/`, and `docs/` are version-controlled source.
 `outputs/` and `models/` are runtime-resolved roots (§5): their concrete
 paths never enter a domain identity, a scientific specification, a stage
-fingerprint, an `ArtifactKey`, or a scientific manifest (`ART-05`).
+fingerprint, an `ArtifactKey`, or a scientific manifest (`ART-05`). The
+runtime-resolved `models/` root (external model/dataset input copies) is a
+distinct concept from the version-controlled `configs/models/` directory
+(`§3`); the former never contains YAML and the latter never contains a
+dataset or checkpoint file.
 
 ## 2. `src/datp_core` layer tree
 
@@ -69,13 +73,16 @@ src/datp_core/
 │   │                       #   derive_artifact_namespace
 │   ├── data.py             # DataDefinition, ClientConstruction union, SplitDefinition union,
 │   │                       #   PreprocessingDefinition, CalibrationSubsetDefinition/Result,
-│   │                       #   Dataset, SplitRole, DatasetVersion, feature-schema identity
-│   ├── detection.py         # DetectorDefinition, AutoencoderArchitecture, ReconstructionObjective,
-│   │                       #   TrainingProtocol union, OptimizerDefinition, SchedulerDefinition,
+│   │                       #   Dataset, SplitRole, DatasetVersion, feature-schema identity,
+│   │                       #   SourceInspectionDefinition, FeasibilityDefinition (dataset-owned audits),
+│   │                       #   EligibilityDefinition's single owner value (minimum_calibration_sample_count)
+│   ├── model.py             # ModelDefinition, AutoencoderArchitecture, ReconstructionObjective,
+│   │                       #   TrainingProfile union, OptimizerDefinition, SchedulerDefinition,
 │   │                       #   CheckpointProductionDefinition/Schedule, CheckpointSelectionPolicy,
 │   │                       #   ParticipationStrategy, ModelPersonalizationStrategy,
-│   │                       #   Training/ScoringBatchDefinition, classify_detector, effective_batch_size,
-│   │                       #   rounds_max, PrimaryCheckpointRoundSelection, CheckpointArtifactSelection
+│   │                       #   Training/ScoringBatchDefinition, classify_training_profile,
+│   │                       #   effective_batch_size, rounds_max, PrimaryCheckpointRoundSelection,
+│   │                       #   CheckpointArtifactSelection
 │   ├── thresholding.py       # ThresholdConstruction union (8 members), CentralizedPooledThreshold,
 │   │                       #   ThresholdConstructionResult, threshold value objects
 │   ├── evaluation.py          # EvaluationDefinition, EvaluationSuiteDefinition union, EligibilityDefinition,
@@ -105,7 +112,7 @@ src/datp_core/
 │   ├── ports/              # Protocol definitions only, one module per boundary family (§2.2)
 │   │   ├── data.py          #   DatasetSourceInspector, ClientPartitioner, SplitDefinitionBuilder,
 │   │   │                    #     PreprocessorFitter, ProcessedSplitMaterializer
-│   │   ├── training.py       #   DetectorTrainingBackend, ScoreGenerator, ThresholdConstructor
+│   │   ├── training.py       #   ModelTrainingBackend, ScoreGenerator, ThresholdConstructor
 │   │   ├── statistics.py      #   StatisticalProcedureBackend
 │   │   ├── persistence.py     #   ArtifactStore, CheckpointStore, ManifestStore, ArtifactLockProvider
 │   │   ├── runtime.py          #   HardwareInspector, EventSink
@@ -120,12 +127,12 @@ src/datp_core/
 │   ├── statistics/         # estimate_paired_threshold_effect, anchor-equivalence use case
 │   └── reporting/          # freeze (RESULT_FREEZE), table/figure/wording projection, provenance tracing
 ├── config/               # boundary parsing, mapping, sweep expansion; imports domain only
-│   ├── schemas/           # Pydantic boundary models, one per configs/ directory (§3.2)
+│   ├── schemas/           # Pydantic boundary models, one per configs/ file family (§3.2)
 │   ├── mapping/           # boundary-model → frozen domain mapping, one per schema family
-│   └── compose.py         # load → validate → resolve refs → expand sweeps → build domain → validate
+│   └── compose.py         # load → validate → resolve refs → expand family/sweeps → build domain → validate
 ├── infrastructure/       # framework adapters implementing application ports; imports application, domain
 │   ├── data/              # dataset source inspection, partitioning, splitting, preprocessing, materialization
-│   ├── detection/         # detector training and reconstruction-scoring backends (Torch/Flower confined here)
+│   ├── training/          # model training and reconstruction-scoring backends (Torch/Flower confined here)
 │   ├── thresholding/      # ThresholdConstructor implementations per variant
 │   ├── statistics/        # StatisticalProcedureBackend adapter (bootstrap/Wilcoxon/Spearman/regression)
 │   ├── persistence/       # ArtifactStore/CheckpointStore/ManifestStore/ArtifactLockProvider,
@@ -135,7 +142,7 @@ src/datp_core/
 │   └── telemetry/         # EventSink console/JSONL renderers
 ├── composition/          # the only layer that constructs adapters and binds ports
 │   ├── root.py            # composition root: wires use cases, ports, adapters
-│   └── registries.py      # explicit StageRunnerRegistry and port bindings (no import-time side effects)
+│   └── registries.py       # explicit StageRunnerRegistry and port bindings (no import-time side effects)
 └── cli/                  # thin entry points; imports composition and boundary result/error types only
     ├── main.py            # datp-core entry point
     └── commands/          # experiment and dataset-audit verb handlers (§3.6)
@@ -146,7 +153,12 @@ owns; the authoritative type contract for each remains its owning
 architecture document. A module is a directory (package) rather than a single
 file only when its type family is large enough that one file would exceed the
 maximum-responsibility guideline (§6); the choice never changes the module's
-layer, allowed imports, or public surface.
+layer, allowed imports, or public surface. `domain/model.py` and
+`application/ports/training.py`/`infrastructure/training/` are the renamed
+homes of what a prior draft of this package called `detection.py` and
+`detectors/`/`detection/`: the roadmap's own vocabulary is "model" and
+"training profile," never "detector" (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md
+§2`).
 
 ### 2.1 Layer import matrix
 
@@ -195,8 +207,8 @@ stage's `PipelineStage` name.
 
 `domain/identifiers.py` owns the open, validated identifier types plus their
 registries for vocabularies expected to grow — `Dataset` IDs, experiment
-slugs, dataset-audit slugs, detector-profile names, runtime-profile names,
-reporting-profile names. Adding one such value is a registry entry, never a
+slugs, dataset-audit check names, model names, training-profile names,
+execution-profile names. Adding one such value is a registry entry, never a
 central-enum edit (`ENGINEERING §9` extension proofs 1 and 6). Genuinely
 closed, stable vocabularies remain `enum`/`StrEnum` members in their owning
 module (`SplitRole`, `ExecutionMode`, `ArtifactType`, `EvidenceRole`, …);
@@ -205,111 +217,112 @@ disposition catalogue.
 
 ## 3. `configs/` catalogue
 
-Six directories, each with one boundary-schema owner
+Four boundary owners — one per real dataset, one for the model family, one
+per experiment family, and one for every execution profile
 (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §§1–2`). Every authored document
 carries `schema_version` and contains no YAML anchor, merge key, implicit
 inheritance, or hidden default.
 
 ```text
 configs/
-├── experiments/        # scientific experiment roots (schema: config/schemas/experiment.py)
-├── dataset_audits/     # source-inspection and feasibility-audit roots (config/schemas/dataset_audit.py)
-├── datasets/           # reusable DataDefinition documents (config/schemas/data.py)
-├── detectors/          # reusable DetectorDefinition documents (config/schemas/detector.py)
-├── runtime/            # named ExecutionDefinition profiles (config/schemas/runtime.py)
-└── reporting/          # presentation definitions (config/schemas/reporting.py)
+├── datasets/
+│   ├── nbaiot.yaml           # PhysicalDeviceClients + DirichletPartitionedClients setups; source audits
+│   ├── ciciot2023.yaml       # DatasetFilePseudoClients setup (boundary role only); feature-count audit
+│   └── edge_iiotset.yaml     # ExternalDeviceOrGroupClients (device/group) + chronological setups; audits
+│
+├── models/
+│   └── autoencoder.yaml      # architecture, objective, optimizer, checkpointing; every named training profile
+│
+├── experiments/
+│   ├── anchor.yaml                    # anchor_reproduction
+│   ├── threshold_scope.yaml           # confirmatory_threshold_scope_effect + its two Tier-2 rule-outs
+│   ├── heterogeneity.yaml             # controlled_heterogeneity_response
+│   ├── calibration_mechanisms.yaml    # cluster_mechanism, calibration_window_size_stability,
+│   │                                  #   local_global_threshold_shrinkage, conformal_local_threshold_coverage
+│   ├── external_validation.yaml       # external_device_dataset_validation, chronological_recalibration_evaluation
+│   ├── training_stress_tests.yaml     # fedprox_aggregation_stress_test, model_personalization_absorption_test
+│   └── references_and_boundaries.yaml # centralized_pooled_reference, federated_summary_comparator,
+│                                       #   file_pseudo_client_applicability_boundary
+│
+└── execution.yaml            # every named execution profile (scientific, print_grade, development,
+                               #   smoke, dataset_audit, test_smoke) in one file
 ```
 
-### 3.1 `configs/experiments/`
+No `dataset_audits/`, `data_sources/`, `detectors/`, `protocols/`,
+`runtime/`, or `reporting/` directory exists anywhere in this tree
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §1.1` records exactly where each
+prior responsibility moved). This tree is identical, file for file, to the
+one in `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §1`; a discrepancy between
+the two is a documentation defect, not an authorized second layout.
 
-One document per root experiment in `SCIENTIFIC_FOUNDATION.md §7`. Attached
-analyses (`§7.4`) never gain their own file; the cluster and
-federated-summary families are each a single merged root.
+### 3.1 `configs/datasets/`
 
-```text
-configs/experiments/
-├── anchor_reproduction.yaml
-├── confirmatory_threshold_scope_effect.yaml
-├── shared_threshold_construction_sensitivity.yaml
-├── threshold_quantile_sensitivity.yaml
-├── controlled_heterogeneity_response.yaml
-├── cluster_mechanism.yaml
-├── calibration_window_size_stability.yaml
-├── local_global_threshold_shrinkage.yaml
-├── conformal_local_threshold_coverage.yaml
-├── external_device_dataset_validation.yaml
-├── fedprox_aggregation_stress_test.yaml
-├── model_personalization_absorption_test.yaml
-├── federated_summary_comparator.yaml
-├── chronological_recalibration_evaluation.yaml
-├── centralized_pooled_reference.yaml
-└── file_pseudo_client_applicability_boundary.yaml
-```
+One document per real dataset — never per client-construction setup, and
+never a separate audit root. Each document owns its own `audits` list
+(source inspection and feasibility checks, `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md
+§2.1`), a `setups` map of every authorized client-construction variant for
+that dataset, its split definition, its preprocessing, and its one
+`eligibility.minimum_calibration_sample_count` value. `ciciot2023.yaml` is
+explicitly boundary-role only (`SCIENTIFIC_FOUNDATION.md §5`); its single
+`file_pseudo_clients` setup never generalizes beyond
+`file_pseudo_client_applicability_boundary`. `edge_iiotset.yaml`'s
+`external_device`/`external_group` setups are authored only after the
+`client_granularity_feasibility` check closes, and its `chronological` setup
+only after `timestamp_semantics_verification` closes
+(`SCIENTIFIC_FOUNDATION.md §5.1`). Worked examples:
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11`.
 
-Worked examples: `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §§9, 10, 17, 18`.
-A slug matching a rejected or out-of-scope entry (`SCIENTIFIC_FOUNDATION.md
-§7.6`) is refused at resolution and has no file here.
+### 3.2 `configs/models/`
 
-### 3.2 `configs/dataset_audits/`
+One document, `autoencoder.yaml` — the only model family this design
+authorizes. It owns architecture, reconstruction objective, optimizer,
+checkpoint schedule, precision, determinism, and training-batch definition
+exactly once, plus a `training_profiles` map naming every authorized
+variant: `federated_averaging` (core ladder), `federated_averaging_personalized`
+(the one authorized personalization comparator, `SCI-07`),
+`federated_proximal` (the FedProx µ-grid stress test, matched to
+`federated_averaging` in every non-strategy field), and `centralized_pooled`
+(B0, its own identity chain, never fused with a federated artifact,
+`ANCHOR-04`). Adding a genuinely new model family — a different
+architecture, not a new training profile of the autoencoder — is a new
+`configs/models/<name>.yaml` document; it is never required merely to add a
+training profile of the existing family. Worked example:
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §12`.
 
-```text
-configs/dataset_audits/
-├── nbaiot_source_inspection.yaml
-├── ciciot2023_source_inspection.yaml
-├── ciciot2023_processed_feature_verification.yaml
-├── edge_iiotset_source_inspection.yaml
-├── edge_iiotset_client_granularity_feasibility.yaml
-└── edge_iiotset_timestamp_semantics_verification.yaml
-```
+### 3.3 `configs/experiments/`
 
-A dataset audit is a `DatasetAuditDefinition`; it carries only audit fields
-(source reference, inspection/feasibility rules, runtime/reporting
-references) and never a detector, threshold, seed, evidence-role, or
-claim-tier field (`ARCH-01`). Its result semantics (`FEASIBLE`, `GATED`,
-`PENDING_VERIFICATION`, `REJECTED`) are `FeasibilityStatus` on the persisted
-`FEASIBILITY_RESULT` (`SCIENTIFIC_FOUNDATION.md §5.1`).
+Seven family documents, each an `experiments` list of independently
+resolvable entries; the complete family-to-slug mapping and each entry's
+identity-bearing fields are given in
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §§9–10, 16`. No standalone
+experiment root exists for an item this package classifies as an attached
+analysis (`SCIENTIFIC_FOUNDATION.md §7.4`); the cluster mechanism and
+federated-summary-comparator families are each a single merged experiment
+entry within their family document, not several sibling entries. A slug
+matching a rejected or out-of-scope entry
+(`SCIENTIFIC_FOUNDATION.md §7.6`) is refused at resolution and appears in no
+family document.
 
-### 3.3 `configs/datasets/`, `configs/detectors/`, `configs/runtime/`, `configs/reporting/`
+### 3.4 `configs/execution.yaml`
 
-```text
-configs/datasets/
-├── natural_device_nbaiot.yaml           # PhysicalDeviceClients (K = 9)
-├── dirichlet_nbaiot.yaml                # DirichletPartitionedClients (K = 20)
-├── file_pseudo_client_ciciot2023.yaml   # DatasetFilePseudoClients (boundary only)
-├── external_device_edge_iiotset.yaml    # ExternalDeviceOrGroupClients (granularity: device)
-├── external_group_edge_iiotset.yaml     # ExternalDeviceOrGroupClients (granularity: group)
-└── chronological_edge_iiotset.yaml      # external composition + chronological 70/30 TemporalWindow
-
-configs/detectors/
-├── core_federated_averaging.yaml        # FederatedAveragingTraining (core ladder)
-├── fedprox_stress_test.yaml             # FederatedProxTraining (matched, non-ladder)
-├── centralized_pooled.yaml              # CentralizedPooledTraining (non-ladder reference)
-└── model_personalization_comparator.yaml # authorized personalization strategy (BLOCKED until chosen)
-
-configs/runtime/
-├── scientific.yaml       # cuda_required; scientific evidence + operational limits (limits BLOCKED)
-├── print_grade.yaml      # cuda_required; publication-grade
-├── development.yaml       # explicit reduced values; non-citable by mode
-├── smoke.yaml            # explicit reduced values; never an automatic reduction of scientific.yaml
-├── dataset_audit_cpu.yaml # CPU audit execution
-└── test_*.yaml           # test-only runtime profiles (never a scientific evidence source)
-
-configs/reporting/
-├── anchor_reporting.yaml
-├── main_confirmatory_table.yaml
-└── <one per report family in EVALUATION_REPORTING_AND_PROVENANCE.md §9.4>
-```
+One file, a `profiles` map keyed by profile name. Every mode requires a
+complete explicit profile; `development` and `smoke` use explicit reduced
+values and are non-citable by mode, never an automatic reduction of
+`scientific` (`EXEC-02`). Worked example:
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §13`.
 
 Ownership boundaries are fixed by
-`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §2`: `datasets/` owns dataset
-identity/construction/split/preprocessing and never runtime chunk sizes,
-worker counts, detector settings, thresholds, metrics, or report formats;
-`detectors/` owns detector definition only (never eligibility, which is
-evaluation-owned); `runtime/` owns execution only; `reporting/` owns
-presentation only and never a scientific value. A reduced smoke profile is a
-separate authored document, never a runtime backoff (`EXEC-02`).
-`model_personalization_comparator.yaml` remains a genuine blocker until the
-comparator and its hyperparameters are documented (`ENGINEERING §7`).
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §2`: a dataset document owns
+dataset identity/construction/split/preprocessing/eligibility and never
+execution limits, model settings, thresholds, metrics, or report formats;
+`models/autoencoder.yaml` owns model definition only (eligibility is
+dataset-owned, never re-authored here); `execution.yaml` owns execution
+only; an experiment entry's inline `report` owns presentation only and
+never a scientific value. A reduced smoke profile is a named entry in
+`execution.yaml`, never a runtime backoff (`EXEC-02`).
+`models/autoencoder.yaml`'s `federated_averaging_personalized` training
+profile remains a genuine blocker until the comparator and its
+hyperparameters are documented (`ENGINEERING §7`).
 
 ## 4. `tests/` tree
 
@@ -324,14 +337,15 @@ tests/
 │   ├── domain/           # invariants: benign-only calibration, delta orientation, AUROC-control,
 │   │                      #   canonical-K derivation, eligibility, non-finite rejection
 │   ├── application/       # use-case behavior with typed test doubles
-│   ├── config/           # schema→domain mapping; missing/extra-field failure; no-hidden-default
+│   ├── config/           # schema→domain mapping; missing/extra-field failure; no-hidden-default;
+│   │                      #   experiment-family expansion (one document → many independent entries)
 │   └── reporting/        # framework-free specification construction (was analysis/)
 ├── property/             # value-object ranges/finiteness; cv_fpr; pooled variance; fpr_target = 1 − q;
 │                          #   Cliff's-delta antisymmetry and bounds
 ├── contract/             # every infrastructure adapter against its port's shared contract suite
 ├── integration/
 │   ├── data/              # chunked-vs-reference equivalence
-│   ├── detection/        # checkpoint selection and reuse across the ladder and B0
+│   ├── training/         # checkpoint selection and reuse across the ladder and B0
 │   ├── persistence/      # atomic commit, bundle rejection, result-freeze/provenance closure
 │   ├── reporting/        # trace-refusal and rendering
 │   └── cuda/             # CUDA refusal/no-fallback/spawn-context; sequential-vs-parallel equivalence
@@ -389,8 +403,10 @@ only after every member is verified and a commit marker is written
   survives only as a `roadmap_reference` metadata field (`NAME-01`, `NAME-03`,
   `NAME-04`).
 - **Semantic module names.** A module is named for the concept it owns
-  (`thresholding.py`, `checkpoint`-bearing `detection.py`), readable without
-  opening another file.
+  (`thresholding.py`, checkpoint-bearing `model.py`), readable without
+  opening another file. "Detector" is never used as a module, type, or
+  configuration-directory name; the roadmap's own vocabulary — "model" and
+  "training profile" — is used throughout.
 - **Maximum responsibility.** A module owns one coherent type family or one
   boundary. When a family grows past roughly a few hundred lines or begins
   serving two distinct questions, it splits along the concept boundary (a
@@ -414,13 +430,15 @@ or executor branch, a replacement identity system, or a compatibility shim.
 
 | New thing | Files touched | Never touched |
 |---|---|---|
-| **Dataset** | `Dataset`/registry entry in `domain/identifiers.py`; a `configs/datasets/` document; a source-inspector/partitioner adapter in `infrastructure/data/`; one binding in `composition/registries.py`; contract + memory-equivalence tests | any threshold, metric, evaluation, or reporting module |
-| **Client construction** | a `ClientConstruction` variant in `domain/data.py`; its schema arm in `config/schemas/data.py` + mapping; its `infrastructure/data/` implementation; one binding | any experiment file, any letter-based label |
+| **Dataset** | `Dataset`/registry entry in `domain/identifiers.py`; a new `configs/datasets/<name>.yaml` document (audits, setups, split, preprocessing, eligibility all in this one file); a source-inspector/partitioner adapter in `infrastructure/data/`; one binding in `composition/registries.py`; contract + memory-equivalence tests | any threshold, metric, evaluation, reporting module, `models/autoencoder.yaml`, or any `configs/experiments/` family |
+| **Client construction (dataset setup)** | a `ClientConstruction` variant in `domain/data.py`; its schema arm in `config/schemas/data.py` + mapping; its `infrastructure/data/` implementation; one binding; one new `setups` entry on the owning dataset document | any experiment file, any letter-based label |
 | **Threshold policy** | a `ThresholdConstruction` variant in `domain/thresholding.py`; a discriminated schema arm carrying only its own fields; an `infrastructure/thresholding/` implementation; one registry line | score-generation code (scores are reused via preserved keys) |
+| **Training profile of the existing model family** | one new entry in `models/autoencoder.yaml`'s `training_profiles` map; a `TrainingProfile` variant in `domain/model.py` if it introduces a genuinely new `kind` | a new `configs/models/` document, any dataset, threshold, or experiment file |
+| **New model family** | a new `configs/models/<name>.yaml` document; its architecture/objective/optimizer schema arms if genuinely distinct | any existing experiment referencing `autoencoder` |
 | **Metric** | a `MetricId` member in its family + `MetricSpec` + typed calculator in `domain/evaluation.py`; reporting metadata | any renderer per-metric; any threshold artifact |
 | **Pipeline stage** | a module in `application/stages/`; an optional config variant; one line in `StageRunnerRegistry` | the executor, planner branching, persistence, recovery, logging, or any existing stage (`PIPE-01`) |
-| **Experiment** | one `configs/experiments/` document referencing existing dataset/detector/runtime/reporting entries; a Make-target family | any code; any new planner or executor branch |
-| **Report** | one `ReportDefinition` (`domain/reporting.py` type + `configs/reporting/` document + `application/reporting/` projection) consuming a frozen result | any recomputation of a scientific value |
+| **Experiment** | one new entry appended to the `configs/experiments/` family document matching its scientific role, referencing existing dataset/setup and model/training-profile identities; a Make-target family | any code; any new planner or executor branch; any other family document |
+| **Report** | one `ReportDefinition` (`domain/reporting.py` type) inlined on the producing experiment entry, consuming a frozen result | any recomputation of a scientific value; any `configs/reporting/` document (none exists) |
 | **Run family** (future) | a new `RunDefinition` variant + its planner applicability; new stage `is_applicable` returns | any weakening of `ScientificExperimentDefinition` or `DatasetAuditDefinition` |
 
 A future research direction the roadmap names but excludes today (dynamic
@@ -458,8 +476,8 @@ point. Allowed/forbidden imports follow the layer of the module exactly
 | Module | Layer | Responsibility | Owns (representative) | Framework code | Tests | Extension point |
 |---|---|---|---|---|---|---|
 | `domain/experiments.py` | domain | run/experiment identity and aggregate roots | `RunDefinition`, `ScientificExperimentDefinition`, `ScientificExperimentCell`, `DatasetAuditDefinition`, `EvidenceRole`, `RunRequirement`, `CatalogueDisposition`, `derive_publication_regime`, `derive_artifact_namespace` | no | `unit/domain` | a new `RunDefinition` variant |
-| `domain/data.py` | domain | dataset/client/split/preprocessing definitions | `DataDefinition`, `ClientConstruction`, `SplitDefinition`, `PreprocessingDefinition`, `Dataset`, `SplitRole` | no | `unit/domain`, benign-only test | a `ClientConstruction`/`SplitDefinition` variant |
-| `domain/detection.py` | domain | detector/training/checkpoint definitions | `DetectorDefinition`, `TrainingProtocol`, `CheckpointSelectionPolicy`, `classify_detector` | no | `unit/domain` | a `TrainingProtocol` variant |
+| `domain/data.py` | domain | dataset/client/split/preprocessing/audit definitions | `DataDefinition`, `ClientConstruction`, `SplitDefinition`, `PreprocessingDefinition`, `Dataset`, `SplitRole`, `SourceInspectionDefinition`, `FeasibilityDefinition` | no | `unit/domain`, benign-only test | a `ClientConstruction`/`SplitDefinition` variant; a new dataset-owned audit check |
+| `domain/model.py` | domain | model/training-profile/checkpoint definitions | `ModelDefinition`, `TrainingProfile`, `CheckpointSelectionPolicy`, `classify_training_profile` | no | `unit/domain` | a `TrainingProfile` variant |
 | `domain/thresholding.py` | domain | threshold constructions | `ThresholdConstruction` (8), `CentralizedPooledThreshold` | no | `property`, threshold-only-change test | a `ThresholdConstruction` variant |
 | `domain/evaluation.py` | domain | evaluation/analysis/metric/result types | `EvaluationDefinition`, `AnalysisDefinition`, `StatisticalProcedure`, every result type, `MetricId`/role/direction | no | `unit/domain`, `property` | a `MetricId`/family, an `AnalysisDefinition` variant |
 | `domain/artifacts.py` | domain | identity, scope, provenance, records | `StageIdentity`, `ArtifactKey`, `ArtifactRef`, `ArtifactScopeKey`, `ArtifactType`, `ProvenanceRecord`, `ResultFreezeManifest`, `FeasibilityRecord` | no | `unit/domain`, `integration/persistence` | an `ArtifactScopeKey`/`ArtifactType` variant |
@@ -476,11 +494,11 @@ point. Allowed/forbidden imports follow the layer of the module exactly
 | `application/evaluation/` | application | operating-point derivation | `evaluate_client_operating_points`, `ConfusionMatrixEvaluator` | no | `unit/application`, `property` | — |
 | `application/statistics/` | application | analysis/anchor use cases | `estimate_paired_threshold_effect`, `verify_anchor_equivalence` | no | `unit/application`, `scientific_smoke` | — |
 | `application/reporting/` | application | freeze, projection, tracing | `RESULT_FREEZE`, table/figure/wording projection, `TableFigureTracer` | no | `integration/reporting` | a projection for a new `ReportDefinition` |
-| `config/schemas/*` | config | Pydantic boundary models | one schema per `configs/` directory | Pydantic/PyYAML (boundary only) | `unit/config` | a schema arm for a new variant |
+| `config/schemas/*` | config | Pydantic boundary models | one schema per `configs/` file family (`data.py`, `model.py`, `experiment.py`, `execution.py`) | Pydantic/PyYAML (boundary only) | `unit/config` | a schema arm for a new variant |
 | `config/mapping/*` | config | boundary→domain mapping | one mapper per schema family | no scientific compute | `unit/config` | a mapping for a new variant |
-| `config/compose.py` | config | load→validate→resolve→expand→build | `ConfigurationResolutionResult` construction | Pydantic/PyYAML | `unit/config` | — (persists nothing) |
+| `config/compose.py` | config | load→validate→resolve→expand family/sweeps→build | `ConfigurationResolutionResult` construction | Pydantic/PyYAML | `unit/config` | — (persists nothing) |
 | `infrastructure/data/*` | infrastructure | dataset adapters | source inspector, partitioner, splitter, preprocessor, materializer | pandas/PyArrow | `contract/`, `integration/data` | an adapter for a new dataset |
-| `infrastructure/detection/*` | infrastructure | training/scoring backends | detector training, score generation | Torch/Flower | `contract/`, `integration/detection`, `integration/cuda` | an adapter for a new `TrainingProtocol` |
+| `infrastructure/training/*` | infrastructure | training/scoring backends | model training, score generation | Torch/Flower | `contract/`, `integration/training`, `integration/cuda` | an adapter for a new `TrainingProfile` |
 | `infrastructure/thresholding/*` | infrastructure | threshold implementations | one per `ThresholdConstruction` variant | NumPy | `contract/`, `property` | an implementation for a new threshold |
 | `infrastructure/statistics/*` | infrastructure | statistical backend | bootstrap/Wilcoxon/Spearman/regression adapter | SciPy | `contract/`, `property` | — (Cliff's delta is a vetted pure fn, not here) |
 | `infrastructure/persistence/*` | infrastructure | stores, path resolver, atomic commit | `ArtifactStore`, `CheckpointStore`, `ManifestStore`, `ArtifactLockProvider`, `ArtifactPathResolver`, `BoundStorageRoot` | filesystem | `contract/`, `integration/persistence` | — (path resolution confined here, `ART-05`) |

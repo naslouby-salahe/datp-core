@@ -15,14 +15,15 @@ Configuration composition, runtime execution, persistence, or rendering.
 
 ## 1. DATP-Core scientific identity
 
-DATP-Core is a fixed-detector, threshold-calibration-scope study. One
-federated-averaging autoencoder is trained once per seed and frozen; only
-the *scope* at which the anomaly threshold is calibrated varies across the
-core ladder (shared, local, family, cluster). Calibration is benign-only.
-The causal question is whether threshold-calibration scope changes deployed
-operating-point reliability — per-client false-positive-rate (FPR)
-dispersion — across heterogeneous IoT clients, not which detector is best.
-AUROC is a detection-quality control, never the thresholding verdict.
+DATP-Core is a fixed-encoder, fixed-federated-model, threshold-calibration-scope
+study. One federated-averaging autoencoder is trained once per seed and
+frozen; only the *scope* at which the anomaly threshold is calibrated
+varies across the core ladder (shared, local, family, cluster). Calibration
+is benign-only. The causal question is whether threshold-calibration scope
+changes deployed operating-point reliability — per-client
+false-positive-rate (FPR) dispersion — across heterogeneous IoT clients,
+not which model is best. AUROC is a detection-quality control, never the
+thresholding verdict.
 "Fairness" means operational, service-level FPR equity across client
 devices, and carries no other meaning anywhere in this package (`SCI-08`).
 
@@ -57,8 +58,8 @@ favor of the five-seed anchor result (`ANCHOR-03`, `SCI-13`).
 
 | ID | Invariant |
 |---|---|
-| `SCI-01` | The detector and its encoder are fixed across the core ladder; one trained state, seeds, and score artifacts feed every ladder member without retraining. |
-| `SCI-02` | Federated averaging (one local epoch, full participation) is the training protocol of the causal ladder. |
+| `SCI-01` | The model and its encoder are fixed across the core ladder; one trained state, seeds, and score artifacts feed every ladder member without retraining. |
+| `SCI-02` | Federated averaging (one local epoch, full participation) is the training profile of the causal ladder. |
 | `SCI-03` | Threshold-calibration scope is the sole causal variable in the ladder. |
 | `SCI-04` | Calibration is benign-only; attack data are evaluation-only. |
 | `SCI-05` | The primary operating-point concern is `CV(FPR)`, not global F1, AUROC, or accuracy. |
@@ -202,7 +203,7 @@ artifact identity (`NAME-03`).
 | `ConformalLocalThreshold` | B2-conf | split- or federated-conformal local threshold at marginal coverage `1 − α`, α = 0.05 | supportive threshold variant; closes the tautology critique |
 | `FederatedSummaryStatisticThreshold` | `B-FedStatsBenign` | benign-only client-disclosed `(n_k, mean_k, variance_k)`; sample-weighted global mean; full pooled variance including the between-client mean-shift term; matched-exceedance candidate grid `τ(k) = µ_global + k·σ_global`, k ∈ {0.00 … 5.00}, ties broken toward larger k | comparator primitive; matched, non-ladder |
 | `FederatedSummaryStatisticThreshold` (fixed-k) | fixed-k sensitivity | the same construction evaluated at fixed k ∈ {2.0, 2.5, 3.0} | supplementary sensitivity only; never the primary comparator result |
-| `CentralizedPooledThreshold` | B0 | centralized pooled-benign quantile from a separately trained centralized detector | non-ladder reference; never fused with federated-averaging scores |
+| `CentralizedPooledThreshold` | B0 | centralized pooled-benign quantile from a separately trained centralized model | non-ladder reference; never fused with federated-averaging scores |
 | — (disclosure only, non-executable) | `B-LaridiFaithful` | anomaly-labeled Laridi-style reproduction | `OUT_OF_SCOPE` — violates the benign-only calibration contract; named disclosure record only |
 
 Every remaining threshold construction requirement — that B1 and B3 use
@@ -309,20 +310,21 @@ anywhere in this design.
 
 Dataset audits are non-scientific `DatasetAuditDefinition` runs that produce a
 persisted `FEASIBILITY_RESULT`/`SOURCE_INSPECTION` before any dependent
-scientific run is authored. They carry no detector, threshold, seed,
+scientific run is authored. They carry no model, threshold, seed,
 evidence-role, or claim-tier field, and `evidence_role`/`tier` do not apply
-to them (`ARCH-01`, `§5.1`). Each has a semantic slug and a
-`configs/dataset_audits/` document (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md
-§24.2`).
+to them (`ARCH-01`, `§5.1`). Each is one named `check` entry in its owning
+dataset's `configs/datasets/<name>.yaml` document, never a document under a
+separate `configs/dataset_audits/` root
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §2.1`).
 
-| Audit slug | Roadmap basis | Produces | Gates |
-|---|---|---|---|
-| `nbaiot_source_inspection` | Regime A feasibility | `SOURCE_INSPECTION`, `FEATURE_SCHEMA_MANIFEST` | N-BaIoT scientific runs |
-| `ciciot2023_source_inspection` | Regime B feasibility; records MAC/device/IP/timestamp absence | `SOURCE_INSPECTION` | B-a boundary; documents the B-b rejection basis |
-| `ciciot2023_processed_feature_verification` | conditional gate 1 (roadmap §7, §20) | `FEATURE_SCHEMA_MANIFEST` (verified `d`) | any quantitative `file_pseudo_client_applicability_boundary` claim |
-| `edge_iiotset_source_inspection` | Regime D feasibility | `SOURCE_INSPECTION`, timestamp evidence | Edge-IIoTset runs |
-| `edge_iiotset_client_granularity_feasibility` | conditional gate 2 (device-vs-group, K ∈ {6,15}, ≥ 90% coverage at n_k ≥ 100) | `FEASIBILITY_RESULT` | `external_device_dataset_validation` granularity authorization |
-| `edge_iiotset_timestamp_semantics_verification` | temporal MVE feasibility | timestamp-semantics `FEASIBILITY_RESULT` | `chronological_recalibration_evaluation` |
+| Owning dataset | Check name | Roadmap basis | Produces | Gates |
+|---|---|---|---|---|
+| `nbaiot` | `source_inspection` | Regime A feasibility | `SOURCE_INSPECTION`, `FEATURE_SCHEMA_MANIFEST` | N-BaIoT scientific runs |
+| `ciciot2023` | `source_inspection` | Regime B feasibility; records MAC/device/IP/timestamp absence | `SOURCE_INSPECTION` | B-a boundary; documents the B-b rejection basis |
+| `ciciot2023` | `processed_feature_verification` | conditional gate 1 (roadmap §7, §20) | `FEATURE_SCHEMA_MANIFEST` (verified `d`) | any quantitative `file_pseudo_client_applicability_boundary` claim |
+| `edge_iiotset` | `source_inspection` | Regime D feasibility | `SOURCE_INSPECTION`, timestamp evidence | Edge-IIoTset runs |
+| `edge_iiotset` | `client_granularity_feasibility` | conditional gate 2 (device-vs-group, K ∈ {6,15}, ≥ 90% coverage at n_k ≥ 100) | `FEASIBILITY_RESULT` | `external_device_dataset_validation` granularity authorization |
+| `edge_iiotset` | `timestamp_semantics_verification` | temporal MVE feasibility | timestamp-semantics `FEASIBILITY_RESULT` | `chronological_recalibration_evaluation` |
 
 A scientific run never re-answers a question an audit closes; it cites the
 audit's `FEASIBILITY_RESULT` by `ArtifactRef` as provenance only
@@ -332,18 +334,18 @@ audit's `FEASIBILITY_RESULT` by `ArtifactRef` as provenance only
 
 A generic YAML combination cannot produce a scientifically unauthorized
 experiment. Every experiment is either (a) an `ScientificExperimentDefinition` fully
-resolved from a named `configs/experiments/` document with every field
-explicit, or (b) a concrete `ScientificExperimentCell` expanded from a declared sweep
-dimension inside such a document. There is no separate "authorized profile"
-layer duplicating the resolved definition's fields: authorization is
-enforced by construction validators on the closed discriminated unions
-themselves (`ThresholdConstruction`, `ClientConstruction`,
-`TrainingProtocol`) plus cross-field validators that reject, at
+resolved from one named entry of a `configs/experiments/` family document
+with every field explicit, or (b) a concrete `ScientificExperimentCell`
+expanded from a declared sweep dimension inside such an entry. There is no
+separate "authorized profile" layer duplicating the resolved definition's
+fields: authorization is enforced by construction validators on the closed
+discriminated unions themselves (`ThresholdConstruction`, `ClientConstruction`,
+`TrainingProfile`) plus cross-field validators that reject, at
 configuration-resolution time, a confirmatory identity paired with a
 non-`natural_device_evaluation` dataset, an unpaired or wrong-count seed
 cohort, an extra threshold construction on the confirmatory pair, attack
 data reachable from a calibration split, an unauthorized personalization
-strategy on a core-ladder detector, an inverted metric direction, a
+strategy on a core-ladder training profile, an inverted metric direction, a
 non-`TIER_1` confirmatory tier, or a checkpoint-selection rule other than
 the one locked rule (`CFG-08`, `DOMAIN_AND_APPLICATION_ARCHITECTURE.md §5`).
 

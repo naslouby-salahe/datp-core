@@ -21,7 +21,7 @@
 ## Authority order
 
 1. **The DATP-Core master roadmap:** scientific scope, identity, datasets,
-   splits, detector/threshold roles, comparators, experiments, evidence,
+   splits, model/threshold roles, comparators, experiments, evidence,
    claims, metrics, statistics, seeds, eligibility, feasibility,
    suppression, publication placement, and scope boundaries.
 2. **This package:** architecture consolidation, naming, type design,
@@ -110,23 +110,41 @@ for every consolidated or removed concept.
 
 ```text
 configs/
-├── experiments/     # one document per swept or standalone ScientificExperimentDefinition
-├── dataset_audits/   # source-inspection and feasibility-audit roots
-├── datasets/          # reusable DataDefinition documents
-├── detectors/           # reusable DetectorDefinition and EvaluationDefinition fragments
-├── runtime/               # named ExecutionDefinition profiles
-└── reporting/               # ReportingDefinition catalogues
+├── datasets/
+│   ├── nbaiot.yaml           # PhysicalDeviceClients + DirichletPartitionedClients setups; source audits
+│   ├── ciciot2023.yaml       # DatasetFilePseudoClients setup (boundary role only); feature-count audit
+│   └── edge_iiotset.yaml     # ExternalDeviceOrGroupClients (device/group) + chronological setups; audits
+│
+├── models/
+│   └── autoencoder.yaml      # architecture, objective, optimizer, checkpointing; every named training profile
+│
+├── experiments/
+│   ├── anchor.yaml
+│   ├── threshold_scope.yaml
+│   ├── heterogeneity.yaml
+│   ├── calibration_mechanisms.yaml
+│   ├── external_validation.yaml
+│   ├── training_stress_tests.yaml
+│   └── references_and_boundaries.yaml
+│
+└── execution.yaml            # every named execution profile in one file
 ```
 
-`detectors/` is the only name used for this directory anywhere in this
-package; the prior `protocols/` name is retired
-(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §1`).
+Four boundary owners, not six: one document per real dataset (its own
+source audits, client-construction setups, splits, preprocessing, and
+eligibility live together), one document for the model family (every named
+training profile), seven experiment-family documents (each experiment still
+independently addressable by semantic slug), and one execution file. There
+is no `dataset_audits/`, `data_sources/`, `detectors/`, `protocols/`,
+`runtime/`, or `reporting/` directory anywhere in this package
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §1.1` records exactly where
+each prior responsibility moved).
 
 ## Project structure
 
 ```text
 src/datp_core/   domain · application · config · infrastructure · composition · cli
-configs/         experiments · dataset_audits · datasets · detectors · runtime · reporting
+configs/         datasets · models · experiments · execution.yaml
 tests/           unit · property · contract · integration · architecture · system · golden
 outputs/ models/ runtime-resolved artifact, report, recovery, and external-input roots
 ```
@@ -143,23 +161,28 @@ responsibility, boundary, and the placement rule for new work.
 
 One canonical CLI, `datp-core experiment <action>`, with exactly seven
 actions and no scientific override flag
-(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §21`):
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §20`):
 
 ```bash
 datp-core experiment list
-datp-core experiment validate --config <experiment.yaml>
-datp-core experiment resolve --config <experiment.yaml>
-datp-core experiment plan --config <experiment.yaml>
-datp-core experiment run --config <experiment.yaml>
-datp-core experiment status --config <experiment.yaml>
-datp-core experiment report --config <experiment.yaml>
+datp-core experiment validate --config <slug>
+datp-core experiment resolve --config <slug>
+datp-core experiment plan --config <slug>
+datp-core experiment run --config <slug>
+datp-core experiment status --config <slug>
+datp-core experiment report --config <slug>
 ```
+
+`<slug>` is a registered experiment slug, unique across every
+`configs/experiments/` family document — a family document holds several
+experiments, so a bare file path would be ambiguous
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §20`).
 
 ## Zero-input Make targets
 
 Every regularly executed experiment exposes a discoverable, zero-input
 Make target per meaningful action — no `EXPERIMENT=...`, `CONFIG=...`, or
-other parameter (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §23`):
+other parameter (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §22`):
 
 ```bash
 make help              # lists every supported target and its exact experiment
@@ -175,9 +198,9 @@ make mandatory-run       # the fixed, explicitly listed mandatory sequence
 
 ```text
 CLI command or zero-input Make target
-  → experiment configuration selection
-    → root experiment YAML loading
-      → referenced YAML resolution
+  → experiment configuration selection (slug lookup across family documents)
+    → owning family document loading and entry expansion
+      → referenced dataset/model/execution document resolution
         → Pydantic boundary validation
           → enum and discriminated-union construction
             → frozen domain dataclass construction

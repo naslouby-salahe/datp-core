@@ -55,7 +55,7 @@ RunDefinition
 ├── ScientificExperimentDefinition
 │   ├── metadata
 │   ├── data
-│   ├── detector
+│   ├── model
 │   ├── evaluations
 │   ├── analyses
 │   ├── seed_cohort
@@ -83,7 +83,7 @@ class ExperimentIdentity:
 class ScientificExperimentDefinition:
     identity: ExperimentIdentity
     data: DataDefinition
-    detector: DetectorDefinition
+    model: ModelDefinition
     evaluations: tuple[EvaluationDefinition, ...]
     analyses: tuple[AnalysisDefinition, ...]
     seed_cohort: SeedCohortDefinition
@@ -98,6 +98,19 @@ class DatasetAuditDefinition:
     feasibility_definition: FeasibilityDefinition
     operations: AuditOperationsDefinition
 ```
+
+`DatasetAuditDefinition` is resolved from one named entry of its owning
+dataset document's own `audits` list
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §2.1`), never from a
+freestanding `configs/dataset_audits/` root; `config/compose.py` parses the
+same `configs/datasets/<name>.yaml` document twice — once per authorized
+`ClientConstruction` setup to build a `DataDefinition` for a scientific
+experiment, once per `audits` entry to build a `DatasetAuditDefinition` —
+and the two resulting aggregates remain structurally distinct, satisfying
+`ARCH-01` exactly as before. `DatasetAuditMetadata.slug` is scoped by its
+owning dataset (`DatasetAuditSlug`, `§16.1`); it carries no detector,
+threshold, seed, evidence-role, or claim-tier field regardless of which
+document supplied it.
 
 Evidence role and run requirement remain distinct. Rejected, out-of-scope,
 and future ideas use `CatalogueDisposition` and never enter a resolved
@@ -179,14 +192,14 @@ def derive_publication_regime(
 It is absent from YAML, run identity, stage identity, artifact keys, planner
 branching, and scientific control flow.
 
-### 3.2 `DetectorDefinition`
+### 3.2 `ModelDefinition`
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DetectorDefinition:
+class ModelDefinition:
     architecture: AutoencoderArchitecture
     reconstruction_objective: ReconstructionObjective
-    training_protocol: TrainingProtocol
+    training_profile: TrainingProfile
     optimizer: OptimizerDefinition
     checkpoint_production: CheckpointProductionDefinition
     training_batch: TrainingBatchDefinition
@@ -227,13 +240,13 @@ validated, canonical `Decimal` value objects; raw `float` is never a
 scientific or artifact-identity input.
 
 ```text
-TrainingProtocol
-├── FederatedAveragingTraining   (local_epochs=1, participation: ParticipationStrategy,
+TrainingProfile
+├── FederatedAveragingTrainingProfile   (local_epochs=1, participation: ParticipationStrategy,
 │                                  personalization: ModelPersonalizationStrategy)
-├── FederatedProxTraining         (mu: a strictly positive pre-registered value,
+├── FederatedProximalTrainingProfile         (mu: a strictly positive pre-registered value,
 │                                   same non-strategy fields as the matched
-│                                   FederatedAveragingTraining)
-└── CentralizedPooledTraining      (pooled-benign; not federated; not in the ladder)
+│                                   FederatedAveragingTrainingProfile)
+└── CentralizedPooledTrainingProfile      (pooled-benign; not federated; not in the ladder)
 
 class ParticipationStrategy(StrEnum):
     FULL = "full"
@@ -242,9 +255,9 @@ class ParticipationStrategy(StrEnum):
     # because the roadmap already names its own extension.
 ```
 
-A detector's role — core ladder, aggregation stress test, or personalization
+A training profile's role — core ladder, aggregation stress test, or personalization
 stress test — is never a stored field; it is computed by
-`classify_detector(training_protocol)`, a pure function, removing the
+`classify_training_profile(training_profile)`, a pure function, removing the
 self-validation the prior design needed to check a stored role against its
 own training specification. `AutoencoderArchitecture` is a value object
 (`hidden_dims`, `bottleneck_dim`, `activation`; no batch normalization
@@ -263,8 +276,8 @@ chunks, prefetch, and execution concurrency.
 Checkpoint authority has two distinct values. `PrimaryCheckpointRoundSelection`
 authorizes the natural-device primary round from permitted benign evidence.
 `CheckpointArtifactSelection` selects each independently trained
-dataset/detector branch's own artifact at that authorized round. This keeps
-input-dimension and training-protocol compatibility explicit, prevents
+dataset/training-profile branch's own artifact at that authorized round. This keeps
+input-dimension and training-profile compatibility explicit, prevents
 per-regime/test-driven selection, and keeps the names neutral for FedAvg and
 FedProx.
 
@@ -289,7 +302,10 @@ class EvaluationDefinition:
     threshold: ThresholdConstruction
     evaluation_suite: EvaluationSuiteDefinition
     requested_metrics: tuple[MetricId, ...]
-    eligibility: EligibilityDefinition
+    eligibility: EligibilityDefinition    # resolved by reference to the owning dataset's single
+                                          #   authored minimum_calibration_sample_count
+                                          #   (CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §2); never
+                                          #   re-authored here, so the dataset remains the sole owner
     recalibration_mode: RecalibrationMode | None    # FROZEN | ONE_SHOT for the chronological
                                                     #   setting only; None (never authored) for
                                                     #   every non-temporal evaluation (CFG-05)
@@ -315,15 +331,15 @@ enters no fingerprint (`§17`). This is why the worked evaluations author them
 only where they diverge from the default (for example the supplementary fixed-k
 evaluation's `execution_requirement: optional`,
 `publication_placement: supplementary`,
-`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §24.1`). Every scientific,
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §16.5`). Every scientific,
 identity-bearing, or output-affecting field remains default-free (`CFG-01`,
 `CFG-05`). `AnalysisMetadata` carries the same three presentation-metadata
 fields under the same default rule.
 
 The eight `ThresholdConstruction` variants are defined completely in
 `SCIENTIFIC_FOUNDATION.md §6`; `CentralizedPooledThreshold` is not a member
-of this union and is reachable only from a `CentralizedPooledTraining`
-detector's own evaluation. `EvaluationSuiteDefinition` is a closed union of
+of this union and is reachable only from a `CentralizedPooledTrainingProfile`
+model's own evaluation. `EvaluationSuiteDefinition` is a closed union of
 `StandardEvaluationSuite` and `AlertBurdenEvaluationSuite`; the latter
 requires a validated `TrafficRateEvidence` value, so alert burden cannot be
 requested with missing or bare rate data (`EVAL-06`).
@@ -448,8 +464,8 @@ threshold evaluation (`ARCH-02`).
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OperationsDefinition:
-    execution: ExecutionDefinition
-    reporting: ReportingDefinition
+    execution: ExecutionProfileRef      # resolved reference to one named profile in execution.yaml
+    report: ReportDefinition            # inline; authored on the experiment entry that produces it
 
 def derive_artifact_namespace(identity: ExperimentIdentity) -> ArtifactNamespace:
     """Pure, total function from an experiment's identity to its artifact
@@ -460,14 +476,23 @@ def derive_artifact_namespace(identity: ExperimentIdentity) -> ArtifactNamespace
 ```
 
 Two named, non-overlapping sub-fields replace three separately top-level
-policy objects. A third, `ArtifactDefinition`, existed in an earlier draft
-solely to carry a `namespace` field that was already fully determined by
+policy objects. `execution` resolves a semantic reference to one named
+profile in `execution.yaml` (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md
+§2.4`); `report` is authored inline on the experiment entry, never a path
+reference to a separate presentation document, since no
+`configs/reporting/` directory exists (`§2.3` of the same file). Both
+fields use the single `ReportDefinition` type `EVALUATION_REPORTING_AND_PROVENANCE.md
+§9.2` declares — an earlier draft of this package named the field's type
+`ReportingDefinition`, a second name for the same concept `§9.2` already
+defines; that duplicate name is removed here. A third sub-field,
+`ArtifactDefinition`, existed in an earlier draft solely to carry a
+`namespace` field that was already fully determined by
 `ExperimentIdentity.evidence_role`; storing it invited the same
-caller-supplied-inconsistency failure mode `§11` catalogues for
-`DetectorBranchSpec.role`, so it is removed in favor of the pure
-`derive_artifact_namespace` function, called wherever a namespace is
-needed (planning, persistence, reporting) and never persisted as its own
-domain field.
+caller-supplied-inconsistency failure mode `§11` catalogues for the prior
+design's removed per-training-branch role field, so it is removed in favor
+of the pure `derive_artifact_namespace` function, called wherever a
+namespace is needed (planning, persistence, reporting) and never persisted
+as its own domain field.
 
 ### 3.5 No duplicate ownership
 
@@ -543,7 +568,7 @@ catalogued.
 |---|---|---|---|---|
 | `ExperimentIdentity` | domain | as part of `ScientificExperimentDefinition` | yes (`evidence_role`, `tier`) | planner, reporting |
 | `DataDefinition` | domain | yes | yes | planner, stages, reuse gate |
-| `DetectorDefinition` | domain | yes | yes | planner, stages, reuse gate |
+| `ModelDefinition` | domain | yes | yes | planner, stages, reuse gate |
 | `EvaluationDefinition` | domain | yes | yes (threshold only) | evaluator |
 | `AnalysisDefinition` | domain | yes | yes (statistical procedure) | statistics runner, anchor gate |
 | `SeedCohortDefinition` | domain | yes | yes | planner, statistics runner |
@@ -584,7 +609,7 @@ itself.
 ### 6.3 Discriminated variant families
 
 Complete list, each exhaustively matched with `typing.assert_never`:
-`ClientConstruction` (§3.1, 4 members), `TrainingProtocol` (§3.2, 3
+`ClientConstruction` (§3.1, 4 members), `TrainingProfile` (§3.2, 3
 members), `ThresholdConstruction` (`SCIENTIFIC_FOUNDATION.md §6`, 8 shared
 members plus `CentralizedPooledThreshold` outside the union),
 `EvaluationSuiteDefinition` (2 members), `AnalysisDefinition` (`§3.3`, 8
@@ -646,7 +671,7 @@ one per `STATISTICAL_ANALYZE`-eligible `AnalysisDefinition` kind; excludes
 | `AnchorReferenceInterval` / `AnchorEquivalenceResult` | the locked `[0.647, 0.769]` reference and the pass/fail comparison (produced by `ANCHOR_EQUIVALENCE`, not `STATISTICAL_ANALYZE`) |
 | `ResourceCostResult` | communication or storage cost, `MEASURED` or `ESTIMATED`, never conflated |
 
-### 6.6 Data and detector pipeline result types
+### 6.6 Data and model pipeline result types
 
 | Type | Purpose |
 |---|---|
@@ -661,7 +686,7 @@ one per `STATISTICAL_ANALYZE`-eligible `AnalysisDefinition` kind; excludes
 
 The only authoritative data flow is source inspection → client-partition
 result → split-definition result → fitted preprocessor → processed split →
-detector training → checkpoint selection → calibration/test/temporal
+model training → checkpoint selection → calibration/test/temporal
 scoring. No component both partitions and preprocesses, and no combined
 prepare-or-fit-transform contract exists.
 
@@ -690,7 +715,7 @@ prepare-or-fit-transform contract exists.
 | `SplitDefinitionBuilder` | `BuildSplitRequest` | `SplitDefinitionResult` |
 | `PreprocessorFitter` | `FitPreprocessorRequest` | `FittedPreprocessorResult` |
 | `ProcessedSplitMaterializer` | `MaterializeProcessedSplitsRequest` | `ProcessedSplitResult` |
-| `DetectorTrainingBackend` | `TrainDetectorRequest` | `TrainingRunResult` |
+| `ModelTrainingBackend` | `TrainModelRequest` | `TrainingRunResult` |
 | `ScoreGenerator` | `GenerateCalibrationScoresRequest` / `GenerateTestScoresRequest` / `GenerateTemporalScoresRequest` | role-scoped score-generation result |
 | `ThresholdConstructor` | `ConstructThresholdRequest` | `ThresholdConstructionResult` |
 | `StatisticalProcedureBackend` | `RunStatisticalAnalysisRequest` | `StatisticalAnalysisResult` |
@@ -728,14 +753,14 @@ compact summary below shows only the layer shape.
 ```
 src/datp_core/
   domain/
-    experiments.py  data.py  detection.py  thresholding.py  evaluation.py
+    experiments.py  data.py  model.py  thresholding.py  evaluation.py
     artifacts.py  operations.py  reporting.py  mathematics.py  identifiers.py  errors.py
   application/
     ports/  data.py  training.py  statistics.py  persistence.py  runtime.py  reporting.py
     configuration/  planning/  stages/  runtime/  evaluation/  statistics/  reporting/
   config/  schemas/  mapping/  compose.py
   infrastructure/
-    data/  detection/  thresholding/  statistics/  persistence/  runtime/  reporting/  telemetry/
+    data/  training/  thresholding/  statistics/  persistence/  runtime/  reporting/  telemetry/
   composition/  root.py  registries.py
   cli/  main.py  commands/
 ```
@@ -792,16 +817,16 @@ pattern applied throughout:
   own training specification at construction and rejected if it disagrees,"
   because a caller could otherwise supply an inconsistent label. Removing
   the stored field and replacing it with the pure function
-  `classify_detector` (§6.6, §12) removes the inconsistency it was designed
+  `classify_training_profile` (§6.6, §12) removes the inconsistency it was designed
   to catch, because there is no longer a second copy of the same fact to
   disagree with the first.
 - The prior design's six centralized (`CentralizedModelIdentity` through
   `CentralizedEvaluationIdentity`) identity classes existed only to
   guarantee that a centralized artifact could never be substituted for a
   federated one. `StageIdentity` and `ArtifactKey` already guarantee this,
-  because a `CentralizedPooledTraining` detector produces a structurally
-  different `stage_fingerprint` input than a `FederatedAveragingTraining`
-  detector at the very first stage that depends on `training_protocol`; a
+  because a `CentralizedPooledTrainingProfile` model produces a structurally
+  different `stage_fingerprint` input than a `FederatedAveragingTrainingProfile`
+  model at the very first stage that depends on `training_profile`; a
   second, parallel type family added no protection the first did not
   already provide.
 
@@ -829,7 +854,7 @@ class CheckpointSelector:
 class ConfusionMatrixEvaluator:
     def derive(self, request: EvaluateOperatingPointsRequest) -> ClientEvaluationResult: ...
 
-def classify_detector(training_protocol: TrainingProtocol) -> DetectorRole:
+def classify_training_profile(training_profile: TrainingProfile) -> TrainingProfileRole:
     """Pure classification; never a stored, separately validated field."""
     ...
 
@@ -853,7 +878,7 @@ classDiagram
     class ScientificExperimentDefinition {
       +ExperimentIdentity identity
       +DataDefinition data
-      +DetectorDefinition detector
+      +ModelDefinition model
       +EvaluationDefinition[] evaluations
       +AnalysisDefinition[] analyses
       +SeedCohortDefinition seed_cohort
@@ -861,20 +886,20 @@ classDiagram
       +OperationsDefinition operations
     }
     class DataDefinition
-    class DetectorDefinition
+    class ModelDefinition
     class EvaluationDefinition
     class AnalysisDefinition
     class SeedCohortDefinition
     class ExperimentPrerequisite
     class OperationsDefinition {
-      +ExecutionDefinition execution
-      +ReportingDefinition reporting
+      +ExecutionProfileRef execution
+      +ReportDefinition report
     }
     class ExperimentIdentity
     ScientificExperimentCell *-- ScientificExperimentDefinition
     ScientificExperimentDefinition *-- ExperimentIdentity
     ScientificExperimentDefinition *-- DataDefinition
-    ScientificExperimentDefinition *-- DetectorDefinition
+    ScientificExperimentDefinition *-- ModelDefinition
     ScientificExperimentDefinition *-- EvaluationDefinition
     ScientificExperimentDefinition *-- AnalysisDefinition
     ScientificExperimentDefinition *-- SeedCohortDefinition
@@ -901,14 +926,14 @@ groups so it can be checked side by side against it.
 | `ClientDefinitionStrategy` | merged | into the `ClientConstruction` discriminated union (`§3.1`); `DEVICE_CLIENT`/`GROUP_CLIENT` merged into `ExternalDeviceOrGroupClients.granularity` |
 | `SplitRole` | kept | `TRAIN`, `CALIBRATION`, `TEST`, `TEMPORAL_EVALUATION` |
 | `ProtocolTrack` | eliminated | `DATP_ANCHOR`/`COMPLETE` replaced by `EvidenceRole.ANCHOR`; namespace is derived, not a stored field (`ANCHOR-05`) |
-| `DetectorBranchRole` | eliminated | replaced by the pure function `classify_detector` (`§3.2`, `§11`) |
+| `DetectorBranchRole` | eliminated | replaced by the pure function `classify_training_profile` (`§3.2`, `§11`) |
 | `CoreThresholdPolicy` | eliminated | redundant with the `ThresholdConstruction` union's own discriminator; "is this core-ladder" is `isinstance` on the variant, never a parallel enum |
 | `ThresholdConstructionKind` | eliminated | the `ThresholdConstruction` union discriminator identifies `SharedThreshold`, `LocalThreshold`, `FamilyThreshold`, `ClusterThreshold`, `LocalGlobalShrinkageThreshold`, `CalibrationSizeAwareFallbackThreshold`, `ConformalLocalThreshold`, or `FederatedSummaryStatisticThreshold`; `ROBUST_CLUSTER_MEDIAN` remains `ClusterThreshold.aggregation` |
 | `SharedThresholdConstruction` | kept | now `SharedThreshold.construction`: `MEAN`, `POOLED`, `WEIGHTED` |
 | `ThresholdVariant` | eliminated | redundant listing of names already distinct in `ThresholdConstruction`; no second "which of these is a variant" tag needed |
-| `ThresholdComparatorRole` | eliminated | `B0` never enters the shared union at all (its own detector's `CentralizedPooledThreshold`); "outside the ladder" is expressed by the owning experiment's `evidence_role = STRESS_TEST`, not a per-threshold field |
-| `AggregationStrategy` | kept, renamed | now the tag of `TrainingProtocol` (`FederatedAveragingTraining`, `FederatedProxTraining`) plus the separate `CentralizedPooledTraining` variant |
-| `ModelPersonalizationStrategy` | kept | `NONE`, `DITTO`, `FEDREP_AE`, `FEDPER_AE`, field of `FederatedAveragingTraining` |
+| `ThresholdComparatorRole` | eliminated | `B0` never enters the shared union at all (its own model's `CentralizedPooledThreshold`); "outside the ladder" is expressed by the owning experiment's `evidence_role = STRESS_TEST`, not a per-threshold field |
+| `AggregationStrategy` | kept, renamed | now the tag of `TrainingProfile` (`FederatedAveragingTrainingProfile`, `FederatedProximalTrainingProfile`) plus the separate `CentralizedPooledTrainingProfile` variant |
+| `ModelPersonalizationStrategy` | kept | `NONE`, `DITTO`, `FEDREP_AE`, `FEDPER_AE`, field of `FederatedAveragingTrainingProfile` |
 | `ExperimentRole` | kept, renamed, narrowed | now `EvidenceRole`, with `ANCHOR` added and the two non-executable members `FUTURE_WORK`/`FORBIDDEN` dropped (they carry no `configs/experiments/` document; future work is `CatalogueDisposition.FUTURE_WORK`, forbidden is a Tier-9 manuscript rule) — eight executable roles (`SCIENTIFIC_FOUNDATION.md §4`) |
 | `ClaimTier` | kept | `TIER_1`…`TIER_9`, `IntEnum`, unchanged |
 | `RunRequirement` | kept | `MANDATORY`, `OPTIONAL`, `SUPPRESSED` only; rejected and future catalogue entries use `CatalogueDisposition`, never executable run status |
@@ -943,7 +968,9 @@ All fifteen kept: `ExecutionMode`, `DevicePolicy`, `RunStatus`, `SeedRole`,
 `ResourcePressureLevel`, `PauseDecision`, `ReuseImpact` kept verbatim.
 `PipelineStage` kept with several members renamed for precision
 (`PARTITION → CLIENT_PARTITION`, `SPLIT_BUILD → SPLIT_DEFINITION`,
-`TRAIN → DETECTOR_TRAIN`, `THRESHOLD → THRESHOLD_CONSTRUCT`,
+`TRAIN → MODEL_TRAIN` (further renamed from an intermediate `DETECTOR_TRAIN`
+once "detector" was replaced by "model" throughout this package),
+`THRESHOLD → THRESHOLD_CONSTRUCT`,
 `ANALYZE → STATISTICAL_ANALYZE`) and one member added (`ANCHOR_EQUIVALENCE`;
 `PIPELINE_EXECUTION_AND_ARTIFACTS.md §2`). Configuration resolution is a
 pre-pipeline composition operation (`§4` above) and was never a correct
@@ -1021,7 +1048,7 @@ this package (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §§10, 14`):
 | `FederatedRoundResult` | one round's full-participation evidence: expected/completed/failed rosters, disposition |
 | `HardwareInventory` | CUDA availability, GPU identity/count/VRAM, driver/runtime versions, CPU count, RAM — provenance, never a scientific value |
 | `ParallelismSpec` | per-stage concurrency, start method, thread limits, GPU assignment |
-| `ExecutionConcurrencyDefinition` | the `runtime/` document's own owned concurrency fields — training concurrency, scoring concurrency, worker count — resolved once into `ParallelismSpec` by preflight; never duplicated in `DetectorDefinition` or `DataDefinition` |
+| `ExecutionConcurrencyDefinition` | the named `execution.yaml` profile's own owned concurrency fields — training concurrency, scoring concurrency, worker count — resolved once into `ParallelismSpec` by preflight; never duplicated in `ModelDefinition` or `DataDefinition` |
 | `SeedPlan` | experiment seed plus every derived per-role seed (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §7.1`) |
 | `ResourcePressurePolicy` / `ResourcePressureSnapshot` | cooperative pause/throttle thresholds and observations |
 | `ResolvedRuntimePlan` | the frozen runtime: device, budget, parallelism, seed plan, resolved batch profile |
@@ -1053,7 +1080,8 @@ not a central enum edit — admits a new member (`§2.4` of
 
 ```python
 class ExperimentSlug(str): ...        # lowercase snake_case, non-empty; registry-validated
-class DatasetAuditSlug(str): ...      # lowercase snake_case, non-empty; registry-validated
+class DatasetAuditSlug(str): ...      # lowercase snake_case, non-empty; registry-validated;
+                                      #   scoped by its owning dataset's `audits` entry (`check` name)
 class EvaluationLabel(str): ...       # unique within one ScientificExperimentDefinition.evaluations
 class AnalysisLabel(str): ...         # unique within one ScientificExperimentDefinition.analyses
 class SweepParameterName(str): ...    # a declared sweep axis (threshold_quantile, dirichlet_alpha,
@@ -1274,7 +1302,7 @@ ThresholdConstruction = (
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CentralizedPooledThreshold:        # NOT a member of ThresholdConstruction;
-    quantile: ThresholdPercentile        # reachable only from a CentralizedPooledTraining detector
+    quantile: ThresholdPercentile        # reachable only from a CentralizedPooledTrainingProfile model
 
 # EvaluationSuiteDefinition (domain/evaluation.py)
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -1401,7 +1429,7 @@ Score-generation requests (`GenerateCalibrationScoresRequest`,
 `GenerateTestScoresRequest`, `GenerateTemporalScoresRequest`) and the
 data-pipeline requests (`InspectDatasetSourceRequest`,
 `ClientPartitionRequest`, `BuildSplitRequest`, `FitPreprocessorRequest`,
-`MaterializeProcessedSplitsRequest`, `TrainDetectorRequest`) each carry the
+`MaterializeProcessedSplitsRequest`, `TrainModelRequest`) each carry the
 selected upstream `ArtifactRef` values plus the resolved definition subset the
 stage consumes, and nothing else.
 
@@ -1855,7 +1883,7 @@ other collection above is a plain immutable `tuple`. No result type exposes a
 Every closed enum, its explicit members, its owning module, whether it is
 serialized (into YAML, an artifact, or a fingerprint), and whether it enters
 scientific identity. Open, registry-backed identifiers (`Dataset` IDs,
-experiment/audit slugs, detector/runtime/reporting profile names) are **not**
+experiment/audit slugs, model/execution/reporting profile names) are **not**
 enums and are covered in `§16.1` and `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md
 §2.4`. `§14` remains the disposition ledger against the prior architecture;
 this section is the final member list.
@@ -1874,13 +1902,13 @@ this section is the final member list.
 | `FingerprintFeature` | `MEAN_ERROR`, `STD_ERROR`, `SKEW_ERROR`, `P95_ERROR` | `domain/thresholding.py` | yes | yes |
 | `ConformalMode` | `SPLIT_CONFORMAL`, `FEDERATED_CONFORMAL` | `domain/thresholding.py` | yes | yes |
 | `QuantileEstimatorType` | `EXACT`, `POOLED`, `WEIGHTED` | `domain/thresholding.py` | yes | yes |
-| `ActivationFunction` | `RELU` | `domain/detection.py` | yes | yes |
-| `OptimizerType` | `ADAM` | `domain/detection.py` | yes | yes |
-| `LrSchedulerType` | `STEP_DECAY` | `domain/detection.py` | yes | yes |
-| `ParticipationStrategy` | `FULL` (`PARTIAL` = named future work, `SCI` §7.6) | `domain/detection.py` | yes | yes |
-| `ModelPersonalizationStrategy` | `NONE`, `DITTO`, `FEDREP_AE`, `FEDPER_AE` | `domain/detection.py` | yes | yes |
-| `NumericalPrecision` / `PrecisionMode` | `FP32` | `domain/detection.py` | yes | yes |
-| `DeterminismLevel` | `STRICT` | `domain/detection.py` | yes | yes |
+| `ActivationFunction` | `RELU` | `domain/model.py` | yes | yes |
+| `OptimizerType` | `ADAM` | `domain/model.py` | yes | yes |
+| `LrSchedulerType` | `STEP_DECAY` | `domain/model.py` | yes | yes |
+| `ParticipationStrategy` | `FULL` (`PARTIAL` = named future work, `SCI` §7.6) | `domain/model.py` | yes | yes |
+| `ModelPersonalizationStrategy` | `NONE`, `DITTO`, `FEDREP_AE`, `FEDPER_AE` | `domain/model.py` | yes | yes |
+| `NumericalPrecision` / `PrecisionMode` | `FP32` | `domain/model.py` | yes | yes |
+| `DeterminismLevel` | `STRICT` | `domain/model.py` | yes | yes |
 | `EvidenceRole` | `ANCHOR`, `CONFIRMATORY`, `SUPPORTIVE`, `EXTERNAL_VALIDATION`, `STRESS_TEST`, `MECHANISM`, `BOUNDARY`, `EXPLORATORY` (eight executable roles; `FUTURE_WORK`/`FORBIDDEN` dropped — non-executable, `SCIENTIFIC_FOUNDATION.md §4`) | `domain/experiments.py` | yes | yes (namespace derivation) |
 | `RunRequirement` | `MANDATORY`, `OPTIONAL`, `SUPPRESSED` | `domain/experiments.py` | yes | no |
 | `ClaimTier` | `TIER_1`…`TIER_9` (`IntEnum`) | `domain/experiments.py` | yes (metadata) | no |

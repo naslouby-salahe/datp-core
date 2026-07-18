@@ -47,7 +47,7 @@ consumes another stage's output.
 | `SPLIT_DEFINITION` | partition, `SplitDefinition` | `SplitDefinitionResult` | `PARTITION_MANIFEST` | `SPLIT_MANIFEST` |
 | `PREPROCESSOR_FIT` | authorized train rows | `FittedPreprocessorResult` | `SPLIT_MANIFEST` | `FITTED_PREPROCESSOR` |
 | `SPLIT_MATERIALIZE` | split, fitted preprocessor | `ProcessedSplitResult` | `SPLIT_MANIFEST`, `FITTED_PREPROCESSOR` | `PROCESSED_SPLIT` |
-| `DETECTOR_TRAIN` | processed training split, `TrainingProtocol` | `TrainingRunResult` (scheduled checkpoints) | `PROCESSED_SPLIT` | `SCIENTIFIC_CHECKPOINT` (one per scheduled round) |
+| `MODEL_TRAIN` | processed training split, `TrainingProfile` | `TrainingRunResult` (scheduled checkpoints) | `PROCESSED_SPLIT` | `SCIENTIFIC_CHECKPOINT` (one per scheduled round) |
 | `CHECKPOINT_SELECT` | scheduled checkpoints, natural-device evidence only | `CheckpointSelectionResult` | `SCIENTIFIC_CHECKPOINT` | `CHECKPOINT_SELECTION` |
 | `CALIBRATION_SCORE` | selected checkpoint, calibration split | `CalibrationScoreArtifactSet` | `CHECKPOINT_SELECTION`, `PROCESSED_SPLIT` | `SCORE_SET` (`SplitRole = CALIBRATION`) |
 | `CALIBRATION_SUBSET_SELECT` | calibration score set, `CalibrationSubsetDefinition` | `CalibrationSubsetResult` | `SCORE_SET` (`SplitRole = CALIBRATION`) | `CALIBRATION_SUBSET` |
@@ -72,7 +72,9 @@ score set). `RESOURCE_COST` and `ANCHOR_EQUIVALENCE` are separated from
 (reporting consumes resource cost directly; the planner consumes anchor
 equivalence directly, before most other stages are even planned).
 `FEASIBILITY_AUDIT` is planned only for a dedicated, non-scientific audit
-experiment (for example `edge_iiotset_feasibility_audit`); a scientific
+run addressed by dataset and check name (for example `--dataset
+edge_iiotset --check client_granularity_feasibility`,
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §20`); a scientific
 `external_device_validation`-family experiment's `ClientConstruction` is
 already fully resolved by the time its configuration is authored
 (`SCIENTIFIC_FOUNDATION.md §5.1`), so `FEASIBILITY_AUDIT` is never planned
@@ -181,7 +183,7 @@ and output-affecting runtime choices — governs every invalidation decision.
   artifact.
 - A preprocessing change invalidates training and every downstream
   artifact.
-- A detector change (`training_protocol`, architecture, optimizer,
+- A model change (`training_profile`, architecture, optimizer,
   checkpoint schedule) invalidates every downstream checkpoint and score.
 - A checkpoint-selection change invalidates scoring and every downstream
   artifact.
@@ -247,8 +249,8 @@ member.
 | `SPLIT_MANIFEST` | `SPLIT_DEFINITION` | exact train/calibration/test row membership, row-order checksums |
 | `FITTED_PREPROCESSOR` | `PREPROCESSOR_FIT` | fitted-state reference, authorized-row identity |
 | `PROCESSED_SPLIT` | `SPLIT_MATERIALIZE` | transformed, partitioned client/split data |
-| `SCIENTIFIC_CHECKPOINT` | `DETECTOR_TRAIN` | one entry per scheduled round; `CheckpointKind = SCIENTIFIC` |
-| `RECOVERY_CHECKPOINT` | `DETECTOR_TRAIN` (safe boundary) | resume-only state; never scientific evidence |
+| `SCIENTIFIC_CHECKPOINT` | `MODEL_TRAIN` | one entry per scheduled round; `CheckpointKind = SCIENTIFIC` |
+| `RECOVERY_CHECKPOINT` | `MODEL_TRAIN` (safe boundary) | resume-only state; never scientific evidence |
 | `CHECKPOINT_SELECTION` | `CHECKPOINT_SELECT` | selected round, candidate evidence, tie-break record |
 | `SCORE_SET` | `CALIBRATION_SCORE` / `TEST_SCORE` / `TEMPORAL_SCORE` | discriminated by `SplitRole`; test/temporal variants additionally carry benign and attack members |
 | `THRESHOLD_OUTPUT` | `THRESHOLD_CONSTRUCT` | per-client threshold assignment, calibration `ArtifactRef` consumed |
@@ -267,7 +269,7 @@ member.
 
 ## 7. Score and checkpoint reuse; anchor execution
 
-One trained checkpoint, identified by `StageIdentity(stage=DETECTOR_TRAIN,
+One trained checkpoint, identified by `StageIdentity(stage=MODEL_TRAIN,
 ...)`, produces compatible calibration and test score artifacts whose
 `ArtifactKey` values remain reusable across threshold policies. Calibration scores fan out to every
 compatible threshold construction; test scores fan out to every compatible
@@ -294,13 +296,13 @@ slug; no stage, port, or artifact type exists solely for the anchor
 (`ANCHOR-01`, `ANCHOR-02`).
 
 `centralized_pooled_reference` (B0) is executed by the same stage sequence
-under `training_protocol = CentralizedPooledTraining`; its `StageIdentity`
+under `training_profile = CentralizedPooledTrainingProfile`; its `StageIdentity`
 and `ArtifactKey` values are ordinary instances of the same two identity
 types (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §6.4`), never a parallel
 identity hierarchy — no stage, port, or registry accepts a federated
 checkpoint or federated-derived score set where a centralized identity is
 required, and the reverse never happens either, because the two
-`TrainingProtocol` variants produce structurally distinct `stage_fingerprint`
+`TrainingProfile` variants produce structurally distinct `stage_fingerprint`
 inputs (`ANCHOR-04`).
 
 ## 7.1 Experiment deduplication
@@ -360,7 +362,7 @@ continuation.
 
 ## 10. CUDA, batching, and parallelism
 
-`SCIENTIFIC` and `PRINT_GRADE` runs require CUDA for detector training and
+`SCIENTIFIC` and `PRINT_GRADE` runs require CUDA for model training and
 for reconstruction-score generation; CUDA availability is validated in
 preflight before any such stage starts, and its absence is a typed
 `RUN_BLOCKING` error with no silent CPU fallback. Configuration resolves
@@ -386,7 +388,7 @@ and `CLIENT_PARTITION` read through chunked row-group iteration;
 `PREPROCESSOR_FIT` uses an incremental fit where valid and a two-pass fit
 where an exact train-fitted statistic requires it; `SPLIT_MATERIALIZE`
 writes partitioned columnar output, one partition per client and split;
-`DETECTOR_TRAIN` consumes client batch iterators; `CALIBRATION_SCORE` and
+`MODEL_TRAIN` consumes client batch iterators; `CALIBRATION_SCORE` and
 `TEST_SCORE` stream batches to the CUDA device and write scores
 incrementally rather than materializing a full score matrix. Training batch
 size, scoring batch size, and gradient-accumulation steps are scientific and
@@ -512,7 +514,7 @@ graph TD
     PT --> SP[split definition]
     SP --> PF[preprocessor fit]
     PF --> PM[split materialize]
-    PM --> TR[detector train]
+    PM --> TR[model train]
     TR --> CK[scheduled checkpoints]
     CK --> CS[checkpoint select]
     CS --> CA[calibration score set]
@@ -546,7 +548,7 @@ else is provenance-only.
 | `SPLIT_DEFINITION` | `BuildSplitRequest` → `SplitDefinitionResult` | `SplitDefinition`, partition identity | partition change, split change | `SplitError` (STAGE_BLOCKING) | no | benign-only calibration test |
 | `PREPROCESSOR_FIT` | `FitPreprocessorRequest` → `FittedPreprocessorResult` | `PreprocessingDefinition`, authorized train rows | split change, preprocessing change | `PreprocessingError` (STAGE_BLOCKING) | no | fit-on-train-only test |
 | `SPLIT_MATERIALIZE` | `MaterializeProcessedSplitsRequest` → `ProcessedSplitResult` | split identity, fitted-preprocessor identity | either upstream change | `PreprocessingError` (STAGE_BLOCKING) | no | row-order/lineage preservation |
-| `DETECTOR_TRAIN` | `TrainDetectorRequest` → `TrainingRunResult` | `TrainingProtocol`, architecture, optimizer, checkpoint schedule, batch profile, precision, determinism, seed | any detector-definition change | `TrainingError`; `FullParticipationViolationError`; `CudaOutOfMemoryError` (all STAGE_BLOCKING) | no (OOM terminal, `EXEC-03`) | checkpoint-selection/reuse; CUDA no-fallback |
+| `MODEL_TRAIN` | `TrainModelRequest` → `TrainingRunResult` | `TrainingProfile`, architecture, optimizer, checkpoint schedule, batch profile, precision, determinism, seed | any model-definition change | `TrainingError`; `FullParticipationViolationError`; `CudaOutOfMemoryError` (all STAGE_BLOCKING) | no (OOM terminal, `EXEC-03`) | checkpoint-selection/reuse; CUDA no-fallback |
 | `CHECKPOINT_SELECT` | `CheckpointSelectionRequest` → `CheckpointSelectionResult` | `CheckpointSelectionPolicy`, natural-device evidence only | training change, policy change | `CheckpointSelectionError` (RUN_BLOCKING) | no | no-test-driven-selection test |
 | `CALIBRATION_SCORE` | `GenerateCalibrationScoresRequest` → `CalibrationScoreArtifactSet` | selected checkpoint identity, calibration split, scoring batch | checkpoint/split change | `ScoringError` (STAGE_BLOCKING) | no | chunked-vs-reference scoring |
 | `CALIBRATION_SUBSET_SELECT` | subset request → `CalibrationSubsetResult` | `CalibrationSubsetDefinition`, selection seed | source score-set change, subset def change | `ScoringError` (STAGE_BLOCKING) | no | nested-subset determinism |
@@ -588,17 +590,25 @@ sibling evaluation) already committed.
 | `local_global_threshold_shrinkage` | reuses scores; per-λ `THRESHOLD_CONSTRUCT` | λ ∈ {0,.25,.5,.75,1} threshold outputs | per-λ `PolicyEvaluationResult` | LAMBDA_CURVE |
 | `conformal_local_threshold_coverage` | reuses scores; conformal `THRESHOLD_CONSTRUCT`; `ConformalCoverageResult` | split/federated-conformal threshold, coverage | coverage result | coverage table |
 | `external_device_dataset_validation` | full chain on Edge-IIoTset; alert-burden `EVALUATE`; q-sweep | external partition (granularity fixed pre-run), `FederatedSummaryStatisticThreshold`, alert burden | external `ConfirmatoryAnalysisResult`, alert burden | external CONFIRMATORY_INTERVAL, ALERT_BURDEN |
-| `fedprox_aggregation_stress_test` | full chain under `FederatedProxTraining` (per µ) | FedProx checkpoints/scores (distinct identity from FedAvg) | per-µ `PolicyEvaluationResult` | STRESS_TEST |
-| `model_personalization_absorption_test` | two detector branches (core + personalized); `AbsorptionAnalysis` | personalized checkpoints/scores; 2×2 corner deltas | `AbsorptionResult` | STRESS_TEST |
+| `fedprox_aggregation_stress_test` | full chain under `FederatedProximalTrainingProfile` (per µ) | FedProx checkpoints/scores (distinct identity from FedAvg) | per-µ `PolicyEvaluationResult` | STRESS_TEST |
+| `model_personalization_absorption_test` | two training-profile branches (core + personalized); `AbsorptionAnalysis` | personalized checkpoints/scores; 2×2 corner deltas | `AbsorptionResult` | STRESS_TEST |
 | `federated_summary_comparator` | reuses scores; matched + fixed-k threshold; `QuantileEstimationAnalysis` | `FederatedSummaryStatisticThreshold` (matched primary, fixed-k supplementary) | comparator `PolicyEvaluationResult`, estimation analysis | COMPARATOR |
 | `chronological_recalibration_evaluation` | adds `TEMPORAL_SCORE`; frozen vs one-shot `EVALUATE`; `TemporalRecoveryAnalysis` | temporal score set, recovery ratio | `TemporalRecoveryResult` | RECOVERY_CURVE |
-| `centralized_pooled_reference` | full chain under `CentralizedPooledTraining`; `CentralizedPooledThreshold` | own centralized identity chain (never fused, `ANCHOR-04`) | `PolicyEvaluationResult` | DISPERSION_LADDER |
+| `centralized_pooled_reference` | full chain under `CentralizedPooledTrainingProfile`; `CentralizedPooledThreshold` | own centralized identity chain (never fused, `ANCHOR-04`) | `PolicyEvaluationResult` | DISPERSION_LADDER |
 | `file_pseudo_client_applicability_boundary` | full chain on CICIoT2023 pseudo-clients | boundary null; never generalized | `ConfirmatoryAnalysisResult` (boundary) | BOUNDARY_NULL |
-| dataset audits (all six) | `SOURCE_INSPECTION` (+ `FEASIBILITY_AUDIT` where the audit is a feasibility gate) | `SOURCE_INSPECTION`, `FEATURE_SCHEMA_MANIFEST`, `FEASIBILITY_RESULT` | `FeasibilityRecord` | source-inspection / feasibility report |
+| dataset audits (six checks across three dataset documents) | `SOURCE_INSPECTION` (+ `FEASIBILITY_AUDIT` where the check is a feasibility gate) | `SOURCE_INSPECTION`, `FEATURE_SCHEMA_MANIFEST`, `FEASIBILITY_RESULT` | `FeasibilityRecord` | source-inspection / feasibility report |
 
-The dataset-audit-to-scientific transition is strictly ordered (source
-inspection → feasibility audit → persisted `FEASIBILITY_RESULT` → human-authored
-`ExternalDeviceOrGroupClients` document → scientific resolution → scientific
-execution), and the scientific run cites the audit's `FEASIBILITY_RESULT` by
-`ArtifactRef` as provenance only, never resolving granularity live
+Each dataset audit is one named `check` entry in its owning
+`configs/datasets/<name>.yaml` document's `audits` list
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §2.1`), never a document under a
+separate `configs/dataset_audits/` root; `nbaiot.yaml` and `ciciot2023.yaml`
+each carry one or two checks, `edge_iiotset.yaml` carries three
+(`source_inspection`, `client_granularity_feasibility`,
+`timestamp_semantics_verification`). The dataset-audit-to-scientific
+transition is strictly ordered (source inspection → feasibility audit →
+persisted `FEASIBILITY_RESULT` → human-authored setup entry on the same
+dataset document, `granularity: device` or `granularity: group` → scientific
+resolution → scientific execution), and the scientific run cites the
+audit's `FEASIBILITY_RESULT` by `ArtifactRef` as provenance only, never
+resolving granularity live
 (`SCIENTIFIC_FOUNDATION.md §5.1`).
