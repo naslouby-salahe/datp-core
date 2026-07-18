@@ -296,6 +296,29 @@ profiling. Each carries status `DEFERRED` or `OUT_OF_SCOPE`
 (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §1`) and has no executable type
 anywhere in this design.
 
+### 7.7 Dataset-audit catalogue
+
+Dataset audits are non-scientific `DatasetAuditDefinition` runs that produce a
+persisted `FEASIBILITY_RESULT`/`SOURCE_INSPECTION` before any dependent
+scientific run is authored. They carry no detector, threshold, seed,
+evidence-role, or claim-tier field, and `evidence_role`/`tier` do not apply
+to them (`ARCH-01`, `§5.1`). Each has a semantic slug and a
+`configs/dataset_audits/` document (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md
+§24.2`).
+
+| Audit slug | Roadmap basis | Produces | Gates |
+|---|---|---|---|
+| `nbaiot_source_inspection` | Regime A feasibility | `SOURCE_INSPECTION`, `FEATURE_SCHEMA_MANIFEST` | N-BaIoT scientific runs |
+| `ciciot2023_source_inspection` | Regime B feasibility; records MAC/device/IP/timestamp absence | `SOURCE_INSPECTION` | B-a boundary; documents the B-b rejection basis |
+| `ciciot2023_processed_feature_verification` | conditional gate 1 (roadmap §7, §20) | `FEATURE_SCHEMA_MANIFEST` (verified `d`) | any quantitative `file_pseudo_client_applicability_boundary` claim |
+| `edge_iiotset_source_inspection` | Regime D feasibility | `SOURCE_INSPECTION`, timestamp evidence | Edge-IIoTset runs |
+| `edge_iiotset_client_granularity_feasibility` | conditional gate 2 (device-vs-group, K ∈ {6,15}, ≥ 90% coverage at n_k ≥ 100) | `FEASIBILITY_RESULT` | `external_device_dataset_validation` granularity authorization |
+| `edge_iiotset_timestamp_semantics_verification` | temporal MVE feasibility | timestamp-semantics `FEASIBILITY_RESULT` | `chronological_recalibration_evaluation` |
+
+A scientific run never re-answers a question an audit closes; it cites the
+audit's `FEASIBILITY_RESULT` by `ArtifactRef` as provenance only
+(`PIPELINE_EXECUTION_AND_ARTIFACTS.md §§2, 17`).
+
 ## 8. Experiment authorization
 
 A generic YAML combination cannot produce a scientifically unauthorized

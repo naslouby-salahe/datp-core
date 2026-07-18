@@ -65,6 +65,7 @@
 |---|---|
 | `SCIENTIFIC_FOUNDATION.md` | What is DATP-Core's complete scientific program, and how does the anchor relate to it? |
 | `DOMAIN_AND_APPLICATION_ARCHITECTURE.md` | What are the layers, the compact aggregate model, and the complete public contract catalogue? |
+| `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md` | Where does every module, configuration, test, and output live, and where is new work placed? |
 | `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md` | How is every experiment driven from YAML, with no hidden defaults? |
 | `PIPELINE_EXECUTION_AND_ARTIFACTS.md` | How does a stage execute, reuse evidence, persist atomically, and recover? |
 | `EVALUATION_REPORTING_AND_PROVENANCE.md` | How is a metric derived, a claim decided, and a report safely rendered? |
@@ -76,14 +77,18 @@
 graph TD
     RM[DATP-Core roadmap] --> SCI[SCIENTIFIC_FOUNDATION]
     SCI --> DOM[DOMAIN_AND_APPLICATION_ARCHITECTURE]
+    DOM --> STRUCT[PROJECT_STRUCTURE_AND_MODULE_CATALOGUE]
     DOM --> CFG[CONFIGURATION_AND_EXPERIMENT_CATALOGUE]
     SCI --> CFG
+    STRUCT --> CFG
     CFG --> PIPE[PIPELINE_EXECUTION_AND_ARTIFACTS]
     DOM --> PIPE
+    STRUCT --> PIPE
     PIPE --> EVAL[EVALUATION_REPORTING_AND_PROVENANCE]
     SCI --> EVAL
     SCI --> DEC[ENGINEERING_DECISIONS_AND_CONFORMANCE]
     DOM --> DEC
+    STRUCT --> DEC
     CFG --> DEC
     PIPE --> DEC
     EVAL --> DEC
@@ -116,6 +121,23 @@ configs/
 `detectors/` is the only name used for this directory anywhere in this
 package; the prior `protocols/` name is retired
 (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §1`).
+
+## Project structure
+
+```text
+src/datp_core/   domain · application · config · infrastructure · composition · cli
+configs/         experiments · dataset_audits · datasets · detectors · runtime · reporting
+tests/           unit · property · contract · integration · architecture · system · golden
+outputs/ models/ runtime-resolved artifact, report, recovery, and external-input roots
+```
+
+Six import layers, one allowed direction; there is no separate top-level
+`analysis/` layer (framework-free report specifications live in
+`domain/reporting.py` and `application/reporting/`, renderers in
+`infrastructure/reporting/`, `ARCH-05`). `outputs/` and `models/` are
+runtime-resolved and never enter scientific identity (`ART-05`).
+`PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md` is authoritative for every module
+responsibility, boundary, and the placement rule for new work.
 
 ## Canonical CLI
 
@@ -189,6 +211,27 @@ Make-target ordering (`SCIENTIFIC_FOUNDATION.md §2`,
 the anchor and the confirmatory experiment; every other registered
 experiment is independently discoverable through `make experiments` and its
 own Make-target family.
+
+## Reading order for implementation agents
+
+1. `SCIENTIFIC_FOUNDATION.md` — scientific identity, invariants, experiment
+   catalogue.
+2. `DOMAIN_AND_APPLICATION_ARCHITECTURE.md` — layers and the complete typed
+   contract catalogue.
+3. `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md` — where each contract, config,
+   test, and output lives, and where new work is placed.
+4. `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md` — how a YAML root resolves into
+   frozen domain values with no hidden defaults.
+5. `PIPELINE_EXECUTION_AND_ARTIFACTS.md` — stage planning, reuse, persistence,
+   recovery.
+6. `EVALUATION_REPORTING_AND_PROVENANCE.md` — metrics, claims, freeze, safe
+   rendering.
+7. `ENGINEERING_DECISIONS_AND_CONFORMANCE.md` — the canonical rule register,
+   error taxonomy, blockers, tests, and conformance checklist consulted
+   throughout.
+
+These are architecture contracts, not implementation claims: every commitment
+carries a status from `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §1`.
 
 ## Implementation status
 

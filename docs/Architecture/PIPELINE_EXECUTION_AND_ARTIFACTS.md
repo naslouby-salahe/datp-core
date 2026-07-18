@@ -528,3 +528,77 @@ graph TD
 
 A threshold-construction change re-enters the graph only at `THR`; every
 node above it is reused unchanged.
+
+## 16. Complete per-stage contract
+
+For every `PipelineStage` member: its request/result types
+(`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §§6, 16`), the scientific fields that
+enter its `StageFingerprint` (identity projection), its reuse trigger, its
+typed failure, its retry disposition, and the test that covers it. Runtime
+values enter identity only when proven output-affecting (`§5.1`); everything
+else is provenance-only.
+
+| Stage | Request → Result | Identity projection (fingerprinted fields) | Reuse invalidated by | Failure (disposition) | Retry | Test |
+|---|---|---|---|---|---|---|
+| `SOURCE_INSPECTION` | `InspectDatasetSourceRequest` → `DatasetSourceInspectionResult` | dataset, dataset_version | dataset/version change | `DatasetError` (STAGE_BLOCKING) | no | `integration/data` chunked-vs-reference |
+| `FEASIBILITY_AUDIT` | audit request → `FeasibilityRecord` | dataset, candidate construction, coverage rule | source-inspection change, rule change | `FeasibilityRejection` (RUN_BLOCKING) | no | `unit/domain` coverage-gate |
+| `CLIENT_PARTITION` | `ClientPartitionRequest` → `ClientPartitionResult` | `ClientConstruction` variant + fields, source identity | construction change, source change | `PartitionError` (STAGE_BLOCKING) | no | `unit/domain` partition invariants |
+| `SPLIT_DEFINITION` | `BuildSplitRequest` → `SplitDefinitionResult` | `SplitDefinition`, partition identity | partition change, split change | `SplitError` (STAGE_BLOCKING) | no | benign-only calibration test |
+| `PREPROCESSOR_FIT` | `FitPreprocessorRequest` → `FittedPreprocessorResult` | `PreprocessingDefinition`, authorized train rows | split change, preprocessing change | `PreprocessingError` (STAGE_BLOCKING) | no | fit-on-train-only test |
+| `SPLIT_MATERIALIZE` | `MaterializeProcessedSplitsRequest` → `ProcessedSplitResult` | split identity, fitted-preprocessor identity | either upstream change | `PreprocessingError` (STAGE_BLOCKING) | no | row-order/lineage preservation |
+| `DETECTOR_TRAIN` | `TrainDetectorRequest` → `TrainingRunResult` | `TrainingProtocol`, architecture, optimizer, checkpoint schedule, batch profile, precision, determinism, seed | any detector-definition change | `TrainingError`; `FullParticipationViolationError`; `CudaOutOfMemoryError` (all STAGE_BLOCKING) | no (OOM terminal, `EXEC-03`) | checkpoint-selection/reuse; CUDA no-fallback |
+| `CHECKPOINT_SELECT` | `CheckpointSelectionRequest` → `CheckpointSelectionResult` | `CheckpointSelectionPolicy`, natural-device evidence only | training change, policy change | `CheckpointSelectionError` (RUN_BLOCKING) | no | no-test-driven-selection test |
+| `CALIBRATION_SCORE` | `GenerateCalibrationScoresRequest` → `CalibrationScoreArtifactSet` | selected checkpoint identity, calibration split, scoring batch | checkpoint/split change | `ScoringError` (STAGE_BLOCKING) | no | chunked-vs-reference scoring |
+| `CALIBRATION_SUBSET_SELECT` | subset request → `CalibrationSubsetResult` | `CalibrationSubsetDefinition`, selection seed | source score-set change, subset def change | `ScoringError` (STAGE_BLOCKING) | no | nested-subset determinism |
+| `TEST_SCORE` | `GenerateTestScoresRequest` → `TestScoreArtifactSet` | selected checkpoint, test split, scoring batch | checkpoint/split change | `ScoringError` (STAGE_BLOCKING) | no | atomic benign+attack bundle test |
+| `TEMPORAL_SCORE` | `GenerateTemporalScoresRequest` → `TemporalScoreArtifactSet` | selected checkpoint, temporal window | checkpoint/window change | `ScoringError` (STAGE_BLOCKING) | no | temporal-ordering test |
+| `THRESHOLD_CONSTRUCT` | `ConstructThresholdRequest` → `ThresholdConstructionResult` | `ThresholdConstruction` variant + params, calibration identity | threshold-policy/quantile change (never the score set) | `ThresholdError` (STAGE_BLOCKING) | no | threshold-only-change preserves score keys |
+| `EVALUATE` | `EvaluateOperatingPointsRequest` → `PolicyEvaluationResult` | threshold identity, test/temporal score identity, eligible set, requested metrics | threshold/score change; metric addition adds, never invalidates | `EvaluationError` (STAGE_BLOCKING) | no | confusion reconciliation; AUROC invariance |
+| `STATISTICAL_ANALYZE` | `RunStatisticalAnalysisRequest` → `StatisticalAnalysisResult` | `AnalysisDefinition`, procedure, seed cohort, paired evaluation identities | analysis/procedure change (never scores/thresholds) | `StatisticsError` (STAGE_BLOCKING; not for expected degeneracy, `STAT-06`) | no | degeneracy-is-typed-result test |
+| `ANCHOR_EQUIVALENCE` | `AnchorEquivalenceRequest` → `AnchorEquivalenceResult` | anchor statistical identity, reference interval | anchor analysis change | `AnchorReproductionFailure` (blocks expansion track) | no | pass/fail-against-reference test |
+| `RESOURCE_COST` | resource request → `ResourceCostResult` | resolved threshold, client roster, manifest byte sizes | upstream manifest change | `ArtifactError` (STAGE_BLOCKING) | no | MEASURED/ESTIMATED-never-conflated test |
+| `RESULT_FREEZE` | freeze request → `ResultFreezeManifest` | selected report inputs, claim assessment | any frozen input change | `ProvenanceError` (STAGE_BLOCKING) | no | freeze/provenance-closure test |
+| `REPORT` | `ProjectReportRequest` → `RenderedReportResult` | `ReportDefinition`, frozen manifest identity | report-format change (never scientific artifacts) | `ReportingError` (STAGE_BLOCKING) | no | report-only-change preserves artifacts |
+
+Every stage's `is_applicable(definition)` returns false for the run family it
+does not serve (`§3`); dataset-audit stages (`SOURCE_INSPECTION`,
+`FEASIBILITY_AUDIT`) return false for `ScientificExperimentDefinition` beyond
+their inspection role, and scientific stages return false for
+`DatasetAuditDefinition`. Only `SOURCE_INSPECTION` and `FEASIBILITY_AUDIT` are
+planned for a `DatasetAuditDefinition`; the rest are absent from its plan.
+
+## 17. Complete workflow catalogue
+
+Every root experiment and dataset audit maps to a stage subset drawn from the
+one shared catalogue (`§2`); no experiment gets a bespoke pipeline. The
+planner emits exactly the applicable stages, deduplicating shared upstream
+stages across a seed (`§7.1`). "New artifacts" are those the experiment first
+produces; "reused" are shared upstream artifacts a compatible earlier run (or
+sibling evaluation) already committed.
+
+| Workflow | Applicable stage subset | Distinguishing stages / artifacts | Result-freeze inputs | Report |
+|---|---|---|---|---|
+| `anchor_reproduction` | SOURCE_INSPECTION → … → THRESHOLD_CONSTRUCT → EVALUATE → STATISTICAL_ANALYZE → ANCHOR_EQUIVALENCE → RESULT_FREEZE → REPORT | `ANCHOR_EQUIVALENCE` (5-seed vs reference interval); anchor namespace | `ConfirmatoryAnalysisResult`, `AnchorEquivalenceResult` | CONFIRMATORY_INTERVAL |
+| `confirmatory_threshold_scope_effect` | full scientific chain; no `ANCHOR_EQUIVALENCE` stage of its own, one `ExperimentPrerequisite` | 10-seed `PairedPolicyEffectAnalysis`; optional attached equity/secondary/RESOURCE_COST | `ConfirmatoryAnalysisResult` (+ optional resource) | CONFIRMATORY_INTERVAL |
+| `shared_threshold_construction_sensitivity` | reuses train/score; three extra `THRESHOLD_CONSTRUCT`+`EVALUATE` | mean/pooled/weighted threshold outputs | `PolicyEvaluationResult` ×4 | DISPERSION_LADDER |
+| `threshold_quantile_sensitivity` | reuses scores; per-q `THRESHOLD_CONSTRUCT`+`EVALUATE` | q ∈ {.90,.95,.975,.99} threshold outputs | per-q `PolicyEvaluationResult` | SENSITIVITY_GRID/HEATMAP |
+| `controlled_heterogeneity_response` | full chain per α; `MetricAssociationAnalysis` attached | Dirichlet partitions per α; JS↔gain regression | per-α `PolicyEvaluationResult`, association result | SEVERITY_TREND, SCATTER |
+| `cluster_mechanism` | reuses scores; family/cluster `THRESHOLD_CONSTRUCT`; `ClusterStabilityAnalysis` | cluster assignments, adjusted-Rand, fingerprint-ablation sweep | cluster dispersion, stability | CLUSTER_STABILITY, CONTINGENCY |
+| `calibration_window_size_stability` | adds `CALIBRATION_SUBSET_SELECT` per size; reuses train | size-scoped calibration subsets, size-aware fallback threshold | per-size `PolicyEvaluationResult` | SENSITIVITY_GRID |
+| `local_global_threshold_shrinkage` | reuses scores; per-λ `THRESHOLD_CONSTRUCT` | λ ∈ {0,.25,.5,.75,1} threshold outputs | per-λ `PolicyEvaluationResult` | LAMBDA_CURVE |
+| `conformal_local_threshold_coverage` | reuses scores; conformal `THRESHOLD_CONSTRUCT`; `ConformalCoverageResult` | split/federated-conformal threshold, coverage | coverage result | coverage table |
+| `external_device_dataset_validation` | full chain on Edge-IIoTset; alert-burden `EVALUATE`; q-sweep | external partition (granularity fixed pre-run), `FederatedSummaryStatisticThreshold`, alert burden | external `ConfirmatoryAnalysisResult`, alert burden | external CONFIRMATORY_INTERVAL, ALERT_BURDEN |
+| `fedprox_aggregation_stress_test` | full chain under `FederatedProxTraining` (per µ) | FedProx checkpoints/scores (distinct identity from FedAvg) | per-µ `PolicyEvaluationResult` | STRESS_TEST |
+| `model_personalization_absorption_test` | two detector branches (core + personalized); `AbsorptionAnalysis` | personalized checkpoints/scores; 2×2 corner deltas | `AbsorptionResult` | STRESS_TEST |
+| `federated_summary_comparator` | reuses scores; matched + fixed-k threshold; `QuantileEstimationAnalysis` | `FederatedSummaryStatisticThreshold` (matched primary, fixed-k supplementary) | comparator `PolicyEvaluationResult`, estimation analysis | COMPARATOR |
+| `chronological_recalibration_evaluation` | adds `TEMPORAL_SCORE`; frozen vs one-shot `EVALUATE`; `TemporalRecoveryAnalysis` | temporal score set, recovery ratio | `TemporalRecoveryResult` | RECOVERY_CURVE |
+| `centralized_pooled_reference` | full chain under `CentralizedPooledTraining`; `CentralizedPooledThreshold` | own centralized identity chain (never fused, `ANCHOR-04`) | `PolicyEvaluationResult` | DISPERSION_LADDER |
+| `file_pseudo_client_applicability_boundary` | full chain on CICIoT2023 pseudo-clients | boundary null; never generalized | `ConfirmatoryAnalysisResult` (boundary) | BOUNDARY_NULL |
+| dataset audits (all six) | `SOURCE_INSPECTION` (+ `FEASIBILITY_AUDIT` where the audit is a feasibility gate) | `SOURCE_INSPECTION`, `FEATURE_SCHEMA_MANIFEST`, `FEASIBILITY_RESULT` | `FeasibilityRecord` | source-inspection / feasibility report |
+
+The dataset-audit-to-scientific transition is strictly ordered (source
+inspection → feasibility audit → persisted `FEASIBILITY_RESULT` → human-authored
+`ExternalDeviceOrGroupClients` document → scientific resolution → scientific
+execution), and the scientific run cites the audit's `FEASIBILITY_RESULT` by
+`ArtifactRef` as provenance only, never resolving granularity live
+(`SCIENTIFIC_FOUNDATION.md §5.1`).

@@ -355,10 +355,17 @@ class QuantileEstimationAnalysis:
     source_evaluations: tuple[EvaluationLabel, ...]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
+class CrossExperimentAnalysisRef:
+    experiment: ExperimentSlug
+    analysis: AnalysisLabel
+
+@dataclass(frozen=True, slots=True, kw_only=True)
 class AbsorptionAnalysis:
     metadata: AnalysisMetadata
-    core_analysis: AnalysisLabel
-    personalized_analysis: AnalysisLabel
+    core_analysis: CrossExperimentAnalysisRef   # the reused FedAvg core delta from the
+                                                #   confirmatory experiment (2×2 FedAvg row);
+                                                #   resolved against a `completed` prerequisite
+    personalized_analysis: AnalysisLabel        # this experiment's personalized 2×2 row delta
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class TemporalRecoveryAnalysis:
@@ -438,7 +445,14 @@ class SeedCohortDefinition:
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentPrerequisite:
     requires: ExperimentSlug
-    required_outcome: PrerequisiteOutcome   # e.g. ANCHOR_EQUIVALENCE_PASSED
+    required_outcome: PrerequisiteOutcome   # ANCHOR_EQUIVALENCE_PASSED | COMPLETED
+
+# PrerequisiteOutcome members: ANCHOR_EQUIVALENCE_PASSED (the anchor gate),
+# COMPLETED (a prior experiment's committed results, e.g. the confirmatory core
+# delta reused by model_personalization_absorption_test's AbsorptionAnalysis).
+# A dataset audit is never an ExperimentPrerequisite: its FEASIBILITY_RESULT is
+# referenced by the dataset document's feasibility_result_ref as provenance only,
+# never as a live gate (SCIENTIFIC_FOUNDATION.md §5.1).
 ```
 
 `ExperimentPrerequisite` replaces a free-text `requires_passed` string list
@@ -488,7 +502,7 @@ catalogued.
 | `SeedCohortDefinition` | domain | yes | yes | planner, statistics runner |
 | `ExperimentPrerequisite` | domain | as part of `ScientificExperimentDefinition` | no (references another identity) | planner, anchor gate |
 | `OperationsDefinition` | domain | yes (execution subset recorded) | conditional (§7 batch rule) | preflight, persistence, reporting |
-| `ScientificExperimentDefinition` | domain | yes | yes | planner, every stage |
+| `ScientificExperimentCell` | domain | yes | yes (`ExperimentCellIdentity`) | planner, every stage |
 | `ScientificExperimentDefinition` | domain | yes | yes | planner, reuse gate, reporting |
 | `DatasetAuditDefinition` | domain | yes | yes | audit planner and reporting |
 
@@ -526,9 +540,13 @@ Complete list, each exhaustively matched with `typing.assert_never`:
 `ClientConstruction` (§3.1, 4 members), `TrainingProtocol` (§3.2, 3
 members), `ThresholdConstruction` (`SCIENTIFIC_FOUNDATION.md §6`, 8 shared
 members plus `CentralizedPooledThreshold` outside the union),
-`EvaluationSuiteDefinition` (2 members), `AnalysisDefinition` (`§3.3`, 4
-members: `PairedThresholdAnalysis`, `AbsorptionAnalysis`,
-`TemporalRecoveryAnalysis`, `AnchorEquivalenceAnalysis`),
+`EvaluationSuiteDefinition` (2 members), `AnalysisDefinition` (`§3.3`, 8
+members: `PairedPolicyEffectAnalysis`, `MetricAssociationAnalysis`,
+`DistributionMechanismAnalysis`, `ClusterStabilityAnalysis`,
+`QuantileEstimationAnalysis`, `AbsorptionAnalysis`, `TemporalRecoveryAnalysis`,
+`AnchorEquivalenceAnalysis`; the confirmatory/anchor pair is a
+`PairedPolicyEffectAnalysis`, whose boundary discriminator is
+`kind: paired_threshold_analysis`),
 `TrafficRateEvidence` (`Measured`,
 `Cited`), `ClaimOutcome` (`STRONG_POSITIVE`, `WEAK_POSITIVE`, `MIXED`,
 `NULL`, `OPPOSITE`, `FEASIBILITY_REJECTION`, `SUPPRESSED`), `CvOutcome`
@@ -649,26 +667,30 @@ Application contracts exchange bounded, framework-neutral descriptors:
 
 ## 9. Conceptual source tree
 
+`PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md` is authoritative for the complete
+tree, per-module responsibilities, allowed imports, and placement rules; the
+compact summary below shows only the layer shape.
+
 ```
 src/datp_core/
   domain/
-    data.py  detection.py  thresholding.py  evaluation.py
-    experiments.py  artifacts.py  operations.py  mathematics.py  errors.py
+    experiments.py  data.py  detection.py  thresholding.py  evaluation.py
+    artifacts.py  operations.py  reporting.py  mathematics.py  identifiers.py  errors.py
   application/
     ports/  data.py  training.py  statistics.py  persistence.py  runtime.py  reporting.py
-    stages/  one module per PipelineStage member (PIPELINE_EXECUTION_AND_ARTIFACTS.md §2)
-    planning/  planner.py  reuse.py  gates.py
-    runtime/  preflight.py  executor.py  lifecycle.py
-    reporting/  freeze.py  tracing.py
+    configuration/  planning/  stages/  runtime/  evaluation/  statistics/  reporting/
   config/  schemas/  mapping/  compose.py
-  analysis/  tables.py  figures.py  wording.py  report_models.py
   infrastructure/
     data/  detection/  thresholding/  statistics/  persistence/  runtime/  reporting/  telemetry/
   composition/  root.py  registries.py
   cli/  main.py  commands/
 ```
 
-Every module has a single, precisely named responsibility; none is
+Framework-free table, figure, and wording *specifications* are domain types
+(`domain/reporting.py`) projected by `application/reporting/`; *rendering*
+adapters live in `infrastructure/reporting/`. There is no separate top-level
+`analysis/` layer (`ARCH-05`). Every module has a single, precisely named
+responsibility; none is
 `utils.py`, `common.py`, `base.py`, `manager.py`, `handlers.py`, `misc.py`,
 `shared.py`, `requests.py`, or `results.py`
 (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §2`, `NAME-*`).
@@ -954,3 +976,810 @@ None of these types is scientific identity-bearing except where a field is
 explicitly promoted into a `StageIdentity`/`ArtifactKey` because it is
 output-affecting (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §6`); the rest
 remain execution-only, recorded in provenance but never fingerprinted.
+
+## 16. Concrete type declarations
+
+The tables above name every public contract; this section gives concrete
+frozen declarations so an implementation agent invents no field, variant, or
+identity behavior. Every dataclass is `frozen=True, slots=True, kw_only=True`
+unless stated; every union is exhaustively matched with `typing.assert_never`
+(`TYPE-04`); every float-wrapping value object rejects `NaN`/infinity at
+construction (`TYPE-05`). Method bodies are omitted; only signatures and
+invariants are given.
+
+### 16.1 Identifiers and value objects (`domain/identifiers.py`, `domain/mathematics.py`)
+
+Open, validated identifiers back vocabularies expected to grow; a registry —
+not a central enum edit — admits a new member (`§2.4` of
+`PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md`).
+
+```python
+class ExperimentSlug(str): ...        # lowercase snake_case, non-empty; registry-validated
+class DatasetAuditSlug(str): ...      # lowercase snake_case, non-empty; registry-validated
+class EvaluationLabel(str): ...       # unique within one ScientificExperimentDefinition.evaluations
+class AnalysisLabel(str): ...         # unique within one ScientificExperimentDefinition.analyses
+class ClientId(str): ...              # opaque per-construction client identity
+class DeviceFamilyId(str): ...        # authorized taxonomy family (FamilyThreshold only)
+class ClusterId(int): ...             # 0 ≤ id < cluster_count
+
+@dataclass(frozen=True, slots=True)
+class Seed:
+    value: int                        # ≥ 0
+
+@dataclass(frozen=True, slots=True)
+class RoundNumber:
+    value: int                        # ≥ 1; ∈ {25,50,75,100,125,150,200} when selecting
+
+@dataclass(frozen=True, slots=True)
+class CanonicalDecimal:
+    """Base for every identity-bearing continuous value: fixed twelve-
+    fractional-digit round-half-even Decimal; rejects NaN/infinity."""
+    value: Decimal
+
+class ThresholdPercentile(CanonicalDecimal): ...   # 0 < q < 1
+class FprTarget(CanonicalDecimal): ...             # equals 1 − quantile exactly
+class ConfidenceLevel(CanonicalDecimal): ...       # e.g. 0.95
+class CoverageRatio(CanonicalDecimal): ...         # 0 ≤ r ≤ 1
+class Probability(CanonicalDecimal): ...           # 0 ≤ p ≤ 1
+class ShrinkageWeight(CanonicalDecimal): ...       # 0 ≤ λ ≤ 1
+class LearningRate(CanonicalDecimal): ...          # > 0
+
+@dataclass(frozen=True, slots=True)
+class DirichletAlpha:
+    value: Decimal | None             # > 0, or None sentinel meaning IID
+
+@dataclass(frozen=True, slots=True)
+class ClusterCount:
+    value: int                        # ≥ 1; canonicality derived from a locked constant, not a flag
+
+@dataclass(frozen=True, slots=True)
+class CalibrationSampleCount:
+    value: int                        # ≥ 0
+
+@dataclass(frozen=True, slots=True)
+class ConfusionCount:
+    value: int                        # ≥ 0
+
+@dataclass(frozen=True, slots=True)
+class BatchSize:
+    value: int                        # ≥ 1
+
+@dataclass(frozen=True, slots=True)
+class GradientAccumulationSteps:
+    value: int                        # ≥ 1
+
+@dataclass(frozen=True, slots=True)
+class WorkerCount:
+    value: int                        # ≥ 0; identity-bearing only when output-affecting
+
+@dataclass(frozen=True, slots=True)
+class BootstrapResampleCount:
+    value: int                        # ≥ 1; never defaulted — a blocker until pre-registered
+
+@dataclass(frozen=True, slots=True)
+class TrafficRate:
+    rate: Decimal                     # finite, strictly positive
+    unit: TrafficRateUnit
+
+@dataclass(frozen=True, slots=True)
+class RelativeArtifactPath:
+    value: str                        # POSIX-relative; no "..", no leading sep, no drive, no whitespace
+
+@dataclass(frozen=True, slots=True)
+class ContentHash:
+    algorithm: str                    # "blake3"
+    digest: str                       # lowercase hex
+
+@dataclass(frozen=True, slots=True)
+class StageFingerprint:
+    digest: str                       # blake3 of a canonical typed, quantized tuple
+
+@dataclass(frozen=True, slots=True)
+class ConfigurationFingerprint:
+    digest: str
+
+@dataclass(frozen=True, slots=True)
+class ExperimentCellIdentity:
+    experiment: ExperimentSlug
+    sweep_coordinate: tuple[SweepCoordinateComponent, ...]   # empty for a non-sweeping root
+    configuration_fingerprint: ConfigurationFingerprint
+```
+
+### 16.2 Discriminated-union member fields
+
+Every variant declares only its own fields and rejects the rest (`CFG-02`,
+`TYPE-04`).
+
+```python
+# ClientConstruction (domain/data.py)
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PhysicalDeviceClients:
+    device_count: int                          # 9 for N-BaIoT
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DatasetFilePseudoClients:
+    pseudo_client_count: int                   # 63 for CICIoT2023; boundary role only
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DirichletPartitionedClients:
+    client_count: int                          # 20
+    alpha: DirichletAlpha
+    partition_seed: Seed
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExternalDeviceOrGroupClients:
+    granularity: ClientGranularity             # DEVICE | GROUP, fixed by human authorization
+    feasibility_result_ref: ArtifactRef        # provenance-only; never resolved during execution
+
+ClientConstruction = (
+    PhysicalDeviceClients | DatasetFilePseudoClients
+    | DirichletPartitionedClients | ExternalDeviceOrGroupClients
+)
+
+# SplitDefinition members (domain/data.py)
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TrainSplit:
+    role: SplitRole                            # TRAIN
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BenignCalibrationSplit:
+    role: SplitRole                            # CALIBRATION; no field can carry an attack label (SCI-04)
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TestSplit:
+    role: SplitRole                            # TEST
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TemporalWindow:
+    role: SplitRole                            # TEMPORAL_EVALUATION
+    historical_fraction: CanonicalDecimal      # locked 0.70
+    capture_time_field: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SplitDefinition:
+    train: TrainSplit
+    calibration: BenignCalibrationSplit
+    test: TestSplit
+    temporal_window: TemporalWindow | None     # chronological setting only
+
+# ThresholdConstruction (domain/thresholding.py) — the eight-member shared union
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SharedThreshold:
+    construction: SharedThresholdConstruction  # MEAN | POOLED | WEIGHTED
+    quantile: ThresholdPercentile
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class LocalThreshold:
+    quantile: ThresholdPercentile
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FamilyThreshold:
+    quantile: ThresholdPercentile              # unweighted family mean of member local quantiles (SCI-15)
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClusterThreshold:
+    aggregation: ClusterAggregation            # MEAN | ROBUST_MEDIAN
+    cluster_count: ClusterCount                # canonical 3 (SCI-16)
+    fingerprint_features: tuple[FingerprintFeature, ...]
+    quantile: ThresholdPercentile
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class LocalGlobalShrinkageThreshold:
+    shrinkage_weight: ShrinkageWeight
+    quantile: ThresholdPercentile
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CalibrationSizeAwareFallbackThreshold:
+    quantile: ThresholdPercentile              # size-dependent λ(n_k) replaces the hard n_min fallback
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ConformalLocalThreshold:
+    conformal_mode: ConformalMode              # SPLIT_CONFORMAL | FEDERATED_CONFORMAL
+    coverage_alpha: CanonicalDecimal           # 0.05
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FederatedSummaryStatisticThreshold:
+    fixed_k: tuple[CanonicalDecimal, ...] | None   # None ⇒ matched-exceedance (primary); values ⇒ supplementary
+    # full pooled variance incl. the between-client term and the larger-k tie rule are
+    # structural, never configurable booleans (SCI-17). The matched-exceedance k-grid step
+    # is a genuine blocker until an authoritative protocol record supplies it.
+
+ThresholdConstruction = (
+    SharedThreshold | LocalThreshold | FamilyThreshold | ClusterThreshold
+    | LocalGlobalShrinkageThreshold | CalibrationSizeAwareFallbackThreshold
+    | ConformalLocalThreshold | FederatedSummaryStatisticThreshold
+)
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CentralizedPooledThreshold:        # NOT a member of ThresholdConstruction;
+    quantile: ThresholdPercentile        # reachable only from a CentralizedPooledTraining detector
+
+# EvaluationSuiteDefinition (domain/evaluation.py)
+@dataclass(frozen=True, slots=True, kw_only=True)
+class StandardEvaluationSuite: ...
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AlertBurdenEvaluationSuite:
+    traffic_rate_evidence: TrafficRateEvidence   # required — burden cannot be requested without it (EVAL-06)
+
+EvaluationSuiteDefinition = StandardEvaluationSuite | AlertBurdenEvaluationSuite
+
+# TrafficRateEvidence (domain/evaluation.py)
+@dataclass(frozen=True, slots=True, kw_only=True)
+class MeasuredTrafficRate:
+    rate: TrafficRate
+    scope: str
+    source: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CitedTrafficRate:
+    rate: TrafficRate
+    scope: str
+    citation: str
+
+TrafficRateEvidence = MeasuredTrafficRate | CitedTrafficRate
+
+# StatisticalProcedure variants (domain/evaluation.py) — each carries only applicable fields
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BcaBootstrap:
+    confidence_level: ConfidenceLevel
+    resample_count: BootstrapResampleCount       # blocker until pre-registered
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PercentileBootstrap:
+    confidence_level: ConfidenceLevel
+    resample_count: BootstrapResampleCount
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WilcoxonSignedRank: ...                     # descriptive secondary only
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CliffsDelta: ...                            # descriptive secondary only
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SpearmanCorrelation: ...
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class LinearRegression: ...
+
+StatisticalProcedure = (
+    BcaBootstrap | PercentileBootstrap | WilcoxonSignedRank
+    | CliffsDelta | SpearmanCorrelation | LinearRegression
+)
+```
+
+### 16.3 Requests and results (application boundary)
+
+One request per complete use case or stable port boundary; one result per
+several-output, scientific, validated, or multi-outcome outcome (`§5`).
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResolveConfigurationRequest:
+    root_document: RelativeArtifactPath | ExperimentSlug
+    requested_execution_mode: ExecutionMode
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ConfigurationResolutionResult:
+    authored_root_snapshot: ResolvedConfigurationSnapshot
+    resolved_runs: tuple[RunDefinition, ...]
+    resolved_run_snapshots: tuple[ResolvedConfigurationSnapshot, ...]
+    boundary_blockers: tuple[BoundaryBlocker, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BoundaryBlocker:
+    document: RelativeArtifactPath
+    field_path: str
+    authority_needed: str
+    rule_reference: str                          # e.g. "ENGINEERING §7"
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CreatePlanRequest:
+    cells: tuple[ScientificExperimentCell, ...]
+    runtime_plan: ResolvedRuntimePlan
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PreflightRequest:
+    draft_plan: DraftExecutionPlan
+    hardware_inventory: HardwareInventory
+    resource_budget: ResourceBudget
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AnchorEquivalenceRequest:
+    anchor_analysis_result: ArtifactRef          # frozen StatisticalAnalysisResult
+    reference_interval: AnchorReferenceInterval
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class EvaluateOperatingPointsRequest:
+    threshold_output: ArtifactRef
+    test_score_set: ArtifactRef                  # committed aggregate only (benign + attack)
+    eligible_client_set: ArtifactRef
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RunStatisticalAnalysisRequest:
+    analysis: AnalysisDefinition
+    evaluation_results: tuple[ArtifactRef, ...]  # one PolicyEvaluationResult per paired seed
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ConstructThresholdRequest:
+    threshold: ThresholdConstruction
+    calibration_score_set: ArtifactRef           # no field can carry a test/attack score (EVAL-02)
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ProjectReportRequest:
+    report: ReportDefinition
+    result_freeze: ArtifactRef                   # a frozen ResultFreezeManifest, never a live result
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TraceReportArtifactRequest:
+    rendered_output: ArtifactRef
+```
+
+Score-generation requests (`GenerateCalibrationScoresRequest`,
+`GenerateTestScoresRequest`, `GenerateTemporalScoresRequest`) and the
+data-pipeline requests (`InspectDatasetSourceRequest`,
+`ClientPartitionRequest`, `BuildSplitRequest`, `FitPreprocessorRequest`,
+`MaterializeProcessedSplitsRequest`, `TrainDetectorRequest`) each carry the
+selected upstream `ArtifactRef` values plus the resolved definition subset the
+stage consumes, and nothing else.
+
+### 16.4 Planning, readiness, and execution types
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ReadinessBlocker:
+    subject: str
+    authority_needed: str
+    blocked_stages: tuple[PipelineStage, ...]
+    rule_reference: str                          # e.g. "ENGINEERING §7"; a readiness blocker is
+                                                 # always a blocker — its condition is not re-typed
+                                                 # against the doc-only DesignStatus vocabulary
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ScientificReadinessResult:
+    is_ready: bool
+    execution_mode: ExecutionMode
+    blockers: tuple[ReadinessBlocker, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DraftPlannedStage:
+    stage: PipelineStage
+    stage_identity: StageIdentity
+    dependencies: StageDependencyCollection
+    required_artifacts: tuple[ArtifactKey, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DraftExecutionPlan:
+    cell_identity: ExperimentCellIdentity
+    stages: tuple[DraftPlannedStage, ...]        # topologically ordered, acyclic
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FinalPlannedStage:
+    draft: DraftPlannedStage
+    reuse_decision: ReuseDecision                # classified at preflight, not before
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FinalExecutionPlan:
+    cell_identity: ExperimentCellIdentity
+    stages: tuple[FinalPlannedStage, ...]
+    runtime_plan: ResolvedRuntimePlan
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExecutionAttempt:
+    attempt_id: str
+    plan: ArtifactRef
+    started_at: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExecutionSummary:
+    attempt: ExecutionAttempt
+    stage_records: tuple[StageLifecycleRecord, ...]
+    run_status: RunStatus
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class StageLifecycleRecord:
+    stage_identity: StageIdentity
+    status: RunStatus
+    reuse_decision: ReuseDecision | None
+    failure: FailureDisposition | None
+    produced: tuple[ArtifactRef, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SeedDerivation:
+    role: SeedRole
+    seed: Seed
+```
+
+### 16.5 Artifact, scope, and provenance types
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ProducerImplementationIdentity:
+    component_revision: str
+    algorithm_revision: str
+    dependency_compatibility_signature: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class StageIdentity:
+    stage: PipelineStage
+    fingerprint: StageFingerprint
+    producer: ProducerImplementationIdentity
+
+# ArtifactScopeKey — closed, typed scope variants; a new scope is a new variant,
+# never a change to ArtifactKey/ArtifactRef or the reuse algorithm.
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DatasetScope:
+    dataset: Dataset
+    dataset_version: DatasetVersion
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PartitionScope:
+    dataset_scope: DatasetScope
+    partition_identity: StageFingerprint
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SplitScope:
+    partition_scope: PartitionScope
+    split_role: SplitRole
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SeedScope:
+    split_scope: SplitScope
+    seed: Seed
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClientScope:
+    seed_scope: SeedScope
+    client: ClientId
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class EvaluationScope:
+    experiment: ExperimentSlug
+    evaluation: EvaluationLabel
+    seed: Seed
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AnalysisScope:
+    experiment: ExperimentSlug
+    analysis: AnalysisLabel
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CrossSeedScope:
+    experiment: ExperimentSlug
+    analysis: AnalysisLabel
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RunScope:
+    experiment: ExperimentSlug
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ReportScope:
+    experiment: ExperimentSlug
+    report_identity: ReportArtifactType
+
+ArtifactScopeKey = (
+    DatasetScope | PartitionScope | SplitScope | SeedScope | ClientScope
+    | EvaluationScope | AnalysisScope | CrossSeedScope | RunScope | ReportScope
+)
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ArtifactKey:
+    artifact_type: ArtifactType
+    scope: ArtifactScopeKey
+    producer_identity: StageIdentity
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ArtifactRef:
+    key: ArtifactKey
+    content_hash: ContentHash                    # exists only after verified persistence
+
+# ReuseDecision union
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Reuse:
+    candidate: ArtifactRef
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Recompute:
+    reason: ReuseIncompatibilityReason
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Blocked:
+    reason: BlockingReason
+
+ReuseDecision = Reuse | Recompute | Blocked
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResolvedConfigurationSnapshot:
+    canonical_bytes_hash: ConfigurationFingerprint
+    source_document_identities: tuple[ContentHash, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ProvenanceRecord:
+    resolved_configuration: ArtifactRef
+    upstream: tuple[ArtifactRef, ...]
+    code_state: ArtifactRef                      # CODE_STATE
+    dependency_lock_state: ArtifactRef           # DEPENDENCY_LOCK_STATE
+    environment_inventory: HardwareInventory     # recorded, never fingerprinted
+    execution_attempt: ExecutionAttempt
+    produced_at: str
+    content_hash: ContentHash
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResultFreezeManifest:
+    inputs: tuple[ArtifactRef, ...]              # every metric/statistic/anchor/resource/claim input
+    input_hashes: tuple[ContentHash, ...]
+    claim_assessment: ArtifactRef
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PreSpecificationRecord:
+    subject: str                                 # e.g. "absorption bands", "temporal outcome bands"
+    roadmap_lock_revision: str
+    locked_at: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SuppressionRecord:
+    subject: str
+    reason: str
+    resulting_outcome: ClaimOutcome              # never a mechanism for hiding a confirmatory result
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FeasibilityRecord:
+    status: FeasibilityStatus                    # FEASIBLE | GATED | PENDING_VERIFICATION | REJECTED
+    eligible_count: int
+    total_count: int
+    coverage_ratio: CoverageRatio
+    minimum_evidence: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExperimentManifest:
+    experiment_identity: ExperimentIdentity
+    namespace: ArtifactNamespace                 # derived, never authored (ANCHOR-05)
+    stage_identities: tuple[StageIdentity, ...]
+    resolved_configuration: ArtifactRef
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RecoveryStateManifest:
+    last_completed_round: RoundNumber
+    architecture_identity: StageFingerprint
+    resolved_batch_profile_hash: StageFingerprint
+    seeds: tuple[SeedDerivation, ...]
+    # distinct kind/root/namespace from a scientific checkpoint; never scientific evidence (ART-04)
+```
+
+### 16.6 Evaluation and statistical result types (concrete)
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClientEvaluationResult:
+    client: ClientId
+    confusion: ConfusionMatrix
+    assigned_threshold: CanonicalDecimal
+    fpr: CanonicalDecimal
+    tpr: CanonicalDecimal
+    precision: CanonicalDecimal
+    recall: CanonicalDecimal
+    f1: CanonicalDecimal
+    balanced_accuracy: CanonicalDecimal
+    eligibility_status: ClientEligibilityStatus
+    eligibility_reason: ClientEligibilityReason
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ValidCvResult:
+    value: CanonicalDecimal
+    mean_fpr: CanonicalDecimal
+    std_fpr: CanonicalDecimal
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class UndefinedCvResult:
+    reason: str                                  # zero-mean degeneracy
+    mean_fpr: CanonicalDecimal
+    iqr_fpr: CanonicalDecimal
+    fpr_range: CanonicalDecimal
+    claim_outcome: ClaimOutcome
+
+CvOutcome = ValidCvResult | UndefinedCvResult
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FleetDispersionResult:
+    cv_fpr: CvOutcome
+    cv_tpr: CvOutcome
+    iqr_fpr: CanonicalDecimal
+    fpr_range: CanonicalDecimal
+    worst_client_fpr: CanonicalDecimal
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FleetDetectionResult:
+    macro_f1: CanonicalDecimal
+    p10_macro_f1: CanonicalDecimal
+    worst_client_balanced_accuracy: CanonicalDecimal
+    auroc: CanonicalDecimal                      # control only
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PolicyEvaluationResult:
+    evaluation: EvaluationLabel
+    seed: Seed
+    per_client: ClientScoreMap                   # one ClientEvaluationResult per known client
+    dispersion: FleetDispersionResult
+    detection: FleetDetectionResult
+    equity: FleetEquityResult | None             # optional suite
+    cluster: ClusterDispersionResult | None      # cluster mechanism only
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PairedDeltaResult:
+    seed: Seed
+    delta: CanonicalDecimal
+    orientation: DeltaOrientation
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ValidBootstrapIntervalResult:
+    lower_bound: CanonicalDecimal
+    upper_bound: CanonicalDecimal
+    point_estimate: CanonicalDecimal
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DegenerateBootstrapIntervalResult:
+    sample_size: int
+    reason: str
+    attempted_resample_count: BootstrapResampleCount
+    point_estimate: CanonicalDecimal | None
+
+BootstrapIntervalOutcome = ValidBootstrapIntervalResult | DegenerateBootstrapIntervalResult
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ConfirmatoryAnalysisResult:
+    per_seed_deltas: tuple[PairedDeltaResult, ...]
+    interval: BootstrapIntervalOutcome
+    sign_consistent: bool
+    excludes_zero_positive: bool
+    claim_outcome: ClaimOutcome
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AbsorptionResult:
+    delta_ratio: CanonicalDecimal
+    band: AbsorptionBand
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TemporalRecoveryResult:
+    frozen_cv_fpr: CvOutcome
+    recalibrated_cv_fpr: CvOutcome
+    recovery_ratio: CanonicalDecimal
+    outcome: TemporalOutcome
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AnchorReferenceInterval:
+    metric: MetricId                             # cv_fpr_delta
+    confidence_level: ConfidenceLevel
+    lower_bound: CanonicalDecimal                # 0.647
+    upper_bound: CanonicalDecimal                # 0.769
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AnchorEquivalencePassed:
+    reproduced_interval: ValidBootstrapIntervalResult
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AnchorEquivalenceFailed:
+    reproduced_interval: BootstrapIntervalOutcome
+    failure_reason: str                          # material movement toward zero, or >~1.20× width
+
+AnchorEquivalenceResult = AnchorEquivalencePassed | AnchorEquivalenceFailed
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResourceCostResult:
+    metric: ResourceMetric
+    value: int                                   # bytes
+    derivation: CostDerivationKind               # MEASURED | ESTIMATED, never conflated (ART-07)
+```
+
+### 16.7 Reporting types (concrete)
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SemanticColumn:
+    name: MetricId | str
+    unit: MetricUnit                             # NONE | RATIO | BYTES | COUNT | ...
+    direction: MetricDirection                   # LOWER_IS_BETTER | HIGHER_IS_BETTER | NONE | CLOSER_TO_TARGET
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TableDefinition:
+    table_type: TableType
+    columns: tuple[SemanticColumn, ...]
+    ordering: DeterministicOrdering
+    missing_value_policy: MissingValuePolicy
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FigureDefinition:
+    figure_type: FigureType
+    series: tuple[SemanticColumn, ...]
+    ordering: DeterministicOrdering
+    missing_value_policy: MissingValuePolicy
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TableProvenance:
+    output_identity: ArtifactRef
+    source_records: tuple[ArtifactRef, ...]
+    rendering_status: RenderingStatus
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ReportTraceResult:
+    output: ArtifactRef
+    traced_inputs: tuple[ArtifactRef, ...]
+    status: RenderingStatus                      # RENDERED | TRACE_REFUSED
+```
+
+`ClientScoreMap`, `EligibleClientSet`, `SeedCohort`, and
+`StageDependencyCollection` are the four custom collections (`§10`); every
+other collection above is a plain immutable `tuple`. No result type exposes a
+`dict`, `Any`, mutable collection, or framework object (`TYPE-03`, `§8`).
+
+## 17. Complete closed-enum member catalogue
+
+Every closed enum, its explicit members, its owning module, whether it is
+serialized (into YAML, an artifact, or a fingerprint), and whether it enters
+scientific identity. Open, registry-backed identifiers (`Dataset` IDs,
+experiment/audit slugs, detector/runtime/reporting profile names) are **not**
+enums and are covered in `§16.1` and `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md
+§2.4`. `§14` remains the disposition ledger against the prior architecture;
+this section is the final member list.
+
+| Enum | Members | Owner | Serialized | Enters identity |
+|---|---|---|---|---|
+| `Dataset` | `N_BAIOT`, `CICIOT2023`, `EDGE_IIOTSET` | `domain/data.py` | yes | yes |
+| `SplitRole` | `TRAIN`, `CALIBRATION`, `TEST`, `TEMPORAL_EVALUATION` | `domain/data.py` | yes | yes |
+| `ClientGranularity` | `DEVICE`, `GROUP` | `domain/data.py` | yes | yes |
+| `NormalizationStrategy` | `MIN_MAX`, `STANDARD` | `domain/data.py` | yes | yes |
+| `NormalizationScope` | `GLOBAL_TRAIN` | `domain/data.py` | yes | yes |
+| `SharedThresholdConstruction` | `MEAN`, `POOLED`, `WEIGHTED` | `domain/thresholding.py` | yes | yes |
+| `ClusterAggregation` | `MEAN`, `ROBUST_MEDIAN` | `domain/thresholding.py` | yes | yes |
+| `FingerprintFeature` | `MEAN_ERROR`, `STD_ERROR`, `SKEW_ERROR`, `P95_ERROR` | `domain/thresholding.py` | yes | yes |
+| `ConformalMode` | `SPLIT_CONFORMAL`, `FEDERATED_CONFORMAL` | `domain/thresholding.py` | yes | yes |
+| `QuantileEstimatorType` | `EXACT`, `POOLED`, `WEIGHTED` | `domain/thresholding.py` | yes | yes |
+| `ActivationFunction` | `RELU` | `domain/detection.py` | yes | yes |
+| `OptimizerType` | `ADAM` | `domain/detection.py` | yes | yes |
+| `LrSchedulerType` | `STEP_DECAY` | `domain/detection.py` | yes | yes |
+| `ParticipationStrategy` | `FULL` (`PARTIAL` = named future work, `SCI` §7.6) | `domain/detection.py` | yes | yes |
+| `ModelPersonalizationStrategy` | `NONE`, `DITTO`, `FEDREP_AE`, `FEDPER_AE` | `domain/detection.py` | yes | yes |
+| `NumericalPrecision` / `PrecisionMode` | `FP32` | `domain/detection.py` | yes | yes |
+| `DeterminismLevel` | `STRICT` | `domain/detection.py` | yes | yes |
+| `EvidenceRole` | `ANCHOR`, `CONFIRMATORY`, `SUPPORTIVE`, `EXTERNAL_VALIDATION`, `STRESS_TEST`, `MECHANISM`, `BOUNDARY`, `EXPLORATORY`, `FUTURE_WORK`, `FORBIDDEN` | `domain/experiments.py` | yes | yes (namespace derivation) |
+| `RunRequirement` | `MANDATORY`, `OPTIONAL`, `SUPPRESSED` | `domain/experiments.py` | yes | no |
+| `ClaimTier` | `TIER_1`…`TIER_9` (`IntEnum`) | `domain/experiments.py` | yes (metadata) | no |
+| `CatalogueDisposition` | `REJECTED`, `OUT_OF_SCOPE`, `FUTURE_WORK` | `domain/experiments.py` | yes | no |
+| `RecalibrationMode` | `FROZEN`, `ONE_SHOT` | `domain/evaluation.py` | yes | yes |
+| `DeltaOrientation` | `SHARED_MINUS_LOCAL`, `CLUSTER_MINUS_LOCAL`, `COMPARATOR_MINUS_LOCAL` | `domain/evaluation.py` | yes | yes |
+| `MetricRole` | `PRIMARY_ENDPOINT`, `SECONDARY_THRESHOLD_OUTCOME`, `MODEL_QUALITY_CONTROL`, `MECHANISM_DIAGNOSTIC`, `RESOURCE_OUTCOME` | `domain/evaluation.py` | yes | no |
+| `MetricDirection` | `LOWER_IS_BETTER`, `HIGHER_IS_BETTER`, `CLOSER_TO_TARGET`, `CONTEXT_DEPENDENT`, `NONE` | `domain/evaluation.py` | yes | no |
+| `MetricUnit` | `NONE`, `RATIO`, `BYTES`, `COUNT`, `RATE` | `domain/evaluation.py` | yes | no |
+| `ClaimOutcome` | `STRONG_POSITIVE`, `WEAK_POSITIVE`, `MIXED`, `NULL`, `OPPOSITE`, `FEASIBILITY_REJECTION`, `SUPPRESSED` | `domain/evaluation.py` | yes | no |
+| `AbsorptionBand` | `STRONGLY_USEFUL`, `PARTIAL`, `LARGELY_ABSORBED`, `ALTERNATIVE_PATH` | `domain/evaluation.py` | yes | no |
+| `TemporalOutcome` | `RECAL_HELPS`, `RECAL_INSUFFICIENT`, `NO_MEANINGFUL_DRIFT` | `domain/evaluation.py` | yes | no |
+| `ClientEligibilityStatus` | `ELIGIBLE`, `FALLBACK_ASSIGNED`, `EXCLUDED` | `domain/evaluation.py` | yes | no |
+| `ClientEligibilityReason` | `SUFFICIENT_CALIBRATION`, `BELOW_MINIMUM_FALLBACK`, `BELOW_MINIMUM_EXCLUDED`, `NO_BENIGN_CALIBRATION` | `domain/evaluation.py` | yes | no |
+| `FeasibilityStatus` | `FEASIBLE`, `GATED`, `PENDING_VERIFICATION`, `REJECTED` | `domain/artifacts.py` | yes | no |
+| `TrafficRateUnit` | `EVENTS_PER_SECOND`, `EVENTS_PER_DAY` | `domain/evaluation.py` | yes | yes (when requested) |
+| `CostDerivationKind` | `MEASURED`, `ESTIMATED` | `domain/evaluation.py` | yes | no |
+| `ResourceMetric` | `COMMUNICATION_BYTES_PER_ROUND`, `TOTAL_COMMUNICATION_BYTES`, `CLIENT_TO_SERVER_BYTES`, `SERVER_TO_CLIENT_BYTES`, `THRESHOLD_MESSAGE_BYTES`, `CHECKPOINT_STORAGE_BYTES`, `SCORE_ARTIFACT_STORAGE_BYTES`, `RESULT_STORAGE_BYTES` | `domain/evaluation.py` | yes | no |
+| `ArtifactType` | fully enumerated in `PIPELINE_EXECUTION_AND_ARTIFACTS.md §6.1` | `domain/artifacts.py` | yes | yes |
+| `ArtifactNamespace` | `ANCHOR`, `COMPLETE_STUDY`, `RECOVERY`, `CACHE`, `STAGING`, `TEST_SANDBOX` | `domain/artifacts.py` | yes | derived from `EvidenceRole` |
+| `CheckpointKind` | `SCIENTIFIC`, `RECOVERY` | `domain/artifacts.py` | yes | yes |
+| `SerializationFormat` | `MARKDOWN`, `LATEX`, `PDF`, `PNG`, `PARQUET`, `JSON` | `domain/reporting.py` | yes | no |
+| `ReportArtifactType` | `MAIN_TABLE`, `SUPPLEMENTARY_TABLE`, `FIGURE`, `WORDING` | `domain/reporting.py` | yes | no |
+| `TableType` / `FigureType` | fully enumerated in `EVALUATION_REPORTING_AND_PROVENANCE.md §9.3` | `domain/reporting.py` | yes | no |
+| `RenderingStatus` | `RENDERED`, `TRACE_REFUSED` | `domain/reporting.py` | yes | no |
+| `ExecutionMode` | `SCIENTIFIC`, `PRINT_GRADE`, `DEVELOPMENT`, `SMOKE` | `domain/operations.py` | yes | no (citability, not a computed value) |
+| `DevicePolicy` | `CUDA_REQUIRED`, `CPU_ONLY` | `domain/operations.py` | yes | no |
+| `ProcessStartMethod` | `SPAWN`, `FORK` | `domain/operations.py` | yes | no |
+| `RunStatus` | `PLANNED`, `READY`, `RUNNING`, `REUSED`, `COMPLETED`, `BLOCKED`, `FAILED`, `INTERRUPTED`, `PAUSED`, `RECOVERED` | `domain/operations.py` | yes (records) | no |
+| `FailureDisposition` | `RUN_BLOCKING`, `STAGE_BLOCKING`, `RETRYABLE_TRANSIENT` | `domain/operations.py` | yes (records) | no |
+| `SeedRole` | `EXPERIMENT`, `TRAINING`, `DATALOADER`, `PARTITION`, `CLUSTERING`, `BOOTSTRAP` | `domain/operations.py` | yes | yes |
+| `PipelineStage` | fully enumerated in `PIPELINE_EXECUTION_AND_ARTIFACTS.md §2` | `domain/operations.py` | yes | yes |
+| `ReuseIncompatibilityReason` | thirteen members (`ENGINEERING §2`, `ReuseIncompatibilityReason` kept) | `domain/artifacts.py` | yes (records) | no |
+| `BlockingReason` | seven members | `domain/artifacts.py` | yes (records) | no |
+| `RejectionReason` | eight members (`§14.1`) | `domain/experiments.py` | yes | no |
+| `DesignStatus` | `LOCKED`, `DESIGNED_NOT_IMPLEMENTED`, `BLOCKED`, `DEFERRED`, `OUT_OF_SCOPE`, `REJECTED`, `SUPPRESSED` | doc-only vocabulary (`ENGINEERING §1`) | n/a | no |
+
+An enum member's stable serialized value (its lowercase name) is what enters
+a fingerprint when the enum enters identity; a member is never fingerprinted
+by its Python `auto()` ordinal, so reordering members never changes an
+identity. Every enum that enters identity is closed: adding a member is a
+deliberate scientific decision, not an open extension point (contrast the
+registry-backed identifiers of `§16.1`).

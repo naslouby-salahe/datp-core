@@ -436,6 +436,52 @@ is never imported by production `src/datp_core` (`TEST-01`).
 7. **New report** — a new `ReportDefinition` consuming a frozen result and
    its provenance; it never recomputes a scientific value.
 
+### 9.1 Consolidated forbidden-shape rules
+
+These hold across every `domain` and `application` contract and are each
+enforced by a named test (`§8`). They restate, in one place, the shape
+constraints scattered across the type rules so an implementer never has to
+reassemble them.
+
+| # | Forbidden | Instead | Enforced by |
+|---|---|---|---|
+| F-01 | `dict`, `dict[str, Any]`, `Mapping[str, Any]`, `list[dict[str, Any]]` in a public contract | a frozen dataclass, a `tuple`, or a snapshotted frozen mapping | `tests/architecture/test_framework_confinement.py`, `TYPE-03` |
+| F-02 | `Any`, `object`, `Sequence[object]`, `tuple[object, ...]` | a named type or a discriminated union | `TYPE-03` |
+| F-03 | a mutable `list`/`dict`/`set`, NumPy array, tensor, DataFrame, or estimator as a public field | an immutable `tuple` / frozen snapshot; framework carriers stay in `infrastructure` | `test_framework_confinement.py`, `§8` |
+| F-04 | variant inference from an optional field's presence | an explicit discriminator, exhaustively matched | `TYPE-04` |
+| F-05 | a Python/dataclass/Pydantic default, `dict.get` fallback, env fallback, or CLI override on an identity-bearing field | an explicit YAML value or a typed reference; otherwise a boundary blocker | `unit/config` missing-field tests, `CFG-01`, `CFG-03` |
+| F-06 | a raw `float` in a fingerprint | a canonical `Decimal` value object rejecting `NaN`/infinity | `tests/property/`, `TYPE-05` |
+| F-07 | the same field owned by two aggregates | one authoritative owner; downstream holds an `ArtifactRef`/`StageIdentity` | `§3.5` of `DOMAIN`, `ARCH-01/02` |
+| F-08 | a framework object crossing into `domain`/`application` | a framework-neutral `ArtifactRef`/descriptor | `test_framework_confinement.py`, `§8` of `DOMAIN` |
+| F-09 | zero/`NaN`/infinity/empty/missing-key for an unavailable scientific value | a typed unavailable outcome (`UndefinedCvResult`, `DegenerateBootstrapIntervalResult`) | `unit/domain` degeneracy tests, `EVAL-04`, `STAT-06` |
+| F-10 | a generic `Result`/`Payload`/`Context`/`Manager`/`Handler`/`Kind` type | a precisely named result and a union discriminator | `test_no_forbidden_module_names.py`, `TYPE-02`, `NAME-06` |
+
+### 9.2 Extension seams for future research (localized-change proofs)
+
+The present scope is strict (`SCI-09`); no future-research type is implemented
+now. Each direction below, when authorized, is a localized addition along an
+existing seam — never a repository-wide redesign. Each row names the seam and
+the files touched; none requires an optional field on every existing
+dataclass, an edit to every experiment, a new planner/executor branch, a
+replacement identity system, or a compatibility shim.
+
+| Future direction | Seam | Localized additions | Never touched |
+|---|---|---|---|
+| **New run family** (e.g. a genuinely non-experiment, non-audit run) | `RunDefinition` union | a new `RunDefinition` variant; its stages' `is_applicable`; a registry binding | `ScientificExperimentDefinition`, `DatasetAuditDefinition`, existing stages |
+| **Dynamic / temporally adaptive thresholds** (Dynamic DATP) | `ThresholdConstruction` union + `ArtifactScopeKey` | a threshold variant carrying its state reference; a temporal/state `ArtifactScopeKey` variant; a stage implementation | `ArtifactKey`/`ArtifactRef`, the reuse algorithm, score generation |
+| **Multi-time-coordinate evaluation** (streaming windows) | `SplitDefinition` + `ArtifactScopeKey` | a temporal `SplitDefinition` member; a windowed scope variant; a scoring/eval stage | existing single-window evaluations |
+| **Stateful policy** (a policy carrying immutable state across runs) | artifact model | an immutable state/policy `ArtifactType` + scope variant; a stage that reads/writes it | the stateless-artifact reuse path |
+| **Transformation / intervention workflow** (a run that mutates state) | provenance model | an explicit transformation/intervention `ProvenanceRecord` field set; a stage; a scope variant | existing clean-run provenance |
+| **New detector family** (different training lifecycle) | `TrainingProtocol` union | a `TrainingProtocol` variant; a training/scoring adapter; `classify_detector` gains one arm | the checkpoint identity model, existing detectors |
+| **New dataset / client construction** | `Dataset` registry + `ClientConstruction` union | a registry entry / a construction variant + adapter; one binding | central enums, thresholds, metrics, reports |
+
+Each seam is already load-bearing in the current design (the `RunDefinition`
+union has two members today; `ArtifactScopeKey` is already a discriminated
+family; `ProvenanceRecord` already carries typed upstream references), so the
+future addition extends a mechanism that exists rather than introducing a new
+one. No vague `Plugin`/`Extension`/`Strategy`/`Hook` abstraction is added
+ahead of a concrete use (`§5` rejected alternatives).
+
 ## 10. Source-coverage ledger
 
 | Source concept | Destination | Disposition |
@@ -493,8 +539,9 @@ explicit removal reason recorded in §4 or §5 above.
 - ☐ Every roadmap experiment (§7 of `SCIENTIFIC_FOUNDATION.md`) has a
   semantic slug and, where named, a `roadmap_reference`.
 - ☐ Every genuine blocker in §7 above is recorded, none silently resolved.
-- ☐ Exactly seven Markdown files exist in this package, none exceeding its
-  approximate word target without cause.
+- ☐ Exactly eight Markdown files exist in this package (`README.md` plus the
+  seven content documents, including `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md`),
+  none exceeding its approximate word target without cause.
 - ☐ Configuration resolution is a pre-pipeline composition operation, never
   a stage; plans contain only applicable registered stages and have no fixed
   stage-count invariant.
@@ -516,3 +563,20 @@ explicit removal reason recorded in §4 or §5 above.
   cluster and federated-summary families are each a single merged
   experiment root.
 - ☐ Every `schema_version` example in this package is the integer `1`.
+- ☐ Every root experiment, dataset audit, dataset setting, detector, runtime
+  profile, and reporting profile has a concrete configuration document
+  (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §24`); each unresolved value is
+  a marked boundary blocker, never a default.
+- ☐ Every public value object, identifier, union member, request, result,
+  planning/execution/artifact/provenance type has a concrete frozen
+  declaration (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §16`); every closed
+  enum has an explicit member list (`§17`).
+- ☐ Every `PipelineStage` has a per-stage contract (identity projection,
+  reuse trigger, failure, retry, test) and every root experiment and dataset
+  audit has a workflow row (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §§16–17`).
+- ☐ The forbidden-shape rules (`§9.1`) and the future-research extension
+  seams (`§9.2`) are enumerated with the seam and files each touches; no
+  future-research type is implemented now.
+- ☐ No implementation agent must invent a major type, configuration family,
+  workflow, artifact, ownership rule, or module boundary: each is defined
+  concretely with fields, producers, consumers, and persistence status.

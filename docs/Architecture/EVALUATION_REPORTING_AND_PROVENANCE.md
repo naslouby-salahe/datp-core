@@ -63,7 +63,12 @@ explicitly authorizes it — no roadmap experiment currently does
 ## 3.1 Complete statistical and evaluation result-type catalogue
 
 Every statistical and evaluation result type this design produces, its
-owning stage, and its persistence status:
+owning stage, and its persistence status. This document owns each type's
+scientific meaning; its concrete frozen field declaration lives in
+`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §16.6` (evaluation/statistical
+results) and `§16.7` (reporting types), with the metric availability outcomes
+(`CvOutcome`, `BootstrapIntervalOutcome`) and the `AnchorEquivalenceResult`
+union declared there.
 
 | Type | Produced by | Persisted | Purpose |
 |---|---|---|---|

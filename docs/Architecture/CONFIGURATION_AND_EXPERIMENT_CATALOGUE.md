@@ -27,7 +27,10 @@ configs/
 Each directory has one boundary schema owner. Experiment and audit documents
 are complete roots that reference, but never duplicate, their reusable
 definitions. The `detectors/` directory owns detector definitions only;
-evaluation and threshold definitions are experiment-owned.
+evaluation and threshold definitions are experiment-owned. This document owns
+configuration *semantics*; `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md §3`
+enumerates the concrete file set expected under each directory and its
+schema-module home.
 
 ## 2. Schema ownership
 
@@ -866,3 +869,1046 @@ mandatory-run:
 Mandatory orchestration and prerequisite enforcement belong to the
 application. Make never encodes dependencies, so parallel Make execution
 cannot bypass the typed `AnchorEquivalenceGate`.
+
+## 24. Complete configuration-file catalogue
+
+This section gives a concrete document for every configuration file the
+roadmap requires, beyond the worked examples in §§9–18. Each is either
+complete or schema-complete with its genuine boundary blockers marked. A
+value marked `# BLOCKED:` is a typed `ScientificReadinessResult` blocker
+(`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`), never a Python default and
+never a value carried into a resolved run. Shared reusable references
+(`datasets/`, `detectors/`, `runtime/`, `reporting/`) are authored once and
+referenced by slug; an experiment document never inlines them.
+
+### 24.1 Remaining experiment roots
+
+`configs/experiments/shared_threshold_construction_sensitivity.yaml` (E-S1,
+Tier 2, mean-artifact rule-out; three shared constructions plus local):
+
+```yaml
+schema_version: 1
+slug: shared_threshold_construction_sensitivity
+display_name: Shared-Threshold Construction Sensitivity
+evidence_role: supportive
+run_requirement: mandatory
+tier: tier_2
+roadmap_reference: E-S1
+dataset: datasets/natural_device_nbaiot.yaml
+detector: detectors/core_federated_averaging.yaml
+evaluations:
+  - label: shared_mean
+    threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+  - label: shared_pooled
+    threshold: { policy: shared_threshold, construction: pooled, quantile: 0.95 }
+  - label: shared_weighted
+    threshold: { policy: shared_threshold, construction: weighted, quantile: 0.95 }
+  - label: local
+    threshold: { policy: local_threshold, quantile: 0.95 }
+analyses:
+  - label: mean_vs_local_dispersion
+    kind: paired_threshold_analysis
+    first_evaluation: shared_mean
+    second_evaluation: local
+    primary_metric: cv_fpr
+    delta_orientation: shared_minus_local
+    primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+      # BLOCKED: bootstrap resample count required from statistical authority.
+    secondary_procedures: []
+seed_cohort:
+  paired_seed_count: 10
+  derivation: deterministic_from_experiment_seed
+  # BLOCKED: experiment_seed required.
+prerequisites:
+  - requires: anchor_reproduction
+    required_outcome: anchor_equivalence_passed
+operations:
+  execution: runtime/scientific.yaml
+  reporting: reporting/dispersion_ladder_table.yaml
+```
+
+`configs/experiments/cluster_mechanism.yaml` (E-M1/E-M2/E-Q2, Tier 5; one
+merged root with four typed axes — grouping, fingerprint feature set,
+aggregation, and authorized K):
+
+```yaml
+schema_version: 1
+slug: cluster_mechanism
+display_name: Cluster Mechanism and Stability
+evidence_role: mechanism
+run_requirement: mandatory
+tier: tier_5
+roadmap_reference: E-M1/E-M2/E-Q2
+dataset: datasets/natural_device_nbaiot.yaml
+detector: detectors/core_federated_averaging.yaml
+evaluations:
+  - label: local
+    threshold: { policy: local_threshold, quantile: 0.95 }
+  - label: family
+    threshold: { policy: family_threshold, quantile: 0.95 }
+      # requires an authorized device-family taxonomy artifact (Regime A only).
+  - label: cluster_k3_mean_full_fingerprint
+    threshold:
+      policy: cluster_threshold
+      aggregation: mean
+      cluster_count: 3          # canonical; SCI-16
+      fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+      quantile: 0.95
+      # BLOCKED: canonical clustering n_init / max_iter required (pre-registration).
+  - label: cluster_k3_robust_median
+    threshold:
+      policy: cluster_threshold
+      aggregation: robust_median   # optional supplementary; cannot replace canonical B4
+      cluster_count: 3
+      fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+      quantile: 0.95
+analyses:
+  - label: granularity_comparison
+    kind: paired_threshold_analysis
+    first_evaluation: cluster_k3_mean_full_fingerprint
+    second_evaluation: local
+    primary_metric: cv_fpr
+    delta_orientation: cluster_minus_local
+    primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+      # BLOCKED: bootstrap resample count required.
+    secondary_procedures: []
+  - label: cluster_assignment_stability
+    kind: cluster_stability_analysis
+    source_evaluation: cluster_k3_mean_full_fingerprint
+    primary_procedure: { method: adjusted_rand_index }
+    secondary_procedures: []
+sweep:
+  parameters:
+    fingerprint_feature_subset:
+      # exploratory fingerprint ablation over the four-scalar fingerprint;
+      # single-feature through all-four subsets, applied to the cluster evaluations.
+      values:
+        - [mean_error]
+        - [p95_error]
+        - [mean_error, std_error]
+        - [mean_error, std_error, skew_error, p95_error]
+seed_cohort:
+  paired_seed_count: 10
+  derivation: deterministic_from_experiment_seed
+  # BLOCKED: experiment_seed required.
+prerequisites:
+  - requires: anchor_reproduction
+    required_outcome: anchor_equivalence_passed
+operations:
+  execution: runtime/scientific.yaml
+  reporting: reporting/cluster_stability_table.yaml
+```
+
+`configs/experiments/calibration_window_size_stability.yaml` (E-V1, Tier 6,
+RQ3; calibration-size sweep, each point resolving a `CalibrationSubsetDefinition`):
+
+```yaml
+schema_version: 1
+slug: calibration_window_size_stability
+display_name: Calibration-Window Size Stability
+evidence_role: boundary
+run_requirement: mandatory
+tier: tier_6
+roadmap_reference: E-V1
+dataset: datasets/natural_device_nbaiot.yaml
+detector: detectors/core_federated_averaging.yaml
+sweep:
+  parameters:
+    calibration_sample_count:
+      values: [50, 100, 250, 500, 1000, 5000]
+calibration_subset:
+  requested_sample_count: { from_sweep: calibration_sample_count }
+  selection_strategy: deterministic_prefix
+  nesting_policy: nested_by_size   # smaller windows are prefixes of larger ones
+  # BLOCKED: calibration-subset selection_seed required.
+evaluations:
+  - label: shared_mean
+    threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+  - label: local
+    threshold: { policy: local_threshold, quantile: 0.95 }
+  - label: cluster_k3
+    threshold: { policy: cluster_threshold, aggregation: mean, cluster_count: 3, quantile: 0.95 }
+  - label: size_aware_fallback
+    threshold: { policy: calibration_size_aware_fallback_threshold, quantile: 0.95 }
+analyses:
+  - label: threshold_variance_vs_size
+    kind: quantile_estimation_analysis
+    source_evaluations: [local, size_aware_fallback]
+    primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+      # BLOCKED: bootstrap resample count required.
+    secondary_procedures: []
+seed_cohort:
+  paired_seed_count: 10
+  derivation: deterministic_from_experiment_seed
+  # BLOCKED: experiment_seed required.
+prerequisites:
+  - requires: anchor_reproduction
+    required_outcome: anchor_equivalence_passed
+operations:
+  execution: runtime/scientific.yaml
+  reporting: reporting/sensitivity_grid_table.yaml
+```
+
+`configs/experiments/local_global_threshold_shrinkage.yaml` (E-V2, RQ3
+supportive; λ-sweep):
+
+```yaml
+schema_version: 1
+slug: local_global_threshold_shrinkage
+display_name: Local-Global Threshold Shrinkage
+evidence_role: supportive
+run_requirement: mandatory
+roadmap_reference: E-V2
+dataset: datasets/natural_device_nbaiot.yaml
+detector: detectors/core_federated_averaging.yaml
+sweep:
+  parameters:
+    shrinkage_weight:
+      values: [0, 0.25, 0.5, 0.75, 1]
+evaluations:
+  - label: shrinkage
+    threshold:
+      policy: local_global_shrinkage_threshold
+      shrinkage_weight: { from_sweep: shrinkage_weight }
+      quantile: 0.95
+analyses:
+  - label: lambda_curve
+    kind: quantile_estimation_analysis
+    source_evaluations: [shrinkage]
+    primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+      # BLOCKED: bootstrap resample count required.
+    secondary_procedures: []
+seed_cohort:
+  paired_seed_count: 10
+  derivation: deterministic_from_experiment_seed
+  # BLOCKED: experiment_seed required.
+prerequisites:
+  - requires: anchor_reproduction
+    required_outcome: anchor_equivalence_passed
+operations:
+  execution: runtime/scientific.yaml
+  reporting: reporting/lambda_curve_figure.yaml
+```
+
+`configs/experiments/conformal_local_threshold_coverage.yaml` (E-V3,
+supportive tautology defense; α = 0.05):
+
+```yaml
+schema_version: 1
+slug: conformal_local_threshold_coverage
+display_name: Conformal Local-Threshold Coverage
+evidence_role: supportive
+run_requirement: mandatory
+roadmap_reference: E-V3
+dataset: datasets/natural_device_nbaiot.yaml
+detector: detectors/core_federated_averaging.yaml
+evaluations:
+  - label: conformal_local
+    threshold:
+      policy: conformal_local_threshold
+      conformal_mode: split_conformal   # or federated_conformal
+      coverage_alpha: 0.05
+    evaluation_suite: { kind: standard_evaluation_suite }
+analyses:
+  - label: coverage_check
+    kind: quantile_estimation_analysis
+    source_evaluations: [conformal_local]
+    primary_procedure: { method: percentile_bootstrap, confidence_level: 0.95 }
+      # BLOCKED: bootstrap resample count required.
+    secondary_procedures: []
+seed_cohort:
+  paired_seed_count: 10
+  derivation: deterministic_from_experiment_seed
+  # BLOCKED: experiment_seed required.
+prerequisites:
+  - requires: anchor_reproduction
+    required_outcome: anchor_equivalence_passed
+operations:
+  execution: runtime/scientific.yaml
+  reporting: reporting/conformal_coverage_table.yaml
+```
+
+`configs/experiments/external_device_dataset_validation.yaml` (E-X1, Tier 3,
+external validation; feasibility-gated; references an audit `FEASIBILITY_RESULT`):
+
+```yaml
+schema_version: 1
+slug: external_device_dataset_validation
+display_name: External Device-Dataset Validation
+evidence_role: external_validation
+run_requirement: mandatory
+tier: tier_3
+roadmap_reference: E-X1
+dataset: datasets/external_device_edge_iiotset.yaml   # granularity fixed to device (or group) by audit
+detector: detectors/core_federated_averaging.yaml
+evaluations:
+  - label: shared_mean
+    threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+  - label: local
+    threshold: { policy: local_threshold, quantile: 0.95 }
+  - label: family
+    threshold: { policy: family_threshold, quantile: 0.95 }
+  - label: cluster_k3
+    threshold: { policy: cluster_threshold, aggregation: mean, cluster_count: 3, quantile: 0.95 }
+  - label: fed_summary
+    threshold: { policy: federated_summary_statistic_threshold }
+      # BLOCKED: matched-exceedance k-grid step required (authoritative protocol record).
+  - label: alert_burden
+    threshold: { policy: local_threshold, quantile: 0.95 }
+    evaluation_suite:
+      kind: alert_burden_evaluation_suite
+      traffic_rate_evidence:
+        kind: cited
+        # BLOCKED: validated traffic rate, unit, scope, and source required.
+sweep:
+  parameters:
+    threshold_quantile:                # sole owner of the external-dataset q-sensitivity axis (§17)
+      values: [0.90, 0.95, 0.975, 0.99]
+analyses:
+  - label: external_scope_effect
+    kind: paired_threshold_analysis
+    first_evaluation: shared_mean
+    second_evaluation: local
+    primary_metric: cv_fpr
+    delta_orientation: shared_minus_local
+    primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+      # BLOCKED: bootstrap resample count required.
+    secondary_procedures: []
+seed_cohort:
+  paired_seed_count: 10
+  derivation: deterministic_from_experiment_seed
+  # BLOCKED: experiment_seed required.
+prerequisites:
+  - requires: anchor_reproduction
+    required_outcome: anchor_equivalence_passed
+  # No audit prerequisite: the device-vs-group feasibility is consumed as provenance
+  # through datasets/external_device_edge_iiotset.yaml's feasibility_result_ref, and
+  # the granularity is fixed in that document before resolution (SCIENTIFIC_FOUNDATION.md §5.1).
+operations:
+  execution: runtime/scientific.yaml
+  reporting: reporting/external_validation_table.yaml
+```
+
+`configs/experiments/fedprox_aggregation_stress_test.yaml` (E-T1, Tier 4,
+stress test; references the FedProx detector; one document per µ grid point):
+
+```yaml
+schema_version: 1
+slug: fedprox_aggregation_stress_test
+display_name: FedProx Aggregation Stress Test
+evidence_role: stress_test
+run_requirement: mandatory
+tier: tier_4
+roadmap_reference: E-T1
+dataset: datasets/natural_device_nbaiot.yaml   # plus external_device_edge_iiotset.yaml in a sibling doc
+detector: detectors/fedprox_stress_test.yaml   # mu ∈ {0.001, 0.01, 0.1}, one resolved doc per point
+evaluations:
+  - label: shared_mean
+    threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+  - label: local
+    threshold: { policy: local_threshold, quantile: 0.95 }
+  - label: family
+    threshold: { policy: family_threshold, quantile: 0.95 }
+  - label: cluster_k3
+    threshold: { policy: cluster_threshold, aggregation: mean, cluster_count: 3, quantile: 0.95 }
+analyses:
+  - label: fedprox_scope_effect
+    kind: paired_threshold_analysis
+    first_evaluation: shared_mean
+    second_evaluation: local
+    primary_metric: cv_fpr
+    delta_orientation: shared_minus_local
+    primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+      # BLOCKED: bootstrap resample count required.
+    secondary_procedures: []
+seed_cohort:
+  paired_seed_count: 10
+  derivation: deterministic_from_experiment_seed
+  # BLOCKED: experiment_seed required.
+prerequisites:
+  - requires: anchor_reproduction
+    required_outcome: anchor_equivalence_passed
+operations:
+  execution: runtime/scientific.yaml
+  reporting: reporting/stress_test_table.yaml
+```
+
+`configs/experiments/model_personalization_absorption_test.yaml` (E-T2,
+Tier 4, stress test; absorption bands read from the 2×2 corners):
+
+```yaml
+schema_version: 1
+slug: model_personalization_absorption_test
+display_name: Model-Personalization Absorption Test
+evidence_role: stress_test
+run_requirement: mandatory
+tier: tier_4
+roadmap_reference: E-T2
+dataset: datasets/natural_device_nbaiot.yaml   # plus external in a sibling doc
+detector: detectors/model_personalization_comparator.yaml
+  # BLOCKED: personalization comparator choice and hyperparameters required (documented pre-training decision).
+# This experiment's single detector is the personalization comparator; it produces the
+# personalized 2×2 row (Pers+B1, Pers+B2). The FedAvg core row (FedAvg+B1, FedAvg+B2)
+# is not retrained here — it is the confirmatory experiment's committed paired delta,
+# reused by artifact identity and referenced as the absorption analysis's core corner
+# through the prerequisite below. No evaluation owns a detector (DOMAIN §3.3).
+evaluations:
+  - label: personalized_shared
+    threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+  - label: personalized_local
+    threshold: { policy: local_threshold, quantile: 0.95 }
+analyses:
+  - label: personalized_delta
+    kind: paired_threshold_analysis
+    first_evaluation: personalized_shared
+    second_evaluation: personalized_local
+    primary_metric: cv_fpr
+    delta_orientation: shared_minus_local
+    primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+      # BLOCKED: bootstrap resample count required.
+    secondary_procedures: []
+  - label: absorption
+    kind: absorption_analysis
+    core_analysis:
+      experiment: confirmatory_threshold_scope_effect   # cross-experiment core corner (reused)
+      analysis: paired_threshold_analysis
+    personalized_analysis: personalized_delta
+    primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+      # BLOCKED: bootstrap resample count required.
+    secondary_procedures: []
+seed_cohort:
+  paired_seed_count: 10
+  derivation: deterministic_from_experiment_seed
+  # BLOCKED: experiment_seed required.
+prerequisites:
+  - requires: anchor_reproduction
+    required_outcome: anchor_equivalence_passed
+  - requires: confirmatory_threshold_scope_effect   # supplies the reused FedAvg core delta
+    required_outcome: completed
+operations:
+  execution: runtime/scientific.yaml
+  reporting: reporting/stress_test_table.yaml
+```
+
+`configs/experiments/federated_summary_comparator.yaml` (E-T3/E-Q1/E-Q5,
+Tier 4; merged matched comparison + quantile-estimation backbone + optional
+fixed-k sensitivity):
+
+```yaml
+schema_version: 1
+slug: federated_summary_comparator
+display_name: Federated Summary-Statistic Comparator
+evidence_role: stress_test
+run_requirement: mandatory
+tier: tier_4
+roadmap_reference: E-T3/E-Q1/E-Q5
+dataset: datasets/natural_device_nbaiot.yaml   # plus external in a sibling doc
+detector: detectors/core_federated_averaging.yaml
+evaluations:
+  - label: local
+    threshold: { policy: local_threshold, quantile: 0.95 }
+  - label: fed_summary_matched
+    threshold: { policy: federated_summary_statistic_threshold }   # matched-exceedance (primary)
+      # BLOCKED: matched-exceedance k-grid step required.
+  - label: fed_summary_fixed_k          # optional supplementary sensitivity; never primary (SCI-18)
+    threshold: { policy: federated_summary_statistic_threshold, fixed_k: { values: [2.0, 2.5, 3.0] } }
+    execution_requirement: optional
+    publication_placement: supplementary
+analyses:
+  - label: matched_comparator_effect
+    kind: paired_threshold_analysis
+    first_evaluation: fed_summary_matched
+    second_evaluation: local
+    primary_metric: cv_fpr
+    delta_orientation: comparator_minus_local
+    primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+      # BLOCKED: bootstrap resample count required.
+    secondary_procedures: []
+  - label: quantile_estimation_backbone
+    kind: quantile_estimation_analysis
+    source_evaluations: [local, fed_summary_matched]
+    primary_procedure: { method: spearman_correlation }
+    secondary_procedures: []
+seed_cohort:
+  paired_seed_count: 10
+  derivation: deterministic_from_experiment_seed
+  # BLOCKED: experiment_seed required.
+prerequisites:
+  - requires: anchor_reproduction
+    required_outcome: anchor_equivalence_passed
+operations:
+  execution: runtime/scientific.yaml
+  reporting: reporting/comparator_table.yaml
+```
+
+`configs/experiments/chronological_recalibration_evaluation.yaml` (E-B1,
+Tier 6, boundary/temporal; feasibility- and timestamp-gated):
+
+```yaml
+schema_version: 1
+slug: chronological_recalibration_evaluation
+display_name: Chronological Recalibration Evaluation
+evidence_role: boundary
+run_requirement: mandatory
+tier: tier_6
+roadmap_reference: E-B1
+dataset: datasets/chronological_edge_iiotset.yaml   # chronological 70/30 TemporalWindow
+detector: detectors/core_federated_averaging.yaml
+evaluations:
+  - label: shared_frozen
+    threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+    recalibration_mode: frozen
+  - label: local_frozen
+    threshold: { policy: local_threshold, quantile: 0.95 }
+    recalibration_mode: frozen
+  - label: local_one_shot
+    threshold: { policy: local_threshold, quantile: 0.95 }
+    recalibration_mode: one_shot        # recalibrate once at the temporal boundary
+  - label: cluster_frozen
+    threshold: { policy: cluster_threshold, aggregation: mean, cluster_count: 3, quantile: 0.95 }
+    recalibration_mode: frozen
+analyses:
+  - label: temporal_recovery
+    kind: temporal_recovery_analysis
+    frozen_evaluation: local_frozen
+    recalibrated_evaluation: local_one_shot
+    primary_procedure: { method: percentile_bootstrap, confidence_level: 0.95 }
+      # BLOCKED: bootstrap resample count required.
+    secondary_procedures: []
+seed_cohort:
+  paired_seed_count: 10
+  derivation: deterministic_from_experiment_seed
+  # BLOCKED: experiment_seed required.
+prerequisites:
+  - requires: anchor_reproduction
+    required_outcome: anchor_equivalence_passed
+  # No audit prerequisite: genuine timestamp semantics are a ScientificReadinessResult
+  # blocker (ENGINEERING §7) closed by edge_iiotset_timestamp_semantics_verification's
+  # source inspection before this experiment can schedule TEMPORAL_SCORE; the chronological
+  # split's capture_time_field is authored in datasets/chronological_edge_iiotset.yaml.
+operations:
+  execution: runtime/scientific.yaml
+  reporting: reporting/recovery_curve_figure.yaml
+```
+
+`configs/experiments/centralized_pooled_reference.yaml` (B0, supportive
+non-ladder reference; own centralized identity chain, never fused with
+federated artifacts):
+
+```yaml
+schema_version: 1
+slug: centralized_pooled_reference
+display_name: Centralized Pooled Reference
+evidence_role: supportive
+run_requirement: mandatory
+roadmap_reference: B0
+dataset: datasets/natural_device_nbaiot.yaml
+detector: detectors/centralized_pooled.yaml   # CentralizedPooledTraining; not federated
+evaluations:
+  - label: centralized_pooled
+    threshold: { policy: centralized_pooled_threshold, quantile: 0.95 }
+      # CentralizedPooledThreshold is reachable only from a CentralizedPooledTraining detector,
+      # never a member of the shared ThresholdConstruction union (DOMAIN §3.3).
+analyses: []
+seed_cohort:
+  paired_seed_count: 10
+  derivation: deterministic_from_experiment_seed
+  # BLOCKED: experiment_seed required.
+prerequisites:
+  - requires: anchor_reproduction
+    required_outcome: anchor_equivalence_passed
+operations:
+  execution: runtime/scientific.yaml
+  reporting: reporting/dispersion_ladder_table.yaml
+```
+
+`configs/experiments/file_pseudo_client_applicability_boundary.yaml`
+(`B_A_APPLICABILITY_BOUNDARY`, Tier 6 boundary; CICIoT2023 file pseudo-clients;
+never generalized):
+
+```yaml
+schema_version: 1
+slug: file_pseudo_client_applicability_boundary
+display_name: File Pseudo-Client Applicability Boundary
+evidence_role: boundary
+run_requirement: mandatory
+tier: tier_6
+roadmap_reference: B_A_APPLICABILITY_BOUNDARY
+dataset: datasets/file_pseudo_client_ciciot2023.yaml
+detector: detectors/core_federated_averaging.yaml
+evaluations:
+  - label: shared_mean
+    threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
+  - label: local
+    threshold: { policy: local_threshold, quantile: 0.95 }
+  - label: cluster_k3
+    threshold: { policy: cluster_threshold, aggregation: mean, cluster_count: 3, quantile: 0.95 }
+analyses:
+  - label: boundary_null
+    kind: paired_threshold_analysis
+    first_evaluation: shared_mean
+    second_evaluation: local
+    primary_metric: cv_fpr
+    delta_orientation: shared_minus_local
+    primary_procedure: { method: bca_bootstrap, confidence_level: 0.95 }
+      # BLOCKED: bootstrap resample count required.
+    secondary_procedures: []
+seed_cohort:
+  paired_seed_count: 10
+  derivation: deterministic_from_experiment_seed
+  # BLOCKED: experiment_seed required.
+prerequisites:
+  - requires: anchor_reproduction
+    required_outcome: anchor_equivalence_passed
+operations:
+  execution: runtime/scientific.yaml
+  reporting: reporting/boundary_null_table.yaml
+```
+
+### 24.2 Dataset-audit roots
+
+Every dataset audit is a `DatasetAuditDefinition` carrying only audit fields
+(`ARCH-01`); it never carries a detector, threshold, seed, evidence-role, or
+claim-tier field. Its result is a persisted `FEASIBILITY_RESULT` with a
+`FeasibilityStatus`.
+
+`configs/dataset_audits/nbaiot_source_inspection.yaml`:
+
+```yaml
+schema_version: 1
+slug: nbaiot_source_inspection
+display_name: N-BaIoT Source Inspection
+dataset_source: n_baiot
+inspection:
+  expected_facts:
+    - feature_schema_present
+    - benign_and_attack_members_present
+    - per_device_membership_recoverable
+  source_row_identity_scheme: required
+feasibility:
+  rule: source_schema_complete
+  required_evidence: [feature_schema_manifest, per_device_counts]
+operations:
+  execution: runtime/dataset_audit_cpu.yaml
+  reporting: reporting/source_inspection_report.yaml
+```
+
+`configs/dataset_audits/ciciot2023_source_inspection.yaml`:
+
+```yaml
+schema_version: 1
+slug: ciciot2023_source_inspection
+display_name: CICIoT2023 Source Inspection
+dataset_source: ciciot2023
+inspection:
+  expected_facts:
+    - feature_schema_present
+    - file_level_membership_recoverable
+    - mac_device_ip_capture_timestamp_columns_present_or_absent   # records absence explicitly
+  source_row_identity_scheme: required
+feasibility:
+  rule: source_schema_complete
+  required_evidence: [feature_schema_manifest, file_member_manifest]
+operations:
+  execution: runtime/dataset_audit_cpu.yaml
+  reporting: reporting/source_inspection_report.yaml
+```
+
+`configs/dataset_audits/ciciot2023_processed_feature_verification.yaml`
+(re-verifies the conference `d = 39` against the actual processed artifact —
+conditional gate 1):
+
+```yaml
+schema_version: 1
+slug: ciciot2023_processed_feature_verification
+display_name: CICIoT2023 Processed-Feature Verification
+dataset_source: ciciot2023
+inspection:
+  expected_facts:
+    - processed_feature_count_matches_conference_value
+  reference_feature_count: 39
+feasibility:
+  rule: processed_feature_count_verified
+  required_evidence: [processed_feature_schema_manifest]
+  # feature count of the actual processed artifact; mirror distributions differ (roadmap §7).
+operations:
+  execution: runtime/dataset_audit_cpu.yaml
+  reporting: reporting/source_inspection_report.yaml
+```
+
+`configs/dataset_audits/edge_iiotset_source_inspection.yaml`:
+
+```yaml
+schema_version: 1
+slug: edge_iiotset_source_inspection
+display_name: Edge-IIoTset Source Inspection
+dataset_source: edge_iiotset
+inspection:
+  expected_facts:
+    - feature_schema_present
+    - device_identity_recoverable
+    - capture_timestamp_present_or_absent
+  source_row_identity_scheme: required
+feasibility:
+  rule: source_schema_complete
+  required_evidence: [feature_schema_manifest, per_device_counts, timestamp_evidence]
+operations:
+  execution: runtime/dataset_audit_cpu.yaml
+  reporting: reporting/source_inspection_report.yaml
+```
+
+`configs/dataset_audits/edge_iiotset_client_granularity_feasibility.yaml`
+(decides device vs group; conditional gate 2):
+
+```yaml
+schema_version: 1
+slug: edge_iiotset_client_granularity_feasibility
+display_name: Edge-IIoTset Client-Granularity Feasibility
+dataset_source: edge_iiotset
+inspection:
+  expected_facts:
+    - per_candidate_client_benign_counts
+  candidate_granularities: [device, group]
+  target_client_counts: [6, 15]
+feasibility:
+  rule: eligibility_coverage_gate
+  minimum_calibration_sample_count: 100
+  minimum_client_coverage_ratio: 0.90     # n_k ≥ 100 for ≥ 90% of clients
+  required_evidence: [per_client_benign_counts]
+  # produces the device-vs-group FEASIBILITY_RESULT; the human then authors the
+  # ExternalDeviceOrGroupClients document with granularity fixed (SCIENTIFIC_FOUNDATION.md §5.1).
+operations:
+  execution: runtime/dataset_audit_cpu.yaml
+  reporting: reporting/feasibility_report.yaml
+```
+
+`configs/dataset_audits/edge_iiotset_timestamp_semantics_verification.yaml`:
+
+```yaml
+schema_version: 1
+slug: edge_iiotset_timestamp_semantics_verification
+display_name: Edge-IIoTset Timestamp-Semantics Verification
+dataset_source: edge_iiotset
+inspection:
+  expected_facts:
+    - genuine_capture_time_field_present
+    - per_client_temporal_ordering_recoverable
+feasibility:
+  rule: timestamp_semantics_verified
+  required_evidence: [timestamp_evidence, per_client_time_span]
+  # gates chronological_recalibration_evaluation; absence blocks the temporal MVE.
+operations:
+  execution: runtime/dataset_audit_cpu.yaml
+  reporting: reporting/feasibility_report.yaml
+```
+
+### 24.3 Remaining reusable dataset definitions
+
+`configs/datasets/file_pseudo_client_ciciot2023.yaml` (boundary role only):
+
+```yaml
+schema_version: 1
+dataset: ciciot2023
+dataset_version: processed_v1
+client_construction:
+  method: dataset_file_pseudo_clients
+  pseudo_client_count: 63
+split_definition:
+  train: { role: train }
+  calibration: { role: calibration, benign_only: true }
+  test: { role: test }
+preprocessing:
+  normalization: { strategy: min_max, scope: global_train }
+  # feature count d is source-inspected, never authored; BLOCKED for any quantitative claim
+  # until ciciot2023_processed_feature_verification closes (conference value 39).
+```
+
+`configs/datasets/external_device_edge_iiotset.yaml` (authored only after the
+granularity feasibility audit closes; granularity fixed, never runtime-chosen):
+
+```yaml
+schema_version: 1
+dataset: edge_iiotset
+dataset_version: v1
+client_construction:
+  method: external_device_or_group_clients
+  granularity: device                 # fixed by human authorization post-audit
+  feasibility_result_ref: edge_iiotset_client_granularity_feasibility   # provenance only
+split_definition:
+  train: { role: train }
+  calibration: { role: calibration, benign_only: true }
+  test: { role: test }
+preprocessing:
+  normalization: { strategy: min_max, scope: global_train }
+  # BLOCKED: external-device feature schema / input dimension from source inspection.
+```
+
+`configs/datasets/external_group_edge_iiotset.yaml` (identical except
+`granularity: group`; a separate document, never a runtime toggle):
+
+```yaml
+schema_version: 1
+dataset: edge_iiotset
+dataset_version: v1
+client_construction:
+  method: external_device_or_group_clients
+  granularity: group
+  feasibility_result_ref: edge_iiotset_client_granularity_feasibility
+split_definition:
+  train: { role: train }
+  calibration: { role: calibration, benign_only: true }
+  test: { role: test }
+preprocessing:
+  normalization: { strategy: min_max, scope: global_train }
+  # BLOCKED: external feature schema / input dimension from source inspection.
+```
+
+`configs/datasets/chronological_edge_iiotset.yaml` (external composition plus
+a chronological 70/30 `TemporalWindow`):
+
+```yaml
+schema_version: 1
+dataset: edge_iiotset
+dataset_version: v1
+client_construction:
+  method: external_device_or_group_clients
+  granularity: device
+  feasibility_result_ref: edge_iiotset_client_granularity_feasibility
+split_definition:
+  train: { role: train }
+  calibration: { role: calibration, benign_only: true }
+  test: { role: test }
+  temporal_window:
+    role: temporal_evaluation
+    historical_fraction: 0.70          # locked chronological boundary
+    capture_time_field: capture_timestamp
+    # requires edge_iiotset_timestamp_semantics_verification to have passed.
+preprocessing:
+  normalization: { strategy: min_max, scope: global_train }
+```
+
+### 24.4 Remaining reusable detector definitions
+
+`configs/detectors/centralized_pooled.yaml` (`CentralizedPooledTraining`; not
+federated; own identity chain):
+
+```yaml
+schema_version: 1
+training_protocol:
+  kind: centralized_pooled_training
+autoencoder:
+  hidden_dims: [80, 40, 20]
+  activation: relu
+optimizer:
+  optimizer_type: adam
+  learning_rate: 0.001
+  scheduler: null
+precision: fp32
+determinism: strict
+checkpoint_schedule:
+  rounds: [25, 50, 75, 100, 125, 150, 200]   # epoch-indexed for the centralized run
+checkpoint_selection:
+  rule: lowest_pooled_benign_validation_reconstruction_error
+  tie_break: earliest_scheduled_round
+training_batch:
+  micro_batch_size: 256
+  gradient_accumulation_steps: 1
+eligibility:
+  minimum_calibration_sample_count: 100
+```
+
+`configs/detectors/model_personalization_comparator.yaml` (the one authorized
+personalization comparator; BLOCKED until chosen and documented):
+
+```yaml
+schema_version: 1
+training_protocol:
+  kind: federated_averaging_training
+  local_epochs: 1
+  participation: full
+  personalization: fedrep_ae     # or ditto / fedper_ae — never "Ditto" unless genuine Ditto (NAME-05)
+    # BLOCKED: personalization comparator choice and hyperparameters (documented pre-training decision).
+autoencoder:
+  hidden_dims: [80, 40, 20]
+  activation: relu
+optimizer:
+  optimizer_type: adam
+  learning_rate: 0.001
+  scheduler: null
+precision: fp32
+determinism: strict
+checkpoint_schedule:
+  rounds: [25, 50, 75, 100, 125, 150, 200]
+checkpoint_selection:
+  rule: lowest_federated_averaging_weighted_benign_validation_reconstruction_error
+  tie_break: earliest_scheduled_round
+training_batch:
+  micro_batch_size: 256
+  gradient_accumulation_steps: 1
+eligibility:
+  minimum_calibration_sample_count: 100
+```
+
+### 24.5 Remaining runtime profiles
+
+Every mode requires a complete explicit profile; `development` and `smoke`
+use explicit reduced values and are non-citable by mode, never an automatic
+reduction of `scientific` (`EXEC-02`).
+
+`configs/runtime/print_grade.yaml`:
+
+```yaml
+schema_version: 1
+execution_mode: print_grade
+device_policy: cuda_required
+determinism: strict
+resource_budget:
+  # BLOCKED: concrete RAM and VRAM limits required.
+concurrency:
+  training_concurrency: 1
+  scoring_concurrency: 1
+  # BLOCKED: concrete worker count required.
+process_start_method: spawn
+# BLOCKED: log_interval_rounds requires its explicit operational owner value.
+```
+
+`configs/runtime/development.yaml`:
+
+```yaml
+schema_version: 1
+execution_mode: development
+device_policy: cuda_required
+determinism: strict
+resource_budget:
+  max_ram_gib: 32          # explicit reduced value; non-citable by mode, not a scientific limit
+  max_vram_gib: 12
+concurrency:
+  training_concurrency: 1
+  scoring_concurrency: 1
+  worker_count: 2
+process_start_method: spawn
+log_interval_rounds: 5
+```
+
+`configs/runtime/smoke.yaml` (explicit reduced batch/chunk profile lives in a
+smoke detector/runtime pairing, never an automatic backoff):
+
+```yaml
+schema_version: 1
+execution_mode: smoke
+device_policy: cuda_required
+determinism: strict
+resource_budget:
+  max_ram_gib: 16
+  max_vram_gib: 8
+concurrency:
+  training_concurrency: 1
+  scoring_concurrency: 1
+  worker_count: 1
+process_start_method: spawn
+log_interval_rounds: 1
+```
+
+`configs/runtime/dataset_audit_cpu.yaml`:
+
+```yaml
+schema_version: 1
+execution_mode: development
+device_policy: cpu_only          # audits touch no CUDA stage; fork is permitted for CPU-only workers
+determinism: strict
+resource_budget:
+  max_ram_gib: 16
+concurrency:
+  worker_count: 4
+process_start_method: fork
+log_interval_rounds: 10
+```
+
+`configs/runtime/test_smoke.yaml` (test-only; resolves storage beneath
+`TEST_SANDBOX`; never a scientific evidence source):
+
+```yaml
+schema_version: 1
+execution_mode: smoke
+device_policy: cpu_only
+determinism: strict
+resource_budget:
+  max_ram_gib: 8
+concurrency:
+  worker_count: 1
+process_start_method: spawn
+log_interval_rounds: 1
+```
+
+### 24.6 Reporting profiles
+
+Reporting owns only presentation (`§2`): tables, figures, formats, ordering,
+semantic columns, units, direction, missing-value rendering, and placement.
+It never owns a scientific threshold, metric selection, statistical method,
+runtime reference, seed, or dataset/detector selection. Each `TableType`/
+`FigureType` in `EVALUATION_REPORTING_AND_PROVENANCE.md §9.3` has one
+reporting document; the confirmatory table is worked in §15. The complete set:
+
+```text
+configs/reporting/
+├── anchor_reporting.yaml            # CONFIRMATORY_INTERVAL (anchor namespace)
+├── main_confirmatory_table.yaml     # CONFIRMATORY_INTERVAL (§15)
+├── dispersion_ladder_table.yaml     # DISPERSION_LADDER
+├── sensitivity_grid_table.yaml      # SENSITIVITY_GRID (+ HEATMAP)
+├── severity_trend_figure.yaml       # SEVERITY_TREND
+├── cluster_stability_table.yaml     # CLUSTER_STABILITY (+ CONTINGENCY)
+├── cdf_overlay_figure.yaml          # CDF_OVERLAY
+├── scatter_figure.yaml              # SCATTER
+├── lambda_curve_figure.yaml         # LAMBDA_CURVE
+├── comparator_table.yaml            # COMPARATOR
+├── stress_test_table.yaml           # STRESS_TEST
+├── recovery_curve_figure.yaml       # RECOVERY_CURVE
+├── conformal_coverage_table.yaml    # CONTINGENCY / coverage
+├── alert_burden_table.yaml          # ALERT_BURDEN
+├── communication_storage_cost_table.yaml  # COMMUNICATION_STORAGE_COST
+├── external_validation_table.yaml   # CONFIRMATORY_INTERVAL for Regime D
+├── boundary_null_table.yaml         # BOUNDARY_NULL
+├── source_inspection_report.yaml    # dataset-audit source facts
+└── feasibility_report.yaml          # dataset-audit FEASIBILITY_RESULT rendering
+```
+
+`configs/reporting/dispersion_ladder_table.yaml` (representative non-confirmatory
+table; every column declares a unit and a direction, `§15`):
+
+```yaml
+schema_version: 1
+report_artifacts:
+  - artifact_type: main_table
+    table_type: dispersion_ladder
+    columns:
+      - { name: threshold_construction, unit: none, direction: none }
+      - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+      - { name: iqr_fpr, unit: ratio, direction: lower_is_better }
+      - { name: fpr_range, unit: ratio, direction: lower_is_better }
+      - { name: worst_client_fpr, unit: ratio, direction: lower_is_better }
+    ordering: deterministic_by_threshold_construction
+    missing_value_policy: render_typed_unavailable   # never zero/NaN (EVAL §5)
+    output_formats: [markdown, latex]
+wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]
+```
+
+`configs/reporting/recovery_curve_figure.yaml` (representative figure):
+
+```yaml
+schema_version: 1
+report_artifacts:
+  - artifact_type: figure
+    figure_type: recovery_curve
+    series:
+      - { name: frozen_cv_fpr, unit: ratio, direction: lower_is_better }
+      - { name: recalibrated_cv_fpr, unit: ratio, direction: lower_is_better }
+    ordering: deterministic_by_temporal_window
+    missing_value_policy: render_typed_unavailable
+    output_formats: [pdf, png]
+wording_outcomes: [recal_helps, recal_insufficient, no_meaningful_drift]
+```
+
+Every other reporting document in the tree follows the identical shape, one
+`table_type`/`figure_type` per document, differing only in its declared
+semantic columns/series and `wording_outcomes`; a column or series with
+neither a unit nor a direction is rejected at schema validation.
