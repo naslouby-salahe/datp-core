@@ -20,9 +20,15 @@ validate prerequisites
 
 ## 2. Complete stable stage catalogue
 
+Configuration resolution is a pre-pipeline composition operation performed
+entirely by `config/compose.py` (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md
+§3`); it is not a `PipelineStage` member. The `RESOLVED_CONFIGURATION`
+artifact it produces is available to every stage below as upstream
+provenance, but no stage consumes it as a *planned* dependency the way it
+consumes another stage's output.
+
 | `PipelineStage` | Scientific input | Scientific output | Consumed artifact family | Produced artifact family |
 |---|---|---|---|---|
-| `CONFIGURATION_RESOLUTION` | YAML documents | `ExperimentDefinition` / `ExperimentTemplate` | none | `RESOLVED_CONFIGURATION` |
 | `SOURCE_INSPECTION` | raw dataset | `DatasetSourceInspectionResult` | `RAW_DATASET_REF` | `SOURCE_INSPECTION`, `FEATURE_SCHEMA_MANIFEST` |
 | `FEASIBILITY_AUDIT` | source inspection, candidate client construction | feasibility result | `SOURCE_INSPECTION` | `FEASIBILITY_RESULT` |
 | `CLIENT_PARTITION` | source identity, `ClientConstruction` | `ClientPartitionResult` | `SOURCE_INSPECTION`, `FEASIBILITY_RESULT` (external device only) | `PARTITION_MANIFEST` |
@@ -36,22 +42,35 @@ validate prerequisites
 | `TEMPORAL_SCORE` | selected checkpoint, chronological split | `TemporalScoreArtifactSet` | `CHECKPOINT_SELECTION`, `PROCESSED_SPLIT` | `SCORE_SET` (`SplitRole = TEMPORAL_EVALUATION`) |
 | `THRESHOLD_CONSTRUCT` | calibration scores, `ThresholdConstruction` | `ThresholdConstructionResult` | `SCORE_SET` (`CALIBRATION`) | `THRESHOLD_OUTPUT` |
 | `EVALUATE` | threshold, test or temporal scores | `PolicyEvaluationResult` | `THRESHOLD_OUTPUT`, `SCORE_SET` (`TEST`/`TEMPORAL_EVALUATION`) | `METRIC_OUTPUT` |
-| `STATISTICAL_ANALYZE` | paired evaluation results, statistical procedure | `StatisticalAnalysisResult` | `METRIC_OUTPUT` | `STATISTICAL_OUTPUT` |
+| `STATISTICAL_ANALYZE` | paired evaluation results, `AnalysisDefinition` | `StatisticalAnalysisResult` | `METRIC_OUTPUT` | `STATISTICAL_OUTPUT` |
 | `ANCHOR_EQUIVALENCE` | anchor `StatisticalAnalysisResult`, reference interval | `AnchorEquivalenceResult` | `STATISTICAL_OUTPUT` | `ANCHOR_EQUIVALENCE_RESULT` |
 | `RESOURCE_COST` | manifests, upstream artifact byte sizes | `ResourceCostResult` | multiple upstream families | `RESOURCE_COST_OUTPUT` |
 | `RESULT_FREEZE` | statistical / resource-cost results | `ResultFreezeManifest` | `STATISTICAL_OUTPUT`, `RESOURCE_COST_OUTPUT` | `RESULT_FREEZE` |
 | `REPORT` | frozen result | rendered table, figure, or wording | `RESULT_FREEZE` | `RENDERED_TABLE`, `RENDERED_FIGURE`, `WORDING_OUTPUT` |
 
 Eighteen stages, merged only where lifecycle and artifact semantics
-genuinely coincide (configuration resolution is one stage regardless of how
-many documents it reads; the three role-scoped scoring stages are kept
-separate because each produces an independently reusable, independently
+genuinely coincide (the three role-scoped scoring stages are kept separate
+because each produces an independently reusable, independently
 fingerprinted artifact and each has distinct failure/recovery semantics — a
 calibration-scoring failure must not invalidate an already-committed test
 score set). `RESOURCE_COST` and `ANCHOR_EQUIVALENCE` are separated from
 `STATISTICAL_ANALYZE` because each is consumed independently downstream
 (reporting consumes resource cost directly; the planner consumes anchor
 equivalence directly, before most other stages are even planned).
+`FEASIBILITY_AUDIT` is planned only for a dedicated, non-scientific audit
+experiment (for example `edge_iiotset_feasibility_audit`); a scientific
+`external_device_validation`-family experiment's `ClientConstruction` is
+already fully resolved by the time its configuration is authored
+(`SCIENTIFIC_FOUNDATION.md §5.1`), so `FEASIBILITY_AUDIT` is never planned
+for it — optional stages are omitted from the execution plan when
+`is_applicable` returns false (`§3` below) applies here specifically
+because the granularity question the stage answers has already been closed
+by an earlier, separate run, not because the scientific experiment
+re-answers it internally. `TEMPORAL_SCORE` applies only to temporal
+experiments, `ANCHOR_EQUIVALENCE` only where a `prerequisites` entry
+requires it, and `RESOURCE_COST` only when an experiment's configuration
+requests it (`SCIENTIFIC_FOUNDATION.md §7.4`); each is omitted from the
+plan, not executed as a no-op, when its `is_applicable` check fails.
 
 ## 3. Stage contract
 
@@ -59,15 +78,28 @@ equivalence directly, before most other stages are even planned).
 class ExperimentStage(Protocol[InputT, OutputT]):
     stage: PipelineStage
     dependencies: tuple[PipelineStage, ...]
-    consumed_artifact_families: tuple[ArtifactType, ...]
-    produced_artifact_family: ArtifactType
+    required_artifact_families: tuple[ArtifactType, ...]
+    produced_artifact_families: tuple[ArtifactType, ...]   # plural: one stage may
+                                                             # produce several artifact
+                                                             # families (e.g. SOURCE_INSPECTION
+                                                             # produces SOURCE_INSPECTION and
+                                                             # FEATURE_SCHEMA_MANIFEST)
 
-    def scientific_identity_contribution(
-        self, definition: ExperimentDefinition,
-    ) -> tuple[FingerprintField, ...]: ...
+    def is_applicable(self, definition: ExperimentDefinition) -> bool: ...
+
+    def build_identity(
+        self, definition: ExperimentDefinition, upstream: tuple[ArtifactRef, ...],
+    ) -> StageIdentity | ScoreIdentity: ...
 
     def execute(self, stage_input: InputT, context: StageExecutionContext) -> OutputT: ...
 ```
+
+`is_applicable` is the single mechanism behind every optional-stage
+omission in `§2` above; a stage the planner does not need is never planned
+as a disabled or skipped no-op, it is simply absent from the plan.
+`build_identity` replaces an earlier draft's `scientific_identity_contribution`
+name with one that states what it returns, not just that it contributes to
+something (`NAME` rules, `§19` of `ENGINEERING_DECISIONS_AND_CONFORMANCE.md`).
 
 `StageRunnerRegistry` is an exhaustive `EnumMap[PipelineStage,
 ExperimentStage]` assembled once in `composition/registries.py` and
@@ -101,7 +133,8 @@ root.
 
 Suppose a future `EQUITY_SUITE` analysis stage is added (consuming
 `METRIC_OUTPUT`, producing a new `EQUITY_OUTPUT` artifact family for the
-`operating_point_equity_suite` experiment). The complete change set is:
+optional equity evaluation attached to `confirmatory_threshold_scope_effect`,
+`SCIENTIFIC_FOUNDATION.md §7.4`). The complete change set is:
 
 1. `domain/evaluation.py` gains `FleetEquityResult` (already catalogued,
    §`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §6.5`) and, if genuinely new, an
@@ -135,6 +168,40 @@ class ScoreReuseGate:
         self, required: ScoreIdentity, candidate: ArtifactRef | None,
     ) -> ReuseDecision: ...
 ```
+
+### 5.1 Required invalidation rules
+
+One generic mechanism — `StageIdentity`/`ScoreIdentity` field comparison,
+`ArtifactType`, required input artifact fingerprints, the scientific
+identity projection, and execution identity only where it is genuinely
+output-affecting — governs every invalidation decision below; no
+score-specific or stage-specific reuse mechanism exists anywhere else in
+this design.
+
+- A client-partition change invalidates the split, every downstream
+  processed split, training, checkpoint, and score, and every artifact
+  after it.
+- A split-definition change invalidates preprocessing and every downstream
+  artifact.
+- A preprocessing change invalidates training and every downstream
+  artifact.
+- A detector change (`training_protocol`, architecture, optimizer,
+  checkpoint schedule) invalidates every downstream checkpoint and score.
+- A checkpoint-selection change invalidates scoring and every downstream
+  artifact.
+- A threshold-policy or quantile change invalidates the threshold output
+  and downstream evaluation, but never the calibration or test score set it
+  reads.
+- A metric addition never invalidates a threshold.
+- A statistical-procedure change never recomputes a score or a threshold
+  when a compatible `PolicyEvaluationResult` already exists.
+- A reporting-format, table, or figure change never invalidates evaluation
+  or any upstream scientific artifact.
+- A cosmetic logging change never affects scientific identity.
+- A runtime value (worker count, chunk size, prefetch depth) affects
+  scientific identity only when it is proven to change row ordering or
+  numerical output; otherwise it is execution-only and recorded in
+  provenance without entering the fingerprint.
 
 ## 6. Artifact identity and lineage
 
@@ -195,7 +262,7 @@ member.
 | `STATISTICAL_OUTPUT` | `STATISTICAL_ANALYZE` | paired delta, interval, claim outcome |
 | `ANCHOR_EQUIVALENCE_RESULT` | `ANCHOR_EQUIVALENCE` | passed/failed comparison against the reference interval |
 | `RESOURCE_COST_OUTPUT` | `RESOURCE_COST` | communication/storage cost, `MEASURED`/`ESTIMATED` |
-| `RESOLVED_CONFIGURATION` | `CONFIGURATION_RESOLUTION` | fingerprinted resolved definition and source-document identities |
+| `RESOLVED_CONFIGURATION` | composition (`config/compose.py`, pre-pipeline) | fingerprinted resolved definition and source-document identities |
 | `DRAFT_EXECUTION_PLAN` / `FINAL_EXECUTION_PLAN` | planner / preflight | ordered planned-stage tuple, dependency collection |
 | `RESULT_FREEZE` | `RESULT_FREEZE` | immutable evaluation/statistical/resource-cost input references and hashes |
 | `RENDERED_TABLE` / `RENDERED_FIGURE` / `WORDING_OUTPUT` | `REPORT` | format-specific rendered output |
@@ -228,8 +295,9 @@ its own configuration and returns `AnchorEquivalenceResult.Passed` or
 zero, or a reproduced interval wider than approximately 1.20× the reference
 width — never an invented numeric tolerance or an automatic pass. The
 planner consults this result before admitting any experiment whose
-`requires_passed` lists the anchor's slug; no stage, port, or artifact type
-exists solely for the anchor (`ANCHOR-01`, `ANCHOR-02`).
+`prerequisites` lists an `ExperimentPrerequisite` requiring the anchor's
+slug; no stage, port, or artifact type exists solely for the anchor
+(`ANCHOR-01`, `ANCHOR-02`).
 
 `centralized_pooled_reference` (B0) is executed by the same stage sequence
 under `training_protocol = CentralizedPooledTraining`; its `StageIdentity`
@@ -241,13 +309,17 @@ required, and the reverse never happens either, because the two
 `TrainingProtocol` variants produce structurally distinct `stage_fingerprint`
 inputs (`ANCHOR-04`).
 
-## 7.1 Experiment expansion and deduplication
+## 7.1 Experiment deduplication
 
-`ExperimentPlanner.create_plan` expands each `ExperimentTemplate` carrying a
-`SweepDefinition` into its ordered `ExperimentCell` tuple
-(`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §4`), derives every stage identity
-from each cell's fully resolved `ExperimentDefinition`, and deduplicates
-compatible stages before emitting a `DraftPlannedStage` sequence: a
+Sweep expansion into `tuple[ExperimentCell, ...]` is already complete by
+the time `ExperimentPlanner.create_plan` receives its input — it happens
+inside `config/compose.py`, before planning
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §§3, 17`); the planner never
+expands a template itself, because no domain-level `ExperimentTemplate`
+exists to expand (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §4`).
+`ExperimentPlanner.create_plan` derives every stage identity from each
+cell's fully resolved `ExperimentDefinition`, and deduplicates compatible
+stages before emitting a `DraftPlannedStage` sequence: a
 `natural_device_evaluation` cell at one seed shares one `StageIdentity` for
 training and one `ScoreIdentity` each for calibration and test scoring
 across every compatible confirmatory, supportive, mechanism, variant, and
@@ -258,7 +330,7 @@ and one threshold/evaluate/analyze stage sequence per genuinely distinct
 Ten confirmatory seeds retain one calibration and one test set per
 compatible seed identity; the same discipline applies to the anchor's five
 seeds. Planning is pure and deterministic: equal immutable inputs yield an
-equal draft, and a `CellIdentity` collision between two distinct resolved
+equal draft, and an `ExperimentCellIdentity` collision between two distinct resolved
 cells is a typed planning error, never a silent overwrite.
 
 ## 8. Atomic persistence and storage resolution
@@ -416,9 +488,9 @@ sequenceDiagram
     participant Store as ArtifactStore
 
     Cli->>Root: run_experiment(slug)
-    Root->>Cfg: resolve configuration -> ExperimentDefinition(s)
-    Root->>Plan: create_plan(definitions)
-    Plan->>Anchor: consult passed/failed result for requires_passed
+    Root->>Cfg: resolve_experiment_configuration -> tuple[ExperimentCell, ...]
+    Root->>Plan: create_plan(cells)
+    Plan->>Anchor: consult passed/failed result for the cell's prerequisites
     Anchor-->>Plan: pass / block
     Plan-->>Root: DraftExecutionPlan
     Root->>Pre: validate(draft, artifact catalogue, hardware, budget)
@@ -439,7 +511,7 @@ sequenceDiagram
 
 ```mermaid
 graph TD
-    CFG[configuration resolution] --> DS[source inspection]
+    CFG[configuration resolution — pre-pipeline, not a PipelineStage] --> DS[source inspection]
     DS --> FA[feasibility audit]
     FA --> PT[client partition]
     DS --> PT

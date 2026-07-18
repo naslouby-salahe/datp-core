@@ -111,6 +111,94 @@ concise source-coverage ledger showing where each major roadmap and prior-
 architecture concept landed in this package, and a full disposition table
 for every consolidated or removed concept.
 
+## Configuration directories
+
+```text
+configs/
+├── experiments/     # one document per swept or standalone ExperimentDefinition
+├── datasets/          # reusable DataDefinition documents
+├── detectors/           # reusable DetectorDefinition and EvaluationDefinition fragments
+├── runtime/               # named ExecutionDefinition profiles
+└── reporting/               # ReportingDefinition catalogues
+```
+
+`detectors/` is the only name used for this directory anywhere in this
+package; the prior `protocols/` name is retired
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §1`).
+
+## Canonical CLI
+
+One canonical CLI, `datp-core experiment <action>`, with exactly seven
+actions and no scientific override flag
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §21`):
+
+```bash
+datp-core experiment list
+datp-core experiment validate --config <experiment.yaml>
+datp-core experiment resolve --config <experiment.yaml>
+datp-core experiment plan --config <experiment.yaml>
+datp-core experiment run --config <experiment.yaml>
+datp-core experiment status --config <experiment.yaml>
+datp-core experiment report --config <experiment.yaml>
+```
+
+## Zero-input Make targets
+
+Every regularly executed experiment exposes a discoverable, zero-input
+Make target per meaningful action — no `EXPERIMENT=...`, `CONFIG=...`, or
+other parameter (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §23`):
+
+```bash
+make help              # lists every supported target and its exact experiment
+make experiments        # datp-core experiment list
+make anchor-run
+make confirmatory-run
+make cluster-mechanism-plan
+make external-validation-run
+make mandatory-run       # the fixed, explicitly listed mandatory sequence
+```
+
+## Experiment lifecycle
+
+```text
+CLI command or zero-input Make target
+  → experiment configuration selection
+    → root experiment YAML loading
+      → referenced YAML resolution
+        → Pydantic boundary validation
+          → enum and discriminated-union construction
+            → frozen domain dataclass construction
+              → cross-document scientific validation
+                → resolved-configuration snapshot creation
+                  → resolved-configuration fingerprinting and persistence
+                    → sweep expansion into resolved ExperimentCell objects
+                      → prerequisite and scientific-readiness checks
+                        → stage planning
+                          → artifact-reuse decisions
+                            → stage execution
+                              → evaluation
+                                → statistical analysis
+                                  → result freeze
+                                    → reporting
+```
+
+Configuration resolution — everything through fingerprinting and
+persistence — is pre-pipeline composition, performed once by
+`config/compose.py`; it is never an executable `PipelineStage`
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §3`,
+`PIPELINE_EXECUTION_AND_ARTIFACTS.md §2`).
+
+## Mandatory workflow
+
+`anchor_reproduction` must pass its `AnchorEquivalenceGate` before any
+other experiment runs; `confirmatory_threshold_scope_effect` carries this
+as a typed `ExperimentPrerequisite`, enforced by the planner, not merely by
+Make-target ordering (`SCIENTIFIC_FOUNDATION.md §2`,
+`PIPELINE_EXECUTION_AND_ARTIFACTS.md §7`). `make mandatory-run` sequences
+the anchor and the confirmatory experiment; every other registered
+experiment is independently discoverable through `make experiments` and its
+own Make-target family.
+
 ## Implementation status
 
 No file, class, dataclass, port, stage, or test named in this package is

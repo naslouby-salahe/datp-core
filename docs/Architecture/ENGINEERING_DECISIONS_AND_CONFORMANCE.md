@@ -59,8 +59,8 @@ identifier rather than repeat the text.
 
 | ID | Rule |
 |---|---|
-| `ARCH-01` | `ExperimentDefinition` has exactly four owned branches: `data`, `detector`, `evaluations`, `operations`. |
-| `ARCH-02` | Statistics are owned by `EvaluationDefinition`, never duplicated at the experiment level. |
+| `ARCH-01` | `ExperimentDefinition` has exactly eight owned branches: `data`, `detector`, `evaluations`, `analyses`, `seed_cohort`, `prerequisites`, `anchor_reference_interval`, `operations`. |
+| `ARCH-02` | Statistics are owned by `AnalysisDefinition`, never duplicated per `EvaluationDefinition` or across evaluations of the same comparison. |
 | `ARCH-03` | No backward-compatibility shim, alias layer, or migration facade toward the prior architecture or the original reference project exists. |
 | `ARCH-04` | No root `experiments/` package exists; experiment identity lives in `domain/experiments.py`, YAML in `configs/experiments/`, mapping in `config/mapping/`, expansion in `application/planning/`. |
 | `ARCH-05` | `analysis` imports only `domain`, or narrowly a stable framework-free application reporting contract; never a persistence adapter. |
@@ -91,6 +91,8 @@ identifier rather than repeat the text.
 | `CFG-08` | Experiment authorization is enforced by construction validators on closed unions and cross-field validators, never by a duplicate "authorized profile" object. |
 | `CFG-09` | The CLI accepts no scientific override flag; a scientific change requires an edited, reviewed configuration document. |
 | `CFG-10` | A value neither source document specifies is marked `unresolved` and blocks `SCIENTIFIC`/`PRINT_GRADE` scheduling; it is never given a plausible invented value. |
+| `CFG-11` | The CLI exposes exactly the seven `datp-core experiment <action>` verbs (`list`, `validate`, `resolve`, `plan`, `run`, `status`, `report`) and no other scientific-affecting verb or flag. |
+| `CFG-12` | A zero-input Make target selects exactly one CLI action and one registered experiment configuration, contains no user-supplied parameter, and fails if its referenced configuration does not exist; a generic parameterized target (`make run EXPERIMENT=...`) is never defined. |
 
 ### `PIPE-*` — stages and planning
 
@@ -100,7 +102,7 @@ identifier rather than repeat the text.
 | `PIPE-02` | Reuse is decided by comparing typed stage identities, never by filename or modification time. |
 | `PIPE-03` | The planner deduplicates every compatible stage across confirmatory, supportive, mechanism, variant, and comparator evaluations sharing a seed. |
 | `PIPE-04` | `RUNNING → REUSED` does not exist; reuse is always decided before computation. |
-| `PIPE-05` | A `CellIdentity` collision between two distinct resolved cells is a typed planning error. |
+| `PIPE-05` | An `ExperimentCellIdentity` collision between two distinct resolved cells is a typed planning error. |
 
 ### `EXEC-*` — runtime and lifecycle
 
@@ -168,8 +170,16 @@ Defined in `§8` below.
 - Per-stage identity dataclasses collapse to `StageIdentity` and
   `ScoreIdentity` (`TYPE-01`, `LOCKED`).
 - `ExperimentSpec`/`ExperimentProfileSpec`/`ScientificProtocolSpec`/`ClaimSpec`
-  collapse to `ExperimentDefinition` with four owned branches (`ARCH-01`,
+  collapse to `ExperimentDefinition` with eight owned branches (`ARCH-01`,
   `LOCKED`).
+- There is no domain-level `ExperimentTemplate`; a sweep dimension exists
+  only as a boundary-schema construct in `config`, expanded directly into
+  `tuple[ExperimentCell, ...]` by `config/compose.py`
+  (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §4`, `LOCKED`).
+- `OperationsDefinition` has two owned sub-fields, `execution` and
+  `reporting`; artifact namespace is a pure derivation
+  (`derive_artifact_namespace`) from `evidence_role`, never a third stored
+  sub-field (`ANCHOR-05`, `LOCKED`).
 - Bootstrap resample count and every numeric resource-budget ceiling are
   explicitly marked `unresolved` rather than defaulted (`CFG-10`,
   `BLOCKED`; §7).
@@ -179,13 +189,13 @@ Defined in `§8` below.
 | Prior concept | Disposition | Notes |
 |---|---|---|
 | `ExperimentSpec` | Merged | Into `ExperimentDefinition` |
-| `ExperimentProfileSpec` | Split | Into `ExperimentTemplate` (sweep-capable) and the resolved `ExperimentDefinition` |
-| `ScientificProtocolSpec` | Removed | Fields redistributed directly to `data`/`detector`/`evaluations` |
+| `ExperimentProfileSpec` | Split | Into a boundary-only sweep schema in `config` (never a `domain` type) and the resolved `ExperimentDefinition`; `config/compose.py` expands the former directly into `tuple[ExperimentCell, ...]` |
+| `ScientificProtocolSpec` | Removed | Fields redistributed directly to `data`/`detector`/`evaluations`/`analyses` |
 | `ClaimSpec` | Removed | `evidence_role`/`tier` moved to `ExperimentIdentity`; fallback wording moved to `EVALUATION_REPORTING_AND_PROVENANCE.md §§8.2, 12` |
 | `RegimeDataSpec` | Renamed | `DataDefinition` |
 | `DetectorBranchSpec` | Renamed | `DetectorDefinition`; the stored `DetectorBranchRole` field is removed and replaced by the pure `classify_detector` function |
-| `EvaluationArmSpec` | Renamed | `EvaluationDefinition`; owned directly by `ExperimentDefinition`, removing the prior arm/branch cross-reference check |
-| `ExecutionPolicy` / `ArtifactPolicy` / `ReportingPolicy` | Merged | Into `OperationsDefinition` with three named sub-fields |
+| `EvaluationArmSpec` | Split | `EvaluationDefinition` (threshold, suite, metrics) owned directly by `ExperimentDefinition`, plus `AnalysisDefinition` (comparison, statistics) as its own sibling branch — removing both the prior arm/branch cross-reference check and the prior per-evaluation statistics duplication (`ARCH-02`) |
+| `ExecutionPolicy` / `ArtifactPolicy` / `ReportingPolicy` | Merged | Into `OperationsDefinition` with two named sub-fields (`execution`, `reporting`); `ArtifactPolicy`'s sole live field, namespace, is a pure derivation from `evidence_role` (`derive_artifact_namespace`) rather than a third stored sub-field |
 | `ProtocolTrack` (`DATP_ANCHOR` / `COMPLETE`) | Removed | Replaced by `EvidenceRole.ANCHOR`; namespace is derived, not an independent scientific type |
 | ~20 per-stage identity dataclasses | Merged | Into `StageIdentity` and `ScoreIdentity` |
 | Per-role score artifact IDs (calibration/test/temporal) | Merged | Into `ArtifactRef` discriminated by `SplitRole` |
@@ -243,6 +253,19 @@ Defined in `§8` below.
   `domain/experiments.py`, `configs/experiments/`, and `application/planning/`.
 - **`ArtifactPathResolver` as an application-facing port** — rejected; path
   resolution is confined to `infrastructure/persistence`.
+- **A domain-level `ExperimentTemplate`** — rejected; a sweep exists only
+  as a boundary-schema construct in `config`, expanded directly into
+  `ExperimentCell` values by the composer.
+- **A stored `ArtifactDefinition.namespace` field** — rejected; namespace
+  is a pure derivation from `evidence_role` (`derive_artifact_namespace`),
+  removing the caller-supplied-inconsistency failure mode a stored,
+  independently settable field would reintroduce.
+- **A per-evaluation `statistical_procedure` field** — rejected; statistics
+  are owned once per comparison, by `AnalysisDefinition`, never repeated
+  under each compared threshold's `EvaluationDefinition`.
+- **A parameterized CLI scientific override or Make-target argument** —
+  rejected; every scientific change requires an edited, reviewed
+  configuration document (`CFG-09`, `CFG-11`, `CFG-12`).
 
 ## 6. Complete error taxonomy
 
@@ -298,7 +321,7 @@ non-citable.
 | External-device feature schema / input dimension | source inspection | materialization onward for `external_device_validation` | `BLOCKED` |
 | CICIoT2023 feature count (conference value d = 39) | inspected actual artifact | any quantitative `file_pseudo_client_applicability_boundary` claim | `BLOCKED` |
 | Genuine Edge-IIoTset timestamp semantics | source inspection | `chronological_recalibration_evaluation` | `BLOCKED` |
-| Matched-exceedance k-grid step for `FederatedSummaryStatisticThreshold` | authoritative protocol record | `federated_summary_threshold_comparison`, `fixed_parameter_comparator_sensitivity` | `BLOCKED` |
+| Matched-exceedance k-grid step for `FederatedSummaryStatisticThreshold` | authoritative protocol record | `federated_summary_comparator` (matched comparison and fixed-k sensitivity evaluations) | `BLOCKED` |
 | Canonical clustering `n_init`/`max_iter` constants | pre-registration | canonical `ClusterThreshold` in `SCIENTIFIC`/`PRINT_GRADE` runs | `BLOCKED` |
 | "Material movement toward zero" numeric tolerance for anchor equivalence | scientific/statistical authority | journal-expansion planning | `BLOCKED`; the approximately-20%-wider-than-reference rule is already locked (`SCIENTIFIC_FOUNDATION.md §2`) |
 
@@ -346,8 +369,8 @@ is never imported by production `src/datp_core` (`TEST-01`).
 - An incompatible artifact is recomputed or blocked, never reused.
 - The anchor executes through the same stage sequence as every experiment.
 - Adding a pipeline stage requires no change to the core executor.
-- A `CellIdentity` collision between two distinct resolved cells raises a
-  typed planning error rather than overwriting silently.
+- An `ExperimentCellIdentity` collision between two distinct resolved cells
+  raises a typed planning error rather than overwriting silently.
 - Expected statistical degeneracy is a persisted typed result, never a
   raised exception.
 
@@ -370,7 +393,7 @@ is never imported by production `src/datp_core` (`TEST-01`).
    `PIPELINE_EXECUTION_AND_ARTIFACTS.md §4.1`; the core executor,
    persistence engine, and lifecycle logic are unchanged.
 6. **New experiment** — a new `configs/experiments/` document referencing
-   existing dataset/protocol/runtime/reporting entries; no random code, no
+   existing dataset/detector/runtime/reporting entries; no random code, no
    new planner or executor branch.
 7. **New report** — a new `ReportDefinition` consuming a frozen result and
    its provenance; it never recomputes a scientific value.
@@ -433,3 +456,23 @@ explicit removal reason recorded in §4 or §5 above.
 - ☐ Every genuine blocker in §7 above is recorded, none silently resolved.
 - ☐ Exactly seven Markdown files exist in this package, none exceeding its
   approximate word target without cause.
+- ☐ `PipelineStage` has exactly eighteen executable members; configuration
+  resolution is a pre-pipeline composition operation, never one of them.
+- ☐ No domain-level `ExperimentTemplate` exists; every sweep is a boundary
+  schema construct expanded by `config/compose.py` into `ExperimentCell`
+  values before planning.
+- ☐ No `EvaluationDefinition` carries a `statistical_procedure` field;
+  every statistical procedure is owned by an `AnalysisDefinition`.
+- ☐ `configs/detectors/` is the only detector-configuration directory name
+  used anywhere in this package; no `configs/protocols/` reference remains.
+- ☐ The CLI exposes exactly the seven `datp-core experiment <action>`
+  verbs and accepts no scientific override flag.
+- ☐ Every regularly executed root experiment in
+  `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §23.1` has a discoverable
+  zero-input Make target for each of its meaningful actions; no
+  parameterized Make target exists.
+- ☐ No standalone experiment root exists for an item this package
+  classifies as an attached analysis (`SCIENTIFIC_FOUNDATION.md §7.4`); the
+  cluster and federated-summary families are each a single merged
+  experiment root.
+- ☐ Every `schema_version` example in this package is the integer `1`.

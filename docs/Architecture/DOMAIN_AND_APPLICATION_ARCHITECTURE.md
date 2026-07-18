@@ -50,12 +50,20 @@ graph TD
 ## 2. Compact aggregate hierarchy
 
 ```text
-ExperimentDefinition
-├── identity: ExperimentIdentity
-├── data: DataDefinition
-├── detector: DetectorDefinition
-├── evaluations: tuple[EvaluationDefinition, ...]
-└── operations: OperationsDefinition
+ExperimentCell
+├── identity: ExperimentCellIdentity
+└── definition: ExperimentDefinition
+    ├── identity: ExperimentIdentity
+    ├── data: DataDefinition
+    ├── detector: DetectorDefinition
+    ├── evaluations: tuple[EvaluationDefinition, ...]
+    ├── analyses: tuple[AnalysisDefinition, ...]
+    ├── seed_cohort: SeedCohortDefinition
+    ├── prerequisites: tuple[ExperimentPrerequisite, ...]
+    ├── anchor_reference_interval: AnchorReferenceInterval | None
+    └── operations: OperationsDefinition
+        ├── execution: ExecutionDefinition
+        └── reporting: ReportingDefinition
 ```
 
 ```python
@@ -75,7 +83,21 @@ class ExperimentDefinition:
     data: DataDefinition
     detector: DetectorDefinition
     evaluations: tuple[EvaluationDefinition, ...]
+    analyses: tuple[AnalysisDefinition, ...]
+    seed_cohort: SeedCohortDefinition
+    prerequisites: tuple[ExperimentPrerequisite, ...]
+    anchor_reference_interval: AnchorReferenceInterval | None
     operations: OperationsDefinition
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExperimentCellIdentity:
+    experiment_slug: ExperimentSlug
+    sweep_coordinate_hash: StageFingerprint   # derived from the resolved sweep value, never raw text
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExperimentCell:
+    identity: ExperimentCellIdentity
+    definition: ExperimentDefinition        # fully resolved; no sweep placeholder remains
 ```
 
 `evidence_role` and `execution_status` are kept as two distinct fields
@@ -86,21 +108,33 @@ classifies whether the study is required to run it at all (`MANDATORY`,
 `OPTIONAL`, `SUPPRESSED`, `REJECTED`, `FUTURE`). An earlier draft of this
 package collapsed the optional/supplementary items into a fifth
 `evidence_role` value and lost this distinction; it is restored here as its
-own field so that, for example, `federated_quantile_estimation_backbone`
-can be correctly represented as `evidence_role = MECHANISM,
-execution_status = OPTIONAL` rather than forcing one enum to carry two
-independent facts. `REJECTED` and `FUTURE` experiments never actually
-reach an `ExperimentDefinition` instance — they exist only as
-non-executable `RejectionRecord` values (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md
-§4`) — so `execution_status` is meaningful chiefly for `MANDATORY`,
-`OPTIONAL`, and `SUPPRESSED`.
+own field. `execution_status` is a field of `ExperimentIdentity` only —
+never of an individual `EvaluationDefinition` or `AnalysisDefinition` — so
+a rejected roadmap item such as `broad_personalized_fl_benchmark` is
+correctly represented as `evidence_role = EXPLORATORY (or its roadmap
+classification), execution_status = REJECTED` at the experiment level,
+rather than forcing one enum to carry two independent facts. An attached
+evaluation inside a `MANDATORY` experiment (for example the
+`federated_summary_comparator`'s fixed-k sensitivity axis, `§7.3` of
+`SCIENTIFIC_FOUNDATION.md`) is scientifically supplementary — "never
+primary" — without a second, evaluation-scoped `execution_status` value to
+express it, because that fact is about evidentiary weight, not about
+whether the study runs at all. `REJECTED` and `FUTURE` experiments never
+actually reach an `ExperimentDefinition` instance — they exist only as
+non-executable `RejectionRecord` values
+(`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §4`) — so `execution_status` is
+meaningful chiefly for `MANDATORY`, `OPTIONAL`, and `SUPPRESSED`.
 
 `EvaluationDefinition` is owned directly as a tuple field, not referenced by
 id from a separate arm collection: the confirmatory pair, for example, is
 one `ExperimentDefinition` with two `EvaluationDefinition` entries (shared,
 local), each sharing the same `detector`. This removes the cross-reference
 validation the prior design needed to keep an evaluation arm and its
-detector branch in agreement.
+detector branch in agreement. `ExperimentCell` is the sole root every
+pipeline stage, the planner, and the reuse gate consume; a non-sweeping
+experiment (for example `anchor_reproduction`) resolves to exactly one
+`ExperimentCell`, never a bare `ExperimentDefinition` floating outside a
+cell (`§4` below).
 
 ## 3. Ownership by branch
 
@@ -113,6 +147,7 @@ class DataDefinition:
     client_construction: ClientConstruction
     split_definition: SplitDefinition
     preprocessing: PreprocessingDefinition
+    calibration_window: CalibrationWindowSelection | None   # populated only by calibration_window_size_stability cells
 ```
 
 ```text
@@ -120,7 +155,11 @@ ClientConstruction
 ├── PhysicalDeviceClients        (device_count)
 ├── DatasetFilePseudoClients      (pseudo_client_count; boundary role only)
 ├── DirichletPartitionedClients    (client_count, alpha, partition_seed)
-└── ExternalDeviceOrGroupClients    (granularity: DEVICE | GROUP; feasibility_artifact_ref)
+└── ExternalDeviceOrGroupClients    (granularity: DEVICE | GROUP, fixed by human authorization;
+                                       feasibility_artifact_ref: ArtifactRef, provenance-only citation
+                                       of the prior audit that authorized granularity — never a value
+                                       this experiment's own resolution or run resolves live, `§5.1`
+                                       of `SCIENTIFIC_FOUNDATION.md`)
 ```
 
 `SplitDefinition` owns `TrainSplit`, `BenignCalibrationSplit`, `TestSplit`,
@@ -129,8 +168,20 @@ fraction locked at 0.70, genuine capture-time field, boundary identity). The
 calibration variant has no field capable of admitting an attack-labeled row
 — benign-only membership is a type-level property, not a runtime check
 (`SCI-04`). `PreprocessingDefinition` owns normalization strategy and scope
-(fit rows restricted to authorized `TrainSplit` rows) and its own chunk
-profile; it is the sole owner of preprocessing chunk sizing.
+(fit rows restricted to authorized `TrainSplit` rows) and references a
+`PreprocessingChunkDefinition` (`§12`); it is the sole owner of
+preprocessing chunk sizing.
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CalibrationWindowSelection:
+    requested_sample_count: CalibrationSampleCount
+    selection_strategy: CalibrationWindowSelectionStrategy   # RANDOM_SUBSAMPLE | NESTED_SUBSAMPLE
+    selection_seed: Seed
+    nested: bool                          # whether smaller windows are subsets of larger ones
+    selected_row_manifest: ArtifactRef    # identity of the exact selected-row manifest
+    source_population_provenance: ArtifactRef   # the calibration population this window was drawn from
+```
 
 **`Regime` is retained as a type, derived and non-authoritative.** An
 earlier draft of this package eliminated `Regime` entirely, per this
@@ -181,9 +232,37 @@ additive change confined to this one function, never a change to
 class DetectorDefinition:
     training_protocol: TrainingProtocol
     autoencoder: AutoencoderArchitecture
+    optimizer: OptimizerDefinition
     checkpoint_schedule: CheckpointSchedule
     checkpoint_selection: CheckpointSelectionPolicy
+    training_batch: TrainingBatchDefinition
     score_generation: ScoreGenerationDefinition
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class OptimizerDefinition:
+    optimizer_type: OptimizerType
+    learning_rate: float
+    scheduler: SchedulerDefinition | None
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SchedulerDefinition:
+    scheduler_type: LrSchedulerType
+    # scheduler-specific fields, e.g. step_size / decay_factor, owned only by the matching type
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TrainingBatchDefinition:
+    micro_batch_size: BatchSize
+    gradient_accumulation_steps: GradientAccumulationSteps
+
+def effective_batch_size(batch: TrainingBatchDefinition) -> int:
+    """Pure, total derivation — never an authored YAML field (§11 of
+    CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md)."""
+    return batch.micro_batch_size * batch.gradient_accumulation_steps
+
+def rounds_max(schedule: CheckpointSchedule) -> RoundNumber:
+    """Pure, total derivation from the checkpoint schedule's own rounds —
+    never an independently authored YAML field."""
+    return max(schedule.rounds)
 ```
 
 ```text
@@ -217,33 +296,90 @@ round) — a single frozen decision, not an enum, because — unlike
 rule; if one is ever introduced, `CheckpointSelectionPolicy` becomes a
 discriminated union at that point, not before.
 `ScoreGenerationDefinition` owns calibration, test, and temporal batch
-sizing exclusively; it is never duplicated in `TrainingProtocol` or
-`PreprocessingDefinition`.
+sizing exclusively through its own `ScoringBatchDefinition` (`batch_size`,
+never duplicated in `TrainingBatchDefinition` or `PreprocessingDefinition`).
+`PreprocessingDefinition.chunk_profile` is a `PreprocessingChunkDefinition`
+(`chunk_row_count`), the sole owner of preprocessing chunk sizing (`§1` of
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §6`).
 
-### 3.3 `EvaluationDefinition`
+### 3.3 `EvaluationDefinition` and `AnalysisDefinition`
+
+`EvaluationDefinition` owns exactly threshold construction, the evaluation
+suite, requested metrics, and its own identity; it never owns a statistical
+procedure. `AnalysisDefinition` owns comparison and statistics: which
+evaluations are being compared, the comparison direction, the primary
+metric, and the full statistical procedure. This split exists because the
+same pair of evaluations is legitimately compared by more than one analysis
+(a confirmatory BCa comparison and, attached to the same experiment, a
+descriptive Wilcoxon/Cliff's-delta pass), and because a single shared
+`StatisticalProcedureDefinition` must never be re-declared once per
+threshold evaluation — a repetition the prior draft of this package
+introduced and this split removes.
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class EvaluationDefinition:
+    label: EvaluationLabel               # e.g. "shared_mean", "local", "cluster_k3"; referenced by AnalysisDefinition
     threshold: ThresholdConstruction
     evaluation_suite: EvaluationSuiteDefinition
-    statistical_procedure: StatisticalProcedureDefinition
+    requested_metrics: tuple[MetricId, ...]
 ```
 
-Statistics are owned per evaluation, not once per experiment, because two
-evaluations of the same detector (a confirmatory pair versus a descriptive
-sweep point) legitimately need different statistical treatment. The eight
-`ThresholdConstruction` variants are defined completely in
+The eight `ThresholdConstruction` variants are defined completely in
 `SCIENTIFIC_FOUNDATION.md §6`; `CentralizedPooledThreshold` is not a member
 of this union and is reachable only from a `CentralizedPooledTraining`
 detector's own evaluation. `EvaluationSuiteDefinition` is a closed union of
 `StandardEvaluationSuite` and `AlertBurdenEvaluationSuite`; the latter
 requires a validated `TrafficRateEvidence` value, so alert burden cannot be
 requested with missing or bare rate data (`EVAL-06`).
-`StatisticalProcedureDefinition` fixes method, confidence level, resample
-count, and paired-seed count; for `evidence_role ∈ {ANCHOR, CONFIRMATORY}`
-it is locked to `BCA_BOOTSTRAP`, confidence `0.95`, and the role-appropriate
-seed count (five for the anchor, ten for the confirmatory experiment).
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class StatisticalProcedureDefinition:
+    method: StatisticalMethod
+    confidence_level: ConfidenceLevel
+    resample_count: BootstrapResampleCount
+    include_wilcoxon: bool          # descriptive secondary evidence only
+    include_cliffs_delta: bool      # descriptive secondary evidence only
+
+AnalysisDefinition = (
+    PairedThresholdAnalysis
+    | AbsorptionAnalysis
+    | TemporalRecoveryAnalysis
+    | AnchorEquivalenceAnalysis
+)
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PairedThresholdAnalysis:
+    first_evaluation: EvaluationLabel
+    second_evaluation: EvaluationLabel
+    primary_metric: MetricId
+    delta_orientation: DeltaOrientation      # explicit and unambiguous for the confirmatory pair
+    statistical_procedure: StatisticalProcedureDefinition
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AbsorptionAnalysis:
+    core_analysis: PairedThresholdAnalysis          # unpersonalized shared-vs-local delta
+    personalized_analysis: PairedThresholdAnalysis   # personalized shared-vs-local delta
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TemporalRecoveryAnalysis:
+    frozen_evaluation: EvaluationLabel
+    recalibrated_evaluation: EvaluationLabel
+    statistical_procedure: StatisticalProcedureDefinition
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AnchorEquivalenceAnalysis:
+    confirmatory_analysis_label: str        # references the PairedThresholdAnalysis producing the CV_FPR delta
+    reference_interval: AnchorReferenceInterval
+```
+
+For `evidence_role ∈ {ANCHOR, CONFIRMATORY}`, the owning
+`PairedThresholdAnalysis.statistical_procedure` is locked to
+`BCA_BOOTSTRAP`, confidence `0.95`, and the role-appropriate paired-seed
+count (five for the anchor, ten for the confirmatory experiment, drawn from
+`ExperimentDefinition.seed_cohort`, `§4` below) — never re-specified per
+threshold evaluation (`ARCH-02`).
 
 ### 3.4 `OperationsDefinition`
 
@@ -251,16 +387,25 @@ seed count (five for the anchor, ten for the confirmatory experiment).
 @dataclass(frozen=True, slots=True, kw_only=True)
 class OperationsDefinition:
     execution: ExecutionDefinition
-    artifacts: ArtifactDefinition
     reporting: ReportingDefinition
+
+def derive_artifact_namespace(identity: ExperimentIdentity) -> ArtifactNamespace:
+    """Pure, total function from an experiment's identity to its artifact
+    namespace (ANCHOR writes to the anchor namespace; every other role
+    writes to the complete-study namespace). Never a stored field a caller
+    could set inconsistently with evidence_role (ANCHOR-05)."""
+    ...
 ```
 
-Three named, non-overlapping sub-fields replace three separately top-level
-policy objects without merging their ownership. `ArtifactDefinition.namespace`
-is derived from `ExperimentIdentity.evidence_role` (`ANCHOR` writes to the
-anchor namespace; every other role writes to the complete-study namespace),
-never supplied as an independent field a caller could set inconsistently
-with the evidence role (`ANCHOR-05`).
+Two named, non-overlapping sub-fields replace three separately top-level
+policy objects. A third, `ArtifactDefinition`, existed in an earlier draft
+solely to carry a `namespace` field that was already fully determined by
+`ExperimentIdentity.evidence_role`; storing it invited the same
+caller-supplied-inconsistency failure mode `§11` catalogues for
+`DetectorBranchSpec.role`, so it is removed in favor of the pure
+`derive_artifact_namespace` function, called wherever a namespace is
+needed (planning, persistence, reporting) and never persisted as its own
+domain field.
 
 ### 3.5 No duplicate ownership
 
@@ -271,41 +416,41 @@ typed reference (`ArtifactRef`, `StageIdentity`, `ScoreIdentity`) instead.
 
 ## 4. Lifecycle concepts
 
+There is no domain-level `ExperimentTemplate`. A sweep dimension (seed,
+quantile, alpha, lambda, calibration size, K) is declared only as a
+boundary-schema construct — a Pydantic sweep placeholder living in
+`config/schemas/experiment.py`, never a `domain` dataclass
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §17`). `config/compose.py`
+expands every declared sweep directly into an ordered tuple of fully
+resolved `ExperimentCell` values (`§2` above) as part of the same
+composition pass that produces the frozen `ExperimentDefinition`; no
+intermediate sweep-capable domain object is ever constructed, held, or
+passed to `application`. A non-sweeping experiment (for example
+`anchor_reproduction`, whose only varying dimension is the five fixed seeds
+already enumerated in its `seed_cohort`) resolves to a single-element
+`tuple[ExperimentCell]` through the identical composer path — there is no
+separate non-sweeping resolution branch. `resolve_experiment_configuration`
+(`§7.1`) therefore always returns `tuple[ExperimentCell, ...]`, never a
+union with an unresolved template type.
+
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ExperimentTemplate:
-    """A reusable, sweep-capable authorized structure, resolved from
-    configs/experiments/. Present only when a genuine sweep dimension
-    (seed, quantile, alpha, lambda, calibration size, K) exists."""
-    identity: ExperimentIdentity
-    body: ExperimentDefinition            # with sweep placeholders on swept fields
-    sweep: SweepDefinition | None
+class SeedCohortDefinition:
+    paired_seed_count: int
+    derivation: SeedDerivationRule     # e.g. DETERMINISTIC_FROM_EXPERIMENT_SEED
+    experiment_seed: Seed
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class SweepDefinition:
-    axis: SweepAxis                        # SEED | QUANTILE | ALPHA | LAMBDA | CALIBRATION_SIZE | CLUSTER_COUNT
-    values: tuple[SweepValue, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CellIdentity:
-    experiment_slug: ExperimentSlug
-    sweep_coordinate_hash: StageFingerprint   # derived from the resolved sweep value, never raw text
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ExperimentCell:
-    cell_identity: CellIdentity
-    definition: ExperimentDefinition        # fully resolved; no sweep placeholder remains
+class ExperimentPrerequisite:
+    requires: ExperimentSlug
+    required_outcome: PrerequisiteOutcome   # e.g. ANCHOR_EQUIVALENCE_PASSED
 ```
 
-A non-sweeping experiment (for example `anchor_reproduction`, whose only
-varying dimension is the five fixed seeds already enumerated in its
-definition) has no `ExperimentTemplate` layer at all — it is a single
-`ExperimentDefinition` resolved directly from its configuration document.
-`ExperimentTemplate` exists only where the roadmap genuinely authorizes a
-grid (`threshold_quantile_sensitivity`'s q values,
-`controlled_heterogeneity_response`'s alpha values,
-`local_global_threshold_shrinkage`'s lambda values,
-`calibration_window_size_stability`'s n values). `ExecutionPlan` and
+`ExperimentPrerequisite` replaces a free-text `requires_passed` string list
+with a typed reference the planner resolves against the concrete gate
+result it names (`ANCHOR-02`, `CFG-08`); `confirmatory_threshold_scope_effect`
+carries exactly one: `ExperimentPrerequisite(requires=anchor_reproduction,
+required_outcome=ANCHOR_EQUIVALENCE_PASSED)`. `ExecutionPlan` and
 `ExperimentResult` are covered in `PIPELINE_EXECUTION_AND_ARTIFACTS.md §§2–3`.
 
 ## 5. Dataclass, request, and result admission rules
@@ -343,18 +488,24 @@ catalogued.
 | `ExperimentIdentity` | domain | as part of `ExperimentDefinition` | yes (`evidence_role`, `tier`) | planner, reporting |
 | `DataDefinition` | domain | yes | yes | planner, stages, reuse gate |
 | `DetectorDefinition` | domain | yes | yes | planner, stages, reuse gate |
-| `EvaluationDefinition` | domain | yes | yes (threshold/statistics only) | evaluator, statistics runner |
+| `EvaluationDefinition` | domain | yes | yes (threshold only) | evaluator |
+| `AnalysisDefinition` | domain | yes | yes (statistical procedure) | statistics runner, anchor gate |
+| `SeedCohortDefinition` | domain | yes | yes | planner, statistics runner |
+| `ExperimentPrerequisite` | domain | as part of `ExperimentDefinition` | no (references another identity) | planner, anchor gate |
 | `OperationsDefinition` | domain | yes (execution subset recorded) | conditional (§7 batch rule) | preflight, persistence, reporting |
 | `ExperimentDefinition` | domain | yes | yes | planner, every stage |
-| `ExperimentTemplate` | domain | yes (pre-resolution) | no (resolves to definitions) | planner |
-| `SweepDefinition` | domain | as part of template | no | planner |
-| `CellIdentity` / `ExperimentCell` | domain | yes | yes | planner, reuse gate, reporting |
+| `ExperimentCellIdentity` / `ExperimentCell` | domain | yes | yes | planner, reuse gate, reporting |
+
+There is no domain-level `ExperimentTemplate` or `SweepDefinition`; sweep
+placeholders exist only in the `config` boundary schema and never reach
+`domain` (`§4` above).
 
 ### 6.2 Value objects
 
 | Value object | Wraps | Validation | Distinct from |
 |---|---|---|---|
 | `ExperimentSlug` | str | lowercase snake_case, non-empty | `ArtifactScopeKey` |
+| `EvaluationLabel` | str | lowercase snake_case, unique within one `ExperimentDefinition.evaluations` | `ExperimentSlug` |
 | `ThresholdPercentile`, `FprTarget`, `ConfidenceLevel`, `CoverageRatio`, `Probability` | canonical `Decimal` | fixed twelve-fractional-digit round-half-even representation; range check; rejects `NaN`/infinity | mutually distinct; never interchanged |
 | `ShrinkageWeight` | float | `0 ≤ λ ≤ 1` | — |
 | `Seed` | int | `≥ 0` | — |
@@ -379,7 +530,10 @@ Complete list, each exhaustively matched with `typing.assert_never`:
 `ClientConstruction` (§3.1, 4 members), `TrainingProtocol` (§3.2, 3
 members), `ThresholdConstruction` (`SCIENTIFIC_FOUNDATION.md §6`, 8 shared
 members plus `CentralizedPooledThreshold` outside the union),
-`EvaluationSuiteDefinition` (2 members), `TrafficRateEvidence` (`Measured`,
+`EvaluationSuiteDefinition` (2 members), `AnalysisDefinition` (`§3.3`, 4
+members: `PairedThresholdAnalysis`, `AbsorptionAnalysis`,
+`TemporalRecoveryAnalysis`, `AnchorEquivalenceAnalysis`),
+`TrafficRateEvidence` (`Measured`,
 `Cited`), `ClaimOutcome` (`STRONG_POSITIVE`, `WEAK_POSITIVE`, `MIXED`,
 `NULL`, `OPPOSITE`, `FEASIBILITY_REJECTION`, `SUPPRESSED`), `CvOutcome`
 (`ValidCvResult`, `UndefinedCvResult`), `BootstrapIntervalOutcome`
@@ -401,6 +555,7 @@ members plus `CentralizedPooledThreshold` outside the union),
 | `ResolvedConfigurationSnapshot` | canonical byte-stable rendering of every field contributing to a resolved definition, its fingerprint, and its source-document identities |
 | `PreSpecificationRecord` | subject (absorption bands, temporal outcome bands), roadmap-lock revision, lock timestamp |
 | `ResultFreezeManifest` | immutable evaluation/statistical/resource-cost input references and hashes approved for rendering |
+| `ScientificReadinessResult` | `{is_ready: bool, execution_mode: ExecutionMode, blockers: tuple[ReadinessBlocker, ...]}`; computed before planning for every `SCIENTIFIC`/`PRINT_GRADE` cell, naming every `unresolved` field it found (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §19`, `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`) |
 
 ### 6.5 Evaluation and statistical result types (domain)
 
@@ -448,7 +603,7 @@ prepare-or-fit-transform contract exists.
 
 | Use case | Input | Output |
 |---|---|---|
-| `resolve_experiment_configuration` | `ResolveConfigurationRequest` | `ExperimentDefinition` or `ExperimentTemplate` |
+| `resolve_experiment_configuration` | `ResolveConfigurationRequest` | `tuple[ExperimentCell, ...]` (sweep expansion already applied; a single element for a non-sweeping experiment) |
 | `create_execution_plan` | `CreatePlanRequest` | `DraftExecutionPlan` |
 | `run_preflight` | `PreflightRequest` | `FinalExecutionPlan` |
 | `run_experiment` | plan reference | `ExecutionSummary` |
@@ -583,7 +738,7 @@ pattern applied throughout:
 ```python
 def resolve_experiment_configuration(
     request: ResolveConfigurationRequest,
-) -> ExperimentDefinition | ExperimentTemplate: ...
+) -> tuple[ExperimentCell, ...]: ...
 
 class ExperimentPlanner:
     def create_plan(self, request: CreatePlanRequest) -> DraftExecutionPlan: ...
@@ -619,22 +774,40 @@ generic mapping.
 
 ```mermaid
 classDiagram
+    class ExperimentCell {
+      +ExperimentCellIdentity identity
+      +ExperimentDefinition definition
+    }
     class ExperimentDefinition {
       +ExperimentIdentity identity
       +DataDefinition data
       +DetectorDefinition detector
       +EvaluationDefinition[] evaluations
+      +AnalysisDefinition[] analyses
+      +SeedCohortDefinition seed_cohort
+      +ExperimentPrerequisite[] prerequisites
+      +AnchorReferenceInterval anchor_reference_interval
       +OperationsDefinition operations
     }
     class DataDefinition
     class DetectorDefinition
     class EvaluationDefinition
-    class OperationsDefinition
+    class AnalysisDefinition
+    class SeedCohortDefinition
+    class ExperimentPrerequisite
+    class OperationsDefinition {
+      +ExecutionDefinition execution
+      +ReportingDefinition reporting
+    }
     class ExperimentIdentity
+    ExperimentCell *-- ExperimentDefinition
     ExperimentDefinition *-- ExperimentIdentity
     ExperimentDefinition *-- DataDefinition
     ExperimentDefinition *-- DetectorDefinition
     ExperimentDefinition *-- EvaluationDefinition
+    ExperimentDefinition *-- AnalysisDefinition
+    ExperimentDefinition *-- SeedCohortDefinition
+    ExperimentDefinition *-- ExperimentPrerequisite
     ExperimentDefinition *-- OperationsDefinition
 ```
 
@@ -700,9 +873,13 @@ All fifteen kept: `ExecutionMode`, `DevicePolicy`, `RunStatus`, `SeedRole`,
 `PipelineStage` kept with several members renamed for precision
 (`PARTITION → CLIENT_PARTITION`, `SPLIT_BUILD → SPLIT_DEFINITION`,
 `TRAIN → DETECTOR_TRAIN`, `THRESHOLD → THRESHOLD_CONSTRUCT`,
-`ANALYZE → STATISTICAL_ANALYZE`) and two members added
-(`CONFIGURATION_RESOLUTION`, `ANCHOR_EQUIVALENCE`;
-`PIPELINE_EXECUTION_AND_ARTIFACTS.md §2`). `ReuseDecisionKind` kept as the
+`ANALYZE → STATISTICAL_ANALYZE`) and one member added (`ANCHOR_EQUIVALENCE`;
+`PIPELINE_EXECUTION_AND_ARTIFACTS.md §2`). Configuration resolution is a
+pre-pipeline composition operation (`§4` above) and was never a correct
+`PipelineStage` member; an earlier draft of this package listed it as one,
+producing a nineteen-row stage table while the surrounding text still
+claimed eighteen stages — that contradiction is resolved by removing the
+row, not by renaming the text. `ReuseDecisionKind` kept as the
 tag of the `ReuseDecision` union (`Reuse`, `Recompute`, `Blocked`).
 
 ### 14.4 Storage and persistence vocabulary (was §6.4)
@@ -769,6 +946,7 @@ this package (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §§10, 14`):
 | `FederatedRoundResult` | one round's full-participation evidence: expected/completed/failed rosters, disposition |
 | `HardwareInventory` | CUDA availability, GPU identity/count/VRAM, driver/runtime versions, CPU count, RAM — provenance, never a scientific value |
 | `ParallelismSpec` | per-stage concurrency, start method, thread limits, GPU assignment |
+| `ExecutionConcurrencyDefinition` | the `runtime/` document's own owned concurrency fields — training concurrency, scoring concurrency, worker count — resolved once into `ParallelismSpec` by preflight; never duplicated in `DetectorDefinition` or `DataDefinition` |
 | `SeedPlan` | experiment seed plus every derived per-role seed (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §7.1`) |
 | `ResourcePressurePolicy` / `ResourcePressureSnapshot` | cooperative pause/throttle thresholds and observations |
 | `ResolvedRuntimePlan` | the frozen runtime: device, budget, parallelism, seed plan, resolved batch profile |

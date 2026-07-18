@@ -186,7 +186,9 @@ Locked, applied to the chronological recalibration evaluation:
 
 ## 7. Communication and storage cost
 
-`communication_storage_cost_analysis` (E-Q6) produces `ResourceCostResult`
+The optional `RESOURCE_COST` stage (formerly the standalone
+`communication_storage_cost_analysis`/E-Q6, now attached to any requesting
+experiment, `SCIENTIFIC_FOUNDATION.md §7.4`) produces `ResourceCostResult`
 values across the eight `ResourceMetric` members
 (`COMMUNICATION_BYTES_PER_ROUND`, `TOTAL_COMMUNICATION_BYTES`,
 `CLIENT_TO_SERVER_BYTES`, `SERVER_TO_CLIENT_BYTES`,
@@ -213,27 +215,37 @@ disclosed `ESTIMATED` label) or the metric is omitted for that construction
 
 ## 8. Statistical procedure architecture
 
-`StatisticalProcedureDefinition` fixes method, confidence level, resample
-count, and paired-seed count; every choice is pre-specified in
-configuration, never selected after observing results (`STAT-01`). Required
+`StatisticalProcedureDefinition` — owned by `AnalysisDefinition`, never by
+`EvaluationDefinition` (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §3.3`) —
+fixes method, confidence level, and resample count; every choice is
+pre-specified in configuration, never selected after observing results
+(`STAT-01`). Paired-seed count is owned once, by the experiment's
+`SeedCohortDefinition`, and read by every `AnalysisDefinition` comparing
+that experiment's evaluations — never re-declared per analysis. Required
 procedures: BCa bootstrap (primary for the confirmatory and anchor
 endpoints), Wilcoxon signed-rank and Cliff's delta (descriptive secondary
-evidence only), Spearman correlation and linear regression (mechanism
-association analyses), percentile bootstrap (never substituted for BCa
-without an explicit, separately named procedure).
+evidence only, requested via `StatisticalProcedureDefinition.include_wilcoxon`/
+`include_cliffs_delta` on the same `PairedThresholdAnalysis` rather than a
+second, standalone analysis), Spearman correlation and linear regression
+(mechanism association analyses), percentile bootstrap (never substituted
+for BCa without an explicit, separately named procedure).
 
 ### 8.1 Confirmatory isolation
 
-The confirmatory (and anchor) statistical contract rejects: a dataset
-setting other than `natural_device_evaluation`; a threshold pair other than
+The confirmatory (and anchor) statistical contract — enforced on
+`confirmatory_threshold_scope_effect`'s (and `anchor_reproduction`'s) single
+`PairedThresholdAnalysis` — rejects: a dataset setting other than
+`natural_device_evaluation`; a threshold pair other than
 `{SharedThreshold(MEAN), LocalThreshold}`; any extra threshold construction
-on the same evaluation; an unpaired or wrong-count seed cohort; a primary
-metric other than `CV_FPR`; a reversed delta orientation; a confidence level
-other than `0.95`; an unauthorized checkpoint lineage; a different eligible-
-client set between the two compared policies; or, for the confirmatory
-experiment specifically, a missing passed anchor result. Secondary
-statistics (Wilcoxon, Cliff's delta) never silently become confirmatory
-decision inputs (`STAT-02`, `SCI-14`).
+on the same pair of evaluations; an unpaired or wrong-count `seed_cohort`;
+a primary metric other than `CV_FPR`; a reversed delta orientation; a
+confidence level other than `0.95`; an unauthorized checkpoint lineage; a
+different eligible-client set between the two compared policies; or, for
+the confirmatory experiment specifically, a missing passed anchor result
+(enforced by its typed `ExperimentPrerequisite`,
+`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §4`). Secondary statistics
+(Wilcoxon, Cliff's delta) never silently become confirmatory decision
+inputs (`STAT-02`, `SCI-14`).
 
 ### 8.2 Claim outcomes
 
@@ -298,17 +310,25 @@ explicitly.
 | `DISPERSION_LADDER` | `shared_threshold_construction_sensitivity`, `file_pseudo_client_applicability_boundary` |
 | `SENSITIVITY_GRID` / `HEATMAP` | `threshold_quantile_sensitivity` |
 | `SEVERITY_TREND` | `controlled_heterogeneity_response` |
-| `CLUSTER_STABILITY` / `CONTINGENCY` | `cluster_family_threshold_granularity_and_stability`, `cluster_fingerprint_feature_ablation` |
-| `CDF_OVERLAY` | `client_score_distribution_mechanism_analysis` |
-| `SCATTER` | `heterogeneity_threshold_benefit_association`, `threshold_shift_detection_tradeoff` |
+| `CLUSTER_STABILITY` / `CONTINGENCY` | `cluster_mechanism` (granularity comparison, adjusted-Rand stability, fingerprint ablation, and robust-median sensitivity, all as evaluations/analyses of this one experiment) |
+| `CDF_OVERLAY` | `confirmatory_threshold_scope_effect` (attached client score-distribution overlay analysis, formerly E-M3) |
+| `SCATTER` | `confirmatory_threshold_scope_effect` (attached threshold-shift-detection tradeoff analysis, formerly E-M5), `controlled_heterogeneity_response` (attached heterogeneity–threshold-benefit association, formerly E-M4) |
 | `SENSITIVITY_GRID` | `calibration_window_size_stability` |
 | `LAMBDA_CURVE` | `local_global_threshold_shrinkage` |
-| `COMPARATOR` | `federated_summary_threshold_comparison`, `fixed_parameter_comparator_sensitivity` |
+| `COMPARATOR` | `federated_summary_comparator` (matched benign-summary comparison, quantile-estimation backbone analysis, and optional fixed-k sensitivity, all as evaluations of this one merged experiment) |
 | `STRESS_TEST` | `fedprox_aggregation_stress_test`, `model_personalization_absorption_test` |
 | `RECOVERY_CURVE` | `chronological_recalibration_evaluation` |
-| `ALERT_BURDEN` | `operational_alert_burden_analysis` |
-| `COMMUNICATION_STORAGE_COST` | `communication_storage_cost_analysis` |
+| `ALERT_BURDEN` | `external_device_dataset_validation` (attached alert-burden evaluation, formerly `operational_alert_burden_analysis`/E-O1, requiring validated `TrafficRateEvidence`) |
+| `COMMUNICATION_STORAGE_COST` | any experiment requesting the optional `RESOURCE_COST` stage (chiefly `confirmatory_threshold_scope_effect`, `anchor_reproduction`; formerly the standalone `communication_storage_cost_analysis`/E-Q6) |
 | `BOUNDARY_NULL` | `file_pseudo_client_applicability_boundary`, any experiment whose claim outcome is `NULL` or `FEASIBILITY_REJECTION` |
+
+The optional equity suite (Jain index, Gini coefficient; formerly the
+standalone `operating_point_equity_suite`/E-Q3) and the descriptive
+secondary confidence-interval/effect-size analysis (formerly the standalone
+`secondary_confidence_intervals_and_effect_sizes`/E-Q4) both attach to
+`confirmatory_threshold_scope_effect` and reuse its `CONFIRMATORY_INTERVAL`
+table family with additional optional columns, rather than introducing a
+new `TableType` for either (`SCIENTIFIC_FOUNDATION.md §7.4`).
 
 Every experiment in `SCIENTIFIC_FOUNDATION.md §7` maps to at least one
 table or figure family above; a new experiment either reuses an existing

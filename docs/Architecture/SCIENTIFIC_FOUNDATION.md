@@ -81,10 +81,14 @@ role may (`SCI-14`).
 separate field, `execution_status` (`MANDATORY`, `OPTIONAL`, `SUPPRESSED`,
 `REJECTED`, `FUTURE`; `DOMAIN_AND_APPLICATION_ARCHITECTURE.md §2`), answers
 a different question — is the study required to run this at all — and is
-never collapsed into `evidence_role`. For example,
-`federated_quantile_estimation_backbone` is `evidence_role = MECHANISM,
-execution_status = OPTIONAL`: it is scientifically a mechanism analysis,
-and it is optional to execute; neither fact substitutes for the other. A
+never collapsed into `evidence_role`. `execution_status` is a field of
+`ExperimentIdentity` only — it is never carried by an individual
+`EvaluationDefinition` or `AnalysisDefinition` inside an experiment, so an
+attached evaluation such as the `federated_summary_comparator`'s
+fixed-k sensitivity axis (`§7.3`) is scientifically a distinct, supplementary
+evaluation while sharing its owning experiment's single
+`execution_status = MANDATORY` — "supplementary, never primary" is a fact
+about evidentiary weight, not a second `execution_status` value. A
 third vocabulary — `LOCKED`, `DESIGNED_NOT_IMPLEMENTED`, `BLOCKED`,
 `DEFERRED`, `OUT_OF_SCOPE`, `REJECTED`, `SUPPRESSED`
 (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §1`) — is a third, still
@@ -123,6 +127,39 @@ the roadmap names is represented below, executable or not:
 A rejected setting is a non-executable `RejectionRecord`
 (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §5`), never a planner branch, a
 threshold-construction union member, or a configuration variant.
+
+### 5.1 Feasibility audit ordering (no circular dependency)
+
+`external_device_validation`'s `ExternalDeviceOrGroupClients.granularity` is
+never chosen dynamically inside a scientific run, and a resolved scientific
+`DataDefinition` never refers to a feasibility artifact its own run has not
+yet produced. The required sequence is:
+
+```text
+source inspection (edge_iiotset_source_inspection, non-scientific)
+  → feasibility audit (edge_iiotset_feasibility_audit, non-scientific)
+    → persisted FEASIBILITY_RESULT (device-vs-group decision, target
+      K ∈ {6, 15}, n_k ≥ 100 for ≥ 90% of clients)
+      → explicit human-authorized ExternalDeviceOrGroupClients document
+        (granularity fixed to DEVICE or GROUP, never `unresolved`, never a
+        runtime choice)
+        → scientific external_device_validation configuration resolution
+          (references the audit's FEASIBILITY_RESULT by `ArtifactRef` as
+          provenance only)
+          → scientific external_device_validation execution
+```
+
+The feasibility audit is its own prior, non-scientific run — `evidence_role`
+does not apply to it and it carries no `tier`; it exists only to produce a
+persisted `FEASIBILITY_RESULT`. `FEASIBILITY_AUDIT` never appears in the
+planned stage sequence of a scientific `external_device_validation`
+experiment, because that experiment's `ClientConstruction` already carries a
+fixed, human-authored `granularity` by the time its configuration is
+resolved; `CLIENT_PARTITION` for that experiment cites the audit's
+`FEASIBILITY_RESULT` as upstream provenance, never as a value it resolves
+live. The scientific experiment never dynamically selects between device
+clients, group clients, or a fallback pseudo-client construction
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §9.1`).
 
 ## 6. Threshold and comparator nomenclature
 
@@ -176,14 +213,10 @@ All `MANDATORY` unless noted.
 | Semantic slug | Roadmap ref | Role; tier | Dataset setting | Threshold construction(s) |
 |---|---|---|---|---|
 | `shared_threshold_construction_sensitivity` | E-S1 | `SUPPORTIVE`; `TIER_2` | `natural_device_evaluation` | `SharedThreshold(MEAN\|POOLED\|WEIGHTED)`, `LocalThreshold` |
-| `threshold_quantile_sensitivity` | E-S2 | `SUPPORTIVE`; `TIER_2` | `natural_device_evaluation` (+ external) | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`; q ∈ {.90, .95, .975, .99} |
-| `controlled_heterogeneity_response` | E-S3 | `SUPPORTIVE`; `TIER_2` | `controlled_heterogeneity_evaluation` | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold` across α |
-| `cluster_family_threshold_granularity_and_stability` | E-M1 | `MECHANISM`; `TIER_5` (+`TIER_7` exploratory at K ≠ 3) | `natural_device_evaluation` (+ external where feasible) | `SharedThreshold`, `LocalThreshold`, `FamilyThreshold`, `ClusterThreshold`; granularity comparison and adjusted-Rand stability as two evaluation definitions of one experiment |
-| `cluster_fingerprint_feature_ablation` | E-M2 | `MECHANISM`; `TIER_5`/`TIER_7` | `natural_device_evaluation` | `ClusterThreshold` over fingerprint feature subsets, plus the all-four fingerprint |
-| `client_score_distribution_mechanism_analysis` | E-M3 | `MECHANISM`; `TIER_5` | `natural_device_evaluation` | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`; per-client benign/attack score-distribution overlays, every client |
-| `heterogeneity_threshold_benefit_association` | E-M4 | `MECHANISM`; `TIER_5` | `natural_device_evaluation` / `controlled_heterogeneity_evaluation` (+ external) | none (distributional divergence regressed against gain) |
-| `threshold_shift_detection_tradeoff` | E-M5 | `MECHANISM`; `TIER_5` | `natural_device_evaluation` | `SharedThreshold` → `LocalThreshold` shift, every client |
-| `calibration_window_size_stability` | E-V1 | `BOUNDARY`; `TIER_6` (RQ3) | `natural_device_evaluation`, subsampled calibration n ∈ {50, 100, 250, 500, 1000, 5000} | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, `CalibrationSizeAwareFallbackThreshold` |
+| `threshold_quantile_sensitivity` | E-S2 | `SUPPORTIVE`; `TIER_2` | `natural_device_evaluation` (sole owner of this sweep; `external_device_dataset_validation` owns the external-dataset quantile axis, `§15`) | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`; q ∈ {.90, .95, .975, .99} |
+| `controlled_heterogeneity_response` | E-S3 | `SUPPORTIVE`; `TIER_2` | `controlled_heterogeneity_evaluation` | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold` across α; carries the heterogeneity–threshold-benefit association (formerly E-M4) as an attached `AnalysisDefinition` regressing distributional divergence against gain, reusing this experiment's own evaluated results — no separate source inspection, partitioning, training, scoring, or threshold construction |
+| `cluster_mechanism` | E-M1 / E-M2 / E-Q2 | `MECHANISM`; `TIER_5` (+`TIER_7` exploratory for non-canonical K and `ROBUST_MEDIAN`) | `natural_device_evaluation` (+ external where feasible) | One merged experiment with four typed axes: threshold grouping (`FamilyThreshold` vs `ClusterThreshold`), fingerprint feature set (single-feature through all-four-feature subsets), cluster aggregation (`MEAN` vs `ROBUST_MEDIAN`), and authorized cluster count (canonical `K = 3`, mandatory; other K, exploratory only). Granularity comparison, adjusted-Rand stability, fingerprint ablation, and robust-median sensitivity are four `EvaluationDefinition`/`AnalysisDefinition` entries of this one experiment, never four experiment roots |
+| `calibration_window_size_stability` | E-V1 | `BOUNDARY`; `TIER_6` (RQ3) | `natural_device_evaluation`, subsampled calibration n ∈ {50, 100, 250, 500, 1000, 5000} | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, `CalibrationSizeAwareFallbackThreshold`; each sweep point is a `CalibrationWindowSelection` (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §12`) |
 | `local_global_threshold_shrinkage` | E-V2 | `SUPPORTIVE`; RQ3 | `natural_device_evaluation` | `LocalGlobalShrinkageThreshold`, λ ∈ {0, .25, .5, .75, 1} |
 | `conformal_local_threshold_coverage` | E-V3 | `SUPPORTIVE`, Tier-1 tautology defense; non-confirmatory | `natural_device_evaluation` (+ external) | `ConformalLocalThreshold`, α = 0.05 |
 
@@ -193,28 +226,35 @@ All `MANDATORY`.
 
 | Semantic slug | Roadmap ref | Role; tier | Dataset setting | Threshold construction(s) |
 |---|---|---|---|---|
-| `external_device_dataset_validation` | E-X1 | `EXTERNAL_VALIDATION`; `TIER_3` | `external_device_validation` | `SharedThreshold`, `LocalThreshold`, `FamilyThreshold`, `ClusterThreshold`, `FederatedSummaryStatisticThreshold`, quantile sensitivity |
+| `external_device_dataset_validation` | E-X1 | `EXTERNAL_VALIDATION`; `TIER_3` | `external_device_validation` | `SharedThreshold`, `LocalThreshold`, `FamilyThreshold`, `ClusterThreshold`, `FederatedSummaryStatisticThreshold`; sole owner of the external-dataset quantile-sensitivity sweep (`§15`); carries the operational alert-burden analysis (formerly E-O1) as an attached `EvaluationDefinition` using `AlertBurdenEvaluationSuite` off its own committed threshold/scores when validated `TrafficRateEvidence` is available |
 | `fedprox_aggregation_stress_test` | E-T1 | `STRESS_TEST`; `TIER_4` | `natural_device_evaluation` + `external_device_validation` | core ladder, under `FederatedProxTraining`, µ ∈ {0.001, 0.01, 0.1} |
 | `model_personalization_absorption_test` | E-T2 | `STRESS_TEST`; `TIER_4` | `natural_device_evaluation` + `external_device_validation` | `SharedThreshold`, `LocalThreshold`, under the authorized personalization comparator |
-| `federated_summary_threshold_comparison` | E-T3 | `STRESS_TEST` (comparator); `TIER_4` | `natural_device_evaluation` + `external_device_validation` | `LocalThreshold` vs `FederatedSummaryStatisticThreshold`, between-ratio diagnostic |
+| `federated_summary_comparator` | E-T3 / E-Q1 / E-Q5 | `STRESS_TEST` (comparator); `TIER_4` | `natural_device_evaluation` + `external_device_validation` | One merged experiment: matched benign-summary `LocalThreshold` vs `FederatedSummaryStatisticThreshold` comparison (mandatory primary, former E-T3), a quantile-estimation-error analysis framed as distributed quantile estimation (mandatory backbone, former E-Q1), and fixed-k `FederatedSummaryStatisticThreshold` sensitivity at k ∈ {2.0, 2.5, 3.0} (optional supplementary evaluation, never primary, former E-Q5) |
 | `chronological_recalibration_evaluation` | E-B1 | `BOUNDARY`; `TIER_6` | `chronological_recalibration_evaluation` | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, frozen vs one-shot recalibration |
-| `operational_alert_burden_analysis` | E-O1 | `SUPPORTIVE`; `TIER_5` (RQ1 support) | `natural_device_evaluation` / `external_device_validation` | `SharedThreshold`, `LocalThreshold`; requires validated traffic-rate evidence |
 
-### 7.4 Optional (`execution_status = OPTIONAL` for every row below)
+### 7.4 Attached, non-root analyses
 
-| Semantic slug | Roadmap ref | Role; tier | Purpose |
+Six roadmap items are analyses, not standalone experiments: they consume an
+existing owning experiment's committed evaluations without repeating source
+inspection, partitioning, training, scoring, or threshold construction, and
+never gain their own `configs/experiments/` document.
+
+| Roadmap ref | Former slug | Owning experiment | Attached as |
 |---|---|---|---|
-| `federated_quantile_estimation_backbone` | E-Q1 | `MECHANISM`; `TIER_7` | Exact centralized oracle vs local vs pooled/weighted quantile estimation error and FPR-target attainment |
-| `robust_cluster_median_sensitivity` | E-Q2 | `EXPLORATORY`; `TIER_7` | `ClusterThreshold(ROBUST_MEDIAN)` outlier robustness |
-| `operating_point_equity_suite` | E-Q3 | `EXPLORATORY` | Jain index, Gini coefficient alongside `CV(FPR)`, never replacing it |
-| `secondary_confidence_intervals_and_effect_sizes` | E-Q4 | `EXPLORATORY` | Bootstrap CIs, full Wilcoxon signed-rank, Cliff's delta, descriptive only |
-| `fixed_parameter_comparator_sensitivity` | E-Q5 | `EXPLORATORY` | Fixed-k `FederatedSummaryStatisticThreshold` sensitivity, never primary |
-| `communication_storage_cost_analysis` | E-Q6 | `SUPPORTIVE` | Byte-level communication/storage estimates for `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`; estimated values always labeled `ESTIMATED`, never rendered as measured |
+| E-M3 | `client_score_distribution_mechanism_analysis` | `confirmatory_threshold_scope_effect` | per-client benign/attack score-distribution overlay `AnalysisDefinition`, reusing its committed `SCORE_SET` artifacts |
+| E-M5 | `threshold_shift_detection_tradeoff` | `confirmatory_threshold_scope_effect` | shared-to-local per-client shift `AnalysisDefinition`, reusing its two evaluations |
+| E-Q3 | `operating_point_equity_suite` | `confirmatory_threshold_scope_effect` | optional `FleetEquityResult` evaluation (Jain index, Gini coefficient), never replacing `CV_FPR` |
+| E-Q4 | `secondary_confidence_intervals_and_effect_sizes` | `confirmatory_threshold_scope_effect` | descriptive-only `include_wilcoxon`/`include_cliffs_delta` flags on its `PairedThresholdAnalysis.statistical_procedure` (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §3.3`), never a second bootstrap definition |
+| E-Q6 | `communication_storage_cost_analysis` | any experiment requesting it (chiefly `confirmatory_threshold_scope_effect`, `anchor_reproduction`) | the optional `RESOURCE_COST` stage (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §2`), consuming manifests and artifact metadata only; `MEASURED`/`ESTIMATED` values, never conflated |
+| E-M4 | `heterogeneity_threshold_benefit_association` | `controlled_heterogeneity_response` | see `§7.2` |
 
-Every row above carries a genuine `EvidenceRole` (`MECHANISM`,
-`EXPLORATORY`, or `SUPPORTIVE`, matching the roadmap's own classification
-of each item) and, separately, `execution_status = OPTIONAL` — the two
-fields are never merged into one invented role.
+E-M1, E-M2, and E-Q2 are not attached analyses; they merge into the single
+`cluster_mechanism` experiment root (`§7.2`) because their fingerprint,
+grouping, and aggregation axes are typed variations of the same mechanism
+question, not analyses of another experiment's fixed output. E-T3, E-Q1,
+and E-Q5 similarly merge into `federated_summary_comparator` (`§7.3`) rather
+than attaching to another root, because the comparator is their shared
+subject.
 
 ### 7.5 Non-ladder reference and boundary
 
