@@ -40,9 +40,10 @@ experiments:
           method: bca_bootstrap
           confidence_level: 0.95
           resample_count: 10000
+        statistical_profile: { pairing_key: seed, resampling_unit: per_seed_paired_delta, analysis_seed_derivation: deterministic_from_experiment_seed_and_analysis_label, missing_pair_behavior: exclude_and_report_reduced_seed_count, zero_difference_behavior: retain_as_zero_delta_included_in_resample, finite_value_validation: reject_non_finite_delta_as_typed_error }
         secondary_procedures:
           - { method: wilcoxon_signed_rank }
-          - { method: cliffs_delta }
+          - { method: matched_pairs_rank_biserial_correlation }
       - label: client_score_distribution_mechanism
         kind: distribution_mechanism_analysis
         source_evaluations: [shared_mean, local]
@@ -145,6 +146,7 @@ experiments:
           method: bca_bootstrap
           confidence_level: 0.95
           resample_count: 10000
+        statistical_profile: { pairing_key: seed, resampling_unit: per_seed_paired_delta, analysis_seed_derivation: deterministic_from_experiment_seed_and_analysis_label, missing_pair_behavior: exclude_and_report_reduced_seed_count, zero_difference_behavior: retain_as_zero_delta_included_in_resample, finite_value_validation: reject_non_finite_delta_as_typed_error }
         secondary_procedures: []
     seed_cohort:
       paired_seed_count: 10

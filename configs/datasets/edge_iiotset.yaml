@@ -96,7 +96,7 @@ field_schema:
     resolved_attack_subnets: [0]
     resolved_attack_fraction: 0.9995
     attack_rows_in_sensor_subnets_1_8: 0
-    decision_ref: edge_attack_distribution_audit
+    decision_ref: client_granularity_feasibility
     limits: attack_sensitive_per_client_metrics_only
   endpoint_identity:
     resolution: direction_normalized_internal_endpoint
@@ -174,100 +174,118 @@ field_schema:
   categorical_encoding:
     strategy: one_hot
     columns: [http.request.method, http.referer, http.request.version, dns.qry.name.len, mqtt.conack.flags, mqtt.protoname, mqtt.topic]
-    per_column_measured_width: { http.request.method: 9, http.referer: 6, http.request.version: 14, dns.qry.name.len: 17, mqtt.conack.flags: 14, mqtt.protoname: 4, mqtt.topic: 12 }
-    encoded_feature_count: 76
     retained_numeric_feature_count: 39
-    total_model_feature_count: 115
-    vocabulary_scope: full_corpus_benign_and_attack
+    vocabulary_scope: benign_training_rows_only
+    vocabulary_fit_split: benign_train
+    vocabulary_artifact: frozen_at_materialization_fit_time
+    vocabulary_fingerprint: derived_from_fitted_benign_train_categories
     category_order: ascending_string
     encoded_feature_naming: "{column}={category_value}"
-    missing_category_policy: absent_value_maps_to_all_zero_indicator
-    unknown_category_policy: unseen_value_maps_to_all_zero_indicator
+    missing_category_policy: absent_value_maps_to_missing_indicator
+    unknown_category_policy: unseen_value_maps_to_unknown_indicator
+    unknown_indicator_distinct_from_missing_indicator: true
+    unknown_reporting: { unknown_counts_by_split: reported_at_fit_time, unknown_fractions_by_client: reported_at_fit_time }
     feature_order: [retained_numeric_features, one_hot_encoded_columns]
-    category_values:
-      http.request.method:
-      - '0'
-      - '0.0'
-      - GET
-      - OPTIONS
-      - POST
-      - PROPFIND
-      - PUT
-      - SEARCH
-      - TRACE
-      http.referer:
-      - '() { _; } >_[$($())] { echo 93e4r0-CVE-2014-6278: true; echo;echo; }'
-      - '0'
-      - '0.0'
-      - '1.0'
-      - 127.0.0.1
-      - TESTING_PURPOSES_ONLY
-      http.request.version:
-      - -a HTTP/1.1
-      - -al&ABSOLUTE_PATH_STUDIP=http://cirt.net/rfiinc.txt?? HTTP/1.1
-      - -al&_PHPLIB[libdir]=http://cirt.net/rfiinc.txt?? HTTP/1.1
-      - /etc/passwd|?data=Download HTTP/1.1
-      - '0'
-      - '0.0'
-      - '0x0000511a'
-      - '> HTTP/1.1'
-      - By Dr HTTP/1.1
-      - HTTP/1.0
-      - HTTP/1.1
-      - Src=javascript:alert('Vulnerable')><Img Src=\" HTTP/1.1
-      - name=a><input name=i value=XSS>&lt;script>alert('Vulnerable')</script> HTTP/1.1
-      - script>alert(1)/script><\" HTTP/1.1
-      dns.qry.name.len:
-      - '0'
-      - '0.0'
-      - 0.debian.pool.ntp.org
-      - '1.0'
-      - 1.debian.pool.ntp.org
-      - '11.0'
-      - '17.0'
-      - 2.debian.pool.ntp.org
-      - '21.0'
-      - '245'
-      - 3.debian.pool.ntp.org
-      - _233637DE._sub._googlecast._tcp.local
-      - _googlecast._tcp.local
-      - _ipp._tcp.local
-      - _ipps._tcp.local
-      - null-null.local
-      - raspberrypi.local
-      mqtt.conack.flags:
-      - '0'
-      - '0.0'
-      - '0x00000000'
-      - '12'
-      - '1461073'
-      - '1461074'
-      - '1461383'
-      - '1461384'
-      - '1461589'
-      - '1461591'
-      - '1471198'
-      - '1471199'
-      - '1574358'
-      - '1574359'
-      mqtt.protoname:
-      - '0'
-      - '0.0'
-      - '3'
-      - MQTT
-      mqtt.topic:
-      - '0'
-      - '0.0'
-      - '14'
-      - Distance
-      - Flame_Sensor
-      - Heart_Rate
-      - IR_Receiver
-      - Soil_Moisture
-      - Sound_Sensor
-      - Temperature_and_Humidity
-      - Water_Level
-      - phValue
+    full_corpus_audit_reference:
+      note: >-
+        The counts and category lists below were measured over the full corpus
+        (benign and attack rows) during source inspection. They are audit
+        observations only and are never fitted as the executable vocabulary.
+        The executable vocabulary is fitted from benign_train rows only (static)
+        or historical benign-training rows only (temporal, `vocabulary_fit_split:
+        historical_benign_train`) by the `categorical_vocabulary_benign_fit_audit`
+        check below at materialization time; encoded_feature_count and
+        total_model_feature_count are re-derived then and may be narrower than
+        the full-corpus reference values, since attack-only category values
+        (e.g. injection-payload strings in http.referer/http.request.version)
+        are excluded from a benign-only fit.
+      encoded_feature_count: 76
+      total_model_feature_count: 115
+      per_column_measured_width: { http.request.method: 9, http.referer: 6, http.request.version: 14, dns.qry.name.len: 17, mqtt.conack.flags: 14, mqtt.protoname: 4, mqtt.topic: 12 }
+      observed_source_categories:
+        http.request.method:
+        - '0'
+        - '0.0'
+        - GET
+        - OPTIONS
+        - POST
+        - PROPFIND
+        - PUT
+        - SEARCH
+        - TRACE
+        http.referer:
+        - '() { _; } >_[$($())] { echo 93e4r0-CVE-2014-6278: true; echo;echo; }'
+        - '0'
+        - '0.0'
+        - '1.0'
+        - 127.0.0.1
+        - TESTING_PURPOSES_ONLY
+        http.request.version:
+        - -a HTTP/1.1
+        - -al&ABSOLUTE_PATH_STUDIP=http://cirt.net/rfiinc.txt?? HTTP/1.1
+        - -al&_PHPLIB[libdir]=http://cirt.net/rfiinc.txt?? HTTP/1.1
+        - /etc/passwd|?data=Download HTTP/1.1
+        - '0'
+        - '0.0'
+        - '0x0000511a'
+        - '> HTTP/1.1'
+        - By Dr HTTP/1.1
+        - HTTP/1.0
+        - HTTP/1.1
+        - Src=javascript:alert('Vulnerable')><Img Src=\" HTTP/1.1
+        - name=a><input name=i value=XSS>&lt;script>alert('Vulnerable')</script> HTTP/1.1
+        - script>alert(1)/script><\" HTTP/1.1
+        dns.qry.name.len:
+        - '0'
+        - '0.0'
+        - 0.debian.pool.ntp.org
+        - '1.0'
+        - 1.debian.pool.ntp.org
+        - '11.0'
+        - '17.0'
+        - 2.debian.pool.ntp.org
+        - '21.0'
+        - '245'
+        - 3.debian.pool.ntp.org
+        - _233637DE._sub._googlecast._tcp.local
+        - _googlecast._tcp.local
+        - _ipp._tcp.local
+        - _ipps._tcp.local
+        - null-null.local
+        - raspberrypi.local
+        mqtt.conack.flags:
+        - '0'
+        - '0.0'
+        - '0x00000000'
+        - '12'
+        - '1461073'
+        - '1461074'
+        - '1461383'
+        - '1461384'
+        - '1461589'
+        - '1461591'
+        - '1471198'
+        - '1471199'
+        - '1574358'
+        - '1574359'
+        mqtt.protoname:
+        - '0'
+        - '0.0'
+        - '3'
+        - MQTT
+        mqtt.topic:
+        - '0'
+        - '0.0'
+        - '14'
+        - Distance
+        - Flame_Sensor
+        - Heart_Rate
+        - IR_Receiver
+        - Soil_Moisture
+        - Sound_Sensor
+        - Temperature_and_Humidity
+        - Water_Level
+        - phValue
   leakage_exclusions:
     columns: [frame.time, ip.src_host, ip.dst_host, arp.src.proto_ipv4, arp.dst.proto_ipv4, http.file_data, http.request.full_uri, icmp.transmit_timestamp, http.request.uri.query, tcp.options, tcp.payload, tcp.srcport, tcp.dstport, udp.port, mqtt.msg]
     role_basis: leakage_or_high_cardinality_or_client_identity_or_timestamp
@@ -364,12 +382,30 @@ audits:
       temporal_group_count: 9
       excluded_groups: [Modbus]
     operations: { execution: dataset_audit, report: { table_type: feasibility_report, output_formats: [markdown] } }
+  - check: categorical_vocabulary_benign_fit_audit
+    inspection:
+      expected_facts: [per_column_benign_train_category_counts, unknown_counts_by_split, unknown_fractions_by_client]
+      fit_split: { static: benign_train, temporal: historical_benign_train }
+    feasibility:
+      rule: benign_only_vocabulary_fit_verified
+      required_evidence: [vocabulary_fit_split_identity, vocabulary_artifact, vocabulary_fingerprint]
+    outcome:
+      vocabulary_scope_verified: benign_training_rows_only
+      encoded_feature_count: pending_benign_train_only_fit
+      total_model_feature_count: pending_benign_train_only_fit
+      note: >-
+        Re-derives per_column_measured_width, encoded_feature_count, and
+        total_model_feature_count from a benign-training-only fit at
+        materialization time; supersedes the full_corpus_audit_reference
+        values in field_schema.categorical_encoding for execution.
+    operations: { execution: dataset_audit, report: { table_type: feasibility_report, output_formats: [markdown] } }
 eligibility:
   minimum_calibration_sample_count: 100
 materializations:
   group_benign:
     materialization_id: edge_iiotset_group_benign
     normalization: { strategy: min_max, scope: global_train }
+    vocabulary_fit_split: benign_train
     preprocessing_sequence: [drop_row_with_null_in_retained_column, drop_exact_duplicate_rows, one_hot_encode_categoricals, min_max_normalization_fit_on_train]
     row_exclusion:
       null_in_retained_column: drop_row
@@ -382,19 +418,41 @@ materializations:
   group_chronological:
     materialization_id: edge_iiotset_group_chronological
     normalization: { strategy: min_max, scope: historical_train }
+    vocabulary_fit_split: historical_benign_train
     preprocessing_sequence: [drop_row_with_null_in_retained_column, drop_exact_duplicate_rows, resolve_within_client_time_order, chronological_split, one_hot_encode_categoricals, min_max_normalization_fit_on_historical_train]
     row_exclusion:
       null_in_retained_column: drop_row
       duplicate_rows: drop_exact_duplicates_keep_first
+      unresolved_row_policy: excluded_from_client_assignment
+      duplicate_timestamp_policy: preserve_original_row_order_stable_sort
     split:
       method: within_client_chronological
       calibration_benign_only: true
+      role_order: [historical_train, historical_calibration, future_recalibration, future_evaluation]
       historical_train_fraction: 0.55
       historical_calibration_fraction: 0.15
-      future_test_fraction: 0.30
+      future_recalibration_fraction: 0.10
+      future_evaluation_fraction: 0.20
       ordering_field: frame.time
       ordering_scope: per_client
       rollover_policy: add_twenty_four_hours_on_time_decrease
+      minimum_row_counts: { historical_train: 100, historical_calibration: 100, future_recalibration: 50, future_evaluation: 100 }
+      missing_client_policy: exclude_client_report_reduced_k
+      chronology_unverifiable_policy: typed_infeasibility_outcome
+    static_reference:
+      note: matched static reference uses the same nine temporal groups (Modbus excluded) via the group_benign materialization, split random_fractional
+      groups: [Distance, Flame_Sensor, Heart_Rate, IR_Receiver, Soil_Moisture, Sound_Sensor, Temperature_and_Humidity, Water_Level, phValue]
+      materialization_ref: group_benign
+    recovery_analysis:
+      fields: [static_reference_cv, frozen_future_cv, recalibrated_future_cv, drift_excess, recovered_amount, recovery_ratio]
+      drift_excess_formula: frozen_future_cv - static_reference_cv
+      recovered_amount_formula: frozen_future_cv - recalibrated_future_cv
+      recovery_ratio_formula: recovered_amount / drift_excess
+      recovery_ratio_precondition: drift_excess_meaningfully_positive
+      negative_recovery_policy: report_as_is_no_floor_clamp
+      outcome_thresholds: { outcome_a_recovery_ratio_min: 0.50, outcome_b_recovery_ratio_max: 0.50, outcome_c_condition: no_meaningful_positive_drift_excess }
+      seed_analysis: paired_seed_ci_over_locked_seed_cohort
+      confidence_interval_procedure: bca_bootstrap_95
 setups:
   external_group:
     materialization: group_benign

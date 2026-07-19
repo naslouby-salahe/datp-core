@@ -5,6 +5,7 @@ experiments:
     display_name: Anchor Reproduction
     evidence_role: anchor
     run_requirement: mandatory
+    roadmap_reference: null   # deliberate: the anchor is not a numbered roadmap E-* experiment (roadmap section 2/17)
     regimes:
       - id: regime_a
         run_requirement: mandatory
@@ -34,10 +35,37 @@ experiments:
           method: bca_bootstrap
           confidence_level: 0.95
           resample_count: 10000
+        statistical_profile: { pairing_key: seed, resampling_unit: per_seed_paired_delta, analysis_seed_derivation: deterministic_from_experiment_seed_and_analysis_label, missing_pair_behavior: exclude_and_report_reduced_seed_count, zero_difference_behavior: retain_as_zero_delta_included_in_resample, finite_value_validation: reject_non_finite_delta_as_typed_error }
         secondary_procedures: []
       - label: anchor_equivalence
         kind: anchor_equivalence_analysis
         source_analysis: anchor_scope_effect
+        comparison_mode:
+          selected: statistical_fallback
+          selection_rule: strict_artifact_comparison_requires_historical_per_seed_artifacts_which_do_not_exist
+          strict_artifact_comparison:
+            applicability: inapplicable_no_historical_per_seed_artifacts_available
+            would_require: [matching_seeds, matching_split_semantics, matching_checkpoint_semantics, matching_policy_semantics, matching_metric_semantics, matching_artifact_provenance]
+          statistical_fallback:
+            requirements: [positive_reproduced_delta, reproduced_estimate_within_historical_interval, overlapping_confidence_intervals, no_material_movement_toward_zero, reproduced_interval_width_at_most_1.20x_historical_width, verified_configuration_and_provenance]
+        expected_seed_cohort: { training_seeds: [0, 1, 2, 3, 4], analysis_seeds: [300, 301, 302, 303, 304], paired_seed_count: 5 }
+        observed_seed_cohort: { source: seed_cohort, paired_seed_count: 5 }
+        historical_reference:
+          metric: cv_fpr_delta
+          historical_b1_cv_fpr: 1.017
+          historical_b2_cv_fpr: 0.299
+          historical_delta: 0.718
+          confidence_level: 0.95
+          lower_bound: 0.647
+          upper_bound: 0.769
+        checks:
+          direction_check: reproduced_delta_positive
+          point_estimate_check: reproduced_point_estimate_within_historical_interval
+          interval_check: reproduced_ci_overlaps_historical_ci
+          interval_width_check: reproduced_width_le_1.20_times_historical_width_0.122
+          floating_point_tolerance: { absolute: 1.0e-9, relative: 1.0e-6 }
+        failure_reasons: [material_movement_toward_zero, interval_too_wide, configuration_or_provenance_mismatch]
+        downstream_blocking_behavior: blocks_every_experiment_except_source_inspection_and_feasibility_audits_until_passed
         reference_interval:
           metric: cv_fpr_delta
           confidence_level: 0.95

@@ -94,11 +94,11 @@ never derived from `evidence_role`.
 | `SCI-06` | AUROC is a detection-quality control, never a thresholding verdict. |
 | `SCI-07` | Stress-test comparators (heterogeneity-aware aggregation, one model-personalization comparator, a benign-only federated summary threshold) remain outside the causal ladder and never share its experimental control. |
 | `SCI-08` | "Fairness" means operational, service-level FPR equity across client devices, stated once, enforced everywhere. |
-| `SCI-09` | Dynamic thresholding, poisoning, formal privacy, deployment/hardware profiling, streaming drift, Byzantine-robust federated conformal prediction, and fleet-scale (K > 100) validation have no type, enum member, or port anywhere in this design. |
+| `SCI-09` | Dynamic thresholding, poisoning, formal privacy, deployment/hardware profiling, streaming drift, backdoor attacks, evasion attacks, Byzantine-robust federated conformal prediction, and fleet-scale (K > 100) validation have no type, enum member, or port anywhere in this design. |
 | `SCI-10` | The eligible-client population is derived once per paired comparison from shared calibration lineage and reused unchanged by every compared policy. |
 | `SCI-11` | Checkpoint selection uses only natural-device-split evidence; no attack label, held-out AUROC, external-dataset result, stress-test result, or downstream threshold outcome may influence it. |
 | `SCI-12` | No test-set-driven or result-driven scientific setting selection occurs anywhere; every scientific value is pre-specified before result freeze. |
-| `SCI-13` | Null, mixed, and opposite results are reportable and pre-committed to fallback wording; a less-favorable extended result never suppresses a more-favorable preliminary one. |
+| `SCI-13` | Null, mixed, and opposite results are reportable and pre-committed to fallback wording; a more-favorable preliminary result never suppresses a less-favorable extended result (the extended, larger-seed result is always reported even when it is the less favorable of the two). |
 
 ## 4. Research questions and evidence roles
 
@@ -126,7 +126,7 @@ entries to `CatalogueDisposition`
 (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §4`). Publication tier numbers
 (Tier 1–9) survive only as `tier` traceability metadata on
 `ExperimentIdentity`; only `CONFIRMATORY` may carry `TIER_1`, and no other
-role may (`SCI-14`).
+role may (`SCI-14`, defined with `SCI-15`–`SCI-19` in `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §2`).
 
 `EvidenceRole` is not the only classification an experiment carries.
 `RunRequirement` (`MANDATORY`, `OPTIONAL`, `SUPPRESSED`) answers the
@@ -171,7 +171,7 @@ the roadmap names is represented below, executable or not:
 | `device_mac_repartition` | CICIoT2023, a device/MAC-scoped client construction | B-b | `REJECTED` — the available CSV artifact lacks MAC, device, IP, capture-source, and timestamp columns; no pseudo-client substitute and no PCAP-reprocessing branch exist |
 | `chronological_probe_ciciot2023` | CICIoT2023, a genuine-timestamp temporal protocol | — | `REJECTED` — no timestamp column and no file/row/merge/directory pseudo-time substitute |
 | `external_sensor_group_validation` | Edge-IIoTset, `ExternalSensorGroupClients` (benign sensor-type group granularity K = 10 recoverable, confirmed directly from endpoints, eligible-benign coverage 1.0; naive per-`ip.src_host` device granularity rejected by the `client_granularity_feasibility` audit) | D | `EXECUTABLE` for benign operating-point equity (`validation_scope: benign_operating_point_equity`): benign calibration, threshold construction, benign-test FPR, and cross-client FPR dispersion. Per-client attack-sensitive metrics are `unavailable` (`per_client_attack_detection_metrics`, `attack_traffic_confined_to_subnet_zero`) because all attack traffic resolves to subnet 0 (`§5.1`) |
-| `chronological_recalibration_evaluation` | `external_sensor_group_validation` composition, chronological 70/30 split, frozen-versus-one-shot recalibration | D-temporal | `EXECUTABLE` for benign temporal operating-point equity (`validation_scope: benign_temporal_operating_point_equity`) using the defensible within-client time-of-day ordering; per-client temporal attack-detection metrics are `unavailable` (same `attack_traffic_confined_to_subnet_zero` limitation) (`§5.1`) |
+| `chronological_recalibration_evaluation` | `external_sensor_group_validation` composition (nine groups, Modbus excluded), chronological 55/15/10/20 split (`historical_train`/`historical_calibration`/`future_recalibration`/`future_evaluation`), frozen-versus-one-shot recalibration against a matched static reference over the same nine groups | D-temporal | `EXECUTABLE` for benign temporal operating-point equity (`validation_scope: benign_temporal_operating_point_equity`) using the defensible within-client time-of-day ordering; per-client temporal attack-detection metrics are `unavailable` (same `attack_traffic_confined_to_subnet_zero` limitation) (`§5.1`) |
 
 A rejected setting is a non-executable `RejectionRecord`
 (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §5`), never a planner branch, a
@@ -229,10 +229,16 @@ names the sensor `/24`). That reopened audit confirms the benign group taxonomy
 from the data (97.5% of the 11.2M benign rows resolve to their own sensor
 subnet; eligible-benign coverage 1.0) but shows that **all 9.7M attack rows
 resolve to a single subnet — subnet 0 (Temperature/Modbus), the `/24` hosting
-both the Kali attacker `192.168.0.170` and its victim `192.168.0.128`**. No
-attack row carries any subnet 1–8 endpoint in any field, so eight of the nine
-sensor clients receive zero attack rows (joint benign+attack coverage 1/9 ≈
-11%). Because false-positive metrics require only held-out benign rows, the
+both the Kali attacker `192.168.0.170` and its victim `192.168.0.128`**. The
+ten authorized benign sensor-group client folders (K = 10) resolve to only
+**nine** distinct `/24` subnets, because `Modbus` is dual-homed (subnets 0
+and 7) and is excluded from this clean per-subnet accounting; no attack row
+carries any subnet 1–8 endpoint in any field, so eight of the remaining nine
+cleanly-resolved sensor clients (every group but `Temperature_and_Humidity`,
+subnet 0) receive zero attack rows (joint benign+attack coverage 1/9 ≈ 11%
+among those nine). This subnet-level accounting does not change the
+authorized K = 10 static client-group count above. Because false-positive
+metrics require only held-out benign rows, the
 `external_group` setup is `executable: true` with
 `validation_scope: benign_operating_point_equity`: benign calibration,
 threshold construction, benign-test FPR, and cross-client FPR dispersion are
@@ -244,6 +250,22 @@ using the defensible within-client time-of-day ordering; its per-client
 temporal attack metrics remain unavailable. The limitation is thus narrowed to
 the specific attack-sensitive capability, never the whole cell, and no mapping
 is fabricated.
+
+### 5.2 Immutable dataset limitations
+
+These are verified, accepted source-data facts, not unresolved
+implementation risk. Each is enforced by a typed unavailability or a
+`RejectionRecord`, never worked around:
+
+| Dataset | Limitation | Enforcement |
+|---|---|---|
+| Edge-IIoTset | Attack traffic resolves entirely to a single subnet (subnet 0); per-client attack-sensitive metrics (TPR, Macro-F1, balanced accuracy, AUROC, attack-sensitive threshold trade-offs) are unavailable for both `external_sensor_group_validation` and `chronological_recalibration_evaluation` | `per_client_attack_detection_metrics: unavailable`, reason `attack_traffic_confined_to_subnet_zero` (`§5.1`) |
+| Edge-IIoTset | No authorized family taxonomy; `FamilyThreshold` (B3) is never evaluated | Excluded from every Edge-IIoTset `evaluation_refs` list (`§6`, `§7.3`) |
+| Edge-IIoTset (temporal) | `Modbus` has unusable capture timestamps; the temporal population is nine groups, not the static regime's ten | `timestamp_semantics_verification` audit, `temporal_group_count: 9`, `excluded_groups: [Modbus]` |
+| CICIoT2023 | `MERGED_CSV/` files are shuffled, near-i.i.d. slices of the full 34-class mixture, not naturally distinct captures, sources, or devices — file identities are pseudo-clients only | `DatasetFilePseudoClients`; boundary role only, `§7.5`, never generalized (roadmap `SB-16`) |
+| CICIoT2023 | No MAC, device, IP, capture-source, or timestamp column exists in either raw tree | `device_mac_repartition` and `chronological_probe_ciciot2023` are `REJECTED` `RejectionRecord`s (`§5`, `§7.6`) |
+| CICIoT2023 | Feature count (`d = 39`) is a conference-artifact value that mirror distributions of this dataset are known to vary on | `processed_feature_verification` audit gates every quantitative `file_pseudo_client_applicability_boundary` claim (`§7.7`) |
+| N-BaIoT | Only nine physical devices exist; K > 100 fleet-scale validation is structurally unavailable, not merely undone | `SCI-09`; no fleet-scale type exists anywhere in this design |
 
 ## 6. Threshold and comparator nomenclature
 
@@ -264,7 +286,7 @@ artifact identity (`NAME-03`).
 | `LocalGlobalShrinkageThreshold` | τ-shrink / LGS | `τ_k(λ) = λ·τ_k,local + (1−λ)·τ_global`, λ ∈ {0, .25, .5, .75, 1} | supportive threshold variant |
 | `CalibrationSizeAwareFallbackThreshold` | — | size-dependent `λ(n_k)` replacing the ordinary hard `n_min = 100` fallback for its own declared cells | supportive threshold variant |
 | `ConformalLocalThreshold` | B2-conf | split- or federated-conformal local threshold at marginal coverage `1 − α`, α = 0.05 | supportive threshold variant; closes the tautology critique |
-| `FederatedSummaryStatisticThreshold` (`mode = matched_exceedance`) | `B-FedStatsBenign` | benign-only client-disclosed `(n_k, mean_k, variance_k)`; sample-weighted global mean; full pooled variance including the between-client mean-shift term; matched-exceedance candidate grid `τ(k) = µ_global + k·σ_global`, k ∈ {0.00 … 5.00} at the pre-registered `matched_exceedance_k_grid_step = 0.05`, ties broken toward larger k | comparator primitive; matched, non-ladder |
+| `FederatedSummaryStatisticThreshold` (`mode = matched_exceedance`) | `B-FedStatsBenign` | benign-only client-disclosed `(n_k, mean_k, variance_k)`; sample-weighted global mean; full pooled variance including the between-client mean-shift term; matched-exceedance candidate grid `τ(k) = µ_global + k·σ_global`, k ∈ {0.00 … 5.00} at the pre-registered `matched_exceedance_k_grid_step = 0.01`, ties broken toward larger k | comparator primitive; matched, non-ladder |
 | `FederatedSummaryStatisticThreshold` (`mode = fixed_k`) | fixed-k sensitivity | the same construction evaluated at a scalar fixed k ∈ {2.0, 2.5, 3.0} | supplementary sensitivity only; never the primary comparator result |
 | `CentralizedPooledThreshold` | B0 | centralized pooled-benign quantile from a separately trained centralized model | non-ladder reference; never fused with federated-averaging scores |
 | — (disclosure only, non-executable) | `B-LaridiFaithful` | anomaly-labeled Laridi-style reproduction | `OUT_OF_SCOPE` — violates the benign-only calibration contract; named disclosure record only |
@@ -325,15 +347,37 @@ sibling experiments.
 | `chronological_recalibration_evaluation` | E-B1 | `BOUNDARY`; `TIER_6` | `chronological_recalibration_evaluation` | **executable, `benign_temporal_operating_point_equity` scope** (`§5.1`): `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, frozen vs one-shot recalibration on benign FPR using the defensible within-client benign ordering; per-client temporal attack metrics carry a typed unavailability |
 
 The E-T2 personalization comparator is resolved to genuine **Ditto** (Li et
-al., ICML 2021): `personalization: ditto`, `personalization_proximal_weight:
-1.0` on the `federated_averaging_personalized` training profile. Ditto's
-architecture-agnostic proximal regularization pulls each client's
-personalized parameters toward the shared federated-averaging solution
-without a head/representation split, so it applies to the fixed autoencoder
-unchanged — unlike FedRep or FedPer, which require a separable personalized
-head the fixed-encoder identity (`SCI-01`, `SCI-19`) forbids. This is a
-documented pre-training design decision, not a runtime choice, and is no
-longer an open blocker.
+al., ICML 2021) on the `federated_averaging_personalized` training profile,
+completely specified — never the `FedRep-AE`/`FedPer-AE` fallback the
+roadmap keeps as the untrue-Ditto default (roadmap `SB-24`) — by every
+element `SB-24` requires:
+
+| Ditto element | Resolution |
+|---|---|
+| Global model state | Shared federated-averaging parameters `w_global`, sent to the server every round, identical in shape and update rule to the non-personalized `federated_averaging` profile |
+| Persistent client-personalized state | Per-client parameters `v_k`, retained across rounds, never reset |
+| Global update sent to the server | Each client's local gradient step on `w_global` only; `v_k` is never transmitted to or aggregated by the server |
+| Personalized state never aggregated | `v_k` is excluded from every `FedAvg` aggregation step by construction (`personalization_proximal_weight` only enters the client-local objective below) |
+| Proximal personalized objective | `min_{v_k} L_k(v_k) + (personalization_proximal_weight / 2) · ‖v_k − w_global‖²` |
+| Parameter grid | `personalization_parameter_grid: [0.001, 0.01, 0.1, 1.0]` |
+| Parameter-selection rule | Lowest Regime A benign-validation reconstruction error at the locked global checkpoint round, over the locked seed cohort; tie-break toward the smallest proximal weight; selected before external validation; never selected by `CV_FPR`, test loss, attack metrics, AUROC, or Edge-IIoTset results |
+| Checkpoint rule | Reuses the round already authorized by `federated_averaging`'s Regime A primary selection (`§10` field-ownership matrix; `PIPELINE_EXECUTION_AND_ARTIFACTS.md §7`) — never independently recomputed |
+| Evaluation state | The personalized parameters `v_k` per client, used for scoring and thresholding; `w_global` is never substituted for evaluation |
+| Artifact separation | The shared checkpoint artifact is the same scientific checkpoint the core ladder reuses; the per-client personalized state is a distinct artifact, never fused with it or with plain `federated_averaging` artifacts |
+
+Ditto's architecture-agnostic proximal regularization needs no
+head/representation split, so it applies to the fixed autoencoder unchanged
+— unlike FedRep or FedPer, which require a separable personalized head that
+this program's fixed-encoder core-ladder identity (`SCI-01`) does not
+provide (`SCI-01` scopes the fixed-encoder requirement to the core B1–B4
+ladder only; `SCI-07` places this stress test outside that ladder, so the
+constraint that actually rules out FedRep/FedPer here is architectural — no
+separable head exists on the shared autoencoder — not a direct application
+of `SCI-01` to a non-ladder experiment). This is a documented pre-training
+design decision, not a runtime choice, recorded in
+`configs/models/autoencoder.yaml` (`personalization_parameter_grid`,
+`personalization_parameter_selection`, `ditto_specification`) and no longer
+an open blocker.
 
 ### 7.4 Attached, non-root analyses
 

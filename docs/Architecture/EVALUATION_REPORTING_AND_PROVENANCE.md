@@ -83,7 +83,7 @@ union declared there.
 | `AlertBurdenResult` | `EVALUATE` (alert-burden suite) | yes | evidence-backed derived burden |
 | `PairedDeltaResult` | `STATISTICAL_ANALYZE` | yes, within `STATISTICAL_OUTPUT` | per-seed delta, locked orientation |
 | `BootstrapIntervalOutcome` | `STATISTICAL_ANALYZE` | yes | valid or expected-degenerate BCa result |
-| `WilcoxonSignedRankResult` / `CliffsDeltaResult` | `STATISTICAL_ANALYZE` (descriptive) | yes | secondary evidence only |
+| `WilcoxonSignedRankResult` / `MatchedPairsRankBiserialResult` | `STATISTICAL_ANALYZE` (descriptive) | yes | secondary evidence only; `MatchedPairsRankBiserialResult` replaces `CliffsDeltaResult` as the paired effect size — Cliff's delta is an unpaired/independent-samples statistic and is never used for this program's entirely paired-seed designs |
 | `ConfirmatoryAnalysisResult` | `STATISTICAL_ANALYZE` (every `PairedPolicyEffectAnalysis`) | yes | the paired delta/interval verdict; the Tier-1 or anchor verdict when confirmatory/anchor |
 | `MetricAssociationResult` | `STATISTICAL_ANALYZE` (`MetricAssociationAnalysis`) | yes | Spearman ρ, regression R², sample size |
 | `DistributionMechanismResult` | `STATISTICAL_ANALYZE` (`DistributionMechanismAnalysis`) | yes | source evaluations, per-client `(Δτ, ΔFPR, ΔTPR)` shift |
@@ -128,7 +128,7 @@ union declared there.
 | Diagnostic ratio | `ABSORPTION_RATIO` | see §6.4 bands | MECHANISM_DIAGNOSTIC | n/a | model-personalization stress test |
 | Diagnostic ratio | `BETWEEN_RATIO` | reported, not a pass rule | MECHANISM_DIAGNOSTIC | n/a | `FederatedSummaryStatisticThreshold` between/within decomposition |
 | Diagnostic ratio | `RECOVERY_RATIO` | see §6.5 outcomes | MECHANISM_DIAGNOSTIC | n/a | temporal recalibration |
-| Resource | `COMMUNICATION_BYTES_PER_ROUND`, `TOTAL_COMMUNICATION_BYTES`, `CLIENT_TO_SERVER_BYTES`, `SERVER_TO_CLIENT_BYTES`, `THRESHOLD_MESSAGE_BYTES`, `CHECKPOINT_STORAGE_BYTES`, `SCORE_ARTIFACT_STORAGE_BYTES`, `RESULT_STORAGE_BYTES` | lower is better | RESOURCE_OUTCOME | n/a | each `MEASURED` or `ESTIMATED`; never conflated |
+| Resource | `COMMUNICATION_BYTES_PER_ROUND`, `TOTAL_COMMUNICATION_BYTES`, `CLIENT_TO_SERVER_BYTES`, `SERVER_TO_CLIENT_BYTES`, `THRESHOLD_SUMMARY_UPLOAD_BYTES`, `THRESHOLD_BROADCAST_BYTES`, `B4_FINGERPRINT_UPLOAD_BYTES`, `B4_CLUSTER_ASSIGNMENT_BROADCAST_BYTES`, `CHECKPOINT_STORAGE_BYTES`, `SCORE_ARTIFACT_STORAGE_BYTES`, `PERSONALIZED_MODEL_LOCAL_STORAGE_BYTES`, `SERVER_SIDE_STORAGE_BYTES`, `RESULT_STORAGE_BYTES` | lower is better | RESOURCE_OUTCOME | n/a | each `MEASURED` or `ESTIMATED`; never conflated; `COMMUNICATION_BYTES_PER_ROUND`/`TOTAL_COMMUNICATION_BYTES`/`CHECKPOINT_STORAGE_BYTES`/`SCORE_ARTIFACT_STORAGE_BYTES` are threshold-policy-invariant (§7) |
 
 `MetricRole` is PRIMARY_ENDPOINT, SECONDARY_THRESHOLD_OUTCOME,
 MODEL_QUALITY_CONTROL, MECHANISM_DIAGNOSTIC, or RESOURCE_OUTCOME. The
@@ -215,6 +215,32 @@ declared cells. Compared policies never use different eligible-client sets
 disjoint identities and never share a metric, table column, or result field
 (`EVAL-06`).
 
+`ConformalCoverageResult`'s split-conformal construction is fully specified,
+never left as an unelaborated "empirical coverage" claim:
+
+```text
+rank = min(ceil((n + 1) * (1 - coverage_alpha)), n)   # order-statistic rank on the ascending
+                                                        # calibration-score order statistics
+```
+
+Ties in the calibration-score order statistics break toward the nearest
+higher order statistic (never an arbitrary or unstated tie rule).
+`coverage_alpha = 0.05` is locked (`SCIENTIFIC_FOUNDATION.md §6`). A client
+below `minimum_sample_count = 100` calibration scores is excluded and its
+per-client coverage rendered as a typed unavailability, never computed on an
+under-sized sample. Calibration unit is per-client benign calibration
+scores; evaluation unit is per-client benign test scores. `ConformalCoverageResult`
+reports three distinct coverage figures, never conflated: `marginal_sample_weighted_coverage`
+(pooled across all eligible clients' evaluation rows), `macro_client_coverage`
+(unweighted mean of each client's own coverage), and `per_client_coverage`
+(one value per eligible client). `coverage_target_error` is the absolute
+difference between achieved and target coverage (`|achieved − (1 −
+coverage_alpha)|`). The construction assumes within-client exchangeability
+of calibration and evaluation scores; it does not verify — and the report
+never claims — exchangeability across clients. On Edge-IIoTset, only benign
+coverage is ever evaluated (`SCIENTIFIC_FOUNDATION.md §5.1`); an
+attack-sensitive conformal coverage claim is never constructed there.
+
 ### 6.3 Alert burden
 
 Requesting `ALERT_BURDEN` selects `AlertBurdenEvaluationSuite`, which
@@ -267,12 +293,32 @@ Locked, applied to the chronological recalibration evaluation:
 The optional `RESOURCE_COST` stage (formerly the standalone
 `communication_storage_cost_analysis`/E-Q6, now attached to any requesting
 experiment, `SCIENTIFIC_FOUNDATION.md §7.4`) produces `ResourceCostResult`
-values across the eight `ResourceMetric` members
-(`COMMUNICATION_BYTES_PER_ROUND`, `TOTAL_COMMUNICATION_BYTES`,
-`CLIENT_TO_SERVER_BYTES`, `SERVER_TO_CLIENT_BYTES`,
-`THRESHOLD_MESSAGE_BYTES`, `CHECKPOINT_STORAGE_BYTES`,
-`SCORE_ARTIFACT_STORAGE_BYTES`, `RESULT_STORAGE_BYTES`) for
-`SharedThreshold`, `LocalThreshold`, and `ClusterThreshold`. Each value is
+values across the twelve `ResourceMetric` members —
+`COMMUNICATION_BYTES_PER_ROUND` (common FL model communication per round,
+identical across `SharedThreshold`/`LocalThreshold`/`ClusterThreshold` by
+construction and never attributed to a threshold-policy difference, see
+below), `TOTAL_COMMUNICATION_BYTES`, `CLIENT_TO_SERVER_BYTES`,
+`SERVER_TO_CLIENT_BYTES`, `THRESHOLD_SUMMARY_UPLOAD_BYTES` (client→server
+threshold-summary upload), `THRESHOLD_BROADCAST_BYTES` (server→client
+threshold broadcast — kept distinct from the upload direction, replacing the
+single undifferentiated `THRESHOLD_MESSAGE_BYTES`), `B4_FINGERPRINT_UPLOAD_BYTES`
+(client→server B4 fingerprint upload, `ClusterThreshold` only),
+`B4_CLUSTER_ASSIGNMENT_BROADCAST_BYTES` (server→client B4 cluster
+assignment/threshold broadcast, `ClusterThreshold` only),
+`CHECKPOINT_STORAGE_BYTES`, `SCORE_ARTIFACT_STORAGE_BYTES`,
+`PERSONALIZED_MODEL_LOCAL_STORAGE_BYTES` (persistent per-client personalized
+state, `federated_averaging_personalized` only), and
+`SERVER_SIDE_STORAGE_BYTES` (kept distinct from client-local
+`CHECKPOINT_STORAGE_BYTES`/`SCORE_ARTIFACT_STORAGE_BYTES`/
+`RESULT_STORAGE_BYTES`) — for `SharedThreshold`, `LocalThreshold`, and
+`ClusterThreshold`. `COMMUNICATION_BYTES_PER_ROUND`, `TOTAL_COMMUNICATION_BYTES`,
+`CHECKPOINT_STORAGE_BYTES`, and `SCORE_ARTIFACT_STORAGE_BYTES` are the common
+FL training cost and are reported as threshold-policy-invariant values —
+identical across B1/B2/B4 rows in the same table by construction; only
+`THRESHOLD_SUMMARY_UPLOAD_BYTES`, `THRESHOLD_BROADCAST_BYTES`,
+`B4_FINGERPRINT_UPLOAD_BYTES`, and `B4_CLUSTER_ASSIGNMENT_BROADCAST_BYTES`
+vary by threshold-policy scope, and a report never reads the common-training
+values as if they varied with threshold policy (`EVAL-07`). Each value is
 `MEASURED` or `ESTIMATED` and never conflated; an `ESTIMATED` communication
 value is always rendered with that label and never described as measured
 traffic (`ART-07`). This resource-cost family is deliberately distinct from
@@ -299,11 +345,31 @@ Every procedure-bearing `AnalysisDefinition` variant owns one
 deterministic interval-vs-reference gate that runs no resampling — declares no
 procedure field at all, `DOMAIN §3.3`). `StatisticalProcedure` is the
 discriminated union of `BcaBootstrap`, `PercentileBootstrap`,
-`WilcoxonSignedRank`, `CliffsDelta`, `SpearmanCorrelation`, and
-`LinearRegression`; each variant contains only applicable fields. Paired-seed
-count is owned once by `SeedCohortDefinition`. The confirmatory/anchor primary
-is BCa; Wilcoxon and Cliff's delta remain secondary evidence and percentile
-bootstrap is never substituted silently.
+`WilcoxonSignedRank`, `MatchedPairsRankBiserialCorrelation`,
+`SpearmanCorrelation`, and `LinearRegression`; each variant contains only
+applicable fields. `MatchedPairsRankBiserialCorrelation` replaces
+`CliffsDelta` as the paired secondary effect size — every analysis in this
+design pairs on seed, and Cliff's delta is an unpaired/independent-samples
+statistic, not a paired one. Paired-seed count is owned once by
+`SeedCohortDefinition`. The confirmatory/anchor primary is BCa; Wilcoxon and
+matched-pairs rank-biserial correlation remain secondary evidence and
+percentile bootstrap is never substituted silently.
+
+Every paired-seed `AnalysisDefinition` additionally owns a `statistical_profile`
+sibling to `primary_procedure`, declaring: `pairing_key` (the field the two
+compared evaluations are matched on — `seed` for every paired-threshold
+analysis in this design), `resampling_unit` (`per_seed_paired_delta`),
+`analysis_seed_derivation` (a rule deterministic in the experiment seed and
+the analysis label — distinct from, and never equal to, the training
+`experiment_seed`), `missing_pair_behavior` (exclude the unpaired seed and
+report the reduced seed count, never silently drop to a smaller resample
+without recording it), `zero_difference_behavior` (a zero per-seed delta is
+retained and included in the resample, never treated as a missing value),
+and `finite_value_validation` (a non-finite per-seed delta is rejected as a
+typed error before resampling, never silently coerced). These six fields are
+mandatory on every `statistical_profile`, alongside the pre-registered
+`confidence_level` and `resample_count` already owned by `primary_procedure`
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §6` field-ownership matrix).
 
 ### 8.1 Confirmatory isolation
 
@@ -319,8 +385,8 @@ different eligible-client set between the two compared policies; or, for
 the confirmatory experiment specifically, a missing passed anchor result
 (enforced by its typed `ExperimentPrerequisite`,
 `DOMAIN_AND_APPLICATION_ARCHITECTURE.md §4`). Secondary statistics
-(Wilcoxon, Cliff's delta) never silently become confirmatory decision
-inputs (`STAT-02`, `SCI-14`).
+(Wilcoxon, matched-pairs rank-biserial correlation) never silently become
+confirmatory decision inputs (`STAT-02`, `SCI-14`).
 
 ### 8.2 Claim outcomes
 
@@ -385,10 +451,14 @@ and a framework-free table/figure specification (`REPORT-01`–`REPORT-03`).
 
 ### 9.3 Table and figure families
 
-`TableType`: `CONFIRMATORY_INTERVAL`, `DISPERSION_LADDER`,
-`SENSITIVITY_GRID`, `COMPARATOR`, `STRESS_TEST`, `CLUSTER_STABILITY`,
-`CONTINGENCY`, `BOUNDARY_NULL`, `ALERT_BURDEN`,
-`COMMUNICATION_STORAGE_COST`. `FigureType`: `CDF_OVERLAY`, `SCATTER`,
+`TableType`: `CONFIRMATORY_INTERVAL`, `EXTERNAL_VALIDATION_INTERVAL`,
+`DISPERSION_LADDER`, `SENSITIVITY_GRID`, `COMPARATOR`, `STRESS_TEST`,
+`CLUSTER_STABILITY`, `CONTINGENCY`, `BOUNDARY_NULL`, `ALERT_BURDEN`,
+`COMMUNICATION_STORAGE_COST`. `EXTERNAL_VALIDATION_INTERVAL` shares
+`CONFIRMATORY_INTERVAL`'s column shape (threshold construction, `cv_fpr`,
+delta, BCa bounds) but is a structurally distinct `TableType` reserved for
+Tier-3 external-validation cells, so an external-validation result can never
+render inside the confirmatory-only table family. `FigureType`: `CDF_OVERLAY`, `SCATTER`,
 `HEATMAP`, `LAMBDA_CURVE`, `RECOVERY_CURVE`, `SEVERITY_TREND` — no Sankey
 member; B4 interpretability renders as a contingency table or a small
 heatmap. Each `ReportDefinition` declares its expected source result types
@@ -398,7 +468,8 @@ explicitly.
 
 | `TableType` / `FigureType` | Serves |
 |---|---|
-| `CONFIRMATORY_INTERVAL` | `anchor_reproduction`, `confirmatory_threshold_scope_effect` |
+| `CONFIRMATORY_INTERVAL` | `anchor_reproduction`, `confirmatory_threshold_scope_effect` — no other experiment, including `external_sensor_group_validation`, ever renders into this table family |
+| `EXTERNAL_VALIDATION_INTERVAL` | `external_sensor_group_validation` (Tier 3; column shape matches `CONFIRMATORY_INTERVAL` but is a distinct `TableType`, keeping external-validation evidence visually and structurally out of the confirmatory-only family) |
 | `DISPERSION_LADDER` | `shared_threshold_construction_sensitivity`, `file_pseudo_client_applicability_boundary` |
 | `SENSITIVITY_GRID` / `HEATMAP` | `threshold_quantile_sensitivity` |
 | `SEVERITY_TREND` | `controlled_heterogeneity_response` |

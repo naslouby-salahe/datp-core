@@ -267,7 +267,7 @@ strategy") and never an omitted required value.
 | `effective_batch_size` | No — derived (`micro_batch_size × gradient_accumulation_steps`) | No | Yes | No | No — computed, rejected if authored |
 | Worker count | Conditional (identity-bearing only if ordering/output-affecting) | Yes | Yes | No | Yes |
 | Precision, determinism level | Yes | No | Yes | No | Yes |
-| Checkpoint-selection rule | Yes | No | Yes | No | Yes (locked; one value per training profile) |
+| Checkpoint-selection rule | Yes | No | Yes | No | Yes (locked; `federated_averaging` on `natural_devices` performs the single `authorization: primary_selection_computed_once_on_regime_a`; `federated_averaging_personalized`, `federated_proximal`, and every other profile that shares the `datp_core` checkpoint profile carry an identical rule string only as an `authorization: lookup_of_federated_averaging_regime_a_primary_selection` — a documented reuse, never an independent per-profile recomputation; `centralized_pooled` alone selects independently, on its own non-federated curve, per `ANCHOR-04`) |
 | Threshold construction and its parameters (quantile, K, λ, α) | Yes | No | Yes | Yes (units, direction) | Yes |
 | `recalibration_mode` (`FROZEN`/`ONE_SHOT`) | Yes (when populated) | No | Yes | No | Yes, only for `chronological_recalibration_evaluation` evaluations; `None` (unauthored) elsewhere |
 | Cluster-count canonicality, clustering `n_init`/`max_iter` | Yes | No | Yes | No | Yes |
@@ -278,6 +278,10 @@ strategy") and never an omitted required value.
 | Traffic rate (alert burden) | Yes (when requested) | No | Yes | Yes | Yes, when `AlertBurdenEvaluationSuite` is selected |
 | `seed_cohort.paired_seed_count`, `seed_cohort.derivation` | Yes | No | Yes | No | Yes |
 | `analyses[*].primary_procedure` / `secondary_procedures` | Yes | No | Yes | Yes | Yes; bootstrap `resample_count` is pre-registered at `10000` |
+| `analyses[*].statistical_profile` (pairing key, resampling unit, analysis-seed derivation, missing-pair behavior, zero-difference behavior, finite-value validation) | Yes | No | Yes | No | Yes, on every `analyses[*]` entry alongside `primary_procedure` |
+| `evaluations[*].requested_metrics` | Yes | No | Yes | Yes | Yes, when narrower than the evaluation's default metric set (e.g. `local_global_threshold_shrinkage`'s `[cv_fpr, p10_macro_f1]`) |
+| `regimes[*].limitations` (typed unavailability: `capability`, `status`, `unavailable_reason`) | Yes | No | Yes | Yes | Yes, on every `regime_d`/`regime_d_temporal` cell; owns the enforcement of `per_client_attack_detection_metrics: unavailable` |
+| `regimes[*].decision_ref` | No — provenance pointer only | No | Yes | No | Yes, when a regime cites a dataset-level `audits[*].check` as the basis for a limitation (must resolve to a real `check` name, e.g. `client_granularity_feasibility`) |
 | Runtime device / CUDA requirement | No | Yes | Yes | No | Yes, once, on the named execution profile |
 | GPU model, driver version | No | No | Yes | No | Runtime-captured only |
 | RAM / VRAM budget | No | Yes | Yes | No | Yes, once, on the named execution profile |
@@ -368,12 +372,21 @@ invalidates every downstream checkpoint and score
 ## 9. Anchor experiment family
 
 `configs/experiments/anchor.yaml` holds exactly one experiment entry. The
-fragment below preserves the source-given fields; every scientific value it
-needs is now supplied, so the draft resolves without a boundary blocker. It
-references the `anchor` materialization (`§11.1`) through the
-`anchor_natural_devices` setup and the `anchor_terminal` checkpoint profile
-(one terminal checkpoint at round 150), never the DATP-Core materialization
-or round schedule.
+fragment below is an **abbreviated field-coverage illustration**, not a
+verbatim byte-for-byte reproduction — the real file wraps `data`/
+`evaluation_scope`/`evaluation_refs`/`analysis_refs`/`prerequisites` in a
+`regimes:` list (one `regime_a` entry) and additionally carries an explicit
+`roadmap_reference` (`null`, since the anchor is not a numbered roadmap
+`E-*` item) and a fully specified two-mode `anchor_equivalence` contract
+(`comparison_mode` with `strict_artifact_comparison`/`statistical_fallback`,
+`expected_seed_cohort`, `historical_reference` with the individual B1/B2
+point values, `checks`, `failure_reasons`, `downstream_blocking_behavior`).
+`configs/experiments/anchor.yaml` is authoritative for the exact shape;
+every scientific value the source documents supply is explicit there, none
+defaulted in Python. It references the `anchor` materialization (`§11.1`)
+through the `anchor_natural_devices` setup and the `anchor_terminal`
+checkpoint profile (one terminal checkpoint at round 150), never the
+DATP-Core materialization or round schedule.
 
 ```yaml
 schema_version: 1
@@ -472,12 +485,20 @@ package removes never returns.
 `configs/experiments/threshold_scope.yaml` groups the confirmatory endpoint
 with its two direct construction/quantile rule-outs — the experiments the
 roadmap ties most tightly to the B1-vs-B2 pair (Tier 1 and its immediate
-Tier 2 defenses). From here on, a flow-style `report: { table_type: …, … }`
-is shorthand for the single-entry `report_artifacts` list worked in full in
-`§9` (`report: { report_artifacts: [{ artifact_type: main_table, table_type:
-…, … }], wording_outcomes: […] }`); every resolved `ReportDefinition` still
-carries the complete `report_artifacts`/`wording_outcomes` shape, only the
-prose in this document is compressed:
+Tier 2 defenses). As in `§9`, the fragments below are **abbreviated
+field-coverage illustrations**: the real file wraps each experiment's
+`data`/`evaluation_scope`/`evaluation_refs`/`analysis_refs`/`prerequisites`
+in a `regimes:` list and additionally carries a `statistical_profile` block
+(pairing key, resampling unit, analysis-seed derivation, missing-pair and
+zero-difference behavior, finite-value validation) alongside every
+`primary_procedure`; `configs/experiments/threshold_scope.yaml` is
+authoritative for the exact shape. From here on, a flow-style
+`report: { table_type: …, … }` is shorthand for the single-entry
+`report_artifacts` list worked in full in `§9` (`report: { report_artifacts:
+[{ artifact_type: main_table, table_type: …, … }], wording_outcomes: […] }`);
+every resolved `ReportDefinition` still carries the complete
+`report_artifacts`/`wording_outcomes` shape, only the prose in this document
+is compressed:
 
 ```yaml
 schema_version: 1
@@ -511,9 +532,10 @@ experiments:
           method: bca_bootstrap
           confidence_level: 0.95
           resample_count: 10000
+        statistical_profile: { pairing_key: seed, resampling_unit: per_seed_paired_delta, analysis_seed_derivation: deterministic_from_experiment_seed_and_analysis_label, missing_pair_behavior: exclude_and_report_reduced_seed_count, zero_difference_behavior: retain_as_zero_delta_included_in_resample, finite_value_validation: reject_non_finite_delta_as_typed_error }
         secondary_procedures:
           - { method: wilcoxon_signed_rank }
-          - { method: cliffs_delta }
+          - { method: matched_pairs_rank_biserial_correlation }
     seed_cohort:
       paired_seed_count: 10
       derivation: deterministic_from_experiment_seed
@@ -693,7 +715,26 @@ materializations:
 setups:
   natural_devices:        { materialization: datp_core,           client_construction: { method: physical_device_clients, device_count: 9 } }
   anchor_natural_devices: { materialization: anchor,              client_construction: { method: physical_device_clients, device_count: 9 } }
-  dirichlet_partitioned:  { materialization: datp_core_dirichlet, client_construction: { method: dirichlet_partitioned_clients, client_count: 20, alpha: { from_sweep: dirichlet_alpha }, partition_seed: 0 } }
+  dirichlet_partitioned:
+    materialization: datp_core_dirichlet
+    client_construction:
+      method: dirichlet_partitioned_clients
+      client_count: 20
+      alpha: { from_sweep: dirichlet_alpha }
+      iid_endpoint: { alpha_label: iid, allocation: equal_across_source_domains }
+      source_mixture_components: nine_physical_device_domains
+      label_field: physical_device_domain
+      partition_seed: 0
+      partition_seed_independent_of_training_seeds: true
+      allocation_procedure: dirichlet_draw_per_synthetic_client_over_nine_source_domain_proportions
+      same_proportions_govern: [benign_train_rows, benign_calibration_rows, benign_test_rows, attack_evaluation_rows]
+      split_role_preservation: each_source_domain_row_keeps_its_pre_partition_split_role
+      attack_row_assignment: allocated_by_same_per_client_source_domain_proportions_as_benign_rows
+      attack_labels_used_in_partition_generation: false
+      minimum_row_counts: { train: 100, calibration: 100, test: 50 }
+      retry_policy: { behavior: deterministic_reseed_retry, max_retries: 10, retry_seed_derivation: partition_seed_plus_attempt_index }
+      feasibility_failure: typed_infeasibility_outcome_if_minimum_row_counts_unmet_after_max_retries
+      manifest: { fields: [client_count, alpha, partition_seed, per_client_source_domain_proportions, per_client_row_counts, retry_attempts_used, feasibility_status], fingerprint: blake3_over_manifest_fields }
 ```
 
 ### 11.1 N-BaIoT field-level schema
@@ -829,22 +870,53 @@ field_schema:
   post_encoding_feature_order: same_as_model_features
   categorical_encoding: none
   leakage_exclusions: [Label]
-observed_facts: { pseudo_client_count: 63, per_class_file_count: 309, model_feature_count: 39, device_mac_ip_capture_timestamp_columns_present: false }
+observed_facts: { pseudo_client_count: 63, per_class_file_count: 309, model_feature_count: 39, merged_excess_duplicate_rate: 0.53340, device_mac_ip_capture_timestamp_columns_present: false }
 readiness: { source_schema_complete: true, processed_feature_count_verified: true }
 eligibility:
   minimum_calibration_sample_count: 100
 materializations:
   datp_core:
     materialization_id: ciciot2023_datp_core
+    role: primary
     normalization: { strategy: min_max, scope: global_train }
-    preprocessing_sequence: [exclude_degenerate_window_rows, drop_exact_duplicate_rows_per_file, random_fractional_split, min_max_normalization_fit_on_train]
-    row_exclusion: { degenerate_window: exclude_rate_inf_or_blank_std_variance, within_file_duplicate_policy: drop_exact_duplicates_keep_first_per_file, cross_file_duplicate_policy: retain_across_pseudo_clients }
+    preprocessing_sequence: [exclude_degenerate_window_rows, compute_global_exact_duplicate_equivalence_classes, assign_each_equivalence_class_to_one_split, drop_non_canonical_equivalence_class_members, random_fractional_split, min_max_normalization_fit_on_train]
+    row_exclusion:
+      degenerate_window: exclude_rate_inf_or_blank_std_variance
+      duplicate_equivalence_class_scope: global_across_all_63_files
+      duplicate_equivalence_class_split_assignment: whole_class_to_one_split_never_crosses_train_calibration_test
+      canonical_row_provenance_preserved: true
+    split: { method: random_fractional, calibration_benign_only: true, split_seed: 0, ratios: { train: 0.70, calibration: 0.15, test: 0.15 } }
+    reporting: [removed_rows, retained_rows_per_pseudo_client, client_eligibility_changes, pseudo_client_coverage]
+    infeasibility_policy: typed_boundary_result_if_dedup_removes_experiment_feasibility
+  datp_core_duplicate_preserving_sensitivity:
+    materialization_id: ciciot2023_datp_core_duplicate_preserving_sensitivity
+    role: sensitivity_only_never_primary
+    normalization: { strategy: min_max, scope: global_train }
+    preprocessing_sequence: [exclude_degenerate_window_rows, drop_exact_duplicate_rows_per_file, assign_cross_file_duplicate_equivalence_classes_to_one_split, random_fractional_split, min_max_normalization_fit_on_train]
+    row_exclusion: { degenerate_window: exclude_rate_inf_or_blank_std_variance, within_file_duplicate_policy: drop_exact_duplicates_keep_first_per_file, cross_file_duplicate_policy: retain_across_pseudo_clients, cross_file_duplicate_split_assignment: whole_equivalence_class_to_one_split_consistent_across_pseudo_clients }
     split: { method: random_fractional, calibration_benign_only: true, split_seed: 0, ratios: { train: 0.70, calibration: 0.15, test: 0.15 } }
 setups:
   file_pseudo_clients:
     materialization: datp_core
     client_construction: { method: dataset_file_pseudo_clients, pseudo_client_count: 63 }
+  file_pseudo_clients_duplicate_sensitivity:
+    materialization: datp_core_duplicate_preserving_sensitivity
+    client_construction: { method: dataset_file_pseudo_clients, pseudo_client_count: 63 }
+    execution_requirement: optional
+    publication_placement: supplementary
 ```
+
+The primary materialization computes exact-duplicate equivalence classes
+**globally** across all 63 files and assigns each whole class to exactly
+one split, so no equivalence class crosses train/calibration/test; it
+reports removed rows, retained rows per pseudo-client, client eligibility
+changes, and pseudo-client coverage, and yields a typed boundary result if
+deduplication removes experiment feasibility rather than being silently
+dropped. `datp_core_duplicate_preserving_sensitivity` — the prior per-file/
+cross-client-retaining behavior — survives only as an explicitly optional,
+supplementary sensitivity materialization, per its own split-assignment
+constraint (`§5` requirement: a duplicate-preserving variant is permitted
+only when each equivalence class is still wholly assigned to one split).
 
 ### 11.2 CICIoT2023 field-level schema
 
@@ -934,14 +1006,20 @@ second authored column.
   constant across the full 309-file corpus, and never dropped on the
   strength of a single-file sample.
 - No non-numeric cell was found outside the `inf`/empty pattern above; no
-  duplicate-row check has been run over the full corpus (scale: 8.4–8.7 GB
-  per tree) — an open item, not a finding either way.
+  duplicate-row check has been run over the raw per-class `CSV/` tree (309
+  files, scale 8.4–8.7 GB) — an open item, not a finding either way, and not
+  the tree the executable materialization reads.
 
-**Blockers.** Feature-schema identity is verified (closed). Open:
-the full-corpus duplicate-row rate; the exact row count and class balance
-of every one of the 309 `CSV/` files and 63 `MERGED_CSV/` files (only a
-subset was directly inspected); the `Rate`/`Std`/`Variance` degenerate-window
-handling policy (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`).
+**Blockers.** Feature-schema identity is verified (closed). Open: the raw
+per-class `CSV/` tree's duplicate-row rate and the exact row count/class
+balance of every one of the 309 `CSV/` files (only a subset was directly
+inspected; not read by the executable materialization). The executable
+`MERGED_CSV/` tree's global candidate-duplicate rate **is** measured
+(`observed_facts.merged_excess_duplicate_rate: 0.53340`) and feeds the
+`datp_core` primary materialization's global equivalence-class
+deduplication (`§11.1`) directly; it is not an open item. Also open: the
+`Rate`/`Std`/`Variance` degenerate-window handling policy
+(`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`).
 
 `configs/datasets/edge_iiotset.yaml` — the external-validation dataset. Its
 `client_granularity_feasibility` audit rejects device granularity, so it owns
@@ -976,29 +1054,44 @@ field_schema:
     family_taxonomy: unavailable                 # no family/B3 taxonomy on Edge-IIoTset
   attack_row_group_assignment:
     available: false
-    reason: attack_traffic_confined_to_attacker_subnet
+    reason: attack_traffic_confined_to_subnet_zero
+    decision_ref: client_granularity_feasibility
     evidence: >-
       Direction-normalized internal-endpoint resolution over all four endpoint fields (keyed on
       the paper TABLE VI subnet topology) resolves 99.95% of the 9,729,709 attack rows to a
       single subnet: subnet 0 (Temperature/Modbus), the /24 hosting the Kali attacker and its
-      victim. No attack row carries any subnet 1-8 endpoint, so eight of nine sensor clients
-      receive zero attack rows. See endpoint_identity.
+      victim. No attack row carries any subnet 1-8 endpoint. The ten benign sensor-group client
+      folders resolve to only nine distinct /24 subnets, because Modbus is dual-homed (subnets 0
+      and 7) and is therefore excluded from this clean per-subnet accounting; of the remaining
+      nine cleanly-resolved groups, eight (all but Temperature_and_Humidity, subnet 0) receive
+      zero attack rows. This subnet-level accounting does not change the authorized K = 10
+      static benign client-group count. See endpoint_identity.
   endpoint_identity:                             # direction-normalized resolution; benign confirmed, attack subnet-0 confined
     resolution: direction_normalized_internal_endpoint
     subnet_to_group: { 0: [Temperature_and_Humidity, Modbus], 1: Distance, 2: phValue, 3: Heart_Rate, 4: Water_Level, 5: IR_Receiver, 6: Sound_Sensor, 7: [Flame_Sensor, Modbus], 8: Soil_Moisture }
     excluded_endpoints: { attacker: [192.168.0.170, 192.168.0.152], ambiguous_dual_role: [192.168.0.101], placeholder: ["0", "0.0.0.0"], public_external: spoofed_flood_or_incidental_background }
-    resolved_coverage: { attack: { resolved_subnets: [0] }, clients_with_benign_and_attack: 1, joint_client_coverage_ratio: 0.11 }
+    resolved_coverage: { attack: { resolved_subnets: [0] }, clients_with_benign_and_attack: 1, joint_client_coverage_ratio: 0.11 }   # 1 of the 9 cleanly-resolved (Modbus-excluded) subnet groups
     verdict: benign_group_identity_confirmed_attack_partition_infeasible
   retained_numeric_features: { role: model_feature, type: numeric_float, count: 39, order: [arp.opcode, ..., mbtcp.unit_id] }
   categorical_encoding:
     strategy: one_hot
     columns: [http.request.method, http.referer, http.request.version, dns.qry.name.len, mqtt.conack.flags, mqtt.protoname, mqtt.topic]   # 7 columns
-    encoded_feature_count: 76
     retained_numeric_feature_count: 39
-    total_model_feature_count: 115           # 76 dummies + 39 numeric
+    vocabulary_scope: benign_training_rows_only        # historical_benign_train for the chronological materialization
+    vocabulary_fit_split: benign_train                 # historical_benign_train (chronological)
+    vocabulary_artifact: frozen_at_materialization_fit_time
+    vocabulary_fingerprint: derived_from_fitted_benign_train_categories
     category_order: ascending_string
     encoded_feature_naming: "{column}={category_value}"
-    category_values: { <per-column, enumerated over the full corpus (benign+attack)> }   # unknown/missing -> all-zero indicator
+    missing_category_policy: absent_value_maps_to_missing_indicator
+    unknown_category_policy: unseen_value_maps_to_unknown_indicator   # distinct indicator from missing
+    unknown_reporting: { unknown_counts_by_split: reported_at_fit_time, unknown_fractions_by_client: reported_at_fit_time }
+    full_corpus_audit_reference:                        # audit observation only, never the executable vocabulary
+      encoded_feature_count: 76
+      total_model_feature_count: 115           # 76 dummies + 39 numeric; superseded by the benign-train-only fit at execution
+      category_values: { <per-column, enumerated over the full corpus (benign+attack), audit reference only> }
+    categorical_vocabulary_benign_fit_audit:            # re-derives per-column widths and total_model_feature_count from a benign-only fit
+      status: pending_execution
   leakage_exclusions: { columns: [frame.time, ip.src_host, ip.dst_host, ...], role_basis: leakage_or_high_cardinality_or_client_identity_or_timestamp }   # 15 dropped
 readiness:
   source_schema_complete: true
@@ -1015,8 +1108,8 @@ evaluation_capabilities:
   threshold_scope_dispersion: { status: available }
   benign_score_distribution_analysis: { status: available }
   conformal_benign_coverage: { status: available }
-  per_client_attack_detection_metrics: { status: unavailable, reason: attack_traffic_confined_to_subnet_zero, unsupported_metrics: [tpr, recall, macro_f1, p10_macro_f1, balanced_accuracy, worst_client_ba, auroc] }
-  attack_sensitive_threshold_tradeoff: { status: unavailable, reason: attack_rows_not_available_across_clients }
+  per_client_attack_detection_metrics: { status: unavailable, reason: attack_traffic_confined_to_subnet_zero, unsupported_metrics: [tpr, cv_tpr, recall, macro_f1, p10_macro_f1, balanced_accuracy, worst_client_ba, auroc] }
+  attack_sensitive_threshold_tradeoff: { status: unavailable, reason: attack_traffic_confined_to_subnet_zero }
 audits:
   - { check: source_inspection, ... }
   - check: client_granularity_feasibility
@@ -1031,13 +1124,40 @@ materializations:
   group_benign:
     materialization_id: edge_iiotset_group_benign
     normalization: { strategy: min_max, scope: global_train }
+    vocabulary_fit_split: benign_train
     preprocessing_sequence: [drop_row_with_null_in_retained_column, drop_exact_duplicate_rows, one_hot_encode_categoricals, min_max_normalization_fit_on_train]
     split: { method: random_fractional, calibration_benign_only: true, split_seed: 0, ratios: { train: 0.70, calibration: 0.15, test: 0.15 } }
   group_chronological:
     materialization_id: edge_iiotset_group_chronological
     normalization: { strategy: min_max, scope: historical_train }
+    vocabulary_fit_split: historical_benign_train
     preprocessing_sequence: [drop_row_with_null_in_retained_column, drop_exact_duplicate_rows, resolve_within_client_time_order, chronological_split, one_hot_encode_categoricals, min_max_normalization_fit_on_historical_train]
-    split: { method: within_client_chronological, calibration_benign_only: true, historical_train_fraction: 0.55, historical_calibration_fraction: 0.15, future_test_fraction: 0.30, ordering_field: frame.time, ordering_scope: per_client, rollover_policy: add_twenty_four_hours_on_time_decrease }
+    row_exclusion: { unresolved_row_policy: excluded_from_client_assignment, duplicate_timestamp_policy: preserve_original_row_order_stable_sort }
+    split:
+      method: within_client_chronological
+      calibration_benign_only: true
+      role_order: [historical_train, historical_calibration, future_recalibration, future_evaluation]
+      historical_train_fraction: 0.55
+      historical_calibration_fraction: 0.15
+      future_recalibration_fraction: 0.10
+      future_evaluation_fraction: 0.20
+      ordering_field: frame.time
+      ordering_scope: per_client
+      rollover_policy: add_twenty_four_hours_on_time_decrease
+      minimum_row_counts: { historical_train: 100, historical_calibration: 100, future_recalibration: 50, future_evaluation: 100 }
+      missing_client_policy: exclude_client_report_reduced_k
+      chronology_unverifiable_policy: typed_infeasibility_outcome
+    static_reference: { note: matched static reference over the same nine temporal groups (Modbus excluded) via group_benign, materialization_ref: group_benign }
+    recovery_analysis:
+      fields: [static_reference_cv, frozen_future_cv, recalibrated_future_cv, drift_excess, recovered_amount, recovery_ratio]
+      drift_excess_formula: frozen_future_cv - static_reference_cv
+      recovered_amount_formula: frozen_future_cv - recalibrated_future_cv
+      recovery_ratio_formula: recovered_amount / drift_excess
+      recovery_ratio_precondition: drift_excess_meaningfully_positive
+      negative_recovery_policy: report_as_is_no_floor_clamp
+      outcome_thresholds: { outcome_a_recovery_ratio_min: 0.50, outcome_b_recovery_ratio_max: 0.50, outcome_c_condition: no_meaningful_positive_drift_excess }
+      seed_analysis: paired_seed_ci_over_locked_seed_cohort
+      confidence_interval_procedure: bca_bootstrap_95
 setups:
   external_group:
     materialization: group_benign
@@ -1050,7 +1170,7 @@ setups:
   chronological:
     materialization: group_chronological
     client_construction: { method: external_group_clients, group_count: 9, excluded_groups: [Modbus] }
-    temporal_window: { role: temporal_evaluation, historical_train_fraction: 0.55, historical_calibration_fraction: 0.15, future_test_fraction: 0.30, capture_time_field: frame.time, ordering_derivation: time_of_day_with_midnight_rollover_correction }
+    temporal_window: { role: temporal_evaluation, historical_train_fraction: 0.55, historical_calibration_fraction: 0.15, future_recalibration_fraction: 0.10, future_evaluation_fraction: 0.20, capture_time_field: frame.time, ordering_derivation: time_of_day_with_midnight_rollover_correction }
     executable: true
     validation_scope: benign_temporal_operating_point_equity
     supported_scope: [historical_benign_training, historical_benign_calibration, future_benign_fpr_evaluation, frozen_vs_one_shot_recalibrated_thresholds, cv_fpr_drift_and_recovery]
@@ -1558,13 +1678,13 @@ altered by moving an experiment into a family file.
 | `cluster_mechanism` | E-M1/E-M2/E-Q2 | mechanism; tier_5 (+tier_7 exploratory) | `nbaiot` / `natural_devices`; benign-FPR-scope `regime_d` regime (`edge_iiotset`/`external_group`, B1/B2/B4, `family` excluded) | `fingerprint_feature_subset` (4 subsets) | one merged experiment, four typed axes: grouping (`family_threshold` vs `cluster_threshold`), fingerprint feature set, aggregation (`mean`/`robust_median`), authorized K (canonical `3`, mandatory; other K exploratory); report: `cluster_stability` table + `contingency` table |
 | `calibration_window_size_stability` | E-V1 | boundary; tier_6 (RQ3) | `nbaiot` / `natural_devices` | `calibration_sample_count ∈ {50,100,250,500,1000,5000}` | each point resolves a `CalibrationSubsetDefinition`; includes `calibration_size_aware_fallback_threshold`; report: `sensitivity_grid` |
 | `local_global_threshold_shrinkage` | E-V2 | supportive; RQ3 | `nbaiot` / `natural_devices` | `shrinkage_weight ∈ {0, .25, .5, .75, 1}` | report: `lambda_curve` figure |
-| `conformal_local_threshold_coverage` | E-V3 | supportive; Tier-1 tautology defense | `nbaiot` / `natural_devices`; benign-FPR-scope `regime_d` regime (`edge_iiotset`/`external_group`) | — | `coverage_alpha = 0.05`; report: conformal coverage table |
+| `conformal_local_threshold_coverage` | E-V3 | supportive; `tier_2` (`supports_confirmatory_tautology_defense: tier_1`, never `tier: tier_1` itself — Tier 1 is reserved exclusively for the confirmatory claim, `SCI-14`) | `nbaiot` / `natural_devices`; benign-FPR-scope `regime_d` regime (`edge_iiotset`/`external_group`, benign coverage only) | — | `coverage_alpha = 0.05`; rank `= min(ceil((n+1)*(1-alpha)), n)`, tie-break nearest higher order statistic, `minimum_sample_count: 100`; reports marginal sample-weighted / macro-client / per-client coverage and coverage-target error; exchangeability assumed within-client, not verified across clients; typed unavailable below the minimum sample count; report: conformal coverage table |
 
 ### 16.3 `external_validation.yaml`
 
 | Slug | Roadmap ref | Role; tier | Dataset + setup | Sweep | Notes |
 |---|---|---|---|---|---|
-| `external_sensor_group_validation` | E-X1 | external_validation; tier_3; **benign-FPR scope** | `edge_iiotset` / `external_group` (device granularity rejected) | `threshold_quantile = .95` (pinned; q-sweep owned by E-S2) | `run_requirement: mandatory`, `evaluation_scope: benign_operating_point_equity` (`§9.1`, `§11.3`); B1–B4 + matched-summary request FPR-family metrics only (no B3, no attack-sensitive metrics — typed `per_client_attack_detection_metrics: unavailable`); report: external `confirmatory_interval` |
+| `external_sensor_group_validation` | E-X1 | external_validation; tier_3; **benign-FPR scope** | `edge_iiotset` / `external_group` (device granularity rejected) | `threshold_quantile = .95` (pinned; q-sweep owned by E-S2) | `run_requirement: mandatory`, `evaluation_scope: benign_operating_point_equity` (`§9.1`, `§11.3`); B1–B4 + matched-summary request FPR-family metrics only (no B3, no attack-sensitive metrics — typed `per_client_attack_detection_metrics: unavailable`); report: `external_validation_interval` table_type (distinct from the confirmatory-only `confirmatory_interval` reserved for `anchor_reproduction`/`confirmatory_threshold_scope_effect`, `EVALUATION_REPORTING_AND_PROVENANCE.md §9.4`) |
 | `chronological_recalibration_evaluation` | E-B1 | boundary; tier_6; **benign-temporal-FPR scope** | `edge_iiotset` / `chronological` | — | `run_requirement: mandatory`, `evaluation_scope: benign_temporal_operating_point_equity` (defensible within-client benign ordering); frozen vs one-shot recalibration on benign FPR; per-client temporal attack metrics unavailable; report: `recovery_curve` figure |
 
 ### 16.4 `training_stress_tests.yaml`
@@ -1579,8 +1699,9 @@ altered by moving an experiment into a family file.
 | Slug | Roadmap ref | Role; tier | Dataset + setup | Training profile | Notes |
 |---|---|---|---|---|---|
 | `centralized_pooled_reference` | B0 | supportive; mandatory wherever cited | `nbaiot` / `natural_devices` | `training_profiles.centralized_pooled` | own centralized identity chain; never fused with federated artifacts (`ANCHOR-04`, `ART-06`); report: `dispersion_ladder` |
-| `federated_summary_comparator` | E-T3/E-Q1/E-Q5 | stress_test (comparator); tier_4 | `regimes:` — `regime_a` (`nbaiot`/`natural_devices`, run) + `regime_d` (`edge_iiotset`/`external_group`, benign operating-point equity) | `federated_averaging` | merged: matched benign-summary comparison (`mode: matched_exceedance`, `matched_exceedance_k_grid_step: 0.05`, mandatory primary), quantile-estimation-error backbone analysis (mandatory), and a `mode: fixed_k` evaluation with a scalar `fixed_k: { from_sweep: federated_summary_fixed_k }` over `{2.0, 2.5, 3.0}` carrying `execution_requirement: optional`, `publication_placement: supplementary` (`SCI-18`); report: `comparator` table |
-| `file_pseudo_client_applicability_boundary` | `B_A_APPLICABILITY_BOUNDARY` | boundary; tier_6 | `ciciot2023` / `file_pseudo_clients` | `training_profiles.federated_averaging` | boundary report only, never generalized; report: `boundary_null` table |
+| `federated_summary_comparator` | E-T3/E-Q1/E-Q5 | stress_test (comparator); tier_4 | `regimes:` — `regime_a` (`nbaiot`/`natural_devices`, run) + `regime_d` (`edge_iiotset`/`external_group`, benign operating-point equity) | `federated_averaging` | merged: matched benign-summary comparison (`mode: matched_exceedance`, `matched_exceedance_k_grid_step: 0.01`, mandatory primary — E-T3), quantile-estimation-error backbone analysis (`execution_requirement: optional`, `publication_placement: supplementary`, matching the roadmap's Tier-7/Supplement status for E-Q1, `§5.7`, `§9.3`), and a `mode: fixed_k` evaluation with a scalar `fixed_k: { from_sweep: federated_summary_fixed_k }` over `{2.0, 2.5, 3.0}` carrying `execution_requirement: optional`, `publication_placement: supplementary` (`SCI-18`, E-Q5); report: `comparator` table |
+| `operational_alert_burden` | E-O1 | supportive; tier_5; **conditional on a valid cited traffic rate** | `regimes:` — `regime_a` (`nbaiot`/`natural_devices`) + `regime_d` (`edge_iiotset`/`external_group`, benign operating-point equity) | `federated_averaging` | `cited_traffic_rate.status: not_configured` — no rate is invented; the `alert_burden_per_device` analysis produces a typed `omitted` outcome per SB-20 until a real/cited rate (value, unit, citation identifier, source title, source metadata, applicability statement; finite and non-negative) is configured; report: `alert_burden` table |
+| `file_pseudo_client_applicability_boundary` | `B_A_APPLICABILITY_BOUNDARY` | boundary; tier_6 | `ciciot2023` / `file_pseudo_clients` (global-dedup primary materialization; `file_pseudo_clients_duplicate_sensitivity` is an optional duplicate-preserving sensitivity variant) | `training_profiles.federated_averaging` | boundary report only, never generalized; report: `boundary_null` table |
 
 ## 17. Sweep representation
 

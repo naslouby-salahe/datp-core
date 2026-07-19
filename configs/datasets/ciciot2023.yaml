@@ -77,7 +77,7 @@ observed_facts:
   per_class_file_count: 309
   model_feature_count: 39
   merged_column_count: 40
-  merged_excess_duplicate_rate: 0.53340
+  merged_excess_duplicate_rate: 0.53340   # measured candidate-row duplicate rate; feeds the global_dedup_primary materialization's equivalence-class computation
   degenerate_window_rate: 0.000022
   merged_files_are_shuffled_mixture_of_all_classes: true
   device_mac_ip_capture_timestamp_columns_present: false
@@ -109,12 +109,34 @@ eligibility:
 materializations:
   datp_core:
     materialization_id: ciciot2023_datp_core
+    role: primary
     normalization: { strategy: min_max, scope: global_train }
-    preprocessing_sequence: [exclude_degenerate_window_rows, drop_exact_duplicate_rows_per_file, random_fractional_split, min_max_normalization_fit_on_train]
+    preprocessing_sequence: [exclude_degenerate_window_rows, compute_global_exact_duplicate_equivalence_classes, assign_each_equivalence_class_to_one_split, drop_non_canonical_equivalence_class_members, random_fractional_split, min_max_normalization_fit_on_train]
+    row_exclusion:
+      degenerate_window: exclude_rate_inf_or_blank_std_variance
+      duplicate_equivalence_class_scope: global_across_all_63_files
+      duplicate_equivalence_class_definition: exact_row_content_hash_over_model_features
+      duplicate_equivalence_class_split_assignment: whole_class_to_one_split_never_crosses_train_calibration_test
+      canonical_row_selection: keep_first_by_source_file_path_then_source_row_index
+      canonical_row_provenance_preserved: true
+    split:
+      method: random_fractional
+      calibration_benign_only: true
+      split_seed: 0
+      ratios: { train: 0.70, calibration: 0.15, test: 0.15 }
+    reporting:
+      fields: [removed_rows, retained_rows_per_pseudo_client, client_eligibility_changes, pseudo_client_coverage]
+    infeasibility_policy: typed_boundary_result_if_dedup_removes_experiment_feasibility
+  datp_core_duplicate_preserving_sensitivity:
+    materialization_id: ciciot2023_datp_core_duplicate_preserving_sensitivity
+    role: sensitivity_only_never_primary
+    normalization: { strategy: min_max, scope: global_train }
+    preprocessing_sequence: [exclude_degenerate_window_rows, drop_exact_duplicate_rows_per_file, assign_cross_file_duplicate_equivalence_classes_to_one_split, random_fractional_split, min_max_normalization_fit_on_train]
     row_exclusion:
       degenerate_window: exclude_rate_inf_or_blank_std_variance
       within_file_duplicate_policy: drop_exact_duplicates_keep_first_per_file
       cross_file_duplicate_policy: retain_across_pseudo_clients
+      cross_file_duplicate_split_assignment: whole_equivalence_class_to_one_split_consistent_across_pseudo_clients
     split:
       method: random_fractional
       calibration_benign_only: true
@@ -124,3 +146,8 @@ setups:
   file_pseudo_clients:
     materialization: datp_core
     client_construction: { method: dataset_file_pseudo_clients, pseudo_client_count: 63 }
+  file_pseudo_clients_duplicate_sensitivity:
+    materialization: datp_core_duplicate_preserving_sensitivity
+    client_construction: { method: dataset_file_pseudo_clients, pseudo_client_count: 63 }
+    execution_requirement: optional
+    publication_placement: supplementary

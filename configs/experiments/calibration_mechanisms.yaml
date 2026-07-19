@@ -110,6 +110,7 @@ experiments:
         primary_metric: cv_fpr
         delta_orientation: family_minus_local
         primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        statistical_profile: { pairing_key: seed, resampling_unit: per_seed_paired_delta, analysis_seed_derivation: deterministic_from_experiment_seed_and_analysis_label, missing_pair_behavior: exclude_and_report_reduced_seed_count, zero_difference_behavior: retain_as_zero_delta_included_in_resample, finite_value_validation: reject_non_finite_delta_as_typed_error }
         secondary_procedures: []
       - label: cluster_vs_local
         kind: paired_threshold_analysis
@@ -118,6 +119,7 @@ experiments:
         primary_metric: cv_fpr
         delta_orientation: cluster_minus_local
         primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        statistical_profile: { pairing_key: seed, resampling_unit: per_seed_paired_delta, analysis_seed_derivation: deterministic_from_experiment_seed_and_analysis_label, missing_pair_behavior: exclude_and_report_reduced_seed_count, zero_difference_behavior: retain_as_zero_delta_included_in_resample, finite_value_validation: reject_non_finite_delta_as_typed_error }
         secondary_procedures: []
       - label: shared_vs_cluster_recovery
         kind: paired_threshold_analysis
@@ -126,11 +128,13 @@ experiments:
         primary_metric: cv_fpr
         delta_orientation: shared_minus_cluster
         primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        statistical_profile: { pairing_key: seed, resampling_unit: per_seed_paired_delta, analysis_seed_derivation: deterministic_from_experiment_seed_and_analysis_label, missing_pair_behavior: exclude_and_report_reduced_seed_count, zero_difference_behavior: retain_as_zero_delta_included_in_resample, finite_value_validation: reject_non_finite_delta_as_typed_error }
         secondary_procedures: []
       - label: cluster_stability
         kind: cluster_stability_analysis
         source_evaluation: cluster_k3_mean
         primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        statistical_profile: { pairing_key: seed, resampling_unit: per_seed_paired_delta, analysis_seed_derivation: deterministic_from_experiment_seed_and_analysis_label, missing_pair_behavior: exclude_and_report_reduced_seed_count, zero_difference_behavior: retain_as_zero_delta_included_in_resample, finite_value_validation: reject_non_finite_delta_as_typed_error }
         secondary_procedures: []
     seed_cohort:
       paired_seed_count: 10
@@ -178,9 +182,14 @@ experiments:
           setup: natural_devices
           calibration_subset:
             requested_sample_count: { from_sweep: calibration_sample_count }
-            selection_strategy: deterministic_prefix
+            selection_strategy: deterministic_without_replacement
             nesting_policy: nested_by_size
             selection_seed: 0
+            replicate_count: 100
+            replicate_seed_derivation: deterministic_from_training_seed_and_client_id_and_replicate_index
+            model_retraining: never_thresholds_only_recomputed
+            subminimum_marking: { sample_count: 50, status: experimental_subminimum, affects_standard_eligibility_minimum: false }
+            insufficient_row_policy: typed_unavailable_below_requested_sample_count
         evaluation_scope: full_detection_and_operating_point
         evaluation_refs: [shared_mean, local, cluster_k3_mean, calibration_size_aware_fallback]
         analysis_refs: [window_size_vs_local]
@@ -222,6 +231,7 @@ experiments:
         primary_metric: cv_fpr
         delta_orientation: shared_minus_local
         primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        statistical_profile: { pairing_key: seed, resampling_unit: per_seed_paired_delta, analysis_seed_derivation: deterministic_from_experiment_seed_and_analysis_label, missing_pair_behavior: exclude_and_report_reduced_seed_count, zero_difference_behavior: retain_as_zero_delta_included_in_resample, finite_value_validation: reject_non_finite_delta_as_typed_error }
         secondary_procedures: []
     seed_cohort:
       paired_seed_count: 10
@@ -237,7 +247,11 @@ experiments:
               - { name: calibration_sample_count, unit: count, direction: none }
               - { name: threshold_construction, unit: none, direction: none }
               - { name: threshold_variance, unit: ratio, direction: lower_is_better }
+              - { name: cv_fpr, unit: ratio, direction: lower_is_better }
               - { name: worst_client_fpr, unit: ratio, direction: lower_is_better }
+              - { name: client_coverage, unit: ratio, direction: higher_is_better }
+              - { name: completed_replicate_count, unit: count, direction: none }
+              - { name: plateau_or_collapse_outcome, unit: none, direction: none }
             ordering: deterministic_by_threshold_construction
             missing_value_policy: render_typed_unavailable
             source_result_types: [policy_evaluation_result, confirmatory_analysis_result]
@@ -275,7 +289,17 @@ experiments:
       - label: local
         threshold: { policy: local_threshold, quantile: 0.95 }
       - label: shrinkage
-        threshold: { policy: local_global_shrinkage_threshold, shrinkage_weight: { from_sweep: shrinkage_weight }, quantile: 0.95 }
+        threshold:
+          policy: local_global_shrinkage_threshold
+          shrinkage_weight: { from_sweep: shrinkage_weight }
+          quantile: 0.95
+          global_reference: shared_mean
+          size_aware_variant:
+            formula: "lambda(n) = n / (n + 100)"
+            clamping: clamp_to_closed_interval_zero_one
+            zero_row_behavior: lambda_equals_zero_full_fallback_to_global_reference
+          effective_lambda_reporting: reported_per_client
+          fallback_frequency_reporting: reported_as_fraction_of_clients_at_lambda_floor
         requested_metrics: [cv_fpr, p10_macro_f1]
     analyses:
       - label: shrinkage_vs_local
@@ -285,6 +309,7 @@ experiments:
         primary_metric: cv_fpr
         delta_orientation: shrinkage_minus_local
         primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        statistical_profile: { pairing_key: seed, resampling_unit: per_seed_paired_delta, analysis_seed_derivation: deterministic_from_experiment_seed_and_analysis_label, missing_pair_behavior: exclude_and_report_reduced_seed_count, zero_difference_behavior: retain_as_zero_delta_included_in_resample, finite_value_validation: reject_non_finite_delta_as_typed_error }
         secondary_procedures: []
     seed_cohort:
       paired_seed_count: 10
@@ -310,7 +335,8 @@ experiments:
     display_name: Conformal Local-Threshold Coverage
     evidence_role: supportive
     run_requirement: mandatory
-    tier: tier_1
+    tier: tier_2
+    supports_confirmatory_tautology_defense: tier_1
     roadmap_reference: E-V3
     regimes:
       - id: regime_a
@@ -346,7 +372,21 @@ experiments:
       - label: local
         threshold: { policy: local_threshold, quantile: 0.95 }
       - label: conformal_local
-        threshold: { policy: conformal_local_threshold, conformal_mode: split_conformal, coverage_alpha: 0.05 }
+        threshold:
+          policy: conformal_local_threshold
+          conformal_mode: split_conformal
+          coverage_alpha: 0.05
+          rank_formula: "rank = min(ceil((n + 1) * (1 - coverage_alpha)), n)"
+          order_statistic_selection: ascending_calibration_score_order_statistic_at_rank
+          tie_break: nearest_higher_order_statistic
+          minimum_sample_count: 100
+          calibration_unit: per_client_benign_calibration_scores
+          evaluation_unit: per_client_benign_test_scores
+          coverage_breakdown: [marginal_sample_weighted_coverage, macro_client_coverage, per_client_coverage]
+          coverage_target_error: absolute_achieved_minus_target_coverage
+          exchangeability_limitation: within_client_exchangeability_assumed_not_verified_across_clients
+          unavailable_behavior: typed_unavailable_if_client_below_minimum_sample_count
+          edge_iiotset_scope: benign_coverage_only
     analyses:
       - label: conformal_vs_local
         kind: paired_threshold_analysis
@@ -355,6 +395,7 @@ experiments:
         primary_metric: cv_fpr
         delta_orientation: conformal_minus_local
         primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        statistical_profile: { pairing_key: seed, resampling_unit: per_seed_paired_delta, analysis_seed_derivation: deterministic_from_experiment_seed_and_analysis_label, missing_pair_behavior: exclude_and_report_reduced_seed_count, zero_difference_behavior: retain_as_zero_delta_included_in_resample, finite_value_validation: reject_non_finite_delta_as_typed_error }
         secondary_procedures: []
     seed_cohort:
       paired_seed_count: 10

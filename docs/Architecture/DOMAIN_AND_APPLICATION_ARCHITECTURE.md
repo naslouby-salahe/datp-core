@@ -546,7 +546,7 @@ StatisticalProcedure = (
     BcaBootstrap
     | PercentileBootstrap
     | WilcoxonSignedRank
-    | CliffsDelta
+    | MatchedPairsRankBiserialCorrelation
     | SpearmanCorrelation
     | LinearRegression
 )
@@ -753,13 +753,13 @@ one per `STATISTICAL_ANALYZE`-eligible `AnalysisDefinition` kind; excludes
 | `ClientEvaluationResult` | per-client sufficient operating point: counts, assigned threshold, FPR/TPR/precision/recall/F1/balanced accuracy, eligibility status and reason |
 | `CvOutcome` | `ValidCvResult` or `UndefinedCvResult`, exhaustive |
 | `EligibleClientSet` | one persisted population, built once per paired comparison, reused unchanged by every compared policy |
-| `EligibilityCoverageResult` / `ConformalCoverageResult` | disjoint coverage identities; never share a metric or table column |
+| `EligibilityCoverageResult` / `ConformalCoverageResult` | disjoint coverage identities; never share a metric or table column. `ConformalCoverageResult` (frozen dataclass, `§16.6`) carries `rank: PositiveInt`, `minimum_sample_count: PositiveInt`, `marginal_sample_weighted_coverage: Probability`, `macro_client_coverage: Probability`, `per_client_coverage: Mapping[ClientId, Probability]`, `coverage_target_error: NonNegativeFloat`, and `exchangeability_scope: Literal["within_client"]` (`EVALUATION_REPORTING_AND_PROVENANCE.md §6.2`) |
 | `FleetDispersionResult` / `FleetDetectionResult` / `FleetEquityResult` / `ClusterDispersionResult` | fleet-level aggregates; equity and cluster results are optional |
 | `PolicyEvaluationResult` | the cohesive per-`EvaluationDefinition` result, joining identity, per-client map, and fleet results |
 | `TrafficRateEvidence` / `AlertBurdenResult` | validated rate evidence and its derived burden |
 | `PairedDeltaResult` | per-seed delta, orientation locked |
 | `BootstrapIntervalOutcome` | valid or expected-degenerate BCa result |
-| `WilcoxonSignedRankResult` / `CliffsDeltaResult` | descriptive secondary evidence only |
+| `WilcoxonSignedRankResult` / `MatchedPairsRankBiserialResult` | descriptive secondary evidence only; the latter replaces `CliffsDeltaResult` as the paired effect size (Cliff's delta is unpaired and never used in this entirely paired-seed design) |
 | `ConfirmatoryAnalysisResult` | every `PairedPolicyEffectAnalysis` verdict: paired delta, interval, sign consistency, pass flag, claim outcome (its name reflects its headline confirmatory use) |
 | `MetricAssociationResult` | `MetricAssociationAnalysis`: Spearman ρ, regression R², sample size |
 | `DistributionMechanismResult` | `DistributionMechanismAnalysis`: source evaluations and per-client `(Δτ, ΔFPR, ΔTPR)` shift table |
