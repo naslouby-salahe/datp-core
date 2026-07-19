@@ -77,8 +77,13 @@ observed_facts:
   per_class_file_count: 309
   model_feature_count: 39
   merged_column_count: 40
-  merged_excess_duplicate_rate: 0.53340   # measured candidate-row duplicate rate; feeds the global_dedup_primary materialization's equivalence-class computation
-  degenerate_window_rate: 0.000022
+  merged_excess_duplicate_rate: 0.5472   # measured 2026-07-19 audit: 24,636,166 excess / 45,019,234 total = 54.72%; feeds the global_dedup_primary materialization's equivalence-class computation
+  degenerate_window_rate: 0.0000151       # measured 2026-07-19 audit: 679 degenerate rows / 45,019,234 total = 0.00151%
+  merged_data_rows: 45019234             # measured 2026-07-19 audit: total data rows across all 63 merged files
+  merged_benign_rows: 1051373            # measured 2026-07-19 audit: BENIGN label rows
+  merged_attack_rows: 43967861           # measured 2026-07-19 audit: attack label rows
+  merged_empty_label_rows: 9             # measured 2026-07-19 audit: rows with empty Label (Merged42,44,46-52)
+  benign_fraction: 0.02335               # measured 2026-07-19 audit: 2.34% benign
   merged_files_are_shuffled_mixture_of_all_classes: true
   device_mac_ip_capture_timestamp_columns_present: false
 readiness:

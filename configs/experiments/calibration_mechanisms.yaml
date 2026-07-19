@@ -166,7 +166,7 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [cluster_stability_result]
             output_formats: [markdown, latex]
-        wording_outcomes: [strong_positive, weak_positive, mixed, null]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null_result]
 
   - slug: calibration_window_size_stability
     display_name: Calibration-Window-Size Stability
@@ -256,7 +256,7 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [policy_evaluation_result, confirmatory_analysis_result]
             output_formats: [markdown, latex]
-        wording_outcomes: [strong_positive, weak_positive, mixed, null]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null_result]
 
   - slug: local_global_threshold_shrinkage
     display_name: Local-Global Threshold Shrinkage
@@ -329,7 +329,7 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [policy_evaluation_result]
             output_formats: [pdf, png]
-        wording_outcomes: [strong_positive, weak_positive, mixed, null]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null_result]
 
   - slug: conformal_local_threshold_coverage
     display_name: Conformal Local-Threshold Coverage
@@ -415,4 +415,4 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [policy_evaluation_result, conformal_coverage_result, eligibility_coverage_result]
             output_formats: [markdown, latex]
-        wording_outcomes: [strong_positive, weak_positive, mixed, null]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null_result]

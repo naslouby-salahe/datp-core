@@ -91,4 +91,4 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [confirmatory_analysis_result]
             output_formats: [markdown, latex]
-        wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null_result, opposite]

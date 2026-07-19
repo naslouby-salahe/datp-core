@@ -16,7 +16,7 @@ experiments:
     sweep:
       parameters:
         federated_proximal_mu:
-          values: [0.001, 0.01, 0.1]
+          values: [0.001, 0.01, 0.1, 1.0]
     regimes:
       - id: regime_a
         run_requirement: mandatory
@@ -81,7 +81,7 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [confirmatory_analysis_result]
             output_formats: [markdown, latex]
-        wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null_result, opposite]
 
   - slug: model_personalization_absorption_test
     display_name: Model-Personalization Absorption Test

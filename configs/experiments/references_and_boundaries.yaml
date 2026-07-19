@@ -40,7 +40,7 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [policy_evaluation_result]
             output_formats: [markdown, latex]
-        wording_outcomes: [strong_positive, weak_positive, mixed, null]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null_result]
 
   - slug: federated_summary_comparator
     display_name: Federated Summary-Statistic Comparator
@@ -144,7 +144,7 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [confirmatory_analysis_result, quantile_estimation_result]
             output_formats: [markdown, latex]
-        wording_outcomes: [strong_positive, weak_positive, mixed, null]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null_result]
 
   - slug: file_pseudo_client_applicability_boundary
     display_name: File-Pseudo-Client Applicability Boundary
@@ -201,7 +201,7 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [confirmatory_analysis_result]
             output_formats: [markdown, latex]
-        wording_outcomes: [null, feasibility_rejection]
+        wording_outcomes: [null_result, feasibility_rejection]
 
   - slug: operational_alert_burden
     display_name: Operational Alert Burden
@@ -277,4 +277,4 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [policy_evaluation_result]
             output_formats: [markdown, latex]
-        wording_outcomes: [strong_positive, weak_positive, mixed, null, omitted]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null_result, omitted]

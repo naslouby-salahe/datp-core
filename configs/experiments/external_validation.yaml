@@ -80,7 +80,7 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [confirmatory_analysis_result]
             output_formats: [markdown, latex]
-        wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite, feasibility_rejection]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null_result, opposite, feasibility_rejection]
 
   - slug: chronological_recalibration_evaluation
     display_name: Chronological Recalibration Evaluation

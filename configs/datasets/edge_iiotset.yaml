@@ -130,7 +130,7 @@ field_schema:
   retained_numeric_features:
     role: model_feature
     type: numeric_float
-    count: 39
+    count: 38
     order:
       - arp.opcode
       - arp.hw.size
@@ -153,7 +153,6 @@ field_schema:
       - tcp.seq
       - udp.stream
       - udp.time_delta
-      - dns.qry.name
       - dns.qry.qu
       - dns.qry.type
       - dns.retransmission
@@ -200,7 +199,7 @@ field_schema:
         (e.g. injection-payload strings in http.referer/http.request.version)
         are excluded from a benign-only fit.
       encoded_feature_count: 76
-      total_model_feature_count: 115
+      total_model_feature_count: 114
       per_column_measured_width: { http.request.method: 9, http.referer: 6, http.request.version: 14, dns.qry.name.len: 17, mqtt.conack.flags: 14, mqtt.protoname: 4, mqtt.topic: 12 }
       observed_source_categories:
         http.request.method:
@@ -287,7 +286,7 @@ field_schema:
         - Water_Level
         - phValue
   leakage_exclusions:
-    columns: [frame.time, ip.src_host, ip.dst_host, arp.src.proto_ipv4, arp.dst.proto_ipv4, http.file_data, http.request.full_uri, icmp.transmit_timestamp, http.request.uri.query, tcp.options, tcp.payload, tcp.srcport, tcp.dstport, udp.port, mqtt.msg]
+    columns: [frame.time, ip.src_host, ip.dst_host, arp.src.proto_ipv4, arp.dst.proto_ipv4, http.file_data, http.request.full_uri, icmp.transmit_timestamp, http.request.uri.query, tcp.options, tcp.payload, tcp.srcport, tcp.dstport, udp.port, mqtt.msg, dns.qry.name]
     role_basis: leakage_or_high_cardinality_or_client_identity_or_timestamp
   fingerprint_inputs:
     source: [source_layout.root, field_schema.source_column_count]
@@ -295,7 +294,7 @@ field_schema:
 observed_facts:
   normal_group_count: 10
   attack_file_count: 14
-  total_model_feature_count: 115
+  total_model_feature_count: 114
   benign_group_row_counts: { Distance: 1143540, Flame_Sensor: 1070196, Heart_Rate: 165319, IR_Receiver: 1307778, Modbus: 159502, Soil_Moisture: 1192777, Sound_Sensor: 1512883, Temperature_and_Humidity: 1615722, Water_Level: 2295288, phValue: 746908 }
   device_granularity_rejected: true
   timestamp_unusable_files: [Modbus, DDoS_UDP_Flood_attack, MITM_attack]
@@ -305,6 +304,19 @@ observed_facts:
   attack_resolved_subnets: [0]
   attack_rows_in_sensor_subnets_1_8: 0
   benign_subnet_consistency: one_subnet_per_folder_except_modbus_spans_0_and_7
+  column_misalignment_2026_07_19_audit:
+    affected_files: [Modbus/Modbus.csv, MITM_attack.csv, DDoS_UDP_Flood_attack.csv]
+    symptom: frame.time_column_contains_non_timestamp_data
+    severity: blocking_for_temporal_chronology
+    mitigation: excluded_from_temporal_regime_verified_in_config
+  dns_qry_name_2026_07_19_audit:
+    type: string_not_numeric
+    config_status: excluded_from_model_features_and_retained_as_source_evidence
+    actual_values: domain_name_strings
+    zero_value_in_non_dns_groups: true
+    resolution: excluded_as_high_cardinality_string_feature
+    severity: resolved
+  total_audit_timestamp: "2026-07-19"
 readiness:
   source_schema_complete: true
   benign_group_partition_recoverable: true

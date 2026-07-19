@@ -103,7 +103,7 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [resource_cost_result]
             output_formats: [markdown, latex]
-        wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null_result, opposite]
 
   - slug: shared_threshold_construction_sensitivity
     display_name: Shared-Threshold Construction Sensitivity
@@ -168,7 +168,7 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [policy_evaluation_result]
             output_formats: [markdown, latex]
-        wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null_result, opposite]
 
   - slug: threshold_quantile_sensitivity
     display_name: Threshold Quantile Sensitivity
@@ -244,4 +244,4 @@ experiments:
             missing_value_policy: render_typed_unavailable
             source_result_types: [policy_evaluation_result]
             output_formats: [markdown, latex]
-        wording_outcomes: [strong_positive, weak_positive, mixed, null, opposite]
+        wording_outcomes: [strong_positive, weak_positive, mixed, null_result, opposite]
