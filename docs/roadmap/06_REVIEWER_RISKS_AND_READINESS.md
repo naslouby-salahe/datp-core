@@ -1,123 +1,1237 @@
 # 06 — Reviewer Risks and Readiness
 
-**Purpose.** Own reviewer defence and readiness: the complete reviewer-objection register with testable defences, the highest residual risks, the identity/experiment/claim/module/manuscript readiness checklists, and the submission-readiness conditions. This file consolidates *what a reviewer might attack and whether the program is ready to answer*.
+## Purpose
 
-**What this file owns.**
-- The complete reviewer-objection register (L01–L28) with testable defence or locked wording.
-- Novelty/overlap, Laridi positioning, tautology, model-personalization absorption, dataset/client-partition, privacy/deployment/security/fairness-framing risks.
-- Risk severity and residual risks (highest residual risks and their handling).
-- Core-identity, experiment-readiness, module-integration, claim-discipline, and manuscript-readiness checklists.
-- Submission-readiness conditions and blocking/non-blocking residual risks.
+This document identifies the reviewer attacks most likely to threaten DATP-Core and defines the evidence required to answer them.
 
-**What this file does not own.**
-- The formal claim tiers, fallback wording, and decision rules → see [02 — Claims and Decision Rules](./02_CLAIMS_AND_DECISION_RULES.md).
-- Experiment definitions the defences point to → see [03 — Experiment Catalogue](./03_EXPERIMENT_CATALOGUE.md).
-- Go/No-Go decisions and feasibility gates → see [07 — Audit and Decision Log](./07_AUDIT_AND_DECISION_LOG.md).
-- Scientific identity, nomenclature, and scope boundaries → see [01 — Scientific Identity and Scope](./01_SCIENTIFIC_IDENTITY_AND_SCOPE.md).
+It owns:
 
-> **Status note.** The checklists below reproduce the source roadmap's unchecked (☐) state. Splitting the roadmap into a package does **not** mark any checklist item complete.
+- reviewer-risk prioritization;
+- defence requirements;
+- residual-risk classification;
+- scientific and manuscript readiness;
+- submission blockers;
+- final reviewer-readiness audits.
 
-**Related files.** [00 — Index](./00_ROADMAP_INDEX.md) · [01 — Identity](./01_SCIENTIFIC_IDENTITY_AND_SCOPE.md) · [02 — Claims](./02_CLAIMS_AND_DECISION_RULES.md) · [07 — Audit and Decision Log](./07_AUDIT_AND_DECISION_LOG.md)
+It does not redefine claims, experiments, metrics, or implementation.
 
----
+Related files:
 
-## Risk summary
+- [01 — Scientific Identity and Scope](./01_SCIENTIFIC_IDENTITY_AND_SCOPE.md)
+- [02 — Claims and Decision Rules](./02_CLAIMS_AND_DECISION_RULES.md)
+- [03 — Experiment Catalogue](./03_EXPERIMENT_CATALOGUE.md)
+- [04 — Evaluation and Reporting Protocol](./04_EVALUATION_AND_REPORTING_PROTOCOL.md)
+- [05 — Implementation Roadmap](./05_IMPLEMENTATION_ROADMAP.md)
+- [07 — Audit and Decision Log](./07_AUDIT_AND_DECISION_LOG.md)
 
-The dominant residual risk is model-personalization *absorption* — whether the threshold-scope gain survives when the model itself is personalized — handled by a pre-specified absorption rule with all outcomes reportable. The second risk is novelty collapse against Laridi et al. (2024), handled by a matched-exceedance benign-only comparator plus an explicit disclosure that the anomaly-labeled Laridi-faithful setting is out of DATP's benign-only contract. Secondary risks are modest client count (K ∈ [9, 15]), single temporal split, qualitative-only privacy framing, and possible CI widening under the 10-seed extension. All are scoped explicitly with pre-committed wording.
-
----
-
-## Reviewer Loophole Register
-
-Each row: the reviewer attack, why it is dangerous, the roadmap defense, the required experiment or wording, and a status checkbox. Defenses are testable; none is hand-waved.
-
-| # | Reviewer attack | Why dangerous | Roadmap defense | Required experiment / wording | Status |
-|---|---|---|---|---|---|
-| L01 | "Thresholding is trivial post-processing" | Dismisses the whole contribution | Freeze the encoder; show scope changes per-client FPR at near-constant AUROC | E-C1 + AUROC control reported | ☐ |
-| L02 | "Laridi already does federated thresholding" | Novelty collapse | Delta is benign-only + operating-point equity; matched-exceedance comparator; explicit faithful/benign-only split | E-T3 + `B-LaridiFaithful` out-of-scope disclosure | ☐ |
-| L03 | "Local thresholds just overfit benign calibration" | Undercuts B2 | Held-out test measurement; calibration-size sweep; conformal coverage | E-C1 (test), E-V1, E-V3 | ☐ |
-| L04 | "B2 works only because it controls FPR by construction" | Tautology | Appendix A: equality exact on cal data only; empirical test-FPR variance is what is measured; B2-conf finite-sample coverage | Appendix A + E-V3 + wording ([02](./02_CLAIMS_AND_DECISION_RULES.md#b1-vs-b2-confirmatory-tier-1)) | ☐ |
-| L05 | "CV(FPR) is not enough" | Metric fragility | Report IQR, max−min, worst-client FPR, alert burden, equity suite | E-S1, E-O1, E-Q3 | ☐ |
-| L06 | "Cluster thresholds are just known clustering" | Novelty of module | Contribution is threshold-scope clustering on a *fixed* federated detector; outcome is operational FPR equity; contrast Sáez-de-Cámara (clusters models) | E-M1 + related work | ☐ |
-| L07 | "Family labels are arbitrary" | Undermines B3 | B3 reported precisely as underperforming because taxonomy ≠ calibration structure; motivates B4 | Existing B3 result + wording | ☐ |
-| L08 | "B4 K was tuned after seeing results" | HARKing | K = 3 canonical pre-committed; silhouette instability documented; other K exploratory/supplementary | SB-K lock + E-M1 | ☐ |
-| L09 | "Small calibration windows make B2 unrealistic" | External validity | Calibration-size sweep + shrinkage + calibration-size-aware fallback; argue small/contaminated windows are real | E-V1, E-V2 | ☐ |
-| L10 | "Shrinkage is textbook" | Novelty of module | No new statistical theory claimed; contribution is testing calibration robustness in FL-IoT thresholding | E-V2 wording | ☐ |
-| L11 | "Federated quantiles are not novel" | Overclaim risk | Positioned explicitly as backbone/primitive; no novel-estimator claim | E-Q1 wording | ☐ |
-| L12 | "Model personalization makes threshold personalization obsolete" | Strongest objection | Absorption ratio with pre-specified bands; all outcomes reportable | E-T2 + [02 — Absorption bands](./02_CLAIMS_AND_DECISION_RULES.md#model-personalization-absorption-bands-pre-specified) | ☐ |
-| L13 | "FedProx/Ditto/FedRep/FedPer are unfairly implemented" | Comparator fairness | µ-grid and E locked equal to FedAvg; Ditto choice documented before training; fallback named honestly | E-T1, E-T2 + G-notes | ☐ |
-| L14 | "CICIoT2023 pseudo-clients are not real clients" | Dataset validity | Reported as Regime B-a boundary only; B-b rejected on metadata grounds | E-R1 + wording ([02](./02_CLAIMS_AND_DECISION_RULES.md#ciciot2023-boundary)) | ☐ |
-| L15 | "Edge-IIoTset client mapping is ambiguous" | External-validity ceiling | Partition decided by first-principles feasibility audit; documented before training | E-X1 preprocessing audit | ☐ |
-| L16 | "External validation failed or is mixed" | Honesty test | Pre-committed mixed/null wording; reported as boundary | [02 — Edge-IIoTset external validation](./02_CLAIMS_AND_DECISION_RULES.md#edge-iiotset-external-validation) | ☐ |
-| L17 | "AUROC did not improve" | Misreads the paper | AUROC is a control, not the verdict; stated explicitly | Identity statement + wording | ☐ |
-| L18 | "Macro-F1 tradeoff is hidden" | Integrity | P10 Macro-F1 degradation reported as honest negative; Ennio deep dive | E-M3 + Tier 6 claim | ☐ |
-| L19 | "False-positive fairness is not human fairness" | Framing | "Fairness" defined once as operational/service-level FPR equity | Locked definition ([01](./01_SCIENTIFIC_IDENTITY_AND_SCOPE.md#fairness-definition-locked)) | ☐ |
-| L20 | "No privacy guarantee" | Scope | Qualitative bounded-disclosure only; B4 explicitly not a privacy mechanism; DP/SecAgg future work | Privacy disclosure table | ☐ |
-| L21 | "No deployment measurement" | Scope | Communication/storage estimated from message sizes; no hardware claim | E-Q6 + wording | ☐ |
-| L22 | "No poisoning/evasion/backdoor analysis" | Scope | Explicitly out of scope; named future work (DATP-CP is a separate paper) | SB list | ☐ |
-| L23 | "Too many experiments create HARKing" | Integrity | Pre-specification before observation; fallback wording locked; suppression rules explicit | [04 — Statistical requirements](./04_EVALUATION_AND_REPORTING_PROTOCOL.md#statistical-requirements-locked) + [02 — Fallback Wording](./02_CLAIMS_AND_DECISION_RULES.md#fallback-wording) | ☐ |
-| L24 | "Conference-to-journal overlap is too high" | Desk reject | ≥ 40% substantive new material (self-imposed benchmark); cover-letter enumeration; figures redrawn | [01 — Originality plan](./01_SCIENTIFIC_IDENTITY_AND_SCOPE.md#conference-to-journal-originality-plan) | ☐ |
-| L25 | "The journal extension is too broad" | Scope creep | Hard limits: 1 new dataset, 3 stress-test families, 4 threshold variants, 1 temporal family, 6 mechanism analyses | Scope boundaries ([01](./01_SCIENTIFIC_IDENTITY_AND_SCOPE.md#scope-boundaries-stable-labels)) | ☐ |
-| L26 | "The journal extension is too narrow" | Editor judgment | Framed as a fairness-oriented threshold-calibration study with external + stress + mechanism evidence | Executive summary framing | ☐ |
-| L27 | "The code was inherited and messy" | Reproducibility | New codebase written from scratch; reference project used only for DATP semantics | [05 — Scratch boundary](./05_IMPLEMENTATION_ROADMAP.md#scratch-implementation-boundary-and-behavioral-reference) | ☐ |
-| L28 | "Scratch codebase means reproducibility must be specified cleanly" | Reproducibility | Deterministic seeds, reproducible manifests, testable threshold-policy contracts, traceable tables/figures | [05 — Implementation-clarity checklist](./05_IMPLEMENTATION_ROADMAP.md#implementation-clarity-checklist) | ☐ |
-
-**Highest residual risks.** L12 (model-personalization absorption) and L02 (Laridi novelty) remain the two highest residual risks; both have pre-specified interpretation rules that keep all outcomes reportable. Neither can invalidate the confirmatory claim.
+All readiness items remain unchecked until supported by executed evidence. Rewriting this document does not mark any item complete.
 
 ---
 
-## Checklists
+# 1. Readiness states
 
-### Core Identity Checklist
-- ☐ Encoder/AE fixed for the core B1–B4 ladder (same final state, seeds, score artifacts).
-- ☐ Threshold-calibration scope is the sole causal variable.
-- ☐ Calibration is benign-only; attack data evaluation-only.
-- ☐ CV(FPR) is the primary metric everywhere.
-- ☐ AUROC is a control metric, never the thresholding verdict.
-- ☐ FedProx, model personalization, and Laridi-style comparators are outside the causal ladder.
-- ☐ No privacy / deployment / security / drift overclaim anywhere.
-- ☐ "Fairness" means operational FPR equity, stated once.
+Use the following states consistently.
 
-### Experiment Readiness Checklist
-- ☐ Dataset feasibility verified (N-BaIoT, Edge-IIoTset coverage; CICIoT2023 B-b rejection recorded).
-- ☐ Client identity verified per regime before training.
-- ☐ Calibration/test split semantics verified (benign-only calibration; gapped chronological splits where used).
-- ☐ Checkpoint protocol fixed before results (train-once, save-many, Regime-A global selection).
-- ☐ Seeds fixed (10 for confirmatory).
-- ☐ Metrics fixed before results.
-- ☐ Suppression and fallback rules fixed before results.
-- ☐ Any reused score cells verified by full lineage (schema, split identity, client IDs, checkpoint hashes, metric tolerance) or rejected.
-- ☐ Scratch implementation does not rely on the reference project's layout.
-- ☐ `/home/naslouby/Projects/datp` used only as a behavioral reference for DATP semantics.
+**Not ready**  
+Required evidence or wording is missing.
 
-### Module Integration Checklist
-- ☐ Cluster/Family module integrated as core mechanism (Tier 5), not confirmatory.
-- ☐ Small-window/shrinkage module integrated as supportive variant.
-- ☐ Federated-quantile module integrated as backbone/primitive, no novelty overclaim.
-- ☐ Model-vs-threshold module integrated as external stress test; spin-off marked future work.
-- ☐ No module hijacks the confirmatory claim.
-- ☐ Optional/spin-off decisions are explicit for every module.
+**Partially ready**  
+Some evidence exists, but a material objection remains unanswered.
 
-### Claim Discipline Checklist
-- ☐ Every claim has an evidence requirement and a regime/metric.
-- ☐ Every weak/mixed/null outcome has pre-committed fallback wording.
-- ☐ No unsupported novelty language; no "first" without independent verification.
-- ☐ No hidden main claim in the supplement.
-- ☐ No cherry-picked checkpoint, K, or calibration size.
-- ☐ No hidden failed experiment; suppressed items are documented in [03 — Suppressed / Rejected](./03_EXPERIMENT_CATALOGUE.md#suppressed--rejected).
+**Evidence ready**  
+The required experiment, audit, and artifacts exist.
 
-### Manuscript Readiness Checklist
-- ☐ Results written before the abstract; prose order Results → Methods → Discussion → Limitations → Related Work → Abstract → Conclusion → Supplement → cover letter.
-- ☐ Methods match the executed experiments exactly.
-- ☐ Limitations explicit (K, seeds, temporal, privacy, Laridi adaptation, CI width).
-- ☐ Related work addresses Laridi (2024) and model personalization directly.
-- ☐ Discussion separates success, boundary, and failure.
-- ☐ Supplement holds exploratory material; main paper stays readable and focused.
+**Manuscript ready**  
+Evidence is interpreted correctly and limitations are explicit.
+
+**Accepted residual risk**  
+The limitation cannot be removed within scope but is disclosed.
+
+**Blocking risk**  
+The issue prevents a claim, result family, submission, or the complete paper.
 
 ---
 
-## Submission-readiness conditions and residual risks
+# 2. Priority risks
 
-- **Blocking for print (non-blocking for start).** Re-verify the actual processed CICIoT2023 feature count before any quantitative CICIoT2023 statement (conference value d = 39; mirror distributions differ). Recorded as a feasibility gate in [07 — Go / No-Go](./07_AUDIT_AND_DECISION_LOG.md#go--no-go--conditional-go-summary).
-- **Blocking for the Tier 3 claim only.** The Edge-IIoTset external-validation claim proceeds only if eligibility coverage is met (n_k ≥ 100 for ≥ 90% of clients) and the partition is assigned by the first-principles feasibility audit; otherwise reduce K or defer per the locked wording.
-- **Accepted residual risks (non-blocking, pre-specified handling).** Model-personalization absorption (E-T2, four bands, all reportable) and Laridi novelty (E-T3 matched-exceedance benign-only + `B-LaridiFaithful` out-of-scope disclosure); modest client count (K ∈ [9, 15]); single temporal split; qualitative-only privacy framing; possible CI widening under the 10-seed extension. None can invalidate the confirmatory claim.
+## Highest risks
+
+1. **Model-personalization absorption**  
+   Ditto may remove most of the B1-versus-B2 gain.
+
+2. **Laridi novelty overlap**  
+   Federated summary-statistics thresholding may substantially overlap the claimed contribution.
+
+3. **Calibration tautology**  
+   A reviewer may argue that B2 reduces FPR dispersion by construction.
+
+4. **External client validity**  
+   Edge-IIoTset and CICIoT2023 client definitions may be challenged.
+
+5. **Conference-extension originality**  
+   The manuscript may appear too close to the conference paper.
+
+## Important accepted limitations
+
+- nine natural N-BaIoT clients;
+- one external dataset;
+- incomplete Edge-IIoTset client-level attack evaluation;
+- one bounded temporal experiment;
+- no formal privacy;
+- no hardware validation;
+- possible ten-seed confidence-interval widening;
+- one aggregation and one model-personalization stress test.
+
+These limitations narrow claims but do not invalidate a valid Regime A confirmatory result.
+
+---
+
+# 3. Contribution and novelty risks
+
+## 3.1 Thresholding is “only post-processing”
+
+**Attack**  
+The paper does not introduce a new detector and therefore lacks contribution.
+
+**Defence**
+
+- freeze the detector and score artifacts;
+- change only threshold-calibration scope;
+- show AUROC invariance;
+- show material per-client FPR changes;
+- frame the contribution as deployment operating-point reliability.
+
+**Evidence required**
+
+- ten-seed B1-versus-B2 result;
+- identical B1–B4 score lineage;
+- AUROC invariance check;
+- per-client FPR;
+- threshold-shift and score-distribution analyses.
+
+**Readiness**
+
+- [ ] Same model and scores verified across B1–B4.
+- [ ] AUROC invariance verified.
+- [ ] Client operating-point effects reported.
+- [ ] Manuscript does not claim a new detector.
+
+**Residual risk:** moderate.
+
+---
+
+## 3.2 Laridi et al. already perform federated thresholding
+
+**Attack**  
+Federated autoencoder thresholding from distributed summary statistics already exists.
+
+**Defence**
+
+Distinguish:
+
+- anomaly-informed versus benign-only calibration;
+- one shared summary threshold versus threshold-scope personalization;
+- pooled performance versus cross-client FPR equity;
+- Laridi-faithful reproduction versus `B-FedStatsBenign`.
+
+**Evidence required**
+
+- primary-paper comparison;
+- matched-exceedance `B-FedStatsBenign`;
+- full pooled variance;
+- within and between terms;
+- B1/B2/comparator result;
+- explicit non-faithful naming.
+
+**Readiness**
+
+- [ ] Laridi method verified from the primary paper.
+- [ ] Benign-only distinction is precise.
+- [ ] Comparator protocol was frozen before computation.
+- [ ] Between-client mean shift is included.
+- [ ] Matched-exceedance result exists.
+- [ ] No “Laridi-faithful” wording is used for the benign adaptation.
+
+**Residual risk:** high until comparator and positioning are complete.
+
+---
+
+## 3.3 B4 is ordinary clustering
+
+**Attack**  
+Applying k-means to four score summaries is not novel.
+
+**Defence**
+
+Do not claim clustering novelty.
+
+The contribution is testing whether data-driven threshold-sharing scope on a fixed detector provides a stable intermediate operating point.
+
+**Evidence required**
+
+- canonical `K = 3`;
+- B1/B3/B4/B2 comparison;
+- recovery fraction;
+- memberships and cluster sizes;
+- adjusted Rand stability;
+- within/across dispersion;
+- fingerprint ablation;
+- distinction from clustered model training.
+
+**Readiness**
+
+- [ ] Canonical B4 setting is frozen.
+- [ ] Alternative `K` values are exploratory.
+- [ ] Memberships and stability are reported.
+- [ ] Fingerprint ablation is complete.
+- [ ] Related work distinguishes threshold clustering from model clustering.
+- [ ] No new-clustering-algorithm claim appears.
+
+**Residual risk:** moderate.
+
+---
+
+## 3.4 Shrinkage and quantiles are standard methods
+
+**Attack**  
+The journal extension is a collection of textbook tools.
+
+**Defence**
+
+Position them as bounded analyses of:
+
+- calibration scarcity;
+- estimator stability;
+- target attainment;
+- partial pooling;
+- shared-versus-local threshold scope.
+
+**Readiness**
+
+- [ ] No new statistical-theory claim appears.
+- [ ] Full calibration and shrinkage curves are reported.
+- [ ] No favorable value is selected post hoc.
+- [ ] Quantile framing is described as a methods backbone.
+- [ ] Negative behavior remains visible.
+
+**Residual risk:** low when claims remain narrow.
+
+---
+
+## 3.5 Conference overlap is too high
+
+**Attack**  
+The journal paper is not a sufficiently extended work.
+
+**Defence**
+
+The paper must visibly add:
+
+- ten-seed evidence;
+- stronger statistics;
+- Edge-IIoTset;
+- invalid-partition rejection;
+- matched threshold comparator;
+- FedProx and Ditto;
+- calibration robustness;
+- B2-conf;
+- mechanism analyses;
+- temporal recalibration;
+- stronger provenance and negative-result handling.
+
+**Readiness**
+
+- [ ] Conference paper is cited.
+- [ ] Extension is disclosed.
+- [ ] New contributions are enumerated.
+- [ ] Figures are redrawn or materially extended.
+- [ ] Tables are extended or replaced.
+- [ ] Overlap audit is complete.
+- [ ] The self-imposed 40% target is not presented as publisher policy.
+- [ ] Cover letter explains the extension.
+
+**Blocking level:** submission-blocking.
+
+---
+
+# 4. Confirmatory-methodology risks
+
+## 4.1 B2 reduces FPR dispersion by construction
+
+**Attack**  
+The primary finding is predetermined by per-client quantile calibration.
+
+**Defence**
+
+Distinguish calibration exceedance from held-out test FPR.
+
+Explain that test FPR depends on:
+
+- finite calibration;
+- calibration/test shift;
+- client score distribution;
+- sample size;
+- threshold-estimation error.
+
+**Evidence required**
+
+- disjoint calibration and test splits;
+- held-out FPR;
+- calibration-size analysis;
+- target-attainment error;
+- B2-conf;
+- shared-construction controls;
+- absolute dispersion.
+
+**Readiness**
+
+- [ ] Calibration and test are disjoint.
+- [ ] Held-out FPR is the endpoint.
+- [ ] Tautology explanation is included.
+- [ ] B2-conf is evaluated.
+- [ ] Calibration-size analysis is complete.
+- [ ] No claim of guaranteed test-FPR equality appears.
+
+**Residual risk:** high until fully addressed.
+
+---
+
+## 4.2 Local thresholds overfit
+
+**Attack**  
+B2 benefits only from highly tailored or noisy calibration.
+
+**Defence**
+
+Use:
+
+- held-out test results;
+- repeated calibration subsampling;
+- threshold variance;
+- calibration-size curves;
+- shrinkage;
+- B2-conf;
+- complete detection trade-offs.
+
+**Readiness**
+
+- [ ] Full calibration-size grid exists.
+- [ ] Nested subsamples do not inflate seed count.
+- [ ] Threshold variance is reported.
+- [ ] Shrinkage curve is complete.
+- [ ] Small-sample collapse is not hidden.
+- [ ] Detection trade-offs remain visible.
+
+**Residual risk:** moderate after the complete analysis.
+
+---
+
+## 4.3 `CV(FPR)` is fragile
+
+**Attack**  
+CV can be unstable when mean FPR is near zero.
+
+**Defence**
+
+Always report:
+
+- mean FPR;
+- IQR;
+- range;
+- worst-client FPR;
+- client-level values;
+- near-zero status.
+
+Optional Jain and Gini values may supplement but not replace CV.
+
+**Readiness**
+
+- [ ] `ddof=0` is fixed.
+- [ ] Zero-mean CV is undefined.
+- [ ] Near-zero handling is configured.
+- [ ] Absolute dispersion accompanies CV.
+- [ ] No metric switch occurs after results.
+
+**Residual risk:** low when protocol is followed.
+
+---
+
+## 4.4 Checkpoint cherry-picking
+
+**Attack**  
+The selected round maximizes the DATP effect.
+
+**Defence**
+
+Use one non-test Regime A selector, frozen before outcome inspection, and show all checkpoint trajectories.
+
+**Readiness**
+
+- [ ] Selector is explicitly configured.
+- [ ] No test or attack metric enters selection.
+- [ ] All candidate checkpoints exist.
+- [ ] One round is reused where required.
+- [ ] Full trajectories remain available.
+- [ ] B1 and B2 do not use different rounds.
+
+**Blocking level:** confirmatory-result blocking.
+
+---
+
+## 4.5 Post-hoc selection of `K`, quantile, or calibration size
+
+**Attack**  
+Flexible grids permit favorable selection.
+
+**Defence**
+
+Freeze:
+
+- B4 `K = 3`;
+- exploratory alternative `K`;
+- quantile grid;
+- calibration-size grid;
+- shrinkage grid;
+- conformal level;
+- FedProx grid;
+- personalization rule;
+- temporal recovery threshold.
+
+**Readiness**
+
+- [ ] Every grid exists in resolved configuration.
+- [ ] Every grid value is reported.
+- [ ] Canonical settings are unchanged.
+- [ ] Deviations appear in the audit log.
+- [ ] Exploratory results are labeled.
+
+---
+
+## 4.6 Ten seeds weaken the conference result
+
+**Attack**  
+The original result may not reproduce or may be less certain.
+
+**Defence**
+
+- reproduce the historical five-seed subset;
+- audit discrepancies;
+- use the ten-seed result as authoritative;
+- never substitute the stronger conference interval.
+
+**Readiness**
+
+- [ ] Five-seed reproduction completed.
+- [ ] Discrepancy report exists.
+- [ ] Material differences are resolved or blocking.
+- [ ] Ten-seed evidence is primary.
+- [ ] Conference values are labeled historical.
+
+**Blocking level:** final confirmatory interpretation while unresolved.
+
+---
+
+# 5. Comparator risks
+
+## 5.1 FedProx is unfairly implemented
+
+**Defence requirements**
+
+- frozen coefficient grid;
+- comparable training settings;
+- independent models and scores;
+- every coefficient retained;
+- convergence failures reported;
+- no post-hoc coefficient.
+
+**Readiness**
+
+- [ ] Grid frozen.
+- [ ] Comparison settings documented.
+- [ ] Every coefficient has a terminal status.
+- [ ] FedAvg scores are not reused.
+- [ ] Convergence diagnostics are reported.
+- [ ] FedProx remains a stress test.
+
+---
+
+## 5.2 The model-personalization comparator is not genuine Ditto
+
+**Defence requirements**
+
+A Ditto-labelled implementation must have:
+
+- global state;
+- persistent personalized states;
+- genuine proximal personalized objective;
+- no aggregation of personalized states;
+- separate provenance.
+
+Otherwise use the actual method name.
+
+**Readiness**
+
+- [ ] Algorithm checked against the primary paper.
+- [ ] Personalized state persistence verified.
+- [ ] Global and personalized artifacts are separate.
+- [ ] Hyperparameter selection is non-test.
+- [ ] Fallback naming is honest.
+
+**Blocking level:** blocks any claim using the name Ditto.
+
+---
+
+## 5.3 Model personalization makes DATP obsolete
+
+**Attack**  
+Personalized models may remove the need for threshold personalization.
+
+**Defence**
+
+Evaluate all four corners:
+
+- FedAvg + B1;
+- FedAvg + B2;
+- personalized model + B1;
+- personalized model + B2.
+
+Apply the locked absorption bands without adjustment.
+
+**Readiness**
+
+- [ ] All four corners exist.
+- [ ] Every score comes from the correct model.
+- [ ] Thresholds are recomputed on personalized scores.
+- [ ] Absorption is calculated exactly.
+- [ ] Cost differences are reported.
+- [ ] Claim wording matches the observed band.
+
+**Residual risk:** high until executed; accepted after honest reporting.
+
+---
+
+# 6. Dataset and client risks
+
+## 6.1 CICIoT2023 pseudo-clients are not physical clients
+
+**Defence**
+
+Treat the available partition as a file-defined applicability boundary only.
+
+**Readiness**
+
+- [ ] Actual artifact schema is reverified.
+- [ ] File-defined client construction is documented.
+- [ ] Device-aware wording is removed.
+- [ ] Physical-device repartition remains suppressed.
+- [ ] Row order and merge order are not used.
+- [ ] Actual feature count is verified before print.
+
+**Blocking level:** quantitative CICIoT2023 claims until verified.
+
+---
+
+## 6.2 Edge-IIoTset client mapping is ambiguous
+
+**Defence**
+
+Use the first-principles full-corpus audit.
+
+**Readiness**
+
+- [ ] Ten benign sensor groups reproduce.
+- [ ] Endpoint normalization is documented.
+- [ ] Eligible-benign coverage is reported.
+- [ ] Unresolved rows are explicitly excluded.
+- [ ] Attack-sensitive metric unavailability is enforced.
+- [ ] B3 is not executed.
+
+**Blocking level:** external-validation claim.
+
+---
+
+## 6.3 External validation is null or opposite
+
+**Defence**
+
+External evidence is non-confirmatory and has pre-specified null and reversal wording.
+
+**Readiness**
+
+- [ ] It is not described as second confirmation.
+- [ ] Null/reversal wording is prepared.
+- [ ] Dataset differences are discussed.
+- [ ] No replacement partition is introduced.
+- [ ] Material negative evidence remains in the main paper.
+
+**Residual risk:** accepted.
+
+---
+
+## 6.4 Natural client count is small
+
+**Defence**
+
+Acknowledge:
+
+- nine natural N-BaIoT clients;
+- complete display of all clients;
+- seeds do not increase client count;
+- synthetic clients are sensitivity evidence;
+- no fleet-scale claim.
+
+**Readiness**
+
+- [ ] All natural clients are shown.
+- [ ] Client and seed counts are not conflated.
+- [ ] No fleet-scale language appears.
+- [ ] Limitation is explicit.
+
+**Residual risk:** accepted.
+
+---
+
+# 7. Interpretation risks
+
+## 7.1 AUROC does not improve
+
+**Response**
+
+AUROC is a model-quality control. It should remain invariant across fixed-score threshold policies.
+
+**Readiness**
+
+- [ ] AUROC invariance is verified.
+- [ ] AUROC is not the threshold verdict.
+- [ ] Any policy-dependent difference is treated as a defect.
+
+---
+
+## 7.2 Macro-F1 trade-off is hidden
+
+**Defence**
+
+Report:
+
+- P10 Macro-F1;
+- worst-client balanced accuracy;
+- per-client TPR;
+- complete client score geometry;
+- low-separability client evidence.
+
+**Readiness**
+
+- [ ] P10 degradation is in the main paper.
+- [ ] No general Macro-F1 improvement claim appears.
+- [ ] All clients remain in the analysis.
+- [ ] Detection cost is discussed.
+
+**Blocking level:** submission-blocking if hidden.
+
+---
+
+## 7.3 Family labels are arbitrary
+
+**Defence**
+
+B3 is a physical-taxonomy mechanism baseline, not an assumed optimum.
+
+Weak B3 performance may show that physical taxonomy does not align with calibration structure.
+
+**Readiness**
+
+- [ ] Family taxonomy is artifact-grounded.
+- [ ] B3 remains a mechanism baseline.
+- [ ] Weak performance is retained.
+- [ ] B4 is not retroactively justified by rewriting B3.
+
+---
+
+## 7.4 Heterogeneity analysis claims causation
+
+**Defence**
+
+Use associative language and report full diagnostics.
+
+**Readiness**
+
+- [ ] “Associated with” replaces causal wording.
+- [ ] Spearman and regression diagnostics are reported.
+- [ ] All observations are shown.
+- [ ] Weak association remains visible.
+
+---
+
+# 8. Scope and framing risks
+
+## 8.1 False-positive fairness is not human fairness
+
+**Defence**
+
+Define fairness as operational false-alarm equity.
+
+Prefer:
+
+- operating-point equity;
+- false-alarm equity;
+- cross-client FPR dispersion.
+
+**Readiness**
+
+- [ ] Definition appears at first use.
+- [ ] No protected-attribute meaning is implied.
+- [ ] Title, abstract, and conclusion use precise wording.
+- [ ] “Fair detector” wording is removed.
+
+---
+
+## 8.2 No privacy guarantee
+
+**Defence**
+
+State:
+
+- raw data stay local;
+- no differential privacy;
+- no secure aggregation;
+- no formal leakage bound;
+- threshold summaries may disclose information;
+- B4 is not a privacy mechanism.
+
+**Readiness**
+
+- [ ] No privacy-preserving claim appears.
+- [ ] Message contents are disclosed.
+- [ ] Privacy limitation is explicit.
+- [ ] Formal privacy remains future work.
+
+**Residual risk:** accepted.
+
+---
+
+## 8.3 No deployment measurement
+
+**Defence**
+
+Distinguish:
+
+- estimated payload;
+- serialized size;
+- measured network traffic;
+- hardware measurements.
+
+**Readiness**
+
+- [ ] No edge-ready or lightweight claim appears.
+- [ ] Alert burden uses a real or cited rate.
+- [ ] Hypothetical rates are omitted.
+- [ ] Communication estimates are labeled.
+- [ ] No hardware conclusion is made.
+
+**Residual risk:** accepted.
+
+---
+
+## 8.4 No poisoning, evasion, backdoor, or Byzantine analysis
+
+**Defence**
+
+These are separate security questions. Calibration poisoning belongs to DATP-CP.
+
+**Readiness**
+
+- [ ] No adversarial-robustness claim appears.
+- [ ] Security attacks are explicitly out of scope.
+- [ ] Rejected security experiments are not described as missing work.
+
+---
+
+## 8.5 Temporal experiment does not solve drift
+
+**Defence**
+
+Describe the temporal work as one-shot recalibration under one verified chronological population.
+
+**Readiness**
+
+- [ ] Timestamps are verified.
+- [ ] Matched static reference exists.
+- [ ] Recovery ratio is computed only when defined.
+- [ ] No streaming method is added after failure.
+- [ ] No general drift-handling claim appears.
+
+---
+
+# 9. Research-integrity risks
+
+## 9.1 Too many experiments create HARKing
+
+**Defence**
+
+Use:
+
+- frozen configurations;
+- explicit evidence roles;
+- immutable manifests;
+- full grid reporting;
+- locked fallback interpretations;
+- explicit rejected analyses.
+
+**Readiness**
+
+- [ ] Every result has an evidence role.
+- [ ] Canonical and exploratory settings are separated.
+- [ ] All pre-specified conditions are reported.
+- [ ] Null and opposite results remain visible.
+- [ ] No hidden main claim exists in the supplement.
+- [ ] Deviations are recorded in [07](./07_AUDIT_AND_DECISION_LOG.md).
+
+---
+
+## 9.2 Code inheritance undermines reproducibility
+
+**Defence**
+
+DATP-Core is written from scratch; the prior project is behavioral only.
+
+**Readiness**
+
+- [ ] Reference-code use is documented.
+- [ ] No old layout is required.
+- [ ] No compatibility shims exist.
+- [ ] Anchor behavior is independently reproduced.
+- [ ] Every result has new artifact lineage.
+
+---
+
+## 9.3 Scratch code does not reproduce the original result
+
+**Defence**
+
+Require:
+
+- five-seed anchor reproduction;
+- split and checkpoint audit;
+- metric comparison;
+- invariance tests;
+- discrepancy handling.
+
+**Readiness**
+
+- [ ] Anchor reproduction report exists.
+- [ ] Material differences are explained.
+- [ ] B1–B4 semantics are tested.
+- [ ] Historical and journal checkpoints are separated.
+- [ ] Reproduction does not use manually copied outputs.
+
+---
+
+## 9.4 Methods, results, and claims do not match
+
+**Defence**
+
+Every manuscript value must trace through:
+
+```text
+configuration
+→ artifacts
+→ metrics
+→ statistics
+→ figure/table
+→ claim decision
+```
+
+**Readiness**
+
+- [ ] Methods match executed configurations.
+- [ ] Figures and tables use frozen manifests.
+- [ ] Claim wording follows [02](./02_CLAIMS_AND_DECISION_RULES.md).
+- [ ] Limitations match unavailable outcomes.
+- [ ] Planned work is not described as completed.
+
+**Blocking level:** submission-blocking.
+
+---
+
+# 10. Scope-balance risks
+
+## 10.1 The extension is too broad
+
+**Defence**
+
+Maintain hard limits:
+
+- one external dataset;
+- one benign summary-statistics comparator;
+- FedProx;
+- one model-personalization method;
+- bounded threshold variants;
+- one temporal family;
+- the locked mechanism analyses.
+
+**Readiness**
+
+- [ ] No second external dataset is added.
+- [ ] No broad personalized-FL benchmark is added.
+- [ ] No broad aggregation benchmark is added.
+- [ ] No privacy, hardware, poisoning, or streaming expansion is added.
+- [ ] Main narrative remains threshold-scope focused.
+
+---
+
+## 10.2 The extension is too narrow
+
+**Defence**
+
+Demonstrate depth through:
+
+- ten-seed evidence;
+- exact statistical protocol;
+- external validation;
+- comparator and stress tests;
+- mechanism analyses;
+- calibration robustness;
+- temporal boundary;
+- negative-result transparency.
+
+**Readiness**
+
+- [ ] Every module connects to the central question.
+- [ ] Main paper exceeds a conference re-run.
+- [ ] External, comparator, mechanism, and boundary evidence exist.
+- [ ] The paper remains one coherent study.
+
+**Residual risk:** editorial judgment.
+
+---
+
+# 11. Scientific readiness checklist
+
+## Core identity
+
+- [ ] B1–B4 use one fixed model and shared scores.
+- [ ] Threshold scope is the sole core variable.
+- [ ] Calibration is benign-only.
+- [ ] `CV(FPR)` is the sole confirmatory metric.
+- [ ] AUROC is a control.
+- [ ] Stress tests remain outside the causal ladder.
+- [ ] FPR equity is defined precisely.
+- [ ] No privacy, deployment, security, or drift overclaim appears.
+
+## Datasets and regimes
+
+- [ ] N-BaIoT nine-device population is verified.
+- [ ] N-BaIoT family taxonomy is verified.
+- [ ] CICIoT2023 file-defined scope is verified.
+- [ ] CICIoT2023 physical-device regime remains suppressed.
+- [ ] Actual CICIoT2023 feature count is reverified.
+- [ ] Edge-IIoTset ten-group mapping is verified.
+- [ ] Edge-IIoTset attack limitations are enforced.
+- [ ] Temporal nine-group chronology is verified.
+- [ ] Every regime has an immutable readiness and split manifest.
+
+## Confirmatory evidence
+
+- [ ] Five-seed anchor reproduced.
+- [ ] Material discrepancies resolved.
+- [ ] Ten seed models and scores exist.
+- [ ] Primary round is selected without test leakage.
+- [ ] Ten paired B1/B2 records exist.
+- [ ] BCa interval is reproducible.
+- [ ] Absolute dispersion is reported.
+- [ ] P10 Macro-F1 trade-off is reported.
+
+## Comparators
+
+- [ ] Shared-threshold controls are complete.
+- [ ] `B-FedStatsBenign` is frozen and validated.
+- [ ] Full pooled variance is used.
+- [ ] FedProx has a terminal result.
+- [ ] Ditto or honestly named alternative has a terminal result.
+- [ ] Absorption follows the locked rule.
+
+## Mechanisms and boundaries
+
+- [ ] B3/B4 comparison is complete.
+- [ ] B4 canonical `K` remains fixed.
+- [ ] Cluster memberships and stability are reported.
+- [ ] Fingerprint ablation is complete.
+- [ ] All-client score distributions exist.
+- [ ] Calibration-size and shrinkage grids are complete.
+- [ ] B2-conf coverage is complete.
+- [ ] Temporal static, frozen, and recalibrated results exist.
+
+---
+
+# 12. Manuscript readiness checklist
+
+## Results
+
+- [ ] Ten-seed evidence appears first.
+- [ ] Confirmatory and non-confirmatory evidence are separated.
+- [ ] Material negatives remain in the main paper.
+- [ ] External evidence is not promoted.
+- [ ] Comparator dominance or absorption is reported honestly.
+- [ ] Exploratory work is labeled.
+
+## Methods
+
+- [ ] Methods match frozen configurations.
+- [ ] Client identity is explained per regime.
+- [ ] Eligibility and unavailable metrics are explicit.
+- [ ] Checkpoint selection is reproducible.
+- [ ] BCa implementation is reproducible.
+- [ ] Undefined metrics are explained.
+- [ ] Policies and stress-test models are separated.
+
+## Discussion and limitations
+
+- [ ] Success, boundary, and failure are separated.
+- [ ] Laridi overlap is addressed.
+- [ ] Model-personalization absorption is addressed.
+- [ ] FPR equity and detection cost are balanced.
+- [ ] No association is described as causal.
+- [ ] Nine-client and one-dataset limitations are explicit.
+- [ ] Privacy, deployment, temporal, and attack-metric limits are explicit.
+
+## Related work
+
+- [ ] Laridi is compared precisely.
+- [ ] Threshold clustering is distinguished from model clustering.
+- [ ] FedProx and Ditto are positioned as stress tests.
+- [ ] Federated conformal prior art is acknowledged.
+- [ ] No unsupported “first” claim appears.
+- [ ] Primary sources are verified.
+
+## Abstract and conclusion
+
+- [ ] Written after the frozen results.
+- [ ] Use only surviving claims.
+- [ ] Include the principal negative trade-off.
+- [ ] Do not imply universal generalization.
+- [ ] Do not claim privacy, deployment, or drift handling.
+- [ ] External evidence is stated at the correct level.
+
+## Supplement and cover letter
+
+- [ ] Supplement contains all seeds and clients.
+- [ ] Full checkpoint trajectories are included.
+- [ ] Exploratory B4 settings are included.
+- [ ] No material negative is hidden there.
+- [ ] Conference paper is cited and extension disclosed.
+- [ ] New material is enumerated.
+- [ ] No simultaneous duplicate submission exists.
+
+---
+
+# 13. Submission blockers
+
+## Scientific blockers
+
+- unresolved anchor reproduction discrepancy;
+- missing ten-seed paired result;
+- invalid checkpoint selection;
+- inconsistent B1–B4 scores;
+- attack information entering threshold calibration;
+- missing absolute-dispersion safeguards;
+- invalid Edge-IIoTset mapping;
+- unsupported external attack claims;
+- post-hoc policy tuning;
+- hidden material negative.
+
+## Novelty blockers
+
+- Laridi overlap not addressed;
+- matched comparator missing;
+- journal additions not distinguished from conference work;
+- overlap audit incomplete;
+- standard methods claimed as algorithmically novel.
+
+## Reproducibility blockers
+
+- hidden scientific defaults;
+- incomplete artifact lineage;
+- manually copied manuscript values;
+- unresolved metric inconsistency;
+- missing seed or checkpoint provenance;
+- overwritten frozen results;
+- planned methods described as executed.
+
+## Editorial blockers
+
+- abstract based on planned rather than executed results;
+- central claim obscured by too many experiments;
+- negative evidence hidden in the supplement;
+- limitations incomplete;
+- conference-extension disclosure missing;
+- current venue policies not rechecked.
+
+---
+
+# 14. Claim-specific blockers
+
+## External validation
+
+Blocked by:
+
+- invalid client mapping;
+- failed eligibility;
+- stale dataset audit;
+- missing paired external analysis;
+- unsupported attack-metric interpretation.
+
+## Model personalization
+
+Blocked by:
+
+- non-genuine Ditto naming;
+- missing comparison corner;
+- model/score provenance mismatch;
+- post-hoc selection;
+- incorrect absorption calculation.
+
+## Temporal result
+
+Blocked by:
+
+- invalid timestamps;
+- future leakage;
+- missing static reference;
+- missing frozen or recalibrated result;
+- recovery ratio computed when undefined.
+
+## Alert burden
+
+Blocked by:
+
+- missing measured or cited traffic rate;
+- unclear unit;
+- hypothetical rate described as measurement.
+
+## CICIoT2023 quantitative result
+
+Blocked until:
+
+- actual feature count is reverified;
+- file-defined clients are confirmed;
+- physical-device wording is removed.
+
+---
+
+# 15. Accepted non-blocking outcomes
+
+The following may narrow claims but do not block a scientifically honest paper:
+
+- wider ten-seed interval;
+- failed confirmatory endpoint;
+- B4 instability;
+- weak heterogeneity association;
+- small-calibration collapse;
+- B2-conf coverage miss;
+- `B-FedStatsBenign` parity or dominance;
+- FedProx absorption;
+- model-personalization absorption;
+- Edge-IIoTset null or reversal;
+- failed temporal recovery;
+- unavailable external attack metrics.
+
+These outcomes must not be hidden.
+
+---
+
+# 16. Final reviewer-readiness audits
+
+Before submission, perform independent audits covering:
+
+## Scientific identity
+
+Verify:
+
+- fixed-detector B1–B4 semantics;
+- benign-only calibration;
+- FPR-equity framing;
+- sole confirmatory endpoint;
+- stress-test separation.
+
+## Claims
+
+Check every claim in:
+
+- title;
+- abstract;
+- introduction;
+- results;
+- discussion;
+- conclusion;
+- cover letter;
+
+against its result, evidence role, decision rule, and limitation.
+
+## Reviewer attacks
+
+Run independent critical reviews focused on:
+
+- novelty and Laridi overlap;
+- calibration tautology;
+- statistical validity;
+- model-personalization absorption;
+- dataset/client validity;
+- reproducibility;
+- privacy and security overclaim;
+- conference originality;
+- negative-result transparency.
+
+## Artifacts
+
+Verify:
+
+- every manuscript number reproduces;
+- figures use the intended records;
+- all seeds and clients are present;
+- no stale artifact is referenced;
+- configurations and checksums match.
+
+## Cold read
+
+A new reader must understand:
+
+- the central question;
+- what is fixed and what changes;
+- the sole confirmatory endpoint;
+- why the contribution is not a new detector;
+- the strongest prior-work overlap;
+- the strongest negative result;
+- what generalizes;
+- what remains out of scope.
+
+---
+
+# 17. Final readiness verdict
+
+Use exactly one verdict.
+
+## NOT READY
+
+One or more scientific, novelty, reproducibility, or editorial blockers remain.
+
+## READY FOR INTERNAL REVIEW
+
+Mandatory evidence exists, but manuscript integration or independent audits remain incomplete.
+
+## READY FOR SUPERVISOR REVIEW
+
+Scientific blockers are closed, claim wording is frozen, principal figures and tables exist, and internal reviewer attacks have been addressed.
+
+## READY FOR SUBMISSION
+
+Use only when:
+
+- all submission blockers are closed;
+- target-journal policies were rechecked;
+- conference-extension disclosure is complete;
+- every manuscript value reproduces from frozen artifacts;
+- independent reviewer audits pass;
+- no material negative is hidden;
+- the final audit is recorded in [07](./07_AUDIT_AND_DECISION_LOG.md).
+
+A partial state must never be described as submission-ready.
