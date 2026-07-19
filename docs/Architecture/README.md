@@ -113,7 +113,7 @@ configs/
 ├── datasets/
 │   ├── nbaiot.yaml           # PhysicalDeviceClients + DirichletPartitionedClients setups; source audits
 │   ├── ciciot2023.yaml       # DatasetFilePseudoClients setup (boundary role only); feature-count audit
-│   └── edge_iiotset.yaml     # ExternalDeviceOrGroupClients (device/group) + chronological setups; audits
+│   └── edge_iiotset.yaml     # ExternalSensorGroupClients (benign sensor-group) + chronological setups; audits
 │
 ├── models/
 │   └── autoencoder.yaml      # architecture, objective, optimizer, checkpointing; every named training profile

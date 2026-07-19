@@ -5,7 +5,14 @@ experiments:
     display_name: Anchor Reproduction
     evidence_role: anchor
     run_requirement: mandatory
-    data: { dataset: nbaiot, setup: anchor_natural_devices }
+    regimes:
+      - id: regime_a
+        run_requirement: mandatory
+        data: { dataset: nbaiot, setup: anchor_natural_devices }
+        evaluation_scope: full_detection_and_operating_point
+        evaluation_refs: [shared_mean, local]
+        analysis_refs: [anchor_scope_effect, anchor_equivalence]
+        prerequisites: []
     model: autoencoder
     checkpoint_profile: anchor_terminal
     training:
@@ -40,7 +47,6 @@ experiments:
       paired_seed_count: 5
       derivation: deterministic_from_experiment_seed
       experiment_seed: 0
-    prerequisites: []
     operations:
       execution: scientific
       report:

@@ -75,7 +75,7 @@ equivalence directly, before most other stages are even planned).
 run addressed by dataset and check name (for example `--dataset
 edge_iiotset --check client_granularity_feasibility`,
 `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §20`); a scientific
-`external_device_validation`-family experiment's `ClientConstruction` is
+`external_sensor_group_validation`-family experiment's `ClientConstruction` is
 already fully resolved by the time its configuration is authored
 (`SCIENTIFIC_FOUNDATION.md §5.1`), so `FEASIBILITY_AUDIT` is never planned
 for it — optional stages are omitted from the execution plan when
@@ -589,7 +589,7 @@ sibling evaluation) already committed.
 | `calibration_window_size_stability` | adds `CALIBRATION_SUBSET_SELECT` per size; reuses train | size-scoped calibration subsets, size-aware fallback threshold | per-size `PolicyEvaluationResult` | SENSITIVITY_GRID |
 | `local_global_threshold_shrinkage` | reuses scores; per-λ `THRESHOLD_CONSTRUCT` | λ ∈ {0,.25,.5,.75,1} threshold outputs | per-λ `PolicyEvaluationResult` | LAMBDA_CURVE |
 | `conformal_local_threshold_coverage` | reuses scores; conformal `THRESHOLD_CONSTRUCT`; `ConformalCoverageResult` | split/federated-conformal threshold, coverage | coverage result | coverage table |
-| `external_device_dataset_validation` | **suppressed** (`attack_row_client_assignment_unavailable`): the intended full Edge-IIoTset chain with `FederatedSummaryStatisticThreshold` and q-sweep is non-executable because all attack traffic resolves to the single attacker subnet 0, leaving eight of nine sensor clients with no attack rows | external partition (group granularity authorized, device rejected), `FederatedSummaryStatisticThreshold` | none produced (suppressed) | external CONFIRMATORY_INTERVAL (intended) |
+| `external_sensor_group_validation` | **executable, `benign_operating_point_equity` scope**: the Edge-IIoTset chain with `FederatedSummaryStatisticThreshold` at the pinned q = 0.95 (external q-sweep owned by E-S2) runs on held-out benign rows to produce cross-client FPR dispersion; per-client attack-sensitive metrics carry a typed `per_client_attack_detection_metrics: unavailable` limitation (attack traffic confined to subnet 0) | external partition (group granularity authorized, device rejected), `FederatedSummaryStatisticThreshold` | benign FPR dispersion (`FleetDispersionResult`) | external CONFIRMATORY_INTERVAL |
 | `fedprox_aggregation_stress_test` | full chain under `FederatedProximalTrainingProfile` (per µ) | FedProx checkpoints/scores (distinct identity from FedAvg) | per-µ `PolicyEvaluationResult` | STRESS_TEST |
 | `model_personalization_absorption_test` | two training-profile branches (core + personalized); `AbsorptionAnalysis` | personalized checkpoints/scores; 2×2 corner deltas | `AbsorptionResult` | STRESS_TEST |
 | `federated_summary_comparator` | reuses scores; matched + fixed-k threshold; `QuantileEstimationAnalysis` | `FederatedSummaryStatisticThreshold` (matched primary, fixed-k supplementary) | comparator `PolicyEvaluationResult`, estimation analysis | COMPARATOR |

@@ -448,20 +448,24 @@ exactly once, in `AnchorEquivalenceAnalysis.reference_interval`.
 
 ### 9.1 No dynamic client-construction fallback
 
-Edge-IIoTset external validation is **suppressed**, not runtime-selected. The
-`client_granularity_feasibility` audit rejects device granularity outright, so
-`edge_iiotset.yaml` no longer carries an `external_device` setup at all; it
-keeps the benign-only `external_group` setup (`granularity: group`, K = 10)
-and the `chronological` setup, but each is authored `executable: false` with
-an explicit `suppression` block, because attack traffic resolves only to the
-single attacker subnet, leaving eight of the nine sensor clients with no attack
-rows (`§11.3`). The `external_device_dataset_validation`
-experiment is therefore `run_requirement: suppressed` (`§16.3`). The
-no-runtime-fallback principle is unchanged: no scientific experiment's
-configuration ever contains a runtime rule choosing between device clients,
-group clients, or a pseudo-client fallback; the group partition is documented
-only as a benign-only extension seam, never a resolved executable setup, so
-the circular dependency this package removes never returns.
+Edge-IIoTset external validation is **capability-scoped**, not runtime-selected.
+The `client_granularity_feasibility` audit rejects device granularity outright,
+so `edge_iiotset.yaml` carries no `external_device` setup; it keeps the benign
+`external_group` setup (`granularity: group`, K = 10) and the `chronological`
+setup, both now `executable: true` with a declared
+`validation_scope` (`benign_operating_point_equity` and
+`benign_temporal_operating_point_equity`). Because false-positive metrics need
+only held-out benign rows, these setups produce benign calibration, threshold
+construction, benign-test FPR, and cross-client FPR dispersion; only per-client
+attack-sensitive metrics carry a typed `per_client_attack_detection_metrics:
+unavailable` limitation (`attack_traffic_confined_to_subnet_zero`, `§11.3`). The
+`external_sensor_group_validation` experiment is therefore
+`run_requirement: mandatory` with `evaluation_scope:
+benign_operating_point_equity` (`§16.3`). The no-runtime-fallback principle is
+unchanged: no scientific experiment's configuration ever contains a runtime rule
+choosing between device clients, group clients, or a pseudo-client fallback; the
+group granularity is fixed and human-authored, so the circular dependency this
+package removes never returns.
 
 ## 10. Threshold-scope experiment family
 
@@ -652,7 +656,7 @@ source_layout:
 field_schema:
   source_column_count: 115
   identity_scheme:
-    row_identity: source_row_order
+    row_identity: { components: [source_file_path, source_row_index], index_scope: within_source_file }
     client_identity: { source: path, derived_from: device_directory_name }
     label_identity: { source: path, benign_rule: file_is_benign_traffic_csv, attack_rule: file_under_attack_family_dir }
     timestamp_field: none
@@ -673,7 +677,7 @@ materializations:
     normalization: { strategy: min_max, scope: global_train }
     preprocessing_sequence: [drop_cold_start_row, drop_exact_duplicate_rows, chronological_gapped_split, min_max_normalization_fit_on_train]
     row_exclusion: { cold_start_row: drop_first_row_per_source_file, duplicate_rows: drop_exact_duplicates_keep_first }
-    split: { method: chronological_gapped, calibration_benign_only: true, ratios: { train: 0.60, gap_1: 0.01, calibration: 0.20, gap_2: 0.01 } }
+    split: { method: chronological_gapped, calibration_benign_only: true, ratios: { train: 0.60, gap_1: 0.01, calibration: 0.20, gap_2: 0.01, test: 0.18 } }
   datp_core_dirichlet:
     materialization_id: nbaiot_datp_core_dirichlet
     normalization: { strategy: min_max, scope: global_train }
@@ -685,7 +689,7 @@ materializations:
     normalization: { strategy: standard, scope: global_train }   # StandardScaler, recovered from the DATP reference project
     preprocessing_sequence: [chronological_gapped_split, standard_normalization_fit_on_train]
     row_exclusion: { cold_start_row: retain, duplicate_rows: retain }   # raw rows retained: no cold-start drop, no dedup
-    split: { method: chronological_gapped, calibration_benign_only: true, ratios: { train: 0.60, gap_1: 0.01, calibration: 0.20, gap_2: 0.01 } }
+    split: { method: chronological_gapped, calibration_benign_only: true, ratios: { train: 0.60, gap_1: 0.01, calibration: 0.20, gap_2: 0.01, test: 0.18 } }
 setups:
   natural_devices:        { materialization: datp_core,           client_construction: { method: physical_device_clients, device_count: 9 } }
   anchor_natural_devices: { materialization: anchor,              client_construction: { method: physical_device_clients, device_count: 9 } }
@@ -813,7 +817,7 @@ source_layout:
 field_schema:
   source_column_count: { per_class: 39, merged: 40 }
   identity_scheme:
-    row_identity: source_row_order
+    row_identity: { components: [source_file_path, source_row_index], index_scope: within_source_file }
     client_identity: { source: file, derived_from: merged_file_name }
     label_identity: { source: column, column: Label, present_in: merged_only }
     timestamp_field: none
@@ -834,7 +838,7 @@ materializations:
     materialization_id: ciciot2023_datp_core
     normalization: { strategy: min_max, scope: global_train }
     preprocessing_sequence: [exclude_degenerate_window_rows, drop_exact_duplicate_rows_per_file, random_fractional_split, min_max_normalization_fit_on_train]
-    row_exclusion: { degenerate_window: exclude_rate_inf_or_blank_std_variance, duplicate_rows: drop_exact_duplicates_keep_first_per_file }
+    row_exclusion: { degenerate_window: exclude_rate_inf_or_blank_std_variance, within_file_duplicate_policy: drop_exact_duplicates_keep_first_per_file, cross_file_duplicate_policy: retain_across_pseudo_clients }
     split: { method: random_fractional, calibration_benign_only: true, split_seed: 0, ratios: { train: 0.70, calibration: 0.15, test: 0.15 } }
 setups:
   file_pseudo_clients:
@@ -941,11 +945,11 @@ handling policy (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7`).
 
 `configs/datasets/edge_iiotset.yaml` — the external-validation dataset. Its
 `client_granularity_feasibility` audit rejects device granularity, so it owns
-**no `external_device` setup**; it keeps a benign-only `external_group` setup
-and a `chronological` setup, but both are authored `executable: false` with an
-explicit `suppression` block, because attack traffic resolves only to the
-single attacker subnet, leaving eight of the nine sensor clients with no attack
-rows (the full 63-column source schema and 39-entry
+**no `external_device` setup**; it keeps a benign `external_group` setup and a
+`chronological` setup, both `executable: true` with a declared `validation_scope`
+(`benign_operating_point_equity` / `benign_temporal_operating_point_equity`),
+because false-positive metrics need only held-out benign rows while attack
+traffic is confined to subnet 0 (the full 63-column source schema and 39-entry
 `retained_numeric_features.order` are authored verbatim in the file; elided
 here for brevity):
 
@@ -961,7 +965,7 @@ source_layout:
 field_schema:
   source_column_count: 63
   identity_scheme:
-    row_identity: source_row_order
+    row_identity: { components: [source_file_path, source_row_index], index_scope: within_source_file }
     benign_group_identity: { source: path, derived_from: normal_traffic_group_folder }
     attack_row_group_identity: unavailable
     device_identity: { source: column, column: ip.src_host, usable: false }
@@ -992,18 +996,31 @@ field_schema:
     encoded_feature_count: 76
     retained_numeric_feature_count: 39
     total_model_feature_count: 115           # 76 dummies + 39 numeric
-    post_encoding_feature_names: runtime_captured
+    category_order: ascending_string
+    encoded_feature_naming: "{column}={category_value}"
+    category_values: { <per-column, enumerated over the full corpus (benign+attack)> }   # unknown/missing -> all-zero indicator
   leakage_exclusions: { columns: [frame.time, ip.src_host, ip.dst_host, ...], role_basis: leakage_or_high_cardinality_or_client_identity_or_timestamp }   # 15 dropped
 readiness:
   source_schema_complete: true
   benign_group_partition_recoverable: true
   benign_endpoint_identity_recoverable: true
+  eligible_benign_client_coverage_ratio: 1.0
+  fpr_scope_evaluation_executable: true
+  benign_temporal_fpr_evaluation_executable: true
+  attack_sensitive_per_client_evaluation_executable: false
   attack_row_group_assignment_recoverable: false
-  external_validation_executable: false
+  external_validation_mode: benign_operating_point_equity
+evaluation_capabilities:
+  benign_test_false_positive_metrics: { status: available, supported_metrics: [fpr, cv_fpr, iqr_fpr, fpr_range, worst_client_fpr, jain_index, gini_coefficient] }
+  threshold_scope_dispersion: { status: available }
+  benign_score_distribution_analysis: { status: available }
+  conformal_benign_coverage: { status: available }
+  per_client_attack_detection_metrics: { status: unavailable, reason: attack_traffic_confined_to_subnet_zero, unsupported_metrics: [tpr, recall, macro_f1, p10_macro_f1, balanced_accuracy, worst_client_ba, auroc] }
+  attack_sensitive_threshold_tradeoff: { status: unavailable, reason: attack_rows_not_available_across_clients }
 audits:
   - { check: source_inspection, ... }
   - check: client_granularity_feasibility
-    outcome: { device_granularity: rejected, resolved_endpoint_granularity: benign_only, group_granularity: authorized_benign_only, group_count: 10, joint_benign_attack_partition: infeasible, joint_client_coverage_ratio: 0.11 }
+    outcome: { device_granularity: rejected, resolved_endpoint_granularity: benign_only, group_granularity: authorized_benign_only, group_count: 10, joint_benign_attack_partition: infeasible, benign_operating_point_equity_executable: true, attack_sensitive_per_client_evaluation_executable: false }
     # ...inspection + feasibility as before
   - check: timestamp_semantics_verification
     outcome: { within_client_ordering: time_of_day_with_midnight_rollover_correction, cross_client_wall_clock_ordering: unavailable, temporal_group_count: 9, excluded_groups: [Modbus] }
@@ -1016,29 +1033,29 @@ materializations:
     normalization: { strategy: min_max, scope: global_train }
     preprocessing_sequence: [drop_row_with_null_in_retained_column, drop_exact_duplicate_rows, one_hot_encode_categoricals, min_max_normalization_fit_on_train]
     split: { method: random_fractional, calibration_benign_only: true, split_seed: 0, ratios: { train: 0.70, calibration: 0.15, test: 0.15 } }
+  group_chronological:
+    materialization_id: edge_iiotset_group_chronological
+    normalization: { strategy: min_max, scope: historical_train }
+    preprocessing_sequence: [drop_row_with_null_in_retained_column, drop_exact_duplicate_rows, resolve_within_client_time_order, chronological_split, one_hot_encode_categoricals, min_max_normalization_fit_on_historical_train]
+    split: { method: within_client_chronological, calibration_benign_only: true, historical_train_fraction: 0.55, historical_calibration_fraction: 0.15, future_test_fraction: 0.30, ordering_field: frame.time, ordering_scope: per_client, rollover_policy: add_twenty_four_hours_on_time_decrease }
 setups:
   external_group:
     materialization: group_benign
     client_construction: { method: external_group_clients, group_count: 10 }
-    executable: false
-    suppression:
-      reason: attack_row_client_assignment_unavailable
-      evidence: >-
-        The benign sensor-type group partition is recoverable (now confirmed from endpoints), but
-        all attack traffic resolves to the single attacker subnet 0, leaving eight of nine sensor
-        clients with no attack rows; a per-client benign+attack external validation cannot be
-        built without fabricating attack traffic.
+    executable: true
+    validation_scope: benign_operating_point_equity
+    supported_capabilities: [benign_calibration, benign_test_false_positive_metrics, threshold_scope_dispersion, benign_score_distribution_analysis, conformal_benign_coverage]
+    unsupported_capabilities: [per_client_attack_detection_metrics, attack_sensitive_threshold_tradeoff]
+    limitation: { capability: per_client_attack_detection_metrics, status: unavailable, reason: attack_traffic_confined_to_subnet_zero }
   chronological:
-    materialization: group_benign
+    materialization: group_chronological
     client_construction: { method: external_group_clients, group_count: 9, excluded_groups: [Modbus] }
-    temporal_window: { role: temporal_evaluation, historical_fraction: 0.70, capture_time_field: frame.time, ordering_derivation: time_of_day_with_midnight_rollover_correction }
-    executable: false
-    suppression:
-      reason: attack_row_client_assignment_unavailable
-      evidence: >-
-        Within-client benign time-of-day ordering is defensible, but the chronological evaluation
-        still requires per-client attack rows at the temporal boundary; the same attack-row
-        assignment gap applies.
+    temporal_window: { role: temporal_evaluation, historical_train_fraction: 0.55, historical_calibration_fraction: 0.15, future_test_fraction: 0.30, capture_time_field: frame.time, ordering_derivation: time_of_day_with_midnight_rollover_correction }
+    executable: true
+    validation_scope: benign_temporal_operating_point_equity
+    supported_scope: [historical_benign_training, historical_benign_calibration, future_benign_fpr_evaluation, frozen_vs_one_shot_recalibrated_thresholds, cv_fpr_drift_and_recovery]
+    unsupported_scope: [per_client_temporal_tpr, temporal_macro_f1, temporal_balanced_accuracy, attack_sensitive_temporal_recovery]
+    limitation: { capability: per_client_attack_detection_metrics, status: unavailable, reason: attack_traffic_confined_to_subnet_zero }
 ```
 
 ### 11.3 Edge-IIoTset field-level schema
@@ -1100,8 +1117,8 @@ long-tail public/incidental IPs each appearing 1–17 times (background
 DNS/NTP/CDN traffic, not IoT clients). A naive per-`ip.src_host` client
 partition would therefore produce one extreme majority handful of clients
 plus thousands of near-singleton pseudo-clients — concretely
-demonstrating, from the actual data, why `external_device_validation`'s
-device-vs-group granularity is feasibility-gated
+demonstrating, from the actual data, why `external_sensor_group_validation`'s
+sensor-group granularity is feasibility-gated
 (`SCIENTIFIC_FOUNDATION.md §5.1`) rather than assumed.
 
 **Reopened full-corpus endpoint audit (direction-normalized).** Because the
@@ -1149,13 +1166,18 @@ attack test rows; (2) **source-grounded endpoint/service groups containing both
 benign and attack rows** — only subnet 0 qualifies, a single group that cannot
 form a multi-client dispersion ladder; (3) **controlled non-IID synthetic
 clients** — would require fabricating attack traffic for subnets 1–8 that have
-none, and would misrepresent Regime D's device-partitioned external-validation
-claim (RQ6) while duplicating Regime C's heterogeneity role. Because no
-source-grounded multi-client benign+attack partition exists, Regime D and
-D-temporal are **preserved as suppressed** cells
-(`attack_row_client_assignment_unavailable`), never deleted; the benign
-endpoint mapping and the excluded attacker/placeholder/public/malformed values
-are recorded machine-readably in `edge_iiotset.yaml`
+none, and would misrepresent Regime D's sensor-group-partitioned external-validation
+claim (RQ6) while duplicating Regime C's heterogeneity role. No source-grounded
+multi-client benign+attack partition exists, so per-client attack-sensitive
+metrics are unavailable. But false-positive metrics require only held-out benign
+rows — recoverable for all ten sensor groups (eligible-benign coverage 1.0) — so
+Regime D and D-temporal are **executable for benign operating-point equity**
+(`CV(FPR)` and its benign-derivable companions); only their attack-sensitive
+per-client metrics carry a typed `per_client_attack_detection_metrics:
+unavailable` limitation (`attack_traffic_confined_to_subnet_zero`), never a
+deleted cell and never a fabricated mapping. The benign endpoint mapping,
+evaluation capabilities, and the excluded attacker/placeholder/public/malformed
+values are recorded machine-readably in `edge_iiotset.yaml`
 (`field_schema.endpoint_identity`). `Modbus` benign traffic is itself split
 across subnet 0 (client, 3,455 rows) and subnet 7 (server, 155,614 rows),
 overlapping both `Temperature_and_Humidity` and `Flame_Sensor`, so an
@@ -1254,8 +1276,10 @@ duplicate rows, before encoding. The 39 retained numeric non-label columns
 and the 7 one-hot-encoded columns are deterministic and fully verified; the
 one-hot expansion has now been measured on the mounted corpus at 76 dummy
 columns, for `39 + 76 = 115` total model features. The exact post-encoding
-column *names* remain `runtime_captured` (they depend on which category
-values survive row-filtering), but the total width is no longer a blocker.
+column *names* are now authored deterministically as `{column}={category_value}`
+from the enumerated per-column category vocabulary (full corpus, benign+attack,
+ascending-string order; unknown/missing values map to an all-zero indicator), and
+the total width is no longer a blocker.
 
 **Verified data-quality findings.**
 - **`ip.src_host` literal `"0"` and `"0.0.0.0"` placeholders** occur in
@@ -1280,24 +1304,26 @@ values survive row-filtering), but the total width is no longer a blocker.
   concentrated in a small row subset and their global variance is
   therefore not representative of their conditional variance.
 
-**Suppression and blockers.** The post-encoding model-feature width is
-resolved (`39 + 76 = 115`; names `runtime_captured`). The decisive finding is
-that **external validation is suppressed, not merely gated**: a reopened
+**Capability scope and blockers.** The post-encoding model-feature width is
+resolved (`39 + 76 = 115`; names authored deterministically as `{column}={category_value}` from the enumerated per-column category vocabulary). The decisive finding is
+that **external validation is capability-scoped, not suppressed**: a reopened
 direction-normalized full-corpus endpoint audit confirms benign client identity
-directly from the endpoints (each sensor folder maps to its own `/24`), but
-**all attack traffic resolves to the single attacker subnet 0**
-(Temperature/Modbus) — no attack row carries any subnet 1–8 endpoint, so eight
-of the nine sensor clients receive zero attack rows. A per-client benign+attack
-external validation is therefore impossible without fabricating attack traffic.
-The audit records `device_granularity: rejected`, `group_granularity:
-authorized_benign_only` (K = 10), `joint_benign_attack_partition: infeasible`;
-`readiness.external_validation_executable` is `false`;
-the `external_group` and `chronological` setups are both `executable: false`
-with a `suppression` block; and no `family_taxonomy` exists, so the B3 family
-threshold is not authored on Edge-IIoTset. The group partition is retained
-only as a benign-only extension seam. Remaining open items are corroborating,
-not gating: the `frame.time` malformed-value distribution (relevant only to
-the now-suppressed temporal evaluation) and the full-corpus duplicate-row rate
+directly from the endpoints (each sensor folder maps to its own `/24`,
+eligible-benign coverage 1.0), while **all attack traffic resolves to the single
+attacker subnet 0** (Temperature/Modbus) — no attack row carries any subnet 1–8
+endpoint, so eight of the nine sensor clients receive zero attack rows. Because
+false-positive metrics need only held-out benign rows, the `external_group` and
+`chronological` setups are `executable: true` for benign operating-point equity
+(`CV(FPR)` and its benign-derivable companions); only per-client attack-sensitive
+metrics carry a typed `per_client_attack_detection_metrics: unavailable`
+limitation (`attack_traffic_confined_to_subnet_zero`). The audit records
+`device_granularity: rejected`, `group_granularity: authorized_benign_only`
+(K = 10), `joint_benign_attack_partition: infeasible`, and
+`benign_operating_point_equity_executable: true`; no `family_taxonomy` exists, so
+the B3 family threshold is not authored on Edge-IIoTset. Remaining open items are
+corroborating, not gating: the `frame.time` malformed-value distribution (in the
+combined "Selected" files only; the per-sensor captures the campaign uses are
+well-formed) and the full-corpus duplicate-row rate
 (only a 30,000-row sample was checked). The `Temperature_and_Humidity`
 subnet-consistency question is resolved — it is a clean subnet-0 folder (see
 above).
@@ -1523,37 +1549,37 @@ altered by moving an experiment into a family file.
 
 | Slug | Roadmap ref | Role; tier | Dataset + setup | Sweep | Notes |
 |---|---|---|---|---|---|
-| `controlled_heterogeneity_response` | E-S3 | supportive; tier_2 | `nbaiot` / `dirichlet_partitioned` | `dirichlet_alpha ∈ {0.1, 0.3, 0.5, 1.0, 10.0, iid}` | carries the heterogeneity–threshold-benefit association (formerly E-M4) as an attached `metric_association_analysis` regressing pairwise JS divergence against `cv_fpr_delta`; carries a suppressed `regime_d_extension` (`edge_iiotset`/`external_group`) preserving the roadmap "+ Regime D points" seam; report: `severity_trend` figure + `scatter` figure |
+| `controlled_heterogeneity_response` | E-S3 | supportive; tier_2 | `nbaiot` / `dirichlet_partitioned` | `dirichlet_alpha ∈ {0.1, 0.3, 0.5, 1.0, 10.0, iid}` | carries the heterogeneity–threshold-benefit association (formerly E-M4) as an attached `metric_association_analysis` regressing pairwise JS divergence against `cv_fpr_delta`; carries a benign-FPR-scope `regime_d` regime (`edge_iiotset`/`external_group`, `evaluation_scope: benign_operating_point_equity`) realizing the roadmap "+ Regime D points" seam; report: `severity_trend` figure + `scatter` figure |
 
 ### 16.2 `calibration_mechanisms.yaml`
 
 | Slug | Roadmap ref | Role; tier | Dataset + setup | Sweep | Notes |
 |---|---|---|---|---|---|
-| `cluster_mechanism` | E-M1/E-M2/E-Q2 | mechanism; tier_5 (+tier_7 exploratory) | `nbaiot` / `natural_devices`; suppressed `regime_d_extension` (`edge_iiotset`/`external_group`) | `fingerprint_feature_subset` (4 subsets) | one merged experiment, four typed axes: grouping (`family_threshold` vs `cluster_threshold`), fingerprint feature set, aggregation (`mean`/`robust_median`), authorized K (canonical `3`, mandatory; other K exploratory); report: `cluster_stability` table + `contingency` table |
+| `cluster_mechanism` | E-M1/E-M2/E-Q2 | mechanism; tier_5 (+tier_7 exploratory) | `nbaiot` / `natural_devices`; benign-FPR-scope `regime_d` regime (`edge_iiotset`/`external_group`, B1/B2/B4, `family` excluded) | `fingerprint_feature_subset` (4 subsets) | one merged experiment, four typed axes: grouping (`family_threshold` vs `cluster_threshold`), fingerprint feature set, aggregation (`mean`/`robust_median`), authorized K (canonical `3`, mandatory; other K exploratory); report: `cluster_stability` table + `contingency` table |
 | `calibration_window_size_stability` | E-V1 | boundary; tier_6 (RQ3) | `nbaiot` / `natural_devices` | `calibration_sample_count ∈ {50,100,250,500,1000,5000}` | each point resolves a `CalibrationSubsetDefinition`; includes `calibration_size_aware_fallback_threshold`; report: `sensitivity_grid` |
 | `local_global_threshold_shrinkage` | E-V2 | supportive; RQ3 | `nbaiot` / `natural_devices` | `shrinkage_weight ∈ {0, .25, .5, .75, 1}` | report: `lambda_curve` figure |
-| `conformal_local_threshold_coverage` | E-V3 | supportive; Tier-1 tautology defense | `nbaiot` / `natural_devices`; suppressed `regime_d_extension` (`edge_iiotset`/`external_group`) | — | `coverage_alpha = 0.05`; report: conformal coverage table |
+| `conformal_local_threshold_coverage` | E-V3 | supportive; Tier-1 tautology defense | `nbaiot` / `natural_devices`; benign-FPR-scope `regime_d` regime (`edge_iiotset`/`external_group`) | — | `coverage_alpha = 0.05`; report: conformal coverage table |
 
 ### 16.3 `external_validation.yaml`
 
 | Slug | Roadmap ref | Role; tier | Dataset + setup | Sweep | Notes |
 |---|---|---|---|---|---|
-| `external_device_dataset_validation` | E-X1 | external_validation; tier_3; **suppressed** | `edge_iiotset` / `external_group` (device granularity rejected) | `threshold_quantile ∈ {.90,.95,.975,.99}` | `run_requirement: suppressed` with an `attack_row_client_assignment_unavailable` suppression block (`§9.1`, `§11.3`); the intended B1–B4 + matched-summary + q-sensitivity scope is preserved as non-executable; report: external `confirmatory_interval` |
-| `chronological_recalibration_evaluation` | E-B1 | boundary; tier_6; **suppressed** | `edge_iiotset` / `chronological` | — | `run_requirement: suppressed` (same attack-row-assignment gap); frozen vs one-shot recalibration preserved as non-executable; report: `recovery_curve` figure |
+| `external_sensor_group_validation` | E-X1 | external_validation; tier_3; **benign-FPR scope** | `edge_iiotset` / `external_group` (device granularity rejected) | `threshold_quantile = .95` (pinned; q-sweep owned by E-S2) | `run_requirement: mandatory`, `evaluation_scope: benign_operating_point_equity` (`§9.1`, `§11.3`); B1–B4 + matched-summary request FPR-family metrics only (no B3, no attack-sensitive metrics — typed `per_client_attack_detection_metrics: unavailable`); report: external `confirmatory_interval` |
+| `chronological_recalibration_evaluation` | E-B1 | boundary; tier_6; **benign-temporal-FPR scope** | `edge_iiotset` / `chronological` | — | `run_requirement: mandatory`, `evaluation_scope: benign_temporal_operating_point_equity` (defensible within-client benign ordering); frozen vs one-shot recalibration on benign FPR; per-client temporal attack metrics unavailable; report: `recovery_curve` figure |
 
 ### 16.4 `training_stress_tests.yaml`
 
 | Slug | Roadmap ref | Role; tier | Dataset + setup | Training profile | Notes |
 |---|---|---|---|---|---|
-| `fedprox_aggregation_stress_test` | E-T1 | stress_test; tier_4 | `regimes:` — `regime_a` (`nbaiot`/`natural_devices`, run) + `regime_d` (`edge_iiotset`/`external_group`, suppressed) | `federated_proximal` with `training.parameters.mu` bound from the `federated_proximal_mu` grid (`§7`, `§14`) | one experiment, no top-level `data:`; report: `stress_test` table |
-| `model_personalization_absorption_test` | E-T2 | stress_test; tier_4 | `regimes:` — `regime_a` (`nbaiot`/`natural_devices`, run) + `regime_d` (`edge_iiotset`/`external_group`, suppressed) | `federated_averaging_personalized` (genuine Ditto) | one experiment, no top-level `data:`; its `AbsorptionAnalysis` reuses the confirmatory experiment's FedAvg core delta by cross-experiment reference, never retraining it; report: `stress_test` table |
+| `fedprox_aggregation_stress_test` | E-T1 | stress_test; tier_4 | `regimes:` — `regime_a` (`nbaiot`/`natural_devices`, run) + `regime_d` (`edge_iiotset`/`external_group`, benign operating-point equity) | `federated_proximal` with `training.parameters.mu` bound from the `federated_proximal_mu` grid (`§7`, `§14`) | one experiment, no top-level `data:`; report: `stress_test` table |
+| `model_personalization_absorption_test` | E-T2 | stress_test; tier_4 | `regimes:` — `regime_a` (`nbaiot`/`natural_devices`, run) + `regime_d` (`edge_iiotset`/`external_group`, benign operating-point equity) | `federated_averaging_personalized` (genuine Ditto) | one experiment, no top-level `data:`; its `AbsorptionAnalysis` reuses the confirmatory experiment's FedAvg core delta by cross-experiment reference, never retraining it; report: `stress_test` table |
 
 ### 16.5 `references_and_boundaries.yaml`
 
 | Slug | Roadmap ref | Role; tier | Dataset + setup | Training profile | Notes |
 |---|---|---|---|---|---|
 | `centralized_pooled_reference` | B0 | supportive; mandatory wherever cited | `nbaiot` / `natural_devices` | `training_profiles.centralized_pooled` | own centralized identity chain; never fused with federated artifacts (`ANCHOR-04`, `ART-06`); report: `dispersion_ladder` |
-| `federated_summary_comparator` | E-T3/E-Q1/E-Q5 | stress_test (comparator); tier_4 | `regimes:` — `regime_a` (`nbaiot`/`natural_devices`, run) + `regime_d` (`edge_iiotset`/`external_group`, suppressed) | `federated_averaging` | merged: matched benign-summary comparison (`mode: matched_exceedance`, `matched_exceedance_k_grid_step: 0.05`, mandatory primary), quantile-estimation-error backbone analysis (mandatory), and a `mode: fixed_k` evaluation with a scalar `fixed_k: { from_sweep: federated_summary_fixed_k }` over `{2.0, 2.5, 3.0}` carrying `execution_requirement: optional`, `publication_placement: supplementary` (`SCI-18`); report: `comparator` table |
+| `federated_summary_comparator` | E-T3/E-Q1/E-Q5 | stress_test (comparator); tier_4 | `regimes:` — `regime_a` (`nbaiot`/`natural_devices`, run) + `regime_d` (`edge_iiotset`/`external_group`, benign operating-point equity) | `federated_averaging` | merged: matched benign-summary comparison (`mode: matched_exceedance`, `matched_exceedance_k_grid_step: 0.05`, mandatory primary), quantile-estimation-error backbone analysis (mandatory), and a `mode: fixed_k` evaluation with a scalar `fixed_k: { from_sweep: federated_summary_fixed_k }` over `{2.0, 2.5, 3.0}` carrying `execution_requirement: optional`, `publication_placement: supplementary` (`SCI-18`); report: `comparator` table |
 | `file_pseudo_client_applicability_boundary` | `B_A_APPLICABILITY_BOUNDARY` | boundary; tier_6 | `ciciot2023` / `file_pseudo_clients` | `training_profiles.federated_averaging` | boundary report only, never generalized; report: `boundary_null` table |
 
 ## 17. Sweep representation
@@ -1691,11 +1717,11 @@ backs it:
 | `calibration-window` | `calibration_window_size_stability` | validate, plan, run, status, report |
 | `threshold-shrinkage` | `local_global_threshold_shrinkage` | validate, plan, run, status, report |
 | `conformal-threshold` | `conformal_local_threshold_coverage` | validate, plan, run, status, report |
-| `external-validation` | `external_device_dataset_validation` | validate, status, report (suppressed — attack-row client assignment unavailable; `§9.1`) |
+| `external-validation` | `external_sensor_group_validation` | validate, plan, run, status, report (benign operating-point equity; per-client attack-sensitive metrics unavailable — `§9.1`) |
 | `fedprox-stress-test` | `fedprox_aggregation_stress_test` | plan, run, status, report |
 | `personalization-stress-test` | `model_personalization_absorption_test` | plan, run, status, report |
 | `federated-summary-comparator` | `federated_summary_comparator` | validate, plan, run, status, report |
-| `temporal-recalibration` | `chronological_recalibration_evaluation` | validate, status, report (suppressed — attack-row client assignment unavailable; `§9.1`) |
+| `temporal-recalibration` | `chronological_recalibration_evaluation` | validate, plan, run, status, report (benign temporal operating-point equity; per-client temporal attack metrics unavailable — `§9.1`) |
 | `centralized-reference` | `centralized_pooled_reference` | validate, plan, run, status, report |
 | `pseudo-client-boundary` | `file_pseudo_client_applicability_boundary` | validate, plan, run, status, report |
 
@@ -1742,10 +1768,9 @@ confirmatory-report:
 .PHONY: external-validation-plan external-validation-run
 
 external-validation-plan:
-	datp-core experiment plan --config external_device_dataset_validation
-
+	datp-core experiment plan --config external_sensor_group_validation
 external-validation-run:
-	datp-core experiment run --config external_device_dataset_validation
+	datp-core experiment run --config external_sensor_group_validation
 ```
 
 Every other family in `§22.1` follows the identical two-line-per-action

@@ -230,7 +230,7 @@ configs/
 ├── datasets/
 │   ├── nbaiot.yaml           # PhysicalDeviceClients + DirichletPartitionedClients setups; source audits
 │   ├── ciciot2023.yaml       # DatasetFilePseudoClients setup (boundary role only); feature-count audit
-│   └── edge_iiotset.yaml     # ExternalDeviceOrGroupClients (device/group) + chronological setups; audits
+│   └── edge_iiotset.yaml     # ExternalSensorGroupClients (benign sensor-group) + chronological setups; audits
 │
 ├── models/
 │   └── autoencoder.yaml      # architecture, objective, optimizer, checkpointing; every named training profile
@@ -241,7 +241,7 @@ configs/
 │   ├── heterogeneity.yaml             # controlled_heterogeneity_response
 │   ├── calibration_mechanisms.yaml    # cluster_mechanism, calibration_window_size_stability,
 │   │                                  #   local_global_threshold_shrinkage, conformal_local_threshold_coverage
-│   ├── external_validation.yaml       # external_device_dataset_validation, chronological_recalibration_evaluation
+│   ├── external_validation.yaml       # external_sensor_group_validation, chronological_recalibration_evaluation
 │   ├── training_stress_tests.yaml     # fedprox_aggregation_stress_test, model_personalization_absorption_test
 │   └── references_and_boundaries.yaml # centralized_pooled_reference, federated_summary_comparator,
 │                                       #   file_pseudo_client_applicability_boundary
@@ -270,12 +270,13 @@ explicitly boundary-role only (`SCIENTIFIC_FOUNDATION.md §5`); its single
 `file_pseudo_client_applicability_boundary`. `edge_iiotset.yaml` authors no
 `external_device` setup — device granularity is rejected by the
 `client_granularity_feasibility` check; only its `external_group` (group
-granularity authorized) and `chronological` setups are retained, and both
-are non-executable (`executable: false`,
-`suppression.reason = attack_row_client_assignment_unavailable`) because
-Edge-IIoTset attack traffic resolves only to the single attacker subnet 0,
-leaving eight of the nine sensor clients with no attack rows
-(`SCIENTIFIC_FOUNDATION.md §5.1`). Worked examples:
+granularity authorized) and `chronological` setups are retained, both
+**executable for benign operating-point equity** (`executable: true`,
+`validation_scope: benign_operating_point_equity`); only per-client
+attack-sensitive metrics carry a typed `per_client_attack_detection_metrics:
+unavailable` limitation because Edge-IIoTset attack traffic resolves only to the
+single attacker subnet 0, leaving eight of the nine sensor clients with no
+attack rows (`SCIENTIFIC_FOUNDATION.md §5.1`). Worked examples:
 `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11`.
 
 ### 3.2 `configs/models/`

@@ -7,7 +7,16 @@ experiments:
     run_requirement: mandatory
     tier: tier_1
     roadmap_reference: E-C1
-    data: { dataset: nbaiot, setup: natural_devices }
+    regimes:
+      - id: regime_a
+        run_requirement: mandatory
+        data: { dataset: nbaiot, setup: natural_devices }
+        evaluation_scope: full_detection_and_operating_point
+        evaluation_refs: [shared_mean, local]
+        analysis_refs: [confirmatory_scope_effect, client_score_distribution_mechanism, threshold_shift_detection_tradeoff]
+        prerequisites:
+          - requires: anchor_reproduction
+            required_outcome: anchor_equivalence_passed
     model: autoencoder
     checkpoint_profile: datp_core
     training:
@@ -48,9 +57,6 @@ experiments:
       paired_seed_count: 10
       derivation: deterministic_from_experiment_seed
       experiment_seed: 0
-    prerequisites:
-      - requires: anchor_reproduction
-        required_outcome: anchor_equivalence_passed
     operations:
       execution: scientific
       report:
@@ -104,7 +110,16 @@ experiments:
     run_requirement: mandatory
     tier: tier_2
     roadmap_reference: E-S1
-    data: { dataset: nbaiot, setup: natural_devices }
+    regimes:
+      - id: regime_a
+        run_requirement: mandatory
+        data: { dataset: nbaiot, setup: natural_devices }
+        evaluation_scope: full_detection_and_operating_point
+        evaluation_refs: [shared_mean, shared_pooled, shared_weighted, local]
+        analysis_refs: [mean_vs_local_dispersion]
+        prerequisites:
+          - requires: anchor_reproduction
+            required_outcome: anchor_equivalence_passed
     model: autoencoder
     checkpoint_profile: datp_core
     training:
@@ -135,9 +150,6 @@ experiments:
       paired_seed_count: 10
       derivation: deterministic_from_experiment_seed
       experiment_seed: 0
-    prerequisites:
-      - requires: anchor_reproduction
-        required_outcome: anchor_equivalence_passed
     operations:
       execution: scientific
       report:
@@ -162,17 +174,31 @@ experiments:
     run_requirement: mandatory
     tier: tier_2
     roadmap_reference: E-S2
-    data: { dataset: nbaiot, setup: natural_devices }
-    regime_d_extension:
-      run_requirement: suppressed
-      data: { dataset: edge_iiotset, setup: external_group }
-      suppression:
-        reason: attack_row_client_assignment_unavailable
-        evidence: >-
-          The roadmap marks the q-sensitivity sweep's Regime D extension as "+ Regime D". It is
-          infeasible because Edge-IIoTset attack rows resolve only to the attacker's subnet 0 (see
-          external_device_dataset_validation), leaving eight of nine sensor clients with no attack
-          rows; the seam is preserved but non-executable.
+    regimes:
+      - id: regime_a
+        run_requirement: mandatory
+        data: { dataset: nbaiot, setup: natural_devices }
+        evaluation_scope: full_detection_and_operating_point
+        evaluation_refs: [shared_mean, local, cluster_k3_mean]
+        analysis_refs: []
+        prerequisites:
+          - requires: anchor_reproduction
+            required_outcome: anchor_equivalence_passed
+      - id: regime_d
+        run_requirement: mandatory
+        data: { dataset: edge_iiotset, setup: external_group }
+        evaluation_scope: benign_operating_point_equity
+        evaluation_refs: [shared_mean, local, cluster_k3_mean]
+        analysis_refs: []
+        limitations:
+          - capability: per_client_attack_detection_metrics
+            status: unavailable
+            unavailable_reason: attack_traffic_confined_to_subnet_zero
+        prerequisites:
+          - requires: anchor_reproduction
+            required_outcome: anchor_equivalence_passed
+          - requires: external_sensor_group_validation
+            required_outcome: completed
     model: autoencoder
     checkpoint_profile: datp_core
     training:
@@ -202,9 +228,6 @@ experiments:
       paired_seed_count: 10
       derivation: deterministic_from_experiment_seed
       experiment_seed: 0
-    prerequisites:
-      - requires: anchor_reproduction
-        required_outcome: anchor_equivalence_passed
     operations:
       execution: scientific
       report:

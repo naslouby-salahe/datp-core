@@ -20,7 +20,10 @@ source_layout:
 field_schema:
   source_column_count: 115
   identity_scheme:
-    row_identity: source_row_order
+    row_identity:
+      components: [source_file_path, source_row_index]
+      index_scope: within_source_file
+      preserved_through_materializations: true
     client_identity: { source: path, derived_from: device_directory_name }
     label_identity:
       source: path
@@ -206,7 +209,14 @@ materializations:
     split:
       method: chronological_gapped
       calibration_benign_only: true
-      ratios: { train: 0.60, gap_1: 0.01, calibration: 0.20, gap_2: 0.01 }
+      ratios: { train: 0.60, gap_1: 0.01, calibration: 0.20, gap_2: 0.01, test: 0.18 }
+      ordering_basis: source_row_order
+      ordering_scope: per_client_per_source_file
+      gap_handling: excluded_contiguous_band_between_splits
+      attack_rows: evaluation_only
+      attack_test_membership: all_attack_rows
+      attack_ordering: source_row_order_per_source_file
+      benign_attack_deduplication: independent_per_source_file
   datp_core_dirichlet:
     materialization_id: nbaiot_datp_core_dirichlet
     normalization: { strategy: min_max, scope: global_train }
@@ -219,6 +229,13 @@ materializations:
       calibration_benign_only: true
       split_seed: 0
       ratios: { train: 0.70, calibration: 0.15, test: 0.15 }
+      ordering_basis: random_seeded
+      ordering_scope: per_client
+      gap_handling: none
+      attack_rows: evaluation_only
+      attack_test_membership: all_attack_rows
+      attack_ordering: random_seeded
+      benign_attack_deduplication: independent_per_source_file
   anchor:
     materialization_id: nbaiot_anchor_historical
     normalization: { strategy: standard, scope: global_train }
@@ -229,7 +246,14 @@ materializations:
     split:
       method: chronological_gapped
       calibration_benign_only: true
-      ratios: { train: 0.60, gap_1: 0.01, calibration: 0.20, gap_2: 0.01 }
+      ratios: { train: 0.60, gap_1: 0.01, calibration: 0.20, gap_2: 0.01, test: 0.18 }
+      ordering_basis: source_row_order
+      ordering_scope: per_client_per_source_file
+      gap_handling: excluded_contiguous_band_between_splits
+      attack_rows: evaluation_only
+      attack_test_membership: all_attack_rows
+      attack_ordering: source_row_order_per_source_file
+      benign_attack_deduplication: not_applied_rows_retained
 setups:
   natural_devices:
     materialization: datp_core

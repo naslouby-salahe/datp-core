@@ -21,17 +21,29 @@ experiments:
       - id: regime_a
         run_requirement: mandatory
         data: { dataset: nbaiot, setup: natural_devices }
+        evaluation_scope: full_detection_and_operating_point
+        evaluation_refs: [shared_mean, local, cluster_k3_mean, family]
+        analysis_refs: [fedprox_scope_effect]
+        prerequisites:
+          - requires: anchor_reproduction
+            required_outcome: anchor_equivalence_passed
+          - requires: confirmatory_threshold_scope_effect
+            required_outcome: completed
       - id: regime_d
-        run_requirement: suppressed
-        suppression:
-          reason: attack_row_client_assignment_unavailable
-          evidence: >-
-            The roadmap requires E-T1 on Regime A + D. The Regime A cell runs on N-BaIoT. The
-            Regime D cell on Edge-IIoTset is suppressed because attack rows resolve only to the
-            attacker's subnet 0 (see external_device_dataset_validation), leaving eight of nine
-            sensor clients with no attack rows; the FedProx-under-Regime-D scope is preserved as
-            intended but non-executable.
+        run_requirement: mandatory
         data: { dataset: edge_iiotset, setup: external_group }
+        evaluation_scope: benign_operating_point_equity
+        evaluation_refs: [shared_mean, local, cluster_k3_mean]
+        analysis_refs: [fedprox_scope_effect]
+        limitations:
+          - capability: per_client_attack_detection_metrics
+            status: unavailable
+            unavailable_reason: attack_traffic_confined_to_subnet_zero
+        prerequisites:
+          - requires: anchor_reproduction
+            required_outcome: anchor_equivalence_passed
+          - requires: external_sensor_group_validation
+            required_outcome: completed
     evaluations:
       - label: shared_mean
         threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
@@ -54,11 +66,6 @@ experiments:
       paired_seed_count: 10
       derivation: deterministic_from_experiment_seed
       experiment_seed: 0
-    prerequisites:
-      - requires: anchor_reproduction
-        required_outcome: anchor_equivalence_passed
-      - requires: confirmatory_threshold_scope_effect
-        required_outcome: completed
     operations:
       execution: scientific
       report:
@@ -90,17 +97,30 @@ experiments:
       - id: regime_a
         run_requirement: mandatory
         data: { dataset: nbaiot, setup: natural_devices }
+        evaluation_scope: full_detection_and_operating_point
+        evaluation_refs: [shared_mean_personalized, local_personalized]
+        analysis_refs: [personalized_scope_effect, absorption_regime_a]
+        prerequisites:
+          - requires: anchor_reproduction
+            required_outcome: anchor_equivalence_passed
+          - requires: confirmatory_threshold_scope_effect
+            required_outcome: completed
       - id: regime_d
-        run_requirement: suppressed
-        suppression:
-          reason: attack_row_client_assignment_unavailable
-          evidence: >-
-            The roadmap requires E-T2 on Regime A + D. The Regime A cell runs on N-BaIoT. The
-            Regime D cell on Edge-IIoTset is suppressed because attack rows resolve only to the
-            attacker's subnet 0 (see external_device_dataset_validation), leaving eight of nine
-            sensor clients with no attack rows; the absorption scope under Regime D is preserved
-            as intended but non-executable.
+        run_requirement: mandatory
         data: { dataset: edge_iiotset, setup: external_group }
+        evaluation_scope: benign_operating_point_equity
+        evaluation_refs: [shared_mean_personalized, local_personalized]
+        analysis_refs: [personalized_scope_effect, absorption_regime_d]
+        absorption_metric: cv_fpr
+        limitations:
+          - capability: per_client_attack_detection_metrics
+            status: unavailable
+            unavailable_reason: attack_traffic_confined_to_subnet_zero
+        prerequisites:
+          - requires: anchor_reproduction
+            required_outcome: anchor_equivalence_passed
+          - requires: external_sensor_group_validation
+            required_outcome: completed
     evaluations:
       - label: shared_mean_personalized
         threshold: { policy: shared_threshold, construction: mean, quantile: 0.95 }
@@ -115,9 +135,15 @@ experiments:
         delta_orientation: shared_minus_local
         primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
         secondary_procedures: []
-      - label: absorption
+      - label: absorption_regime_a
         kind: absorption_analysis
         core_analysis: { experiment: confirmatory_threshold_scope_effect, analysis: confirmatory_scope_effect }
+        personalized_analysis: personalized_scope_effect
+        primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
+        secondary_procedures: []
+      - label: absorption_regime_d
+        kind: absorption_analysis
+        core_analysis: { experiment: external_sensor_group_validation, analysis: external_scope_effect }
         personalized_analysis: personalized_scope_effect
         primary_procedure: { method: bca_bootstrap, confidence_level: 0.95, resample_count: 10000 }
         secondary_procedures: []
@@ -125,11 +151,6 @@ experiments:
       paired_seed_count: 10
       derivation: deterministic_from_experiment_seed
       experiment_seed: 0
-    prerequisites:
-      - requires: anchor_reproduction
-        required_outcome: anchor_equivalence_passed
-      - requires: confirmatory_threshold_scope_effect
-        required_outcome: completed
     operations:
       execution: scientific
       report:

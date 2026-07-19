@@ -137,6 +137,45 @@ diagnostic-ratio metrics are MECHANISM_DIAGNOSTIC unless their row states a
 secondary threshold role; resource metrics are RESOURCE_OUTCOME. Each metric
 has one calculator owner and one role, with no `is_control` boolean.
 
+## 4.1 Metric-to-capability ownership and dataset capability gating
+
+Every metric depends on a specific slice of a client's evaluation data. A
+dataset setup therefore advertises which **evaluation capabilities** it can
+satisfy, and an experiment cell is executable when — and only for the metrics
+for which — the setup provides the required capability. The absence of an
+unrelated capability never suppresses the whole cell (`EVAL-08`).
+
+| Capability | Required data per eligible client | Owning result type(s) | Metrics |
+|---|---|---|---|
+| `benign_calibration` | benign calibration rows | `ThresholdConstruction` inputs | — (enables threshold construction) |
+| `benign_test_false_positive_metrics` | benign test rows | `FleetDispersionResult`, `FleetEquityResult` | `fpr`, `cv_fpr`, `iqr_fpr`, `fpr_range`, `worst_client_fpr`, `jain_index`, `gini_coefficient` |
+| `threshold_scope_dispersion` | benign test rows across clients | `ConfirmatoryAnalysisResult` | `cv_fpr` delta |
+| `benign_score_distribution_analysis` | benign scores | `ClusterDispersionResult`, `ClusterStabilityResult`, `MetricAssociationResult` | `within_cluster_dispersion`, `across_cluster_dispersion`, `adjusted_rand_index`, `pairwise_js_divergence` |
+| `conformal_benign_coverage` | benign calibration + benign test rows | `ConformalCoverageResult` | `conformal_coverage` (distinct from `eligibility_coverage`) |
+| `per_client_attack_detection_metrics` | **attack test rows per client** | `FleetDetectionResult` | `tpr`, `recall`, `macro_f1`, `p10_macro_f1`, `balanced_accuracy`, `worst_client_ba`, `auroc`, `cv_tpr` |
+| `attack_sensitive_threshold_tradeoff` | benign **and** attack test rows per client | `DistributionMechanismResult` | attack-sensitive `Δτ`/`ΔFPR`/`ΔTPR` tradeoff surface |
+
+`B-FedStatsBenign` requires benign summary statistics only, so it is available
+wherever `benign_calibration` and `benign_test_false_positive_metrics` are.
+On Edge-IIoTset (`external_group` / `chronological`) the first five capabilities
+are `available` (eligible-benign coverage 1.0) and the last two are
+`unavailable` (`attack_traffic_confined_to_subnet_zero`), authored in
+`edge_iiotset.yaml` `evaluation_capabilities`. Regime A (N-BaIoT) and Regime C
+provide every capability, so their cells may request the full suite.
+
+**Capability executability rule (`EVAL-08`).** A cell is executable when every
+capability required by its `requested_metrics` is `available` on its setup. The
+configuration validator (contract in
+`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §7.1`) rejects (a) requesting a metric
+whose capability is `unavailable` on the setup (e.g. `tpr` from Edge-IIoTset
+`external_group`), (b) requesting a `family` (B3) threshold on a dataset without
+a family taxonomy, (c) suppressing an entire cell when all its requested
+capabilities are available, and (d) declaring a capability `available` without
+its `readiness_evidence`. An unavailable metric is rendered as a typed
+unavailability (`unavailable_reason`), never `0`, `NaN`, an empty value, or a
+silently omitted column, and never placed in a table reserved for available FPR
+evidence (`§5`).
+
 ## 5. Undefined metric outcomes
 
 A metric that cannot be computed never silently returns zero, `NaN`,
@@ -191,12 +230,13 @@ or `Cited`) is available. Every Edge-IIoTset capture session is a short lab
 burst (27 min to 2.58 days), so a linear day-extrapolation of raw row counts
 would misrepresent deployment density — the hypothetical-number-as-measurement
 pattern SB-20 forbids — and no externally cited real-world IoT traffic rate
-is authorized. Edge external validation is itself suppressed
-(`attack_row_client_assignment_unavailable`: all attack traffic resolves to the
-single attacker subnet 0, leaving eight of nine sensor clients with no attack
-rows, §6 of the Edge dataset document and
-`external_device_dataset_validation`), so no host experiment for the metric
-exists either. The suite and metric remain defined for a future run that
+is authorized. The Edge-IIoTset external validation now runs for benign
+operating-point equity (`external_sensor_group_validation`,
+`validation_scope: benign_operating_point_equity`), but the E-O1 alert-burden
+metric additionally needs a validated `TrafficRateEvidence`, which no Edge
+capture supplies (every session is a short lab burst), so no host experiment
+requests `ALERT_BURDEN`. The suite and metric remain defined for a future run
+that
 supplies a validated traffic rate.
 
 ### 6.4 Model-personalization absorption bands
@@ -370,7 +410,7 @@ explicitly.
 | `COMPARATOR` | `federated_summary_comparator` (matched benign-summary comparison, quantile-estimation backbone analysis, and optional fixed-k sensitivity, all as evaluations of this one merged experiment) |
 | `STRESS_TEST` | `fedprox_aggregation_stress_test`, `model_personalization_absorption_test` |
 | `RECOVERY_CURVE` | `chronological_recalibration_evaluation` |
-| `ALERT_BURDEN` | defined but requested by no experiment (E-O1 disposition, §6.3): no validated `TrafficRateEvidence` is available, and its former host `external_device_dataset_validation` is itself suppressed |
+| `ALERT_BURDEN` | defined but requested by no experiment (E-O1 disposition, §6.3): no validated `TrafficRateEvidence` is available, and its former host `external_sensor_group_validation` runs only for benign operating-point equity and supplies no validated traffic rate |
 | `COMMUNICATION_STORAGE_COST` | any experiment requesting the optional `RESOURCE_COST` stage (chiefly `confirmatory_threshold_scope_effect`, `anchor_reproduction`; formerly the standalone `communication_storage_cost_analysis`/E-Q6) |
 | `BOUNDARY_NULL` | `file_pseudo_client_applicability_boundary`, any experiment whose claim outcome is `NULL` or `FEASIBILITY_REJECTION` |
 

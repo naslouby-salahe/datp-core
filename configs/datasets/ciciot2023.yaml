@@ -11,7 +11,10 @@ source_layout:
 field_schema:
   source_column_count: { per_class: 39, merged: 40 }
   identity_scheme:
-    row_identity: source_row_order
+    row_identity:
+      components: [source_file_path, source_row_index]
+      index_scope: within_source_file
+      preserved_through_materializations: true
     client_identity: { source: file, derived_from: merged_file_name }
     label_identity: { source: column, column: Label, present_in: merged_only }
     timestamp_field: none
@@ -110,7 +113,8 @@ materializations:
     preprocessing_sequence: [exclude_degenerate_window_rows, drop_exact_duplicate_rows_per_file, random_fractional_split, min_max_normalization_fit_on_train]
     row_exclusion:
       degenerate_window: exclude_rate_inf_or_blank_std_variance
-      duplicate_rows: drop_exact_duplicates_keep_first_per_file
+      within_file_duplicate_policy: drop_exact_duplicates_keep_first_per_file
+      cross_file_duplicate_policy: retain_across_pseudo_clients
     split:
       method: random_fractional
       calibration_benign_only: true

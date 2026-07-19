@@ -28,20 +28,21 @@ thresholding verdict.
 devices, and carries no other meaning anywhere in this package (`SCI-08`).
 
 DATP-Core strengthens this identity along five disciplined axes without
-becoming a generic FL-IDS benchmark: one external device-partitioned
+becoming a generic FL-IDS benchmark: one external sensor-group-partitioned
 dataset; a matched-operating-point federated-threshold comparator plus
 explicit disclosure of the anomaly-labeled comparator that is out of scope;
 two training-side stress tests outside the causal ladder; four threshold
 variants deepening the calibration story; and one chronological-split
 temporal-recalibration experiment. Six mechanism analyses and a dedicated
 tautology-defense appendix support these. The confirmatory endpoint is
-singular and unchanged by the extension. The external device-partitioned and
-chronological cells are designed in full but currently execute as
-*suppressed* cells, because Edge-IIoTset attack traffic resolves — under
-direction-normalized internal-endpoint identity — exclusively to the single
-attacker subnet, leaving eight of the nine sensor clients with no attack rows
-(`§5`, `§5.1`); the confirmatory Regime A endpoint is unaffected by that
-suppression.
+singular and unchanged by the extension. The external sensor-group-partitioned and
+chronological cells are **executable for benign operating-point equity** —
+cross-client false-positive dispersion (`CV(FPR)`, the primary external
+concern) — because held-out benign rows are recoverable for all ten
+source-grounded sensor groups (eligible-benign coverage 1.0); only their
+per-client attack-sensitive metrics are unavailable, because Edge-IIoTset
+attack traffic is confined to the single attacker subnet (`§5`, `§5.1`). The
+confirmatory Regime A endpoint is unaffected.
 
 ## 2. Anchor relationship
 
@@ -108,7 +109,7 @@ never derived from `evidence_role`.
 | RQ3 | `SUPPORTIVE` | How robust are local thresholds under small benign calibration windows, and can shrinkage and a size-aware fallback stabilize them? |
 | RQ4 | `MECHANISM` (backbone) | Framed as distributed quantile estimation, do federated statistical comparators explain or challenge the threshold-scope effect? |
 | RQ5 | `STRESS_TEST` | Does threshold-only personalization remain useful against aggregation-side and model-side personalization stress tests? |
-| RQ6 | `EXTERNAL_VALIDATION` / `BOUNDARY` | Does the effect generalize to an independent device-partitioned dataset, across heterogeneity severity, and where does it fail? |
+| RQ6 | `EXTERNAL_VALIDATION` / `BOUNDARY` | Does the effect generalize to an independent sensor-group-partitioned dataset, across heterogeneity severity, and where does it fail? |
 
 Evidence roles used throughout this package: `ANCHOR`, `CONFIRMATORY`,
 `SUPPORTIVE`, `EXTERNAL_VALIDATION`, `STRESS_TEST`, `MECHANISM`, `BOUNDARY`,
@@ -169,74 +170,80 @@ the roadmap names is represented below, executable or not:
 | `file_pseudo_client_evaluation` | CICIoT2023, `DatasetFilePseudoClients` (63 pseudo-clients, matching the `MERGED_CSV/` file count exactly; feature count d = 39 manually corroborated against the mounted corpus, `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.2` — the `processed_feature_verification` audit's own run remains the citable gate) | B-a | `LOCKED`, boundary only; never generalized beyond itself |
 | `device_mac_repartition` | CICIoT2023, a device/MAC-scoped client construction | B-b | `REJECTED` — the available CSV artifact lacks MAC, device, IP, capture-source, and timestamp columns; no pseudo-client substitute and no PCAP-reprocessing branch exist |
 | `chronological_probe_ciciot2023` | CICIoT2023, a genuine-timestamp temporal protocol | — | `REJECTED` — no timestamp column and no file/row/merge/directory pseudo-time substitute |
-| `external_device_validation` | Edge-IIoTset, `ExternalDeviceOrGroupClients` (benign sensor-type group granularity K = 10 recoverable, now also confirmed directly from endpoints; naive per-`ip.src_host` device granularity rejected by the `client_granularity_feasibility` audit) | D | `SUPPRESSED` — all attack traffic resolves to the single attacker subnet 0 (Temperature/Modbus), so eight of nine sensor clients receive zero attack rows (`attack_row_client_assignment_unavailable`); a per-client benign+attack evaluation cannot be built without fabricating attack traffic (`§5.1`) |
-| `chronological_recalibration_evaluation` | `external_device_validation` composition, chronological 70/30 split, frozen-versus-one-shot recalibration | D-temporal | `SUPPRESSED` — the temporal MVE also needs per-client attack rows at the boundary; the same `attack_row_client_assignment_unavailable` gap applies (`§5.1`) |
+| `external_sensor_group_validation` | Edge-IIoTset, `ExternalSensorGroupClients` (benign sensor-type group granularity K = 10 recoverable, confirmed directly from endpoints, eligible-benign coverage 1.0; naive per-`ip.src_host` device granularity rejected by the `client_granularity_feasibility` audit) | D | `EXECUTABLE` for benign operating-point equity (`validation_scope: benign_operating_point_equity`): benign calibration, threshold construction, benign-test FPR, and cross-client FPR dispersion. Per-client attack-sensitive metrics are `unavailable` (`per_client_attack_detection_metrics`, `attack_traffic_confined_to_subnet_zero`) because all attack traffic resolves to subnet 0 (`§5.1`) |
+| `chronological_recalibration_evaluation` | `external_sensor_group_validation` composition, chronological 70/30 split, frozen-versus-one-shot recalibration | D-temporal | `EXECUTABLE` for benign temporal operating-point equity (`validation_scope: benign_temporal_operating_point_equity`) using the defensible within-client time-of-day ordering; per-client temporal attack-detection metrics are `unavailable` (same `attack_traffic_confined_to_subnet_zero` limitation) (`§5.1`) |
 
 A rejected setting is a non-executable `RejectionRecord`
 (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §5`), never a planner branch, a
-threshold-construction union member, or a configuration variant. A
-*suppressed* setting (Regime D and D-temporal above) differs from a rejected
-one: it is a fully authored, non-executable cell carrying a typed
-`attack_row_client_assignment_unavailable` reason and source-grounded
-evidence, preserved so the roadmap scope survives, and is never deleted. The
-Regime A confirmatory claim is unaffected by the Regime D / D-temporal
-suppression.
+threshold-construction union member, or a configuration variant. Regime D and
+D-temporal are neither rejected nor wholly suppressed: they are
+**capability-scoped** cells, executable for benign operating-point equity
+(`CV(FPR)` and its benign-derivable companions) and carrying a typed
+`per_client_attack_detection_metrics: unavailable` limitation
+(`attack_traffic_confined_to_subnet_zero`) for the metrics that require
+per-client attack rows. The benign external and temporal evidence is produced;
+the attack-sensitive per-client evidence is rendered as a typed unavailability,
+never fabricated or deleted. The Regime A confirmatory claim is unaffected.
 
 ### 5.1 Feasibility audit ordering (no circular dependency)
 
-`external_device_validation`'s `ExternalDeviceOrGroupClients.granularity` is
-never chosen dynamically inside a scientific run, and a resolved scientific
+`external_sensor_group_validation`'s `ExternalSensorGroupClients` sensor-group
+granularity is never chosen dynamically inside a scientific run, and a resolved scientific
 `DataDefinition` never refers to a feasibility artifact its own run has not
 yet produced. The required sequence is:
 
 ```text
 source inspection (edge_iiotset_source_inspection, non-scientific)
   → feasibility audit (edge_iiotset_feasibility_audit, non-scientific)
-    → persisted FEASIBILITY_RESULT (device-vs-group decision, target
+    → persisted FEASIBILITY_RESULT (benign sensor-group authorization decision, target
       K ∈ {6, 15}, n_k ≥ 100 for ≥ 90% of clients)
-      → explicit human-authorized ExternalDeviceOrGroupClients document
-        (granularity fixed to DEVICE or GROUP before resolution, never a
+      → explicit human-authorized ExternalSensorGroupClients document
+        (fixed to the benign sensor-group partition before resolution, never a
         runtime choice)
-        → scientific external_device_validation configuration resolution
+        → scientific external_sensor_group_validation configuration resolution
           (references the audit's FEASIBILITY_RESULT by `ArtifactRef` as
           provenance only)
-          → scientific external_device_validation execution
+          → scientific external_sensor_group_validation execution
 ```
 
 The feasibility audit is its own prior, non-scientific run — `evidence_role`
 does not apply to it and it carries no `tier`; it exists only to produce a
 persisted `FEASIBILITY_RESULT`. `FEASIBILITY_AUDIT` never appears in the
-planned stage sequence of a scientific `external_device_validation`
+planned stage sequence of a scientific `external_sensor_group_validation`
 experiment, because that experiment's `ClientConstruction` already carries a
-fixed, human-authored `granularity` by the time its configuration is
+fixed, human-authored sensor-group partition by the time its configuration is
 resolved; `CLIENT_PARTITION` for that experiment cites the audit's
 `FEASIBILITY_RESULT` as upstream provenance, never as a value it resolves
 live. The scientific experiment never dynamically selects between device
 clients, group clients, or a fallback pseudo-client construction
 (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §9.1`).
 
-In the resolved Edge-IIoTset campaign this sequence terminates before its
-final scientific step. The `client_granularity_feasibility` audit authorizes
-the benign sensor-type **group** granularity (K = 10) and rejects the naive
-per-`ip.src_host` device granularity; a reopened audit additionally resolves
-benign client identity directly from the endpoints, using direction-normalized
-internal-endpoint resolution over all four endpoint fields keyed on the paper
-TABLE VI subnet topology (the third octet of `192.168.X.Y` names the sensor
-`/24`). That reopened audit confirms the benign group taxonomy from the data
-(97.5% of the 11.2M benign rows resolve to their own sensor subnet) but shows
-that **all 9.7M attack rows resolve to a single subnet — subnet 0
-(Temperature/Modbus), the `/24` hosting both the Kali attacker
-`192.168.0.170` and its victim `192.168.0.128`**. No attack row carries any
-subnet 1–8 endpoint in any field, so eight of the nine sensor clients receive
-zero attack rows (joint benign+attack coverage 1/9 ≈ 11%, below the 90% gate).
-The human-authored `external_group` setup is therefore marked
-`executable: false` with suppression reason
-`attack_row_client_assignment_unavailable`, and the scientific
-`external_device_dataset_validation` run — together with the chronological
-temporal MVE, which additionally needs per-client attack rows at the boundary
-— is suppressed rather than resolved. The feasibility ordering above remains
-the design; the suppression is a data-availability outcome recorded at
-authoring time, never a silent fallback or a fabricated mapping.
+In the resolved Edge-IIoTset campaign this sequence resolves to a
+**capability-scoped** external validation. The `client_granularity_feasibility`
+audit authorizes the benign sensor-type **group** granularity (K = 10) and
+rejects the naive per-`ip.src_host` device granularity; a reopened audit
+additionally resolves benign client identity directly from the endpoints, using
+direction-normalized internal-endpoint resolution over all four endpoint fields
+keyed on the paper TABLE VI subnet topology (the third octet of `192.168.X.Y`
+names the sensor `/24`). That reopened audit confirms the benign group taxonomy
+from the data (97.5% of the 11.2M benign rows resolve to their own sensor
+subnet; eligible-benign coverage 1.0) but shows that **all 9.7M attack rows
+resolve to a single subnet — subnet 0 (Temperature/Modbus), the `/24` hosting
+both the Kali attacker `192.168.0.170` and its victim `192.168.0.128`**. No
+attack row carries any subnet 1–8 endpoint in any field, so eight of the nine
+sensor clients receive zero attack rows (joint benign+attack coverage 1/9 ≈
+11%). Because false-positive metrics require only held-out benign rows, the
+`external_group` setup is `executable: true` with
+`validation_scope: benign_operating_point_equity`: benign calibration,
+threshold construction, benign-test FPR, and cross-client FPR dispersion are
+produced. Only per-client attack-sensitive metrics (TPR, Macro-F1, balanced
+accuracy, AUROC) carry a typed `per_client_attack_detection_metrics:
+unavailable` limitation (`attack_traffic_confined_to_subnet_zero`). The
+chronological setup is likewise executable for benign temporal FPR equity,
+using the defensible within-client time-of-day ordering; its per-client
+temporal attack metrics remain unavailable. The limitation is thus narrowed to
+the specific attack-sensitive capability, never the whole cell, and no mapping
+is fabricated.
 
 ## 6. Threshold and comparator nomenclature
 
@@ -292,27 +299,30 @@ All `MANDATORY` unless noted.
 | Semantic slug | Roadmap ref | Role; tier | Dataset setting | Threshold construction(s) |
 |---|---|---|---|---|
 | `shared_threshold_construction_sensitivity` | E-S1 | `SUPPORTIVE`; `TIER_2` | `natural_device_evaluation` | `SharedThreshold(MEAN\|POOLED\|WEIGHTED)`, `LocalThreshold` |
-| `threshold_quantile_sensitivity` | E-S2 | `SUPPORTIVE`; `TIER_2` | `natural_device_evaluation` (sole owner of this sweep; its external-dataset quantile axis is a suppressed `regime_d_extension`, `attack_row_client_assignment_unavailable`, since `external_device_dataset_validation` is itself suppressed, `§7.3`) | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`; q ∈ {.90, .95, .975, .99} |
-| `controlled_heterogeneity_response` | E-S3 | `SUPPORTIVE`; `TIER_2` | `controlled_heterogeneity_evaluation` (Regime A; the E-M4 "+ Regime D points" seam is a suppressed `regime_d_extension`, `attack_row_client_assignment_unavailable`) | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold` across α; carries the heterogeneity–threshold-benefit association (formerly E-M4) as an attached `AnalysisDefinition` regressing distributional divergence against gain, reusing this experiment's own evaluated results — no separate source inspection, partitioning, training, scoring, or threshold construction |
-| `cluster_mechanism` | E-M1 / E-M2 / E-Q2 | `MECHANISM`; `TIER_5` (+`TIER_7` exploratory for non-canonical K and `ROBUST_MEDIAN`) | `natural_device_evaluation` (Regime A; the "+ D where feasible" external seam is a suppressed `regime_d_extension`, `attack_row_client_assignment_unavailable`) | One merged experiment with four typed axes: threshold grouping (`FamilyThreshold` vs `ClusterThreshold`), fingerprint feature set (single-feature through all-four-feature subsets), cluster aggregation (`MEAN` vs `ROBUST_MEDIAN`), and authorized cluster count (canonical `K = 3`, mandatory; other K, exploratory only). Granularity comparison, adjusted-Rand stability, fingerprint ablation, and robust-median sensitivity are four `EvaluationDefinition`/`AnalysisDefinition` entries of this one experiment, never four experiment roots |
+| `threshold_quantile_sensitivity` | E-S2 | `SUPPORTIVE`; `TIER_2` | `natural_device_evaluation` (sole owner of this sweep; its external-dataset quantile axis is a benign-FPR-scope `regime_d` regime, `evaluation_scope: benign_operating_point_equity`, `§7.3`) | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`; q ∈ {.90, .95, .975, .99} |
+| `controlled_heterogeneity_response` | E-S3 | `SUPPORTIVE`; `TIER_2` | `controlled_heterogeneity_evaluation` (Regime A; the E-M4 "+ Regime D points" seam is a benign-FPR-scope `regime_d` regime using benign score-distribution divergence, `attack_traffic_confined_to_subnet_zero` for attack-sensitive metrics only) | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold` across α; carries the heterogeneity–threshold-benefit association (formerly E-M4) as an attached `AnalysisDefinition` regressing distributional divergence against gain, reusing this experiment's own evaluated results — no separate source inspection, partitioning, training, scoring, or threshold construction |
+| `cluster_mechanism` | E-M1 / E-M2 / E-Q2 | `MECHANISM`; `TIER_5` (+`TIER_7` exploratory for non-canonical K and `ROBUST_MEDIAN`) | `natural_device_evaluation` (Regime A; the "+ D where feasible" external seam is a benign-FPR-scope `regime_d` regime, B1/B2/B4 with `FamilyThreshold` excluded) | One merged experiment with four typed axes: threshold grouping (`FamilyThreshold` vs `ClusterThreshold`), fingerprint feature set (single-feature through all-four-feature subsets), cluster aggregation (`MEAN` vs `ROBUST_MEDIAN`), and authorized cluster count (canonical `K = 3`, mandatory; other K, exploratory only). Granularity comparison, adjusted-Rand stability, fingerprint ablation, and robust-median sensitivity are four `EvaluationDefinition`/`AnalysisDefinition` entries of this one experiment, never four experiment roots |
 | `calibration_window_size_stability` | E-V1 | `BOUNDARY`; `TIER_6` (RQ3) | `natural_device_evaluation`, subsampled calibration n ∈ {50, 100, 250, 500, 1000, 5000} | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, `CalibrationSizeAwareFallbackThreshold`; each sweep point is a `CalibrationWindowSelection` (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §12`) |
 | `local_global_threshold_shrinkage` | E-V2 | `SUPPORTIVE`; RQ3 | `natural_device_evaluation` | `LocalGlobalShrinkageThreshold`, λ ∈ {0, .25, .5, .75, 1} |
-| `conformal_local_threshold_coverage` | E-V3 | `SUPPORTIVE`, Tier-1 tautology defense; non-confirmatory | `natural_device_evaluation` (the "+ external" seam is a suppressed `regime_d_extension`, `attack_row_client_assignment_unavailable`) | `ConformalLocalThreshold`, α = 0.05 |
+| `conformal_local_threshold_coverage` | E-V3 | `SUPPORTIVE`, Tier-1 tautology defense; non-confirmatory | `natural_device_evaluation` (the "+ external" seam is a benign-FPR-scope `regime_d` regime producing benign conformal coverage and FPR dispersion) | `ConformalLocalThreshold`, α = 0.05 |
 
 ### 7.3 External validation and stress tests
 
-All `MANDATORY`, but two carry a `SUPPRESSED` Edge-IIoTset cell and the three
-stress tests express their Regime A + Regime D coverage as a typed `regimes`
-list (`regime_a`, run; `regime_d`, suppressed) rather than three invented
-per-dataset sibling experiments.
+All `MANDATORY`. The Edge-IIoTset cells are **executable for benign
+operating-point equity** (`evaluation_scope: benign_operating_point_equity`),
+with per-client attack-sensitive metrics carrying a typed
+`per_client_attack_detection_metrics: unavailable` limitation; the three stress
+tests express their Regime A + Regime D coverage as a typed `regimes` list
+(`regime_a` and `regime_d`, both run) rather than three invented per-dataset
+sibling experiments.
 
 | Semantic slug | Roadmap ref | Role; tier | Dataset setting | Threshold construction(s) |
 |---|---|---|---|---|
-| `external_device_dataset_validation` | E-X1 | `EXTERNAL_VALIDATION`; `TIER_3` | `external_device_validation` | `SUPPRESSED` (`attack_row_client_assignment_unavailable`, `§5.1`): `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, `FederatedSummaryStatisticThreshold` (no `FamilyThreshold` — Edge-IIoTset has no authorized family taxonomy); designed as sole owner of the external-dataset quantile-sensitivity sweep (`§15`) and the operational alert-burden analysis (formerly E-O1), preserved in full but currently non-executable |
-| `fedprox_aggregation_stress_test` | E-T1 | `STRESS_TEST`; `TIER_4` | `regimes`: `regime_a` (`natural_device_evaluation`, run) + `regime_d` (`external_device_validation`, `SUPPRESSED`) | core ladder, under `FederatedProxTraining`; µ bound per cell from `training.parameters.mu = {from_sweep: federated_proximal_mu}` over the pre-registered grid {0.001, 0.01, 0.1} |
-| `model_personalization_absorption_test` | E-T2 | `STRESS_TEST`; `TIER_4` | `regimes`: `regime_a` (`natural_device_evaluation`, run) + `regime_d` (`external_device_validation`, `SUPPRESSED`) | `SharedThreshold`, `LocalThreshold`, under the resolved Ditto personalization comparator (see below) |
-| `federated_summary_comparator` | E-T3 / E-Q1 / E-Q5 | `STRESS_TEST` (comparator); `TIER_4` | `regimes`: `regime_a` (`natural_device_evaluation`, run) + `regime_d` (`external_device_validation`, `SUPPRESSED`) | One merged experiment: matched benign-summary (`mode = matched_exceedance`) `LocalThreshold` vs `FederatedSummaryStatisticThreshold` comparison (mandatory primary, former E-T3), a quantile-estimation-error analysis framed as distributed quantile estimation (mandatory backbone, former E-Q1), and `mode = fixed_k` `FederatedSummaryStatisticThreshold` sensitivity at scalar k ∈ {2.0, 2.5, 3.0} (optional supplementary evaluation, never primary, former E-Q5) |
-| `chronological_recalibration_evaluation` | E-B1 | `BOUNDARY`; `TIER_6` | `chronological_recalibration_evaluation` | `SUPPRESSED` (`attack_row_client_assignment_unavailable`, `§5.1`): `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, frozen vs one-shot recalibration; designed in full but non-executable because the temporal boundary still needs per-client attack rows |
+| `external_sensor_group_validation` | E-X1 | `EXTERNAL_VALIDATION`; `TIER_3` | `external_sensor_group_validation` | **executable, `benign_operating_point_equity` scope** (`§5.1`): `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, `FederatedSummaryStatisticThreshold` (no `FamilyThreshold` — Edge-IIoTset has no authorized family taxonomy) request FPR-family metrics only; per-client attack-sensitive metrics carry a typed `per_client_attack_detection_metrics: unavailable` limitation; q pinned at 0.95 (the external-dataset quantile-sensitivity sweep is owned by E-S2, `§15`); the operational alert-burden analysis (formerly E-O1) stays unavailable pending a validated traffic rate |
+| `fedprox_aggregation_stress_test` | E-T1 | `STRESS_TEST`; `TIER_4` | `regimes`: `regime_a` (`natural_device_evaluation`, run) + `regime_d` (`external_sensor_group_validation`, `benign_operating_point_equity` scope, `FamilyThreshold` excluded) | core ladder, under `FederatedProxTraining`; µ bound per cell from `training.parameters.mu = {from_sweep: federated_proximal_mu}` over the pre-registered grid {0.001, 0.01, 0.1} |
+| `model_personalization_absorption_test` | E-T2 | `STRESS_TEST`; `TIER_4` | `regimes`: `regime_a` (`natural_device_evaluation`, run) + `regime_d` (`external_sensor_group_validation`, `benign_operating_point_equity` scope) | `SharedThreshold`, `LocalThreshold`, under the resolved Ditto personalization comparator (see below); the absorption bands compare `CV_FPR` deltas |
+| `federated_summary_comparator` | E-T3 / E-Q1 / E-Q5 | `STRESS_TEST` (comparator); `TIER_4` | `regimes`: `regime_a` (`natural_device_evaluation`, run) + `regime_d` (`external_sensor_group_validation`, `benign_operating_point_equity` scope) | One merged experiment: matched benign-summary (`mode = matched_exceedance`) `LocalThreshold` vs `FederatedSummaryStatisticThreshold` comparison (mandatory primary, former E-T3), a quantile-estimation-error analysis framed as distributed quantile estimation (mandatory backbone, former E-Q1), and `mode = fixed_k` `FederatedSummaryStatisticThreshold` sensitivity at scalar k ∈ {2.0, 2.5, 3.0} (optional supplementary evaluation, never primary, former E-Q5) |
+| `chronological_recalibration_evaluation` | E-B1 | `BOUNDARY`; `TIER_6` | `chronological_recalibration_evaluation` | **executable, `benign_temporal_operating_point_equity` scope** (`§5.1`): `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, frozen vs one-shot recalibration on benign FPR using the defensible within-client benign ordering; per-client temporal attack metrics carry a typed unavailability |
 
 The E-T2 personalization comparator is resolved to genuine **Ditto** (Li et
 al., ICML 2021): `personalization: ditto`, `personalization_proximal_weight:
@@ -395,7 +405,7 @@ separate `configs/dataset_audits/` root
 | `ciciot2023` | `source_inspection` | Regime B feasibility; records MAC/device/IP/timestamp absence | `SOURCE_INSPECTION` | B-a boundary; documents the B-b rejection basis |
 | `ciciot2023` | `processed_feature_verification` | conditional gate 1 (roadmap §7, §20) | `FEATURE_SCHEMA_MANIFEST` (verified `d`) | any quantitative `file_pseudo_client_applicability_boundary` claim |
 | `edge_iiotset` | `source_inspection` | Regime D feasibility | `SOURCE_INSPECTION`, timestamp evidence | Edge-IIoTset runs |
-| `edge_iiotset` | `client_granularity_feasibility` | conditional gate 2 (device-vs-group, K ∈ {6,15}, ≥ 90% coverage at n_k ≥ 100) | `FEASIBILITY_RESULT` | `external_device_dataset_validation` granularity authorization |
+| `edge_iiotset` | `client_granularity_feasibility` | conditional gate 2 (sensor-group authorization, K ∈ {6,15}, ≥ 90% coverage at n_k ≥ 100) | `FEASIBILITY_RESULT` | `external_sensor_group_validation` granularity authorization |
 | `edge_iiotset` | `timestamp_semantics_verification` | temporal MVE feasibility | timestamp-semantics `FEASIBILITY_RESULT` | `chronological_recalibration_evaluation` |
 
 A scientific run never re-answers a question an audit closes; it cites the

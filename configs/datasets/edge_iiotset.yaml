@@ -77,7 +77,10 @@ field_schema:
     - Attack_label
     - Attack_type
   identity_scheme:
-    row_identity: source_row_order
+    row_identity:
+      components: [source_file_path, source_row_index]
+      index_scope: within_source_file
+      preserved_through_materializations: true
     benign_group_identity: { source: path, derived_from: normal_traffic_group_folder }
     attack_row_group_identity: unavailable
     device_identity: { source: column, column: ip.src_host, usable: false, superseded_by: endpoint_identity }
@@ -89,18 +92,12 @@ field_schema:
     family_taxonomy: unavailable
   attack_row_group_assignment:
     available: false
-    reason: attack_traffic_confined_to_attacker_subnet
-    evidence: >-
-      Direction-normalized internal-endpoint resolution over all four endpoint fields
-      (ip.src_host, ip.dst_host, arp.src.proto_ipv4, arp.dst.proto_ipv4), keyed on the paper
-      TABLE VI testbed topology (the third octet of 192.168.X.Y identifies the sensor /24),
-      resolves 99.95% of the 9,729,709 attack rows to exactly one subnet: subnet 0
-      (Temperature_and_Humidity / Modbus), the /24 that hosts both the Kali attacker
-      (192.168.0.170) and its primary victim (192.168.0.128). No attack row carries any subnet
-      1-8 endpoint in any field, so eight of the nine sensor clients receive zero attack rows.
-      A per-client benign+attack evaluation across the B1-B4 ladder is therefore impossible
-      without fabricating attack traffic for clients that have none. See endpoint_identity and
-      CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.3.
+    reason: attack_traffic_confined_to_subnet_zero
+    resolved_attack_subnets: [0]
+    resolved_attack_fraction: 0.9995
+    attack_rows_in_sensor_subnets_1_8: 0
+    decision_ref: edge_attack_distribution_audit
+    limits: attack_sensitive_per_client_metrics_only
   endpoint_identity:
     resolution: direction_normalized_internal_endpoint
     fields: [ip.src_host, ip.dst_host, arp.src.proto_ipv4, arp.dst.proto_ipv4]
@@ -181,13 +178,102 @@ field_schema:
     encoded_feature_count: 76
     retained_numeric_feature_count: 39
     total_model_feature_count: 115
-    post_encoding_feature_names: runtime_captured
+    vocabulary_scope: full_corpus_benign_and_attack
+    category_order: ascending_string
+    encoded_feature_naming: "{column}={category_value}"
+    missing_category_policy: absent_value_maps_to_all_zero_indicator
+    unknown_category_policy: unseen_value_maps_to_all_zero_indicator
+    feature_order: [retained_numeric_features, one_hot_encoded_columns]
+    category_values:
+      http.request.method:
+      - '0'
+      - '0.0'
+      - GET
+      - OPTIONS
+      - POST
+      - PROPFIND
+      - PUT
+      - SEARCH
+      - TRACE
+      http.referer:
+      - '() { _; } >_[$($())] { echo 93e4r0-CVE-2014-6278: true; echo;echo; }'
+      - '0'
+      - '0.0'
+      - '1.0'
+      - 127.0.0.1
+      - TESTING_PURPOSES_ONLY
+      http.request.version:
+      - -a HTTP/1.1
+      - -al&ABSOLUTE_PATH_STUDIP=http://cirt.net/rfiinc.txt?? HTTP/1.1
+      - -al&_PHPLIB[libdir]=http://cirt.net/rfiinc.txt?? HTTP/1.1
+      - /etc/passwd|?data=Download HTTP/1.1
+      - '0'
+      - '0.0'
+      - '0x0000511a'
+      - '> HTTP/1.1'
+      - By Dr HTTP/1.1
+      - HTTP/1.0
+      - HTTP/1.1
+      - Src=javascript:alert('Vulnerable')><Img Src=\" HTTP/1.1
+      - name=a><input name=i value=XSS>&lt;script>alert('Vulnerable')</script> HTTP/1.1
+      - script>alert(1)/script><\" HTTP/1.1
+      dns.qry.name.len:
+      - '0'
+      - '0.0'
+      - 0.debian.pool.ntp.org
+      - '1.0'
+      - 1.debian.pool.ntp.org
+      - '11.0'
+      - '17.0'
+      - 2.debian.pool.ntp.org
+      - '21.0'
+      - '245'
+      - 3.debian.pool.ntp.org
+      - _233637DE._sub._googlecast._tcp.local
+      - _googlecast._tcp.local
+      - _ipp._tcp.local
+      - _ipps._tcp.local
+      - null-null.local
+      - raspberrypi.local
+      mqtt.conack.flags:
+      - '0'
+      - '0.0'
+      - '0x00000000'
+      - '12'
+      - '1461073'
+      - '1461074'
+      - '1461383'
+      - '1461384'
+      - '1461589'
+      - '1461591'
+      - '1471198'
+      - '1471199'
+      - '1574358'
+      - '1574359'
+      mqtt.protoname:
+      - '0'
+      - '0.0'
+      - '3'
+      - MQTT
+      mqtt.topic:
+      - '0'
+      - '0.0'
+      - '14'
+      - Distance
+      - Flame_Sensor
+      - Heart_Rate
+      - IR_Receiver
+      - Soil_Moisture
+      - Sound_Sensor
+      - Temperature_and_Humidity
+      - Water_Level
+      - phValue
   leakage_exclusions:
     columns: [frame.time, ip.src_host, ip.dst_host, arp.src.proto_ipv4, arp.dst.proto_ipv4, http.file_data, http.request.full_uri, icmp.transmit_timestamp, http.request.uri.query, tcp.options, tcp.payload, tcp.srcport, tcp.dstport, udp.port, mqtt.msg]
     role_basis: leakage_or_high_cardinality_or_client_identity_or_timestamp
   fingerprint_inputs:
     source: [source_layout.root, field_schema.source_column_count]
-    schema: [schema_id, field_schema.categorical_encoding.total_model_feature_count]
+    schema: [schema_id, field_schema.retained_numeric_features.order, field_schema.categorical_encoding.total_model_feature_count, field_schema.categorical_encoding.category_values]
 observed_facts:
   normal_group_count: 10
   attack_file_count: 14
@@ -197,7 +283,7 @@ observed_facts:
   timestamp_unusable_files: [Modbus, DDoS_UDP_Flood_attack, MITM_attack]
   exact_duplicate_rate: 0.000125
   family_taxonomy_available: false
-  temperature_subnet: 0                       # corrected: shares subnet 0 with Modbus, not public-IP dominated
+  temperature_subnet: 0                       # shared /24 with Modbus
   attack_resolved_subnets: [0]
   attack_rows_in_sensor_subnets_1_8: 0
   benign_subnet_consistency: one_subnet_per_folder_except_modbus_spans_0_and_7
@@ -205,8 +291,38 @@ readiness:
   source_schema_complete: true
   benign_group_partition_recoverable: true
   benign_endpoint_identity_recoverable: true
+  eligible_benign_client_coverage_ratio: 1.0
+  fpr_scope_evaluation_executable: true
+  benign_temporal_fpr_evaluation_executable: true
+  attack_sensitive_per_client_evaluation_executable: false
   attack_row_group_assignment_recoverable: false
-  external_validation_executable: false
+  external_validation_mode: benign_operating_point_equity
+evaluation_capabilities:
+  benign_calibration:
+    status: available
+    readiness_evidence: benign_group_partition_recoverable
+  benign_test_false_positive_metrics:
+    status: available
+    result_types: [fleet_dispersion_result, fleet_equity_result]
+    supported_metrics: [fpr, cv_fpr, iqr_fpr, fpr_range, worst_client_fpr, jain_index, gini_coefficient]
+    readiness_evidence: eligible_benign_client_coverage_ratio
+  threshold_scope_dispersion:
+    status: available
+    result_type: confirmatory_analysis_result
+  benign_score_distribution_analysis:
+    status: available
+    result_types: [cluster_dispersion_result, cluster_stability_result, metric_association_result]
+  conformal_benign_coverage:
+    status: available
+    result_type: conformal_coverage_result
+  per_client_attack_detection_metrics:
+    status: unavailable
+    reason: attack_traffic_confined_to_subnet_zero
+    result_type: fleet_detection_result
+    unsupported_metrics: [tpr, cv_tpr, recall, macro_f1, p10_macro_f1, balanced_accuracy, worst_client_ba, auroc]
+  attack_sensitive_threshold_tradeoff:
+    status: unavailable
+    reason: attack_traffic_confined_to_subnet_zero
 audits:
   - check: source_inspection
     inspection:
@@ -233,6 +349,8 @@ audits:
       group_count: 10
       joint_benign_attack_partition: infeasible
       joint_client_coverage_ratio: 0.11
+      benign_operating_point_equity_executable: true
+      attack_sensitive_per_client_evaluation_executable: false
     operations: { execution: dataset_audit, report: { table_type: feasibility_report, output_formats: [markdown] } }
   - check: timestamp_semantics_verification
     inspection:
@@ -261,32 +379,43 @@ materializations:
       calibration_benign_only: true
       split_seed: 0
       ratios: { train: 0.70, calibration: 0.15, test: 0.15 }
+  group_chronological:
+    materialization_id: edge_iiotset_group_chronological
+    normalization: { strategy: min_max, scope: historical_train }
+    preprocessing_sequence: [drop_row_with_null_in_retained_column, drop_exact_duplicate_rows, resolve_within_client_time_order, chronological_split, one_hot_encode_categoricals, min_max_normalization_fit_on_historical_train]
+    row_exclusion:
+      null_in_retained_column: drop_row
+      duplicate_rows: drop_exact_duplicates_keep_first
+    split:
+      method: within_client_chronological
+      calibration_benign_only: true
+      historical_train_fraction: 0.55
+      historical_calibration_fraction: 0.15
+      future_test_fraction: 0.30
+      ordering_field: frame.time
+      ordering_scope: per_client
+      rollover_policy: add_twenty_four_hours_on_time_decrease
 setups:
   external_group:
     materialization: group_benign
     client_construction: { method: external_group_clients, group_count: 10 }
-    executable: false
-    suppression:
-      reason: attack_row_client_assignment_unavailable
-      evidence: >-
-        The benign sensor-type group partition is recoverable and is now independently confirmed
-        from endpoint IPs (field_schema.endpoint_identity), but every attack row resolves to a
-        single subnet (subnet 0, Temperature/Modbus); eight of the nine sensor clients receive
-        zero attack rows, so a per-client benign+attack external-validation evaluation cannot be
-        constructed without fabricating attack traffic. The group partition alone is insufficient.
+    executable: true
+    validation_scope: benign_operating_point_equity
+    supported_capabilities: [benign_calibration, benign_test_false_positive_metrics, threshold_scope_dispersion, benign_score_distribution_analysis, conformal_benign_coverage]
+    unsupported_capabilities: [per_client_attack_detection_metrics, attack_sensitive_threshold_tradeoff]
+    limitation:
+      capability: per_client_attack_detection_metrics
+      status: unavailable
+      reason: attack_traffic_confined_to_subnet_zero
   chronological:
-    materialization: group_benign
+    materialization: group_chronological
     client_construction: { method: external_group_clients, group_count: 9, excluded_groups: [Modbus] }
-    temporal_window:
-      role: temporal_evaluation
-      historical_fraction: 0.70
-      capture_time_field: frame.time
-      ordering_derivation: time_of_day_with_midnight_rollover_correction
-    executable: false
-    suppression:
-      reason: attack_row_client_assignment_unavailable
-      evidence: >-
-        Within-client benign time-of-day ordering is defensible, but the chronological evaluation
-        still requires per-client attack rows at the temporal boundary; the same attack-row
-        subnet-0 confinement that suppresses external_group (field_schema.endpoint_identity)
-        applies here.
+    executable: true
+    validation_scope: benign_temporal_operating_point_equity
+    cross_client_wall_clock_ordering: unavailable
+    supported_scope: [historical_benign_training, historical_benign_calibration, future_benign_fpr_evaluation, frozen_vs_one_shot_recalibrated_thresholds, cv_fpr_drift_and_recovery]
+    unsupported_scope: [per_client_temporal_tpr, temporal_macro_f1, temporal_balanced_accuracy, attack_sensitive_temporal_recovery]
+    limitation:
+      capability: per_client_attack_detection_metrics
+      status: unavailable
+      reason: attack_traffic_confined_to_subnet_zero

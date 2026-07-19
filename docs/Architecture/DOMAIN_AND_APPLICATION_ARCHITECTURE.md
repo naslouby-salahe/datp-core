@@ -142,7 +142,7 @@ ClientConstruction
 ├── PhysicalDeviceClients        (device_count)
 ├── DatasetFilePseudoClients      (pseudo_client_count; boundary role only)
 ├── DirichletPartitionedClients    (client_count, alpha, partition_seed)
-└── ExternalDeviceOrGroupClients    (granularity: DEVICE | GROUP, fixed by human authorization;
+└── ExternalSensorGroupClients    (granularity: GROUP benign sensor-group, K = 10, fixed by human authorization;
                                        feasibility_result_ref: FeasibilityResultRef,
                                        provenance-only; never resolved during execution)
 ```
@@ -1023,7 +1023,7 @@ groups so it can be checked side by side against it.
 |---|---|---|
 | `Dataset` | kept | `N_BAIOT`, `CICIOT2023`, `EDGE_IIOTSET` — unchanged, never letter-based |
 | `Regime` | **kept, redefined as derived** | see `§3.1` above; five members `A, B_A, C, D, D_TEMPORAL`, computed from `DataDefinition`, never a constructor input |
-| `ClientDefinitionStrategy` | merged | into the `ClientConstruction` discriminated union (`§3.1`); `DEVICE_CLIENT`/`GROUP_CLIENT` merged into `ExternalDeviceOrGroupClients.granularity` |
+| `ClientDefinitionStrategy` | merged | into the `ClientConstruction` discriminated union (`§3.1`); `DEVICE_CLIENT`/`GROUP_CLIENT` merged into `ExternalSensorGroupClients.granularity` (now GROUP-only; device granularity rejected) |
 | `SplitRole` | kept | `TRAIN`, `CALIBRATION`, `TEST`, `TEMPORAL_EVALUATION` |
 | `ProtocolTrack` | eliminated | `DATP_ANCHOR`/`COMPLETE` replaced by `EvidenceRole.ANCHOR`; namespace is derived, not a stored field (`ANCHOR-05`) |
 | `DetectorBranchRole` | eliminated | replaced by the pure function `classify_training_profile` (`§3.2`, `§11`) |
@@ -1324,13 +1324,13 @@ class DirichletPartitionedClients:
     partition_seed: Seed
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ExternalDeviceOrGroupClients:
-    granularity: ClientGranularity             # DEVICE | GROUP, fixed by human authorization
+class ExternalSensorGroupClients:
+    granularity: ClientGranularity             # GROUP (benign sensor-group, K = 10), fixed by human authorization; DEVICE rejected
     feasibility_result_ref: ArtifactRef        # provenance-only; never resolved during execution
 
 ClientConstruction = (
     PhysicalDeviceClients | DatasetFilePseudoClients
-    | DirichletPartitionedClients | ExternalDeviceOrGroupClients
+    | DirichletPartitionedClients | ExternalSensorGroupClients
 )
 
 # SplitDefinition members (domain/data.py)

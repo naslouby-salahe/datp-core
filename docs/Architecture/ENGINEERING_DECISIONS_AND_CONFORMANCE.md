@@ -170,7 +170,12 @@ identifier rather than repeat the text.
 §§1–6`. `EVAL-07` (`§7`): a communication/storage cost value is either a
 disclosed `MEASURED`/`ESTIMATED` derivation from the resolved configuration
 or omitted; it is never fabricated from an approximate model when a real
-derivation is available.
+derivation is available. `EVAL-08` (`EVALUATION_REPORTING_AND_PROVENANCE.md
+§4.1`): an experiment cell is executable when every capability required by its
+`requested_metrics` is `available` on its setup; the absence of an unrelated
+capability (e.g. Edge-IIoTset per-client attack metrics) suppresses only the
+affected metrics, never the whole cell, and an unavailable metric is rendered
+as a typed unavailability, never zero/`NaN`/omitted.
 
 ### `STAT-*` — statistics
 
@@ -353,10 +358,10 @@ non-citable.
 
 | Decision | Authority needed | Blocked stages | Status |
 |---|---|---|---|
-| External-device (Edge-IIoTset) partition granularity (device vs. group) | first-principles feasibility audit | every `external_device_validation` stage | `RESOLVED`; the reopened direction-normalized full-corpus endpoint audit rejects naive device granularity, confirms the benign sensor-group/endpoint identity, but finds all attack traffic confined to the single attacker subnet 0 — so no multi-client benign+attack partition exists and `external_device_validation` is `SUPPRESSED`, never scheduled (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.3`) |
-| External-device post-encoding `model_feature_order` width | source inspection (data-dependent one-hot expansion) | materialization onward for `external_device_validation` | `BLOCKED`; the 63-column raw schema and its 15-drop/7-encode column lists are verified (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.3`) — only the final encoded width is open |
+| External-device (Edge-IIoTset) partition granularity (device vs. group) | first-principles feasibility audit | every `external_sensor_group_validation` stage | `RESOLVED`; the reopened direction-normalized full-corpus endpoint audit rejects naive device granularity and confirms the benign sensor-group/endpoint identity (eligible-benign coverage 1.0). `external_sensor_group_validation` is **executable for benign operating-point equity** (`validation_scope: benign_operating_point_equity`); only per-client attack-sensitive metrics carry a typed `attack_traffic_confined_to_subnet_zero` unavailability (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.3`) |
+| External-device post-encoding `model_feature_order` width | source inspection (data-dependent one-hot expansion) | materialization onward for `external_sensor_group_validation` | `RESOLVED`; the one-hot expansion is authored (7 encoded columns → 76 dummies + 39 numeric = 115, `per_column_measured_width` recorded, category vocabulary enumerated per column: `category_values`, `category_order: ascending_string`, `encoded_feature_naming: "{column}={category_value}"`, unknown/missing → all-zero indicator) in `edge_iiotset.yaml`, enabling the benign external materialization (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.3`) |
 | CICIoT2023 feature count (conference value d = 39) | `processed_feature_verification` audit's own run | any quantitative `file_pseudo_client_applicability_boundary` claim | `BLOCKED` pending the audit's own execution; manually corroborated at exactly 39 against the mounted corpus (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.2`) |
-| Genuine Edge-IIoTset timestamp semantics | source inspection | `chronological_recalibration_evaluation` | `BLOCKED`; `frame.time` is confirmed well-formed in the raw per-sensor captures but malformed in sampled rows of the combined "Selected" files — the malformed-value distribution across the full corpus is unresolved (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.3`) |
+| Genuine Edge-IIoTset timestamp semantics | source inspection | `chronological_recalibration_evaluation` | `RESOLVED` for benign scope; `frame.time` is well-formed in the raw per-sensor captures the campaign uses, giving defensible within-client time-of-day ordering (midnight-rollover corrected, K = 9, Modbus excluded). `chronological_recalibration_evaluation` is **executable for benign temporal operating-point equity**; cross-client wall-clock chronology and per-client temporal attack metrics remain unavailable (the latter by attack-subnet-0 confinement, not timestamps) (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.3`) |
 | N-BaIoT row-1 cold-start handling policy | scientific authority | any `natural_device_evaluation`/`controlled_heterogeneity_evaluation` materialization | `BLOCKED`; the artifact itself is verified (every raw file's first row carries a raw epoch timestamp in its `HH_jit_*_mean` columns instead of a jitter statistic) — only the drop-vs-flag policy is open (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.1`) |
 | N-BaIoT / CICIoT2023 duplicate-row handling policy | scientific authority | materialization for `natural_device_evaluation`, `file_pseudo_client_evaluation` | `BLOCKED`; a low, nonzero duplicate rate is confirmed on sampled files (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §§11.1–11.2`); the full-corpus rate for either dataset is unmeasured |
 | CICIoT2023 `Rate = inf` / empty `Std`,`Variance` degenerate-window handling policy | scientific authority | materialization for `file_pseudo_client_evaluation` and any experiment referencing `ciciot2023` | `BLOCKED`; confirmed recurring on real rows (single-packet flow windows), never a transcription error (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.2`) |
@@ -411,6 +416,33 @@ carries a `data_loading` block (`chunk_row_count`, `streaming`) — 50000 for
 `smoke`/`test_smoke` — and datasets no longer carry a `chunk_profile`. These
 budgets must be re-verified against the real training host before any
 `SCIENTIFIC` or `PRINT_GRADE` run.
+
+### 7.1 Capability-availability validator (contract, not yet implemented)
+
+Each dataset setup declares `evaluation_capabilities` (available/unavailable
+with `readiness_evidence` or a typed `reason`); each experiment cell declares
+`requested_metrics` and, for external cells, an `evaluation_scope` and typed
+`limitations`. A configuration validator MUST enforce the capability
+executability rule (`EVAL-08`, `EVALUATION_REPORTING_AND_PROVENANCE.md §4.1`):
+
+- **Reject an unavailable-capability metric request** — e.g. requesting `tpr`,
+  `macro_f1`, `balanced_accuracy`, or `auroc` from the Edge-IIoTset
+  `external_group` setup, whose `per_client_attack_detection_metrics`
+  capability is `unavailable` (`attack_traffic_confined_to_subnet_zero`).
+- **Reject a `family` (B3) threshold** on any dataset whose
+  `field_schema.label_fields.family_taxonomy` is `unavailable` (Edge-IIoTset).
+- **Reject whole-cell suppression** when every capability required by the
+  cell's `requested_metrics` is `available` on its setup (the defect this task
+  corrected: attack-row confinement must suppress only attack-sensitive
+  metrics, never the benign FPR cell).
+- **Reject a capability declared `available` without its `readiness_evidence`**,
+  and reject an experiment requesting a metric with no owning capability.
+
+Until the validator exists, these are authoring invariants verified by review;
+the metric→capability ownership table is the single source of truth. The
+validator never fabricates attack rows, never downgrades an unavailable metric
+to zero/`NaN`, and never promotes a benign-scope cell to claim attack-detection
+evidence.
 
 ## 8. Test architecture
 
