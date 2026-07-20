@@ -31,6 +31,34 @@ from datp_core.domain.identifiers import ArtifactId, ExperimentId
 from datp_core.domain.values import Seed
 
 
+def _manifest_to_json(manifest: ArtifactManifest) -> dict[str, object]:
+    """Canonical manifest JSON payload shared by every atomic commit transaction."""
+    return {
+        "artifact_id": manifest.artifact_key.artifact_id.value,
+        "artifact_kind": manifest.artifact_key.kind.value,
+        "artifact_format": manifest.artifact_format.value,
+        "scientific_fingerprint": manifest.scientific_fingerprint.value,
+        "execution_fingerprint": manifest.execution_fingerprint.value,
+        "payload_checksum": manifest.payload_checksum.value,
+        "relative_path": manifest.relative_path,
+        "state": manifest.state.value,
+        "schema_version": manifest.schema_version,
+        "parents": [
+            {
+                "artifact_id": parent.parent_key.artifact_id.value,
+                "artifact_kind": parent.parent_key.kind.value,
+                "scientific_fingerprint": parent.scientific_fingerprint.value,
+            }
+            for parent in manifest.parents
+        ],
+        "creation_timestamp": manifest.creation_timestamp,
+        "environment_identity": manifest.environment_identity,
+        "experiment_id": manifest.experiment_id.value if manifest.experiment_id else None,
+        "seed": manifest.seed.value if manifest.seed else None,
+        "is_frozen": manifest.is_frozen,
+    }
+
+
 def commit_artifact_atomically(
     request: ArtifactCommitRequest,
     outputs_dir: Path,
@@ -78,33 +106,9 @@ def commit_artifact_atomically(
                 is_frozen=True,
             )
 
-            manifest_json = {
-                "artifact_id": manifest.artifact_key.artifact_id.value,
-                "artifact_kind": manifest.artifact_key.kind.value,
-                "artifact_format": manifest.artifact_format.value,
-                "scientific_fingerprint": manifest.scientific_fingerprint.value,
-                "execution_fingerprint": manifest.execution_fingerprint.value,
-                "payload_checksum": manifest.payload_checksum.value,
-                "relative_path": manifest.relative_path,
-                "state": manifest.state.value,
-                "schema_version": manifest.schema_version,
-                "parents": [
-                    {
-                        "artifact_id": parent.parent_key.artifact_id.value,
-                        "artifact_kind": parent.parent_key.kind.value,
-                        "scientific_fingerprint": parent.scientific_fingerprint.value,
-                    }
-                    for parent in manifest.parents
-                ],
-                "creation_timestamp": manifest.creation_timestamp,
-                "environment_identity": manifest.environment_identity,
-                "experiment_id": manifest.experiment_id.value if manifest.experiment_id else None,
-                "seed": manifest.seed.value if manifest.seed else None,
-                "is_frozen": manifest.is_frozen,
-            }
             manifest_path = tmp_dir / "manifest.json"
             with open(manifest_path, "w", encoding="utf-8") as f:
-                json.dump(manifest_json, f, indent=2)
+                json.dump(_manifest_to_json(manifest), f, indent=2)
                 f.flush()
                 os.fsync(f.fileno())
 
@@ -162,35 +166,8 @@ def commit_artifact_file_atomically(
                 is_frozen=True,
             )
             manifest_path = tmp_dir / "manifest.json"
-            manifest_json = json.dumps(
-                {
-                    "artifact_id": manifest.artifact_key.artifact_id.value,
-                    "artifact_kind": manifest.artifact_key.kind.value,
-                    "artifact_format": manifest.artifact_format.value,
-                    "scientific_fingerprint": manifest.scientific_fingerprint.value,
-                    "execution_fingerprint": manifest.execution_fingerprint.value,
-                    "payload_checksum": manifest.payload_checksum.value,
-                    "relative_path": manifest.relative_path,
-                    "state": manifest.state.value,
-                    "schema_version": manifest.schema_version,
-                    "parents": [
-                        {
-                            "artifact_id": parent.parent_key.artifact_id.value,
-                            "artifact_kind": parent.parent_key.kind.value,
-                            "scientific_fingerprint": parent.scientific_fingerprint.value,
-                        }
-                        for parent in manifest.parents
-                    ],
-                    "creation_timestamp": manifest.creation_timestamp,
-                    "environment_identity": manifest.environment_identity,
-                    "experiment_id": manifest.experiment_id.value if manifest.experiment_id else None,
-                    "seed": manifest.seed.value if manifest.seed else None,
-                    "is_frozen": True,
-                },
-                indent=2,
-            )
             with manifest_path.open("w", encoding="utf-8") as manifest_file:
-                manifest_file.write(manifest_json)
+                json.dump(_manifest_to_json(manifest), manifest_file, indent=2)
                 manifest_file.flush()
                 os.fsync(manifest_file.fileno())
             target_dir.parent.mkdir(parents=True, exist_ok=True)
