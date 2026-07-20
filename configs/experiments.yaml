@@ -7,7 +7,9 @@
 schema_version: 1
 
 # --- Study populations -------------------------------------------------------------------
-# A population's metric bundle may not exceed what its audited capabilities support.
+# A population's metric bundle may not exceed what its audited capabilities support. One
+# experiment binds one dataset population unless a second population is a declared reference
+# arm of the same procedure, so a failure in one dataset can never suppress another.
 study_populations:
   nbaiot_natural_devices:
     dataset: nbaiot
@@ -33,11 +35,15 @@ study_populations:
     dataset: edge_iiotset
     setup: chronological_sensor_groups
     metric_bundle: benign_operating_point_equity
+  edge_iiotset_static_reference_groups:
+    dataset: edge_iiotset
+    setup: chronological_static_reference_groups
+    metric_bundle: benign_operating_point_equity
 
 # --- Capability vocabulary ---------------------------------------------------------------
-# Closed set of capabilities an experiment may require of a population. Whether a population
-# actually provides one is resolved from generated dataset-audit evidence before execution;
-# it is never asserted in static configuration.
+# Closed set of capabilities an experiment may require of a population. A setup declares the
+# capabilities it claims; the claim is verified against generated dataset-audit evidence
+# before execution and never treated as evidence in itself.
 capabilities:
   - benign_calibration
   - benign_test_false_positive_metrics
@@ -53,6 +59,20 @@ suppression_behaviors:
   - skip_population_and_report_reason
   - fail_experiment
 
+# --- Population readiness ----------------------------------------------------------------
+# A setup carrying an unresolved readiness blocker blocks only the experiments that bind it.
+population_readiness_rule:
+  blocked_population_outcome: blocked_by_dependency
+  blocks_only_experiments_binding_that_population: true
+  blocked_population_reporting: typed_readiness_blocker_record_with_blocker_identifier
+
+# --- Analysis conventions ----------------------------------------------------------------
+# `delta_interpretation` resolves every report column whose direction is `from_analysis`.
+analysis_conventions:
+  paired_delta_definition: "delta = metric(first_evaluation) - metric(second_evaluation)"
+  delta_direction_resolution: from_the_binding_analysis_delta_interpretation_field
+  raw_metric_direction_resolution: from_protocols_metric_definitions
+
 # --- Experiment catalogue ----------------------------------------------------------------
 experiments:
 
@@ -62,7 +82,7 @@ experiments:
     evidence_role: anchor
     run_requirement: mandatory
     populations: [nbaiot_anchor_natural_devices]
-    training_profile: federated_averaging
+    training_profile: federated_averaging_anchor
     checkpoint_profile: anchor_terminal_round
     seed_cohort: anchor_five_seed
     eligibility_policy: primary_analysis
@@ -70,6 +90,7 @@ experiments:
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
+      - { capability: per_client_attack_detection_metrics, when_unavailable: fail_experiment }
     evaluations:
       - { label: shared_mean, threshold_policy: shared_mean_p95 }
       - { label: local, threshold_policy: local_p95 }
@@ -81,7 +102,9 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: shared_minus_local
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
+        statistical_profile_overrides: { minimum_paired_units: 5 }
       - label: anchor_equivalence
         kind: anchor_equivalence_analysis
         result_type: anchor_reproduction_result
@@ -108,7 +131,7 @@ experiments:
         floating_point_tolerance: { absolute: 1.0e-9, relative: 1.0e-6 }
         failure_reasons: [material_movement_toward_zero, interval_too_wide, configuration_or_provenance_mismatch]
         downstream_blocking_behavior: blocks_every_experiment_except_dataset_audits_until_passed
-        statistical_profile: paired_seed_bca
+        statistical_profile: descriptive_seed_summary
     reports: [interval_table]
 
   # =========================================================================================
@@ -138,6 +161,7 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: shared_minus_local
+        delta_interpretation: positive_favors_second_evaluation
         required_direction: positive
         statistical_profile: paired_seed_bca
         secondary_statistical_profile: rank_based_secondary
@@ -145,13 +169,19 @@ experiments:
         kind: distribution_mechanism_analysis
         result_type: distribution_mechanism_result
         source_evaluations: [shared_mean, local]
-        statistical_profile: monotone_association
+        produced_fields: [per_client_benign_score_cdf, per_client_attack_score_cdf, per_client_threshold_position, per_client_fpr, per_client_tpr, per_client_balanced_accuracy, per_client_macro_f1]
+        statistical_profile: descriptive_seed_summary
       - label: threshold_shift_detection_tradeoff
         kind: distribution_mechanism_analysis
         result_type: distribution_mechanism_result
         source_evaluations: [shared_mean, local]
+        produced_fields: [threshold_shift, fpr_delta, tpr_delta]
+        field_formulas:
+          threshold_shift: "tau_local_k - tau_shared"
+          fpr_delta: "fpr_local_k - fpr_shared_k"
+          tpr_delta: "tpr_local_k - tpr_shared_k"
         statistical_profile: monotone_association
-    reports: [interval_table, score_geometry_figure, threshold_tradeoff_figure, communication_storage_table]
+    reports: [interval_table, score_geometry_figure, threshold_tradeoff_figure]
 
   # =========================================================================================
   - name: shared_threshold_construction_sensitivity
@@ -181,6 +211,25 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: shared_minus_local
+        delta_interpretation: positive_favors_second_evaluation
+        statistical_profile: paired_seed_bca
+      - label: pooled_vs_local_dispersion
+        kind: paired_threshold_analysis
+        result_type: supportive_analysis_result
+        first_evaluation: shared_pooled
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: pooled_minus_local
+        delta_interpretation: positive_favors_second_evaluation
+        statistical_profile: paired_seed_bca
+      - label: weighted_vs_local_dispersion
+        kind: paired_threshold_analysis
+        result_type: supportive_analysis_result
+        first_evaluation: shared_weighted
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: weighted_minus_local
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
     reports: [dispersion_ladder_table]
 
@@ -189,18 +238,17 @@ experiments:
     display_name: Threshold Quantile Sensitivity
     evidence_role: supportive
     run_requirement: mandatory
-    populations: [nbaiot_natural_devices, edge_iiotset_sensor_groups]
+    populations: [nbaiot_natural_devices]
     training_profile: federated_averaging
     checkpoint_profile: datp_core_round_grid
     seed_cohort: datp_core_ten_seed
     eligibility_policy: primary_analysis
     prerequisites:
       - { experiment: anchor_reproduction, required_outcome: anchor_equivalence_passed }
-      - { experiment: external_sensor_group_validation, required_outcome: completed }
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
-      - { capability: per_client_attack_detection_metrics, when_unavailable: suppress_dependent_metrics_and_report_reason }
+      - { capability: per_client_attack_detection_metrics, when_unavailable: fail_experiment }
     sweeps:
       threshold_quantile:
         values: [0.90, 0.95, 0.975, 0.99]
@@ -214,15 +262,26 @@ experiments:
       - label: cluster_k3_mean
         threshold_policy: cluster_k3_mean_p95
         overrides: { quantile: { from_sweep: threshold_quantile } }
-    analyses: []
+    analyses:
+      - label: quantile_scope_effect
+        kind: paired_threshold_analysis
+        result_type: supportive_analysis_result
+        first_evaluation: shared_mean
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: shared_minus_local
+        delta_interpretation: positive_favors_second_evaluation
+        per_sweep_cell: threshold_quantile
+        ordering_inversion_reporting: required
+        statistical_profile: paired_seed_bca
     reports: [sensitivity_grid_table]
 
   # =========================================================================================
-  - name: controlled_heterogeneity_response
-    display_name: Controlled Heterogeneity Response
-    evidence_role: supportive
+  - name: external_threshold_quantile_sensitivity
+    display_name: External Threshold Quantile Sensitivity
+    evidence_role: external_validation
     run_requirement: mandatory
-    populations: [nbaiot_dirichlet_heterogeneity, edge_iiotset_sensor_groups]
+    populations: [edge_iiotset_sensor_groups]
     training_profile: federated_averaging
     checkpoint_profile: datp_core_round_grid
     seed_cohort: datp_core_ten_seed
@@ -233,12 +292,57 @@ experiments:
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
-      - { capability: per_client_attack_detection_metrics, when_unavailable: suppress_dependent_metrics_and_report_reason }
+    validation_scope: benign_operating_point_equity
+    never_promoted_to_confirmatory: true
+    sweeps:
+      threshold_quantile:
+        values: [0.90, 0.95, 0.975, 0.99]
+    evaluations:
+      - label: shared_mean
+        threshold_policy: shared_mean_p95
+        overrides: { quantile: { from_sweep: threshold_quantile } }
+      - label: local
+        threshold_policy: local_p95
+        overrides: { quantile: { from_sweep: threshold_quantile } }
+      - label: cluster_k3_mean
+        threshold_policy: cluster_k3_mean_p95
+        overrides: { quantile: { from_sweep: threshold_quantile } }
+    analyses:
+      - label: external_quantile_scope_effect
+        kind: paired_threshold_analysis
+        result_type: external_validation_result
+        first_evaluation: shared_mean
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: shared_minus_local
+        delta_interpretation: positive_favors_second_evaluation
+        per_sweep_cell: threshold_quantile
+        ordering_inversion_reporting: required
+        statistical_profile: paired_seed_bca
+    reports: [sensitivity_grid_table]
+
+  # =========================================================================================
+  # Controlled Dirichlet severity sweep on N-BaIoT only. External validation is a separate
+  # dataset contract and must never enter this controlled comparison.
+  - name: controlled_heterogeneity_response
+    display_name: Controlled Heterogeneity Response
+    evidence_role: supportive
+    run_requirement: mandatory
+    populations: [nbaiot_dirichlet_heterogeneity]
+    training_profile: federated_averaging
+    checkpoint_profile: datp_core_round_grid
+    seed_cohort: datp_core_ten_seed
+    eligibility_policy: primary_analysis
+    prerequisites:
+      - { experiment: anchor_reproduction, required_outcome: anchor_equivalence_passed }
+    capability_requirements:
+      - { capability: benign_calibration, when_unavailable: fail_experiment }
+      - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
+      - { capability: per_client_attack_detection_metrics, when_unavailable: fail_experiment }
     # Partition conditions are a named closed set, not a mixed-type list. The IID reference is
     # a distinct named condition, never a string smuggled into a numeric alpha list.
     sweeps:
       partition_condition:
-        applies_to_populations: [nbaiot_dirichlet_heterogeneity]
         conditions:
           - { name: dirichlet_alpha_0_1, allocation: dirichlet, dirichlet_alpha: 0.1 }
           - { name: dirichlet_alpha_0_3, allocation: dirichlet, dirichlet_alpha: 0.3 }
@@ -258,12 +362,16 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: shared_minus_local
+        delta_interpretation: positive_favors_second_evaluation
+        per_sweep_cell: partition_condition
+        monotonicity_required: false
         statistical_profile: paired_seed_bca
       - label: heterogeneity_threshold_benefit_association
         kind: metric_association_analysis
         result_type: metric_association_result
         predictor_metric: pairwise_js_divergence
         outcome_metric: cv_fpr_delta
+        outcome_source_analysis: heterogeneity_scope_effect
         grouping_dimension: partition_condition
         statistical_profile: monotone_association
         secondary_statistical_profile: linear_association
@@ -275,19 +383,18 @@ experiments:
     display_name: Cluster and Family Threshold Mechanism
     evidence_role: mechanism
     run_requirement: mandatory
-    populations: [nbaiot_natural_devices, edge_iiotset_sensor_groups]
+    populations: [nbaiot_natural_devices]
     training_profile: federated_averaging
     checkpoint_profile: datp_core_round_grid
     seed_cohort: datp_core_ten_seed
     eligibility_policy: primary_analysis
     prerequisites:
       - { experiment: anchor_reproduction, required_outcome: anchor_equivalence_passed }
-      - { experiment: external_sensor_group_validation, required_outcome: completed }
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
-      - { capability: family_taxonomy, when_unavailable: suppress_dependent_metrics_and_report_reason }
-      - { capability: per_client_attack_detection_metrics, when_unavailable: suppress_dependent_metrics_and_report_reason }
+      - { capability: family_taxonomy, when_unavailable: fail_experiment }
+      - { capability: per_client_attack_detection_metrics, when_unavailable: fail_experiment }
     sweeps:
       fingerprint_feature_subset:
         values:
@@ -298,9 +405,7 @@ experiments:
     evaluations:
       - { label: shared_mean, threshold_policy: shared_mean_p95 }
       - { label: local, threshold_policy: local_p95 }
-      - label: family
-        threshold_policy: family_p95
-        requires_capability: family_taxonomy
+      - { label: family, threshold_policy: family_p95 }
       - { label: cluster_k3_mean, threshold_policy: cluster_k3_mean_p95 }
       - { label: cluster_k9_mean, threshold_policy: cluster_k9_mean_p95, run_requirement: optional }
       - { label: cluster_k3_robust_median, threshold_policy: cluster_k3_robust_median_p95, run_requirement: optional }
@@ -316,8 +421,8 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: family_minus_local
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
-        requires_capability: family_taxonomy
       - label: cluster_vs_local
         kind: paired_threshold_analysis
         result_type: mechanism_analysis_result
@@ -325,6 +430,7 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: cluster_minus_local
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
       - label: shared_vs_cluster_recovery
         kind: paired_threshold_analysis
@@ -333,12 +439,77 @@ experiments:
         second_evaluation: cluster_k3_mean
         primary_metric: cv_fpr
         delta_orientation: shared_minus_cluster
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
+      - label: cluster_recovery_fraction
+        kind: recovery_fraction_analysis
+        result_type: mechanism_analysis_result
+        numerator_analysis: shared_vs_cluster_recovery
+        denominator_analysis: cluster_vs_local
+        denominator_composition: shared_minus_local_gap_of_the_same_seed
+        formula: "recovery_fraction_s = (cv_fpr_shared_s - cv_fpr_cluster_s) / (cv_fpr_shared_s - cv_fpr_local_s)"
+        undefined_denominator_behavior: typed_undefined_ratio
+        denominator_materiality_rule: absolute_denominator_at_least_1.0e-6
+        statistical_profile: seed_level_ratio
       - label: cluster_stability
         kind: cluster_stability_analysis
         result_type: cluster_stability_result
         source_evaluation: cluster_k3_mean
+        comparison_unit: unordered_pair_of_training_seeds
+        produced_fields: [adjusted_rand_index, cluster_membership_per_client, cluster_size, singleton_cluster_flag, empty_cluster_flag, within_cluster_dispersion, across_cluster_dispersion]
+        statistical_profile: descriptive_seed_summary
+      - label: fingerprint_ablation_stability
+        kind: cluster_stability_analysis
+        result_type: cluster_stability_result
+        source_evaluation: cluster_k3_fingerprint_ablation
+        reference_evaluation: cluster_k3_mean
+        comparison_unit: ablated_subset_against_the_full_fingerprint_within_seed
+        produced_fields: [adjusted_rand_index, cluster_membership_per_client, cluster_size]
+        statistical_profile: descriptive_seed_summary
+        run_requirement: optional
+    reports: [cluster_stability_table, cluster_contingency_table]
+
+  # =========================================================================================
+  - name: external_cluster_threshold_mechanism
+    display_name: External Cluster Threshold Mechanism
+    evidence_role: external_validation
+    run_requirement: mandatory
+    populations: [edge_iiotset_sensor_groups]
+    training_profile: federated_averaging
+    checkpoint_profile: datp_core_round_grid
+    seed_cohort: datp_core_ten_seed
+    eligibility_policy: primary_analysis
+    prerequisites:
+      - { experiment: anchor_reproduction, required_outcome: anchor_equivalence_passed }
+      - { experiment: external_sensor_group_validation, required_outcome: completed }
+    capability_requirements:
+      - { capability: benign_calibration, when_unavailable: fail_experiment }
+      - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
+    # No defensible external family taxonomy exists, so the family scope is absent rather
+    # than suppressed at run time.
+    validation_scope: benign_operating_point_equity
+    never_promoted_to_confirmatory: true
+    evaluations:
+      - { label: shared_mean, threshold_policy: shared_mean_p95 }
+      - { label: local, threshold_policy: local_p95 }
+      - { label: cluster_k3_mean, threshold_policy: cluster_k3_mean_p95 }
+    analyses:
+      - label: external_cluster_vs_local
+        kind: paired_threshold_analysis
+        result_type: external_validation_result
+        first_evaluation: cluster_k3_mean
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: cluster_minus_local
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
+      - label: external_cluster_stability
+        kind: cluster_stability_analysis
+        result_type: cluster_stability_result
+        source_evaluation: cluster_k3_mean
+        comparison_unit: unordered_pair_of_training_seeds
+        produced_fields: [adjusted_rand_index, cluster_membership_per_client, cluster_size, singleton_cluster_flag, empty_cluster_flag, within_cluster_dispersion, across_cluster_dispersion]
+        statistical_profile: descriptive_seed_summary
     reports: [cluster_stability_table, cluster_contingency_table]
 
   # =========================================================================================
@@ -356,6 +527,7 @@ experiments:
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
+      - { capability: per_client_attack_detection_metrics, when_unavailable: fail_experiment }
     sweeps:
       calibration_sample_count:
         values: [50, 100, 250, 500, 1000, 5000]
@@ -363,12 +535,21 @@ experiments:
       requested_sample_count: { from_sweep: calibration_sample_count }
       selection_strategy: deterministic_without_replacement
       nesting_policy: nested_by_size
+      nesting_rule: the_subset_at_a_smaller_requested_size_is_a_prefix_of_the_subset_at_every_larger_requested_size_of_the_same_replicate
       selection_seed: 0
       replicate_count: 100
-      replicate_seed_derivation: deterministic_from_training_seed_and_client_id_and_replicate_index
+      replicate_seed_derivation: derived_seed_algorithm_with_namespace_calibration_subsample
       model_retraining: never_thresholds_only_recomputed
+      client_eligibility_per_requested_size: client_participates_only_when_its_benign_calibration_row_count_is_at_least_the_requested_sample_count
       subminimum_eligibility_policy: experimental_subminimum
+      subminimum_eligibility_policy_applies_to: requested_sample_counts_below_the_primary_analysis_minimum
       insufficient_row_policy: typed_unavailable_below_requested_sample_count
+      replicate_aggregation_within_seed: arithmetic_mean_across_replicates
+      seed_level_statistic: arithmetic_mean_across_replicates
+      additional_seed_level_statistic: threshold_variance_across_replicates
+      independent_inferential_unit: training_seed
+      replicates_counted_as_seeds: false
+      full_calibration_reference_condition: evaluated_as_a_separate_named_condition_outside_the_sweep_grid
     evaluations:
       - { label: shared_mean, threshold_policy: shared_mean_p95 }
       - { label: local, threshold_policy: local_p95 }
@@ -382,7 +563,26 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: shared_minus_local
+        delta_interpretation: positive_favors_second_evaluation
+        per_sweep_cell: calibration_sample_count
         statistical_profile: paired_seed_bca
+      - label: size_aware_fallback_vs_local
+        kind: paired_threshold_analysis
+        result_type: boundary_result
+        first_evaluation: calibration_size_aware_fallback
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: size_aware_fallback_minus_local
+        delta_interpretation: positive_favors_second_evaluation
+        per_sweep_cell: calibration_sample_count
+        statistical_profile: paired_seed_bca
+      - label: local_threshold_variance_curve
+        kind: threshold_stability_analysis
+        result_type: boundary_result
+        source_evaluation: local
+        produced_fields: [threshold_variance_across_replicates, absolute_attainment_error, worst_client_fpr, clients_unavailable_at_size]
+        per_sweep_cell: calibration_sample_count
+        statistical_profile: descriptive_seed_summary
     reports: [sensitivity_grid_table]
 
   # =========================================================================================
@@ -400,6 +600,7 @@ experiments:
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
+      - { capability: per_client_attack_detection_metrics, when_unavailable: fail_experiment }
     sweeps:
       shrinkage_weight:
         values: [0.0, 0.25, 0.5, 0.75, 1.0]
@@ -417,27 +618,32 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: shrinkage_minus_local
+        delta_interpretation: positive_favors_second_evaluation
+        per_sweep_cell: shrinkage_weight
+        full_curve_reporting: required
+        post_hoc_weight_selection: forbidden
         statistical_profile: paired_seed_bca
     reports: [shrinkage_curve_figure]
 
   # =========================================================================================
+  # B2-conf is a Regime A diagnostic only; no external conformal population is authorized.
   - name: conformal_local_threshold_coverage
     display_name: Conformal Local-Threshold Coverage
     evidence_role: supportive
     run_requirement: mandatory
-    populations: [nbaiot_natural_devices, edge_iiotset_sensor_groups]
+    populations: [nbaiot_natural_devices]
     training_profile: federated_averaging
     checkpoint_profile: datp_core_round_grid
     seed_cohort: datp_core_ten_seed
     eligibility_policy: primary_analysis
     prerequisites:
       - { experiment: anchor_reproduction, required_outcome: anchor_equivalence_passed }
-      - { experiment: external_sensor_group_validation, required_outcome: completed }
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
-      - { capability: per_client_attack_detection_metrics, when_unavailable: suppress_dependent_metrics_and_report_reason }
+      - { capability: per_client_attack_detection_metrics, when_unavailable: fail_experiment }
     evaluations:
+      - { label: shared_mean, threshold_policy: shared_mean_p95 }
       - { label: local, threshold_policy: local_p95 }
       - { label: conformal_local, threshold_policy: conformal_local_p95 }
     analyses:
@@ -448,13 +654,26 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: conformal_minus_local
+        delta_interpretation: positive_favors_second_evaluation
+        statistical_profile: paired_seed_bca
+      - label: conformal_vs_shared
+        kind: paired_threshold_analysis
+        result_type: supportive_analysis_result
+        first_evaluation: shared_mean
+        second_evaluation: conformal_local
+        primary_metric: cv_fpr
+        delta_orientation: shared_minus_conformal
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
       - label: conformal_coverage
         kind: conformal_coverage_analysis
         result_type: conformal_coverage_result
         source_evaluation: conformal_local
-        statistical_profile: paired_seed_bca
-    reports: [minimal_dispersion_table]
+        target_coverage: 0.95
+        produced_fields: [target_coverage, achieved_marginal_coverage, achieved_macro_client_coverage, per_client_coverage, absolute_coverage_error, finite_sample_rank, attainability_status]
+        coverage_direction: absolute_coverage_error_lower_is_better
+        statistical_profile: seed_level_bca
+    reports: [coverage_table, minimal_dispersion_table]
 
   # =========================================================================================
   - name: centralized_pooled_reference
@@ -463,13 +682,15 @@ experiments:
     run_requirement: mandatory
     populations: [nbaiot_natural_devices]
     training_profile: centralized_pooled
-    checkpoint_profile: datp_core_round_grid
+    checkpoint_profile: centralized_pooled_epoch_grid
     seed_cohort: datp_core_ten_seed
     eligibility_policy: primary_analysis
     prerequisites: []
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
+      - { capability: per_client_attack_detection_metrics, when_unavailable: fail_experiment }
+    outside_core_causal_ladder: true
     evaluations:
       - { label: centralized_pooled, threshold_policy: centralized_pooled_p95 }
     analyses: []
@@ -480,18 +701,18 @@ experiments:
     display_name: Federated Summary-Statistic Comparator
     evidence_role: stress_test
     run_requirement: mandatory
-    populations: [nbaiot_natural_devices, edge_iiotset_sensor_groups]
+    populations: [nbaiot_natural_devices]
     training_profile: federated_averaging
     checkpoint_profile: datp_core_round_grid
     seed_cohort: datp_core_ten_seed
     eligibility_policy: primary_analysis
     prerequisites:
       - { experiment: anchor_reproduction, required_outcome: anchor_equivalence_passed }
-      - { experiment: external_sensor_group_validation, required_outcome: completed }
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
-      - { capability: per_client_attack_detection_metrics, when_unavailable: suppress_dependent_metrics_and_report_reason }
+      - { capability: per_client_attack_detection_metrics, when_unavailable: fail_experiment }
+    faithful_reproduction_claim_forbidden: true
     sweeps:
       federated_summary_fixed_k:
         values: [2.0, 2.5, 3.0]
@@ -513,6 +734,7 @@ experiments:
         second_evaluation: federated_summary_matched
         primary_metric: cv_fpr
         delta_orientation: local_minus_federated_summary
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
       - label: matched_comparator_vs_shared
         kind: paired_threshold_analysis
@@ -521,13 +743,74 @@ experiments:
         second_evaluation: federated_summary_matched
         primary_metric: cv_fpr
         delta_orientation: shared_minus_federated_summary
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
       - label: quantile_estimation_backbone
         kind: quantile_estimation_analysis
         result_type: quantile_estimation_result
         source_evaluations: [shared_mean, shared_pooled, shared_weighted, local, federated_summary_matched]
+        oracle_reference: shared_pooled
+        produced_fields: [absolute_threshold_error, relative_threshold_error, achieved_exceedance, signed_attainment_error, absolute_attainment_error, within_term, between_term, between_ratio]
+        statistical_profile: seed_level_bca
+      - label: comparator_communication_cost
+        kind: resource_cost_analysis
+        result_type: resource_cost_result
+        source_evaluations: [shared_mean, shared_pooled, shared_weighted, local, federated_summary_matched]
+        produced_fields: [transmitted_field_list, estimated_threshold_message_bytes, estimated_model_exchange_bytes_per_round, estimated_checkpoint_storage_bytes]
+        estimate_basis: analytical_payload_estimate_never_measured_network_traffic
+        statistical_profile: descriptive_seed_summary
+    reports: [comparator_table, communication_storage_table]
+
+  # =========================================================================================
+  - name: external_federated_summary_comparator
+    display_name: External Federated Summary-Statistic Comparator
+    evidence_role: external_validation
+    run_requirement: mandatory
+    populations: [edge_iiotset_sensor_groups]
+    training_profile: federated_averaging
+    checkpoint_profile: datp_core_round_grid
+    seed_cohort: datp_core_ten_seed
+    eligibility_policy: primary_analysis
+    prerequisites:
+      - { experiment: anchor_reproduction, required_outcome: anchor_equivalence_passed }
+      - { experiment: external_sensor_group_validation, required_outcome: completed }
+    capability_requirements:
+      - { capability: benign_calibration, when_unavailable: fail_experiment }
+      - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
+    validation_scope: benign_operating_point_equity
+    never_promoted_to_confirmatory: true
+    faithful_reproduction_claim_forbidden: true
+    evaluations:
+      - { label: shared_mean, threshold_policy: shared_mean_p95 }
+      - { label: shared_pooled, threshold_policy: shared_pooled_p95 }
+      - { label: local, threshold_policy: local_p95 }
+      - { label: federated_summary_matched, threshold_policy: federated_summary_matched_exceedance }
+    analyses:
+      - label: external_matched_comparator_vs_local
+        kind: paired_threshold_analysis
+        result_type: external_validation_result
+        first_evaluation: local
+        second_evaluation: federated_summary_matched
+        primary_metric: cv_fpr
+        delta_orientation: local_minus_federated_summary
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
-        run_requirement: optional
+      - label: external_matched_comparator_vs_shared
+        kind: paired_threshold_analysis
+        result_type: external_validation_result
+        first_evaluation: shared_mean
+        second_evaluation: federated_summary_matched
+        primary_metric: cv_fpr
+        delta_orientation: shared_minus_federated_summary
+        delta_interpretation: positive_favors_second_evaluation
+        statistical_profile: paired_seed_bca
+      - label: external_quantile_estimation_backbone
+        kind: quantile_estimation_analysis
+        result_type: quantile_estimation_result
+        source_evaluations: [shared_mean, shared_pooled, local, federated_summary_matched]
+        oracle_reference: shared_pooled
+        produced_fields: [absolute_threshold_error, relative_threshold_error, achieved_exceedance, signed_attainment_error, absolute_attainment_error, within_term, between_term, between_ratio]
+        statistical_profile: seed_level_bca
     reports: [comparator_table]
 
   # =========================================================================================
@@ -545,7 +828,7 @@ experiments:
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
-      - { capability: per_client_attack_detection_metrics, when_unavailable: suppress_dependent_metrics_and_report_reason }
+      - { capability: per_client_attack_detection_metrics, when_unavailable: fail_experiment }
     evaluations:
       - { label: shared_mean, threshold_policy: shared_mean_p95 }
       - { label: local, threshold_policy: local_p95 }
@@ -558,8 +841,19 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: shared_minus_local
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
+      - label: pseudo_client_homogeneity
+        kind: metric_association_analysis
+        result_type: boundary_result
+        predictor_metric: pairwise_js_divergence
+        outcome_metric: cv_fpr_delta
+        outcome_source_analysis: pseudo_client_scope_effect
+        statistical_profile: monotone_association
+        interpretation_constraint: association_not_causation
+    client_semantics_constraint: file_defined_pseudo_client_never_described_as_a_physical_device
     generalization_constraint: artifact_specific_never_generalized_to_physical_device_topology
+    quantitative_claim_gate: source_feature_count_reverification_must_pass_before_any_reported_value
     reports: [minimal_dispersion_table]
 
   # =========================================================================================
@@ -577,10 +871,15 @@ experiments:
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
-      - { capability: per_client_attack_detection_metrics, when_unavailable: suppress_dependent_metrics_and_report_reason }
-      - { capability: attack_sensitive_threshold_tradeoff, when_unavailable: suppress_dependent_metrics_and_report_reason }
     validation_scope: benign_operating_point_equity
     never_promoted_to_confirmatory: true
+    # These outcomes are structurally unavailable for this artifact and are reported as typed
+    # unavailable records rather than requested and suppressed at run time.
+    unavailable_capability_reporting:
+      - { capability: per_client_attack_detection_metrics, status: unavailable_invalid_attack_assignment }
+      - { capability: attack_sensitive_threshold_tradeoff, status: unavailable_invalid_attack_assignment }
+      - { capability: family_taxonomy, status: unavailable_unsupported_regime }
+      - { capability: cross_client_wall_clock_ordering, status: unavailable_unsupported_regime }
     evaluations:
       - { label: shared_mean, threshold_policy: shared_mean_p95 }
       - { label: local, threshold_policy: local_p95 }
@@ -594,66 +893,109 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: shared_minus_local
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
         secondary_statistical_profile: rank_based_secondary
-    reports: [interval_table]
+    reports: [interval_table, dispersion_ladder_table]
 
   # =========================================================================================
+  # The static reference is a matched random-fractional arm over the same chronological client
+  # population, not a restriction of a different experiment's result.
   - name: chronological_recalibration_evaluation
     display_name: Chronological Recalibration Evaluation
     evidence_role: boundary
     run_requirement: mandatory
-    populations: [edge_iiotset_chronological_groups]
+    populations: [edge_iiotset_chronological_groups, edge_iiotset_static_reference_groups]
+    population_roles:
+      edge_iiotset_chronological_groups: temporal_arm
+      edge_iiotset_static_reference_groups: matched_static_reference_arm
+    population_equivalence_requirement: both_arms_must_resolve_to_the_identical_client_identifier_set
     training_profile: federated_averaging
     checkpoint_profile: datp_core_round_grid
     seed_cohort: datp_core_ten_seed
     eligibility_policy: primary_analysis
     prerequisites:
       - { experiment: anchor_reproduction, required_outcome: anchor_equivalence_passed }
-      - { experiment: external_sensor_group_validation, required_outcome: completed }
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
-      - { capability: within_client_chronological_ordering, when_unavailable: fail_experiment }
-      - { capability: cross_client_wall_clock_ordering, when_unavailable: suppress_dependent_metrics_and_report_reason }
-      - { capability: per_client_attack_detection_metrics, when_unavailable: suppress_dependent_metrics_and_report_reason }
+      # The matched static reference arm is deliberately non-chronological, so the chronology
+      # requirement applies only to the temporal arm.
+      - { capability: within_client_chronological_ordering, when_unavailable: fail_experiment, applies_to_populations: [edge_iiotset_chronological_groups] }
+    scope_constraint: one_shot_recalibration_never_described_as_concept_drift_handling
+    unavailable_capability_reporting:
+      - { capability: cross_client_wall_clock_ordering, status: unavailable_unsupported_regime }
+      - { capability: per_client_attack_detection_metrics, status: unavailable_invalid_attack_assignment }
+    temporal_procedure:
+      calibration_source_window: historical_calibration
+      frozen_evaluation_window: future_evaluation
+      recalibration_source_window: future_recalibration
+      recalibrated_evaluation_window: future_evaluation
+      model_reuse: the_same_historically_trained_frozen_model_is_used_for_every_compared_state
+      future_rows_forbidden_in_training_and_preprocessing_fit: true
     evaluations:
-      - { label: shared_mean_frozen, threshold_policy: shared_mean_p95, recalibration_mode: frozen }
-      - { label: local_frozen, threshold_policy: local_p95, recalibration_mode: frozen }
-      - { label: cluster_k3_mean_frozen, threshold_policy: cluster_k3_mean_p95, recalibration_mode: frozen }
-      - { label: shared_mean_one_shot, threshold_policy: shared_mean_p95, recalibration_mode: one_shot }
-      - { label: local_one_shot, threshold_policy: local_p95, recalibration_mode: one_shot }
-      - { label: cluster_k3_mean_one_shot, threshold_policy: cluster_k3_mean_p95, recalibration_mode: one_shot }
+      - { label: shared_mean_frozen, threshold_policy: shared_mean_p95, population: edge_iiotset_chronological_groups, recalibration_mode: frozen }
+      - { label: local_frozen, threshold_policy: local_p95, population: edge_iiotset_chronological_groups, recalibration_mode: frozen }
+      - { label: cluster_k3_mean_frozen, threshold_policy: cluster_k3_mean_p95, population: edge_iiotset_chronological_groups, recalibration_mode: frozen }
+      - { label: shared_mean_one_shot, threshold_policy: shared_mean_p95, population: edge_iiotset_chronological_groups, recalibration_mode: one_shot }
+      - { label: local_one_shot, threshold_policy: local_p95, population: edge_iiotset_chronological_groups, recalibration_mode: one_shot }
+      - { label: cluster_k3_mean_one_shot, threshold_policy: cluster_k3_mean_p95, population: edge_iiotset_chronological_groups, recalibration_mode: one_shot }
+      - { label: shared_mean_static_reference, threshold_policy: shared_mean_p95, population: edge_iiotset_static_reference_groups, recalibration_mode: not_applicable }
+      - { label: local_static_reference, threshold_policy: local_p95, population: edge_iiotset_static_reference_groups, recalibration_mode: not_applicable }
+      - { label: cluster_k3_mean_static_reference, threshold_policy: cluster_k3_mean_p95, population: edge_iiotset_static_reference_groups, recalibration_mode: not_applicable }
     analyses:
       - label: local_temporal_recovery
         kind: temporal_recovery_analysis
         result_type: temporal_recovery_result
+        static_reference_evaluation: local_static_reference
         frozen_evaluation: local_frozen
         recalibrated_evaluation: local_one_shot
-        static_reference:
-          experiment: external_sensor_group_validation
-          evaluation: local
-          population_restriction: chronological_group_population
+        primary_metric: cv_fpr
         recovery_fields: [static_reference_cv, frozen_future_cv, recalibrated_future_cv, drift_excess, recovered_amount, recovery_ratio]
-        drift_excess_formula: frozen_future_cv - static_reference_cv
-        recovered_amount_formula: frozen_future_cv - recalibrated_future_cv
-        recovery_ratio_formula: recovered_amount / drift_excess
+        drift_excess_formula: "drift_excess_s = frozen_future_cv_s - static_reference_cv_s"
+        recovered_amount_formula: "recovered_amount_s = frozen_future_cv_s - recalibrated_future_cv_s"
+        recovery_ratio_formula: "recovery_ratio_s = recovered_amount_s / drift_excess_s"
         recovery_ratio_precondition: drift_excess_meaningfully_positive
+        meaningfully_positive_drift_excess_minimum: 0.05
         negative_recovery_policy: report_as_is_no_floor_clamp
         outcome_bands:
-          meaningful_recovery_ratio_min: 0.50
-          insufficient_recovery_ratio_max: 0.50
-          no_meaningful_degradation_condition: no_meaningful_positive_drift_excess
+          - { name: no_meaningful_degradation, condition: "drift_excess < 0.05", recovery_ratio: undefined }
+          - { name: meaningful_recovery, condition: "drift_excess >= 0.05 and recovery_ratio >= 0.50" }
+          - { name: insufficient_recovery, condition: "drift_excess >= 0.05 and recovery_ratio < 0.50" }
+        outcome_bands_are_mutually_exclusive_and_exhaustive: true
+        recovery_ratio_direction: higher_is_better
         chronology_unverifiable_policy: typed_infeasibility_outcome
-        statistical_profile: paired_seed_bca
-    reports: [recovery_curve_figure]
+        statistical_profile: seed_level_ratio
+      - label: shared_temporal_recovery
+        kind: temporal_recovery_analysis
+        result_type: temporal_recovery_result
+        static_reference_evaluation: shared_mean_static_reference
+        frozen_evaluation: shared_mean_frozen
+        recalibrated_evaluation: shared_mean_one_shot
+        primary_metric: cv_fpr
+        recovery_fields: [static_reference_cv, frozen_future_cv, recalibrated_future_cv, drift_excess, recovered_amount, recovery_ratio]
+        drift_excess_formula: "drift_excess_s = frozen_future_cv_s - static_reference_cv_s"
+        recovered_amount_formula: "recovered_amount_s = frozen_future_cv_s - recalibrated_future_cv_s"
+        recovery_ratio_formula: "recovery_ratio_s = recovered_amount_s / drift_excess_s"
+        recovery_ratio_precondition: drift_excess_meaningfully_positive
+        meaningfully_positive_drift_excess_minimum: 0.05
+        negative_recovery_policy: report_as_is_no_floor_clamp
+        outcome_bands:
+          - { name: no_meaningful_degradation, condition: "drift_excess < 0.05", recovery_ratio: undefined }
+          - { name: meaningful_recovery, condition: "drift_excess >= 0.05 and recovery_ratio >= 0.50" }
+          - { name: insufficient_recovery, condition: "drift_excess >= 0.05 and recovery_ratio < 0.50" }
+        outcome_bands_are_mutually_exclusive_and_exhaustive: true
+        recovery_ratio_direction: higher_is_better
+        chronology_unverifiable_policy: typed_infeasibility_outcome
+        statistical_profile: seed_level_ratio
+    reports: [recovery_curve_figure, dispersion_ladder_table]
 
   # =========================================================================================
   - name: fedprox_aggregation_stress_test
     display_name: FedProx Aggregation Stress Test
     evidence_role: stress_test
     run_requirement: mandatory
-    populations: [nbaiot_natural_devices, edge_iiotset_sensor_groups]
+    populations: [nbaiot_natural_devices]
     training_profile: federated_proximal
     checkpoint_profile: datp_core_round_grid
     seed_cohort: datp_core_ten_seed
@@ -661,24 +1003,28 @@ experiments:
     prerequisites:
       - { experiment: anchor_reproduction, required_outcome: anchor_equivalence_passed }
       - { experiment: confirmatory_threshold_scope_effect, required_outcome: completed }
-      - { experiment: external_sensor_group_validation, required_outcome: completed }
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
-      - { capability: family_taxonomy, when_unavailable: suppress_dependent_metrics_and_report_reason }
-      - { capability: per_client_attack_detection_metrics, when_unavailable: suppress_dependent_metrics_and_report_reason }
+      - { capability: family_taxonomy, when_unavailable: fail_experiment }
+      - { capability: per_client_attack_detection_metrics, when_unavailable: fail_experiment }
+    outside_core_causal_ladder: true
     sweeps:
       federated_proximal_mu:
         values: [0.001, 0.01, 0.1, 1.0]
     training_overrides:
       mu: { from_sweep: federated_proximal_mu }
+    primary_coefficient_selection:
+      rule: lowest_natural_device_regime_benign_validation_reconstruction_error_at_the_locked_primary_round
+      tie_break: smallest_proximal_coefficient
+      forbidden_selectors: [cv_fpr, test_metrics, attack_metrics, auroc, external_dataset_results]
+      complete_grid_reported: true
+      post_hoc_coefficient_addition: forbidden
     evaluations:
       - { label: shared_mean, threshold_policy: shared_mean_p95 }
       - { label: local, threshold_policy: local_p95 }
       - { label: cluster_k3_mean, threshold_policy: cluster_k3_mean_p95 }
-      - label: family
-        threshold_policy: family_p95
-        requires_capability: family_taxonomy
+      - { label: family, threshold_policy: family_p95 }
     analyses:
       - label: fedprox_scope_effect
         kind: paired_threshold_analysis
@@ -687,7 +1033,89 @@ experiments:
         second_evaluation: local
         primary_metric: cv_fpr
         delta_orientation: shared_minus_local
+        delta_interpretation: positive_favors_second_evaluation
+        per_sweep_cell: federated_proximal_mu
         statistical_profile: paired_seed_bca
+      - label: fedprox_absorption_against_confirmatory
+        kind: absorption_analysis
+        result_type: absorption_result
+        reference_analysis: { experiment: confirmatory_threshold_scope_effect, analysis: confirmatory_scope_effect }
+        stress_test_analysis: fedprox_scope_effect
+        absorption_metric: cv_fpr
+        formula: "absorption_ratio_s = delta_stress_test_s / delta_reference_s"
+        matching_requirement: identical_dataset_setup_training_seed_checkpoint_round_and_evaluation_pair_labels
+        undefined_denominator_behavior: typed_undefined_ratio
+        denominator_materiality_rule: absolute_denominator_at_least_1.0e-6
+        outcome_bands:
+          - { name: strong_retention, condition: "absorption_ratio >= 0.75" }
+          - { name: partial_absorption, condition: "0.25 <= absorption_ratio < 0.75" }
+          - { name: large_absorption, condition: "absorption_ratio < 0.25" }
+        outcome_bands_are_mutually_exclusive_and_exhaustive: true
+        band_interpretation: pre_specified_bands_never_generic_higher_is_better
+        statistical_profile: seed_level_ratio
+    reports: [interval_table]
+
+  # =========================================================================================
+  - name: external_fedprox_aggregation_stress_test
+    display_name: External FedProx Aggregation Stress Test
+    evidence_role: stress_test
+    run_requirement: mandatory
+    populations: [edge_iiotset_sensor_groups]
+    training_profile: federated_proximal
+    checkpoint_profile: datp_core_round_grid
+    seed_cohort: datp_core_ten_seed
+    eligibility_policy: primary_analysis
+    prerequisites:
+      - { experiment: anchor_reproduction, required_outcome: anchor_equivalence_passed }
+      - { experiment: external_sensor_group_validation, required_outcome: completed }
+      - { experiment: fedprox_aggregation_stress_test, required_outcome: completed }
+    capability_requirements:
+      - { capability: benign_calibration, when_unavailable: fail_experiment }
+      - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
+    outside_core_causal_ladder: true
+    validation_scope: benign_operating_point_equity
+    never_promoted_to_confirmatory: true
+    sweeps:
+      federated_proximal_mu:
+        values: [0.001, 0.01, 0.1, 1.0]
+    training_overrides:
+      mu: { from_sweep: federated_proximal_mu }
+    primary_coefficient_selection:
+      rule: reuse_the_coefficient_selected_on_the_natural_device_regime
+      external_dataset_may_select_the_coefficient: false
+      complete_grid_reported: true
+    evaluations:
+      - { label: shared_mean, threshold_policy: shared_mean_p95 }
+      - { label: local, threshold_policy: local_p95 }
+      - { label: cluster_k3_mean, threshold_policy: cluster_k3_mean_p95 }
+    analyses:
+      - label: external_fedprox_scope_effect
+        kind: paired_threshold_analysis
+        result_type: stress_test_result
+        first_evaluation: shared_mean
+        second_evaluation: local
+        primary_metric: cv_fpr
+        delta_orientation: shared_minus_local
+        delta_interpretation: positive_favors_second_evaluation
+        per_sweep_cell: federated_proximal_mu
+        statistical_profile: paired_seed_bca
+      - label: external_fedprox_absorption
+        kind: absorption_analysis
+        result_type: absorption_result
+        reference_analysis: { experiment: external_sensor_group_validation, analysis: external_scope_effect }
+        stress_test_analysis: external_fedprox_scope_effect
+        absorption_metric: cv_fpr
+        formula: "absorption_ratio_s = delta_stress_test_s / delta_reference_s"
+        matching_requirement: identical_dataset_setup_training_seed_checkpoint_round_and_evaluation_pair_labels
+        undefined_denominator_behavior: typed_undefined_ratio
+        denominator_materiality_rule: absolute_denominator_at_least_1.0e-6
+        outcome_bands:
+          - { name: strong_retention, condition: "absorption_ratio >= 0.75" }
+          - { name: partial_absorption, condition: "0.25 <= absorption_ratio < 0.75" }
+          - { name: large_absorption, condition: "absorption_ratio < 0.25" }
+        outcome_bands_are_mutually_exclusive_and_exhaustive: true
+        band_interpretation: pre_specified_bands_never_generic_higher_is_better
+        statistical_profile: seed_level_ratio
     reports: [interval_table]
 
   # =========================================================================================
@@ -695,7 +1123,7 @@ experiments:
     display_name: Model-Personalization Absorption Test
     evidence_role: stress_test
     run_requirement: mandatory
-    populations: [nbaiot_natural_devices, edge_iiotset_sensor_groups]
+    populations: [nbaiot_natural_devices]
     training_profile: federated_averaging_personalized
     checkpoint_profile: datp_core_round_grid
     seed_cohort: datp_core_ten_seed
@@ -703,11 +1131,12 @@ experiments:
     prerequisites:
       - { experiment: anchor_reproduction, required_outcome: anchor_equivalence_passed }
       - { experiment: confirmatory_threshold_scope_effect, required_outcome: completed }
-      - { experiment: external_sensor_group_validation, required_outcome: completed }
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
-      - { capability: per_client_attack_detection_metrics, when_unavailable: suppress_dependent_metrics_and_report_reason }
+      - { capability: per_client_attack_detection_metrics, when_unavailable: fail_experiment }
+    outside_core_causal_ladder: true
+    method_naming_rule: the_name_ditto_is_permitted_only_while_the_ditto_specification_contract_holds
     evaluations:
       - { label: shared_mean_personalized, threshold_policy: shared_mean_p95 }
       - { label: local_personalized, threshold_policy: local_p95 }
@@ -719,29 +1148,85 @@ experiments:
         second_evaluation: local_personalized
         primary_metric: cv_fpr
         delta_orientation: shared_minus_local
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
       - label: absorption_against_confirmatory
         kind: absorption_analysis
         result_type: absorption_result
         reference_analysis: { experiment: confirmatory_threshold_scope_effect, analysis: confirmatory_scope_effect }
-        personalized_analysis: personalized_scope_effect
+        stress_test_analysis: personalized_scope_effect
         absorption_metric: cv_fpr
+        formula: "absorption_ratio_s = delta_stress_test_s / delta_reference_s"
+        matching_requirement: identical_dataset_setup_training_seed_checkpoint_round_and_evaluation_pair_labels
+        undefined_denominator_behavior: typed_undefined_ratio
+        denominator_materiality_rule: absolute_denominator_at_least_1.0e-6
         outcome_bands:
-          strong_retention_min_ratio: 0.75
-          partial_absorption_min_ratio: 0.25
-          alternative_path_absolute_tolerance: 0.05
+          - { name: strong_retention, condition: "absorption_ratio >= 0.75" }
+          - { name: partial_absorption, condition: "0.25 <= absorption_ratio < 0.75" }
+          - { name: large_absorption, condition: "absorption_ratio < 0.25" }
+        outcome_bands_are_mutually_exclusive_and_exhaustive: true
+        alternative_path_rule:
+          formula: "|cv_fpr(personalized + shared_mean) - cv_fpr(reference + local)| <= 0.05"
+          reported_independently_of_the_absorption_band: true
+        band_interpretation: pre_specified_bands_never_generic_higher_is_better
+        statistical_profile: seed_level_ratio
+    reports: [interval_table]
+
+  # =========================================================================================
+  - name: external_model_personalization_absorption_test
+    display_name: External Model-Personalization Absorption Test
+    evidence_role: stress_test
+    run_requirement: mandatory
+    populations: [edge_iiotset_sensor_groups]
+    training_profile: federated_averaging_personalized
+    checkpoint_profile: datp_core_round_grid
+    seed_cohort: datp_core_ten_seed
+    eligibility_policy: primary_analysis
+    prerequisites:
+      - { experiment: anchor_reproduction, required_outcome: anchor_equivalence_passed }
+      - { experiment: external_sensor_group_validation, required_outcome: completed }
+      - { experiment: model_personalization_absorption_test, required_outcome: completed }
+    capability_requirements:
+      - { capability: benign_calibration, when_unavailable: fail_experiment }
+      - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
+    outside_core_causal_ladder: true
+    validation_scope: benign_operating_point_equity
+    never_promoted_to_confirmatory: true
+    method_naming_rule: the_name_ditto_is_permitted_only_while_the_ditto_specification_contract_holds
+    personalization_parameter_selection_source: reuse_the_value_selected_on_the_natural_device_regime
+    evaluations:
+      - { label: shared_mean_personalized, threshold_policy: shared_mean_p95 }
+      - { label: local_personalized, threshold_policy: local_p95 }
+    analyses:
+      - label: external_personalized_scope_effect
+        kind: paired_threshold_analysis
+        result_type: stress_test_result
+        first_evaluation: shared_mean_personalized
+        second_evaluation: local_personalized
+        primary_metric: cv_fpr
+        delta_orientation: shared_minus_local
+        delta_interpretation: positive_favors_second_evaluation
         statistical_profile: paired_seed_bca
       - label: absorption_against_external_validation
         kind: absorption_analysis
         result_type: absorption_result
         reference_analysis: { experiment: external_sensor_group_validation, analysis: external_scope_effect }
-        personalized_analysis: personalized_scope_effect
+        stress_test_analysis: external_personalized_scope_effect
         absorption_metric: cv_fpr
+        formula: "absorption_ratio_s = delta_stress_test_s / delta_reference_s"
+        matching_requirement: identical_dataset_setup_training_seed_checkpoint_round_and_evaluation_pair_labels
+        undefined_denominator_behavior: typed_undefined_ratio
+        denominator_materiality_rule: absolute_denominator_at_least_1.0e-6
         outcome_bands:
-          strong_retention_min_ratio: 0.75
-          partial_absorption_min_ratio: 0.25
-          alternative_path_absolute_tolerance: 0.05
-        statistical_profile: paired_seed_bca
+          - { name: strong_retention, condition: "absorption_ratio >= 0.75" }
+          - { name: partial_absorption, condition: "0.25 <= absorption_ratio < 0.75" }
+          - { name: large_absorption, condition: "absorption_ratio < 0.25" }
+        outcome_bands_are_mutually_exclusive_and_exhaustive: true
+        alternative_path_rule:
+          formula: "|cv_fpr(personalized + shared_mean) - cv_fpr(reference + local)| <= 0.05"
+          reported_independently_of_the_absorption_band: true
+        band_interpretation: pre_specified_bands_never_generic_higher_is_better
+        statistical_profile: seed_level_ratio
     reports: [interval_table]
 
   # =========================================================================================
@@ -753,17 +1238,17 @@ experiments:
     run_condition: { required_operational_input: benign_decision_rate }
     unavailable_behavior: typed_unavailable_result
     blocks_other_experiments_when_unavailable: false
-    populations: [nbaiot_natural_devices, edge_iiotset_sensor_groups]
+    populations: [nbaiot_natural_devices]
     training_profile: federated_averaging
     checkpoint_profile: datp_core_round_grid
     seed_cohort: datp_core_ten_seed
     eligibility_policy: primary_analysis
     prerequisites:
       - { experiment: anchor_reproduction, required_outcome: anchor_equivalence_passed }
-      - { experiment: external_sensor_group_validation, required_outcome: completed }
     capability_requirements:
       - { capability: benign_calibration, when_unavailable: fail_experiment }
       - { capability: benign_test_false_positive_metrics, when_unavailable: fail_experiment }
+    estimate_basis: estimated_never_a_deployment_measurement
     evaluations:
       - { label: shared_mean, threshold_policy: shared_mean_p95 }
       - { label: local, threshold_policy: local_p95 }
@@ -774,6 +1259,8 @@ experiments:
         source_evaluations: [shared_mean, local]
         required_operational_input: benign_decision_rate
         formula: "alerts_per_client_per_day = fpr_k * benign_decisions_k_per_day"
+        produced_fields: [alerts_per_client_per_day, benign_decision_rate_source]
+        per_client_reporting_required: true
         unavailable_behavior: typed_unavailable_result
-        statistical_profile: paired_seed_bca
+        statistical_profile: descriptive_seed_summary
     reports: [alert_burden_table]

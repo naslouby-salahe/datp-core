@@ -199,7 +199,15 @@ source_contract:
 # Every path must resolve inside this document and may never point at generated evidence.
 fingerprint_inputs:
   source: [source_layout.root, source_layout.device_dirs, field_schema.source_column_count]
-  schema: [schema_id, field_schema.model_features.order]
+  schema: [schema_id, field_schema.model_features.order, field_schema.label_fields.family_map]
+  materialization:
+    - materialization_id
+    - preprocessing_sequence
+    - row_exclusion
+    - normalization
+    - split
+  client_assignment:
+    - client_construction
 
 # Client eligibility uses the shared primary_analysis policy in protocols.yaml.
 eligibility_policy: primary_analysis
@@ -296,6 +304,7 @@ setups:
       - benign_calibration
       - benign_test_false_positive_metrics
       - per_client_attack_detection_metrics
+      - attack_sensitive_threshold_tradeoff
       - family_taxonomy
 
   dirichlet_partitioned:

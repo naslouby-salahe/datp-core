@@ -315,14 +315,49 @@ source_contract:
     guarantees_all_admitted_retained_numeric_values_parseable: true
 
 fingerprint_inputs:
-  source: [source_layout.root, field_schema.source_column_count]
+  source: [source_layout.root, source_layout.executable_group_folders, field_schema.source_column_count]
   schema:
     - schema_id
     - field_schema.retained_numeric_features.order
     - field_schema.categorical_encoding.columns
     - field_schema.categorical_encoding.vocabulary_scope
+    - field_schema.leakage_exclusions.columns
+  materialization:
+    - materialization_id
+    - preprocessing_sequence
+    - row_exclusion
+    - normalization
+    - vocabulary_fit_split
+    - split
+  client_assignment:
+    - client_construction
+    - field_schema.endpoint_identity.subnet_to_group
+    - field_schema.endpoint_identity.excluded_endpoints
+    - field_schema.endpoint_identity.direction_normalization
 
 eligibility_policy: primary_analysis
+
+# The roadmap locks a ten-group static external population in which Modbus is usable for
+# benign equity and unusable only for chronology. The source audit recorded here finds every
+# Modbus row structurally displaced, which makes it unusable for any purpose and leaves nine
+# executable groups. Both statements cannot hold, so the static external population is not
+# execution ready until the roadmap resolves the count.
+readiness_blockers:
+  edge_iiotset_static_population_count:
+    status: unresolved
+    kind: population_definition_contradiction
+    roadmap_expectation: ten_benign_sensor_group_clients_with_eligible_benign_coverage_one
+    configuration_expectation: nine_executable_benign_sensor_group_clients_after_modbus_source_integrity_exclusion
+    conflicting_inputs:
+      - source_layout.normal_group_folders
+      - source_layout.non_executable_group_folders
+      - source_layout.executable_group_folders
+    safer_interpretation_applied: modbus_rows_are_never_admitted_because_displaced_rows_cannot_be_parsed
+    required_decision: declare_whether_modbus_is_globally_non_executable_or_only_temporally_unusable
+    # The temporal population and its matched static reference are nine groups under both
+    # readings, so they are not blocked by this contradiction.
+    blocks_setups: [sensor_groups]
+    outcome_when_unresolved: blocked_by_dependency
 
 materializations:
   group_benign:
@@ -387,7 +422,13 @@ materializations:
       future_evaluation_fraction: 0.20
       ordering_field: frame.time
       ordering_scope: per_client
+      ordering_sort: stable_ascending_on_corrected_time_then_original_row_order
       rollover_policy: add_twenty_four_hours_on_time_decrease
+      rollover_scope: per_client_cumulative_over_the_client_stable_source_order
+      boundary_rule: contiguous_fractions_of_the_ordered_row_sequence_in_role_order
+      boundary_index_formula: "role boundary index = floor(cumulative_fraction * n_client_rows)"
+      gap_handling: none_roles_are_contiguous_and_disjoint
+      future_leakage_check: every_future_role_row_index_must_exceed_every_historical_role_row_index
       minimum_row_counts:
         historical_train: 100
         historical_calibration: 100
@@ -395,6 +436,42 @@ materializations:
         future_evaluation: 100
       missing_client_policy: exclude_client_report_reduced_client_count
       chronology_unverifiable_policy: typed_infeasibility_outcome
+    split_row_semantics:
+      train_rows: benign_only
+      calibration_rows: benign_only
+      test_rows: benign_only
+      attack_rows: not_assigned_to_clients
+
+  # Matched random-fractional reference over exactly the chronological client population. It
+  # exists so the temporal experiment can estimate ordinary sampling variation without
+  # chronology and without depending on a differently sized external population.
+  group_chronological_static_reference:
+    materialization_id: edge_iiotset_group_chronological_static_reference
+    normalization: { strategy: min_max, scope: global_train }
+    vocabulary_fit_split: benign_train
+    preprocessing_sequence:
+      - exclude_non_executable_group_folders
+      - exclude_displaced_source_rows
+      - exclude_invalid_retained_numeric_rows
+      - drop_row_with_null_in_retained_column
+      - drop_exact_duplicate_rows
+      - random_fractional_split
+      - one_hot_encode_categoricals
+      - min_max_normalization_fit_on_train
+    row_exclusion:
+      non_executable_group_folder: drop_row
+      displaced_source_row: drop_row
+      invalid_retained_numeric_feature: drop_row
+      null_in_retained_column: drop_row
+      duplicate_rows: drop_exact_duplicates_keep_first
+      unresolved_endpoint: excluded_from_client_assignment
+    split:
+      method: random_fractional
+      calibration_benign_only: true
+      split_seed: 0
+      # Fractions match the chronological role fractions so the two arms differ only in
+      # whether the ordering is chronological or random.
+      ratios: { train: 0.55, calibration: 0.15, recalibration_reference: 0.10, test: 0.20 }
     split_row_semantics:
       train_rows: benign_only
       calibration_rows: benign_only
@@ -424,3 +501,14 @@ setups:
       - benign_calibration
       - benign_test_false_positive_metrics
       - within_client_chronological_ordering
+
+  chronological_static_reference_groups:
+    materialization: group_chronological_static_reference
+    client_construction:
+      method: sensor_group_clients
+      client_source: source_layout.executable_group_folders
+    client_population_must_equal_setup: chronological_sensor_groups
+    validation_scope: benign_operating_point_equity
+    provides_capabilities:
+      - benign_calibration
+      - benign_test_false_positive_metrics

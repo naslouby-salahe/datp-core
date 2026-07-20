@@ -10,47 +10,133 @@ schema_version: 1
 model_architectures:
   fixed_autoencoder:
     kind: dense_autoencoder
+    input_dimension:
+      resolution: from_materialized_post_encoding_feature_schema
+      declared_per_dataset: false
+      validation: must_equal_materialization_post_encoding_feature_count
     hidden_dims: [80, 40, 20]
+    bottleneck_dim: last_hidden_dim
+    decoder:
+      construction: mirrors_encoder_dimensions_in_reverse
+      final_layer_output_dim: input_dimension
     activation: relu
+    activation_placement: after_every_linear_layer_except_the_final_decoder_layer
+    output_activation: identity
+    normalization_layers: none
+    bias: true
+    parameter_initialization:
+      weight: kaiming_uniform_fan_in_leaky_relu_negative_slope_sqrt_5
+      bias: uniform_symmetric_one_over_sqrt_fan_in
+      applied_to: every_linear_layer
+      seeded_by: training_seed
     reconstruction_objective: mse
+    training_loss_reduction: mean_over_all_elements_of_the_batch
+    anomaly_score:
+      definition: per_row_mean_of_squared_feature_reconstruction_error
+      orientation: higher_score_means_more_anomalous
     precision: fp32
 
 optimizers:
   adam_default:
     optimizer_type: adam
     learning_rate: 0.001
+    beta_1: 0.9
+    beta_2: 0.999
+    epsilon: 1.0e-8
+    weight_decay: 0.0
+    amsgrad: false
     scheduler: none
+    gradient_clipping: none
+    state_lifecycle: recreated_at_the_start_of_every_local_fit_never_persisted_across_rounds
+    state_aggregated_by_server: false
 
 batching:
   standard:
     micro_batch_size: 256
     gradient_accumulation_steps: 1
+    effective_batch_size: 256
+    shuffle_each_epoch: true
+    shuffle_unit: row_permutation_over_the_client_local_training_rows
+    incomplete_final_batch: retained_never_dropped
+    row_ordering_before_shuffle: materialization_row_order
+    shuffle_seed_namespace: dataloader_shuffle
+    worker_seed_namespace: dataloader_worker
 
 # --- Deterministic derivation ------------------------------------------------------------
+# Every stochastic procedure draws from a seed that is either an explicit cohort value or a
+# value derived by the single algorithm below. No procedure may use an unseeded generator.
 determinism:
-  seed_derivation: deterministic_from_experiment_seed
-  analysis_seed_derivation: deterministic_from_experiment_seed_and_analysis_label
+  seed_domains:
+    - training
+    - partition
+    - calibration_subsampling
+    - clustering
+    - bootstrap_analysis
+    - dataloader_shuffling
   partition_seed_independent_of_training_seeds: true
+  checkpoint_selection_uses_no_stochastic_seed: true
+  derived_seed_algorithm:
+    hash_function: blake2b
+    digest_bytes: 8
+    key_encoding: utf_8
+    component_order: ascending_component_name
+    key_template: "{namespace}|{component_name}={component_value}(|{component_name}={component_value})*"
+    component_value_encoding: decimal_integer_for_integers_and_verbatim_identifier_for_strings
+    reduction: unsigned_big_endian_integer_modulo_2_pow_32
+  seed_namespaces:
+    dataloader_shuffle:
+      key: datp_core.dataloader_shuffle
+      components: [training_seed, round_index, client_identifier, local_epoch_index]
+    dataloader_worker:
+      key: datp_core.dataloader_worker
+      components: [training_seed, round_index, client_identifier, worker_index]
+    calibration_subsample:
+      key: datp_core.calibration_subsample
+      components: [training_seed, client_identifier, requested_sample_count, replicate_index]
+    model_initialization:
+      key: datp_core.model_initialization
+      components: [training_seed]
+  resolved_seeds_required_in_manifests:
+    - training_seed
+    - analysis_seed
+    - partition_seed
+    - split_seed
+    - clustering_random_seed
+    - bootstrap_analysis_seed
+    - every_derived_seed_actually_drawn
 
 seed_cohorts:
   datp_core_ten_seed:
     paired_seed_count: 10
-    experiment_seed: 0
+    training_seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    analysis_seeds: [300, 301, 302, 303, 304, 305, 306, 307, 308, 309]
+    seed_pairing_rule: analysis_seed_at_index_i_pairs_with_training_seed_at_index_i
   anchor_five_seed:
     paired_seed_count: 5
-    experiment_seed: 0
     training_seeds: [0, 1, 2, 3, 4]
     analysis_seeds: [300, 301, 302, 303, 304]
+    seed_pairing_rule: analysis_seed_at_index_i_pairs_with_training_seed_at_index_i
 
 # --- Checkpointing -----------------------------------------------------------------------
 checkpoint_profiles:
   datp_core_round_grid:
+    total_rounds: 200
     rounds: [25, 50, 75, 100, 125, 150, 200]
+    early_stopping: none
+    convergence_logged_without_stopping: true
     selection:
       rule: lowest_federated_averaging_weighted_benign_validation_reconstruction_error
+      selector_input:
+        population: per_client_benign_calibration_split_rows
+        quantity: mean_per_row_reconstruction_error_under_the_candidate_round_global_state
+        client_weighting: benign_calibration_row_count
+        aggregation_over_clients: weighted_arithmetic_mean
+        client_accumulation_order: ascending_client_identifier
       tie_break: earliest_scheduled_round
       aggregation: cross_locked_seed_cohort_mean_reconstruction_error_per_candidate_round
       scope: natural_device_regime_only_fedavg_only_benign_validation_only
+      selected_round_reuse: single_round_number_reused_by_every_profile_declaring_lookup_authorization
+      weights_remain_seed_and_population_specific: true
       forbidden_selectors:
         - per_policy_selection
         - per_experiment_selection
@@ -60,11 +146,27 @@ checkpoint_profiles:
         - auroc_driven_selection
         - external_dataset_driven_selection
   anchor_terminal_round:
+    total_rounds: 150
     rounds: [150]
+    early_stopping: none
+    convergence_logged_without_stopping: true
     selection:
       rule: terminal_scheduled_round
       tie_break: earliest_scheduled_round
       scope: anchor_only_historical_checkpoint_semantics_preserved
+  centralized_pooled_epoch_grid:
+    total_epochs: 200
+    epochs: [25, 50, 75, 100, 125, 150, 200]
+    early_stopping: none
+    convergence_logged_without_stopping: true
+    selection:
+      rule: lowest_pooled_benign_validation_reconstruction_error
+      selector_input:
+        population: pooled_benign_validation_rows_held_out_from_the_pooled_benign_training_rows
+        quantity: mean_per_row_reconstruction_error
+        aggregation_over_rows: unweighted_arithmetic_mean
+      tie_break: earliest_scheduled_epoch
+      scope: centralized_reference_only_never_fused_with_federated_artifacts
 
 # --- Training ----------------------------------------------------------------------------
 training_profiles:
@@ -75,8 +177,31 @@ training_profiles:
     batching: standard
     local_epochs: 1
     participation: full
+    participation_rule: every_eligible_client_participates_in_every_round
+    client_ordering: ascending_client_identifier
+    client_update_weighting: benign_training_row_count
+    aggregation_formula: "w_global = sum_k(n_k_train * w_k) / sum_k(n_k_train)"
+    aggregation_accumulation_order: ascending_client_identifier
     personalization: none
     checkpoint_authorization: primary_selection_computed_once_on_natural_device_regime
+
+  federated_averaging_anchor:
+    kind: federated_averaging_training
+    model_architecture: fixed_autoencoder
+    optimizer: adam_default
+    batching: standard
+    # The anchor preserves the conference training contract, which used five local epochs and
+    # a terminal 150-round endpoint. Aligning it with the journal protocol would destroy the
+    # reproduction it exists to perform.
+    local_epochs: 5
+    participation: full
+    participation_rule: every_eligible_client_participates_in_every_round
+    client_ordering: ascending_client_identifier
+    client_update_weighting: benign_training_row_count
+    aggregation_formula: "w_global = sum_k(n_k_train * w_k) / sum_k(n_k_train)"
+    aggregation_accumulation_order: ascending_client_identifier
+    personalization: none
+    checkpoint_authorization: terminal_round_no_selection
 
   federated_averaging_personalized:
     kind: federated_averaging_training
@@ -84,22 +209,36 @@ training_profiles:
     optimizer: adam_default
     batching: standard
     local_epochs: 1
+    personalized_local_epochs: 1
     participation: full
+    participation_rule: every_eligible_client_participates_in_every_round
+    client_ordering: ascending_client_identifier
+    client_update_weighting: benign_training_row_count
+    aggregation_formula: "w_global = sum_k(n_k_train * w_k) / sum_k(n_k_train)"
+    aggregation_accumulation_order: ascending_client_identifier
     personalization: ditto
     personalization_proximal_weight: 1.0
     personalization_parameter_grid: [0.001, 0.01, 0.1, 1.0]
     personalization_parameter_selection:
       rule: lowest_natural_device_regime_benign_validation_reconstruction_error_at_locked_global_checkpoint
       candidates: personalization_parameter_grid
+      selector_input:
+        population: per_client_benign_calibration_split_rows
+        quantity: mean_per_row_reconstruction_error_under_the_personalized_state
+        client_weighting: benign_calibration_row_count
+        aggregation_over_clients: weighted_arithmetic_mean
       tie_break: smallest_proximal_weight
       selected_before_external_validation: true
       forbidden_selectors: [cv_fpr, test_loss, attack_metrics, auroc, external_dataset_results]
     ditto_specification:
       global_model_state: shared_federated_averaging_parameters_sent_to_server_each_round
       persistent_client_personalized_state: per_client_local_parameters_retained_across_rounds_never_reset
+      personalized_state_initialization: copy_of_the_round_zero_global_initialization
       global_update_sent_to_server: client_local_gradient_step_on_shared_parameters_only
       personalized_state_never_aggregated: true
       proximal_personalized_objective: "min_v_k  L_k(v_k) + (proximal_weight / 2) * ||v_k - w_global||^2"
+      personalized_optimizer: adam_default
+      personalized_optimizer_state_lifecycle: recreated_at_the_start_of_every_local_fit_never_persisted_across_rounds
       evaluation_state: personalized_parameters_v_k_per_client_used_for_scoring_and_thresholding
       artifact_separation:
         global_checkpoint: shared_scientific_checkpoint_artifact_reused_by_core_ladder
@@ -113,6 +252,16 @@ training_profiles:
     batching: standard
     local_epochs: 1
     participation: full
+    participation_rule: every_eligible_client_participates_in_every_round
+    client_ordering: ascending_client_identifier
+    client_update_weighting: benign_training_row_count
+    aggregation_formula: "w_global = sum_k(n_k_train * w_k) / sum_k(n_k_train)"
+    aggregation_accumulation_order: ascending_client_identifier
+    proximal_objective: "min_w  L_k(w) + (mu / 2) * ||w - w_global_round_start||^2"
+    mu: null
+    mu_grid: [0.001, 0.01, 0.1, 1.0]
+    mu_resolution: required_from_experiment_sweep
+    mu_zero_forbidden_as_a_fedprox_condition: true
     personalization: none
     checkpoint_authorization: lookup_of_federated_averaging_primary_selection
 
@@ -121,8 +270,14 @@ training_profiles:
     model_architecture: fixed_autoencoder
     optimizer: adam_default
     batching: standard
+    training_population: pooled_benign_training_rows_across_all_clients
+    row_ordering_before_shuffle: ascending_client_identifier_then_materialization_row_order
+    validation_split:
+      source: pooled_benign_training_rows
+      fraction: 0.10
+      selection: random_without_replacement
+      split_seed: 0
     checkpoint_authorization: independent_selection_own_non_federated_curve_never_fused_with_federated_averaging_artifacts
-    checkpoint_selection_rule: lowest_pooled_benign_validation_reconstruction_error
 
 # --- Client eligibility ------------------------------------------------------------------
 eligibility_policies:
@@ -135,103 +290,529 @@ eligibility_policies:
       - valid_per_client_attack_assignment
       - at_least_one_held_out_attack_row
     ineligible_clients_excluded_from_primary_dispersion: true
+    ineligible_client_deployment_fallback:
+      threshold_source: the_shared_threshold_of_the_evaluated_policys_own_eligible_population
+      shared_construction: unweighted_arithmetic_mean_of_eligible_local_quantiles
+      reported_status: unavailable_ineligible_client
+      enters_primary_dispersion: false
+    zero_eligible_clients_behavior: typed_unavailable_ineligible_population
   experimental_subminimum:
     minimum_benign_calibration_count: 50
+    determined_before_test_evaluation: true
+    identical_across_policies_in_one_comparison: true
+    fpr_evaluable_requires_non_empty_benign_test_denominator: true
+    attack_evaluable_requires:
+      - valid_per_client_attack_assignment
+      - at_least_one_held_out_attack_row
+    ineligible_clients_excluded_from_primary_dispersion: true
+    ineligible_client_deployment_fallback:
+      threshold_source: the_shared_threshold_of_the_evaluated_policys_own_eligible_population
+      shared_construction: unweighted_arithmetic_mean_of_eligible_local_quantiles
+      reported_status: unavailable_ineligible_client
+      enters_primary_dispersion: false
+    zero_eligible_clients_behavior: typed_unavailable_ineligible_population
     affects_standard_eligibility_minimum: false
+    permitted_use: calibration_window_size_experiments_only_never_the_confirmatory_population
+
+# --- Normalization strategies ------------------------------------------------------------
+# Datasets choose a strategy by name; the numerical contract lives here so the two datasets
+# that share a strategy cannot drift apart.
+normalization_strategies:
+  min_max:
+    formula: "x_scaled = (x - fit_min) / (fit_max - fit_min)"
+    fitted_statistics: [per_feature_minimum, per_feature_maximum]
+    constant_feature_rule: zero_range_feature_maps_to_zero_and_is_recorded_as_constant
+    out_of_range_transform_values: retained_unclipped
+    fit_population: declared_by_the_materialization_scope_field
+  standard:
+    formula: "x_scaled = (x - fit_mean) / fit_standard_deviation"
+    fitted_statistics: [per_feature_mean, per_feature_standard_deviation]
+    standard_deviation_ddof: 0
+    constant_feature_rule: zero_scale_feature_uses_scale_one_and_becomes_an_all_zero_centered_column
+    out_of_range_transform_values: retained_unclipped
+    fit_population: declared_by_the_materialization_scope_field
+normalization_fit_scopes:
+  global_train: fitted_once_on_the_pooled_benign_training_rows_of_every_client_in_the_population
+  historical_train: fitted_once_on_the_pooled_benign_historical_training_rows_of_every_client_in_the_population
+normalization_leakage_rule: calibration_test_future_recalibration_and_future_evaluation_rows_are_transformed_but_never_influence_the_fit
+
+# --- Quantile estimation -----------------------------------------------------------------
+# One estimator definition serves every quantile, order statistic and interquartile
+# calculation in the study. No library default may be relied upon.
+quantile_estimators:
+  linear_interpolated_order_statistic:
+    sort_order: ascending
+    index_formula: "h = (n - 1) * p"
+    interpolation: "x_sorted[floor(h)] + (h - floor(h)) * (x_sorted[floor(h) + 1] - x_sorted[floor(h)])"
+    single_element_behavior: return_the_single_value
+    empty_input_behavior: typed_failure_empty_quantile_population
+    non_finite_input_behavior: typed_failure_non_finite_score_population
+    tie_behavior: duplicate_values_are_retained_and_the_index_formula_is_unaffected
 
 # --- Threshold policies ------------------------------------------------------------------
-# The policy ladder. Calibration is benign-only for every policy.
+# The policy ladder. Calibration is benign-only for every policy. Every policy consumes the
+# frozen per-client benign calibration scores of the evaluated model and produces exactly one
+# threshold assignment per eligible client.
+threshold_policy_defaults:
+  source_score_population: per_client_benign_calibration_scores_of_the_selected_checkpoint
+  eligibility_filter: the_experiment_eligibility_policy_applied_before_any_threshold_is_formed
+  attack_rows_forbidden_in_calibration: true
+  non_finite_calibration_score: typed_failure_non_finite_score_population
+  empty_client_calibration: client_treated_as_ineligible_and_receives_the_declared_deployment_fallback
+  application_scope: threshold_applied_to_the_clients_held_out_test_scores_only
+  required_diagnostic_fields:
+    - threshold_value_per_client
+    - threshold_owner_scope
+    - group_membership_where_applicable
+    - eligible_calibration_count_per_client
+    - achieved_benign_exceedance_on_calibration
+    - achieved_benign_exceedance_on_held_out_test
+    - signed_attainment_error
+    - absolute_attainment_error
+    - eligible_client_count
+    - fallback_client_count
+
 threshold_policies:
   shared_mean_p95:
     policy: shared_threshold
     construction: mean
     quantile: 0.95
+    quantile_estimator: linear_interpolated_order_statistic
+    aggregation_scope: all_eligible_clients_of_the_evaluated_population
+    aggregation_formula: "tau_shared = (1 / K_eligible) * sum_k(quantile(scores_k, q))"
+    sample_weighting: none
+    client_accumulation_order: ascending_client_identifier
+    threshold_ownership: one_threshold_for_the_whole_eligible_population
   shared_pooled_p95:
     policy: shared_threshold
     construction: pooled
     quantile: 0.95
+    quantile_estimator: linear_interpolated_order_statistic
+    aggregation_scope: concatenated_benign_calibration_scores_of_all_eligible_clients
+    aggregation_formula: "tau_pooled = quantile(concat_k(scores_k), q)"
+    concatenation_order: ascending_client_identifier
+    sample_weighting: implicit_by_calibration_row_count
+    threshold_ownership: one_threshold_for_the_whole_eligible_population
   shared_weighted_p95:
     policy: shared_threshold
     construction: weighted
     quantile: 0.95
+    quantile_estimator: linear_interpolated_order_statistic
+    aggregation_scope: all_eligible_clients_of_the_evaluated_population
+    aggregation_formula: "tau_weighted = sum_k(n_k * quantile(scores_k, q)) / sum_k(n_k)"
+    sample_weighting: eligible_benign_calibration_row_count
+    client_accumulation_order: ascending_client_identifier
+    zero_total_weight_behavior: typed_unavailable_ineligible_population
+    threshold_ownership: one_threshold_for_the_whole_eligible_population
   local_p95:
     policy: local_threshold
     quantile: 0.95
+    quantile_estimator: linear_interpolated_order_statistic
+    aggregation_scope: single_client
+    aggregation_formula: "tau_k = quantile(scores_k, q)"
+    sample_weighting: none
+    threshold_ownership: one_threshold_per_eligible_client
   family_p95:
     policy: family_threshold
     quantile: 0.95
+    quantile_estimator: linear_interpolated_order_statistic
+    requires_capability: family_taxonomy
+    taxonomy_source: dataset_field_schema_label_fields_family_map
+    aggregated_quantity: eligible_member_local_quantile_thresholds
+    aggregation_scope: clients_sharing_one_family_label
+    aggregation_formula: "tau_f = (1 / |eligible members of f|) * sum_{k in f}(quantile(scores_k, q))"
+    sample_weighting: none
+    client_accumulation_order: ascending_client_identifier
+    singleton_family_behavior: family_threshold_equals_the_single_member_local_threshold_and_is_reported_as_singleton
+    family_with_no_eligible_member_behavior: family_receives_no_threshold_and_is_reported_as_empty_family
+    client_without_family_label_behavior: typed_failure_unmapped_client_family
+    unavailable_without_taxonomy: typed_unavailable_unsupported_regime
+    threshold_ownership: one_threshold_per_family
   centralized_pooled_p95:
     policy: centralized_pooled_threshold
     quantile: 0.95
+    quantile_estimator: linear_interpolated_order_statistic
+    source_score_population: pooled_benign_calibration_scores_of_the_centralized_model
+    aggregation_scope: pooled_across_all_clients
+    aggregation_formula: "tau_b0 = quantile(concat_k(centralized_scores_k), q)"
+    concatenation_order: ascending_client_identifier
+    sample_weighting: implicit_by_calibration_row_count
+    provenance_separation: centralized_scores_only_never_federated_scores
+    threshold_ownership: one_threshold_for_the_whole_eligible_population
 
   cluster_k3_mean_p95:
     policy: cluster_threshold
+    canonical: true
     aggregation: mean
     cluster_count: 3
-    fingerprint_features: [mean_error, std_error, skew_error, p95_error]
     quantile: 0.95
-    initialization: k_means_plus_plus
-    initialization_runs: 10
-    maximum_iterations: 300
-    random_seed: 42
+    quantile_estimator: linear_interpolated_order_statistic
+    aggregated_quantity: eligible_member_local_quantile_thresholds
+    aggregation_formula: "tau_c = (1 / |members of c|) * sum_{k in c}(quantile(scores_k, q))"
+    sample_weighting: none
+    client_accumulation_order: ascending_client_identifier
+    fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+    fingerprint_estimators:
+      mean_error: arithmetic_mean
+      std_error: standard_deviation_ddof_1
+      skew_error: fisher_pearson_moment_coefficient_of_skewness_uncorrected
+      # The fingerprint quantile is locked at 0.95 and never follows a swept threshold
+      # quantile, so a quantile sweep changes thresholds without changing the grouping.
+      p95_error: quantile_0_95_linear_interpolated_order_statistic
+    fingerprint_degenerate_client_rules:
+      fewer_than_two_calibration_scores: { std_error: 0.0, skew_error: 0.0 }
+      non_finite_skew_value: 0.0
+    fingerprint_non_finite_value_behavior: typed_failure_non_finite_fingerprint
+    standardization:
+      method: zero_mean_unit_variance
+      standard_deviation_ddof: 0
+      fit_scope: the_eligible_client_fingerprint_matrix_of_the_current_population_seed_and_checkpoint
+      constant_dimension_rule: zero_variance_dimension_uses_scale_one_and_becomes_an_all_zero_centered_column
+    client_ordering_before_fit: ascending_client_identifier
+    clustering:
+      algorithm: k_means_lloyd
+      initialization: k_means_plus_plus
+      initialization_runs: 10
+      maximum_iterations: 300
+      convergence_tolerance: 1.0e-4
+      random_seed: 42
+    label_canonicalization: relabel_clusters_by_ascending_cluster_threshold_then_by_smallest_member_client_identifier
+    insufficient_eligible_clients_behavior: typed_unavailable_when_eligible_client_count_is_not_greater_than_cluster_count
+    degenerate_fingerprint_matrix_behavior: typed_unavailable_when_fewer_than_two_distinct_fingerprints
+    required_diagnostics:
+      - cluster_membership_per_client
+      - cluster_size
+      - singleton_cluster_flag
+      - empty_cluster_flag
+      - within_cluster_threshold_dispersion
+      - within_cluster_fpr_dispersion
+      - across_cluster_threshold_dispersion
+      - across_cluster_mean_fpr_dispersion
+      - standardizer_center_and_scale
+    threshold_ownership: one_threshold_per_cluster
   cluster_k9_mean_p95:
     policy: cluster_threshold
+    canonical: false
+    exploratory: true
     aggregation: mean
     cluster_count: 9
-    fingerprint_features: [mean_error, std_error, skew_error, p95_error]
     quantile: 0.95
-    initialization: k_means_plus_plus
-    initialization_runs: 10
-    maximum_iterations: 300
-    random_seed: 42
+    quantile_estimator: linear_interpolated_order_statistic
+    aggregated_quantity: eligible_member_local_quantile_thresholds
+    aggregation_formula: "tau_c = (1 / |members of c|) * sum_{k in c}(quantile(scores_k, q))"
+    sample_weighting: none
+    client_accumulation_order: ascending_client_identifier
+    fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+    fingerprint_estimators:
+      mean_error: arithmetic_mean
+      std_error: standard_deviation_ddof_1
+      skew_error: fisher_pearson_moment_coefficient_of_skewness_uncorrected
+      p95_error: quantile_0_95_linear_interpolated_order_statistic
+    fingerprint_degenerate_client_rules:
+      fewer_than_two_calibration_scores: { std_error: 0.0, skew_error: 0.0 }
+      non_finite_skew_value: 0.0
+    fingerprint_non_finite_value_behavior: typed_failure_non_finite_fingerprint
+    standardization:
+      method: zero_mean_unit_variance
+      standard_deviation_ddof: 0
+      fit_scope: the_eligible_client_fingerprint_matrix_of_the_current_population_seed_and_checkpoint
+      constant_dimension_rule: zero_variance_dimension_uses_scale_one_and_becomes_an_all_zero_centered_column
+    client_ordering_before_fit: ascending_client_identifier
+    clustering:
+      algorithm: k_means_lloyd
+      initialization: k_means_plus_plus
+      initialization_runs: 10
+      maximum_iterations: 300
+      convergence_tolerance: 1.0e-4
+      random_seed: 42
+    label_canonicalization: relabel_clusters_by_ascending_cluster_threshold_then_by_smallest_member_client_identifier
+    insufficient_eligible_clients_behavior: typed_unavailable_when_eligible_client_count_is_not_greater_than_cluster_count
+    degenerate_fingerprint_matrix_behavior: typed_unavailable_when_fewer_than_two_distinct_fingerprints
+    required_diagnostics:
+      - cluster_membership_per_client
+      - cluster_size
+      - singleton_cluster_flag
+      - empty_cluster_flag
+      - within_cluster_threshold_dispersion
+      - within_cluster_fpr_dispersion
+      - across_cluster_threshold_dispersion
+      - across_cluster_mean_fpr_dispersion
+      - standardizer_center_and_scale
+    threshold_ownership: one_threshold_per_cluster
   cluster_k3_robust_median_p95:
     policy: cluster_threshold
+    canonical: false
+    exploratory: true
     aggregation: robust_median
     cluster_count: 3
-    fingerprint_features: [mean_error, std_error, skew_error, p95_error]
     quantile: 0.95
-    initialization: k_means_plus_plus
-    initialization_runs: 10
-    maximum_iterations: 300
-    random_seed: 42
+    quantile_estimator: linear_interpolated_order_statistic
+    aggregated_quantity: eligible_member_local_quantile_thresholds
+    aggregation_formula: "tau_c = quantile({quantile(scores_k, q) : k in c}, 0.5)"
+    median_estimator: linear_interpolated_order_statistic
+    sample_weighting: none
+    client_accumulation_order: ascending_client_identifier
+    fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+    fingerprint_estimators:
+      mean_error: arithmetic_mean
+      std_error: standard_deviation_ddof_1
+      skew_error: fisher_pearson_moment_coefficient_of_skewness_uncorrected
+      p95_error: quantile_0_95_linear_interpolated_order_statistic
+    fingerprint_degenerate_client_rules:
+      fewer_than_two_calibration_scores: { std_error: 0.0, skew_error: 0.0 }
+      non_finite_skew_value: 0.0
+    fingerprint_non_finite_value_behavior: typed_failure_non_finite_fingerprint
+    standardization:
+      method: zero_mean_unit_variance
+      standard_deviation_ddof: 0
+      fit_scope: the_eligible_client_fingerprint_matrix_of_the_current_population_seed_and_checkpoint
+      constant_dimension_rule: zero_variance_dimension_uses_scale_one_and_becomes_an_all_zero_centered_column
+    client_ordering_before_fit: ascending_client_identifier
+    clustering:
+      algorithm: k_means_lloyd
+      initialization: k_means_plus_plus
+      initialization_runs: 10
+      maximum_iterations: 300
+      convergence_tolerance: 1.0e-4
+      random_seed: 42
+    label_canonicalization: relabel_clusters_by_ascending_cluster_threshold_then_by_smallest_member_client_identifier
+    insufficient_eligible_clients_behavior: typed_unavailable_when_eligible_client_count_is_not_greater_than_cluster_count
+    degenerate_fingerprint_matrix_behavior: typed_unavailable_when_fewer_than_two_distinct_fingerprints
+    required_diagnostics:
+      - cluster_membership_per_client
+      - cluster_size
+      - singleton_cluster_flag
+      - empty_cluster_flag
+      - within_cluster_threshold_dispersion
+      - within_cluster_fpr_dispersion
+      - across_cluster_threshold_dispersion
+      - across_cluster_mean_fpr_dispersion
+      - standardizer_center_and_scale
+    threshold_ownership: one_threshold_per_cluster
 
   conformal_local_p95:
     policy: conformal_local_threshold
     conformal_mode: split_conformal
     coverage_alpha: 0.05
+    nominal_coverage: 0.95
+    target_exceedance: 0.05
     rank_formula: "rank = min(ceil((n + 1) * (1 - coverage_alpha)), n)"
     order_statistic_selection: ascending_calibration_score_order_statistic_at_rank
+    interpolation: none_exact_order_statistic
     tie_break: nearest_higher_order_statistic
+    finite_sample_attainability_rule: "attainable only when n >= ceil(1 / coverage_alpha) - 1"
+    unattainable_behavior: typed_unavailable_conformal_level_unattainable
     minimum_sample_count: 100
     calibration_unit: per_client_benign_calibration_scores
+    calibration_scope: per_client_never_pooled
     evaluation_unit: per_client_benign_test_scores
     coverage_breakdown: [marginal_sample_weighted_coverage, macro_client_coverage, per_client_coverage]
     coverage_target_error: absolute_achieved_minus_target_coverage
+    output_type: one_threshold_per_eligible_client
     exchangeability_limitation: within_client_exchangeability_assumed_not_verified_across_clients
     unavailable_behavior: typed_unavailable_if_client_below_minimum_sample_count
+    threshold_ownership: one_threshold_per_eligible_client
 
   local_global_shrinkage_p95:
     policy: local_global_shrinkage_threshold
     quantile: 0.95
+    quantile_estimator: linear_interpolated_order_statistic
+    local_reference: local_p95
     global_reference: shared_mean_p95
-    size_aware_variant:
-      formula: "lambda(n) = n / (n + 100)"
-      clamping: clamp_to_closed_interval_zero_one
-      zero_row_behavior: lambda_equals_zero_full_fallback_to_global_reference
+    interpolation_formula: "tau_k(lambda) = lambda * tau_local_k + (1 - lambda) * tau_shared"
+    weight_semantics: lambda_one_is_fully_local_and_lambda_zero_is_fully_shared
+    weight_scope: one_global_value_per_sweep_cell_identical_for_every_client_seed_and_window
+    permitted_weight_range: { minimum: 0.0, maximum: 1.0 }
+    shrinkage_weight_grid: [0.0, 0.25, 0.5, 0.75, 1.0]
+    shrinkage_weight: null
+    shrinkage_weight_resolution: required_from_experiment_sweep
+    out_of_range_weight_behavior: typed_failure_invalid_shrinkage_weight
     effective_lambda_reporting: reported_per_client
-    fallback_frequency_reporting: reported_as_fraction_of_clients_at_lambda_floor
+    threshold_ownership: one_threshold_per_eligible_client
 
   calibration_size_aware_fallback_p95:
     policy: calibration_size_aware_fallback_threshold
     quantile: 0.95
+    quantile_estimator: linear_interpolated_order_statistic
+    local_reference: local_p95
+    global_reference: shared_mean_p95
+    interpolation_formula: "tau_k(n_k) = lambda(n_k) * tau_local_k + (1 - lambda(n_k)) * tau_shared"
+    weight_semantics: lambda_one_is_fully_local_and_lambda_zero_is_fully_shared
+    weight_scope: per_client_determined_only_by_that_clients_benign_calibration_count
+    weight_formula: "lambda(n) = n / (n + n_half)"
+    weight_formula_constants: { n_half: 100 }
+    weight_monotone_in_calibration_count: true
+    clamping: clamp_to_closed_interval_zero_one
+    permitted_weight_range: { minimum: 0.0, maximum: 1.0 }
+    zero_calibration_behavior: lambda_equals_zero_full_fallback_to_global_reference
+    minimum_calibration_behavior: no_separate_minimum_lambda_the_formula_applies_at_every_positive_count
+    effective_lambda_reporting: reported_per_client
+    fallback_frequency_reporting: reported_as_fraction_of_clients_at_lambda_floor
+    threshold_ownership: one_threshold_per_eligible_client
 
   federated_summary_matched_exceedance:
     policy: federated_summary_statistic_threshold
     mode: matched_exceedance
-    matched_exceedance_k_grid_step: 0.01
+    primary_comparator: true
+    client_message:
+      fields: [benign_calibration_count, benign_local_mean, benign_local_variance]
+      variance_convention: population_variance_ddof_0_over_the_clients_benign_calibration_scores
+      raw_scores_transmitted: false
+      attack_labels_transmitted: false
+    global_mean_formula: "mu_global = sum_k(n_k * mu_k) / sum_k(n_k)"
+    within_term_formula: "within = sum_k(n_k * sigma_k_squared) / sum_k(n_k)"
+    between_term_formula: "between = sum_k(n_k * (mu_k - mu_global)^2) / sum_k(n_k)"
+    pooled_variance_formula: "sigma_global_squared = within + between"
+    between_term_mandatory: true
+    between_ratio_formula: "between_ratio = between / (within + between)"
+    between_ratio_zero_denominator_behavior: typed_undefined_zero_denominator
+    global_standard_deviation_formula: "sigma_global = sqrt(sigma_global_squared)"
+    client_accumulation_order: ascending_client_identifier
+    zero_total_count_behavior: typed_unavailable_ineligible_population
+    candidate_grid:
+      formula: "tau(k) = mu_global + k * sigma_global"
+      minimum: 0.00
+      maximum: 5.00
+      step: 0.01
+      inclusive_endpoints: true
+    exceedance_exchange:
+      client_returns: [benign_exceedance_count_per_candidate, benign_calibration_count]
+      exceedance_rule: "score > tau(k) counts as an exceedance"
+      achieved_exceedance_formula: "achieved(k) = sum_k'(exceedance_count_k'(k)) / sum_k'(n_k')"
+    selection:
+      target_exceedance_formula: "1 - quantile"
+      objective: "k_star = argmin_k |achieved(k) - target_exceedance|"
+      tie_break: largest_candidate_k
+    quantile: 0.95
+    required_diagnostics:
+      - selected_coefficient
+      - selected_threshold
+      - achieved_exceedance
+      - target_exceedance
+      - absolute_target_deviation
+      - within_term
+      - between_term
+      - pooled_variance
+      - between_ratio
+      - candidate_grid_evaluation_record
+      - tie_set
+      - transmitted_field_list
+      - estimated_payload_bytes
+    threshold_ownership: one_threshold_for_the_whole_eligible_population
   federated_summary_fixed_k:
     policy: federated_summary_statistic_threshold
     mode: fixed_k
+    primary_comparator: false
+    supplementary_sensitivity_only: true
+    client_message:
+      fields: [benign_calibration_count, benign_local_mean, benign_local_variance]
+      variance_convention: population_variance_ddof_0_over_the_clients_benign_calibration_scores
+      raw_scores_transmitted: false
+      attack_labels_transmitted: false
+    global_mean_formula: "mu_global = sum_k(n_k * mu_k) / sum_k(n_k)"
+    within_term_formula: "within = sum_k(n_k * sigma_k_squared) / sum_k(n_k)"
+    between_term_formula: "between = sum_k(n_k * (mu_k - mu_global)^2) / sum_k(n_k)"
+    pooled_variance_formula: "sigma_global_squared = within + between"
+    between_term_mandatory: true
+    between_ratio_formula: "between_ratio = between / (within + between)"
+    between_ratio_zero_denominator_behavior: typed_undefined_zero_denominator
+    global_standard_deviation_formula: "sigma_global = sqrt(sigma_global_squared)"
+    client_accumulation_order: ascending_client_identifier
+    zero_total_count_behavior: typed_unavailable_ineligible_population
+    threshold_formula: "tau = mu_global + fixed_k * sigma_global"
+    fixed_k_grid: [2.0, 2.5, 3.0]
+    fixed_k: null
+    fixed_k_resolution: required_from_experiment_sweep
+    quantile: 0.95
+    required_diagnostics:
+      - fixed_coefficient
+      - selected_threshold
+      - achieved_exceedance
+      - target_exceedance
+      - absolute_target_deviation
+      - within_term
+      - between_term
+      - pooled_variance
+      - between_ratio
+      - transmitted_field_list
+      - estimated_payload_bytes
+    threshold_ownership: one_threshold_for_the_whole_eligible_population
+
+# --- Metric definitions ------------------------------------------------------------------
+metric_definitions:
+  prediction_rule: "predicted_attack when score > threshold, otherwise predicted_benign"
+  per_client_before_aggregation: true
+  test_rows_only: true
+  fpr: { formula: "FP_k / (FP_k + TN_k)", unit: ratio, direction: lower_is_better, zero_denominator: undefined_zero_denominator }
+  tpr: { formula: "TP_k / (TP_k + FN_k)", unit: ratio, direction: higher_is_better, zero_denominator: undefined_zero_denominator }
+  balanced_accuracy: { formula: "(TPR_k + (1 - FPR_k)) / 2", unit: ratio, direction: higher_is_better, requires: [fpr, tpr] }
+  macro_f1: { formula: "(F1_benign_k + F1_attack_k) / 2", unit: ratio, direction: higher_is_better, missing_class_behavior: unavailable_missing_attack_class }
+  auroc: { unit: ratio, direction: higher_is_better, requires_both_classes: true, role: model_quality_control, invariance_check: identical_across_core_ladder_policies_within_numerical_tolerance }
+  cross_client_aggregation:
+    mean_fpr: { formula: "(1 / K_eligible) * sum_k(FPR_k)", weighting: none }
+    standard_deviation_ddof: 0
+    cv_fpr:
+      formula: "std(FPR_k, ddof=0) / mean(FPR_k)"
+      unit: ratio
+      direction: lower_is_better
+      denominator_stabilizer: forbidden
+      zero_mean_behavior: undefined_zero_denominator
+      near_zero_mean_threshold_formula: "0.10 * (1 - evaluated_threshold_policy_quantile)"
+      near_zero_mean_behavior: retain_numerical_value_with_undefined_near_zero_denominator_warning_status
+      minimum_client_count: 2
+    cv_tpr:
+      formula: "std(TPR_k, ddof=0) / mean(TPR_k)"
+      unit: ratio
+      direction: lower_is_better
+      zero_mean_behavior: undefined_zero_denominator
+      near_zero_mean_behavior: retain_numerical_value_with_undefined_near_zero_denominator_warning_status
+    iqr_fpr: { formula: "quantile(FPR_k, 0.75) - quantile(FPR_k, 0.25)", quantile_estimator: linear_interpolated_order_statistic, unit: ratio, direction: lower_is_better }
+    fpr_range: { formula: "max(FPR_k) - min(FPR_k)", unit: ratio, direction: lower_is_better }
+    worst_client_fpr: { formula: "max(FPR_k)", unit: ratio, direction: lower_is_better }
+    p10_macro_f1: { formula: "quantile(MacroF1_k, 0.10)", quantile_estimator: linear_interpolated_order_statistic, unit: ratio, direction: higher_is_better }
+    worst_client_ba: { formula: "min(BA_k)", unit: ratio, direction: higher_is_better }
+    jain_index: { formula: "(sum_k FPR_k)^2 / (K_eligible * sum_k FPR_k^2)", unit: ratio, direction: higher_is_better, zero_sum_behavior: undefined_zero_denominator }
+    gini_coefficient: { formula: "sum_i sum_j |FPR_i - FPR_j| / (2 * K_eligible * sum_i FPR_i)", unit: ratio, direction: lower_is_better, zero_sum_behavior: undefined_zero_denominator }
+  threshold_estimation:
+    absolute_threshold_error: { formula: "|tau - tau_oracle|", unit: score, direction: lower_is_better }
+    relative_threshold_error: { formula: "|tau - tau_oracle| / |tau_oracle|", unit: ratio, direction: lower_is_better, zero_oracle_behavior: undefined_zero_denominator }
+    oracle_definition: exact_pooled_benign_quantile_of_the_same_population_and_quantile_estimator
+    target_exceedance: { formula: "1 - quantile", unit: ratio, direction: none }
+    signed_attainment_error: { formula: "achieved_benign_exceedance - (1 - quantile)", unit: ratio, direction: none }
+    absolute_attainment_error: { formula: "|signed_attainment_error|", unit: ratio, direction: lower_is_better }
+    threshold_dispersion: { formula: "std(tau_k, ddof=0) / mean(tau_k)", unit: ratio, direction: none, zero_mean_behavior: undefined_zero_denominator }
+    threshold_variance_across_replicates: { formula: "var(tau_k_r, ddof=1) over subsampling replicates within client and seed", unit: score_squared, direction: lower_is_better }
+  heterogeneity_diagnostics:
+    pairwise_js_divergence:
+      definition: jensen_shannon_divergence_between_two_clients_benign_score_histograms
+      histogram_bins: 32
+      binning_range: shared_range_over_the_pooled_benign_scores_of_the_compared_population
+      binning_edges: equal_width
+      logarithm_base: 2
+      empty_bin_handling: zero_probability_contributes_zero_to_the_divergence
+      pairwise_aggregation: arithmetic_mean_over_all_unordered_eligible_client_pairs
+      unit: none
+      direction: none
+      minimum_client_count: 2
+  cluster_diagnostics:
+    adjusted_rand_index: { unit: none, direction: higher_is_better, comparison_unit: unordered_pair_of_seed_level_client_assignments }
+    within_cluster_dispersion: { formula: "std(tau_k in cluster, ddof=0)", unit: score, direction: lower_is_better }
+    across_cluster_dispersion: { formula: "std(tau_c, ddof=0)", unit: score, direction: none }
+  precision_policy:
+    computation: full_available_precision
+    rounding: presentation_only
+  metric_statuses:
+    - available
+    - undefined_zero_denominator
+    - undefined_near_zero_denominator
+    - unavailable_missing_benign_class
+    - unavailable_missing_attack_class
+    - unavailable_invalid_attack_assignment
+    - unavailable_ineligible_client
+    - unavailable_unsupported_regime
+    - failed_invalid_artifact
+    - failed_statistical_procedure
+  forbidden_substitutions: [zero_for_undefined, empty_string_for_unavailable, omitted_row_for_unavailable, unqualified_nan]
 
 # --- Metric bundles ----------------------------------------------------------------------
 metric_bundles:
@@ -263,25 +844,99 @@ metric_bundles:
     requires_attack_evaluable_clients: false
 
 # --- Statistical analysis profiles -------------------------------------------------------
+# Profiles are separated by estimand, not by convenience. A paired-seed delta profile may
+# never be bound to a single estimate, a ratio, or a descriptive diagnostic.
 statistical_profiles:
   paired_seed_bca:
+    estimand: mean_paired_seed_level_delta_between_two_evaluations
+    unit_of_analysis: training_seed
     method: bca_bootstrap
+    statistic: arithmetic_mean_of_paired_deltas
     confidence_level: 0.95
-    resample_count: 10000
+    resample_count: 50000
+    analysis_seed_source: seed_cohort_analysis_seed_at_index_zero
     pairing_key: seed
     resampling_unit: per_seed_paired_delta
+    independent_resampling_of_the_two_evaluations: forbidden
     bias_correction: from_bootstrap_distribution
     acceleration: leave_one_seed_out_jackknife
+    minimum_paired_units: 10
+    insufficient_pair_behavior: record_statistical_procedure_failure_and_report_the_paired_values
     missing_pair_behavior: exclude_and_report_reduced_seed_count
     zero_difference_behavior: retain_as_zero_delta_included_in_resample
+    zero_variance_behavior: record_statistical_procedure_failure_degenerate_bootstrap_distribution
     finite_value_validation: reject_non_finite_delta_as_typed_error
     degenerate_behavior: record_statistical_procedure_failure_never_substitute_another_interval
+    diagnostic_intervals_permitted: [percentile, basic]
+    multiple_comparison_policy: none_for_the_single_confirmatory_endpoint_and_holm_within_a_declared_secondary_family
+    direction_source: analysis_delta_orientation
+  seed_level_bca:
+    estimand: mean_seed_level_value_of_one_quantity
+    unit_of_analysis: training_seed
+    method: bca_bootstrap
+    statistic: arithmetic_mean_of_seed_level_values
+    confidence_level: 0.95
+    resample_count: 50000
+    analysis_seed_source: seed_cohort_analysis_seed_at_index_zero
+    pairing_key: none
+    resampling_unit: per_seed_value
+    bias_correction: from_bootstrap_distribution
+    acceleration: leave_one_seed_out_jackknife
+    minimum_units: 10
+    insufficient_unit_behavior: record_statistical_procedure_failure_and_report_the_seed_level_values
+    zero_variance_behavior: record_statistical_procedure_failure_degenerate_bootstrap_distribution
+    finite_value_validation: reject_non_finite_value_as_typed_error
+    degenerate_behavior: record_statistical_procedure_failure_never_substitute_another_interval
+    direction_source: analysis_metric_direction
+  seed_level_ratio:
+    estimand: ratio_of_two_seed_level_quantities
+    unit_of_analysis: training_seed
+    method: ratio_of_seed_level_means
+    statistic: "numerator_seed_mean / denominator_seed_mean"
+    pairing_key: seed
+    per_seed_ratio_reporting: required
+    denominator_materiality_rule: required_from_the_binding_analysis
+    undefined_denominator_behavior: typed_undefined_ratio
+    interval_reporting: none_point_estimate_and_per_seed_values_only
+    direction_source: analysis_outcome_bands
+  descriptive_seed_summary:
+    estimand: descriptive_distribution_of_a_seed_level_quantity
+    unit_of_analysis: training_seed
+    method: descriptive_summary
+    reported_statistics: [per_seed_values, arithmetic_mean, median, minimum, maximum, sign_counts]
+    interval_reporting: none
+    direction_source: analysis_metric_direction
   rank_based_secondary:
+    estimand: paired_seed_level_rank_evidence
+    unit_of_analysis: training_seed
+    role: secondary_never_confirmatory
     procedures: [wilcoxon_signed_rank, matched_pairs_rank_biserial_correlation]
+    wilcoxon_alternative: two_sided
+    wilcoxon_zero_difference_handling: pratt_zeros_retained_and_reported
+    wilcoxon_exact_when_possible: true
+    wilcoxon_approximation_recorded_when_used: true
+    effect_size: matched_pairs_rank_biserial_correlation
+    unpaired_effect_sizes_forbidden: true
   monotone_association:
+    estimand: monotone_association_between_two_seed_level_quantities
+    unit_of_analysis: training_seed
     method: spearman_correlation
+    tie_handling: average_ranks
+    reported_fields: [coefficient, p_value, observation_count, all_observations]
+    interpretation_constraint: association_not_causation
   linear_association:
+    estimand: linear_association_between_two_seed_level_quantities
+    unit_of_analysis: training_seed
     method: linear_regression
+    reported_fields: [coefficient, standard_error, r_squared, influence_diagnostics, all_observations]
+    interpretation_constraint: association_not_causation
+
+nested_replicate_policy:
+  replicate_values_computed_first: true
+  summarized_within_seed_before_across_seed_inference: true
+  seed_level_statistic: arithmetic_mean_across_replicates_within_seed
+  replicates_counted_as_independent_units: false
+  additional_required_replicate_statistic: threshold_variance_across_replicates
 
 # --- Result types ------------------------------------------------------------------------
 # `confirmatory_analysis_result` is reserved for the single locked confirmatory endpoint.
@@ -294,15 +949,86 @@ result_types:
   boundary_result: { permitted_evidence_roles: [boundary] }
   anchor_reproduction_result: { permitted_evidence_roles: [anchor] }
   policy_evaluation_result: { permitted_evidence_roles: [anchor, confirmatory, supportive, mechanism, external_validation, stress_test, boundary] }
-  cluster_stability_result: { permitted_evidence_roles: [mechanism] }
+  cluster_stability_result: { permitted_evidence_roles: [mechanism, external_validation] }
   conformal_coverage_result: { permitted_evidence_roles: [supportive] }
-  quantile_estimation_result: { permitted_evidence_roles: [stress_test] }
+  quantile_estimation_result: { permitted_evidence_roles: [stress_test, external_validation] }
   absorption_result: { permitted_evidence_roles: [stress_test] }
   temporal_recovery_result: { permitted_evidence_roles: [boundary] }
   metric_association_result: { permitted_evidence_roles: [mechanism, supportive] }
   distribution_mechanism_result: { permitted_evidence_roles: [confirmatory, mechanism] }
-  resource_cost_result: { permitted_evidence_roles: [confirmatory, supportive] }
+  resource_cost_result: { permitted_evidence_roles: [confirmatory, supportive, stress_test] }
   eligibility_coverage_result: { permitted_evidence_roles: [anchor, confirmatory, supportive, mechanism, external_validation, stress_test, boundary] }
+
+# Every evaluation produces these two records regardless of the analyses bound to it.
+evaluation_result_contract:
+  per_evaluation_result_type: policy_evaluation_result
+  per_evaluation_eligibility_result_type: eligibility_coverage_result
+  per_evaluation_required_records:
+    - threshold_record
+    - per_client_metric_record
+    - seed_level_metric_record
+    - eligibility_manifest
+
+# --- Artifact identity -------------------------------------------------------------------
+# A fingerprint changes whenever any listed input changes. Concrete filesystem paths are
+# never fingerprint inputs and never form scientific identity.
+artifact_identity:
+  hash_function: blake2b
+  digest_bytes: 32
+  canonical_serialization: sorted_keys_utf_8_json_without_comments_or_whitespace_variation
+  absolute_paths_excluded_from_identity: true
+  fingerprints:
+    source: [dataset_identifier, dataset_fingerprint_inputs_source, source_inventory_hash]
+    schema: [dataset_identifier, dataset_fingerprint_inputs_schema]
+    materialization:
+      - source_fingerprint
+      - schema_fingerprint
+      - materialization_identifier
+      - preprocessing_sequence
+      - row_exclusion_rules
+      - duplicate_policy
+      - categorical_encoding_vocabulary_fingerprint
+      - post_encoding_feature_order
+      - normalization_strategy
+      - normalization_fit_scope
+      - split_definition
+      - split_seed
+    client_assignment: [materialization_fingerprint, setup_identifier, client_construction, partition_condition, partition_seed]
+    model: [model_architecture, resolved_input_dimension]
+    training:
+      - client_assignment_fingerprint
+      - model_fingerprint
+      - training_profile
+      - optimizer_contract
+      - batching_contract
+      - training_seed
+      - resolved_training_overrides
+    checkpoint: [training_fingerprint, checkpoint_profile, round_or_epoch, checkpoint_selection_profile]
+    score: [checkpoint_fingerprint, split_role, score_orientation]
+    threshold: [score_fingerprint, threshold_policy, resolved_policy_parameters, eligibility_policy]
+    metric: [threshold_fingerprint, metric_bundle, metric_definition_version]
+    analysis: [metric_fingerprint, analysis_label, statistical_profile, analysis_seed]
+  lineage_validation_before_reuse:
+    - checksum_match
+    - schema_version_match
+    - parent_fingerprint_match
+    - completion_status_completed
+    - non_stale_status
+  reuse_rejected_when_any_changes:
+    - dataset
+    - materialization
+    - client_assignment
+    - split
+    - preprocessing
+    - model
+    - training_algorithm
+    - training_seed
+    - checkpoint
+    - threshold_policy
+    - policy_parameters
+  filename_match_is_not_lineage_evidence: true
+  frozen_artifacts_immutable: true
+  ambiguous_latest_reference: forbidden
 
 # --- Report artifact profiles ------------------------------------------------------------
 report_defaults:
@@ -310,6 +1036,10 @@ report_defaults:
   missing_value_policy: render_typed_unavailable
   table_output_formats: [markdown, latex]
   figure_output_formats: [pdf, png]
+  provenance_required_per_artifact: true
+  # A delta column has no intrinsic direction: its interpretation follows the orientation of
+  # the analysis that produced it.
+  analysis_defined_direction_token: from_analysis
 
 report_profiles:
   interval_table:
@@ -318,9 +1048,10 @@ report_profiles:
     columns:
       - { name: threshold_construction, unit: none, direction: none }
       - { name: cv_fpr, unit: ratio, direction: lower_is_better }
-      - { name: delta, unit: ratio, direction: higher_is_better }
+      - { name: delta, unit: ratio, direction: from_analysis }
       - { name: bca_lower_bound, unit: ratio, direction: none }
       - { name: bca_upper_bound, unit: ratio, direction: none }
+      - { name: sign_consistency, unit: ratio, direction: none }
   dispersion_ladder_table:
     artifact_type: main_table
     table_type: dispersion_ladder
@@ -341,6 +1072,19 @@ report_profiles:
     table_type: sensitivity_grid
     columns:
       - { name: threshold_construction, unit: none, direction: none }
+      - { name: sweep_condition, unit: none, direction: none }
+      - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+      - { name: worst_client_fpr, unit: ratio, direction: lower_is_better }
+      - { name: absolute_attainment_error, unit: ratio, direction: lower_is_better }
+  coverage_table:
+    artifact_type: main_table
+    table_type: conformal_coverage
+    columns:
+      - { name: threshold_construction, unit: none, direction: none }
+      - { name: target_coverage, unit: ratio, direction: none }
+      - { name: achieved_marginal_coverage, unit: ratio, direction: none }
+      - { name: achieved_macro_client_coverage, unit: ratio, direction: none }
+      - { name: absolute_coverage_error, unit: ratio, direction: lower_is_better }
       - { name: cv_fpr, unit: ratio, direction: lower_is_better }
   cluster_stability_table:
     artifact_type: main_table
@@ -349,9 +1093,10 @@ report_profiles:
       - { name: threshold_construction, unit: none, direction: none }
       - { name: cv_fpr, unit: ratio, direction: lower_is_better }
       - { name: worst_client_fpr, unit: ratio, direction: lower_is_better }
-      - { name: within_cluster_dispersion, unit: ratio, direction: lower_is_better }
-      - { name: across_cluster_dispersion, unit: ratio, direction: none }
+      - { name: within_cluster_dispersion, unit: score, direction: lower_is_better }
+      - { name: across_cluster_dispersion, unit: score, direction: none }
       - { name: adjusted_rand_index, unit: none, direction: higher_is_better }
+      - { name: cluster_size, unit: count, direction: none }
   cluster_contingency_table:
     artifact_type: supplementary_table
     table_type: contingency
@@ -361,34 +1106,45 @@ report_profiles:
   communication_storage_table:
     artifact_type: supplementary_table
     table_type: communication_storage_cost
+    estimate_basis: analytical_payload_estimate_never_measured_network_traffic
     columns:
       - { name: threshold_construction, unit: none, direction: none }
-      - { name: communication_bytes_per_round, unit: bytes, direction: lower_is_better }
-      - { name: threshold_message_bytes, unit: bytes, direction: lower_is_better }
+      - { name: transmitted_field_list, unit: none, direction: none }
+      - { name: estimated_threshold_message_bytes, unit: bytes, direction: lower_is_better }
+      - { name: estimated_model_exchange_bytes_per_round, unit: bytes, direction: lower_is_better }
+      - { name: estimated_checkpoint_storage_bytes, unit: bytes, direction: lower_is_better }
   alert_burden_table:
     artifact_type: main_table
     table_type: alert_burden
+    estimate_basis: estimated_from_a_cited_or_measured_benign_decision_rate_never_a_deployment_measurement
     columns:
       - { name: threshold_construction, unit: none, direction: none }
       - { name: alerts_per_client_per_day, unit: count, direction: lower_is_better }
+      - { name: benign_decision_rate_source, unit: none, direction: none }
   comparator_table:
     artifact_type: main_table
     table_type: comparator
     columns:
       - { name: threshold_construction, unit: none, direction: none }
       - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+      - { name: absolute_threshold_error, unit: score, direction: lower_is_better }
+      - { name: achieved_exceedance, unit: ratio, direction: none }
+      - { name: absolute_attainment_error, unit: ratio, direction: lower_is_better }
+      - { name: within_term, unit: score_squared, direction: none }
+      - { name: between_term, unit: score_squared, direction: none }
       - { name: between_ratio, unit: ratio, direction: none }
   score_geometry_figure:
     artifact_type: figure
     figure_type: cdf_overlay
     series:
-      - { name: benign_score_density, unit: none, direction: none }
-      - { name: attack_score_density, unit: none, direction: none }
+      - { name: per_client_benign_score_cdf, unit: none, direction: none }
+      - { name: per_client_attack_score_cdf, unit: none, direction: none }
+      - { name: per_client_threshold_position, unit: score, direction: none }
   threshold_tradeoff_figure:
     artifact_type: figure
     figure_type: scatter
     series:
-      - { name: threshold_shift, unit: ratio, direction: none }
+      - { name: threshold_shift, unit: score, direction: none }
       - { name: fpr_delta, unit: ratio, direction: lower_is_better }
       - { name: tpr_delta, unit: ratio, direction: higher_is_better }
   severity_trend_figure:
@@ -396,13 +1152,13 @@ report_profiles:
     figure_type: severity_trend
     series:
       - { name: partition_condition, unit: none, direction: none }
-      - { name: cv_fpr_delta, unit: ratio, direction: higher_is_better }
+      - { name: cv_fpr_delta, unit: ratio, direction: from_analysis }
   association_scatter_figure:
     artifact_type: figure
     figure_type: scatter
     series:
       - { name: pairwise_js_divergence, unit: none, direction: none }
-      - { name: cv_fpr_delta, unit: ratio, direction: higher_is_better }
+      - { name: cv_fpr_delta, unit: ratio, direction: from_analysis }
   shrinkage_curve_figure:
     artifact_type: figure
     figure_type: lambda_curve
@@ -416,6 +1172,7 @@ report_profiles:
     series:
       - { name: temporal_window, unit: none, direction: none }
       - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+      - { name: recovery_ratio, unit: ratio, direction: from_analysis }
 
 # --- Operational inputs ------------------------------------------------------------------
 # No benign decision rate is sourced, so alert burden resolves to a typed unavailable result
@@ -423,7 +1180,9 @@ report_profiles:
 operational_inputs:
   benign_decision_rate:
     configured: false
+    value: null
     required_fields: [value, unit, citation_identifier, source_title, source_metadata, applicability_statement]
     finite_value_validation: reject_non_finite_rate
     non_negative_validation: reject_negative_rate
     unavailable_behavior: typed_unavailable_result
+    invented_rate_forbidden: true

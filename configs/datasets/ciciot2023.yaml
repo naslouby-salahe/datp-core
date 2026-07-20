@@ -134,8 +134,16 @@ source_contract:
   reject_unparseable_numeric_model_feature: true
 
 fingerprint_inputs:
-  source: [source_layout.sources.merged.root, field_schema.source_column_count]
+  source: [source_layout.sources.merged.root, source_layout.sources.merged.file_pattern, field_schema.source_column_count]
   schema: [schema_id, field_schema.model_features.order]
+  materialization:
+    - materialization_id
+    - preprocessing_sequence
+    - row_exclusion
+    - normalization
+    - split
+  client_assignment:
+    - client_construction
 
 eligibility_policy: primary_analysis
 
@@ -176,37 +184,6 @@ materializations:
       cross_split_duplicate_prevention: equivalence_class_never_spans_two_splits
     infeasibility_policy: typed_boundary_result_if_dedup_removes_experiment_feasibility
 
-  duplicate_preserving_sensitivity:
-    materialization_id: ciciot2023_duplicate_preserving_sensitivity
-    role: sensitivity_only_never_primary
-    normalization: { strategy: min_max, scope: global_train }
-    preprocessing_sequence:
-      - exclude_malformed_rows
-      - exclude_empty_label_rows
-      - exclude_degenerate_window_rows
-      - drop_exact_duplicate_rows_per_file
-      - assign_cross_file_duplicate_equivalence_classes_to_one_split
-      - random_fractional_split
-      - min_max_normalization_fit_on_train
-    row_exclusion:
-      malformed_row: exclude
-      empty_label_row: exclude
-      degenerate_window: exclude_non_finite_rate_or_blank_or_non_finite_std_or_variance
-      within_file_duplicate_policy: drop_exact_duplicates_keep_first_per_file
-      cross_file_duplicate_policy: retain_across_pseudo_clients
-      cross_file_duplicate_split_assignment: whole_equivalence_class_to_one_split_consistent_across_pseudo_clients
-    split:
-      method: random_fractional
-      calibration_benign_only: true
-      split_seed: 0
-      ratios: { train: 0.70, calibration: 0.15, test: 0.15 }
-    split_row_semantics:
-      train_rows: benign_only
-      calibration_rows: benign_only
-      test_rows: benign_and_attack
-      attack_rows: evaluation_only
-      cross_split_duplicate_prevention: equivalence_class_never_spans_two_splits
-
 setups:
   file_pseudo_clients:
     materialization: datp_core
@@ -218,14 +195,4 @@ setups:
       - benign_calibration
       - benign_test_false_positive_metrics
       - per_client_attack_detection_metrics
-
-  file_pseudo_clients_duplicate_preserving:
-    materialization: duplicate_preserving_sensitivity
-    client_construction:
-      method: dataset_file_pseudo_clients
-      client_source: source_layout.sources.merged.file_pattern
-      client_semantics: file_defined_pseudo_client_not_physical_device
-    provides_capabilities:
-      - benign_calibration
-      - benign_test_false_positive_metrics
-      - per_client_attack_detection_metrics
+      - attack_sensitive_threshold_tradeoff

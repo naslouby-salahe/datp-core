@@ -25,6 +25,50 @@ raw_source_policy:
   write_access: forbidden
   create_files_under_raw_root: forbidden
 
+# --- Deterministic execution enforcement --------------------------------------------------
+# Enforcement only. The seeds themselves are scientific values and live in protocols.yaml.
+determinism_enforcement:
+  strict:
+    python_hash_seed: 0
+    cublas_workspace_config: ":4096:8"
+    torch_use_deterministic_algorithms: true
+    torch_deterministic_algorithms_warn_only: false
+    cudnn_deterministic: true
+    cudnn_benchmark: false
+    float32_matmul_precision: highest
+    tensorfloat32_matmul: false
+    tensorfloat32_cudnn: false
+    dataloader_worker_seeding: required_from_the_protocol_worker_seed_namespace
+    file_discovery_order: sorted_ascending_by_relative_path
+    client_iteration_order: sorted_ascending_by_client_identifier
+    nondeterministic_operation_policy: raise_never_silently_downgrade
+    recorded_environment_fields:
+      - operating_system
+      - python_version
+      - framework_version
+      - cuda_version
+      - driver_version
+      - gpu_identity
+      - dependency_lock_fingerprint
+      - deterministic_flags
+      - execution_profile
+    unavailable_determinism_policy: record_and_quantify_the_limitation_never_claim_bitwise_reproducibility
+
+# --- Device policy -----------------------------------------------------------------------
+device_policy_rules:
+  cuda_required:
+    cpu_fallback: forbidden
+    missing_device_behavior: fail_execution_never_downgrade
+  cpu_only:
+    permitted_for: [dataset_audit, test_smoke]
+    permitted_for_scientific_training_or_scoring: false
+
+# --- Resource discipline -----------------------------------------------------------------
+resource_pressure_policy:
+  silent_reduction_of_batch_size: forbidden
+  silent_reduction_of_rounds_seeds_clients_or_sample_counts: forbidden
+  on_budget_exceeded: block_execution_and_report
+
 # --- Execution profiles ------------------------------------------------------------------
 execution_profiles:
   scientific:
