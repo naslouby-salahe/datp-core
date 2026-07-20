@@ -14,6 +14,7 @@ from datp_core.domain.identifiers import (
     EligibilityPolicyId,
     ExperimentId,
     MetricBundleId,
+    NormalizationStrategyId,
     PopulationId,
     SeedCohortId,
     StatisticalProfileId,
@@ -111,6 +112,73 @@ class BatchingRecord:
     row_ordering_before_shuffle: str
     shuffle_seed_namespace: str
     worker_seed_namespace: str
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class EligibilityFallbackRecord:
+    """Pure resolved deployment fallback for ineligible clients."""
+
+    threshold_source: str
+    shared_construction: str
+    reported_status: str
+    enters_primary_dispersion: bool
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class EligibilityPolicyRecord:
+    """Pure resolved client eligibility policy."""
+
+    identifier: EligibilityPolicyId
+    minimum_benign_calibration_count: PositiveInt
+    determined_before_test_evaluation: bool
+    identical_across_policies_in_one_comparison: bool
+    fpr_evaluable_requires_non_empty_benign_test_denominator: bool
+    attack_evaluable_requires: tuple[str, ...]
+    ineligible_clients_excluded_from_primary_dispersion: bool
+    ineligible_client_deployment_fallback: EligibilityFallbackRecord
+    zero_eligible_clients_behavior: str
+    affects_standard_eligibility_minimum: bool | None
+    permitted_use: str | None
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class NormalizationStrategyRecord:
+    """Pure resolved normalization strategy."""
+
+    identifier: NormalizationStrategyId
+    formula: str
+    fitted_statistics: tuple[str, ...]
+    constant_feature_rule: str
+    out_of_range_transform_values: str
+    fit_population: str
+    standard_deviation_ddof: int | None
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class QuantileEstimatorRecord:
+    """Pure resolved quantile estimator contract."""
+
+    identifier: str
+    sort_order: str
+    index_formula: str
+    interpolation: str
+    single_element_behavior: str
+    empty_input_behavior: str
+    non_finite_input_behavior: str
+    tie_behavior: str
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class MetricBundleRecord:
+    """Pure resolved metric bundle."""
+
+    identifier: MetricBundleId
+    metrics: tuple[str, ...]
+    cross_client_aggregation: str | None
+    primary_dispersion_metric: str | None
+    model_quality_control: str | None
+    excludes_ineligible_clients: bool | None
+    requires_attack_evaluable_clients: bool | None
 
 
 @define(frozen=True, slots=True, kw_only=True)

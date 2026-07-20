@@ -213,6 +213,15 @@ class FederationStrategyConfig(BaseModel):
     minimum_available_clients: int
 
 
+class EligibilityFallbackConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    threshold_source: str
+    shared_construction: str
+    reported_status: str
+    enters_primary_dispersion: bool
+
+
 class EligibilityPolicyConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -222,7 +231,7 @@ class EligibilityPolicyConfig(BaseModel):
     fpr_evaluable_requires_non_empty_benign_test_denominator: bool
     attack_evaluable_requires: list[str]
     ineligible_clients_excluded_from_primary_dispersion: bool
-    ineligible_client_deployment_fallback: dict[str, str | bool]
+    ineligible_client_deployment_fallback: EligibilityFallbackConfig
     zero_eligible_clients_behavior: str
     affects_standard_eligibility_minimum: bool | None = None
     permitted_use: str | None = None

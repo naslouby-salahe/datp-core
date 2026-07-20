@@ -4,14 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import cattrs
 from attrs import define
 
 from datp_core.config.models.dataset_config import CategoricalEncodingConfig
 from datp_core.config.models.protocol_config import (
-    EligibilityPolicyConfig,
-    MetricBundleConfig,
-    NormalizationStrategyConfig,
-    QuantileEstimatorConfig,
     TypedThresholdPolicyConfig,
 )
 from datp_core.config.runtime_settings import (
@@ -28,13 +25,18 @@ from datp_core.domain.catalogue import (
     CheckpointConvergenceRecord,
     CheckpointProfileRecord,
     CheckpointSelectionRecord,
+    EligibilityFallbackRecord,
+    EligibilityPolicyRecord,
     EvaluationSpecRecord,
     EvidenceRole,
     ExperimentRecord,
     FederationProfileRecord,
+    MetricBundleRecord,
     ModelArchitectureRecord,
+    NormalizationStrategyRecord,
     OptimizerRecord,
     PopulationRecord,
+    QuantileEstimatorRecord,
     RunRequirement,
     SeedCohortRecord,
     StatisticalProfileRecord,
@@ -82,6 +84,14 @@ from datp_core.domain.values import (
 )
 
 
+_projection_converter = cattrs.Converter()
+
+
+def _unstructure(value: object) -> object:
+    """Convert resolved attrs records into primitive structures for canonical fingerprinting."""
+    return _projection_converter.unstructure(value)
+
+
 @define(frozen=True, slots=True, kw_only=True)
 class ResolvedProjectConfiguration:
     """Single resolved project configuration authority loaded once during composition root initialization."""
@@ -97,10 +107,10 @@ class ResolvedProjectConfiguration:
     model_architectures: dict[str, ModelArchitectureRecord]
     optimizers: dict[str, OptimizerRecord]
     batching_profiles: dict[str, BatchingRecord]
-    eligibility_policies: dict[EligibilityPolicyId, EligibilityPolicyConfig]
-    normalization_strategies: dict[NormalizationStrategyId, NormalizationStrategyConfig]
-    quantile_estimators: dict[str, QuantileEstimatorConfig]
-    metric_bundles: dict[MetricBundleId, MetricBundleConfig]
+    eligibility_policies: dict[EligibilityPolicyId, EligibilityPolicyRecord]
+    normalization_strategies: dict[NormalizationStrategyId, NormalizationStrategyRecord]
+    quantile_estimators: dict[str, QuantileEstimatorRecord]
+    metric_bundles: dict[MetricBundleId, MetricBundleRecord]
     runtime: ResolvedRuntimeConfiguration
     paths: ResolvedProjectPaths
     scientific_fingerprint: Fingerprint
@@ -565,20 +575,110 @@ def resolve_project_configuration(
         )
         for key, b in authored_protocols.batching.items()
     }
-    eligibility_policies = {EligibilityPolicyId(k): v for k, v in authored_protocols.eligibility_policies.items()}
-    normalization_strategies = {
-        NormalizationStrategyId(k): v for k, v in authored_protocols.normalization_strategies.items()
+    eligibility_policies = {
+        EligibilityPolicyId(k): EligibilityPolicyRecord(
+            identifier=EligibilityPolicyId(k),
+            minimum_benign_calibration_count=PositiveInt(v.minimum_benign_calibration_count),
+            determined_before_test_evaluation=v.determined_before_test_evaluation,
+            identical_across_policies_in_one_comparison=v.identical_across_policies_in_one_comparison,
+            fpr_evaluable_requires_non_empty_benign_test_denominator=(
+                v.fpr_evaluable_requires_non_empty_benign_test_denominator
+            ),
+            attack_evaluable_requires=tuple(v.attack_evaluable_requires),
+            ineligible_clients_excluded_from_primary_dispersion=v.ineligible_clients_excluded_from_primary_dispersion,
+            ineligible_client_deployment_fallback=EligibilityFallbackRecord(
+                threshold_source=v.ineligible_client_deployment_fallback.threshold_source,
+                shared_construction=v.ineligible_client_deployment_fallback.shared_construction,
+                reported_status=v.ineligible_client_deployment_fallback.reported_status,
+                enters_primary_dispersion=v.ineligible_client_deployment_fallback.enters_primary_dispersion,
+            ),
+            zero_eligible_clients_behavior=v.zero_eligible_clients_behavior,
+            affects_standard_eligibility_minimum=v.affects_standard_eligibility_minimum,
+            permitted_use=v.permitted_use,
+        )
+        for k, v in authored_protocols.eligibility_policies.items()
     }
-    quantile_estimators = authored_protocols.quantile_estimators
-    metric_bundles = {MetricBundleId(k): v for k, v in authored_protocols.metric_bundles.items()}
+    normalization_strategies = {
+        NormalizationStrategyId(k): NormalizationStrategyRecord(
+            identifier=NormalizationStrategyId(k),
+            formula=v.formula,
+            fitted_statistics=tuple(v.fitted_statistics),
+            constant_feature_rule=v.constant_feature_rule,
+            out_of_range_transform_values=v.out_of_range_transform_values,
+            fit_population=v.fit_population,
+            standard_deviation_ddof=v.standard_deviation_ddof,
+        )
+        for k, v in authored_protocols.normalization_strategies.items()
+    }
+    quantile_estimators = {
+        k: QuantileEstimatorRecord(
+            identifier=k,
+            sort_order=v.sort_order,
+            index_formula=v.index_formula,
+            interpolation=v.interpolation,
+            single_element_behavior=v.single_element_behavior,
+            empty_input_behavior=v.empty_input_behavior,
+            non_finite_input_behavior=v.non_finite_input_behavior,
+            tie_behavior=v.tie_behavior,
+        )
+        for k, v in authored_protocols.quantile_estimators.items()
+    }
+    metric_bundles = {
+        MetricBundleId(k): MetricBundleRecord(
+            identifier=MetricBundleId(k),
+            metrics=tuple(v.metrics),
+            cross_client_aggregation=v.cross_client_aggregation,
+            primary_dispersion_metric=v.primary_dispersion_metric,
+            model_quality_control=v.model_quality_control,
+            excludes_ineligible_clients=v.excludes_ineligible_clients,
+            requires_attack_evaluable_clients=v.requires_attack_evaluable_clients,
+        )
+        for k, v in authored_protocols.metric_bundles.items()
+    }
 
-    # Scientific fingerprint computation over full scientific content
-    scientific_projection = {
-        "datasets": {str(k): v.schema_id for k, v in sorted(resolved_datasets.items(), key=lambda x: str(x[0]))},
-        "populations": sorted([str(k) for k in populations_dict.keys()]),
-        "experiments": sorted([str(k) for k in experiments_dict.keys()]),
-        "threshold_policies": sorted([str(k) for k in threshold_policies_dict.keys()]),
-        "seed_cohorts": {str(k): v.training_seeds for k, v in sorted(seed_dict.items(), key=lambda x: str(x[0]))},
+    # Scientific fingerprint computation over full scientific content.
+    # Absolute filesystem paths are deliberately excluded from identity (artifact_identity rule);
+    # datasets are projected via their schema id, materialization contracts, and fingerprint field
+    # lists rather than their resolved (absolute-path-bearing) record.
+    scientific_projection: dict[str, object] = {
+        "datasets": {
+            str(k): {
+                "schema_id": v.schema_id,
+                "materializations": _unstructure(v.materializations),
+                "fingerprint_source_fields": list(v.fingerprint_source_fields),
+                "fingerprint_schema_fields": list(v.fingerprint_schema_fields),
+                "fingerprint_materialization_fields": list(v.fingerprint_materialization_fields),
+                "fingerprint_client_assignment_fields": list(v.fingerprint_client_assignment_fields),
+            }
+            for k, v in sorted(resolved_datasets.items(), key=lambda x: str(x[0]))
+        },
+        "populations": {str(k): _unstructure(v) for k, v in sorted(populations_dict.items(), key=lambda x: str(x[0]))},
+        "experiments": {str(k): _unstructure(v) for k, v in sorted(experiments_dict.items(), key=lambda x: str(x[0]))},
+        "threshold_policies": {
+            str(k): v.model_dump(mode="json")
+            for k, v in sorted(threshold_policies_dict.items(), key=lambda x: str(x[0]))
+        },
+        "seed_cohorts": {str(k): _unstructure(v) for k, v in sorted(seed_dict.items(), key=lambda x: str(x[0]))},
+        "training_profiles": {
+            str(k): _unstructure(v) for k, v in sorted(training_dict.items(), key=lambda x: str(x[0]))
+        },
+        "checkpoint_profiles": {
+            str(k): _unstructure(v) for k, v in sorted(checkpoint_dict.items(), key=lambda x: str(x[0]))
+        },
+        "model_architectures": {k: _unstructure(v) for k, v in sorted(model_architectures.items())},
+        "optimizers": {k: _unstructure(v) for k, v in sorted(optimizers.items())},
+        "batching": {k: _unstructure(v) for k, v in sorted(batching_profiles.items())},
+        "eligibility_policies": {
+            str(k): _unstructure(v) for k, v in sorted(eligibility_policies.items(), key=lambda x: str(x[0]))
+        },
+        "normalization_strategies": {
+            str(k): _unstructure(v) for k, v in sorted(normalization_strategies.items(), key=lambda x: str(x[0]))
+        },
+        "quantile_estimators": {k: _unstructure(v) for k, v in sorted(quantile_estimators.items())},
+        "metric_bundles": {str(k): _unstructure(v) for k, v in sorted(metric_bundles.items(), key=lambda x: str(x[0]))},
+        "statistical_profiles": {
+            str(k): _unstructure(v) for k, v in sorted(statistical_dict.items(), key=lambda x: str(x[0]))
+        },
     }
     scientific_fingerprint = compute_scientific_fingerprint(scientific_projection)
 

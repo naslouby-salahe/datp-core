@@ -3,9 +3,18 @@
 import pytest
 from pydantic import ValidationError
 
-from datp_core.config.models.protocol_config import ModelArchitectureConfig
+from datp_core.config.models.protocol_config import EligibilityPolicyConfig, ModelArchitectureConfig
 from datp_core.config.resolver import resolve_project_configuration
-from datp_core.domain.catalogue import BatchingRecord, ModelArchitectureRecord, OptimizerRecord
+from datp_core.domain.catalogue import (
+    BatchingRecord,
+    EligibilityPolicyRecord,
+    MetricBundleRecord,
+    ModelArchitectureRecord,
+    NormalizationStrategyRecord,
+    OptimizerRecord,
+    QuantileEstimatorRecord,
+)
+from datp_core.domain.identifiers import EligibilityPolicyId
 
 
 def test_resolved_config_holds_pure_domain_protocol_records() -> None:
@@ -28,6 +37,42 @@ def test_resolved_config_holds_pure_domain_protocol_records() -> None:
     assert isinstance(batching, BatchingRecord)
     assert batching.micro_batch_size.value == 256
     assert batching.effective_batch_size.value == 256
+
+
+def test_resolved_config_holds_pure_eligibility_normalization_quantile_metric_records() -> None:
+    cfg = resolve_project_configuration()
+
+    eligibility = cfg.eligibility_policies[EligibilityPolicyId("primary_analysis")]
+    assert isinstance(eligibility, EligibilityPolicyRecord)
+    assert eligibility.minimum_benign_calibration_count.value == 100
+    assert eligibility.ineligible_client_deployment_fallback.reported_status == "unavailable_ineligible_client"
+    assert eligibility.ineligible_client_deployment_fallback.enters_primary_dispersion is False
+
+    assert all(isinstance(n, NormalizationStrategyRecord) for n in cfg.normalization_strategies.values())
+    assert all(isinstance(q, QuantileEstimatorRecord) for q in cfg.quantile_estimators.values())
+    assert all(isinstance(m, MetricBundleRecord) for m in cfg.metric_bundles.values())
+
+
+def test_eligibility_fallback_subdocument_rejects_unknown_field() -> None:
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        EligibilityPolicyConfig.model_validate(
+            {
+                "minimum_benign_calibration_count": 100,
+                "determined_before_test_evaluation": True,
+                "identical_across_policies_in_one_comparison": True,
+                "fpr_evaluable_requires_non_empty_benign_test_denominator": True,
+                "attack_evaluable_requires": ["valid_per_client_attack_assignment"],
+                "ineligible_clients_excluded_from_primary_dispersion": True,
+                "ineligible_client_deployment_fallback": {
+                    "threshold_source": "the_shared_threshold_of_the_evaluated_policys_own_eligible_population",
+                    "shared_construction": "unweighted_arithmetic_mean_of_eligible_local_quantiles",
+                    "reported_status": "unavailable_ineligible_client",
+                    "enters_primary_dispersion": False,
+                    "unexpected": "x",
+                },
+                "zero_eligible_clients_behavior": "typed_unavailable_ineligible_population",
+            }
+        )
 
 
 def test_model_architecture_subdocuments_reject_unknown_fields() -> None:
