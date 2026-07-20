@@ -99,7 +99,7 @@ identifier rather than repeat the text.
 | `ARCH-01` | `ScientificExperimentDefinition` owns metadata, data, model, evaluations, analyses, seed cohort, prerequisites, and operations; `DatasetAuditDefinition` owns only audit fields. |
 | `ARCH-02` | Statistics are owned by `AnalysisDefinition`, never duplicated per `EvaluationDefinition` or across evaluations of the same comparison. |
 | `ARCH-03` | No backward-compatibility shim, alias layer, or migration facade toward the prior architecture or the original reference project exists. |
-| `ARCH-04` | No root `experiments/` package exists; experiment identity lives in `domain/experiments.py`, YAML in `configs/experiments/`, mapping in `config/mapping/`, expansion in `application/planning/`. |
+| `ARCH-04` | No root `experiments/` package exists; experiment identity lives in `domain/experiments.py`, YAML in `configs/experiments.yaml`, mapping in `config/mapping/`, expansion in `application/planning/`. |
 | `ARCH-05` | Framework-free analysis/reporting specifications live in `application/reporting`; no separate analysis layer exists. |
 | `ARCH-06` | `cli` never constructs an adapter, binds a port, or resolves a path; it only invokes `composition`. |
 
@@ -295,7 +295,7 @@ Defined in `§8` below.
   federated summary-statistic comparator** — rejected; full pooled variance
   and the larger-k tie rule are structural, not configurable.
 - **A root `experiments/` package** — rejected; it would duplicate
-  `domain/experiments.py`, `configs/experiments/`, and `application/planning/`.
+  `domain/experiments.py`, `configs/experiments.yaml`, and `application/planning/`.
 - **`ArtifactPathResolver` as an application-facing port** — rejected; path
   resolution is confined to `infrastructure/persistence`.
 - **A domain-level `ExperimentTemplate`** — rejected; a sweep exists only
@@ -509,11 +509,11 @@ is never imported by production `src/datp_core` (`TEST-01`).
 5. **New pipeline stage** — worked in full in
    `PIPELINE_EXECUTION_AND_ARTIFACTS.md §4.1`; the core executor,
    persistence engine, and lifecycle logic are unchanged.
-6. **New experiment** — one new entry appended to the `configs/experiments/`
-   family document matching its scientific role, referencing existing
+6. **New experiment** — one new entry appended to the `configs/experiments.yaml`
+   catalogue, matching its scientific role and referencing existing
    dataset/setup, model/training-profile, and execution-profile identities,
    with its report inlined; no random code, no new planner or executor
-   branch, no new family document required.
+   branch, no new configuration document required.
 7. **New report** — a new `ReportDefinition` consuming a frozen result and
    its provenance; it never recomputes a scientific value.
 
@@ -553,7 +553,7 @@ replacement identity system, or a compatibility shim.
 | **Multi-time-coordinate evaluation** (streaming windows) | `SplitDefinition` + `ArtifactScopeKey` | a temporal `SplitDefinition` member; a windowed scope variant; a scoring/eval stage | existing single-window evaluations |
 | **Stateful policy** (a policy carrying immutable state across runs) | artifact model | an immutable state/policy `ArtifactType` + scope variant; a stage that reads/writes it | the stateless-artifact reuse path |
 | **Transformation / intervention workflow** (a run that mutates state) | provenance model | an explicit transformation/intervention `ProvenanceRecord` field set; a stage; a scope variant | existing clean-run provenance |
-| **New model family** (different architecture or training lifecycle) | `TrainingProfile` union, `configs/models/` | a new `configs/models/<name>.yaml` document; a `TrainingProfile` variant if the lifecycle genuinely differs; a training/scoring adapter; `classify_training_profile` gains one arm | the checkpoint identity model, existing model documents |
+| **New model family** (different architecture or training lifecycle) | `TrainingProfile` union, `configs/protocols.yaml` | a new `configs/protocols.yaml` document; a `TrainingProfile` variant if the lifecycle genuinely differs; a training/scoring adapter; `classify_training_profile` gains one arm | the checkpoint identity model, existing model documents |
 | **New dataset / client construction** | `Dataset` registry + `ClientConstruction` union | a registry entry / a construction variant + adapter; one binding | central enums, thresholds, metrics, reports |
 
 Each seam is already load-bearing in the current design (the `RunDefinition`
@@ -631,13 +631,19 @@ explicit removal reason recorded in §4 or §5 above.
   values before planning.
 - ☐ No `EvaluationDefinition` carries a procedure field;
   every statistical procedure is owned by an `AnalysisDefinition`.
-- ☐ `configs/models/` is the only model-configuration directory name used
-  anywhere in this package; no `configs/detectors/`, `configs/protocols/`,
-  `configs/dataset_audits/`, `configs/data_sources/`, `configs/runtime/`, or
-  `configs/reporting/` reference remains — the four-directory tree
-  (`datasets/`, `models/`, `experiments/`, `execution.yaml`) is identical,
-  file for file, in `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §1` and
-  `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md §3`.
+- ☐ The committed configuration tree is exactly six YAML files —
+  `datasets/nbaiot.yaml`, `datasets/ciciot2023.yaml`,
+  `datasets/edge_iiotset.yaml`, `experiments.yaml`, `protocols.yaml`,
+  `runtime.yaml` — and no other configuration directory exists; no
+  `configs/models/`, `configs/experiments/`, `configs/execution.yaml`,
+  `configs/detectors/`, `configs/dataset_audits/`, `configs/data_sources/`,
+  `configs/catalogues/`, `configs/contracts/`, `configs/profiles/`,
+  `configs/policies/`, or `configs/reporting/` reference remains. The tree is
+  identical, file for file, in `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §1`
+  and `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md §3`.
+- ☐ No dataset document carries a generated observation, a readiness verdict,
+  a measured count, or any audit-time or date-like field; measured evidence
+  lives only in the generated dataset-source audit output.
 - ☐ The CLI exposes exactly the seven `datp-core experiment <action>`
   verbs and accepts no scientific override flag.
 - ☐ Every regularly executed root experiment in
@@ -647,7 +653,7 @@ explicit removal reason recorded in §4 or §5 above.
 - ☐ No standalone experiment root exists for an item this package
   classifies as an attached analysis (`SCIENTIFIC_FOUNDATION.md §7.4`); the
   cluster and federated-summary families are each a single merged
-  experiment entry within its family document.
+  experiment entry within the catalogue.
 - ☐ Every `schema_version` example in this package is the integer `1`.
 - ☐ Every root experiment, dataset audit check, dataset setup, model
   training profile, and execution profile has a concrete configuration

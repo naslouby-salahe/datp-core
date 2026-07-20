@@ -116,7 +116,7 @@ Evidence roles used throughout this package: `ANCHOR`, `CONFIRMATORY`,
 `EXPLORATORY` — eight members, every role an *executable* experiment can
 carry. The prior architecture's `ExperimentRole` also listed `FUTURE_WORK`
 and `FORBIDDEN`; neither names an executable experiment — a future-work or
-forbidden item has no `configs/experiments/` document and never resolves into
+forbidden item has no `configs/experiments.yaml` document and never resolves into
 a `RunDefinition`, so it is not an evidence role at all. A named future-work
 item is a `CatalogueDisposition.FUTURE_WORK` entry (`§7.6`), and a forbidden
 claim is a manuscript-discipline rule (roadmap Tier 9), never an experiment.
@@ -375,7 +375,7 @@ constraint that actually rules out FedRep/FedPer here is architectural — no
 separable head exists on the shared autoencoder — not a direct application
 of `SCI-01` to a non-ladder experiment). This is a documented pre-training
 design decision, not a runtime choice, recorded in
-`configs/models/autoencoder.yaml` (`personalization_parameter_grid`,
+`configs/protocols.yaml` (`personalization_parameter_grid`,
 `personalization_parameter_selection`, `ditto_specification`) and no longer
 an open blocker.
 
@@ -384,7 +384,7 @@ an open blocker.
 Six roadmap items are analyses, not standalone experiments: they consume an
 existing owning experiment's committed evaluations without repeating source
 inspection, partitioning, training, scoring, or threshold construction, and
-never gain their own `configs/experiments/` document.
+never gain their own `configs/experiments.yaml` document.
 
 | Roadmap ref | Former slug | Owning experiment | Attached as |
 |---|---|---|---|
@@ -438,9 +438,10 @@ Dataset audits are non-scientific `DatasetAuditDefinition` runs that produce a
 persisted `FEASIBILITY_RESULT`/`SOURCE_INSPECTION` before any dependent
 scientific run is authored. They carry no model, threshold, seed,
 evidence-role, or claim-tier field, and `evidence_role`/`tier` do not apply
-to them (`ARCH-01`, `§5.1`). Each is one named `check` entry in its owning
-dataset's `configs/datasets/<name>.yaml` document, never a document under a
-separate `configs/dataset_audits/` root
+to them (`ARCH-01`, `§5.1`). Each is driven by the declarative contract its
+owning dataset's `configs/datasets/<name>.yaml` document states, never by a
+document under a separate `configs/dataset_audits/` root and never by an
+`audits` list embedded in the dataset document
 (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §2.1`).
 
 | Owning dataset | Check name | Roadmap basis | Produces | Gates |
@@ -460,7 +461,7 @@ audit's `FEASIBILITY_RESULT` by `ArtifactRef` as provenance only
 
 A generic YAML combination cannot produce a scientifically unauthorized
 experiment. Every experiment is either (a) an `ScientificExperimentDefinition` fully
-resolved from one named entry of a `configs/experiments/` family document
+resolved from one named entry of the `configs/experiments.yaml` catalogue
 with every field explicit, or (b) a concrete `ScientificExperimentCell`
 expanded from a declared sweep dimension inside such an entry. There is no
 separate "authorized profile" layer duplicating the resolved definition's

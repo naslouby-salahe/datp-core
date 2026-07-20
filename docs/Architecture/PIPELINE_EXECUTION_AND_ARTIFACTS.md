@@ -598,13 +598,16 @@ sibling evaluation) already committed.
 | `file_pseudo_client_applicability_boundary` | full chain on CICIoT2023 pseudo-clients | boundary null; never generalized | `ConfirmatoryAnalysisResult` (boundary) | BOUNDARY_NULL |
 | dataset audits (six checks across three dataset documents) | `SOURCE_INSPECTION` (+ `FEASIBILITY_AUDIT` where the check is a feasibility gate) | `SOURCE_INSPECTION`, `FEATURE_SCHEMA_MANIFEST`, `FEASIBILITY_RESULT` | `FeasibilityRecord` | source-inspection / feasibility report |
 
-Each dataset audit is one named `check` entry in its owning
-`configs/datasets/<name>.yaml` document's `audits` list
-(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §2.1`), never a document under a
-separate `configs/dataset_audits/` root; `nbaiot.yaml` and `ciciot2023.yaml`
-each carry one or two checks, `edge_iiotset.yaml` carries three
-(`source_inspection`, `client_granularity_feasibility`,
-`timestamp_semantics_verification`). The dataset-audit-to-scientific
+Dataset auditing is driven by the declarative contract each
+`configs/datasets/<name>.yaml` document states — `source_layout`,
+`field_schema`, `source_contract` and `fingerprint_inputs` — never by a
+document under a separate `configs/dataset_audits/` root and never by an
+`audits` list inside the dataset document. A dataset document declares only
+what to read and how to interpret it; what was found, what was measured and
+which capabilities resolved are generated evidence and live solely in the
+consolidated dataset-source audit output. Capability availability is resolved
+from that generated evidence and checked against each experiment's
+`capability_requirements` before execution. The dataset-audit-to-scientific
 transition is strictly ordered (source inspection → feasibility audit →
 persisted `FEASIBILITY_RESULT` → human-authored setup entry on the same
 dataset document, `granularity: device` or `granularity: group` → scientific

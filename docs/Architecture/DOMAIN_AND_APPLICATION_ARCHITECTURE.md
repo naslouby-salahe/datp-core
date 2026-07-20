@@ -99,15 +99,17 @@ class DatasetAuditDefinition:
     operations: AuditOperationsDefinition
 ```
 
-`DatasetAuditDefinition` is resolved from one named entry of its owning
-dataset document's own `audits` list
-(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §2.1`), never from a
-freestanding `configs/dataset_audits/` root; `config/compose.py` parses the
-same `configs/datasets/<name>.yaml` document twice — once per authorized
-`ClientConstruction` setup to build a `DataDefinition` for a scientific
-experiment, once per `audits` entry to build a `DatasetAuditDefinition` —
-and the two resulting aggregates remain structurally distinct, satisfying
-`ARCH-01` exactly as before. `DatasetAuditMetadata.slug` is scoped by its
+`DatasetAuditDefinition` is resolved from the declarative contract its owning
+`configs/datasets/<name>.yaml` document states — `source_layout`,
+`field_schema`, `source_contract` and `fingerprint_inputs`
+(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §2.1`) — never from a
+freestanding `configs/dataset_audits/` root and never from an `audits` list
+inside the dataset document, which would embed generated observations in
+static configuration. `config/compose.py` parses the same document twice —
+once per authorized `ClientConstruction` setup to build a `DataDefinition`
+for a scientific experiment, once over the source contract to build a
+`DatasetAuditDefinition` — and the two resulting aggregates remain
+structurally distinct, satisfying `ARCH-01` exactly as before. `DatasetAuditMetadata.slug` is scoped by its
 owning dataset (`DatasetAuditSlug`, `§16.1`); it carries no detector,
 threshold, seed, evidence-role, or claim-tier field regardless of which
 document supplied it.
@@ -577,10 +579,12 @@ def derive_artifact_namespace(identity: ExperimentIdentity) -> ArtifactNamespace
 
 Two named, non-overlapping sub-fields replace three separately top-level
 policy objects. `execution` resolves a semantic reference to one named
-profile in `execution.yaml` (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md
-§2.4`); `report` is authored inline on the experiment entry, never a path
-reference to a separate presentation document, since no
-`configs/reporting/` directory exists (`§2.3` of the same file). Both
+profile in `configs/runtime.yaml` (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md
+§2.4`); `report` is a list of semantic references to named `report_profiles`
+entries in `configs/protocols.yaml`, never a path reference to a separate
+presentation document, since no `configs/reporting/` directory exists (`§2.3`
+of the same file). Shared table and figure contracts are therefore stated
+once and reused, rather than restated inline on each experiment entry. Both
 fields use the single `ReportDefinition` type `EVALUATION_REPORTING_AND_PROVENANCE.md
 §9.2` declares — an earlier draft of this package named the field's type
 `ReportingDefinition`, a second name for the same concept `§9.2` already
@@ -1034,7 +1038,7 @@ groups so it can be checked side by side against it.
 | `ThresholdComparatorRole` | eliminated | `B0` never enters the shared union at all (its own model's `CentralizedPooledThreshold`); "outside the ladder" is expressed by the owning experiment's `evidence_role = STRESS_TEST`, not a per-threshold field |
 | `AggregationStrategy` | kept, renamed | now the tag of `TrainingProfile` (`FederatedAveragingTrainingProfile`, `FederatedProximalTrainingProfile`) plus the separate `CentralizedPooledTrainingProfile` variant |
 | `ModelPersonalizationStrategy` | kept | `NONE`, `DITTO`, `FEDREP_AE`, `FEDPER_AE`, field of `FederatedAveragingTrainingProfile` |
-| `ExperimentRole` | kept, renamed, narrowed | now `EvidenceRole`, with `ANCHOR` added and the two non-executable members `FUTURE_WORK`/`FORBIDDEN` dropped (they carry no `configs/experiments/` document; future work is `CatalogueDisposition.FUTURE_WORK`, forbidden is a Tier-9 manuscript rule) — eight executable roles (`SCIENTIFIC_FOUNDATION.md §4`) |
+| `ExperimentRole` | kept, renamed, narrowed | now `EvidenceRole`, with `ANCHOR` added and the two non-executable members `FUTURE_WORK`/`FORBIDDEN` dropped (they carry no `configs/experiments.yaml` document; future work is `CatalogueDisposition.FUTURE_WORK`, forbidden is a Tier-9 manuscript rule) — eight executable roles (`SCIENTIFIC_FOUNDATION.md §4`) |
 | `ClaimTier` | kept | `TIER_1`…`TIER_9`, `IntEnum`, unchanged |
 | `RunRequirement` | kept | `MANDATORY`, `OPTIONAL`, `SUPPRESSED` only; rejected and future catalogue entries use `CatalogueDisposition`, never executable run status |
 | `FeasibilityStatus` | **kept, restored** | `FEASIBLE`, `GATED`, `PENDING_VERIFICATION`, `REJECTED`; a field of the persisted `FEASIBILITY_RESULT` artifact, distinct from the transient `FeasibilityGateDecision` result union |

@@ -133,7 +133,7 @@ configs/
 Four boundary owners, not six: one document per real dataset (its own
 source audits, client-construction setups, splits, preprocessing, and
 eligibility live together), one document for the model family (every named
-training profile), seven experiment-family documents (each experiment still
+training profile), one experiment catalogue document (each experiment still
 independently addressable by semantic slug), and one execution file. There
 is no `dataset_audits/`, `data_sources/`, `detectors/`, `protocols/`,
 `runtime/`, or `reporting/` directory anywhere in this package
@@ -173,9 +173,9 @@ datp-core experiment status --config <slug>
 datp-core experiment report --config <slug>
 ```
 
-`<slug>` is a registered experiment slug, unique across every
-`configs/experiments/` family document — a family document holds several
-experiments, so a bare file path would be ambiguous
+`<slug>` is a registered experiment name, unique across the single
+`configs/experiments.yaml` catalogue — that one document holds every
+experiment, so a bare file path would be ambiguous
 (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §20`).
 
 ## Zero-input Make targets
@@ -198,8 +198,8 @@ make mandatory-run       # the fixed, explicitly listed mandatory sequence
 
 ```text
 CLI command or zero-input Make target
-  → experiment configuration selection (slug lookup across family documents)
-    → owning family document loading and entry expansion
+  → experiment configuration selection (name lookup across the catalogue)
+    → catalogue loading and entry expansion
       → referenced dataset/model/execution document resolution
         → Pydantic boundary validation
           → enum and discriminated-union construction

@@ -1,0 +1,436 @@
+# Reusable, execution-independent scientific definitions shared across experiments.
+#
+# Every definition here appears exactly once and is referenced from experiments.yaml by a
+# stable descriptive identifier. Experiments may narrow a definition through a local
+# parameter override, never by restating it.
+#
+# This file owns no dataset facts, no machine/runtime settings, and no generated evidence.
+schema_version: 1
+
+# --- Detector ---------------------------------------------------------------------------
+# The encoder is fixed for the whole study: only threshold-calibration scope varies across
+# the policy ladder. Architecture is kept separate from the training algorithms that use it.
+model_architectures:
+  fixed_autoencoder:
+    kind: dense_autoencoder
+    hidden_dims: [80, 40, 20]
+    activation: relu
+    reconstruction_objective: mse
+    precision: fp32
+
+optimizers:
+  adam_default:
+    optimizer_type: adam
+    learning_rate: 0.001
+    scheduler: none
+
+batching:
+  standard:
+    micro_batch_size: 256
+    gradient_accumulation_steps: 1
+
+# --- Deterministic derivation ------------------------------------------------------------
+determinism:
+  seed_derivation: deterministic_from_experiment_seed
+  analysis_seed_derivation: deterministic_from_experiment_seed_and_analysis_label
+  partition_seed_independent_of_training_seeds: true
+
+seed_cohorts:
+  datp_core_ten_seed:
+    paired_seed_count: 10
+    experiment_seed: 0
+  anchor_five_seed:
+    paired_seed_count: 5
+    experiment_seed: 0
+    training_seeds: [0, 1, 2, 3, 4]
+    analysis_seeds: [300, 301, 302, 303, 304]
+
+# --- Checkpointing -----------------------------------------------------------------------
+checkpoint_profiles:
+  datp_core_round_grid:
+    rounds: [25, 50, 75, 100, 125, 150, 200]
+    selection:
+      rule: lowest_federated_averaging_weighted_benign_validation_reconstruction_error
+      tie_break: earliest_scheduled_round
+      aggregation: cross_locked_seed_cohort_mean_reconstruction_error_per_candidate_round
+      scope: natural_device_regime_only_fedavg_only_benign_validation_only
+      forbidden_selectors:
+        - per_policy_selection
+        - per_experiment_selection
+        - per_dataset_selection
+        - test_driven_selection
+        - attack_driven_selection
+        - auroc_driven_selection
+        - external_dataset_driven_selection
+  anchor_terminal_round:
+    rounds: [150]
+    selection:
+      rule: terminal_scheduled_round
+      tie_break: earliest_scheduled_round
+      scope: anchor_only_historical_checkpoint_semantics_preserved
+
+# --- Training ----------------------------------------------------------------------------
+training_profiles:
+  federated_averaging:
+    kind: federated_averaging_training
+    model_architecture: fixed_autoencoder
+    optimizer: adam_default
+    batching: standard
+    local_epochs: 1
+    participation: full
+    personalization: none
+    checkpoint_authorization: primary_selection_computed_once_on_natural_device_regime
+
+  federated_averaging_personalized:
+    kind: federated_averaging_training
+    model_architecture: fixed_autoencoder
+    optimizer: adam_default
+    batching: standard
+    local_epochs: 1
+    participation: full
+    personalization: ditto
+    personalization_proximal_weight: 1.0
+    personalization_parameter_grid: [0.001, 0.01, 0.1, 1.0]
+    personalization_parameter_selection:
+      rule: lowest_natural_device_regime_benign_validation_reconstruction_error_at_locked_global_checkpoint
+      candidates: personalization_parameter_grid
+      tie_break: smallest_proximal_weight
+      selected_before_external_validation: true
+      forbidden_selectors: [cv_fpr, test_loss, attack_metrics, auroc, external_dataset_results]
+    ditto_specification:
+      global_model_state: shared_federated_averaging_parameters_sent_to_server_each_round
+      persistent_client_personalized_state: per_client_local_parameters_retained_across_rounds_never_reset
+      global_update_sent_to_server: client_local_gradient_step_on_shared_parameters_only
+      personalized_state_never_aggregated: true
+      proximal_personalized_objective: "min_v_k  L_k(v_k) + (proximal_weight / 2) * ||v_k - w_global||^2"
+      evaluation_state: personalized_parameters_v_k_per_client_used_for_scoring_and_thresholding
+      artifact_separation:
+        global_checkpoint: shared_scientific_checkpoint_artifact_reused_by_core_ladder
+        personalized_state: per_client_artifact_never_fused_with_global_checkpoint_or_federated_averaging_artifacts
+    checkpoint_authorization: lookup_of_federated_averaging_primary_selection
+
+  federated_proximal:
+    kind: federated_prox_training
+    model_architecture: fixed_autoencoder
+    optimizer: adam_default
+    batching: standard
+    local_epochs: 1
+    participation: full
+    personalization: none
+    checkpoint_authorization: lookup_of_federated_averaging_primary_selection
+
+  centralized_pooled:
+    kind: centralized_pooled_training
+    model_architecture: fixed_autoencoder
+    optimizer: adam_default
+    batching: standard
+    checkpoint_authorization: independent_selection_own_non_federated_curve_never_fused_with_federated_averaging_artifacts
+    checkpoint_selection_rule: lowest_pooled_benign_validation_reconstruction_error
+
+# --- Client eligibility ------------------------------------------------------------------
+eligibility_policies:
+  primary_analysis:
+    minimum_benign_calibration_count: 100
+    determined_before_test_evaluation: true
+    identical_across_policies_in_one_comparison: true
+    fpr_evaluable_requires_non_empty_benign_test_denominator: true
+    attack_evaluable_requires:
+      - valid_per_client_attack_assignment
+      - at_least_one_held_out_attack_row
+    ineligible_clients_excluded_from_primary_dispersion: true
+  experimental_subminimum:
+    minimum_benign_calibration_count: 50
+    affects_standard_eligibility_minimum: false
+
+# --- Threshold policies ------------------------------------------------------------------
+# The policy ladder. Calibration is benign-only for every policy.
+threshold_policies:
+  shared_mean_p95:
+    policy: shared_threshold
+    construction: mean
+    quantile: 0.95
+  shared_pooled_p95:
+    policy: shared_threshold
+    construction: pooled
+    quantile: 0.95
+  shared_weighted_p95:
+    policy: shared_threshold
+    construction: weighted
+    quantile: 0.95
+  local_p95:
+    policy: local_threshold
+    quantile: 0.95
+  family_p95:
+    policy: family_threshold
+    quantile: 0.95
+  centralized_pooled_p95:
+    policy: centralized_pooled_threshold
+    quantile: 0.95
+
+  cluster_k3_mean_p95:
+    policy: cluster_threshold
+    aggregation: mean
+    cluster_count: 3
+    fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+    quantile: 0.95
+    initialization: k_means_plus_plus
+    initialization_runs: 10
+    maximum_iterations: 300
+    random_seed: 42
+  cluster_k9_mean_p95:
+    policy: cluster_threshold
+    aggregation: mean
+    cluster_count: 9
+    fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+    quantile: 0.95
+    initialization: k_means_plus_plus
+    initialization_runs: 10
+    maximum_iterations: 300
+    random_seed: 42
+  cluster_k3_robust_median_p95:
+    policy: cluster_threshold
+    aggregation: robust_median
+    cluster_count: 3
+    fingerprint_features: [mean_error, std_error, skew_error, p95_error]
+    quantile: 0.95
+    initialization: k_means_plus_plus
+    initialization_runs: 10
+    maximum_iterations: 300
+    random_seed: 42
+
+  conformal_local_p95:
+    policy: conformal_local_threshold
+    conformal_mode: split_conformal
+    coverage_alpha: 0.05
+    rank_formula: "rank = min(ceil((n + 1) * (1 - coverage_alpha)), n)"
+    order_statistic_selection: ascending_calibration_score_order_statistic_at_rank
+    tie_break: nearest_higher_order_statistic
+    minimum_sample_count: 100
+    calibration_unit: per_client_benign_calibration_scores
+    evaluation_unit: per_client_benign_test_scores
+    coverage_breakdown: [marginal_sample_weighted_coverage, macro_client_coverage, per_client_coverage]
+    coverage_target_error: absolute_achieved_minus_target_coverage
+    exchangeability_limitation: within_client_exchangeability_assumed_not_verified_across_clients
+    unavailable_behavior: typed_unavailable_if_client_below_minimum_sample_count
+
+  local_global_shrinkage_p95:
+    policy: local_global_shrinkage_threshold
+    quantile: 0.95
+    global_reference: shared_mean_p95
+    size_aware_variant:
+      formula: "lambda(n) = n / (n + 100)"
+      clamping: clamp_to_closed_interval_zero_one
+      zero_row_behavior: lambda_equals_zero_full_fallback_to_global_reference
+    effective_lambda_reporting: reported_per_client
+    fallback_frequency_reporting: reported_as_fraction_of_clients_at_lambda_floor
+
+  calibration_size_aware_fallback_p95:
+    policy: calibration_size_aware_fallback_threshold
+    quantile: 0.95
+
+  federated_summary_matched_exceedance:
+    policy: federated_summary_statistic_threshold
+    mode: matched_exceedance
+    matched_exceedance_k_grid_step: 0.01
+  federated_summary_fixed_k:
+    policy: federated_summary_statistic_threshold
+    mode: fixed_k
+
+# --- Metric bundles ----------------------------------------------------------------------
+metric_bundles:
+  full_detection_and_operating_point:
+    metrics:
+      - cv_fpr
+      - fpr
+      - tpr
+      - iqr_fpr
+      - fpr_range
+      - worst_client_fpr
+      - auroc
+      - macro_f1
+      - p10_macro_f1
+      - balanced_accuracy
+      - worst_client_ba
+      - jain_index
+      - gini_coefficient
+    requires_attack_evaluable_clients: true
+  benign_operating_point_equity:
+    metrics:
+      - cv_fpr
+      - fpr
+      - iqr_fpr
+      - fpr_range
+      - worst_client_fpr
+      - jain_index
+      - gini_coefficient
+    requires_attack_evaluable_clients: false
+
+# --- Statistical analysis profiles -------------------------------------------------------
+statistical_profiles:
+  paired_seed_bca:
+    method: bca_bootstrap
+    confidence_level: 0.95
+    resample_count: 10000
+    pairing_key: seed
+    resampling_unit: per_seed_paired_delta
+    bias_correction: from_bootstrap_distribution
+    acceleration: leave_one_seed_out_jackknife
+    missing_pair_behavior: exclude_and_report_reduced_seed_count
+    zero_difference_behavior: retain_as_zero_delta_included_in_resample
+    finite_value_validation: reject_non_finite_delta_as_typed_error
+    degenerate_behavior: record_statistical_procedure_failure_never_substitute_another_interval
+  rank_based_secondary:
+    procedures: [wilcoxon_signed_rank, matched_pairs_rank_biserial_correlation]
+  monotone_association:
+    method: spearman_correlation
+  linear_association:
+    method: linear_regression
+
+# --- Result types ------------------------------------------------------------------------
+# A result type must match the analysis role. `confirmatory_analysis_result` is reserved for
+# the sole locked confirmatory endpoint and must never be emitted by a supportive,
+# mechanism, external-validation, stress-test, or boundary analysis.
+result_types:
+  confirmatory_analysis_result: { permitted_evidence_roles: [confirmatory] }
+  supportive_analysis_result: { permitted_evidence_roles: [supportive] }
+  mechanism_analysis_result: { permitted_evidence_roles: [mechanism] }
+  external_validation_result: { permitted_evidence_roles: [external_validation] }
+  stress_test_result: { permitted_evidence_roles: [stress_test] }
+  boundary_result: { permitted_evidence_roles: [boundary] }
+  anchor_reproduction_result: { permitted_evidence_roles: [anchor] }
+  policy_evaluation_result: { permitted_evidence_roles: [anchor, confirmatory, supportive, mechanism, external_validation, stress_test, boundary] }
+  cluster_stability_result: { permitted_evidence_roles: [mechanism] }
+  conformal_coverage_result: { permitted_evidence_roles: [supportive] }
+  quantile_estimation_result: { permitted_evidence_roles: [stress_test] }
+  absorption_result: { permitted_evidence_roles: [stress_test] }
+  temporal_recovery_result: { permitted_evidence_roles: [boundary] }
+  metric_association_result: { permitted_evidence_roles: [mechanism, supportive] }
+  distribution_mechanism_result: { permitted_evidence_roles: [confirmatory, mechanism] }
+  resource_cost_result: { permitted_evidence_roles: [confirmatory, supportive] }
+  eligibility_coverage_result: { permitted_evidence_roles: [anchor, confirmatory, supportive, mechanism, external_validation, stress_test, boundary] }
+
+# --- Report artifact profiles ------------------------------------------------------------
+# Shared rendering contracts. Experiments reference these instead of restating column lists.
+report_defaults:
+  ordering: deterministic_by_threshold_construction
+  missing_value_policy: render_typed_unavailable
+  table_output_formats: [markdown, latex]
+  figure_output_formats: [pdf, png]
+
+report_profiles:
+  interval_table:
+    artifact_type: main_table
+    table_type: estimate_with_interval
+    columns:
+      - { name: threshold_construction, unit: none, direction: none }
+      - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+      - { name: delta, unit: ratio, direction: higher_is_better }
+      - { name: bca_lower_bound, unit: ratio, direction: none }
+      - { name: bca_upper_bound, unit: ratio, direction: none }
+  dispersion_ladder_table:
+    artifact_type: main_table
+    table_type: dispersion_ladder
+    columns:
+      - { name: threshold_construction, unit: none, direction: none }
+      - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+      - { name: iqr_fpr, unit: ratio, direction: lower_is_better }
+      - { name: fpr_range, unit: ratio, direction: lower_is_better }
+      - { name: worst_client_fpr, unit: ratio, direction: lower_is_better }
+  minimal_dispersion_table:
+    artifact_type: main_table
+    table_type: dispersion_ladder
+    columns:
+      - { name: threshold_construction, unit: none, direction: none }
+      - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+  sensitivity_grid_table:
+    artifact_type: main_table
+    table_type: sensitivity_grid
+    columns:
+      - { name: threshold_construction, unit: none, direction: none }
+      - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+  cluster_stability_table:
+    artifact_type: main_table
+    table_type: cluster_stability
+    columns:
+      - { name: threshold_construction, unit: none, direction: none }
+      - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+      - { name: worst_client_fpr, unit: ratio, direction: lower_is_better }
+      - { name: within_cluster_dispersion, unit: ratio, direction: lower_is_better }
+      - { name: across_cluster_dispersion, unit: ratio, direction: none }
+      - { name: adjusted_rand_index, unit: none, direction: higher_is_better }
+  cluster_contingency_table:
+    artifact_type: supplementary_table
+    table_type: contingency
+    columns:
+      - { name: cluster_assignment, unit: none, direction: none }
+      - { name: client_identifier, unit: none, direction: none }
+  communication_storage_table:
+    artifact_type: supplementary_table
+    table_type: communication_storage_cost
+    columns:
+      - { name: threshold_construction, unit: none, direction: none }
+      - { name: communication_bytes_per_round, unit: bytes, direction: lower_is_better }
+      - { name: threshold_message_bytes, unit: bytes, direction: lower_is_better }
+  alert_burden_table:
+    artifact_type: main_table
+    table_type: alert_burden
+    columns:
+      - { name: threshold_construction, unit: none, direction: none }
+      - { name: alerts_per_client_per_day, unit: count, direction: lower_is_better }
+  comparator_table:
+    artifact_type: main_table
+    table_type: comparator
+    columns:
+      - { name: threshold_construction, unit: none, direction: none }
+      - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+      - { name: between_ratio, unit: ratio, direction: none }
+  score_geometry_figure:
+    artifact_type: figure
+    figure_type: cdf_overlay
+    series:
+      - { name: benign_score_density, unit: none, direction: none }
+      - { name: attack_score_density, unit: none, direction: none }
+  threshold_tradeoff_figure:
+    artifact_type: figure
+    figure_type: scatter
+    series:
+      - { name: threshold_shift, unit: ratio, direction: none }
+      - { name: fpr_delta, unit: ratio, direction: lower_is_better }
+      - { name: tpr_delta, unit: ratio, direction: higher_is_better }
+  severity_trend_figure:
+    artifact_type: figure
+    figure_type: severity_trend
+    series:
+      - { name: partition_condition, unit: none, direction: none }
+      - { name: cv_fpr_delta, unit: ratio, direction: higher_is_better }
+  association_scatter_figure:
+    artifact_type: figure
+    figure_type: scatter
+    series:
+      - { name: pairwise_js_divergence, unit: none, direction: none }
+      - { name: cv_fpr_delta, unit: ratio, direction: higher_is_better }
+  shrinkage_curve_figure:
+    artifact_type: figure
+    figure_type: lambda_curve
+    series:
+      - { name: shrinkage_weight, unit: none, direction: none }
+      - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+      - { name: p10_macro_f1, unit: ratio, direction: higher_is_better }
+  recovery_curve_figure:
+    artifact_type: figure
+    figure_type: recovery_curve
+    series:
+      - { name: temporal_window, unit: none, direction: none }
+      - { name: cv_fpr, unit: ratio, direction: lower_is_better }
+
+# --- Operational inputs ------------------------------------------------------------------
+# Alert burden may execute only against an explicitly sourced benign decision rate. No rate
+# is configured, so the analysis resolves to a typed unavailable outcome and never produces
+# a hypothetical alerts-per-day value. Its absence must not fail any other evaluation.
+operational_inputs:
+  benign_decision_rate:
+    configured: false
+    required_fields: [value, unit, citation_identifier, source_title, source_metadata, applicability_statement]
+    finite_value_validation: reject_non_finite_rate
+    non_negative_validation: reject_negative_rate
+    unavailable_behavior: typed_unavailable_result

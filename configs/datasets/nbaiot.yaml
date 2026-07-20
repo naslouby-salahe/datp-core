@@ -1,7 +1,13 @@
+# N-BaIoT dataset contract.
+#
+# Declarative only: what to read, how to interpret it, which rows are eligible, and which
+# transformations are configured. Measured counts, duplicate rates, category inventories,
+# readiness verdicts and audit outcomes are generated evidence and are deliberately absent.
 schema_version: 1
 dataset: nbaiot
 display_name: N-BaIoT
 schema_id: nbaiot_kitsune_115
+
 source_layout:
   root: N-BaIoT
   device_dirs:
@@ -15,10 +21,22 @@ source_layout:
     - SimpleHome_XCS7_1002_WHT_Security_Camera
     - SimpleHome_XCS7_1003_WHT_Security_Camera
   benign_file: benign_traffic.csv
+  benign_file_required_per_device: true
   attack_family_dirs: [gafgyt_attacks, mirai_attacks]
+  # Not every device was infected by every family; a missing family directory is a valid
+  # source layout, not a source error.
+  attack_family_required_per_device: false
   attack_file_pattern: "*.csv"
+  # Compressed archives sit beside their extracted directories and the distribution ships
+  # documentation and a structure sample at the root. Only the patterns above are ingested;
+  # everything else is reported as unmatched and never read.
+  ignored_source_suffixes: [".rar"]
+  ignored_root_entries: [demonstrate_structure.csv, N_BaIoT_dataset_description_v1.txt]
+
 field_schema:
   source_column_count: 115
+  header_required: true
+  header_must_be_identical_across_all_source_files: true
   identity_scheme:
     row_identity:
       components: [source_file_path, source_row_index]
@@ -32,9 +50,16 @@ field_schema:
     attack_family_identity: { source: path, derived_from: attack_family_directory_name }
     attack_type_identity: { source: path, derived_from: attack_file_basename }
     timestamp_field: none
-    provenance_fields: [source_file_path, device_directory_name, attack_family_directory_name, attack_file_basename]
+    chronological_ordering_basis: source_row_order
+    provenance_fields:
+      - source_file_path
+      - device_directory_name
+      - attack_family_directory_name
+      - attack_file_basename
   label_fields:
     binary_label: { benign: benign_traffic, attack: [gafgyt, mirai] }
+    # Configured scientific grouping for the family-scope threshold policy. This is a study
+    # decision about device type, not a property recovered from the source artifact.
     family_taxonomy: device_type
     family_map:
       Danmini_Doorbell: doorbell
@@ -168,44 +193,38 @@ field_schema:
   post_encoding_feature_order: same_as_model_features
   categorical_encoding: none
   leakage_exclusions: []
-  fingerprint_inputs:
-    source: [source_layout.root, source_layout.device_dirs, field_schema.source_column_count]
-    schema: [schema_id, field_schema.model_features.order]
-observed_facts:
-  device_count: 9
-  model_feature_count: 115
-  devices_without_mirai_family: [Ennio_Doorbell, Samsung_SNH_1011_N_Webcam]
-  benign_exact_duplicate_rate: 0.07633
-  attack_exact_duplicate_rate: 0.01773
-  cold_start_first_row_present_in_every_source_file: true
-readiness:
-  source_schema_complete: true
-  feature_schema_verified: true
-  per_device_membership_recoverable: true
-audits:
-  - check: source_inspection
-    inspection:
-      expected_facts:
-        - feature_schema_present
-        - benign_and_attack_members_present
-        - per_device_membership_recoverable
-      source_row_identity_scheme: required
-    feasibility:
-      rule: source_schema_complete
-      required_evidence: [feature_schema_manifest, per_device_counts]
-    operations:
-      execution: dataset_audit
-      report: { table_type: source_inspection_report, output_formats: [markdown] }
-eligibility:
-  minimum_calibration_sample_count: 100
+
+# Expected invariants that are part of the executable contract. A source tree violating one
+# is a typed contract failure, not a silently tolerated difference.
+source_contract:
+  every_model_feature_present_in_every_file: true
+  model_feature_count_equals_source_column_count: true
+  reject_row_with_field_count_other_than_header: true
+  reject_unparseable_numeric_model_feature: true
+
+# Provenance inputs for the dataset fingerprint. Every path below must resolve inside this
+# document; no path may point at generated evidence.
+fingerprint_inputs:
+  source: [source_layout.root, source_layout.device_dirs, field_schema.source_column_count]
+  schema: [schema_id, field_schema.model_features.order]
+
+# Client eligibility uses the shared primary_analysis policy in protocols.yaml.
+eligibility_policy: primary_analysis
+
 materializations:
   datp_core:
     materialization_id: nbaiot_datp_core
     normalization: { strategy: min_max, scope: global_train }
-    preprocessing_sequence: [drop_cold_start_row, drop_exact_duplicate_rows, chronological_gapped_split, min_max_normalization_fit_on_train]
+    preprocessing_sequence:
+      - drop_cold_start_row
+      - drop_exact_duplicate_rows
+      - chronological_gapped_split
+      - min_max_normalization_fit_on_train
     row_exclusion:
+      # The first row of every Kitsune source file carries uninitialised running statistics.
       cold_start_row: drop_first_row_per_source_file
       duplicate_rows: drop_exact_duplicates_keep_first
+      duplicate_scope: within_source_file
     split:
       method: chronological_gapped
       calibration_benign_only: true
@@ -217,13 +236,19 @@ materializations:
       attack_test_membership: all_attack_rows
       attack_ordering: source_row_order_per_source_file
       benign_attack_deduplication: independent_per_source_file
+
   datp_core_dirichlet:
     materialization_id: nbaiot_datp_core_dirichlet
     normalization: { strategy: min_max, scope: global_train }
-    preprocessing_sequence: [drop_cold_start_row, drop_exact_duplicate_rows, random_fractional_split, min_max_normalization_fit_on_train]
+    preprocessing_sequence:
+      - drop_cold_start_row
+      - drop_exact_duplicate_rows
+      - random_fractional_split
+      - min_max_normalization_fit_on_train
     row_exclusion:
       cold_start_row: drop_first_row_per_source_file
       duplicate_rows: drop_exact_duplicates_keep_first
+      duplicate_scope: within_source_file
     split:
       method: random_fractional
       calibration_benign_only: true
@@ -236,11 +261,16 @@ materializations:
       attack_test_membership: all_attack_rows
       attack_ordering: random_seeded
       benign_attack_deduplication: independent_per_source_file
+
   anchor:
     materialization_id: nbaiot_anchor_historical
     normalization: { strategy: standard, scope: global_train }
-    preprocessing_sequence: [chronological_gapped_split, standard_normalization_fit_on_train]
+    preprocessing_sequence:
+      - chronological_gapped_split
+      - standard_normalization_fit_on_train
     row_exclusion:
+      # The anchor reproduces historical conference semantics and therefore retains rows the
+      # datp-core materializations drop. This asymmetry is intentional and must not be aligned.
       cold_start_row: retain
       duplicate_rows: retain
     split:
@@ -254,32 +284,62 @@ materializations:
       attack_test_membership: all_attack_rows
       attack_ordering: source_row_order_per_source_file
       benign_attack_deduplication: not_applied_rows_retained
+
 setups:
   natural_devices:
     materialization: datp_core
-    client_construction: { method: physical_device_clients, device_count: 9 }
+    client_construction: { method: physical_device_clients, client_source: source_layout.device_dirs }
+    provides_capabilities:
+      - benign_calibration
+      - benign_test_false_positive_metrics
+      - per_client_attack_detection_metrics
+      - attack_sensitive_threshold_tradeoff
+      - family_taxonomy
+
   anchor_natural_devices:
     materialization: anchor
-    client_construction: { method: physical_device_clients, device_count: 9 }
+    client_construction: { method: physical_device_clients, client_source: source_layout.device_dirs }
+    provides_capabilities:
+      - benign_calibration
+      - benign_test_false_positive_metrics
+      - per_client_attack_detection_metrics
+      - family_taxonomy
+
   dirichlet_partitioned:
     materialization: datp_core_dirichlet
     client_construction:
       method: dirichlet_partitioned_clients
       client_count: 20
-      alpha: { from_sweep: dirichlet_alpha }
-      iid_endpoint: { alpha_label: iid, allocation: equal_across_source_domains }
-      source_mixture_components: nine_physical_device_domains
+      # The partition condition (Dirichlet alpha values and the separate IID reference) is
+      # supplied by the experiment sweep; it is never a mixed-type list here.
+      partition_condition: { from_experiment_sweep: partition_condition }
+      source_mixture_components: physical_device_domains
       label_field: physical_device_domain
       partition_seed: 0
-      partition_seed_independent_of_training_seeds: true
-      allocation_procedure: dirichlet_draw_per_synthetic_client_over_nine_source_domain_proportions
-      same_proportions_govern: [benign_train_rows, benign_calibration_rows, benign_test_rows, attack_evaluation_rows]
+      allocation_procedure: dirichlet_draw_per_synthetic_client_over_source_domain_proportions
+      same_proportions_govern:
+        - benign_train_rows
+        - benign_calibration_rows
+        - benign_test_rows
+        - attack_evaluation_rows
       split_role_preservation: each_source_domain_row_keeps_its_pre_partition_split_role
       attack_row_assignment: allocated_by_same_per_client_source_domain_proportions_as_benign_rows
       attack_labels_used_in_partition_generation: false
       minimum_row_counts: { train: 100, calibration: 100, test: 50 }
-      retry_policy: { behavior: deterministic_reseed_retry, max_retries: 10, retry_seed_derivation: partition_seed_plus_attempt_index }
+      retry_policy:
+        behavior: deterministic_reseed_retry
+        max_retries: 10
+        retry_seed_derivation: partition_seed_plus_attempt_index
       feasibility_failure: typed_infeasibility_outcome_if_minimum_row_counts_unmet_after_max_retries
-      manifest:
-        fields: [client_count, alpha, partition_seed, per_client_source_domain_proportions, per_client_row_counts, retry_attempts_used, feasibility_status]
-        fingerprint: blake3_over_manifest_fields
+      manifest_fields:
+        - client_count
+        - partition_condition
+        - partition_seed
+        - per_client_source_domain_proportions
+        - per_client_row_counts
+        - retry_attempts_used
+        - feasibility_status
+    provides_capabilities:
+      - benign_calibration
+      - benign_test_false_positive_metrics
+      - per_client_attack_detection_metrics

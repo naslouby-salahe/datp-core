@@ -1,27 +1,90 @@
+# CICIoT2023 dataset contract.
+#
+# Declarative only. Measured row counts, duplicate rates, label distributions and audit
+# verdicts are generated evidence and are deliberately absent from this document.
+#
+# The processed artifact preserves no device, MAC, IP, or capture-timestamp column, so a
+# physical-device client regime is not recoverable. The merged files are shuffled mixtures of
+# every class and are used strictly as file-defined pseudo-clients, never as device identities.
 schema_version: 1
 dataset: ciciot2023
 display_name: CICIoT2023
 schema_id: ciciot2023_flow_39
+
 source_layout:
   root: CIC_IOT_Dataset2023/CSV
-  per_class_root: CIC_IOT_Dataset2023/CSV/CSV
-  merged_root: CIC_IOT_Dataset2023/CSV/MERGED_CSV
-  per_class_file_pattern: "*/*.pcap.csv"
-  merged_file_pattern: "Merged*.csv"
+
+  # The two source trees are independent populations. The merged tree is not a
+  # row-preserving reorganization of the per-class tree, their row counts differ, and no
+  # row-level correspondence between them is assumed or required. They are therefore given
+  # explicitly different roles, and nothing executable depends on their equivalence.
+  executable_source: merged
+  sources:
+    merged:
+      role: executable
+      root: CIC_IOT_Dataset2023/CSV/MERGED_CSV
+      file_pattern: "Merged*.csv"
+      # The merged tree is the sole source for every executable concern.
+      owns:
+        - pseudo_client_construction
+        - row_identity
+        - label_access
+        - benign_only_training_selection
+        - benign_only_calibration_selection
+        - attack_inclusive_testing
+        - duplicate_equivalence_class_computation
+        - split_assignment
+        - normalization
+        - feature_materialization
+    per_class:
+      role: reference_only
+      root: CIC_IOT_Dataset2023/CSV/CSV
+      file_pattern: "*/*.pcap.csv"
+      # Reference evidence only. This tree contributes no row to any materialization and
+      # defines no client.
+      permitted_uses:
+        - source_layout_verification
+        - per_class_schema_verification
+        - class_directory_and_file_inventory
+        - taxonomy_reference_inspection
+        - corpus_integrity_diagnostics
+      contributes_rows_to_executable_materializations: false
+      defines_pseudo_clients: false
+
+  cross_source_relationship:
+    row_count_equality_required: false
+    row_level_one_to_one_equivalence_assumed: false
+    join_by_row_position: forbidden
+    join_by_any_key: forbidden
+
 field_schema:
   source_column_count: { per_class: 39, merged: 40 }
+  header_required: true
+  header_must_be_identical_across_all_files_in_a_tree: true
+  # The merged header is the per-class header with Label appended as the final column.
+  merged_header_extends_per_class_header_with: Label
+  label_column_position: last
   identity_scheme:
+    # An executable row identity is derived only from the merged tree. A per-class file path
+    # or row index is never a component of an executable identity.
     row_identity:
-      components: [source_file_path, source_row_index]
+      derived_from_source: merged
+      components: [merged_source_file_path, merged_source_row_index]
       index_scope: within_source_file
       preserved_through_materializations: true
-    client_identity: { source: file, derived_from: merged_file_name }
+    # A merged file is a file-defined pseudo-client, never a physical device.
+    client_identity:
+      source: file
+      derived_from: merged_file_name
+      semantics: file_defined_pseudo_client
+      physical_device_identity: not_recoverable
     label_identity: { source: column, column: Label, present_in: merged_only }
     timestamp_field: none
     device_mac_ip_field: none
+    chronological_ordering_basis: unavailable
     provenance_fields: [source_file_name]
   label_fields:
-    multiclass_label: { column: Label, type: categorical_string }
+    multiclass_label: { column: Label, type: categorical_string, case: upper }
     binary_label: { derivation: label_equals_benign, benign_value: BENIGN }
   model_features:
     role: model_feature
@@ -69,57 +132,49 @@ field_schema:
   post_encoding_feature_order: same_as_model_features
   categorical_encoding: none
   leakage_exclusions: [Label]
-  fingerprint_inputs:
-    source: [source_layout.merged_root, field_schema.source_column_count]
-    schema: [schema_id, field_schema.model_features.order]
-observed_facts:
-  pseudo_client_count: 63
-  per_class_file_count: 309
-  model_feature_count: 39
-  merged_column_count: 40
-  merged_excess_duplicate_rate: 0.5472   # measured 2026-07-19 audit: 24,636,166 excess / 45,019,234 total = 54.72%; feeds the global_dedup_primary materialization's equivalence-class computation
-  degenerate_window_rate: 0.0000151       # measured 2026-07-19 audit: 679 degenerate rows / 45,019,234 total = 0.00151%
-  merged_data_rows: 45019234             # measured 2026-07-19 audit: total data rows across all 63 merged files
-  merged_benign_rows: 1051373            # measured 2026-07-19 audit: BENIGN label rows
-  merged_attack_rows: 43967861           # measured 2026-07-19 audit: attack label rows
-  merged_empty_label_rows: 9             # measured 2026-07-19 audit: rows with empty Label (Merged42,44,46-52)
-  benign_fraction: 0.02335               # measured 2026-07-19 audit: 2.34% benign
-  merged_files_are_shuffled_mixture_of_all_classes: true
-  device_mac_ip_capture_timestamp_columns_present: false
-readiness:
-  source_schema_complete: true
-  processed_feature_count_verified: true
-audits:
-  - check: source_inspection
-    inspection:
-      expected_facts:
-        - feature_schema_present
-        - file_level_membership_recoverable
-        - mac_device_ip_capture_timestamp_columns_present_or_absent
-      source_row_identity_scheme: required
-    feasibility:
-      rule: source_schema_complete
-      required_evidence: [feature_schema_manifest, file_member_manifest]
-    operations: { execution: dataset_audit, report: { table_type: source_inspection_report, output_formats: [markdown] } }
-  - check: processed_feature_verification
-    inspection:
-      expected_facts: [processed_feature_count_matches_conference_value]
-      reference_feature_count: 39
-    feasibility:
-      rule: processed_feature_count_verified
-      required_evidence: [processed_feature_schema_manifest]
-    operations: { execution: dataset_audit, report: { table_type: source_inspection_report, output_formats: [markdown] } }
-eligibility:
-  minimum_calibration_sample_count: 100
+
+source_contract:
+  # Executable contract, evaluated against the merged tree only.
+  every_model_feature_present_in_merged_header: true
+  # A schema-level check only. It compares column counts between the two trees and asserts
+  # nothing about their row populations.
+  per_class_schema_reference_check:
+    scope: schema_only
+    model_feature_count_equals_per_class_source_column_count: true
+    asserts_row_equivalence: false
+  # A minority of merged rows are physically truncated and carry fewer fields than the
+  # header. They are a malformed-row defect, not rows with an empty Label, and are excluded
+  # and counted as such rather than being coerced into a label class.
+  malformed_row: { detection: field_count_differs_from_header, handling: exclude_and_count }
+  empty_label_row: { detection: label_is_null_or_blank, handling: exclude_and_count }
+  reject_unparseable_numeric_model_feature: true
+
+fingerprint_inputs:
+  source: [source_layout.sources.merged.root, field_schema.source_column_count]
+  schema: [schema_id, field_schema.model_features.order]
+
+eligibility_policy: primary_analysis
+
 materializations:
   datp_core:
     materialization_id: ciciot2023_datp_core
     role: primary
     normalization: { strategy: min_max, scope: global_train }
-    preprocessing_sequence: [exclude_degenerate_window_rows, compute_global_exact_duplicate_equivalence_classes, assign_each_equivalence_class_to_one_split, drop_non_canonical_equivalence_class_members, random_fractional_split, min_max_normalization_fit_on_train]
+    preprocessing_sequence:
+      - exclude_malformed_rows
+      - exclude_empty_label_rows
+      - exclude_degenerate_window_rows
+      - compute_global_exact_duplicate_equivalence_classes
+      - assign_each_equivalence_class_to_one_split
+      - drop_non_canonical_equivalence_class_members
+      - random_fractional_split
+      - min_max_normalization_fit_on_train
     row_exclusion:
-      degenerate_window: exclude_rate_inf_or_blank_std_variance
-      duplicate_equivalence_class_scope: global_across_all_63_files
+      malformed_row: exclude
+      empty_label_row: exclude
+      # A degenerate flow window has a non-finite Rate, or a blank/non-finite Std or Variance.
+      degenerate_window: exclude_non_finite_rate_or_blank_or_non_finite_std_or_variance
+      duplicate_equivalence_class_scope: global_across_all_merged_files
       duplicate_equivalence_class_definition: exact_row_content_hash_over_model_features
       duplicate_equivalence_class_split_assignment: whole_class_to_one_split_never_crosses_train_calibration_test
       canonical_row_selection: keep_first_by_source_file_path_then_source_row_index
@@ -129,16 +184,32 @@ materializations:
       calibration_benign_only: true
       split_seed: 0
       ratios: { train: 0.70, calibration: 0.15, test: 0.15 }
-    reporting:
-      fields: [removed_rows, retained_rows_per_pseudo_client, client_eligibility_changes, pseudo_client_coverage]
+    # The autoencoder is a benign-only detector. Making the partition semantics explicit
+    # rather than implicit is part of the locked contract.
+    split_row_semantics:
+      train_rows: benign_only
+      calibration_rows: benign_only
+      test_rows: benign_and_attack
+      attack_rows: evaluation_only
+      cross_split_duplicate_prevention: equivalence_class_never_spans_two_splits
     infeasibility_policy: typed_boundary_result_if_dedup_removes_experiment_feasibility
-  datp_core_duplicate_preserving_sensitivity:
-    materialization_id: ciciot2023_datp_core_duplicate_preserving_sensitivity
+
+  duplicate_preserving_sensitivity:
+    materialization_id: ciciot2023_duplicate_preserving_sensitivity
     role: sensitivity_only_never_primary
     normalization: { strategy: min_max, scope: global_train }
-    preprocessing_sequence: [exclude_degenerate_window_rows, drop_exact_duplicate_rows_per_file, assign_cross_file_duplicate_equivalence_classes_to_one_split, random_fractional_split, min_max_normalization_fit_on_train]
+    preprocessing_sequence:
+      - exclude_malformed_rows
+      - exclude_empty_label_rows
+      - exclude_degenerate_window_rows
+      - drop_exact_duplicate_rows_per_file
+      - assign_cross_file_duplicate_equivalence_classes_to_one_split
+      - random_fractional_split
+      - min_max_normalization_fit_on_train
     row_exclusion:
-      degenerate_window: exclude_rate_inf_or_blank_std_variance
+      malformed_row: exclude
+      empty_label_row: exclude
+      degenerate_window: exclude_non_finite_rate_or_blank_or_non_finite_std_or_variance
       within_file_duplicate_policy: drop_exact_duplicates_keep_first_per_file
       cross_file_duplicate_policy: retain_across_pseudo_clients
       cross_file_duplicate_split_assignment: whole_equivalence_class_to_one_split_consistent_across_pseudo_clients
@@ -147,12 +218,32 @@ materializations:
       calibration_benign_only: true
       split_seed: 0
       ratios: { train: 0.70, calibration: 0.15, test: 0.15 }
+    split_row_semantics:
+      train_rows: benign_only
+      calibration_rows: benign_only
+      test_rows: benign_and_attack
+      attack_rows: evaluation_only
+      cross_split_duplicate_prevention: equivalence_class_never_spans_two_splits
+
 setups:
   file_pseudo_clients:
     materialization: datp_core
-    client_construction: { method: dataset_file_pseudo_clients, pseudo_client_count: 63 }
-  file_pseudo_clients_duplicate_sensitivity:
-    materialization: datp_core_duplicate_preserving_sensitivity
-    client_construction: { method: dataset_file_pseudo_clients, pseudo_client_count: 63 }
-    execution_requirement: optional
-    publication_placement: supplementary
+    client_construction:
+      method: dataset_file_pseudo_clients
+      client_source: source_layout.sources.merged.file_pattern
+      client_semantics: file_defined_pseudo_client_not_physical_device
+    provides_capabilities:
+      - benign_calibration
+      - benign_test_false_positive_metrics
+      - per_client_attack_detection_metrics
+
+  file_pseudo_clients_duplicate_preserving:
+    materialization: duplicate_preserving_sensitivity
+    client_construction:
+      method: dataset_file_pseudo_clients
+      client_source: source_layout.sources.merged.file_pattern
+      client_semantics: file_defined_pseudo_client_not_physical_device
+    provides_capabilities:
+      - benign_calibration
+      - benign_test_false_positive_metrics
+      - per_client_attack_detection_metrics

@@ -52,9 +52,9 @@ datp-core/
 paths never enter a domain identity, a scientific specification, a stage
 fingerprint, an `ArtifactKey`, or a scientific manifest (`ART-05`). The
 runtime-resolved `models/` root (external model/dataset input copies) is a
-distinct concept from the version-controlled `configs/models/` directory
-(`§3`); the former never contains YAML and the latter never contains a
-dataset or checkpoint file.
+distinct concept from the version-controlled `configs/` tree (`§3`), whose
+model-family definitions live in `configs/protocols.yaml`; the former never
+contains YAML and the latter never contains a dataset or checkpoint file.
 
 ## 2. `src/datp_core` layer tree
 
@@ -279,49 +279,61 @@ single attacker subnet 0, leaving eight of the nine sensor clients with no
 attack rows (`SCIENTIFIC_FOUNDATION.md §5.1`). Worked examples:
 `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11`.
 
-### 3.2 `configs/models/`
+### 3.2 `configs/protocols.yaml`
 
-One document, `autoencoder.yaml` — the only model family this design
-authorizes. It owns architecture, reconstruction objective, optimizer,
-named `checkpoint_profiles` (`datp_core` = `{25,50,75,100,125,150,200}`,
-`anchor_terminal` = `{150}`), precision, determinism, and training-batch
-definition exactly once; each experiment selects one schedule by an explicit
+One document holding every reusable, execution-independent scientific
+definition, each stated exactly once and referenced elsewhere by a stable
+descriptive identifier. It owns `model_architectures` (`fixed_autoencoder` —
+the only model family this design authorizes), `optimizers`, `batching`,
+named `checkpoint_profiles` (`datp_core_round_grid` =
+`{25,50,75,100,125,150,200}`, `anchor_terminal_round` = `{150}`),
+`seed_cohorts`, `eligibility_policies`, `threshold_policies`,
+`metric_bundles`, `statistical_profiles`, `result_types`, `report_profiles`,
+and `operational_inputs`. Each experiment selects one schedule by an explicit
 `checkpoint_profile` reference (the anchor a single terminal checkpoint at
 round 150, DATP-Core the seven checkpoints through round 200), never derived
-from `evidence_role`. It also owns a `training_profiles` map naming every
-authorized variant: `federated_averaging` (core ladder),
+from `evidence_role`. The `training_profiles` map names every authorized
+variant: `federated_averaging` (core ladder),
 `federated_averaging_personalized` (genuine Ditto — `personalization: ditto`,
 `personalization_proximal_weight: 1.0` — the one authorized personalization
 comparator, `SCI-07`),
 `federated_proximal` (the FedProx µ-grid stress test, matched to
 `federated_averaging` in every non-strategy field), and `centralized_pooled`
 (B0, its own identity chain, never fused with a federated artifact,
-`ANCHOR-04`). Adding a genuinely new model family — a different
-architecture, not a new training profile of the autoencoder — is a new
-`configs/models/<name>.yaml` document; it is never required merely to add a
-training profile of the existing family. Worked example:
+`ANCHOR-04`). A genuinely new model family — a different architecture, not a
+new training profile of the autoencoder — is a new entry under
+`model_architectures`; it is never required merely to add a training profile
+of the existing family. Worked example:
 `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §12`.
 
-### 3.3 `configs/experiments/`
+### 3.3 `configs/experiments.yaml`
 
-Seven family documents, each an `experiments` list of independently
-resolvable entries; the complete family-to-slug mapping and each entry's
-identity-bearing fields are given in
-`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §§9–10, 16`. No standalone
-experiment root exists for an item this package classifies as an attached
-analysis (`SCIENTIFIC_FOUNDATION.md §7.4`); the cluster mechanism and
-federated-summary-comparator families are each a single merged experiment
-entry within their family document, not several sibling entries. A slug
-matching a rejected or out-of-scope entry
-(`SCIENTIFIC_FOUNDATION.md §7.6`) is refused at resolution and appears in no
-family document.
+One document: a `study_populations` map binding each descriptive population
+name to a dataset, a client-construction setup and a metric bundle, a closed
+`capabilities` vocabulary, a closed `suppression_behaviors` vocabulary, and a
+single `experiments` list of independently resolvable entries. Each entry
+resolves to exactly one training profile, checkpoint profile, seed cohort and
+eligibility policy, and every threshold, statistical and report reference
+points into `configs/protocols.yaml`. Entry identity is the descriptive
+`name`; roadmap shorthand (`E-*`, tier numbers, regime letters, publication
+placement, manuscript wording) is deliberately absent, because traceability
+belongs to the roadmap documents rather than to executable configuration. No
+standalone experiment root exists for an item this package classifies as an
+attached analysis (`SCIENTIFIC_FOUNDATION.md §7.4`); the cluster mechanism and
+federated-summary-comparator experiments are each a single merged entry, not
+several sibling entries. A name matching a rejected or out-of-scope entry
+(`SCIENTIFIC_FOUNDATION.md §7.6`) is refused at resolution and appears
+nowhere in the catalogue.
 
-### 3.4 `configs/execution.yaml`
+### 3.4 `configs/runtime.yaml`
 
-One file, a `profiles` map keyed by profile name. Every mode requires a
-complete explicit profile; `development` and `smoke` use explicit reduced
-values and are non-citable by mode, never an automatic reduction of
-`scientific` (`EXEC-02`). Worked example:
+One file owning machine and operational execution profiles only: the
+repository-relative `roots`, the read-only `raw_source_policy` for the
+`data/raw` symlink, and an `execution_profiles` map keyed by profile name. It
+holds no scientific parameter — no quantile, seed, split ratio, metric or
+sample count. Every mode requires a complete explicit profile; `development`
+and `smoke` use explicit reduced values and are non-citable by mode, never an
+automatic reduction of `scientific` (`EXEC-02`). Worked example:
 `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §13`.
 
 Ownership boundaries are fixed by
@@ -354,7 +366,7 @@ tests/
 │   │                      #   canonical-K derivation, eligibility, non-finite rejection
 │   ├── application/       # use-case behavior with typed test doubles
 │   ├── config/           # schema→domain mapping; missing/extra-field failure; no-hidden-default;
-│   │                      #   experiment-family expansion (one document → many independent entries);
+│   │                      #   experiment catalogue expansion (one document → many independent entries);
 │   │                      #   DatasetFieldSchema drift detection (renamed/reordered/added source column)
 │   └── reporting/        # framework-free specification construction (was analysis/)
 ├── property/             # value-object ranges/finiteness; cv_fpr; pooled variance; fpr_target = 1 − q;
@@ -447,14 +459,14 @@ or executor branch, a replacement identity system, or a compatibility shim.
 
 | New thing | Files touched | Never touched |
 |---|---|---|
-| **Dataset** | `Dataset`/registry entry in `domain/identifiers.py`; a new `configs/datasets/<name>.yaml` document (audits, setups, split, preprocessing, eligibility, and its `SOURCE_INSPECTION`-derived `DatasetFieldSchema` all traced to this one file); a source-inspector/partitioner adapter in `infrastructure/data/`; one binding in `composition/registries.py`; contract + memory-equivalence + schema-drift-detection tests | any threshold, metric, evaluation, reporting module, `models/autoencoder.yaml`, or any `configs/experiments/` family |
+| **Dataset** | `Dataset`/registry entry in `domain/identifiers.py`; a new `configs/datasets/<name>.yaml` document (audits, setups, split, preprocessing, eligibility, and its `SOURCE_INSPECTION`-derived `DatasetFieldSchema` all traced to this one file); a source-inspector/partitioner adapter in `infrastructure/data/`; one binding in `composition/registries.py`; contract + memory-equivalence + schema-drift-detection tests | any threshold, metric, evaluation, reporting module, `models/autoencoder.yaml`, or any `configs/experiments.yaml` family |
 | **Client construction (dataset setup)** | a `ClientConstruction` variant in `domain/data.py`; its schema arm in `config/schemas/data.py` + mapping; its `infrastructure/data/` implementation; one binding; one new `setups` entry on the owning dataset document | any experiment file, any letter-based label |
 | **Threshold policy** | a `ThresholdConstruction` variant in `domain/thresholding.py`; a discriminated schema arm carrying only its own fields; an `infrastructure/thresholding/` implementation; one registry line | score-generation code (scores are reused via preserved keys) |
-| **Training profile of the existing model family** | one new entry in `models/autoencoder.yaml`'s `training_profiles` map; a `TrainingProfile` variant in `domain/model.py` if it introduces a genuinely new `kind` | a new `configs/models/` document, any dataset, threshold, or experiment file |
-| **New model family** | a new `configs/models/<name>.yaml` document; its architecture/objective/optimizer schema arms if genuinely distinct | any existing experiment referencing `autoencoder` |
+| **Training profile of the existing model family** | one new entry in `models/autoencoder.yaml`'s `training_profiles` map; a `TrainingProfile` variant in `domain/model.py` if it introduces a genuinely new `kind` | a new `configs/protocols.yaml` document, any dataset, threshold, or experiment file |
+| **New model family** | a new `configs/protocols.yaml` document; its architecture/objective/optimizer schema arms if genuinely distinct | any existing experiment referencing `autoencoder` |
 | **Metric** | a `MetricId` member in its family + `MetricSpec` + typed calculator in `domain/evaluation.py`; reporting metadata | any renderer per-metric; any threshold artifact |
 | **Pipeline stage** | a module in `application/stages/`; an optional config variant; one line in `StageRunnerRegistry` | the executor, planner branching, persistence, recovery, logging, or any existing stage (`PIPE-01`) |
-| **Experiment** | one new entry appended to the `configs/experiments/` family document matching its scientific role, referencing existing dataset/setup and model/training-profile identities; a Make-target family | any code; any new planner or executor branch; any other family document |
+| **Experiment** | one new entry appended to the `configs/experiments.yaml` catalogue, matching its scientific role and referencing existing dataset/setup and model/training-profile identities; a Make-target family | any code; any new planner or executor branch; any new configuration document |
 | **Report** | one `ReportDefinition` (`domain/reporting.py` type) inlined on the producing experiment entry, consuming a frozen result | any recomputation of a scientific value; any `configs/reporting/` document (none exists) |
 | **Run family** (future) | a new `RunDefinition` variant + its planner applicability; new stage `is_applicable` returns | any weakening of `ScientificExperimentDefinition` or `DatasetAuditDefinition` |
 

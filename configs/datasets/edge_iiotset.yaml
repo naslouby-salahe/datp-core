@@ -1,17 +1,81 @@
+# Edge-IIoTset dataset contract.
+#
+# Declarative only. Measured row counts, endpoint distributions, category inventories,
+# coverage ratios and feasibility verdicts are generated evidence and are deliberately absent.
+#
+# Feature-count concepts are kept strictly separate and are never conflated:
+#   raw source columns                 -> field_schema.source_column_count
+#   retained numeric features          -> length of retained_numeric_features.order
+#   selected categorical source columns-> length of categorical_encoding.columns
+#   fitted encoded category count      -> resolved at materialization fit time, benign train only
+#   post-encoding model feature count  -> retained numeric + fitted encoded, never static
 schema_version: 1
 dataset: edge_iiotset
 display_name: Edge-IIoTset
 schema_id: edge_iiotset_wireshark_63
+
 source_layout:
   root: "Edge-IIoTset dataset"
   normal_traffic_root: "Edge-IIoTset dataset/Normal traffic"
   attack_traffic_root: "Edge-IIoTset dataset/Attack traffic"
   normal_file_pattern: "*/*.csv"
   attack_file_pattern: "*_attack.csv"
-  normal_group_folders: [Distance, Flame_Sensor, Heart_Rate, IR_Receiver, Modbus, Soil_Moisture, Sound_Sensor, Temperature_and_Humidity, Water_Level, phValue]
-  attack_files: [Backdoor_attack.csv, DDoS_HTTP_Flood_attack.csv, DDoS_ICMP_Flood_attack.csv, DDoS_TCP_SYN_Flood_attack.csv, DDoS_UDP_Flood_attack.csv, MITM_attack.csv, OS_Fingerprinting_attack.csv, Password_attack.csv, Port_Scanning_attack.csv, Ransomware_attack.csv, SQL_injection_attack.csv, Uploading_attack.csv, Vulnerability_scanner_attack.csv, XSS_attack.csv]
+  # Every normal-traffic group folder present in the source tree.
+  normal_group_folders:
+    - Distance
+    - Flame_Sensor
+    - Heart_Rate
+    - IR_Receiver
+    - Modbus
+    - Soil_Moisture
+    - Sound_Sensor
+    - Temperature_and_Humidity
+    - Water_Level
+    - phValue
+  # Modbus is a source-integrity exclusion, not an experimental ablation: no row of
+  # Modbus.csv satisfies the 63-column positional contract, because frame.time carries an
+  # address literal in place of a timestamp in every row and the leading fields are
+  # displaced accordingly. There is no valid Modbus sub-population to retain, so the group
+  # contributes no rows to any executable materialization or client population.
+  non_executable_group_folders:
+    - group: Modbus
+      reason: source_integrity_column_displacement
+      displaced_field: frame.time
+  # The group folders that define the executable client population.
+  executable_group_folders:
+    - Distance
+    - Flame_Sensor
+    - Heart_Rate
+    - IR_Receiver
+    - Soil_Moisture
+    - Sound_Sensor
+    - Temperature_and_Humidity
+    - Water_Level
+    - phValue
+  attack_files:
+    - Backdoor_attack.csv
+    - DDoS_HTTP_Flood_attack.csv
+    - DDoS_ICMP_Flood_attack.csv
+    - DDoS_TCP_SYN_Flood_attack.csv
+    - DDoS_UDP_Flood_attack.csv
+    - MITM_attack.csv
+    - OS_Fingerprinting_attack.csv
+    - Password_attack.csv
+    - Port_Scanning_attack.csv
+    - Ransomware_attack.csv
+    - SQL_injection_attack.csv
+    - Uploading_attack.csv
+    - Vulnerability_scanner_attack.csv
+    - XSS_attack.csv
+  # Packet captures ship beside every CSV, and the distribution also carries a pre-selected
+  # ML/DL extract that this study does not use. Only the patterns above are ingested.
+  ignored_source_suffixes: [".pcap"]
+  ignored_subtrees: ["Edge-IIoTset dataset/Selected dataset for ML and DL"]
+
 field_schema:
   source_column_count: 63
+  header_required: true
+  header_must_be_identical_across_all_source_files: true
   source_columns:
     - frame.time
     - ip.src_host
@@ -76,61 +140,70 @@ field_schema:
     - mbtcp.unit_id
     - Attack_label
     - Attack_type
+
   identity_scheme:
     row_identity:
       components: [source_file_path, source_row_index]
       index_scope: within_source_file
       preserved_through_materializations: true
     benign_group_identity: { source: path, derived_from: normal_traffic_group_folder }
+    # Attack rows carry no recoverable per-client group identity; see attack_row_group_policy.
     attack_row_group_identity: unavailable
     device_identity: { source: column, column: ip.src_host, usable: false, superseded_by: endpoint_identity }
-    timestamp_field: { column: frame.time, semantics: time_of_day_no_month_day }
+    timestamp_field:
+      column: frame.time
+      # The exported field carries a year token and a time of day but no month or day, so an
+      # absolute wall-clock instant cannot be reconstructed.
+      semantics: year_and_time_of_day_without_month_or_day
+      absolute_instant_recoverable: false
+      within_client_ordering: time_of_day_with_midnight_rollover_correction
+      cross_client_wall_clock_ordering: unavailable
     provenance_fields: [source_file_path, normal_traffic_group_folder, attack_file_basename]
+
   label_fields:
     binary_label: { column: Attack_label, values: [0, 1] }
     multiclass_label: { column: Attack_type }
+    benign_value: { Attack_label: 0, Attack_type: Normal }
     family_taxonomy: unavailable
-  attack_row_group_assignment:
-    available: false
-    reason: attack_traffic_confined_to_subnet_zero
-    resolved_attack_subnets: [0]
-    resolved_attack_fraction: 0.9995
-    attack_rows_in_sensor_subnets_1_8: 0
-    decision_ref: client_granularity_feasibility
-    limits: attack_sensitive_per_client_metrics_only
+
+  # Endpoint resolution is the configured rule for deriving a client from an internal address.
   endpoint_identity:
     resolution: direction_normalized_internal_endpoint
     fields: [ip.src_host, ip.dst_host, arp.src.proto_ipv4, arp.dst.proto_ipv4]
     internal_prefix: "192.168"
+    subnet_component: third_octet
     subnet_role_source: dataset_paper_table_vi
+    # Modbus spanned subnets 0 and 7 in the source tree, but it is a non-executable group,
+    # so it appears in no subnet mapping and can never be resolved as a client.
     subnet_to_group:
-      0: [Temperature_and_Humidity, Modbus]   # shared /24; also hosts the attacker
+      0: Temperature_and_Humidity
       1: Distance
       2: phValue
       3: Heart_Rate
       4: Water_Level
       5: IR_Receiver
       6: Sound_Sensor
-      7: [Flame_Sensor, Modbus]               # Modbus server row shares Flame_Sensor's /24
+      7: Flame_Sensor
       8: Soil_Moisture
     excluded_endpoints:
-      attacker: [192.168.0.170, 192.168.0.152]
-      ambiguous_dual_role: [192.168.0.101]    # Temperature IoT node and attacker impersonation IP
-      placeholder: ["0", "0.0.0.0"]
-      public_external: spoofed_flood_or_incidental_background
+      attacker: ["192.168.0.170", "192.168.0.152"]
+      ambiguous_dual_role: ["192.168.0.101"]
+      placeholder: ["0", "0.0", "0.0.0.0", ""]
+      public_external: excluded_as_spoofed_flood_or_incidental_background
     direction_normalization: prefer_non_attacker_internal_endpoint_then_smallest_nonzero_subnet
     unresolved_row_policy: excluded_from_client_assignment
-    resolved_coverage:
-      benign: { rows: 11209913, resolved_fraction: 0.975 }
-      attack: { rows: 9729709, resolved_fraction: 0.9995, resolved_subnets: [0] }
-      clients_with_benign_and_attack: 1
-      required_client_coverage_ratio: 0.90
-      joint_client_coverage_ratio: 0.11
-    verdict: benign_group_identity_confirmed_attack_partition_infeasible
+
+  # The attacker and every attack-generating host reside in a single subnet, so attack rows
+  # cannot be attributed to sensor clients. This is a configured scope limitation: the dataset
+  # supports benign operating-point equity only.
+  attack_row_group_policy:
+    per_client_attack_assignment: unavailable
+    reason: attack_traffic_originates_from_a_single_internal_subnet
+    consequence: benign_operating_point_equity_only
+
   retained_numeric_features:
     role: model_feature
-    type: numeric_float
-    count: 38
+    # The count is the length of this list and is never restated as a separate literal.
     order:
       - arp.opcode
       - arp.hw.size
@@ -170,12 +243,34 @@ field_schema:
       - mbtcp.len
       - mbtcp.trans_id
       - mbtcp.unit_id
+    # Several retained columns are Wireshark flag/checksum fields exported as hexadecimal
+    # strings ("0x0000000a") interleaved with decimal values, so a plain float parse is not a
+    # valid contract. The coercion below is explicit and must not be replaced by a silent
+    # default, and a value matching none of the accepted forms is a typed parse failure.
+    numeric_parsing:
+      accepted_forms: [decimal, hexadecimal_0x_prefixed]
+      hexadecimal_interpretation: unsigned_integer
+      on_unparseable_value: typed_parse_failure
+    # A value that matches none of the accepted forms — including an address literal, which
+    # is client-identifying information rather than a protocol measurement — makes the whole
+    # row invalid. It is never coerced, and never mapped to zero, NaN, missing, unknown, or a
+    # categorical token. See source_contract.row_integrity_exclusions.
+    on_invalid_value: reject_row_as_invalid_retained_numeric_feature
+
   categorical_encoding:
     strategy: one_hot
-    columns: [http.request.method, http.referer, http.request.version, dns.qry.name.len, mqtt.conack.flags, mqtt.protoname, mqtt.topic]
-    retained_numeric_feature_count: 39
+    columns:
+      - http.request.method
+      - http.referer
+      - http.request.version
+      - dns.qry.name.len
+      - mqtt.conack.flags
+      - mqtt.protoname
+      - mqtt.topic
+    # The vocabulary is fitted from the configured benign training partition only. Attack-only
+    # category values must never enter it. The fitted width, and therefore the post-encoding
+    # model feature count, are resolved at fit time and are not declared here.
     vocabulary_scope: benign_training_rows_only
-    vocabulary_fit_split: benign_train
     vocabulary_artifact: frozen_at_materialization_fit_time
     vocabulary_fingerprint: derived_from_fitted_benign_train_categories
     category_order: ascending_string
@@ -183,259 +278,134 @@ field_schema:
     missing_category_policy: absent_value_maps_to_missing_indicator
     unknown_category_policy: unseen_value_maps_to_unknown_indicator
     unknown_indicator_distinct_from_missing_indicator: true
-    unknown_reporting: { unknown_counts_by_split: reported_at_fit_time, unknown_fractions_by_client: reported_at_fit_time }
     feature_order: [retained_numeric_features, one_hot_encoded_columns]
-    full_corpus_audit_reference:
-      note: >-
-        The counts and category lists below were measured over the full corpus
-        (benign and attack rows) during source inspection. They are audit
-        observations only and are never fitted as the executable vocabulary.
-        The executable vocabulary is fitted from benign_train rows only (static)
-        or historical benign-training rows only (temporal, `vocabulary_fit_split:
-        historical_benign_train`) by the `categorical_vocabulary_benign_fit_audit`
-        check below at materialization time; encoded_feature_count and
-        total_model_feature_count are re-derived then and may be narrower than
-        the full-corpus reference values, since attack-only category values
-        (e.g. injection-payload strings in http.referer/http.request.version)
-        are excluded from a benign-only fit.
-      encoded_feature_count: 76
-      total_model_feature_count: 114
-      per_column_measured_width: { http.request.method: 9, http.referer: 6, http.request.version: 14, dns.qry.name.len: 17, mqtt.conack.flags: 14, mqtt.protoname: 4, mqtt.topic: 12 }
-      observed_source_categories:
-        http.request.method:
-        - '0'
-        - '0.0'
-        - GET
-        - OPTIONS
-        - POST
-        - PROPFIND
-        - PUT
-        - SEARCH
-        - TRACE
-        http.referer:
-        - '() { _; } >_[$($())] { echo 93e4r0-CVE-2014-6278: true; echo;echo; }'
-        - '0'
-        - '0.0'
-        - '1.0'
-        - 127.0.0.1
-        - TESTING_PURPOSES_ONLY
-        http.request.version:
-        - -a HTTP/1.1
-        - -al&ABSOLUTE_PATH_STUDIP=http://cirt.net/rfiinc.txt?? HTTP/1.1
-        - -al&_PHPLIB[libdir]=http://cirt.net/rfiinc.txt?? HTTP/1.1
-        - /etc/passwd|?data=Download HTTP/1.1
-        - '0'
-        - '0.0'
-        - '0x0000511a'
-        - '> HTTP/1.1'
-        - By Dr HTTP/1.1
-        - HTTP/1.0
-        - HTTP/1.1
-        - Src=javascript:alert('Vulnerable')><Img Src=\" HTTP/1.1
-        - name=a><input name=i value=XSS>&lt;script>alert('Vulnerable')</script> HTTP/1.1
-        - script>alert(1)/script><\" HTTP/1.1
-        dns.qry.name.len:
-        - '0'
-        - '0.0'
-        - 0.debian.pool.ntp.org
-        - '1.0'
-        - 1.debian.pool.ntp.org
-        - '11.0'
-        - '17.0'
-        - 2.debian.pool.ntp.org
-        - '21.0'
-        - '245'
-        - 3.debian.pool.ntp.org
-        - _233637DE._sub._googlecast._tcp.local
-        - _googlecast._tcp.local
-        - _ipp._tcp.local
-        - _ipps._tcp.local
-        - null-null.local
-        - raspberrypi.local
-        mqtt.conack.flags:
-        - '0'
-        - '0.0'
-        - '0x00000000'
-        - '12'
-        - '1461073'
-        - '1461074'
-        - '1461383'
-        - '1461384'
-        - '1461589'
-        - '1461591'
-        - '1471198'
-        - '1471199'
-        - '1574358'
-        - '1574359'
-        mqtt.protoname:
-        - '0'
-        - '0.0'
-        - '3'
-        - MQTT
-        mqtt.topic:
-        - '0'
-        - '0.0'
-        - '14'
-        - Distance
-        - Flame_Sensor
-        - Heart_Rate
-        - IR_Receiver
-        - Soil_Moisture
-        - Sound_Sensor
-        - Temperature_and_Humidity
-        - Water_Level
-        - phValue
+
   leakage_exclusions:
-    columns: [frame.time, ip.src_host, ip.dst_host, arp.src.proto_ipv4, arp.dst.proto_ipv4, http.file_data, http.request.full_uri, icmp.transmit_timestamp, http.request.uri.query, tcp.options, tcp.payload, tcp.srcport, tcp.dstport, udp.port, mqtt.msg, dns.qry.name]
     role_basis: leakage_or_high_cardinality_or_client_identity_or_timestamp
-  fingerprint_inputs:
-    source: [source_layout.root, field_schema.source_column_count]
-    schema: [schema_id, field_schema.retained_numeric_features.order, field_schema.categorical_encoding.total_model_feature_count, field_schema.categorical_encoding.category_values]
-observed_facts:
-  normal_group_count: 10
-  attack_file_count: 14
-  total_model_feature_count: 114
-  benign_group_row_counts: { Distance: 1143540, Flame_Sensor: 1070196, Heart_Rate: 165319, IR_Receiver: 1307778, Modbus: 159502, Soil_Moisture: 1192777, Sound_Sensor: 1512883, Temperature_and_Humidity: 1615722, Water_Level: 2295288, phValue: 746908 }
-  device_granularity_rejected: true
-  timestamp_unusable_files: [Modbus, DDoS_UDP_Flood_attack, MITM_attack]
-  exact_duplicate_rate: 0.000125
-  family_taxonomy_available: false
-  temperature_subnet: 0                       # shared /24 with Modbus
-  attack_resolved_subnets: [0]
-  attack_rows_in_sensor_subnets_1_8: 0
-  benign_subnet_consistency: one_subnet_per_folder_except_modbus_spans_0_and_7
-  column_misalignment_2026_07_19_audit:
-    affected_files: [Modbus/Modbus.csv, MITM_attack.csv, DDoS_UDP_Flood_attack.csv]
-    symptom: frame.time_column_contains_non_timestamp_data
-    severity: blocking_for_temporal_chronology
-    mitigation: excluded_from_temporal_regime_verified_in_config
-  dns_qry_name_2026_07_19_audit:
-    type: string_not_numeric
-    config_status: excluded_from_model_features_and_retained_as_source_evidence
-    actual_values: domain_name_strings
-    zero_value_in_non_dns_groups: true
-    resolution: excluded_as_high_cardinality_string_feature
-    severity: resolved
-  total_audit_timestamp: "2026-07-19"
-readiness:
-  source_schema_complete: true
-  benign_group_partition_recoverable: true
-  benign_endpoint_identity_recoverable: true
-  eligible_benign_client_coverage_ratio: 1.0
-  fpr_scope_evaluation_executable: true
-  benign_temporal_fpr_evaluation_executable: true
-  attack_sensitive_per_client_evaluation_executable: false
-  attack_row_group_assignment_recoverable: false
-  external_validation_mode: benign_operating_point_equity
-evaluation_capabilities:
-  benign_calibration:
-    status: available
-    readiness_evidence: benign_group_partition_recoverable
-  benign_test_false_positive_metrics:
-    status: available
-    result_types: [fleet_dispersion_result, fleet_equity_result]
-    supported_metrics: [fpr, cv_fpr, iqr_fpr, fpr_range, worst_client_fpr, jain_index, gini_coefficient]
-    readiness_evidence: eligible_benign_client_coverage_ratio
-  threshold_scope_dispersion:
-    status: available
-    result_type: confirmatory_analysis_result
-  benign_score_distribution_analysis:
-    status: available
-    result_types: [cluster_dispersion_result, cluster_stability_result, metric_association_result]
-  conformal_benign_coverage:
-    status: available
-    result_type: conformal_coverage_result
-  per_client_attack_detection_metrics:
-    status: unavailable
-    reason: attack_traffic_confined_to_subnet_zero
-    result_type: fleet_detection_result
-    unsupported_metrics: [tpr, cv_tpr, recall, macro_f1, p10_macro_f1, balanced_accuracy, worst_client_ba, auroc]
-  attack_sensitive_threshold_tradeoff:
-    status: unavailable
-    reason: attack_traffic_confined_to_subnet_zero
-audits:
-  - check: source_inspection
-    inspection:
-      expected_facts: [feature_schema_present, device_identity_recoverable, capture_timestamp_present_or_absent]
-      source_row_identity_scheme: required
-    feasibility:
-      rule: source_schema_complete
-      required_evidence: [feature_schema_manifest, per_device_counts, timestamp_evidence]
-    operations: { execution: dataset_audit, report: { table_type: source_inspection_report, output_formats: [markdown] } }
-  - check: client_granularity_feasibility
-    inspection:
-      expected_facts: [per_candidate_client_benign_counts, per_candidate_client_attack_counts]
-      candidate_granularities: [device, resolved_endpoint, group]
-      target_client_counts: [6, 15]
-    feasibility:
-      rule: eligibility_coverage_gate
-      minimum_calibration_sample_count: 100
-      minimum_client_coverage_ratio: 0.90
-      required_evidence: [per_client_benign_counts, per_client_attack_counts]
-    outcome:
-      device_granularity: rejected
-      resolved_endpoint_granularity: benign_only
-      group_granularity: authorized_benign_only
-      group_count: 10
-      joint_benign_attack_partition: infeasible
-      joint_client_coverage_ratio: 0.11
-      benign_operating_point_equity_executable: true
-      attack_sensitive_per_client_evaluation_executable: false
-    operations: { execution: dataset_audit, report: { table_type: feasibility_report, output_formats: [markdown] } }
-  - check: timestamp_semantics_verification
-    inspection:
-      expected_facts: [genuine_capture_time_field_present, per_client_temporal_ordering_recoverable]
-    feasibility:
-      rule: timestamp_semantics_verified
-      required_evidence: [timestamp_evidence, per_client_time_span]
-    outcome:
-      within_client_ordering: time_of_day_with_midnight_rollover_correction
-      cross_client_wall_clock_ordering: unavailable
-      temporal_group_count: 9
-      excluded_groups: [Modbus]
-    operations: { execution: dataset_audit, report: { table_type: feasibility_report, output_formats: [markdown] } }
-  - check: categorical_vocabulary_benign_fit_audit
-    inspection:
-      expected_facts: [per_column_benign_train_category_counts, unknown_counts_by_split, unknown_fractions_by_client]
-      fit_split: { static: benign_train, temporal: historical_benign_train }
-    feasibility:
-      rule: benign_only_vocabulary_fit_verified
-      required_evidence: [vocabulary_fit_split_identity, vocabulary_artifact, vocabulary_fingerprint]
-    outcome:
-      vocabulary_scope_verified: benign_training_rows_only
-      encoded_feature_count: pending_benign_train_only_fit
-      total_model_feature_count: pending_benign_train_only_fit
-      note: >-
-        Re-derives per_column_measured_width, encoded_feature_count, and
-        total_model_feature_count from a benign-training-only fit at
-        materialization time; supersedes the full_corpus_audit_reference
-        values in field_schema.categorical_encoding for execution.
-    operations: { execution: dataset_audit, report: { table_type: feasibility_report, output_formats: [markdown] } }
-eligibility:
-  minimum_calibration_sample_count: 100
+    columns:
+      - frame.time
+      - ip.src_host
+      - ip.dst_host
+      - arp.src.proto_ipv4
+      - arp.dst.proto_ipv4
+      - http.file_data
+      - http.request.full_uri
+      - icmp.transmit_timestamp
+      - http.request.uri.query
+      - tcp.options
+      - tcp.payload
+      - tcp.srcport
+      - tcp.dstport
+      - udp.port
+      - mqtt.msg
+      - dns.qry.name
+
+source_contract:
+  # Every source column is accounted for exactly once by one of the four roles below.
+  column_role_partition:
+    roles: [retained_numeric_features, categorical_encoding.columns, leakage_exclusions.columns, label_fields]
+    partition_must_be_disjoint: true
+    partition_must_cover_every_source_column: true
+  reject_row_with_field_count_other_than_header: true
+
+  # A row must satisfy the positional contract as well as the field-count contract: a row
+  # carrying the right number of fields whose leading fields hold the wrong kind of value is
+  # displaced, not merely untidy.
+  positional_contract:
+    timestamp_field_must_match_declared_semantics: true
+    label_fields_must_carry_declared_values: true
+    trailing_label_validity_does_not_imply_row_validity: true
+
+  # Deterministic row-integrity exclusions. Both are evaluated on the raw source row, and
+  # both run before split assignment, client eligibility, endpoint resolution, categorical
+  # vocabulary fitting, normalization, duplicate accounting, and model-feature construction.
+  # A row failing either exclusion can therefore never reach training, calibration, testing,
+  # the fitted vocabulary, or any metric. Reasons are mutually exclusive and evaluated in the
+  # order listed, so a row is attributed to exactly one reason and never double counted.
+  row_integrity_exclusions:
+    evaluation_order: [displaced_source_row, invalid_retained_numeric_feature]
+    applies_before:
+      - split_assignment
+      - client_eligibility_evaluation
+      - endpoint_resolution
+      - categorical_vocabulary_fitting
+      - normalization
+      - duplicate_accounting
+      - model_feature_construction
+    reasons:
+      displaced_source_row:
+        detection: row_violates_positional_contract
+        handling: exclude_and_count
+      invalid_retained_numeric_feature:
+        detection: retained_numeric_value_matches_no_accepted_numeric_form
+        handling: exclude_and_count
+        coercion: forbidden
+    # After these exclusions, every retained numeric value admitted into an executable
+    # materialization is deterministically parseable under the declared numeric_parsing rule.
+    guarantees_all_admitted_retained_numeric_values_parseable: true
+
+fingerprint_inputs:
+  source: [source_layout.root, field_schema.source_column_count]
+  schema:
+    - schema_id
+    - field_schema.retained_numeric_features.order
+    - field_schema.categorical_encoding.columns
+    - field_schema.categorical_encoding.vocabulary_scope
+
+eligibility_policy: primary_analysis
+
 materializations:
   group_benign:
     materialization_id: edge_iiotset_group_benign
     normalization: { strategy: min_max, scope: global_train }
     vocabulary_fit_split: benign_train
-    preprocessing_sequence: [drop_row_with_null_in_retained_column, drop_exact_duplicate_rows, one_hot_encode_categoricals, min_max_normalization_fit_on_train]
+    preprocessing_sequence:
+      - exclude_non_executable_group_folders
+      - exclude_displaced_source_rows
+      - exclude_invalid_retained_numeric_rows
+      - drop_row_with_null_in_retained_column
+      - drop_exact_duplicate_rows
+      - one_hot_encode_categoricals
+      - min_max_normalization_fit_on_train
     row_exclusion:
+      non_executable_group_folder: drop_row
+      displaced_source_row: drop_row
+      invalid_retained_numeric_feature: drop_row
       null_in_retained_column: drop_row
       duplicate_rows: drop_exact_duplicates_keep_first
+      unresolved_endpoint: excluded_from_client_assignment
     split:
       method: random_fractional
       calibration_benign_only: true
       split_seed: 0
       ratios: { train: 0.70, calibration: 0.15, test: 0.15 }
+    split_row_semantics:
+      train_rows: benign_only
+      calibration_rows: benign_only
+      test_rows: benign_only
+      attack_rows: not_assigned_to_clients
+
   group_chronological:
     materialization_id: edge_iiotset_group_chronological
     normalization: { strategy: min_max, scope: historical_train }
     vocabulary_fit_split: historical_benign_train
-    preprocessing_sequence: [drop_row_with_null_in_retained_column, drop_exact_duplicate_rows, resolve_within_client_time_order, chronological_split, one_hot_encode_categoricals, min_max_normalization_fit_on_historical_train]
+    preprocessing_sequence:
+      - exclude_non_executable_group_folders
+      - exclude_displaced_source_rows
+      - exclude_invalid_retained_numeric_rows
+      - drop_row_with_null_in_retained_column
+      - drop_exact_duplicate_rows
+      - resolve_within_client_time_order
+      - chronological_split
+      - one_hot_encode_categoricals
+      - min_max_normalization_fit_on_historical_train
     row_exclusion:
+      non_executable_group_folder: drop_row
+      displaced_source_row: drop_row
+      invalid_retained_numeric_feature: drop_row
       null_in_retained_column: drop_row
       duplicate_rows: drop_exact_duplicates_keep_first
-      unresolved_row_policy: excluded_from_client_assignment
+      unresolved_endpoint: excluded_from_client_assignment
       duplicate_timestamp_policy: preserve_original_row_order_stable_sort
     split:
       method: within_client_chronological
@@ -448,44 +418,39 @@ materializations:
       ordering_field: frame.time
       ordering_scope: per_client
       rollover_policy: add_twenty_four_hours_on_time_decrease
-      minimum_row_counts: { historical_train: 100, historical_calibration: 100, future_recalibration: 50, future_evaluation: 100 }
-      missing_client_policy: exclude_client_report_reduced_k
+      minimum_row_counts:
+        historical_train: 100
+        historical_calibration: 100
+        future_recalibration: 50
+        future_evaluation: 100
+      missing_client_policy: exclude_client_report_reduced_client_count
       chronology_unverifiable_policy: typed_infeasibility_outcome
-    static_reference:
-      note: matched static reference uses the same nine temporal groups (Modbus excluded) via the group_benign materialization, split random_fractional
-      groups: [Distance, Flame_Sensor, Heart_Rate, IR_Receiver, Soil_Moisture, Sound_Sensor, Temperature_and_Humidity, Water_Level, phValue]
-      materialization_ref: group_benign
-    recovery_analysis:
-      fields: [static_reference_cv, frozen_future_cv, recalibrated_future_cv, drift_excess, recovered_amount, recovery_ratio]
-      drift_excess_formula: frozen_future_cv - static_reference_cv
-      recovered_amount_formula: frozen_future_cv - recalibrated_future_cv
-      recovery_ratio_formula: recovered_amount / drift_excess
-      recovery_ratio_precondition: drift_excess_meaningfully_positive
-      negative_recovery_policy: report_as_is_no_floor_clamp
-      outcome_thresholds: { outcome_a_recovery_ratio_min: 0.50, outcome_b_recovery_ratio_max: 0.50, outcome_c_condition: no_meaningful_positive_drift_excess }
-      seed_analysis: paired_seed_ci_over_locked_seed_cohort
-      confidence_interval_procedure: bca_bootstrap_95
+    split_row_semantics:
+      train_rows: benign_only
+      calibration_rows: benign_only
+      test_rows: benign_only
+      attack_rows: not_assigned_to_clients
+
 setups:
-  external_group:
+  sensor_groups:
     materialization: group_benign
-    client_construction: { method: external_group_clients, group_count: 10 }
-    executable: true
+    client_construction:
+      method: sensor_group_clients
+      client_source: source_layout.executable_group_folders
     validation_scope: benign_operating_point_equity
-    supported_capabilities: [benign_calibration, benign_test_false_positive_metrics, threshold_scope_dispersion, benign_score_distribution_analysis, conformal_benign_coverage]
-    unsupported_capabilities: [per_client_attack_detection_metrics, attack_sensitive_threshold_tradeoff]
-    limitation:
-      capability: per_client_attack_detection_metrics
-      status: unavailable
-      reason: attack_traffic_confined_to_subnet_zero
-  chronological:
+    provides_capabilities:
+      - benign_calibration
+      - benign_test_false_positive_metrics
+
+  chronological_sensor_groups:
     materialization: group_chronological
-    client_construction: { method: external_group_clients, group_count: 9, excluded_groups: [Modbus] }
-    executable: true
+    client_construction:
+      method: sensor_group_clients
+      # Modbus is already absent from the executable group folders as a source-integrity
+      # exclusion, so the temporal population needs no separate exclusion of its own.
+      client_source: source_layout.executable_group_folders
     validation_scope: benign_temporal_operating_point_equity
-    cross_client_wall_clock_ordering: unavailable
-    supported_scope: [historical_benign_training, historical_benign_calibration, future_benign_fpr_evaluation, frozen_vs_one_shot_recalibrated_thresholds, cv_fpr_drift_and_recovery]
-    unsupported_scope: [per_client_temporal_tpr, temporal_macro_f1, temporal_balanced_accuracy, attack_sensitive_temporal_recovery]
-    limitation:
-      capability: per_client_attack_detection_metrics
-      status: unavailable
-      reason: attack_traffic_confined_to_subnet_zero
+    provides_capabilities:
+      - benign_calibration
+      - benign_test_false_positive_metrics
+      - within_client_chronological_ordering

@@ -12,7 +12,7 @@ Configuration schemas and resolution contracts.
 
 Scientific meaning, execution mechanics, or report rendering.
 
-## 1. Configuration directories
+## 1. Configuration documents
 
 ```text
 configs/
@@ -21,36 +21,40 @@ configs/
 │   ├── ciciot2023.yaml
 │   └── edge_iiotset.yaml
 │
-├── models/
-│   └── autoencoder.yaml
-│
-├── experiments/
-│   ├── anchor.yaml
-│   ├── threshold_scope.yaml
-│   ├── heterogeneity.yaml
-│   ├── calibration_mechanisms.yaml
-│   ├── external_validation.yaml
-│   ├── training_stress_tests.yaml
-│   └── references_and_boundaries.yaml
-│
-└── execution.yaml
+├── experiments.yaml
+├── protocols.yaml
+└── runtime.yaml
 ```
 
-Four boundary owners, not six: `datasets/` owns one document per real dataset
-(source, feasibility, machine-readable field schema, named materializations —
-each pairing a normalization, preprocessing sequence, row-exclusion policy,
-and split — client-construction setups that reference a materialization, and
-eligibility); `models/` owns one document per model family (architecture,
-objective, optimizer, checkpointing, and every named training profile that
-shares that family); `experiments/` groups scientifically related
-experiments into family documents, each experiment independently
-addressable by a semantic slug; `execution.yaml` owns every named execution
-profile in one file, including each profile's data-loading chunk size and
-streaming policy. `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md §3`
-reproduces this identical tree with per-file schema-module ownership.
+Six documents and exactly one directory. `datasets/` owns one document per
+real dataset, and dataset source schemas are independent enough that they
+remain one file per dataset rather than one merged document: each declares
+source layout, machine-readable field schema, the source contract, named
+materializations — each pairing a normalization, preprocessing sequence,
+row-exclusion policy, and split — client-construction setups that reference a
+materialization, and the capabilities that setup provides. A dataset document
+carries no measured count, category inventory, readiness verdict, or
+audit-time field; those are generated evidence and live only in the
+consolidated dataset-source audit output.
 
-There is no `dataset_audits/`, `data_sources/`, `detectors/`, `protocols/`,
-`runtime/`, or `reporting/` directory anywhere in this design. Their prior
+`protocols.yaml` owns every reusable, execution-independent scientific
+definition — model architectures, optimizers, batching, seed cohorts,
+checkpoint profiles, training profiles, eligibility policies, threshold
+policies, metric bundles, statistical profiles, result types, report profiles,
+and operational inputs — each stated exactly once and referenced by a stable
+descriptive identifier. `experiments.yaml` owns the study populations, the
+capability and suppression vocabularies, and the single experiment catalogue,
+each entry independently addressable by a descriptive name. `runtime.yaml`
+owns machine and operational execution profiles only — repository-relative
+roots, the read-only raw-source policy, and each profile's device policy,
+resource budget, concurrency, data-loading chunk size and streaming policy —
+and holds no scientific parameter.
+`PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md §3` reproduces this identical tree
+with per-file schema-module ownership.
+
+There is no `models/`, `experiments/`, `dataset_audits/`, `data_sources/`,
+`detectors/`, `catalogues/`, `contracts/`, `profiles/`, `policies/`,
+`reporting/`, or `execution.yaml` path anywhere in this design. Their prior
 responsibilities move to a single owner each (`§1.1` below); none is
 duplicated, and none survives as an empty or redirect path.
 
@@ -136,7 +140,7 @@ load root boundary document
       → resolve typed references (dataset+setup, model+training_profile, execution profile)
         → validate typed sweep bindings
           → expand sweep coordinates
-            → expand each experiment-family document into its independent experiment entries
+            → expand each experiment catalogue into its independent experiment entries
               → resolve one complete configuration per (experiment, coordinate)
                 → construct frozen resolved domain objects
                   → run cross-document scientific validation
@@ -150,7 +154,7 @@ load root boundary document
 `config/compose.py` performs parsing, reference resolution, family-document
 expansion, sweep expansion, mapping, and validation only. It neither
 persists artifacts, imports infrastructure, creates execution resources, nor
-runs scientific computation. Expanding a family document into its
+runs scientific computation. Expanding the experiment catalogue into its
 independent experiment entries is the same kind of pure, boundary-only
 expansion sweep expansion already performs (`§17`); no new composition
 mechanism is introduced, and no expanded entry ever depends on a sibling
@@ -371,7 +375,7 @@ invalidates every downstream checkpoint and score
 
 ## 9. Anchor experiment family
 
-`configs/experiments/anchor.yaml` holds exactly one experiment entry. The
+`configs/experiments.yaml` holds exactly one experiment entry. The
 fragment below is an **abbreviated field-coverage illustration**, not a
 verbatim byte-for-byte reproduction — the real file wraps `data`/
 `evaluation_scope`/`evaluation_refs`/`analysis_refs`/`prerequisites` in a
@@ -381,7 +385,7 @@ verbatim byte-for-byte reproduction — the real file wraps `data`/
 (`comparison_mode` with `strict_artifact_comparison`/`statistical_fallback`,
 `expected_seed_cohort`, `historical_reference` with the individual B1/B2
 point values, `checks`, `failure_reasons`, `downstream_blocking_behavior`).
-`configs/experiments/anchor.yaml` is authoritative for the exact shape;
+`configs/experiments.yaml` is authoritative for the exact shape;
 every scientific value the source documents supply is explicit there, none
 defaulted in Python. It references the `anchor` materialization (`§11.1`)
 through the `anchor_natural_devices` setup and the `anchor_terminal`
@@ -482,7 +486,7 @@ package removes never returns.
 
 ## 10. Threshold-scope experiment family
 
-`configs/experiments/threshold_scope.yaml` groups the confirmatory endpoint
+`configs/experiments.yaml` groups the confirmatory endpoint
 with its two direct construction/quantile rule-outs — the experiments the
 roadmap ties most tightly to the B1-vs-B2 pair (Tier 1 and its immediate
 Tier 2 defenses). As in `§9`, the fragments below are **abbreviated
@@ -491,7 +495,7 @@ field-coverage illustrations**: the real file wraps each experiment's
 in a `regimes:` list and additionally carries a `statistical_profile` block
 (pairing key, resampling unit, analysis-seed derivation, missing-pair and
 zero-difference behavior, finite-value validation) alongside every
-`primary_procedure`; `configs/experiments/threshold_scope.yaml` is
+`primary_procedure`; `configs/experiments.yaml` is
 authoritative for the exact shape. From here on, a flow-style
 `report: { table_type: …, … }` is shorthand for the single-entry
 `report_artifacts` list worked in full in `§9` (`report: { report_artifacts:
@@ -1450,7 +1454,7 @@ above).
 
 ## 12. Reusable model configuration
 
-`configs/models/autoencoder.yaml` — the one model family, carrying every
+`configs/protocols.yaml` — the one model family, carrying every
 named training profile the roadmap authorizes:
 
 ```yaml
@@ -1539,7 +1543,7 @@ test).
 
 ## 13. Execution configuration
 
-`configs/execution.yaml` — every named profile in one file, shown as a
+`configs/runtime.yaml` — every named profile in one file, shown as a
 non-resolvable draft until the authority supplies its operational limits:
 
 ```yaml
@@ -1655,7 +1659,7 @@ directory mirroring the experiment catalogue.
 ## 16. Remaining experiment families
 
 Every family below follows the identical shape worked in full in `§§9–10`:
-one `configs/experiments/<family>.yaml` document, a `family` name, and an
+one `configs/experiments.yaml` document, a `family` name, and an
 `experiments` list of independently resolvable entries, each carrying either
 `data` (dataset + setup) or a `regimes:` list of regime cells, `model` +
 `checkpoint_profile` + a `training` block (`profile` + `parameters`),
@@ -1717,7 +1721,7 @@ bound into `nbaiot.yaml`'s `dirichlet_partitioned` setup), lambda
 size `{50, 100, 250, 500, 1000, 5000}` (`calibration_window_size_stability`,
 each point additionally resolving a `CalibrationSubsetDefinition`), and
 fixed-k `{2.0, 2.5, 3.0}` (`federated_summary_comparator`'s optional
-supplementary evaluation). Expanding an experiment-family document into its
+supplementary evaluation). Expanding the experiment catalogue into its
 independent entries (`§3`) and expanding a sweep into its coordinates are
 the same class of pure, boundary-only expansion; neither introduces a
 second composition mechanism.
@@ -1768,9 +1772,9 @@ datp-core experiment report --config <slug>
 ```
 
 `--config` accepts a registered experiment slug (`datp-core experiment
-list` enumerates every registered slug and the family document that
-contains it). A slug is unique across every family document; the CLI never
-needs a file path, because one family document may hold several experiments
+list` enumerates every registered experiment name). A name is unique across
+the whole catalogue; the CLI never
+needs a file path, because the one catalogue document holds every experiment
 and a path alone would be ambiguous. The CLI may additionally accept only a
 storage-root override where operationally required, and dry-run, verbosity,
 confirmation, and logging controls that do not affect scientific output.
@@ -1824,7 +1828,7 @@ registered fails, it never silently no-ops.
 ### 22.1 Experiment-family targets
 
 Every regularly executed root experiment exposes only the actions
-meaningful for it, addressed by slug regardless of which family document
+meaningful for it, addressed by name regardless of where in the catalogue
 backs it:
 
 | Family target prefix | Registered slug | Actions exposed |
@@ -1955,13 +1959,13 @@ cannot bypass the typed `AnchorEquivalenceGate`.
 
 Adding a new threshold construction, a new dataset, or a new attack/defense
 direction the roadmap authorizes later never requires editing every
-existing family document. Concretely: adding a new dataset means one new
+existing catalogue entry. Concretely: adding a new dataset means one new
 `configs/datasets/<name>.yaml` document, no edit to `models/autoencoder.yaml`
-or any `configs/experiments/` family; adding a new threshold construction
+or any `configs/experiments.yaml` family; adding a new threshold construction
 means a new discriminated `threshold.policy` arm plus its implementation,
 with every existing experiment entry untouched because none references the
 new policy; adding a new experiment means one new entry appended to the
-family document whose scientific role it matches, referencing existing
+catalogue entry whose scientific role it matches, referencing existing
 dataset/setup and model/training-profile identities, never a new planner or
 executor branch (`PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md §7`,
 `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §9.2`).
