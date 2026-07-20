@@ -2,59 +2,55 @@
 
 from __future__ import annotations
 
-from typing import Any
-
-from datp_core.domain.identifiers import ThresholdPolicyId
+from datp_core.config.resolver import ResolvedProjectConfiguration
+from datp_core.domain.identifiers import PopulationId, ThresholdPolicyId
 from datp_core.domain.thresholding import BenignCalibrationScores, ThresholdSet
-from datp_core.domain.values import Probability, TypedDomainRegistry
-from datp_core.infrastructure.thresholding.base import ThresholdEstimator
-from datp_core.infrastructure.thresholding.estimators import (
-    CalibrationFallbackEstimator,
-    ClusterThresholdEstimator,
-    FamilyMeanThresholdEstimator,
-    FederatedFixedCoefficientEstimator,
-    FederatedMatchedExceedanceEstimator,
-    LocalGlobalShrinkageEstimator,
-    LocalQuantileThresholdEstimator,
-    PooledThresholdEstimator,
-    SharedMeanThresholdEstimator,
-    SplitConformalThresholdEstimator,
-    WeightedSharedThresholdEstimator,
-)
-
-DEFAULT_Q = Probability(0.95)
+from datp_core.domain.values import Seed, TypedDomainRegistry
+from datp_core.infrastructure.thresholding.base import ThresholdConstructionRequest, ThresholdEstimator
+from datp_core.infrastructure.thresholding.estimators import ConfiguredThresholdEstimator
 
 
-def build_estimator_registry() -> TypedDomainRegistry[ThresholdPolicyId, ThresholdEstimator]:
-    estimators: list[ThresholdEstimator] = [
-        SharedMeanThresholdEstimator(),
-        PooledThresholdEstimator("shared_pooled_p95"),
-        PooledThresholdEstimator("centralized_pooled_p95"),
-        WeightedSharedThresholdEstimator(),
-        LocalQuantileThresholdEstimator(),
-        FamilyMeanThresholdEstimator(),
-        ClusterThresholdEstimator("cluster_k3_mean_p95", k_clusters=3, use_median=False),
-        ClusterThresholdEstimator("cluster_k9_mean_p95", k_clusters=9, use_median=False),
-        ClusterThresholdEstimator("cluster_k3_robust_median_p95", k_clusters=3, use_median=True),
-        SplitConformalThresholdEstimator(),
-        LocalGlobalShrinkageEstimator(),
-        CalibrationFallbackEstimator(),
-        FederatedMatchedExceedanceEstimator(),
-        FederatedFixedCoefficientEstimator(),
-    ]
-    return TypedDomainRegistry(_items={est.policy_id: est for est in estimators})
+def build_estimator_registry(
+    config: ResolvedProjectConfiguration,
+) -> TypedDomainRegistry[ThresholdPolicyId, ThresholdEstimator]:
+    """Bind every estimator to its single resolved policy; no adapter-side policy values exist."""
+    estimators: dict[ThresholdPolicyId, ThresholdEstimator] = {
+        policy_id: ConfiguredThresholdEstimator(policy_id, policy)
+        for policy_id, policy in config.threshold_policies.items()
+    }
+    return TypedDomainRegistry(_items=estimators)
 
 
 class ConstructThresholdsUseCase:
-    def __init__(self, registry: TypedDomainRegistry[ThresholdPolicyId, ThresholdEstimator] | None = None) -> None:
-        self._registry = registry or build_estimator_registry()
+    def __init__(
+        self,
+        config: ResolvedProjectConfiguration,
+        registry: TypedDomainRegistry[ThresholdPolicyId, ThresholdEstimator],
+    ) -> None:
+        self._config = config
+        self._registry = registry
 
     def execute(
         self,
         policy_id: ThresholdPolicyId,
         calibration: tuple[BenignCalibrationScores, ...],
-        quantile: Probability = DEFAULT_Q,
-        **kwargs: Any,
+        population_id: PopulationId,
+        family_map: dict[str, str] | None,
+        seed: Seed | None,
+        selected_coefficient: float | None,
     ) -> ThresholdSet:
         estimator = self._registry.get(policy_id)
-        return estimator.estimate(calibration, quantile, **kwargs)
+        policy = self._config.threshold_policies.get(policy_id)
+        if policy is None:
+            raise KeyError(f"Unknown resolved threshold policy: {policy_id.value}")
+        return estimator.estimate(
+            ThresholdConstructionRequest(
+                policy_id=policy_id,
+                policy=policy,
+                calibration=calibration,
+                population_id=population_id,
+                family_map=family_map,
+                seed=seed,
+                selected_coefficient=selected_coefficient,
+            )
+        )

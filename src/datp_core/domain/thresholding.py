@@ -10,7 +10,6 @@ from datp_core.domain.values import NonNegativeFloat, PositiveInt, Probability
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BenignCalibrationScores:
-
     client_id: ClientId
     values: tuple[float, ...]
     population_id: PopulationId | None = None
@@ -27,7 +26,6 @@ class BenignCalibrationScores:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ThresholdRecord:
-
     client_id: ClientId
     threshold: NonNegativeFloat | float
     owner: str
@@ -44,10 +42,9 @@ class ThresholdRecord:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ThresholdSet:
-
     policy_id: ThresholdPolicyId
     values: tuple[ThresholdRecord, ...]
-    target_quantile: Probability = Probability(0.95)
+    target_quantile: Probability
 
     def get_client_threshold(self, client_id: ClientId) -> ThresholdRecord:
         for rec in self.values:
@@ -58,7 +55,6 @@ class ThresholdSet:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SampleSizeCheck:
-
     client_id: ClientId
     calibration_count: PositiveInt | int
     minimum_required: PositiveInt | int

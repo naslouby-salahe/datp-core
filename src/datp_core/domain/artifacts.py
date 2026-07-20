@@ -1,13 +1,15 @@
-"""Domain models for artifact identities, lifecycle states, formats, and manifests."""
+"""Domain models for artifact identities, lifecycle states, formats, manifests, and repository transactions."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import Enum
+from typing import Protocol, runtime_checkable
 
-from .fingerprints import Checksum, Fingerprint
-from .identifiers import ArtifactId
-from .values import Seed
+from attrs import define, field
+
+from datp_core.domain.fingerprints import Checksum, Fingerprint
+from datp_core.domain.identifiers import ArtifactId, ExperimentId
+from datp_core.domain.values import Seed
 
 
 class ArtifactKind(Enum):
@@ -18,7 +20,9 @@ class ArtifactKind(Enum):
     TEST_SCORES = "test_scores"
     THRESHOLDS = "thresholds"
     CLIENT_METRICS = "client_metrics"
+    STATISTICAL_SUMMARY = "statistical_summary"
     STATISTICAL_RESULTS = "statistical_results"
+    RESULT_REPORT = "result_report"
     REPORT = "report"
 
 
@@ -35,9 +39,18 @@ class ArtifactState(Enum):
     PENDING = "pending"
     CORRUPT = "corrupt"
     INCOMPATIBLE = "incompatible"
+    FROZEN = "frozen"
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+class ArtifactCorruptionReason(Enum):
+    CHECKSUM_MISMATCH = "checksum_mismatch"
+    MANIFEST_MISSING = "manifest_missing"
+    PAYLOAD_MISSING = "payload_missing"
+    FINGERPRINT_MISMATCH = "fingerprint_mismatch"
+    SCHEMA_INCOMPATIBLE = "schema_incompatible"
+
+
+@define(frozen=True, slots=True, kw_only=True)
 class ArtifactKey:
     artifact_id: ArtifactId
     kind: ArtifactKind
@@ -46,14 +59,108 @@ class ArtifactKey:
         return f"{self.kind.value}:{self.artifact_id.value}"
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@define(frozen=True, slots=True, kw_only=True)
+class ArtifactParent:
+    parent_key: ArtifactKey
+    scientific_fingerprint: Fingerprint
+
+
+@define(frozen=True, slots=True, kw_only=True)
 class ArtifactManifest:
     artifact_key: ArtifactKey
-    format: ArtifactFormat
+    artifact_format: ArtifactFormat
     state: ArtifactState
     relative_path: str
     scientific_fingerprint: Fingerprint
     execution_fingerprint: Fingerprint
     payload_checksum: Checksum
-    schema_version: int = 1
+    schema_version: int
+    parents: tuple[ArtifactParent, ...]
+    creation_timestamp: float
+    environment_identity: str
+    is_frozen: bool
+    experiment_id: ExperimentId | None = None
     seed: Seed | None = None
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ArtifactCommitRequest:
+    artifact_key: ArtifactKey
+    artifact_format: ArtifactFormat
+    scientific_fingerprint: Fingerprint
+    execution_fingerprint: Fingerprint
+    payload_bytes: bytes
+    relative_path: str
+    parents: tuple[ArtifactParent, ...]
+    schema_version: int
+    creation_timestamp: float
+    environment_identity: str
+    experiment_id: ExperimentId | None = None
+    seed: Seed | None = None
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ArtifactFileCommitRequest:
+    """Artifact commit metadata for a staged payload file owned by the transaction."""
+
+    artifact_key: ArtifactKey
+    artifact_format: ArtifactFormat
+    scientific_fingerprint: Fingerprint
+    execution_fingerprint: Fingerprint
+    source_file: str
+    relative_path: str
+    parents: tuple[ArtifactParent, ...]
+    schema_version: int
+    creation_timestamp: float
+    environment_identity: str
+    experiment_id: ExperimentId | None = None
+    seed: Seed | None = None
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ArtifactCommitResult:
+    success: bool
+    manifest: ArtifactManifest | None = None
+    error_message: str | None = None
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ArtifactLookupResult:
+    found: bool
+    manifest: ArtifactManifest | None = None
+    payload_bytes: bytes | None = None
+    corruption_reason: ArtifactCorruptionReason | None = None
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ArtifactReuseDecision:
+    can_reuse: bool
+    reason: str
+    existing_manifest: ArtifactManifest | None = None
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ArtifactCompatibilityResult:
+    compatible: bool
+    reasons: tuple[str, ...] = field(factory=tuple)
+
+
+@runtime_checkable
+class ArtifactRepository(Protocol):
+    """Single application-facing authority for immutable artifact persistence."""
+
+    def commit(self, request: ArtifactCommitRequest) -> ArtifactCommitResult: ...
+
+    def commit_file(self, request: ArtifactFileCommitRequest) -> ArtifactCommitResult: ...
+
+    def read(self, relative_path: str) -> ArtifactLookupResult: ...
+
+    def inspect(self, relative_path: str) -> ArtifactLookupResult: ...
+
+    def assess_reuse(
+        self,
+        relative_path: str,
+        artifact_key: ArtifactKey,
+        scientific_fingerprint: Fingerprint,
+        execution_fingerprint: Fingerprint,
+    ) -> ArtifactReuseDecision: ...

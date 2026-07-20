@@ -44,8 +44,27 @@ hardware = [
     "pynvml>=11.5",
 ]
 
+[dependency-groups]
+dev = [
+    "hypothesis>=6.0",
+    "import-linter>=2.0",
+    "nox>=2024.4.15",
+    "pytest>=8.0",
+    "pytest-benchmark>=4.0",
+    "pytest-xdist>=3.5",
+    "pyright>=1.1.390",
+    "ruff>=0.8",
+]
+
 [project.scripts]
 datp-core = "datp_core.interfaces.cli.app:main"
+
+[build-system]
+requires = ["setuptools>=75"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

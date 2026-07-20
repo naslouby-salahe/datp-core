@@ -1,0 +1,382 @@
+"""Edge-IIoTset configured benign-client identity and strict numeric parsing."""
+
+from __future__ import annotations
+
+import csv
+import hashlib
+import json
+import math
+import sqlite3
+import struct
+from collections.abc import Iterator
+from io import BytesIO
+from pathlib import Path
+from random import Random
+from tempfile import TemporaryDirectory
+
+import pyarrow as pa
+import pyarrow.parquet as pq
+from attrs import define
+
+from datp_core.domain.datasets import DatasetMaterialization
+from datp_core.infrastructure.datasets.csv_source import SourceRowFailure
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class EdgeIIoTsetRow:
+    client_id: str | None
+    is_attack: bool
+    source_path: Path
+    source_row_index: int
+    numeric_values: tuple[float, ...]
+    categorical_values: tuple[str | None, ...]
+    multiclass_label: str
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class EdgeIIoTsetSplitRows:
+    train: tuple[EdgeIIoTsetRow, ...]
+    calibration: tuple[EdgeIIoTsetRow, ...]
+    test: tuple[EdgeIIoTsetRow, ...]
+    unassigned_attack: tuple[EdgeIIoTsetRow, ...]
+    duplicate_rows_removed: int
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class EdgeIIoTsetVocabulary:
+    categories_by_column: tuple[tuple[str, tuple[str, ...]], ...]
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class EdgeIIoTsetNormalization:
+    minimums: tuple[float, ...]
+    maximums: tuple[float, ...]
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class EdgeIIoTsetExternalIndexReport:
+    source_rows_seen: int
+    excluded_rows: int
+    canonical_rows: int
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class EdgeTimestampedRow:
+    row: EdgeIIoTsetRow
+    time_of_day_seconds: float
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class EdgeChronologicalSplitRows:
+    historical_train: tuple[EdgeIIoTsetRow, ...]
+    historical_calibration: tuple[EdgeIIoTsetRow, ...]
+    future_recalibration: tuple[EdgeIIoTsetRow, ...]
+    future_evaluation: tuple[EdgeIIoTsetRow, ...]
+    excluded_clients: tuple[str, ...]
+
+
+type EdgeIIoTsetSourceResult = EdgeIIoTsetRow | SourceRowFailure
+
+
+def iter_edge_iiotset_source(
+    path: Path,
+    normal_root: Path,
+    attack_root: Path,
+    numeric_headers: tuple[str, ...],
+    categorical_headers: tuple[str, ...],
+    binary_label_header: str,
+    multiclass_label_header: str,
+) -> Iterator[EdgeIIoTsetSourceResult]:
+    """Read one configured Edge source; only normal-group rows receive client identities."""
+    try:
+        relative_normal = path.relative_to(normal_root)
+        client_id: str | None = relative_normal.parts[0] if len(relative_normal.parts) >= 2 else None
+        is_attack = False
+    except ValueError:
+        try:
+            path.relative_to(attack_root)
+        except ValueError as exc:
+            raise ValueError("Edge-IIoTset source path escapes configured normal and attack roots") from exc
+        client_id = None
+        is_attack = True
+    with path.open("r", encoding="utf-8", newline="") as source:
+        reader = csv.DictReader(source)
+        required = numeric_headers + categorical_headers + (binary_label_header, multiclass_label_header)
+        missing = tuple(header for header in required if header not in tuple(reader.fieldnames or ()))
+        if missing:
+            raise ValueError(f"Source {path} is missing required headers: {', '.join(missing)}")
+        for index, record in enumerate(reader, start=1):
+            if None in record or any(record[header] is None for header in required):
+                yield SourceRowFailure(
+                    source_path=path, source_row_index=index, reason="field count differs from configured header"
+                )
+                continue
+            values: list[float] = []
+            reason: str | None = None
+            for header in numeric_headers:
+                raw = record[header]
+                try:
+                    value = float(int(raw, 16)) if raw.lower().startswith("0x") else float(raw)
+                except ValueError:
+                    reason = f"invalid retained numeric feature '{header}'"
+                    break
+                if not math.isfinite(value):
+                    reason = f"invalid retained numeric feature '{header}'"
+                    break
+                values.append(value)
+            if reason is not None:
+                yield SourceRowFailure(source_path=path, source_row_index=index, reason=reason)
+                continue
+            binary_label = record[binary_label_header].strip()
+            multiclass = record[multiclass_label_header].strip()
+            if binary_label not in {"0", "1"} or not multiclass:
+                yield SourceRowFailure(
+                    source_path=path, source_row_index=index, reason="invalid configured Edge label fields"
+                )
+                continue
+            if is_attack == (binary_label == "0"):
+                yield SourceRowFailure(
+                    source_path=path,
+                    source_row_index=index,
+                    reason="source path conflicts with configured Edge binary label",
+                )
+                continue
+            yield EdgeIIoTsetRow(
+                client_id=client_id,
+                is_attack=is_attack,
+                source_path=path,
+                source_row_index=index,
+                numeric_values=tuple(values),
+                categorical_values=tuple(
+                    record[header] if record[header] != "" else None for header in categorical_headers
+                ),
+                multiclass_label=multiclass,
+            )
+
+
+def split_edge_benign_rows(
+    rows: tuple[EdgeIIoTsetRow, ...], materialization: DatasetMaterialization
+) -> EdgeIIoTsetSplitRows:
+    """Deduplicate and split valid folder-defined benign clients; never assign attacks to clients."""
+    if materialization.split_method != "random_fractional" or materialization.split_seed is None:
+        raise ValueError("Edge-IIoTset benign materialization requires configured random_fractional split and seed")
+    train_ratio = float(materialization.ratio("train"))
+    calibration_ratio = float(materialization.ratio("calibration"))
+    test_ratio = float(materialization.ratio("test"))
+    if not math.isclose(train_ratio + calibration_ratio + test_ratio, 1.0, rel_tol=0.0, abs_tol=1.0e-12):
+        raise ValueError("Edge-IIoTset split ratios must sum exactly to one")
+    attacks = tuple(row for row in rows if row.is_attack)
+    benign_by_client: dict[str, list[EdgeIIoTsetRow]] = {}
+    for row in rows:
+        if row.is_attack:
+            continue
+        if row.client_id is None:
+            raise ValueError("Edge-IIoTset benign rows require a configured normal-group client identity")
+        benign_by_client.setdefault(row.client_id, []).append(row)
+    train: list[EdgeIIoTsetRow] = []
+    calibration: list[EdgeIIoTsetRow] = []
+    test: list[EdgeIIoTsetRow] = []
+    duplicates = 0
+    for client_id, client_rows in sorted(benign_by_client.items()):
+        canonical: dict[tuple[tuple[float, ...], tuple[str | None, ...]], EdgeIIoTsetRow] = {}
+        for row in sorted(client_rows, key=_provenance_key):
+            key = (row.numeric_values, row.categorical_values)
+            if key in canonical:
+                duplicates += 1
+            else:
+                canonical[key] = row
+        ordered = sorted(canonical.values(), key=_edge_content_hash)
+        generator = Random(f"{materialization.split_seed.value}:{client_id}")
+        for row in ordered:
+            draw = generator.random()
+            if draw < train_ratio:
+                train.append(row)
+            elif draw < train_ratio + calibration_ratio:
+                calibration.append(row)
+            else:
+                test.append(row)
+    return EdgeIIoTsetSplitRows(
+        train=tuple(sorted(train, key=_provenance_key)),
+        calibration=tuple(sorted(calibration, key=_provenance_key)),
+        test=tuple(sorted(test, key=_provenance_key)),
+        unassigned_attack=attacks,
+        duplicate_rows_removed=duplicates,
+    )
+
+
+def fit_edge_vocabulary(
+    train_rows: tuple[EdgeIIoTsetRow, ...], categorical_headers: tuple[str, ...]
+) -> EdgeIIoTsetVocabulary:
+    """Fit sorted categorical vocabularies exclusively from benign training rows."""
+    if any(row.is_attack for row in train_rows):
+        raise ValueError("Edge-IIoTset categorical vocabulary may only fit benign training rows")
+    values: list[set[str]] = [set() for _ in categorical_headers]
+    for row in train_rows:
+        if len(row.categorical_values) != len(categorical_headers):
+            raise ValueError("Edge-IIoTset categorical row width differs from configured schema")
+        for index, value in enumerate(row.categorical_values):
+            if value is not None:
+                values[index].add(value)
+    return EdgeIIoTsetVocabulary(
+        categories_by_column=tuple(
+            (header, tuple(sorted(values[index]))) for index, header in enumerate(categorical_headers)
+        )
+    )
+
+
+def fit_edge_train_normalization(train_rows: tuple[EdgeIIoTsetRow, ...]) -> EdgeIIoTsetNormalization:
+    """Fit min/max scalers only from benign training numeric features."""
+    if not train_rows or any(row.is_attack for row in train_rows):
+        raise ValueError("Edge-IIoTset normalization requires non-empty benign training rows")
+    width = len(train_rows[0].numeric_values)
+    if any(len(row.numeric_values) != width for row in train_rows):
+        raise ValueError("Edge-IIoTset numeric row width differs within training population")
+    return EdgeIIoTsetNormalization(
+        minimums=tuple(min(row.numeric_values[i] for row in train_rows) for i in range(width)),
+        maximums=tuple(max(row.numeric_values[i] for row in train_rows) for i in range(width)),
+    )
+
+
+def encode_edge_split_as_parquet(
+    split: EdgeIIoTsetSplitRows,
+    numeric_headers: tuple[str, ...],
+    vocabulary: EdgeIIoTsetVocabulary,
+    normalization: EdgeIIoTsetNormalization,
+) -> bytes:
+    """Encode a frozen, train-fit benign Edge feature artifact."""
+    category_columns = dict(vocabulary.categories_by_column)
+    categorical_headers = tuple(category_columns)
+    if len(normalization.minimums) != len(numeric_headers) or len(normalization.maximums) != len(numeric_headers):
+        raise ValueError("Edge-IIoTset normalization width differs from numeric schema")
+    encoded_headers = list(numeric_headers)
+    for header in categorical_headers:
+        encoded_headers += [f"{header}={value}" for value in (*category_columns[header], "__MISSING__", "__UNKNOWN__")]
+    records: dict[str, list[object]] = {"split": [], "client_id": [], "source_path": [], "source_row_index": []}
+    records.update({header: [] for header in encoded_headers})
+    for role, rows in (("train", split.train), ("calibration", split.calibration), ("test", split.test)):
+        for row in rows:
+            if row.is_attack or row.client_id is None:
+                raise ValueError("Edge-IIoTset client artifact may only contain benign assigned rows")
+            records["split"].append(role)
+            records["client_id"].append(row.client_id)
+            records["source_path"].append(row.source_path.as_posix())
+            records["source_row_index"].append(row.source_row_index)
+            for i, header in enumerate(numeric_headers):
+                low, high = normalization.minimums[i], normalization.maximums[i]
+                records[header].append(0.0 if high == low else (row.numeric_values[i] - low) / (high - low))
+            for i, header in enumerate(categorical_headers):
+                value = row.categorical_values[i]
+                selected = (
+                    "__MISSING__" if value is None else value if value in category_columns[header] else "__UNKNOWN__"
+                )
+                for category in (*category_columns[header], "__MISSING__", "__UNKNOWN__"):
+                    records[f"{header}={category}"].append(float(category == selected))
+    payload = BytesIO()
+    pq.write_table(pa.table(records), payload, compression="zstd", use_dictionary=False)
+    return payload.getvalue()
+
+
+def index_edge_benign_sources(
+    source_paths: tuple[Path, ...],
+    normal_root: Path,
+    attack_root: Path,
+    numeric_headers: tuple[str, ...],
+    categorical_headers: tuple[str, ...],
+    binary_label_header: str,
+    multiclass_label_header: str,
+) -> EdgeIIoTsetExternalIndexReport:
+    """Boundedly scan Edge benign sources into a temporary SQLite exact-row index for feasibility evidence."""
+    seen = excluded = 0
+    with TemporaryDirectory(prefix="datp_edge_index_") as temporary_directory:
+        database = sqlite3.connect(Path(temporary_directory) / "edge.sqlite3")
+        try:
+            database.execute("PRAGMA journal_mode = OFF")
+            database.execute(
+                "CREATE TABLE canonical_rows (client_id TEXT, numeric_values TEXT, categorical_values TEXT, "
+                "source_path TEXT, source_row_index INTEGER, "
+                "PRIMARY KEY (client_id, numeric_values, categorical_values)) WITHOUT ROWID"
+            )
+            for path in sorted(source_paths):
+                for result in iter_edge_iiotset_source(
+                    path,
+                    normal_root,
+                    attack_root,
+                    numeric_headers,
+                    categorical_headers,
+                    binary_label_header,
+                    multiclass_label_header,
+                ):
+                    seen += 1
+                    if isinstance(result, SourceRowFailure):
+                        excluded += 1
+                        continue
+                    if result.is_attack or result.client_id is None:
+                        continue
+                    database.execute(
+                        "INSERT OR IGNORE INTO canonical_rows VALUES (?, ?, ?, ?, ?)",
+                        (
+                            result.client_id,
+                            struct.pack(f"!{len(result.numeric_values)}d", *result.numeric_values),
+                            json.dumps(result.categorical_values, separators=(",", ":"), ensure_ascii=False),
+                            result.source_path.as_posix(),
+                            result.source_row_index,
+                        ),
+                    )
+            canonical = int(database.execute("SELECT COUNT(*) FROM canonical_rows").fetchone()[0])
+        finally:
+            database.close()
+    return EdgeIIoTsetExternalIndexReport(source_rows_seen=seen, excluded_rows=excluded, canonical_rows=canonical)
+
+
+def split_edge_chronological_rows(
+    rows: tuple[EdgeTimestampedRow, ...], materialization: DatasetMaterialization, excluded_clients: tuple[str, ...]
+) -> EdgeChronologicalSplitRows:
+    """Apply configured stable per-client chronology with cumulative midnight rollover correction."""
+    if materialization.split_method != "within_client_chronological":
+        raise ValueError("Edge-IIoTset chronological setup requires the configured within_client_chronological method")
+    fractions = tuple(
+        float(materialization.chronological_ratio(role))
+        for role in ("historical_train", "historical_calibration", "future_recalibration", "future_evaluation")
+    )
+    if not math.isclose(sum(fractions), 1.0, rel_tol=0.0, abs_tol=1e-12):
+        raise ValueError("Edge-IIoTset chronological fractions must sum exactly to one")
+    grouped: dict[str, list[EdgeTimestampedRow]] = {}
+    for timestamped in rows:
+        if timestamped.row.is_attack or timestamped.row.client_id is None:
+            raise ValueError("Edge-IIoTset chronological split accepts assigned benign rows only")
+        if not math.isfinite(timestamped.time_of_day_seconds) or not 0 <= timestamped.time_of_day_seconds < 86_400:
+            raise ValueError("Edge-IIoTset time-of-day values must be finite seconds within one day")
+        grouped.setdefault(timestamped.row.client_id, []).append(timestamped)
+    roles = ([], [], [], [])
+    for client_id, client_rows in sorted(grouped.items()):
+        if client_id in excluded_clients:
+            continue
+        corrected: list[tuple[float, EdgeIIoTsetRow]] = []
+        offset = 0.0
+        previous: float | None = None
+        for item in sorted(client_rows, key=lambda value: _provenance_key(value.row)):
+            if previous is not None and item.time_of_day_seconds < previous:
+                offset += 86_400
+            corrected.append((item.time_of_day_seconds + offset, item.row))
+            previous = item.time_of_day_seconds
+        ordered = [row for _, row in sorted(corrected, key=lambda value: (value[0], _provenance_key(value[1])))]
+        boundaries = [int(sum(fractions[: index + 1]) * len(ordered)) for index in range(3)]
+        for index, row in enumerate(ordered):
+            roles[
+                0 if index < boundaries[0] else 1 if index < boundaries[1] else 2 if index < boundaries[2] else 3
+            ].append(row)
+    return EdgeChronologicalSplitRows(
+        historical_train=tuple(roles[0]),
+        historical_calibration=tuple(roles[1]),
+        future_recalibration=tuple(roles[2]),
+        future_evaluation=tuple(roles[3]),
+        excluded_clients=tuple(sorted(set(excluded_clients))),
+    )
+
+
+def _provenance_key(row: EdgeIIoTsetRow) -> tuple[str, int]:
+    return (row.source_path.as_posix(), row.source_row_index)
+
+
+def _edge_content_hash(row: EdgeIIoTsetRow) -> str:
+    return hashlib.blake2b(repr((row.numeric_values, row.categorical_values)).encode(), digest_size=32).hexdigest()

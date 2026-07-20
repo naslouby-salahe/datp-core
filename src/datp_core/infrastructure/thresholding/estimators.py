@@ -1,383 +1,298 @@
-"""All 14 scientific threshold estimator policy implementations."""
+"""Configuration-driven implementations of every threshold policy."""
 
 from __future__ import annotations
+
+import math
+from typing import cast
 
 import numpy as np
 from scipy.stats import skew
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
+from datp_core.config.models.protocol_config import (
+    CalibrationFallbackPolicyConfig,
+    CentralizedPooledThresholdPolicyConfig,
+    ClusterThresholdPolicyConfig,
+    FamilyMeanThresholdPolicyConfig,
+    FederatedFixedCoefficientPolicyConfig,
+    FederatedMatchedExceedancePolicyConfig,
+    LocalGlobalShrinkagePolicyConfig,
+    LocalQuantileThresholdPolicyConfig,
+    SharedMeanThresholdPolicyConfig,
+    SharedPooledThresholdPolicyConfig,
+    SharedWeightedThresholdPolicyConfig,
+    SplitConformalThresholdPolicyConfig,
+    TypedThresholdPolicyConfig,
+)
 from datp_core.domain.identifiers import ThresholdPolicyId
 from datp_core.domain.thresholding import BenignCalibrationScores, ThresholdRecord, ThresholdSet
 from datp_core.domain.values import Probability
-from datp_core.infrastructure.thresholding.base import ThresholdEstimator
-
-DEFAULT_Q = Probability(0.95)
+from datp_core.infrastructure.thresholding.base import ThresholdConstructionRequest, ThresholdEstimator
 
 
-def _quantile_1d(arr: np.ndarray, q: float) -> float:
-    if len(arr) == 0:
-        return 0.0
-    return float(np.quantile(arr, q, method="linear"))
+def _quantile(values: tuple[float, ...], quantile: float) -> float:
+    array = np.asarray(values, dtype=np.float64)
+    if array.size == 0 or not np.all(np.isfinite(array)):
+        raise ValueError("Threshold construction requires finite non-empty calibration scores")
+    result = float(np.quantile(array, quantile, method="linear"))
+    if not math.isfinite(result):
+        raise ValueError("Threshold construction produced a non-finite quantile")
+    return result
 
 
-class SharedMeanThresholdEstimator(ThresholdEstimator):
-    @property
-    def policy_id(self) -> ThresholdPolicyId:
-        return ThresholdPolicyId("shared_mean_p95")
+def _policy_quantile(policy: TypedThresholdPolicyConfig) -> Probability:
+    if isinstance(policy, SplitConformalThresholdPolicyConfig):
+        return Probability(policy.nominal_coverage)
+    return Probability(policy.quantile)
 
-    def estimate(
-        self,
-        calibration: tuple[BenignCalibrationScores, ...],
-        quantile: Probability = DEFAULT_Q,
-        **kwargs: object,
-    ) -> ThresholdSet:
-        local_quantiles = [
-            _quantile_1d(np.array(item.values, dtype=np.float64), quantile.value)
-            for item in calibration
-        ]
-        shared_val = float(np.mean(local_quantiles))
-        values = tuple(
+
+def _records(
+    policy_id: ThresholdPolicyId,
+    calibration: tuple[BenignCalibrationScores, ...],
+    thresholds: dict[str, float],
+    owner: str,
+    quantile: Probability,
+    lambdas: dict[str, float] | None = None,
+) -> ThresholdSet:
+    return ThresholdSet(
+        policy_id=policy_id,
+        target_quantile=quantile,
+        values=tuple(
             ThresholdRecord(
                 client_id=item.client_id,
-                threshold=shared_val,
-                owner="shared_global",
-                effective_lambda=None,
+                threshold=thresholds[item.client_id.value],
+                owner=owner,
+                effective_lambda=None if lambdas is None else lambdas[item.client_id.value],
             )
             for item in calibration
-        )
-        return ThresholdSet(policy_id=self.policy_id, values=values)
+        ),
+    )
 
 
-class PooledThresholdEstimator(ThresholdEstimator):
-    def __init__(self, policy_name: str) -> None:
-        self._policy_id = ThresholdPolicyId(policy_name)
+class ConfiguredThresholdEstimator(ThresholdEstimator):
+    """One immutable estimator bound to a single resolved policy configuration."""
+
+    def __init__(self, policy_id: ThresholdPolicyId, policy: TypedThresholdPolicyConfig) -> None:
+        self._policy_id = policy_id
+        self._policy = policy
 
     @property
     def policy_id(self) -> ThresholdPolicyId:
         return self._policy_id
 
-    def estimate(
-        self,
-        calibration: tuple[BenignCalibrationScores, ...],
-        quantile: Probability = DEFAULT_Q,
-        **kwargs: object,
-    ) -> ThresholdSet:
-        all_scores = np.concatenate([np.array(item.values, dtype=np.float64) for item in calibration])
-        pooled_thresh = _quantile_1d(all_scores, quantile.value)
-        values = tuple(
-            ThresholdRecord(
-                client_id=item.client_id,
-                threshold=pooled_thresh,
-                owner="shared_pooled",
-                effective_lambda=None,
+    def estimate(self, request: ThresholdConstructionRequest) -> ThresholdSet:
+        if request.policy_id != self._policy_id or request.policy != self._policy:
+            raise ValueError("Threshold estimator request does not match its resolved policy")
+        calibration = request.calibration
+        if not calibration:
+            raise ValueError("Threshold construction requires at least one eligible client")
+        policy = self._policy
+        quantile = _policy_quantile(policy)
+        local = {item.client_id.value: _quantile(item.values, quantile.value) for item in calibration}
+
+        if isinstance(policy, SharedMeanThresholdPolicyConfig):
+            shared = float(np.mean(tuple(local.values())))
+            return _records(self._policy_id, calibration, {key: shared for key in local}, "shared_mean", quantile)
+        if isinstance(policy, (SharedPooledThresholdPolicyConfig, CentralizedPooledThresholdPolicyConfig)):
+            pooled = tuple(value for item in calibration for value in item.values)
+            threshold = _quantile(pooled, quantile.value)
+            return _records(self._policy_id, calibration, {key: threshold for key in local}, "pooled", quantile)
+        if isinstance(policy, SharedWeightedThresholdPolicyConfig):
+            count = sum(len(item.values) for item in calibration)
+            if count == 0:
+                raise ValueError("Weighted threshold has no calibration rows")
+            threshold = sum(len(item.values) * local[item.client_id.value] for item in calibration) / count
+            return _records(
+                self._policy_id, calibration, {key: threshold for key in local}, "shared_weighted", quantile
             )
-            for item in calibration
-        )
-        return ThresholdSet(policy_id=self.policy_id, values=values)
-
-
-class WeightedSharedThresholdEstimator(ThresholdEstimator):
-    @property
-    def policy_id(self) -> ThresholdPolicyId:
-        return ThresholdPolicyId("shared_weighted_p95")
-
-    def estimate(
-        self,
-        calibration: tuple[BenignCalibrationScores, ...],
-        quantile: Probability = DEFAULT_Q,
-        **kwargs: object,
-    ) -> ThresholdSet:
-        counts = np.array([len(item.values) for item in calibration], dtype=np.float64)
-        local_qs = np.array(
-            [_quantile_1d(np.array(item.values, dtype=np.float64), quantile.value) for item in calibration],
-            dtype=np.float64,
-        )
-        total = np.sum(counts)
-        weighted_thresh = float(np.sum(local_qs * counts) / total) if total > 0 else float(np.mean(local_qs))
-        values = tuple(
-            ThresholdRecord(
-                client_id=item.client_id,
-                threshold=weighted_thresh,
-                owner="shared_weighted",
-                effective_lambda=None,
+        if isinstance(policy, LocalQuantileThresholdPolicyConfig):
+            return _records(self._policy_id, calibration, local, "local", quantile)
+        if isinstance(policy, FamilyMeanThresholdPolicyConfig):
+            if request.family_map is None:
+                raise ValueError("Family threshold requires an explicit resolved client-family mapping")
+            families: dict[str, list[float]] = {}
+            for item in calibration:
+                family = request.family_map.get(item.client_id.value)
+                if family is None:
+                    raise ValueError(f"Client '{item.client_id.value}' has no configured family")
+                families.setdefault(family, []).append(local[item.client_id.value])
+            family_thresholds = {family: float(np.mean(values)) for family, values in families.items()}
+            thresholds = {
+                item.client_id.value: family_thresholds[request.family_map[item.client_id.value]]
+                for item in calibration
+            }
+            return _records(self._policy_id, calibration, thresholds, "family_mean", quantile)
+        if isinstance(policy, ClusterThresholdPolicyConfig):
+            return self._cluster(request, local, quantile)
+        if isinstance(policy, SplitConformalThresholdPolicyConfig):
+            return self._conformal(calibration, policy, quantile)
+        if isinstance(policy, LocalGlobalShrinkagePolicyConfig):
+            coefficient = (
+                policy.shrinkage_weight if policy.shrinkage_weight is not None else request.selected_coefficient
             )
-            for item in calibration
-        )
-        return ThresholdSet(policy_id=self.policy_id, values=values)
+            if coefficient is None:
+                raise ValueError("Shrinkage threshold requires an experiment-selected coefficient")
+            return self._shrinkage(calibration, local, coefficient, quantile)
+        if isinstance(policy, CalibrationFallbackPolicyConfig):
+            half = policy.weight_formula_constants.get("n_half")
+            if not isinstance(half, int) or half <= 0:
+                raise ValueError("Fallback threshold policy requires a positive authored n_half")
+            shared = float(np.mean(tuple(local.values())))
+            lambdas = {item.client_id.value: len(item.values) / (len(item.values) + half) for item in calibration}
+            thresholds = {
+                item.client_id.value: lambdas[item.client_id.value] * local[item.client_id.value]
+                + (1.0 - lambdas[item.client_id.value]) * shared
+                for item in calibration
+            }
+            return _records(self._policy_id, calibration, thresholds, "calibration_shrinkage", quantile, lambdas)
+        if isinstance(policy, FederatedMatchedExceedancePolicyConfig):
+            return self._federated_matched(calibration, policy, quantile)
+        if isinstance(policy, FederatedFixedCoefficientPolicyConfig):
+            coefficient = policy.fixed_k if policy.fixed_k is not None else request.selected_coefficient
+            if coefficient is None:
+                raise ValueError("Fixed-k threshold requires an experiment-selected coefficient")
+            return self._federated_fixed(calibration, coefficient, quantile)
+        raise TypeError(f"Unsupported threshold policy configuration: {type(policy).__name__}")
 
-
-class LocalQuantileThresholdEstimator(ThresholdEstimator):
-    @property
-    def policy_id(self) -> ThresholdPolicyId:
-        return ThresholdPolicyId("local_quantile_p95")
-
-    def estimate(
+    def _cluster(
         self,
-        calibration: tuple[BenignCalibrationScores, ...],
-        quantile: Probability = DEFAULT_Q,
-        **kwargs: object,
+        request: ThresholdConstructionRequest,
+        local: dict[str, float],
+        quantile: Probability,
     ) -> ThresholdSet:
-        values = tuple(
-            ThresholdRecord(
-                client_id=item.client_id,
-                threshold=_quantile_1d(np.array(item.values, dtype=np.float64), quantile.value),
-                owner="local_only",
-                effective_lambda=None,
+        policy = self._policy
+        assert isinstance(policy, ClusterThresholdPolicyConfig)
+        calibration = request.calibration
+        if len(calibration) < policy.cluster_count:
+            raise ValueError("Cluster threshold has fewer eligible clients than configured clusters")
+        rows = []
+        for item in calibration:
+            values = np.asarray(item.values, dtype=np.float64)
+            rows.append(
+                (
+                    float(np.mean(values)),
+                    float(np.std(values)),
+                    float(skew(values)) if len(values) > 2 else 0.0,
+                    local[item.client_id.value],
+                )
             )
-            for item in calibration
-        )
-        return ThresholdSet(policy_id=self.policy_id, values=values)
-
-
-class FamilyMeanThresholdEstimator(ThresholdEstimator):
-    @property
-    def policy_id(self) -> ThresholdPolicyId:
-        return ThresholdPolicyId("family_mean_p95")
-
-    def estimate(
-        self,
-        calibration: tuple[BenignCalibrationScores, ...],
-        quantile: Probability = DEFAULT_Q,
-        **kwargs: object,
-    ) -> ThresholdSet:
-        family_map = kwargs.get("family_map")
-        if not isinstance(family_map, dict):
-            raise ValueError("FamilyMeanThresholdEstimator requires explicit family group mapping")
-
-        local_q = {
-            item.client_id: _quantile_1d(np.array(item.values, dtype=np.float64), quantile.value)
-            for item in calibration
+        features = np.asarray(rows, dtype=np.float64)
+        if len(np.unique(features, axis=0)) < 2:
+            raise ValueError("Cluster threshold has a degenerate fingerprint matrix")
+        clustering = policy.clustering
+        random_seed = clustering.get("random_seed")
+        runs = clustering.get("initialization_runs")
+        maximum_iterations = clustering.get("maximum_iterations")
+        tolerance = clustering.get("convergence_tolerance")
+        if not isinstance(random_seed, int) or isinstance(random_seed, bool):
+            raise ValueError("Cluster policy has invalid authored integer parameters")
+        if not isinstance(runs, int) or isinstance(runs, bool):
+            raise ValueError("Cluster policy has invalid authored integer parameters")
+        if not isinstance(maximum_iterations, int) or isinstance(maximum_iterations, bool):
+            raise ValueError("Cluster policy has invalid authored integer parameters")
+        if not isinstance(tolerance, float):
+            raise ValueError("Cluster policy has invalid authored convergence tolerance")
+        labels = KMeans(
+            n_clusters=policy.cluster_count,
+            random_state=int(random_seed),
+            n_init=cast(str, runs),
+            max_iter=int(maximum_iterations),
+            tol=tolerance,
+        ).fit_predict(StandardScaler().fit_transform(features))
+        buckets: dict[int, list[float]] = {}
+        for item, label in zip(calibration, labels, strict=True):
+            buckets.setdefault(int(label), []).append(local[item.client_id.value])
+        aggregation = np.median if policy.aggregation == "robust_median" else np.mean
+        aggregate = {label: float(aggregation(values)) for label, values in buckets.items()}
+        thresholds = {
+            item.client_id.value: aggregate[int(label)] for item, label in zip(calibration, labels, strict=True)
         }
-        buckets: dict[str, list[float]] = {}
+        return _records(self._policy_id, calibration, thresholds, f"cluster_k{policy.cluster_count}", quantile)
+
+    def _conformal(
+        self,
+        calibration: tuple[BenignCalibrationScores, ...],
+        policy: SplitConformalThresholdPolicyConfig,
+        quantile: Probability,
+    ) -> ThresholdSet:
+        thresholds: dict[str, float] = {}
         for item in calibration:
-            fam = family_map.get(item.client_id.value, "unknown")
-            buckets.setdefault(fam, []).append(local_q[item.client_id])
+            scores = np.sort(np.asarray(item.values, dtype=np.float64))
+            if len(scores) < policy.minimum_sample_count:
+                raise ValueError("Conformal threshold is unattainable for the authored minimum sample count")
+            rank = min(math.ceil((len(scores) + 1) * (1.0 - policy.coverage_alpha)), len(scores))
+            thresholds[item.client_id.value] = float(scores[rank - 1])
+        return _records(self._policy_id, calibration, thresholds, "split_conformal", quantile)
 
-        fam_means = {fam: float(np.mean(vals)) for fam, vals in buckets.items()}
-        values = tuple(
-            ThresholdRecord(
-                client_id=item.client_id,
-                threshold=fam_means[family_map.get(item.client_id.value, "unknown")],
-                owner="family_mean",
-                effective_lambda=None,
-            )
-            for item in calibration
+    def _shrinkage(
+        self,
+        calibration: tuple[BenignCalibrationScores, ...],
+        local: dict[str, float],
+        coefficient: float,
+        quantile: Probability,
+    ) -> ThresholdSet:
+        if not 0.0 <= coefficient <= 1.0:
+            raise ValueError("Shrinkage coefficient is outside the authored permitted range")
+        shared = float(np.mean(tuple(local.values())))
+        thresholds = {key: coefficient * value + (1.0 - coefficient) * shared for key, value in local.items()}
+        return _records(
+            self._policy_id,
+            calibration,
+            thresholds,
+            "local_global_shrinkage",
+            quantile,
+            {key: coefficient for key in local},
         )
-        return ThresholdSet(policy_id=self.policy_id, values=values)
 
+    def _federated_moments(self, calibration: tuple[BenignCalibrationScores, ...]) -> tuple[float, float]:
+        counts = np.asarray([len(item.values) for item in calibration], dtype=np.float64)
+        means = np.asarray([np.mean(item.values) for item in calibration], dtype=np.float64)
+        variances = np.asarray([np.var(item.values) for item in calibration], dtype=np.float64)
+        total = float(np.sum(counts))
+        if total <= 0.0:
+            raise ValueError("Federated summary threshold has no calibration rows")
+        mean = float(np.sum(counts * means) / total)
+        variance = float(np.sum(counts * variances) / total + np.sum(counts * (means - mean) ** 2) / total)
+        return mean, math.sqrt(variance)
 
-class ClusterThresholdEstimator(ThresholdEstimator):
-    def __init__(self, policy_name: str, k_clusters: int, use_median: bool = False) -> None:
-        self._policy_id = ThresholdPolicyId(policy_name)
-        self._k = k_clusters
-        self._use_median = use_median
-
-    @property
-    def policy_id(self) -> ThresholdPolicyId:
-        return self._policy_id
-
-    def estimate(
+    def _federated_matched(
         self,
         calibration: tuple[BenignCalibrationScores, ...],
-        quantile: Probability = DEFAULT_Q,
-        **kwargs: object,
+        policy: FederatedMatchedExceedancePolicyConfig,
+        quantile: Probability,
     ) -> ThresholdSet:
-        local_q = [_quantile_1d(np.array(item.values, dtype=np.float64), quantile.value) for item in calibration]
-        features = []
-        for item, lq in zip(calibration, local_q, strict=False):
-            arr = np.array(item.values, dtype=np.float64)
-            m = float(np.mean(arr))
-            s = float(np.std(arr))
-            sk = float(skew(arr)) if len(arr) > 2 else 0.0
-            features.append([m, s, sk, lq])
-
-        feat_arr = np.array(features, dtype=np.float64)
-        scaler = StandardScaler()
-        scaled_feat = scaler.fit_transform(feat_arr)
-
-        kmeans = KMeans(n_clusters=self._k, random_state=42, n_init="auto", max_iter=300, tol=1e-4)
-        labels = kmeans.fit_predict(scaled_feat)
-
-        cluster_buckets: dict[int, list[float]] = {}
-        for idx, lbl in enumerate(labels):
-            cluster_buckets.setdefault(int(lbl), []).append(local_q[idx])
-
-        agg_func = np.median if self._use_median else np.mean
-        cluster_thresh = {c: float(agg_func(vals)) for c, vals in cluster_buckets.items()}
-
-        values = tuple(
-            ThresholdRecord(
-                client_id=item.client_id,
-                threshold=cluster_thresh[int(labels[i])],
-                owner=f"cluster_k{self._k}",
-                effective_lambda=None,
-            )
-            for i, item in enumerate(calibration)
+        minimum = policy.candidate_grid.get("minimum")
+        maximum = policy.candidate_grid.get("maximum")
+        step = policy.candidate_grid.get("step")
+        if not isinstance(minimum, float) or not isinstance(maximum, float) or not isinstance(step, float):
+            raise ValueError("Matched-exceedance policy has an invalid authored candidate grid")
+        if step <= 0.0:
+            raise ValueError("Matched-exceedance policy has an invalid authored candidate grid")
+        mean, standard_deviation = self._federated_moments(calibration)
+        candidates = np.arange(minimum, maximum + step / 2.0, step)
+        scores = np.asarray([score for item in calibration for score in item.values], dtype=np.float64)
+        achieved = np.asarray([np.mean(scores > mean + candidate * standard_deviation) for candidate in candidates])
+        deviation = np.abs(achieved - (1.0 - quantile.value))
+        winner = candidates[np.flatnonzero(deviation == np.min(deviation))[-1]]
+        threshold = mean + float(winner) * standard_deviation
+        return _records(
+            self._policy_id,
+            calibration,
+            {item.client_id.value: threshold for item in calibration},
+            "federated_matched_exceedance",
+            quantile,
         )
-        return ThresholdSet(policy_id=self.policy_id, values=values)
 
-
-class SplitConformalThresholdEstimator(ThresholdEstimator):
-    @property
-    def policy_id(self) -> ThresholdPolicyId:
-        return ThresholdPolicyId("conformal_local_p95")
-
-    def estimate(
-        self,
-        calibration: tuple[BenignCalibrationScores, ...],
-        quantile: Probability = DEFAULT_Q,
-        **kwargs: object,
+    def _federated_fixed(
+        self, calibration: tuple[BenignCalibrationScores, ...], coefficient: float, quantile: Probability
     ) -> ThresholdSet:
-        alpha = 1.0 - quantile.value
-        min_req = int(kwargs.get("minimum_count", 100))  # type: ignore
-
-        records = []
-        for item in calibration:
-            scores = np.sort(np.array(item.values, dtype=np.float64))
-            n = len(scores)
-            if n < min_req:
-                msg = (
-                    f"Conformal quantile unattainable for client {item.client_id.value} "
-                    f"(sample size n={n} < min={min_req})"
-                )
-                raise ValueError(msg)
-            k = int(np.ceil((n + 1) * (1.0 - alpha)))
-            k_clamped = min(max(k, 1), n)
-            conformal_t = float(scores[k_clamped - 1])
-            records.append(
-                ThresholdRecord(
-                    client_id=item.client_id,
-                    threshold=conformal_t,
-                    owner="conformal_split",
-                    effective_lambda=None,
-                )
-            )
-        return ThresholdSet(policy_id=self.policy_id, values=tuple(records))
-
-
-class LocalGlobalShrinkageEstimator(ThresholdEstimator):
-    @property
-    def policy_id(self) -> ThresholdPolicyId:
-        return ThresholdPolicyId("local_global_shrinkage_p95")
-
-    def estimate(
-        self,
-        calibration: tuple[BenignCalibrationScores, ...],
-        quantile: Probability = DEFAULT_Q,
-        **kwargs: object,
-    ) -> ThresholdSet:
-        lam = float(kwargs.get("shrinkage_weight", 0.5))  # type: ignore
-        if not (0.0 <= lam <= 1.0):
-            raise ValueError("Shrinkage weight lambda must be in [0, 1]")
-
-        local_q = {
-            item.client_id: _quantile_1d(np.array(item.values, dtype=np.float64), quantile.value)
-            for item in calibration
-        }
-        shared_val = float(np.mean(list(local_q.values())))
-
-        records = tuple(
-            ThresholdRecord(
-                client_id=item.client_id,
-                threshold=lam * local_q[item.client_id] + (1.0 - lam) * shared_val,
-                owner="local_global",
-                effective_lambda=lam,
-            )
-            for item in calibration
+        mean, standard_deviation = self._federated_moments(calibration)
+        threshold = mean + coefficient * standard_deviation
+        return _records(
+            self._policy_id,
+            calibration,
+            {item.client_id.value: threshold for item in calibration},
+            "federated_fixed_k",
+            quantile,
         )
-        return ThresholdSet(policy_id=self.policy_id, values=records)
-
-
-class CalibrationFallbackEstimator(ThresholdEstimator):
-    @property
-    def policy_id(self) -> ThresholdPolicyId:
-        return ThresholdPolicyId("calibration_fallback_p95")
-
-    def estimate(
-        self,
-        calibration: tuple[BenignCalibrationScores, ...],
-        quantile: Probability = DEFAULT_Q,
-        **kwargs: object,
-    ) -> ThresholdSet:
-        min_req = int(kwargs.get("minimum_count", 100))  # type: ignore
-        local_q = {
-            item.client_id: _quantile_1d(np.array(item.values, dtype=np.float64), quantile.value)
-            for item in calibration
-        }
-        shared_val = float(np.mean(list(local_q.values())))
-
-        records = []
-        for item in calibration:
-            if len(item.values) < min_req:
-                thresh = shared_val
-                owner = "fallback_global"
-                eff_lam = 0.0
-            else:
-                thresh = local_q[item.client_id]
-                owner = "local_only"
-                eff_lam = 1.0
-
-            records.append(
-                ThresholdRecord(
-                    client_id=item.client_id,
-                    threshold=thresh,
-                    owner=owner,
-                    effective_lambda=eff_lam,
-                )
-            )
-
-        return ThresholdSet(policy_id=self.policy_id, values=tuple(records))
-
-
-class FederatedMatchedExceedanceEstimator(ThresholdEstimator):
-    @property
-    def policy_id(self) -> ThresholdPolicyId:
-        return ThresholdPolicyId("federated_matched_exceedance_p95")
-
-    def estimate(
-        self,
-        calibration: tuple[BenignCalibrationScores, ...],
-        quantile: Probability = DEFAULT_Q,
-        **kwargs: object,
-    ) -> ThresholdSet:
-        pooled = np.concatenate([np.array(item.values, dtype=np.float64) for item in calibration])
-        matched_thresh = _quantile_1d(pooled, quantile.value)
-        values = tuple(
-            ThresholdRecord(
-                client_id=item.client_id,
-                threshold=matched_thresh,
-                owner="federated_exceedance",
-                effective_lambda=None,
-            )
-            for item in calibration
-        )
-        return ThresholdSet(policy_id=self.policy_id, values=values)
-
-
-class FederatedFixedCoefficientEstimator(ThresholdEstimator):
-    @property
-    def policy_id(self) -> ThresholdPolicyId:
-        return ThresholdPolicyId("federated_fixed_k30")
-
-    def estimate(
-        self,
-        calibration: tuple[BenignCalibrationScores, ...],
-        quantile: Probability = DEFAULT_Q,
-        **kwargs: object,
-    ) -> ThresholdSet:
-        k = float(kwargs.get("fixed_k", 3.0))  # type: ignore
-        records = []
-        for item in calibration:
-            arr = np.array(item.values, dtype=np.float64)
-            mu = float(np.mean(arr))
-            sigma = float(np.std(arr))
-            records.append(
-                ThresholdRecord(
-                    client_id=item.client_id,
-                    threshold=mu + k * sigma,
-                    owner="federated_fixed_coeff",
-                    effective_lambda=None,
-                )
-            )
-        return ThresholdSet(policy_id=self.policy_id, values=tuple(records))

@@ -2,18 +2,31 @@
 
 from __future__ import annotations
 
-from typing import Any
-
 import flwr as fl
+
+from datp_core.domain.catalogue import FederationProfileRecord, TrainingProfileRecord
 
 
 class DatpFedAvgStrategy(fl.server.strategy.FedAvg):
-    """Custom FedAvg Flower strategy for DATP client model aggregation."""
+    """Custom FedAvg Flower strategy for DATP client model aggregation with explicit profile configuration."""
 
-    def __init__(self, fraction_fit: float = 1.0, min_fit_clients: int = 1, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        federation: FederationProfileRecord,
+        training_profile: TrainingProfileRecord,
+    ) -> None:
         super().__init__(
-            fraction_fit=fraction_fit,
-            min_fit_clients=min_fit_clients,
-            min_available_clients=min_fit_clients,
-            **kwargs,
+            fraction_fit=federation.fraction_fit,
+            fraction_evaluate=federation.fraction_evaluate,
+            min_fit_clients=federation.minimum_fit_clients.value,
+            min_evaluate_clients=federation.minimum_evaluate_clients.value,
+            min_available_clients=federation.minimum_available_clients.value,
         )
+        self._training_profile = training_profile
+
+
+def build_flower_strategy_from_profile(profile: TrainingProfileRecord) -> DatpFedAvgStrategy:
+    """Build concrete Flower strategy from resolved DATP training profile."""
+    if profile.federation is None:
+        raise ValueError(f"Training profile '{profile.kind}' has no Flower federation configuration")
+    return DatpFedAvgStrategy(federation=profile.federation, training_profile=profile)

@@ -1,9 +1,10 @@
-"""Resolved domain catalogue models representing scientific definitions without generic mappings."""
+"""Pure resolved experiment catalogue records."""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import Enum
+
+from attrs import define, field
 
 from datp_core.domain.fingerprints import Fingerprint
 from datp_core.domain.identifiers import (
@@ -15,10 +16,11 @@ from datp_core.domain.identifiers import (
     MetricBundleId,
     PopulationId,
     SeedCohortId,
+    StatisticalProfileId,
     ThresholdPolicyId,
     TrainingProfileId,
 )
-from datp_core.domain.values import PositiveFloat, PositiveInt, Seed, TypedDomainRegistry
+from datp_core.domain.values import PositiveInt, Probability, Seed, TypedDomainRegistry
 
 
 class EvidenceRole(Enum):
@@ -41,44 +43,89 @@ class RunRequirement(Enum):
     OPTIONAL = "optional"
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@define(frozen=True, slots=True, kw_only=True)
 class TrainingProfileRecord:
     identifier: TrainingProfileId
-    training_loss: str
-    optimizer_type: str
-    learning_rate: PositiveFloat
-    max_rounds: PositiveInt
-    local_epochs: PositiveInt
+    kind: str
+    model_architecture_id: str
+    optimizer_id: str
+    batching_profile_id: str
+    local_epochs: PositiveInt | None
+    participation: str | None
+    checkpoint_authorization: str
+    personalization: str | None
+    federation: FederationProfileRecord | None
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@define(frozen=True, slots=True, kw_only=True)
+class FederationProfileRecord:
+    """Pure resolved Flower participation contract."""
+
+    fraction_fit: float
+    fraction_evaluate: float
+    minimum_fit_clients: PositiveInt
+    minimum_evaluate_clients: PositiveInt
+    minimum_available_clients: PositiveInt
+
+
+@define(frozen=True, slots=True, kw_only=True)
 class CheckpointProfileRecord:
     identifier: CheckpointProfileId
-    strategy: str
-    selection_metric: str | None = None
+    total_rounds: PositiveInt | None
+    selected_rounds: tuple[PositiveInt, ...]
+    early_stopping: str
+    selection_rule: str
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@define(frozen=True, slots=True, kw_only=True)
 class SeedCohortRecord:
     identifier: SeedCohortId
     paired_seed_count: PositiveInt
-    seeds: tuple[Seed, ...]
+    training_seeds: tuple[Seed, ...]
+    bootstrap_analysis_seed: Seed
+    analysis_seed_model: str
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@define(frozen=True, slots=True, kw_only=True)
+class StatisticalProfileRecord:
+    """Resolved, executable statistical analysis contract."""
+
+    identifier: StatisticalProfileId
+    method: str | None
+    confidence_level: Probability | None
+    resample_count: PositiveInt | None
+    minimum_units: PositiveInt | None
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class CapabilityRequirementRecord:
+    capability: str
+    when_unavailable: str
+
+
+@define(frozen=True, slots=True, kw_only=True)
 class EvaluationSpecRecord:
     label: str
     threshold_policy_id: ThresholdPolicyId
+    run_requirement: RunRequirement
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@define(frozen=True, slots=True, kw_only=True)
 class AnalysisSpecRecord:
     label: str
     kind: str
     result_type: str
+    primary_metric: str | None
+    statistical_profile: str | None
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@define(frozen=True, slots=True, kw_only=True)
+class SweepRecord:
+    name: str
+    values: tuple[str | int | float, ...]
+
+
+@define(frozen=True, slots=True, kw_only=True)
 class PopulationRecord:
     identifier: PopulationId
     dataset_id: DatasetId
@@ -86,7 +133,7 @@ class PopulationRecord:
     metric_bundle_id: MetricBundleId
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@define(frozen=True, slots=True, kw_only=True)
 class ExperimentRecord:
     identifier: ExperimentId
     display_name: str
@@ -98,11 +145,14 @@ class ExperimentRecord:
     seed_cohort_id: SeedCohortId
     eligibility_policy_id: EligibilityPolicyId
     prerequisite_ids: tuple[ExperimentId, ...]
+    capability_requirements: tuple[CapabilityRequirementRecord, ...]
     evaluations: tuple[EvaluationSpecRecord, ...]
     analyses: tuple[AnalysisSpecRecord, ...]
+    report_ids: tuple[str, ...]
+    sweeps: tuple[SweepRecord, ...] = field(factory=tuple)
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@define(frozen=True, slots=True, kw_only=True)
 class ResolvedCatalogue:
     schema_version: PositiveInt
     populations: TypedDomainRegistry[PopulationId, PopulationRecord]

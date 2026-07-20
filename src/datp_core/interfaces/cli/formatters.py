@@ -6,13 +6,13 @@ from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
 
-from datp_core.domain.catalogue import ResolvedCatalogue
+from datp_core.config.resolver import ResolvedProjectConfiguration
 from datp_core.planning.graph import PlanningGraph
 
 console = Console()
 
 
-def print_catalogue_summary(catalogue: ResolvedCatalogue) -> None:
+def print_catalogue_summary(catalogue: ResolvedProjectConfiguration) -> None:
     table = Table(title="DATP-Core Catalogue Summary")
     table.add_column("Category", style="cyan")
     table.add_column("Count", style="green")
@@ -24,7 +24,7 @@ def print_catalogue_summary(catalogue: ResolvedCatalogue) -> None:
     table.add_row("Seed Cohorts", str(len(catalogue.seed_cohorts)))
 
     console.print(table)
-    console.print(f"[bold blue]Catalogue Scientific Fingerprint:[/bold blue] {catalogue.fingerprint.value}")
+    console.print(f"[bold blue]Scientific Fingerprint:[/bold blue] {catalogue.scientific_fingerprint.value}")
 
 
 def print_planning_dag(graph: PlanningGraph, experiment_name: str) -> None:

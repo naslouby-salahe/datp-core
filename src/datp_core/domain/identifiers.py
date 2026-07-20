@@ -2,22 +2,25 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import re
+
+from attrs import define, field
+
+_HEX64_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
 
-def _validate_identifier_string(value: str) -> None:
+def validate_canonical_identifier(instance: object, attribute: object, value: str) -> None:
+    if not isinstance(value, str):
+        raise TypeError(f"Identifier value must be a string, got {type(value).__name__}")
     if not value or value.strip() != value:
-        raise ValueError("identifier must be non-empty and canonical without whitespace padding")
+        raise ValueError("Identifier must be non-empty and canonical without whitespace padding")
     if any(char in value for char in ("/", "\\", "\x00")):
-        raise ValueError("identifier must not contain path delimiters or null bytes")
+        raise ValueError("Identifier must not contain path delimiters or null bytes")
 
 
-@dataclass(frozen=True, slots=True, order=True)
+@define(frozen=True, slots=True, order=True)
 class _DomainIdentifier:
-    value: str
-
-    def __post_init__(self) -> None:
-        _validate_identifier_string(self.value)
+    value: str = field(validator=validate_canonical_identifier)
 
     def __str__(self) -> str:
         return self.value

@@ -12,15 +12,25 @@ class PlanningGraph:
     """NetworkX wrapper for pre-execution DAG validation and topological analysis."""
 
     def __init__(self, jobs: tuple[StageJob, ...]) -> None:
-        self._jobs: dict[JobId, StageJob] = {j.job_id: j for j in jobs}
+        self._jobs: dict[JobId, StageJob] = {}
+        for j in jobs:
+            if j.job_id in self._jobs:
+                raise ValueError(f"Duplicate JobId in planning graph: {j.job_id}")
+            self._jobs[j.job_id] = j
+
+        job_ids = set(self._jobs.keys())
+        for j in jobs:
+            for dep_id in j.dependencies:
+                if dep_id not in job_ids:
+                    raise ValueError(f"Job '{j.job_id}' depends on missing job '{dep_id}'")
+
         self._graph = nx.DiGraph()
 
+        # Add nodes as JobId objects
         for j in jobs:
-            self._graph.add_node(j.job_id.value, job=j)
+            self._graph.add_node(j.job_id, job=j)
             for dep_id in j.dependencies:
-                if dep_id.value not in self._graph:
-                    self._graph.add_node(dep_id.value)
-                self._graph.add_edge(dep_id.value, j.job_id.value)
+                self._graph.add_edge(dep_id, j.job_id)
 
     def validate_acyclic(self) -> None:
         if not nx.is_directed_acyclic_graph(self._graph):
@@ -29,50 +39,50 @@ class PlanningGraph:
 
     def lexicographical_topological_sort(self) -> tuple[StageJob, ...]:
         self.validate_acyclic()
-        sorted_nodes = [str(node_id) for node_id in nx.lexicographical_topological_sort(self._graph)]
-        return tuple(self._jobs[JobId(value=node_id)] for node_id in sorted_nodes if JobId(value=node_id) in self._jobs)
+        sorted_nodes = list(nx.lexicographical_topological_sort(self._graph, key=lambda n: n.value))
+        return tuple(self._jobs[node] for node in sorted_nodes)
 
     def topological_generations(self) -> tuple[tuple[StageJob, ...], ...]:
         self.validate_acyclic()
         generations = list(nx.topological_generations(self._graph))
         res = []
         for gen in generations:
-            gen_nodes = [str(node) for node in gen]
-            gen_jobs = tuple(self._jobs[JobId(value=node)] for node in gen_nodes if JobId(value=node) in self._jobs)
+            sorted_gen_nodes = sorted(list(gen), key=lambda n: n.value)
+            gen_jobs = tuple(self._jobs[node] for node in sorted_gen_nodes)
             if gen_jobs:
                 res.append(gen_jobs)
         return tuple(res)
 
     def predecessors(self, job_id: JobId) -> tuple[JobId, ...]:
-        if job_id.value not in self._graph:
+        if job_id not in self._graph:
             return ()
-        preds = [str(p) for p in self._graph.predecessors(job_id.value)]
-        return tuple(JobId(value=p) for p in sorted(preds))
+        preds = list(self._graph.predecessors(job_id))
+        return tuple(sorted(preds, key=lambda n: n.value))
 
     def successors(self, job_id: JobId) -> tuple[JobId, ...]:
-        if job_id.value not in self._graph:
+        if job_id not in self._graph:
             return ()
-        succs = [str(s) for s in self._graph.successors(job_id.value)]
-        return tuple(JobId(value=s) for s in sorted(succs))
+        succs = list(self._graph.successors(job_id))
+        return tuple(sorted(succs, key=lambda n: n.value))
 
     def ancestors(self, job_id: JobId) -> tuple[JobId, ...]:
-        if job_id.value not in self._graph:
+        if job_id not in self._graph:
             return ()
-        ancs = [str(a) for a in nx.ancestors(self._graph, job_id.value)]
-        return tuple(JobId(value=a) for a in sorted(ancs))
+        ancs = list(nx.ancestors(self._graph, job_id))
+        return tuple(sorted(ancs, key=lambda n: n.value))
 
     def descendants(self, job_id: JobId) -> tuple[JobId, ...]:
-        if job_id.value not in self._graph:
+        if job_id not in self._graph:
             return ()
-        descs = [str(d) for d in nx.descendants(self._graph, job_id.value)]
-        return tuple(JobId(value=d) for d in sorted(descs))
+        descs = list(nx.descendants(self._graph, job_id))
+        return tuple(sorted(descs, key=lambda n: n.value))
 
     def transitive_reduction(self) -> PlanningGraph:
         tr_graph = nx.transitive_reduction(self._graph)
         new_jobs = []
         for j in self._jobs.values():
-            preds = [str(p) for p in tr_graph.predecessors(j.job_id.value)]
-            direct_preds = tuple(JobId(value=p) for p in sorted(preds))
+            preds = list(tr_graph.predecessors(j.job_id))
+            direct_preds = tuple(sorted(preds, key=lambda n: n.value))
             new_jobs.append(
                 StageJob(
                     job_id=j.job_id,
@@ -91,3 +101,7 @@ class PlanningGraph:
     @property
     def edge_count(self) -> int:
         return self._graph.number_of_edges()
+
+    @property
+    def jobs(self) -> tuple[StageJob, ...]:
+        return tuple(self._jobs.values())

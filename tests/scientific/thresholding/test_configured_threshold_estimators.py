@@ -1,0 +1,55 @@
+"""Configured threshold-policy estimator tests."""
+
+import pytest
+
+from datp_core.application.threshold_construction import ConstructThresholdsUseCase, build_estimator_registry
+from datp_core.composition.root import build_application
+from datp_core.domain.identifiers import ClientId, PopulationId, ThresholdPolicyId
+from datp_core.domain.thresholding import BenignCalibrationScores, ThresholdSet
+
+
+@pytest.fixture
+def calibration() -> tuple[BenignCalibrationScores, ...]:
+    return tuple(
+        BenignCalibrationScores(
+            client_id=ClientId(identifier), values=tuple(float(multiplier * i) for i in range(1, 101))
+        )
+        for identifier, multiplier in (("c1", 1), ("c2", 2), ("c3", 3))
+    )
+
+
+def _execute(
+    policy_id: ThresholdPolicyId, calibration: tuple[BenignCalibrationScores, ...], coefficient: float | None = None
+) -> ThresholdSet:
+    config = build_application().config
+    use_case = ConstructThresholdsUseCase(config, build_estimator_registry(config))
+    return use_case.execute(policy_id, calibration, PopulationId("nbaiot_natural_devices"), None, None, coefficient)
+
+
+def _values(result: ThresholdSet) -> list[float]:
+    return [float(value.threshold) for value in result.values]
+
+
+def test_shared_and_local_configured_policies_preserve_scope_semantics(
+    calibration: tuple[BenignCalibrationScores, ...],
+) -> None:
+    shared = _values(_execute(ThresholdPolicyId("shared_mean_p95"), calibration))
+    local = _values(_execute(ThresholdPolicyId("local_p95"), calibration))
+    assert shared[0] == shared[1] == shared[2]
+    assert local[0] < local[1] < local[2]
+
+
+def test_conformal_and_federated_configured_policies_produce_finite_thresholds(
+    calibration: tuple[BenignCalibrationScores, ...],
+) -> None:
+    conformal = _values(_execute(ThresholdPolicyId("conformal_local_p95"), calibration))
+    fixed = _values(_execute(ThresholdPolicyId("federated_summary_fixed_k"), calibration, 3.0))
+    matched = _values(_execute(ThresholdPolicyId("federated_summary_matched_exceedance"), calibration))
+    assert conformal[0] < conformal[1] < conformal[2]
+    assert fixed[0] == fixed[1] == fixed[2]
+    assert all(value > 0.0 for value in matched)
+
+
+def test_registry_matches_complete_authored_policy_catalogue() -> None:
+    config = build_application().config
+    assert set(build_estimator_registry(config).keys()) == set(config.threshold_policies)

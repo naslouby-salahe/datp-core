@@ -41,7 +41,7 @@ def config_validate() -> None:
 def config_explain_drift(current: Path, expected: Path) -> None:
     """Explain structural drift between two YAML configuration files."""
     application = build_application()
-    drift = application.explain_configuration_drift.execute(current, expected)
+    drift = application.explain_authored_drift.execute(current, expected)
     console.print_json(data=drift)
 
 
@@ -49,7 +49,7 @@ def config_explain_drift(current: Path, expected: Path) -> None:
 def catalogue_describe() -> None:
     """Describe resolved scientific catalogue records."""
     application = build_application()
-    resolved = application.describe_catalogue.execute()
+    resolved = application.describe_project.execute()
     print_catalogue_summary(resolved)
 
 
@@ -57,7 +57,11 @@ def catalogue_describe() -> None:
 def dataset_audit(dataset_id: str = typer.Argument(..., help="Dataset ID (e.g. nbaiot)")) -> None:
     """Audit dataset layout and source file availability."""
     application = build_application()
-    report = application.audit_dataset.execute(DatasetId(dataset_id))
+    try:
+        dataset = application.config.datasets[DatasetId(dataset_id)]
+    except KeyError as exc:
+        raise typer.BadParameter(f"Unknown configured dataset: {dataset_id}") from exc
+    report = application.audit_dataset.execute(dataset)
     msg = (
         f"[bold green]Dataset Audit for {dataset_id}:[/bold green] "
         f"Found={report.raw_source_found}, Files={report.file_count}"
@@ -95,17 +99,15 @@ def experiment_resume(experiment: str = typer.Option(..., "--config", "-c", help
 
 @results_app.command("audit")
 def results_audit() -> None:
-    """Audit result parquet artifacts using DuckDB."""
-    application = build_application()
-    res = application.audit_results.execute()
-    console.print(res)
+    """Result auditing requires an authored audit profile and is not exposed ad hoc."""
+    raise typer.BadParameter("Use a configured audit profile through the experiment reporting workflow.")
 
 
 @results_app.command("query")
 def results_query(sql: str = typer.Argument(..., help="SQL query string")) -> None:
     """Run interactive DuckDB query over Parquet result artifacts."""
     application = build_application()
-    res = application.query_results.execute(sql)
+    res = application.audit_service.execute_query(sql)
     console.print(res)
 
 

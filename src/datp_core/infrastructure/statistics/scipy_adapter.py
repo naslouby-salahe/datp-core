@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 import numpy as np
 from scipy import stats
 
@@ -12,8 +14,9 @@ from datp_core.domain.values import Probability
 def compute_wilcoxon_signed_rank(x: np.ndarray, y: np.ndarray) -> HypothesisTestResult:
     """Wilcoxon signed-rank test for paired seed differences."""
     res = stats.wilcoxon(x, y, zero_method="wilcox", correction=True)
-    stat_val = float(getattr(res, "statistic", 0.0))
-    p_val = float(getattr(res, "pvalue", 1.0))
+    statistic, p_value = cast(tuple[float, float], res)
+    stat_val = float(statistic)
+    p_val = float(p_value)
     return HypothesisTestResult(
         test_name="wilcoxon_signed_rank",
         statistic=stat_val,
@@ -23,8 +26,9 @@ def compute_wilcoxon_signed_rank(x: np.ndarray, y: np.ndarray) -> HypothesisTest
 
 def compute_bca_bootstrap_ci(
     data: np.ndarray,
-    resample_count: int = 1000,
-    confidence_level: float = 0.95,
+    resample_count: int,
+    confidence_level: float,
+    analysis_seed: int,
 ) -> ConfidenceInterval:
     """BCa bootstrap confidence interval estimation."""
     if len(data) < 2:
@@ -36,7 +40,14 @@ def compute_bca_bootstrap_ci(
             method="single_sample",
         )
 
-    res = stats.bootstrap((data,), np.mean, n_resamples=resample_count, confidence_level=confidence_level, method="BCa")
+    res = stats.bootstrap(
+        (data,),
+        np.mean,
+        n_resamples=resample_count,
+        confidence_level=confidence_level,
+        method="BCa",
+        rng=np.random.default_rng(analysis_seed),
+    )
     return ConfidenceInterval(
         lower_bound=float(res.confidence_interval.low),
         upper_bound=float(res.confidence_interval.high),

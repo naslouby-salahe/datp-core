@@ -184,6 +184,7 @@ training_profiles:
     aggregation_accumulation_order: ascending_client_identifier
     personalization: none
     checkpoint_authorization: primary_selection_computed_once_on_natural_device_regime
+    federation: { fraction_fit: 1.0, fraction_evaluate: 1.0, minimum_fit_clients: 1, minimum_evaluate_clients: 1, minimum_available_clients: 1 }
 
   federated_averaging_anchor:
     kind: federated_averaging_training
@@ -199,6 +200,7 @@ training_profiles:
     aggregation_accumulation_order: ascending_client_identifier
     personalization: none
     checkpoint_authorization: historical_first_qualifying_round_or_150_round_cap
+    federation: { fraction_fit: 1.0, fraction_evaluate: 1.0, minimum_fit_clients: 1, minimum_evaluate_clients: 1, minimum_available_clients: 1 }
 
   federated_averaging_personalized:
     kind: federated_averaging_training
@@ -241,6 +243,7 @@ training_profiles:
         global_checkpoint: shared_scientific_checkpoint_artifact_reused_by_core_ladder
         personalized_state: per_client_artifact_never_fused_with_global_checkpoint_or_federated_averaging_artifacts
     checkpoint_authorization: lookup_of_federated_averaging_primary_selection
+    federation: { fraction_fit: 1.0, fraction_evaluate: 1.0, minimum_fit_clients: 1, minimum_evaluate_clients: 1, minimum_available_clients: 1 }
 
   federated_proximal:
     kind: federated_prox_training
@@ -261,6 +264,7 @@ training_profiles:
     mu_zero_forbidden_as_a_fedprox_condition: true
     personalization: none
     checkpoint_authorization: lookup_of_federated_averaging_primary_selection
+    federation: { fraction_fit: 1.0, fraction_evaluate: 1.0, minimum_fit_clients: 1, minimum_evaluate_clients: 1, minimum_available_clients: 1 }
 
   centralized_pooled:
     kind: centralized_pooled_training

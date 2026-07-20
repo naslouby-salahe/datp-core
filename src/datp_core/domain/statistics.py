@@ -2,19 +2,20 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from attrs import define
 
-from .values import Probability, Seed
+from datp_core.domain.identifiers import MetricId, ThresholdPolicyId
+from datp_core.domain.values import Probability, Seed
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@define(frozen=True, slots=True, kw_only=True)
 class ConfidenceInterval:
     lower_bound: float
     upper_bound: float
     confidence_level: Probability
     method: str
 
-    def __post_init__(self) -> None:
+    def __attrs_post_init__(self) -> None:
         if self.lower_bound > self.upper_bound:
             raise ValueError("Lower bound cannot be greater than upper bound")
 
@@ -23,7 +24,7 @@ class ConfidenceInterval:
         return self.lower_bound > 0.0
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@define(frozen=True, slots=True, kw_only=True)
 class HypothesisTestResult:
     test_name: str
     statistic: float
@@ -32,13 +33,14 @@ class HypothesisTestResult:
     alternative: str = "two-sided"
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@define(frozen=True, slots=True, kw_only=True)
 class PairedSeedDifferenceRecord:
-    metric_name: str
-    policy_a: str
-    policy_b: str
+    metric_id: MetricId
+    policy_a_id: ThresholdPolicyId
+    policy_b_id: ThresholdPolicyId
     mean_difference: float
     confidence_interval: ConfidenceInterval
+    resample_count: int
+    analysis_seed: Seed
     hypothesis_test: HypothesisTestResult | None = None
-    resample_count: int = 1000
-    analysis_seed: Seed = Seed(42)
+    effect_size: float | None = None

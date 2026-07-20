@@ -8,8 +8,19 @@ import sys
 import structlog
 
 
-def configure_structured_logging(mode: str = "human", level: str = "INFO") -> None:
-    log_level = getattr(logging, level.upper(), logging.INFO)
+def configure_structured_logging(mode: str, level: str) -> None:
+    """Configure logging from an explicitly resolved runtime profile."""
+    levels = {
+        "CRITICAL": logging.CRITICAL,
+        "ERROR": logging.ERROR,
+        "WARNING": logging.WARNING,
+        "INFO": logging.INFO,
+        "DEBUG": logging.DEBUG,
+    }
+    try:
+        log_level = levels[level.upper()]
+    except KeyError as exc:
+        raise ValueError(f"Unknown resolved logging level: {level}") from exc
 
     processors: list[structlog.types.Processor] = [
         structlog.contextvars.merge_contextvars,
@@ -21,8 +32,10 @@ def configure_structured_logging(mode: str = "human", level: str = "INFO") -> No
 
     if mode == "json":
         processors.append(structlog.processors.JSONRenderer())
-    else:
+    elif mode == "human":
         processors.append(structlog.dev.ConsoleRenderer())
+    else:
+        raise ValueError(f"Unknown resolved logging mode: {mode}")
 
     structlog.configure(
         processors=processors,

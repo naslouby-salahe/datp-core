@@ -1,58 +1,117 @@
-"""Canonical scientific fingerprinting via hashlib BLAKE2."""
+"""Canonical scientific and execution fingerprinting via hashlib BLAKE2."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
+import math
+from enum import Enum
 from hashlib import blake2b
 from json import dumps
-from typing import Any
+from pathlib import Path
+from typing import NamedTuple
+
+import cattrs
+from attrs import define, field
+
+from datp_core.domain.identifiers import _DomainIdentifier
+from datp_core.domain.values import NonNegativeFloat, PositiveFloat, PositiveInt, Probability, RelativePath, Seed
+
+_cattrs_converter = cattrs.Converter()
+
+type CanonicalProjection = str | int | bool | None | list[CanonicalProjection] | dict[str, CanonicalProjection]
 
 
-@dataclass(frozen=True, slots=True, order=True)
+def validate_hex64(instance: object, attribute: object, value: str) -> None:
+    if not isinstance(value, str) or len(value) != 64 or not all(c in "0123456789abcdefABCDEF" for c in value):
+        raise ValueError(f"Value must be a 64-character hexadecimal digest, got: {value}")
+
+
+@define(frozen=True, slots=True, order=True)
 class Fingerprint:
-    value: str
-
-    def __post_init__(self) -> None:
-        if not self.value or len(self.value) != 64:
-            raise ValueError("Fingerprint value must be a 64-character hex digest")
+    value: str = field(validator=validate_hex64)
 
     def __str__(self) -> str:
         return self.value
 
 
-@dataclass(frozen=True, slots=True, order=True)
+@define(frozen=True, slots=True, order=True)
 class Checksum:
-    value: str
-
-    def __post_init__(self) -> None:
-        if not self.value or len(self.value) != 64:
-            raise ValueError("Checksum value must be a 64-character hex digest")
+    value: str = field(validator=validate_hex64)
 
     def __str__(self) -> str:
         return self.value
 
 
-def _normalize_obj(obj: Any) -> Any:
-    if isinstance(obj, Mapping):
-        return {str(k): _normalize_obj(v) for k, v in sorted(obj.items(), key=lambda x: str(x[0]))}
+class FingerprintPayload(NamedTuple):
+    schema_version: int
+    kind: str
+    payload: CanonicalProjection
+
+
+def _canonicalize_value(obj: object) -> CanonicalProjection:
+    if isinstance(
+        obj,
+        (
+            Checksum,
+            Fingerprint,
+            NonNegativeFloat,
+            PositiveFloat,
+            PositiveInt,
+            Probability,
+            RelativePath,
+            Seed,
+            _DomainIdentifier,
+        ),
+    ):
+        return {"type": f"{type(obj).__module__}.{type(obj).__qualname__}", "value": str(obj.value)}
+    if isinstance(obj, Enum):
+        return {"enum": f"{type(obj).__module__}.{type(obj).__qualname__}", "value": str(obj.value)}
+    if isinstance(obj, dict):
+        if not all(isinstance(key, str) for key in obj):
+            raise TypeError("Fingerprint mappings must use string keys")
+        return {key: _canonicalize_value(value) for key, value in sorted(obj.items())}
     if isinstance(obj, (list, tuple)):
-        return [_normalize_obj(item) for item in obj]
+        return [_canonicalize_value(item) for item in obj]
     if isinstance(obj, set):
-        return [_normalize_obj(item) for item in sorted(obj, key=str)]
+        return [_canonicalize_value(item) for item in sorted(obj, key=str)]
     if isinstance(obj, float):
-        if obj != obj or obj in (float("inf"), float("-inf")):
-            raise ValueError("non-finite values cannot be fingerprinted")
+        if not math.isfinite(obj):
+            raise ValueError(f"Non-finite float values cannot be fingerprinted: {obj}")
         return format(obj, ".17g")
-    if hasattr(obj, "value"):
-        return _normalize_obj(obj.value)
-    return obj
+    if isinstance(obj, (str, int, bool)) or obj is None:
+        return obj
+    raise TypeError(f"Unsupported value in fingerprint projection: {type(obj).__name__}")
 
 
-def compute_fingerprint(data: Any) -> Fingerprint:
-    """Compute canonical BLAKE2b fingerprint (256-bit / 64 hex characters) of a data structure."""
-    normalized = _normalize_obj(data)
-    json_bytes = dumps(normalized, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+def compute_scientific_fingerprint(scientific_projection: object) -> Fingerprint:
+    """Compute canonical 256-bit BLAKE2b fingerprint for scientific configuration."""
+    envelope = FingerprintPayload(
+        schema_version=1,
+        kind="scientific",
+        payload=_canonicalize_value(scientific_projection),
+    )
+    json_bytes = dumps(
+        envelope._asdict(),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    hex_digest = blake2b(json_bytes, digest_size=32).hexdigest()
+    return Fingerprint(value=hex_digest)
+
+
+def compute_execution_fingerprint(execution_projection: object) -> Fingerprint:
+    """Compute canonical 256-bit BLAKE2b fingerprint for execution configuration."""
+    envelope = FingerprintPayload(
+        schema_version=1,
+        kind="execution",
+        payload=_canonicalize_value(execution_projection),
+    )
+    json_bytes = dumps(
+        envelope._asdict(),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
     hex_digest = blake2b(json_bytes, digest_size=32).hexdigest()
     return Fingerprint(value=hex_digest)
 
@@ -61,3 +120,14 @@ def compute_payload_checksum(payload: bytes) -> Checksum:
     """Compute BLAKE2b checksum (256-bit / 64 hex characters) of raw byte payload."""
     hex_digest = blake2b(payload, digest_size=32).hexdigest()
     return Checksum(value=hex_digest)
+
+
+def compute_file_checksum(path: Path, chunk_size: int = 1_048_576) -> Checksum:
+    """Compute a BLAKE2b payload checksum without loading an artifact file into memory."""
+    if chunk_size <= 0:
+        raise ValueError("Checksum chunk size must be positive")
+    digest = blake2b(digest_size=32)
+    with path.open("rb") as source:
+        while chunk := source.read(chunk_size):
+            digest.update(chunk)
+    return Checksum(value=digest.hexdigest())
