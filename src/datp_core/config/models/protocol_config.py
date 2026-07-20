@@ -567,6 +567,53 @@ class StatisticalProfileConfig(BaseModel):
         return self
 
 
+class ThresholdPolicyDefaultsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    source_score_population: str
+    eligibility_filter: str
+    attack_rows_forbidden_in_calibration: bool
+    non_finite_calibration_score: str
+    empty_client_calibration: str
+    application_scope: str
+    required_diagnostic_fields: list[str]
+
+
+class NestedReplicatePolicyConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    replicate_values_computed_first: bool
+    summarized_within_seed_before_across_seed_inference: bool
+    seed_level_statistic: str
+    replicates_counted_as_independent_units: bool
+    additional_required_replicate_statistic: str
+
+
+class ResultTypeConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    permitted_evidence_roles: list[str]
+
+
+class EvaluationResultContractConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    per_evaluation_result_type: str
+    per_evaluation_eligibility_result_type: str
+    per_evaluation_required_records: list[str]
+
+
+class ReportDefaultsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    ordering: str
+    missing_value_policy: str
+    table_output_formats: list[str]
+    figure_output_formats: list[str]
+    provenance_required_per_artifact: bool
+    analysis_defined_direction_token: str
+
+
 class AuthoredProtocolsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -583,16 +630,16 @@ class AuthoredProtocolsConfig(BaseModel):
     normalization_fit_scopes: dict[str, str]
     normalization_leakage_rule: str
     quantile_estimators: dict[str, QuantileEstimatorConfig]
-    threshold_policy_defaults: dict[str, JsonValue]
+    threshold_policy_defaults: ThresholdPolicyDefaultsConfig
     threshold_policies: dict[str, TypedThresholdPolicyConfig]
     metric_definitions: dict[str, JsonValue]
     metric_bundles: dict[str, MetricBundleConfig]
-    nested_replicate_policy: dict[str, JsonValue]
-    result_types: dict[str, JsonValue]
-    evaluation_result_contract: dict[str, JsonValue]
+    nested_replicate_policy: NestedReplicatePolicyConfig
+    result_types: dict[str, ResultTypeConfig]
+    evaluation_result_contract: EvaluationResultContractConfig
     artifact_identity: dict[str, JsonValue]
     communication_estimation_contract: dict[str, JsonValue]
-    report_defaults: dict[str, JsonValue]
+    report_defaults: ReportDefaultsConfig
     operational_inputs: dict[str, JsonValue]
     statistical_profiles: dict[str, StatisticalProfileConfig]
     report_profiles: dict[str, JsonValue]
