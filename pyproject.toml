@@ -40,7 +40,7 @@ hardware = [
 ]
 
 [project.scripts]
-datp-core = "datp_core.cli:main"
+datp-core = "datp_core.interfaces.cli.app:main"
 
 [dependency-groups]
 # tooling: test execution, coverage, property tests, parallelism, timeouts, order-randomization

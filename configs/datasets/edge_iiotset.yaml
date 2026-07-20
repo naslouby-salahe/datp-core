@@ -4,9 +4,9 @@ display_name: Edge-IIoTset
 schema_id: edge_iiotset_wireshark_63
 
 source_layout:
-  root: "Edge-IIoTset dataset"
-  normal_traffic_root: "Edge-IIoTset dataset/Normal traffic"
-  attack_traffic_root: "Edge-IIoTset dataset/Attack traffic"
+  root: "Edge-IIoTset/Edge-IIoTset dataset"
+  normal_traffic_root: "Edge-IIoTset/Edge-IIoTset dataset/Normal traffic"
+  attack_traffic_root: "Edge-IIoTset/Edge-IIoTset dataset/Attack traffic"
   normal_file_pattern: "*/*.csv"
   attack_file_pattern: "*_attack.csv"
   normal_group_folders:
@@ -47,7 +47,7 @@ source_layout:
     - Vulnerability_scanner_attack.csv
     - XSS_attack.csv
   ignored_source_suffixes: [".pcap"]
-  ignored_subtrees: ["Edge-IIoTset dataset/Selected dataset for ML and DL"]
+  ignored_subtrees: ["Edge-IIoTset/Edge-IIoTset dataset/Selected dataset for ML and DL"]
 
 field_schema:
   source_column_count: 63
