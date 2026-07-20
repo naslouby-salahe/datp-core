@@ -1,7 +1,5 @@
-# Edge-IIoTset dataset contract.
-#
-# Declarative only. Measured row counts, endpoint distributions, category inventories,
-# coverage ratios and feasibility verdicts are generated evidence and are deliberately absent.
+# Declarative only: measured counts, coverage ratios and feasibility verdicts are generated
+# evidence and must not be added here.
 #
 # Feature-count concepts are kept strictly separate and are never conflated:
 #   raw source columns                 -> field_schema.source_column_count
@@ -20,7 +18,6 @@ source_layout:
   attack_traffic_root: "Edge-IIoTset dataset/Attack traffic"
   normal_file_pattern: "*/*.csv"
   attack_file_pattern: "*_attack.csv"
-  # Every normal-traffic group folder present in the source tree.
   normal_group_folders:
     - Distance
     - Flame_Sensor
@@ -32,16 +29,12 @@ source_layout:
     - Temperature_and_Humidity
     - Water_Level
     - phValue
-  # Modbus is a source-integrity exclusion, not an experimental ablation: no row of
-  # Modbus.csv satisfies the 63-column positional contract, because frame.time carries an
-  # address literal in place of a timestamp in every row and the leading fields are
-  # displaced accordingly. There is no valid Modbus sub-population to retain, so the group
-  # contributes no rows to any executable materialization or client population.
+  # Source-integrity exclusion, not an ablation: frame.time carries an address literal
+  # instead of a timestamp, displacing every leading field.
   non_executable_group_folders:
     - group: Modbus
       reason: source_integrity_column_displacement
       displaced_field: frame.time
-  # The group folders that define the executable client population.
   executable_group_folders:
     - Distance
     - Flame_Sensor
@@ -67,8 +60,7 @@ source_layout:
     - Uploading_attack.csv
     - Vulnerability_scanner_attack.csv
     - XSS_attack.csv
-  # Packet captures ship beside every CSV, and the distribution also carries a pre-selected
-  # ML/DL extract that this study does not use. Only the patterns above are ingested.
+  # The distribution also ships a pre-selected ML/DL extract, which this study does not use.
   ignored_source_suffixes: [".pcap"]
   ignored_subtrees: ["Edge-IIoTset dataset/Selected dataset for ML and DL"]
 
@@ -147,13 +139,10 @@ field_schema:
       index_scope: within_source_file
       preserved_through_materializations: true
     benign_group_identity: { source: path, derived_from: normal_traffic_group_folder }
-    # Attack rows carry no recoverable per-client group identity; see attack_row_group_policy.
     attack_row_group_identity: unavailable
     device_identity: { source: column, column: ip.src_host, usable: false, superseded_by: endpoint_identity }
     timestamp_field:
       column: frame.time
-      # The exported field carries a year token and a time of day but no month or day, so an
-      # absolute wall-clock instant cannot be reconstructed.
       semantics: year_and_time_of_day_without_month_or_day
       absolute_instant_recoverable: false
       within_client_ordering: time_of_day_with_midnight_rollover_correction
@@ -166,7 +155,6 @@ field_schema:
     benign_value: { Attack_label: 0, Attack_type: Normal }
     family_taxonomy: unavailable
 
-  # Endpoint resolution is the configured rule for deriving a client from an internal address.
   endpoint_identity:
     resolution: direction_normalized_internal_endpoint
     fields: [ip.src_host, ip.dst_host, arp.src.proto_ipv4, arp.dst.proto_ipv4]
@@ -193,9 +181,6 @@ field_schema:
     direction_normalization: prefer_non_attacker_internal_endpoint_then_smallest_nonzero_subnet
     unresolved_row_policy: excluded_from_client_assignment
 
-  # The attacker and every attack-generating host reside in a single subnet, so attack rows
-  # cannot be attributed to sensor clients. This is a configured scope limitation: the dataset
-  # supports benign operating-point equity only.
   attack_row_group_policy:
     per_client_attack_assignment: unavailable
     reason: attack_traffic_originates_from_a_single_internal_subnet
@@ -243,18 +228,14 @@ field_schema:
       - mbtcp.len
       - mbtcp.trans_id
       - mbtcp.unit_id
-    # Several retained columns are Wireshark flag/checksum fields exported as hexadecimal
-    # strings ("0x0000000a") interleaved with decimal values, so a plain float parse is not a
-    # valid contract. The coercion below is explicit and must not be replaced by a silent
-    # default, and a value matching none of the accepted forms is a typed parse failure.
+    # Some retained flag/checksum columns are exported as hex strings interleaved with
+    # decimals, so a plain float parse is not a valid contract.
     numeric_parsing:
       accepted_forms: [decimal, hexadecimal_0x_prefixed]
       hexadecimal_interpretation: unsigned_integer
       on_unparseable_value: typed_parse_failure
-    # A value that matches none of the accepted forms — including an address literal, which
-    # is client-identifying information rather than a protocol measurement — makes the whole
-    # row invalid. It is never coerced, and never mapped to zero, NaN, missing, unknown, or a
-    # categorical token. See source_contract.row_integrity_exclusions.
+    # An address literal here is client-identifying information, not a protocol measurement.
+    # See source_contract.row_integrity_exclusions.
     on_invalid_value: reject_row_as_invalid_retained_numeric_feature
 
   categorical_encoding:
@@ -267,9 +248,7 @@ field_schema:
       - mqtt.conack.flags
       - mqtt.protoname
       - mqtt.topic
-    # The vocabulary is fitted from the configured benign training partition only. Attack-only
-    # category values must never enter it. The fitted width, and therefore the post-encoding
-    # model feature count, are resolved at fit time and are not declared here.
+    # Attack-only category values must never enter the fitted vocabulary.
     vocabulary_scope: benign_training_rows_only
     vocabulary_artifact: frozen_at_materialization_fit_time
     vocabulary_fingerprint: derived_from_fitted_benign_train_categories
@@ -301,27 +280,20 @@ field_schema:
       - dns.qry.name
 
 source_contract:
-  # Every source column is accounted for exactly once by one of the four roles below.
   column_role_partition:
     roles: [retained_numeric_features, categorical_encoding.columns, leakage_exclusions.columns, label_fields]
     partition_must_be_disjoint: true
     partition_must_cover_every_source_column: true
   reject_row_with_field_count_other_than_header: true
 
-  # A row must satisfy the positional contract as well as the field-count contract: a row
-  # carrying the right number of fields whose leading fields hold the wrong kind of value is
-  # displaced, not merely untidy.
+  # A correct field count does not imply a valid row: leading fields can be displaced.
   positional_contract:
     timestamp_field_must_match_declared_semantics: true
     label_fields_must_carry_declared_values: true
     trailing_label_validity_does_not_imply_row_validity: true
 
-  # Deterministic row-integrity exclusions. Both are evaluated on the raw source row, and
-  # both run before split assignment, client eligibility, endpoint resolution, categorical
-  # vocabulary fitting, normalization, duplicate accounting, and model-feature construction.
-  # A row failing either exclusion can therefore never reach training, calibration, testing,
-  # the fitted vocabulary, or any metric. Reasons are mutually exclusive and evaluated in the
-  # order listed, so a row is attributed to exactly one reason and never double counted.
+  # Reasons are mutually exclusive and evaluated in the listed order, so a row is attributed
+  # to exactly one reason and never double counted.
   row_integrity_exclusions:
     evaluation_order: [displaced_source_row, invalid_retained_numeric_feature]
     applies_before:
@@ -340,8 +312,6 @@ source_contract:
         detection: retained_numeric_value_matches_no_accepted_numeric_form
         handling: exclude_and_count
         coercion: forbidden
-    # After these exclusions, every retained numeric value admitted into an executable
-    # materialization is deterministically parseable under the declared numeric_parsing rule.
     guarantees_all_admitted_retained_numeric_values_parseable: true
 
 fingerprint_inputs:

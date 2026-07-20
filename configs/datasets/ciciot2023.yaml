@@ -1,11 +1,8 @@
-# CICIoT2023 dataset contract.
+# Declarative only: measured counts and audit verdicts are generated evidence and must never
+# be added here.
 #
-# Declarative only. Measured row counts, duplicate rates, label distributions and audit
-# verdicts are generated evidence and are deliberately absent from this document.
-#
-# The processed artifact preserves no device, MAC, IP, or capture-timestamp column, so a
-# physical-device client regime is not recoverable. The merged files are shuffled mixtures of
-# every class and are used strictly as file-defined pseudo-clients, never as device identities.
+# No device, MAC, IP, or capture-timestamp column survives, so clients are file-defined only
+# and can never be read as device identities.
 schema_version: 1
 dataset: ciciot2023
 display_name: CICIoT2023
@@ -14,17 +11,14 @@ schema_id: ciciot2023_flow_39
 source_layout:
   root: CIC_IOT_Dataset2023/CSV
 
-  # The two source trees are independent populations. The merged tree is not a
-  # row-preserving reorganization of the per-class tree, their row counts differ, and no
-  # row-level correspondence between them is assumed or required. They are therefore given
-  # explicitly different roles, and nothing executable depends on their equivalence.
+  # The merged tree is not a reorganization of the per-class tree; the two are independent
+  # populations and nothing executable depends on their equivalence.
   executable_source: merged
   sources:
     merged:
       role: executable
       root: CIC_IOT_Dataset2023/CSV/MERGED_CSV
       file_pattern: "Merged*.csv"
-      # The merged tree is the sole source for every executable concern.
       owns:
         - pseudo_client_construction
         - row_identity
@@ -40,8 +34,6 @@ source_layout:
       role: reference_only
       root: CIC_IOT_Dataset2023/CSV/CSV
       file_pattern: "*/*.pcap.csv"
-      # Reference evidence only. This tree contributes no row to any materialization and
-      # defines no client.
       permitted_uses:
         - source_layout_verification
         - per_class_schema_verification
@@ -61,18 +53,14 @@ field_schema:
   source_column_count: { per_class: 39, merged: 40 }
   header_required: true
   header_must_be_identical_across_all_files_in_a_tree: true
-  # The merged header is the per-class header with Label appended as the final column.
   merged_header_extends_per_class_header_with: Label
   label_column_position: last
   identity_scheme:
-    # An executable row identity is derived only from the merged tree. A per-class file path
-    # or row index is never a component of an executable identity.
     row_identity:
       derived_from_source: merged
       components: [merged_source_file_path, merged_source_row_index]
       index_scope: within_source_file
       preserved_through_materializations: true
-    # A merged file is a file-defined pseudo-client, never a physical device.
     client_identity:
       source: file
       derived_from: merged_file_name
@@ -134,17 +122,13 @@ field_schema:
   leakage_exclusions: [Label]
 
 source_contract:
-  # Executable contract, evaluated against the merged tree only.
   every_model_feature_present_in_merged_header: true
-  # A schema-level check only. It compares column counts between the two trees and asserts
-  # nothing about their row populations.
   per_class_schema_reference_check:
     scope: schema_only
     model_feature_count_equals_per_class_source_column_count: true
     asserts_row_equivalence: false
-  # A minority of merged rows are physically truncated and carry fewer fields than the
-  # header. They are a malformed-row defect, not rows with an empty Label, and are excluded
-  # and counted as such rather than being coerced into a label class.
+  # Truncated rows are a malformed-row defect, not empty-Label rows, and must not be coerced
+  # into a label class.
   malformed_row: { detection: field_count_differs_from_header, handling: exclude_and_count }
   empty_label_row: { detection: label_is_null_or_blank, handling: exclude_and_count }
   reject_unparseable_numeric_model_feature: true
@@ -172,7 +156,6 @@ materializations:
     row_exclusion:
       malformed_row: exclude
       empty_label_row: exclude
-      # A degenerate flow window has a non-finite Rate, or a blank/non-finite Std or Variance.
       degenerate_window: exclude_non_finite_rate_or_blank_or_non_finite_std_or_variance
       duplicate_equivalence_class_scope: global_across_all_merged_files
       duplicate_equivalence_class_definition: exact_row_content_hash_over_model_features
@@ -184,8 +167,7 @@ materializations:
       calibration_benign_only: true
       split_seed: 0
       ratios: { train: 0.70, calibration: 0.15, test: 0.15 }
-    # The autoencoder is a benign-only detector. Making the partition semantics explicit
-    # rather than implicit is part of the locked contract.
+    # The autoencoder is a benign-only detector, so train and calibration carry no attack rows.
     split_row_semantics:
       train_rows: benign_only
       calibration_rows: benign_only

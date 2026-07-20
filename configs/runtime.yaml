@@ -5,8 +5,8 @@
 # influences training batch size, model batch semantics, or any scientific sample count.
 schema_version: 1
 
-# Repository-relative roots. Concrete paths are runtime-resolved and never enter a scientific
-# identity, artifact key, or fingerprint.
+# --- Roots -------------------------------------------------------------------------------
+# Resolved concrete paths must never enter a scientific identity, artifact key, or fingerprint.
 roots:
   raw_data: data/raw
   processed_data: data/processed
@@ -15,6 +15,7 @@ roots:
   outputs: outputs
   runtime_state: .runtime
 
+# --- Raw source policy -------------------------------------------------------------------
 # The raw root is an external mount reached through a symlink and is strictly read-only.
 raw_source_policy:
   follow_symlink: true
@@ -24,6 +25,7 @@ raw_source_policy:
   write_access: forbidden
   create_files_under_raw_root: forbidden
 
+# --- Execution profiles ------------------------------------------------------------------
 execution_profiles:
   scientific:
     device_policy: cuda_required

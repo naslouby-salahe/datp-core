@@ -1,8 +1,5 @@
-# N-BaIoT dataset contract.
-#
-# Declarative only: what to read, how to interpret it, which rows are eligible, and which
-# transformations are configured. Measured counts, duplicate rates, category inventories,
-# readiness verdicts and audit outcomes are generated evidence and are deliberately absent.
+# Declarative only: measured counts and audit outcomes are generated evidence and must never
+# be added here.
 schema_version: 1
 dataset: nbaiot
 display_name: N-BaIoT
@@ -27,9 +24,7 @@ source_layout:
   # source layout, not a source error.
   attack_family_required_per_device: false
   attack_file_pattern: "*.csv"
-  # Compressed archives sit beside their extracted directories and the distribution ships
-  # documentation and a structure sample at the root. Only the patterns above are ingested;
-  # everything else is reported as unmatched and never read.
+  # Anything not matching the patterns above is reported as unmatched and never read.
   ignored_source_suffixes: [".rar"]
   ignored_root_entries: [demonstrate_structure.csv, N_BaIoT_dataset_description_v1.txt]
 
@@ -194,16 +189,14 @@ field_schema:
   categorical_encoding: none
   leakage_exclusions: []
 
-# Expected invariants that are part of the executable contract. A source tree violating one
-# is a typed contract failure, not a silently tolerated difference.
+# A source tree violating any of these is a typed contract failure, not a tolerated difference.
 source_contract:
   every_model_feature_present_in_every_file: true
   model_feature_count_equals_source_column_count: true
   reject_row_with_field_count_other_than_header: true
   reject_unparseable_numeric_model_feature: true
 
-# Provenance inputs for the dataset fingerprint. Every path below must resolve inside this
-# document; no path may point at generated evidence.
+# Every path must resolve inside this document and may never point at generated evidence.
 fingerprint_inputs:
   source: [source_layout.root, source_layout.device_dirs, field_schema.source_column_count]
   schema: [schema_id, field_schema.model_features.order]
@@ -310,8 +303,7 @@ setups:
     client_construction:
       method: dirichlet_partitioned_clients
       client_count: 20
-      # The partition condition (Dirichlet alpha values and the separate IID reference) is
-      # supplied by the experiment sweep; it is never a mixed-type list here.
+      # The partition condition comes from the experiment sweep and is never inlined here.
       partition_condition: { from_experiment_sweep: partition_condition }
       source_mixture_components: physical_device_domains
       label_field: physical_device_domain

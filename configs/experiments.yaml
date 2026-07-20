@@ -1,9 +1,5 @@
-# The executable experiment catalogue.
-#
-# Every experiment resolves to exactly one study population (dataset + setup), one training
-# profile, one checkpoint profile, one metric bundle, and — where it analyses anything — one
-# statistical profile per analysis. Shared definitions live in protocols.yaml and are
-# referenced here by identifier; they are never restated.
+# Every experiment binds exactly one of each shared definition; those definitions live in
+# protocols.yaml and are referenced by identifier, never restated.
 #
 # Roadmap shorthand (E-*, tier numbers, regime letters, publication placement, manuscript
 # wording) is deliberately absent: traceability belongs to the roadmap documents, not to
@@ -11,8 +7,7 @@
 schema_version: 1
 
 # --- Study populations -------------------------------------------------------------------
-# A descriptive binding of dataset, client-construction setup, and the metric bundle that the
-# population's audited capabilities can actually support.
+# A population's metric bundle may not exceed what its audited capabilities support.
 study_populations:
   nbaiot_natural_devices:
     dataset: nbaiot
@@ -52,12 +47,13 @@ capabilities:
   - within_client_chronological_ordering
   - cross_client_wall_clock_ordering
 
-# How an experiment behaves when a required capability is unavailable.
+# --- Suppression behaviors ---------------------------------------------------------------
 suppression_behaviors:
   - suppress_dependent_metrics_and_report_reason
   - skip_population_and_report_reason
   - fail_experiment
 
+# --- Experiment catalogue ----------------------------------------------------------------
 experiments:
 
   # =========================================================================================
@@ -749,10 +745,7 @@ experiments:
     reports: [interval_table]
 
   # =========================================================================================
-  # Alert burden executes only when a valid, finite, non-negative, explicitly sourced benign
-  # decision rate is configured. None is configured (see protocols.yaml operational_inputs),
-  # so this experiment is conditional, not mandatory, and resolves to a typed unavailable
-  # result rather than a hypothetical alerts-per-day value. Its absence fails nothing else.
+  # See protocols.yaml operational_inputs for why this experiment is conditional.
   - name: operational_alert_burden
     display_name: Operational Alert Burden
     evidence_role: supportive

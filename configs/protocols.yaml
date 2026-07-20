@@ -1,15 +1,12 @@
-# Reusable, execution-independent scientific definitions shared across experiments.
-#
-# Every definition here appears exactly once and is referenced from experiments.yaml by a
-# stable descriptive identifier. Experiments may narrow a definition through a local
-# parameter override, never by restating it.
+# Experiments may narrow a definition through a local parameter override, never by restating
+# it.
 #
 # This file owns no dataset facts, no machine/runtime settings, and no generated evidence.
 schema_version: 1
 
-# --- Detector ---------------------------------------------------------------------------
+# --- Detector ----------------------------------------------------------------------------
 # The encoder is fixed for the whole study: only threshold-calibration scope varies across
-# the policy ladder. Architecture is kept separate from the training algorithms that use it.
+# the policy ladder.
 model_architectures:
   fixed_autoencoder:
     kind: dense_autoencoder
@@ -287,9 +284,7 @@ statistical_profiles:
     method: linear_regression
 
 # --- Result types ------------------------------------------------------------------------
-# A result type must match the analysis role. `confirmatory_analysis_result` is reserved for
-# the sole locked confirmatory endpoint and must never be emitted by a supportive,
-# mechanism, external-validation, stress-test, or boundary analysis.
+# `confirmatory_analysis_result` is reserved for the single locked confirmatory endpoint.
 result_types:
   confirmatory_analysis_result: { permitted_evidence_roles: [confirmatory] }
   supportive_analysis_result: { permitted_evidence_roles: [supportive] }
@@ -310,7 +305,6 @@ result_types:
   eligibility_coverage_result: { permitted_evidence_roles: [anchor, confirmatory, supportive, mechanism, external_validation, stress_test, boundary] }
 
 # --- Report artifact profiles ------------------------------------------------------------
-# Shared rendering contracts. Experiments reference these instead of restating column lists.
 report_defaults:
   ordering: deterministic_by_threshold_construction
   missing_value_policy: render_typed_unavailable
@@ -424,9 +418,8 @@ report_profiles:
       - { name: cv_fpr, unit: ratio, direction: lower_is_better }
 
 # --- Operational inputs ------------------------------------------------------------------
-# Alert burden may execute only against an explicitly sourced benign decision rate. No rate
-# is configured, so the analysis resolves to a typed unavailable outcome and never produces
-# a hypothetical alerts-per-day value. Its absence must not fail any other evaluation.
+# No benign decision rate is sourced, so alert burden resolves to a typed unavailable result
+# and must not fail any other evaluation.
 operational_inputs:
   benign_decision_rate:
     configured: false
