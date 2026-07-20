@@ -1,2091 +1,2874 @@
-# DOMAIN_AND_APPLICATION_ARCHITECTURE
+# DOMAIN AND APPLICATION ARCHITECTURE
 
-## Purpose
+## Document status
 
-Define dependency layers, frozen contracts, unions, application use cases,
-and ports.
+This document is the implementation contract for the DATP-Core domain and application layers.
 
-## Authoritative for
+It replaces the previous `DOMAIN_AND_APPLICATION_ARCHITECTURE.md` in full. It is aligned with:
 
-Domain/application ownership and type contracts.
+- the current roadmap package in `docs/roadmap/00_ROADMAP_INDEX.md` through `06_REVIEWER_RISKS_AND_READINESS.md`;
+- the six authoritative configuration documents:
+  - `configs/datasets/nbaiot.yaml`;
+  - `configs/datasets/ciciot2023.yaml`;
+  - `configs/datasets/edge_iiotset.yaml`;
+  - `configs/experiments.yaml`;
+  - `configs/protocols.yaml`;
+  - `configs/runtime.yaml`.
 
-## Not authoritative for
+The architecture is complete for the configured programme. It contains no placeholder contract, unresolved structural alternative, compatibility layer, or requirement for additional configuration files.
 
-Scientific meaning, YAML composition, stage mechanics, or rendering.
+---
 
-> Configuration alignment: concrete YAML paths, names, and values are owned by
-> `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md`. Type sketches here are not an
-> alternate configuration layout.
+# 1. Responsibility, authority, and precedence
 
-## 1. Dependency layers and import rules
+## 1.1 What this document owns
 
-Six layers, one allowed direction.
+This file owns:
+
+- dependency direction and framework boundaries;
+- domain aggregate ownership;
+- immutable identifiers, value objects, enums, and discriminated unions;
+- the mapping from validated YAML to executable domain definitions;
+- application use cases and orchestration boundaries;
+- application ports and infrastructure responsibilities;
+- run planning, capability resolution, artifact identity, reuse, and stage outcomes;
+- extension rules for datasets, training methods, threshold policies, analyses, reports, and experiments;
+- the canonical source-tree structure for these responsibilities.
+
+## 1.2 What this document does not own
+
+This file does not redefine:
+
+- scientific identity, claims, or scope;
+- experiment values or experiment membership;
+- dataset columns, file patterns, split ratios, feature orders, or exclusions;
+- training hyperparameters, seed cohorts, checkpoint grids, threshold grids, metrics, or statistical profiles;
+- runtime paths, resource budgets, or execution-profile values;
+- report content or manuscript wording.
+
+Those values remain in the roadmap and the six YAML files. Code implements and validates them; code does not restate them as hidden defaults.
+
+## 1.3 Precedence
+
+When two sources appear to disagree, apply this order:
+
+1. locked scientific identity and decision rules in the roadmap;
+2. explicit values in the six configuration documents;
+3. type ownership and dependency rules in this architecture;
+4. implementation details.
+
+An implementation convenience cannot override configuration. Configuration cannot override a locked scientific invariant. A stale artifact cannot override either.
+
+---
+
+# 2. Architectural decisions
+
+The following decisions are final.
+
+1. **Framework-free domain.** Domain code uses the Python standard library only.
+2. **Application depends only on domain.** Application services do not import Pydantic, PyYAML, PyTorch, NumPy, pandas, scikit-learn, SciPy, Matplotlib, filesystem adapters, or CLI frameworks.
+3. **Pydantic v2 is confined to configuration.** Raw YAML shape, schema validation, and cross-document references live in `config`.
+4. **Scientific objects are frozen dataclasses.** Public domain and application-boundary records use `@dataclass(frozen=True, slots=True, kw_only=True)` unless they are enums, protocols, or type aliases.
+5. **No untyped dictionaries at public boundaries.** `dict[str, Any]`, `Mapping[str, Any]`, and `Any` are forbidden in domain and application APIs.
+6. **No class per experiment.** The 23 configured experiments are data instances of one typed `ExperimentDefinition`, not 23 subclasses or 23 services.
+7. **No class per YAML file section.** Types represent stable concepts, not indentation levels.
+8. **No generic option bag.** Variant-specific fields live on discriminated-union members; unrelated fields are not made nullable on a giant aggregate.
+9. **No hidden scientific defaults.** Missing result-affecting values fail configuration resolution or produce a typed infeasibility outcome.
+10. **No legacy compatibility.** There are no old policy aliases, redirects, migration wrappers, duplicate module trees, or compatibility shims.
+11. **No generated observations in static configuration.** Readiness findings, row counts, fingerprints, checkpoint selections, metrics, and statistics are artifacts, not YAML fields.
+12. **Artifact reuse follows scientific identity.** Filenames and directory proximity are never lineage evidence.
+13. **Expected scientific unavailability is data.** Unsupported metrics, insufficient eligibility, absent chronology, and invalid attack assignment use typed results, not exceptions, empty rows, or `NaN`.
+14. **Extensions are registry-based, not conditional chains.** Adding a supported strategy registers a new typed implementation; central orchestration does not grow `if experiment == ...` branches.
+15. **Runtime and science have separate fingerprints.** Resource settings and environment provenance are recorded without contaminating the scientific identity of reusable artifacts.
+
+---
+
+# 3. Dependency layers and import rules
+
+## 3.1 Layers
 
 | Layer | May import | Must not import |
 |---|---|---|
-| `domain` | standard library, other `domain` modules | Pydantic, PyYAML, scientific frameworks, filesystem, CLI frameworks |
-| `application` | `domain` | `config`, concrete infrastructure, `cli`, frameworks |
-| `config` | `domain` | `application`, `infrastructure`, `cli`, scientific computation |
-| `infrastructure` | `application`, `domain` | `config`, `cli` |
-| `composition` | `domain`, `application`, `config`, `infrastructure` | direct framework use |
-| `cli` | `composition` and shared boundary result/error types | `infrastructure`, `config`, direct adapter construction |
+| `domain` | standard library; other `domain` modules | Pydantic, YAML, filesystem adapters, ML/scientific frameworks, CLI libraries |
+| `application` | `domain`; standard library | `config`, `infrastructure`, `composition`, `cli`, Pydantic, concrete frameworks |
+| `config` | `domain`; Pydantic; YAML parser | `application`, `infrastructure`, `cli`, model training or statistical execution code |
+| `infrastructure` | `domain`, `application`; concrete frameworks | `config` models, `cli`, experiment-specific orchestration |
+| `composition` | `domain`, `application`, `config`, `infrastructure` | scientific logic |
+| `cli` | `composition`; application request/result types | direct adapter construction, framework calls, YAML traversal |
 
-Framework-free analysis and reporting specifications belong in
-`application/reporting`; infrastructure provides only adapters.
+## 3.2 Dependency graph
 
 ```mermaid
 graph TD
-    DOM[domain]
+    DOMAIN[domain]
     APP[application]
-    CFG[config]
+    CONFIG[config]
     INFRA[infrastructure]
-    COMP[composition]
+    COMPOSE[composition]
     CLI[cli]
-    APP --> DOM
-    CFG --> DOM
+
+    APP --> DOMAIN
+    CONFIG --> DOMAIN
     INFRA --> APP
-    INFRA --> DOM
-    COMP --> CFG
-    COMP --> APP
-    COMP --> INFRA
-    COMP --> DOM
-    CLI --> COMP
+    INFRA --> DOMAIN
+    COMPOSE --> CONFIG
+    COMPOSE --> APP
+    COMPOSE --> INFRA
+    COMPOSE --> DOMAIN
+    CLI --> COMPOSE
+    CLI --> APP
 ```
 
-## 2. Compact aggregate hierarchy
+## 3.3 Framework confinement
+
+| Framework or concern | Owning layer |
+|---|---|
+| Pydantic and YAML parsing | `config` |
+| PyTorch and CUDA | `infrastructure/learning.py` |
+| NumPy and memory-mapped arrays | `infrastructure/numerics.py` and dataset adapters |
+| pandas or streaming CSV readers | dataset adapters only |
+| scikit-learn clustering and preprocessing backends | `infrastructure/clustering.py` or dataset adapters |
+| SciPy/bootstrap/statistical libraries | `infrastructure/statistics.py` |
+| Matplotlib/table rendering | `infrastructure/reporting.py` |
+| Filesystem, checksums, atomic writes | `infrastructure/storage.py` |
+| Typer/argparse | `cli` |
+
+Domain formulas and scientific semantics remain explicit in domain definitions even when infrastructure performs the numerical work.
+
+---
+
+# 4. Canonical source tree
 
 ```text
-RunDefinition
-├── ScientificExperimentDefinition
-│   ├── metadata
-│   ├── data
-│   ├── model
-│   ├── evaluations
-│   ├── analyses
-│   ├── seed_cohort
-│   ├── prerequisites
-│   └── operations
-└── DatasetAuditDefinition
-    ├── metadata
-    ├── dataset_source
-    ├── inspection_definition
-    ├── feasibility_definition
-    └── operations
+src/datp_core/
+├── domain/
+│   ├── identifiers.py
+│   ├── values.py
+│   ├── outcomes.py
+│   ├── data.py
+│   ├── protocols.py
+│   ├── experiments.py
+│   ├── evaluation.py
+│   ├── artifacts.py
+│   └── errors.py
+├── application/
+│   ├── ports.py
+│   ├── catalogue.py
+│   ├── planning.py
+│   ├── readiness.py
+│   ├── execution.py
+│   ├── reuse.py
+│   └── queries.py
+├── config/
+│   ├── models.py
+│   ├── loader.py
+│   ├── references.py
+│   ├── validation.py
+│   └── mapper.py
+├── infrastructure/
+│   ├── datasets.py
+│   ├── learning.py
+│   ├── numerics.py
+│   ├── clustering.py
+│   ├── statistics.py
+│   ├── storage.py
+│   ├── reporting.py
+│   └── environment.py
+├── composition/
+│   └── bootstrap.py
+└── cli/
+    └── main.py
 ```
+
+This is a deliberately merged structure:
+
+- shared domain concepts are grouped by responsibility rather than split into one file per class;
+- configuration has one model module because only six documents exist;
+- ports are centralized in one application module;
+- infrastructure is divided only at genuine framework boundaries;
+- no `contracts/`, `catalogues/`, `schemas/`, or `adapters/` directory forest is created.
+
+Tests mirror the same structure under `tests/` and use one additional `tests/fixtures/` directory for bounded synthetic and configuration fixtures.
+
+---
+
+# 5. Configuration-to-execution model
+
+## 5.1 Four representations
+
+The system uses four representations, each with one responsibility.
+
+```text
+YAML text
+  ↓ parse
+AuthoredConfigBundle          Pydantic; preserves authored shape
+  ↓ validate references and scientific combinations
+ValidatedConfigBundle         Pydantic; all references proven
+  ↓ explicit mapping
+ResolvedStudyCatalogue        domain; framework-free definitions
+  ↓ plan experiment, population, seed, and sweep coordinates
+ExecutionPlan                 application; executable jobs and dependencies
+```
+
+No layer consumes YAML dictionaries after mapping.
+
+## 5.2 Configuration bundle
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ExperimentIdentity:
-    slug: ExperimentSlug
-    display_name: str
-    evidence_role: EvidenceRole
-    tier: ClaimTier | None          # required and TIER_1 iff evidence_role is CONFIRMATORY
-    run_requirement: RunRequirement     # MANDATORY | OPTIONAL | SUPPRESSED
-    roadmap_reference: str | None    # source-traceability metadata only
+class ConfigPaths:
+    nbaiot: Path
+    ciciot2023: Path
+    edge_iiotset: Path
+    experiments: Path
+    protocols: Path
+    runtime: Path
+```
+
+`Path` is used only by the configuration and infrastructure boundaries. Domain objects use normalized relative-path value objects where path identity is scientifically relevant.
+
+The config-layer root is:
+
+```python
+class AuthoredConfigBundle(BaseModel):
+    datasets: tuple[DatasetDocumentConfig, ...]
+    experiments: ExperimentsDocumentConfig
+    protocols: ProtocolsDocumentConfig
+    runtime: RuntimeDocumentConfig
+```
+
+The validated root retains the same content but can only be constructed by the validator after every local and cross-document rule passes:
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ValidatedConfigBundle:
+    authored: AuthoredConfigBundle
+    reference_index: ConfigReferenceIndex
+```
+
+## 5.3 Configuration file ownership
+
+| Document | Maps to | Does not create |
+|---|---|---|
+| `datasets/*.yaml` | dataset definition, source contract, field schema, materializations, setups, capability declarations, dataset-audit definition | experiment, metric result, readiness observation |
+| `experiments.yaml` | populations, experiment definitions, evaluations, analyses, sweeps, prerequisites, gates, report requests | new policies, new metric formulas, runtime values |
+| `protocols.yaml` | model, training, checkpoint, eligibility, normalization, threshold, metric, statistical, result, artifact, communication, and report registries | experiment membership or dataset source facts |
+| `runtime.yaml` | storage roots, source-access policy, determinism enforcement, device policy, budgets, concurrency, execution profiles | scientific model or experiment values |
+
+## 5.4 Resolution order
+
+Resolution is deterministic and always follows this order:
+
+1. parse all six documents;
+2. reject duplicate keys and unsupported `schema_version` values;
+3. validate each document independently;
+4. build the cross-document reference index;
+5. validate protocol references;
+6. map datasets, materializations, and setups;
+7. map protocol registries;
+8. map study populations;
+9. map experiment definitions;
+10. validate capability and combination rules;
+11. map runtime profiles;
+12. canonicalize and fingerprint the resolved catalogue.
+
+The mapper is explicit. It does not use field-name reflection to construct domain objects.
+
+---
+
+# 6. Identifier and value-object rules
+
+## 6.1 Identifier types
+
+Every independently referenced configuration object has its own identifier type.
+
+```python
+@dataclass(frozen=True, slots=True, order=True)
+class DatasetId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class MaterializationId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class DatasetSetupId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class PopulationId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class ExperimentId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class SchemaId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class ModelArchitectureId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class OptimizerId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class BatchingProfileId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class TrainingProfileId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class CheckpointProfileId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class SeedCohortId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class EligibilityPolicyId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class QuantileEstimatorId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class ThresholdPolicyId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class MetricId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class MetricBundleId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class StatisticalProfileId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class ResultTypeId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class ReportProfileId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class ReadinessGateId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class OperationalInputId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class SweepAxisId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class ExecutionProfileId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class DeterminismProfileId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class EvaluationId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class AnalysisId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class ClientId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class RunId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class ArtifactId:
+    value: str
+
+@dataclass(frozen=True, slots=True, order=True)
+class JobId:
+    value: str
+```
+
+Separate aliases are not used for semantically distinct identities. A `PopulationId` cannot be passed where a `DatasetSetupId` is required.
+
+## 6.2 Validated numeric values
+
+```python
+@dataclass(frozen=True, slots=True, order=True)
+class Probability:
+    value: float  # 0.0 <= value <= 1.0
+
+@dataclass(frozen=True, slots=True, order=True)
+class StrictlyPositiveFloat:
+    value: float
+
+@dataclass(frozen=True, slots=True, order=True)
+class NonNegativeFloat:
+    value: float
+
+@dataclass(frozen=True, slots=True, order=True)
+class PositiveInt:
+    value: int
+
+@dataclass(frozen=True, slots=True, order=True)
+class Seed:
+    value: int
+
+@dataclass(frozen=True, slots=True, order=True)
+class RoundNumber:
+    value: int
+```
+
+Validation occurs at construction. Invalid values never survive into the domain catalogue.
+
+## 6.3 Semantic strings
+
+Scientific expressions are not passed as anonymous strings.
+
+```python
+@dataclass(frozen=True, slots=True)
+class Formula:
+    expression: str
+
+@dataclass(frozen=True, slots=True)
+class InterpretationRule:
+    text: str
+
+@dataclass(frozen=True, slots=True)
+class RelativePath:
+    value: str
+
+@dataclass(frozen=True, slots=True)
+class Fingerprint:
+    algorithm: str
+    hexadecimal: str
+```
+
+These types preserve configuration-authored formulas and rules while preventing accidental interchange with ordinary labels or paths.
+
+---
+
+# 7. Closed vocabulary
+
+## 7.1 Core enums
+
+```python
+class DatasetName(StrEnum):
+    NBAIOT = "nbaiot"
+    CICIOT2023 = "ciciot2023"
+    EDGE_IIOTSET = "edge_iiotset"
+
+class EvidenceRole(StrEnum):
+    ANCHOR = "anchor"
+    CONFIRMATORY = "confirmatory"
+    SUPPORTIVE = "supportive"
+    EXTERNAL_VALIDATION = "external_validation"
+    MECHANISM = "mechanism"
+    STRESS_TEST = "stress_test"
+    BOUNDARY = "boundary"
+
+class ExecutionRequirement(StrEnum):
+    MANDATORY = "mandatory"
+    CONDITIONAL = "conditional"
+    OPTIONAL = "optional"
+
+class Capability(StrEnum):
+    BENIGN_CALIBRATION = "benign_calibration"
+    BENIGN_TEST_FALSE_POSITIVE_METRICS = "benign_test_false_positive_metrics"
+    PER_CLIENT_ATTACK_DETECTION_METRICS = "per_client_attack_detection_metrics"
+    ATTACK_SENSITIVE_THRESHOLD_TRADEOFF = "attack_sensitive_threshold_tradeoff"
+    FAMILY_TAXONOMY = "family_taxonomy"
+    WITHIN_CLIENT_CHRONOLOGICAL_ORDERING = "within_client_chronological_ordering"
+    CROSS_CLIENT_WALL_CLOCK_ORDERING = "cross_client_wall_clock_ordering"
+
+class CapabilityUnavailableBehavior(StrEnum):
+    FAIL_EXPERIMENT = "fail_experiment"
+    SUPPRESS_DEPENDENT_METRICS_AND_REPORT_REASON = (
+        "suppress_dependent_metrics_and_report_reason"
+    )
+    SKIP_POPULATION_AND_REPORT_REASON = "skip_population_and_report_reason"
+
+class RecalibrationMode(StrEnum):
+    FROZEN = "frozen"
+    ONE_SHOT = "one_shot"
+    NOT_APPLICABLE = "not_applicable"
+```
+
+`OPTIONAL` is required because optional evaluation conditions exist even though current experiment roots are mandatory or conditional.
+
+## 7.2 Stage and outcome enums
+
+```python
+class PipelineStage(StrEnum):
+    SOURCE_VALIDATION = "source_validation"
+    CLIENT_ASSIGNMENT = "client_assignment"
+    SPLIT_CONSTRUCTION = "split_construction"
+    PREPROCESSING = "preprocessing"
+    TRAINING = "training"
+    CHECKPOINT_SELECTION = "checkpoint_selection"
+    SCORE_GENERATION = "score_generation"
+    THRESHOLD_ESTIMATION = "threshold_estimation"
+    METRIC_EVALUATION = "metric_evaluation"
+    STATISTICAL_ANALYSIS = "statistical_analysis"
+    REPORTING = "reporting"
+    RESULT_FREEZE = "result_freeze"
+
+class StageStatus(StrEnum):
+    COMPLETED = "completed"
+    COMPLETED_WITH_WARNINGS = "completed_with_warnings"
+    INFEASIBLE = "infeasible"
+    FAILED_VALIDATION = "failed_validation"
+    FAILED_EXECUTION = "failed_execution"
+    BLOCKED_BY_DEPENDENCY = "blocked_by_dependency"
+```
+
+## 7.3 Metric status
+
+The domain enum exactly matches `protocols.yaml`:
+
+```python
+class MetricStatus(StrEnum):
+    AVAILABLE = "available"
+    UNDEFINED_ZERO_DENOMINATOR = "undefined_zero_denominator"
+    UNDEFINED_NEAR_ZERO_DENOMINATOR = "undefined_near_zero_denominator"
+    UNAVAILABLE_MISSING_BENIGN_CLASS = "unavailable_missing_benign_class"
+    UNAVAILABLE_MISSING_ATTACK_CLASS = "unavailable_missing_attack_class"
+    UNAVAILABLE_INVALID_ATTACK_ASSIGNMENT = "unavailable_invalid_attack_assignment"
+    UNAVAILABLE_INELIGIBLE_CLIENT = "unavailable_ineligible_client"
+    UNAVAILABLE_UNSUPPORTED_REGIME = "unavailable_unsupported_regime"
+    FAILED_INVALID_ARTIFACT = "failed_invalid_artifact"
+    FAILED_STATISTICAL_PROCEDURE = "failed_statistical_procedure"
+```
+
+No status maps to zero, blank text, omitted output, or unqualified `NaN`.
+
+---
+
+# 8. Resolved catalogue aggregates
+
+## 8.1 Root catalogue
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResolvedStudyCatalogue:
+    schema_version: PositiveInt
+    datasets: DatasetRegistry
+    protocols: ProtocolRegistry
+    populations: PopulationRegistry
+    readiness_gates: ReadinessGateRegistry
+    declared_capabilities: frozenset[Capability]
+    population_readiness_rule: PopulationReadinessRule
+    analysis_conventions: AnalysisConventions
+    experiments: ExperimentRegistry
+    catalogue_fingerprint: Fingerprint
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ScientificExperimentDefinition:
-    identity: ExperimentIdentity
-    data: DataDefinition
-    model: ModelDefinition
-    evaluations: tuple[EvaluationDefinition, ...]
-    analyses: tuple[AnalysisDefinition, ...]
-    seed_cohort: SeedCohortDefinition
-    prerequisites: tuple[ExperimentPrerequisite, ...]
-    operations: OperationsDefinition
+class ResolvedRuntimeCatalogue:
+    roots: StorageRoots
+    raw_source_policy: RawSourcePolicy
+    determinism_profiles: DeterminismProfileRegistry
+    device_policy_rules: DevicePolicyRules
+    resource_pressure_policy: ResourcePressurePolicy
+    execution_profiles: ExecutionProfileRegistry
+    runtime_fingerprint: Fingerprint
+```
 
+Scientific and runtime catalogues are separate. A runtime profile may change chunk size, workers, or storage placement without silently changing scientific identity.
+
+## 8.2 Typed immutable registries
+
+Registries expose `Mapping[TypedId, Definition]` but construct an immutable private mapping once.
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExperimentRegistry:
+    _items: Mapping[ExperimentId, ExperimentDefinition]
+
+    def get(self, experiment_id: ExperimentId) -> ExperimentDefinition: ...
+    def ordered(self) -> tuple[ExperimentDefinition, ...]: ...
+```
+
+The same pattern is used for datasets, populations, protocols, threshold policies, metrics, statistical profiles, result types, and report profiles.
+
+Registries reject duplicate identifiers at construction and iterate in deterministic identifier order.
+
+---
+
+# 9. Dataset domain
+
+## 9.1 Dataset definition
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DatasetDefinition:
+    dataset_id: DatasetId
+    dataset_name: DatasetName
+    display_name: str
+    schema_id: SchemaId
+    source: DatasetSourceDefinition
+    field_schema: FieldSchemaDefinition
+    source_contract: SourceValidationContract
+    fingerprint_specification: DatasetFingerprintSpecification
+    eligibility_policy_id: EligibilityPolicyId
+    materializations: MaterializationRegistry
+    setups: DatasetSetupRegistry
+    client_identity_contract: ClientIdentityContract | None
+```
+
+A dataset definition contains authored facts and executable contracts. It never contains observed row counts, actual eligibility, fitted vocabulary, selected clients, or readiness status.
+
+## 9.2 Source definitions
+
+Dataset-specific source layouts form a closed union because source semantics are not interchangeable.
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class NbaiotSourceDefinition:
+    root: RelativePath
+    device_directories: tuple[RelativePath, ...]
+    benign_patterns: tuple[str, ...]
+    attack_patterns: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Ciciot2023SourceDefinition:
+    root: RelativePath
+    executable_merged_source: SourceTreeDefinition
+    reference_per_class_source: SourceTreeDefinition
+    cross_source_contract: CrossSourceContract
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class EdgeIiotsetSourceDefinition:
+    root: RelativePath
+    normal_traffic_root: RelativePath
+    attack_traffic_root: RelativePath
+    normal_group_folders: tuple[str, ...]
+    executable_group_folders: tuple[str, ...]
+    attack_files: tuple[str, ...]
+    ignored_suffixes: tuple[str, ...]
+    ignored_subtrees: tuple[RelativePath, ...]
+
+DatasetSourceDefinition = (
+    NbaiotSourceDefinition
+    | Ciciot2023SourceDefinition
+    | EdgeIiotsetSourceDefinition
+)
+```
+
+Adding a fourth dataset adds one union member and one dataset adapter. Experiment planning and execution orchestration remain unchanged.
+
+## 9.3 Field schema
+
+```python
+class FieldRole(StrEnum):
+    MODEL_FEATURE = "model_feature"
+    BINARY_LABEL = "binary_label"
+    MULTICLASS_LABEL = "multiclass_label"
+    CLIENT_IDENTITY = "client_identity"
+    GROUP_IDENTITY = "group_identity"
+    TIMESTAMP = "timestamp"
+    ROW_IDENTITY = "row_identity"
+    PROVENANCE = "provenance"
+    LEAKAGE_EXCLUSION = "leakage_exclusion"
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SourceField:
+    source_name: str
+    role: FieldRole
+    data_type: str
+    position: int
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FieldSchemaDefinition:
+    source_column_counts: tuple[SourceColumnCount, ...]
+    source_fields: tuple[SourceField, ...]
+    model_feature_order: tuple[str, ...]
+    post_encoding_feature_order: PostEncodingFeatureOrder
+    label_definition: LabelDefinition
+    identity_definition: RowAndClientIdentityDefinition
+    encoding: EncodingDefinition
+    leakage_exclusions: tuple[str, ...]
+```
+
+For CICIoT2023, the source field tuple describes the merged executable schema and records the per-class tree as schema-only reference evidence. For Edge-IIoTset, every one of the 63 columns has one role in the source contract, and the model order is produced from retained numeric plus frozen one-hot features.
+
+The materialized feature order is persisted as an artifact. Training never re-derives it from a live set or unordered mapping.
+
+## 9.4 Materialization definition
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class MaterializationDefinition:
+    materialization_id: MaterializationId
+    role: str | None
+    normalization: NormalizationDefinition
+    preprocessing_steps: tuple[PreprocessingStep, ...]
+    row_exclusion: RowExclusionDefinition
+    split: SplitDefinition
+    split_row_semantics: SplitRowSemantics
+    vocabulary_fit_role: SplitRole | None
+    infeasibility_policy: InterpretationRule | None
+```
+
+`PreprocessingStep` is a closed `StrEnum` backed by the authored values. Execution dispatches each step through a registered implementation and rejects an unregistered step during catalogue resolution.
+
+## 9.5 Split union
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SplitFraction:
+    role: SplitRole
+    fraction: Probability
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RandomFractionalSplit:
+    fractions: tuple[SplitFraction, ...]
+    split_seed: Seed
+    benign_calibration_only: bool
+    excluded_clients: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class OrderedGappedSplit:
+    fractions: tuple[SplitFraction, ...]
+    ordering_basis: str
+    ordering_scope: str
+    benign_calibration_only: bool
+    attack_membership_rule: str
+    deduplication_rule: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WithinClientChronologicalSplit:
+    fractions: tuple[SplitFraction, ...]
+    ordering_field: str
+    stable_tie_break: str
+    rollover_policy: str
+    minimum_counts: tuple[MinimumRoleCount, ...]
+    excluded_clients: tuple[str, ...]
+    chronology_unverifiable_policy: str
+
+SplitDefinition = (
+    RandomFractionalSplit
+    | OrderedGappedSplit
+    | WithinClientChronologicalSplit
+)
+```
+
+This union directly covers:
+
+- N-BaIoT DATP-Core and anchor chronological-gapped splits;
+- N-BaIoT Dirichlet and CICIoT2023 random fractional splits;
+- Edge-IIoTset static random splits;
+- Edge-IIoTset within-client chronological 55/15/10/20 split.
+
+A new split algorithm is a new union member and executor. It is never encoded as a nullable collection of unrelated fields.
+
+## 9.6 Client-construction union
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PhysicalDeviceClients:
+    client_source: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DatasetFilePseudoClients:
+    client_source: str
+    semantics: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SensorGroupClients:
+    client_source: str
+    excluded_group_folders: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DirichletPartitionedClients:
+    client_count: PositiveInt
+    partition_condition_binding: SweepReference
+    source_domain: str
+    label_field: str
+    base_partition_seed: Seed
+    allocation: DirichletAllocationDefinition
+    minimum_counts: tuple[MinimumRoleCount, ...]
+    retry_policy: DeterministicRetryPolicy
+    manifest_invariants: tuple[InterpretationRule, ...]
+
+ClientConstruction = (
+    PhysicalDeviceClients
+    | DatasetFilePseudoClients
+    | SensorGroupClients
+    | DirichletPartitionedClients
+)
+```
+
+## 9.7 Dataset setup and population
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DatasetSetupDefinition:
+    setup_id: DatasetSetupId
+    materialization_id: MaterializationId
+    client_construction: ClientConstruction
+    provided_capabilities: frozenset[Capability]
+    eligibility_gate_id: ReadinessGateId | None
+    validation_scope: str | None
+    equivalent_client_population_setup: DatasetSetupId | None
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class StudyPopulationDefinition:
+    population_id: PopulationId
+    dataset_id: DatasetId
+    setup_id: DatasetSetupId
+    metric_bundle_id: MetricBundleId
+```
+
+A population is a reference to one dataset setup plus one metric bundle. It does not duplicate dataset, split, client, or metric definitions.
+
+## 9.8 Dataset audit definition
+
+Dataset audits are derived from each dataset document and are not experiments.
+
+```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DatasetAuditDefinition:
-    metadata: DatasetAuditMetadata
-    dataset_source: DatasetSourceDefinition
-    inspection_definition: SourceInspectionDefinition
-    feasibility_definition: FeasibilityDefinition
-    operations: AuditOperationsDefinition
+    dataset_id: DatasetId
+    source: DatasetSourceDefinition
+    field_schema: FieldSchemaDefinition
+    source_contract: SourceValidationContract
+    fingerprint_specification: DatasetFingerprintSpecification
 ```
 
-`DatasetAuditDefinition` is resolved from the declarative contract its owning
-`configs/datasets/<name>.yaml` document states — `source_layout`,
-`field_schema`, `source_contract` and `fingerprint_inputs`
-(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §2.1`) — never from a
-freestanding `configs/dataset_audits/` root and never from an `audits` list
-inside the dataset document, which would embed generated observations in
-static configuration. `config/compose.py` parses the same document twice —
-once per authorized `ClientConstruction` setup to build a `DataDefinition`
-for a scientific experiment, once over the source contract to build a
-`DatasetAuditDefinition` — and the two resulting aggregates remain
-structurally distinct, satisfying `ARCH-01` exactly as before. `DatasetAuditMetadata.slug` is scoped by its
-owning dataset (`DatasetAuditSlug`, `§16.1`); it carries no detector,
-threshold, seed, evidence-role, or claim-tier field regardless of which
-document supplied it.
-
-Evidence role and run requirement remain distinct. Rejected, out-of-scope,
-and future ideas use `CatalogueDisposition` and never enter a resolved
-`RunDefinition`.
-
-Evaluations and analyses are owned by their scientific experiment. A
-resolved sweep coordinate produces one complete scientific run; sweep
-bindings do not enter its domain object.
-
-## 3. Ownership by branch
-
-### 3.1 `DataDefinition`
+The audit result is runtime evidence:
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DataDefinition:
-    dataset: Dataset                                   # N_BAIOT | CICIOT2023 | EDGE_IIOTSET
-    schema_id: SchemaId                                # dataset-level source-schema identity
-    materialization_id: MaterializationId              # the named processed-artifact identity a setup
-                                                       #   references; identity-bearing, feeds DatasetScope (§16.5)
-    client_construction: ClientConstruction
-    split_definition: SplitDefinition
-    preprocessing: PreprocessingDefinition
-    calibration_subset: CalibrationSubsetDefinition | None
+class DatasetReadinessReport:
+    dataset_id: DatasetId
+    source_fingerprint: Fingerprint
+    schema_summary: SchemaSummary
+    populations: tuple[PopulationReadiness, ...]
+    findings: tuple[ReadinessFinding, ...]
+    status: StageStatus
 ```
 
-```text
-ClientConstruction
-├── PhysicalDeviceClients        (device_count)
-├── DatasetFilePseudoClients      (pseudo_client_count; boundary role only)
-├── DirichletPartitionedClients    (client_count, alpha, partition_seed)
-└── ExternalSensorGroupClients    (granularity: GROUP benign sensor-group, K = 10, fixed by human authorization;
-                                       feasibility_result_ref: FeasibilityResultRef,
-                                       provenance-only; never resolved during execution)
-```
+The report is persisted; it is never written back into YAML.
 
-`SplitDefinition` owns `TrainSplit`, `BenignCalibrationSplit`, `TestSplit`,
-and, only for the chronological setting, `TemporalWindow` (historical
-fraction locked at 0.70, genuine capture-time field, boundary identity). The
-calibration variant has no field capable of admitting an attack-labeled row
-— benign-only membership is a type-level property, not a runtime check
-(`SCI-04`). `PreprocessingDefinition` owns normalization strategy and scope
-(fit rows restricted to authorized `TrainSplit` rows) together with the
-row-exclusion and split policy that make up one named **materialization**. A
-dataset authors a `schema_id` and a `materializations` map; each
-`ClientConstruction` setup references one materialization, and
-`DataDefinition.materialization_id` carries that processed-artifact identity.
-This is why N-BaIoT exposes two distinct materializations: `datp_core`
-(`MIN_MAX` normalization, cold-start-row and exact-duplicate removal) and
-`anchor` (`STANDARD` / `StandardScaler` normalization, raw rows retained), so
-the anchor's distinct preprocessing is a first-class identity referenced by
-the `anchor_natural_devices` setup, never a silent inheritance of the
-DATP-Core policy. Runtime owns preprocessing chunk sizing and execution.
+---
 
-#### Field-level schema (`DatasetFieldSchema`)
+# 10. Protocol domain
 
-Every source column of every dataset — raw or already-numeric — is a typed
-`SourceFieldDescriptor`; there is no untyped, unclassified, or silently
-dropped column anywhere in the pipeline. `SOURCE_INSPECTION`
-(`PIPELINE_EXECUTION_AND_ARTIFACTS.md §2`) produces exactly one
-`DatasetFieldSchema` per dataset as its `FEATURE_SCHEMA_MANIFEST` artifact;
-`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11` gives the concrete,
-source-verified content of this manifest for all three datasets this design
-authorizes.
-
-```python
-class SourceFieldType(StrEnum):
-    NUMERIC_FLOAT = "numeric_float"
-    NUMERIC_INT = "numeric_int"
-    CATEGORICAL_STRING = "categorical_string"
-    FREE_TEXT = "free_text"                # unbounded-cardinality payload/query/hex content
-    TIMESTAMP_STRING = "timestamp_string"
-    IP_ADDRESS_STRING = "ip_address_string"
-
-class SourceFieldRole(StrEnum):
-    MODEL_FEATURE = "model_feature"                                    # enters model_feature_order
-    CLIENT_IDENTITY = "client_identity"                                # device/IP-derived
-    GROUP_IDENTITY = "group_identity"                                  # sensor-type/subnet/family grouping
-    BINARY_LABEL = "binary_label"                                      # benign-vs-attack
-    MULTICLASS_LABEL = "multiclass_label"                              # attack family/type
-    TIMESTAMP = "timestamp"                                            # capture wall-clock time
-    ROW_PROVENANCE = "row_provenance"                                  # source file/path/capture identity
-    EXCLUDED_LEAKAGE_RISK = "excluded_leakage_risk"                    # attack signature reachable in raw text
-    EXCLUDED_HIGH_CARDINALITY = "excluded_high_cardinality"            # port/hex/opaque payload
-    EXCLUDED_PROTOCOL_CONDITIONAL_PLACEHOLDER = "excluded_protocol_conditional_placeholder"
-                                                                        # zero-filled unless a specific protocol fires
-    EXCLUDED_UNRESOLVED = "excluded_unresolved"                        # genuinely unclassified; ScientificReadinessResult blocker
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SourceFieldDescriptor:
-    source_name: str                       # exact verbatim source column name
-    canonical_field_id: CanonicalFieldId
-    inferred_type: SourceFieldType
-    role: SourceFieldRole
-    note: str | None                       # non-obvious behavior only (cold-start artifact, placeholder
-                                           #   value, dataset-author-recommended exclusion), never filler
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DatasetFieldSchema:
-    dataset: Dataset
-    schema_id: SchemaId
-    source_fields: tuple[SourceFieldDescriptor, ...]      # every column, in exact source order
-    model_feature_order: tuple[CanonicalFieldId, ...]     # the ordered MODEL_FEATURE subset only
-    schema_fingerprint: StageFingerprint                  # blake3 of the canonical tuple above (§8 of
-                                                          #   CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md)
-```
-
-`model_feature_order` is never re-derived at training or scoring time from a
-`role == MODEL_FEATURE` filter applied live — it is a persisted, fingerprinted
-field of the committed `DatasetFieldSchema`, so a later source-schema drift
-(a column renamed, reordered, or added upstream) is a detected
-`SchemaCompatibility` mismatch rather than a silent feature-vector reshuffle.
-A `CanonicalFieldId` is stable across materializations of the same `schema_id`
-that share the underlying feature; it is never reused for two different source
-columns.
+## 10.1 Protocol registry
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class CalibrationSubsetDefinition:
-    requested_sample_count: CalibrationSampleCount
-    selection_strategy: CalibrationSubsetSelectionStrategy
-    selection_seed: Seed
-    nesting_policy: CalibrationSubsetNestingPolicy
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CalibrationSubsetResult:
-    source_score_set: ArtifactRef
-    selected_score_set: ArtifactRef
-    selected_row_manifest: ArtifactRef
-    selected_count: CalibrationSampleCount
-    source_population_identity: ArtifactKey
+class ProtocolRegistry:
+    model_architectures: ModelArchitectureRegistry
+    optimizers: OptimizerRegistry
+    batching_profiles: BatchingRegistry
+    determinism: DeterminismDefinition
+    seed_cohorts: SeedCohortRegistry
+    checkpoint_profiles: CheckpointProfileRegistry
+    training_profiles: TrainingProfileRegistry
+    eligibility_policies: EligibilityPolicyRegistry
+    normalization_strategies: NormalizationStrategyRegistry
+    normalization_fit_scopes: NormalizationFitScopeRegistry
+    normalization_leakage_rule: InterpretationRule
+    quantile_estimators: QuantileEstimatorRegistry
+    threshold_policy_defaults: ThresholdPolicyDefaults
+    threshold_policies: ThresholdPolicyRegistry
+    metric_definitions: MetricRegistry
+    metric_bundles: MetricBundleRegistry
+    statistical_profiles: StatisticalProfileRegistry
+    nested_replicate_policy: NestedReplicatePolicy
+    result_types: ResultTypeRegistry
+    evaluation_result_contract: EvaluationResultContract
+    artifact_identity: ArtifactIdentityContract
+    communication_estimation: CommunicationEstimationContract
+    report_defaults: ReportDefaults
+    report_profiles: ReportProfileRegistry
+    operational_inputs: OperationalInputRegistry
 ```
 
-Publication regime is a reporting-only projection, never an identity or
-control-flow input:
+The registry preserves configured identifiers. Experiments bind to identifiers; application planning resolves them to definitions.
 
-```python
-class PublicationRegimeLabel(StrEnum):
-    A = "a"
-    B_A = "b_a"
-    C = "c"
-    D = "d"
-    D_TEMPORAL = "d_temporal"
-    # B_B intentionally absent: rejected, non-executable (SCIENTIFIC_FOUNDATION.md §5)
-
-def derive_publication_regime(
-    data: DataDefinition,
-) -> PublicationRegimeLabel | None:
-    ...
-```
-
-It is absent from YAML, run identity, stage identity, artifact keys, planner
-branching, and scientific control flow.
-
-### 3.2 `ModelDefinition`
+## 10.2 Model and optimizer
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ModelDefinition:
-    architecture: AutoencoderArchitecture
-    reconstruction_objective: ReconstructionObjective
-    training: TrainingDefinition
-    optimizer: OptimizerDefinition
-    checkpoint_production: CheckpointProductionDefinition
-    training_batch: TrainingBatchDefinition
-    score_generation: ScoreGenerationDefinition
-    scoring_batch: ScoringBatchDefinition
-    numerical_precision: NumericalPrecision
-    deterministic_computation_requirement: DeterministicComputationRequirement
+class DenseAutoencoderDefinition:
+    input_dimension: InputDimensionRule
+    hidden_dimensions: tuple[PositiveInt, ...]
+    bottleneck_rule: str
+    decoder_rule: str
+    activation: str
+    output_activation: str
+    bias: bool
+    initialization: ParameterInitializationDefinition
+    reconstruction_objective: str
+    anomaly_score: Formula
+    precision: str
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class TrainingDefinition:
-    profile: TrainingProfile             # the named training profile (FedAvg, FedProx, Ditto-personalized, centralized)
-    parameters: TrainingParameters       # per-experiment bound values; empty for every profile except FedProx
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class TrainingParameters:
-    mu: FedProxMu | None                 # the only per-experiment training parameter today: a strictly
-                                         #   positive pre-registered value bound from the federated_proximal_mu
-                                         #   sweep, populated only for a FederatedProximalTrainingProfile (None otherwise)
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class OptimizerDefinition:
-    optimizer_type: OptimizerType
-    learning_rate: LearningRate
-    scheduler: SchedulerDefinition | None
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SchedulerDefinition:
-    scheduler_type: LrSchedulerType
-    # scheduler-specific fields, e.g. step_size / decay_factor, owned only by the matching type
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class TrainingBatchDefinition:
-    micro_batch_size: BatchSize
-    gradient_accumulation_steps: GradientAccumulationSteps
-
-def effective_batch_size(batch: TrainingBatchDefinition) -> int:
-    """Pure, total derivation — never an authored YAML field (§11 of
-    CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md)."""
-    return batch.micro_batch_size * batch.gradient_accumulation_steps
-
-def rounds_max(schedule: CheckpointSchedule) -> RoundNumber:
-    """Pure, total derivation from the checkpoint schedule's own rounds —
-    never an independently authored YAML field."""
-    return max(schedule.rounds)
+class AdamDefinition:
+    learning_rate: StrictlyPositiveFloat
+    beta_1: Probability
+    beta_2: Probability
+    epsilon: StrictlyPositiveFloat
+    weight_decay: NonNegativeFloat
+    amsgrad: bool
+    scheduler: str
+    gradient_clipping: str
+    state_lifecycle: str
 ```
 
-`CheckpointProductionDefinition` names one of the model's authored
-`checkpoint_profiles` — for example `datp_core` with rounds
-[25, 50, 75, 100, 125, 150, 200], or `anchor_terminal` with the single
-terminal round [150]. The owning experiment selects the profile through an
-explicit `checkpoint_profile` reference; the schedule is never derived from
-`evidence_role`. `rounds_max` is then the pure `max(rounds)` of the selected
-profile (150 for the anchor, 200 for DATP-Core), never an independently
-authored field.
+The input dimension is resolved from the materialized feature schema. It is not authored separately per dataset or inferred from the first batch.
 
-`LearningRate` and every other continuous value that enters a fingerprint are
-validated, canonical `Decimal` value objects; raw `float` is never a
-scientific or artifact-identity input.
-
-```text
-TrainingProfile
-├── FederatedAveragingTrainingProfile   (local_epochs=1, participation: ParticipationStrategy,
-│                                  personalization: ModelPersonalizationStrategy)
-├── FederatedProximalTrainingProfile         (carries no literal mu — µ is bound per experiment via
-│                                   the owning experiment's training.parameters.mu from the
-│                                   federated_proximal_mu sweep; same non-strategy fields as the
-│                                   matched FederatedAveragingTrainingProfile)
-└── CentralizedPooledTrainingProfile      (pooled-benign; not federated; not in the ladder)
-
-class ParticipationStrategy(StrEnum):
-    FULL = "full"
-    # PARTIAL is future work (SCIENTIFIC_FOUNDATION.md §7.6); kept as a real,
-    # single-member-today enum rather than a hardcoded literal specifically
-    # because the roadmap already names its own extension.
-```
-
-A training profile's role — core ladder, aggregation stress test, or personalization
-stress test — is never a stored field; it is computed by
-`classify_training_profile(training_profile)`, a pure function, removing the
-self-validation the prior design needed to check a stored role against its
-own training specification. `AutoencoderArchitecture` is a value object
-(`hidden_dims`, `bottleneck_dim`, `activation`; no batch normalization
-anywhere, `SCI-19`). It carries no authored `input_dim` field: input width
-is the pure derivation `len(model_feature_order)` from the resolved
-experiment's `DatasetFieldSchema` (`§3.1`), computed after dataset
-resolution exactly like `effective_batch_size` and `rounds_max` (`§3.2`
-below) — never authored, and never guessed ahead of `SOURCE_INSPECTION`
-actually running (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §4`).
-`CheckpointSelectionPolicy` is a locked value naming
-the fixed evidence source (`natural_device_evaluation` only) and the two
-locked deterministic rules (lowest federated-averaging-weighted benign
-validation reconstruction error; ties broken toward the earlier scheduled
-round) — a single frozen decision, not an enum, because — unlike
-`ParticipationStrategy` — the roadmap names no forthcoming second selection
-rule; if one is ever introduced, `CheckpointSelectionPolicy` becomes a
-discriminated union at that point, not before.
-`ScoreGenerationDefinition` describes score behavior. Its separate
-`ScoringBatchDefinition` owns scoring batch size. Runtime owns preprocessing
-chunks, prefetch, and execution concurrency.
-
-Checkpoint authority has two distinct values. `PrimaryCheckpointRoundSelection`
-authorizes the natural-device primary round from permitted benign evidence.
-`CheckpointArtifactSelection` selects each independently trained
-dataset/training-profile branch's own artifact at that authorized round. This keeps
-input-dimension and training-profile compatibility explicit, prevents
-per-regime/test-driven selection, and keeps the names neutral for FedAvg and
-FedProx.
-
-### 3.3 `EvaluationDefinition` and `AnalysisDefinition`
-
-`EvaluationDefinition` owns exactly threshold construction, the evaluation
-suite, requested metrics, and its own identity; it never owns a statistical
-procedure. `AnalysisDefinition` owns comparison and statistics: which
-evaluations are being compared, the comparison direction, the primary
-metric, and the full statistical procedure. This split exists because the
-same pair of evaluations is legitimately compared by more than one analysis
-(a confirmatory BCa comparison and, attached to the same experiment, a
-descriptive Wilcoxon/Cliff's-delta pass), and because a single shared
-`StatisticalProcedureDefinition` must never be re-declared once per
-threshold evaluation — a repetition the prior draft of this package
-introduced and this split removes.
+## 10.3 Training profiles
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class EvaluationDefinition:
-    label: EvaluationLabel
-    threshold: ThresholdConstruction
-    evaluation_suite: EvaluationSuiteDefinition
-    requested_metrics: tuple[MetricId, ...]
-    eligibility: EligibilityDefinition    # resolved by reference to the owning dataset's single
-                                          #   authored minimum_calibration_sample_count
-                                          #   (CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §2); never
-                                          #   re-authored here, so the dataset remains the sole owner
-    recalibration_mode: RecalibrationMode | None    # FROZEN | ONE_SHOT for the chronological
-                                                    #   setting only; None (never authored) for
-                                                    #   every non-temporal evaluation (CFG-05)
-    execution_requirement: ExecutionRequirement
-    evidence_use: EvidenceUse
-    publication_placement: PublicationPlacement
-```
-
-`recalibration_mode` is the sole per-evaluation field that lets one threshold
-construction appear twice under a chronological setting — once `FROZEN`, once
-`ONE_SHOT` — so that `TemporalRecoveryAnalysis` can name a frozen and a
-recalibrated evaluation by label. It is identity-bearing (it changes what is
-computed), so it enters the `EVALUATE`/`THRESHOLD_CONSTRUCT` fingerprint when
-populated; it is `None` and unauthored for every non-chronological experiment,
-where `None` is the meaningful "no recalibration boundary" state, never an
-omitted required value (`CFG-05`).
-
-`execution_requirement`, `evidence_use`, and `publication_placement` are the
-only three fields in the whole aggregate permitted a documented boundary
-default (`REQUIRED`, `PRIMARY`, `MAIN`), because none is scientific,
-identity-bearing, or output-affecting — each is presentation metadata that
-enters no fingerprint (`§17`). This is why the worked evaluations author them
-only where they diverge from the default (for example the supplementary fixed-k
-evaluation's `execution_requirement: optional`,
-`publication_placement: supplementary`,
-`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §16.5`). Every scientific,
-identity-bearing, or output-affecting field remains default-free (`CFG-01`,
-`CFG-05`). `AnalysisMetadata` carries the same three presentation-metadata
-fields under the same default rule.
-
-The eight `ThresholdConstruction` variants are defined completely in
-`SCIENTIFIC_FOUNDATION.md §6`; `CentralizedPooledThreshold` is not a member
-of this union and is reachable only from a `CentralizedPooledTrainingProfile`
-model's own evaluation. `EvaluationSuiteDefinition` is a closed union of
-`StandardEvaluationSuite` and `AlertBurdenEvaluationSuite`; the latter
-requires a validated `TrafficRateEvidence` value, so alert burden cannot be
-requested with missing or bare rate data (`EVAL-06`).
-
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AnalysisMetadata:
-    label: AnalysisLabel
-    execution_requirement: ExecutionRequirement
-    evidence_use: EvidenceUse
-    publication_placement: PublicationPlacement
-    # Statistical procedures are NOT owned here: AnchorEquivalenceAnalysis runs no resampling
-    # procedure (it is a deterministic interval-vs-reference gate), so a procedure field on the
-    # shared header would be a field an AnchorEquivalenceAnalysis does not own (CFG-02). Every
-    # procedure-bearing variant declares primary_procedure / secondary_procedures directly.
+class FederatedAveragingTraining:
+    model_architecture_id: ModelArchitectureId
+    optimizer_id: OptimizerId
+    batching_id: BatchingProfileId
+    local_epochs: PositiveInt
+    participation: str
+    client_weighting: str
+    aggregation_formula: Formula
+    checkpoint_authorization: str
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class PairedPolicyEffectAnalysis:
-    metadata: AnalysisMetadata
-    first_evaluation: EvaluationLabel
-    second_evaluation: EvaluationLabel
-    primary_metric: MetricId
-    delta_orientation: DeltaOrientation
-    primary_procedure: StatisticalProcedure
-    secondary_procedures: tuple[StatisticalProcedure, ...]
+class FederatedProximalTraining:
+    common: FederatedAveragingTraining
+    proximal_objective: Formula
+    mu_binding: SweepReference
+    allowed_mu_values: tuple[StrictlyPositiveFloat, ...]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class MetricAssociationAnalysis:
-    metadata: AnalysisMetadata
-    predictor_metric: MetricId
-    outcome_metric: MetricId
-    grouping_dimension: SweepParameterName
-    primary_procedure: StatisticalProcedure
-    secondary_procedures: tuple[StatisticalProcedure, ...]
+class PersonalizedFederatedTraining:
+    common: FederatedAveragingTraining
+    method: PersonalizedMethod
+    personalized_local_epochs: PositiveInt
+    proximal_weight: StrictlyPositiveFloat
+    parameter_grid: tuple[StrictlyPositiveFloat, ...]
+    selection_rule: SelectionRule
+    method_contract: PersonalizedMethodContract
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DistributionMechanismAnalysis:
-    metadata: AnalysisMetadata
-    source_evaluations: tuple[EvaluationLabel, ...]
-    primary_procedure: StatisticalProcedure
-    secondary_procedures: tuple[StatisticalProcedure, ...]
+class CentralizedPooledTraining:
+    model_architecture_id: ModelArchitectureId
+    optimizer_id: OptimizerId
+    batching_id: BatchingProfileId
+    training_population: str
+    validation_split: ValidationSplitDefinition
+    checkpoint_authorization: str
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ClusterStabilityAnalysis:
-    metadata: AnalysisMetadata
-    source_evaluation: EvaluationLabel
-    primary_procedure: StatisticalProcedure
-    secondary_procedures: tuple[StatisticalProcedure, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class QuantileEstimationAnalysis:
-    metadata: AnalysisMetadata
-    source_evaluations: tuple[EvaluationLabel, ...]
-    primary_procedure: StatisticalProcedure
-    secondary_procedures: tuple[StatisticalProcedure, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CrossExperimentAnalysisRef:
-    experiment: ExperimentSlug
-    analysis: AnalysisLabel
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AbsorptionAnalysis:
-    metadata: AnalysisMetadata
-    core_analysis: CrossExperimentAnalysisRef   # the reused FedAvg core delta from the
-                                                #   confirmatory experiment (2×2 FedAvg row);
-                                                #   resolved against a `completed` prerequisite
-    personalized_analysis: AnalysisLabel        # this experiment's personalized 2×2 row delta
-    primary_procedure: StatisticalProcedure
-    secondary_procedures: tuple[StatisticalProcedure, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class TemporalRecoveryAnalysis:
-    metadata: AnalysisMetadata
-    frozen_evaluation: EvaluationLabel
-    recalibrated_evaluation: EvaluationLabel
-    primary_procedure: StatisticalProcedure
-    secondary_procedures: tuple[StatisticalProcedure, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AnchorEquivalenceAnalysis:
-    metadata: AnalysisMetadata
-    source_analysis: AnalysisLabel               # the owning experiment's paired analysis label,
-                                                 #   whose committed BCa interval is compared here
-    reference_interval: AnchorReferenceInterval
-    # No primary/secondary procedure: this is the deterministic interval-vs-reference gate the
-    # ANCHOR_EQUIVALENCE stage runs, never a resampling procedure (EVALUATION_REPORTING §8).
-
-# The closed AnalysisDefinition union is declared after its members so the alias
-# never forward-references an undefined name; it is a plain type alias, never a
-# dataclass, and every consumer matches it exhaustively with typing.assert_never.
-AnalysisDefinition = (
-    PairedPolicyEffectAnalysis
-    | MetricAssociationAnalysis
-    | DistributionMechanismAnalysis
-    | ClusterStabilityAnalysis
-    | QuantileEstimationAnalysis
-    | AbsorptionAnalysis
-    | TemporalRecoveryAnalysis
-    | AnchorEquivalenceAnalysis
-)
-
-StatisticalProcedure = (
-    BcaBootstrap
-    | PercentileBootstrap
-    | WilcoxonSignedRank
-    | MatchedPairsRankBiserialCorrelation
-    | SpearmanCorrelation
-    | LinearRegression
+TrainingProfile = (
+    FederatedAveragingTraining
+    | FederatedProximalTraining
+    | PersonalizedFederatedTraining
+    | CentralizedPooledTraining
 )
 ```
 
-For `evidence_role ∈ {ANCHOR, CONFIRMATORY}`, the owning
-`PairedPolicyEffectAnalysis.primary_procedure` is locked to
-`BCA_BOOTSTRAP`, confidence `0.95`, and the role-appropriate paired-seed
-count (five for the anchor, ten for the confirmatory experiment, drawn from
-`ScientificExperimentDefinition.seed_cohort`, `§4` below) — never re-specified per
-threshold evaluation (`ARCH-02`).
+The name `ditto` is exposed only when `PersonalizedMethodContract` proves persistent local state, the configured proximal personalized objective, separate global and local provenance, and no aggregation of personalized state.
 
-### 3.4 `OperationsDefinition`
+## 10.4 Checkpoint profiles
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class OperationsDefinition:
-    execution: ExecutionProfileRef      # resolved reference to one named profile in execution.yaml
-    report: ReportDefinition            # inline; authored on the experiment entry that produces it
+class RoundGridCheckpointProfile:
+    total_rounds: PositiveInt
+    candidate_rounds: tuple[RoundNumber, ...]
+    selection_rule: SelectionRule
+    tie_break: str
+    selection_scope: str
 
-def derive_artifact_namespace(identity: ExperimentIdentity) -> ArtifactNamespace:
-    """Pure, total function from an experiment's identity to its artifact
-    namespace (ANCHOR writes to the anchor namespace; every other role
-    writes to the complete-study namespace). Never a stored field a caller
-    could set inconsistently with evidence_role (ANCHOR-05)."""
-    ...
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AnchorConvergenceCheckpointProfile:
+    maximum_rounds: PositiveInt
+    evaluation_start_round: RoundNumber
+    trailing_window: PositiveInt
+    relative_change_tolerance: NonNegativeFloat
+    fallback_round: RoundNumber
+    save_policy: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CentralizedEpochGridCheckpointProfile:
+    total_epochs: PositiveInt
+    candidate_epochs: tuple[PositiveInt, ...]
+    selection_rule: SelectionRule
+    tie_break: str
+
+CheckpointProfile = (
+    RoundGridCheckpointProfile
+    | AnchorConvergenceCheckpointProfile
+    | CentralizedEpochGridCheckpointProfile
+)
 ```
 
-Two named, non-overlapping sub-fields replace three separately top-level
-policy objects. `execution` resolves a semantic reference to one named
-profile in `configs/runtime.yaml` (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md
-§2.4`); `report` is a list of semantic references to named `report_profiles`
-entries in `configs/protocols.yaml`, never a path reference to a separate
-presentation document, since no `configs/reporting/` directory exists (`§2.3`
-of the same file). Shared table and figure contracts are therefore stated
-once and reused, rather than restated inline on each experiment entry. Both
-fields use the single `ReportDefinition` type `EVALUATION_REPORTING_AND_PROVENANCE.md
-§9.2` declares — an earlier draft of this package named the field's type
-`ReportingDefinition`, a second name for the same concept `§9.2` already
-defines; that duplicate name is removed here. A third sub-field,
-`ArtifactDefinition`, existed in an earlier draft solely to carry a
-`namespace` field that was already fully determined by
-`ExperimentIdentity.evidence_role`; storing it invited the same
-caller-supplied-inconsistency failure mode `§11` catalogues for the prior
-design's removed per-training-branch role field, so it is removed in favor
-of the pure `derive_artifact_namespace` function, called wherever a
-namespace is needed (planning, persistence, reporting) and never persisted
-as its own domain field.
-
-### 3.5 No duplicate ownership
-
-Every scientific and operational field above has exactly one authoritative
-owner. A field is never copied between aggregates; a downstream branch holds
-an `ArtifactRef` or `StageIdentity`.
-
-## 4. Lifecycle concepts
-
-There is no domain-level sweep template. A boundary sweep is expanded during
-composition into complete `ScientificExperimentDefinition` values. Bindings
-are consumed before domain construction; a non-sweeping root follows the
-same resolution path and produces one resolved run.
+## 10.5 Seed cohort and derived seeds
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SeedCohortDefinition:
-    paired_seed_count: int
-    derivation: SeedDerivationRule     # e.g. DETERMINISTIC_FROM_EXPERIMENT_SEED
-    experiment_seed: Seed
+    cohort_id: SeedCohortId
+    training_seeds: tuple[Seed, ...]
+    bootstrap_analysis_seed: Seed
+    analysis_seed_model: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SeedPlan:
+    training_seed: Seed
+    bootstrap_analysis_seed: Seed
+    split_seed: Seed | None
+    partition_seed: Seed | None
+    clustering_seed: Seed | None
+    derived_seeds: tuple[DerivedSeed, ...]
+```
+
+Derived seeds use the configured BLAKE2b namespace algorithm and are persisted in manifests. No service calls a global random generator without a `SeedPlan` entry.
+
+---
+
+# 11. Threshold-policy domain
+
+## 11.1 Policy families
+
+The 14 configured policy identifiers map into six stable policy families rather than 14 unrelated classes.
+
+```python
+class ThresholdScope(StrEnum):
+    SHARED = "shared"
+    LOCAL = "local"
+    FAMILY = "family"
+    CLUSTER = "cluster"
+    CENTRALIZED = "centralized"
+    FEDERATED_SUMMARY = "federated_summary"
+
+class ThresholdAggregation(StrEnum):
+    ARITHMETIC_MEAN = "arithmetic_mean"
+    POOLED = "pooled"
+    SAMPLE_WEIGHTED = "sample_weighted"
+    ROBUST_MEDIAN = "robust_median"
+    NONE = "none"
+```
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class QuantileThresholdPolicy:
+    policy_id: ThresholdPolicyId
+    scope: ThresholdScope
+    aggregation: ThresholdAggregation
+    quantile: Probability
+    estimator_id: QuantileEstimatorId
+    required_capabilities: frozenset[Capability]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClusterThresholdPolicy:
+    policy_id: ThresholdPolicyId
+    quantile: Probability
+    cluster_count: PositiveInt
+    fingerprint_features: tuple[str, ...]
+    scaler: str
+    algorithm: ClusteringAlgorithmDefinition
+    aggregation: ThresholdAggregation
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ConformalLocalThresholdPolicy:
+    policy_id: ThresholdPolicyId
+    target_quantile: Probability
+    rank_rule: Formula
+    unattainable_behavior: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class LocalGlobalShrinkagePolicy:
+    policy_id: ThresholdPolicyId
+    quantile: Probability
+    weight_binding: SweepReference
+    formula: Formula
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CalibrationSizeAwareFallbackPolicy:
+    policy_id: ThresholdPolicyId
+    quantile: Probability
+    eligibility_reference: EligibilityPolicyId
+    fallback_rule: Formula
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FederatedSummaryThresholdPolicy:
+    policy_id: ThresholdPolicyId
+    quantile: Probability
+    candidate_grid: CandidateGrid
+    aggregation_formula: Formula
+    selection_rule: SelectionRule
+    fixed_coefficient_binding: SweepReference | None
+
+ThresholdPolicyDefinition = (
+    QuantileThresholdPolicy
+    | ClusterThresholdPolicy
+    | ConformalLocalThresholdPolicy
+    | LocalGlobalShrinkagePolicy
+    | CalibrationSizeAwareFallbackPolicy
+    | FederatedSummaryThresholdPolicy
+)
+```
+
+## 11.2 Configured policy mapping
+
+| Configured identifier | Domain family |
+|---|---|
+| `shared_mean_p95` | shared quantile, arithmetic mean |
+| `shared_pooled_p95` | shared quantile, pooled |
+| `shared_weighted_p95` | shared quantile, sample-weighted |
+| `local_p95` | local quantile |
+| `family_p95` | family quantile |
+| `centralized_pooled_p95` | centralized pooled quantile |
+| `cluster_k3_mean_p95` | cluster policy, K=3, mean |
+| `cluster_k9_mean_p95` | cluster policy, K=9, mean |
+| `cluster_k3_robust_median_p95` | cluster policy, K=3, median |
+| `conformal_local_p95` | conformal local |
+| `local_global_shrinkage_p95` | local-global shrinkage |
+| `calibration_size_aware_fallback_p95` | size-aware fallback |
+| `federated_summary_matched_exceedance` | federated summary, matched exceedance |
+| `federated_summary_fixed_k` | federated summary, fixed coefficient |
+
+Threshold execution is selected by the policy variant, not by experiment name.
+
+## 11.3 Threshold request and result
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class EstimateThresholdsRequest:
+    run_id: RunId
+    evaluation: ResolvedEvaluation
+    score_artifact: ArtifactRef
+    eligibility_manifest: ArtifactRef
+    seed_plan: SeedPlan
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ThresholdRecord:
+    policy_id: ThresholdPolicyId
+    client_id: ClientId
+    owner_scope: ThresholdScope
+    owner_id: str
+    threshold: float
+    calibration_count: int
+    achieved_calibration_exceedance: float
+    fallback_applied: bool
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ThresholdArtifactPayload:
+    records: tuple[ThresholdRecord, ...]
+    group_assignments: tuple[GroupAssignment, ...]
+    diagnostics: ThresholdDiagnostics
+```
+
+Attack rows cannot be represented in the calibration input type. `BenignCalibrationScoreSetRef` is a separate artifact-reference type from test-score references.
+
+---
+
+# 12. Experiment domain
+
+## 12.1 Experiment definition
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExperimentDefinition:
+    experiment_id: ExperimentId
+    display_name: str
+    evidence_role: EvidenceRole
+    requirement: ExecutionRequirement
+    population_bindings: tuple[PopulationBinding, ...]
+    training_profile_id: TrainingProfileId
+    checkpoint_profile_id: CheckpointProfileId
+    seed_cohort_id: SeedCohortId
+    eligibility_policy_id: EligibilityPolicyId
+    prerequisites: tuple[ExperimentPrerequisite, ...]
+    readiness_gate_ids: tuple[ReadinessGateId, ...]
+    capability_requirements: tuple[CapabilityRequirement, ...]
+    sweeps: tuple[SweepAxis, ...]
+    training_overrides: tuple[TrainingOverride, ...]
+    evaluations: tuple[EvaluationDefinition, ...]
+    analyses: tuple[AnalysisDefinition, ...]
+    report_profile_ids: tuple[ReportProfileId, ...]
+    guardrails: tuple[ExperimentGuardrail, ...]
+```
+
+The same type represents anchor, confirmatory, supportive, mechanism, boundary, external-validation, and stress-test experiments.
+
+## 12.2 Experiment guardrails
+
+Fields that apply only to selected experiments are mapped to typed guardrail variants rather than nullable fields on `ExperimentDefinition`.
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BooleanExperimentGuardrail:
+    kind: BooleanGuardrailKind
+    enabled: bool
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TextExperimentGuardrail:
+    kind: TextGuardrailKind
+    rule: InterpretationRule
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class UnavailableCapabilityDeclaration:
+    capability: Capability
+    status: MetricStatus
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ParameterSelectionGuardrail:
+    parameter: str
+    selection_rule: SelectionRule
+    tie_break: str | None
+    forbidden_selectors: tuple[str, ...]
+    complete_grid_reported: bool
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CalibrationSubsetGuardrail:
+    sample_count_binding: SweepReference
+    selection_strategy: str
+    repetitions: PositiveInt
+    nested_within_seed: bool
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PopulationRelationshipGuardrail:
+    roles: tuple[PopulationRoleBinding, ...]
+    equivalence_requirement: InterpretationRule | None
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TemporalProcedureGuardrail:
+    calibration_source_window: SplitRole
+    frozen_evaluation_window: SplitRole
+    recalibration_source_window: SplitRole
+    recalibrated_evaluation_window: SplitRole
+    model_reuse_rule: InterpretationRule
+    future_rows_forbidden_in_fit: bool
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ConditionalRunGuardrail:
+    required_operational_input_id: OperationalInputId
+    unavailable_behavior: str
+    blocks_other_experiments: bool
+    estimate_basis: str
+
+ExperimentGuardrail = (
+    BooleanExperimentGuardrail
+    | TextExperimentGuardrail
+    | UnavailableCapabilityDeclaration
+    | ParameterSelectionGuardrail
+    | CalibrationSubsetGuardrail
+    | PopulationRelationshipGuardrail
+    | TemporalProcedureGuardrail
+    | ConditionalRunGuardrail
+)
+```
+
+The mapper converts every non-common experiment key into one of these variants. Unknown extra keys are configuration errors. This covers validation scope, confirmatory-promotion restrictions, causal-ladder separation, faithful-reproduction restrictions, client-semantics constraints, quantitative claim gates, method-naming rules, selection rules, temporal procedures, population equivalence, conditional operational inputs, and unavailable-result behavior.
+
+## 12.3 Prerequisites and capability requirements
+
+```python
+class RequiredExperimentOutcome(StrEnum):
+    COMPLETED = "completed"
+    ANCHOR_EQUIVALENCE_PASSED = "anchor_equivalence_passed"
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentPrerequisite:
-    requires: ExperimentSlug
-    required_outcome: PrerequisiteOutcome   # ANCHOR_EQUIVALENCE_PASSED | COMPLETED
-
-# PrerequisiteOutcome members: ANCHOR_EQUIVALENCE_PASSED (the anchor gate),
-# COMPLETED (a prior experiment's committed results, e.g. the confirmatory core
-# delta reused by model_personalization_absorption_test's AbsorptionAnalysis).
-# A dataset audit is never an ExperimentPrerequisite: its FEASIBILITY_RESULT is
-# referenced by the dataset document's feasibility_result_ref as provenance only,
-# never as a live gate (SCIENTIFIC_FOUNDATION.md §5.1).
-```
-
-`ExperimentPrerequisite` replaces a free-text `requires_passed` string list
-with a typed reference the planner resolves against the concrete gate
-result it names (`ANCHOR-02`, `CFG-08`); `confirmatory_threshold_scope_effect`
-carries exactly one: `ExperimentPrerequisite(requires=anchor_reproduction,
-required_outcome=ANCHOR_EQUIVALENCE_PASSED)`. `ExecutionPlan` and
-`ExperimentResult` are covered in `PIPELINE_EXECUTION_AND_ARTIFACTS.md §§2–3`.
-
-## 5. Dataclass, request, and result admission rules
-
-A dedicated dataclass is introduced only when it carries scientific
-identity, enforces a real invariant, owns several related values with an
-independent lifecycle, crosses a layer boundary, is persisted, participates
-in artifact lineage, has multiple meaningful variants, or prevents an
-invalid scientific state. Grouping fields that happen to travel together is
-not sufficient justification, and a dataclass is never introduced merely
-because a function takes three inputs. A request object is justified only
-for a complete application use case or a stable port boundary; a result
-object is justified only when it has several related outputs, scientific
-meaning, validation, persistence, or multiple meaningful outcome variants. A
-small deterministic function takes ordinary typed parameters and returns a
-scalar, an existing domain value, or an existing result type — never a
-ceremonial single-field wrapper. A custom collection is used only when it
-enforces ordering, uniqueness, cardinality, complete client coverage,
-complete seed pairing, key compatibility, or scientific validation;
-otherwise an immutable typed collection (a `tuple` or a frozen mapping
-snapshot) is used directly.
-
-## 6. Complete public contract catalogue
-
-Every public root aggregate, value-object family, discriminated variant
-family, application use case, port, artifact reference, evaluation/
-statistical result family, and decision record in this design is listed
-below or in the cross-referenced section. Internal helper functions are not
-catalogued.
-
-### 6.1 Root aggregates and lifecycle types
-
-| Type | Layer | Persisted | Identity-bearing | Consumers |
-|---|---|---|---|---|
-| `ExperimentIdentity` | domain | as part of `ScientificExperimentDefinition` | yes (`evidence_role`, `tier`) | planner, reporting |
-| `DataDefinition` | domain | yes | yes | planner, stages, reuse gate |
-| `ModelDefinition` | domain | yes | yes | planner, stages, reuse gate |
-| `EvaluationDefinition` | domain | yes | yes (threshold only) | evaluator |
-| `AnalysisDefinition` | domain | yes | yes (statistical procedure) | statistics runner, anchor gate |
-| `SeedCohortDefinition` | domain | yes | yes | planner, statistics runner |
-| `ExperimentPrerequisite` | domain | as part of `ScientificExperimentDefinition` | no (references another identity) | planner, anchor gate |
-| `OperationsDefinition` | domain | yes (execution subset recorded) | conditional (§7 batch rule) | preflight, persistence, reporting |
-| `ScientificExperimentCell` | domain | yes | yes (`ExperimentCellIdentity`) | planner, every stage |
-| `ScientificExperimentDefinition` | domain | yes | yes | planner, reuse gate, reporting |
-| `DatasetAuditDefinition` | domain | yes | yes | audit planner and reporting |
-
-There is no domain-level `ExperimentTemplate` or `SweepDefinition`; sweep
-placeholders exist only in the `config` boundary schema and never reach
-`domain` (`§4` above).
-
-### 6.2 Value objects
-
-| Value object | Wraps | Validation | Distinct from |
-|---|---|---|---|
-| `ExperimentSlug` | str | lowercase snake_case, non-empty | `ArtifactScopeKey` |
-| `EvaluationLabel` | str | lowercase snake_case, unique within one `ScientificExperimentDefinition.evaluations` | `ExperimentSlug` |
-| `ThresholdPercentile`, `FprTarget`, `ConfidenceLevel`, `CoverageRatio`, `Probability` | canonical `Decimal` | fixed twelve-fractional-digit round-half-even representation; range check; rejects `NaN`/infinity | mutually distinct; never interchanged |
-| `ShrinkageWeight` | float | `0 ≤ λ ≤ 1` | — |
-| `Seed` | int | `≥ 0` | — |
-| `RoundNumber` | int | `≥ 1`; must be in `{25,50,75,100,125,150,200}` when selecting | — |
-| `ClusterCount` | int | `≥ 1`; canonicality derived from a locked constant, never a caller flag | — |
-| `DirichletAlpha` | float `> 0` or an IID sentinel | rejects `α ≤ 0` | — |
-| `CalibrationSampleCount` | int | `≥ 0` | `SampleCount` |
-| `ConfusionCount` | int | `≥ 0` | `SampleCount` |
-| `BatchSize`, `GradientAccumulationSteps` | int | `≥ 1` | `WorkerCount` |
-| `WorkerCount` | int | `≥ 0`; identity-bearing only when ordering/output-affecting | `BatchSize` |
-| `RelativeArtifactPath` | str | POSIX-relative, no `..`, no leading separator, no drive, no whitespace | — |
-| `BootstrapResampleCount` | int | `≥ 1`; never defaulted | — |
-| `TrafficRate` | Decimal rate + unit | finite, strictly positive, supported unit | `Probability` |
-
-Every float-wrapping value object rejects `NaN` and infinity at
-construction, so a fingerprinted field can never silently compare unequal to
-itself.
-
-### 6.3 Discriminated variant families
-
-Complete list, each exhaustively matched with `typing.assert_never`:
-`ClientConstruction` (§3.1, 4 members), `TrainingProfile` (§3.2, 3
-members), `ThresholdConstruction` (`SCIENTIFIC_FOUNDATION.md §6`, 8 shared
-members plus `CentralizedPooledThreshold` outside the union),
-`EvaluationSuiteDefinition` (2 members), `AnalysisDefinition` (`§3.3`, 8
-members: `PairedPolicyEffectAnalysis`, `MetricAssociationAnalysis`,
-`DistributionMechanismAnalysis`, `ClusterStabilityAnalysis`,
-`QuantileEstimationAnalysis`, `AbsorptionAnalysis`, `TemporalRecoveryAnalysis`,
-`AnchorEquivalenceAnalysis`; the confirmatory/anchor pair is a
-`PairedPolicyEffectAnalysis`, whose boundary discriminator is
-`kind: paired_threshold_analysis`),
-`TrafficRateEvidence` (`Measured`,
-`Cited`), `ClaimOutcome` (`STRONG_POSITIVE`, `WEAK_POSITIVE`, `MIXED`,
-`NULL`, `OPPOSITE`, `FEASIBILITY_REJECTION`, `SUPPRESSED`), `CvOutcome`
-(`ValidCvResult`, `UndefinedCvResult`), `BootstrapIntervalOutcome`
-(`ValidBootstrapIntervalResult`, `DegenerateBootstrapIntervalResult`),
-`ReuseDecision` (`Reuse`, `Recompute`, `Blocked`), `FeasibilityGateDecision`
-(`AllowAudit`, `AllowScientific`, `Block`), `AnchorEquivalenceResult`
-(`Passed`, `Failed`), and `StatisticalAnalysisResult` (`§16.6`, 7 members —
-one per `STATISTICAL_ANALYZE`-eligible `AnalysisDefinition` kind; excludes
-`AnchorEquivalenceResult`, which the `ANCHOR_EQUIVALENCE` stage owns).
-
-### 6.4 Artifact and lineage types (domain)
-
-| Type | Purpose |
-|---|---|
-| `StageIdentity` | `{stage: PipelineStage, fingerprint: StageFingerprint}`; covers the linear single-purpose lineage chain (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §2` cross-ref; full derivation in `PIPELINE_EXECUTION_AND_ARTIFACTS.md §3`) |
-| `ArtifactKey` | `{artifact_type, scope, producer_identity}`; lookup/locking/reuse identity for every artifact role |
-| `ArtifactRef` | `{key, content_hash}`; verified persisted artifact identity |
-| `ArtifactType` | closed enum of every independently persisted artifact family (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §5`) |
-| `ArtifactScopeKey` | closed typed scope variants carrying only coordinates the artifact type needs (current experiment/cell/stage/split/client coordinates; future temporal or intervention scope is a new variant) |
-| `ProvenanceRecord` | resolved-configuration reference, upstream `ArtifactRef` values, code state, dependency-lock state, environment inventory, execution attempt, production time, content hash |
-| `ResolvedConfigurationSnapshot` | canonical byte-stable rendering of every field contributing to a resolved definition, its fingerprint, and its source-document identities |
-| `PreSpecificationRecord` | subject (absorption bands, temporal outcome bands), roadmap-lock revision, lock timestamp |
-| `ResultFreezeManifest` | immutable evaluation/statistical/resource-cost input references and hashes approved for rendering |
-| `ScientificReadinessResult` | `{is_ready: bool, execution_mode: ExecutionMode, blockers: tuple[ReadinessBlocker, ...]}`; computed before planning for every `SCIENTIFIC`/`PRINT_GRADE` cell. A blocker prevents construction of a resolved run; it is not a field carried by one. |
-
-### 6.5 Evaluation and statistical result types (domain)
-
-| Type | Purpose |
-|---|---|
-| `ConfusionMatrix` | derived `{true_positive, true_negative, false_positive, false_negative}` (`EVALUATION_REPORTING_AND_PROVENANCE.md §1`) |
-| `ClientEvaluationResult` | per-client sufficient operating point: counts, assigned threshold, FPR/TPR/precision/recall/F1/balanced accuracy, eligibility status and reason |
-| `CvOutcome` | `ValidCvResult` or `UndefinedCvResult`, exhaustive |
-| `EligibleClientSet` | one persisted population, built once per paired comparison, reused unchanged by every compared policy |
-| `EligibilityCoverageResult` / `ConformalCoverageResult` | disjoint coverage identities; never share a metric or table column. `ConformalCoverageResult` (frozen dataclass, `§16.6`) carries `rank: PositiveInt`, `minimum_sample_count: PositiveInt`, `marginal_sample_weighted_coverage: Probability`, `macro_client_coverage: Probability`, `per_client_coverage: Mapping[ClientId, Probability]`, `coverage_target_error: NonNegativeFloat`, and `exchangeability_scope: Literal["within_client"]` (`EVALUATION_REPORTING_AND_PROVENANCE.md §6.2`) |
-| `FleetDispersionResult` / `FleetDetectionResult` / `FleetEquityResult` / `ClusterDispersionResult` | fleet-level aggregates; equity and cluster results are optional |
-| `PolicyEvaluationResult` | the cohesive per-`EvaluationDefinition` result, joining identity, per-client map, and fleet results |
-| `TrafficRateEvidence` / `AlertBurdenResult` | validated rate evidence and its derived burden |
-| `PairedDeltaResult` | per-seed delta, orientation locked |
-| `BootstrapIntervalOutcome` | valid or expected-degenerate BCa result |
-| `WilcoxonSignedRankResult` / `MatchedPairsRankBiserialResult` | descriptive secondary evidence only; the latter replaces `CliffsDeltaResult` as the paired effect size (Cliff's delta is unpaired and never used in this entirely paired-seed design) |
-| `ConfirmatoryAnalysisResult` | every `PairedPolicyEffectAnalysis` verdict: paired delta, interval, sign consistency, pass flag, claim outcome (its name reflects its headline confirmatory use) |
-| `MetricAssociationResult` | `MetricAssociationAnalysis`: Spearman ρ, regression R², sample size |
-| `DistributionMechanismResult` | `DistributionMechanismAnalysis`: source evaluations and per-client `(Δτ, ΔFPR, ΔTPR)` shift table |
-| `ClusterStabilityResult` | `ClusterStabilityAnalysis`: adjusted-Rand, silhouette, within/across-cluster dispersion |
-| `QuantileEstimationResult` | `QuantileEstimationAnalysis`: estimation error, threshold variance, FPR-target attainment, sample efficiency |
-| `AbsorptionResult` | model-personalization stress-test delta ratio and band |
-| `TemporalRecoveryResult` | frozen-versus-recalibrated CV, recovery ratio, outcome |
-| `StatisticalAnalysisResult` | closed union of the seven results above (all `STATISTICAL_ANALYZE` outputs); the `STATISTICAL_ANALYZE` stage and `StatisticalProcedureBackend` port return type |
-| `AnchorReferenceInterval` / `AnchorEquivalenceResult` | the locked `[0.647, 0.769]` reference and the pass/fail comparison (produced by `ANCHOR_EQUIVALENCE`, not `STATISTICAL_ANALYZE`) |
-| `ResourceCostResult` | communication or storage cost, `MEASURED` or `ESTIMATED`, never conflated |
-
-### 6.6 Data and model pipeline result types
-
-| Type | Purpose |
-|---|---|
-| `DatasetSourceInspectionResult` | inspected source facts: source manifest, `DatasetFieldSchema` (`§3.1`) as the `FEATURE_SCHEMA_MANIFEST` content, source-row identity scheme, timestamp evidence; never partitions or preprocesses |
-| `ClientPartitionResult` | authoritative client mapping: partition manifest, client roster, `PartitionIdentity` |
-| `SplitDefinitionResult` | exact row membership: split manifest, split identities, row-order checksums |
-| `FittedPreprocessorResult` | immutable fitted state; contains no processed split and no test-derived statistic |
-| `ProcessedSplitResult` | transformed split materialization; retains row order and source-row lineage |
-| `TrainingRunResult` | scheduled checkpoints plus convergence diagnostics (diagnostic only, never a stop condition) |
-| `CalibrationScoreArtifactSet` / `TestScoreArtifactSet` / `TemporalScoreArtifactSet` | role-scoped score substrates referenced by `ArtifactRef`; a test-score set atomically commits benign and attack members as one aggregate |
-| `ThresholdConstructionResult` | resulting per-client threshold assignment plus the calibration `ArtifactRef` it consumed |
-
-The only authoritative data flow is source inspection → client-partition
-result → split-definition result → fitted preprocessor → processed split →
-model training → checkpoint selection → calibration/test/temporal
-scoring. No component both partitions and preprocesses, and no combined
-prepare-or-fit-transform contract exists.
-
-## 7. Application use cases and ports
-
-### 7.1 Use cases (concrete services, no port; single implementation)
-
-| Use case | Input | Output |
-|---|---|---|
-| `resolve_configuration` | `ResolveConfigurationRequest` | `ConfigurationResolutionResult` |
-| `create_execution_plan` | `CreatePlanRequest` | `DraftExecutionPlan` |
-| `run_preflight` | `PreflightRequest` | `FinalExecutionPlan` |
-| `run_experiment` | plan reference | `ExecutionSummary` |
-| `verify_anchor_equivalence` | `AnchorEquivalenceRequest` | `AnchorEquivalenceResult` |
-| `evaluate_client_operating_points` | `EvaluateOperatingPointsRequest` | `PolicyEvaluationResult` |
-| `estimate_paired_threshold_effect` | `RunStatisticalAnalysisRequest` | `StatisticalAnalysisResult` |
-| `project_results_to_table` / `project_results_to_figure` | `ProjectReportRequest` | typed table/figure specification |
-| `trace_report_provenance` | `TraceReportArtifactRequest` | `ReportTraceResult` |
-
-### 7.2 Ports (genuine framework or hardware boundaries)
-
-| Port | Input | Output |
-|---|---|---|
-| `DatasetSourceInspector` | `InspectDatasetSourceRequest` | `DatasetSourceInspectionResult` |
-| `ClientPartitioner` | `ClientPartitionRequest` | `ClientPartitionResult` |
-| `SplitDefinitionBuilder` | `BuildSplitRequest` | `SplitDefinitionResult` |
-| `PreprocessorFitter` | `FitPreprocessorRequest` | `FittedPreprocessorResult` |
-| `ProcessedSplitMaterializer` | `MaterializeProcessedSplitsRequest` | `ProcessedSplitResult` |
-| `ModelTrainingBackend` | `TrainModelRequest` | `TrainingRunResult` |
-| `ScoreGenerator` | `GenerateCalibrationScoresRequest` / `GenerateTestScoresRequest` / `GenerateTemporalScoresRequest` | role-scoped score-generation result |
-| `ThresholdConstructor` | `ConstructThresholdRequest` | `ThresholdConstructionResult` |
-| `StatisticalProcedureBackend` | `RunStatisticalAnalysisRequest` | `StatisticalAnalysisResult` |
-| `ArtifactStore` | lookup / write / bundle-commit / validate requests | corresponding typed results |
-| `CheckpointStore` | find / save / load requests | corresponding typed results |
-| `ManifestStore` | record / trace requests | `tuple[ProvenanceRecord, ...]` |
-| `ArtifactLockProvider` | `AcquireArtifactLockRequest` | `ArtifactLockLease` |
-| `HardwareInspector` | none | `HardwareInventory` |
-| `ReportRenderer` | `RenderReportRequest` | `RenderedReportResult` |
-| `EventSink` | `StructuredEvent` | none |
-
-Threshold and deterministic-metric calculations are domain or application
-services, not ports, unless a real interchangeable backend exists; `Cliff's
-delta` is a vetted, property-tested pure function, not a SciPy call, and
-therefore never gains a port. No `ArtifactRepository` god-interface exists;
-persistence is narrowed into `ArtifactStore`, `CheckpointStore`,
-`ManifestStore`, and `ArtifactLockProvider`, each non-overlapping.
-
-## 8. Framework confinement
-
-NumPy arrays, pandas objects, PyArrow batches, `nn.Module`, Torch tensors
-and state dictionaries, scikit-learn estimators, and Flower clients and
-strategies are private implementation carriers confined to `infrastructure`
-adapters. They never appear in a `domain` or `application` port signature.
-Application contracts exchange bounded, framework-neutral descriptors:
-`ArtifactRef`, `ProcessedSplitResult`, `TrainingRunResult`,
-`CalibrationScoreArtifactSet`, `TestScoreArtifactSet`.
-
-## 9. Conceptual source tree
-
-`PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md` is authoritative for the complete
-tree, per-module responsibilities, allowed imports, and placement rules; the
-compact summary below shows only the layer shape.
-
-```
-src/datp_core/
-  domain/
-    experiments.py  data.py  model.py  thresholding.py  evaluation.py
-    artifacts.py  operations.py  reporting.py  mathematics.py  identifiers.py  errors.py
-  application/
-    ports/  data.py  training.py  statistics.py  persistence.py  runtime.py  reporting.py
-    configuration/  planning/  stages/  runtime/  evaluation/  statistics/  reporting/
-  config/  schemas/  mapping/  compose.py
-  infrastructure/
-    data/  training/  thresholding/  statistics/  persistence/  runtime/  reporting/  telemetry/
-  composition/  root.py  registries.py
-  cli/  main.py  commands/
-```
-
-Framework-free table, figure, and wording *specifications* are domain types
-(`domain/reporting.py`) projected by `application/reporting/`; *rendering*
-adapters live in `infrastructure/reporting/`. There is no separate top-level
-`analysis/` layer (`ARCH-05`). Every module has a single, precisely named
-responsibility; none is
-`utils.py`, `common.py`, `base.py`, `manager.py`, `handlers.py`, `misc.py`,
-`shared.py`, `requests.py`, or `results.py`
-(`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §2`, `NAME-*`).
-
-## 10. Immutable typed collections and collection-wrapper policy
-
-A frozen dataclass never holds a live `dict`; a constructor accepting a
-`Mapping` stores an immutable snapshot (a `MappingProxyType` over a copied
-dictionary, or a frozen tuple of items) in `__post_init__`. A custom
-collection class is introduced only when it enforces a rule an ordinary
-`tuple` cannot: `EligibleClientSet` enforces complete, deduplicated client
-coverage against a roster; `SeedCohort` enforces exact pairing cardinality
-between two compared policies; `StageDependencyCollection` preserves edge
-order and rejects a duplicate edge; `ClientScoreMap` enforces one entry per
-known client identity with no silent overwrite. Everywhere else — an
-ordered tuple of `EvaluationDefinition`, a tuple of `ArtifactRef` upstream
-references, a tuple of scheduled rounds — a plain immutable `tuple` is used
-directly, because no additional domain rule needs enforcing beyond
-immutability and order. `Sequence[str | int | float]`,
-`Mapping[str, Any]`, and `list[dict[str, Any]]` never appear in a `domain`
-or `application` signature (`TYPE-03`).
-
-## 11. Consolidation of prior aggregates
-
-`ExperimentSpec`, `ExperimentProfileSpec`, `ScientificProtocolSpec`,
-`ClaimSpec`, `RegimeDataSpec`, `DetectorBranchSpec`, `EvaluationArmSpec`,
-`ExecutionPolicy`, `ArtifactPolicy`, `ReportingPolicy`, `ProtocolTrack`, and
-roughly twenty per-stage identity dataclasses are each given a full
-disposition in `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §4`. No prior
-concept disappears without a recorded replacement or an explicit
-justification for its removal. Three concrete examples illustrate the
-pattern applied throughout:
-
-- The prior design's `EvaluationArmSpec.detector_branch_id` field existed
-  solely to reference its sibling `DetectorBranchSpec`, and
-  `ScientificProtocolSpec.__post_init__` then had to validate that the
-  reference agreed with the branch actually present. Because
-  `EvaluationDefinition` is now owned directly as a tuple field of
-  `ScientificExperimentDefinition` rather than looked up from a separate collection,
-  no such reference — and no such validator — exists at all; the
-  consolidation removed a field and the failure mode it existed to guard
-  against simultaneously.
-- The prior design's `DetectorBranchSpec.role` field stored one of three
-  `DetectorBranchRole` values but had to be "re-derived from the branch's
-  own training specification at construction and rejected if it disagrees,"
-  because a caller could otherwise supply an inconsistent label. Removing
-  the stored field and replacing it with the pure function
-  `classify_training_profile` (§6.6, §12) removes the inconsistency it was designed
-  to catch, because there is no longer a second copy of the same fact to
-  disagree with the first.
-- The prior design's six centralized (`CentralizedModelIdentity` through
-  `CentralizedEvaluationIdentity`) identity classes existed only to
-  guarantee that a centralized artifact could never be substituted for a
-  federated one. `StageIdentity` and `ArtifactKey` already guarantee this,
-  because a `CentralizedPooledTrainingProfile` model produces a structurally
-  different `stage_fingerprint` input than a `FederatedAveragingTrainingProfile`
-  model at the very first stage that depends on `training_profile`; a
-  second, parallel type family added no protection the first did not
-  already provide.
-
-## 12. Representative method signatures
-
-```python
-def resolve_experiment_configuration(
-    request: ResolveConfigurationRequest,
-) -> ConfigurationResolutionResult: ...
-
-class ExperimentPlanner:
-    def create_plan(self, request: CreatePlanRequest) -> DraftExecutionPlan: ...
-
-class AnchorEquivalenceGate:
-    def evaluate(self, request: AnchorEquivalenceRequest) -> AnchorEquivalenceResult: ...
-
-class ArtifactReuseGate:
-    def decide(
-        self, required: ArtifactKey, candidate: ArtifactRef | None,
-    ) -> ReuseDecision: ...
-
-class CheckpointSelector:
-    def select(self, request: CheckpointSelectionRequest) -> CheckpointSelectionResult: ...
-
-class ConfusionMatrixEvaluator:
-    def derive(self, request: EvaluateOperatingPointsRequest) -> ClientEvaluationResult: ...
-
-def classify_training_profile(training_profile: TrainingProfile) -> TrainingProfileRole:
-    """Pure classification; never a stored, separately validated field."""
-    ...
-
-def is_confirmatory(identity: ExperimentIdentity) -> bool:
-    return identity.evidence_role is EvidenceRole.CONFIRMATORY
-```
-
-Each raises only the typed error families declared for its layer
-(`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §6`); none returns `None` in
-place of a typed unavailable outcome, and none accepts `Any`, `object`, or a
-generic mapping.
-
-## 13. Class diagram
-
-```mermaid
-classDiagram
-    class ScientificExperimentCell {
-      +ExperimentCellIdentity identity
-      +ScientificExperimentDefinition definition
-    }
-    class ScientificExperimentDefinition {
-      +ExperimentIdentity identity
-      +DataDefinition data
-      +ModelDefinition model
-      +EvaluationDefinition[] evaluations
-      +AnalysisDefinition[] analyses
-      +SeedCohortDefinition seed_cohort
-      +ExperimentPrerequisite[] prerequisites
-      +OperationsDefinition operations
-    }
-    class DataDefinition
-    class ModelDefinition
-    class EvaluationDefinition
-    class AnalysisDefinition
-    class SeedCohortDefinition
-    class ExperimentPrerequisite
-    class OperationsDefinition {
-      +ExecutionProfileRef execution
-      +ReportDefinition report
-    }
-    class ExperimentIdentity
-    ScientificExperimentCell *-- ScientificExperimentDefinition
-    ScientificExperimentDefinition *-- ExperimentIdentity
-    ScientificExperimentDefinition *-- DataDefinition
-    ScientificExperimentDefinition *-- ModelDefinition
-    ScientificExperimentDefinition *-- EvaluationDefinition
-    ScientificExperimentDefinition *-- AnalysisDefinition
-    ScientificExperimentDefinition *-- SeedCohortDefinition
-    ScientificExperimentDefinition *-- ExperimentPrerequisite
-    ScientificExperimentDefinition *-- OperationsDefinition
-```
-
-## 14. Complete enum catalogue
-
-Every enum in the prior architecture's Section 6 catalogue is listed below
-with an explicit disposition — `kept` (same members, same meaning, at most
-renamed to remove a letter or a redundant word), `merged` (folded into a
-discriminated union or another enum, with the mapping shown), or
-`eliminated` (removed, with the specific reason and its replacement). None
-is silently dropped. Grouping mirrors the prior catalogue's own seven
-groups so it can be checked side by side against it.
-
-### 14.1 Scientific vocabulary (was §6.1)
-
-| Enum | Disposition | Detail |
-|---|---|---|
-| `Dataset` | kept | `N_BAIOT`, `CICIOT2023`, `EDGE_IIOTSET` — unchanged, never letter-based |
-| `Regime` | **kept, redefined as derived** | see `§3.1` above; five members `A, B_A, C, D, D_TEMPORAL`, computed from `DataDefinition`, never a constructor input |
-| `ClientDefinitionStrategy` | merged | into the `ClientConstruction` discriminated union (`§3.1`); `DEVICE_CLIENT`/`GROUP_CLIENT` merged into `ExternalSensorGroupClients.granularity` (now GROUP-only; device granularity rejected) |
-| `SplitRole` | kept | `TRAIN`, `CALIBRATION`, `TEST`, `TEMPORAL_EVALUATION` |
-| `ProtocolTrack` | eliminated | `DATP_ANCHOR`/`COMPLETE` replaced by `EvidenceRole.ANCHOR`; namespace is derived, not a stored field (`ANCHOR-05`) |
-| `DetectorBranchRole` | eliminated | replaced by the pure function `classify_training_profile` (`§3.2`, `§11`) |
-| `CoreThresholdPolicy` | eliminated | redundant with the `ThresholdConstruction` union's own discriminator; "is this core-ladder" is `isinstance` on the variant, never a parallel enum |
-| `ThresholdConstructionKind` | eliminated | the `ThresholdConstruction` union discriminator identifies `SharedThreshold`, `LocalThreshold`, `FamilyThreshold`, `ClusterThreshold`, `LocalGlobalShrinkageThreshold`, `CalibrationSizeAwareFallbackThreshold`, `ConformalLocalThreshold`, or `FederatedSummaryStatisticThreshold`; `ROBUST_CLUSTER_MEDIAN` remains `ClusterThreshold.aggregation` |
-| `SharedThresholdConstruction` | kept | now `SharedThreshold.construction`: `MEAN`, `POOLED`, `WEIGHTED` |
-| `ThresholdVariant` | eliminated | redundant listing of names already distinct in `ThresholdConstruction`; no second "which of these is a variant" tag needed |
-| `ThresholdComparatorRole` | eliminated | `B0` never enters the shared union at all (its own model's `CentralizedPooledThreshold`); "outside the ladder" is expressed by the owning experiment's `evidence_role = STRESS_TEST`, not a per-threshold field |
-| `AggregationStrategy` | kept, renamed | now the tag of `TrainingProfile` (`FederatedAveragingTrainingProfile`, `FederatedProximalTrainingProfile`) plus the separate `CentralizedPooledTrainingProfile` variant |
-| `ModelPersonalizationStrategy` | kept | `NONE`, `DITTO`, `FEDREP_AE`, `FEDPER_AE`, field of `FederatedAveragingTrainingProfile` |
-| `ExperimentRole` | kept, renamed, narrowed | now `EvidenceRole`, with `ANCHOR` added and the two non-executable members `FUTURE_WORK`/`FORBIDDEN` dropped (they carry no `configs/experiments.yaml` document; future work is `CatalogueDisposition.FUTURE_WORK`, forbidden is a Tier-9 manuscript rule) — eight executable roles (`SCIENTIFIC_FOUNDATION.md §4`) |
-| `ClaimTier` | kept | `TIER_1`…`TIER_9`, `IntEnum`, unchanged |
-| `RunRequirement` | kept | `MANDATORY`, `OPTIONAL`, `SUPPRESSED` only; rejected and future catalogue entries use `CatalogueDisposition`, never executable run status |
-| `FeasibilityStatus` | **kept, restored** | `FEASIBLE`, `GATED`, `PENDING_VERIFICATION`, `REJECTED`; a field of the persisted `FEASIBILITY_RESULT` artifact, distinct from the transient `FeasibilityGateDecision` result union |
-| `ClientEligibilityStatus` | kept | `ELIGIBLE`, `FALLBACK_ASSIGNED`, `EXCLUDED` |
-| `ClientEligibilityReason` | kept | four members, unchanged |
-| `RejectionReason` | kept, renamed | eight members, letters removed: `DEVICE_MAC_REPARTITION_NO_METADATA`, `CHRONOLOGICAL_PROBE_NO_TIMESTAMPS`, `FEDBN_NO_BATCHNORM`, `LARIDI_ANOMALY_LABELED`, `MIA_NO_LITERATURE`, `STREAMING_DRIFT_SCOPE`, `BYZANTINE_CONFORMAL_SCOPE`, `BROAD_PFL_LIMIT` |
-| `ReuseIncompatibilityReason` | kept | thirteen members, unchanged |
-| `BlockingReason` | kept | seven members, unchanged |
-| `MetricFamily` + 8 per-family metric enums | kept | presented as one unified table in `EVALUATION_REPORTING_AND_PROVENANCE.md §4` for readability; all thirty-seven members and their eight family groupings are unchanged underneath |
-| `TrafficRateUnit`, `TrafficRateEvidenceKind`, `CostDerivationKind` | kept | unchanged |
-| `StatisticalMethod` | eliminated | each `StatisticalProcedure` union variant is its own method identity |
-| `CheckpointSelectionStrategy` | eliminated | single-member enum with no documented future variant, replaced by the locked value `CheckpointSelectionPolicy` (`§3.2`) |
-| `ParticipationStrategy` | **kept, restored as a real enum** | see `§3.2`; kept rather than hardcoded specifically because the roadmap names `PARTIAL` as future work |
-| `RecalibrationMode` | kept | `FROZEN`, `ONE_SHOT` |
-| `TemporalOutcome` | kept | `RECAL_HELPS`, `RECAL_INSUFFICIENT`, `NO_MEANINGFUL_DRIFT` |
-| `ClaimOutcome` | kept | seven members, unchanged |
-| `AbsorptionBand` | kept | `STRONGLY_USEFUL`, `PARTIAL`, `LARGELY_ABSORBED`, `ALTERNATIVE_PATH` |
-
-### 14.2 Model, preprocessing, and estimation vocabulary (was §6.2)
-
-All nine kept unchanged: `ActivationFunction`, `NormalizationStrategy`,
-`NormalizationScope`, `OptimizerType`, `LrSchedulerType`, `PrecisionMode`,
-`DeterminismLevel`, `QuantileEstimatorType`, `ConformalMode`. None was
-letter-based in the prior design, so none needed renaming.
-
-### 14.3 Execution and lifecycle vocabulary (was §6.3)
-
-All fifteen kept: `ExecutionMode`, `DevicePolicy`, `RunStatus`, `SeedRole`,
-`StageConcurrency`, `ProcessStartMethod`, `WorkerRole`,
-`FailureDisposition`, `CheckpointKind`, `RoundDisposition`,
-`ResourcePressureLevel`, `PauseDecision`, `ReuseImpact` kept verbatim.
-`PipelineStage` kept with several members renamed for precision
-(`PARTITION → CLIENT_PARTITION`, `SPLIT_BUILD → SPLIT_DEFINITION`,
-`TRAIN → MODEL_TRAIN` (further renamed from an intermediate `DETECTOR_TRAIN`
-once "detector" was replaced by "model" throughout this package),
-`THRESHOLD → THRESHOLD_CONSTRUCT`,
-`ANALYZE → STATISTICAL_ANALYZE`) and one member added (`ANCHOR_EQUIVALENCE`;
-`PIPELINE_EXECUTION_AND_ARTIFACTS.md §2`). Configuration resolution is a
-pre-pipeline composition operation (`§4` above) and was never a correct
-`PipelineStage` member; an earlier draft of this package listed it as one,
-producing a nineteen-row stage table while the surrounding text still
-claimed eighteen stages — that contradiction is resolved by removing the
-row, not by renaming the text. `ReuseDecisionKind` kept as the
-tag of the `ReuseDecision` union (`Reuse`, `Recompute`, `Blocked`).
-
-### 14.4 Storage and persistence vocabulary (was §6.4)
-
-`StorageRootKind`, `StorageVisibility`, `SerializationFormat`,
-`WriteDisposition`, `LockScope`, `ValidationStatus`, `IntegrityStatus`,
-`SchemaCompatibility` kept unchanged. `ArtifactNamespace` kept with
-`DATP_ANCHOR`/`COMPLETE` replaced by namespace derivation from
-`EvidenceRole` (`ANCHOR-05`); its remaining members (`RECOVERY`, `CACHE`,
-`STAGING`, `TEST_SANDBOX`) are unchanged. `ArtifactType` kept and fully
-enumerated in `PIPELINE_EXECUTION_AND_ARTIFACTS.md §6.1`. `ManifestType`
-merged into `ArtifactType`: each of its thirteen members already named a
-specific persisted content family that already has its own `ArtifactType`
-member (for example `REGIME_D_FEASIBILITY → FEASIBILITY_RESULT`,
-letter removed; `EXPERIMENT → EXPERIMENT_MANIFEST`); keeping two enums for
-the same classification question was the duplicate-ownership pattern this
-package's own admission rules (`§5`) reject.
-
-### 14.5 Observability vocabulary (was §6.5)
-
-`LogSink`, `LogFormat` kept unchanged. `LogEventKind` kept and fully
-enumerated in `PIPELINE_EXECUTION_AND_ARTIFACTS.md §12.1` (twenty-six
-members, unchanged).
-
-### 14.6 Reporting vocabulary (was §6.6)
-
-`ReportArtifactType`, `RenderingStatus` kept unchanged. `TableType` and
-`FigureType` kept and fully enumerated in
-`EVALUATION_REPORTING_AND_PROVENANCE.md §9.3` (ten and six members
-respectively, unchanged, including the no-Sankey rule for B4
-interpretability).
-
-### 14.7 Test vocabulary (was §6.7)
-
-All eight kept unchanged and confined to test infrastructure, never
-imported by production code (`TEST-01`): `TestSuiteKind`, `TestDataScale`,
-`TestIsolationMode`, `TestDeviceRequirement`, `TestParallelismMode`,
-`ExternalDependencyPolicy`, `ArtifactRetentionPolicy`, `TestOutcome`.
-
-### 14.8 Totals
-
-Ninety-one enum members' worth of vocabulary in the prior catalogue maps
-onto this package as: seventy-seven kept unchanged or renamed only to
-remove a letter or redundant word; seven merged into an existing
-discriminated union or enum with no loss of distinction; five eliminated
-as genuinely redundant, each with its replacement named above; and the two
-non-executable `ExperimentRole` members (`FUTURE_WORK`, `FORBIDDEN`)
-relocated out of the executable `EvidenceRole` enum — future work to
-`CatalogueDisposition.FUTURE_WORK`, forbidden to Tier-9 manuscript
-discipline (`SCIENTIFIC_FOUNDATION.md §4`). Nothing is missing without a
-stated reason; nothing was removed merely for brevity.
-
-## 15. Execution and runtime types (was prior architecture §9.4)
-
-The prior architecture's execution/planning/resource type family — treated
-as internal-only in this package's first draft — is confirmed present and
-unchanged in shape, because each genuinely crosses the `application`/
-`infrastructure` boundary and several are directly referenced elsewhere in
-this package (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §§10, 14`):
-
-| Type | Purpose |
-|---|---|
-| `ResourceBudget` | RAM/VRAM/worker/prefetch/disk ceilings only — never a selected batch size, which `TrainingBatchSpec`/`ScoringBatchSpec`/`PreprocessingChunkSpec` own exclusively |
-| `DeviceSpec` | device policy plus GPU index |
-| `ResolvedBatchExecutionProfile` | the exact, preflight-validated immutable combination of training/scoring/chunk profiles (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §13`) |
-| `DataLoaderSeedPlan` | framework-neutral shuffle/sampler/worker seed derivation |
-| `ClientUpdateResult` | one client's typed per-round update verdict |
-| `FederatedRoundResult` | one round's full-participation evidence: expected/completed/failed rosters, disposition |
-| `HardwareInventory` | CUDA availability, GPU identity/count/VRAM, driver/runtime versions, CPU count, RAM — provenance, never a scientific value |
-| `ParallelismSpec` | per-stage concurrency, start method, thread limits, GPU assignment |
-| `ExecutionConcurrencyDefinition` | the named `execution.yaml` profile's own owned concurrency fields — training concurrency, scoring concurrency, worker count — resolved once into `ParallelismSpec` by preflight; never duplicated in `ModelDefinition` or `DataDefinition` |
-| `SeedPlan` | experiment seed plus every derived per-role seed (`PIPELINE_EXECUTION_AND_ARTIFACTS.md §7.1`) |
-| `ResourcePressurePolicy` / `ResourcePressureSnapshot` | cooperative pause/throttle thresholds and observations |
-| `ResolvedRuntimePlan` | the frozen runtime: device, budget, parallelism, seed plan, resolved batch profile |
-| `GpuAssignment` | one job's stage/cell/GPU-index binding |
-| `ResourceUsageSummary` | peak RAM/VRAM and elapsed time, telemetry only |
-| `DiskSpaceRequirement` / `StorageRootPreflightResult` / `DiskSpacePreflightResult` | storage preflight; distinct from `ResourceCostResult` (`EVALUATION_REPORTING_AND_PROVENANCE.md §7`) |
-| `StageCostEstimate` / `ExecutionCostEstimate` | advisory, non-scientific; never enters identity, reuse, or a scientific report |
-
-None of these types is scientific identity-bearing except where a field is
-explicitly promoted into a `StageIdentity`/`ArtifactKey` because it is
-output-affecting (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §6`); the rest
-remain execution-only, recorded in provenance but never fingerprinted.
-
-## 16. Concrete type declarations
-
-The tables above name every public contract; this section gives concrete
-frozen declarations so an implementation agent invents no field, variant, or
-identity behavior. Every dataclass is `frozen=True, slots=True, kw_only=True`
-unless stated; every union is exhaustively matched with `typing.assert_never`
-(`TYPE-04`); every float-wrapping value object rejects `NaN`/infinity at
-construction (`TYPE-05`). Method bodies are omitted; only signatures and
-invariants are given.
-
-### 16.1 Identifiers and value objects (`domain/identifiers.py`, `domain/mathematics.py`)
-
-Open, validated identifiers back vocabularies expected to grow; a registry —
-not a central enum edit — admits a new member (`§2.4` of
-`PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md`).
-
-```python
-class ExperimentSlug(str): ...        # lowercase snake_case, non-empty; registry-validated
-class DatasetAuditSlug(str): ...      # lowercase snake_case, non-empty; registry-validated;
-                                      #   scoped by its owning dataset's `audits` entry (`check` name)
-class EvaluationLabel(str): ...       # unique within one ScientificExperimentDefinition.evaluations
-class AnalysisLabel(str): ...         # unique within one ScientificExperimentDefinition.analyses
-class SweepParameterName(str): ...    # a declared sweep axis (threshold_quantile, dirichlet_alpha,
-                                      #   shrinkage_weight, calibration_sample_count, fixed_k,
-                                      #   fingerprint_feature_subset); also a MetricAssociation grouping
-class SchemaId(str): ...              # dataset-level source-schema identity (e.g. "nbaiot_kitsune_115");
-                                      #   semantic, never a meaningless counter (CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11)
-class MaterializationId(str): ...     # a named processed-artifact identity (e.g. "nbaiot_datp_core",
-                                      #   "nbaiot_anchor_historical"); one per authored materialization
-class ResultTypeId(str): ...          # names a frozen result type a ReportDefinition consumes
-class ClientId(str): ...              # opaque per-construction client identity
-class DeviceFamilyId(str): ...        # authorized taxonomy family (FamilyThreshold only)
-class ClusterId(int): ...             # 0 ≤ id < cluster_count
-class CanonicalFieldId(str): ...      # stable snake_case source-column identifier (§3.1); registry-validated
-                                      #   per dataset, never reused across two distinct source columns
+    experiment_id: ExperimentId
+    required_outcome: RequiredExperimentOutcome
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class SchemaVersion:
-    value: int                        # ≥ 1; the authored schema_version of a configuration document
+class CapabilityRequirement:
+    capability: Capability
+    unavailable_behavior: CapabilityUnavailableBehavior
+    applicable_populations: tuple[PopulationId, ...]
+```
+
+Capability resolution occurs before expensive execution. Edge-IIoTset can therefore execute benign operating-point analyses while attack-sensitive outputs remain typed unavailable rather than blocking unrelated evidence.
+
+## 12.4 Sweeps
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ScalarSweep:
+    axis_id: SweepAxisId
+    values: tuple[float, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FeatureSubsetSweep:
+    axis_id: SweepAxisId
+    values: tuple[tuple[str, ...], ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PartitionCondition:
+    name: str
+    allocation: str
+    dirichlet_alpha: StrictlyPositiveFloat | None
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PartitionConditionSweep:
+    axis_id: SweepAxisId
+    conditions: tuple[PartitionCondition, ...]
+
+SweepAxis = ScalarSweep | FeatureSubsetSweep | PartitionConditionSweep
+```
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SweepCoordinate:
+    components: tuple[SweepCoordinateComponent, ...]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class SweepCoordinateComponent:
-    parameter: SweepParameterName
-    value: SweepValue                 # the bound value object for that axis (a ThresholdPercentile,
-                                      #   DirichletAlpha, ShrinkageWeight, CalibrationSampleCount, …),
-                                      #   never a bare float — SweepValue is the union of those
-
-@dataclass(frozen=True, slots=True)
-class Seed:
-    value: int                        # ≥ 0
-
-@dataclass(frozen=True, slots=True)
-class RoundNumber:
-    value: int                        # ≥ 1; ∈ {25,50,75,100,125,150,200} when selecting
-
-@dataclass(frozen=True, slots=True)
-class CanonicalDecimal:
-    """Base for every identity-bearing continuous value: fixed twelve-
-    fractional-digit round-half-even Decimal; rejects NaN/infinity."""
-    value: Decimal
-
-class ThresholdPercentile(CanonicalDecimal): ...   # 0 < q < 1
-class FprTarget(CanonicalDecimal): ...             # equals 1 − quantile exactly
-class ConfidenceLevel(CanonicalDecimal): ...       # e.g. 0.95
-class CoverageRatio(CanonicalDecimal): ...         # 0 ≤ r ≤ 1
-class Probability(CanonicalDecimal): ...           # 0 ≤ p ≤ 1
-class ShrinkageWeight(CanonicalDecimal): ...       # 0 ≤ λ ≤ 1
-class LearningRate(CanonicalDecimal): ...          # > 0
-class FedProxMu(CanonicalDecimal): ...             # > 0; the FedProx proximal weight, bound per experiment
-                                                   #   from the federated_proximal_mu sweep {0.001, 0.01, 0.1}
-
-@dataclass(frozen=True, slots=True)
-class DirichletAlpha:
-    value: Decimal | None             # > 0, or None sentinel meaning IID
-
-@dataclass(frozen=True, slots=True)
-class ClusterCount:
-    value: int                        # ≥ 1; canonicality derived from a locked constant, not a flag
-
-@dataclass(frozen=True, slots=True)
-class CalibrationSampleCount:
-    value: int                        # ≥ 0
-
-@dataclass(frozen=True, slots=True)
-class ConfusionCount:
-    value: int                        # ≥ 0
-
-@dataclass(frozen=True, slots=True)
-class BatchSize:
-    value: int                        # ≥ 1
-
-@dataclass(frozen=True, slots=True)
-class GradientAccumulationSteps:
-    value: int                        # ≥ 1
-
-@dataclass(frozen=True, slots=True)
-class WorkerCount:
-    value: int                        # ≥ 0; identity-bearing only when output-affecting
-
-@dataclass(frozen=True, slots=True)
-class BootstrapResampleCount:
-    value: int                        # ≥ 1; never defaulted — a blocker until pre-registered
-
-# SweepValue is the closed union of the value objects a sweep axis can bind (used by
-# SweepCoordinateComponent above); never a bare float or int.
-SweepValue = (
-    ThresholdPercentile | DirichletAlpha | ShrinkageWeight
-    | CalibrationSampleCount | ClusterCount
-    | tuple[FingerprintFeature, ...]   # the fingerprint-feature-subset axis
-)
-
-@dataclass(frozen=True, slots=True)
-class TrafficRate:
-    rate: Decimal                     # finite, strictly positive
-    unit: TrafficRateUnit
-
-@dataclass(frozen=True, slots=True)
-class RelativeArtifactPath:
-    value: str                        # POSIX-relative; no "..", no leading sep, no drive, no whitespace
-
-@dataclass(frozen=True, slots=True)
-class ContentHash:
-    algorithm: str                    # "blake3"
-    digest: str                       # lowercase hex
-
-@dataclass(frozen=True, slots=True)
-class StageFingerprint:
-    digest: str                       # blake3 of a canonical typed, quantized tuple
-
-@dataclass(frozen=True, slots=True)
-class ConfigurationFingerprint:
-    digest: str
-
-@dataclass(frozen=True, slots=True)
-class ExperimentCellIdentity:
-    experiment: ExperimentSlug
-    sweep_coordinate: tuple[SweepCoordinateComponent, ...]   # empty for a non-sweeping root
-    configuration_fingerprint: ConfigurationFingerprint
+    axis_id: SweepAxisId
+    value: SweepValue
 ```
 
-### 16.2 Discriminated-union member fields
+Coordinates are ordered by sweep declaration and then by authored value order. They are identity-bearing and persisted.
 
-Every variant declares only its own fields and rejects the rest (`CFG-02`,
-`TYPE-04`).
+## 12.5 Evaluation definition
 
 ```python
-# ClientConstruction (domain/data.py)
 @dataclass(frozen=True, slots=True, kw_only=True)
-class PhysicalDeviceClients:
-    device_count: int                          # 9 for N-BaIoT
+class EvaluationDefinition:
+    evaluation_id: EvaluationId
+    threshold_policy_id: ThresholdPolicyId
+    population_id: PopulationId | None
+    requirement: ExecutionRequirement
+    recalibration_mode: RecalibrationMode | None
+    overrides: tuple[PolicyOverride, ...]
+```
+
+An evaluation references a policy; it does not duplicate the policy definition. Overrides can bind only fields explicitly declared overridable by the target policy type.
+
+## 12.6 Analysis union
+
+The current catalogue uses 14 analysis kinds. Each has one typed definition and one executor registration.
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AnalysisCommon:
+    analysis_id: AnalysisId
+    result_type_id: ResultTypeId
+    statistical_profile_id: StatisticalProfileId
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DatasetFilePseudoClients:
-    pseudo_client_count: int                   # 63 for CICIoT2023; boundary role only
+class PairedThresholdAnalysis:
+    common: AnalysisCommon
+    first_evaluation_id: EvaluationId
+    second_evaluation_id: EvaluationId
+    primary_metric_id: MetricId
+    delta_orientation: str
+    delta_interpretation: str
+    secondary_statistical_profile_id: StatisticalProfileId | None
+    per_sweep_cell: bool
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DirichletPartitionedClients:
-    client_count: int                          # 20
-    alpha: DirichletAlpha
-    partition_seed: Seed
+class AnchorEquivalenceAnalysis:
+    common: AnalysisCommon
+    source_analysis_id: AnalysisId
+    historical_reference: HistoricalAnchorReference
+    comparison_mode: str
+    requirements: tuple[str, ...]
+    interval_width_tolerance_multiplier: StrictlyPositiveFloat
+    failure_reasons: tuple[str, ...]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ExternalSensorGroupClients:
-    granularity: ClientGranularity             # GROUP (benign sensor-group, K = 10), fixed by human authorization; DEVICE rejected
-    feasibility_result_ref: ArtifactRef        # provenance-only; never resolved during execution
+class DistributionMechanismAnalysis:
+    common: AnalysisCommon
+    source_evaluation_ids: tuple[EvaluationId, ...]
+    produced_fields: tuple[str, ...]
+    field_formulas: tuple[NamedFormula, ...]
 
-ClientConstruction = (
-    PhysicalDeviceClients | DatasetFilePseudoClients
-    | DirichletPartitionedClients | ExternalSensorGroupClients
+@dataclass(frozen=True, slots=True, kw_only=True)
+class LockedClientDistributionAnalysis:
+    common: AnalysisCommon
+    source_evaluation_ids: tuple[EvaluationId, ...]
+    locked_client_id: ClientId
+    produced_fields: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class MetricAssociationAnalysis:
+    common: AnalysisCommon
+    predictor_metric_id: MetricId
+    outcome_metric_id: MetricId
+    outcome_source_analysis_id: AnalysisId
+    grouping_dimension: str
+    interpretation_constraint: InterpretationRule
+    secondary_statistical_profile_id: StatisticalProfileId | None
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RecoveryFractionAnalysis:
+    common: AnalysisCommon
+    numerator_analysis_id: AnalysisId
+    denominator_analysis_id: AnalysisId
+    formula: Formula
+    denominator_materiality_rule: Formula
+    undefined_denominator_behavior: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ClusterStabilityAnalysis:
+    common: AnalysisCommon
+    source_evaluation_id: EvaluationId
+    reference_evaluation_id: EvaluationId | None
+    comparison_unit: str
+    produced_fields: tuple[str, ...]
+    requirement: ExecutionRequirement
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ThresholdStabilityAnalysis:
+    common: AnalysisCommon
+    source_evaluation_id: EvaluationId
+    produced_fields: tuple[str, ...]
+    per_sweep_cell: bool
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ConformalCoverageAnalysis:
+    common: AnalysisCommon
+    source_evaluation_id: EvaluationId
+    target_coverage: Probability
+    coverage_direction: str
+    produced_fields: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class QuantileEstimationAnalysis:
+    common: AnalysisCommon
+    source_evaluation_ids: tuple[EvaluationId, ...]
+    oracle_reference_id: EvaluationId
+    produced_fields: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResourceCostAnalysis:
+    common: AnalysisCommon
+    source_evaluation_ids: tuple[EvaluationId, ...]
+    estimate_basis: str
+    produced_fields: tuple[str, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class TemporalRecoveryAnalysis:
+    common: AnalysisCommon
+    static_reference_evaluation_id: EvaluationId
+    frozen_evaluation_id: EvaluationId
+    recalibrated_evaluation_id: EvaluationId
+    primary_metric_id: MetricId
+    drift_excess_formula: Formula
+    recovered_amount_formula: Formula
+    recovery_ratio_formula: Formula
+    meaningful_degradation_rule: Formula
+    outcome_bands: tuple[OutcomeBand, ...]
+    negative_recovery_policy: str
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AbsorptionAnalysis:
+    common: AnalysisCommon
+    reference_analysis_id: AnalysisId
+    stress_test_analysis_id: AnalysisId
+    absorption_metric_id: MetricId
+    formula: Formula
+    denominator_materiality_rule: Formula
+    outcome_bands: tuple[OutcomeBand, ...]
+    matching_contract: InterpretationRule
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AlertBurdenAnalysis:
+    common: AnalysisCommon
+    source_evaluation_ids: tuple[EvaluationId, ...]
+    required_operational_input_id: OperationalInputId
+    formula: Formula
+    produced_fields: tuple[str, ...]
+    unavailable_behavior: str
+
+AnalysisDefinition = (
+    PairedThresholdAnalysis
+    | AnchorEquivalenceAnalysis
+    | DistributionMechanismAnalysis
+    | LockedClientDistributionAnalysis
+    | MetricAssociationAnalysis
+    | RecoveryFractionAnalysis
+    | ClusterStabilityAnalysis
+    | ThresholdStabilityAnalysis
+    | ConformalCoverageAnalysis
+    | QuantileEstimationAnalysis
+    | ResourceCostAnalysis
+    | TemporalRecoveryAnalysis
+    | AbsorptionAnalysis
+    | AlertBurdenAnalysis
 )
+```
 
-# SplitDefinition members (domain/data.py)
+Every match over `AnalysisDefinition` is exhaustive and ends with `typing.assert_never`.
+
+---
+
+# 13. Planning model
+
+## 13.1 Experiment plan
+
+Planning resolves authored references without touching data or executing frameworks.
+
+```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class TrainSplit:
-    role: SplitRole                            # TRAIN
+class ExperimentPlan:
+    experiment: ExperimentDefinition
+    populations: tuple[ResolvedPopulationBinding, ...]
+    training_profile: TrainingProfile
+    checkpoint_profile: CheckpointProfile
+    seed_cohort: SeedCohortDefinition
+    eligibility_policy: EligibilityPolicyDefinition
+    coordinates: tuple[SweepCoordinate, ...]
+    capability_plan: CapabilityPlan
+    readiness_gates: tuple[ReadinessGateDefinition, ...]
+    dependency_ids: tuple[ExperimentId, ...]
+```
 
+## 13.2 Scientific run
+
+A scientific run is one experiment, one sweep coordinate, and one training seed. It may contain multiple population bindings and multiple policy evaluations.
+
+```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class BenignCalibrationSplit:
-    role: SplitRole                            # CALIBRATION; no field can carry an attack label (SCI-04)
+class ScientificRun:
+    run_id: RunId
+    experiment_id: ExperimentId
+    coordinate: SweepCoordinate
+    seed_plan: SeedPlan
+    populations: tuple[ResolvedPopulationBinding, ...]
+    training: ResolvedTrainingDefinition
+    checkpoint: CheckpointProfile
+    evaluations: tuple[ResolvedEvaluation, ...]
+    analyses: tuple[AnalysisDefinition, ...]
+    reports: tuple[ReportProfileDefinition, ...]
+    scientific_fingerprint: Fingerprint
+```
 
+The temporal experiment remains one run with a temporal arm and a matched static-reference arm. Population-specific evaluations select the correct arm explicitly.
+
+## 13.3 Job graph
+
+```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class TestSplit:
-    role: SplitRole                            # TEST
+class ExecutionPlan:
+    experiment_plan: ExperimentPlan
+    jobs: tuple[ExecutionJob, ...]
+    dependencies: tuple[JobDependency, ...]
+    plan_fingerprint: Fingerprint
+```
 
+Job types are stable:
+
+```text
+DatasetAuditJob
+PopulationReadinessJob
+MaterializationJob
+TrainingJob
+CheckpointSelectionJob
+ScoreGenerationJob
+ThresholdEvaluationJob
+MetricEvaluationJob
+StatisticalAnalysisJob
+ReportJob
+ResultFreezeJob
+```
+
+The planner coalesces jobs with the same scientific identity. One FedAvg training and score job can therefore feed many threshold evaluations without retraining.
+
+## 13.4 Identity boundaries
+
+| Identity | Includes | Excludes |
+|---|---|---|
+| population | dataset, setup, materialization, client construction, split, preprocessing | model, seed, threshold |
+| training | population, model, training profile, resolved training overrides, seed | threshold policy, metrics, reports |
+| checkpoint | training identity, checkpoint profile, selected round/epoch | threshold policy |
+| score | checkpoint identity, preprocessing, score definition | threshold policy, metric |
+| threshold | score identity, eligibility, policy, resolved policy parameters | metric and statistical profile |
+| metric | threshold identity, metric definition, evaluation population | reporting style |
+| analysis | required seed-level metric artifacts, formula, statistical profile, outcome bands | table and figure formatting |
+| report | analysis artifacts, report profile | upstream scientific computation |
+
+These boundaries are the basis for reuse and invalidation.
+
+---
+
+# 14. Capability and readiness resolution
+
+## 14.1 Capability plan
+
+```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class TemporalWindow:
-    role: SplitRole                            # TEMPORAL_EVALUATION
-    historical_fraction: CanonicalDecimal      # locked 0.70
-    capture_time_field: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SplitDefinition:
-    train: TrainSplit
-    calibration: BenignCalibrationSplit
-    test: TestSplit
-    temporal_window: TemporalWindow | None     # chronological setting only
-
-# ThresholdConstruction (domain/thresholding.py) — the eight-member shared union
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SharedThreshold:
-    construction: SharedThresholdConstruction  # MEAN | POOLED | WEIGHTED
-    quantile: ThresholdPercentile
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class LocalThreshold:
-    quantile: ThresholdPercentile
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FamilyThreshold:
-    quantile: ThresholdPercentile              # unweighted family mean of member local quantiles (SCI-15)
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ClusterThreshold:
-    aggregation: ClusterAggregation            # MEAN | ROBUST_MEDIAN
-    cluster_count: ClusterCount                # canonical 3 (SCI-16)
-    fingerprint_features: tuple[FingerprintFeature, ...]
-    quantile: ThresholdPercentile
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class LocalGlobalShrinkageThreshold:
-    shrinkage_weight: ShrinkageWeight
-    quantile: ThresholdPercentile
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CalibrationSizeAwareFallbackThreshold:
-    quantile: ThresholdPercentile              # size-dependent λ(n_k) replaces the hard n_min fallback
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ConformalLocalThreshold:
-    conformal_mode: ConformalMode              # SPLIT_CONFORMAL | FEDERATED_CONFORMAL
-    coverage_alpha: CanonicalDecimal           # 0.05
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class MatchedExceedanceMode:
-    matched_exceedance_k_grid_step: CanonicalDecimal   # pre-registered grid step, 0.05
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FixedKMode:
-    fixed_k: CanonicalDecimal                          # a single scalar k; supplementary sensitivity only
-
-FederatedSummaryThresholdMode = MatchedExceedanceMode | FixedKMode
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FederatedSummaryStatisticThreshold:
-    mode: FederatedSummaryThresholdMode        # explicit discriminator: matched_exceedance (primary) or
-                                               #   fixed_k (supplementary) — never a `fixed_k = null` sentinel
-    # full pooled variance incl. the between-client term and the larger-k tie rule are
-    # structural, never configurable booleans (SCI-17). The matched-exceedance k-grid step is now
-    # supplied (0.05) on the matched_exceedance mode, no longer an open blocker.
-
-ThresholdConstruction = (
-    SharedThreshold | LocalThreshold | FamilyThreshold | ClusterThreshold
-    | LocalGlobalShrinkageThreshold | CalibrationSizeAwareFallbackThreshold
-    | ConformalLocalThreshold | FederatedSummaryStatisticThreshold
-)
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CentralizedPooledThreshold:        # NOT a member of ThresholdConstruction;
-    quantile: ThresholdPercentile        # reachable only from a CentralizedPooledTrainingProfile model
-
-# EvaluationSuiteDefinition (domain/evaluation.py)
-@dataclass(frozen=True, slots=True, kw_only=True)
-class StandardEvaluationSuite: ...
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AlertBurdenEvaluationSuite:
-    traffic_rate_evidence: TrafficRateEvidence   # required — burden cannot be requested without it (EVAL-06)
-
-EvaluationSuiteDefinition = StandardEvaluationSuite | AlertBurdenEvaluationSuite
-
-# TrafficRateEvidence (domain/evaluation.py)
-@dataclass(frozen=True, slots=True, kw_only=True)
-class MeasuredTrafficRate:
-    rate: TrafficRate
-    scope: str
+class CapabilityDecision:
+    population_id: PopulationId
+    capability: Capability
+    available: bool
     source: str
+    unavailable_behavior: CapabilityUnavailableBehavior
+    reason: str | None
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class CitedTrafficRate:
-    rate: TrafficRate
-    scope: str
-    citation: str
+class CapabilityPlan:
+    decisions: tuple[CapabilityDecision, ...]
+    executable_evaluations: tuple[EvaluationId, ...]
+    suppressed_outputs: tuple[SuppressedOutput, ...]
+    experiment_blocked: bool
+```
 
-TrafficRateEvidence = MeasuredTrafficRate | CitedTrafficRate
+Capabilities are declared by dataset setups and validated against observed readiness. A declaration is necessary but not sufficient; readiness can still show insufficient support.
 
-# StatisticalProcedure variants (domain/evaluation.py) — each carries only applicable fields
+## 14.2 Readiness gate
+
+```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class BcaBootstrap:
-    confidence_level: ConfidenceLevel
-    resample_count: BootstrapResampleCount       # blocker until pre-registered
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PercentileBootstrap:
-    confidence_level: ConfidenceLevel
-    resample_count: BootstrapResampleCount
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class WilcoxonSignedRank: ...                     # descriptive secondary only
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CliffsDelta: ...                            # descriptive secondary only
+class ReadinessGateDefinition:
+    gate_id: ReadinessGateId
+    candidate_population: str
+    minimum_benign_calibration_count: PositiveInt
+    minimum_eligible_client_proportion: Probability
+    evaluation_time: str
+    failure_outcome: str
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class SpearmanCorrelation: ...
+class ReadinessGateResult:
+    gate_id: ReadinessGateId
+    candidate_client_count: int
+    eligible_client_count: int
+    eligible_proportion: float
+    passed: bool
+    excluded_clients: tuple[ClientExclusion, ...]
+```
+
+The Edge-IIoTset external gate is evaluated before training or threshold evaluation. Population reduction beyond configured exclusions is forbidden.
+
+---
+
+# 15. Application use cases
+
+## 15.1 Catalogue use cases
+
+```python
+class LoadStudyCatalogue:
+    def execute(self, request: LoadCatalogueRequest) -> LoadCatalogueResult: ...
+
+class ValidateStudyCatalogue:
+    def execute(self, request: ValidateCatalogueRequest) -> ValidationReport: ...
+
+class DescribeExperiment:
+    def execute(self, request: DescribeExperimentRequest) -> ExperimentDescription: ...
+```
+
+`LoadStudyCatalogue` coordinates config loading, validation, and mapping. It returns either a complete catalogue or a validation report; it never returns a partially resolved catalogue.
+
+## 15.2 Planning use cases
+
+```python
+class PlanExperiment:
+    def execute(self, request: PlanExperimentRequest) -> PlanExperimentResult: ...
+
+class PlanDatasetAudit:
+    def execute(self, request: PlanDatasetAuditRequest) -> DatasetAuditPlan: ...
+
+class ExplainArtifactReuse:
+    def execute(self, request: ExplainReuseRequest) -> ReuseExplanation: ...
+```
+
+Planning is side-effect free. It can run on CPU and does not access raw data except through persisted readiness metadata supplied to the request.
+
+## 15.3 Execution use cases
+
+```python
+class ExecuteDatasetAudit:
+    def execute(self, request: ExecuteDatasetAuditRequest) -> StageResult[DatasetReadinessReport]: ...
+
+class ExecuteRun:
+    def execute(self, request: ExecuteRunRequest) -> RunExecutionResult: ...
+
+class ResumeRun:
+    def execute(self, request: ResumeRunRequest) -> RunExecutionResult: ...
+
+class FreezeExperimentResult:
+    def execute(self, request: FreezeResultRequest) -> StageResult[FrozenResultManifest]: ...
+```
+
+`ExecuteRun` delegates each job to the correct stage service, validates every input artifact, records outcomes, and never embeds dataset- or experiment-name branching.
+
+## 15.4 Stage services
+
+The application layer contains one service per stable scientific stage:
+
+- `ResolvePopulationReadiness`;
+- `MaterializePopulation`;
+- `TrainDetector`;
+- `SelectCheckpoint`;
+- `GenerateScores`;
+- `EstimateThresholds`;
+- `EvaluateMetrics`;
+- `AnalyzeSeedResults`;
+- `RenderConfiguredReports`;
+- `FreezeResults`.
+
+These are services, not ports. A service uses one or more ports and pure strategy registries.
+
+## 15.5 Query use cases
+
+Read-only queries remain separate from execution:
+
+- list configured experiments;
+- explain a resolved run;
+- show prerequisite status;
+- show capability availability;
+- show missing artifacts;
+- show why an artifact is reusable or incompatible;
+- show terminal experiment status;
+- trace a report cell to upstream artifacts.
+
+Queries never mutate state or trigger computation.
+
+---
+
+# 16. Application ports
+
+Only genuine external or framework boundaries are ports.
+
+## 16.1 Dataset adapter
+
+```python
+class DatasetAdapter(Protocol):
+    dataset_name: DatasetName
+
+    def inspect(
+        self,
+        definition: DatasetAuditDefinition,
+        runtime: ExecutionEnvironment,
+    ) -> StageResult[DatasetReadinessReport]: ...
+
+    def materialize(
+        self,
+        request: MaterializePopulationRequest,
+    ) -> StageResult[MaterializedPopulation]: ...
+```
+
+One implementation exists per dataset. The registry selects by `DatasetName`.
+
+## 16.2 Training and scoring
+
+```python
+class TrainingBackend(Protocol):
+    def train(
+        self,
+        request: TrainDetectorRequest,
+    ) -> StageResult[TrainingArtifactPayload]: ...
+
+class ScoringBackend(Protocol):
+    def score(
+        self,
+        request: GenerateScoresRequest,
+    ) -> StageResult[ScoreArtifactPayload]: ...
+```
+
+Training receives a fully resolved training definition. It does not read YAML or inspect experiment names.
+
+## 16.3 Clustering and statistics
+
+```python
+class ClusteringBackend(Protocol):
+    def cluster(
+        self,
+        request: ClusterClientsRequest,
+    ) -> StageResult[ClusterAssignmentResult]: ...
+
+class StatisticalBackend(Protocol):
+    def analyze(
+        self,
+        request: StatisticalAnalysisRequest,
+    ) -> StageResult[StatisticalAnalysisResult]: ...
+```
+
+The statistical backend dispatches by `AnalysisDefinition` variant through an executor registry. Unknown variants cannot reach runtime because catalogue mapping is closed and exhaustive.
+
+## 16.4 Artifact storage
+
+```python
+class ArtifactStore(Protocol):
+    def find(self, key: ArtifactKey) -> ArtifactLookupResult: ...
+    def read_manifest(self, ref: ArtifactRef) -> ArtifactManifest: ...
+    def verify(self, ref: ArtifactRef) -> ArtifactVerificationResult: ...
+    def commit(self, artifact: PendingArtifact) -> ArtifactRef: ...
+    def freeze(self, refs: tuple[ArtifactRef, ...]) -> FrozenResultManifest: ...
+```
+
+`commit` is atomic. Existing immutable artifacts are never overwritten.
+
+## 16.5 Reporting and environment
+
+```python
+class ReportRenderer(Protocol):
+    def render(self, request: RenderReportRequest) -> StageResult[ReportArtifactPayload]: ...
+
+class EnvironmentProbe(Protocol):
+    def inspect(self, profile: ExecutionProfile) -> ExecutionEnvironment: ...
+```
+
+The environment probe validates CUDA requirements, deterministic flags, storage roots, symlink policy, and budgets before execution.
+
+---
+
+# 17. Pure strategy registries
+
+```python
+class ThresholdPolicyFamily(StrEnum):
+    QUANTILE = "quantile"
+    CLUSTER = "cluster"
+    CONFORMAL = "conformal"
+    SHRINKAGE = "shrinkage"
+    CALIBRATION_SIZE_AWARE = "calibration_size_aware"
+    FEDERATED_SUMMARY = "federated_summary"
+
+class AnalysisKind(StrEnum):
+    PAIRED_THRESHOLD = "paired_threshold_analysis"
+    ANCHOR_EQUIVALENCE = "anchor_equivalence_analysis"
+    DISTRIBUTION_MECHANISM = "distribution_mechanism_analysis"
+    LOCKED_CLIENT_DISTRIBUTION = "locked_client_distribution_analysis"
+    METRIC_ASSOCIATION = "metric_association_analysis"
+    RECOVERY_FRACTION = "recovery_fraction_analysis"
+    CLUSTER_STABILITY = "cluster_stability_analysis"
+    THRESHOLD_STABILITY = "threshold_stability_analysis"
+    CONFORMAL_COVERAGE = "conformal_coverage_analysis"
+    QUANTILE_ESTIMATION = "quantile_estimation_analysis"
+    RESOURCE_COST = "resource_cost_analysis"
+    TEMPORAL_RECOVERY = "temporal_recovery_analysis"
+    ABSORPTION = "absorption_analysis"
+    ALERT_BURDEN = "alert_burden_analysis"
+```
+
+Not every variation requires an infrastructure port.
+
+The following registries live in application composition and expose framework-neutral strategy protocols:
+
+```python
+class ThresholdEstimator(Protocol):
+    family: ThresholdPolicyFamily
+    def estimate(self, request: EstimateThresholdsRequest) -> StageResult[ThresholdArtifactPayload]: ...
+
+class MetricEvaluator(Protocol):
+    metric_id: MetricId
+    def evaluate(self, request: MetricEvaluationRequest) -> MetricResultSet: ...
+
+class AnalysisExecutor(Protocol):
+    kind: AnalysisKind
+    def execute(self, request: AnalysisExecutionRequest) -> StageResult[AnalysisResultPayload]: ...
+```
+
+Implementations that require NumPy, SciPy, or scikit-learn live in infrastructure and are registered at composition. Pure implementations may live in application.
+
+The orchestrator knows only the registries; it contains no policy-specific branches.
+
+---
+
+# 18. Stage outcomes and failure model
+
+## 18.1 Result union
+
+```python
+T = TypeVar("T")
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class LinearRegression: ...
+class Completed(Generic[T]):
+    value: T
+    warnings: tuple[ExecutionWarning, ...]
 
-StatisticalProcedure = (
-    BcaBootstrap | PercentileBootstrap | WilcoxonSignedRank
-    | CliffsDelta | SpearmanCorrelation | LinearRegression
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Infeasible:
+    reason: InfeasibilityReason
+    evidence: tuple[ArtifactRef, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ValidationFailed:
+    issues: tuple[ValidationIssue, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExecutionFailed:
+    error: ExecutionError
+    retryable: bool
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BlockedByDependency:
+    dependencies: tuple[DependencyBlock, ...]
+
+StageResult: TypeAlias = (
+    Completed[T]
+    | Infeasible
+    | ValidationFailed
+    | ExecutionFailed
+    | BlockedByDependency
 )
 ```
 
-### 16.3 Requests and results (application boundary)
+`Completed` with non-empty warnings maps to `completed_with_warnings`; otherwise it maps to `completed`.
 
-One request per complete use case or stable port boundary; one result per
-several-output, scientific, validated, or multi-outcome outcome (`§5`).
+## 18.2 Exception boundary
+
+Expected scientific and configuration outcomes use the result union.
+
+Exceptions are reserved for:
+
+- programmer defects;
+- corrupted process state;
+- unhandled external-library failures;
+- interrupted execution.
+
+Infrastructure catches expected framework exceptions, converts them to typed execution errors, and preserves the original cause for logs. Domain and application do not catch broad `Exception` to continue silently.
+
+## 18.3 Infeasibility reasons
+
+The closed reason vocabulary includes:
+
+- insufficient eligible clients;
+- insufficient split-role rows;
+- unsupported capability;
+- invalid attack assignment;
+- chronology unavailable or invalid;
+- impossible cluster count;
+- non-finite source or score population;
+- unavailable operational input;
+- degenerate statistical procedure;
+- non-convergent configured training condition.
+
+No reason authorizes automatic scientific relaxation.
+
+---
+
+# 19. Metric and result model
+
+## 19.1 Metric values
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ResolveConfigurationRequest:
-    root_document: RelativeArtifactPath | ExperimentSlug
-    requested_execution_mode: ExecutionMode
+class AvailableMetricValue:
+    metric_id: MetricId
+    value: float
+    denominator: int | None
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ConfigurationResolutionResult:
-    authored_root_snapshot: ResolvedConfigurationSnapshot
-    resolved_runs: tuple[RunDefinition, ...]
-    resolved_run_snapshots: tuple[ResolvedConfigurationSnapshot, ...]
-    boundary_blockers: tuple[BoundaryBlocker, ...]
+class UnavailableMetricValue:
+    metric_id: MetricId
+    status: MetricStatus
+    reason: str
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class BoundaryBlocker:
-    document: RelativeArtifactPath
-    field_path: str
-    authority_needed: str
-    rule_reference: str                          # e.g. "ENGINEERING §7"
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CreatePlanRequest:
-    cells: tuple[ScientificExperimentCell, ...]
-    runtime_plan: ResolvedRuntimePlan
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PreflightRequest:
-    draft_plan: DraftExecutionPlan
-    hardware_inventory: HardwareInventory
-    resource_budget: ResourceBudget
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AnchorEquivalenceRequest:
-    anchor_analysis_result: ArtifactRef          # frozen StatisticalAnalysisResult
-    reference_interval: AnchorReferenceInterval
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class EvaluateOperatingPointsRequest:
-    threshold_output: ArtifactRef
-    test_score_set: ArtifactRef                  # committed aggregate only (benign + attack)
-    eligible_client_set: ArtifactRef
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class RunStatisticalAnalysisRequest:
-    analysis: AnalysisDefinition
-    evaluation_results: tuple[ArtifactRef, ...]  # one PolicyEvaluationResult per paired seed
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ConstructThresholdRequest:
-    threshold: ThresholdConstruction
-    calibration_score_set: ArtifactRef           # no field can carry a test/attack score (EVAL-02)
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ProjectReportRequest:
-    report: ReportDefinition
-    result_freeze: ArtifactRef                   # a frozen ResultFreezeManifest, never a live result
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class TraceReportArtifactRequest:
-    rendered_output: ArtifactRef
+MetricValue = AvailableMetricValue | UnavailableMetricValue
 ```
 
-Score-generation requests (`GenerateCalibrationScoresRequest`,
-`GenerateTestScoresRequest`, `GenerateTemporalScoresRequest`) and the
-data-pipeline requests (`InspectDatasetSourceRequest`,
-`ClientPartitionRequest`, `BuildSplitRequest`, `FitPreprocessorRequest`,
-`MaterializeProcessedSplitsRequest`, `TrainModelRequest`) each carry the
-selected upstream `ArtifactRef` values plus the resolved definition subset the
-stage consumes, and nothing else.
-
-### 16.4 Planning, readiness, and execution types
+## 19.2 Per-client before aggregation
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ReadinessBlocker:
-    subject: str
-    authority_needed: str
-    blocked_stages: tuple[PipelineStage, ...]
-    rule_reference: str                          # e.g. "ENGINEERING §7"; a readiness blocker is
-                                                 # always a blocker — its condition is not re-typed
-                                                 # against the doc-only DesignStatus vocabulary
+class ClientMetricRecord:
+    run_id: RunId
+    evaluation_id: EvaluationId
+    client_id: ClientId
+    values: tuple[MetricValue, ...]
+    eligibility: ClientEligibility
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ScientificReadinessResult:
-    is_ready: bool
-    execution_mode: ExecutionMode
-    blockers: tuple[ReadinessBlocker, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DraftPlannedStage:
-    stage: PipelineStage
-    stage_identity: StageIdentity
-    dependencies: StageDependencyCollection
-    required_artifacts: tuple[ArtifactKey, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DraftExecutionPlan:
-    cell_identity: ExperimentCellIdentity
-    stages: tuple[DraftPlannedStage, ...]        # topologically ordered, acyclic
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FinalPlannedStage:
-    draft: DraftPlannedStage
-    reuse_decision: ReuseDecision                # classified at preflight, not before
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FinalExecutionPlan:
-    cell_identity: ExperimentCellIdentity
-    stages: tuple[FinalPlannedStage, ...]
-    runtime_plan: ResolvedRuntimePlan
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ExecutionAttempt:
-    attempt_id: str
-    plan: ArtifactRef
-    started_at: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ExecutionSummary:
-    attempt: ExecutionAttempt
-    stage_records: tuple[StageLifecycleRecord, ...]
-    run_status: RunStatus
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class StageLifecycleRecord:
-    stage_identity: StageIdentity
-    status: RunStatus
-    reuse_decision: ReuseDecision | None
-    failure: FailureDisposition | None
-    produced: tuple[ArtifactRef, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SeedDerivation:
-    role: SeedRole
-    seed: Seed
+class SeedLevelMetricRecord:
+    run_id: RunId
+    evaluation_id: EvaluationId
+    training_seed: Seed
+    values: tuple[MetricValue, ...]
+    eligible_client_ids: tuple[ClientId, ...]
 ```
 
-### 16.5 Artifact, scope, and provenance types
+Client metrics are calculated before cross-client aggregation. FPR-evaluable and attack-evaluable populations are explicit and can differ.
+
+## 19.3 Analysis results
+
+The configured result-type registry maps to one of these payload families:
+
+- `AnchorReproductionResult`;
+- `ConfirmatoryAnalysisResult`;
+- `SupportiveAnalysisResult`;
+- `MechanismAnalysisResult`;
+- `ExternalValidationResult`;
+- `StressTestResult`;
+- `BoundaryResult`;
+- `ClusterStabilityResult`;
+- `ConformalCoverageResult`;
+- `QuantileEstimationResult`;
+- `AbsorptionResult`;
+- `TemporalRecoveryResult`;
+- `MetricAssociationResult`;
+- `DistributionMechanismResult`;
+- `ResourceCostResult`;
+- `EligibilityCoverageResult`;
+- `PolicyEvaluationResult`.
+
+Every result carries its exact source analysis ID, input artifact references, statistical profile ID, status, and scientific fingerprint.
+
+---
+
+# 20. Artifact identity and lineage
+
+## 20.1 Artifact kinds
+
+```python
+class ArtifactKind(StrEnum):
+    RESOLVED_CONFIGURATION = "resolved_configuration"
+    DATASET_READINESS = "dataset_readiness"
+    CLIENT_ASSIGNMENT_MANIFEST = "client_assignment_manifest"
+    SPLIT_MANIFEST = "split_manifest"
+    FEATURE_SCHEMA = "feature_schema"
+    PREPROCESSING_STATE = "preprocessing_state"
+    MATERIALIZED_POPULATION = "materialized_population"
+    TRAINING_STATE = "training_state"
+    CHECKPOINT = "checkpoint"
+    CHECKPOINT_SELECTION = "checkpoint_selection"
+    SCORE_SET = "score_set"
+    ELIGIBILITY_MANIFEST = "eligibility_manifest"
+    THRESHOLD_SET = "threshold_set"
+    METRIC_SET = "metric_set"
+    STATISTICAL_RESULT = "statistical_result"
+    REPORT = "report"
+    RESULT_MANIFEST = "result_manifest"
+```
+
+## 20.2 Manifest
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ProducerImplementationIdentity:
-    component_revision: str
-    algorithm_revision: str
-    dependency_compatibility_signature: str
+class ArtifactManifest:
+    artifact_id: ArtifactId
+    kind: ArtifactKind
+    schema_version: PositiveInt
+    scientific_fingerprint: Fingerprint
+    execution_fingerprint: Fingerprint
+    checksum: Fingerprint
+    parents: tuple[ArtifactRef, ...]
+    logical_scope: ArtifactScope
+    completion_status: StageStatus
+    created_at: datetime
+    source_revision: str
+    environment: EnvironmentSummary
+    frozen: bool
+```
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class StageIdentity:
-    stage: PipelineStage
-    fingerprint: StageFingerprint
-    producer: ProducerImplementationIdentity
+Absolute paths are excluded from identity and recorded only as storage metadata.
 
-# ArtifactScopeKey — closed, typed scope variants; a new scope is a new variant,
-# never a change to ArtifactKey/ArtifactRef or the reuse algorithm.
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DatasetScope:
-    dataset: Dataset
-    materialization_id: MaterializationId
+## 20.3 Scope union
 
+```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class PartitionScope:
-    dataset_scope: DatasetScope
-    partition_identity: StageFingerprint
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SplitScope:
-    partition_scope: PartitionScope
-    split_role: SplitRole
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SeedScope:
-    split_scope: SplitScope
-    seed: Seed
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ClientScope:
-    seed_scope: SeedScope
-    client: ClientId
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class EvaluationScope:
-    experiment: ExperimentSlug
-    evaluation: EvaluationLabel
-    seed: Seed
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AnalysisScope:
-    experiment: ExperimentSlug
-    analysis: AnalysisLabel
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CrossSeedScope:
-    experiment: ExperimentSlug
-    analysis: AnalysisLabel
+class PopulationScope:
+    population_id: PopulationId
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class RunScope:
-    experiment: ExperimentSlug
+    run_id: RunId
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ReportScope:
-    experiment: ExperimentSlug
-    report_identity: ReportArtifactType
-
-ArtifactScopeKey = (
-    DatasetScope | PartitionScope | SplitScope | SeedScope | ClientScope
-    | EvaluationScope | AnalysisScope | CrossSeedScope | RunScope | ReportScope
-)
+class EvaluationScope:
+    run_id: RunId
+    evaluation_id: EvaluationId
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ArtifactKey:
-    artifact_type: ArtifactType
-    scope: ArtifactScopeKey
-    producer_identity: StageIdentity
+class AnalysisScope:
+    experiment_id: ExperimentId
+    analysis_id: AnalysisId
+
+ArtifactScope = PopulationScope | RunScope | EvaluationScope | AnalysisScope
+```
+
+## 20.4 Reuse decision
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ReusableArtifact:
+    ref: ArtifactRef
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ArtifactRef:
+class MissingArtifact:
     key: ArtifactKey
-    content_hash: ContentHash                    # exists only after verified persistence
-
-# ReuseDecision union
-@dataclass(frozen=True, slots=True, kw_only=True)
-class Reuse:
-    candidate: ArtifactRef
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Recompute:
-    reason: ReuseIncompatibilityReason
+class IncompatibleArtifact:
+    ref: ArtifactRef
+    differences: tuple[CompatibilityDifference, ...]
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Blocked:
-    reason: BlockingReason
+class InvalidArtifact:
+    ref: ArtifactRef
+    verification_failures: tuple[str, ...]
 
-ReuseDecision = Reuse | Recompute | Blocked
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ResolvedConfigurationSnapshot:
-    canonical_bytes_hash: ConfigurationFingerprint
-    source_document_identities: tuple[ContentHash, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ProvenanceRecord:
-    resolved_configuration: ArtifactRef
-    upstream: tuple[ArtifactRef, ...]
-    code_state: ArtifactRef                      # CODE_STATE
-    dependency_lock_state: ArtifactRef           # DEPENDENCY_LOCK_STATE
-    environment_inventory: HardwareInventory     # recorded, never fingerprinted
-    execution_attempt: ExecutionAttempt
-    produced_at: str
-    content_hash: ContentHash
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ResultFreezeManifest:
-    inputs: tuple[ArtifactRef, ...]              # every metric/statistic/anchor/resource/claim input
-    input_hashes: tuple[ContentHash, ...]
-    claim_assessment: ArtifactRef
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PreSpecificationRecord:
-    subject: str                                 # e.g. "absorption bands", "temporal outcome bands"
-    roadmap_lock_revision: str
-    locked_at: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SuppressionRecord:
-    subject: str
-    reason: str
-    resulting_outcome: ClaimOutcome              # never a mechanism for hiding a confirmatory result
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FeasibilityRecord:
-    status: FeasibilityStatus                    # FEASIBLE | GATED | PENDING_VERIFICATION | REJECTED
-    eligible_count: int
-    total_count: int
-    coverage_ratio: CoverageRatio
-    minimum_evidence: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ExperimentManifest:
-    experiment_identity: ExperimentIdentity
-    namespace: ArtifactNamespace                 # derived, never authored (ANCHOR-05)
-    stage_identities: tuple[StageIdentity, ...]
-    resolved_configuration: ArtifactRef
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class RecoveryStateManifest:
-    last_completed_round: RoundNumber
-    architecture_identity: StageFingerprint
-    resolved_batch_profile_hash: StageFingerprint
-    seeds: tuple[SeedDerivation, ...]
-    # distinct kind/root/namespace from a scientific checkpoint; never scientific evidence (ART-04)
-```
-
-### 16.6 Evaluation and statistical result types (concrete)
-
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ClientEvaluationResult:
-    client: ClientId
-    confusion: ConfusionMatrix
-    assigned_threshold: CanonicalDecimal
-    fpr: CanonicalDecimal
-    tpr: CanonicalDecimal
-    precision: CanonicalDecimal
-    recall: CanonicalDecimal
-    f1: CanonicalDecimal
-    balanced_accuracy: CanonicalDecimal
-    eligibility_status: ClientEligibilityStatus
-    eligibility_reason: ClientEligibilityReason
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ValidCvResult:
-    value: CanonicalDecimal
-    mean_fpr: CanonicalDecimal
-    std_fpr: CanonicalDecimal
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class UndefinedCvResult:
-    reason: str                                  # zero-mean degeneracy
-    mean_fpr: CanonicalDecimal
-    iqr_fpr: CanonicalDecimal
-    fpr_range: CanonicalDecimal
-    claim_outcome: ClaimOutcome
-
-CvOutcome = ValidCvResult | UndefinedCvResult
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FleetDispersionResult:
-    cv_fpr: CvOutcome
-    cv_tpr: CvOutcome
-    iqr_fpr: CanonicalDecimal
-    fpr_range: CanonicalDecimal
-    worst_client_fpr: CanonicalDecimal
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FleetDetectionResult:
-    macro_f1: CanonicalDecimal
-    p10_macro_f1: CanonicalDecimal
-    worst_client_balanced_accuracy: CanonicalDecimal
-    auroc: CanonicalDecimal                      # control only
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PolicyEvaluationResult:
-    evaluation: EvaluationLabel
-    seed: Seed
-    per_client: ClientScoreMap                   # one ClientEvaluationResult per known client
-    dispersion: FleetDispersionResult
-    detection: FleetDetectionResult
-    equity: FleetEquityResult | None             # optional suite
-    cluster: ClusterDispersionResult | None      # cluster mechanism only
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PairedDeltaResult:
-    seed: Seed
-    delta: CanonicalDecimal
-    orientation: DeltaOrientation
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ValidBootstrapIntervalResult:
-    lower_bound: CanonicalDecimal
-    upper_bound: CanonicalDecimal
-    point_estimate: CanonicalDecimal
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DegenerateBootstrapIntervalResult:
-    sample_size: int
-    reason: str
-    attempted_resample_count: BootstrapResampleCount
-    point_estimate: CanonicalDecimal | None
-
-BootstrapIntervalOutcome = ValidBootstrapIntervalResult | DegenerateBootstrapIntervalResult
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ConfirmatoryAnalysisResult:
-    per_seed_deltas: tuple[PairedDeltaResult, ...]
-    interval: BootstrapIntervalOutcome
-    sign_consistent: bool
-    excludes_zero_positive: bool
-    claim_outcome: ClaimOutcome
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AbsorptionResult:
-    delta_ratio: CanonicalDecimal
-    band: AbsorptionBand
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class TemporalRecoveryResult:
-    frozen_cv_fpr: CvOutcome
-    recalibrated_cv_fpr: CvOutcome
-    recovery_ratio: CanonicalDecimal
-    outcome: TemporalOutcome
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class MetricAssociationResult:                   # MetricAssociationAnalysis (E-M4)
-    predictor_metric: MetricId
-    outcome_metric: MetricId
-    correlation: CanonicalDecimal                # Spearman ρ (primary procedure)
-    r_squared: CanonicalDecimal                  # linear-regression R² (secondary procedure)
-    sample_size: int
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ClusterStabilityResult:                    # ClusterStabilityAnalysis (E-M1 stability axis)
-    adjusted_rand_index: CanonicalDecimal
-    silhouette: CanonicalDecimal
-    within_cluster_dispersion: CanonicalDecimal
-    across_cluster_dispersion: CanonicalDecimal
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class QuantileEstimationResult:                  # QuantileEstimationAnalysis (E-Q1 backbone)
-    quantile_estimation_error: CanonicalDecimal
-    threshold_variance: CanonicalDecimal
-    fpr_target_attainment: CanonicalDecimal
-    calibration_sample_efficiency: CanonicalDecimal
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ClientThresholdShift:
-    client: ClientId
-    delta_threshold: CanonicalDecimal
-    delta_fpr: CanonicalDecimal
-    delta_tpr: CanonicalDecimal
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DistributionMechanismResult:               # DistributionMechanismAnalysis (E-M3 overlay, E-M5 shift)
-    source_evaluations: tuple[EvaluationLabel, ...]
-    per_client_shift: tuple[ClientThresholdShift, ...]   # empty for a pure CDF-overlay analysis,
-                                                         #   populated for the threshold-shift tradeoff
-
-# StatisticalAnalysisResult is the closed result of the STATISTICAL_ANALYZE stage and the
-# StatisticalProcedureBackend port: exactly one variant per AnalysisDefinition kind that runs
-# there, matched exhaustively with typing.assert_never. AnchorEquivalenceAnalysis is deliberately
-# absent — it is consumed by the separate ANCHOR_EQUIVALENCE stage, which returns
-# AnchorEquivalenceResult, not a StatisticalAnalysisResult (PIPELINE §2).
-StatisticalAnalysisResult = (
-    ConfirmatoryAnalysisResult      # every PairedPolicyEffectAnalysis (confirmatory, anchor,
-                                    #   and every non-confirmatory paired comparison)
-    | MetricAssociationResult
-    | DistributionMechanismResult
-    | ClusterStabilityResult
-    | QuantileEstimationResult
-    | AbsorptionResult
-    | TemporalRecoveryResult
+ReuseDecision = (
+    ReusableArtifact
+    | MissingArtifact
+    | IncompatibleArtifact
+    | InvalidArtifact
 )
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AnchorReferenceInterval:
-    metric: MetricId                             # cv_fpr_delta
-    confidence_level: ConfidenceLevel
-    lower_bound: CanonicalDecimal                # 0.647
-    upper_bound: CanonicalDecimal                # 0.769
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AnchorEquivalencePassed:
-    reproduced_interval: ValidBootstrapIntervalResult
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AnchorEquivalenceFailed:
-    reproduced_interval: BootstrapIntervalOutcome
-    failure_reason: str                          # material movement toward zero, or >~1.20× width
-
-AnchorEquivalenceResult = AnchorEquivalencePassed | AnchorEquivalenceFailed
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ResourceCostResult:
-    metric: ResourceMetric
-    value: int                                   # bytes
-    derivation: CostDerivationKind               # MEASURED | ESTIMATED, never conflated (ART-07)
 ```
 
-### 16.7 Reporting types (concrete)
+Reuse requires checksum, schema, parent lineage, completed status, non-stale status, and scientific compatibility. A filename match is irrelevant.
 
-The container `ReportDefinition` and its `ReportArtifactSpec` entries are
-declared in `EVALUATION_REPORTING_AND_PROVENANCE.md §9.2` (the reporting
-authority); a `ReportArtifactSpec.body` is one of the two per-artifact
-specifications declared below. `RowProjectionRule` is derived from a table's
-`TableType`, never authored, so `TableDefinition` carries no such field.
+## 20.5 Invalidation graph
+
+```text
+source/schema/client/split/preprocessing change
+  → invalidate training and everything downstream
+
+model/training/seed/checkpoint change
+  → invalidate scores and everything downstream
+
+threshold policy or threshold parameter change
+  → reuse scores; invalidate thresholds and everything downstream
+
+metric definition change
+  → reuse thresholds; invalidate metrics and everything downstream
+
+analysis/statistical profile/outcome-band change
+  → reuse metrics; invalidate analyses and reports
+
+report profile change
+  → reuse analyses; invalidate reports only
+```
+
+---
+
+# 21. Runtime and execution types
+
+## 21.1 Runtime profile
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class SemanticColumn:
-    name: MetricId | str
-    unit: MetricUnit                             # NONE | RATIO | BYTES | COUNT | ...
-    direction: MetricDirection                   # LOWER_IS_BETTER | HIGHER_IS_BETTER | NONE | CLOSER_TO_TARGET
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class TableDefinition:
-    table_type: TableType
-    columns: tuple[SemanticColumn, ...]
-    ordering: DeterministicOrdering
-    missing_value_policy: MissingValuePolicy
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FigureDefinition:
-    figure_type: FigureType
-    series: tuple[SemanticColumn, ...]
-    ordering: DeterministicOrdering
-    missing_value_policy: MissingValuePolicy
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class TableProvenance:
-    output_identity: ArtifactRef
-    source_records: tuple[ArtifactRef, ...]
-    rendering_status: RenderingStatus
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ReportTraceResult:
-    output: ArtifactRef
-    traced_inputs: tuple[ArtifactRef, ...]
-    status: RenderingStatus                      # RENDERED | TRACE_REFUSED
+class ExecutionProfile:
+    profile_id: ExecutionProfileId
+    device_policy: DevicePolicy
+    determinism_profile_id: ExecutionProfileId
+    resource_budget: ResourceBudget
+    concurrency: ConcurrencyDefinition
+    data_loading: DataLoadingDefinition
+    process_start_method: str
+    log_interval_rounds: PositiveInt
+    atomic_write: bool
+    temporary_storage: TemporaryStoragePolicy | None
 ```
 
-`ClientScoreMap`, `EligibleClientSet`, `SeedCohort`, and
-`StageDependencyCollection` are the four custom collections (`§10`); every
-other collection above is a plain immutable `tuple`. No result type exposes a
-`dict`, `Any`, mutable collection, or framework object (`TYPE-03`, `§8`).
+## 21.2 Preflight
 
-## 17. Complete closed-enum member catalogue
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExecutionEnvironment:
+    profile: ExecutionProfile
+    roots: ResolvedStorageRoots
+    device: DeviceAvailability
+    determinism: DeterminismAvailability
+    resources: ResourceAvailability
+    software: SoftwareEnvironment
+    environment_fingerprint: Fingerprint
 
-Every closed enum, its explicit members, its owning module, whether it is
-serialized (into YAML, an artifact, or a fingerprint), and whether it enters
-scientific identity. Open, registry-backed identifiers (`Dataset` IDs,
-experiment/audit slugs, model/execution/reporting profile names) are **not**
-enums and are covered in `§16.1` and `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md
-§2.4`. `§14` remains the disposition ledger against the prior architecture;
-this section is the final member list.
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PreflightResult:
+    environment: ExecutionEnvironment
+    issues: tuple[ValidationIssue, ...]
+    executable: bool
+```
 
-| Enum | Members | Owner | Serialized | Enters identity |
-|---|---|---|---|---|
-| `Dataset` | `N_BAIOT`, `CICIOT2023`, `EDGE_IIOTSET` | `domain/data.py` | yes | yes |
-| `SourceFieldType` | `NUMERIC_FLOAT`, `NUMERIC_INT`, `CATEGORICAL_STRING`, `FREE_TEXT`, `TIMESTAMP_STRING`, `IP_ADDRESS_STRING` | `domain/data.py` | yes | no (schema-manifest metadata only) |
-| `SourceFieldRole` | `MODEL_FEATURE`, `CLIENT_IDENTITY`, `GROUP_IDENTITY`, `BINARY_LABEL`, `MULTICLASS_LABEL`, `TIMESTAMP`, `ROW_PROVENANCE`, `EXCLUDED_LEAKAGE_RISK`, `EXCLUDED_HIGH_CARDINALITY`, `EXCLUDED_PROTOCOL_CONDITIONAL_PLACEHOLDER`, `EXCLUDED_UNRESOLVED` | `domain/data.py` | yes | yes (`model_feature_order` derivation) |
-| `SplitRole` | `TRAIN`, `CALIBRATION`, `TEST`, `TEMPORAL_EVALUATION` | `domain/data.py` | yes | yes |
-| `ClientGranularity` | `DEVICE`, `GROUP` | `domain/data.py` | yes | yes |
-| `NormalizationStrategy` | `MIN_MAX`, `STANDARD` | `domain/data.py` | yes | yes |
-| `NormalizationScope` | `GLOBAL_TRAIN` | `domain/data.py` | yes | yes |
-| `CalibrationSubsetSelectionStrategy` | `DETERMINISTIC_PREFIX` (sole current strategy; a category axis) | `domain/data.py` | yes | yes (when populated) |
-| `CalibrationSubsetNestingPolicy` | `NESTED_BY_SIZE`, `INDEPENDENT` | `domain/data.py` | yes | yes (when populated) |
-| `SharedThresholdConstruction` | `MEAN`, `POOLED`, `WEIGHTED` | `domain/thresholding.py` | yes | yes |
-| `ClusterAggregation` | `MEAN`, `ROBUST_MEDIAN` | `domain/thresholding.py` | yes | yes |
-| `FingerprintFeature` | `MEAN_ERROR`, `STD_ERROR`, `SKEW_ERROR`, `P95_ERROR` | `domain/thresholding.py` | yes | yes |
-| `ConformalMode` | `SPLIT_CONFORMAL`, `FEDERATED_CONFORMAL` | `domain/thresholding.py` | yes | yes |
-| `QuantileEstimatorType` | `EXACT`, `POOLED`, `WEIGHTED` | `domain/thresholding.py` | yes | yes |
-| `ActivationFunction` | `RELU` | `domain/model.py` | yes | yes |
-| `OptimizerType` | `ADAM` | `domain/model.py` | yes | yes |
-| `LrSchedulerType` | `STEP_DECAY` | `domain/model.py` | yes | yes |
-| `ParticipationStrategy` | `FULL` (`PARTIAL` = named future work, `SCI` §7.6) | `domain/model.py` | yes | yes |
-| `ModelPersonalizationStrategy` | `NONE`, `DITTO`, `FEDREP_AE`, `FEDPER_AE` | `domain/model.py` | yes | yes |
-| `NumericalPrecision` / `PrecisionMode` | `FP32` | `domain/model.py` | yes | yes |
-| `DeterminismLevel` | `STRICT` | `domain/model.py` | yes | yes |
-| `EvidenceRole` | `ANCHOR`, `CONFIRMATORY`, `SUPPORTIVE`, `EXTERNAL_VALIDATION`, `STRESS_TEST`, `MECHANISM`, `BOUNDARY`, `EXPLORATORY` (eight executable roles; `FUTURE_WORK`/`FORBIDDEN` dropped — non-executable, `SCIENTIFIC_FOUNDATION.md §4`) | `domain/experiments.py` | yes | yes (namespace derivation) |
-| `RunRequirement` | `MANDATORY`, `OPTIONAL`, `SUPPRESSED` | `domain/experiments.py` | yes | no |
-| `ClaimTier` | `TIER_1`…`TIER_9` (`IntEnum`) | `domain/experiments.py` | yes (metadata) | no |
-| `CatalogueDisposition` | `REJECTED`, `OUT_OF_SCOPE`, `FUTURE_WORK` | `domain/experiments.py` | yes | no |
-| `SeedDerivationRule` | `DETERMINISTIC_FROM_EXPERIMENT_SEED` (sole current rule; a category axis, like `OptimizerType`) | `domain/experiments.py` | yes | yes |
-| `PrerequisiteOutcome` | `ANCHOR_EQUIVALENCE_PASSED`, `COMPLETED` | `domain/experiments.py` | yes | no |
-| `RecalibrationMode` | `FROZEN`, `ONE_SHOT` | `domain/evaluation.py` | yes | yes (when populated) |
-| `DeltaOrientation` | `SHARED_MINUS_LOCAL`, `CLUSTER_MINUS_LOCAL`, `COMPARATOR_MINUS_LOCAL` | `domain/evaluation.py` | yes | yes |
-| `ExecutionRequirement` | `REQUIRED`, `OPTIONAL` | `domain/evaluation.py` | yes | no |
-| `EvidenceUse` | `PRIMARY`, `SUPPLEMENTARY` | `domain/evaluation.py` | yes | no |
-| `PublicationPlacement` | `MAIN`, `SUPPLEMENTARY` | `domain/evaluation.py` | yes | no |
-| `MetricId` (+ `MetricFamily`) | the thirty-seven metric members in their eight families, fully enumerated in `EVALUATION_REPORTING_AND_PROVENANCE.md §4` | `domain/evaluation.py` | yes | no (metric selection is authored; a metric result is not identity) |
-| `MetricRole` | `PRIMARY_ENDPOINT`, `SECONDARY_THRESHOLD_OUTCOME`, `MODEL_QUALITY_CONTROL`, `MECHANISM_DIAGNOSTIC`, `RESOURCE_OUTCOME` | `domain/evaluation.py` | yes | no |
-| `MetricDirection` | `LOWER_IS_BETTER`, `HIGHER_IS_BETTER`, `CLOSER_TO_TARGET`, `CONTEXT_DEPENDENT`, `NONE` | `domain/evaluation.py` | yes | no |
-| `MetricUnit` | `NONE`, `RATIO`, `BYTES`, `COUNT`, `RATE` | `domain/evaluation.py` | yes | no |
-| `ClaimOutcome` | `STRONG_POSITIVE`, `WEAK_POSITIVE`, `MIXED`, `NULL`, `OPPOSITE`, `FEASIBILITY_REJECTION`, `SUPPRESSED` | `domain/evaluation.py` | yes | no |
-| `AbsorptionBand` | `STRONGLY_USEFUL`, `PARTIAL`, `LARGELY_ABSORBED`, `ALTERNATIVE_PATH` | `domain/evaluation.py` | yes | no |
-| `TemporalOutcome` | `RECAL_HELPS`, `RECAL_INSUFFICIENT`, `NO_MEANINGFUL_DRIFT` | `domain/evaluation.py` | yes | no |
-| `ClientEligibilityStatus` | `ELIGIBLE`, `FALLBACK_ASSIGNED`, `EXCLUDED` | `domain/evaluation.py` | yes | no |
-| `ClientEligibilityReason` | `SUFFICIENT_CALIBRATION`, `BELOW_MINIMUM_FALLBACK`, `BELOW_MINIMUM_EXCLUDED`, `NO_BENIGN_CALIBRATION` | `domain/evaluation.py` | yes | no |
-| `FeasibilityStatus` | `FEASIBLE`, `GATED`, `PENDING_VERIFICATION`, `REJECTED` | `domain/artifacts.py` | yes | no |
-| `TrafficRateUnit` | `EVENTS_PER_SECOND`, `EVENTS_PER_DAY` | `domain/evaluation.py` | yes | yes (when requested) |
-| `CostDerivationKind` | `MEASURED`, `ESTIMATED` | `domain/evaluation.py` | yes | no |
-| `ResourceMetric` | `COMMUNICATION_BYTES_PER_ROUND`, `TOTAL_COMMUNICATION_BYTES`, `CLIENT_TO_SERVER_BYTES`, `SERVER_TO_CLIENT_BYTES`, `THRESHOLD_MESSAGE_BYTES`, `CHECKPOINT_STORAGE_BYTES`, `SCORE_ARTIFACT_STORAGE_BYTES`, `RESULT_STORAGE_BYTES` | `domain/evaluation.py` | yes | no |
-| `ArtifactType` | fully enumerated in `PIPELINE_EXECUTION_AND_ARTIFACTS.md §6.1` | `domain/artifacts.py` | yes | yes |
-| `ArtifactNamespace` | `ANCHOR`, `COMPLETE_STUDY`, `RECOVERY`, `CACHE`, `STAGING`, `TEST_SANDBOX` | `domain/artifacts.py` | yes | derived from `EvidenceRole` |
-| `CheckpointKind` | `SCIENTIFIC`, `RECOVERY` | `domain/artifacts.py` | yes | yes |
-| `SerializationFormat` | `MARKDOWN`, `LATEX`, `PDF`, `PNG`, `PARQUET`, `JSON` | `domain/reporting.py` | yes | no |
-| `ReportArtifactType` | `MAIN_TABLE`, `SUPPLEMENTARY_TABLE`, `FIGURE`, `WORDING` | `domain/reporting.py` | yes | no |
-| `TableType` / `FigureType` | fully enumerated in `EVALUATION_REPORTING_AND_PROVENANCE.md §9.3` | `domain/reporting.py` | yes | no |
-| `RenderingStatus` | `RENDERED`, `TRACE_REFUSED` | `domain/reporting.py` | yes | no |
-| `MissingValuePolicy` | `RENDER_TYPED_UNAVAILABLE` (sole policy; zero/`NaN`/empty is never a valid substitute, `EVAL §5`) | `domain/reporting.py` | yes | no |
-| `DeterministicOrdering` | `BY_THRESHOLD_CONSTRUCTION`, `BY_SWEEP_POINT`, `BY_TEMPORAL_WINDOW`, `BY_SEED`, `BY_CLIENT` | `domain/reporting.py` | yes | no |
-| `RowProjectionRule` | `ONE_ROW_PER_THRESHOLD_CONSTRUCTION`, `ONE_ROW_PER_SWEEP_POINT`, `ONE_ROW_PER_CLIENT`, `ONE_ROW_PER_SEED`, `ONE_ROW_PER_TEMPORAL_WINDOW` (derived from `TableType`, never authored — `EVAL §9.2`) | `domain/reporting.py` | yes | no |
-| `ExecutionMode` | `SCIENTIFIC`, `PRINT_GRADE`, `DEVELOPMENT`, `SMOKE` | `domain/operations.py` | yes | no (citability, not a computed value) |
-| `DevicePolicy` | `CUDA_REQUIRED`, `CPU_ONLY` | `domain/operations.py` | yes | no |
-| `ProcessStartMethod` | `SPAWN`, `FORK` | `domain/operations.py` | yes | no |
-| `RunStatus` | `PLANNED`, `READY`, `RUNNING`, `REUSED`, `COMPLETED`, `BLOCKED`, `FAILED`, `INTERRUPTED`, `PAUSED`, `RECOVERED` | `domain/operations.py` | yes (records) | no |
-| `FailureDisposition` | `RUN_BLOCKING`, `STAGE_BLOCKING`, `RETRYABLE_TRANSIENT` | `domain/operations.py` | yes (records) | no |
-| `SeedRole` | `EXPERIMENT`, `TRAINING`, `DATALOADER`, `PARTITION`, `CLUSTERING`, `BOOTSTRAP` | `domain/operations.py` | yes | yes |
-| `PipelineStage` | fully enumerated in `PIPELINE_EXECUTION_AND_ARTIFACTS.md §2` | `domain/operations.py` | yes | yes |
-| `ReuseIncompatibilityReason` | thirteen members (`ENGINEERING §2`, `ReuseIncompatibilityReason` kept) | `domain/artifacts.py` | yes (records) | no |
-| `BlockingReason` | seven members | `domain/artifacts.py` | yes (records) | no |
-| `RejectionReason` | eight members (`§14.1`) | `domain/experiments.py` | yes | no |
-| `DesignStatus` | `LOCKED`, `DESIGNED_NOT_IMPLEMENTED`, `BLOCKED`, `DEFERRED`, `OUT_OF_SCOPE`, `REJECTED`, `SUPPRESSED` | doc-only vocabulary (`ENGINEERING §1`) | n/a | no |
+Scientific, development, and smoke training profiles require CUDA. Dataset-audit and test-smoke profiles are the only CPU-only profiles. Missing CUDA never triggers CPU fallback for scientific training or scoring.
 
-An enum member's stable serialized value (its lowercase name) is what enters
-a fingerprint when the enum enters identity; a member is never fingerprinted
-by its Python `auto()` ordinal, so reordering members never changes an
-identity. Every enum that enters identity is closed: adding a member is a
-deliberate scientific decision, not an open extension point (contrast the
-registry-backed identifiers of `§16.1`).
+## 21.3 Resource pressure
+
+The execution service enforces:
+
+- no silent batch-size reduction;
+- no silent reduction of seeds, rounds, clients, samples, or sweep cells;
+- no implicit change from streaming to sampled data;
+- no profile mutation after planning.
+
+Budget excess returns `BlockedByDependency` or `ExecutionFailed` according to whether execution started. It does not alter the run definition.
+
+---
+
+# 22. Determinism contract
+
+## 22.1 Ordering
+
+All externally discovered and internally iterated collections use explicit deterministic order:
+
+- files by ascending relative path;
+- clients by ascending `ClientId`;
+- sweep axes by declaration order;
+- sweep values by authored order;
+- training seeds by cohort order;
+- model-parameter aggregation by ascending client ID;
+- reports by configured report order;
+- artifact parents by logical stage order.
+
+Sets are never serialized directly.
+
+## 22.2 Canonical serialization
+
+Scientific fingerprints use:
+
+- BLAKE2b;
+- 32-byte digest;
+- UTF-8 JSON;
+- sorted object keys;
+- explicit enum values;
+- stable tuple order;
+- no comments or formatting dependence;
+- no absolute paths.
+
+Floating-point values serialize through one canonical decimal strategy and are never fingerprinted from platform-dependent `repr` output without normalization.
+
+## 22.3 Environment record
+
+Every scientific artifact records the environment fields required by `runtime.yaml`, including OS, Python, framework, CUDA, driver, GPU, dependency-lock fingerprint, deterministic flags, and execution profile.
+
+Unavailable bitwise determinism is recorded and quantified. It is never silently downgraded or described as full reproducibility.
+
+---
+
+# 23. Validation architecture
+
+## 23.1 Validation phases
+
+```text
+syntax validation
+→ document schema validation
+→ cross-reference validation
+→ scientific-combination validation
+→ capability validation
+→ planning validation
+→ runtime preflight
+→ artifact input validation
+→ stage output validation
+```
+
+## 23.2 Validation issue
+
+```python
+class ValidationSeverity(StrEnum):
+    ERROR = "error"
+    WARNING = "warning"
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ValidationIssue:
+    code: str
+    severity: ValidationSeverity
+    document: str
+    path: tuple[str | int, ...]
+    message: str
+    related_paths: tuple[tuple[str | int, ...], ...]
+```
+
+Issues are stable and machine-readable. The CLI may render them, but it does not create them.
+
+## 23.3 Required cross-reference checks
+
+The resolver proves that:
+
+- every population references an existing dataset and setup;
+- every setup references an existing materialization;
+- every experiment references existing populations, profiles, policies, analyses, result types, reports, metrics, gates, and prerequisites;
+- every evaluation label is unique within its experiment;
+- every analysis references evaluations and analyses in its own experiment unless a field explicitly permits cross-experiment reference;
+- every sweep binding points to a declared sweep axis;
+- every override is valid for the target policy or training profile;
+- every result type exists in the result registry;
+- every report profile exists;
+- prerequisite graphs are acyclic.
+
+## 23.4 Required scientific-combination checks
+
+Reject before planning:
+
+- family thresholds without `family_taxonomy`;
+- attack-sensitive metrics without valid attack assignment;
+- temporal evaluation without within-client chronological capability;
+- cluster count greater than the resolved eligible client count;
+- FedProx with `mu = 0` or a value outside the configured grid;
+- personalized method named Ditto when its method contract fails;
+- conformal thresholding with attack calibration rows;
+- unavailable metric requests without declared behavior;
+- missing or duplicate seeds;
+- checkpoint selection without a selection rule;
+- test-, attack-, AUROC-, FPR-, or policy-effect-driven checkpoint selection;
+- silent runtime batch-size or workload overrides;
+- retired names such as `B5` or `B3-LGS`;
+- unknown preprocessing steps, policy IDs, analysis kinds, result types, or report profiles.
+
+## 23.5 Output validation
+
+Every stage validates its output before commit. Examples include:
+
+- source counts and headers against source contracts;
+- one row assigned at most once and to one client;
+- split disjointness and coverage;
+- fitted preprocessing population and feature order;
+- checkpoint round membership;
+- score finiteness and exact manifest row agreement;
+- identical score inputs for B1–B4 comparisons;
+- threshold ownership and eligibility consistency;
+- per-client metric denominator handling;
+- paired seed completeness;
+- nested replicate summarization within seed;
+- report rows traceable to frozen analysis artifacts.
+
+---
+
+# 24. Application orchestration
+
+## 24.1 Execution sequence
+
+```mermaid
+sequenceDiagram
+    participant CLI
+    participant BOOT as Composition root
+    participant CAT as Catalogue service
+    participant PLAN as Planner
+    participant EXEC as Run executor
+    participant STORE as Artifact store
+    participant PORTS as Infrastructure backends
+
+    CLI->>BOOT: command + config paths + profile
+    BOOT->>CAT: load and resolve catalogue
+    CAT-->>BOOT: ResolvedStudyCatalogue
+    BOOT->>PLAN: plan experiment
+    PLAN->>STORE: inspect prerequisite and reusable artifacts
+    STORE-->>PLAN: typed reuse decisions
+    PLAN-->>BOOT: ExecutionPlan
+    BOOT->>EXEC: execute or resume plan
+    loop jobs in dependency order
+        EXEC->>STORE: verify inputs
+        EXEC->>PORTS: execute stage
+        PORTS-->>EXEC: StageResult
+        EXEC->>STORE: atomic commit on completion
+    end
+    EXEC-->>CLI: RunExecutionResult
+```
+
+## 24.2 No experiment branching
+
+The executor dispatches by job type and domain variant. The following is forbidden:
+
+```python
+if experiment_id == "chronological_recalibration_evaluation": ...
+elif experiment_id == "fedprox_aggregation_stress_test": ...
+```
+
+Temporal behavior comes from `WithinClientChronologicalSplit`, population roles, and `RecalibrationMode`. FedProx behavior comes from `FederatedProximalTraining`. Experiment identity remains descriptive and provenance-bearing, not a control-flow switch.
+
+## 24.3 Idempotent resumption
+
+For each job:
+
+1. compute the expected artifact key;
+2. ask the artifact store for a reuse decision;
+3. verify reusable artifacts;
+4. skip only when verification succeeds;
+5. otherwise execute the job;
+6. write to a temporary location outside frozen outputs;
+7. validate the complete output;
+8. atomically commit;
+9. persist the terminal outcome.
+
+A failed report export does not retrain. A changed threshold does not rescore. A changed training seed does not reuse a checkpoint.
+
+---
+
+# 25. Composition root
+
+`composition/bootstrap.py` is the only place where concrete implementations are selected.
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Application:
+    load_catalogue: LoadStudyCatalogue
+    plan_experiment: PlanExperiment
+    execute_run: ExecuteRun
+    resume_run: ResumeRun
+    execute_dataset_audit: ExecuteDatasetAudit
+    queries: ApplicationQueries
+
+
+def build_application(config_paths: ConfigPaths) -> Application:
+    ...
+```
+
+The composition root registers:
+
+- three dataset adapters;
+- the PyTorch training and scoring backends;
+- clustering and statistical backends;
+- threshold estimators by policy variant;
+- metric evaluators by metric ID;
+- analysis executors by analysis variant;
+- report renderers by report profile;
+- filesystem artifact storage;
+- environment probing.
+
+No service locator is exposed to domain or application code.
+
+---
+
+# 26. CLI boundary
+
+The CLI is a thin adapter. Its responsibilities are limited to:
+
+- parse command-line values;
+- resolve config paths and execution-profile identifier;
+- call one application use case;
+- render typed results and validation issues;
+- return a process exit code.
+
+Canonical commands are:
+
+```text
+datp-core config validate
+datp-core catalogue experiments
+datp-core dataset audit <dataset>
+datp-core experiment plan <experiment>
+datp-core experiment run <experiment>
+datp-core experiment resume <experiment>
+datp-core artifact explain <artifact-id>
+datp-core result trace <experiment> <analysis>
+```
+
+The CLI never reads YAML keys, selects adapters, calculates metrics, or constructs scientific definitions.
+
+---
+
+# 27. Extension model
+
+## 27.1 Add a new experiment
+
+When all required concepts already exist, adding an experiment requires only:
+
+1. a new entry in `configs/experiments.yaml`;
+2. configuration validation;
+3. a plan snapshot test.
+
+No Python experiment class or orchestration branch is added.
+
+## 27.2 Add a new threshold policy
+
+A new threshold method requires:
+
+1. a protocol entry;
+2. a Pydantic policy variant;
+3. a domain policy variant only when no existing family fits;
+4. one estimator implementation;
+5. one registry registration;
+6. formula, capability, determinism, and identity tests.
+
+Dataset adapters, training, scoring, and the run executor remain unchanged.
+
+## 27.3 Add a new analysis
+
+A new analysis requires:
+
+1. an analysis-kind discriminator and typed config model;
+2. a domain analysis variant;
+3. a typed result payload or existing result family;
+4. an executor;
+5. optional report profiles;
+6. exhaustive-match and provenance tests.
+
+Experiments then reference it through YAML.
+
+## 27.4 Add a new training method
+
+A new training method requires:
+
+1. a protocol training-profile variant;
+2. a domain training variant;
+3. backend support;
+4. explicit identity and score-reuse rules;
+5. checkpoint and selection validation;
+6. method-naming conformance tests.
+
+Threshold and metric code remains unchanged.
+
+## 27.5 Add a new dataset
+
+A new dataset requires:
+
+1. one `configs/datasets/<name>.yaml` document following the existing dataset top-level contract;
+2. one Pydantic dataset-source variant;
+3. one domain source-definition variant;
+4. one dataset adapter;
+5. source, schema, materialization, split, capability, and readiness tests;
+6. population entries in `experiments.yaml` only when needed.
+
+The experiment planner and run executor do not change.
+
+## 27.6 Add a new report
+
+A report requires a protocol profile and renderer registration. It does not change metrics, analyses, or artifact identities upstream of reporting.
+
+---
+
+# 28. Prohibited architecture patterns
+
+The implementation must not introduce:
+
+- `BaseExperiment` subclasses for individual experiments;
+- `if dataset == ...` outside the dataset-adapter registry and config mapping;
+- one service per threshold-policy identifier;
+- raw YAML dictionaries beyond `config`;
+- `Any` at a domain or application boundary;
+- a global mutable configuration singleton;
+- repository-wide `latest` artifact lookup;
+- implicit fallback from missing config values;
+- domain objects containing Pydantic models, tensors, arrays, dataframes, paths to mutable files, or open handles;
+- metrics represented as `dict[str, float]`;
+- result availability represented by `None`, `NaN`, missing rows, or empty strings;
+- configuration directories for generated contracts or catalogues;
+- generated observations written into configuration;
+- duplicate anchor and journal class hierarchies;
+- backwards-compatible aliases or stale policy names;
+- manual table values disconnected from result manifests;
+- silent workload reduction under resource pressure.
+
+---
+
+# 29. Representative end-to-end types
+
+## 29.1 Planning request
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class PlanExperimentRequest:
+    catalogue: ResolvedStudyCatalogue
+    runtime_catalogue: ResolvedRuntimeCatalogue
+    experiment_id: ExperimentId
+    execution_profile_id: ExecutionProfileId
+    known_artifacts: ArtifactInventory
+    prerequisite_statuses: ExperimentStatusRegistry
+```
+
+## 29.2 Run request
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExecuteRunRequest:
+    plan: ExecutionPlan
+    environment: ExecutionEnvironment
+    resume_policy: ResumePolicy
+```
+
+## 29.3 Run result
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class JobOutcome:
+    job_id: JobId
+    stage: PipelineStage
+    status: StageStatus
+    artifact_refs: tuple[ArtifactRef, ...]
+    warnings: tuple[ExecutionWarning, ...]
+    failure: ExecutionError | None
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RunExecutionResult:
+    experiment_id: ExperimentId
+    outcomes: tuple[JobOutcome, ...]
+    terminal_status: StageStatus
+    result_manifest: ArtifactRef | None
+```
+
+`failure` is nullable only because `JobOutcome` is a compact envelope whose status determines applicability. Variant-specific scientific results still use discriminated unions.
+
+## 29.4 Traceability query
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResultTrace:
+    report_artifact: ArtifactRef
+    analysis_artifacts: tuple[ArtifactRef, ...]
+    metric_artifacts: tuple[ArtifactRef, ...]
+    threshold_artifacts: tuple[ArtifactRef, ...]
+    score_artifacts: tuple[ArtifactRef, ...]
+    checkpoint_artifacts: tuple[ArtifactRef, ...]
+    population_artifacts: tuple[ArtifactRef, ...]
+    resolved_configuration: ArtifactRef
+```
+
+---
+
+# 30. Implementation order
+
+The architecture is implemented in this dependency order.
+
+## 30.1 Foundation
+
+1. identifiers, values, enums, and outcome unions;
+2. config Pydantic models for all six documents;
+3. loader, duplicate-key detection, reference index, and mapper;
+4. resolved catalogue and canonical fingerprints;
+5. storage manifests and artifact verification.
+
+## 30.2 Data readiness
+
+1. dataset adapter protocol and registry;
+2. dataset-specific source inspection;
+3. client assignment and split manifests;
+4. preprocessing and materialization artifacts;
+5. readiness gates and capability decisions.
+
+## 30.3 Learning and scores
+
+1. training-profile mapping;
+2. PyTorch training backend;
+3. checkpoint-profile implementations;
+4. score-generation backend;
+5. score validation and immutability.
+
+## 30.4 Thresholds, metrics, and analyses
+
+1. policy registry and core quantile policies;
+2. cluster, conformal, shrinkage, fallback, and federated-summary policies;
+3. metric evaluators and typed metric statuses;
+4. analysis union executors and statistical backend;
+5. report renderers and traceability.
+
+## 30.5 Orchestration
+
+1. experiment planner and job coalescing;
+2. reuse explanation and invalidation;
+3. run execution and resumption;
+4. result freeze;
+5. CLI.
+
+This order creates usable vertical slices without creating temporary public contracts.
+
+---
+
+# 31. Required tests
+
+## 31.1 Configuration tests
+
+- all six documents parse and validate;
+- duplicate YAML keys fail;
+- every cross-reference resolves;
+- prerequisite graph is acyclic;
+- every sweep binding and override is valid;
+- every configured analysis maps to one union member;
+- every configured policy maps to one policy family;
+- every report and result type exists;
+- unsupported schema versions fail;
+- no hidden default is injected during mapping.
+
+## 31.2 Domain tests
+
+- invalid identifiers and numeric values cannot be constructed;
+- registries reject duplicates and preserve deterministic order;
+- every union is exhaustively matched;
+- capability combinations produce deterministic decisions;
+- scientific fingerprints change exactly at their declared identity boundaries;
+- runtime-only changes do not change reusable scientific identities.
+
+## 31.3 Dataset tests
+
+- source contracts cover every column;
+- file discovery order is deterministic;
+- client assignment is total over admitted rows and mutually exclusive;
+- split manifests are disjoint and complete;
+- chronological boundaries and rollover correction are deterministic;
+- no future or test row influences preprocessing fit;
+- Edge attack-assignment limits remain enforced;
+- CICIoT2023 sources are never joined by row position or inferred key.
+
+## 31.4 Learning and score tests
+
+- B1–B4 training identity is identical within a seed and population;
+- anchor and DATP-Core checkpoint semantics remain distinct;
+- checkpoint selection never receives test or attack metrics;
+- optimizer state lifecycle matches protocol;
+- effective batch size equals the configured value;
+- score sets match manifests exactly and contain finite values;
+- score orientation is fixed and recorded;
+- policy changes reuse scores; model or checkpoint changes do not.
+
+## 31.5 Threshold and metric tests
+
+- all 14 policies satisfy their formulas and capability rules;
+- quantile interpolation matches the configured estimator;
+- cluster K and fingerprint behavior are deterministic;
+- `B-FedStatsBenign` includes within and between variance terms;
+- matched-exceedance tie-break selects the larger candidate coefficient;
+- attack rows cannot enter threshold inputs;
+- undefined metric denominators produce typed statuses;
+- per-client metrics precede cross-client aggregation;
+- AUROC inputs remain identical across B1–B4.
+
+## 31.6 Analysis and reporting tests
+
+- paired analyses require paired seed identities;
+- confirmatory BCa requires the complete configured cohort;
+- nested replicates are summarized within seed;
+- outcome bands are mutually exclusive and exhaustive;
+- negative and unavailable outcomes render explicitly;
+- every report cell traces to a frozen result artifact;
+- report-profile changes do not invalidate upstream analysis.
+
+---
+
+# 32. Architecture conformance checklist
+
+## 32.1 Structure
+
+- [ ] The canonical package tree is used without parallel legacy trees.
+- [ ] Dependencies follow the import table.
+- [ ] Framework imports are confined to their owning layer.
+- [ ] No experiment-specific class or orchestrator branch exists.
+- [ ] No `contracts/` or generated configuration-catalogue directory exists.
+
+## 32.2 Configuration
+
+- [ ] Exactly the six authoritative configuration documents are loaded.
+- [ ] Pydantic models represent every authored field.
+- [ ] Every reference and override is validated before mapping.
+- [ ] Mapping is explicit and produces frozen domain definitions.
+- [ ] No scientific value is supplied by code when absent from configuration.
+
+## 32.3 Domain
+
+- [ ] Public records are frozen, slotted, and keyword-only.
+- [ ] Distinct identities use distinct types.
+- [ ] Variant-specific fields use discriminated unions.
+- [ ] No `Any` or untyped public dictionary exists.
+- [ ] Undefined and unavailable values are typed.
+
+## 32.4 Application
+
+- [ ] Use cases depend only on domain and ports.
+- [ ] Planning is side-effect free.
+- [ ] Capability and readiness resolution occur before expensive execution.
+- [ ] Jobs are coalesced by scientific identity.
+- [ ] Resumption validates lineage before reuse.
+
+## 32.5 Scientific integrity
+
+- [ ] B1–B4 reuse one frozen detector and score set within each controlled comparison.
+- [ ] Benign-only calibration is enforced by input types.
+- [ ] Checkpoint selection is independent of test and threshold outcomes.
+- [ ] Edge-IIoTset attack-sensitive metrics remain unavailable where assignment is invalid.
+- [ ] Temporal execution uses genuine within-client ordering and prevents future leakage.
+- [ ] No runtime pressure changes scientific workload silently.
+
+## 32.6 Artifacts and reporting
+
+- [ ] Every artifact has schema, checksum, parents, fingerprints, and terminal status.
+- [ ] Frozen artifacts are immutable.
+- [ ] No ambiguous `latest` reference exists.
+- [ ] Invalidations follow the declared identity graph.
+- [ ] Every report traces to frozen analyses and resolved configuration.
+
+---
+
+# 33. Current configuration alignment inventory
+
+This inventory is descriptive. The YAML remains authoritative, and the implementation loads these identifiers rather than hard-coding the list.
+
+## 33.1 Study populations
+
+| Population | Dataset | Setup | Metric bundle |
+|---|---|---|---|
+| `nbaiot_natural_devices` | `nbaiot` | `natural_devices` | `full_detection_and_operating_point` |
+| `nbaiot_anchor_natural_devices` | `nbaiot` | `anchor_natural_devices` | `full_detection_and_operating_point` |
+| `nbaiot_dirichlet_heterogeneity` | `nbaiot` | `dirichlet_partitioned` | `full_detection_and_operating_point` |
+| `ciciot2023_file_pseudo_clients` | `ciciot2023` | `file_pseudo_clients` | `full_detection_and_operating_point` |
+| `edge_iiotset_sensor_groups` | `edge_iiotset` | `sensor_groups` | `benign_operating_point_equity` |
+| `edge_iiotset_chronological_groups` | `edge_iiotset` | `chronological_sensor_groups` | `benign_operating_point_equity` |
+| `edge_iiotset_static_reference_groups` | `edge_iiotset` | `chronological_static_reference_groups` | `benign_operating_point_equity` |
+
+## 33.2 Experiments
+
+| Experiment | Role | Requirement | Population(s) | Training | Checkpoint | Seed cohort |
+|---|---|---|---|---|---|---|
+| `anchor_reproduction` | `anchor` | `mandatory` | `nbaiot_anchor_natural_devices` | `federated_averaging_anchor` | `anchor_terminal_round` | `anchor_five_seed` |
+| `confirmatory_threshold_scope_effect` | `confirmatory` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `shared_threshold_construction_sensitivity` | `supportive` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `threshold_quantile_sensitivity` | `supportive` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `external_threshold_quantile_sensitivity` | `external_validation` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `controlled_heterogeneity_response` | `supportive` | `mandatory` | `nbaiot_dirichlet_heterogeneity` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `cluster_and_family_threshold_mechanism` | `mechanism` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `external_cluster_threshold_mechanism` | `external_validation` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `calibration_window_size_stability` | `boundary` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `local_global_threshold_shrinkage` | `supportive` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `conformal_local_threshold_coverage` | `supportive` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `external_conformal_local_threshold_coverage` | `external_validation` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `centralized_pooled_reference` | `supportive` | `mandatory` | `nbaiot_natural_devices` | `centralized_pooled` | `centralized_pooled_epoch_grid` | `datp_core_ten_seed` |
+| `federated_summary_comparator` | `stress_test` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `external_federated_summary_comparator` | `external_validation` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `file_pseudo_client_applicability_boundary` | `boundary` | `mandatory` | `ciciot2023_file_pseudo_clients` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `external_sensor_group_validation` | `external_validation` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `chronological_recalibration_evaluation` | `boundary` | `mandatory` | `edge_iiotset_chronological_groups`<br>`edge_iiotset_static_reference_groups` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `fedprox_aggregation_stress_test` | `stress_test` | `mandatory` | `nbaiot_natural_devices` | `federated_proximal` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `external_fedprox_aggregation_stress_test` | `stress_test` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_proximal` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `model_personalization_absorption_test` | `stress_test` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging_personalized` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `external_model_personalization_absorption_test` | `stress_test` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_averaging_personalized` | `datp_core_round_grid` | `datp_core_ten_seed` |
+| `operational_alert_burden` | `supportive` | `conditional` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+
+## 33.3 Protocol registries
+
+**Training profiles**
+
+`federated_averaging`, `federated_averaging_anchor`, `federated_averaging_personalized`, `federated_proximal`, `centralized_pooled`.
+
+**Checkpoint profiles**
+
+`datp_core_round_grid`, `anchor_terminal_round`, `centralized_pooled_epoch_grid`.
+
+**Seed cohorts**
+
+`datp_core_ten_seed`, `anchor_five_seed`.
+
+**Analysis kinds**
+
+`absorption_analysis`, `alert_burden_analysis`, `anchor_equivalence_analysis`, `cluster_stability_analysis`, `conformal_coverage_analysis`, `distribution_mechanism_analysis`, `locked_client_distribution_analysis`, `metric_association_analysis`, `paired_threshold_analysis`, `quantile_estimation_analysis`, `recovery_fraction_analysis`, `resource_cost_analysis`, `temporal_recovery_analysis`, `threshold_stability_analysis`.
+
+**Result types**
+
+`confirmatory_analysis_result`, `supportive_analysis_result`, `mechanism_analysis_result`, `external_validation_result`, `stress_test_result`, `boundary_result`, `anchor_reproduction_result`, `policy_evaluation_result`, `cluster_stability_result`, `conformal_coverage_result`, `quantile_estimation_result`, `absorption_result`, `temporal_recovery_result`, `metric_association_result`, `distribution_mechanism_result`, `resource_cost_result`, `eligibility_coverage_result`.
+
+**Report profiles**
+
+`interval_table`, `dispersion_ladder_table`, `minimal_dispersion_table`, `sensitivity_grid_table`, `coverage_table`, `cluster_stability_table`, `cluster_contingency_table`, `communication_storage_table`, `alert_burden_table`, `comparator_table`, `score_geometry_figure`, `threshold_tradeoff_figure`, `severity_trend_figure`, `association_scatter_figure`, `shrinkage_curve_figure`, `recovery_curve_figure`, `temporal_recovery_table`.
+
+## 33.4 Alignment rule
+
+Catalogue validation fails when any configured identifier does not map to its typed registry, when an identifier maps to more than one definition, or when a registered implementation has no corresponding configured use and is not explicitly marked as infrastructure-only support.
+
+---
+
+# 34. Definition of done
+
+The domain and application architecture is implemented when all of the following are true:
+
+- all six YAML documents resolve into one immutable study catalogue and one runtime catalogue;
+- all 23 configured experiments plan without experiment-specific Python code;
+- all configured populations, capabilities, policies, sweeps, analyses, result types, and reports map to typed definitions;
+- dataset audits and readiness gates execute through dataset adapters;
+- one execution plan correctly coalesces shared training and score jobs across threshold evaluations;
+- expected infeasibility and metric unavailability are represented by typed results;
+- artifact reuse and invalidation follow scientific identity rather than filenames;
+- a bounded end-to-end run reaches a traceable report artifact;
+- architecture, configuration, and scientific conformance tests pass;
+- no hidden default, stale architecture reference, compatibility shim, untyped public payload, or unresolved structural decision remains.
+
+This architecture is the implementation target. Changes to its public contracts require a documented architecture revision; changes to scientific values remain configuration or roadmap changes according to their canonical ownership.
