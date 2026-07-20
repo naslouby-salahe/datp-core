@@ -4,26 +4,57 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
+
+
+class ModelInputDimensionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    resolution: str
+    declared_per_dataset: bool
+    validation: str
+
+
+class ModelDecoderConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    construction: str
+    final_layer_output_dim: str
+
+
+class ModelParameterInitializationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    weight: str
+    bias: str
+    applied_to: str
+    seeded_by: str
+
+
+class ModelAnomalyScoreConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    definition: str
+    orientation: str
 
 
 class ModelArchitectureConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     kind: Literal["dense_autoencoder"]
-    input_dimension: dict[str, str | bool]
+    input_dimension: ModelInputDimensionConfig
     hidden_dims: list[int]
     bottleneck_dim: str
-    decoder: dict[str, str]
+    decoder: ModelDecoderConfig
     activation: str
     activation_placement: str
     output_activation: str
     normalization_layers: str
     bias: bool
-    parameter_initialization: dict[str, str]
+    parameter_initialization: ModelParameterInitializationConfig
     reconstruction_objective: str
     training_loss_reduction: str
-    anomaly_score: dict[str, str]
+    anomaly_score: ModelAnomalyScoreConfig
     precision: str
 
 
@@ -84,6 +115,46 @@ class SeedCohortConfig(BaseModel):
     analysis_seed_model: str
 
 
+class CheckpointSelectorInputConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    population: str
+    quantity: str
+    client_weighting: str | None = None
+    aggregation_over_clients: str | None = None
+    client_accumulation_order: str | None = None
+    aggregation_over_rows: str | None = None
+
+
+class CheckpointSelectionConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    rule: str
+    selector_input: CheckpointSelectorInputConfig | None = None
+    tie_break: str | None = None
+    aggregation: str | None = None
+    scope: str | None = None
+    selected_round_reuse: str | None = None
+    weights_remain_seed_and_population_specific: bool | None = None
+    forbidden_selectors: list[str] | None = None
+    selection_granularity: str | None = None
+
+
+class CheckpointConvergenceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    metric: str
+    rounds_initial: int
+    rule: str
+    formula: str
+    zero_start_loss_behavior: str
+    tolerance: float
+    window_rounds: int
+    window: str
+    qualification: str
+    no_qualifying_round_behavior: str
+
+
 class CheckpointProfileConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -92,10 +163,10 @@ class CheckpointProfileConfig(BaseModel):
     rounds: list[int] | None = None
     epochs: list[int] | None = None
     early_stopping: str
-    convergence: dict[str, JsonValue] | None = None
+    convergence: CheckpointConvergenceConfig | None = None
     convergence_logged_without_stopping: bool | None = None
     checkpoint_save_policy: str | None = None
-    selection: dict[str, JsonValue]
+    selection: CheckpointSelectionConfig
 
 
 class TrainingProfileConfig(BaseModel):
@@ -419,6 +490,74 @@ class MetricBundleConfig(BaseModel):
     requires_attack_evaluable_clients: bool | None = None
 
 
+class StatisticalProfileConfig(BaseModel):
+    """Strict authored statistical-analysis profile (protocols.yaml ``statistical_profiles``).
+
+    A single superset model covering every configured profile shape. ``extra="forbid"``
+    rejects unknown or misspelled fields; the model validator enforces the fields that the
+    bootstrap methods require. This replaces the previous ``dict[str, JsonValue]`` bag so
+    that resolution reads typed attributes instead of untyped mapping lookups.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    estimand: str
+    unit_of_analysis: str
+    method: str | None = None
+    role: str | None = None
+    statistic: str | None = None
+    confidence_level: float | None = None
+    resample_count: int | None = None
+    analysis_seed: int | None = None
+    analysis_seed_source: str | None = None
+    pairing_key: str | None = None
+    resampling_unit: str | None = None
+    independent_resampling_of_the_two_evaluations: str | None = None
+    minimum_paired_units: int | None = None
+    minimum_units: int | None = None
+    minimum_defined_units: int | None = None
+    finite_value_validation: str | None = None
+    degenerate_behavior: str | None = None
+    direction_source: str | None = None
+    bias_correction: str | None = None
+    acceleration: str | None = None
+    insufficient_pair_behavior: str | None = None
+    insufficient_unit_behavior: str | None = None
+    missing_pair_behavior: str | None = None
+    zero_difference_behavior: str | None = None
+    zero_variance_behavior: str | None = None
+    diagnostic_intervals_permitted: list[str] | None = None
+    multiple_comparison_policy: str | None = None
+    per_seed_ratio_reporting: str | None = None
+    denominator_materiality_rule: str | None = None
+    undefined_denominator_behavior: str | None = None
+    interval_reporting: str | None = None
+    degradation_gate: str | None = None
+    undefined_ratio_behavior: str | None = None
+    negative_ratio_behavior: str | None = None
+    reported_statistics: list[str] | None = None
+    independent_scientific_replication_claim: str | None = None
+    procedures: list[str] | None = None
+    wilcoxon_alternative: str | None = None
+    wilcoxon_zero_difference_handling: str | None = None
+    wilcoxon_exact_when_possible: bool | None = None
+    wilcoxon_approximation_recorded_when_used: bool | None = None
+    effect_size: str | None = None
+    unpaired_effect_sizes_forbidden: bool | None = None
+    tie_handling: str | None = None
+    reported_fields: list[str] | None = None
+    interpretation_constraint: str | None = None
+
+    @model_validator(mode="after")
+    def validate_bootstrap_requirements(self) -> StatisticalProfileConfig:
+        if self.method in {"percentile_bootstrap", "bca_bootstrap"}:
+            if self.confidence_level is None:
+                raise ValueError("Bootstrap statistical profile requires a confidence_level")
+            if self.resample_count is None:
+                raise ValueError("Bootstrap statistical profile requires a resample_count")
+        return self
+
+
 class AuthoredProtocolsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -446,7 +585,7 @@ class AuthoredProtocolsConfig(BaseModel):
     communication_estimation_contract: dict[str, JsonValue]
     report_defaults: dict[str, JsonValue]
     operational_inputs: dict[str, JsonValue]
-    statistical_profiles: dict[str, JsonValue]
+    statistical_profiles: dict[str, StatisticalProfileConfig]
     report_profiles: dict[str, JsonValue]
     communication_estimation: dict[str, JsonValue] | None = None
 

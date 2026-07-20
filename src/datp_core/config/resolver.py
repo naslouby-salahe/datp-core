@@ -8,12 +8,9 @@ from attrs import define
 
 from datp_core.config.models.dataset_config import CategoricalEncodingConfig
 from datp_core.config.models.protocol_config import (
-    BatchingProfileConfig,
     EligibilityPolicyConfig,
     MetricBundleConfig,
-    ModelArchitectureConfig,
     NormalizationStrategyConfig,
-    OptimizerProfileConfig,
     QuantileEstimatorConfig,
     TypedThresholdPolicyConfig,
 )
@@ -26,12 +23,17 @@ from datp_core.config.runtime_settings import (
 from datp_core.config.yaml_loader import ConfigurationError, YamlConfigurationReader
 from datp_core.domain.catalogue import (
     AnalysisSpecRecord,
+    BatchingRecord,
     CapabilityRequirementRecord,
+    CheckpointConvergenceRecord,
     CheckpointProfileRecord,
+    CheckpointSelectionRecord,
     EvaluationSpecRecord,
     EvidenceRole,
     ExperimentRecord,
     FederationProfileRecord,
+    ModelArchitectureRecord,
+    OptimizerRecord,
     PopulationRecord,
     RunRequirement,
     SeedCohortRecord,
@@ -69,7 +71,15 @@ from datp_core.domain.identifiers import (
     ThresholdPolicyId,
     TrainingProfileId,
 )
-from datp_core.domain.values import PositiveInt, Probability, RelativePath, Seed, TypedDomainRegistry
+from datp_core.domain.values import (
+    NonNegativeFloat,
+    PositiveFloat,
+    PositiveInt,
+    Probability,
+    RelativePath,
+    Seed,
+    TypedDomainRegistry,
+)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -84,9 +94,9 @@ class ResolvedProjectConfiguration:
     seed_cohorts: TypedDomainRegistry[SeedCohortId, SeedCohortRecord]
     statistical_profiles: TypedDomainRegistry[StatisticalProfileId, StatisticalProfileRecord]
     threshold_policies: dict[ThresholdPolicyId, TypedThresholdPolicyConfig]
-    model_architectures: dict[str, ModelArchitectureConfig]
-    optimizers: dict[str, OptimizerProfileConfig]
-    batching_profiles: dict[str, BatchingProfileConfig]
+    model_architectures: dict[str, ModelArchitectureRecord]
+    optimizers: dict[str, OptimizerRecord]
+    batching_profiles: dict[str, BatchingRecord]
     eligibility_policies: dict[EligibilityPolicyId, EligibilityPolicyConfig]
     normalization_strategies: dict[NormalizationStrategyId, NormalizationStrategyConfig]
     quantile_estimators: dict[str, QuantileEstimatorConfig]
@@ -349,14 +359,40 @@ def resolve_project_configuration(
         total_rounds = cp_cfg.total_rounds if cp_cfg.total_rounds is not None else cp_cfg.total_epochs
         if total_rounds is None:
             raise ConfigurationError(f"Checkpoint profile '{cp_key}' has no total rounds or epochs")
-        if "rule" not in cp_cfg.selection:
-            raise ConfigurationError(f"Checkpoint profile '{cp_key}' selection has no rule")
+        selection_record = CheckpointSelectionRecord(
+            rule=cp_cfg.selection.rule,
+            tie_break=cp_cfg.selection.tie_break,
+            scope=cp_cfg.selection.scope,
+            aggregation=cp_cfg.selection.aggregation,
+            selected_round_reuse=cp_cfg.selection.selected_round_reuse,
+            selection_granularity=cp_cfg.selection.selection_granularity,
+            forbidden_selectors=tuple(cp_cfg.selection.forbidden_selectors or ()),
+        )
+        convergence_record = (
+            CheckpointConvergenceRecord(
+                metric=cp_cfg.convergence.metric,
+                rounds_initial=PositiveInt(cp_cfg.convergence.rounds_initial),
+                rule=cp_cfg.convergence.rule,
+                formula=cp_cfg.convergence.formula,
+                zero_start_loss_behavior=cp_cfg.convergence.zero_start_loss_behavior,
+                tolerance=PositiveFloat(cp_cfg.convergence.tolerance),
+                window_rounds=PositiveInt(cp_cfg.convergence.window_rounds),
+                window=cp_cfg.convergence.window,
+                qualification=cp_cfg.convergence.qualification,
+                no_qualifying_round_behavior=cp_cfg.convergence.no_qualifying_round_behavior,
+            )
+            if cp_cfg.convergence is not None
+            else None
+        )
         checkpoint_dict[cp_id] = CheckpointProfileRecord(
             identifier=cp_id,
             total_rounds=PositiveInt(total_rounds),
             selected_rounds=tuple(PositiveInt(round_number) for round_number in (selected_rounds or ())),
             early_stopping=cp_cfg.early_stopping,
-            selection_rule=str(cp_cfg.selection["rule"]),
+            selection_rule=cp_cfg.selection.rule,
+            selection=selection_record,
+            convergence=convergence_record,
+            checkpoint_save_policy=cp_cfg.checkpoint_save_policy,
         )
     checkpoint_reg = TypedDomainRegistry(_items=checkpoint_dict)
 
@@ -376,27 +412,22 @@ def resolve_project_configuration(
 
     # 5b. Resolve the executable subset of statistical profiles.
     statistical_dict: dict[StatisticalProfileId, StatisticalProfileRecord] = {}
-    for profile_key, raw_profile in authored_protocols.statistical_profiles.items():
-        if not isinstance(raw_profile, dict):
-            raise ConfigurationError(f"Statistical profile '{profile_key}' must be a mapping")
-        method = raw_profile.get("method")
-        confidence = raw_profile.get("confidence_level")
-        resample_count = raw_profile.get("resample_count")
-        minimum_units = raw_profile.get("minimum_paired_units", raw_profile.get("minimum_units"))
-        if method is not None and not isinstance(method, str):
-            raise ConfigurationError(f"Statistical profile '{profile_key}' has an invalid method")
-        if confidence is not None and (not isinstance(confidence, float) or isinstance(confidence, bool)):
-            raise ConfigurationError(f"Statistical profile '{profile_key}' has an invalid confidence level")
-        if resample_count is not None and (not isinstance(resample_count, int) or isinstance(resample_count, bool)):
-            raise ConfigurationError(f"Statistical profile '{profile_key}' has an invalid resample count")
-        if minimum_units is not None and (not isinstance(minimum_units, int) or isinstance(minimum_units, bool)):
-            raise ConfigurationError(f"Statistical profile '{profile_key}' has an invalid minimum-unit count")
+    for profile_key, profile_cfg in authored_protocols.statistical_profiles.items():
+        minimum_units = (
+            profile_cfg.minimum_paired_units
+            if profile_cfg.minimum_paired_units is not None
+            else profile_cfg.minimum_units
+        )
         profile_id = StatisticalProfileId(profile_key)
         statistical_dict[profile_id] = StatisticalProfileRecord(
             identifier=profile_id,
-            method=method,
-            confidence_level=Probability(confidence) if confidence is not None else None,
-            resample_count=PositiveInt(resample_count) if resample_count is not None else None,
+            method=profile_cfg.method,
+            confidence_level=(
+                Probability(profile_cfg.confidence_level) if profile_cfg.confidence_level is not None else None
+            ),
+            resample_count=(
+                PositiveInt(profile_cfg.resample_count) if profile_cfg.resample_count is not None else None
+            ),
             minimum_units=PositiveInt(minimum_units) if minimum_units is not None else None,
         )
     statistical_reg = TypedDomainRegistry(_items=statistical_dict)
@@ -474,9 +505,66 @@ def resolve_project_configuration(
     experiments_reg = TypedDomainRegistry(_items=experiments_dict)
 
     # Resolve protocol dictionaries
-    model_architectures = authored_protocols.model_architectures
-    optimizers = authored_protocols.optimizers
-    batching_profiles = authored_protocols.batching
+    model_architectures = {
+        key: ModelArchitectureRecord(
+            identifier=key,
+            kind=m.kind,
+            hidden_dims=tuple(PositiveInt(dim) for dim in m.hidden_dims),
+            bottleneck_dim=m.bottleneck_dim,
+            activation=m.activation,
+            activation_placement=m.activation_placement,
+            output_activation=m.output_activation,
+            normalization_layers=m.normalization_layers,
+            bias=m.bias,
+            reconstruction_objective=m.reconstruction_objective,
+            training_loss_reduction=m.training_loss_reduction,
+            precision=m.precision,
+            input_dimension_resolution=m.input_dimension.resolution,
+            input_dimension_declared_per_dataset=m.input_dimension.declared_per_dataset,
+            input_dimension_validation=m.input_dimension.validation,
+            decoder_construction=m.decoder.construction,
+            decoder_final_layer_output_dim=m.decoder.final_layer_output_dim,
+            weight_initialization=m.parameter_initialization.weight,
+            bias_initialization=m.parameter_initialization.bias,
+            initialization_applied_to=m.parameter_initialization.applied_to,
+            initialization_seeded_by=m.parameter_initialization.seeded_by,
+            anomaly_score_definition=m.anomaly_score.definition,
+            anomaly_score_orientation=m.anomaly_score.orientation,
+        )
+        for key, m in authored_protocols.model_architectures.items()
+    }
+    optimizers = {
+        key: OptimizerRecord(
+            identifier=key,
+            optimizer_type=o.optimizer_type,
+            learning_rate=PositiveFloat(o.learning_rate),
+            beta_1=o.beta_1,
+            beta_2=o.beta_2,
+            epsilon=PositiveFloat(o.epsilon),
+            weight_decay=NonNegativeFloat(o.weight_decay),
+            amsgrad=o.amsgrad,
+            scheduler=o.scheduler,
+            gradient_clipping=o.gradient_clipping,
+            state_lifecycle=o.state_lifecycle,
+            state_aggregated_by_server=o.state_aggregated_by_server,
+        )
+        for key, o in authored_protocols.optimizers.items()
+    }
+    batching_profiles = {
+        key: BatchingRecord(
+            identifier=key,
+            micro_batch_size=PositiveInt(b.micro_batch_size),
+            gradient_accumulation_steps=PositiveInt(b.gradient_accumulation_steps),
+            effective_batch_size=PositiveInt(b.effective_batch_size),
+            shuffle_each_epoch=b.shuffle_each_epoch,
+            shuffle_unit=b.shuffle_unit,
+            incomplete_final_batch=b.incomplete_final_batch,
+            row_ordering_before_shuffle=b.row_ordering_before_shuffle,
+            shuffle_seed_namespace=b.shuffle_seed_namespace,
+            worker_seed_namespace=b.worker_seed_namespace,
+        )
+        for key, b in authored_protocols.batching.items()
+    }
     eligibility_policies = {EligibilityPolicyId(k): v for k, v in authored_protocols.eligibility_policies.items()}
     normalization_strategies = {
         NormalizationStrategyId(k): v for k, v in authored_protocols.normalization_strategies.items()
