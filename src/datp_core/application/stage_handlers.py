@@ -141,28 +141,13 @@ class DatasetMaterializationStageHandler:
                 produced_artifact=job.output,
             )
         profile = self._config.runtime.execution_profiles["scientific"]
-        if not isinstance(profile, dict) or "data_loading" not in profile:
-            return StageJobOutcome(
-                job_id=job.job_id,
-                stage=job.stage,
-                status=JobExecutionStatus.FAILED,
-                error_message="Scientific runtime data-loading policy is absent",
-            )
-        data_loading = profile["data_loading"]
-        if not isinstance(data_loading, dict) or "chunk_row_count" not in data_loading:
-            return StageJobOutcome(
-                job_id=job.job_id,
-                stage=job.stage,
-                status=JobExecutionStatus.FAILED,
-                error_message="Scientific runtime chunk_row_count is absent",
-            )
-        chunk_row_count = data_loading["chunk_row_count"]
+        chunk_row_count = profile.data_loading.get("chunk_row_count")
         if not isinstance(chunk_row_count, int) or isinstance(chunk_row_count, bool):
             return StageJobOutcome(
                 job_id=job.job_id,
                 stage=job.stage,
                 status=JobExecutionStatus.FAILED,
-                error_message="Scientific runtime chunk_row_count is invalid",
+                error_message="Scientific runtime chunk_row_count is absent or invalid",
             )
         try:
             with TemporaryDirectory(prefix=f"datp_{dataset.dataset_id.value}_") as staging_directory:

@@ -9,6 +9,7 @@ from pydantic import Field, JsonValue
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from datp_core.config.models.runtime_config import AuthoredRuntimeConfig
+from datp_core.domain.values import PositiveInt
 
 
 class RuntimeBootstrapSettings(BaseSettings):
@@ -48,6 +49,23 @@ class ResolvedProjectPaths:
 
 
 @define(frozen=True, slots=True, kw_only=True)
+class ExecutionProfileRecord:
+    """Pure resolved execution profile (runtime.yaml `execution_profiles`)."""
+
+    identifier: str
+    device_policy: str
+    determinism: str
+    resource_budget: dict[str, int]
+    concurrency: dict[str, int]
+    data_loading: dict[str, int | bool]
+    process_start_method: str
+    log_interval_rounds: PositiveInt
+    atomic_write: bool
+    temporary_storage: str | None
+    temporary_storage_cleanup: str | None
+
+
+@define(frozen=True, slots=True, kw_only=True)
 class ResolvedRuntimeConfiguration:
     """Fully resolved runtime configuration combining bootstrap settings and runtime.yaml."""
 
@@ -57,7 +75,7 @@ class ResolvedRuntimeConfiguration:
     determinism_enforcement: dict[str, JsonValue]
     device_policy_rules: dict[str, JsonValue]
     resource_pressure_policy: dict[str, JsonValue]
-    execution_profiles: dict[str, JsonValue]
+    execution_profiles: dict[str, ExecutionProfileRecord]
 
 
 def resolve_runtime_configuration(
@@ -92,5 +110,20 @@ def resolve_runtime_configuration(
         determinism_enforcement=authored_runtime.determinism_enforcement.model_dump(),
         device_policy_rules=authored_runtime.device_policy_rules.model_dump(),
         resource_pressure_policy=authored_runtime.resource_pressure_policy.model_dump(),
-        execution_profiles={k: v.model_dump() for k, v in authored_runtime.execution_profiles.items()},
+        execution_profiles={
+            key: ExecutionProfileRecord(
+                identifier=key,
+                device_policy=profile.device_policy,
+                determinism=profile.determinism,
+                resource_budget=dict(profile.resource_budget),
+                concurrency=dict(profile.concurrency),
+                data_loading=dict(profile.data_loading),
+                process_start_method=profile.process_start_method,
+                log_interval_rounds=PositiveInt(profile.log_interval_rounds),
+                atomic_write=profile.atomic_write,
+                temporary_storage=profile.temporary_storage,
+                temporary_storage_cleanup=profile.temporary_storage_cleanup,
+            )
+            for key, profile in authored_runtime.execution_profiles.items()
+        },
     )
