@@ -614,6 +614,237 @@ class ReportDefaultsConfig(BaseModel):
     analysis_defined_direction_token: str
 
 
+class ReportColumnConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    name: str
+    unit: str
+    direction: str
+
+
+class ReportProfileConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    artifact_type: str
+    table_type: str | None = None
+    figure_type: str | None = None
+    estimate_basis: str | None = None
+    columns: list[ReportColumnConfig] | None = None
+    series: list[ReportColumnConfig] | None = None
+
+
+class BenignDecisionRateConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    configured: bool
+    value: float | None = None
+    required_fields: list[str]
+    finite_value_validation: str
+    non_negative_validation: str
+    unavailable_behavior: str
+    invented_rate_forbidden: bool
+
+
+class OperationalInputsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    benign_decision_rate: BenignDecisionRateConfig
+
+
+class ArtifactFingerprintsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, populate_by_name=True)
+
+    source: list[str]
+    schema_stage: list[str] = Field(alias="schema")
+    materialization: list[str]
+    client_assignment: list[str]
+    model_stage: list[str] = Field(alias="model")
+    training: list[str]
+    checkpoint: list[str]
+    score: list[str]
+    threshold: list[str]
+    metric: list[str]
+    analysis: list[str]
+
+
+class ArtifactIdentityConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    hash_function: str
+    digest_bytes: int
+    canonical_serialization: str
+    absolute_paths_excluded_from_identity: bool
+    fingerprints: ArtifactFingerprintsConfig
+    lineage_validation_before_reuse: list[str]
+    reuse_rejected_when_any_changes: list[str]
+
+
+class FieldEncodingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    bytes_per_field: int
+    byte_order: str
+
+
+class ThresholdExchangeEntryConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    uplink_fields_per_client: list[str] | None = None
+    downlink_fields_per_client: list[str] | None = None
+    candidate_grid_downlink_fields_per_client: list[str] | None = None
+    candidate_grid_uplink_fields_per_client_per_candidate: list[str] | None = None
+
+
+class ThresholdExchangeConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    direction: str
+    b1: ThresholdExchangeEntryConfig
+    b2: ThresholdExchangeEntryConfig
+    b4: ThresholdExchangeEntryConfig
+    federated_summary: ThresholdExchangeEntryConfig
+
+
+class ModelExchangeConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, protected_namespaces=())
+
+    field_width: str
+    directions: list[str]
+    bytes_per_round_formula: str
+
+
+class CheckpointStorageConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True, protected_namespaces=())
+
+    contents: list[str]
+    model_parameter_bytes_formula: str
+
+
+class CommunicationEstimationContractConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    estimate_basis: str
+    field_encodings: dict[str, FieldEncodingConfig]
+    threshold_exchange: ThresholdExchangeConfig
+    candidate_grid_payload: str
+    model_exchange: ModelExchangeConfig
+    checkpoint_storage: CheckpointStorageConfig
+    filename_match_is_not_lineage_evidence: bool
+    frozen_artifacts_immutable: bool
+    ambiguous_latest_reference: str
+
+
+class MetricFormulaConfig(BaseModel):
+    """Reusable strict leaf descriptor for a single metric definition (superset of all metric keys)."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    formula: str | None = None
+    unit: str | None = None
+    direction: str | None = None
+    zero_denominator: str | None = None
+    requires: list[str] | None = None
+    missing_class_behavior: str | None = None
+    requires_both_classes: bool | None = None
+    role: str | None = None
+    invariance_check: str | None = None
+    quantile_estimator: str | None = None
+    zero_sum_behavior: str | None = None
+    zero_oracle_behavior: str | None = None
+    zero_mean_behavior: str | None = None
+    denominator_stabilizer: str | None = None
+    near_zero_mean_threshold_formula: str | None = None
+    near_zero_mean_behavior: str | None = None
+    minimum_client_count: int | None = None
+    weighting: str | None = None
+    comparison_unit: str | None = None
+
+
+class CrossClientAggregationConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    mean_fpr: MetricFormulaConfig
+    standard_deviation_ddof: int
+    cv_fpr: MetricFormulaConfig
+    cv_tpr: MetricFormulaConfig
+    iqr_fpr: MetricFormulaConfig
+    fpr_range: MetricFormulaConfig
+    worst_client_fpr: MetricFormulaConfig
+    p10_macro_f1: MetricFormulaConfig
+    worst_client_ba: MetricFormulaConfig
+    jain_index: MetricFormulaConfig
+    gini_coefficient: MetricFormulaConfig
+
+
+class ThresholdEstimationMetricsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    absolute_threshold_error: MetricFormulaConfig
+    relative_threshold_error: MetricFormulaConfig
+    oracle_definition: str
+    target_exceedance: MetricFormulaConfig
+    signed_attainment_error: MetricFormulaConfig
+    absolute_attainment_error: MetricFormulaConfig
+    threshold_dispersion: MetricFormulaConfig
+    threshold_variance_across_replicates: MetricFormulaConfig
+
+
+class JsDivergenceConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    definition: str
+    histogram_bins: int
+    binning_range: str
+    binning_edges: str
+    logarithm_base: int
+    empty_bin_handling: str
+    pairwise_aggregation: str
+    unit: str
+    direction: str
+    minimum_client_count: int
+
+
+class HeterogeneityDiagnosticsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    pairwise_js_divergence: JsDivergenceConfig
+
+
+class ClusterDiagnosticsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    adjusted_rand_index: MetricFormulaConfig
+    within_cluster_dispersion: MetricFormulaConfig
+    across_cluster_dispersion: MetricFormulaConfig
+
+
+class PrecisionPolicyConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    computation: str
+    rounding: str
+
+
+class MetricDefinitionsConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    prediction_rule: str
+    per_client_before_aggregation: bool
+    test_rows_only: bool
+    fpr: MetricFormulaConfig
+    tpr: MetricFormulaConfig
+    balanced_accuracy: MetricFormulaConfig
+    macro_f1: MetricFormulaConfig
+    auroc: MetricFormulaConfig
+    cross_client_aggregation: CrossClientAggregationConfig
+    threshold_estimation: ThresholdEstimationMetricsConfig
+    heterogeneity_diagnostics: HeterogeneityDiagnosticsConfig
+    cluster_diagnostics: ClusterDiagnosticsConfig
+    precision_policy: PrecisionPolicyConfig
+    metric_statuses: list[str]
+    forbidden_substitutions: list[str]
+
+
 class AuthoredProtocolsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -632,17 +863,17 @@ class AuthoredProtocolsConfig(BaseModel):
     quantile_estimators: dict[str, QuantileEstimatorConfig]
     threshold_policy_defaults: ThresholdPolicyDefaultsConfig
     threshold_policies: dict[str, TypedThresholdPolicyConfig]
-    metric_definitions: dict[str, JsonValue]
+    metric_definitions: MetricDefinitionsConfig
     metric_bundles: dict[str, MetricBundleConfig]
     nested_replicate_policy: NestedReplicatePolicyConfig
     result_types: dict[str, ResultTypeConfig]
     evaluation_result_contract: EvaluationResultContractConfig
-    artifact_identity: dict[str, JsonValue]
-    communication_estimation_contract: dict[str, JsonValue]
+    artifact_identity: ArtifactIdentityConfig
+    communication_estimation_contract: CommunicationEstimationContractConfig
     report_defaults: ReportDefaultsConfig
-    operational_inputs: dict[str, JsonValue]
+    operational_inputs: OperationalInputsConfig
     statistical_profiles: dict[str, StatisticalProfileConfig]
-    report_profiles: dict[str, JsonValue]
+    report_profiles: dict[str, ReportProfileConfig]
     communication_estimation: dict[str, JsonValue] | None = None
 
     @field_validator("schema_version")
