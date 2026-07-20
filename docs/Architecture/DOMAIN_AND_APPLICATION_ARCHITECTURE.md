@@ -2,11 +2,11 @@
 
 ## Document status
 
-This document is the implementation contract for the DATP-Core domain and application layers.
+This document is the implementation contract for the DATP-Core domain, application, orchestration, and extension boundaries.
 
 It replaces the previous `DOMAIN_AND_APPLICATION_ARCHITECTURE.md` in full. It is aligned with:
 
-- the current roadmap package in `docs/roadmap/00_ROADMAP_INDEX.md` through `06_REVIEWER_RISKS_AND_READINESS.md`;
+- the roadmap package in `docs/roadmap/00_ROADMAP_INDEX.md` through `06_REVIEWER_RISKS_AND_READINESS.md`;
 - the six authoritative configuration documents:
   - `configs/datasets/nbaiot.yaml`;
   - `configs/datasets/ciciot2023.yaml`;
@@ -15,7 +15,15 @@ It replaces the previous `DOMAIN_AND_APPLICATION_ARCHITECTURE.md` in full. It is
   - `configs/protocols.yaml`;
   - `configs/runtime.yaml`.
 
-The architecture is complete for the configured programme. It contains no placeholder contract, unresolved structural alternative, compatibility layer, or requirement for additional configuration files.
+The design is intentionally a **modular monolith**. It is small enough to implement and audit now, but its extension seams are explicit enough to support additional datasets, training methods, threshold policies, analyses, report surfaces, and execution interfaces without creating experiment-specific branches or a directory forest.
+
+The architecture distinguishes three implementation horizons:
+
+1. **Static skeleton** — types, configuration loading and mapping, catalogue resolution, planning, artifact identity, runtime contracts, ports, registries, queries, and CLI commands that can be completed before scientific execution code.
+2. **Scientific capability implementation** — dataset inspection and materialization, learning, scoring, threshold estimation, metrics, analyses, and reporting.
+3. **Execution hardening** — resumption, lineage verification, run-state persistence, progress events, frozen outputs, integration tests, and full experiment execution.
+
+No incomplete concrete adapter, `pass`, broad `NotImplementedError`, fake success result, or placeholder scientific computation is part of the skeleton. A capability is either represented by a real protocol and absent concrete implementation, or implemented fully and registered.
 
 ---
 
@@ -25,115 +33,344 @@ The architecture is complete for the configured programme. It contains no placeh
 
 This file owns:
 
-- dependency direction and framework boundaries;
+- module boundaries and dependency direction;
+- framework confinement;
 - domain aggregate ownership;
-- immutable identifiers, value objects, enums, and discriminated unions;
-- the mapping from validated YAML to executable domain definitions;
-- application use cases and orchestration boundaries;
-- application ports and infrastructure responsibilities;
-- run planning, capability resolution, artifact identity, reuse, and stage outcomes;
-- extension rules for datasets, training methods, threshold policies, analyses, reports, and experiments;
-- the canonical source-tree structure for these responsibilities.
+- immutable identifiers, values, enums, and discriminated unions;
+- the mapping from validated YAML into resolved scientific definitions;
+- application use cases, stage services, ports, registries, and queries;
+- experiment planning, sweep expansion, seed planning, capability resolution, and job coalescing;
+- artifact identity, lineage, reuse, invalidation, and result freezing;
+- run-state persistence, progress-event boundaries, and resumability;
+- the canonical source tree;
+- extension procedures;
+- implementation order, conformance checks, and definition of done.
 
 ## 1.2 What this document does not own
 
 This file does not redefine:
 
-- scientific identity, claims, or scope;
-- experiment values or experiment membership;
-- dataset columns, file patterns, split ratios, feature orders, or exclusions;
-- training hyperparameters, seed cohorts, checkpoint grids, threshold grids, metrics, or statistical profiles;
-- runtime paths, resource budgets, or execution-profile values;
-- report content or manuscript wording.
+- scientific identity, claims, scope, or result interpretation;
+- experiment membership or authored values;
+- dataset columns, source paths, file patterns, split ratios, feature orders, or exclusions;
+- model hyperparameters, seed cohorts, checkpoint grids, threshold grids, metrics, statistical profiles, or report profiles;
+- runtime paths, budgets, or execution-profile values;
+- generated observations such as row counts, fingerprints, readiness findings, selected checkpoints, metrics, intervals, or report values.
 
-Those values remain in the roadmap and the six YAML files. Code implements and validates them; code does not restate them as hidden defaults.
+Those remain owned by the roadmap and the six YAML documents.
 
 ## 1.3 Precedence
 
-When two sources appear to disagree, apply this order:
+When sources appear to disagree, apply this order:
 
 1. locked scientific identity and decision rules in the roadmap;
-2. explicit values in the six configuration documents;
+2. explicit values in the six YAML documents;
 3. type ownership and dependency rules in this architecture;
-4. implementation details.
+4. concrete implementation details.
 
-An implementation convenience cannot override configuration. Configuration cannot override a locked scientific invariant. A stale artifact cannot override either.
-
----
-
-# 2. Architectural decisions
-
-The following decisions are final.
-
-1. **Framework-free domain.** Domain code uses the Python standard library only.
-2. **Application depends only on domain.** Application services do not import Pydantic, PyYAML, PyTorch, NumPy, pandas, scikit-learn, SciPy, Matplotlib, filesystem adapters, or CLI frameworks.
-3. **Pydantic v2 is confined to configuration.** Raw YAML shape, schema validation, and cross-document references live in `config`.
-4. **Scientific objects are frozen dataclasses.** Public domain and application-boundary records use `@dataclass(frozen=True, slots=True, kw_only=True)` unless they are enums, protocols, or type aliases.
-5. **No untyped dictionaries at public boundaries.** `dict[str, Any]`, `Mapping[str, Any]`, and `Any` are forbidden in domain and application APIs.
-6. **No class per experiment.** The 23 configured experiments are data instances of one typed `ExperimentDefinition`, not 23 subclasses or 23 services.
-7. **No class per YAML file section.** Types represent stable concepts, not indentation levels.
-8. **No generic option bag.** Variant-specific fields live on discriminated-union members; unrelated fields are not made nullable on a giant aggregate.
-9. **No hidden scientific defaults.** Missing result-affecting values fail configuration resolution or produce a typed infeasibility outcome.
-10. **No legacy compatibility.** There are no old policy aliases, redirects, migration wrappers, duplicate module trees, or compatibility shims.
-11. **No generated observations in static configuration.** Readiness findings, row counts, fingerprints, checkpoint selections, metrics, and statistics are artifacts, not YAML fields.
-12. **Artifact reuse follows scientific identity.** Filenames and directory proximity are never lineage evidence.
-13. **Expected scientific unavailability is data.** Unsupported metrics, insufficient eligibility, absent chronology, and invalid attack assignment use typed results, not exceptions, empty rows, or `NaN`.
-14. **Extensions are registry-based, not conditional chains.** Adding a supported strategy registers a new typed implementation; central orchestration does not grow `if experiment == ...` branches.
-15. **Runtime and science have separate fingerprints.** Resource settings and environment provenance are recorded without contaminating the scientific identity of reusable artifacts.
+An implementation convenience cannot override configuration. Configuration cannot override a locked scientific invariant. A generated artifact cannot redefine either.
 
 ---
 
-# 3. Dependency layers and import rules
+# 2. Architectural decisions and applied consolidation
 
-## 3.1 Layers
+## 2.1 Final architectural decisions
 
-| Layer | May import | Must not import |
-|---|---|---|
-| `domain` | standard library; other `domain` modules | Pydantic, YAML, filesystem adapters, ML/scientific frameworks, CLI libraries |
-| `application` | `domain`; standard library | `config`, `infrastructure`, `composition`, `cli`, Pydantic, concrete frameworks |
-| `config` | `domain`; Pydantic; YAML parser | `application`, `infrastructure`, `cli`, model training or statistical execution code |
-| `infrastructure` | `domain`, `application`; concrete frameworks | `config` models, `cli`, experiment-specific orchestration |
-| `composition` | `domain`, `application`, `config`, `infrastructure` | scientific logic |
-| `cli` | `composition`; application request/result types | direct adapter construction, framework calls, YAML traversal |
+1. **Framework-free scientific domain.** Domain types use the Python standard library only.
+2. **Modular monolith.** Code is organized by stable scientific capability, not by one global layer directory and not by experiment.
+3. **Pydantic v2 is confined to catalogue configuration.** Pydantic and YAML types never cross into scientific domain or application services.
+4. **Frozen public records.** Domain and application-boundary records use `@dataclass(frozen=True, slots=True, kw_only=True)` unless they are enums, protocols, generic containers, or type aliases.
+5. **No untyped public payloads.** `Any`, `dict[str, Any]`, framework tensors, dataframes, and mutable filesystem objects are forbidden at domain and application boundaries.
+6. **No class per experiment.** The configured experiments are instances of one typed experiment aggregate.
+7. **No orchestration by experiment name.** Behavior is selected by resolved strategy variants and job specifications.
+8. **No hidden scientific defaults.** Missing result-affecting values fail resolution or produce a typed infeasibility result.
+9. **Expected unavailability is data.** Unsupported metrics, insufficient eligibility, absent chronology, unavailable operational inputs, and invalid attack assignment use typed outcomes.
+10. **Scientific and execution fingerprints remain separate.**
+11. **Registries are immutable and composition-owned.**
+12. **Generated evidence never enters static configuration.**
+13. **Resource pressure never changes the scientific workload silently.**
+14. **The CLI and any future UI/API are replaceable interfaces over the same application use cases.**
+15. **Future scientific families add bounded capabilities rather than nullable fields to existing aggregates.**
 
-## 3.2 Dependency graph
+## 2.2 Merge opportunities applied
+
+The previous design contained many correct concepts but split several of them too finely. The following consolidations are now part of the target architecture.
+
+### A. Protocol identifier classes are merged
+
+Dedicated identifiers remain for major entities whose identity crosses many boundaries:
+
+- `DatasetId`;
+- `PopulationId`;
+- `ExperimentId`;
+- `EvaluationId`;
+- `AnalysisId`;
+- `ClientId`;
+- `RunId`;
+- `JobId`;
+- `ArtifactId`.
+
+The many nearly identical identifiers for registry entries are replaced by one generic type:
+
+```python
+TDefinition = TypeVar("TDefinition")
+
+@dataclass(frozen=True, slots=True, order=True)
+class RegistryId(Generic[TDefinition]):
+    value: str
+```
+
+Typed aliases retain static separation:
+
+```python
+TrainingProfileId: TypeAlias = RegistryId["TrainingProfile"]
+ThresholdPolicyId: TypeAlias = RegistryId["ThresholdPolicyDefinition"]
+MetricId: TypeAlias = RegistryId["MetricDefinition"]
+ReportProfileId: TypeAlias = RegistryId["ReportProfileDefinition"]
+```
+
+This removes repetitive dataclass definitions without reducing type-checker precision.
+
+### B. Registry implementations are merged
+
+One generic immutable registry replaces a separate implementation class for every registry:
+
+```python
+K = TypeVar("K", bound=Hashable)
+V = TypeVar("V")
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FrozenRegistry(Generic[K, V]):
+    _items: Mapping[K, V]
+
+    def get(self, key: K) -> V: ...
+    def ordered(self) -> tuple[V, ...]: ...
+    def contains(self, key: K) -> bool: ...
+```
+
+Domain aliases preserve meaning, for example:
+
+```python
+ExperimentRegistry: TypeAlias = FrozenRegistry[ExperimentId, ExperimentDefinition]
+MetricRegistry: TypeAlias = FrozenRegistry[MetricId, MetricDefinition]
+```
+
+### C. Configuration handoff is merged
+
+The scientific and runtime catalogues remain separately fingerprinted, but application use cases receive one immutable handoff:
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResolvedConfiguration:
+    study: ResolvedStudyCatalogue
+    runtime: ResolvedRuntimeCatalogue
+```
+
+This avoids passing two unrelated roots through every use case while preserving identity separation.
+
+### D. Large aggregates are decomposed by ownership
+
+`ExperimentDefinition` no longer carries a long flat list of unrelated fields. It is composed from:
+
+- `ExperimentIdentity`;
+- `ExperimentExecutionBinding`;
+- `ExperimentMatrix`;
+- `ExperimentConstraints`.
+
+`DatasetDefinition` is composed from:
+
+- `DatasetIdentity`;
+- `DatasetContract`;
+- materialization registry;
+- setup registry.
+
+This makes construction, review, testing, and future extension clearer.
+
+### E. Generic guardrail bags are removed
+
+Generic boolean and text guardrails are replaced by a structured `ExperimentConstraints` aggregate with explicit categories:
+
+- prerequisites;
+- readiness gates;
+- capability requirements;
+- scientific invariants;
+- selection constraints;
+- calibration constraints;
+- population relationship constraints;
+- temporal constraints;
+- operational-input constraints.
+
+Unknown experiment-specific keys are rejected. New constraint families are added deliberately rather than hidden in free text.
+
+### F. Job dependencies are merged into the job
+
+`ExecutionPlan` no longer keeps jobs and a separate dependency-edge collection that can drift. Each `ExecutionJob` owns its parent job IDs and expected output key.
+
+### G. Job outcomes are made variant-specific
+
+A single envelope with a nullable failure is replaced by a closed outcome union:
+
+- `CompletedJob`;
+- `InfeasibleJob`;
+- `ValidationFailedJob`;
+- `ExecutionFailedJob`;
+- `BlockedJob`.
+
+### H. Ports are colocated with capabilities
+
+A global `application/ports.py` is removed. Dataset, learning, analysis, reporting, artifact, and runtime ports live next to the capability they abstract. This prevents a central ports file from becoming a dependency hub.
+
+### I. Configuration models are split by authoritative document
+
+A single large `config/models.py` is replaced by document-owned modules for datasets, experiments, protocols, runtime, and the bundle root.
+
+### J. Executor files are grouped by stable mechanism family
+
+There is no file per metric, policy identifier, analysis identifier, or experiment. Implementations are grouped by stable mechanism:
+
+- quantile, cluster, conformal, shrinkage, and federated-summary thresholding;
+- predictive, operating-point, dispersion, equity, and resource metrics;
+- comparative, mechanism, temporal, association, and resource analyses.
+
+## 2.3 Concepts intentionally not merged
+
+The following separations are scientifically meaningful and remain explicit:
+
+- authored Pydantic configuration vs resolved frozen domain definitions;
+- scientific catalogue vs runtime catalogue;
+- dataset audit vs scientific experiment;
+- dataset setup vs study population;
+- training profile vs checkpoint profile;
+- score artifact vs threshold artifact;
+- threshold policy vs metric definition;
+- metric evaluation vs statistical analysis;
+- expected infeasibility vs execution failure;
+- scientific fingerprint vs execution fingerprint;
+- benign calibration scores vs test scores;
+- FPR-evaluable vs attack-evaluable client populations.
+
+---
+
+# 3. Architecture topology and dependency rules
+
+## 3.1 Capability-oriented modular monolith
+
+The codebase uses stable capability packages. Each capability owns its domain types, services, ports, registrations, and concrete adapters where applicable.
 
 ```mermaid
 graph TD
-    DOMAIN[domain]
-    APP[application]
-    CONFIG[config]
-    INFRA[infrastructure]
-    COMPOSE[composition]
-    CLI[cli]
+    KERNEL[kernel]
+    ART[artifacts domain]
+    RUN[runtime domain]
+    DATA[datasets domain]
+    LEARN[learning domain]
+    THR[thresholding domain]
+    EVAL[evaluation domain]
+    ANA[analysis domain]
+    REP[reporting domain]
+    CAT[catalogue]
+    ORCH[orchestration]
+    IMPL[concrete adapters and backends]
+    IFACE[interfaces]
+    COMP[composition]
 
-    APP --> DOMAIN
-    CONFIG --> DOMAIN
-    INFRA --> APP
-    INFRA --> DOMAIN
-    COMPOSE --> CONFIG
-    COMPOSE --> APP
-    COMPOSE --> INFRA
-    COMPOSE --> DOMAIN
-    CLI --> COMPOSE
-    CLI --> APP
+    ART --> KERNEL
+    RUN --> KERNEL
+    DATA --> KERNEL
+    DATA --> ART
+    LEARN --> KERNEL
+    LEARN --> ART
+    THR --> KERNEL
+    THR --> ART
+    EVAL --> KERNEL
+    EVAL --> ART
+    ANA --> KERNEL
+    ANA --> ART
+    REP --> KERNEL
+    REP --> ART
+
+    CAT --> KERNEL
+    CAT --> DATA
+    CAT --> LEARN
+    CAT --> THR
+    CAT --> EVAL
+    CAT --> ANA
+    CAT --> REP
+    CAT --> RUN
+
+    ORCH --> CAT
+    ORCH --> ART
+    ORCH --> RUN
+    ORCH --> DATA
+    ORCH --> LEARN
+    ORCH --> THR
+    ORCH --> EVAL
+    ORCH --> ANA
+    ORCH --> REP
+
+    IMPL --> DATA
+    IMPL --> LEARN
+    IMPL --> THR
+    IMPL --> EVAL
+    IMPL --> ANA
+    IMPL --> REP
+    IMPL --> ART
+    IMPL --> RUN
+
+    COMP --> CAT
+    COMP --> ORCH
+    COMP --> IMPL
+    IFACE --> ORCH
+    IFACE --> COMP
 ```
 
-## 3.3 Framework confinement
+## 3.2 Import rules
 
-| Framework or concern | Owning layer |
+| Package category | May import | Must not import |
+|---|---|---|
+| `kernel` | standard library | every project capability, Pydantic, scientific frameworks |
+| capability `domain.py` | `kernel`, small artifact-reference contracts | Pydantic, YAML, CLI, concrete frameworks, orchestration |
+| capability `services.py` | its domain, its ports, `kernel`, artifact references | catalogue config models, CLI, concrete adapter modules |
+| capability concrete adapters | their domain and ports, external frameworks | YAML traversal, experiment-name branching |
+| `catalogue/config` | Pydantic, YAML parser, capability domain types through explicit mapper | execution services, infrastructure backends |
+| `catalogue/domain.py` | capability domain definitions, `kernel` | Pydantic, YAML, infrastructure |
+| `orchestration` | resolved catalogue, capability services/ports, artifacts, runtime | raw YAML, concrete framework construction |
+| `interfaces` | application requests/results and composition root | direct framework calls, YAML traversal, scientific formulas |
+| `composition` | all registration and construction modules | scientific calculation |
+
+## 3.3 Cross-capability rule
+
+Capability domains may exchange only:
+
+- typed identifiers;
+- immutable value objects;
+- artifact references;
+- explicit request/result dataclasses.
+
+They must not exchange:
+
+- framework objects;
+- mutable arrays;
+- dataframes;
+- global registries;
+- raw dictionaries;
+- open file handles;
+- configuration models.
+
+## 3.4 Framework confinement
+
+| Concern | Owning implementation location |
 |---|---|
-| Pydantic and YAML parsing | `config` |
-| PyTorch and CUDA | `infrastructure/learning.py` |
-| NumPy and memory-mapped arrays | `infrastructure/numerics.py` and dataset adapters |
-| pandas or streaming CSV readers | dataset adapters only |
-| scikit-learn clustering and preprocessing backends | `infrastructure/clustering.py` or dataset adapters |
-| SciPy/bootstrap/statistical libraries | `infrastructure/statistics.py` |
-| Matplotlib/table rendering | `infrastructure/reporting.py` |
-| Filesystem, checksums, atomic writes | `infrastructure/storage.py` |
-| Typer/argparse | `cli` |
-
-Domain formulas and scientific semantics remain explicit in domain definitions even when infrastructure performs the numerical work.
+| Pydantic and YAML | `catalogue/config/` |
+| streaming CSV and pandas, if used | `datasets/adapters/` only |
+| NumPy and memory-mapped arrays | dataset, threshold, metric, and analysis implementations only |
+| PyTorch and CUDA | `learning/pytorch/` |
+| scikit-learn preprocessing/clustering | dataset adapters or `thresholding/estimators/cluster.py` |
+| SciPy/bootstrap/statistics | `analysis/backends/` |
+| Matplotlib/table rendering | `reporting/renderers/` |
+| filesystem, checksums, atomic writes | `artifacts/filesystem.py` |
+| environment/CUDA probing | `runtime/environment.py` |
+| Typer or argparse | `interfaces/cli/` |
 
 ---
 
@@ -141,158 +378,194 @@ Domain formulas and scientific semantics remain explicit in domain definitions e
 
 ```text
 src/datp_core/
-├── domain/
-│   ├── identifiers.py
+├── kernel/
+│   ├── ids.py
 │   ├── values.py
-│   ├── outcomes.py
-│   ├── data.py
-│   ├── protocols.py
-│   ├── experiments.py
-│   ├── evaluation.py
-│   ├── artifacts.py
+│   ├── results.py
+│   ├── fingerprints.py
 │   └── errors.py
-├── application/
+│
+├── artifacts/
+│   ├── domain.py
+│   ├── services.py
 │   ├── ports.py
-│   ├── catalogue.py
-│   ├── planning.py
-│   ├── readiness.py
-│   ├── execution.py
-│   ├── reuse.py
-│   └── queries.py
-├── config/
-│   ├── models.py
-│   ├── loader.py
-│   ├── references.py
-│   ├── validation.py
-│   └── mapper.py
-├── infrastructure/
-│   ├── datasets.py
-│   ├── learning.py
-│   ├── numerics.py
-│   ├── clustering.py
-│   ├── statistics.py
-│   ├── storage.py
-│   ├── reporting.py
+│   └── filesystem.py
+│
+├── runtime/
+│   ├── domain.py
+│   ├── services.py
+│   ├── ports.py
 │   └── environment.py
-├── composition/
-│   └── bootstrap.py
-└── cli/
-    └── main.py
+│
+├── datasets/
+│   ├── domain.py
+│   ├── services.py
+│   ├── ports.py
+│   ├── registry.py
+│   └── adapters/
+│       ├── nbaiot.py
+│       ├── ciciot2023.py
+│       └── edge_iiotset.py
+│
+├── learning/
+│   ├── domain.py
+│   ├── services.py
+│   ├── ports.py
+│   ├── registry.py
+│   └── pytorch/
+│       ├── models.py
+│       ├── training.py
+│       ├── checkpointing.py
+│       └── scoring.py
+│
+├── thresholding/
+│   ├── domain.py
+│   ├── services.py
+│   ├── ports.py
+│   ├── registry.py
+│   └── estimators/
+│       ├── quantile.py
+│       ├── cluster.py
+│       ├── conformal.py
+│       ├── shrinkage.py
+│       └── federated_summary.py
+│
+├── evaluation/
+│   ├── domain.py
+│   ├── services.py
+│   ├── registry.py
+│   └── metrics/
+│       ├── predictive.py
+│       ├── operating_point.py
+│       ├── dispersion.py
+│       ├── equity.py
+│       └── resource.py
+│
+├── analysis/
+│   ├── domain.py
+│   ├── services.py
+│   ├── ports.py
+│   ├── registry.py
+│   ├── backends/
+│   │   └── scipy_backend.py
+│   └── executors/
+│       ├── comparative.py
+│       ├── mechanism.py
+│       ├── association.py
+│       ├── temporal.py
+│       └── resource.py
+│
+├── reporting/
+│   ├── domain.py
+│   ├── services.py
+│   ├── ports.py
+│   ├── registry.py
+│   └── renderers/
+│       ├── tables.py
+│       ├── figures.py
+│       └── manifests.py
+│
+├── catalogue/
+│   ├── domain.py
+│   ├── registry.py
+│   ├── services.py
+│   └── config/
+│       ├── bundle.py
+│       ├── datasets.py
+│       ├── experiments.py
+│       ├── protocols.py
+│       ├── runtime.py
+│       ├── load.py
+│       ├── validate.py
+│       ├── references.py
+│       └── map.py
+│
+├── orchestration/
+│   ├── domain.py
+│   ├── planning.py
+│   ├── capabilities.py
+│   ├── reuse.py
+│   ├── execution.py
+│   ├── state.py
+│   ├── events.py
+│   └── queries.py
+│
+├── interfaces/
+│   ├── python_api.py
+│   └── cli/
+│       ├── app.py
+│       ├── rendering.py
+│       └── commands/
+│           ├── config.py
+│           ├── catalogue.py
+│           ├── dataset.py
+│           ├── experiment.py
+│           ├── artifact.py
+│           └── result.py
+│
+└── composition/
+    └── bootstrap.py
 ```
 
-This is a deliberately merged structure:
+## 4.1 Why this tree is open to extension
 
-- shared domain concepts are grouped by responsibility rather than split into one file per class;
-- configuration has one model module because only six documents exist;
-- ports are centralized in one application module;
-- infrastructure is divided only at genuine framework boundaries;
-- no `contracts/`, `catalogues/`, `schemas/`, or `adapters/` directory forest is created.
+- A new dataset adds one adapter and one configuration source variant.
+- A new training method adds one domain variant and one backend registration.
+- A new threshold family adds one estimator module only when an existing family cannot represent it.
+- A new metric joins the appropriate metric-family module rather than creating a file per metric.
+- A new analysis joins one stable executor family or introduces one new family.
+- A new interface, such as a local web UI or notebook API, is added under `interfaces/` without changing scientific services.
+- A future remote runner can be introduced behind orchestration execution ports without changing the catalogue or scientific definitions.
+- A future bounded scientific programme such as online adaptation or poisoning adds its own capability package and artifact types rather than expanding current experiment records with unrelated nullable fields.
 
-Tests mirror the same structure under `tests/` and use one additional `tests/fixtures/` directory for bounded synthetic and configuration fixtures.
-
----
-
-# 5. Configuration-to-execution model
-
-## 5.1 Four representations
-
-The system uses four representations, each with one responsibility.
+## 4.2 Test tree
 
 ```text
-YAML text
-  ↓ parse
-AuthoredConfigBundle          Pydantic; preserves authored shape
-  ↓ validate references and scientific combinations
-ValidatedConfigBundle         Pydantic; all references proven
-  ↓ explicit mapping
-ResolvedStudyCatalogue        domain; framework-free definitions
-  ↓ plan experiment, population, seed, and sweep coordinates
-ExecutionPlan                 application; executable jobs and dependencies
+tests/
+├── unit/
+│   ├── kernel/
+│   ├── catalogue/
+│   ├── datasets/
+│   ├── learning/
+│   ├── thresholding/
+│   ├── evaluation/
+│   ├── analysis/
+│   ├── artifacts/
+│   ├── runtime/
+│   └── orchestration/
+├── contract/
+│   ├── configuration/
+│   ├── registries/
+│   ├── adapters/
+│   └── artifacts/
+├── integration/
+│   ├── datasets/
+│   ├── learning/
+│   ├── thresholding/
+│   ├── analyses/
+│   └── reporting/
+├── e2e/
+│   ├── synthetic_smoke/
+│   ├── anchor_smoke/
+│   └── resume_and_reuse/
+└── fixtures/
+    ├── config/
+    ├── synthetic_data/
+    ├── manifests/
+    └── expected_plans/
 ```
 
-No layer consumes YAML dictionaries after mapping.
-
-## 5.2 Configuration bundle
-
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ConfigPaths:
-    nbaiot: Path
-    ciciot2023: Path
-    edge_iiotset: Path
-    experiments: Path
-    protocols: Path
-    runtime: Path
-```
-
-`Path` is used only by the configuration and infrastructure boundaries. Domain objects use normalized relative-path value objects where path identity is scientifically relevant.
-
-The config-layer root is:
-
-```python
-class AuthoredConfigBundle(BaseModel):
-    datasets: tuple[DatasetDocumentConfig, ...]
-    experiments: ExperimentsDocumentConfig
-    protocols: ProtocolsDocumentConfig
-    runtime: RuntimeDocumentConfig
-```
-
-The validated root retains the same content but can only be constructed by the validator after every local and cross-document rule passes:
-
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ValidatedConfigBundle:
-    authored: AuthoredConfigBundle
-    reference_index: ConfigReferenceIndex
-```
-
-## 5.3 Configuration file ownership
-
-| Document | Maps to | Does not create |
-|---|---|---|
-| `datasets/*.yaml` | dataset definition, source contract, field schema, materializations, setups, capability declarations, dataset-audit definition | experiment, metric result, readiness observation |
-| `experiments.yaml` | populations, experiment definitions, evaluations, analyses, sweeps, prerequisites, gates, report requests | new policies, new metric formulas, runtime values |
-| `protocols.yaml` | model, training, checkpoint, eligibility, normalization, threshold, metric, statistical, result, artifact, communication, and report registries | experiment membership or dataset source facts |
-| `runtime.yaml` | storage roots, source-access policy, determinism enforcement, device policy, budgets, concurrency, execution profiles | scientific model or experiment values |
-
-## 5.4 Resolution order
-
-Resolution is deterministic and always follows this order:
-
-1. parse all six documents;
-2. reject duplicate keys and unsupported `schema_version` values;
-3. validate each document independently;
-4. build the cross-document reference index;
-5. validate protocol references;
-6. map datasets, materializations, and setups;
-7. map protocol registries;
-8. map study populations;
-9. map experiment definitions;
-10. validate capability and combination rules;
-11. map runtime profiles;
-12. canonicalize and fingerprint the resolved catalogue.
-
-The mapper is explicit. It does not use field-name reflection to construct domain objects.
+Tests are grouped by verification purpose rather than blindly mirroring every source file.
 
 ---
 
-# 6. Identifier and value-object rules
+# 5. Kernel contracts
 
-## 6.1 Identifier types
-
-Every independently referenced configuration object has its own identifier type.
+## 5.1 Entity identifiers
 
 ```python
 @dataclass(frozen=True, slots=True, order=True)
 class DatasetId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class MaterializationId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class DatasetSetupId:
     value: str
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -301,86 +574,6 @@ class PopulationId:
 
 @dataclass(frozen=True, slots=True, order=True)
 class ExperimentId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class SchemaId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class ModelArchitectureId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class OptimizerId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class BatchingProfileId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class TrainingProfileId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class CheckpointProfileId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class SeedCohortId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class EligibilityPolicyId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class QuantileEstimatorId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class ThresholdPolicyId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class MetricId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class MetricBundleId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class StatisticalProfileId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class ResultTypeId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class ReportProfileId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class ReadinessGateId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class OperationalInputId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class SweepAxisId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class ExecutionProfileId:
-    value: str
-
-@dataclass(frozen=True, slots=True, order=True)
-class DeterminismProfileId:
     value: str
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -400,25 +593,62 @@ class RunId:
     value: str
 
 @dataclass(frozen=True, slots=True, order=True)
-class ArtifactId:
+class JobId:
     value: str
 
 @dataclass(frozen=True, slots=True, order=True)
-class JobId:
+class ArtifactId:
     value: str
 ```
 
-Separate aliases are not used for semantically distinct identities. A `PopulationId` cannot be passed where a `DatasetSetupId` is required.
+Construction rejects empty, whitespace-only, path-like, or non-canonical values.
 
-## 6.2 Validated numeric values
+## 5.2 Registry identifiers
+
+```python
+TDefinition = TypeVar("TDefinition")
+
+@dataclass(frozen=True, slots=True, order=True)
+class RegistryId(Generic[TDefinition]):
+    value: str
+```
+
+Aliases include:
+
+```text
+MaterializationId
+DatasetSetupId
+SchemaId
+ModelArchitectureId
+OptimizerId
+BatchingProfileId
+TrainingProfileId
+CheckpointProfileId
+SeedCohortId
+EligibilityPolicyId
+QuantileEstimatorId
+ThresholdPolicyId
+MetricId
+MetricBundleId
+StatisticalProfileId
+ResultTypeId
+ReportProfileId
+ReadinessGateId
+OperationalInputId
+SweepAxisId
+ExecutionProfileId
+DeterminismProfileId
+```
+
+## 5.3 Validated values
 
 ```python
 @dataclass(frozen=True, slots=True, order=True)
 class Probability:
-    value: float  # 0.0 <= value <= 1.0
+    value: float
 
 @dataclass(frozen=True, slots=True, order=True)
-class StrictlyPositiveFloat:
+class PositiveFloat:
     value: float
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -438,11 +668,9 @@ class RoundNumber:
     value: int
 ```
 
-Validation occurs at construction. Invalid values never survive into the domain catalogue.
+`Probability` validates `0 <= value <= 1`; positive and non-negative types validate at construction.
 
-## 6.3 Semantic strings
-
-Scientific expressions are not passed as anonymous strings.
+## 5.4 Semantic values
 
 ```python
 @dataclass(frozen=True, slots=True)
@@ -463,219 +691,205 @@ class Fingerprint:
     hexadecimal: str
 ```
 
-These types preserve configuration-authored formulas and rules while preventing accidental interchange with ordinary labels or paths.
+## 5.5 Generic immutable registry
+
+```python
+K = TypeVar("K", bound=Hashable)
+V = TypeVar("V")
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class FrozenRegistry(Generic[K, V]):
+    _items: Mapping[K, V]
+
+    def get(self, key: K) -> V: ...
+    def ordered(self) -> tuple[V, ...]: ...
+    def contains(self, key: K) -> bool: ...
+```
+
+Construction:
+
+- copies into an immutable mapping;
+- rejects duplicate keys;
+- rejects a mismatch between the key and the definition's own identifier;
+- preserves deterministic identifier ordering.
+
+## 5.6 Stage result union
+
+```python
+T = TypeVar("T")
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Completed(Generic[T]):
+    value: T
+    warnings: tuple["ExecutionWarning", ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class Infeasible:
+    reason: "InfeasibilityReason"
+    evidence: tuple["ArtifactRef", ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ValidationFailed:
+    issues: tuple["ValidationIssue", ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExecutionFailed:
+    error: "ExecutionError"
+    retryable: bool
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class BlockedByDependency:
+    dependencies: tuple["DependencyBlock", ...]
+
+StageResult: TypeAlias = (
+    Completed[T]
+    | Infeasible
+    | ValidationFailed
+    | ExecutionFailed
+    | BlockedByDependency
+)
+```
+
+Expected scientific boundaries use this union. Exceptions remain reserved for programmer defects, corrupted process state, interrupts, and unhandled external-library failures.
 
 ---
 
-# 7. Closed vocabulary
+# 6. Configuration and catalogue resolution
 
-## 7.1 Core enums
+## 6.1 Four representations
 
-```python
-class DatasetName(StrEnum):
-    NBAIOT = "nbaiot"
-    CICIOT2023 = "ciciot2023"
-    EDGE_IIOTSET = "edge_iiotset"
-
-class EvidenceRole(StrEnum):
-    ANCHOR = "anchor"
-    CONFIRMATORY = "confirmatory"
-    SUPPORTIVE = "supportive"
-    EXTERNAL_VALIDATION = "external_validation"
-    MECHANISM = "mechanism"
-    STRESS_TEST = "stress_test"
-    BOUNDARY = "boundary"
-
-class ExecutionRequirement(StrEnum):
-    MANDATORY = "mandatory"
-    CONDITIONAL = "conditional"
-    OPTIONAL = "optional"
-
-class Capability(StrEnum):
-    BENIGN_CALIBRATION = "benign_calibration"
-    BENIGN_TEST_FALSE_POSITIVE_METRICS = "benign_test_false_positive_metrics"
-    PER_CLIENT_ATTACK_DETECTION_METRICS = "per_client_attack_detection_metrics"
-    ATTACK_SENSITIVE_THRESHOLD_TRADEOFF = "attack_sensitive_threshold_tradeoff"
-    FAMILY_TAXONOMY = "family_taxonomy"
-    WITHIN_CLIENT_CHRONOLOGICAL_ORDERING = "within_client_chronological_ordering"
-    CROSS_CLIENT_WALL_CLOCK_ORDERING = "cross_client_wall_clock_ordering"
-
-class CapabilityUnavailableBehavior(StrEnum):
-    FAIL_EXPERIMENT = "fail_experiment"
-    SUPPRESS_DEPENDENT_METRICS_AND_REPORT_REASON = (
-        "suppress_dependent_metrics_and_report_reason"
-    )
-    SKIP_POPULATION_AND_REPORT_REASON = "skip_population_and_report_reason"
-
-class RecalibrationMode(StrEnum):
-    FROZEN = "frozen"
-    ONE_SHOT = "one_shot"
-    NOT_APPLICABLE = "not_applicable"
+```text
+YAML text
+  ↓ parse with duplicate-key rejection
+AuthoredConfigBundle            Pydantic; authored shape
+  ↓ document and cross-reference validation
+ValidatedConfigBundle           all references and combinations proven
+  ↓ explicit mapper
+ResolvedConfiguration           frozen scientific + runtime catalogues
+  ↓ planning
+ExecutionPlan                   typed jobs and lineage
 ```
 
-`OPTIONAL` is required because optional evaluation conditions exist even though current experiment roots are mandatory or conditional.
+No layer consumes raw YAML dictionaries after mapping.
 
-## 7.2 Stage and outcome enums
-
-```python
-class PipelineStage(StrEnum):
-    SOURCE_VALIDATION = "source_validation"
-    CLIENT_ASSIGNMENT = "client_assignment"
-    SPLIT_CONSTRUCTION = "split_construction"
-    PREPROCESSING = "preprocessing"
-    TRAINING = "training"
-    CHECKPOINT_SELECTION = "checkpoint_selection"
-    SCORE_GENERATION = "score_generation"
-    THRESHOLD_ESTIMATION = "threshold_estimation"
-    METRIC_EVALUATION = "metric_evaluation"
-    STATISTICAL_ANALYSIS = "statistical_analysis"
-    REPORTING = "reporting"
-    RESULT_FREEZE = "result_freeze"
-
-class StageStatus(StrEnum):
-    COMPLETED = "completed"
-    COMPLETED_WITH_WARNINGS = "completed_with_warnings"
-    INFEASIBLE = "infeasible"
-    FAILED_VALIDATION = "failed_validation"
-    FAILED_EXECUTION = "failed_execution"
-    BLOCKED_BY_DEPENDENCY = "blocked_by_dependency"
-```
-
-## 7.3 Metric status
-
-The domain enum exactly matches `protocols.yaml`:
+## 6.2 Configuration paths and roots
 
 ```python
-class MetricStatus(StrEnum):
-    AVAILABLE = "available"
-    UNDEFINED_ZERO_DENOMINATOR = "undefined_zero_denominator"
-    UNDEFINED_NEAR_ZERO_DENOMINATOR = "undefined_near_zero_denominator"
-    UNAVAILABLE_MISSING_BENIGN_CLASS = "unavailable_missing_benign_class"
-    UNAVAILABLE_MISSING_ATTACK_CLASS = "unavailable_missing_attack_class"
-    UNAVAILABLE_INVALID_ATTACK_ASSIGNMENT = "unavailable_invalid_attack_assignment"
-    UNAVAILABLE_INELIGIBLE_CLIENT = "unavailable_ineligible_client"
-    UNAVAILABLE_UNSUPPORTED_REGIME = "unavailable_unsupported_regime"
-    FAILED_INVALID_ARTIFACT = "failed_invalid_artifact"
-    FAILED_STATISTICAL_PROCEDURE = "failed_statistical_procedure"
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ConfigPaths:
+    nbaiot: Path
+    ciciot2023: Path
+    edge_iiotset: Path
+    experiments: Path
+    protocols: Path
+    runtime: Path
 ```
 
-No status maps to zero, blank text, omitted output, or unqualified `NaN`.
+```python
+class AuthoredConfigBundle(BaseModel):
+    datasets: tuple[DatasetDocumentConfig, ...]
+    experiments: ExperimentsDocumentConfig
+    protocols: ProtocolsDocumentConfig
+    runtime: RuntimeDocumentConfig
+```
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ValidatedConfigBundle:
+    authored: AuthoredConfigBundle
+    reference_index: ConfigReferenceIndex
+    validation_fingerprint: Fingerprint
+```
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResolvedConfiguration:
+    study: ResolvedStudyCatalogue
+    runtime: ResolvedRuntimeCatalogue
+```
+
+## 6.3 Configuration ownership
+
+| Document | Owns | Never owns |
+|---|---|---|
+| `datasets/*.yaml` | source layout, field schema, source contract, materializations, setups, declared capabilities | experiments, metric results, readiness observations |
+| `experiments.yaml` | populations, experiments, sweeps, evaluations, analyses, prerequisites, gates, report requests | policy formulas, dataset facts, runtime values |
+| `protocols.yaml` | model, training, checkpoint, eligibility, threshold, metric, statistics, result, artifact, communication, and report registries | experiment membership, dataset source facts |
+| `runtime.yaml` | roots, source access, determinism enforcement, device policy, resource budgets, concurrency, execution profiles | scientific model or experiment values |
+
+## 6.4 Resolution order
+
+1. load exactly the six authoritative documents;
+2. reject duplicate keys;
+3. reject unsupported `schema_version`;
+4. validate each document independently;
+5. build the reference index;
+6. validate all cross-document references;
+7. map dataset identities, contracts, materializations, and setups;
+8. map grouped protocol catalogues;
+9. map populations;
+10. map experiment identities, execution bindings, matrices, and constraints;
+11. validate capabilities and scientific combinations;
+12. map runtime definitions;
+13. canonicalize and fingerprint;
+14. validate that every registered implementation is either configured or explicitly infrastructure-only.
+
+## 6.5 Explicit mapping rule
+
+The mapper constructs domain variants explicitly. It must not:
+
+- use field-name reflection to instantiate domain objects;
+- return Pydantic models inside domain aggregates;
+- inject scientific defaults;
+- silently ignore unknown keys;
+- treat arbitrary strings as strategy names;
+- keep unresolved references for runtime discovery.
 
 ---
 
-# 8. Resolved catalogue aggregates
+# 7. Dataset and population domain
 
-## 8.1 Root catalogue
-
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ResolvedStudyCatalogue:
-    schema_version: PositiveInt
-    datasets: DatasetRegistry
-    protocols: ProtocolRegistry
-    populations: PopulationRegistry
-    readiness_gates: ReadinessGateRegistry
-    declared_capabilities: frozenset[Capability]
-    population_readiness_rule: PopulationReadinessRule
-    analysis_conventions: AnalysisConventions
-    experiments: ExperimentRegistry
-    catalogue_fingerprint: Fingerprint
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ResolvedRuntimeCatalogue:
-    roots: StorageRoots
-    raw_source_policy: RawSourcePolicy
-    determinism_profiles: DeterminismProfileRegistry
-    device_policy_rules: DevicePolicyRules
-    resource_pressure_policy: ResourcePressurePolicy
-    execution_profiles: ExecutionProfileRegistry
-    runtime_fingerprint: Fingerprint
-```
-
-Scientific and runtime catalogues are separate. A runtime profile may change chunk size, workers, or storage placement without silently changing scientific identity.
-
-## 8.2 Typed immutable registries
-
-Registries expose `Mapping[TypedId, Definition]` but construct an immutable private mapping once.
+## 7.1 Dataset aggregate
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ExperimentRegistry:
-    _items: Mapping[ExperimentId, ExperimentDefinition]
-
-    def get(self, experiment_id: ExperimentId) -> ExperimentDefinition: ...
-    def ordered(self) -> tuple[ExperimentDefinition, ...]: ...
-```
-
-The same pattern is used for datasets, populations, protocols, threshold policies, metrics, statistical profiles, result types, and report profiles.
-
-Registries reject duplicate identifiers at construction and iterate in deterministic identifier order.
-
----
-
-# 9. Dataset domain
-
-## 9.1 Dataset definition
-
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DatasetDefinition:
+class DatasetIdentity:
     dataset_id: DatasetId
-    dataset_name: DatasetName
     display_name: str
     schema_id: SchemaId
-    source: DatasetSourceDefinition
-    field_schema: FieldSchemaDefinition
-    source_contract: SourceValidationContract
-    fingerprint_specification: DatasetFingerprintSpecification
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DatasetContract:
+    source: "DatasetSourceDefinition"
+    field_schema: "FieldSchemaDefinition"
+    source_validation: "SourceValidationContract"
+    fingerprint_specification: "DatasetFingerprintSpecification"
+    client_identity: "ClientIdentityContract | None"
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class DatasetDefinition:
+    identity: DatasetIdentity
+    contract: DatasetContract
     eligibility_policy_id: EligibilityPolicyId
-    materializations: MaterializationRegistry
-    setups: DatasetSetupRegistry
-    client_identity_contract: ClientIdentityContract | None
+    materializations: FrozenRegistry[MaterializationId, "MaterializationDefinition"]
+    setups: FrozenRegistry[DatasetSetupId, "DatasetSetupDefinition"]
 ```
 
-A dataset definition contains authored facts and executable contracts. It never contains observed row counts, actual eligibility, fitted vocabulary, selected clients, or readiness status.
+Authored facts and executable contracts belong here. Observed row counts, selected clients, fitted vocabularies, and readiness status do not.
 
-## 9.2 Source definitions
-
-Dataset-specific source layouts form a closed union because source semantics are not interchangeable.
+## 7.2 Dataset source union
 
 ```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class NbaiotSourceDefinition:
-    root: RelativePath
-    device_directories: tuple[RelativePath, ...]
-    benign_patterns: tuple[str, ...]
-    attack_patterns: tuple[str, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class Ciciot2023SourceDefinition:
-    root: RelativePath
-    executable_merged_source: SourceTreeDefinition
-    reference_per_class_source: SourceTreeDefinition
-    cross_source_contract: CrossSourceContract
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class EdgeIiotsetSourceDefinition:
-    root: RelativePath
-    normal_traffic_root: RelativePath
-    attack_traffic_root: RelativePath
-    normal_group_folders: tuple[str, ...]
-    executable_group_folders: tuple[str, ...]
-    attack_files: tuple[str, ...]
-    ignored_suffixes: tuple[str, ...]
-    ignored_subtrees: tuple[RelativePath, ...]
-
-DatasetSourceDefinition = (
+DatasetSourceDefinition: TypeAlias = (
     NbaiotSourceDefinition
     | Ciciot2023SourceDefinition
     | EdgeIiotsetSourceDefinition
 )
 ```
 
-Adding a fourth dataset adds one union member and one dataset adapter. Experiment planning and execution orchestration remain unchanged.
+Each variant carries only source-layout fields meaningful to that dataset. Adding a fourth dataset adds one source variant and one dataset adapter; the planner and executor remain unchanged.
 
-## 9.3 Field schema
+## 7.3 Field schema
 
 ```python
 class FieldRole(StrEnum):
@@ -698,118 +912,52 @@ class SourceField:
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class FieldSchemaDefinition:
-    source_column_counts: tuple[SourceColumnCount, ...]
+    source_column_counts: tuple["SourceColumnCount", ...]
     source_fields: tuple[SourceField, ...]
     model_feature_order: tuple[str, ...]
-    post_encoding_feature_order: PostEncodingFeatureOrder
-    label_definition: LabelDefinition
-    identity_definition: RowAndClientIdentityDefinition
-    encoding: EncodingDefinition
+    post_encoding_feature_order: "PostEncodingFeatureOrder"
+    labels: "LabelDefinition"
+    identities: "RowAndClientIdentityDefinition"
+    encoding: "EncodingDefinition"
     leakage_exclusions: tuple[str, ...]
 ```
 
-For CICIoT2023, the source field tuple describes the merged executable schema and records the per-class tree as schema-only reference evidence. For Edge-IIoTset, every one of the 63 columns has one role in the source contract, and the model order is produced from retained numeric plus frozen one-hot features.
+The materialized feature order is persisted and fingerprinted. Training never derives feature order from a live set or mapping.
 
-The materialized feature order is persisted as an artifact. Training never re-derives it from a live set or unordered mapping.
-
-## 9.4 Materialization definition
+## 7.4 Materialization
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class MaterializationDefinition:
     materialization_id: MaterializationId
     role: str | None
-    normalization: NormalizationDefinition
-    preprocessing_steps: tuple[PreprocessingStep, ...]
-    row_exclusion: RowExclusionDefinition
-    split: SplitDefinition
-    split_row_semantics: SplitRowSemantics
-    vocabulary_fit_role: SplitRole | None
+    normalization: "NormalizationDefinition"
+    preprocessing_steps: tuple["PreprocessingStep", ...]
+    row_exclusion: "RowExclusionDefinition"
+    split: "SplitDefinition"
+    split_row_semantics: "SplitRowSemantics"
+    vocabulary_fit_role: "SplitRole | None"
     infeasibility_policy: InterpretationRule | None
 ```
 
-`PreprocessingStep` is a closed `StrEnum` backed by the authored values. Execution dispatches each step through a registered implementation and rejects an unregistered step during catalogue resolution.
+`PreprocessingStep` is a closed vocabulary loaded from configuration and bound to registered implementations.
 
-## 9.5 Split union
+## 7.5 Split union
 
 ```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SplitFraction:
-    role: SplitRole
-    fraction: Probability
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class RandomFractionalSplit:
-    fractions: tuple[SplitFraction, ...]
-    split_seed: Seed
-    benign_calibration_only: bool
-    excluded_clients: tuple[str, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class OrderedGappedSplit:
-    fractions: tuple[SplitFraction, ...]
-    ordering_basis: str
-    ordering_scope: str
-    benign_calibration_only: bool
-    attack_membership_rule: str
-    deduplication_rule: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class WithinClientChronologicalSplit:
-    fractions: tuple[SplitFraction, ...]
-    ordering_field: str
-    stable_tie_break: str
-    rollover_policy: str
-    minimum_counts: tuple[MinimumRoleCount, ...]
-    excluded_clients: tuple[str, ...]
-    chronology_unverifiable_policy: str
-
-SplitDefinition = (
+SplitDefinition: TypeAlias = (
     RandomFractionalSplit
     | OrderedGappedSplit
     | WithinClientChronologicalSplit
 )
 ```
 
-This union directly covers:
+These variants cover the current N-BaIoT, CICIoT2023, and Edge-IIoTset materializations. A new split algorithm is a new variant and executor, never an option bag.
 
-- N-BaIoT DATP-Core and anchor chronological-gapped splits;
-- N-BaIoT Dirichlet and CICIoT2023 random fractional splits;
-- Edge-IIoTset static random splits;
-- Edge-IIoTset within-client chronological 55/15/10/20 split.
-
-A new split algorithm is a new union member and executor. It is never encoded as a nullable collection of unrelated fields.
-
-## 9.6 Client-construction union
+## 7.6 Client construction union
 
 ```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PhysicalDeviceClients:
-    client_source: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DatasetFilePseudoClients:
-    client_source: str
-    semantics: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SensorGroupClients:
-    client_source: str
-    excluded_group_folders: tuple[str, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DirichletPartitionedClients:
-    client_count: PositiveInt
-    partition_condition_binding: SweepReference
-    source_domain: str
-    label_field: str
-    base_partition_seed: Seed
-    allocation: DirichletAllocationDefinition
-    minimum_counts: tuple[MinimumRoleCount, ...]
-    retry_policy: DeterministicRetryPolicy
-    manifest_invariants: tuple[InterpretationRule, ...]
-
-ClientConstruction = (
+ClientConstruction: TypeAlias = (
     PhysicalDeviceClients
     | DatasetFilePseudoClients
     | SensorGroupClients
@@ -817,7 +965,7 @@ ClientConstruction = (
 )
 ```
 
-## 9.7 Dataset setup and population
+## 7.7 Setup and population
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -825,7 +973,7 @@ class DatasetSetupDefinition:
     setup_id: DatasetSetupId
     materialization_id: MaterializationId
     client_construction: ClientConstruction
-    provided_capabilities: frozenset[Capability]
+    provided_capabilities: frozenset["Capability"]
     eligibility_gate_id: ReadinessGateId | None
     validation_scope: str | None
     equivalent_client_population_setup: DatasetSetupId | None
@@ -838,148 +986,62 @@ class StudyPopulationDefinition:
     metric_bundle_id: MetricBundleId
 ```
 
-A population is a reference to one dataset setup plus one metric bundle. It does not duplicate dataset, split, client, or metric definitions.
+A population references one setup and one metric bundle. It does not duplicate source, split, preprocessing, client, or metric definitions.
 
-## 9.8 Dataset audit definition
-
-Dataset audits are derived from each dataset document and are not experiments.
+## 7.8 Dataset audit
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DatasetAuditDefinition:
     dataset_id: DatasetId
-    source: DatasetSourceDefinition
-    field_schema: FieldSchemaDefinition
-    source_contract: SourceValidationContract
-    fingerprint_specification: DatasetFingerprintSpecification
-```
+    contract: DatasetContract
 
-The audit result is runtime evidence:
-
-```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class DatasetReadinessReport:
     dataset_id: DatasetId
     source_fingerprint: Fingerprint
-    schema_summary: SchemaSummary
-    populations: tuple[PopulationReadiness, ...]
-    findings: tuple[ReadinessFinding, ...]
-    status: StageStatus
+    schema_summary: "SchemaSummary"
+    populations: tuple["PopulationReadiness", ...]
+    findings: tuple["ReadinessFinding", ...]
+    status: "StageStatus"
 ```
 
-The report is persisted; it is never written back into YAML.
+Audit results are artifacts. They are never written back into YAML.
 
 ---
 
-# 10. Protocol domain
+# 8. Grouped protocol catalogue
 
-## 10.1 Protocol registry
+## 8.1 Root
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ProtocolRegistry:
-    model_architectures: ModelArchitectureRegistry
-    optimizers: OptimizerRegistry
-    batching_profiles: BatchingRegistry
-    determinism: DeterminismDefinition
-    seed_cohorts: SeedCohortRegistry
-    checkpoint_profiles: CheckpointProfileRegistry
-    training_profiles: TrainingProfileRegistry
-    eligibility_policies: EligibilityPolicyRegistry
-    normalization_strategies: NormalizationStrategyRegistry
-    normalization_fit_scopes: NormalizationFitScopeRegistry
-    normalization_leakage_rule: InterpretationRule
-    quantile_estimators: QuantileEstimatorRegistry
-    threshold_policy_defaults: ThresholdPolicyDefaults
-    threshold_policies: ThresholdPolicyRegistry
-    metric_definitions: MetricRegistry
-    metric_bundles: MetricBundleRegistry
-    statistical_profiles: StatisticalProfileRegistry
-    nested_replicate_policy: NestedReplicatePolicy
-    result_types: ResultTypeRegistry
-    evaluation_result_contract: EvaluationResultContract
-    artifact_identity: ArtifactIdentityContract
-    communication_estimation: CommunicationEstimationContract
-    report_defaults: ReportDefaults
-    report_profiles: ReportProfileRegistry
-    operational_inputs: OperationalInputRegistry
+class ProtocolCatalogue:
+    learning: "LearningProtocols"
+    thresholding: "ThresholdProtocols"
+    evaluation: "EvaluationProtocols"
+    reporting: "ReportingProtocols"
+    operations: "OperationalProtocols"
 ```
 
-The registry preserves configured identifiers. Experiments bind to identifiers; application planning resolves them to definitions.
-
-## 10.2 Model and optimizer
+## 8.2 Learning protocols
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class DenseAutoencoderDefinition:
-    input_dimension: InputDimensionRule
-    hidden_dimensions: tuple[PositiveInt, ...]
-    bottleneck_rule: str
-    decoder_rule: str
-    activation: str
-    output_activation: str
-    bias: bool
-    initialization: ParameterInitializationDefinition
-    reconstruction_objective: str
-    anomaly_score: Formula
-    precision: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AdamDefinition:
-    learning_rate: StrictlyPositiveFloat
-    beta_1: Probability
-    beta_2: Probability
-    epsilon: StrictlyPositiveFloat
-    weight_decay: NonNegativeFloat
-    amsgrad: bool
-    scheduler: str
-    gradient_clipping: str
-    state_lifecycle: str
+class LearningProtocols:
+    model_architectures: FrozenRegistry[ModelArchitectureId, "ModelArchitecture"]
+    optimizers: FrozenRegistry[OptimizerId, "OptimizerDefinition"]
+    batching_profiles: FrozenRegistry[BatchingProfileId, "BatchingDefinition"]
+    seed_cohorts: FrozenRegistry[SeedCohortId, "SeedCohortDefinition"]
+    checkpoint_profiles: FrozenRegistry[CheckpointProfileId, "CheckpointProfile"]
+    training_profiles: FrozenRegistry[TrainingProfileId, "TrainingProfile"]
+    determinism: "DeterminismDefinition"
 ```
 
-The input dimension is resolved from the materialized feature schema. It is not authored separately per dataset or inferred from the first batch.
-
-## 10.3 Training profiles
+Training profile union:
 
 ```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FederatedAveragingTraining:
-    model_architecture_id: ModelArchitectureId
-    optimizer_id: OptimizerId
-    batching_id: BatchingProfileId
-    local_epochs: PositiveInt
-    participation: str
-    client_weighting: str
-    aggregation_formula: Formula
-    checkpoint_authorization: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FederatedProximalTraining:
-    common: FederatedAveragingTraining
-    proximal_objective: Formula
-    mu_binding: SweepReference
-    allowed_mu_values: tuple[StrictlyPositiveFloat, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PersonalizedFederatedTraining:
-    common: FederatedAveragingTraining
-    method: PersonalizedMethod
-    personalized_local_epochs: PositiveInt
-    proximal_weight: StrictlyPositiveFloat
-    parameter_grid: tuple[StrictlyPositiveFloat, ...]
-    selection_rule: SelectionRule
-    method_contract: PersonalizedMethodContract
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CentralizedPooledTraining:
-    model_architecture_id: ModelArchitectureId
-    optimizer_id: OptimizerId
-    batching_id: BatchingProfileId
-    training_population: str
-    validation_split: ValidationSplitDefinition
-    checkpoint_authorization: str
-
-TrainingProfile = (
+TrainingProfile: TypeAlias = (
     FederatedAveragingTraining
     | FederatedProximalTraining
     | PersonalizedFederatedTraining
@@ -987,140 +1049,31 @@ TrainingProfile = (
 )
 ```
 
-The name `ditto` is exposed only when `PersonalizedMethodContract` proves persistent local state, the configured proximal personalized objective, separate global and local provenance, and no aggregation of personalized state.
-
-## 10.4 Checkpoint profiles
+Checkpoint union:
 
 ```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class RoundGridCheckpointProfile:
-    total_rounds: PositiveInt
-    candidate_rounds: tuple[RoundNumber, ...]
-    selection_rule: SelectionRule
-    tie_break: str
-    selection_scope: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AnchorConvergenceCheckpointProfile:
-    maximum_rounds: PositiveInt
-    evaluation_start_round: RoundNumber
-    trailing_window: PositiveInt
-    relative_change_tolerance: NonNegativeFloat
-    fallback_round: RoundNumber
-    save_policy: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CentralizedEpochGridCheckpointProfile:
-    total_epochs: PositiveInt
-    candidate_epochs: tuple[PositiveInt, ...]
-    selection_rule: SelectionRule
-    tie_break: str
-
-CheckpointProfile = (
+CheckpointProfile: TypeAlias = (
     RoundGridCheckpointProfile
-    | AnchorConvergenceCheckpointProfile
+    | AnchorTerminalCheckpointProfile
     | CentralizedEpochGridCheckpointProfile
 )
 ```
 
-## 10.5 Seed cohort and derived seeds
+## 8.3 Threshold protocols
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class SeedCohortDefinition:
-    cohort_id: SeedCohortId
-    training_seeds: tuple[Seed, ...]
-    bootstrap_analysis_seed: Seed
-    analysis_seed_model: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SeedPlan:
-    training_seed: Seed
-    bootstrap_analysis_seed: Seed
-    split_seed: Seed | None
-    partition_seed: Seed | None
-    clustering_seed: Seed | None
-    derived_seeds: tuple[DerivedSeed, ...]
+class ThresholdProtocols:
+    eligibility_policies: FrozenRegistry[EligibilityPolicyId, "EligibilityPolicyDefinition"]
+    quantile_estimators: FrozenRegistry[QuantileEstimatorId, "QuantileEstimatorDefinition"]
+    policies: FrozenRegistry[ThresholdPolicyId, "ThresholdPolicyDefinition"]
+    defaults: "ThresholdPolicyDefaults"
 ```
 
-Derived seeds use the configured BLAKE2b namespace algorithm and are persisted in manifests. No service calls a global random generator without a `SeedPlan` entry.
-
----
-
-# 11. Threshold-policy domain
-
-## 11.1 Policy families
-
-The 14 configured policy identifiers map into six stable policy families rather than 14 unrelated classes.
+Policy union:
 
 ```python
-class ThresholdScope(StrEnum):
-    SHARED = "shared"
-    LOCAL = "local"
-    FAMILY = "family"
-    CLUSTER = "cluster"
-    CENTRALIZED = "centralized"
-    FEDERATED_SUMMARY = "federated_summary"
-
-class ThresholdAggregation(StrEnum):
-    ARITHMETIC_MEAN = "arithmetic_mean"
-    POOLED = "pooled"
-    SAMPLE_WEIGHTED = "sample_weighted"
-    ROBUST_MEDIAN = "robust_median"
-    NONE = "none"
-```
-
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class QuantileThresholdPolicy:
-    policy_id: ThresholdPolicyId
-    scope: ThresholdScope
-    aggregation: ThresholdAggregation
-    quantile: Probability
-    estimator_id: QuantileEstimatorId
-    required_capabilities: frozenset[Capability]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ClusterThresholdPolicy:
-    policy_id: ThresholdPolicyId
-    quantile: Probability
-    cluster_count: PositiveInt
-    fingerprint_features: tuple[str, ...]
-    scaler: str
-    algorithm: ClusteringAlgorithmDefinition
-    aggregation: ThresholdAggregation
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ConformalLocalThresholdPolicy:
-    policy_id: ThresholdPolicyId
-    target_quantile: Probability
-    rank_rule: Formula
-    unattainable_behavior: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class LocalGlobalShrinkagePolicy:
-    policy_id: ThresholdPolicyId
-    quantile: Probability
-    weight_binding: SweepReference
-    formula: Formula
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CalibrationSizeAwareFallbackPolicy:
-    policy_id: ThresholdPolicyId
-    quantile: Probability
-    eligibility_reference: EligibilityPolicyId
-    fallback_rule: Formula
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FederatedSummaryThresholdPolicy:
-    policy_id: ThresholdPolicyId
-    quantile: Probability
-    candidate_grid: CandidateGrid
-    aggregation_formula: Formula
-    selection_rule: SelectionRule
-    fixed_coefficient_binding: SweepReference | None
-
-ThresholdPolicyDefinition = (
+ThresholdPolicyDefinition: TypeAlias = (
     QuantileThresholdPolicy
     | ClusterThresholdPolicy
     | ConformalLocalThresholdPolicy
@@ -1130,221 +1083,116 @@ ThresholdPolicyDefinition = (
 )
 ```
 
-## 11.2 Configured policy mapping
+The 14 configured policy identifiers map into these six families.
 
-| Configured identifier | Domain family |
-|---|---|
-| `shared_mean_p95` | shared quantile, arithmetic mean |
-| `shared_pooled_p95` | shared quantile, pooled |
-| `shared_weighted_p95` | shared quantile, sample-weighted |
-| `local_p95` | local quantile |
-| `family_p95` | family quantile |
-| `centralized_pooled_p95` | centralized pooled quantile |
-| `cluster_k3_mean_p95` | cluster policy, K=3, mean |
-| `cluster_k9_mean_p95` | cluster policy, K=9, mean |
-| `cluster_k3_robust_median_p95` | cluster policy, K=3, median |
-| `conformal_local_p95` | conformal local |
-| `local_global_shrinkage_p95` | local-global shrinkage |
-| `calibration_size_aware_fallback_p95` | size-aware fallback |
-| `federated_summary_matched_exceedance` | federated summary, matched exceedance |
-| `federated_summary_fixed_k` | federated summary, fixed coefficient |
-
-Threshold execution is selected by the policy variant, not by experiment name.
-
-## 11.3 Threshold request and result
+## 8.4 Evaluation protocols
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class EstimateThresholdsRequest:
-    run_id: RunId
-    evaluation: ResolvedEvaluation
-    score_artifact: ArtifactRef
-    eligibility_manifest: ArtifactRef
-    seed_plan: SeedPlan
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ThresholdRecord:
-    policy_id: ThresholdPolicyId
-    client_id: ClientId
-    owner_scope: ThresholdScope
-    owner_id: str
-    threshold: float
-    calibration_count: int
-    achieved_calibration_exceedance: float
-    fallback_applied: bool
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ThresholdArtifactPayload:
-    records: tuple[ThresholdRecord, ...]
-    group_assignments: tuple[GroupAssignment, ...]
-    diagnostics: ThresholdDiagnostics
+class EvaluationProtocols:
+    metrics: FrozenRegistry[MetricId, "MetricDefinition"]
+    metric_bundles: FrozenRegistry[MetricBundleId, "MetricBundleDefinition"]
+    statistical_profiles: FrozenRegistry[StatisticalProfileId, "StatisticalProfileDefinition"]
+    result_types: FrozenRegistry[ResultTypeId, "ResultTypeDefinition"]
+    nested_replicate_policy: "NestedReplicatePolicy"
+    result_contract: "EvaluationResultContract"
 ```
 
-Attack rows cannot be represented in the calibration input type. `BenignCalibrationScoreSetRef` is a separate artifact-reference type from test-score references.
+## 8.5 Reporting protocols
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ReportingProtocols:
+    report_profiles: FrozenRegistry[ReportProfileId, "ReportProfileDefinition"]
+    defaults: "ReportDefaults"
+```
+
+## 8.6 Operational protocols
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class OperationalProtocols:
+    readiness_gates: FrozenRegistry[ReadinessGateId, "ReadinessGateDefinition"]
+    operational_inputs: FrozenRegistry[OperationalInputId, "OperationalInputDefinition"]
+    artifact_identity: "ArtifactIdentityContract"
+    communication_estimation: "CommunicationEstimationContract"
+    normalization: "NormalizationProtocols"
+```
 
 ---
 
-# 12. Experiment domain
+# 9. Experiment and analysis domain
 
-## 12.1 Experiment definition
+## 9.1 Experiment aggregate
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class ExperimentDefinition:
+class ExperimentIdentity:
     experiment_id: ExperimentId
     display_name: str
-    evidence_role: EvidenceRole
-    requirement: ExecutionRequirement
-    population_bindings: tuple[PopulationBinding, ...]
+    evidence_role: "EvidenceRole"
+    requirement: "ExecutionRequirement"
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExperimentExecutionBinding:
+    populations: tuple["PopulationBinding", ...]
     training_profile_id: TrainingProfileId
     checkpoint_profile_id: CheckpointProfileId
     seed_cohort_id: SeedCohortId
     eligibility_policy_id: EligibilityPolicyId
-    prerequisites: tuple[ExperimentPrerequisite, ...]
-    readiness_gate_ids: tuple[ReadinessGateId, ...]
-    capability_requirements: tuple[CapabilityRequirement, ...]
-    sweeps: tuple[SweepAxis, ...]
-    training_overrides: tuple[TrainingOverride, ...]
-    evaluations: tuple[EvaluationDefinition, ...]
-    analyses: tuple[AnalysisDefinition, ...]
+    training_overrides: tuple["TrainingOverride", ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExperimentMatrix:
+    sweeps: tuple["SweepAxis", ...]
+    evaluations: tuple["EvaluationDefinition", ...]
+    analyses: tuple["AnalysisDefinition", ...]
     report_profile_ids: tuple[ReportProfileId, ...]
-    guardrails: tuple[ExperimentGuardrail, ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExperimentConstraints:
+    prerequisites: tuple["ExperimentPrerequisite", ...]
+    readiness_gate_ids: tuple[ReadinessGateId, ...]
+    capabilities: tuple["CapabilityRequirement", ...]
+    invariants: tuple["ScientificInvariant", ...]
+    selection: tuple["SelectionConstraint", ...]
+    calibration: "CalibrationConstraint | None"
+    population_relationships: tuple["PopulationRelationshipConstraint", ...]
+    temporal: "TemporalConstraint | None"
+    operational_inputs: tuple["OperationalInputConstraint", ...]
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExperimentDefinition:
+    identity: ExperimentIdentity
+    execution: ExperimentExecutionBinding
+    matrix: ExperimentMatrix
+    constraints: ExperimentConstraints
 ```
 
-The same type represents anchor, confirmatory, supportive, mechanism, boundary, external-validation, and stress-test experiments.
+This structure prevents unrelated fields from becoming nullable on one giant dataclass.
 
-## 12.2 Experiment guardrails
-
-Fields that apply only to selected experiments are mapped to typed guardrail variants rather than nullable fields on `ExperimentDefinition`.
+## 9.2 Scientific invariants
 
 ```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class BooleanExperimentGuardrail:
-    kind: BooleanGuardrailKind
-    enabled: bool
+class ScientificInvariantKind(StrEnum):
+    SAME_DETECTOR_WITHIN_CONTROLLED_LADDER = "same_detector_within_controlled_ladder"
+    SAME_SCORE_SET_WITHIN_CONTROLLED_LADDER = "same_score_set_within_controlled_ladder"
+    BENIGN_ONLY_CALIBRATION = "benign_only_calibration"
+    CHECKPOINT_INDEPENDENT_OF_TEST_OUTCOMES = "checkpoint_independent_of_test_outcomes"
+    NO_CONFIRMATORY_PROMOTION = "no_confirmatory_promotion"
+    COMPLETE_GRID_REPORTING = "complete_grid_reporting"
+    FIXED_CLIENT_POPULATION = "fixed_client_population"
+    TEMPORAL_FUTURE_LEAKAGE_FORBIDDEN = "temporal_future_leakage_forbidden"
 
 @dataclass(frozen=True, slots=True, kw_only=True)
-class TextExperimentGuardrail:
-    kind: TextGuardrailKind
+class ScientificInvariant:
+    kind: ScientificInvariantKind
     rule: InterpretationRule
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class UnavailableCapabilityDeclaration:
-    capability: Capability
-    status: MetricStatus
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ParameterSelectionGuardrail:
-    parameter: str
-    selection_rule: SelectionRule
-    tie_break: str | None
-    forbidden_selectors: tuple[str, ...]
-    complete_grid_reported: bool
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CalibrationSubsetGuardrail:
-    sample_count_binding: SweepReference
-    selection_strategy: str
-    repetitions: PositiveInt
-    nested_within_seed: bool
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PopulationRelationshipGuardrail:
-    roles: tuple[PopulationRoleBinding, ...]
-    equivalence_requirement: InterpretationRule | None
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class TemporalProcedureGuardrail:
-    calibration_source_window: SplitRole
-    frozen_evaluation_window: SplitRole
-    recalibration_source_window: SplitRole
-    recalibrated_evaluation_window: SplitRole
-    model_reuse_rule: InterpretationRule
-    future_rows_forbidden_in_fit: bool
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ConditionalRunGuardrail:
-    required_operational_input_id: OperationalInputId
-    unavailable_behavior: str
-    blocks_other_experiments: bool
-    estimate_basis: str
-
-ExperimentGuardrail = (
-    BooleanExperimentGuardrail
-    | TextExperimentGuardrail
-    | UnavailableCapabilityDeclaration
-    | ParameterSelectionGuardrail
-    | CalibrationSubsetGuardrail
-    | PopulationRelationshipGuardrail
-    | TemporalProcedureGuardrail
-    | ConditionalRunGuardrail
-)
 ```
 
-The mapper converts every non-common experiment key into one of these variants. Unknown extra keys are configuration errors. This covers validation scope, confirmatory-promotion restrictions, causal-ladder separation, faithful-reproduction restrictions, client-semantics constraints, quantitative claim gates, method-naming rules, selection rules, temporal procedures, population equivalence, conditional operational inputs, and unavailable-result behavior.
+This replaces generic boolean/text guardrails while preserving explicit semantics.
 
-## 12.3 Prerequisites and capability requirements
-
-```python
-class RequiredExperimentOutcome(StrEnum):
-    COMPLETED = "completed"
-    ANCHOR_EQUIVALENCE_PASSED = "anchor_equivalence_passed"
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ExperimentPrerequisite:
-    experiment_id: ExperimentId
-    required_outcome: RequiredExperimentOutcome
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CapabilityRequirement:
-    capability: Capability
-    unavailable_behavior: CapabilityUnavailableBehavior
-    applicable_populations: tuple[PopulationId, ...]
-```
-
-Capability resolution occurs before expensive execution. Edge-IIoTset can therefore execute benign operating-point analyses while attack-sensitive outputs remain typed unavailable rather than blocking unrelated evidence.
-
-## 12.4 Sweeps
-
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ScalarSweep:
-    axis_id: SweepAxisId
-    values: tuple[float, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class FeatureSubsetSweep:
-    axis_id: SweepAxisId
-    values: tuple[tuple[str, ...], ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PartitionCondition:
-    name: str
-    allocation: str
-    dirichlet_alpha: StrictlyPositiveFloat | None
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PartitionConditionSweep:
-    axis_id: SweepAxisId
-    conditions: tuple[PartitionCondition, ...]
-
-SweepAxis = ScalarSweep | FeatureSubsetSweep | PartitionConditionSweep
-```
-
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SweepCoordinate:
-    components: tuple[SweepCoordinateComponent, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SweepCoordinateComponent:
-    axis_id: SweepAxisId
-    value: SweepValue
-```
-
-Coordinates are ordered by sweep declaration and then by authored value order. They are identity-bearing and persisted.
-
-## 12.5 Evaluation definition
+## 9.3 Evaluation definition
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -1352,196 +1200,325 @@ class EvaluationDefinition:
     evaluation_id: EvaluationId
     threshold_policy_id: ThresholdPolicyId
     population_id: PopulationId | None
-    requirement: ExecutionRequirement
-    recalibration_mode: RecalibrationMode | None
-    overrides: tuple[PolicyOverride, ...]
+    requirement: "ExecutionRequirement"
+    recalibration_mode: "RecalibrationMode | None"
+    overrides: tuple["PolicyOverride", ...]
 ```
 
-An evaluation references a policy; it does not duplicate the policy definition. Overrides can bind only fields explicitly declared overridable by the target policy type.
+Overrides can target only fields declared overridable by the resolved policy variant.
 
-## 12.6 Analysis union
+## 9.4 Sweeps
 
-The current catalogue uses 14 analysis kinds. Each has one typed definition and one executor registration.
+```python
+SweepAxis: TypeAlias = (
+    ScalarSweep
+    | FeatureSubsetSweep
+    | PartitionConditionSweep
+)
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SweepCoordinate:
+    components: tuple["SweepCoordinateComponent", ...]
+```
+
+Axes follow declaration order; values follow authored order; coordinates are identity-bearing.
+
+## 9.5 Analysis variants
+
+Every analysis has:
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
-class AnalysisCommon:
+class AnalysisHeader:
     analysis_id: AnalysisId
     result_type_id: ResultTypeId
     statistical_profile_id: StatisticalProfileId
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PairedThresholdAnalysis:
-    common: AnalysisCommon
-    first_evaluation_id: EvaluationId
-    second_evaluation_id: EvaluationId
-    primary_metric_id: MetricId
-    delta_orientation: str
-    delta_interpretation: str
-    secondary_statistical_profile_id: StatisticalProfileId | None
-    per_sweep_cell: bool
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AnchorEquivalenceAnalysis:
-    common: AnalysisCommon
-    source_analysis_id: AnalysisId
-    historical_reference: HistoricalAnchorReference
-    comparison_mode: str
-    requirements: tuple[str, ...]
-    interval_width_tolerance_multiplier: StrictlyPositiveFloat
-    failure_reasons: tuple[str, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class DistributionMechanismAnalysis:
-    common: AnalysisCommon
-    source_evaluation_ids: tuple[EvaluationId, ...]
-    produced_fields: tuple[str, ...]
-    field_formulas: tuple[NamedFormula, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class LockedClientDistributionAnalysis:
-    common: AnalysisCommon
-    source_evaluation_ids: tuple[EvaluationId, ...]
-    locked_client_id: ClientId
-    produced_fields: tuple[str, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class MetricAssociationAnalysis:
-    common: AnalysisCommon
-    predictor_metric_id: MetricId
-    outcome_metric_id: MetricId
-    outcome_source_analysis_id: AnalysisId
-    grouping_dimension: str
-    interpretation_constraint: InterpretationRule
-    secondary_statistical_profile_id: StatisticalProfileId | None
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class RecoveryFractionAnalysis:
-    common: AnalysisCommon
-    numerator_analysis_id: AnalysisId
-    denominator_analysis_id: AnalysisId
-    formula: Formula
-    denominator_materiality_rule: Formula
-    undefined_denominator_behavior: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ClusterStabilityAnalysis:
-    common: AnalysisCommon
-    source_evaluation_id: EvaluationId
-    reference_evaluation_id: EvaluationId | None
-    comparison_unit: str
-    produced_fields: tuple[str, ...]
-    requirement: ExecutionRequirement
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ThresholdStabilityAnalysis:
-    common: AnalysisCommon
-    source_evaluation_id: EvaluationId
-    produced_fields: tuple[str, ...]
-    per_sweep_cell: bool
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ConformalCoverageAnalysis:
-    common: AnalysisCommon
-    source_evaluation_id: EvaluationId
-    target_coverage: Probability
-    coverage_direction: str
-    produced_fields: tuple[str, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class QuantileEstimationAnalysis:
-    common: AnalysisCommon
-    source_evaluation_ids: tuple[EvaluationId, ...]
-    oracle_reference_id: EvaluationId
-    produced_fields: tuple[str, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ResourceCostAnalysis:
-    common: AnalysisCommon
-    source_evaluation_ids: tuple[EvaluationId, ...]
-    estimate_basis: str
-    produced_fields: tuple[str, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class TemporalRecoveryAnalysis:
-    common: AnalysisCommon
-    static_reference_evaluation_id: EvaluationId
-    frozen_evaluation_id: EvaluationId
-    recalibrated_evaluation_id: EvaluationId
-    primary_metric_id: MetricId
-    drift_excess_formula: Formula
-    recovered_amount_formula: Formula
-    recovery_ratio_formula: Formula
-    meaningful_degradation_rule: Formula
-    outcome_bands: tuple[OutcomeBand, ...]
-    negative_recovery_policy: str
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AbsorptionAnalysis:
-    common: AnalysisCommon
-    reference_analysis_id: AnalysisId
-    stress_test_analysis_id: AnalysisId
-    absorption_metric_id: MetricId
-    formula: Formula
-    denominator_materiality_rule: Formula
-    outcome_bands: tuple[OutcomeBand, ...]
-    matching_contract: InterpretationRule
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AlertBurdenAnalysis:
-    common: AnalysisCommon
-    source_evaluation_ids: tuple[EvaluationId, ...]
-    required_operational_input_id: OperationalInputId
-    formula: Formula
-    produced_fields: tuple[str, ...]
-    unavailable_behavior: str
-
-AnalysisDefinition = (
-    PairedThresholdAnalysis
-    | AnchorEquivalenceAnalysis
-    | DistributionMechanismAnalysis
-    | LockedClientDistributionAnalysis
-    | MetricAssociationAnalysis
-    | RecoveryFractionAnalysis
-    | ClusterStabilityAnalysis
-    | ThresholdStabilityAnalysis
-    | ConformalCoverageAnalysis
-    | QuantileEstimationAnalysis
-    | ResourceCostAnalysis
-    | TemporalRecoveryAnalysis
-    | AbsorptionAnalysis
-    | AlertBurdenAnalysis
-)
 ```
 
-Every match over `AnalysisDefinition` is exhaustive and ends with `typing.assert_never`.
+The configured analysis union contains:
+
+```text
+PairedThresholdAnalysis
+AnchorEquivalenceAnalysis
+DistributionMechanismAnalysis
+LockedClientDistributionAnalysis
+MetricAssociationAnalysis
+RecoveryFractionAnalysis
+ClusterStabilityAnalysis
+ThresholdStabilityAnalysis
+ConformalCoverageAnalysis
+QuantileEstimationAnalysis
+ResourceCostAnalysis
+TemporalRecoveryAnalysis
+AbsorptionAnalysis
+AlertBurdenAnalysis
+```
+
+The variants are grouped into implementation families:
+
+| Executor family | Analysis variants |
+|---|---|
+| `comparative.py` | paired threshold, anchor equivalence, recovery fraction, absorption |
+| `mechanism.py` | distribution mechanism, locked-client distribution, cluster stability, threshold stability, conformal coverage, quantile estimation |
+| `association.py` | metric association |
+| `temporal.py` | temporal recovery |
+| `resource.py` | resource cost, alert burden |
+
+Each variant retains its specific references, formulas, materiality rules, bands, and unavailable behavior. Every match is exhaustive and uses `typing.assert_never`.
 
 ---
 
-# 13. Planning model
+# 10. Resolved catalogue roots
 
-## 13.1 Experiment plan
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResolvedStudyCatalogue:
+    schema_version: PositiveInt
+    datasets: FrozenRegistry[DatasetId, DatasetDefinition]
+    protocols: ProtocolCatalogue
+    populations: FrozenRegistry[PopulationId, StudyPopulationDefinition]
+    experiments: FrozenRegistry[ExperimentId, ExperimentDefinition]
+    declared_capabilities: frozenset["Capability"]
+    population_readiness_rule: "PopulationReadinessRule"
+    analysis_conventions: "AnalysisConventions"
+    catalogue_fingerprint: Fingerprint
 
-Planning resolves authored references without touching data or executing frameworks.
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResolvedRuntimeCatalogue:
+    roots: "StorageRoots"
+    raw_source_policy: "RawSourcePolicy"
+    determinism_profiles: FrozenRegistry[DeterminismProfileId, "DeterminismProfile"]
+    device_policy_rules: "DevicePolicyRules"
+    resource_pressure_policy: "ResourcePressurePolicy"
+    execution_profiles: FrozenRegistry[ExecutionProfileId, "ExecutionProfile"]
+    runtime_fingerprint: Fingerprint
+```
+
+Runtime-only changes must not alter scientific identities unless they change an explicitly scientific computation contract.
+
+---
+
+# 11. Application services, ports, and future interfaces
+
+## 11.1 Catalogue services
+
+```text
+LoadConfiguration
+ValidateConfiguration
+ResolveConfiguration
+DescribeCatalogue
+DescribeExperiment
+```
+
+A failed load or resolution returns validation issues and never a partial catalogue.
+
+## 11.2 Planning and query services
+
+```text
+PlanExperiment
+PlanDatasetAudit
+ExplainPlan
+ExplainArtifactReuse
+ListExperiments
+ShowPrerequisiteStatus
+ShowCapabilityStatus
+ShowMissingArtifacts
+TraceResult
+```
+
+Planning and queries are side-effect free.
+
+## 11.3 Scientific stage services
+
+```text
+InspectDataset
+ResolvePopulationReadiness
+MaterializePopulation
+TrainDetector
+SelectCheckpoint
+GenerateScores
+EstimateThresholds
+EvaluateMetrics
+ExecuteAnalyses
+RenderReports
+FreezeResults
+```
+
+These are stable application services. They are not ports and are not duplicated per experiment.
+
+## 11.4 Execution services
+
+```text
+ExecutePlan
+ResumeRun
+CancelRunAtSafeBoundary
+RecoverInterruptedRun
+```
+
+Cancellation occurs only between committed jobs. A partially written artifact is never considered complete or reusable.
+
+## 11.5 Capability ports
+
+### Dataset
+
+```python
+class DatasetAdapter(Protocol):
+    dataset_id: DatasetId
+
+    def inspect(
+        self,
+        definition: DatasetAuditDefinition,
+        environment: "ExecutionEnvironment",
+    ) -> StageResult[DatasetReadinessReport]: ...
+
+    def materialize(
+        self,
+        request: "MaterializePopulationRequest",
+    ) -> StageResult["MaterializedPopulation"]: ...
+```
+
+### Learning
+
+```python
+class TrainingBackend(Protocol):
+    def train(
+        self,
+        request: "TrainDetectorRequest",
+    ) -> StageResult["TrainingArtifactPayload"]: ...
+
+class ScoringBackend(Protocol):
+    def score(
+        self,
+        request: "GenerateScoresRequest",
+    ) -> StageResult["ScoreArtifactPayload"]: ...
+```
+
+### Thresholding and evaluation
+
+```python
+class ThresholdEstimator(Protocol):
+    family: "ThresholdPolicyFamily"
+
+    def estimate(
+        self,
+        request: "EstimateThresholdsRequest",
+    ) -> StageResult["ThresholdArtifactPayload"]: ...
+
+class MetricEvaluator(Protocol):
+    metric_id: MetricId
+
+    def evaluate(
+        self,
+        request: "MetricEvaluationRequest",
+    ) -> "MetricResultSet": ...
+```
+
+### Analysis
+
+```python
+class StatisticalBackend(Protocol):
+    def execute(
+        self,
+        request: "StatisticalProcedureRequest",
+    ) -> StageResult["StatisticalProcedureResult"]: ...
+
+class AnalysisExecutor(Protocol):
+    kind: "AnalysisKind"
+
+    def execute(
+        self,
+        request: "AnalysisExecutionRequest",
+    ) -> StageResult["AnalysisResultPayload"]: ...
+```
+
+### Artifacts and run state
+
+```python
+class ArtifactStore(Protocol):
+    def find(self, key: "ArtifactKey") -> "ArtifactLookupResult": ...
+    def read_manifest(self, ref: "ArtifactRef") -> "ArtifactManifest": ...
+    def verify(self, ref: "ArtifactRef") -> "ArtifactVerificationResult": ...
+    def commit(self, artifact: "PendingArtifact") -> "ArtifactRef": ...
+    def freeze(self, refs: tuple["ArtifactRef", ...]) -> "FrozenResultManifest": ...
+
+class RunStateStore(Protocol):
+    def create(self, state: "RunState") -> None: ...
+    def load(self, run_id: RunId) -> "RunState": ...
+    def record_job(self, run_id: RunId, outcome: "JobOutcome") -> None: ...
+    def mark_terminal(self, run_id: RunId, status: "RunTerminalStatus") -> None: ...
+
+class RunEventSink(Protocol):
+    def publish(self, event: "RunEvent") -> None: ...
+```
+
+`RunStateStore` and `RunEventSink` make the application ready for CLI progress now and a future UI/API later without coupling scientific services to presentation code.
+
+### Reporting, runtime, and operational inputs
+
+```python
+class ReportRenderer(Protocol):
+    def render(
+        self,
+        request: "RenderReportRequest",
+    ) -> StageResult["ReportArtifactPayload"]: ...
+
+class EnvironmentProbe(Protocol):
+    def inspect(
+        self,
+        profile: "ExecutionProfile",
+    ) -> "ExecutionEnvironment": ...
+
+class OperationalInputProvider(Protocol):
+    def resolve(
+        self,
+        input_id: OperationalInputId,
+    ) -> "OperationalInputResult": ...
+```
+
+## 11.6 Interface boundary
+
+The initial interface is the CLI. A future Python API, notebook interface, or local web UI may call the same use cases.
+
+Interfaces may:
+
+- parse user input;
+- call one use case;
+- display plans, progress, issues, and results;
+- map process exit codes.
+
+Interfaces must not:
+
+- traverse YAML;
+- construct scientific definitions;
+- select concrete adapters;
+- calculate metrics;
+- inspect framework tensors;
+- infer artifact reuse from filenames.
+
+---
+
+# 12. Planning, job graph, and execution
+
+## 12.1 Experiment plan
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExperimentPlan:
     experiment: ExperimentDefinition
-    populations: tuple[ResolvedPopulationBinding, ...]
+    populations: tuple["ResolvedPopulationBinding", ...]
     training_profile: TrainingProfile
     checkpoint_profile: CheckpointProfile
-    seed_cohort: SeedCohortDefinition
-    eligibility_policy: EligibilityPolicyDefinition
+    seed_cohort: "SeedCohortDefinition"
+    eligibility_policy: "EligibilityPolicyDefinition"
     coordinates: tuple[SweepCoordinate, ...]
-    capability_plan: CapabilityPlan
-    readiness_gates: tuple[ReadinessGateDefinition, ...]
+    capability_plan: "CapabilityPlan"
+    readiness_gates: tuple["ReadinessGateDefinition", ...]
     dependency_ids: tuple[ExperimentId, ...]
 ```
 
-## 13.2 Scientific run
+Planning resolves references without touching raw data or importing scientific frameworks.
 
-A scientific run is one experiment, one sweep coordinate, and one training seed. It may contain multiple population bindings and multiple policy evaluations.
+## 12.2 Scientific run
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -1549,100 +1526,146 @@ class ScientificRun:
     run_id: RunId
     experiment_id: ExperimentId
     coordinate: SweepCoordinate
-    seed_plan: SeedPlan
-    populations: tuple[ResolvedPopulationBinding, ...]
-    training: ResolvedTrainingDefinition
+    seed_plan: "SeedPlan"
+    populations: tuple["ResolvedPopulationBinding", ...]
+    training: "ResolvedTrainingDefinition"
     checkpoint: CheckpointProfile
-    evaluations: tuple[ResolvedEvaluation, ...]
-    analyses: tuple[AnalysisDefinition, ...]
-    reports: tuple[ReportProfileDefinition, ...]
+    evaluations: tuple["ResolvedEvaluation", ...]
+    analyses: tuple["AnalysisDefinition", ...]
+    reports: tuple["ReportProfileDefinition", ...]
     scientific_fingerprint: Fingerprint
 ```
 
-The temporal experiment remains one run with a temporal arm and a matched static-reference arm. Population-specific evaluations select the correct arm explicitly.
+One run is one experiment, one sweep coordinate, and one training seed. It may own multiple population arms and multiple policy evaluations.
 
-## 13.3 Job graph
+## 12.3 Job specification union
+
+```python
+JobSpec: TypeAlias = (
+    DatasetAuditSpec
+    | PopulationReadinessSpec
+    | MaterializationSpec
+    | TrainingSpec
+    | CheckpointSelectionSpec
+    | ScoreGenerationSpec
+    | ThresholdEvaluationSpec
+    | MetricEvaluationSpec
+    | AnalysisSpec
+    | ReportSpec
+    | ResultFreezeSpec
+)
+```
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ExecutionJob:
+    job_id: JobId
+    spec: JobSpec
+    parent_job_ids: tuple[JobId, ...]
+    expected_artifact_key: "ArtifactKey"
+```
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExecutionPlan:
     experiment_plan: ExperimentPlan
     jobs: tuple[ExecutionJob, ...]
-    dependencies: tuple[JobDependency, ...]
     plan_fingerprint: Fingerprint
 ```
 
-Job types are stable:
+A separate edge collection is unnecessary because each job owns its parents.
 
-```text
-DatasetAuditJob
-PopulationReadinessJob
-MaterializationJob
-TrainingJob
-CheckpointSelectionJob
-ScoreGenerationJob
-ThresholdEvaluationJob
-MetricEvaluationJob
-StatisticalAnalysisJob
-ReportJob
-ResultFreezeJob
+## 12.4 Coalescing
+
+The planner coalesces jobs when their scientific artifact keys are equal. This enables:
+
+- one population materialization to feed multiple experiments;
+- one FedAvg training to feed multiple threshold-policy evaluations;
+- one checkpoint and score set to feed B1–B4 and threshold variants;
+- one metric artifact to feed several analyses;
+- one analysis artifact to feed several report profiles.
+
+Coalescing must never cross a scientific identity boundary.
+
+## 12.5 Job outcome union
+
+```python
+JobOutcome: TypeAlias = (
+    CompletedJob
+    | InfeasibleJob
+    | ValidationFailedJob
+    | ExecutionFailedJob
+    | BlockedJob
+)
 ```
 
-The planner coalesces jobs with the same scientific identity. One FedAvg training and score job can therefore feed many threshold evaluations without retraining.
+Each outcome includes `job_id`, stage, relevant artifacts or evidence, warnings, and typed reason data. There is no nullable error field.
 
-## 13.4 Identity boundaries
+## 12.6 Execution algorithm
 
-| Identity | Includes | Excludes |
-|---|---|---|
-| population | dataset, setup, materialization, client construction, split, preprocessing | model, seed, threshold |
-| training | population, model, training profile, resolved training overrides, seed | threshold policy, metrics, reports |
-| checkpoint | training identity, checkpoint profile, selected round/epoch | threshold policy |
-| score | checkpoint identity, preprocessing, score definition | threshold policy, metric |
-| threshold | score identity, eligibility, policy, resolved policy parameters | metric and statistical profile |
-| metric | threshold identity, metric definition, evaluation population | reporting style |
-| analysis | required seed-level metric artifacts, formula, statistical profile, outcome bands | table and figure formatting |
-| report | analysis artifacts, report profile | upstream scientific computation |
+For every job:
 
-These boundaries are the basis for reuse and invalidation.
+1. compute the expected artifact key;
+2. inspect the artifact store;
+3. verify lineage, checksum, schema, completion, and compatibility;
+4. reuse only a verified compatible artifact;
+5. acquire the run-state transition;
+6. emit a started event;
+7. execute the stage;
+8. validate the stage output;
+9. atomically commit on completion;
+10. record the job outcome;
+11. emit a terminal event;
+12. unlock dependent jobs.
+
+A report failure cannot retrain. A threshold change cannot rescore. A model or checkpoint change cannot reuse scores.
+
+## 12.7 No experiment-name branching
+
+Forbidden:
+
+```python
+if experiment_id == "chronological_recalibration_evaluation":
+    ...
+```
+
+Required:
+
+- temporal behavior comes from split variants, population roles, and recalibration mode;
+- FedProx behavior comes from the resolved training profile;
+- cluster behavior comes from the threshold policy variant;
+- conditional alert burden comes from an operational-input constraint;
+- external metric suppression comes from capability decisions.
 
 ---
 
-# 14. Capability and readiness resolution
+# 13. Capability, readiness, metric availability, and failures
 
-## 14.1 Capability plan
+## 13.1 Capability resolution
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CapabilityDecision:
     population_id: PopulationId
-    capability: Capability
+    capability: "Capability"
     available: bool
     source: str
-    unavailable_behavior: CapabilityUnavailableBehavior
+    unavailable_behavior: "CapabilityUnavailableBehavior"
     reason: str | None
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class CapabilityPlan:
     decisions: tuple[CapabilityDecision, ...]
     executable_evaluations: tuple[EvaluationId, ...]
-    suppressed_outputs: tuple[SuppressedOutput, ...]
+    suppressed_outputs: tuple["SuppressedOutput", ...]
     experiment_blocked: bool
 ```
 
-Capabilities are declared by dataset setups and validated against observed readiness. A declaration is necessary but not sufficient; readiness can still show insufficient support.
+Configured capability declaration is necessary but observed readiness remains authoritative for execution feasibility.
 
-## 14.2 Readiness gate
+## 13.2 Readiness gate
 
 ```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ReadinessGateDefinition:
-    gate_id: ReadinessGateId
-    candidate_population: str
-    minimum_benign_calibration_count: PositiveInt
-    minimum_eligible_client_proportion: Probability
-    evaluation_time: str
-    failure_outcome: str
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ReadinessGateResult:
     gate_id: ReadinessGateId
@@ -1650,293 +1673,49 @@ class ReadinessGateResult:
     eligible_client_count: int
     eligible_proportion: float
     passed: bool
-    excluded_clients: tuple[ClientExclusion, ...]
+    excluded_clients: tuple["ClientExclusion", ...]
 ```
 
-The Edge-IIoTset external gate is evaluated before training or threshold evaluation. Population reduction beyond configured exclusions is forbidden.
+Readiness is resolved before expensive training.
 
----
-
-# 15. Application use cases
-
-## 15.1 Catalogue use cases
+## 13.3 Metric availability
 
 ```python
-class LoadStudyCatalogue:
-    def execute(self, request: LoadCatalogueRequest) -> LoadCatalogueResult: ...
-
-class ValidateStudyCatalogue:
-    def execute(self, request: ValidateCatalogueRequest) -> ValidationReport: ...
-
-class DescribeExperiment:
-    def execute(self, request: DescribeExperimentRequest) -> ExperimentDescription: ...
-```
-
-`LoadStudyCatalogue` coordinates config loading, validation, and mapping. It returns either a complete catalogue or a validation report; it never returns a partially resolved catalogue.
-
-## 15.2 Planning use cases
-
-```python
-class PlanExperiment:
-    def execute(self, request: PlanExperimentRequest) -> PlanExperimentResult: ...
-
-class PlanDatasetAudit:
-    def execute(self, request: PlanDatasetAuditRequest) -> DatasetAuditPlan: ...
-
-class ExplainArtifactReuse:
-    def execute(self, request: ExplainReuseRequest) -> ReuseExplanation: ...
-```
-
-Planning is side-effect free. It can run on CPU and does not access raw data except through persisted readiness metadata supplied to the request.
-
-## 15.3 Execution use cases
-
-```python
-class ExecuteDatasetAudit:
-    def execute(self, request: ExecuteDatasetAuditRequest) -> StageResult[DatasetReadinessReport]: ...
-
-class ExecuteRun:
-    def execute(self, request: ExecuteRunRequest) -> RunExecutionResult: ...
-
-class ResumeRun:
-    def execute(self, request: ResumeRunRequest) -> RunExecutionResult: ...
-
-class FreezeExperimentResult:
-    def execute(self, request: FreezeResultRequest) -> StageResult[FrozenResultManifest]: ...
-```
-
-`ExecuteRun` delegates each job to the correct stage service, validates every input artifact, records outcomes, and never embeds dataset- or experiment-name branching.
-
-## 15.4 Stage services
-
-The application layer contains one service per stable scientific stage:
-
-- `ResolvePopulationReadiness`;
-- `MaterializePopulation`;
-- `TrainDetector`;
-- `SelectCheckpoint`;
-- `GenerateScores`;
-- `EstimateThresholds`;
-- `EvaluateMetrics`;
-- `AnalyzeSeedResults`;
-- `RenderConfiguredReports`;
-- `FreezeResults`.
-
-These are services, not ports. A service uses one or more ports and pure strategy registries.
-
-## 15.5 Query use cases
-
-Read-only queries remain separate from execution:
-
-- list configured experiments;
-- explain a resolved run;
-- show prerequisite status;
-- show capability availability;
-- show missing artifacts;
-- show why an artifact is reusable or incompatible;
-- show terminal experiment status;
-- trace a report cell to upstream artifacts.
-
-Queries never mutate state or trigger computation.
-
----
-
-# 16. Application ports
-
-Only genuine external or framework boundaries are ports.
-
-## 16.1 Dataset adapter
-
-```python
-class DatasetAdapter(Protocol):
-    dataset_name: DatasetName
-
-    def inspect(
-        self,
-        definition: DatasetAuditDefinition,
-        runtime: ExecutionEnvironment,
-    ) -> StageResult[DatasetReadinessReport]: ...
-
-    def materialize(
-        self,
-        request: MaterializePopulationRequest,
-    ) -> StageResult[MaterializedPopulation]: ...
-```
-
-One implementation exists per dataset. The registry selects by `DatasetName`.
-
-## 16.2 Training and scoring
-
-```python
-class TrainingBackend(Protocol):
-    def train(
-        self,
-        request: TrainDetectorRequest,
-    ) -> StageResult[TrainingArtifactPayload]: ...
-
-class ScoringBackend(Protocol):
-    def score(
-        self,
-        request: GenerateScoresRequest,
-    ) -> StageResult[ScoreArtifactPayload]: ...
-```
-
-Training receives a fully resolved training definition. It does not read YAML or inspect experiment names.
-
-## 16.3 Clustering and statistics
-
-```python
-class ClusteringBackend(Protocol):
-    def cluster(
-        self,
-        request: ClusterClientsRequest,
-    ) -> StageResult[ClusterAssignmentResult]: ...
-
-class StatisticalBackend(Protocol):
-    def analyze(
-        self,
-        request: StatisticalAnalysisRequest,
-    ) -> StageResult[StatisticalAnalysisResult]: ...
-```
-
-The statistical backend dispatches by `AnalysisDefinition` variant through an executor registry. Unknown variants cannot reach runtime because catalogue mapping is closed and exhaustive.
-
-## 16.4 Artifact storage
-
-```python
-class ArtifactStore(Protocol):
-    def find(self, key: ArtifactKey) -> ArtifactLookupResult: ...
-    def read_manifest(self, ref: ArtifactRef) -> ArtifactManifest: ...
-    def verify(self, ref: ArtifactRef) -> ArtifactVerificationResult: ...
-    def commit(self, artifact: PendingArtifact) -> ArtifactRef: ...
-    def freeze(self, refs: tuple[ArtifactRef, ...]) -> FrozenResultManifest: ...
-```
-
-`commit` is atomic. Existing immutable artifacts are never overwritten.
-
-## 16.5 Reporting and environment
-
-```python
-class ReportRenderer(Protocol):
-    def render(self, request: RenderReportRequest) -> StageResult[ReportArtifactPayload]: ...
-
-class EnvironmentProbe(Protocol):
-    def inspect(self, profile: ExecutionProfile) -> ExecutionEnvironment: ...
-```
-
-The environment probe validates CUDA requirements, deterministic flags, storage roots, symlink policy, and budgets before execution.
-
----
-
-# 17. Pure strategy registries
-
-```python
-class ThresholdPolicyFamily(StrEnum):
-    QUANTILE = "quantile"
-    CLUSTER = "cluster"
-    CONFORMAL = "conformal"
-    SHRINKAGE = "shrinkage"
-    CALIBRATION_SIZE_AWARE = "calibration_size_aware"
-    FEDERATED_SUMMARY = "federated_summary"
-
-class AnalysisKind(StrEnum):
-    PAIRED_THRESHOLD = "paired_threshold_analysis"
-    ANCHOR_EQUIVALENCE = "anchor_equivalence_analysis"
-    DISTRIBUTION_MECHANISM = "distribution_mechanism_analysis"
-    LOCKED_CLIENT_DISTRIBUTION = "locked_client_distribution_analysis"
-    METRIC_ASSOCIATION = "metric_association_analysis"
-    RECOVERY_FRACTION = "recovery_fraction_analysis"
-    CLUSTER_STABILITY = "cluster_stability_analysis"
-    THRESHOLD_STABILITY = "threshold_stability_analysis"
-    CONFORMAL_COVERAGE = "conformal_coverage_analysis"
-    QUANTILE_ESTIMATION = "quantile_estimation_analysis"
-    RESOURCE_COST = "resource_cost_analysis"
-    TEMPORAL_RECOVERY = "temporal_recovery_analysis"
-    ABSORPTION = "absorption_analysis"
-    ALERT_BURDEN = "alert_burden_analysis"
-```
-
-Not every variation requires an infrastructure port.
-
-The following registries live in application composition and expose framework-neutral strategy protocols:
-
-```python
-class ThresholdEstimator(Protocol):
-    family: ThresholdPolicyFamily
-    def estimate(self, request: EstimateThresholdsRequest) -> StageResult[ThresholdArtifactPayload]: ...
-
-class MetricEvaluator(Protocol):
+@dataclass(frozen=True, slots=True, kw_only=True)
+class AvailableMetricValue:
     metric_id: MetricId
-    def evaluate(self, request: MetricEvaluationRequest) -> MetricResultSet: ...
+    value: float
+    denominator: int | None
 
-class AnalysisExecutor(Protocol):
-    kind: AnalysisKind
-    def execute(self, request: AnalysisExecutionRequest) -> StageResult[AnalysisResultPayload]: ...
+@dataclass(frozen=True, slots=True, kw_only=True)
+class UnavailableMetricValue:
+    metric_id: MetricId
+    status: "MetricStatus"
+    reason: str
+
+MetricValue: TypeAlias = AvailableMetricValue | UnavailableMetricValue
 ```
 
-Implementations that require NumPy, SciPy, or scikit-learn live in infrastructure and are registered at composition. Pure implementations may live in application.
+Unavailable metrics are never represented by `None`, blank cells, omitted rows, or unqualified `NaN`.
 
-The orchestrator knows only the registries; it contains no policy-specific branches.
+## 13.4 Closed metric statuses
 
----
-
-# 18. Stage outcomes and failure model
-
-## 18.1 Result union
-
-```python
-T = TypeVar("T")
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class Completed(Generic[T]):
-    value: T
-    warnings: tuple[ExecutionWarning, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class Infeasible:
-    reason: InfeasibilityReason
-    evidence: tuple[ArtifactRef, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ValidationFailed:
-    issues: tuple[ValidationIssue, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ExecutionFailed:
-    error: ExecutionError
-    retryable: bool
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class BlockedByDependency:
-    dependencies: tuple[DependencyBlock, ...]
-
-StageResult: TypeAlias = (
-    Completed[T]
-    | Infeasible
-    | ValidationFailed
-    | ExecutionFailed
-    | BlockedByDependency
-)
+```text
+available
+undefined_zero_denominator
+undefined_near_zero_denominator
+unavailable_missing_benign_class
+unavailable_missing_attack_class
+unavailable_invalid_attack_assignment
+unavailable_ineligible_client
+unavailable_unsupported_regime
+failed_invalid_artifact
+failed_statistical_procedure
 ```
 
-`Completed` with non-empty warnings maps to `completed_with_warnings`; otherwise it maps to `completed`.
+## 13.5 Infeasibility vocabulary
 
-## 18.2 Exception boundary
-
-Expected scientific and configuration outcomes use the result union.
-
-Exceptions are reserved for:
-
-- programmer defects;
-- corrupted process state;
-- unhandled external-library failures;
-- interrupted execution.
-
-Infrastructure catches expected framework exceptions, converts them to typed execution errors, and preserves the original cause for logs. Domain and application do not catch broad `Exception` to continue silently.
-
-## 18.3 Infeasibility reasons
-
-The closed reason vocabulary includes:
+Expected infeasibility includes:
 
 - insufficient eligible clients;
 - insufficient split-role rows;
@@ -1949,171 +1728,71 @@ The closed reason vocabulary includes:
 - degenerate statistical procedure;
 - non-convergent configured training condition.
 
-No reason authorizes automatic scientific relaxation.
+No reason authorizes automatic relaxation of scientific requirements.
 
 ---
 
-# 19. Metric and result model
+# 14. Artifact identity, reuse, run state, and traceability
 
-## 19.1 Metric values
+## 14.1 Artifact kinds
 
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AvailableMetricValue:
-    metric_id: MetricId
-    value: float
-    denominator: int | None
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class UnavailableMetricValue:
-    metric_id: MetricId
-    status: MetricStatus
-    reason: str
-
-MetricValue = AvailableMetricValue | UnavailableMetricValue
+```text
+resolved_configuration
+dataset_readiness
+client_assignment_manifest
+split_manifest
+feature_schema
+preprocessing_state
+materialized_population
+training_state
+checkpoint
+checkpoint_selection
+score_set
+eligibility_manifest
+threshold_set
+metric_set
+statistical_result
+report
+result_manifest
 ```
 
-## 19.2 Per-client before aggregation
-
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ClientMetricRecord:
-    run_id: RunId
-    evaluation_id: EvaluationId
-    client_id: ClientId
-    values: tuple[MetricValue, ...]
-    eligibility: ClientEligibility
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SeedLevelMetricRecord:
-    run_id: RunId
-    evaluation_id: EvaluationId
-    training_seed: Seed
-    values: tuple[MetricValue, ...]
-    eligible_client_ids: tuple[ClientId, ...]
-```
-
-Client metrics are calculated before cross-client aggregation. FPR-evaluable and attack-evaluable populations are explicit and can differ.
-
-## 19.3 Analysis results
-
-The configured result-type registry maps to one of these payload families:
-
-- `AnchorReproductionResult`;
-- `ConfirmatoryAnalysisResult`;
-- `SupportiveAnalysisResult`;
-- `MechanismAnalysisResult`;
-- `ExternalValidationResult`;
-- `StressTestResult`;
-- `BoundaryResult`;
-- `ClusterStabilityResult`;
-- `ConformalCoverageResult`;
-- `QuantileEstimationResult`;
-- `AbsorptionResult`;
-- `TemporalRecoveryResult`;
-- `MetricAssociationResult`;
-- `DistributionMechanismResult`;
-- `ResourceCostResult`;
-- `EligibilityCoverageResult`;
-- `PolicyEvaluationResult`.
-
-Every result carries its exact source analysis ID, input artifact references, statistical profile ID, status, and scientific fingerprint.
-
----
-
-# 20. Artifact identity and lineage
-
-## 20.1 Artifact kinds
-
-```python
-class ArtifactKind(StrEnum):
-    RESOLVED_CONFIGURATION = "resolved_configuration"
-    DATASET_READINESS = "dataset_readiness"
-    CLIENT_ASSIGNMENT_MANIFEST = "client_assignment_manifest"
-    SPLIT_MANIFEST = "split_manifest"
-    FEATURE_SCHEMA = "feature_schema"
-    PREPROCESSING_STATE = "preprocessing_state"
-    MATERIALIZED_POPULATION = "materialized_population"
-    TRAINING_STATE = "training_state"
-    CHECKPOINT = "checkpoint"
-    CHECKPOINT_SELECTION = "checkpoint_selection"
-    SCORE_SET = "score_set"
-    ELIGIBILITY_MANIFEST = "eligibility_manifest"
-    THRESHOLD_SET = "threshold_set"
-    METRIC_SET = "metric_set"
-    STATISTICAL_RESULT = "statistical_result"
-    REPORT = "report"
-    RESULT_MANIFEST = "result_manifest"
-```
-
-## 20.2 Manifest
+## 14.2 Manifest
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ArtifactManifest:
     artifact_id: ArtifactId
-    kind: ArtifactKind
+    kind: "ArtifactKind"
     schema_version: PositiveInt
     scientific_fingerprint: Fingerprint
     execution_fingerprint: Fingerprint
     checksum: Fingerprint
-    parents: tuple[ArtifactRef, ...]
-    logical_scope: ArtifactScope
-    completion_status: StageStatus
+    parents: tuple["ArtifactRef", ...]
+    logical_scope: "ArtifactScope"
+    completion_status: "StageStatus"
     created_at: datetime
     source_revision: str
-    environment: EnvironmentSummary
+    environment: "EnvironmentSummary"
     frozen: bool
 ```
 
-Absolute paths are excluded from identity and recorded only as storage metadata.
+Absolute paths are storage metadata, never scientific identity.
 
-## 20.3 Scope union
+## 14.3 Scope union
 
 ```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PopulationScope:
-    population_id: PopulationId
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class RunScope:
-    run_id: RunId
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class EvaluationScope:
-    run_id: RunId
-    evaluation_id: EvaluationId
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class AnalysisScope:
-    experiment_id: ExperimentId
-    analysis_id: AnalysisId
-
-ArtifactScope = PopulationScope | RunScope | EvaluationScope | AnalysisScope
+ArtifactScope: TypeAlias = (
+    PopulationScope
+    | RunScope
+    | EvaluationScope
+    | AnalysisScope
+)
 ```
 
-## 20.4 Reuse decision
+## 14.4 Reuse decision
 
 ```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ReusableArtifact:
-    ref: ArtifactRef
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class MissingArtifact:
-    key: ArtifactKey
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class IncompatibleArtifact:
-    ref: ArtifactRef
-    differences: tuple[CompatibilityDifference, ...]
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class InvalidArtifact:
-    ref: ArtifactRef
-    verification_failures: tuple[str, ...]
-
-ReuseDecision = (
+ReuseDecision: TypeAlias = (
     ReusableArtifact
     | MissingArtifact
     | IncompatibleArtifact
@@ -2121,754 +1800,1125 @@ ReuseDecision = (
 )
 ```
 
-Reuse requires checksum, schema, parent lineage, completed status, non-stale status, and scientific compatibility. A filename match is irrelevant.
+A filename match has no evidentiary value.
 
-## 20.5 Invalidation graph
+## 14.5 Invalidation rules
 
 ```text
 source/schema/client/split/preprocessing change
-  → invalidate training and everything downstream
+  → invalidate training and all downstream artifacts
 
 model/training/seed/checkpoint change
-  → invalidate scores and everything downstream
+  → invalidate scores and all downstream artifacts
 
 threshold policy or threshold parameter change
-  → reuse scores; invalidate thresholds and everything downstream
+  → reuse scores; invalidate thresholds and downstream artifacts
 
 metric definition change
-  → reuse thresholds; invalidate metrics and everything downstream
+  → reuse thresholds; invalidate metrics and downstream artifacts
 
 analysis/statistical profile/outcome-band change
   → reuse metrics; invalidate analyses and reports
 
 report profile change
   → reuse analyses; invalidate reports only
+
+runtime storage-path or worker-count change
+  → preserve scientific identity; update execution provenance
+
+runtime change that alters numerical semantics
+  → invalidate the affected scientific artifacts
 ```
+
+## 14.6 Run state
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RunState:
+    run_id: RunId
+    plan_fingerprint: Fingerprint
+    status: "RunStatus"
+    completed_jobs: tuple[JobId, ...]
+    active_job: JobId | None
+    blocked_jobs: tuple[JobId, ...]
+    terminal_result: "ArtifactRef | None"
+```
+
+Run state is operational evidence and does not alter scientific identity.
+
+## 14.7 Result trace
+
+```python
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ResultTrace:
+    report_artifact: "ArtifactRef"
+    analysis_artifacts: tuple["ArtifactRef", ...]
+    metric_artifacts: tuple["ArtifactRef", ...]
+    threshold_artifacts: tuple["ArtifactRef", ...]
+    score_artifacts: tuple["ArtifactRef", ...]
+    checkpoint_artifacts: tuple["ArtifactRef", ...]
+    population_artifacts: tuple["ArtifactRef", ...]
+    resolved_configuration: "ArtifactRef"
+```
+
+Every report cell must be traceable through this lineage.
 
 ---
 
-# 21. Runtime and execution types
+# 15. Runtime, determinism, and resource contracts
 
-## 21.1 Runtime profile
+## 15.1 Execution profile
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExecutionProfile:
     profile_id: ExecutionProfileId
-    device_policy: DevicePolicy
-    determinism_profile_id: ExecutionProfileId
-    resource_budget: ResourceBudget
-    concurrency: ConcurrencyDefinition
-    data_loading: DataLoadingDefinition
+    device_policy: "DevicePolicy"
+    determinism_profile_id: DeterminismProfileId
+    resource_budget: "ResourceBudget"
+    concurrency: "ConcurrencyDefinition"
+    data_loading: "DataLoadingDefinition"
     process_start_method: str
     log_interval_rounds: PositiveInt
     atomic_write: bool
-    temporary_storage: TemporaryStoragePolicy | None
+    temporary_storage: "TemporaryStoragePolicy | None"
 ```
 
-## 21.2 Preflight
+## 15.2 Preflight
 
 ```python
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ExecutionEnvironment:
     profile: ExecutionProfile
-    roots: ResolvedStorageRoots
-    device: DeviceAvailability
-    determinism: DeterminismAvailability
-    resources: ResourceAvailability
-    software: SoftwareEnvironment
+    roots: "ResolvedStorageRoots"
+    device: "DeviceAvailability"
+    determinism: "DeterminismAvailability"
+    resources: "ResourceAvailability"
+    software: "SoftwareEnvironment"
     environment_fingerprint: Fingerprint
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PreflightResult:
-    environment: ExecutionEnvironment
-    issues: tuple[ValidationIssue, ...]
-    executable: bool
 ```
 
-Scientific, development, and smoke training profiles require CUDA. Dataset-audit and test-smoke profiles are the only CPU-only profiles. Missing CUDA never triggers CPU fallback for scientific training or scoring.
+Scientific training and scoring require the configured CUDA policy. Missing CUDA cannot silently fall back to CPU where the runtime contract forbids it.
 
-## 21.3 Resource pressure
+## 15.3 Deterministic ordering
 
-The execution service enforces:
-
-- no silent batch-size reduction;
-- no silent reduction of seeds, rounds, clients, samples, or sweep cells;
-- no implicit change from streaming to sampled data;
-- no profile mutation after planning.
-
-Budget excess returns `BlockedByDependency` or `ExecutionFailed` according to whether execution started. It does not alter the run definition.
-
----
-
-# 22. Determinism contract
-
-## 22.1 Ordering
-
-All externally discovered and internally iterated collections use explicit deterministic order:
-
-- files by ascending relative path;
-- clients by ascending `ClientId`;
-- sweep axes by declaration order;
-- sweep values by authored order;
-- training seeds by cohort order;
-- model-parameter aggregation by ascending client ID;
-- reports by configured report order;
-- artifact parents by logical stage order.
+- files: ascending normalized relative path;
+- clients: ascending `ClientId`;
+- sweep axes: declaration order;
+- sweep values: authored order;
+- seeds: cohort order;
+- aggregation: ascending client ID;
+- artifact parents: logical stage order;
+- reports: configured order.
 
 Sets are never serialized directly.
 
-## 22.2 Canonical serialization
+## 15.4 Canonical fingerprints
 
 Scientific fingerprints use:
 
 - BLAKE2b;
 - 32-byte digest;
-- UTF-8 JSON;
+- canonical UTF-8 JSON;
 - sorted object keys;
 - explicit enum values;
 - stable tuple order;
+- canonical decimal encoding;
 - no comments or formatting dependence;
 - no absolute paths.
 
-Floating-point values serialize through one canonical decimal strategy and are never fingerprinted from platform-dependent `repr` output without normalization.
+## 15.5 Resource pressure
 
-## 22.3 Environment record
+The application must never silently:
 
-Every scientific artifact records the environment fields required by `runtime.yaml`, including OS, Python, framework, CUDA, driver, GPU, dependency-lock fingerprint, deterministic flags, and execution profile.
+- reduce batch size;
+- reduce seeds;
+- reduce rounds;
+- reduce clients;
+- reduce samples;
+- remove sweep cells;
+- switch to sampled data;
+- change execution profile after planning.
 
-Unavailable bitwise determinism is recorded and quantified. It is never silently downgraded or described as full reproducibility.
+Resource excess produces a typed blocked or failed outcome.
 
 ---
 
-# 23. Validation architecture
+# 16. Validation architecture
 
-## 23.1 Validation phases
+## 16.1 Validation phases
 
 ```text
-syntax validation
+YAML syntax and duplicate-key validation
 → document schema validation
 → cross-reference validation
+→ domain mapping validation
 → scientific-combination validation
 → capability validation
 → planning validation
 → runtime preflight
-→ artifact input validation
-→ stage output validation
+→ artifact-input validation
+→ stage-output validation
+→ result-freeze validation
 ```
 
-## 23.2 Validation issue
+## 16.2 Validation issue
 
 ```python
-class ValidationSeverity(StrEnum):
-    ERROR = "error"
-    WARNING = "warning"
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ValidationIssue:
     code: str
-    severity: ValidationSeverity
+    severity: "ValidationSeverity"
     document: str
     path: tuple[str | int, ...]
     message: str
     related_paths: tuple[tuple[str | int, ...], ...]
 ```
 
-Issues are stable and machine-readable. The CLI may render them, but it does not create them.
+Issues are stable and machine-readable. Presentation layers render them but do not create them.
 
-## 23.3 Required cross-reference checks
+## 16.3 Required cross-reference checks
 
 The resolver proves that:
 
 - every population references an existing dataset and setup;
 - every setup references an existing materialization;
-- every experiment references existing populations, profiles, policies, analyses, result types, reports, metrics, gates, and prerequisites;
-- every evaluation label is unique within its experiment;
-- every analysis references evaluations and analyses in its own experiment unless a field explicitly permits cross-experiment reference;
-- every sweep binding points to a declared sweep axis;
-- every override is valid for the target policy or training profile;
-- every result type exists in the result registry;
-- every report profile exists;
-- prerequisite graphs are acyclic.
+- every experiment references existing populations, profiles, policies, analyses, result types, reports, metrics, gates, inputs, and prerequisites;
+- evaluation and analysis identifiers are unique within each experiment;
+- every analysis reference is legal;
+- every sweep binding targets a declared axis;
+- every override is valid for its target variant;
+- prerequisite graphs are acyclic;
+- every configured identifier maps exactly once;
+- every registered implementation declares its supported variant or identifier.
 
-## 23.4 Required scientific-combination checks
+## 16.4 Required scientific-combination checks
 
 Reject before planning:
 
-- family thresholds without `family_taxonomy`;
-- attack-sensitive metrics without valid attack assignment;
-- temporal evaluation without within-client chronological capability;
-- cluster count greater than the resolved eligible client count;
-- FedProx with `mu = 0` or a value outside the configured grid;
-- personalized method named Ditto when its method contract fails;
-- conformal thresholding with attack calibration rows;
-- unavailable metric requests without declared behavior;
+- family threshold without family taxonomy;
+- attack-sensitive metric without valid attack assignment;
+- temporal evaluation without chronological capability;
+- cluster count beyond the eligible population;
+- FedProx `mu` outside the configured grid;
+- false Ditto naming without the complete method contract;
+- attack data in calibration;
+- unavailable metric request without explicit behavior;
 - missing or duplicate seeds;
-- checkpoint selection without a selection rule;
-- test-, attack-, AUROC-, FPR-, or policy-effect-driven checkpoint selection;
-- silent runtime batch-size or workload overrides;
-- retired names such as `B5` or `B3-LGS`;
-- unknown preprocessing steps, policy IDs, analysis kinds, result types, or report profiles.
+- checkpoint selection using test, attack, threshold, or policy-effect outcomes;
+- silent workload overrides;
+- retired names;
+- unknown preprocessing step, policy family, analysis kind, result type, or report profile.
 
-## 23.5 Output validation
+## 16.5 Stage-output validation
 
-Every stage validates its output before commit. Examples include:
+Every output is validated before commit, including:
 
-- source counts and headers against source contracts;
-- one row assigned at most once and to one client;
+- source counts and headers;
+- total and mutually exclusive client assignment;
 - split disjointness and coverage;
-- fitted preprocessing population and feature order;
-- checkpoint round membership;
-- score finiteness and exact manifest row agreement;
-- identical score inputs for B1–B4 comparisons;
-- threshold ownership and eligibility consistency;
-- per-client metric denominator handling;
-- paired seed completeness;
-- nested replicate summarization within seed;
-- report rows traceable to frozen analysis artifacts.
+- preprocessing fit population;
+- feature-order persistence;
+- checkpoint candidate membership;
+- score-row and manifest equality;
+- score finiteness;
+- threshold ownership and eligibility;
+- denominator handling;
+- paired-seed completeness;
+- nested-replicate reduction;
+- report traceability.
 
 ---
 
-# 24. Application orchestration
+# 17. Extension model
 
-## 24.1 Execution sequence
+## 17.1 New experiment
 
-```mermaid
-sequenceDiagram
-    participant CLI
-    participant BOOT as Composition root
-    participant CAT as Catalogue service
-    participant PLAN as Planner
-    participant EXEC as Run executor
-    participant STORE as Artifact store
-    participant PORTS as Infrastructure backends
+When all concepts already exist:
 
-    CLI->>BOOT: command + config paths + profile
-    BOOT->>CAT: load and resolve catalogue
-    CAT-->>BOOT: ResolvedStudyCatalogue
-    BOOT->>PLAN: plan experiment
-    PLAN->>STORE: inspect prerequisite and reusable artifacts
-    STORE-->>PLAN: typed reuse decisions
-    PLAN-->>BOOT: ExecutionPlan
-    BOOT->>EXEC: execute or resume plan
-    loop jobs in dependency order
-        EXEC->>STORE: verify inputs
-        EXEC->>PORTS: execute stage
-        PORTS-->>EXEC: StageResult
-        EXEC->>STORE: atomic commit on completion
-    end
-    EXEC-->>CLI: RunExecutionResult
-```
+1. add the experiment to `configs/experiments.yaml`;
+2. validate references and constraints;
+3. update plan snapshots;
+4. add no experiment class and no executor branch.
 
-## 24.2 No experiment branching
+## 17.2 New threshold policy
 
-The executor dispatches by job type and domain variant. The following is forbidden:
+1. add the protocol definition;
+2. reuse an existing policy family when possible;
+3. add a Pydantic and domain variant only when the mechanism is genuinely new;
+4. implement one estimator;
+5. register it;
+6. add formula, capability, determinism, fingerprint, and reuse tests.
 
-```python
-if experiment_id == "chronological_recalibration_evaluation": ...
-elif experiment_id == "fedprox_aggregation_stress_test": ...
-```
+## 17.3 New analysis
 
-Temporal behavior comes from `WithinClientChronologicalSplit`, population roles, and `RecalibrationMode`. FedProx behavior comes from `FederatedProximalTraining`. Experiment identity remains descriptive and provenance-bearing, not a control-flow switch.
+1. add one analysis discriminator and config model;
+2. add a domain variant;
+3. add or reuse a result payload family;
+4. implement it in the appropriate executor-family module;
+5. register it;
+6. add provenance, completeness, and outcome-band tests.
 
-## 24.3 Idempotent resumption
+## 17.4 New training method or model
 
-For each job:
+1. add a training/model protocol variant;
+2. add a domain variant;
+3. implement backend support;
+4. define checkpoint and selection semantics;
+5. define score-reuse boundaries;
+6. add method-naming and provenance tests.
 
-1. compute the expected artifact key;
-2. ask the artifact store for a reuse decision;
-3. verify reusable artifacts;
-4. skip only when verification succeeds;
-5. otherwise execute the job;
-6. write to a temporary location outside frozen outputs;
-7. validate the complete output;
-8. atomically commit;
-9. persist the terminal outcome.
+## 17.5 New dataset
 
-A failed report export does not retrain. A changed threshold does not rescore. A changed training seed does not reuse a checkpoint.
+1. add one dataset YAML document following the existing top-level contract;
+2. add one source-config variant;
+3. add one domain source variant;
+4. add one dataset adapter;
+5. implement source, schema, split, capability, readiness, and materialization tests;
+6. add populations only where required.
 
----
+## 17.6 New report surface
 
-# 25. Composition root
+A new table, figure, manifest, notebook projection, or UI view consumes frozen result artifacts. It must not change metric, analysis, or upstream artifact identity.
 
-`composition/bootstrap.py` is the only place where concrete implementations are selected.
+## 17.7 Future online, poisoning, deployment, or remote-execution work
 
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class Application:
-    load_catalogue: LoadStudyCatalogue
-    plan_experiment: PlanExperiment
-    execute_run: ExecuteRun
-    resume_run: ResumeRun
-    execute_dataset_audit: ExecuteDatasetAudit
-    queries: ApplicationQueries
+These are not added as optional fields to current DATP-Core definitions.
 
+- Online recalibration introduces a dedicated temporal/online capability with explicit state and window artifacts.
+- Poisoning introduces a dedicated threat/attack capability with clean-vs-attacked lineage.
+- Deployment profiling introduces a resource-observation capability and hardware-profile artifacts.
+- Remote execution introduces an orchestration dispatch adapter.
 
-def build_application(config_paths: ConfigPaths) -> Application:
-    ...
-```
-
-The composition root registers:
-
-- three dataset adapters;
-- the PyTorch training and scoring backends;
-- clustering and statistical backends;
-- threshold estimators by policy variant;
-- metric evaluators by metric ID;
-- analysis executors by analysis variant;
-- report renderers by report profile;
-- filesystem artifact storage;
-- environment probing.
-
-No service locator is exposed to domain or application code.
+The shared kernel, catalogue, artifact, and run-state patterns may be reused, but scientific contracts remain separately owned.
 
 ---
 
-# 26. CLI boundary
-
-The CLI is a thin adapter. Its responsibilities are limited to:
-
-- parse command-line values;
-- resolve config paths and execution-profile identifier;
-- call one application use case;
-- render typed results and validation issues;
-- return a process exit code.
-
-Canonical commands are:
-
-```text
-datp-core config validate
-datp-core catalogue experiments
-datp-core dataset audit <dataset>
-datp-core experiment plan <experiment>
-datp-core experiment run <experiment>
-datp-core experiment resume <experiment>
-datp-core artifact explain <artifact-id>
-datp-core result trace <experiment> <analysis>
-```
-
-The CLI never reads YAML keys, selects adapters, calculates metrics, or constructs scientific definitions.
-
----
-
-# 27. Extension model
-
-## 27.1 Add a new experiment
-
-When all required concepts already exist, adding an experiment requires only:
-
-1. a new entry in `configs/experiments.yaml`;
-2. configuration validation;
-3. a plan snapshot test.
-
-No Python experiment class or orchestration branch is added.
-
-## 27.2 Add a new threshold policy
-
-A new threshold method requires:
-
-1. a protocol entry;
-2. a Pydantic policy variant;
-3. a domain policy variant only when no existing family fits;
-4. one estimator implementation;
-5. one registry registration;
-6. formula, capability, determinism, and identity tests.
-
-Dataset adapters, training, scoring, and the run executor remain unchanged.
-
-## 27.3 Add a new analysis
-
-A new analysis requires:
-
-1. an analysis-kind discriminator and typed config model;
-2. a domain analysis variant;
-3. a typed result payload or existing result family;
-4. an executor;
-5. optional report profiles;
-6. exhaustive-match and provenance tests.
-
-Experiments then reference it through YAML.
-
-## 27.4 Add a new training method
-
-A new training method requires:
-
-1. a protocol training-profile variant;
-2. a domain training variant;
-3. backend support;
-4. explicit identity and score-reuse rules;
-5. checkpoint and selection validation;
-6. method-naming conformance tests.
-
-Threshold and metric code remains unchanged.
-
-## 27.5 Add a new dataset
-
-A new dataset requires:
-
-1. one `configs/datasets/<name>.yaml` document following the existing dataset top-level contract;
-2. one Pydantic dataset-source variant;
-3. one domain source-definition variant;
-4. one dataset adapter;
-5. source, schema, materialization, split, capability, and readiness tests;
-6. population entries in `experiments.yaml` only when needed.
-
-The experiment planner and run executor do not change.
-
-## 27.6 Add a new report
-
-A report requires a protocol profile and renderer registration. It does not change metrics, analyses, or artifact identities upstream of reporting.
-
----
-
-# 28. Prohibited architecture patterns
+# 18. Prohibited patterns
 
 The implementation must not introduce:
 
-- `BaseExperiment` subclasses for individual experiments;
-- `if dataset == ...` outside the dataset-adapter registry and config mapping;
-- one service per threshold-policy identifier;
-- raw YAML dictionaries beyond `config`;
-- `Any` at a domain or application boundary;
-- a global mutable configuration singleton;
-- repository-wide `latest` artifact lookup;
-- implicit fallback from missing config values;
-- domain objects containing Pydantic models, tensors, arrays, dataframes, paths to mutable files, or open handles;
-- metrics represented as `dict[str, float]`;
-- result availability represented by `None`, `NaN`, missing rows, or empty strings;
-- configuration directories for generated contracts or catalogues;
-- generated observations written into configuration;
-- duplicate anchor and journal class hierarchies;
-- backwards-compatible aliases or stale policy names;
-- manual table values disconnected from result manifests;
-- silent workload reduction under resource pressure.
+- experiment subclasses;
+- dataset branching outside mapping and dataset-adapter registration;
+- a service per policy identifier;
+- a file per metric or analysis identifier;
+- a giant `common.py`, `utils.py`, or `helpers.py`;
+- one global mutable registry;
+- Pydantic objects in domain or application types;
+- `Any` or untyped dictionaries at public boundaries;
+- tensors, arrays, dataframes, paths to mutable files, or open handles in domain aggregates;
+- generated contracts or catalogue directories under `configs/`;
+- generated observations in YAML;
+- hidden scientific defaults;
+- automatic scientific relaxation;
+- broad exception swallowing;
+- `latest` artifact lookup;
+- filename-based reuse;
+- missing-row or `NaN` availability semantics;
+- duplicate anchor and DATP-Core class hierarchies;
+- compatibility shims or retired policy aliases;
+- fake concrete adapters with `pass` or `NotImplementedError`;
+- CLI-owned scientific logic;
+- report values disconnected from frozen result artifacts.
 
 ---
 
-# 29. Representative end-to-end types
+# 19. Skeleton-first implementation plan
 
-## 29.1 Planning request
+The implementation is divided so that a large, useful, testable skeleton exists before raw-data execution or experiment algorithms are introduced.
 
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PlanExperimentRequest:
-    catalogue: ResolvedStudyCatalogue
-    runtime_catalogue: ResolvedRuntimeCatalogue
-    experiment_id: ExperimentId
-    execution_profile_id: ExecutionProfileId
-    known_artifacts: ArtifactInventory
-    prerequisite_statuses: ExperimentStatusRegistry
-```
+## Phase 0 — Package and quality foundation
 
-## 29.2 Run request
+### Implement
 
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ExecuteRunRequest:
-    plan: ExecutionPlan
-    environment: ExecutionEnvironment
-    resume_policy: ResumePolicy
-```
+- create the canonical package tree;
+- configure Python version, dependency groups, ruff, pyright, pytest, coverage, and import-boundary checks;
+- create package-level `__init__.py` files with no eager adapter imports;
+- establish naming, typing, and exception conventions;
+- add a test fixture strategy;
+- add a command for architecture conformance checks.
 
-## 29.3 Run result
+### Do not implement
 
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class JobOutcome:
-    job_id: JobId
-    stage: PipelineStage
-    status: StageStatus
-    artifact_refs: tuple[ArtifactRef, ...]
-    warnings: tuple[ExecutionWarning, ...]
-    failure: ExecutionError | None
+- empty concrete adapters;
+- fake scientific outputs;
+- broad plugin discovery;
+- a service locator.
 
-@dataclass(frozen=True, slots=True, kw_only=True)
-class RunExecutionResult:
-    experiment_id: ExperimentId
-    outcomes: tuple[JobOutcome, ...]
-    terminal_status: StageStatus
-    result_manifest: ArtifactRef | None
-```
+### Exit gate
 
-`failure` is nullable only because `JobOutcome` is a compact envelope whose status determines applicability. Variant-specific scientific results still use discriminated unions.
+- imports respect the declared dependency graph;
+- the project imports without loading PyTorch, pandas, SciPy, or YAML through domain packages;
+- baseline lint, type, and empty-test-suite checks pass.
 
-## 29.4 Traceability query
+## Phase 1 — Kernel
 
-```python
-@dataclass(frozen=True, slots=True, kw_only=True)
-class ResultTrace:
-    report_artifact: ArtifactRef
-    analysis_artifacts: tuple[ArtifactRef, ...]
-    metric_artifacts: tuple[ArtifactRef, ...]
-    threshold_artifacts: tuple[ArtifactRef, ...]
-    score_artifacts: tuple[ArtifactRef, ...]
-    checkpoint_artifacts: tuple[ArtifactRef, ...]
-    population_artifacts: tuple[ArtifactRef, ...]
-    resolved_configuration: ArtifactRef
-```
+### Implement
 
----
+- nine entity identifiers;
+- generic `RegistryId`;
+- validated numeric and semantic values;
+- generic `FrozenRegistry`;
+- `StageResult`;
+- validation and execution issue types;
+- canonical serialization and fingerprint service;
+- exhaustive-match helpers.
 
-# 30. Implementation order
+### Tests
 
-The architecture is implemented in this dependency order.
+- invalid IDs and values fail construction;
+- registry duplicates fail;
+- ordering is deterministic;
+- fingerprints are stable;
+- runtime-only metadata is excluded from scientific fingerprints;
+- every result union is exhaustively handled.
 
-## 30.1 Foundation
+### Exit gate
 
-1. identifiers, values, enums, and outcome unions;
-2. config Pydantic models for all six documents;
-3. loader, duplicate-key detection, reference index, and mapper;
-4. resolved catalogue and canonical fingerprints;
-5. storage manifests and artifact verification.
+The kernel is complete and has no dependency on any scientific framework or configuration library.
 
-## 30.2 Data readiness
+## Phase 2 — Configuration models and loader
 
-1. dataset adapter protocol and registry;
-2. dataset-specific source inspection;
-3. client assignment and split manifests;
-4. preprocessing and materialization artifacts;
-5. readiness gates and capability decisions.
+### Implement
 
-## 30.3 Learning and scores
+- Pydantic models for all six documents, split by document;
+- duplicate-key YAML loading;
+- schema-version validation;
+- unknown-key rejection;
+- `ConfigPaths`;
+- `AuthoredConfigBundle`;
+- machine-readable `ValidationIssue`.
 
-1. training-profile mapping;
-2. PyTorch training backend;
-3. checkpoint-profile implementations;
-4. score-generation backend;
-5. score validation and immutability.
+### Tests
 
-## 30.4 Thresholds, metrics, and analyses
+- every current YAML document parses;
+- malformed fields fail at exact paths;
+- duplicate keys fail;
+- unknown keys fail;
+- no result-affecting default is injected.
 
-1. policy registry and core quantile policies;
-2. cluster, conformal, shrinkage, fallback, and federated-summary policies;
-3. metric evaluators and typed metric statuses;
-4. analysis union executors and statistical backend;
-5. report renderers and traceability.
+### Exit gate
 
-## 30.5 Orchestration
+The six authored documents can be loaded faithfully without resolving references.
 
-1. experiment planner and job coalescing;
-2. reuse explanation and invalidation;
-3. run execution and resumption;
-4. result freeze;
-5. CLI.
+## Phase 3 — Reference validation and explicit mapping
 
-This order creates usable vertical slices without creating temporary public contracts.
+### Implement
 
----
+- `ConfigReferenceIndex`;
+- all cross-document checks;
+- capability-combination checks possible without raw data;
+- source, split, client-construction, training, checkpoint, policy, metric, analysis, report, and constraint mappers;
+- grouped protocol catalogue;
+- `ResolvedStudyCatalogue`;
+- `ResolvedRuntimeCatalogue`;
+- `ResolvedConfiguration`.
 
-# 31. Required tests
+### Tests
 
-## 31.1 Configuration tests
-
-- all six documents parse and validate;
-- duplicate YAML keys fail;
-- every cross-reference resolves;
+- all identifiers resolve exactly once;
 - prerequisite graph is acyclic;
-- every sweep binding and override is valid;
-- every configured analysis maps to one union member;
-- every configured policy maps to one policy family;
-- every report and result type exists;
-- unsupported schema versions fail;
-- no hidden default is injected during mapping.
+- all overrides and sweep bindings are legal;
+- all 23 experiments map;
+- all 7 populations map;
+- all 14 threshold policies map;
+- all 14 analysis kinds map;
+- all configured report and result types map;
+- resolved-catalogue snapshots are deterministic.
 
-## 31.2 Domain tests
+### Exit gate
 
-- invalid identifiers and numeric values cannot be constructed;
-- registries reject duplicates and preserve deterministic order;
-- every union is exhaustively matched;
-- capability combinations produce deterministic decisions;
-- scientific fingerprints change exactly at their declared identity boundaries;
-- runtime-only changes do not change reusable scientific identities.
+The complete current programme resolves into frozen domain definitions with no framework imports and no raw-data access.
 
-## 31.3 Dataset tests
+## Phase 4 — Planning-only application
 
-- source contracts cover every column;
-- file discovery order is deterministic;
-- client assignment is total over admitted rows and mutually exclusive;
-- split manifests are disjoint and complete;
-- chronological boundaries and rollover correction are deterministic;
-- no future or test row influences preprocessing fit;
-- Edge attack-assignment limits remain enforced;
-- CICIoT2023 sources are never joined by row position or inferred key.
+### Implement
 
-## 31.4 Learning and score tests
+- catalogue query services;
+- capability planning from declared capabilities;
+- seed-plan derivation;
+- sweep expansion;
+- experiment plan construction;
+- scientific run construction;
+- job specification variants;
+- execution-plan construction;
+- dependency validation;
+- scientific identity keys;
+- job coalescing;
+- plan explanation.
 
-- B1–B4 training identity is identical within a seed and population;
-- anchor and DATP-Core checkpoint semantics remain distinct;
-- checkpoint selection never receives test or attack metrics;
-- optimizer state lifecycle matches protocol;
-- effective batch size equals the configured value;
-- score sets match manifests exactly and contain finite values;
-- score orientation is fixed and recorded;
-- policy changes reuse scores; model or checkpoint changes do not.
+### Tests
 
-## 31.5 Threshold and metric tests
+- every experiment produces a deterministic plan;
+- shared training and score jobs coalesce;
+- changed threshold policies reuse score identities;
+- changed models, seeds, or checkpoints do not;
+- no experiment-name branch exists;
+- temporal and multi-population plans derive from variants and constraints.
 
-- all 14 policies satisfy their formulas and capability rules;
-- quantile interpolation matches the configured estimator;
-- cluster K and fingerprint behavior are deterministic;
-- `B-FedStatsBenign` includes within and between variance terms;
-- matched-exceedance tie-break selects the larger candidate coefficient;
-- attack rows cannot enter threshold inputs;
-- undefined metric denominators produce typed statuses;
-- per-client metrics precede cross-client aggregation;
-- AUROC inputs remain identical across B1–B4.
+### Exit gate
 
-## 31.6 Analysis and reporting tests
+All 23 experiments can be listed, described, and planned without data or ML code.
 
-- paired analyses require paired seed identities;
-- confirmatory BCa requires the complete configured cohort;
-- nested replicates are summarized within seed;
-- outcome bands are mutually exclusive and exhaustive;
-- negative and unavailable outcomes render explicitly;
-- every report cell traces to a frozen result artifact;
-- report-profile changes do not invalidate upstream analysis.
+## Phase 5 — Artifact, run-state, runtime, and interface skeleton
+
+### Implement
+
+- artifact kinds, keys, scopes, manifests, and references;
+- filesystem artifact-store contract and concrete atomic manifest storage;
+- reuse decisions and compatibility diffs;
+- run-state store;
+- run events;
+- environment and deterministic preflight contracts;
+- operational-input provider contract;
+- CLI commands for:
+  - config validation;
+  - catalogue listing;
+  - experiment description;
+  - experiment planning;
+  - artifact explanation;
+  - result trace.
+
+### Tests
+
+- atomic commit behavior;
+- checksum and parent verification;
+- invalid/stale artifacts rejected;
+- run state survives process restart;
+- progress events carry no framework payload;
+- CLI remains a thin adapter.
+
+### Exit gate — static skeleton complete
+
+At this point the application has a complete, useful skeleton:
+
+- configuration can be validated and resolved;
+- all experiments can be planned;
+- scientific identities and expected artifacts can be explained;
+- run state and events exist;
+- no scientific execution has been faked.
+
+## Phase 6 — Dataset inspection and readiness
+
+### Implement
+
+- dataset adapter registry;
+- real source inspection for N-BaIoT, CICIoT2023, and Edge-IIoTset;
+- header, field-count, source-layout, and provenance validation;
+- dataset readiness artifacts;
+- population readiness and eligibility gates;
+- capability decisions based on observed evidence.
+
+### Tests
+
+- deterministic file discovery;
+- every source column classified;
+- CICIoT2023 executable and reference sources never joined;
+- Edge attack-assignment limitation preserved;
+- chronology evidence validated;
+- symlink and raw-source policy enforced.
+
+### Exit gate
+
+All datasets can be audited and every population receives a persisted readiness verdict.
+
+## Phase 7 — Client assignment, split, preprocessing, and materialization
+
+### Implement
+
+- client-construction executors;
+- split executors;
+- duplicate-equivalence handling;
+- row exclusions;
+- normalization and encoding fit/transform;
+- feature-schema, assignment, split, preprocessing, and materialized-population artifacts.
+
+### Tests
+
+- total and exclusive admitted-row assignment;
+- disjoint and complete splits;
+- no future/test leakage;
+- deterministic retries for Dirichlet allocation;
+- frozen one-hot vocabulary;
+- exact feature order;
+- infeasible materializations return typed boundaries.
+
+### Exit gate
+
+Every configured population can produce a validated materialized artifact or a typed infeasibility result.
+
+## Phase 8 — Learning, checkpointing, and scoring
+
+### Implement
+
+- dense autoencoder factory;
+- FedAvg;
+- anchor training semantics;
+- FedProx;
+- personalized method contract and implementation;
+- centralized pooled training;
+- checkpoint profiles;
+- score generation;
+- training, checkpoint, and score artifacts.
+
+### Recommended vertical order
+
+1. N-BaIoT FedAvg;
+2. anchor checkpoint behavior;
+3. DATP-Core round-grid selection;
+4. centralized pooled;
+5. FedProx;
+6. personalized training;
+7. Edge and CIC score generation after data adapters are validated.
+
+### Tests
+
+- deterministic seed use;
+- configured effective batch size;
+- optimizer state lifecycle;
+- complete participation and weighting;
+- checkpoint selection independence;
+- one frozen detector per controlled ladder;
+- exact score-manifest alignment;
+- finite scores and fixed orientation.
+
+### Exit gate
+
+A real N-BaIoT run can produce reusable, validated score artifacts.
+
+## Phase 9 — Thresholding
+
+### Implement in mechanism order
+
+1. quantile policies:
+   - shared mean;
+   - pooled;
+   - weighted;
+   - local;
+   - family;
+   - centralized;
+2. cluster policies;
+3. conformal local;
+4. local-global shrinkage;
+5. calibration-size-aware fallback;
+6. federated-summary policies.
+
+### Tests
+
+- exact configured quantile interpolation;
+- benign-only input type;
+- threshold ownership;
+- cluster determinism;
+- matched-exceedance tie-break;
+- fallback and unattainable behavior;
+- policy changes preserve score reuse.
+
+### Exit gate
+
+All configured threshold policies execute through family registries with no experiment-specific code.
+
+## Phase 10 — Metrics and analyses
+
+### Implement
+
+- per-client metric records;
+- typed metric availability;
+- cross-client aggregation;
+- predictive and operating-point metrics;
+- dispersion and equity metrics;
+- communication/resource estimates;
+- all 14 analysis variants through five executor families;
+- statistical backend and BCa procedures.
+
+### Tests
+
+- per-client metrics precede aggregation;
+- FPR and attack-evaluable populations remain explicit;
+- paired seeds are complete;
+- confirmatory BCa uses the full cohort;
+- nested repeats reduce within seed;
+- outcome bands are exhaustive;
+- degenerate procedures are typed.
+
+### Exit gate
+
+Frozen score and threshold artifacts can produce all configured result types.
+
+## Phase 11 — Reporting and traceability
+
+### Implement
+
+- configured table renderers;
+- configured figure renderers;
+- manifest and provenance renderer;
+- report-cell trace records;
+- result-freeze workflow.
+
+### Tests
+
+- every value traces to a frozen analysis artifact;
+- unavailable and negative results render explicitly;
+- report-only changes do not invalidate analyses;
+- no manual scientific table values exist.
+
+### Exit gate
+
+A completed experiment produces frozen, traceable report artifacts.
+
+## Phase 12 — End-to-end orchestration and hardening
+
+### Implement
+
+- real job execution;
+- resumption;
+- safe-boundary cancellation;
+- interrupted-run recovery;
+- concurrency according to runtime profiles;
+- final status queries;
+- bounded smoke runs;
+- conformance and drift audits.
+
+### Execution rollout
+
+1. synthetic end-to-end smoke;
+2. anchor smoke;
+3. anchor reproduction;
+4. confirmatory threshold-scope experiment;
+5. N-BaIoT supportive and mechanism experiments;
+6. CICIoT2023 boundary experiment;
+7. Edge external-validation and temporal experiments;
+8. FedProx and personalization stress tests;
+9. conditional alert-burden experiment when the operational input is supplied.
+
+### Exit gate
+
+The complete configured programme can execute without architecture changes, experiment subclasses, hidden defaults, or lineage ambiguity.
 
 ---
 
-# 32. Architecture conformance checklist
+# 20. What should be implemented before experiment algorithms
 
-## 32.1 Structure
+The following is not merely documentation; it is implementable, useful production skeleton work and should be completed before threshold, metric, or experiment execution code:
 
-- [ ] The canonical package tree is used without parallel legacy trees.
-- [ ] Dependencies follow the import table.
-- [ ] Framework imports are confined to their owning layer.
-- [ ] No experiment-specific class or orchestrator branch exists.
-- [ ] No `contracts/` or generated configuration-catalogue directory exists.
+- canonical package tree and import rules;
+- identifiers, values, enums, generic registry, and result unions;
+- all Pydantic models for the six YAML documents;
+- duplicate-key and schema-version validation;
+- cross-reference index;
+- explicit domain mapper;
+- resolved study and runtime catalogues;
+- all dataset, split, client-construction, training, checkpoint, threshold-policy, evaluation, analysis, report, and constraint domain variants;
+- catalogue queries;
+- seed-plan derivation;
+- sweep expansion;
+- capability-plan construction from declarations;
+- experiment planning;
+- scientific run construction;
+- job graph and coalescing;
+- artifact keys, manifests, scopes, verification, and invalidation;
+- run-state and event contracts;
+- runtime profile and preflight contracts;
+- port protocols and composition registries;
+- CLI commands for validate, list, describe, plan, and explain;
+- plan snapshots and architecture-conformance tests.
 
-## 32.2 Configuration
+The following must **not** be faked during the skeleton phase:
 
-- [ ] Exactly the six authoritative configuration documents are loaded.
+- dataset inspection results;
+- row counts;
+- materialized data;
+- model training;
+- checkpoint selection;
+- scores;
+- thresholds;
+- metrics;
+- confidence intervals;
+- report values;
+- successful concrete adapters that do not execute real behavior.
+
+---
+
+# 21. Current configuration alignment inventory
+
+## 21.1 Counts
+
+The resolved catalogue must contain:
+
+- 3 datasets;
+- 7 study populations;
+- 23 experiments;
+- 5 training profiles;
+- 3 checkpoint profiles;
+- 2 seed cohorts;
+- 14 threshold policies across 6 policy families;
+- 14 analysis kinds across 5 executor families;
+- 17 result types;
+- 17 report profiles.
+
+## 21.2 Populations
+
+```text
+nbaiot_natural_devices
+nbaiot_anchor_natural_devices
+nbaiot_dirichlet_heterogeneity
+ciciot2023_file_pseudo_clients
+edge_iiotset_sensor_groups
+edge_iiotset_chronological_groups
+edge_iiotset_static_reference_groups
+```
+
+## 21.3 Experiments
+
+```text
+anchor_reproduction
+confirmatory_threshold_scope_effect
+shared_threshold_construction_sensitivity
+threshold_quantile_sensitivity
+external_threshold_quantile_sensitivity
+controlled_heterogeneity_response
+cluster_and_family_threshold_mechanism
+external_cluster_threshold_mechanism
+calibration_window_size_stability
+local_global_threshold_shrinkage
+conformal_local_threshold_coverage
+external_conformal_local_threshold_coverage
+centralized_pooled_reference
+federated_summary_comparator
+external_federated_summary_comparator
+file_pseudo_client_applicability_boundary
+external_sensor_group_validation
+chronological_recalibration_evaluation
+fedprox_aggregation_stress_test
+external_fedprox_aggregation_stress_test
+model_personalization_absorption_test
+external_model_personalization_absorption_test
+operational_alert_burden
+```
+
+## 21.4 Threshold policies
+
+```text
+shared_mean_p95
+shared_pooled_p95
+shared_weighted_p95
+local_p95
+family_p95
+centralized_pooled_p95
+cluster_k3_mean_p95
+cluster_k9_mean_p95
+cluster_k3_robust_median_p95
+conformal_local_p95
+local_global_shrinkage_p95
+calibration_size_aware_fallback_p95
+federated_summary_matched_exceedance
+federated_summary_fixed_k
+```
+
+## 21.5 Analysis kinds
+
+```text
+paired_threshold_analysis
+anchor_equivalence_analysis
+distribution_mechanism_analysis
+locked_client_distribution_analysis
+metric_association_analysis
+recovery_fraction_analysis
+cluster_stability_analysis
+threshold_stability_analysis
+conformal_coverage_analysis
+quantile_estimation_analysis
+resource_cost_analysis
+temporal_recovery_analysis
+absorption_analysis
+alert_burden_analysis
+```
+
+Catalogue validation fails when these authored identifiers do not resolve exactly once or when an implementation is registered under an incompatible variant.
+
+---
+
+# 22. Final architecture summary
+
+- DATP-Core is implemented as a capability-oriented modular monolith.
+- The source tree is organized around datasets, learning, thresholding, evaluation, analysis, reporting, artifacts, runtime, catalogue, and orchestration.
+- Major entities keep dedicated identifiers; repetitive protocol identifiers use one generic typed `RegistryId`.
+- All immutable registries use one generic `FrozenRegistry`.
+- Scientific and runtime catalogues remain separately fingerprinted but are handed to the application through one `ResolvedConfiguration`.
+- Dataset and experiment aggregates are decomposed into coherent subaggregates.
+- Generic guardrail bags are replaced by explicit experiment constraints.
+- Jobs own their dependencies and expected artifact keys.
+- Job and stage outcomes are closed unions rather than nullable envelopes.
+- Ports live beside the capability they abstract.
+- All experiments are configuration instances; no experiment class or experiment-name branch is permitted.
+- All threshold policies execute through six stable policy families.
+- All analyses execute through five stable executor families.
+- Artifact reuse follows scientific identity, checksum, schema, completion, and parent lineage.
+- Run state and progress events are first-class operational contracts, enabling CLI progress now and future interfaces later.
+- The complete static skeleton can be implemented before raw-data, training, threshold, metric, or analysis code.
+- Scientific execution is added in vertical slices, beginning with N-BaIoT FedAvg and the anchor/confirmatory path.
+- Expected scientific boundaries are typed; they never become exceptions, missing rows, or silent defaults.
+- Future datasets, methods, policies, analyses, reports, interfaces, and runners have explicit extension procedures.
+- Future online, poisoning, or deployment programmes enter as new bounded capabilities rather than contaminating current aggregates.
+
+---
+
+# 23. Implementation audit checklist
+
+## 23.1 Package structure and dependencies
+
+- [ ] The canonical capability-oriented source tree is used.
+- [ ] No parallel legacy source tree exists.
+- [ ] `kernel` imports only the standard library.
+- [ ] Capability domains do not import Pydantic, YAML, CLI code, or scientific frameworks.
+- [ ] Orchestration never imports raw configuration models.
+- [ ] Interfaces do not call concrete frameworks.
+- [ ] Concrete adapters are selected only in `composition/bootstrap.py`.
+- [ ] No global mutable registry or service locator exists.
+- [ ] No `common.py`, `utils.py`, or `helpers.py` becomes a dumping ground.
+- [ ] Import-boundary tests enforce the dependency graph.
+
+## 23.2 Kernel and shared types
+
+- [ ] All major entity IDs validate canonical non-empty values.
+- [ ] Repetitive registry IDs use `RegistryId[T]`.
+- [ ] `FrozenRegistry` rejects duplicate and mismatched keys.
+- [ ] Registry iteration is deterministic.
+- [ ] Numeric value objects validate at construction.
+- [ ] Semantic strings use explicit value types where interchange would be unsafe.
+- [ ] `StageResult` is exhaustively handled.
+- [ ] No `Any` appears at a domain or application boundary.
+- [ ] No mutable collection is exposed from a frozen public record.
+- [ ] Canonical fingerprints are stable across runs.
+
+## 23.3 Configuration loading and mapping
+
+- [ ] Exactly six authoritative YAML documents are loaded.
+- [ ] Duplicate YAML keys fail.
+- [ ] Unsupported schema versions fail.
+- [ ] Unknown authored keys fail.
 - [ ] Pydantic models represent every authored field.
-- [ ] Every reference and override is validated before mapping.
-- [ ] Mapping is explicit and produces frozen domain definitions.
-- [ ] No scientific value is supplied by code when absent from configuration.
+- [ ] Cross-document references resolve exactly once.
+- [ ] Prerequisite graphs are acyclic.
+- [ ] Sweep bindings reference declared axes.
+- [ ] Policy and training overrides are variant-valid.
+- [ ] Mapping is explicit rather than reflective.
+- [ ] Pydantic models do not survive into resolved domain objects.
+- [ ] No result-affecting default is injected by code.
+- [ ] Resolved-catalogue serialization is deterministic.
+- [ ] Scientific and runtime fingerprints are separate.
 
-## 32.3 Domain
+## 23.4 Catalogue completeness
 
-- [ ] Public records are frozen, slotted, and keyword-only.
-- [ ] Distinct identities use distinct types.
-- [ ] Variant-specific fields use discriminated unions.
-- [ ] No `Any` or untyped public dictionary exists.
-- [ ] Undefined and unavailable values are typed.
+- [ ] All 3 datasets resolve.
+- [ ] All 7 populations resolve.
+- [ ] All 23 experiments resolve.
+- [ ] All 5 training profiles resolve.
+- [ ] All 3 checkpoint profiles resolve.
+- [ ] Both seed cohorts resolve.
+- [ ] All 14 threshold policies resolve into 6 families.
+- [ ] All 14 analyses resolve into 5 executor families.
+- [ ] All 17 result types resolve.
+- [ ] All 17 report profiles resolve.
+- [ ] Every configured implementation identifier maps exactly once.
+- [ ] Infrastructure-only registrations are explicitly marked.
 
-## 32.4 Application
+## 23.5 Dataset contracts and readiness
 
-- [ ] Use cases depend only on domain and ports.
-- [ ] Planning is side-effect free.
-- [ ] Capability and readiness resolution occur before expensive execution.
-- [ ] Jobs are coalesced by scientific identity.
-- [ ] Resumption validates lineage before reuse.
+- [ ] Every source file is discovered in deterministic order.
+- [ ] Every source column is classified.
+- [ ] Headers and field counts match source contracts.
+- [ ] CICIoT2023 merged and per-class sources are never joined.
+- [ ] CICIoT2023 pseudo-clients remain explicitly non-physical.
+- [ ] Edge attack assignment remains unavailable where configured.
+- [ ] Edge benign operating-point analyses remain executable when readiness passes.
+- [ ] Chronology is validated from genuine configured evidence.
+- [ ] Source symlink and raw-source policies are enforced.
+- [ ] Readiness findings are persisted as artifacts.
+- [ ] Readiness observations are never written into YAML.
+- [ ] Population reduction beyond configured exclusions is forbidden.
 
-## 32.5 Scientific integrity
+## 23.6 Client assignment, split, and preprocessing
 
-- [ ] B1–B4 reuse one frozen detector and score set within each controlled comparison.
-- [ ] Benign-only calibration is enforced by input types.
-- [ ] Checkpoint selection is independent of test and threshold outcomes.
-- [ ] Edge-IIoTset attack-sensitive metrics remain unavailable where assignment is invalid.
-- [ ] Temporal execution uses genuine within-client ordering and prevents future leakage.
-- [ ] No runtime pressure changes scientific workload silently.
+- [ ] Every admitted row belongs to exactly one client.
+- [ ] Client IDs are deterministic.
+- [ ] Split manifests are disjoint and complete.
+- [ ] Calibration contains benign rows only.
+- [ ] Attack rows remain evaluation-only.
+- [ ] No test or future row enters preprocessing fit.
+- [ ] Duplicate equivalence classes cannot cross splits.
+- [ ] Dirichlet retries are deterministic and recorded.
+- [ ] Normalization fit scope matches configuration.
+- [ ] One-hot vocabulary is fit on authorized rows only.
+- [ ] Unknown and missing categories remain distinct where required.
+- [ ] Materialized feature order is persisted and fingerprinted.
+- [ ] Infeasible populations return typed evidence.
 
-## 32.6 Artifacts and reporting
+## 23.7 Learning, checkpointing, and scoring
 
-- [ ] Every artifact has schema, checksum, parents, fingerprints, and terminal status.
+- [ ] Model input dimension comes from the materialized schema.
+- [ ] Training receives no YAML or experiment-name input.
+- [ ] All configured seeds come from `SeedPlan`.
+- [ ] No uncontrolled global RNG call exists.
+- [ ] Effective batch size equals configuration.
+- [ ] Batch size is never silently reduced.
+- [ ] Participation and client weighting match the profile.
+- [ ] Optimizer state lifecycle matches configuration.
+- [ ] Anchor checkpoint semantics remain distinct.
+- [ ] DATP-Core checkpoint selection uses only authorized data.
+- [ ] Test, attack, threshold, and policy-effect outcomes cannot select checkpoints.
+- [ ] B1–B4 share one detector and score set within each controlled comparison.
+- [ ] Score direction is fixed and recorded.
+- [ ] Score rows match manifests exactly.
+- [ ] All committed scores are finite.
+- [ ] Model, seed, or checkpoint changes invalidate scores.
+
+## 23.8 Thresholding
+
+- [ ] Threshold inputs are typed benign calibration score references.
+- [ ] Attack rows cannot be represented in threshold input types.
+- [ ] Quantile interpolation matches the configured estimator.
+- [ ] Shared mean, pooled, and weighted policies are distinct.
+- [ ] Local and family ownership is correct.
+- [ ] Cluster features, scaling, algorithm, K, and random state are deterministic.
+- [ ] Robust cluster aggregation follows configuration.
+- [ ] Conformal rank and unattainable behavior are exact.
+- [ ] Shrinkage uses the configured formula and binding.
+- [ ] Calibration-size fallback uses configured eligibility semantics.
+- [ ] Federated-summary within and between variance terms are present.
+- [ ] Matched-exceedance tie-break is exact.
+- [ ] Policy changes reuse score artifacts.
+- [ ] Every threshold artifact records ownership, counts, exceedance, and fallback status.
+
+## 23.9 Metrics and availability
+
+- [ ] Per-client metrics are calculated before aggregation.
+- [ ] FPR-evaluable and attack-evaluable client sets are explicit.
+- [ ] Every denominator is recorded or its absence is typed.
+- [ ] Undefined metrics use the exact configured status.
+- [ ] Missing attack assignment never yields fabricated attack metrics.
+- [ ] Ineligible clients are not silently included.
+- [ ] AUROC uses identical score inputs across B1–B4.
+- [ ] Metric results are not represented as untyped dictionaries.
+- [ ] Metric-definition changes invalidate metrics but preserve thresholds.
+
+## 23.10 Analyses and statistics
+
+- [ ] Analysis matching is exhaustive.
+- [ ] Paired analyses verify paired run and seed identities.
+- [ ] Confirmatory BCa uses the complete configured cohort.
+- [ ] Bootstrap seed comes from the configured seed plan.
+- [ ] Nested replicates reduce within seed before inference.
+- [ ] Materiality and denominator rules are applied before ratios.
+- [ ] Outcome bands are mutually exclusive and exhaustive.
+- [ ] Negative recovery is handled explicitly.
+- [ ] Degenerate statistical procedures return typed results.
+- [ ] Analysis artifacts record every input artifact.
+- [ ] Statistical-profile changes invalidate analyses only.
+
+## 23.11 Artifacts, reuse, and run state
+
+- [ ] Every artifact has kind, schema, checksum, parents, scopes, fingerprints, and status.
+- [ ] Absolute paths are excluded from scientific identity.
+- [ ] Commit is atomic.
 - [ ] Frozen artifacts are immutable.
-- [ ] No ambiguous `latest` reference exists.
-- [ ] Invalidations follow the declared identity graph.
-- [ ] Every report traces to frozen analyses and resolved configuration.
+- [ ] Existing artifacts are never overwritten.
+- [ ] Reuse requires checksum verification.
+- [ ] Reuse requires schema compatibility.
+- [ ] Reuse requires parent-lineage compatibility.
+- [ ] Reuse requires completed terminal status.
+- [ ] No `latest` lookup exists.
+- [ ] Compatibility differences are explainable.
+- [ ] Run state persists after process interruption.
+- [ ] Completed jobs are not rerun after verified resume.
+- [ ] Partial artifacts are never reusable.
+- [ ] Job events contain stable typed identifiers.
 
----
+## 23.12 Planning and orchestration
 
-# 33. Current configuration alignment inventory
+- [ ] Planning has no side effects.
+- [ ] All 23 experiments plan without data access.
+- [ ] Jobs own their parent IDs.
+- [ ] Job graphs are acyclic.
+- [ ] Coalescing occurs only on equal scientific artifact keys.
+- [ ] Shared training and scores coalesce where valid.
+- [ ] Threshold changes do not retrain or rescore.
+- [ ] Report changes do not recompute analyses.
+- [ ] No experiment-name branch exists.
+- [ ] Capability and readiness decisions occur before expensive execution.
+- [ ] Conditional operational inputs have explicit unavailable behavior.
+- [ ] Cancellation occurs only at safe job boundaries.
+- [ ] Resource pressure cannot mutate the plan.
 
-This inventory is descriptive. The YAML remains authoritative, and the implementation loads these identifiers rather than hard-coding the list.
+## 23.13 Runtime and determinism
 
-## 33.1 Study populations
+- [ ] Execution profile is resolved before planning execution.
+- [ ] Environment preflight records software and hardware.
+- [ ] CUDA requirements are enforced.
+- [ ] Forbidden CPU fallback cannot occur.
+- [ ] File, client, seed, sweep, aggregation, and report ordering is deterministic.
+- [ ] Sets are never serialized directly.
+- [ ] Floating-point fingerprint encoding is canonical.
+- [ ] Runtime-only changes preserve scientific identity.
+- [ ] Numerically meaningful runtime changes invalidate affected artifacts.
+- [ ] Determinism limitations are recorded honestly.
+- [ ] Resource budgets are checked before expensive jobs.
 
-| Population | Dataset | Setup | Metric bundle |
-|---|---|---|---|
-| `nbaiot_natural_devices` | `nbaiot` | `natural_devices` | `full_detection_and_operating_point` |
-| `nbaiot_anchor_natural_devices` | `nbaiot` | `anchor_natural_devices` | `full_detection_and_operating_point` |
-| `nbaiot_dirichlet_heterogeneity` | `nbaiot` | `dirichlet_partitioned` | `full_detection_and_operating_point` |
-| `ciciot2023_file_pseudo_clients` | `ciciot2023` | `file_pseudo_clients` | `full_detection_and_operating_point` |
-| `edge_iiotset_sensor_groups` | `edge_iiotset` | `sensor_groups` | `benign_operating_point_equity` |
-| `edge_iiotset_chronological_groups` | `edge_iiotset` | `chronological_sensor_groups` | `benign_operating_point_equity` |
-| `edge_iiotset_static_reference_groups` | `edge_iiotset` | `chronological_static_reference_groups` | `benign_operating_point_equity` |
+## 23.14 Reporting and traceability
 
-## 33.2 Experiments
+- [ ] Reports consume frozen analysis artifacts only.
+- [ ] Every report value has a `ResultTrace`.
+- [ ] Unavailable results render explicitly.
+- [ ] Negative or null findings render explicitly.
+- [ ] Table and figure ordering is deterministic.
+- [ ] No manual scientific value is embedded in rendering code.
+- [ ] Report-profile changes invalidate reports only.
+- [ ] Result freezing verifies the complete lineage.
+- [ ] Frozen result manifests include resolved configuration references.
 
-| Experiment | Role | Requirement | Population(s) | Training | Checkpoint | Seed cohort |
-|---|---|---|---|---|---|---|
-| `anchor_reproduction` | `anchor` | `mandatory` | `nbaiot_anchor_natural_devices` | `federated_averaging_anchor` | `anchor_terminal_round` | `anchor_five_seed` |
-| `confirmatory_threshold_scope_effect` | `confirmatory` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `shared_threshold_construction_sensitivity` | `supportive` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `threshold_quantile_sensitivity` | `supportive` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `external_threshold_quantile_sensitivity` | `external_validation` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `controlled_heterogeneity_response` | `supportive` | `mandatory` | `nbaiot_dirichlet_heterogeneity` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `cluster_and_family_threshold_mechanism` | `mechanism` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `external_cluster_threshold_mechanism` | `external_validation` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `calibration_window_size_stability` | `boundary` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `local_global_threshold_shrinkage` | `supportive` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `conformal_local_threshold_coverage` | `supportive` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `external_conformal_local_threshold_coverage` | `external_validation` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `centralized_pooled_reference` | `supportive` | `mandatory` | `nbaiot_natural_devices` | `centralized_pooled` | `centralized_pooled_epoch_grid` | `datp_core_ten_seed` |
-| `federated_summary_comparator` | `stress_test` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `external_federated_summary_comparator` | `external_validation` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `file_pseudo_client_applicability_boundary` | `boundary` | `mandatory` | `ciciot2023_file_pseudo_clients` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `external_sensor_group_validation` | `external_validation` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `chronological_recalibration_evaluation` | `boundary` | `mandatory` | `edge_iiotset_chronological_groups`<br>`edge_iiotset_static_reference_groups` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `fedprox_aggregation_stress_test` | `stress_test` | `mandatory` | `nbaiot_natural_devices` | `federated_proximal` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `external_fedprox_aggregation_stress_test` | `stress_test` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_proximal` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `model_personalization_absorption_test` | `stress_test` | `mandatory` | `nbaiot_natural_devices` | `federated_averaging_personalized` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `external_model_personalization_absorption_test` | `stress_test` | `mandatory` | `edge_iiotset_sensor_groups` | `federated_averaging_personalized` | `datp_core_round_grid` | `datp_core_ten_seed` |
-| `operational_alert_burden` | `supportive` | `conditional` | `nbaiot_natural_devices` | `federated_averaging` | `datp_core_round_grid` | `datp_core_ten_seed` |
+## 23.15 Interfaces and composition
 
-## 33.3 Protocol registries
+- [ ] CLI commands call one use case each.
+- [ ] CLI does not traverse YAML keys.
+- [ ] CLI does not construct scientific definitions.
+- [ ] CLI does not select concrete backends.
+- [ ] CLI does not calculate metrics.
+- [ ] Composition registers exactly one implementation per supported key or family.
+- [ ] Duplicate registrations fail startup.
+- [ ] Missing required registrations fail before execution.
+- [ ] A future interface can reuse the same use cases.
+- [ ] Progress-event rendering remains outside scientific services.
 
-**Training profiles**
+## 23.16 Testing and quality
 
-`federated_averaging`, `federated_averaging_anchor`, `federated_averaging_personalized`, `federated_proximal`, `centralized_pooled`.
+- [ ] Unit tests cover every value object and union.
+- [ ] Contract tests cover all six YAML documents.
+- [ ] Plan snapshots cover all experiments.
+- [ ] Adapter contracts are shared across dataset implementations.
+- [ ] Artifact-store contract tests cover corruption and interruption.
+- [ ] Synthetic end-to-end smoke tests exist.
+- [ ] Anchor smoke tests exist.
+- [ ] Resume and reuse tests exist.
+- [ ] Scientific drift tests verify frozen identities and formulas.
+- [ ] Impacted tests pass for every implementation ticket.
+- [ ] Ruff passes.
+- [ ] Pyright passes.
+- [ ] Pytest passes for the required scope.
+- [ ] Import-boundary checks pass.
+- [ ] No temporary audit files or compatibility shims remain.
+- [ ] No fake adapter or unfinished concrete implementation is registered.
 
-**Checkpoint profiles**
+## 23.17 Final definition of done
 
-`datp_core_round_grid`, `anchor_terminal_round`, `centralized_pooled_epoch_grid`.
-
-**Seed cohorts**
-
-`datp_core_ten_seed`, `anchor_five_seed`.
-
-**Analysis kinds**
-
-`absorption_analysis`, `alert_burden_analysis`, `anchor_equivalence_analysis`, `cluster_stability_analysis`, `conformal_coverage_analysis`, `distribution_mechanism_analysis`, `locked_client_distribution_analysis`, `metric_association_analysis`, `paired_threshold_analysis`, `quantile_estimation_analysis`, `recovery_fraction_analysis`, `resource_cost_analysis`, `temporal_recovery_analysis`, `threshold_stability_analysis`.
-
-**Result types**
-
-`confirmatory_analysis_result`, `supportive_analysis_result`, `mechanism_analysis_result`, `external_validation_result`, `stress_test_result`, `boundary_result`, `anchor_reproduction_result`, `policy_evaluation_result`, `cluster_stability_result`, `conformal_coverage_result`, `quantile_estimation_result`, `absorption_result`, `temporal_recovery_result`, `metric_association_result`, `distribution_mechanism_result`, `resource_cost_result`, `eligibility_coverage_result`.
-
-**Report profiles**
-
-`interval_table`, `dispersion_ladder_table`, `minimal_dispersion_table`, `sensitivity_grid_table`, `coverage_table`, `cluster_stability_table`, `cluster_contingency_table`, `communication_storage_table`, `alert_burden_table`, `comparator_table`, `score_geometry_figure`, `threshold_tradeoff_figure`, `severity_trend_figure`, `association_scatter_figure`, `shrinkage_curve_figure`, `recovery_curve_figure`, `temporal_recovery_table`.
-
-## 33.4 Alignment rule
-
-Catalogue validation fails when any configured identifier does not map to its typed registry, when an identifier maps to more than one definition, or when a registered implementation has no corresponding configured use and is not explicitly marked as infrastructure-only support.
-
----
-
-# 34. Definition of done
-
-The domain and application architecture is implemented when all of the following are true:
-
-- all six YAML documents resolve into one immutable study catalogue and one runtime catalogue;
-- all 23 configured experiments plan without experiment-specific Python code;
-- all configured populations, capabilities, policies, sweeps, analyses, result types, and reports map to typed definitions;
-- dataset audits and readiness gates execute through dataset adapters;
-- one execution plan correctly coalesces shared training and score jobs across threshold evaluations;
-- expected infeasibility and metric unavailability are represented by typed results;
-- artifact reuse and invalidation follow scientific identity rather than filenames;
-- a bounded end-to-end run reaches a traceable report artifact;
-- architecture, configuration, and scientific conformance tests pass;
-- no hidden default, stale architecture reference, compatibility shim, untyped public payload, or unresolved structural decision remains.
-
-This architecture is the implementation target. Changes to its public contracts require a documented architecture revision; changes to scientific values remain configuration or roadmap changes according to their canonical ownership.
+- [ ] The static skeleton phases 0–5 are complete before scientific algorithms expand.
+- [ ] All six YAML documents resolve into one `ResolvedConfiguration`.
+- [ ] Every configured experiment plans without experiment-specific code.
+- [ ] Every expected artifact and reuse boundary can be explained.
+- [ ] All datasets can be audited.
+- [ ] All populations materialize or return typed infeasibility.
+- [ ] Real training produces validated score artifacts.
+- [ ] All threshold policies execute through family registries.
+- [ ] All metrics and analyses produce typed results.
+- [ ] Reports are frozen and fully traceable.
+- [ ] Resumption is lineage-safe and idempotent.
+- [ ] Scientific invariants pass dedicated tests.
+- [ ] No hidden default, unresolved structural alternative, untyped public payload, experiment branch, or lineage ambiguity remains.
