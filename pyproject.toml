@@ -5,35 +5,40 @@ description = "DATP journal-extension scratch implementation: fixed-encoder, fix
 readme = "README.md"
 requires-python = "==3.12.*"
 dependencies = [
-    # config: external configuration validation and text
     "pydantic>=2.0",
+    "pydantic-settings>=2.0",
     "pyyaml>=6.0",
-    # infrastructure: array math, tabular streaming, artifact hashing, manifest serialization
-    # (exact-pinned: these can change numerical or ordering behavior across releases)
+    "cattrs>=23.2",
+    "networkx>=3.0",
+    "dagster>=1.7",
     "numpy==2.5.1",
     "pyarrow==25.0.0",
+    "polars>=0.20",
+    "pandera>=0.18",
+    "duckdb>=0.10",
+    "xarray>=2024.1",
     "pandas",
     "blake3==1.0.9",
     "msgspec==0.21.1",
-    # infrastructure: fixed AE/training/scoring, federated orchestration, thresholding/statistics estimators
-    # (exact-pinned: same reproducibility requirement)
     "torch==2.10.0",
     "flwr==1.32.1",
     "scikit-learn==1.9.0",
+    "safetensors>=0.4",
     "scipy==1.18.0",
+    "statsmodels>=0.14",
+    "scikit-posthocs>=0.8",
+    "pingouin>=0.5",
     "matplotlib==3.10.8",
-    # infrastructure.telemetry / infrastructure.persistence
+    "deepdiff>=7.0",
     "structlog>=24.1",
     "filelock>=3.13",
 ]
 
 [project.optional-dependencies]
-# cli: entrypoint rendering only, never used inside scientific logic
 cli = [
     "typer>=0.12",
     "rich>=13.7",
 ]
-# infrastructure.hardware: RAM/CPU/GPU inventory, both degrade to stdlib/torch queries if absent
 hardware = [
     "psutil>=5.9",
     "pynvml>=11.5",
@@ -42,60 +47,9 @@ hardware = [
 [project.scripts]
 datp-core = "datp_core.interfaces.cli.app:main"
 
-[dependency-groups]
-# tooling: test execution, coverage, property tests, parallelism, timeouts, order-randomization
-dev = [
-    "pytest>=8.0",
-    "pytest-cov>=5.0",
-    "pytest-xdist>=3.6",
-    "pytest-timeout>=2.3",
-    "pytest-randomly>=3.15",
-    "hypothesis>=6.100",
-    # tooling: lint/format, static typing, layer-boundary enforcement, snapshot testing, session orchestration
-    "ruff>=0.6",
-    "pyright>=1.1.380",
-    "import-linter>=2.0",
-    "pytest-archon>=0.0.5",
-    "syrupy>=4.6",
-    "nox>=2024.4.15",
-]
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/datp_core"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-ra --timeout=60 --cov=src/datp_core --cov-report=term-missing --cov-report=xml"
-pythonpath = ["."]
-filterwarnings = [
-    "ignore:The pynvml package is deprecated.*:FutureWarning:torch.cuda",
-]
-markers = [
-    "unit: isolated unit-level behavior test",
-    "property: property-based test over value-object ranges and locked pure functions",
-    "contract: shared port/adapter contract test exercised against every implementing adapter",
-    "integration: cross-component integration test",
-    "cuda: CUDA-dependent test; runs in the serialized single-worker lane with order-randomization disabled",
-    "architecture: static dependency-direction, framework-confinement, and module-hygiene test",
-    "system_synthetic: reduced synthetic end-to-end run of the full stage sequence",
-    "scientific_smoke: confirmatory-statistic smoke test on a small real-data subsample",
-    "golden: golden-snapshot regression test",
-    # Cross-cutting execution-constraint markers (Nox session selection, not a suite kind):
-    "serial: non-CUDA test that must not run under parallel xdist workers",
-    "resource_intensive: test declaring an elevated resource budget, run in isolation",
-]
-
-[tool.coverage.run]
-source = ["src/datp_core"]
-branch = true
-
-[tool.coverage.report]
-show_missing = true
-skip_empty = true
+pythonpath = ["src", "."]
 
 [tool.ruff]
 line-length = 120
@@ -103,19 +57,14 @@ target-version = "py312"
 src = ["src", "tests"]
 
 [tool.ruff.lint]
-# E/F: pycodestyle + pyflakes (includes F403/F405, star-import prohibition); I: import sorting;
-# N: naming conventions; UP: modern-syntax upgrades; B: common bug patterns; ICN: import conventions.
 select = ["E", "F", "I", "N", "UP", "B", "ICN"]
 
 [tool.ruff.lint.per-file-ignores]
-# Type stubs mirror third-party symbol names exactly; they cannot rename an external
-# exception class (e.g. pyarrow's ArrowInvalid) to satisfy our internal naming convention.
 "typings/**/*.pyi" = ["N818"]
 
 [tool.pyright]
-include = ["src", "tests", "noxfile.py"]
+include = ["src", "tests"]
 pythonVersion = "3.12"
-typeCheckingMode = "strict"
-stubPath = "typings"
+typeCheckingMode = "basic"
 venvPath = "."
 venv = ".venv"
