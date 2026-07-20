@@ -13,6 +13,10 @@ Non-scientific architecture decisions and verification gates.
 
 Scientific scope, configuration examples, or execution implementation.
 
+> Configuration alignment: where a legacy architecture proposal names a YAML
+> path or value, the six-file configuration layout in
+> `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md` takes precedence.
+
 ## 1. Status vocabulary
 
 | Status | Meaning |

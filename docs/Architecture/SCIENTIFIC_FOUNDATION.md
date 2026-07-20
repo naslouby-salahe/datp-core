@@ -13,6 +13,12 @@ Scientific meaning and publication disposition.
 
 Configuration composition, runtime execution, persistence, or rendering.
 
+> Configuration alignment: executable dataset setup names, experiment names,
+> and numeric protocol values are owned by
+> `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md`. This document provides the
+> scientific rationale; where an older conceptual label differs, the catalogue
+> and the YAML configuration take precedence.
+
 ## 1. DATP-Core scientific identity
 
 DATP-Core is a fixed-encoder, fixed-federated-model, threshold-calibration-scope
@@ -62,25 +68,17 @@ scientific shape; a less-favorable ten-seed result is never suppressed in
 favor of the five-seed anchor result (`ANCHOR-03`, `SCI-13`).
 
 The anchor is a *distinct historical materialization*, not the DATP-Core
-pipeline re-labeled. It trains to a maximum of 150 rounds with a single
-terminal checkpoint at round 150 (the `anchor_terminal` checkpoint profile,
-`rounds: [150]`), over training seeds 0–4 and analysis seeds 300–304
-(`paired_seed_count = 5`, `experiment_seed = 0`), and consumes the
-`anchor_natural_devices` setup whose `anchor` materialization applies
-`StandardScaler` normalization (`STANDARD`) with the raw rows retained — no
-cold-start-first-row removal and no exact-duplicate removal — and a
-`chronological_gapped` benign-only calibration split (train 0.60 / gap 0.01 /
-calibration 0.20 / gap 0.01 / test remainder). DATP-Core instead trains to a
-maximum of 200 rounds with the seven `datp_core` checkpoints
-[25, 50, 75, 100, 125, 150, 200], over training seeds 0–9 and analysis seeds
-300–309 (`paired_seed_count = 10`), on the `natural_devices` setup whose
-`datp_core` materialization uses `MIN_MAX` normalization with cold-start-row
-and exact-duplicate removal. The two do not share a terminal autoencoder
-state or a `rounds_max`, and anchor preprocessing must never silently inherit
-the DATP-Core dedup, cold-start drop, or min-max normalization. Each
-experiment authors its checkpoint schedule explicitly through a named
-`checkpoint_profile` (`anchor_terminal` or `datp_core`); the schedule is
-never derived from `evidence_role`.
+pipeline re-labeled. It uses training seeds 0–4, per-client train-split
+standardization, Adam at 0.001, batch size 256, one local epoch, and full
+participation. It trains at most 150 rounds and, from round 40, selects the
+first round whose trailing ten FedAvg-weighted benign-validation losses meet
+the locked relative-change rule `abs(loss[r-9] - loss[r]) / abs(loss[r-9]) <
+0.005`; a zero start loss is treated as relative change zero. If none
+qualifies, it selects the 150-round cap and saves exactly that one final
+checkpoint. Its five-seed interval is the 95% percentile bootstrap with
+10,000 resamples and seed 42. DATP-Core instead uses the 200-round scheduled
+grid and ten-seed declared BCa procedures. The two do not share a terminal
+autoencoder state, preprocessing identity, or checkpoint-selection rule.
 
 ## 3. Consolidated scientific invariants
 
@@ -165,13 +163,13 @@ the roadmap names is represented below, executable or not:
 
 | Semantic setting | Composition | Roadmap letter | Status |
 |---|---|---|---|
-| `natural_device_evaluation` | N-BaIoT, `PhysicalDeviceClients` (K = 9) | A | `LOCKED`, confirmatory (`datp_core` materialization) + anchor (distinct `anchor` materialization, `§2`) |
+| `natural_devices` / `anchor_natural_devices` | N-BaIoT, foldered physical-device clients (K = 9) | A | Journal (`datp_core`) and distinct historical anchor (`anchor`) materializations. |
 | `controlled_heterogeneity_evaluation` | N-BaIoT, `DirichletPartitionedClients` (K = 20, α ∈ {0.1, 0.3, 0.5, 1.0, 10.0, IID}) | C | `LOCKED`, supportive |
 | `file_pseudo_client_evaluation` | CICIoT2023, `DatasetFilePseudoClients` (63 pseudo-clients, matching the `MERGED_CSV/` file count exactly; feature count d = 39 manually corroborated against the mounted corpus, `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11.2` — the `processed_feature_verification` audit's own run remains the citable gate) | B-a | `LOCKED`, boundary only; never generalized beyond itself |
 | `device_mac_repartition` | CICIoT2023, a device/MAC-scoped client construction | B-b | `REJECTED` — the available CSV artifact lacks MAC, device, IP, capture-source, and timestamp columns; no pseudo-client substitute and no PCAP-reprocessing branch exist |
 | `chronological_probe_ciciot2023` | CICIoT2023, a genuine-timestamp temporal protocol | — | `REJECTED` — no timestamp column and no file/row/merge/directory pseudo-time substitute |
-| `external_sensor_group_validation` | Edge-IIoTset, `ExternalSensorGroupClients` (benign sensor-type group granularity K = 10 recoverable, confirmed directly from endpoints, eligible-benign coverage 1.0; naive per-`ip.src_host` device granularity rejected by the `client_granularity_feasibility` audit) | D | `EXECUTABLE` for benign operating-point equity (`validation_scope: benign_operating_point_equity`): benign calibration, threshold construction, benign-test FPR, and cross-client FPR dispersion. Per-client attack-sensitive metrics are `unavailable` (`per_client_attack_detection_metrics`, `attack_traffic_confined_to_subnet_zero`) because all attack traffic resolves to subnet 0 (`§5.1`) |
-| `chronological_recalibration_evaluation` | `external_sensor_group_validation` composition (nine groups, Modbus excluded), chronological 55/15/10/20 split (`historical_train`/`historical_calibration`/`future_recalibration`/`future_evaluation`), frozen-versus-one-shot recalibration against a matched static reference over the same nine groups | D-temporal | `EXECUTABLE` for benign temporal operating-point equity (`validation_scope: benign_temporal_operating_point_equity`) using the defensible within-client time-of-day ordering; per-client temporal attack-detection metrics are `unavailable` (same `attack_traffic_confined_to_subnet_zero` limitation) (`§5.1`) |
+| `sensor_groups` | Edge-IIoTset, ten normal-traffic group folders | D | Static benign operating-point equity. Folder identity is authoritative; endpoint resolution is diagnostic/provenance only. Per-client attack-sensitive metrics are unavailable. |
+| `chronological_sensor_groups` | Edge-IIoTset nine-folder temporal population and matched nine-folder static control; Modbus excluded only for unusable timestamps; chronological 55/15/10/20 split | D-temporal | Benign temporal operating-point equity, frozen versus one-shot recalibration, and typed attack-sensitive unavailability. |
 
 A rejected setting is a non-executable `RejectionRecord`
 (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §5`), never a planner branch, a
@@ -218,38 +216,17 @@ live. The scientific experiment never dynamically selects between device
 clients, group clients, or a fallback pseudo-client construction
 (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §9.1`).
 
-In the resolved Edge-IIoTset campaign this sequence resolves to a
-**capability-scoped** external validation. The `client_granularity_feasibility`
-audit authorizes the benign sensor-type **group** granularity (K = 10) and
-rejects the naive per-`ip.src_host` device granularity; a reopened audit
-additionally resolves benign client identity directly from the endpoints, using
-direction-normalized internal-endpoint resolution over all four endpoint fields
-keyed on the paper TABLE VI subnet topology (the third octet of `192.168.X.Y`
-names the sensor `/24`). That reopened audit confirms the benign group taxonomy
-from the data (97.5% of the 11.2M benign rows resolve to their own sensor
-subnet; eligible-benign coverage 1.0) but shows that **all 9.7M attack rows
-resolve to a single subnet — subnet 0 (Temperature/Modbus), the `/24` hosting
-both the Kali attacker `192.168.0.170` and its victim `192.168.0.128`**. The
-ten authorized benign sensor-group client folders (K = 10) resolve to only
-**nine** distinct `/24` subnets, because `Modbus` is dual-homed (subnets 0
-and 7) and is excluded from this clean per-subnet accounting; no attack row
-carries any subnet 1–8 endpoint in any field, so eight of the remaining nine
-cleanly-resolved sensor clients (every group but `Temperature_and_Humidity`,
-subnet 0) receive zero attack rows (joint benign+attack coverage 1/9 ≈ 11%
-among those nine). This subnet-level accounting does not change the
-authorized K = 10 static client-group count above. Because false-positive
-metrics require only held-out benign rows, the
-`external_group` setup is `executable: true` with
-`validation_scope: benign_operating_point_equity`: benign calibration,
-threshold construction, benign-test FPR, and cross-client FPR dispersion are
-produced. Only per-client attack-sensitive metrics (TPR, Macro-F1, balanced
-accuracy, AUROC) carry a typed `per_client_attack_detection_metrics:
-unavailable` limitation (`attack_traffic_confined_to_subnet_zero`). The
-chronological setup is likewise executable for benign temporal FPR equity,
-using the defensible within-client time-of-day ordering; its per-client
-temporal attack metrics remain unavailable. The limitation is thus narrowed to
-the specific attack-sensitive capability, never the whole cell, and no mapping
-is fabricated.
+In the resolved Edge-IIoTset campaign this is a **capability-scoped** external
+validation. The normal-traffic group folder is the authoritative benign client
+identity (K = 10 static groups). Direction-normalized endpoint resolution is
+kept for source-integrity auditing, attack diagnostics, and provenance only;
+it cannot exclude or reassign a source-integrity-valid benign row. Attack rows
+do not support per-client attack-sensitive metrics, so external validation is
+limited to benign calibration, benign-test FPR, and cross-client FPR
+dispersion. The chronological setup and its matched static control both use
+the same nine folder clients: Modbus is excluded only because its `frame.time`
+values are unusable for chronology. The limitation is therefore specific to
+attack-sensitive and timestamp-dependent capabilities, never the whole cell.
 
 ### 5.2 Immutable dataset limitations
 

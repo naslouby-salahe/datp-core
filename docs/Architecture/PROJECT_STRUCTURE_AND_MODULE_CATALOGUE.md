@@ -219,65 +219,35 @@ disposition catalogue.
 
 ## 3. `configs/` catalogue
 
-Four boundary owners — one per real dataset, one for the model family, one
-per experiment family, and one for every execution profile
-(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §§1–2`). Every authored document
-carries `schema_version` and contains no YAML anchor, merge key, implicit
-inheritance, or hidden default.
+Four ownership surfaces — dataset documents, reusable protocols, experiment
+catalogue, and runtime — are described in
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md`. Every authored document carries
+`schema_version` and contains no YAML anchor, merge key, implicit inheritance,
+or hidden default.
 
 ```text
 configs/
 ├── datasets/
-│   ├── nbaiot.yaml           # PhysicalDeviceClients + DirichletPartitionedClients setups; source audits
-│   ├── ciciot2023.yaml       # DatasetFilePseudoClients setup (boundary role only); feature-count audit
-│   └── edge_iiotset.yaml     # ExternalSensorGroupClients (benign sensor-group) + chronological setups; audits
-│
-├── models/
-│   └── autoencoder.yaml      # architecture, objective, optimizer, checkpointing; every named training profile
-│
-├── experiments/
-│   ├── anchor.yaml                    # anchor_reproduction
-│   ├── threshold_scope.yaml           # confirmatory_threshold_scope_effect + its two Tier-2 rule-outs
-│   ├── heterogeneity.yaml             # controlled_heterogeneity_response
-│   ├── calibration_mechanisms.yaml    # cluster_mechanism, calibration_window_size_stability,
-│   │                                  #   local_global_threshold_shrinkage, conformal_local_threshold_coverage
-│   ├── external_validation.yaml       # external_sensor_group_validation, chronological_recalibration_evaluation
-│   ├── training_stress_tests.yaml     # fedprox_aggregation_stress_test, model_personalization_absorption_test
-│   └── references_and_boundaries.yaml # centralized_pooled_reference, federated_summary_comparator,
-│                                       #   file_pseudo_client_applicability_boundary
-│
-└── execution.yaml            # every named execution profile (scientific, print_grade, development,
-                               #   smoke, dataset_audit, test_smoke) in one file
+│   ├── nbaiot.yaml
+│   ├── ciciot2023.yaml
+│   └── edge_iiotset.yaml
+├── experiments.yaml
+├── protocols.yaml
+└── runtime.yaml
 ```
 
-No `dataset_audits/`, `data_sources/`, `detectors/`, `protocols/`,
-`runtime/`, or `reporting/` directory exists anywhere in this tree
-(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §1.1` records exactly where each
-prior responsibility moved). This tree is identical, file for file, to the
-one in `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §1`; a discrepancy between
-the two is a documentation defect, not an authorized second layout.
+The tree is identical to the one in
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md`; a discrepancy is a documentation
+defect, not an authorized second layout.
 
 ### 3.1 `configs/datasets/`
 
-One document per real dataset — never per client-construction setup, and
-never a separate audit root. Each document owns its own `audits` list
-(source inspection and feasibility checks, `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md
-§2.1`), a `setups` map of every authorized client-construction variant for
-that dataset, its split definition, its preprocessing, and its one
-`eligibility.minimum_calibration_sample_count` value. `ciciot2023.yaml` is
-explicitly boundary-role only (`SCIENTIFIC_FOUNDATION.md §5`); its single
-`file_pseudo_clients` setup never generalizes beyond
-`file_pseudo_client_applicability_boundary`. `edge_iiotset.yaml` authors no
-`external_device` setup — device granularity is rejected by the
-`client_granularity_feasibility` check; only its `external_group` (group
-granularity authorized) and `chronological` setups are retained, both
-**executable for benign operating-point equity** (`executable: true`,
-`validation_scope: benign_operating_point_equity`); only per-client
-attack-sensitive metrics carry a typed `per_client_attack_detection_metrics:
-unavailable` limitation because Edge-IIoTset attack traffic resolves only to the
-single attacker subnet 0, leaving eight of the nine sensor clients with no
-attack rows (`SCIENTIFIC_FOUNDATION.md §5.1`). Worked examples:
-`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §11`.
+One document per real dataset owns its source contract, materializations, and
+setups. CICIoT2023 remains file-pseudo-client only. Edge-IIoTset uses ten
+folder-defined static benign clients and nine matched temporal/control clients;
+Modbus is excluded only from temporal uses. Endpoint resolution never excludes
+a source-integrity-valid benign row from its folder-defined client. See
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md` for the current values.
 
 ### 3.2 `configs/protocols.yaml`
 
@@ -286,13 +256,15 @@ definition, each stated exactly once and referenced elsewhere by a stable
 descriptive identifier. It owns `model_architectures` (`fixed_autoencoder` —
 the only model family this design authorizes), `optimizers`, `batching`,
 named `checkpoint_profiles` (`datp_core_round_grid` =
-`{25,50,75,100,125,150,200}`, `anchor_terminal_round` = `{150}`),
+`{25,50,75,100,125,150,200}`, `anchor_terminal_round` =
+`first_historical_convergence_round_or_150`),
 `seed_cohorts`, `eligibility_policies`, `threshold_policies`,
 `metric_bundles`, `statistical_profiles`, `result_types`, `report_profiles`,
 and `operational_inputs`. Each experiment selects one schedule by an explicit
-`checkpoint_profile` reference (the anchor a single terminal checkpoint at
-round 150, DATP-Core the seven checkpoints through round 200), never derived
-from `evidence_role`. The `training_profiles` map names every authorized
+`checkpoint_profile` reference. The anchor selects its first qualifying
+historical convergence round from round 40 onward, or the 150-round cap, and
+saves one final checkpoint; DATP-Core uses the seven checkpoints through 200.
+This selection is never derived from `evidence_role`. The `training_profiles` map names every authorized
 variant: `federated_averaging` (core ladder),
 `federated_averaging_personalized` (genuine Ditto — `personalization: ditto`,
 `personalization_proximal_weight: 1.0` — the one authorized personalization
@@ -304,7 +276,7 @@ comparator, `SCI-07`),
 new training profile of the autoencoder — is a new entry under
 `model_architectures`; it is never required merely to add a training profile
 of the existing family. Worked example:
-`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §12`.
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md`.
 
 ### 3.3 `configs/experiments.yaml`
 
@@ -337,20 +309,12 @@ automatic reduction of `scientific` (`EXEC-02`). Worked example:
 `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §13`.
 
 Ownership boundaries are fixed by
-`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §2`: a dataset document owns
-dataset identity/construction/split/preprocessing/eligibility and never
-execution limits, model settings, thresholds, metrics, or report formats;
-`models/autoencoder.yaml` owns model definition only (eligibility is
-dataset-owned, never re-authored here); `execution.yaml` owns execution
-only — including per-profile resource budgets, concurrency,
-`process_start_method`, and the `data_loading` block (`chunk_row_count`,
-`streaming`) that datasets no longer carry; an experiment entry's inline
-`report` owns presentation only and never a scientific value. A reduced
-smoke profile is a named entry in `execution.yaml`, never a runtime backoff
-(`EXEC-02`). `models/autoencoder.yaml`'s `federated_averaging_personalized`
-training profile is resolved as genuine Ditto (`personalization: ditto`,
-`personalization_proximal_weight: 1.0`) and is no longer a blocker
-(`ENGINEERING §7`).
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md`: a dataset document owns dataset
+identity/construction/split/preprocessing; `protocols.yaml` owns the fixed
+model and training definitions; `experiments.yaml` owns experiment bindings
+and reports; and `runtime.yaml` owns execution profiles. Runtime profiles
+never back off an authored scientific setting. The Ditto profile is
+`protocols.yaml`'s `federated_averaging_personalized` definition.
 
 ## 4. `tests/` tree
 
@@ -459,10 +423,10 @@ or executor branch, a replacement identity system, or a compatibility shim.
 
 | New thing | Files touched | Never touched |
 |---|---|---|
-| **Dataset** | `Dataset`/registry entry in `domain/identifiers.py`; a new `configs/datasets/<name>.yaml` document (audits, setups, split, preprocessing, eligibility, and its `SOURCE_INSPECTION`-derived `DatasetFieldSchema` all traced to this one file); a source-inspector/partitioner adapter in `infrastructure/data/`; one binding in `composition/registries.py`; contract + memory-equivalence + schema-drift-detection tests | any threshold, metric, evaluation, reporting module, `models/autoencoder.yaml`, or any `configs/experiments.yaml` family |
+| **Dataset** | `Dataset`/registry entry in `domain/identifiers.py`; a new `configs/datasets/<name>.yaml` document (source, setup, split, preprocessing, and capability contracts traced to that file); a source-inspector/partitioner adapter in `infrastructure/data/`; one binding in `composition/registries.py`; contract + memory-equivalence + schema-drift-detection tests | any threshold, metric, evaluation, reporting module, `configs/protocols.yaml`, or `configs/experiments.yaml` |
 | **Client construction (dataset setup)** | a `ClientConstruction` variant in `domain/data.py`; its schema arm in `config/schemas/data.py` + mapping; its `infrastructure/data/` implementation; one binding; one new `setups` entry on the owning dataset document | any experiment file, any letter-based label |
 | **Threshold policy** | a `ThresholdConstruction` variant in `domain/thresholding.py`; a discriminated schema arm carrying only its own fields; an `infrastructure/thresholding/` implementation; one registry line | score-generation code (scores are reused via preserved keys) |
-| **Training profile of the existing model family** | one new entry in `models/autoencoder.yaml`'s `training_profiles` map; a `TrainingProfile` variant in `domain/model.py` if it introduces a genuinely new `kind` | a new `configs/protocols.yaml` document, any dataset, threshold, or experiment file |
+| **Training profile of the existing model family** | one new entry in `configs/protocols.yaml`'s `training_profiles` map; a `TrainingProfile` variant in `domain/model.py` if it introduces a genuinely new `kind` | a new configuration document, dataset, threshold, or experiment file |
 | **New model family** | a new `configs/protocols.yaml` document; its architecture/objective/optimizer schema arms if genuinely distinct | any existing experiment referencing `autoencoder` |
 | **Metric** | a `MetricId` member in its family + `MetricSpec` + typed calculator in `domain/evaluation.py`; reporting metadata | any renderer per-metric; any threshold artifact |
 | **Pipeline stage** | a module in `application/stages/`; an optional config variant; one line in `StageRunnerRegistry` | the executor, planner branching, persistence, recovery, logging, or any existing stage (`PIPE-01`) |

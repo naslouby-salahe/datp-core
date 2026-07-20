@@ -12,6 +12,10 @@ The current stage catalogue and artifact lifecycle.
 
 Scientific experiment meaning, configuration composition, or report layout.
 
+> Configuration alignment: executable configuration paths and values are owned
+> by `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md`; this document does not create
+> additional configuration files or override their contracts.
+
 ## 1. Required lifecycle
 
 The shared execution engine owns the complete stage lifecycle; a stage

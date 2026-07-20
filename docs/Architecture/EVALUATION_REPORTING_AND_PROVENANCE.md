@@ -13,6 +13,10 @@ Evaluation, analysis, reporting, and traceability contracts.
 
 Scientific catalogue selection, runtime execution, or persistence adapters.
 
+> Configuration alignment: executable policy, profile, and experiment names
+> are owned by `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md`; this document
+> describes their evaluation consequences rather than an alternate YAML schema.
+
 ## 1. Primitive evaluation evidence
 
 The evaluator derives every outcome from lineage-bound primitives only:

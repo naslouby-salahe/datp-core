@@ -111,40 +111,26 @@ for every consolidated or removed concept.
 ```text
 configs/
 ├── datasets/
-│   ├── nbaiot.yaml           # PhysicalDeviceClients + DirichletPartitionedClients setups; source audits
-│   ├── ciciot2023.yaml       # DatasetFilePseudoClients setup (boundary role only); feature-count audit
-│   └── edge_iiotset.yaml     # ExternalSensorGroupClients (benign sensor-group) + chronological setups; audits
-│
-├── models/
-│   └── autoencoder.yaml      # architecture, objective, optimizer, checkpointing; every named training profile
-│
-├── experiments/
-│   ├── anchor.yaml
-│   ├── threshold_scope.yaml
-│   ├── heterogeneity.yaml
-│   ├── calibration_mechanisms.yaml
-│   ├── external_validation.yaml
-│   ├── training_stress_tests.yaml
-│   └── references_and_boundaries.yaml
-│
-└── execution.yaml            # every named execution profile in one file
+│   ├── nbaiot.yaml
+│   ├── ciciot2023.yaml
+│   └── edge_iiotset.yaml
+├── experiments.yaml           # study populations, gates, and experiment catalogue
+├── protocols.yaml             # reusable scientific definitions
+└── runtime.yaml               # roots and execution profiles
 ```
 
-Four boundary owners, not six: one document per real dataset (its own
-source audits, client-construction setups, splits, preprocessing, and
-eligibility live together), one document for the model family (every named
-training profile), one experiment catalogue document (each experiment still
-independently addressable by semantic slug), and one execution file. There
-is no `dataset_audits/`, `data_sources/`, `detectors/`, `protocols/`,
-`runtime/`, or `reporting/` directory anywhere in this package
-(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §1.1` records exactly where
-each prior responsibility moved).
+Four ownership surfaces: one document per real dataset, one reusable-protocol
+document, one experiment catalogue, and one runtime document. Dataset setup,
+split, preprocessing, and capability contracts live with their dataset;
+model/training definitions live in `protocols.yaml`; and experiments are
+independently addressable entries in `experiments.yaml`. See
+`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md` for the current contract.
 
 ## Project structure
 
 ```text
 src/datp_core/   domain · application · config · infrastructure · composition · cli
-configs/         datasets · models · experiments · execution.yaml
+configs/         datasets · experiments.yaml · protocols.yaml · runtime.yaml
 tests/           unit · property · contract · integration · architecture · system · golden
 outputs/ models/ runtime-resolved artifact, report, recovery, and external-input roots
 ```
@@ -160,8 +146,7 @@ responsibility, boundary, and the placement rule for new work.
 ## Canonical CLI
 
 One canonical CLI, `datp-core experiment <action>`, with exactly seven
-actions and no scientific override flag
-(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §20`):
+actions and no scientific override flag:
 
 ```bash
 datp-core experiment list

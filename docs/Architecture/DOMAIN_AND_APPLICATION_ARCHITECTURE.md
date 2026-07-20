@@ -13,6 +13,10 @@ Domain/application ownership and type contracts.
 
 Scientific meaning, YAML composition, stage mechanics, or rendering.
 
+> Configuration alignment: concrete YAML paths, names, and values are owned by
+> `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md`. Type sketches here are not an
+> alternate configuration layout.
+
 ## 1. Dependency layers and import rules
 
 Six layers, one allowed direction.
