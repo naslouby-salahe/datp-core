@@ -683,6 +683,8 @@ The conference anchor preserves its historical endpoint and checkpoint semantics
 
 It is not retrofitted with journal checkpoint selection merely to improve reproduction.
 
+Historical anchor training uses one local epoch, Adam (`lr = 0.001`), batch size 256, and client-local standardization fit on benign training rows. Beginning at round 40, compute `abs(loss[r-9] - loss[r]) / abs(loss[r-9])` over the trailing ten FedAvg-weighted benign validation losses; a zero start loss has relative change zero. Select the first round below `0.005`, otherwise the 150-round cap, and save only that final checkpoint. Its five paired seed deltas use the historical 95% percentile bootstrap with 10,000 resamples and seed 42.
+
 ## 13.2 Journal checkpoint grid
 
 Train journal runs to 200 rounds and save:

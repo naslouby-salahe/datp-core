@@ -1,12 +1,5 @@
-# Experiments may narrow a definition through a local parameter override, never by restating
-# it.
-#
-# This file owns no dataset facts, no machine/runtime settings, and no generated evidence.
 schema_version: 1
 
-# --- Detector ----------------------------------------------------------------------------
-# The encoder is fixed for the whole study: only threshold-calibration scope varies across
-# the policy ladder.
 model_architectures:
   fixed_autoencoder:
     kind: dense_autoencoder
@@ -62,9 +55,6 @@ batching:
     shuffle_seed_namespace: dataloader_shuffle
     worker_seed_namespace: dataloader_worker
 
-# --- Deterministic derivation ------------------------------------------------------------
-# Every stochastic procedure draws from a seed that is either an explicit cohort value or a
-# value derived by the single algorithm below. No procedure may use an unseeded generator.
 determinism:
   seed_domains:
     - training
@@ -109,15 +99,14 @@ seed_cohorts:
   datp_core_ten_seed:
     paired_seed_count: 10
     training_seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-    analysis_seeds: [300, 301, 302, 303, 304, 305, 306, 307, 308, 309]
-    seed_pairing_rule: analysis_seed_at_index_i_pairs_with_training_seed_at_index_i
+    bootstrap_analysis_seed: 300
+    analysis_seed_model: one_fixed_bootstrap_seed_per_analysis_not_one_analysis_seed_per_training_seed
   anchor_five_seed:
     paired_seed_count: 5
     training_seeds: [0, 1, 2, 3, 4]
-    analysis_seeds: [300, 301, 302, 303, 304]
-    seed_pairing_rule: analysis_seed_at_index_i_pairs_with_training_seed_at_index_i
+    bootstrap_analysis_seed: 300
+    analysis_seed_model: one_fixed_bootstrap_seed_per_analysis_not_one_analysis_seed_per_training_seed
 
-# --- Checkpointing -----------------------------------------------------------------------
 checkpoint_profiles:
   datp_core_round_grid:
     total_rounds: 200
@@ -147,12 +136,23 @@ checkpoint_profiles:
         - external_dataset_driven_selection
   anchor_terminal_round:
     total_rounds: 150
-    rounds: [150]
-    early_stopping: none
-    convergence_logged_without_stopping: true
+    rounds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150]
+    early_stopping: historical_convergence_rule
+    convergence:
+      metric: federated_averaging_weighted_benign_validation_reconstruction_error
+      rounds_initial: 40
+      rule: absolute_relative_change_between_the_first_and_last_losses_in_the_trailing_window_is_less_than_tolerance
+      formula: "abs(loss_round_minus_9 - loss_round) / abs(loss_round_minus_9) < 0.005"
+      zero_start_loss_behavior: relative_change_equals_zero
+      tolerance: 0.005
+      window_rounds: 10
+      window: trailing_ten_recorded_rounds
+      qualification: first_round_at_or_after_40_satisfying_the_rule
+      no_qualifying_round_behavior: select_the_150_round_cap
+    checkpoint_save_policy: save_exactly_one_final_anchor_checkpoint_at_the_selected_round
     selection:
-      rule: terminal_scheduled_round
-      tie_break: earliest_scheduled_round
+      rule: first_historically_qualifying_round_otherwise_150_round_cap
+      tie_break: earliest_qualifying_round
       scope: anchor_only_historical_checkpoint_semantics_preserved
   centralized_pooled_epoch_grid:
     total_epochs: 200
@@ -167,8 +167,8 @@ checkpoint_profiles:
         aggregation_over_rows: unweighted_arithmetic_mean
       tie_break: earliest_scheduled_epoch
       scope: centralized_reference_only_never_fused_with_federated_artifacts
+      selection_granularity: independently_per_training_seed_then_reused_by_all_centralized_evaluations_of_that_seed
 
-# --- Training ----------------------------------------------------------------------------
 training_profiles:
   federated_averaging:
     kind: federated_averaging_training
@@ -190,10 +190,7 @@ training_profiles:
     model_architecture: fixed_autoencoder
     optimizer: adam_default
     batching: standard
-    # The anchor preserves the conference training contract, which used five local epochs and
-    # a terminal 150-round endpoint. Aligning it with the journal protocol would destroy the
-    # reproduction it exists to perform.
-    local_epochs: 5
+    local_epochs: 1
     participation: full
     participation_rule: every_eligible_client_participates_in_every_round
     client_ordering: ascending_client_identifier
@@ -201,7 +198,7 @@ training_profiles:
     aggregation_formula: "w_global = sum_k(n_k_train * w_k) / sum_k(n_k_train)"
     aggregation_accumulation_order: ascending_client_identifier
     personalization: none
-    checkpoint_authorization: terminal_round_no_selection
+    checkpoint_authorization: historical_first_qualifying_round_or_150_round_cap
 
   federated_averaging_personalized:
     kind: federated_averaging_training
@@ -279,7 +276,6 @@ training_profiles:
       split_seed: 0
     checkpoint_authorization: independent_selection_own_non_federated_curve_never_fused_with_federated_averaging_artifacts
 
-# --- Client eligibility ------------------------------------------------------------------
 eligibility_policies:
   primary_analysis:
     minimum_benign_calibration_count: 100
@@ -314,9 +310,6 @@ eligibility_policies:
     affects_standard_eligibility_minimum: false
     permitted_use: calibration_window_size_experiments_only_never_the_confirmatory_population
 
-# --- Normalization strategies ------------------------------------------------------------
-# Datasets choose a strategy by name; the numerical contract lives here so the two datasets
-# that share a strategy cannot drift apart.
 normalization_strategies:
   min_max:
     formula: "x_scaled = (x - fit_min) / (fit_max - fit_min)"
@@ -334,11 +327,9 @@ normalization_strategies:
 normalization_fit_scopes:
   global_train: fitted_once_on_the_pooled_benign_training_rows_of_every_client_in_the_population
   historical_train: fitted_once_on_the_pooled_benign_historical_training_rows_of_every_client_in_the_population
+  per_client_train: fitted_independently_on_each_clients_benign_training_rows
 normalization_leakage_rule: calibration_test_future_recalibration_and_future_evaluation_rows_are_transformed_but_never_influence_the_fit
 
-# --- Quantile estimation -----------------------------------------------------------------
-# One estimator definition serves every quantile, order statistic and interquartile
-# calculation in the study. No library default may be relied upon.
 quantile_estimators:
   linear_interpolated_order_statistic:
     sort_order: ascending
@@ -349,10 +340,6 @@ quantile_estimators:
     non_finite_input_behavior: typed_failure_non_finite_score_population
     tie_behavior: duplicate_values_are_retained_and_the_index_formula_is_unaffected
 
-# --- Threshold policies ------------------------------------------------------------------
-# The policy ladder. Calibration is benign-only for every policy. Every policy consumes the
-# frozen per-client benign calibration scores of the evaluated model and produces exactly one
-# threshold assignment per eligible client.
 threshold_policy_defaults:
   source_score_population: per_client_benign_calibration_scores_of_the_selected_checkpoint
   eligibility_filter: the_experiment_eligibility_policy_applied_before_any_threshold_is_formed
@@ -456,8 +443,6 @@ threshold_policies:
       mean_error: arithmetic_mean
       std_error: standard_deviation_ddof_1
       skew_error: fisher_pearson_moment_coefficient_of_skewness_uncorrected
-      # The fingerprint quantile is locked at 0.95 and never follows a swept threshold
-      # quantile, so a quantile sweep changes thresholds without changing the grouping.
       p95_error: quantile_0_95_linear_interpolated_order_statistic
     fingerprint_degenerate_client_rules:
       fewer_than_two_calibration_scores: { std_error: 0.0, skew_error: 0.0 }
@@ -477,7 +462,7 @@ threshold_policies:
       convergence_tolerance: 1.0e-4
       random_seed: 42
     label_canonicalization: relabel_clusters_by_ascending_cluster_threshold_then_by_smallest_member_client_identifier
-    insufficient_eligible_clients_behavior: typed_unavailable_when_eligible_client_count_is_not_greater_than_cluster_count
+    insufficient_eligible_clients_behavior: typed_unavailable_when_eligible_client_count_is_less_than_cluster_count
     degenerate_fingerprint_matrix_behavior: typed_unavailable_when_fewer_than_two_distinct_fingerprints
     required_diagnostics:
       - cluster_membership_per_client
@@ -526,7 +511,7 @@ threshold_policies:
       convergence_tolerance: 1.0e-4
       random_seed: 42
     label_canonicalization: relabel_clusters_by_ascending_cluster_threshold_then_by_smallest_member_client_identifier
-    insufficient_eligible_clients_behavior: typed_unavailable_when_eligible_client_count_is_not_greater_than_cluster_count
+    insufficient_eligible_clients_behavior: typed_unavailable_when_eligible_client_count_is_less_than_cluster_count
     degenerate_fingerprint_matrix_behavior: typed_unavailable_when_fewer_than_two_distinct_fingerprints
     required_diagnostics:
       - cluster_membership_per_client
@@ -576,7 +561,7 @@ threshold_policies:
       convergence_tolerance: 1.0e-4
       random_seed: 42
     label_canonicalization: relabel_clusters_by_ascending_cluster_threshold_then_by_smallest_member_client_identifier
-    insufficient_eligible_clients_behavior: typed_unavailable_when_eligible_client_count_is_not_greater_than_cluster_count
+    insufficient_eligible_clients_behavior: typed_unavailable_when_eligible_client_count_is_less_than_cluster_count
     degenerate_fingerprint_matrix_behavior: typed_unavailable_when_fewer_than_two_distinct_fingerprints
     required_diagnostics:
       - cluster_membership_per_client
@@ -738,7 +723,6 @@ threshold_policies:
       - estimated_payload_bytes
     threshold_ownership: one_threshold_for_the_whole_eligible_population
 
-# --- Metric definitions ------------------------------------------------------------------
 metric_definitions:
   prediction_rule: "predicted_attack when score > threshold, otherwise predicted_benign"
   per_client_before_aggregation: true
@@ -814,7 +798,6 @@ metric_definitions:
     - failed_statistical_procedure
   forbidden_substitutions: [zero_for_undefined, empty_string_for_unavailable, omitted_row_for_unavailable, unqualified_nan]
 
-# --- Metric bundles ----------------------------------------------------------------------
 metric_bundles:
   full_detection_and_operating_point:
     metrics:
@@ -843,10 +826,22 @@ metric_bundles:
       - gini_coefficient
     requires_attack_evaluable_clients: false
 
-# --- Statistical analysis profiles -------------------------------------------------------
-# Profiles are separated by estimand, not by convenience. A paired-seed delta profile may
-# never be bound to a single estimate, a ratio, or a descriptive diagnostic.
 statistical_profiles:
+  historical_five_seed_percentile_bootstrap:
+    estimand: mean_historical_paired_seed_level_delta_between_shared_and_local_thresholds
+    unit_of_analysis: training_seed
+    method: percentile_bootstrap
+    statistic: arithmetic_mean_of_paired_deltas
+    confidence_level: 0.95
+    resample_count: 10000
+    analysis_seed: 42
+    pairing_key: seed
+    resampling_unit: per_seed_paired_delta
+    independent_resampling_of_the_two_evaluations: forbidden
+    minimum_paired_units: 5
+    finite_value_validation: reject_non_finite_delta_as_typed_error
+    degenerate_behavior: record_statistical_procedure_failure_and_report_the_paired_values
+    direction_source: analysis_delta_orientation
   paired_seed_bca:
     estimand: mean_paired_seed_level_delta_between_two_evaluations
     unit_of_analysis: training_seed
@@ -854,7 +849,7 @@ statistical_profiles:
     statistic: arithmetic_mean_of_paired_deltas
     confidence_level: 0.95
     resample_count: 50000
-    analysis_seed_source: seed_cohort_analysis_seed_at_index_zero
+    analysis_seed_source: seed_cohort_bootstrap_analysis_seed
     pairing_key: seed
     resampling_unit: per_seed_paired_delta
     independent_resampling_of_the_two_evaluations: forbidden
@@ -877,7 +872,7 @@ statistical_profiles:
     statistic: arithmetic_mean_of_seed_level_values
     confidence_level: 0.95
     resample_count: 50000
-    analysis_seed_source: seed_cohort_analysis_seed_at_index_zero
+    analysis_seed_source: seed_cohort_bootstrap_analysis_seed
     pairing_key: none
     resampling_unit: per_seed_value
     bias_correction: from_bootstrap_distribution
@@ -899,6 +894,23 @@ statistical_profiles:
     undefined_denominator_behavior: typed_undefined_ratio
     interval_reporting: none_point_estimate_and_per_seed_values_only
     direction_source: analysis_outcome_bands
+  paired_seed_ratio_bca:
+    estimand: mean_defined_per_seed_recovery_ratio_after_a_predeclared_paired_degradation_gate
+    unit_of_analysis: training_seed
+    method: bca_bootstrap
+    statistic: arithmetic_mean_of_defined_seed_level_recovery_ratios
+    confidence_level: 0.95
+    resample_count: 50000
+    analysis_seed_source: seed_cohort_bootstrap_analysis_seed
+    pairing_key: seed
+    resampling_unit: paired_seed_temporal_record
+    degradation_gate: required_from_the_binding_analysis
+    undefined_ratio_behavior: retain_as_typed_undefined_and_exclude_only_from_the_ratio_estimate_with_count_reported
+    minimum_defined_units: 10
+    insufficient_unit_behavior: record_statistical_procedure_failure_and_report_defined_and_undefined_seed_records
+    bias_correction: from_bootstrap_distribution
+    acceleration: leave_one_seed_out_jackknife
+    negative_ratio_behavior: retain_without_clamping
   descriptive_seed_summary:
     estimand: descriptive_distribution_of_a_seed_level_quantity
     unit_of_analysis: training_seed
@@ -906,6 +918,13 @@ statistical_profiles:
     reported_statistics: [per_seed_values, arithmetic_mean, median, minimum, maximum, sign_counts]
     interval_reporting: none
     direction_source: analysis_metric_direction
+  descriptive_seed_pair_summary:
+    estimand: descriptive_distribution_of_unordered_seed_pair_cluster_assignment_similarity
+    unit_of_analysis: unordered_training_seed_pair
+    method: descriptive_summary
+    reported_statistics: [all_pair_values, arithmetic_mean, median, minimum, maximum, pair_count]
+    interval_reporting: none
+    independent_scientific_replication_claim: forbidden
   rank_based_secondary:
     estimand: paired_seed_level_rank_evidence
     unit_of_analysis: training_seed
@@ -938,8 +957,6 @@ nested_replicate_policy:
   replicates_counted_as_independent_units: false
   additional_required_replicate_statistic: threshold_variance_across_replicates
 
-# --- Result types ------------------------------------------------------------------------
-# `confirmatory_analysis_result` is reserved for the single locked confirmatory endpoint.
 result_types:
   confirmatory_analysis_result: { permitted_evidence_roles: [confirmatory] }
   supportive_analysis_result: { permitted_evidence_roles: [supportive] }
@@ -950,7 +967,7 @@ result_types:
   anchor_reproduction_result: { permitted_evidence_roles: [anchor] }
   policy_evaluation_result: { permitted_evidence_roles: [anchor, confirmatory, supportive, mechanism, external_validation, stress_test, boundary] }
   cluster_stability_result: { permitted_evidence_roles: [mechanism, external_validation] }
-  conformal_coverage_result: { permitted_evidence_roles: [supportive] }
+  conformal_coverage_result: { permitted_evidence_roles: [supportive, external_validation] }
   quantile_estimation_result: { permitted_evidence_roles: [stress_test, external_validation] }
   absorption_result: { permitted_evidence_roles: [stress_test] }
   temporal_recovery_result: { permitted_evidence_roles: [boundary] }
@@ -959,7 +976,6 @@ result_types:
   resource_cost_result: { permitted_evidence_roles: [confirmatory, supportive, stress_test] }
   eligibility_coverage_result: { permitted_evidence_roles: [anchor, confirmatory, supportive, mechanism, external_validation, stress_test, boundary] }
 
-# Every evaluation produces these two records regardless of the analyses bound to it.
 evaluation_result_contract:
   per_evaluation_result_type: policy_evaluation_result
   per_evaluation_eligibility_result_type: eligibility_coverage_result
@@ -969,9 +985,6 @@ evaluation_result_contract:
     - seed_level_metric_record
     - eligibility_manifest
 
-# --- Artifact identity -------------------------------------------------------------------
-# A fingerprint changes whenever any listed input changes. Concrete filesystem paths are
-# never fingerprint inputs and never form scientific identity.
 artifact_identity:
   hash_function: blake2b
   digest_bytes: 32
@@ -994,20 +1007,20 @@ artifact_identity:
       - split_definition
       - split_seed
     client_assignment: [materialization_fingerprint, setup_identifier, client_construction, partition_condition, partition_seed]
-    model: [model_architecture, resolved_input_dimension]
+    model: [resolved_model_architecture, resolved_input_dimension]
     training:
       - client_assignment_fingerprint
       - model_fingerprint
-      - training_profile
-      - optimizer_contract
-      - batching_contract
+      - resolved_training_profile
+      - resolved_optimizer_contract
+      - resolved_batching_contract
       - training_seed
       - resolved_training_overrides
-    checkpoint: [training_fingerprint, checkpoint_profile, round_or_epoch, checkpoint_selection_profile]
+    checkpoint: [training_fingerprint, checkpoint_profile, round_or_epoch, resolved_checkpoint_selection_contract]
     score: [checkpoint_fingerprint, split_role, score_orientation]
-    threshold: [score_fingerprint, threshold_policy, resolved_policy_parameters, eligibility_policy]
-    metric: [threshold_fingerprint, metric_bundle, metric_definition_version]
-    analysis: [metric_fingerprint, analysis_label, statistical_profile, analysis_seed]
+    threshold: [score_fingerprint, resolved_threshold_policy_contract, resolved_policy_overrides, eligibility_policy]
+    metric: [threshold_fingerprint, metric_bundle, resolved_metric_definitions, metric_definition_version]
+    analysis: [metric_fingerprint, analysis_label, analysis_formulae, score_orientation, reference_analysis, outcome_bands, sweep_coordinates, resolved_statistical_profile, analysis_seed]
   lineage_validation_before_reuse:
     - checksum_match
     - schema_version_match
@@ -1026,19 +1039,41 @@ artifact_identity:
     - checkpoint
     - threshold_policy
     - policy_parameters
+    - metric_definition
+    - analysis_formula
+    - outcome_bands
+    - statistical_profile
+
+communication_estimation_contract:
+  estimate_basis: analytical_payload_estimate_never_measured_network_traffic
+  field_encodings:
+    float64: { bytes_per_field: 8, byte_order: little_endian }
+    uint64: { bytes_per_field: 8, byte_order: little_endian }
+    uint32: { bytes_per_field: 4, byte_order: little_endian }
+  threshold_exchange:
+    direction: client_to_server_then_server_to_clients
+    b1: { uplink_fields_per_client: [local_quantile_float64], downlink_fields_per_client: [shared_threshold_float64] }
+    b2: { uplink_fields_per_client: [], downlink_fields_per_client: [local_threshold_float64] }
+    b4: { uplink_fields_per_client: [mean_error_float64, std_error_float64, skew_error_float64, p95_error_float64], downlink_fields_per_client: [cluster_identifier_uint32, cluster_threshold_float64] }
+    federated_summary: { uplink_fields_per_client: [benign_calibration_count_uint64, benign_local_mean_float64, benign_local_variance_float64], candidate_grid_downlink_fields_per_client: [candidate_coefficient_float64], candidate_grid_uplink_fields_per_client_per_candidate: [benign_exceedance_count_uint64] }
+  candidate_grid_payload: count_every_candidate_downlink_and_every_client_candidate_uplink_without_compression
+  model_exchange:
+    field_width: float32_4_bytes
+    directions: [server_to_each_participating_client, each_participating_client_to_server]
+    bytes_per_round_formula: "2 * participating_client_count * resolved_model_parameter_count * 4"
+  checkpoint_storage:
+    contents: [model_parameters_float32, selected_round_uint32, training_seed_uint32, optimizer_state_if_required_for_resumption, training_and_checkpoint_fingerprints]
+    model_parameter_bytes_formula: "resolved_model_parameter_count * 4"
   filename_match_is_not_lineage_evidence: true
   frozen_artifacts_immutable: true
   ambiguous_latest_reference: forbidden
 
-# --- Report artifact profiles ------------------------------------------------------------
 report_defaults:
   ordering: deterministic_by_threshold_construction
   missing_value_policy: render_typed_unavailable
   table_output_formats: [markdown, latex]
   figure_output_formats: [pdf, png]
   provenance_required_per_artifact: true
-  # A delta column has no intrinsic direction: its interpretation follows the orientation of
-  # the analysis that produced it.
   analysis_defined_direction_token: from_analysis
 
 report_profiles:
@@ -1093,8 +1128,10 @@ report_profiles:
       - { name: threshold_construction, unit: none, direction: none }
       - { name: cv_fpr, unit: ratio, direction: lower_is_better }
       - { name: worst_client_fpr, unit: ratio, direction: lower_is_better }
-      - { name: within_cluster_dispersion, unit: score, direction: lower_is_better }
-      - { name: across_cluster_dispersion, unit: score, direction: none }
+      - { name: within_cluster_threshold_dispersion, unit: score, direction: lower_is_better }
+      - { name: within_cluster_fpr_dispersion, unit: ratio, direction: lower_is_better }
+      - { name: across_cluster_threshold_dispersion, unit: score, direction: none }
+      - { name: across_cluster_mean_fpr_dispersion, unit: ratio, direction: none }
       - { name: adjusted_rand_index, unit: none, direction: higher_is_better }
       - { name: cluster_size, unit: count, direction: none }
   cluster_contingency_table:
@@ -1173,10 +1210,18 @@ report_profiles:
       - { name: temporal_window, unit: none, direction: none }
       - { name: cv_fpr, unit: ratio, direction: lower_is_better }
       - { name: recovery_ratio, unit: ratio, direction: from_analysis }
+  temporal_recovery_table:
+    artifact_type: main_table
+    table_type: temporal_recovery
+    columns:
+      - { name: threshold_construction, unit: none, direction: none }
+      - { name: static_reference_cv, unit: ratio, direction: lower_is_better }
+      - { name: frozen_future_cv, unit: ratio, direction: lower_is_better }
+      - { name: recalibrated_future_cv, unit: ratio, direction: lower_is_better }
+      - { name: drift_excess, unit: ratio, direction: from_analysis }
+      - { name: recovered_amount, unit: ratio, direction: from_analysis }
+      - { name: recovery_ratio, unit: ratio, direction: from_analysis }
 
-# --- Operational inputs ------------------------------------------------------------------
-# No benign decision rate is sourced, so alert burden resolves to a typed unavailable result
-# and must not fail any other evaluation.
 operational_inputs:
   benign_decision_rate:
     configured: false

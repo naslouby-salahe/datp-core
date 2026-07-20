@@ -1,12 +1,5 @@
-# Machine and operational execution profiles.
-#
-# This file owns nothing scientific. No threshold, quantile, seed, split ratio, metric, or
-# sample count may appear here. `chunk_row_count` is an I/O streaming detail and never
-# influences training batch size, model batch semantics, or any scientific sample count.
 schema_version: 1
 
-# --- Roots -------------------------------------------------------------------------------
-# Resolved concrete paths must never enter a scientific identity, artifact key, or fingerprint.
 roots:
   raw_data: data/raw
   processed_data: data/processed
@@ -15,8 +8,6 @@ roots:
   outputs: outputs
   runtime_state: .runtime
 
-# --- Raw source policy -------------------------------------------------------------------
-# The raw root is an external mount reached through a symlink and is strictly read-only.
 raw_source_policy:
   follow_symlink: true
   require_resolved_target_readable: true
@@ -25,8 +16,6 @@ raw_source_policy:
   write_access: forbidden
   create_files_under_raw_root: forbidden
 
-# --- Deterministic execution enforcement --------------------------------------------------
-# Enforcement only. The seeds themselves are scientific values and live in protocols.yaml.
 determinism_enforcement:
   strict:
     python_hash_seed: 0
@@ -54,7 +43,6 @@ determinism_enforcement:
       - execution_profile
     unavailable_determinism_policy: record_and_quantify_the_limitation_never_claim_bitwise_reproducibility
 
-# --- Device policy -----------------------------------------------------------------------
 device_policy_rules:
   cuda_required:
     cpu_fallback: forbidden
@@ -63,13 +51,11 @@ device_policy_rules:
     permitted_for: [dataset_audit, test_smoke]
     permitted_for_scientific_training_or_scoring: false
 
-# --- Resource discipline -----------------------------------------------------------------
 resource_pressure_policy:
   silent_reduction_of_batch_size: forbidden
   silent_reduction_of_rounds_seeds_clients_or_sample_counts: forbidden
   on_budget_exceeded: block_execution_and_report
 
-# --- Execution profiles ------------------------------------------------------------------
 execution_profiles:
   scientific:
     device_policy: cuda_required

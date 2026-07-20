@@ -1,5 +1,3 @@
-# Declarative only: measured counts and audit outcomes are generated evidence and must never
-# be added here.
 schema_version: 1
 dataset: nbaiot
 display_name: N-BaIoT
@@ -20,11 +18,8 @@ source_layout:
   benign_file: benign_traffic.csv
   benign_file_required_per_device: true
   attack_family_dirs: [gafgyt_attacks, mirai_attacks]
-  # Not every device was infected by every family; a missing family directory is a valid
-  # source layout, not a source error.
   attack_family_required_per_device: false
   attack_file_pattern: "*.csv"
-  # Anything not matching the patterns above is reported as unmatched and never read.
   ignored_source_suffixes: [".rar"]
   ignored_root_entries: [demonstrate_structure.csv, N_BaIoT_dataset_description_v1.txt]
 
@@ -53,8 +48,6 @@ field_schema:
       - attack_file_basename
   label_fields:
     binary_label: { benign: benign_traffic, attack: [gafgyt, mirai] }
-    # Configured scientific grouping for the family-scope threshold policy. This is a study
-    # decision about device type, not a property recovered from the source artifact.
     family_taxonomy: device_type
     family_map:
       Danmini_Doorbell: doorbell
@@ -189,14 +182,12 @@ field_schema:
   categorical_encoding: none
   leakage_exclusions: []
 
-# A source tree violating any of these is a typed contract failure, not a tolerated difference.
 source_contract:
   every_model_feature_present_in_every_file: true
   model_feature_count_equals_source_column_count: true
   reject_row_with_field_count_other_than_header: true
   reject_unparseable_numeric_model_feature: true
 
-# Every path must resolve inside this document and may never point at generated evidence.
 fingerprint_inputs:
   source: [source_layout.root, source_layout.device_dirs, field_schema.source_column_count]
   schema: [schema_id, field_schema.model_features.order, field_schema.label_fields.family_map]
@@ -209,7 +200,6 @@ fingerprint_inputs:
   client_assignment:
     - client_construction
 
-# Client eligibility uses the shared primary_analysis policy in protocols.yaml.
 eligibility_policy: primary_analysis
 
 materializations:
@@ -222,7 +212,6 @@ materializations:
       - chronological_gapped_split
       - min_max_normalization_fit_on_train
     row_exclusion:
-      # The first row of every Kitsune source file carries uninitialised running statistics.
       cold_start_row: drop_first_row_per_source_file
       duplicate_rows: drop_exact_duplicates_keep_first
       duplicate_scope: within_source_file
@@ -265,13 +254,11 @@ materializations:
 
   anchor:
     materialization_id: nbaiot_anchor_historical
-    normalization: { strategy: standard, scope: global_train }
+    normalization: { strategy: standard, scope: per_client_train }
     preprocessing_sequence:
       - chronological_gapped_split
-      - standard_normalization_fit_on_train
+      - standard_normalization_fit_per_client_on_train
     row_exclusion:
-      # The anchor reproduces historical conference semantics and therefore retains rows the
-      # datp-core materializations drop. This asymmetry is intentional and must not be aligned.
       cold_start_row: retain
       duplicate_rows: retain
     split:
@@ -312,12 +299,24 @@ setups:
     client_construction:
       method: dirichlet_partitioned_clients
       client_count: 20
-      # The partition condition comes from the experiment sweep and is never inlined here.
       partition_condition: { from_experiment_sweep: partition_condition }
       source_mixture_components: physical_device_domains
       label_field: physical_device_domain
       partition_seed: 0
-      allocation_procedure: dirichlet_draw_per_synthetic_client_over_source_domain_proportions
+      partition_axes:
+        dirichlet_draw_direction: one_source_domain_proportion_vector_per_synthetic_client
+        source_domain_axis: physical_device_domain
+        synthetic_client_axis: ascending_synthetic_client_identifier
+      allocation_procedure:
+        method: deterministic_capacity_constrained_weighted_assignment
+        proportions: draw_one_dirichlet_vector_per_synthetic_client_over_source_domains
+        source_domain_alpha: required_from_partition_condition
+        iid_reference_proportions: uniform_over_source_domains_without_a_dirichlet_draw
+        client_size_targets: equal_integer_targets_per_split_role_with_remainder_to_ascending_synthetic_client_identifiers
+        integer_allocation: assign_each_row_to_the_remaining_capacity_client_maximizing_drawn_source_domain_proportion_divided_by_remaining_capacity
+        allocation_tie_break: ascending_synthetic_client_identifier
+        row_order_before_allocation: ascending_split_role_then_source_domain_then_source_file_path_then_source_row_index
+        allocation_scope: independently_per_split_role_using_the_same_drawn_proportions_and_role_specific_client_size_targets
       same_proportions_govern:
         - benign_train_rows
         - benign_calibration_rows
@@ -330,8 +329,16 @@ setups:
       retry_policy:
         behavior: deterministic_reseed_retry
         max_retries: 10
-        retry_seed_derivation: partition_seed_plus_attempt_index
+        retry_seed_derivation: derived_seed_algorithm_with_namespace_partition_and_components_partition_seed_partition_condition_and_attempt_index
       feasibility_failure: typed_infeasibility_outcome_if_minimum_row_counts_unmet_after_max_retries
+      manifest_invariants:
+        - every_eligible_source_row_is_assigned_exactly_once
+        - no_source_row_is_assigned_to_multiple_synthetic_clients
+        - every_source_row_retains_its_existing_train_calibration_or_test_role
+        - allocated_count_per_split_role_equals_the_source_count
+        - resolved_client_size_targets_equal_allocated_client_counts_per_split_role
+        - deterministic_output_for_the_same_resolved_partition_seed_and_condition
+        - attack_labels_do_not_enter_partition_generation
       manifest_fields:
         - client_count
         - partition_condition

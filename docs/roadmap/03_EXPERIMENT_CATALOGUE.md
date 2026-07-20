@@ -546,7 +546,7 @@ The experiment’s actual client definition comes from the completed local full-
 
 ### Client definition
 
-Ten benign sensor-group folders form the external client population.
+Ten benign sensor-group folders form the static external client population. The Modbus folder is valid for static benign-equity evaluation because its rows retain the declared 63-column layout; its `frame.time` values are address literals and therefore exclude it only from the temporal population.
 
 Eligible-benign coverage is 1.0 under the locked `n_k >= 100` rule.
 

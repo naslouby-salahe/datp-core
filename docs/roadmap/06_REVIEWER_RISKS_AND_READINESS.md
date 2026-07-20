@@ -542,7 +542,7 @@ Use the first-principles full-corpus audit.
 - [ ] Ten benign sensor groups reproduce.
 - [ ] Endpoint normalization is documented.
 - [ ] Eligible-benign coverage is reported.
-- [ ] Unresolved rows are explicitly excluded.
+- [ ] Endpoint-unresolved benign rows are retained in their folder-defined client and reported for provenance.
 - [ ] Attack-sensitive metric unavailability is enforced.
 - [ ] B3 is not executed.
 

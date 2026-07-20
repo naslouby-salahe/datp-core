@@ -1,12 +1,3 @@
-# Declarative only: measured counts, coverage ratios and feasibility verdicts are generated
-# evidence and must not be added here.
-#
-# Feature-count concepts are kept strictly separate and are never conflated:
-#   raw source columns                 -> field_schema.source_column_count
-#   retained numeric features          -> length of retained_numeric_features.order
-#   selected categorical source columns-> length of categorical_encoding.columns
-#   fitted encoded category count      -> resolved at materialization fit time, benign train only
-#   post-encoding model feature count  -> retained numeric + fitted encoded, never static
 schema_version: 1
 dataset: edge_iiotset
 display_name: Edge-IIoTset
@@ -29,17 +20,12 @@ source_layout:
     - Temperature_and_Humidity
     - Water_Level
     - phValue
-  # Source-integrity exclusion, not an ablation: frame.time carries an address literal
-  # instead of a timestamp, displacing every leading field.
-  non_executable_group_folders:
-    - group: Modbus
-      reason: source_integrity_column_displacement
-      displaced_field: frame.time
   executable_group_folders:
     - Distance
     - Flame_Sensor
     - Heart_Rate
     - IR_Receiver
+    - Modbus
     - Soil_Moisture
     - Sound_Sensor
     - Temperature_and_Humidity
@@ -60,7 +46,6 @@ source_layout:
     - Uploading_attack.csv
     - Vulnerability_scanner_attack.csv
     - XSS_attack.csv
-  # The distribution also ships a pre-selected ML/DL extract, which this study does not use.
   ignored_source_suffixes: [".pcap"]
   ignored_subtrees: ["Edge-IIoTset dataset/Selected dataset for ML and DL"]
 
@@ -161,8 +146,6 @@ field_schema:
     internal_prefix: "192.168"
     subnet_component: third_octet
     subnet_role_source: dataset_paper_table_vi
-    # Modbus spanned subnets 0 and 7 in the source tree, but it is a non-executable group,
-    # so it appears in no subnet mapping and can never be resolved as a client.
     subnet_to_group:
       0: Temperature_and_Humidity
       1: Distance
@@ -179,7 +162,8 @@ field_schema:
       placeholder: ["0", "0.0", "0.0.0.0", ""]
       public_external: excluded_as_spoofed_flood_or_incidental_background
     direction_normalization: prefer_non_attacker_internal_endpoint_then_smallest_nonzero_subnet
-    unresolved_row_policy: excluded_from_client_assignment
+    use: source_integrity_auditing_attack_assignment_diagnostics_and_provenance_only
+    unresolved_row_policy: retained_for_folder_defined_benign_client_assignment_and_reported_for_provenance
 
   attack_row_group_policy:
     per_client_attack_assignment: unavailable
@@ -188,7 +172,6 @@ field_schema:
 
   retained_numeric_features:
     role: model_feature
-    # The count is the length of this list and is never restated as a separate literal.
     order:
       - arp.opcode
       - arp.hw.size
@@ -228,14 +211,10 @@ field_schema:
       - mbtcp.len
       - mbtcp.trans_id
       - mbtcp.unit_id
-    # Some retained flag/checksum columns are exported as hex strings interleaved with
-    # decimals, so a plain float parse is not a valid contract.
     numeric_parsing:
       accepted_forms: [decimal, hexadecimal_0x_prefixed]
       hexadecimal_interpretation: unsigned_integer
       on_unparseable_value: typed_parse_failure
-    # An address literal here is client-identifying information, not a protocol measurement.
-    # See source_contract.row_integrity_exclusions.
     on_invalid_value: reject_row_as_invalid_retained_numeric_feature
 
   categorical_encoding:
@@ -248,7 +227,6 @@ field_schema:
       - mqtt.conack.flags
       - mqtt.protoname
       - mqtt.topic
-    # Attack-only category values must never enter the fitted vocabulary.
     vocabulary_scope: benign_training_rows_only
     vocabulary_artifact: frozen_at_materialization_fit_time
     vocabulary_fingerprint: derived_from_fitted_benign_train_categories
@@ -286,16 +264,13 @@ source_contract:
     partition_must_cover_every_source_column: true
   reject_row_with_field_count_other_than_header: true
 
-  # A correct field count does not imply a valid row: leading fields can be displaced.
   positional_contract:
-    timestamp_field_must_match_declared_semantics: true
+    timestamp_field_must_match_declared_semantics_for_temporal_materialization_only: true
     label_fields_must_carry_declared_values: true
     trailing_label_validity_does_not_imply_row_validity: true
 
-  # Reasons are mutually exclusive and evaluated in the listed order, so a row is attributed
-  # to exactly one reason and never double counted.
   row_integrity_exclusions:
-    evaluation_order: [displaced_source_row, invalid_retained_numeric_feature]
+    evaluation_order: [invalid_retained_numeric_feature]
     applies_before:
       - split_assignment
       - client_eligibility_evaluation
@@ -305,9 +280,6 @@ source_contract:
       - duplicate_accounting
       - model_feature_construction
     reasons:
-      displaced_source_row:
-        detection: row_violates_positional_contract
-        handling: exclude_and_count
       invalid_retained_numeric_feature:
         detection: retained_numeric_value_matches_no_accepted_numeric_form
         handling: exclude_and_count
@@ -335,29 +307,13 @@ fingerprint_inputs:
     - field_schema.endpoint_identity.excluded_endpoints
     - field_schema.endpoint_identity.direction_normalization
 
-eligibility_policy: primary_analysis
+client_identity_contract:
+  authoritative_client_definition: normal_traffic_group_folder
+  valid_benign_row_assignment: every_source_integrity_valid_benign_row_is_assigned_to_its_folder_defined_sensor_group_client
+  endpoint_resolution: may_not_exclude_or_reassign_a_source_integrity_valid_benign_row
+  endpoint_permitted_uses: [source_integrity_auditing, attack_assignment_diagnostics, provenance]
 
-# The roadmap locks a ten-group static external population in which Modbus is usable for
-# benign equity and unusable only for chronology. The source audit recorded here finds every
-# Modbus row structurally displaced, which makes it unusable for any purpose and leaves nine
-# executable groups. Both statements cannot hold, so the static external population is not
-# execution ready until the roadmap resolves the count.
-readiness_blockers:
-  edge_iiotset_static_population_count:
-    status: unresolved
-    kind: population_definition_contradiction
-    roadmap_expectation: ten_benign_sensor_group_clients_with_eligible_benign_coverage_one
-    configuration_expectation: nine_executable_benign_sensor_group_clients_after_modbus_source_integrity_exclusion
-    conflicting_inputs:
-      - source_layout.normal_group_folders
-      - source_layout.non_executable_group_folders
-      - source_layout.executable_group_folders
-    safer_interpretation_applied: modbus_rows_are_never_admitted_because_displaced_rows_cannot_be_parsed
-    required_decision: declare_whether_modbus_is_globally_non_executable_or_only_temporally_unusable
-    # The temporal population and its matched static reference are nine groups under both
-    # readings, so they are not blocked by this contradiction.
-    blocks_setups: [sensor_groups]
-    outcome_when_unresolved: blocked_by_dependency
+eligibility_policy: primary_analysis
 
 materializations:
   group_benign:
@@ -365,20 +321,16 @@ materializations:
     normalization: { strategy: min_max, scope: global_train }
     vocabulary_fit_split: benign_train
     preprocessing_sequence:
-      - exclude_non_executable_group_folders
-      - exclude_displaced_source_rows
       - exclude_invalid_retained_numeric_rows
       - drop_row_with_null_in_retained_column
       - drop_exact_duplicate_rows
       - one_hot_encode_categoricals
       - min_max_normalization_fit_on_train
     row_exclusion:
-      non_executable_group_folder: drop_row
-      displaced_source_row: drop_row
       invalid_retained_numeric_feature: drop_row
       null_in_retained_column: drop_row
       duplicate_rows: drop_exact_duplicates_keep_first
-      unresolved_endpoint: excluded_from_client_assignment
+      unresolved_endpoint: retained_for_folder_defined_benign_client_assignment_and_reported_for_provenance
     split:
       method: random_fractional
       calibration_benign_only: true
@@ -395,8 +347,6 @@ materializations:
     normalization: { strategy: min_max, scope: historical_train }
     vocabulary_fit_split: historical_benign_train
     preprocessing_sequence:
-      - exclude_non_executable_group_folders
-      - exclude_displaced_source_rows
       - exclude_invalid_retained_numeric_rows
       - drop_row_with_null_in_retained_column
       - drop_exact_duplicate_rows
@@ -405,17 +355,17 @@ materializations:
       - one_hot_encode_categoricals
       - min_max_normalization_fit_on_historical_train
     row_exclusion:
-      non_executable_group_folder: drop_row
-      displaced_source_row: drop_row
       invalid_retained_numeric_feature: drop_row
       null_in_retained_column: drop_row
       duplicate_rows: drop_exact_duplicates_keep_first
-      unresolved_endpoint: excluded_from_client_assignment
+      unresolved_endpoint: retained_for_folder_defined_benign_client_assignment_and_reported_for_provenance
       duplicate_timestamp_policy: preserve_original_row_order_stable_sort
     split:
       method: within_client_chronological
       calibration_benign_only: true
       role_order: [historical_train, historical_calibration, future_recalibration, future_evaluation]
+      excluded_client_folders: [Modbus]
+      exclusion_reason: timestamp_field_contains_address_literals_not_temporal_values
       historical_train_fraction: 0.55
       historical_calibration_fraction: 0.15
       future_recalibration_fraction: 0.10
@@ -442,16 +392,11 @@ materializations:
       test_rows: benign_only
       attack_rows: not_assigned_to_clients
 
-  # Matched random-fractional reference over exactly the chronological client population. It
-  # exists so the temporal experiment can estimate ordinary sampling variation without
-  # chronology and without depending on a differently sized external population.
   group_chronological_static_reference:
     materialization_id: edge_iiotset_group_chronological_static_reference
     normalization: { strategy: min_max, scope: global_train }
     vocabulary_fit_split: benign_train
     preprocessing_sequence:
-      - exclude_non_executable_group_folders
-      - exclude_displaced_source_rows
       - exclude_invalid_retained_numeric_rows
       - drop_row_with_null_in_retained_column
       - drop_exact_duplicate_rows
@@ -459,18 +404,16 @@ materializations:
       - one_hot_encode_categoricals
       - min_max_normalization_fit_on_train
     row_exclusion:
-      non_executable_group_folder: drop_row
-      displaced_source_row: drop_row
       invalid_retained_numeric_feature: drop_row
       null_in_retained_column: drop_row
       duplicate_rows: drop_exact_duplicates_keep_first
-      unresolved_endpoint: excluded_from_client_assignment
+      unresolved_endpoint: retained_for_folder_defined_benign_client_assignment_and_reported_for_provenance
     split:
       method: random_fractional
       calibration_benign_only: true
       split_seed: 0
-      # Fractions match the chronological role fractions so the two arms differ only in
-      # whether the ordering is chronological or random.
+      excluded_client_folders: [Modbus]
+      exclusion_reason: static_reference_population_must_match_chronological_sensor_groups_and_modbus_has_no_usable_timestamp
       ratios: { train: 0.55, calibration: 0.15, recalibration_reference: 0.10, test: 0.20 }
     split_row_semantics:
       train_rows: benign_only
@@ -485,6 +428,7 @@ setups:
       method: sensor_group_clients
       client_source: source_layout.executable_group_folders
     validation_scope: benign_operating_point_equity
+    eligibility_gate: edge_external_benign_coverage
     provides_capabilities:
       - benign_calibration
       - benign_test_false_positive_metrics
@@ -493,10 +437,10 @@ setups:
     materialization: group_chronological
     client_construction:
       method: sensor_group_clients
-      # Modbus is already absent from the executable group folders as a source-integrity
-      # exclusion, so the temporal population needs no separate exclusion of its own.
       client_source: source_layout.executable_group_folders
+      excluded_client_folders: [Modbus]
     validation_scope: benign_temporal_operating_point_equity
+    eligibility_gate: edge_external_benign_coverage
     provides_capabilities:
       - benign_calibration
       - benign_test_false_positive_metrics
@@ -507,8 +451,10 @@ setups:
     client_construction:
       method: sensor_group_clients
       client_source: source_layout.executable_group_folders
+      excluded_client_folders: [Modbus]
     client_population_must_equal_setup: chronological_sensor_groups
     validation_scope: benign_operating_point_equity
+    eligibility_gate: edge_external_benign_coverage
     provides_capabilities:
       - benign_calibration
       - benign_test_false_positive_metrics

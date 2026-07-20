@@ -450,6 +450,8 @@ The anchor preserves historical conference semantics, including its historical t
 
 It is not retrofitted with journal checkpoint selection merely to improve agreement.
 
+The executable anchor contract is: per-client train-split standardization; Adam at `0.001`; batch size 256; one local epoch; full participation; and no more than 150 rounds. From round 40 onward, evaluate the relative endpoint change across the trailing ten FedAvg-weighted benign validation losses. The first change below `0.005` is selected; otherwise select round 150. Save one checkpoint at that selected round. The historical five-seed interval is a 10,000-resample 95% percentile bootstrap with seed 42.
+
 ## 6.4 Journal execution
 
 Journal training:
