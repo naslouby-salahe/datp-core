@@ -1,8 +1,16 @@
 """Resolved execution-profile record tests."""
 
-from datp_core.config.runtime_settings import ExecutionProfileRecord, resolve_runtime_configuration
-from datp_core.config.yaml_loader import YamlConfigurationReader
 from pathlib import Path
+
+from datp_core.config.runtime_settings import (
+    DeterminismStrictRecord,
+    DevicePolicyRecord,
+    ExecutionProfileRecord,
+    RawSourcePolicyRecord,
+    ResourcePressureRecord,
+    resolve_runtime_configuration,
+)
+from datp_core.config.yaml_loader import YamlConfigurationReader
 
 
 def _authored():
@@ -26,3 +34,24 @@ def test_execution_profiles_resolve_to_pure_records() -> None:
     audit = profiles["dataset_audit"]
     assert audit.device_policy == "cpu_only"
     assert audit.temporary_storage_cleanup == "remove_on_success_and_on_failure"
+
+
+def test_runtime_policies_resolve_to_pure_records() -> None:
+    runtime = resolve_runtime_configuration(authored_runtime=_authored())
+
+    assert isinstance(runtime.raw_source_policy, RawSourcePolicyRecord)
+    assert runtime.raw_source_policy.write_access == "forbidden"
+    assert runtime.raw_source_policy.create_files_under_raw_root == "forbidden"
+
+    assert isinstance(runtime.determinism_enforcement, DeterminismStrictRecord)
+    assert runtime.determinism_enforcement.python_hash_seed == 0
+    assert runtime.determinism_enforcement.torch_use_deterministic_algorithms is True
+    assert runtime.determinism_enforcement.cudnn_benchmark is False
+    assert "gpu_identity" in runtime.determinism_enforcement.recorded_environment_fields
+
+    assert isinstance(runtime.device_policy_rules, DevicePolicyRecord)
+    assert runtime.device_policy_rules.cuda_required["cpu_fallback"] == "forbidden"
+    assert runtime.device_policy_rules.cpu_only["permitted_for_scientific_training_or_scoring"] is False
+
+    assert isinstance(runtime.resource_pressure_policy, ResourcePressureRecord)
+    assert runtime.resource_pressure_policy.on_budget_exceeded == "block_execution_and_report"

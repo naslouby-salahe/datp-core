@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from attrs import define
-from pydantic import Field, JsonValue
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from datp_core.config.models.runtime_config import AuthoredRuntimeConfig
@@ -66,15 +66,65 @@ class ExecutionProfileRecord:
 
 
 @define(frozen=True, slots=True, kw_only=True)
+class RawSourcePolicyRecord:
+    """Pure resolved raw-source access policy (runtime.yaml `raw_source_policy`)."""
+
+    follow_symlink: bool
+    require_resolved_target_readable: bool
+    reject_broken_symlink: bool
+    reject_symlink_loop: bool
+    write_access: str
+    create_files_under_raw_root: str
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class DeterminismStrictRecord:
+    """Pure resolved strict determinism-enforcement contract."""
+
+    python_hash_seed: int
+    cublas_workspace_config: str
+    torch_use_deterministic_algorithms: bool
+    torch_deterministic_algorithms_warn_only: bool
+    cudnn_deterministic: bool
+    cudnn_benchmark: bool
+    float32_matmul_precision: str
+    tensorfloat32_matmul: bool
+    tensorfloat32_cudnn: bool
+    dataloader_worker_seeding: str
+    file_discovery_order: str
+    client_iteration_order: str
+    nondeterministic_operation_policy: str
+    recorded_environment_fields: tuple[str, ...]
+    unavailable_determinism_policy: str
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class DevicePolicyRecord:
+    """Pure resolved device policy (runtime.yaml `device_policy_rules`)."""
+
+    cuda_required: dict[str, str]
+    cpu_only: dict[str, tuple[str, ...] | bool]
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ResourcePressureRecord:
+    """Pure resolved resource-pressure policy (runtime.yaml `resource_pressure_policy`)."""
+
+    silent_reduction_of_batch_size: str
+    silent_reduction_of_rounds_seeds_clients_or_sample_counts: str
+    on_budget_exceeded: str
+
+
+@define(frozen=True, slots=True, kw_only=True)
 class ResolvedRuntimeConfiguration:
     """Fully resolved runtime configuration combining bootstrap settings and runtime.yaml."""
 
     bootstrap: RuntimeBootstrapSettings
     paths: ResolvedProjectPaths
-    raw_source_policy: dict[str, JsonValue]
-    determinism_enforcement: dict[str, JsonValue]
-    device_policy_rules: dict[str, JsonValue]
-    resource_pressure_policy: dict[str, JsonValue]
+    raw_source_policy: RawSourcePolicyRecord
+    determinism_enforcement: DeterminismStrictRecord
+    device_policy_rules: DevicePolicyRecord
+    resource_pressure_policy: ResourcePressureRecord
     execution_profiles: dict[str, ExecutionProfileRecord]
 
 
@@ -103,13 +153,49 @@ def resolve_runtime_configuration(
         runtime_state=(repo_root / roots["runtime_state"]).resolve(),
     )
 
+    raw = authored_runtime.raw_source_policy
+    strict = authored_runtime.determinism_enforcement.strict
+    device = authored_runtime.device_policy_rules
+    pressure = authored_runtime.resource_pressure_policy
     return ResolvedRuntimeConfiguration(
         bootstrap=settings,
         paths=resolved_paths,
-        raw_source_policy=authored_runtime.raw_source_policy.model_dump(),
-        determinism_enforcement=authored_runtime.determinism_enforcement.model_dump(),
-        device_policy_rules=authored_runtime.device_policy_rules.model_dump(),
-        resource_pressure_policy=authored_runtime.resource_pressure_policy.model_dump(),
+        raw_source_policy=RawSourcePolicyRecord(
+            follow_symlink=raw.follow_symlink,
+            require_resolved_target_readable=raw.require_resolved_target_readable,
+            reject_broken_symlink=raw.reject_broken_symlink,
+            reject_symlink_loop=raw.reject_symlink_loop,
+            write_access=raw.write_access,
+            create_files_under_raw_root=raw.create_files_under_raw_root,
+        ),
+        determinism_enforcement=DeterminismStrictRecord(
+            python_hash_seed=strict.python_hash_seed,
+            cublas_workspace_config=strict.cublas_workspace_config,
+            torch_use_deterministic_algorithms=strict.torch_use_deterministic_algorithms,
+            torch_deterministic_algorithms_warn_only=strict.torch_deterministic_algorithms_warn_only,
+            cudnn_deterministic=strict.cudnn_deterministic,
+            cudnn_benchmark=strict.cudnn_benchmark,
+            float32_matmul_precision=strict.float32_matmul_precision,
+            tensorfloat32_matmul=strict.tensorfloat32_matmul,
+            tensorfloat32_cudnn=strict.tensorfloat32_cudnn,
+            dataloader_worker_seeding=strict.dataloader_worker_seeding,
+            file_discovery_order=strict.file_discovery_order,
+            client_iteration_order=strict.client_iteration_order,
+            nondeterministic_operation_policy=strict.nondeterministic_operation_policy,
+            recorded_environment_fields=tuple(strict.recorded_environment_fields),
+            unavailable_determinism_policy=strict.unavailable_determinism_policy,
+        ),
+        device_policy_rules=DevicePolicyRecord(
+            cuda_required=dict(device.cuda_required),
+            cpu_only={k: (tuple(v) if isinstance(v, list) else v) for k, v in device.cpu_only.items()},
+        ),
+        resource_pressure_policy=ResourcePressureRecord(
+            silent_reduction_of_batch_size=pressure.silent_reduction_of_batch_size,
+            silent_reduction_of_rounds_seeds_clients_or_sample_counts=(
+                pressure.silent_reduction_of_rounds_seeds_clients_or_sample_counts
+            ),
+            on_budget_exceeded=pressure.on_budget_exceeded,
+        ),
         execution_profiles={
             key: ExecutionProfileRecord(
                 identifier=key,

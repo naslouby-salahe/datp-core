@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class RawSourcePolicyConfig(BaseModel):
@@ -16,10 +16,30 @@ class RawSourcePolicyConfig(BaseModel):
     create_files_under_raw_root: str
 
 
+class DeterminismStrictConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    python_hash_seed: int
+    cublas_workspace_config: str
+    torch_use_deterministic_algorithms: bool
+    torch_deterministic_algorithms_warn_only: bool
+    cudnn_deterministic: bool
+    cudnn_benchmark: bool
+    float32_matmul_precision: str
+    tensorfloat32_matmul: bool
+    tensorfloat32_cudnn: bool
+    dataloader_worker_seeding: str
+    file_discovery_order: str
+    client_iteration_order: str
+    nondeterministic_operation_policy: str
+    recorded_environment_fields: list[str]
+    unavailable_determinism_policy: str
+
+
 class DeterminismEnforcementConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
-    strict: dict[str, JsonValue]
+    strict: DeterminismStrictConfig
 
 
 class DevicePolicyRulesConfig(BaseModel):

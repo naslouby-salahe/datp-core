@@ -685,7 +685,10 @@ def resolve_project_configuration(
     execution_projection = {
         "scientific_fingerprint": scientific_fingerprint.value,
         "runtime_profiles": {k: _unstructure(v) for k, v in sorted(resolved_runtime.execution_profiles.items())},
-        "determinism": resolved_runtime.determinism_enforcement,
+        "determinism": _unstructure(resolved_runtime.determinism_enforcement),
+        "device_policy": _unstructure(resolved_runtime.device_policy_rules),
+        "resource_pressure": _unstructure(resolved_runtime.resource_pressure_policy),
+        "raw_source_policy": _unstructure(resolved_runtime.raw_source_policy),
     }
     execution_fingerprint = compute_execution_fingerprint(execution_projection)
 
