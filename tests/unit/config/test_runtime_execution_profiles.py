@@ -2,12 +2,15 @@
 
 from pathlib import Path
 
+import pytest
+
 from datp_core.config.runtime_settings import (
     DeterminismStrictRecord,
     DevicePolicyRecord,
     ExecutionProfileRecord,
     RawSourcePolicyRecord,
     ResourcePressureRecord,
+    RuntimeBootstrapSettings,
     resolve_runtime_configuration,
 )
 from datp_core.config.yaml_loader import YamlConfigurationReader
@@ -55,3 +58,15 @@ def test_runtime_policies_resolve_to_pure_records() -> None:
 
     assert isinstance(runtime.resource_pressure_policy, ResourcePressureRecord)
     assert runtime.resource_pressure_policy.on_budget_exceeded == "block_execution_and_report"
+
+
+def test_active_execution_profile_defaults_to_scientific() -> None:
+    runtime = resolve_runtime_configuration(authored_runtime=_authored())
+    assert runtime.active_execution_profile is runtime.execution_profiles["scientific"]
+    assert runtime.active_execution_profile.identifier == "scientific"
+
+
+def test_unknown_active_execution_profile_is_rejected() -> None:
+    settings = RuntimeBootstrapSettings(execution_profile="does_not_exist")
+    with pytest.raises(ValueError, match="Active execution profile"):
+        resolve_runtime_configuration(authored_runtime=_authored(), bootstrap_settings=settings)

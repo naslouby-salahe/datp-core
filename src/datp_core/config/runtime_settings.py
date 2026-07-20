@@ -26,6 +26,7 @@ class RuntimeBootstrapSettings(BaseSettings):
     config_root: Path = Field(default_factory=lambda: Path("configs").resolve())
     dagster_home: Path | None = None
     environment_identity: str = "local_linux"
+    execution_profile: str = "scientific"
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -126,6 +127,7 @@ class ResolvedRuntimeConfiguration:
     device_policy_rules: DevicePolicyRecord
     resource_pressure_policy: ResourcePressureRecord
     execution_profiles: dict[str, ExecutionProfileRecord]
+    active_execution_profile: ExecutionProfileRecord
 
 
 def resolve_runtime_configuration(
@@ -157,6 +159,27 @@ def resolve_runtime_configuration(
     strict = authored_runtime.determinism_enforcement.strict
     device = authored_runtime.device_policy_rules
     pressure = authored_runtime.resource_pressure_policy
+    execution_profiles = {
+        key: ExecutionProfileRecord(
+            identifier=key,
+            device_policy=profile.device_policy,
+            determinism=profile.determinism,
+            resource_budget=dict(profile.resource_budget),
+            concurrency=dict(profile.concurrency),
+            data_loading=dict(profile.data_loading),
+            process_start_method=profile.process_start_method,
+            log_interval_rounds=PositiveInt(profile.log_interval_rounds),
+            atomic_write=profile.atomic_write,
+            temporary_storage=profile.temporary_storage,
+            temporary_storage_cleanup=profile.temporary_storage_cleanup,
+        )
+        for key, profile in authored_runtime.execution_profiles.items()
+    }
+    if settings.execution_profile not in execution_profiles:
+        raise ValueError(
+            f"Active execution profile '{settings.execution_profile}' is not defined in runtime.yaml execution_profiles"
+        )
+    active_execution_profile = execution_profiles[settings.execution_profile]
     return ResolvedRuntimeConfiguration(
         bootstrap=settings,
         paths=resolved_paths,
@@ -196,20 +219,6 @@ def resolve_runtime_configuration(
             ),
             on_budget_exceeded=pressure.on_budget_exceeded,
         ),
-        execution_profiles={
-            key: ExecutionProfileRecord(
-                identifier=key,
-                device_policy=profile.device_policy,
-                determinism=profile.determinism,
-                resource_budget=dict(profile.resource_budget),
-                concurrency=dict(profile.concurrency),
-                data_loading=dict(profile.data_loading),
-                process_start_method=profile.process_start_method,
-                log_interval_rounds=PositiveInt(profile.log_interval_rounds),
-                atomic_write=profile.atomic_write,
-                temporary_storage=profile.temporary_storage,
-                temporary_storage_cleanup=profile.temporary_storage_cleanup,
-            )
-            for key, profile in authored_runtime.execution_profiles.items()
-        },
+        execution_profiles=execution_profiles,
+        active_execution_profile=active_execution_profile,
     )

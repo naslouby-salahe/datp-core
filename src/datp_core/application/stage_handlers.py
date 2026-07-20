@@ -140,7 +140,7 @@ class DatasetMaterializationStageHandler:
                 status=JobExecutionStatus.REUSED,
                 produced_artifact=job.output,
             )
-        profile = self._config.runtime.execution_profiles["scientific"]
+        profile = self._config.runtime.active_execution_profile
         chunk_row_count = profile.data_loading.get("chunk_row_count")
         if not isinstance(chunk_row_count, int) or isinstance(chunk_row_count, bool):
             return StageJobOutcome(

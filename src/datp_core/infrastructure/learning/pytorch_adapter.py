@@ -6,10 +6,16 @@ import random
 from pathlib import Path
 
 import numpy as np
-import safetensors.torch
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
+
+from datp_core.infrastructure.artifacts.model_store import (
+    load_model_safetensors as _load_state_dict_safetensors,
+)
+from datp_core.infrastructure.artifacts.model_store import (
+    save_model_safetensors as _save_state_dict_safetensors,
+)
 
 
 def set_deterministic_seeds(seed: int) -> None:
@@ -55,16 +61,13 @@ class DynamicDenseAutoencoder(nn.Module):
 
 
 def save_model_safetensors(model: nn.Module, destination_path: Path) -> None:
-    """Persist PyTorch model weights using SafeTensors format."""
-    destination_path.parent.mkdir(parents=True, exist_ok=True)
-    state_dict = {k: v.contiguous().cpu() for k, v in model.state_dict().items()}
-    safetensors.torch.save_file(state_dict, str(destination_path))
+    """Persist PyTorch model weights using SafeTensors format via the artifact model store."""
+    _save_state_dict_safetensors(model.state_dict(), destination_path)
 
 
 def load_model_safetensors(model: nn.Module, source_path: Path) -> nn.Module:
-    """Load PyTorch model weights from SafeTensors format."""
-    state_dict = safetensors.torch.load_file(str(source_path))
-    model.load_state_dict(state_dict)
+    """Load PyTorch model weights from SafeTensors format via the artifact model store."""
+    model.load_state_dict(_load_state_dict_safetensors(source_path))
     return model
 
 
