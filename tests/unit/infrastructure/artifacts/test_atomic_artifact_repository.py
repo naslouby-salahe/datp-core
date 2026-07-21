@@ -3,19 +3,20 @@
 from pathlib import Path
 
 from datp_core.domain.artifacts import (
+    ArtifactCommitMetadata,
     ArtifactCommitRequest,
-    ArtifactFileCommitRequest,
     ArtifactFormat,
     ArtifactKey,
     ArtifactKind,
     ArtifactParent,
+    BytesPayload,
+    FilePayload,
 )
 from datp_core.domain.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
 from datp_core.domain.identifiers import ArtifactId
 from datp_core.infrastructure.artifacts.atomic_commit import (
     AtomicArtifactRepository,
     commit_artifact_atomically,
-    commit_artifact_file_atomically,
     inspect_committed_artifact,
     read_committed_artifact,
 )
@@ -24,16 +25,18 @@ from datp_core.infrastructure.artifacts.atomic_commit import (
 def _request() -> ArtifactCommitRequest:
     scientific = compute_scientific_fingerprint({"experiment": "test"})
     return ArtifactCommitRequest(
-        artifact_key=ArtifactKey(artifact_id=ArtifactId("artifact"), kind=ArtifactKind.REPORT),
-        artifact_format=ArtifactFormat.TEXT,
-        scientific_fingerprint=scientific,
-        execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
-        payload_bytes=b"verified payload",
-        relative_path="reports/artifact",
-        parents=(),
-        schema_version=1,
-        creation_timestamp=1.0,
-        environment_identity="test",
+        metadata=ArtifactCommitMetadata(
+            artifact_key=ArtifactKey(artifact_id=ArtifactId("artifact"), kind=ArtifactKind.REPORT),
+            artifact_format=ArtifactFormat.TEXT,
+            scientific_fingerprint=scientific,
+            execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
+            relative_path="reports/artifact",
+            parents=(),
+            schema_version=1,
+            creation_timestamp=1.0,
+            environment_identity="test",
+        ),
+        payload=BytesPayload(payload_bytes=b"verified payload"),
     )
 
 
@@ -55,7 +58,10 @@ def test_repository_reuses_only_a_matching_frozen_artifact(tmp_path: Path) -> No
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
     assert repository.commit(request).success
     decision = repository.assess_reuse(
-        request.relative_path, request.artifact_key, request.scientific_fingerprint, request.execution_fingerprint
+        request.metadata.relative_path,
+        request.metadata.artifact_key,
+        request.metadata.scientific_fingerprint,
+        request.metadata.execution_fingerprint,
     )
     assert decision.can_reuse
     assert decision.existing_manifest is not None
@@ -64,18 +70,23 @@ def test_repository_reuses_only_a_matching_frozen_artifact(tmp_path: Path) -> No
 def test_artifact_declaring_itself_as_its_own_parent_is_rejected(tmp_path: Path) -> None:
     request = _request()
     self_referential = ArtifactCommitRequest(
-        artifact_key=request.artifact_key,
-        artifact_format=request.artifact_format,
-        scientific_fingerprint=request.scientific_fingerprint,
-        execution_fingerprint=request.execution_fingerprint,
-        payload_bytes=request.payload_bytes,
-        relative_path=request.relative_path,
-        parents=(
-            ArtifactParent(parent_key=request.artifact_key, scientific_fingerprint=request.scientific_fingerprint),
+        metadata=ArtifactCommitMetadata(
+            artifact_key=request.metadata.artifact_key,
+            artifact_format=request.metadata.artifact_format,
+            scientific_fingerprint=request.metadata.scientific_fingerprint,
+            execution_fingerprint=request.metadata.execution_fingerprint,
+            relative_path=request.metadata.relative_path,
+            parents=(
+                ArtifactParent(
+                    parent_key=request.metadata.artifact_key,
+                    scientific_fingerprint=request.metadata.scientific_fingerprint,
+                ),
+            ),
+            schema_version=request.metadata.schema_version,
+            creation_timestamp=request.metadata.creation_timestamp,
+            environment_identity=request.metadata.environment_identity,
         ),
-        schema_version=request.schema_version,
-        creation_timestamp=request.creation_timestamp,
-        environment_identity=request.environment_identity,
+        payload=BytesPayload(payload_bytes=b"verified payload"),
     )
     result = commit_artifact_atomically(self_referential, tmp_path, lock_timeout=1.0)
     assert not result.success
@@ -86,18 +97,22 @@ def test_artifact_declaring_itself_as_its_own_parent_is_rejected(tmp_path: Path)
 def test_artifact_declaring_duplicate_parent_lineage_is_rejected(tmp_path: Path) -> None:
     request = _request()
     duplicate_parent = ArtifactKey(artifact_id=ArtifactId("some-parent"), kind=ArtifactKind.MATERIALIZED_DATASET)
-    parent_entry = ArtifactParent(parent_key=duplicate_parent, scientific_fingerprint=request.scientific_fingerprint)
+    parent_entry = ArtifactParent(
+        parent_key=duplicate_parent, scientific_fingerprint=request.metadata.scientific_fingerprint
+    )
     with_duplicates = ArtifactCommitRequest(
-        artifact_key=request.artifact_key,
-        artifact_format=request.artifact_format,
-        scientific_fingerprint=request.scientific_fingerprint,
-        execution_fingerprint=request.execution_fingerprint,
-        payload_bytes=request.payload_bytes,
-        relative_path=request.relative_path,
-        parents=(parent_entry, parent_entry),
-        schema_version=request.schema_version,
-        creation_timestamp=request.creation_timestamp,
-        environment_identity=request.environment_identity,
+        metadata=ArtifactCommitMetadata(
+            artifact_key=request.metadata.artifact_key,
+            artifact_format=request.metadata.artifact_format,
+            scientific_fingerprint=request.metadata.scientific_fingerprint,
+            execution_fingerprint=request.metadata.execution_fingerprint,
+            relative_path=request.metadata.relative_path,
+            parents=(parent_entry, parent_entry),
+            schema_version=request.metadata.schema_version,
+            creation_timestamp=request.metadata.creation_timestamp,
+            environment_identity=request.metadata.environment_identity,
+        ),
+        payload=BytesPayload(payload_bytes=b"verified payload"),
     )
     result = commit_artifact_atomically(with_duplicates, tmp_path, lock_timeout=1.0)
     assert not result.success
@@ -109,19 +124,21 @@ def test_file_commit_copies_and_verifies_a_staged_payload_without_in_memory_payl
     source = tmp_path / "staged.parquet"
     source.write_bytes(b"streamed payload" * 1000)
     scientific = compute_scientific_fingerprint({"experiment": "file"})
-    request = ArtifactFileCommitRequest(
-        artifact_key=ArtifactKey(artifact_id=ArtifactId("file-artifact"), kind=ArtifactKind.MATERIALIZED_DATASET),
-        artifact_format=ArtifactFormat.PARQUET,
-        scientific_fingerprint=scientific,
-        execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
-        source_file=str(source),
-        relative_path="datasets/file-artifact",
-        parents=(),
-        schema_version=1,
-        creation_timestamp=1.0,
-        environment_identity="test",
+    request = ArtifactCommitRequest(
+        metadata=ArtifactCommitMetadata(
+            artifact_key=ArtifactKey(artifact_id=ArtifactId("file-artifact"), kind=ArtifactKind.MATERIALIZED_DATASET),
+            artifact_format=ArtifactFormat.PARQUET,
+            scientific_fingerprint=scientific,
+            execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
+            relative_path="datasets/file-artifact",
+            parents=(),
+            schema_version=1,
+            creation_timestamp=1.0,
+            environment_identity="test",
+        ),
+        payload=FilePayload(source_file=str(source)),
     )
-    assert commit_artifact_file_atomically(request, tmp_path / "artifacts", lock_timeout=1.0).success
+    assert commit_artifact_atomically(request, tmp_path / "artifacts", lock_timeout=1.0).success
     inspected = inspect_committed_artifact("datasets/file-artifact", tmp_path / "artifacts")
     assert inspected.found
     assert inspected.payload_bytes is None

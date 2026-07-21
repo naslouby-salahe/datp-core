@@ -80,12 +80,13 @@ class ArtifactManifest:
 
 
 @define(frozen=True, slots=True, kw_only=True)
-class ArtifactCommitRequest:
+class ArtifactCommitMetadata:
+    """Shared immutable metadata for every artifact commit, regardless of payload source."""
+
     artifact_key: ArtifactKey
     artifact_format: ArtifactFormat
     scientific_fingerprint: Fingerprint
     execution_fingerprint: Fingerprint
-    payload_bytes: bytes
     relative_path: str
     parents: tuple[ArtifactParent, ...]
     schema_version: int
@@ -96,21 +97,32 @@ class ArtifactCommitRequest:
 
 
 @define(frozen=True, slots=True, kw_only=True)
-class ArtifactFileCommitRequest:
-    """Artifact commit metadata for a staged payload file owned by the transaction."""
+class BytesPayload:
+    """In-memory payload bytes for the artifact transaction."""
 
-    artifact_key: ArtifactKey
-    artifact_format: ArtifactFormat
-    scientific_fingerprint: Fingerprint
-    execution_fingerprint: Fingerprint
+    payload_bytes: bytes
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class FilePayload:
+    """Staged-file path whose contents will be copied into the artifact transaction."""
+
     source_file: str
-    relative_path: str
-    parents: tuple[ArtifactParent, ...]
-    schema_version: int
-    creation_timestamp: float
-    environment_identity: str
-    experiment_id: ExperimentId | None = None
-    seed: Seed | None = None
+
+
+type ArtifactPayload = BytesPayload | FilePayload
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ArtifactCommitRequest:
+    """One artifact commit request with shared metadata and a closed payload-source variant.
+
+    The payload discriminates between in-memory bytes and a staged file on disk.
+    Both variants flow through the same atomic transaction engine.
+    """
+
+    metadata: ArtifactCommitMetadata
+    payload: ArtifactPayload
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -146,8 +158,6 @@ class ArtifactRepository(Protocol):
     """Single application-facing authority for immutable artifact persistence."""
 
     def commit(self, request: ArtifactCommitRequest) -> ArtifactCommitResult: ...
-
-    def commit_file(self, request: ArtifactFileCommitRequest) -> ArtifactCommitResult: ...
 
     def read(self, relative_path: str) -> ArtifactLookupResult: ...
 

@@ -1,4 +1,8 @@
-"""Inter-process atomic artifact directory commit repository transactions backed by filelock."""
+"""Inter-process atomic artifact directory commit repository transactions backed by filelock.
+
+One private transaction engine owns the complete lifecycle for both byte-payload and
+staged-file commits. The public entry points are thin delegates with zero duplicated logic.
+"""
 
 from __future__ import annotations
 
@@ -14,7 +18,6 @@ from datp_core.domain.artifacts import (
     ArtifactCommitResult,
     ArtifactCompatibilityResult,
     ArtifactCorruptionReason,
-    ArtifactFileCommitRequest,
     ArtifactKey,
     ArtifactLookupResult,
     ArtifactManifest,
@@ -22,6 +25,8 @@ from datp_core.domain.artifacts import (
     ArtifactRepository,
     ArtifactReuseDecision,
     ArtifactState,
+    BytesPayload,
+    FilePayload,
 )
 from datp_core.domain.fingerprints import Fingerprint, compute_file_checksum, compute_payload_checksum
 from datp_core.infrastructure.artifacts.manifest_codec import (
@@ -50,21 +55,38 @@ def _validate_parent_lineage(artifact_key: ArtifactKey, parents: tuple[ArtifactP
     return None
 
 
-def commit_artifact_atomically(
+def _execute_atomic_transaction(
     request: ArtifactCommitRequest,
     outputs_dir: Path,
     lock_timeout: float,
 ) -> ArtifactCommitResult:
-    """Commit payload bytes and manifest atomically inside a filelock-protected transaction."""
-    lineage_error = _validate_parent_lineage(request.artifact_key, request.parents)
+    """Private transaction engine: owns every lifecycle step exactly once.
+
+    The only parameterized behavior is payload materialization and checksum computation.
+    Every other step — validation, locking, manifest construction, atomic replace, parent
+    fsync — is identical for both payload variants.
+    """
+    metadata = request.metadata
+
+    # --- Pre-I/O validation ---------------------------------------------------
+    lineage_error = _validate_parent_lineage(metadata.artifact_key, metadata.parents)
     if lineage_error is not None:
         return ArtifactCommitResult(success=False, error_message=lineage_error)
-    relative_path = Path(request.relative_path)
+
+    relative_path = Path(metadata.relative_path)
     if relative_path.is_absolute() or ".." in relative_path.parts:
         return ArtifactCommitResult(success=False, error_message="Artifact relative path escapes the repository")
-    target_dir = outputs_dir / relative_path
 
-    lock_file = outputs_dir / f"{request.relative_path}.lock"
+    # --- Staged-file validation (before lock, before any transaction I/O) ------
+    resolved_source: Path | None = None
+    if isinstance(request.payload, FilePayload):
+        resolved_source = Path(request.payload.source_file).resolve()
+        if not resolved_source.is_file():
+            return ArtifactCommitResult(success=False, error_message="Staged artifact source file is missing")
+
+    # --- Locked transaction ---------------------------------------------------
+    target_dir = outputs_dir / metadata.relative_path
+    lock_file = outputs_dir / f"{metadata.relative_path}.lock"
     lock_file.parent.mkdir(parents=True, exist_ok=True)
 
     with FileLock(str(lock_file), timeout=lock_timeout):
@@ -73,39 +95,53 @@ def commit_artifact_atomically(
                 success=False,
                 error_message=f"Frozen artifact already exists at {target_dir}",
             )
+
         with TemporaryDirectory(dir=outputs_dir, prefix=".tmp_commit_") as tmp_dir_str:
             tmp_dir = Path(tmp_dir_str)
-            payload_path = tmp_dir / f"payload.{request.artifact_format.value}"
+            payload_path = tmp_dir / f"payload.{metadata.artifact_format.value}"
 
-            with open(payload_path, "wb") as f:
-                f.write(request.payload_bytes)
-                f.flush()
-                os.fsync(f.fileno())
+            # --- Payload materialization (only variant-specific step) ----------
+            if isinstance(request.payload, BytesPayload):
+                with open(payload_path, "wb") as f:
+                    f.write(request.payload.payload_bytes)
+                    f.flush()
+                    os.fsync(f.fileno())
+                checksum = compute_payload_checksum(request.payload.payload_bytes)
+            else:
+                # FilePayload — resolved_source guaranteed non-None by pre-lock validation
+                assert resolved_source is not None
+                with resolved_source.open("rb") as source, payload_path.open("wb") as target:
+                    shutil.copyfileobj(source, target, length=1_048_576)
+                    target.flush()
+                    os.fsync(target.fileno())
+                checksum = compute_file_checksum(payload_path)
 
-            checksum = compute_payload_checksum(request.payload_bytes)
+            # --- Manifest construction (identical for both variants) -----------
             manifest = ArtifactManifest(
-                artifact_key=request.artifact_key,
-                artifact_format=request.artifact_format,
+                artifact_key=metadata.artifact_key,
+                artifact_format=metadata.artifact_format,
                 state=ArtifactState.FROZEN,
-                relative_path=request.relative_path,
-                scientific_fingerprint=request.scientific_fingerprint,
-                execution_fingerprint=request.execution_fingerprint,
+                relative_path=metadata.relative_path,
+                scientific_fingerprint=metadata.scientific_fingerprint,
+                execution_fingerprint=metadata.execution_fingerprint,
                 payload_checksum=checksum,
-                schema_version=request.schema_version,
-                parents=request.parents,
-                creation_timestamp=request.creation_timestamp,
-                environment_identity=request.environment_identity,
-                experiment_id=request.experiment_id,
-                seed=request.seed,
+                schema_version=metadata.schema_version,
+                parents=metadata.parents,
+                creation_timestamp=metadata.creation_timestamp,
+                environment_identity=metadata.environment_identity,
+                experiment_id=metadata.experiment_id,
+                seed=metadata.seed,
                 is_frozen=True,
             )
 
+            # --- Manifest write + fsync (identical) ----------------------------
             manifest_path = tmp_dir / "manifest.json"
             with open(manifest_path, "wb") as f:
                 f.write(encode_manifest(manifest))
                 f.flush()
                 os.fsync(f.fileno())
 
+            # --- Atomic directory replacement + parent fsync (identical) -------
             target_dir.parent.mkdir(parents=True, exist_ok=True)
             os.replace(tmp_dir, target_dir)
             parent_fd = os.open(target_dir.parent, os.O_RDONLY)
@@ -117,64 +153,13 @@ def commit_artifact_atomically(
     return ArtifactCommitResult(success=True, manifest=manifest)
 
 
-def commit_artifact_file_atomically(
-    request: ArtifactFileCommitRequest,
+def commit_artifact_atomically(
+    request: ArtifactCommitRequest,
     outputs_dir: Path,
     lock_timeout: float,
 ) -> ArtifactCommitResult:
-    """Copy a staged file into one atomic artifact transaction without reading it into memory."""
-    lineage_error = _validate_parent_lineage(request.artifact_key, request.parents)
-    if lineage_error is not None:
-        return ArtifactCommitResult(success=False, error_message=lineage_error)
-    source_file = Path(request.source_file).resolve()
-    relative_path = Path(request.relative_path)
-    if not source_file.is_file():
-        return ArtifactCommitResult(success=False, error_message="Staged artifact source file is missing")
-    if relative_path.is_absolute() or ".." in relative_path.parts:
-        return ArtifactCommitResult(success=False, error_message="Artifact relative path escapes the repository")
-    target_dir = outputs_dir / relative_path
-    lock_file = outputs_dir / f"{request.relative_path}.lock"
-    lock_file.parent.mkdir(parents=True, exist_ok=True)
-    with FileLock(str(lock_file), timeout=lock_timeout):
-        if target_dir.exists():
-            return ArtifactCommitResult(success=False, error_message=f"Frozen artifact already exists at {target_dir}")
-        with TemporaryDirectory(dir=outputs_dir, prefix=".tmp_commit_") as tmp_dir_str:
-            tmp_dir = Path(tmp_dir_str)
-            payload_path = tmp_dir / f"payload.{request.artifact_format.value}"
-            with source_file.open("rb") as source, payload_path.open("wb") as target:
-                shutil.copyfileobj(source, target, length=1_048_576)
-                target.flush()
-                os.fsync(target.fileno())
-            checksum = compute_file_checksum(payload_path)
-            manifest = ArtifactManifest(
-                artifact_key=request.artifact_key,
-                artifact_format=request.artifact_format,
-                state=ArtifactState.FROZEN,
-                relative_path=request.relative_path,
-                scientific_fingerprint=request.scientific_fingerprint,
-                execution_fingerprint=request.execution_fingerprint,
-                payload_checksum=checksum,
-                schema_version=request.schema_version,
-                parents=request.parents,
-                creation_timestamp=request.creation_timestamp,
-                environment_identity=request.environment_identity,
-                experiment_id=request.experiment_id,
-                seed=request.seed,
-                is_frozen=True,
-            )
-            manifest_path = tmp_dir / "manifest.json"
-            with manifest_path.open("wb") as manifest_file:
-                manifest_file.write(encode_manifest(manifest))
-                manifest_file.flush()
-                os.fsync(manifest_file.fileno())
-            target_dir.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(tmp_dir, target_dir)
-            parent_fd = os.open(target_dir.parent, os.O_RDONLY)
-            try:
-                os.fsync(parent_fd)
-            finally:
-                os.close(parent_fd)
-    return ArtifactCommitResult(success=True, manifest=manifest)
+    """Public delegate to the private transaction engine (thin, zero duplicated logic)."""
+    return _execute_atomic_transaction(request, outputs_dir, lock_timeout)
 
 
 def inspect_committed_artifact(relative_path: str, outputs_dir: Path) -> ArtifactLookupResult:
@@ -217,10 +202,7 @@ class AtomicArtifactRepository(ArtifactRepository):
         self._lock_timeout = lock_timeout
 
     def commit(self, request: ArtifactCommitRequest) -> ArtifactCommitResult:
-        return commit_artifact_atomically(request, self._outputs_dir, self._lock_timeout)
-
-    def commit_file(self, request: ArtifactFileCommitRequest) -> ArtifactCommitResult:
-        return commit_artifact_file_atomically(request, self._outputs_dir, self._lock_timeout)
+        return _execute_atomic_transaction(request, self._outputs_dir, self._lock_timeout)
 
     def read(self, relative_path: str) -> ArtifactLookupResult:
         return read_committed_artifact(relative_path, self._outputs_dir)

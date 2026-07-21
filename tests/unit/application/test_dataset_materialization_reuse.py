@@ -5,7 +5,7 @@ from pathlib import Path
 from datp_core.application.experiment_planning import PlanExperimentUseCase
 from datp_core.application.stage_handlers import DatasetMaterializationStageHandler
 from datp_core.composition.root import _build_adapter_registry, build_application
-from datp_core.domain.artifacts import ArtifactCommitRequest, ArtifactFormat
+from datp_core.domain.artifacts import ArtifactCommitMetadata, ArtifactCommitRequest, ArtifactFormat, BytesPayload
 from datp_core.domain.identifiers import ExperimentId, RunId
 from datp_core.domain.outcomes import JobExecutionStatus, StageKind
 from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
@@ -23,16 +23,18 @@ def test_materialization_reuses_a_matching_frozen_artifact_without_reading_raw_s
     relative_path = f"runs/{run_id.value}/{job.job_id.value}"
     assert repository.commit(
         ArtifactCommitRequest(
-            artifact_key=job.output,
-            artifact_format=ArtifactFormat.PARQUET,
-            scientific_fingerprint=app.config.scientific_fingerprint,
-            execution_fingerprint=app.config.execution_fingerprint,
-            payload_bytes=b"already materialized",
-            relative_path=relative_path,
-            parents=(),
-            schema_version=1,
-            creation_timestamp=1.0,
-            environment_identity="test",
+            metadata=ArtifactCommitMetadata(
+                artifact_key=job.output,
+                artifact_format=ArtifactFormat.PARQUET,
+                scientific_fingerprint=app.config.scientific_fingerprint,
+                execution_fingerprint=app.config.execution_fingerprint,
+                relative_path=relative_path,
+                parents=(),
+                schema_version=1,
+                creation_timestamp=1.0,
+                environment_identity="test",
+            ),
+            payload=BytesPayload(payload_bytes=b"already materialized"),
         )
     ).success
     outcome = DatasetMaterializationStageHandler(app.config, repository, _build_adapter_registry()).execute(job, run_id)

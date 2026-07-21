@@ -9,11 +9,13 @@ from safetensors.torch import load as load_safetensors_bytes
 from safetensors.torch import save as save_safetensors_bytes
 
 from datp_core.domain.artifacts import (
+    ArtifactCommitMetadata,
     ArtifactCommitRequest,
     ArtifactCommitResult,
     ArtifactFormat,
     ArtifactKey,
     ArtifactParent,
+    BytesPayload,
 )
 from datp_core.domain.fingerprints import Fingerprint
 from datp_core.domain.identifiers import ExperimentId
@@ -45,18 +47,20 @@ def save_model_safetensors(
     clean_tensors = {key: tensor.cpu().contiguous() for key, tensor in model_state_dict.items()}
     payload_bytes = save_safetensors_bytes(clean_tensors)
     request = ArtifactCommitRequest(
-        artifact_key=artifact_key,
-        artifact_format=ArtifactFormat.SAFETENSORS,
-        scientific_fingerprint=scientific_fingerprint,
-        execution_fingerprint=execution_fingerprint,
-        payload_bytes=payload_bytes,
-        relative_path=relative_path,
-        parents=parents,
-        schema_version=schema_version,
-        creation_timestamp=creation_timestamp,
-        environment_identity=environment_identity,
-        experiment_id=experiment_id,
-        seed=seed,
+        metadata=ArtifactCommitMetadata(
+            artifact_key=artifact_key,
+            artifact_format=ArtifactFormat.SAFETENSORS,
+            scientific_fingerprint=scientific_fingerprint,
+            execution_fingerprint=execution_fingerprint,
+            relative_path=relative_path,
+            parents=parents,
+            schema_version=schema_version,
+            creation_timestamp=creation_timestamp,
+            environment_identity=environment_identity,
+            experiment_id=experiment_id,
+            seed=seed,
+        ),
+        payload=BytesPayload(payload_bytes=payload_bytes),
     )
     return commit_artifact_atomically(request, outputs_dir, lock_timeout)
 

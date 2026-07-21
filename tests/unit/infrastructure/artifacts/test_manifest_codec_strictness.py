@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 from datp_core.domain.artifacts import (
+    ArtifactCommitMetadata,
     ArtifactCommitRequest,
     ArtifactCorruptionReason,
     ArtifactFormat,
@@ -16,6 +17,7 @@ from datp_core.domain.artifacts import (
     ArtifactKind,
     ArtifactManifest,
     ArtifactState,
+    BytesPayload,
 )
 from datp_core.domain.fingerprints import Checksum, compute_execution_fingerprint, compute_scientific_fingerprint
 from datp_core.domain.identifiers import ArtifactId
@@ -93,16 +95,18 @@ def test_schema_version_mismatch_is_reported_distinctly_from_malformed_manifest(
 def test_committed_artifact_with_incompatible_schema_version_reports_schema_incompatible(tmp_path: Path) -> None:
     scientific = compute_scientific_fingerprint({"experiment": "schema-mismatch"})
     request = ArtifactCommitRequest(
-        artifact_key=ArtifactKey(artifact_id=ArtifactId("schema-mismatch"), kind=ArtifactKind.REPORT),
-        artifact_format=ArtifactFormat.TEXT,
-        scientific_fingerprint=scientific,
-        execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
-        payload_bytes=b"payload",
-        relative_path="reports/schema-mismatch",
-        parents=(),
-        schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
-        creation_timestamp=1.0,
-        environment_identity="test",
+        metadata=ArtifactCommitMetadata(
+            artifact_key=ArtifactKey(artifact_id=ArtifactId("schema-mismatch"), kind=ArtifactKind.REPORT),
+            artifact_format=ArtifactFormat.TEXT,
+            scientific_fingerprint=scientific,
+            execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
+            relative_path="reports/schema-mismatch",
+            parents=(),
+            schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
+            creation_timestamp=1.0,
+            environment_identity="test",
+        ),
+        payload=BytesPayload(payload_bytes=b"payload"),
     )
     assert commit_artifact_atomically(request, tmp_path, lock_timeout=1.0).success
 

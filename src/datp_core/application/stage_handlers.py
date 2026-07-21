@@ -10,11 +10,13 @@ from typing import Protocol
 
 from datp_core.config.resolver import ResolvedProjectConfiguration
 from datp_core.domain.artifacts import (
+    ArtifactCommitMetadata,
     ArtifactCommitRequest,
-    ArtifactFileCommitRequest,
     ArtifactFormat,
     ArtifactParent,
     ArtifactRepository,
+    BytesPayload,
+    FilePayload,
 )
 from datp_core.domain.identifiers import DatasetId, RunId
 from datp_core.domain.outcomes import StageJob, StageJobOutcome, StageKind
@@ -63,16 +65,18 @@ class PreflightStageHandler:
             )
         commit = self._repository.commit(
             ArtifactCommitRequest(
-                artifact_key=job.output,
-                artifact_format=ArtifactFormat.JSON,
-                scientific_fingerprint=self._config.scientific_fingerprint,
-                execution_fingerprint=self._config.execution_fingerprint,
-                payload_bytes=payload,
-                relative_path=relative_path,
-                parents=(),
-                schema_version=1,
-                creation_timestamp=time(),
-                environment_identity="runtime_bootstrap",
+                metadata=ArtifactCommitMetadata(
+                    artifact_key=job.output,
+                    artifact_format=ArtifactFormat.JSON,
+                    scientific_fingerprint=self._config.scientific_fingerprint,
+                    execution_fingerprint=self._config.execution_fingerprint,
+                    relative_path=relative_path,
+                    parents=(),
+                    schema_version=1,
+                    creation_timestamp=time(),
+                    environment_identity="runtime_bootstrap",
+                ),
+                payload=BytesPayload(payload_bytes=payload),
             )
         )
         if not commit.success:
@@ -153,24 +157,26 @@ class DatasetMaterializationStageHandler:
                     inventory=inventory,
                     staging_root=staging_root,
                 )
-                commit = self._repository.commit_file(
-                    ArtifactFileCommitRequest(
-                        artifact_key=job.output,
-                        artifact_format=ArtifactFormat.PARQUET,
-                        scientific_fingerprint=self._config.scientific_fingerprint,
-                        execution_fingerprint=self._config.execution_fingerprint,
-                        source_file=str(payload.staged_path),
-                        relative_path=relative_path,
-                        parents=tuple(
-                            ArtifactParent(
-                                parent_key=input_artifact,
-                                scientific_fingerprint=self._config.scientific_fingerprint,
-                            )
-                            for input_artifact in job.inputs
+                commit = self._repository.commit(
+                    ArtifactCommitRequest(
+                        metadata=ArtifactCommitMetadata(
+                            artifact_key=job.output,
+                            artifact_format=ArtifactFormat.PARQUET,
+                            scientific_fingerprint=self._config.scientific_fingerprint,
+                            execution_fingerprint=self._config.execution_fingerprint,
+                            relative_path=relative_path,
+                            parents=tuple(
+                                ArtifactParent(
+                                    parent_key=input_artifact,
+                                    scientific_fingerprint=self._config.scientific_fingerprint,
+                                )
+                                for input_artifact in job.inputs
+                            ),
+                            schema_version=1,
+                            creation_timestamp=time(),
+                            environment_identity="runtime_bootstrap",
                         ),
-                        schema_version=1,
-                        creation_timestamp=time(),
-                        environment_identity="runtime_bootstrap",
+                        payload=FilePayload(source_file=str(payload.staged_path)),
                     )
                 )
         except (OSError, ValueError) as exc:

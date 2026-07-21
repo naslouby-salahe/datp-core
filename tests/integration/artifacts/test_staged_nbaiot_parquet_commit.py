@@ -5,7 +5,14 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.composition.root import build_application
-from datp_core.domain.artifacts import ArtifactFileCommitRequest, ArtifactFormat, ArtifactKey, ArtifactKind
+from datp_core.domain.artifacts import (
+    ArtifactCommitMetadata,
+    ArtifactCommitRequest,
+    ArtifactFormat,
+    ArtifactKey,
+    ArtifactKind,
+    FilePayload,
+)
 from datp_core.domain.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
 from datp_core.domain.identifiers import ArtifactId, DatasetId, MaterializationId
 from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
@@ -37,19 +44,21 @@ def test_staged_nbaiot_parquet_consolidation_commits_as_a_frozen_artifact(tmp_pa
     assert consolidate_nbaiot_parquet_sources((staged,), consolidated, 7) == 98
     scientific = compute_scientific_fingerprint({"dataset": "nbaiot"})
     repository = AtomicArtifactRepository(tmp_path / "artifacts", lock_timeout=1.0)
-    request = ArtifactFileCommitRequest(
-        artifact_key=ArtifactKey(artifact_id=ArtifactId("dataset"), kind=ArtifactKind.MATERIALIZED_DATASET),
-        artifact_format=ArtifactFormat.PARQUET,
-        scientific_fingerprint=scientific,
-        execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
-        source_file=str(consolidated),
-        relative_path="datasets/nbaiot",
-        parents=(),
-        schema_version=1,
-        creation_timestamp=1.0,
-        environment_identity="test",
+    request = ArtifactCommitRequest(
+        metadata=ArtifactCommitMetadata(
+            artifact_key=ArtifactKey(artifact_id=ArtifactId("dataset"), kind=ArtifactKind.MATERIALIZED_DATASET),
+            artifact_format=ArtifactFormat.PARQUET,
+            scientific_fingerprint=scientific,
+            execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
+            relative_path="datasets/nbaiot",
+            parents=(),
+            schema_version=1,
+            creation_timestamp=1.0,
+            environment_identity="test",
+        ),
+        payload=FilePayload(source_file=str(consolidated)),
     )
-    assert repository.commit_file(request).success
+    assert repository.commit(request).success
     payload = repository.read("datasets/nbaiot").payload_bytes
     assert payload is not None
     assert pl.read_parquet(payload).height == 98
