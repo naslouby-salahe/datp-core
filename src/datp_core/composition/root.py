@@ -23,6 +23,7 @@ from datp_core.application.stage_handlers import (
     ModelTrainingStageHandler,
     OperatingPointEvaluationStageHandler,
     PreflightStageHandler,
+    ReportGenerationStageHandler,
     ScoreGenerationStageHandler,
     StatisticalAnalysisStageHandler,
     ThresholdConstructionStageHandler,
@@ -160,6 +161,7 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
             ThresholdConstructionStageHandler(resolved_config, artifact_repository, construct_th),
             OperatingPointEvaluationStageHandler(resolved_config, artifact_repository),
             StatisticalAnalysisStageHandler(resolved_config, artifact_repository, statistical_analysis),
+            ReportGenerationStageHandler(resolved_config, artifact_repository),
         ),
     )
     audit_svc = DuckDbAuditService(config=resolved_config)

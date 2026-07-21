@@ -896,3 +896,61 @@ class StatisticalAnalysisStageHandler:
     def _evaluation_policy(experiment, label: str) -> str:
         evaluation = next(item for item in experiment.evaluations if item.label == label)
         return evaluation.threshold_policy_id.value
+
+
+class ReportGenerationStageHandler:
+    """Freeze the configured report request against one immutable statistical summary."""
+
+    stage = StageKind.REPORT_GENERATION
+
+    def __init__(self, config: ResolvedProjectConfiguration, repository: ArtifactRepository) -> None:
+        self._config = config
+        self._repository = repository
+
+    def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
+        relative_path = f"runs/{run_id.value}/{job.job_id.value}"
+        if self._repository.assess_reuse(
+            relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
+        ).can_reuse:
+            return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        statistics = self._repository.read(
+            f"runs/{run_id.value}/{IdentityBuilder.statistical_analysis_job_id(job.context).value}"
+        )
+        if not statistics.found or statistics.payload_bytes is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Statistical summary is unavailable"
+            )
+        experiment = self._config.experiments.get(job.context.experiment_id)
+        try:
+            summary = json.loads(statistics.payload_bytes)
+            profiles = [self._config.report_profiles.get(identifier).identifier for identifier in experiment.report_ids]
+        except (KeyError, ValueError, json.JSONDecodeError) as exc:
+            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+        payload = json.dumps(
+            {
+                "schema_version": 1,
+                "experiment_id": experiment.identifier.value,
+                "report_profiles": profiles,
+                "statistical_summary": summary,
+                "scientific_fingerprint": self._config.scientific_fingerprint.value,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        commit = _commit_artifact(
+            self._repository,
+            self._config,
+            job.context,
+            artifact_key=job.output,
+            artifact_format=ArtifactFormat.JSON,
+            relative_path=relative_path,
+            parents=_parents(self._config, job.inputs),
+            payload=BytesPayload(payload_bytes=payload),
+        )
+        if not commit.success:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message=commit.error_message or "report artifact commit failed",
+            )
+        return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
