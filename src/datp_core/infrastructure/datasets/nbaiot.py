@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 from io import BytesIO
 from pathlib import Path
+from random import Random
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -143,6 +144,31 @@ def calculate_nbaiot_chronological_boundaries(
     )
 
 
+def random_fractional_roles(
+    row_count: int, materialization: DatasetMaterialization, source_path: Path
+) -> tuple[str, ...]:
+    """Assign exact configured random-fractional benign roles deterministically per source."""
+    if materialization.split_method != "random_fractional" or materialization.split_seed is None:
+        raise ValueError("N-BaIoT random materialization requires a configured random_fractional split and seed")
+    if row_count < 0 or not math.isclose(
+        sum(float(materialization.ratio(role)) for role in ("train", "calibration", "test")),
+        1.0,
+        rel_tol=0.0,
+        abs_tol=1.0e-12,
+    ):
+        raise ValueError("N-BaIoT random split ratios must sum exactly to one")
+    indices = list(range(row_count))
+    Random(f"{materialization.split_seed.value}:{source_path.as_posix()}").shuffle(indices)
+    train_count = int(float(materialization.ratio("train")) * row_count)
+    calibration_count = int(float(materialization.ratio("calibration")) * row_count)
+    roles = ["test"] * row_count
+    for index in indices[:train_count]:
+        roles[index] = "train"
+    for index in indices[train_count : train_count + calibration_count]:
+        roles[index] = "calibration"
+    return tuple(roles)
+
+
 def write_nbaiot_source_parquet(
     source_path: Path,
     target_path: Path,
@@ -164,7 +190,14 @@ def write_nbaiot_source_parquet(
             result, dataset_root, benign_filename, attack_family_directories
         ).is_attack:
             valid_benign_count += 1
-    boundaries = calculate_nbaiot_chronological_boundaries(valid_benign_count, materialization)
+    random_roles = (
+        random_fractional_roles(valid_benign_count, materialization, source_path)
+        if materialization.split_method == "random_fractional"
+        else None
+    )
+    boundaries = (
+        calculate_nbaiot_chronological_boundaries(valid_benign_count, materialization) if random_roles is None else None
+    )
     target_path.parent.mkdir(parents=True, exist_ok=True)
     schema = pa.schema(
         [
@@ -185,7 +218,13 @@ def write_nbaiot_source_parquet(
             if isinstance(result, SourceRowFailure):
                 raise ValueError(f"N-BaIoT source changed between validation and write: {source_path}")
             row = materialize_nbaiot_source_row(result, dataset_root, benign_filename, attack_family_directories)
-            role = "test" if row.is_attack else boundaries.role_for_benign_index(benign_index)
+            if row.is_attack:
+                role = "test"
+            elif random_roles is not None:
+                role = random_roles[benign_index]
+            else:
+                assert boundaries is not None
+                role = boundaries.role_for_benign_index(benign_index)
             benign_index += not row.is_attack
             if role == "excluded_gap":
                 continue
