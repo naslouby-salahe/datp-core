@@ -30,7 +30,7 @@ from datp_core.infrastructure.datasets.adapter_registry import DatasetAdapterReg
 from datp_core.infrastructure.datasets.ciciot2023_adapter import CICIoT2023Adapter
 from datp_core.infrastructure.datasets.nbaiot_adapter import NBaIoTAdapter
 from datp_core.infrastructure.querying.audit_service import DuckDbAuditService
-from datp_core.infrastructure.statistics.scipy_port import ScipyStatisticalAnalysisAdapter
+from datp_core.infrastructure.statistics.scipy_adapter import ScipyStatisticalAnalysisAdapter
 from datp_core.infrastructure.thresholding.base import ThresholdEstimator
 from datp_core.infrastructure.thresholding.estimators import ConfiguredThresholdEstimator
 

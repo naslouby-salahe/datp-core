@@ -22,11 +22,6 @@ class ValidationReport:
     experiments_checked: int
     threshold_policies_checked: int
 
-    def __eq__(self, other: object) -> bool:
-        if isinstance(other, bool):
-            return self.is_valid == other
-        return super().__eq__(other)
-
 
 class ProjectConfigurationValidator:
     """Validator inspecting resolved project configuration against cross-document invariants."""

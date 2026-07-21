@@ -9,13 +9,10 @@ from json import dumps
 from pathlib import Path
 from typing import NamedTuple
 
-import cattrs
 from attrs import define, field
 
 from datp_core.domain.identifiers import _DomainIdentifier
 from datp_core.domain.values import NonNegativeFloat, PositiveFloat, PositiveInt, Probability, RelativePath, Seed
-
-_cattrs_converter = cattrs.Converter()
 
 type CanonicalProjection = str | int | bool | None | list[CanonicalProjection] | dict[str, CanonicalProjection]
 

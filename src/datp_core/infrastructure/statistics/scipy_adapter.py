@@ -11,7 +11,7 @@ from datp_core.domain.statistics import ConfidenceInterval, HypothesisTestResult
 from datp_core.domain.values import Probability
 
 
-def compute_wilcoxon_signed_rank(x: np.ndarray, y: np.ndarray) -> HypothesisTestResult:
+def _compute_wilcoxon_signed_rank(x: np.ndarray, y: np.ndarray) -> HypothesisTestResult:
     """Wilcoxon signed-rank test for paired seed differences."""
     res = stats.wilcoxon(x, y, zero_method="wilcox", correction=True)
     statistic, p_value = cast(tuple[float, float], res)
@@ -24,7 +24,7 @@ def compute_wilcoxon_signed_rank(x: np.ndarray, y: np.ndarray) -> HypothesisTest
     )
 
 
-def compute_bca_bootstrap_ci(
+def _compute_bca_bootstrap_ci(
     data: np.ndarray,
     resample_count: int,
     confidence_level: float,
@@ -54,3 +54,24 @@ def compute_bca_bootstrap_ci(
         confidence_level=Probability(confidence_level),
         method="bca_bootstrap",
     )
+
+
+class ScipyStatisticalAnalysisAdapter:
+    """SciPy implementation of the application statistical-analysis port."""
+
+    def bootstrap_ci(
+        self,
+        data: np.ndarray,
+        resample_count: int,
+        confidence_level: float,
+        analysis_seed: int,
+    ) -> ConfidenceInterval:
+        return _compute_bca_bootstrap_ci(
+            data,
+            resample_count=resample_count,
+            confidence_level=confidence_level,
+            analysis_seed=analysis_seed,
+        )
+
+    def wilcoxon(self, left: np.ndarray, right: np.ndarray) -> HypothesisTestResult:
+        return _compute_wilcoxon_signed_rank(left, right)

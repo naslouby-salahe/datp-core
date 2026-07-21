@@ -111,23 +111,3 @@ class YamlConfigurationReader:
         protocols = cls.read_protocols_document(protocols_path)
         runtime = cls.read_runtime_document(runtime_path)
         return datasets, experiments, protocols, runtime
-
-
-def load_authored_yaml[TModel: BaseModel](file_path: Path, model_cls: type[TModel]) -> TModel:
-    return YamlConfigurationReader.read_model(file_path, model_cls)
-
-
-def load_dataset_config(file_path: Path) -> AuthoredDatasetConfig:
-    return YamlConfigurationReader.read_dataset_document(file_path)
-
-
-def load_experiments_catalogue(file_path: Path) -> AuthoredExperimentsCatalogueConfig:
-    return YamlConfigurationReader.read_experiments_document(file_path)
-
-
-def load_protocols_config(file_path: Path) -> AuthoredProtocolsConfig:
-    return YamlConfigurationReader.read_protocols_document(file_path)
-
-
-def load_runtime_config(file_path: Path) -> AuthoredRuntimeConfig:
-    return YamlConfigurationReader.read_runtime_document(file_path)
