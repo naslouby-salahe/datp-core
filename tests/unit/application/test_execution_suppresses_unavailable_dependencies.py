@@ -11,7 +11,8 @@ def test_execution_suppresses_jobs_after_an_unavailable_prerequisite() -> None:
     report = ExecuteExperimentUseCase(config, handlers=()).execute(ExperimentId("anchor_reproduction"))
     preflight = next(outcome for outcome in report.outcomes if outcome.stage is StageKind.PREFLIGHT)
     materialization = next(outcome for outcome in report.outcomes if outcome.stage is StageKind.DATASET_MATERIALIZATION)
-    assert preflight.status is JobExecutionStatus.SKIPPED
+    assert preflight.status is JobExecutionStatus.FAILED
+    assert preflight.error_message == "No stage handler is registered"
     assert materialization.status is JobExecutionStatus.SKIPPED
     assert materialization.error_message is not None
     assert "Unavailable prerequisite jobs" in materialization.error_message

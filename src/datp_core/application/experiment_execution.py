@@ -61,7 +61,7 @@ class ExecuteExperimentUseCase:
                 if unavailable_dependencies
                 else handler.execute(job, run_id)
                 if handler is not None
-                else StageJobOutcome.skipped(
+                else StageJobOutcome.failed(
                     job_id=job.job_id,
                     stage=job.stage,
                     error_message="No stage handler is registered",

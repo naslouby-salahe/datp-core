@@ -35,8 +35,8 @@ class SourceEntry(Protocol):
 class SourceInventory(Protocol):
     """Ordered, typed inventory of source files for one resolved dataset.
 
-    Both audit and materialization consume the same inventory; no consumer
-    rescans the filesystem independently.
+    Materialization consumes this ordered inventory rather than discovering
+    source files independently.
     """
 
     @property

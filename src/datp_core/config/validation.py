@@ -9,6 +9,7 @@ from attrs import define
 from datp_core.config.resolver import ResolvedProjectConfiguration, resolve_project_configuration
 from datp_core.config.yaml_loader import ConfigurationError
 from datp_core.domain.identifiers import NormalizationStrategyId
+from datp_core.domain.thresholding import FamilyMeanThresholdPolicyRecord
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -107,6 +108,18 @@ class ProjectConfigurationValidator:
                     errors.append(
                         f"Experiment '{exp_id}' evaluation '{ev.label}' references "
                         f"unregistered threshold policy '{ev.threshold_policy_id}'"
+                    )
+                    continue
+                policy = config.threshold_policies[ev.threshold_policy_id]
+                target_population = config.populations.get(ev.population_id or exp_rec.population_ids[0])
+                target_dataset = config.datasets.get(target_population.dataset_id)
+                if (
+                    isinstance(policy, FamilyMeanThresholdPolicyRecord)
+                    and "family_taxonomy" not in target_dataset.capabilities
+                ):
+                    errors.append(
+                        f"Experiment '{exp_id}' evaluation '{ev.label}' requests B3 on a population without "
+                        "a family taxonomy"
                     )
 
             for analysis in exp_rec.analyses:

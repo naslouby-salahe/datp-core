@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 from attrs import define
 
-from datp_core.domain.datasets import ConfiguredSourceTree, ResolvedDataset
-from datp_core.domain.identifiers import DatasetId
+from datp_core.domain.datasets import ConfiguredSourceTree, DatasetSetup, ResolvedDataset
+from datp_core.domain.fingerprints import Checksum
+from datp_core.domain.identifiers import DatasetId, DatasetSetupId
+from datp_core.domain.splits import MaterializedSplitEvidence, SplitMembership
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -54,6 +57,57 @@ class DatasetAuditReport:
         return self.raw_source_found and self.readable and not self.issues
 
 
+@define(frozen=True, slots=True, kw_only=True)
+class DatasetReadinessReport:
+    """Observed materialization evidence that decides whether training may start."""
+
+    dataset_id: DatasetId
+    setup_id: DatasetSetupId
+    source_fingerprint: Checksum
+    schema_summary: tuple[tuple[str, str], ...]
+    client_row_counts: dict[str, int]
+    class_counts: dict[str, int]
+    metadata_availability: dict[str, bool]
+    projected_eligible_client_ids: tuple[str, ...]
+    attack_evaluable: bool
+    timestamp_valid: bool | None
+    blocking_defects: tuple[DatasetAuditIssue, ...]
+
+    @property
+    def ready_for_training(self) -> bool:
+        return not self.blocking_defects
+
+    def encode(self) -> bytes:
+        """Encode this observed decision in a stable artifact payload."""
+        return json.dumps(
+            {
+                "schema_version": 1,
+                "dataset_id": self.dataset_id.value,
+                "setup_id": self.setup_id.value,
+                "source_fingerprint": self.source_fingerprint.value,
+                "schema_summary": self.schema_summary,
+                "client_row_counts": self.client_row_counts,
+                "class_counts": self.class_counts,
+                "metadata_availability": self.metadata_availability,
+                "projected_eligible_client_ids": self.projected_eligible_client_ids,
+                "attack_evaluable": self.attack_evaluable,
+                "timestamp_valid": self.timestamp_valid,
+                "blocking_defects": [
+                    {
+                        "code": defect.code,
+                        "message": defect.message,
+                        "path": None if defect.path is None else str(defect.path),
+                    }
+                    for defect in self.blocking_defects
+                ],
+                "ready_for_training": self.ready_for_training,
+            },
+            ensure_ascii=False,
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+
+
 class AuditDatasetUseCase:
     """Audit exactly the resolved dataset supplied by the composition root."""
 
@@ -96,6 +150,98 @@ class AuditDatasetUseCase:
             materialization_count=len(dataset.materializations),
             source_trees=source_audits,
             issues=tuple(issues),
+        )
+
+    def assess_materialization(
+        self,
+        dataset: ResolvedDataset,
+        setup: DatasetSetup,
+        evidence: MaterializedSplitEvidence,
+        source_fingerprint: Checksum,
+    ) -> DatasetReadinessReport:
+        """Turn validated row assignments into the execution readiness decision."""
+        columns = dict(evidence.schema_columns)
+        manifest = evidence.manifest
+        defects: list[DatasetAuditIssue] = []
+        required_columns = ("split", "client_id", "is_attack", "source_path", "source_row_index")
+        missing_columns = tuple(column for column in required_columns if column not in columns)
+        if missing_columns:
+            defects.append(
+                DatasetAuditIssue(
+                    code="materialized_schema_missing_required_columns",
+                    message=f"Materialized payload is missing required columns: {', '.join(missing_columns)}",
+                    path=None,
+                )
+            )
+        if not manifest.eligible_client_ids:
+            defects.append(
+                DatasetAuditIssue(
+                    code="no_eligible_clients",
+                    message="No client has the configured benign calibration support",
+                    path=None,
+                )
+            )
+        expected_client_count = setup.client_construction.client_count
+        if expected_client_count is not None and len(manifest.client_ids) != int(expected_client_count):
+            defects.append(
+                DatasetAuditIssue(
+                    code="unexpected_client_count",
+                    message=(f"Expected {int(expected_client_count)} clients, observed {len(manifest.client_ids)}"),
+                    path=None,
+                )
+            )
+
+        temporal = any(
+            entry.membership
+            in {
+                SplitMembership.HISTORICAL_TRAINING,
+                SplitMembership.HISTORICAL_CALIBRATION,
+                SplitMembership.FUTURE_RECALIBRATION,
+                SplitMembership.FUTURE_EVALUATION,
+            }
+            for entry in manifest.entries
+        )
+        timestamp_valid = all(entry.chronology_key is not None for entry in manifest.entries) if temporal else None
+        if temporal and not timestamp_valid:
+            defects.append(
+                DatasetAuditIssue(
+                    code="invalid_temporal_chronology",
+                    message="Temporal materialization lacks a chronology key for one or more rows",
+                    path=None,
+                )
+            )
+
+        capabilities = frozenset(setup.capabilities)
+        attack_entries = tuple(entry for entry in manifest.entries if entry.is_attack)
+        attack_evaluable = bool(attack_entries) and all(
+            entry.client_id in manifest.client_ids for entry in attack_entries
+        )
+        if "per_client_attack_detection_metrics" in capabilities and not attack_evaluable:
+            defects.append(
+                DatasetAuditIssue(
+                    code="attack_evaluation_unavailable",
+                    message="Configured per-client attack detection has no client-assigned attack rows",
+                    path=None,
+                )
+            )
+
+        timestamp_field = dataset.field_schema.identity_scheme.timestamp_field
+        return DatasetReadinessReport(
+            dataset_id=dataset.dataset_id,
+            setup_id=setup.identifier,
+            source_fingerprint=source_fingerprint,
+            schema_summary=evidence.schema_columns,
+            client_row_counts=manifest.client_row_counts,
+            class_counts=manifest.class_counts,
+            metadata_availability={
+                "client": "client_id" in columns,
+                "family_taxonomy": dataset.field_schema.label_fields.family_taxonomy is not None,
+                "timestamp": temporal or (isinstance(timestamp_field, str) and timestamp_field != "unavailable"),
+            },
+            projected_eligible_client_ids=manifest.eligible_client_ids,
+            attack_evaluable=attack_evaluable,
+            timestamp_valid=timestamp_valid,
+            blocking_defects=tuple(defects),
         )
 
     def _audit_source_tree(

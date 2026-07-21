@@ -7,7 +7,7 @@ from typing import cast
 import numpy as np
 from scipy import stats
 
-from datp_core.domain.statistics import ConfidenceInterval, HypothesisTestResult
+from datp_core.domain.statistics import ConfidenceInterval, HypothesisTestResult, StatisticalProcedureError
 from datp_core.domain.values import Probability
 
 
@@ -31,23 +31,26 @@ def _compute_bca_bootstrap_ci(
     analysis_seed: int,
 ) -> ConfidenceInterval:
     """BCa bootstrap confidence interval estimation."""
-    if len(data) < 2:
-        val = float(data[0]) if len(data) == 1 else 0.0
-        return ConfidenceInterval(
-            lower_bound=val,
-            upper_bound=val,
-            confidence_level=Probability(confidence_level),
-            method="single_sample",
-        )
+    if len(data) < 10:
+        raise StatisticalProcedureError("BCa requires at least ten valid paired seed differences")
+    if not np.isfinite(data).all():
+        raise StatisticalProcedureError("BCa requires finite paired seed differences")
+    if np.ptp(data) == 0.0:
+        raise StatisticalProcedureError("BCa is degenerate for identical paired seed differences")
 
-    res = stats.bootstrap(
-        (data,),
-        np.mean,
-        n_resamples=resample_count,
-        confidence_level=confidence_level,
-        method="BCa",
-        rng=np.random.default_rng(analysis_seed),
-    )
+    try:
+        res = stats.bootstrap(
+            (data,),
+            np.mean,
+            n_resamples=resample_count,
+            confidence_level=confidence_level,
+            method="BCa",
+            rng=np.random.default_rng(analysis_seed),
+        )
+    except ValueError as exc:
+        raise StatisticalProcedureError(f"BCa failed: {exc}") from exc
+    if not np.isfinite((res.confidence_interval.low, res.confidence_interval.high)).all():
+        raise StatisticalProcedureError("BCa produced a non-finite confidence interval")
     return ConfidenceInterval(
         lower_bound=float(res.confidence_interval.low),
         upper_bound=float(res.confidence_interval.high),

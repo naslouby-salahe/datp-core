@@ -1,5 +1,6 @@
-"""Preflight execution reports success only after an artifact commit."""
+"""Preflight execution persists the full resolved configuration immutably."""
 
+import json
 from pathlib import Path
 
 from datp_core.application.stage_handlers import PreflightStageHandler
@@ -25,4 +26,11 @@ def test_preflight_stage_commits_the_resolved_identity_artifact(tmp_path: Path) 
     outcome = PreflightStageHandler(app.config, repository).execute(job, RunId("run_anchor"))
     assert outcome.status is JobExecutionStatus.SUCCESS
     assert outcome.produced_artifact == job.output
-    assert repository.read("runs/run_anchor/anchor:preflight").found
+    stored = repository.read("runs/run_anchor/anchor:preflight")
+    assert stored.found
+    assert stored.payload_bytes is not None
+    persisted = json.loads(stored.payload_bytes)
+    assert persisted["scientific_fingerprint"] == app.config.scientific_fingerprint.value
+    assert persisted["execution_fingerprint"] == app.config.execution_fingerprint.value
+    assert persisted["scientific_projection"] == app.config.scientific_projection
+    assert persisted["execution_projection"] == app.config.execution_projection

@@ -45,9 +45,15 @@ def compute_operating_point_metrics(df: pl.DataFrame) -> pl.DataFrame:
             false_positive_rate=pl.when(pl.col("benign_total") > 0)
             .then(pl.col("false_positives") / pl.col("benign_total"))
             .otherwise(None),
+            false_positive_rate_status=pl.when(pl.col("benign_total") > 0)
+            .then(pl.lit("available"))
+            .otherwise(pl.lit("unavailable_missing_benign_class")),
             true_positive_rate=pl.when(pl.col("attack_total") > 0)
             .then(pl.col("true_positives") / pl.col("attack_total"))
             .otherwise(None),
+            true_positive_rate_status=pl.when(pl.col("attack_total") > 0)
+            .then(pl.lit("available"))
+            .otherwise(pl.lit("unavailable_missing_attack_class")),
         )
         .sort("client_id")
         .collect()

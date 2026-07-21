@@ -15,6 +15,8 @@ from datp_core.domain.values import Seed
 class ArtifactKind(Enum):
     RESOLVED_CONFIG = "resolved_config"
     MATERIALIZED_DATASET = "materialized_dataset"
+    SPLIT_MANIFEST = "split_manifest"
+    DATASET_READINESS = "dataset_readiness"
     MODEL_CHECKPOINT = "model_checkpoint"
     CALIBRATION_SCORES = "calibration_scores"
     TEST_SCORES = "test_scores"

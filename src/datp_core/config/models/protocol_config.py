@@ -96,6 +96,14 @@ class SeedCohortConfig(StrictFrozenConfigModel):
     bootstrap_analysis_seed: int
     analysis_seed_model: str
 
+    @model_validator(mode="after")
+    def validate_seed_cohort(self) -> SeedCohortConfig:
+        if len(self.training_seeds) != self.paired_seed_count:
+            raise ValueError("paired_seed_count must equal the number of training_seeds")
+        if len(set(self.training_seeds)) != len(self.training_seeds):
+            raise ValueError("training_seeds must be unique")
+        return self
+
 
 class CheckpointSelectorInputConfig(StrictFrozenConfigModel):
     population: str
@@ -299,7 +307,7 @@ class ClusterThresholdPolicyConfig(BaseThresholdPolicyConfig):
     canonical: bool | None = None
     exploratory: bool | None = None
     aggregation: str
-    cluster_count: int
+    cluster_count: int = Field(ge=1)
     aggregated_quantity: str
     aggregation_formula: str
     median_estimator: str | None = None
@@ -317,6 +325,14 @@ class ClusterThresholdPolicyConfig(BaseThresholdPolicyConfig):
     degenerate_fingerprint_matrix_behavior: str
     required_diagnostics: list[str]
     threshold_ownership: str
+
+    @model_validator(mode="after")
+    def validate_canonical_cluster_policy(self) -> ClusterThresholdPolicyConfig:
+        if self.canonical is True and self.cluster_count != 3:
+            raise ValueError("The canonical B4 policy must use cluster_count=3")
+        if self.canonical is True and self.exploratory is True:
+            raise ValueError("A canonical B4 policy cannot also be exploratory")
+        return self
 
 
 class SplitConformalThresholdPolicyConfig(StrictFrozenConfigModel):
@@ -357,6 +373,17 @@ class LocalGlobalShrinkagePolicyConfig(BaseThresholdPolicyConfig):
     out_of_range_weight_behavior: str
     effective_lambda_reporting: str
     threshold_ownership: str
+
+    @model_validator(mode="after")
+    def validate_shrinkage_weights(self) -> LocalGlobalShrinkagePolicyConfig:
+        lower = self.permitted_weight_range.get("minimum")
+        upper = self.permitted_weight_range.get("maximum")
+        if lower is None or upper is None or lower > upper:
+            raise ValueError("permitted_weight_range requires ordered minimum and maximum values")
+        values = (*self.shrinkage_weight_grid, self.shrinkage_weight)
+        if any(value is not None and not lower <= value <= upper for value in values):
+            raise ValueError("shrinkage weights must fall within permitted_weight_range")
+        return self
 
 
 class CalibrationFallbackPolicyConfig(BaseThresholdPolicyConfig):
@@ -778,3 +805,12 @@ class AuthoredProtocolsConfig(SchemaVersionOneConfigModel):
     statistical_profiles: dict[str, StatisticalProfileConfig]
     report_profiles: dict[str, ReportProfileConfig]
     communication_estimation: dict[str, JsonValue] | None = None
+
+    @model_validator(mode="after")
+    def reject_retired_policy_identifiers(self) -> AuthoredProtocolsConfig:
+        retired = {"b5", "b3lgs"}
+        for identifier in self.threshold_policies:
+            normalized = identifier.lower().replace("-", "").replace("_", "")
+            if normalized in retired:
+                raise ValueError(f"Retired threshold policy identifier is forbidden: {identifier}")
+        return self

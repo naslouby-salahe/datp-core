@@ -746,7 +746,7 @@ def resolve_project_configuration(
     canonical_scientific_projection = canonicalize_value(scientific_projection)
     canonical_execution_projection = canonicalize_value(execution_projection)
 
-    return ResolvedProjectConfiguration(
+    resolved = ResolvedProjectConfiguration(
         datasets=TypedDomainRegistry(_items=resolved_datasets),
         populations=populations_reg,
         experiments=experiments_reg,
@@ -788,3 +788,11 @@ def resolve_project_configuration(
         scientific_projection=canonical_scientific_projection,
         execution_projection=canonical_execution_projection,
     )
+    # Import here to keep resolution records independent from the validation use case while
+    # still rejecting cross-document scientific violations before composition can execute.
+    from datp_core.config.validation import ProjectConfigurationValidator
+
+    validation_report = ProjectConfigurationValidator().validate(resolved)
+    if not validation_report.is_valid:
+        raise ConfigurationError(f"Resolved configuration violates scientific guards: {validation_report.errors}")
+    return resolved

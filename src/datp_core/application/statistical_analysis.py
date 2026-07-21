@@ -8,7 +8,12 @@ import numpy as np
 
 from datp_core.domain.catalogue import StatisticalProfileRecord
 from datp_core.domain.identifiers import MetricId, StatisticalProfileId, ThresholdPolicyId
-from datp_core.domain.statistics import ConfidenceInterval, HypothesisTestResult, PairedSeedDifferenceRecord
+from datp_core.domain.statistics import (
+    ConfidenceInterval,
+    HypothesisTestResult,
+    PairedSeedDifferenceRecord,
+    matched_pairs_rank_biserial_correlation,
+)
 from datp_core.domain.values import Seed, TypedDomainRegistry
 
 
@@ -50,6 +55,8 @@ class StatisticalAnalysisUseCase:
             raise ValueError(f"Statistical profile '{statistical_profile_id.value}' is not an executable BCa profile")
         arr_a = np.array(scores_policy_a, dtype=np.float64)
         arr_b = np.array(scores_policy_b, dtype=np.float64)
+        if arr_a.shape != arr_b.shape:
+            raise ValueError("Paired seed analysis requires equally sized policy score cohorts")
         diffs = arr_a - arr_b
 
         mean_diff = float(np.mean(diffs))
@@ -68,6 +75,7 @@ class StatisticalAnalysisUseCase:
             mean_difference=mean_diff,
             confidence_interval=ci,
             hypothesis_test=test_res,
+            effect_size=matched_pairs_rank_biserial_correlation(arr_a, arr_b) if test_res is not None else None,
             resample_count=profile.resample_count.value,
             analysis_seed=analysis_seed,
         )

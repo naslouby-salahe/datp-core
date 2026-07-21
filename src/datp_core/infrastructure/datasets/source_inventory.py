@@ -1,4 +1,4 @@
-"""One deterministic source inventory consumed by both audit and materialization.
+"""Deterministic executable source inventory for materialization and provenance.
 
 Applies configured source-tree resolution, path containment, glob semantics,
 ignored suffixes/subtrees, required directory layout, stable relative-path
@@ -11,10 +11,8 @@ from pathlib import Path
 
 from attrs import define
 
-from datp_core.domain.datasets import (
-    ConfiguredSourceTree,
-    ResolvedDataset,
-)
+from datp_core.domain.datasets import ConfiguredSourceTree, DatasetInspectionContract, ResolvedDataset
+from datp_core.domain.fingerprints import Checksum, compute_file_checksum, compute_payload_checksum
 from datp_core.domain.identifiers import DatasetId
 
 
@@ -38,12 +36,20 @@ class ConcreteSourceInventory:
     def file_count(self) -> int:
         return len(self.entries)
 
+    def fingerprint(self) -> Checksum:
+        """Fingerprint the ordered source bytes together with their configured paths."""
+        payload = "\n".join(
+            f"{entry.relative_path.as_posix()}:{compute_file_checksum(entry.source_path).value}"
+            for entry in self.entries
+        ).encode("utf-8")
+        return compute_payload_checksum(payload)
+
 
 def build_source_inventory(dataset: ResolvedDataset) -> ConcreteSourceInventory:
     """Build the sole ordered source inventory for a resolved dataset.
 
-    Consumed by both audit and materialization; no consumer rescans the
-    filesystem independently.
+    Materializers and source fingerprinting consume this inventory; audit
+    retains non-executable source trees as configured inspection evidence.
     """
     raw_data_root = dataset.paths.raw_data_root.resolve()
     inspection = dataset.inspection_contract
@@ -92,7 +98,7 @@ def _inventory_source_tree(
     tree: ConfiguredSourceTree,
     ignored_suffixes: frozenset[str],
     ignored_subtrees: tuple[Path, ...],
-    inspection: object,  # DatasetInspectionContract
+    inspection: DatasetInspectionContract,
 ) -> list[Path]:
     """Collect matching files from one configured source tree, applying all filtering rules.
 
@@ -100,11 +106,7 @@ def _inventory_source_tree(
     rglob("*.csv") when device_directories or normal_group_directories are present,
     otherwise glob(tree.file_pattern).
     """
-    contract = inspection
-    device_dirs = getattr(contract, "device_directories", ())
-    normal_group_dirs = getattr(contract, "normal_group_directories", ())
-
-    if device_dirs or normal_group_dirs:
+    if inspection.device_directories or inspection.normal_group_directories:
         candidates = source_root.rglob("*.csv")
     else:
         pattern = tree.file_pattern
