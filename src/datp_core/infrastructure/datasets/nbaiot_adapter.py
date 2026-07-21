@@ -17,6 +17,7 @@ from datp_core.infrastructure.datasets.nbaiot import (
     consolidate_nbaiot_parquet_sources,
     write_nbaiot_source_parquet,
 )
+from datp_core.infrastructure.tables.parquet_io import normalize_materialized_parquet
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -25,6 +26,7 @@ class NBaIoTMaterializationPayload:
 
     staged_path: Path
     row_count: int
+    preprocessing_evidence: bytes
 
 
 class NBaIoTAdapter:
@@ -67,7 +69,22 @@ class NBaIoTAdapter:
             )
             staged_files.append(staged_file)
 
+        unprocessed_payload = staging_root / "unprocessed.parquet"
+        total_rows = consolidate_nbaiot_parquet_sources(tuple(staged_files), unprocessed_payload, chunk_row_count)
         payload_file = staging_root / "materialized.parquet"
-        total_rows = consolidate_nbaiot_parquet_sources(tuple(staged_files), payload_file, chunk_row_count)
+        feature_columns = dataset.field_schema.model_features
+        if feature_columns is None:
+            raise ValueError("N-BaIoT materialization requires configured model features")
+        normalization = normalize_materialized_parquet(
+            unprocessed_payload,
+            payload_file,
+            feature_columns=feature_columns.order,
+            strategy=materialization.normalization_strategy,
+            scope=materialization.normalization_scope,
+        )
 
-        return NBaIoTMaterializationPayload(staged_path=payload_file, row_count=total_rows)
+        return NBaIoTMaterializationPayload(
+            staged_path=payload_file,
+            row_count=total_rows,
+            preprocessing_evidence=normalization.encode(),
+        )

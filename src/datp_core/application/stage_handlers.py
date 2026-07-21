@@ -162,6 +162,7 @@ class DatasetMaterializationStageHandler:
         relative_path = f"runs/{run_id.value}/{job.job_id.value}"
         manifest_relative_path = f"{relative_path}.split_manifest"
         readiness_relative_path = f"{relative_path}.readiness"
+        preprocessing_relative_path = f"{relative_path}.preprocessing"
         manifest_key = ArtifactKey(
             artifact_id=ArtifactId(f"{job.output.artifact_id.value}:split_manifest"),
             kind=ArtifactKind.SPLIT_MANIFEST,
@@ -169,6 +170,10 @@ class DatasetMaterializationStageHandler:
         readiness_key = ArtifactKey(
             artifact_id=ArtifactId(f"{job.output.artifact_id.value}:readiness"),
             kind=ArtifactKind.DATASET_READINESS,
+        )
+        preprocessing_key = ArtifactKey(
+            artifact_id=ArtifactId(f"{job.output.artifact_id.value}:preprocessing"),
+            kind=ArtifactKind.PREPROCESSING_EVIDENCE,
         )
         reuse = self._repository.assess_reuse(
             relative_path,
@@ -187,6 +192,7 @@ class DatasetMaterializationStageHandler:
                 for companion_path, companion_key in (
                     (manifest_relative_path, manifest_key),
                     (readiness_relative_path, readiness_key),
+                    (preprocessing_relative_path, preprocessing_key),
                 )
             )
             if not companion_reusable:
@@ -281,6 +287,21 @@ class DatasetMaterializationStageHandler:
                         job_id=job.job_id,
                         stage=job.stage,
                         error_message=readiness_commit.error_message or "dataset readiness commit failed",
+                    )
+                preprocessing_commit = _commit_artifact(
+                    self._repository,
+                    self._config,
+                    artifact_key=preprocessing_key,
+                    artifact_format=ArtifactFormat.JSON,
+                    relative_path=preprocessing_relative_path,
+                    parents=_parents(self._config, (job.output,)),
+                    payload=BytesPayload(payload_bytes=payload.preprocessing_evidence),
+                )
+                if not preprocessing_commit.success:
+                    return StageJobOutcome.failed(
+                        job_id=job.job_id,
+                        stage=job.stage,
+                        error_message=preprocessing_commit.error_message or "preprocessing evidence commit failed",
                     )
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))

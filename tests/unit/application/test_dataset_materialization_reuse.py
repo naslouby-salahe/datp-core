@@ -31,6 +31,7 @@ def test_materialization_reuses_a_matching_frozen_artifact_without_reading_raw_s
     relative_path = f"runs/{run_id.value}/{job.job_id.value}"
     manifest_relative_path = f"{relative_path}.split_manifest"
     readiness_relative_path = f"{relative_path}.readiness"
+    preprocessing_relative_path = f"{relative_path}.preprocessing"
     manifest_key = ArtifactKey(
         artifact_id=ArtifactId(f"{job.output.artifact_id.value}:split_manifest"),
         kind=ArtifactKind.SPLIT_MANIFEST,
@@ -39,6 +40,28 @@ def test_materialization_reuses_a_matching_frozen_artifact_without_reading_raw_s
         artifact_id=ArtifactId(f"{job.output.artifact_id.value}:readiness"),
         kind=ArtifactKind.DATASET_READINESS,
     )
+    preprocessing_key = ArtifactKey(
+        artifact_id=ArtifactId(f"{job.output.artifact_id.value}:preprocessing"),
+        kind=ArtifactKind.PREPROCESSING_EVIDENCE,
+    )
+    assert repository.commit(
+        ArtifactCommitRequest(
+            metadata=ArtifactCommitMetadata(
+                artifact_key=preprocessing_key,
+                artifact_format=ArtifactFormat.JSON,
+                scientific_fingerprint=app.config.scientific_fingerprint,
+                execution_fingerprint=app.config.execution_fingerprint,
+                relative_path=preprocessing_relative_path,
+                parents=(
+                    ArtifactParent(parent_key=job.output, scientific_fingerprint=app.config.scientific_fingerprint),
+                ),
+                schema_version=1,
+                creation_timestamp=1.0,
+                environment_identity="test",
+            ),
+            payload=BytesPayload(payload_bytes=b"preprocessing"),
+        )
+    ).success
     assert repository.commit(
         ArtifactCommitRequest(
             metadata=ArtifactCommitMetadata(

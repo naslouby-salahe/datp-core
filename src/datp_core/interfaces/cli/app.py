@@ -10,6 +10,7 @@ from rich.console import Console
 
 from datp_core.composition.root import build_application, build_config_only_application
 from datp_core.config.resolver import resolve_project_configuration
+from datp_core.config.yaml_loader import ConfigurationError
 from datp_core.domain.identifiers import DatasetId, ExperimentId
 from datp_core.interfaces.cli.formatters import print_catalogue_summary, print_planning_dag
 
@@ -33,7 +34,12 @@ _converter = cattrs.Converter()
 @config_app.command("validate")
 def config_validate() -> None:
     """Validate all YAML configuration documents against schema and cross-reference rules."""
-    application = build_config_only_application()
+    try:
+        application = build_config_only_application()
+    except ConfigurationError as exc:
+        console.print("[bold red]Configuration validation failed:[/bold red]")
+        console.print(f"  [red]-[/red] {exc}")
+        raise typer.Exit(code=1) from exc
     report = application.validate_configuration.execute()
     for warning in report.warnings:
         console.print(f"[yellow]Warning:[/yellow] {warning}")

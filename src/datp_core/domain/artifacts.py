@@ -17,6 +17,7 @@ class ArtifactKind(Enum):
     MATERIALIZED_DATASET = "materialized_dataset"
     SPLIT_MANIFEST = "split_manifest"
     DATASET_READINESS = "dataset_readiness"
+    PREPROCESSING_EVIDENCE = "preprocessing_evidence"
     MODEL_CHECKPOINT = "model_checkpoint"
     CALIBRATION_SCORES = "calibration_scores"
     TEST_SCORES = "test_scores"

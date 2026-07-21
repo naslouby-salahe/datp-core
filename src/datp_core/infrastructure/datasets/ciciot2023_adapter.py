@@ -14,6 +14,7 @@ from datp_core.domain.datasets import (
     ResolvedDataset,
 )
 from datp_core.infrastructure.datasets.ciciot2023 import write_ciciot2023_materialized_parquet
+from datp_core.infrastructure.tables.parquet_io import normalize_materialized_parquet
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -22,6 +23,7 @@ class CICIoT2023MaterializationPayload:
 
     staged_path: Path
     row_count: int
+    preprocessing_evidence: bytes
 
 
 class CICIoT2023Adapter:
@@ -50,11 +52,11 @@ class CICIoT2023Adapter:
         chunk_row_count = 100_000
 
         source_paths = tuple(entry.source_path for entry in inventory.entries)
-        payload_file = staging_root / "materialized.parquet"
+        unprocessed_payload = staging_root / "unprocessed.parquet"
 
         report = write_ciciot2023_materialized_parquet(
             source_paths,
-            payload_file,
+            unprocessed_payload,
             feature_headers,
             label_header,
             merged_root.resolve(),
@@ -63,4 +65,19 @@ class CICIoT2023Adapter:
             chunk_row_count,
         )
 
-        return CICIoT2023MaterializationPayload(staged_path=payload_file, row_count=report.written_rows)
+        feature_columns = dataset.field_schema.model_features
+        if feature_columns is None:
+            raise ValueError("CICIoT2023 materialization requires configured model features")
+        payload_file = staging_root / "materialized.parquet"
+        normalization = normalize_materialized_parquet(
+            unprocessed_payload,
+            payload_file,
+            feature_columns=feature_columns.order,
+            strategy=materialization.normalization_strategy,
+            scope=materialization.normalization_scope,
+        )
+        return CICIoT2023MaterializationPayload(
+            staged_path=payload_file,
+            row_count=report.written_rows,
+            preprocessing_evidence=normalization.encode(),
+        )
