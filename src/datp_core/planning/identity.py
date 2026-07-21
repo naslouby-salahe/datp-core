@@ -32,24 +32,36 @@ class IdentityBuilder:
         return str(seed)
 
     @staticmethod
+    def _condition_suffix(ctx: StageJobContext) -> str:
+        return "" if ctx.partition_condition is None else f":condition_{ctx.partition_condition}"
+
+    @staticmethod
     def preflight_job_id(ctx: StageJobContext) -> JobId:
         return JobId(f"{ctx.experiment_id.value}:preflight")
 
     @staticmethod
     def materialization_job_id(ctx: StageJobContext) -> JobId:
-        return JobId(f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}:mat")
+        return JobId(
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:mat"
+        )
 
     @staticmethod
     def training_job_id(ctx: StageJobContext) -> JobId:
-        return JobId(f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}:train")
+        return JobId(
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:train"
+        )
 
     @staticmethod
     def calibration_score_job_id(ctx: StageJobContext) -> JobId:
-        return JobId(f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}:calibration_scores")
+        return JobId(
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:calibration_scores"
+        )
 
     @staticmethod
     def test_score_job_id(ctx: StageJobContext) -> JobId:
-        return JobId(f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}:test_scores")
+        return JobId(
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:test_scores"
+        )
 
     @staticmethod
     def threshold_job_id(ctx: StageJobContext) -> JobId:
@@ -81,19 +93,27 @@ class IdentityBuilder:
 
     @staticmethod
     def materialization_artifact_id(ctx: StageJobContext) -> ArtifactId:
-        return ArtifactId(f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}:mat_data")
+        return ArtifactId(
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:mat_data"
+        )
 
     @staticmethod
     def checkpoint_artifact_id(ctx: StageJobContext) -> ArtifactId:
-        return ArtifactId(f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}:checkpoint")
+        return ArtifactId(
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:checkpoint"
+        )
 
     @staticmethod
     def calibration_scores_artifact_id(ctx: StageJobContext) -> ArtifactId:
-        return ArtifactId(f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}:calib_scores")
+        return ArtifactId(
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:calib_scores"
+        )
 
     @staticmethod
     def test_scores_artifact_id(ctx: StageJobContext) -> ArtifactId:
-        return ArtifactId(f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}:test_scores")
+        return ArtifactId(
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:test_scores"
+        )
 
     @staticmethod
     def threshold_artifact_id(ctx: StageJobContext) -> ArtifactId:

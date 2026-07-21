@@ -44,6 +44,7 @@ class StageJobContext:
     threshold_policy_id: ThresholdPolicyId | None = None
     dataset_setup_id: str | None = None
     materialization_id: str | None = None
+    partition_condition: str | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
