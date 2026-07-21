@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from attrs import define
 
 from datp_core.config.resolver import ResolvedProjectConfiguration, resolve_project_configuration
 from datp_core.config.yaml_loader import ConfigurationError
-from datp_core.domain.catalogue import ConditionSweepRecord
+from datp_core.domain.catalogue import ConditionSweepRecord, ValueSweepRecord
 from datp_core.domain.identifiers import NormalizationStrategyId
 from datp_core.domain.thresholding import FamilyMeanThresholdPolicyRecord
 
@@ -74,6 +75,10 @@ class ProjectConfigurationValidator:
 
         # 4. Validate experiments
         experiment_ids = set(config.experiments)
+        try:
+            config.primary_federated_checkpoint_experiment()
+        except ValueError as exc:
+            errors.append(str(exc))
         if "partition" not in config.protocol_determinism.seed_namespaces:
             errors.append("Protocol determinism lacks the required partition seed namespace")
         for exp_id, exp_rec in config.experiments.items():
@@ -81,6 +86,7 @@ class ProjectConfigurationValidator:
                 errors.append(
                     f"Experiment '{exp_id}' references missing training profile '{exp_rec.training_profile_id}'"
                 )
+                continue
             if not config.checkpoint_profiles.contains(exp_rec.checkpoint_profile_id):
                 errors.append(
                     f"Experiment '{exp_id}' references missing checkpoint profile '{exp_rec.checkpoint_profile_id}'"
@@ -105,6 +111,29 @@ class ProjectConfigurationValidator:
             for report_id in exp_rec.report_ids:
                 if not config.report_profiles.contains(report_id):
                     errors.append(f"Experiment '{exp_id}' references unregistered report profile '{report_id}'")
+
+            profile = config.training_profiles.get(exp_rec.training_profile_id)
+            if profile.kind == "federated_prox_training":
+                configured_grid = profile.mu_grid
+                override = exp_rec.training_overrides.get("mu") if exp_rec.training_overrides is not None else None
+                sweep_name = override.get("from_sweep") if isinstance(override, Mapping) else None
+                values = tuple(
+                    value
+                    for sweep in exp_rec.sweeps
+                    if isinstance(sweep, ValueSweepRecord) and sweep.name == sweep_name
+                    for value in sweep.values
+                )
+                if (
+                    configured_grid is None
+                    or not configured_grid
+                    or any(value <= 0.0 for value in configured_grid)
+                    or profile.mu_zero_forbidden_as_a_fedprox_condition is not True
+                    or tuple(values) != configured_grid
+                ):
+                    errors.append(
+                        f"FedProx experiment '{exp_id}' must bind its exact positive configured mu grid "
+                        "through training_overrides"
+                    )
 
             partition_conditions = tuple(
                 condition

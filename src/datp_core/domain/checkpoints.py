@@ -62,3 +62,19 @@ def select_lowest_validation_loss_checkpoint(
     if missing:
         raise ValueError(f"Checkpoint selection is missing scheduled losses: {', '.join(map(str, missing))}")
     return min(schedule, key=lambda round_number: (losses[round_number], round_number))
+
+
+def select_cohort_validation_checkpoint(
+    *, scheduled_rounds: Sequence[int], seed_losses: Sequence[Sequence[tuple[int, float]]]
+) -> int:
+    """Select one authorized round from the arithmetic mean benign calibration loss over all seeds."""
+    if not seed_losses:
+        raise ValueError("Cohort checkpoint selection requires at least one seed loss curve")
+    schedule = tuple(scheduled_rounds)
+    per_seed = tuple(dict(losses) for losses in seed_losses)
+    if any(any(round_number not in losses for round_number in schedule) for losses in per_seed):
+        raise ValueError("Cohort checkpoint selection is missing a scheduled calibration loss")
+    averaged = tuple(
+        (round_number, sum(losses[round_number] for losses in per_seed) / len(per_seed)) for round_number in schedule
+    )
+    return select_lowest_validation_loss_checkpoint(scheduled_rounds=schedule, recorded_losses=averaged)

@@ -9,6 +9,7 @@ from datp_core.application.stage_handlers import StageHandler
 from datp_core.config.resolver import ResolvedProjectConfiguration
 from datp_core.domain.identifiers import ExperimentId, JobId, RunId
 from datp_core.domain.outcomes import JobExecutionStatus, StageJobOutcome
+from datp_core.domain.run_identity import execution_run_id
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -39,8 +40,7 @@ class ExecuteExperimentUseCase:
         failed_cnt = 0
 
         # Run ID tied collision-safely to scientific and execution identity
-        exec_hash = self._config.execution_fingerprint.value[:12]
-        run_id = RunId(f"run_{experiment_id.value}_{exec_hash}")
+        run_id = execution_run_id(experiment_id, self._config.execution_fingerprint.value)
 
         for job in sorted_jobs:
             unavailable_dependencies = tuple(

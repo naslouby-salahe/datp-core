@@ -39,6 +39,10 @@ class IdentityBuilder:
         return f":condition_{ctx.partition_condition}"
 
     @staticmethod
+    def _training_suffix(ctx: StageJobContext) -> str:
+        return "" if ctx.federated_proximal_mu is None else f":mu_{ctx.federated_proximal_mu:g}"
+
+    @staticmethod
     def preflight_job_id(ctx: StageJobContext) -> JobId:
         return JobId(f"{ctx.experiment_id.value}:preflight")
 
@@ -51,19 +55,19 @@ class IdentityBuilder:
     @staticmethod
     def training_job_id(ctx: StageJobContext) -> JobId:
         return JobId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:train"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._training_suffix(ctx)}:train"
         )
 
     @staticmethod
     def calibration_score_job_id(ctx: StageJobContext) -> JobId:
         return JobId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:calibration_scores"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._training_suffix(ctx)}:calibration_scores"
         )
 
     @staticmethod
     def test_score_job_id(ctx: StageJobContext) -> JobId:
         return JobId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:test_scores"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._training_suffix(ctx)}:test_scores"
         )
 
     @staticmethod
@@ -71,7 +75,7 @@ class IdentityBuilder:
         if ctx.evaluation_label is None:
             raise ValueError("evaluation_label is required for threshold job identity")
         return JobId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:{ctx.evaluation_label}:thresh"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._training_suffix(ctx)}:{ctx.evaluation_label}:thresh"
         )
 
     @staticmethod
@@ -79,12 +83,20 @@ class IdentityBuilder:
         if ctx.evaluation_label is None:
             raise ValueError("evaluation_label is required for evaluation job identity")
         return JobId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:{ctx.evaluation_label}:eval"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._training_suffix(ctx)}:{ctx.evaluation_label}:eval"
         )
 
     @staticmethod
     def statistical_analysis_job_id(ctx: StageJobContext) -> JobId:
         return JobId(f"{ctx.experiment_id.value}:statistical_analysis")
+
+    @staticmethod
+    def cohort_checkpoint_selection_job_id(ctx: StageJobContext) -> JobId:
+        return JobId(f"{ctx.experiment_id.value}:cohort_checkpoint_selection")
+
+    @staticmethod
+    def federated_proximal_selection_job_id(ctx: StageJobContext) -> JobId:
+        return JobId(f"{ctx.experiment_id.value}:federated_proximal_coefficient_selection")
 
     @staticmethod
     def report_job_id(ctx: StageJobContext) -> JobId:
@@ -103,19 +115,19 @@ class IdentityBuilder:
     @staticmethod
     def checkpoint_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:checkpoint"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._training_suffix(ctx)}:checkpoint"
         )
 
     @staticmethod
     def calibration_scores_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:calib_scores"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._training_suffix(ctx)}:calib_scores"
         )
 
     @staticmethod
     def test_scores_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:test_scores"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._training_suffix(ctx)}:test_scores"
         )
 
     @staticmethod
@@ -123,7 +135,7 @@ class IdentityBuilder:
         if ctx.evaluation_label is None:
             raise ValueError("evaluation_label is required for threshold artifact identity")
         return ArtifactId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:{ctx.evaluation_label}:threshold_set"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._training_suffix(ctx)}:{ctx.evaluation_label}:threshold_set"
         )
 
     @staticmethod
@@ -131,12 +143,20 @@ class IdentityBuilder:
         if ctx.evaluation_label is None:
             raise ValueError("evaluation_label is required for metrics artifact identity")
         return ArtifactId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:{ctx.evaluation_label}:metrics"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._training_suffix(ctx)}:{ctx.evaluation_label}:metrics"
         )
 
     @staticmethod
     def statistical_report_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(f"{ctx.experiment_id.value}:statistical_report")
+
+    @staticmethod
+    def cohort_checkpoint_selection_artifact_id(ctx: StageJobContext) -> ArtifactId:
+        return ArtifactId(f"{ctx.experiment_id.value}:cohort_checkpoint_selection")
+
+    @staticmethod
+    def federated_proximal_selection_artifact_id(ctx: StageJobContext) -> ArtifactId:
+        return ArtifactId(f"{ctx.experiment_id.value}:federated_proximal_coefficient_selection")
 
     @staticmethod
     def final_report_artifact_id(ctx: StageJobContext) -> ArtifactId:
@@ -199,6 +219,20 @@ class IdentityBuilder:
         )
 
     @staticmethod
+    def cohort_checkpoint_selection_key(ctx: StageJobContext) -> ArtifactKey:
+        return ArtifactKey(
+            artifact_id=IdentityBuilder.cohort_checkpoint_selection_artifact_id(ctx),
+            kind=ArtifactKind.CHECKPOINT_SELECTION,
+        )
+
+    @staticmethod
+    def federated_proximal_selection_key(ctx: StageJobContext) -> ArtifactKey:
+        return ArtifactKey(
+            artifact_id=IdentityBuilder.federated_proximal_selection_artifact_id(ctx),
+            kind=ArtifactKind.CHECKPOINT_SELECTION,
+        )
+
+    @staticmethod
     def result_report_key(ctx: StageJobContext) -> ArtifactKey:
         return ArtifactKey(
             artifact_id=IdentityBuilder.final_report_artifact_id(ctx),
@@ -232,25 +266,61 @@ class IdentityBuilder:
         )
 
     @staticmethod
-    def calibration_score_job(
-        ctx: StageJobContext, train_output: ArtifactKey, mat_output: ArtifactKey, train_job_id: JobId
+    def cohort_checkpoint_selection_job(
+        ctx: StageJobContext, train_outputs: tuple[ArtifactKey, ...], train_job_ids: tuple[JobId, ...]
     ) -> tuple[JobId, ArtifactKey, tuple[ArtifactKey, ...], tuple[JobId, ...]]:
+        return (
+            IdentityBuilder.cohort_checkpoint_selection_job_id(ctx),
+            IdentityBuilder.cohort_checkpoint_selection_key(ctx),
+            train_outputs,
+            train_job_ids,
+        )
+
+    @staticmethod
+    def federated_proximal_selection_job(
+        ctx: StageJobContext, train_outputs: tuple[ArtifactKey, ...], train_job_ids: tuple[JobId, ...]
+    ) -> tuple[JobId, ArtifactKey, tuple[ArtifactKey, ...], tuple[JobId, ...]]:
+        return (
+            IdentityBuilder.federated_proximal_selection_job_id(ctx),
+            IdentityBuilder.federated_proximal_selection_key(ctx),
+            train_outputs,
+            train_job_ids,
+        )
+
+    @staticmethod
+    def calibration_score_job(
+        ctx: StageJobContext,
+        train_output: ArtifactKey,
+        mat_output: ArtifactKey,
+        train_job_id: JobId,
+        selection_output: ArtifactKey | None = None,
+        selection_job_id: JobId | None = None,
+    ) -> tuple[JobId, ArtifactKey, tuple[ArtifactKey, ...], tuple[JobId, ...]]:
+        selection_inputs = () if selection_output is None else (selection_output,)
+        selection_dependencies = () if selection_job_id is None else (selection_job_id,)
         return (
             IdentityBuilder.calibration_score_job_id(ctx),
             IdentityBuilder.calibration_scores_key(ctx),
-            (train_output, mat_output),
-            (train_job_id,),
+            (train_output, mat_output, *selection_inputs),
+            (train_job_id, *selection_dependencies),
         )
 
     @staticmethod
     def test_score_job(
-        ctx: StageJobContext, train_output: ArtifactKey, mat_output: ArtifactKey, train_job_id: JobId
+        ctx: StageJobContext,
+        train_output: ArtifactKey,
+        mat_output: ArtifactKey,
+        train_job_id: JobId,
+        selection_output: ArtifactKey | None = None,
+        selection_job_id: JobId | None = None,
     ) -> tuple[JobId, ArtifactKey, tuple[ArtifactKey, ...], tuple[JobId, ...]]:
+        selection_inputs = () if selection_output is None else (selection_output,)
+        selection_dependencies = () if selection_job_id is None else (selection_job_id,)
         return (
             IdentityBuilder.test_score_job_id(ctx),
             IdentityBuilder.test_scores_key(ctx),
-            (train_output, mat_output),
-            (train_job_id,),
+            (train_output, mat_output, *selection_inputs),
+            (train_job_id, *selection_dependencies),
         )
 
     @staticmethod
@@ -281,13 +351,17 @@ class IdentityBuilder:
 
     @staticmethod
     def statistical_analysis_job(
-        ctx: StageJobContext, eval_outputs: tuple[ArtifactKey, ...], eval_job_ids: tuple[JobId, ...]
+        ctx: StageJobContext,
+        eval_outputs: tuple[ArtifactKey, ...],
+        eval_job_ids: tuple[JobId, ...],
+        additional_inputs: tuple[ArtifactKey, ...] = (),
+        additional_dependencies: tuple[JobId, ...] = (),
     ) -> tuple[JobId, ArtifactKey, tuple[ArtifactKey, ...], tuple[JobId, ...]]:
         return (
             IdentityBuilder.statistical_analysis_job_id(ctx),
             IdentityBuilder.statistical_summary_key(ctx),
-            eval_outputs,
-            eval_job_ids,
+            (*eval_outputs, *additional_inputs),
+            (*eval_job_ids, *additional_dependencies),
         )
 
     @staticmethod

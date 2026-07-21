@@ -2,7 +2,11 @@
 
 from datp_core.config.resolver import resolve_project_configuration
 from datp_core.domain.catalogue import CheckpointConvergenceRecord
-from datp_core.domain.checkpoints import select_anchor_checkpoint_round, select_lowest_validation_loss_checkpoint
+from datp_core.domain.checkpoints import (
+    select_anchor_checkpoint_round,
+    select_cohort_validation_checkpoint,
+    select_lowest_validation_loss_checkpoint,
+)
 from datp_core.domain.identifiers import CheckpointProfileId
 from datp_core.domain.values import PositiveFloat, PositiveInt
 
@@ -76,3 +80,11 @@ def test_journal_selector_uses_scheduled_benign_losses_with_earliest_tie_break()
         scheduled_rounds=(25, 50, 75), recorded_losses=((25, 0.2), (50, 0.1), (75, 0.1))
     )
     assert selected == 50
+
+
+def test_cohort_selector_uses_mean_seed_loss_and_earliest_tie_break() -> None:
+    selected = select_cohort_validation_checkpoint(
+        scheduled_rounds=(25, 50, 75),
+        seed_losses=(((25, 0.3), (50, 0.1), (75, 0.2)), ((25, 0.1), (50, 0.3), (75, 0.2))),
+    )
+    assert selected == 25

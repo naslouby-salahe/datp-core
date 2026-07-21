@@ -207,6 +207,9 @@ class TrainingProfileRecord:
     participation: str | None
     checkpoint_authorization: str
     personalization: str | None
+    proximal_objective: str | None
+    mu_grid: tuple[float, ...] | None
+    mu_zero_forbidden_as_a_fedprox_condition: bool | None
     federation: FederationProfileRecord | None
 
 

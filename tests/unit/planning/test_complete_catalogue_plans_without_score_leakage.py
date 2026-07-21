@@ -38,3 +38,31 @@ def test_controlled_heterogeneity_expands_every_partition_condition_without_iden
     assert all(job.context.partition_condition is not None for job in evaluations)
     assert len({job.job_id for job in plan.jobs}) == plan.node_count
     assert len({job.output.artifact_id for job in plan.jobs}) == plan.node_count
+
+
+def test_confirmatory_plan_freezes_one_cohort_checkpoint_before_all_scores() -> None:
+    app = build_application()
+    plan = app.plan_experiment.execute(ExperimentId("confirmatory_threshold_scope_effect"))
+    selector = next(job for job in plan.jobs if job.stage is StageKind.CHECKPOINT_SELECTION)
+    scores = tuple(job for job in plan.jobs if job.stage is StageKind.SCORE_GENERATION)
+
+    assert len(selector.inputs) == 10
+    assert len(scores) == 20
+    assert all(selector.job_id in score.dependencies for score in scores)
+    assert all(selector.output in score.inputs for score in scores)
+
+
+def test_fedprox_plan_retains_all_mu_cells_without_rematerializing() -> None:
+    app = build_application()
+    plan = app.plan_experiment.execute(ExperimentId("fedprox_aggregation_stress_test"))
+    training = tuple(job for job in plan.jobs if job.stage is StageKind.MODEL_TRAINING)
+    materializations = tuple(job for job in plan.jobs if job.stage is StageKind.DATASET_MATERIALIZATION)
+    selector = next(job for job in plan.jobs if job.stage is StageKind.CHECKPOINT_SELECTION)
+    statistics = next(job for job in plan.jobs if job.stage is StageKind.STATISTICAL_ANALYSIS)
+
+    assert len(materializations) == 10
+    assert len(training) == 40
+    assert {job.context.federated_proximal_mu for job in training} == {0.001, 0.01, 0.1, 1.0}
+    assert len(selector.inputs) == 40
+    assert selector.job_id in statistics.dependencies
+    assert selector.output in statistics.inputs

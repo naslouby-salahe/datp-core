@@ -78,6 +78,9 @@ def test_typed_context_correctness_for_every_job_stage() -> None:
             elif job.stage is StageKind.MODEL_TRAINING:
                 assert ctx.seed is not None
                 assert ctx.evaluation_label is None
+            elif job.stage is StageKind.CHECKPOINT_SELECTION:
+                assert ctx.seed is None
+                assert ctx.evaluation_label is None
             elif job.stage is StageKind.SCORE_GENERATION:
                 assert ctx.seed is not None
                 assert ctx.evaluation_label is None

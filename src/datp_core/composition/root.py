@@ -19,6 +19,7 @@ from datp_core.application.experiment_execution import ExecuteExperimentUseCase
 from datp_core.application.experiment_planning import PlanExperimentUseCase
 from datp_core.application.result_audit import AuditResultsUseCase, QueryResultsUseCase
 from datp_core.application.stage_handlers import (
+    CohortCheckpointSelectionStageHandler,
     DatasetMaterializationStageHandler,
     ModelTrainingStageHandler,
     OperatingPointEvaluationStageHandler,
@@ -157,6 +158,7 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
             PreflightStageHandler(resolved_config, artifact_repository),
             DatasetMaterializationStageHandler(resolved_config, artifact_repository, adapter_registry),
             ModelTrainingStageHandler(resolved_config, artifact_repository),
+            CohortCheckpointSelectionStageHandler(resolved_config, artifact_repository),
             ScoreGenerationStageHandler(resolved_config, artifact_repository),
             ThresholdConstructionStageHandler(resolved_config, artifact_repository, construct_th),
             OperatingPointEvaluationStageHandler(resolved_config, artifact_repository),

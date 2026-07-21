@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
+from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -33,12 +35,18 @@ from datp_core.domain.catalogue import (
     MetricAssociationAnalysisRecord,
     PairedThresholdAnalysisRecord,
     SweepConditionRecord,
+    ValueSweepRecord,
 )
-from datp_core.domain.checkpoints import select_anchor_checkpoint_round, select_lowest_validation_loss_checkpoint
+from datp_core.domain.checkpoints import (
+    select_anchor_checkpoint_round,
+    select_cohort_validation_checkpoint,
+    select_lowest_validation_loss_checkpoint,
+)
 from datp_core.domain.datasets import PartitionSeedContract
 from datp_core.domain.evaluation import MetricStatus, calculate_fpr_dispersion, calculate_pairwise_js_divergence
 from datp_core.domain.identifiers import ArtifactId, ClientId, DatasetId, RunId
 from datp_core.domain.outcomes import StageJob, StageJobContext, StageJobOutcome, StageKind
+from datp_core.domain.run_identity import execution_run_id
 from datp_core.domain.thresholding import BenignCalibrationScores
 from datp_core.domain.values import PositiveInt, Seed
 from datp_core.infrastructure.datasets.adapter_registry import DatasetAdapterRegistry
@@ -69,6 +77,11 @@ class StageHandler(Protocol):
     stage: StageKind
 
     def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome: ...
+
+
+@dataclass(frozen=True, slots=True)
+class _TrainingCheckpointSelection:
+    round_losses: tuple[tuple[int, float], ...]
 
 
 def _commit_artifact(
@@ -424,7 +437,7 @@ class DatasetMaterializationStageHandler:
 
 
 class ModelTrainingStageHandler:
-    """Train one configured full-participation FedAvg model and persist its selected checkpoint."""
+    """Train one configured full-participation federated model and persist its checkpoint grid."""
 
     stage = StageKind.MODEL_TRAINING
 
@@ -435,7 +448,10 @@ class ModelTrainingStageHandler:
     def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
         experiment = self._config.experiments.get(job.context.experiment_id)
         profile = self._config.training_profiles.get(experiment.training_profile_id)
-        if profile.kind != "federated_averaging_training" or profile.participation != "full":
+        if (
+            profile.kind not in {"federated_averaging_training", "federated_prox_training"}
+            or profile.participation != "full"
+        ):
             return StageJobOutcome.failed(
                 job_id=job.job_id,
                 stage=job.stage,
@@ -444,6 +460,18 @@ class ModelTrainingStageHandler:
         if job.context.seed is None or profile.local_epochs is None:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Training requires a seed and local epochs"
+            )
+        proximal_mu = job.context.federated_proximal_mu
+        if profile.kind == "federated_prox_training":
+            if proximal_mu is None or proximal_mu <= 0.0:
+                return StageJobOutcome.failed(
+                    job_id=job.job_id,
+                    stage=job.stage,
+                    error_message="FedProx training requires a positive sweep-resolved mu",
+                )
+        elif proximal_mu is not None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="FedAvg training must not carry a FedProx coefficient"
             )
         population = self._config.populations.get(experiment.population_ids[0])
         dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
@@ -522,6 +550,7 @@ class ModelTrainingStageHandler:
                     checkpoint_rounds=tuple(int(value.value) for value in checkpoint_profile.selected_rounds),
                     shuffle_seed_key=shuffle_namespace.key,
                     shuffle_seed_digest_bytes=digest_bytes,
+                    proximal_mu=proximal_mu,
                 )
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
@@ -536,14 +565,15 @@ class ModelTrainingStageHandler:
                 scheduled_rounds=tuple(int(value.value) for value in checkpoint_profile.selected_rounds),
                 recorded_losses=result.round_losses,
             )
-        selected = next(
-            (checkpoint for checkpoint in result.scheduled_checkpoints if checkpoint.round_number == selected_round),
-            None,
-        )
-        if selected is None:
+        if selected_round not in {checkpoint.round_number for checkpoint in result.scheduled_checkpoints}:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Selected checkpoint state was not captured"
             )
+        checkpoint_grid = {
+            f"round_{checkpoint.round_number}.{name}": tensor
+            for checkpoint in result.scheduled_checkpoints
+            for name, tensor in checkpoint.state
+        }
         commit = _commit_artifact(
             self._repository,
             self._config,
@@ -552,7 +582,7 @@ class ModelTrainingStageHandler:
             artifact_format=ArtifactFormat.SAFETENSORS,
             relative_path=relative_path,
             parents=_parents(self._config, job.inputs),
-            payload=BytesPayload(payload_bytes=save_safetensors(dict(selected.state))),
+            payload=BytesPayload(payload_bytes=save_safetensors(checkpoint_grid)),
         )
         if not commit.success:
             return StageJobOutcome.failed(
@@ -562,6 +592,7 @@ class ModelTrainingStageHandler:
             {
                 "schema_version": 1,
                 "selected_round": selected_round,
+                "checkpoint_rounds": [checkpoint.round_number for checkpoint in result.scheduled_checkpoints],
                 "round_losses": result.round_losses,
                 "model_initialization_seed": initialization_seed,
                 "dataloader_shuffle_seeds": [
@@ -590,6 +621,253 @@ class ModelTrainingStageHandler:
         return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
 
 
+class CohortCheckpointSelectionStageHandler:
+    """Freeze the sole confirmatory FedAvg checkpoint chosen from all seed calibration curves."""
+
+    stage = StageKind.CHECKPOINT_SELECTION
+
+    def __init__(self, config: ResolvedProjectConfiguration, repository: ArtifactRepository) -> None:
+        self._config = config
+        self._repository = repository
+
+    def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
+        experiment = self._config.experiments.get(job.context.experiment_id)
+        profile = self._config.training_profiles.get(experiment.training_profile_id)
+        if profile.kind == "federated_prox_training":
+            return self._execute_federated_proximal(job, run_id)
+        if (
+            profile.checkpoint_authorization != "primary_selection_computed_once_on_natural_device_regime"
+            or experiment != self._config.primary_federated_checkpoint_experiment()
+            or job.context.seed is not None
+            or len(job.inputs) != len(job.dependencies)
+            or not job.inputs
+        ):
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="Checkpoint cohort selection is only valid for the configured primary FedAvg experiment",
+            )
+        relative_path = f"runs/{run_id.value}/{job.job_id.value}"
+        if self._repository.assess_reuse(
+            relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
+        ).can_reuse:
+            return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+
+        selection_keys = tuple(
+            ArtifactKey(
+                artifact_id=ArtifactId(f"{checkpoint.artifact_id.value}:selection"),
+                kind=ArtifactKind.CHECKPOINT_SELECTION,
+            )
+            for checkpoint in job.inputs
+        )
+        try:
+            selections = tuple(
+                self._read_training_selection(run_id, dependency, selection_key)
+                for dependency, selection_key in zip(job.dependencies, selection_keys, strict=True)
+            )
+            checkpoint_profile = self._config.checkpoint_profiles.get(experiment.checkpoint_profile_id)
+            scheduled_rounds = tuple(int(round_number.value) for round_number in checkpoint_profile.selected_rounds)
+            seed_losses = tuple(selection.round_losses for selection in selections)
+            selected_round = select_cohort_validation_checkpoint(
+                scheduled_rounds=scheduled_rounds,
+                seed_losses=seed_losses,
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+        payload = json.dumps(
+            {
+                "schema_version": 1,
+                "selected_round": selected_round,
+                "scheduled_rounds": scheduled_rounds,
+                "seed_round_losses": [selection.round_losses for selection in selections],
+                "selector": checkpoint_profile.selection.rule,
+                "aggregation": checkpoint_profile.selection.aggregation,
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        commit = _commit_artifact(
+            self._repository,
+            self._config,
+            job.context,
+            artifact_key=job.output,
+            artifact_format=ArtifactFormat.JSON,
+            relative_path=relative_path,
+            parents=_parents(self._config, (*job.inputs, *selection_keys)),
+            payload=BytesPayload(payload_bytes=payload),
+        )
+        if not commit.success:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message=commit.error_message or "checkpoint cohort selection commit failed",
+            )
+        return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+
+    def _execute_federated_proximal(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
+        experiment = self._config.experiments.get(job.context.experiment_id)
+        profile = self._config.training_profiles.get(experiment.training_profile_id)
+        cohort = self._config.seed_cohorts.get(experiment.seed_cohort_id)
+        if profile.mu_grid is None or job.context.seed is not None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="FedProx coefficient selection requires its configured coefficient grid",
+            )
+        expected_contexts = tuple(
+            StageJobContext(
+                experiment_id=experiment.identifier,
+                seed=int(seed.value),
+                federated_proximal_mu=proximal_mu,
+            )
+            for seed in cohort.training_seeds
+            for proximal_mu in profile.mu_grid
+        )
+        expected_dependencies = tuple(IdentityBuilder.training_job_id(context) for context in expected_contexts)
+        if job.dependencies != expected_dependencies or len(job.inputs) != len(expected_contexts):
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="FedProx coefficient selection does not depend on the exact configured training grid",
+            )
+        relative_path = f"runs/{run_id.value}/{job.job_id.value}"
+        if self._repository.assess_reuse(
+            relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
+        ).can_reuse:
+            return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        try:
+            primary_round, primary_key = self._primary_round()
+            means = tuple(
+                (
+                    proximal_mu,
+                    self._mean_federated_proximal_loss(
+                        run_id, experiment.identifier, cohort.training_seeds, proximal_mu, primary_round
+                    ),
+                )
+                for proximal_mu in profile.mu_grid
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+        selection_keys = tuple(self._training_selection_key(context) for context in expected_contexts)
+        payload = json.dumps(
+            {
+                "schema_version": 1,
+                "selected_proximal_mu": min(means, key=lambda item: (item[1], item[0]))[0],
+                "locked_primary_round": primary_round,
+                "mean_benign_calibration_loss_by_mu": means,
+                "selector": (
+                    "lowest_natural_device_regime_benign_validation_reconstruction_error_at_the_locked_primary_round"
+                ),
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        commit = _commit_artifact(
+            self._repository,
+            self._config,
+            job.context,
+            artifact_key=job.output,
+            artifact_format=ArtifactFormat.JSON,
+            relative_path=relative_path,
+            parents=_parents(self._config, (*job.inputs, *selection_keys, primary_key)),
+            payload=BytesPayload(payload_bytes=payload),
+        )
+        if not commit.success:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message=commit.error_message or "FedProx coefficient selection commit failed",
+            )
+        return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+
+    def _mean_federated_proximal_loss(
+        self, run_id: RunId, experiment_id, seeds, proximal_mu: float, selected_round: int
+    ) -> float:
+        losses = tuple(
+            dict(
+                self._read_training_selection(
+                    run_id,
+                    IdentityBuilder.training_job_id(
+                        StageJobContext(
+                            experiment_id=experiment_id,
+                            seed=int(seed.value),
+                            federated_proximal_mu=proximal_mu,
+                        )
+                    ),
+                    self._training_selection_key(
+                        StageJobContext(
+                            experiment_id=experiment_id,
+                            seed=int(seed.value),
+                            federated_proximal_mu=proximal_mu,
+                        )
+                    ),
+                ).round_losses
+            )[selected_round]
+            for seed in seeds
+        )
+        return sum(losses) / len(losses)
+
+    @staticmethod
+    def _training_selection_key(context: StageJobContext) -> ArtifactKey:
+        return ArtifactKey(
+            artifact_id=ArtifactId(f"{IdentityBuilder.checkpoint_artifact_id(context).value}:selection"),
+            kind=ArtifactKind.CHECKPOINT_SELECTION,
+        )
+
+    def _read_training_selection(
+        self, run_id: RunId, dependency, selection_key: ArtifactKey
+    ) -> _TrainingCheckpointSelection:
+        relative_path = f"runs/{run_id.value}/{dependency.value}.selection"
+        if not self._repository.assess_reuse(
+            relative_path,
+            selection_key,
+            self._config.scientific_fingerprint,
+            self._config.execution_fingerprint,
+        ).can_reuse:
+            raise ValueError(f"Training checkpoint-selection evidence is unavailable for '{dependency.value}'")
+        selection = self._repository.read(relative_path)
+        if not selection.found or selection.payload_bytes is None:
+            raise ValueError(f"Training checkpoint-selection evidence is unreadable for '{dependency.value}'")
+        parsed = json.loads(selection.payload_bytes)
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("round_losses"), list):
+            raise ValueError(f"Training checkpoint-selection evidence is malformed for '{dependency.value}'")
+        round_losses: list[tuple[int, float]] = []
+        for item in parsed["round_losses"]:
+            if (
+                not isinstance(item, list)
+                or len(item) != 2
+                or not isinstance(item[0], int)
+                or not isinstance(item[1], (int, float))
+            ):
+                raise ValueError(f"Training checkpoint-selection evidence is malformed for '{dependency.value}'")
+            round_losses.append((item[0], float(item[1])))
+        return _TrainingCheckpointSelection(round_losses=tuple(round_losses))
+
+    def _primary_round(self) -> tuple[int, ArtifactKey]:
+        source = self._config.primary_federated_checkpoint_experiment()
+        context = StageJobContext(experiment_id=source.identifier)
+        key = IdentityBuilder.cohort_checkpoint_selection_key(context)
+        source_run_id = execution_run_id(source.identifier, self._config.execution_fingerprint.value)
+        relative_path = (
+            f"runs/{source_run_id.value}/{IdentityBuilder.cohort_checkpoint_selection_job_id(context).value}"
+        )
+        if not self._repository.assess_reuse(
+            relative_path,
+            key,
+            self._config.scientific_fingerprint,
+            self._config.execution_fingerprint,
+        ).can_reuse:
+            raise ValueError("The frozen primary FedAvg checkpoint selection is unavailable")
+        selection = self._repository.read(relative_path)
+        if not selection.found or selection.payload_bytes is None:
+            raise ValueError("The frozen primary FedAvg checkpoint selection is unreadable")
+        parsed = json.loads(selection.payload_bytes)
+        selected_round = parsed.get("selected_round") if isinstance(parsed, dict) else None
+        if not isinstance(selected_round, int):
+            raise ValueError("The frozen primary FedAvg checkpoint selection is malformed")
+        return (selected_round, key)
+
+
 class ScoreGenerationStageHandler:
     """Score one authorized materialized split from its selected model checkpoint."""
 
@@ -610,13 +888,13 @@ class ScoreGenerationStageHandler:
             relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
         ).can_reuse:
             return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        experiment = self._config.experiments.get(job.context.experiment_id)
+        profile = self._config.training_profiles.get(experiment.training_profile_id)
         training_path = f"runs/{run_id.value}/{IdentityBuilder.training_job_id(job.context).value}"
-        selection_key = ArtifactKey(
-            artifact_id=ArtifactId(f"{job.inputs[0].artifact_id.value}:selection"),
-            kind=ArtifactKind.CHECKPOINT_SELECTION,
-        )
+        selection_path, selection_key = self._selection_location(job, run_id, profile.checkpoint_authorization)
+        selection = self._repository.read(selection_path)
         if not self._repository.assess_reuse(
-            f"{training_path}.selection",
+            selection_path,
             selection_key,
             self._config.scientific_fingerprint,
             self._config.execution_fingerprint,
@@ -625,6 +903,10 @@ class ScoreGenerationStageHandler:
                 job_id=job.job_id,
                 stage=job.stage,
                 error_message="Selected-checkpoint evidence is unavailable or incompatible",
+            )
+        if not selection.found or selection.payload_bytes is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Selected-checkpoint evidence is unreadable"
             )
         checkpoint = self._repository.read(training_path)
         materialization = self._repository.read(
@@ -638,8 +920,6 @@ class ScoreGenerationStageHandler:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Materialization artifact is unavailable"
             )
-        experiment = self._config.experiments.get(job.context.experiment_id)
-        profile = self._config.training_profiles.get(experiment.training_profile_id)
         population = self._config.populations.get(experiment.population_ids[0])
         dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
         features = dataset.field_schema.model_features
@@ -658,7 +938,15 @@ class ScoreGenerationStageHandler:
                 model = DynamicDenseAutoencoder(
                     len(features.order), tuple(int(value.value) for value in architecture.hidden_dims)
                 )
-                model.load_state_dict(load_safetensors(checkpoint.payload_bytes))
+                selected_round = json.loads(selection.payload_bytes)["selected_round"]
+                all_states = load_safetensors(checkpoint.payload_bytes)
+                prefix = f"round_{selected_round}."
+                state = {
+                    name.removeprefix(prefix): tensor for name, tensor in all_states.items() if name.startswith(prefix)
+                }
+                if not state:
+                    raise ValueError("Selected checkpoint is absent from the persisted checkpoint grid")
+                model.load_state_dict(state)
                 scores = score_materialized_split(
                     model,
                     materialized_path,
@@ -693,6 +981,27 @@ class ScoreGenerationStageHandler:
                 job_id=job.job_id, stage=job.stage, error_message=commit.error_message or "score artifact commit failed"
             )
         return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+
+    def _selection_location(self, job: StageJob, run_id: RunId, authorization: str) -> tuple[str, ArtifactKey]:
+        if authorization == "primary_selection_computed_once_on_natural_device_regime":
+            selection_context = StageJobContext(experiment_id=job.context.experiment_id)
+            return (
+                f"runs/{run_id.value}/{IdentityBuilder.cohort_checkpoint_selection_job_id(selection_context).value}",
+                IdentityBuilder.cohort_checkpoint_selection_key(selection_context),
+            )
+        if authorization == "lookup_of_federated_averaging_primary_selection":
+            source = self._config.primary_federated_checkpoint_experiment()
+            selection_context = StageJobContext(experiment_id=source.identifier)
+            source_run_id = execution_run_id(source.identifier, self._config.execution_fingerprint.value)
+            return (
+                f"runs/{source_run_id.value}/{IdentityBuilder.cohort_checkpoint_selection_job_id(selection_context).value}",
+                IdentityBuilder.cohort_checkpoint_selection_key(selection_context),
+            )
+        selection_key = ArtifactKey(
+            artifact_id=ArtifactId(f"{job.inputs[0].artifact_id.value}:selection"),
+            kind=ArtifactKind.CHECKPOINT_SELECTION,
+        )
+        return (f"runs/{run_id.value}/{IdentityBuilder.training_job_id(job.context).value}.selection", selection_key)
 
 
 def _score_split(kind: ArtifactKind) -> str | None:
@@ -902,16 +1211,28 @@ class StatisticalAnalysisStageHandler:
             if isinstance(sweep, ConditionSweepRecord)
             for condition in sweep.conditions
         ) or (None,)
+        mu_sweep = experiment.training_overrides.get("mu") if experiment.training_overrides is not None else None
+        mu_sweep_name = mu_sweep.get("from_sweep") if isinstance(mu_sweep, Mapping) else None
+        mus = tuple(
+            float(value)
+            for sweep in experiment.sweeps
+            if isinstance(sweep, ValueSweepRecord) and sweep.name == mu_sweep_name
+            for value in sweep.values
+            if isinstance(value, float)
+        ) or (None,)
         try:
             paired_results = [
-                self._analyze_paired(analysis, experiment, cohort.training_seeds, run_id, condition)
+                self._analyze_paired(analysis, experiment, cohort.training_seeds, run_id, condition, proximal_mu)
                 for condition in conditions
+                for proximal_mu in mus
                 for analysis in paired_analyses
             ]
             results = paired_results + [
                 self._analyze_association(analysis, paired_results, experiment, cohort.training_seeds, run_id)
                 for analysis in association_analyses
             ]
+            if self._config.training_profiles.get(experiment.training_profile_id).kind == "federated_prox_training":
+                results.append(self._federated_proximal_selection(experiment.identifier, run_id))
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
         payload = json.dumps(results, separators=(",", ":"), sort_keys=True).encode("utf-8")
@@ -940,16 +1261,29 @@ class StatisticalAnalysisStageHandler:
         seeds,
         run_id: RunId,
         partition_condition: str | None,
+        proximal_mu: float | None,
     ) -> dict[str, object]:
         left = tuple(
             self._evaluation_metric(
-                experiment, seed.value, analysis.first_evaluation, analysis.primary_metric, run_id, partition_condition
+                experiment,
+                seed.value,
+                analysis.first_evaluation,
+                analysis.primary_metric,
+                run_id,
+                partition_condition,
+                proximal_mu,
             )
             for seed in seeds
         )
         right = tuple(
             self._evaluation_metric(
-                experiment, seed.value, analysis.second_evaluation, analysis.primary_metric, run_id, partition_condition
+                experiment,
+                seed.value,
+                analysis.second_evaluation,
+                analysis.primary_metric,
+                run_id,
+                partition_condition,
+                proximal_mu,
             )
             for seed in seeds
         )
@@ -974,8 +1308,34 @@ class StatisticalAnalysisStageHandler:
         }
         if partition_condition is not None:
             result["partition_condition"] = partition_condition
+        if proximal_mu is not None:
+            result["federated_proximal_mu"] = proximal_mu
         result["seed_differences"] = [first - second for first, second in zip(left, right, strict=True)]
         return result
+
+    def _federated_proximal_selection(self, experiment_id, run_id: RunId) -> dict[str, object]:
+        context = StageJobContext(experiment_id=experiment_id)
+        relative_path = f"runs/{run_id.value}/{IdentityBuilder.federated_proximal_selection_job_id(context).value}"
+        key = IdentityBuilder.federated_proximal_selection_key(context)
+        if not self._repository.assess_reuse(
+            relative_path,
+            key,
+            self._config.scientific_fingerprint,
+            self._config.execution_fingerprint,
+        ).can_reuse:
+            raise ValueError("FedProx coefficient-selection artifact is unavailable or incompatible")
+        artifact = self._repository.read(relative_path)
+        if not artifact.found or artifact.payload_bytes is None:
+            raise ValueError("FedProx coefficient-selection artifact is unreadable")
+        payload = json.loads(artifact.payload_bytes)
+        if not isinstance(payload, dict) or not isinstance(payload.get("selected_proximal_mu"), (int, float)):
+            raise ValueError("FedProx coefficient-selection artifact is malformed")
+        return {
+            "analysis_label": "fedprox_primary_coefficient_selection",
+            "selected_proximal_mu": float(payload["selected_proximal_mu"]),
+            "locked_primary_round": payload.get("locked_primary_round"),
+            "mean_benign_calibration_loss_by_mu": payload.get("mean_benign_calibration_loss_by_mu"),
+        }
 
     def _analyze_association(
         self,
@@ -1055,6 +1415,7 @@ class StatisticalAnalysisStageHandler:
         metric: str,
         run_id: RunId,
         partition_condition: str | None,
+        proximal_mu: float | None,
     ) -> float:
         if metric != "cv_fpr":
             raise ValueError(f"Statistical execution does not support configured metric '{metric}'")
@@ -1062,6 +1423,7 @@ class StatisticalAnalysisStageHandler:
             experiment_id=experiment.identifier,
             seed=seed,
             partition_condition=partition_condition,
+            federated_proximal_mu=proximal_mu,
             evaluation_label=label,
         )
         artifact = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")

@@ -162,6 +162,20 @@ class ResolvedProjectConfiguration:
     scientific_projection: CanonicalProjection
     execution_projection: CanonicalProjection
 
+    def primary_federated_checkpoint_experiment(self) -> ExperimentRecord:
+        """Return the sole confirmatory FedAvg experiment authorized to choose the shared round."""
+        candidates = tuple(
+            experiment
+            for experiment in self.experiments.values()
+            if experiment.evidence_role is EvidenceRole.CONFIRMATORY
+            and self.training_profiles.contains(experiment.training_profile_id)
+            and self.training_profiles.get(experiment.training_profile_id).checkpoint_authorization
+            == "primary_selection_computed_once_on_natural_device_regime"
+        )
+        if len(candidates) != 1:
+            raise ValueError("Configuration must define exactly one confirmatory primary FedAvg checkpoint selector")
+        return candidates[0]
+
 
 def resolve_project_configuration(
     config_dir: Path | None = None,
@@ -264,6 +278,9 @@ def resolve_project_configuration(
             participation=tp_cfg.participation,
             checkpoint_authorization=tp_cfg.checkpoint_authorization,
             personalization=tp_cfg.personalization,
+            proximal_objective=tp_cfg.proximal_objective,
+            mu_grid=tuple(tp_cfg.mu_grid) if tp_cfg.mu_grid is not None else None,
+            mu_zero_forbidden_as_a_fedprox_condition=tp_cfg.mu_zero_forbidden_as_a_fedprox_condition,
             federation=(
                 FederationProfileRecord(
                     fraction_fit=tp_cfg.federation.fraction_fit,
