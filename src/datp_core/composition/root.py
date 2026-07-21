@@ -18,7 +18,11 @@ from datp_core.application.dataset_audit import AuditDatasetUseCase
 from datp_core.application.experiment_execution import ExecuteExperimentUseCase
 from datp_core.application.experiment_planning import PlanExperimentUseCase
 from datp_core.application.result_audit import AuditResultsUseCase, QueryResultsUseCase
-from datp_core.application.stage_handlers import DatasetMaterializationStageHandler, PreflightStageHandler
+from datp_core.application.stage_handlers import (
+    DatasetMaterializationStageHandler,
+    ModelTrainingStageHandler,
+    PreflightStageHandler,
+)
 from datp_core.application.statistical_analysis import StatisticalAnalysisUseCase
 from datp_core.application.threshold_construction import ConstructThresholdsUseCase
 from datp_core.config.resolver import ResolvedProjectConfiguration, resolve_project_configuration
@@ -140,6 +144,7 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
         handlers=(
             PreflightStageHandler(resolved_config, artifact_repository),
             DatasetMaterializationStageHandler(resolved_config, artifact_repository, adapter_registry),
+            ModelTrainingStageHandler(resolved_config, artifact_repository),
         ),
     )
 

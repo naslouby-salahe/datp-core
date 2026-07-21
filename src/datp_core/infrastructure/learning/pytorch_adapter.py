@@ -5,6 +5,7 @@ from __future__ import annotations
 import random
 from collections.abc import Mapping
 from copy import deepcopy
+from hashlib import blake2b
 from pathlib import Path
 
 import numpy as np
@@ -37,8 +38,22 @@ def set_deterministic_seeds(seed: int) -> None:
     torch.backends.cudnn.benchmark = False
 
 
-def load_benign_training_tensors(path: Path, feature_columns: tuple[str, ...]) -> tuple[tuple[str, torch.Tensor], ...]:
-    """Load only configured benign training rows, ordered by client and materialization row order."""
+def derive_model_initialization_seed(*, key: str, digest_bytes: int, training_seed: int) -> int:
+    """Derive the configured model-initialization seed from its declared namespace."""
+    return _derive_seed(key, digest_bytes, (("training_seed", training_seed),))
+
+
+def require_cuda_training_device() -> str:
+    """Return CUDA only when available; scientific training may never silently fall back."""
+    if not torch.cuda.is_available():
+        raise ValueError("Configured CUDA-required training cannot run because no CUDA device is available")
+    return "cuda"
+
+
+def load_benign_client_tensors(
+    path: Path, split: str, feature_columns: tuple[str, ...]
+) -> tuple[tuple[str, torch.Tensor], ...]:
+    """Load configured benign rows for one authorized split, ordered by client."""
     if not feature_columns:
         raise ValueError("Training requires configured model feature columns")
     frame = pl.read_parquet(path, columns=["split", "client_id", "is_attack", *feature_columns])
@@ -46,14 +61,14 @@ def load_benign_training_tensors(path: Path, feature_columns: tuple[str, ...]) -
     missing = sorted(required - set(frame.columns))
     if missing:
         raise ValueError(f"Materialized payload lacks training columns: {', '.join(missing)}")
-    training = frame.filter((pl.col("split") == "train") & ~pl.col("is_attack")).select("client_id", *feature_columns)
-    if training.is_empty():
-        raise ValueError("Materialized payload has no benign training rows")
+    selected = frame.filter((pl.col("split") == split) & ~pl.col("is_attack")).select("client_id", *feature_columns)
+    if selected.is_empty():
+        raise ValueError(f"Materialized payload has no benign {split} rows")
     tensors: list[tuple[str, torch.Tensor]] = []
-    for client_id, client_rows in training.group_by("client_id", maintain_order=True):
+    for client_id, client_rows in selected.group_by("client_id", maintain_order=True):
         values = client_rows.select(*feature_columns).to_numpy()
         if not np.isfinite(values).all():
-            raise ValueError(f"Training rows for client '{client_id[0]}' contain non-finite feature values")
+            raise ValueError(f"Benign {split} rows for client '{client_id[0]}' contain non-finite feature values")
         tensors.append((str(client_id[0]), torch.tensor(values, dtype=torch.float32)))
     return tuple(sorted(tensors, key=lambda item: item[0]))
 
@@ -94,6 +109,7 @@ class FederatedTrainingResult:
     model: nn.Module
     round_losses: tuple[tuple[int, float], ...]
     scheduled_checkpoints: tuple[FederatedCheckpoint, ...]
+    derived_shuffle_seeds: tuple[DataloaderShuffleSeed, ...]
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -102,9 +118,18 @@ class FederatedCheckpoint:
     state: tuple[tuple[str, torch.Tensor], ...]
 
 
+@define(frozen=True, slots=True, kw_only=True)
+class DataloaderShuffleSeed:
+    round_number: int
+    client_id: str
+    local_epoch: int
+    value: int
+
+
 def federated_train_autoencoder(
     model: nn.Module,
     client_training_data: tuple[tuple[str, torch.Tensor], ...],
+    client_calibration_data: tuple[tuple[str, torch.Tensor], ...],
     *,
     rounds: int,
     local_epochs: int,
@@ -119,6 +144,8 @@ def federated_train_autoencoder(
     amsgrad: bool,
     shuffle_each_epoch: bool,
     checkpoint_rounds: tuple[int, ...],
+    shuffle_seed_key: str,
+    shuffle_seed_digest_bytes: int,
     proximal_mu: float | None = None,
 ) -> FederatedTrainingResult:
     """Run full-participation FedAvg or FedProx with client-size weighted aggregation."""
@@ -131,6 +158,11 @@ def federated_train_autoencoder(
         raise ValueError("Federated training requires unique client identifiers")
     if any(data.ndim != 2 or data.shape[0] == 0 for _, data in clients):
         raise ValueError("Each federated client requires a non-empty two-dimensional training tensor")
+    calibration_clients = tuple(sorted(client_calibration_data, key=lambda item: item[0]))
+    if tuple(client_id for client_id, _ in clients) != tuple(client_id for client_id, _ in calibration_clients):
+        raise ValueError("Each training client requires benign calibration rows for checkpoint selection")
+    if any(data.ndim != 2 or data.shape[0] == 0 for _, data in calibration_clients):
+        raise ValueError("Each federated client requires non-empty two-dimensional calibration tensors")
     if proximal_mu is not None and proximal_mu <= 0.0:
         raise ValueError("FedProx requires a strictly positive proximal coefficient")
     if any(round_number < 1 or round_number > rounds for round_number in checkpoint_rounds):
@@ -141,18 +173,39 @@ def federated_train_autoencoder(
     global_model = deepcopy(model)
     losses: list[tuple[int, float]] = []
     checkpoints: list[FederatedCheckpoint] = []
+    derived_seeds: list[DataloaderShuffleSeed] = []
     for round_index in range(rounds):
         round_start = {name: tensor.detach().clone() for name, tensor in global_model.state_dict().items()}
         local_models: list[tuple[int, dict[str, torch.Tensor]]] = []
-        for client_index, (_, data) in enumerate(clients):
+        for client_id, data in clients:
             local_model = deepcopy(global_model)
+            epoch_seeds = tuple(
+                _derive_dataloader_shuffle_seed(
+                    key=shuffle_seed_key,
+                    digest_bytes=shuffle_seed_digest_bytes,
+                    training_seed=seed,
+                    round_number=round_index + 1,
+                    client_id=client_id,
+                    local_epoch=local_epoch,
+                )
+                for local_epoch in range(local_epochs)
+            )
+            derived_seeds.extend(
+                DataloaderShuffleSeed(
+                    round_number=round_index + 1,
+                    client_id=client_id,
+                    local_epoch=local_epoch,
+                    value=epoch_seed,
+                )
+                for local_epoch, epoch_seed in enumerate(epoch_seeds)
+            )
             trained = train_autoencoder(
                 local_model,
                 data,
                 local_epochs,
                 learning_rate,
                 batch_size,
-                seed + (round_index * len(clients)) + client_index,
+                epoch_seeds,
                 device,
                 beta_1,
                 beta_2,
@@ -166,7 +219,7 @@ def federated_train_autoencoder(
             local_models.append((int(data.shape[0]), trained.state_dict()))
         global_model.load_state_dict(_weighted_average_state(local_models))
         round_number = round_index + 1
-        losses.append((round_number, _weighted_reconstruction_loss(global_model, clients, device)))
+        losses.append((round_number, _weighted_reconstruction_loss(global_model, calibration_clients, device)))
         if round_number in checkpoint_rounds:
             checkpoints.append(
                 FederatedCheckpoint(
@@ -180,6 +233,7 @@ def federated_train_autoencoder(
         model=global_model,
         round_losses=tuple(losses),
         scheduled_checkpoints=tuple(checkpoints),
+        derived_shuffle_seeds=tuple(derived_seeds),
     )
 
 
@@ -187,8 +241,8 @@ def _weighted_average_state(client_states: list[tuple[int, dict[str, torch.Tenso
     total_rows = sum(row_count for row_count, _ in client_states)
     if total_rows < 1:
         raise ValueError("Federated aggregation requires positive client row counts")
-    keys = set(client_states[0][1])
-    if any(set(state) != keys for _, state in client_states[1:]):
+    keys = tuple(client_states[0][1])
+    if any(set(state) != set(keys) for _, state in client_states[1:]):
         raise ValueError("Federated aggregation requires identical model state keys")
     averaged: dict[str, torch.Tensor] = {}
     for key in keys:
@@ -214,6 +268,36 @@ def _weighted_reconstruction_loss(
             weighted_loss += row_count * loss
             total_rows += row_count
     return weighted_loss / total_rows
+
+
+def _derive_dataloader_shuffle_seed(
+    *,
+    key: str,
+    digest_bytes: int,
+    training_seed: int,
+    round_number: int,
+    client_id: str,
+    local_epoch: int,
+) -> int:
+    return _derive_seed(
+        key,
+        digest_bytes,
+        (
+            ("client_identifier", client_id),
+            ("local_epoch_index", local_epoch),
+            ("round_index", round_number),
+            ("training_seed", training_seed),
+        ),
+    )
+
+
+def _derive_seed(key: str, digest_bytes: int, components: tuple[tuple[str, int | str], ...]) -> int:
+    if not key or digest_bytes < 1:
+        raise ValueError("Seed derivation requires a key and positive digest length")
+    if tuple(name for name, _ in components) != tuple(sorted(name for name, _ in components)):
+        raise ValueError("Seed derivation components must be ordered by ascending name")
+    encoded = "|".join((key, *(f"{name}={value}" for name, value in components))).encode("utf-8")
+    return int.from_bytes(blake2b(encoded, digest_size=digest_bytes).digest(), "big") % (2**32)
 
 
 def fedprox_objective(
@@ -281,7 +365,7 @@ def train_autoencoder(
     epochs: int,
     learning_rate: float,
     batch_size: int,
-    seed: int,
+    epoch_seeds: tuple[int, ...],
     device: str,
     beta_1: float,
     beta_2: float,
@@ -293,12 +377,12 @@ def train_autoencoder(
     proximal_mu: float | None,
 ) -> nn.Module:
     """Train the dense autoencoder deterministically with explicit seeds and config parameters."""
-    set_deterministic_seeds(seed)
+    if len(epoch_seeds) != epochs:
+        raise ValueError("Training requires one dataloader shuffle seed per local epoch")
     model = model.to(device)
     model.train()
 
     dataset = TensorDataset(train_data)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle_each_epoch)
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=learning_rate,
@@ -311,7 +395,9 @@ def train_autoencoder(
     if (global_round_start_state is None) != (proximal_mu is None):
         raise ValueError("FedProx state and coefficient must be provided together")
 
-    for _ in range(epochs):
+    for epoch_seed in epoch_seeds:
+        set_deterministic_seeds(epoch_seed)
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle_each_epoch)
         for (batch_x,) in loader:
             batch_x = batch_x.to(device)
             optimizer.zero_grad()

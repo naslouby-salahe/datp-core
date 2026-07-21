@@ -19,6 +19,7 @@ class ArtifactKind(Enum):
     DATASET_READINESS = "dataset_readiness"
     PREPROCESSING_EVIDENCE = "preprocessing_evidence"
     MODEL_CHECKPOINT = "model_checkpoint"
+    CHECKPOINT_SELECTION = "checkpoint_selection"
     CALIBRATION_SCORES = "calibration_scores"
     TEST_SCORES = "test_scores"
     THRESHOLDS = "thresholds"

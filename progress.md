@@ -6,7 +6,7 @@
 
 ## 1. Executive Verdict
 
-### Implementation update — 2026-07-21 checkpoint 1
+### Implementation status
 
 The audit below remains the baseline assessment. The following findings have since been corrected and are covered by the full quality gates recorded in the implementation state:
 
@@ -14,7 +14,7 @@ The audit below remains the baseline assessment. The following findings have sin
 - D2: operating-point metrics now use the closed `MetricStatus`/`MetricValue` contract; FPR, TPR, balanced accuracy, macro-F1, AUROC invariance, and FPR dispersion no longer substitute zero for undefined values.
 - Resolved scientific and execution projections are persisted by preflight; materializations persist validated row-level split and readiness evidence and refuse reuse when either companion artifact is absent.
 - Configuration resolution now enforces the documented seed, threshold-family, canonical-cluster, shrinkage, and capability guards. Degenerate BCa inputs fail explicitly; paired rank-biserial and Holm correction are executable.
-- Execution now reports an unregistered stage handler as failed, rather than silently skipping it. The downstream handlers, controlled Dirichlet materialization, genuine Ditto implementation, frozen reporting, and architecture-document synchronization remain open work.
+- Execution now reports an unregistered stage handler as failed, rather than silently skipping it. FedAvg training consumes only materialized benign train/calibration rows, requires CUDA without a silent fallback, derives the configured initialization and dataloader seeds, selects checkpoints solely from benign calibration loss, and persists both SafeTensors weights and immutable selection evidence. Score, threshold, evaluation, statistics, reporting, controlled Dirichlet materialization, FedProx grid execution, genuine Ditto, and architecture-document synchronization remain open work.
 
 This update does not claim completed experiments or a final scientific readiness verdict.
 
