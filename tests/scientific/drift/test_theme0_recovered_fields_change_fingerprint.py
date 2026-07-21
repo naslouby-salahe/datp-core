@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import attrs
 
-from datp_core.config.resolver import _experiment_scientific_projection, _unstructure
+from datp_core.config.converter import unstructure_projection
+from datp_core.config.resolver import _experiment_scientific_projection
 from datp_core.domain.catalogue import (
     AbsorptionAnalysisRecord,
     CapabilityRequirementRecord,
@@ -158,8 +159,8 @@ def test_analysis_specific_contract_field_changes_scientific_fingerprint() -> No
 
     baseline = absorption_analysis("1 - (cv_fpr_local / cv_fpr_shared)")
     perturbed = absorption_analysis("1 - (cv_fpr_shared / cv_fpr_local)")
-    assert compute_scientific_fingerprint(_unstructure(baseline)) != compute_scientific_fingerprint(
-        _unstructure(perturbed)
+    assert compute_scientific_fingerprint(unstructure_projection(baseline)) != compute_scientific_fingerprint(
+        unstructure_projection(perturbed)
     )
 
 

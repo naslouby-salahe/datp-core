@@ -17,6 +17,10 @@ _ALLOWLIST = {
     "config/resolver.py",
     "config/runtime_settings.py",
     "config/yaml_loader.py",
+    "config/dataset_resolution.py",
+    "config/converter.py",
+    "config/protocol_resolution.py",
+    "config/experiment_resolution.py",
 }
 
 

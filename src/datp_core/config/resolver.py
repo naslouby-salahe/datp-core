@@ -7,47 +7,30 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import cast
 
-import cattrs
 from attrs import define
 
-from datp_core.config.models.dataset_config import (
-    CategoricalEncodingConfig,
-    DatasetFieldSchemaConfig,
-    DatasetSourceLayoutConfig,
-    EndpointIdentityConfig,
-    IdentitySchemeConfig,
-    LabelFieldsConfig,
-    SetupClientConstructionConfig,
-    SourceContractConfig,
+from datp_core.config.converter import unstructure_projection
+from datp_core.config.dataset_resolution import (
+    resolve_datasets,
 )
-from datp_core.config.models.experiment_config import AnalysisSpecConfig, AuthoredExperimentConfig, SweepVariableConfig
-from datp_core.config.models.protocol_config import (
-    ArtifactIdentityConfig,
-    CalibrationFallbackPolicyConfig,
-    CentralizedPooledThresholdPolicyConfig,
-    ClusterThresholdPolicyConfig,
-    CommunicationEstimationContractConfig,
-    DeterminismProfileConfig,
-    EvaluationResultContractConfig,
-    FamilyMeanThresholdPolicyConfig,
-    FederatedFixedCoefficientPolicyConfig,
-    FederatedMatchedExceedancePolicyConfig,
-    LocalGlobalShrinkagePolicyConfig,
-    LocalQuantileThresholdPolicyConfig,
-    MetricDefinitionsConfig,
-    MetricFormulaConfig,
-    NestedReplicatePolicyConfig,
-    OperationalInputsConfig,
-    ReportDefaultsConfig,
-    ReportProfileConfig,
-    ResultTypeConfig,
-    SharedMeanThresholdPolicyConfig,
-    SharedPooledThresholdPolicyConfig,
-    SharedWeightedThresholdPolicyConfig,
-    SplitConformalThresholdPolicyConfig,
-    ThresholdExchangeEntryConfig,
-    ThresholdPolicyDefaultsConfig,
-    TypedThresholdPolicyConfig,
+from datp_core.config.experiment_resolution import (
+    _experiment_scientific_projection,
+    _resolve_analysis,
+    _resolve_sweep,
+)
+from datp_core.config.protocol_resolution import (
+    _resolve_artifact_identity,
+    _resolve_communication_estimation_contract,
+    _resolve_evaluation_result_contract,
+    _resolve_metric_definitions,
+    _resolve_nested_replicate_policy,
+    _resolve_operational_inputs,
+    _resolve_protocol_determinism,
+    _resolve_report_defaults,
+    _resolve_report_profile,
+    _resolve_result_type,
+    _resolve_threshold_policy,
+    _resolve_threshold_policy_defaults,
 )
 from datp_core.config.runtime_settings import (
     ResolvedProjectPaths,
@@ -58,20 +41,12 @@ from datp_core.config.runtime_settings import (
 )
 from datp_core.config.yaml_loader import ConfigurationError, YamlConfigurationReader
 from datp_core.domain.catalogue import (
-    AbsorptionAnalysisRecord,
-    AlertBurdenAnalysisRecord,
-    AnalysisRecord,
-    AnchorEquivalenceAnalysisRecord,
     BatchingRecord,
     CalibrationSubsetRecord,
     CapabilityRequirementRecord,
     CheckpointConvergenceRecord,
     CheckpointProfileRecord,
     CheckpointSelectionRecord,
-    ClusterStabilityAnalysisRecord,
-    ConditionSweepRecord,
-    ConformalCoverageAnalysisRecord,
-    DistributionMechanismAnalysisRecord,
     EligibilityFallbackRecord,
     EligibilityGateRecord,
     EligibilityPolicyRecord,
@@ -79,52 +54,20 @@ from datp_core.domain.catalogue import (
     EvidenceRole,
     ExperimentRecord,
     FederationProfileRecord,
-    LockedClientDistributionAnalysisRecord,
-    MetricAssociationAnalysisRecord,
     MetricBundleRecord,
     ModelArchitectureRecord,
     NormalizationStrategyRecord,
     OptimizerRecord,
-    PairedThresholdAnalysisRecord,
     PopulationRecord,
     PrerequisiteSpecRecord,
-    QuantileEstimationAnalysisRecord,
     QuantileEstimatorRecord,
-    RecoveryFractionAnalysisRecord,
-    ResourceCostAnalysisRecord,
     RunRequirement,
     SeedCohortRecord,
     StatisticalProfileRecord,
-    SweepConditionRecord,
-    SweepRecord,
-    SweepValue,
-    TemporalRecoveryAnalysisRecord,
-    ThresholdStabilityAnalysisRecord,
     TrainingProfileRecord,
-    ValueSweepRecord,
 )
 from datp_core.domain.datasets import (
-    AdapterKind,
-    CategoricalEncodingRecord,
-    ConfiguredSourceTree,
-    CrossSourceRelationshipRecord,
-    DatasetFieldSchemaRecord,
-    DatasetInspectionContract,
-    DatasetMaterialization,
-    DatasetSetup,
-    DatasetSourceLayoutContractRecord,
-    DatasetSourceRecord,
-    EndpointIdentityRecord,
-    IdentitySchemeRecord,
-    LabelFieldsRecord,
-    ModelFeaturesRecord,
-    MulticlassLabelRecord,
     ResolvedDataset,
-    ResolvedDatasetPaths,
-    RetainedNumericFeaturesRecord,
-    SetupClientConstructionRecord,
-    SourceContractRecord,
-    SourceLayout,
 )
 from datp_core.domain.fingerprints import (
     CanonicalProjection,
@@ -139,7 +82,6 @@ from datp_core.domain.identifiers import (
     DatasetSetupId,
     EligibilityPolicyId,
     ExperimentId,
-    MaterializationId,
     MetricBundleId,
     NormalizationStrategyId,
     PopulationId,
@@ -149,47 +91,19 @@ from datp_core.domain.identifiers import (
     TrainingProfileId,
 )
 from datp_core.domain.protocol_contracts import (
-    ArtifactFingerprintsRecord,
     ArtifactIdentityRecord,
-    BenignDecisionRateRecord,
-    CheckpointStorageRecord,
-    ClusterDiagnosticsRecord,
     CommunicationEstimationContractRecord,
-    CrossClientAggregationRecord,
     EvaluationResultContractRecord,
-    FieldEncodingRecord,
-    HeterogeneityDiagnosticsRecord,
-    JsDivergenceRecord,
     MetricDefinitionsRecord,
-    MetricFormulaRecord,
-    ModelExchangeRecord,
     NestedReplicatePolicyRecord,
     OperationalInputsRecord,
-    PrecisionPolicyRecord,
     ProtocolDeterminismRecord,
-    ReportColumnRecord,
     ReportDefaultsRecord,
     ReportProfileRecord,
     ResultTypeRecord,
-    SeedNamespaceRecord,
-    ThresholdEstimationMetricsRecord,
-    ThresholdExchangeEntryRecord,
-    ThresholdExchangeRecord,
     ThresholdPolicyDefaultsRecord,
 )
 from datp_core.domain.thresholding import (
-    CalibrationFallbackThresholdPolicyRecord,
-    CentralizedPooledThresholdPolicyRecord,
-    ClusterThresholdPolicyRecord,
-    FamilyMeanThresholdPolicyRecord,
-    FederatedFixedCoefficientThresholdPolicyRecord,
-    FederatedMatchedExceedanceThresholdPolicyRecord,
-    LocalGlobalShrinkageThresholdPolicyRecord,
-    LocalQuantileThresholdPolicyRecord,
-    SharedMeanThresholdPolicyRecord,
-    SharedPooledThresholdPolicyRecord,
-    SharedWeightedThresholdPolicyRecord,
-    SplitConformalThresholdPolicyRecord,
     ThresholdPolicyRecord,
 )
 from datp_core.domain.values import (
@@ -197,558 +111,10 @@ from datp_core.domain.values import (
     PositiveFloat,
     PositiveInt,
     Probability,
-    RelativePath,
     Seed,
     TypedDomainRegistry,
-    as_optional_frozen_json_mapping,
     deep_freeze,
 )
-
-_projection_converter = cattrs.Converter()
-
-
-def _unstructure(value: object) -> object:
-    """Convert resolved attrs records into primitive structures for canonical fingerprinting."""
-    return _projection_converter.unstructure(value)
-
-
-def _experiment_scientific_projection(record: ExperimentRecord) -> dict[str, object]:
-    """Unstructure an experiment for the scientific fingerprint, excluding display-only prose.
-
-    `display_name` is authored human-readable prose with no bearing on what is executed, evaluated,
-    or claimed; it is the one field in `AuthoredExperimentConfig` classified AUTHORING_METADATA.
-    """
-    projected = cast(dict, _unstructure(record))
-    del projected["display_name"]
-    return projected
-
-
-_THRESHOLD_POLICY_RECORD_TYPES: dict[type[TypedThresholdPolicyConfig], type[ThresholdPolicyRecord]] = {
-    SharedMeanThresholdPolicyConfig: SharedMeanThresholdPolicyRecord,
-    SharedPooledThresholdPolicyConfig: SharedPooledThresholdPolicyRecord,
-    SharedWeightedThresholdPolicyConfig: SharedWeightedThresholdPolicyRecord,
-    LocalQuantileThresholdPolicyConfig: LocalQuantileThresholdPolicyRecord,
-    FamilyMeanThresholdPolicyConfig: FamilyMeanThresholdPolicyRecord,
-    CentralizedPooledThresholdPolicyConfig: CentralizedPooledThresholdPolicyRecord,
-    ClusterThresholdPolicyConfig: ClusterThresholdPolicyRecord,
-    SplitConformalThresholdPolicyConfig: SplitConformalThresholdPolicyRecord,
-    LocalGlobalShrinkagePolicyConfig: LocalGlobalShrinkageThresholdPolicyRecord,
-    CalibrationFallbackPolicyConfig: CalibrationFallbackThresholdPolicyRecord,
-    FederatedMatchedExceedancePolicyConfig: FederatedMatchedExceedanceThresholdPolicyRecord,
-    FederatedFixedCoefficientPolicyConfig: FederatedFixedCoefficientThresholdPolicyRecord,
-}
-
-
-def _resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicyRecord:
-    """Convert an authored threshold-policy variant into its pure domain record, losslessly."""
-    record_type = _THRESHOLD_POLICY_RECORD_TYPES.get(type(cfg))
-    if record_type is None:
-        raise ConfigurationError(f"Unsupported authored threshold policy configuration: {type(cfg).__name__}")
-    return record_type(**cfg.model_dump())
-
-
-def _resolve_metric_formula(cfg: MetricFormulaConfig) -> MetricFormulaRecord:
-    return MetricFormulaRecord(
-        formula=cfg.formula,
-        unit=cfg.unit,
-        direction=cfg.direction,
-        zero_denominator=cfg.zero_denominator,
-        requires=tuple(cfg.requires) if cfg.requires is not None else None,
-        missing_class_behavior=cfg.missing_class_behavior,
-        requires_both_classes=cfg.requires_both_classes,
-        role=cfg.role,
-        invariance_check=cfg.invariance_check,
-        quantile_estimator=cfg.quantile_estimator,
-        zero_sum_behavior=cfg.zero_sum_behavior,
-        zero_oracle_behavior=cfg.zero_oracle_behavior,
-        zero_mean_behavior=cfg.zero_mean_behavior,
-        denominator_stabilizer=cfg.denominator_stabilizer,
-        near_zero_mean_threshold_formula=cfg.near_zero_mean_threshold_formula,
-        near_zero_mean_behavior=cfg.near_zero_mean_behavior,
-        minimum_client_count=cfg.minimum_client_count,
-        weighting=cfg.weighting,
-        comparison_unit=cfg.comparison_unit,
-    )
-
-
-def _resolve_metric_definitions(cfg: MetricDefinitionsConfig) -> MetricDefinitionsRecord:
-    cross_client = cfg.cross_client_aggregation
-    threshold_est = cfg.threshold_estimation
-    js = cfg.heterogeneity_diagnostics.pairwise_js_divergence
-    cluster = cfg.cluster_diagnostics
-    return MetricDefinitionsRecord(
-        prediction_rule=cfg.prediction_rule,
-        per_client_before_aggregation=cfg.per_client_before_aggregation,
-        test_rows_only=cfg.test_rows_only,
-        fpr=_resolve_metric_formula(cfg.fpr),
-        tpr=_resolve_metric_formula(cfg.tpr),
-        balanced_accuracy=_resolve_metric_formula(cfg.balanced_accuracy),
-        macro_f1=_resolve_metric_formula(cfg.macro_f1),
-        auroc=_resolve_metric_formula(cfg.auroc),
-        cross_client_aggregation=CrossClientAggregationRecord(
-            mean_fpr=_resolve_metric_formula(cross_client.mean_fpr),
-            standard_deviation_ddof=cross_client.standard_deviation_ddof,
-            cv_fpr=_resolve_metric_formula(cross_client.cv_fpr),
-            cv_tpr=_resolve_metric_formula(cross_client.cv_tpr),
-            iqr_fpr=_resolve_metric_formula(cross_client.iqr_fpr),
-            fpr_range=_resolve_metric_formula(cross_client.fpr_range),
-            worst_client_fpr=_resolve_metric_formula(cross_client.worst_client_fpr),
-            p10_macro_f1=_resolve_metric_formula(cross_client.p10_macro_f1),
-            worst_client_ba=_resolve_metric_formula(cross_client.worst_client_ba),
-            jain_index=_resolve_metric_formula(cross_client.jain_index),
-            gini_coefficient=_resolve_metric_formula(cross_client.gini_coefficient),
-        ),
-        threshold_estimation=ThresholdEstimationMetricsRecord(
-            absolute_threshold_error=_resolve_metric_formula(threshold_est.absolute_threshold_error),
-            relative_threshold_error=_resolve_metric_formula(threshold_est.relative_threshold_error),
-            oracle_definition=threshold_est.oracle_definition,
-            target_exceedance=_resolve_metric_formula(threshold_est.target_exceedance),
-            signed_attainment_error=_resolve_metric_formula(threshold_est.signed_attainment_error),
-            absolute_attainment_error=_resolve_metric_formula(threshold_est.absolute_attainment_error),
-            threshold_dispersion=_resolve_metric_formula(threshold_est.threshold_dispersion),
-            threshold_variance_across_replicates=_resolve_metric_formula(
-                threshold_est.threshold_variance_across_replicates
-            ),
-        ),
-        heterogeneity_diagnostics=HeterogeneityDiagnosticsRecord(
-            pairwise_js_divergence=JsDivergenceRecord(
-                definition=js.definition,
-                histogram_bins=js.histogram_bins,
-                binning_range=js.binning_range,
-                binning_edges=js.binning_edges,
-                logarithm_base=js.logarithm_base,
-                empty_bin_handling=js.empty_bin_handling,
-                pairwise_aggregation=js.pairwise_aggregation,
-                unit=js.unit,
-                direction=js.direction,
-                minimum_client_count=js.minimum_client_count,
-            )
-        ),
-        cluster_diagnostics=ClusterDiagnosticsRecord(
-            adjusted_rand_index=_resolve_metric_formula(cluster.adjusted_rand_index),
-            within_cluster_dispersion=_resolve_metric_formula(cluster.within_cluster_dispersion),
-            across_cluster_dispersion=_resolve_metric_formula(cluster.across_cluster_dispersion),
-        ),
-        precision_policy=PrecisionPolicyRecord(
-            computation=cfg.precision_policy.computation,
-            rounding=cfg.precision_policy.rounding,
-        ),
-        metric_statuses=tuple(cfg.metric_statuses),
-        forbidden_substitutions=tuple(cfg.forbidden_substitutions),
-    )
-
-
-def _resolve_artifact_identity(cfg: ArtifactIdentityConfig) -> ArtifactIdentityRecord:
-    fp = cfg.fingerprints
-    return ArtifactIdentityRecord(
-        hash_function=cfg.hash_function,
-        digest_bytes=cfg.digest_bytes,
-        canonical_serialization=cfg.canonical_serialization,
-        absolute_paths_excluded_from_identity=cfg.absolute_paths_excluded_from_identity,
-        fingerprints=ArtifactFingerprintsRecord(
-            source=tuple(fp.source),
-            schema_stage=tuple(fp.schema_stage),
-            materialization=tuple(fp.materialization),
-            client_assignment=tuple(fp.client_assignment),
-            model_stage=tuple(fp.model_stage),
-            training=tuple(fp.training),
-            checkpoint=tuple(fp.checkpoint),
-            score=tuple(fp.score),
-            threshold=tuple(fp.threshold),
-            metric=tuple(fp.metric),
-            analysis=tuple(fp.analysis),
-        ),
-        lineage_validation_before_reuse=tuple(cfg.lineage_validation_before_reuse),
-        reuse_rejected_when_any_changes=tuple(cfg.reuse_rejected_when_any_changes),
-    )
-
-
-def _resolve_threshold_exchange_entry(cfg: ThresholdExchangeEntryConfig) -> ThresholdExchangeEntryRecord:
-    return ThresholdExchangeEntryRecord(
-        uplink_fields_per_client=(
-            tuple(cfg.uplink_fields_per_client) if cfg.uplink_fields_per_client is not None else None
-        ),
-        downlink_fields_per_client=(
-            tuple(cfg.downlink_fields_per_client) if cfg.downlink_fields_per_client is not None else None
-        ),
-        candidate_grid_downlink_fields_per_client=(
-            tuple(cfg.candidate_grid_downlink_fields_per_client)
-            if cfg.candidate_grid_downlink_fields_per_client is not None
-            else None
-        ),
-        candidate_grid_uplink_fields_per_client_per_candidate=(
-            tuple(cfg.candidate_grid_uplink_fields_per_client_per_candidate)
-            if cfg.candidate_grid_uplink_fields_per_client_per_candidate is not None
-            else None
-        ),
-    )
-
-
-def _resolve_communication_estimation_contract(
-    cfg: CommunicationEstimationContractConfig,
-) -> CommunicationEstimationContractRecord:
-    exchange = cfg.threshold_exchange
-    return CommunicationEstimationContractRecord(
-        estimate_basis=cfg.estimate_basis,
-        field_encodings=MappingProxyType(
-            {
-                key: FieldEncodingRecord(bytes_per_field=v.bytes_per_field, byte_order=v.byte_order)
-                for key, v in cfg.field_encodings.items()
-            }
-        ),
-        threshold_exchange=ThresholdExchangeRecord(
-            direction=exchange.direction,
-            b1=_resolve_threshold_exchange_entry(exchange.b1),
-            b2=_resolve_threshold_exchange_entry(exchange.b2),
-            b4=_resolve_threshold_exchange_entry(exchange.b4),
-            federated_summary=_resolve_threshold_exchange_entry(exchange.federated_summary),
-        ),
-        candidate_grid_payload=cfg.candidate_grid_payload,
-        model_exchange=ModelExchangeRecord(
-            field_width=cfg.model_exchange.field_width,
-            directions=tuple(cfg.model_exchange.directions),
-            bytes_per_round_formula=cfg.model_exchange.bytes_per_round_formula,
-        ),
-        checkpoint_storage=CheckpointStorageRecord(
-            contents=tuple(cfg.checkpoint_storage.contents),
-            model_parameter_bytes_formula=cfg.checkpoint_storage.model_parameter_bytes_formula,
-        ),
-        filename_match_is_not_lineage_evidence=cfg.filename_match_is_not_lineage_evidence,
-        frozen_artifacts_immutable=cfg.frozen_artifacts_immutable,
-        ambiguous_latest_reference=cfg.ambiguous_latest_reference,
-    )
-
-
-def _resolve_operational_inputs(cfg: OperationalInputsConfig) -> OperationalInputsRecord:
-    rate = cfg.benign_decision_rate
-    return OperationalInputsRecord(
-        benign_decision_rate=BenignDecisionRateRecord(
-            configured=rate.configured,
-            value=rate.value,
-            required_fields=tuple(rate.required_fields),
-            finite_value_validation=rate.finite_value_validation,
-            non_negative_validation=rate.non_negative_validation,
-            unavailable_behavior=rate.unavailable_behavior,
-            invented_rate_forbidden=rate.invented_rate_forbidden,
-        )
-    )
-
-
-def _resolve_protocol_determinism(cfg: DeterminismProfileConfig) -> ProtocolDeterminismRecord:
-    return ProtocolDeterminismRecord(
-        seed_domains=tuple(cfg.seed_domains),
-        partition_seed_independent_of_training_seeds=cfg.partition_seed_independent_of_training_seeds,
-        checkpoint_selection_uses_no_stochastic_seed=cfg.checkpoint_selection_uses_no_stochastic_seed,
-        derived_seed_algorithm=MappingProxyType(dict(cfg.derived_seed_algorithm)),
-        seed_namespaces=MappingProxyType(
-            {
-                key: SeedNamespaceRecord(key=v.key, components=tuple(v.components))
-                for key, v in cfg.seed_namespaces.items()
-            }
-        ),
-        resolved_seeds_required_in_manifests=tuple(cfg.resolved_seeds_required_in_manifests),
-    )
-
-
-def _resolve_threshold_policy_defaults(cfg: ThresholdPolicyDefaultsConfig) -> ThresholdPolicyDefaultsRecord:
-    return ThresholdPolicyDefaultsRecord(
-        source_score_population=cfg.source_score_population,
-        eligibility_filter=cfg.eligibility_filter,
-        attack_rows_forbidden_in_calibration=cfg.attack_rows_forbidden_in_calibration,
-        non_finite_calibration_score=cfg.non_finite_calibration_score,
-        empty_client_calibration=cfg.empty_client_calibration,
-        application_scope=cfg.application_scope,
-        required_diagnostic_fields=tuple(cfg.required_diagnostic_fields),
-    )
-
-
-def _resolve_nested_replicate_policy(cfg: NestedReplicatePolicyConfig) -> NestedReplicatePolicyRecord:
-    return NestedReplicatePolicyRecord(
-        replicate_values_computed_first=cfg.replicate_values_computed_first,
-        summarized_within_seed_before_across_seed_inference=cfg.summarized_within_seed_before_across_seed_inference,
-        seed_level_statistic=cfg.seed_level_statistic,
-        replicates_counted_as_independent_units=cfg.replicates_counted_as_independent_units,
-        additional_required_replicate_statistic=cfg.additional_required_replicate_statistic,
-    )
-
-
-def _resolve_result_type(identifier: str, cfg: ResultTypeConfig) -> ResultTypeRecord:
-    return ResultTypeRecord(identifier=identifier, permitted_evidence_roles=tuple(cfg.permitted_evidence_roles))
-
-
-def _resolve_evaluation_result_contract(cfg: EvaluationResultContractConfig) -> EvaluationResultContractRecord:
-    return EvaluationResultContractRecord(
-        per_evaluation_result_type=cfg.per_evaluation_result_type,
-        per_evaluation_eligibility_result_type=cfg.per_evaluation_eligibility_result_type,
-        per_evaluation_required_records=tuple(cfg.per_evaluation_required_records),
-    )
-
-
-def _resolve_report_defaults(cfg: ReportDefaultsConfig) -> ReportDefaultsRecord:
-    return ReportDefaultsRecord(
-        ordering=cfg.ordering,
-        missing_value_policy=cfg.missing_value_policy,
-        table_output_formats=tuple(cfg.table_output_formats),
-        figure_output_formats=tuple(cfg.figure_output_formats),
-        provenance_required_per_artifact=cfg.provenance_required_per_artifact,
-        analysis_defined_direction_token=cfg.analysis_defined_direction_token,
-    )
-
-
-def _resolve_report_profile(identifier: str, cfg: ReportProfileConfig) -> ReportProfileRecord:
-    return ReportProfileRecord(
-        identifier=identifier,
-        artifact_type=cfg.artifact_type,
-        table_type=cfg.table_type,
-        figure_type=cfg.figure_type,
-        estimate_basis=cfg.estimate_basis,
-        columns=(
-            [ReportColumnRecord(name=c.name, unit=c.unit, direction=c.direction) for c in cfg.columns]
-            if cfg.columns is not None
-            else None
-        ),
-        series=(
-            [ReportColumnRecord(name=c.name, unit=c.unit, direction=c.direction) for c in cfg.series]
-            if cfg.series is not None
-            else None
-        ),
-    )
-
-
-def _resolve_sweep_value(value: object) -> SweepValue:
-    if isinstance(value, list):
-        if not all(isinstance(item, str) for item in value):
-            raise ConfigurationError(f"Sweep value list must contain only strings, got: {value!r}")
-        return tuple(value)
-    if isinstance(value, str | int | float):
-        return value
-    raise ConfigurationError(f"Unsupported authored sweep value: {value!r}")
-
-
-def _resolve_sweep(name: str, cfg: SweepVariableConfig) -> SweepRecord:
-    if cfg.values is not None:
-        return ValueSweepRecord(name=name, values=tuple(_resolve_sweep_value(value) for value in cfg.values))
-    assert cfg.conditions is not None  # enforced by SweepVariableConfig.validate_exactly_one_variant
-    return ConditionSweepRecord(
-        name=name,
-        conditions=tuple(
-            SweepConditionRecord(name=c.name, allocation=c.allocation, dirichlet_alpha=c.dirichlet_alpha)
-            for c in cfg.conditions
-        ),
-    )
-
-
-def _require(value: object | None, *, experiment_name: str, analysis_label: str, field_name: str) -> object:
-    if value is None:
-        raise ConfigurationError(
-            f"Experiment '{experiment_name}' analysis '{analysis_label}' is missing required field '{field_name}'"
-        )
-    return value
-
-
-def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) -> AnalysisRecord:
-    def req(field_name: str) -> object:
-        return _require(
-            getattr(a, field_name), experiment_name=exp_cfg.name, analysis_label=a.label, field_name=field_name
-        )
-
-    statistical_profile = StatisticalProfileId(cast(str, req("statistical_profile")))
-    secondary_statistical_profile = (
-        StatisticalProfileId(a.secondary_statistical_profile) if a.secondary_statistical_profile is not None else None
-    )
-
-    if a.kind == "paired_threshold_analysis":
-        return PairedThresholdAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            secondary_statistical_profile=secondary_statistical_profile,
-            first_evaluation=cast(str, req("first_evaluation")),
-            second_evaluation=cast(str, req("second_evaluation")),
-            primary_metric=cast(str, req("primary_metric")),
-            delta_orientation=cast(str, req("delta_orientation")),
-            delta_interpretation=cast(str, req("delta_interpretation")),
-            required_direction=a.required_direction,
-            monotonicity_required=a.monotonicity_required,
-            ordering_inversion_reporting=a.ordering_inversion_reporting,
-            per_sweep_cell=a.per_sweep_cell,
-            full_curve_reporting=a.full_curve_reporting,
-            post_hoc_weight_selection=a.post_hoc_weight_selection,
-        )
-    if a.kind == "absorption_analysis":
-        return AbsorptionAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            absorption_metric=cast(str, req("absorption_metric")),
-            formula=cast(str, req("formula")),
-            band_interpretation=cast(str, req("band_interpretation")),
-            denominator_materiality_rule=cast("float | str", req("denominator_materiality_rule")),
-            undefined_denominator_behavior=cast(str, req("undefined_denominator_behavior")),
-            matching_contract=cast(dict, req("matching_contract")),
-            outcome_bands=cast(list, req("outcome_bands")),
-            outcome_bands_are_mutually_exclusive_and_exhaustive=cast(
-                bool, req("outcome_bands_are_mutually_exclusive_and_exhaustive")
-            ),
-            reference_analysis=cast("str | dict", req("reference_analysis")),
-            stress_test_analysis=cast(str, req("stress_test_analysis")),
-            alternative_path_rule=a.alternative_path_rule,
-        )
-    if a.kind == "alert_burden_analysis":
-        return AlertBurdenAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            formula=cast(str, req("formula")),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
-            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
-            required_operational_input=cast(str, req("required_operational_input")),
-            per_client_reporting_required=cast(bool, req("per_client_reporting_required")),
-            unavailable_behavior=cast(str, req("unavailable_behavior")),
-        )
-    if a.kind == "anchor_equivalence_analysis":
-        return AnchorEquivalenceAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            source_analysis=cast(str, req("source_analysis")),
-            comparison_mode=cast(str, req("comparison_mode")),
-            comparison_mode_rule=cast(str, req("comparison_mode_rule")),
-            interval_width_tolerance_multiplier=cast(float, req("interval_width_tolerance_multiplier")),
-            floating_point_tolerance=cast("dict[str, float]", req("floating_point_tolerance")),
-            historical_reference=cast("dict[str, float | str]", req("historical_reference")),
-            statistical_fallback_requirements=tuple(cast("list[str]", req("statistical_fallback_requirements"))),
-            failure_reasons=tuple(cast("list[str]", req("failure_reasons"))),
-            downstream_blocking_behavior=cast(str, req("downstream_blocking_behavior")),
-        )
-    if a.kind == "cluster_stability_analysis":
-        return ClusterStabilityAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            source_evaluation=cast(str, req("source_evaluation")),
-            comparison_unit=cast(str, req("comparison_unit")),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
-            reference_evaluation=a.reference_evaluation,
-            run_requirement=(RunRequirement(a.run_requirement) if a.run_requirement is not None else None),
-        )
-    if a.kind == "conformal_coverage_analysis":
-        return ConformalCoverageAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            source_evaluation=cast(str, req("source_evaluation")),
-            target_coverage=cast(float, req("target_coverage")),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
-            coverage_direction=a.coverage_direction,
-        )
-    if a.kind == "distribution_mechanism_analysis":
-        return DistributionMechanismAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
-            field_formulas=a.field_formulas,
-        )
-    if a.kind == "locked_client_distribution_analysis":
-        return LockedClientDistributionAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
-            locked_client_identifier=cast(str, req("locked_client_identifier")),
-        )
-    if a.kind == "metric_association_analysis":
-        return MetricAssociationAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            secondary_statistical_profile=secondary_statistical_profile,
-            predictor_metric=cast(str, req("predictor_metric")),
-            outcome_metric=cast(str, req("outcome_metric")),
-            outcome_source_analysis=cast(str, req("outcome_source_analysis")),
-            interpretation_constraint=cast(str, req("interpretation_constraint")),
-            grouping_dimension=a.grouping_dimension,
-        )
-    if a.kind == "quantile_estimation_analysis":
-        return QuantileEstimationAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
-            oracle_reference=cast(str, req("oracle_reference")),
-        )
-    if a.kind == "recovery_fraction_analysis":
-        return RecoveryFractionAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            formula=cast(str, req("formula")),
-            numerator_analysis=cast(str, req("numerator_analysis")),
-            denominator_analysis=cast(str, req("denominator_analysis")),
-            denominator_composition=cast(str, req("denominator_composition")),
-            denominator_materiality_rule=cast("float | str", req("denominator_materiality_rule")),
-            undefined_denominator_behavior=cast(str, req("undefined_denominator_behavior")),
-        )
-    if a.kind == "resource_cost_analysis":
-        return ResourceCostAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
-            estimate_basis=cast(str, req("estimate_basis")),
-        )
-    if a.kind == "temporal_recovery_analysis":
-        return TemporalRecoveryAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            primary_metric=cast(str, req("primary_metric")),
-            static_reference_evaluation=cast(str, req("static_reference_evaluation")),
-            frozen_evaluation=cast(str, req("frozen_evaluation")),
-            recalibrated_evaluation=cast(str, req("recalibrated_evaluation")),
-            recovery_fields=tuple(cast("list[str]", req("recovery_fields"))),
-            drift_excess_formula=cast(str, req("drift_excess_formula")),
-            recovered_amount_formula=cast(str, req("recovered_amount_formula")),
-            recovery_ratio_formula=cast(str, req("recovery_ratio_formula")),
-            meaningful_degradation_rule=cast(str, req("meaningful_degradation_rule")),
-            recovery_ratio_precondition=cast(str, req("recovery_ratio_precondition")),
-            negative_recovery_policy=cast(str, req("negative_recovery_policy")),
-            recovery_ratio_direction=cast(str, req("recovery_ratio_direction")),
-            chronology_unverifiable_policy=cast(str, req("chronology_unverifiable_policy")),
-            outcome_bands=cast(list, req("outcome_bands")),
-            outcome_bands_are_mutually_exclusive_and_exhaustive=cast(
-                bool, req("outcome_bands_are_mutually_exclusive_and_exhaustive")
-            ),
-        )
-    if a.kind == "threshold_stability_analysis":
-        return ThresholdStabilityAnalysisRecord(
-            label=a.label,
-            kind=a.kind,
-            result_type=a.result_type,
-            statistical_profile=statistical_profile,
-            source_evaluation=cast(str, req("source_evaluation")),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
-            per_sweep_cell=cast(str, req("per_sweep_cell")),
-        )
-    raise ConfigurationError(f"Experiment '{exp_cfg.name}' analysis '{a.label}' has unsupported kind '{a.kind}'")
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -797,225 +163,6 @@ class ResolvedProjectConfiguration:
     execution_projection: CanonicalProjection
 
 
-def _resolve_identity_scheme(cfg: IdentitySchemeConfig) -> IdentitySchemeRecord:
-    return IdentitySchemeRecord(
-        row_identity=cfg.row_identity,
-        client_identity=cfg.client_identity,
-        benign_group_identity=cfg.benign_group_identity,
-        attack_row_group_identity=cfg.attack_row_group_identity,
-        label_identity=cfg.label_identity,
-        attack_family_identity=cfg.attack_family_identity,
-        attack_type_identity=cfg.attack_type_identity,
-        device_identity=cfg.device_identity,
-        device_mac_ip_field=cfg.device_mac_ip_field,
-        timestamp_field=cfg.timestamp_field,
-        chronological_ordering_basis=cfg.chronological_ordering_basis,
-        provenance_fields=tuple(cfg.provenance_fields),
-    )
-
-
-def _resolve_label_fields(cfg: LabelFieldsConfig) -> LabelFieldsRecord:
-    multiclass = cfg.multiclass_label
-    return LabelFieldsRecord(
-        binary_label=cfg.binary_label,
-        multiclass_label=(
-            MulticlassLabelRecord(column=multiclass.column, type=multiclass.type, case=multiclass.case)
-            if multiclass is not None
-            else None
-        ),
-        benign_value=cfg.benign_value,
-        attack_class_mapping=cfg.attack_class_mapping,
-        device_family_mapping=cfg.device_family_mapping,
-        family_taxonomy=cfg.family_taxonomy,
-        family_map=cfg.family_map,
-    )
-
-
-def _resolve_endpoint_identity(cfg: EndpointIdentityConfig) -> EndpointIdentityRecord:
-    return EndpointIdentityRecord(
-        resolution=cfg.resolution,
-        fields=tuple(cfg.fields),
-        internal_prefix=cfg.internal_prefix,
-        subnet_component=cfg.subnet_component,
-        subnet_role_source=cfg.subnet_role_source,
-        subnet_to_group=cfg.subnet_to_group,
-        excluded_endpoints=cfg.excluded_endpoints,
-        direction_normalization=cfg.direction_normalization,
-        use=cfg.use,
-        unresolved_row_policy=cfg.unresolved_row_policy,
-    )
-
-
-def _resolve_categorical_encoding(cfg: CategoricalEncodingConfig) -> CategoricalEncodingRecord:
-    return CategoricalEncodingRecord(
-        strategy=cfg.strategy,
-        columns=tuple(cfg.columns),
-        vocabulary_scope=cfg.vocabulary_scope,
-        vocabulary_artifact=cfg.vocabulary_artifact,
-        vocabulary_fingerprint=cfg.vocabulary_fingerprint,
-        category_order=cfg.category_order,
-        encoded_feature_naming=cfg.encoded_feature_naming,
-        missing_category_policy=cfg.missing_category_policy,
-        unknown_category_policy=cfg.unknown_category_policy,
-        unknown_indicator_distinct_from_missing_indicator=cfg.unknown_indicator_distinct_from_missing_indicator,
-        feature_order=tuple(cfg.feature_order),
-    )
-
-
-def _resolve_field_schema(cfg: DatasetFieldSchemaConfig) -> DatasetFieldSchemaRecord:
-    model_features = cfg.model_features
-    retained_numeric_features = cfg.retained_numeric_features
-    endpoint_identity = cfg.endpoint_identity
-    return DatasetFieldSchemaRecord(
-        source_column_count=cfg.source_column_count,
-        header_required=cfg.header_required,
-        header_must_be_identical_across_all_source_files=cfg.header_must_be_identical_across_all_source_files,
-        header_must_be_identical_across_all_files_in_a_tree=cfg.header_must_be_identical_across_all_files_in_a_tree,
-        merged_header_extends_per_class_header_with=cfg.merged_header_extends_per_class_header_with,
-        label_column_position=cfg.label_column_position,
-        identity_scheme=_resolve_identity_scheme(cfg.identity_scheme),
-        label_fields=_resolve_label_fields(cfg.label_fields),
-        model_features=(
-            ModelFeaturesRecord(role=model_features.role, type=model_features.type, order=tuple(model_features.order))
-            if model_features is not None
-            else None
-        ),
-        source_columns=tuple(cfg.source_columns) if cfg.source_columns is not None else None,
-        endpoint_identity=(_resolve_endpoint_identity(endpoint_identity) if endpoint_identity is not None else None),
-        attack_row_group_policy=cfg.attack_row_group_policy,
-        retained_numeric_features=(
-            RetainedNumericFeaturesRecord(
-                role=retained_numeric_features.role,
-                order=tuple(retained_numeric_features.order),
-                numeric_parsing=retained_numeric_features.numeric_parsing,
-                on_invalid_value=retained_numeric_features.on_invalid_value,
-            )
-            if retained_numeric_features is not None
-            else None
-        ),
-        post_encoding_feature_order=cfg.post_encoding_feature_order,
-        categorical_encoding=(
-            cfg.categorical_encoding
-            if isinstance(cfg.categorical_encoding, str)
-            else _resolve_categorical_encoding(cfg.categorical_encoding)
-        ),
-        leakage_exclusions=cfg.leakage_exclusions,
-    )
-
-
-def _resolve_source_layout_contract(cfg: DatasetSourceLayoutConfig) -> DatasetSourceLayoutContractRecord:
-    cross_source_relationship = cfg.cross_source_relationship
-    return DatasetSourceLayoutContractRecord(
-        root=RelativePath(cfg.root),
-        benign_file=cfg.benign_file,
-        benign_file_pattern=cfg.benign_file_pattern,
-        normal_file_pattern=cfg.normal_file_pattern,
-        attack_file_pattern=cfg.attack_file_pattern,
-        device_dirs=tuple(cfg.device_dirs) if cfg.device_dirs is not None else None,
-        normal_group_folders=tuple(cfg.normal_group_folders) if cfg.normal_group_folders is not None else None,
-        executable_group_folders=(
-            tuple(cfg.executable_group_folders) if cfg.executable_group_folders is not None else None
-        ),
-        attack_files=tuple(cfg.attack_files) if cfg.attack_files is not None else None,
-        ignored_source_suffixes=tuple(cfg.ignored_source_suffixes),
-        ignored_root_entries=tuple(cfg.ignored_root_entries),
-        ignored_subtrees=tuple(cfg.ignored_subtrees),
-        sources=(
-            {
-                key: DatasetSourceRecord(
-                    role=source.role,
-                    root=RelativePath(source.root),
-                    file_pattern=source.file_pattern,
-                    owns=tuple(source.owns) if source.owns is not None else None,
-                    permitted_uses=tuple(source.permitted_uses) if source.permitted_uses is not None else None,
-                    contributes_rows_to_executable_materializations=(
-                        source.contributes_rows_to_executable_materializations
-                    ),
-                    defines_pseudo_clients=source.defines_pseudo_clients,
-                )
-                for key, source in cfg.sources.items()
-            }
-            if cfg.sources is not None
-            else None
-        ),
-        executable_source=cfg.executable_source,
-        cross_source_relationship=(
-            CrossSourceRelationshipRecord(
-                row_count_equality_required=cross_source_relationship.row_count_equality_required,
-                row_level_one_to_one_equivalence_assumed=(
-                    cross_source_relationship.row_level_one_to_one_equivalence_assumed
-                ),
-                join_by_row_position=cross_source_relationship.join_by_row_position,
-                join_by_any_key=cross_source_relationship.join_by_any_key,
-            )
-            if cross_source_relationship is not None
-            else None
-        ),
-        normal_traffic_root=(RelativePath(cfg.normal_traffic_root) if cfg.normal_traffic_root is not None else None),
-        attack_traffic_root=(RelativePath(cfg.attack_traffic_root) if cfg.attack_traffic_root is not None else None),
-        benign_file_required_per_device=cfg.benign_file_required_per_device,
-        attack_family_dirs=tuple(cfg.attack_family_dirs) if cfg.attack_family_dirs is not None else None,
-        attack_family_required_per_device=cfg.attack_family_required_per_device,
-    )
-
-
-def _resolve_source_contract(cfg: SourceContractConfig) -> SourceContractRecord:
-    return SourceContractRecord(
-        every_model_feature_present_in_merged_header=cfg.every_model_feature_present_in_merged_header,
-        every_model_feature_present_in_every_file=cfg.every_model_feature_present_in_every_file,
-        model_feature_count_equals_source_column_count=cfg.model_feature_count_equals_source_column_count,
-        per_class_schema_reference_check=cfg.per_class_schema_reference_check,
-        malformed_row=cfg.malformed_row,
-        empty_label_row=cfg.empty_label_row,
-        reject_unparseable_numeric_model_feature=cfg.reject_unparseable_numeric_model_feature,
-        reject_row_with_field_count_other_than_header=cfg.reject_row_with_field_count_other_than_header,
-        column_role_partition=cfg.column_role_partition,
-        positional_contract=cfg.positional_contract,
-        row_integrity_exclusions=cfg.row_integrity_exclusions,
-    )
-
-
-def _resolve_client_construction(cfg: SetupClientConstructionConfig) -> SetupClientConstructionRecord:
-    client_source: str | tuple[str, ...] | None
-    if cfg.client_source is None or isinstance(cfg.client_source, str):
-        client_source = cfg.client_source
-    else:
-        client_source = tuple(cfg.client_source)
-    return SetupClientConstructionRecord(
-        method=cfg.method,
-        client_source=client_source,
-        client_semantics=cfg.client_semantics,
-        excluded_client_folders=(
-            tuple(cfg.excluded_client_folders) if cfg.excluded_client_folders is not None else None
-        ),
-        client_count=PositiveInt(cfg.client_count) if cfg.client_count is not None else None,
-        partition_condition=cfg.partition_condition,
-        source_mixture_components=cfg.source_mixture_components,
-        label_field=cfg.label_field,
-        partition_seed=Seed(cfg.partition_seed) if cfg.partition_seed is not None else None,
-        partition_axes=cfg.partition_axes,
-        allocation_procedure=cfg.allocation_procedure,
-        same_proportions_govern=(
-            tuple(cfg.same_proportions_govern) if cfg.same_proportions_govern is not None else None
-        ),
-        split_role_preservation=cfg.split_role_preservation,
-        attack_row_assignment=cfg.attack_row_assignment,
-        attack_labels_used_in_partition_generation=cfg.attack_labels_used_in_partition_generation,
-        minimum_row_counts=cfg.minimum_row_counts,
-        retry_policy=cfg.retry_policy,
-        feasibility_failure=cfg.feasibility_failure,
-        manifest_invariants=(tuple(cfg.manifest_invariants) if cfg.manifest_invariants is not None else None),
-        manifest_fields=(tuple(cfg.manifest_fields) if cfg.manifest_fields is not None else None),
-    )
-
-
-def _resolve_adapter_kind(dataset_name: str) -> AdapterKind:
-    try:
-        return AdapterKind(dataset_name.lower())
-    except ValueError as exc:
-        raise ConfigurationError(f"Unsupported dataset adapter kind: {dataset_name}") from exc
-
-
 def resolve_project_configuration(
     config_dir: Path | None = None,
     bootstrap_settings: RuntimeBootstrapSettings | None = None,
@@ -1051,224 +198,8 @@ def resolve_project_configuration(
     )
     paths = resolved_runtime.paths
 
-    # 1. Resolve datasets
-    resolved_datasets: dict[DatasetId, ResolvedDataset] = {}
-    for d_cfg in authored_datasets:
-        d_id = DatasetId(d_cfg.dataset)
-        if d_id in resolved_datasets:
-            raise ConfigurationError(f"Duplicate dataset identifier across dataset documents: '{d_cfg.dataset}'")
-        adapter_kind = _resolve_adapter_kind(d_cfg.dataset)
-        raw_root = d_cfg.source_layout.root
-        dataset_paths = ResolvedDatasetPaths(
-            raw_data_root=paths.raw_data,
-            raw_root=(paths.raw_data / raw_root).resolve(),
-            processed_root=(paths.processed_data / d_cfg.dataset).resolve(),
-        )
-        setup_identifiers = set(d_cfg.setups)
-        setups_list = []
-        for identifier, setup in sorted(d_cfg.setups.items()):
-            if (
-                setup.client_population_must_equal_setup is not None
-                and setup.client_population_must_equal_setup not in setup_identifiers
-            ):
-                raise ConfigurationError(
-                    f"Dataset '{d_cfg.dataset}' setup '{identifier}' references unregistered "
-                    f"client_population_must_equal_setup '{setup.client_population_must_equal_setup}'"
-                )
-            setups_list.append(
-                DatasetSetup(
-                    identifier=DatasetSetupId(identifier),
-                    materialization_id=MaterializationId(setup.materialization),
-                    capabilities=tuple(setup.provides_capabilities),
-                    client_construction=_resolve_client_construction(setup.client_construction),
-                    validation_scope=setup.validation_scope,
-                    eligibility_gate=setup.eligibility_gate,
-                    client_population_must_equal_setup=(
-                        DatasetSetupId(setup.client_population_must_equal_setup)
-                        if setup.client_population_must_equal_setup is not None
-                        else None
-                    ),
-                )
-            )
-        setups = tuple(setups_list)
-        materializations = tuple(
-            DatasetMaterialization(
-                identifier=MaterializationId(identifier),
-                role=materialization.role,
-                normalization_strategy=materialization.normalization.strategy,
-                normalization_scope=materialization.normalization.scope,
-                vocabulary_fit_split=materialization.vocabulary_fit_split,
-                preprocessing_sequence=tuple(materialization.preprocessing_sequence),
-                row_exclusion=materialization.row_exclusion,
-                split_row_semantics=(
-                    cast(Mapping[str, "str | bool"], deep_freeze(materialization.split_row_semantics))
-                    if materialization.split_row_semantics is not None
-                    else None
-                ),
-                infeasibility_policy=materialization.infeasibility_policy,
-                split_method=materialization.split.method,
-                split_seed=Seed(materialization.split.split_seed)
-                if materialization.split.split_seed is not None
-                else None,
-                split_ratios=tuple(
-                    (role, Probability(ratio)) for role, ratio in sorted((materialization.split.ratios or {}).items())
-                ),
-                chronological_ratios=tuple(
-                    (role, Probability(value))
-                    for role, value in (
-                        ("historical_train", materialization.split.historical_train_fraction),
-                        ("historical_calibration", materialization.split.historical_calibration_fraction),
-                        ("future_recalibration", materialization.split.future_recalibration_fraction),
-                        ("future_evaluation", materialization.split.future_evaluation_fraction),
-                    )
-                    if value is not None
-                ),
-                split_ordering_basis=materialization.split.ordering_basis,
-                split_ordering_scope=materialization.split.ordering_scope,
-                split_gap_handling=materialization.split.gap_handling,
-                split_attack_rows=materialization.split.attack_rows,
-                split_attack_test_membership=materialization.split.attack_test_membership,
-                split_attack_ordering=materialization.split.attack_ordering,
-                split_benign_attack_deduplication=materialization.split.benign_attack_deduplication,
-                split_role_order=(
-                    tuple(materialization.split.role_order) if materialization.split.role_order is not None else None
-                ),
-                split_excluded_client_folders=(
-                    tuple(materialization.split.excluded_client_folders)
-                    if materialization.split.excluded_client_folders is not None
-                    else None
-                ),
-                split_exclusion_reason=materialization.split.exclusion_reason,
-                split_ordering_field=materialization.split.ordering_field,
-                split_ordering_sort=materialization.split.ordering_sort,
-                split_rollover_policy=materialization.split.rollover_policy,
-                split_rollover_scope=materialization.split.rollover_scope,
-                split_boundary_rule=materialization.split.boundary_rule,
-                split_boundary_index_formula=materialization.split.boundary_index_formula,
-                split_future_leakage_check=materialization.split.future_leakage_check,
-                split_minimum_row_counts=materialization.split.minimum_row_counts,
-                split_missing_client_policy=materialization.split.missing_client_policy,
-                split_chronology_unverifiable_policy=materialization.split.chronology_unverifiable_policy,
-            )
-            for identifier, materialization in sorted(d_cfg.materializations.items())
-        )
-        source_column_count = d_cfg.field_schema.source_column_count
-        configured_sources = d_cfg.source_layout.sources
-        if d_cfg.field_schema.model_features is not None:
-            required_model_headers = tuple(d_cfg.field_schema.model_features.order)
-        elif d_cfg.field_schema.retained_numeric_features is not None:
-            required_model_headers = tuple(d_cfg.field_schema.retained_numeric_features.order)
-        else:
-            raise ConfigurationError(f"Dataset '{d_cfg.dataset}' has no resolved model feature headers")
-        categorical_encoding = d_cfg.field_schema.categorical_encoding
-        required_categorical_headers = (
-            tuple(categorical_encoding.columns) if isinstance(categorical_encoding, CategoricalEncodingConfig) else ()
-        )
-        multiclass_label = d_cfg.field_schema.label_fields.multiclass_label
-        label_header = multiclass_label.column if multiclass_label is not None else None
-        if configured_sources is None:
-            if d_cfg.source_layout.attack_file_pattern is None:
-                raise ConfigurationError(
-                    f"Dataset '{d_cfg.dataset}' has a single unconfigured source tree "
-                    "and must author an explicit 'attack_file_pattern'"
-                )
-            source_trees = (
-                ConfiguredSourceTree(
-                    identifier="primary",
-                    root=RelativePath(d_cfg.source_layout.root),
-                    file_pattern=d_cfg.source_layout.attack_file_pattern,
-                    expected_column_count=(
-                        source_column_count
-                        if isinstance(source_column_count, int)
-                        else next(iter(source_column_count.values()))
-                    ),
-                    executable=True,
-                    required_headers=required_model_headers + required_categorical_headers,
-                ),
-            )
-        else:
-            source_trees = tuple(
-                ConfiguredSourceTree(
-                    identifier=identifier,
-                    root=RelativePath(source.root),
-                    file_pattern=source.file_pattern,
-                    expected_column_count=(
-                        source_column_count if isinstance(source_column_count, int) else source_column_count[identifier]
-                    ),
-                    executable=source.role == "executable",
-                    required_headers=(
-                        required_model_headers
-                        + required_categorical_headers
-                        + ((label_header,) if source.role == "executable" and label_header is not None else ())
-                    ),
-                )
-                for identifier, source in sorted(configured_sources.items())
-            )
-        inspection_contract = DatasetInspectionContract(
-            source_trees=source_trees,
-            require_identical_headers=(
-                d_cfg.field_schema.header_must_be_identical_across_all_source_files is True
-                or d_cfg.field_schema.header_must_be_identical_across_all_files_in_a_tree is True
-            ),
-            device_directories=tuple(d_cfg.source_layout.device_dirs or ()),
-            benign_filename=d_cfg.source_layout.benign_file,
-            benign_file_required_per_device=d_cfg.source_layout.benign_file_required_per_device is True,
-            attack_family_directories=tuple(d_cfg.source_layout.attack_family_dirs or ()),
-            attack_family_required_per_device=d_cfg.source_layout.attack_family_required_per_device is True,
-            normal_group_directories=tuple(d_cfg.source_layout.normal_group_folders or ()),
-            attack_filenames=tuple(d_cfg.source_layout.attack_files or ()),
-            ignored_root_entries=tuple(d_cfg.source_layout.ignored_root_entries),
-            benign_label=(
-                str(d_cfg.field_schema.label_fields.binary_label.get("benign_value"))
-                if d_cfg.field_schema.label_fields.binary_label is not None
-                and isinstance(d_cfg.field_schema.label_fields.binary_label.get("benign_value"), str)
-                else None
-            ),
-            normal_traffic_root=(
-                RelativePath(d_cfg.source_layout.normal_traffic_root)
-                if d_cfg.source_layout.normal_traffic_root is not None
-                else None
-            ),
-            attack_traffic_root=(
-                RelativePath(d_cfg.source_layout.attack_traffic_root)
-                if d_cfg.source_layout.attack_traffic_root is not None
-                else None
-            ),
-            binary_label_header=(
-                str(d_cfg.field_schema.label_fields.binary_label.get("column"))
-                if isinstance(d_cfg.field_schema.label_fields.binary_label.get("column"), str)
-                else None
-            ),
-        )
-        resolved_datasets[d_id] = ResolvedDataset(
-            dataset_id=d_id,
-            adapter_kind=adapter_kind,
-            display_name=d_cfg.display_name,
-            schema_id=d_cfg.schema_id,
-            source_layout=SourceLayout(
-                root=RelativePath(d_cfg.source_layout.root),
-                ignored_suffixes=tuple(d_cfg.source_layout.ignored_source_suffixes),
-                ignored_subtrees=tuple(d_cfg.source_layout.ignored_subtrees),
-            ),
-            source_layout_contract=_resolve_source_layout_contract(d_cfg.source_layout),
-            field_schema=_resolve_field_schema(d_cfg.field_schema),
-            source_contract=_resolve_source_contract(d_cfg.source_contract),
-            client_identity_contract=(
-                as_optional_frozen_json_mapping(d_cfg.client_identity_contract)
-                if d_cfg.client_identity_contract is not None
-                else None
-            ),
-            inspection_contract=inspection_contract,
-            setups=setups,
-            materializations=materializations,
-            eligibility_policy_id=EligibilityPolicyId(d_cfg.eligibility_policy),
-            capabilities=tuple(sorted({capability for setup in setups for capability in setup.capabilities})),
-            paths=dataset_paths,
-            fingerprint_source_fields=tuple(d_cfg.fingerprint_inputs.source),
-            fingerprint_schema_fields=tuple(d_cfg.fingerprint_inputs.schema_fields),
-            fingerprint_materialization_fields=tuple(d_cfg.fingerprint_inputs.materialization),
-            fingerprint_client_assignment_fields=tuple(d_cfg.fingerprint_inputs.client_assignment),
-        )
+    # 1. Resolve datasets (delegated)
+    resolved_datasets = resolve_datasets(authored_datasets, paths)
 
     # 2. Resolve study populations & validate cross-references
     populations_dict: dict[PopulationId, PopulationRecord] = {}
@@ -1730,12 +661,12 @@ def resolve_project_configuration(
         "datasets": {
             str(k): {
                 "schema_id": v.schema_id,
-                "source_layout_contract": _unstructure(v.source_layout_contract),
-                "field_schema": _unstructure(v.field_schema),
-                "source_contract": _unstructure(v.source_contract),
-                "client_identity_contract": _unstructure(v.client_identity_contract),
-                "setups": _unstructure(v.setups),
-                "materializations": _unstructure(v.materializations),
+                "source_layout_contract": unstructure_projection(v.source_layout_contract),
+                "field_schema": unstructure_projection(v.field_schema),
+                "source_contract": unstructure_projection(v.source_contract),
+                "client_identity_contract": unstructure_projection(v.client_identity_contract),
+                "setups": unstructure_projection(v.setups),
+                "materializations": unstructure_projection(v.materializations),
                 "capabilities": list(v.capabilities),
                 "fingerprint_source_fields": list(v.fingerprint_source_fields),
                 "fingerprint_schema_fields": list(v.fingerprint_schema_fields),
@@ -1744,64 +675,72 @@ def resolve_project_configuration(
             }
             for k, v in sorted(resolved_datasets.items(), key=lambda x: str(x[0]))
         },
-        "populations": {str(k): _unstructure(v) for k, v in sorted(populations_dict.items(), key=lambda x: str(x[0]))},
+        "populations": {
+            str(k): unstructure_projection(v) for k, v in sorted(populations_dict.items(), key=lambda x: str(x[0]))
+        },
         "experiments": {
             str(k): _experiment_scientific_projection(v)
             for k, v in sorted(experiments_dict.items(), key=lambda x: str(x[0]))
         },
         "threshold_policies": {
-            str(k): _unstructure(v) for k, v in sorted(threshold_policies_dict.items(), key=lambda x: str(x[0]))
+            str(k): unstructure_projection(v)
+            for k, v in sorted(threshold_policies_dict.items(), key=lambda x: str(x[0]))
         },
-        "seed_cohorts": {str(k): _unstructure(v) for k, v in sorted(seed_dict.items(), key=lambda x: str(x[0]))},
+        "seed_cohorts": {
+            str(k): unstructure_projection(v) for k, v in sorted(seed_dict.items(), key=lambda x: str(x[0]))
+        },
         "training_profiles": {
-            str(k): _unstructure(v) for k, v in sorted(training_dict.items(), key=lambda x: str(x[0]))
+            str(k): unstructure_projection(v) for k, v in sorted(training_dict.items(), key=lambda x: str(x[0]))
         },
         "checkpoint_profiles": {
-            str(k): _unstructure(v) for k, v in sorted(checkpoint_dict.items(), key=lambda x: str(x[0]))
+            str(k): unstructure_projection(v) for k, v in sorted(checkpoint_dict.items(), key=lambda x: str(x[0]))
         },
-        "model_architectures": {k: _unstructure(v) for k, v in sorted(model_architectures.items())},
-        "optimizers": {k: _unstructure(v) for k, v in sorted(optimizers.items())},
-        "batching": {k: _unstructure(v) for k, v in sorted(batching_profiles.items())},
+        "model_architectures": {k: unstructure_projection(v) for k, v in sorted(model_architectures.items())},
+        "optimizers": {k: unstructure_projection(v) for k, v in sorted(optimizers.items())},
+        "batching": {k: unstructure_projection(v) for k, v in sorted(batching_profiles.items())},
         "eligibility_policies": {
-            str(k): _unstructure(v) for k, v in sorted(eligibility_policies.items(), key=lambda x: str(x[0]))
+            str(k): unstructure_projection(v) for k, v in sorted(eligibility_policies.items(), key=lambda x: str(x[0]))
         },
         "normalization_strategies": {
-            str(k): _unstructure(v) for k, v in sorted(normalization_strategies.items(), key=lambda x: str(x[0]))
+            str(k): unstructure_projection(v)
+            for k, v in sorted(normalization_strategies.items(), key=lambda x: str(x[0]))
         },
-        "quantile_estimators": {k: _unstructure(v) for k, v in sorted(quantile_estimators.items())},
-        "metric_bundles": {str(k): _unstructure(v) for k, v in sorted(metric_bundles.items(), key=lambda x: str(x[0]))},
+        "quantile_estimators": {k: unstructure_projection(v) for k, v in sorted(quantile_estimators.items())},
+        "metric_bundles": {
+            str(k): unstructure_projection(v) for k, v in sorted(metric_bundles.items(), key=lambda x: str(x[0]))
+        },
         "statistical_profiles": {
-            str(k): _unstructure(v) for k, v in sorted(statistical_dict.items(), key=lambda x: str(x[0]))
+            str(k): unstructure_projection(v) for k, v in sorted(statistical_dict.items(), key=lambda x: str(x[0]))
         },
-        "metric_definitions": _unstructure(resolved_metric_definitions),
-        "artifact_identity": _unstructure(resolved_artifact_identity),
-        "communication_estimation_contract": _unstructure(resolved_communication_estimation_contract),
-        "operational_inputs": _unstructure(resolved_operational_inputs),
-        "report_profiles": {k: _unstructure(v) for k, v in sorted(report_profiles.items())},
-        "communication_estimation": _unstructure(resolved_communication_estimation),
-        "protocol_determinism": _unstructure(resolved_protocol_determinism),
+        "metric_definitions": unstructure_projection(resolved_metric_definitions),
+        "artifact_identity": unstructure_projection(resolved_artifact_identity),
+        "communication_estimation_contract": unstructure_projection(resolved_communication_estimation_contract),
+        "operational_inputs": unstructure_projection(resolved_operational_inputs),
+        "report_profiles": {k: unstructure_projection(v) for k, v in sorted(report_profiles.items())},
+        "communication_estimation": unstructure_projection(resolved_communication_estimation),
+        "protocol_determinism": unstructure_projection(resolved_protocol_determinism),
         "normalization_fit_scopes": dict(sorted(resolved_normalization_fit_scopes.items())),
         "normalization_leakage_rule": authored_protocols.normalization_leakage_rule,
-        "threshold_policy_defaults": _unstructure(resolved_threshold_policy_defaults),
-        "nested_replicate_policy": _unstructure(resolved_nested_replicate_policy),
-        "result_types": {k: _unstructure(v) for k, v in sorted(result_types.items())},
-        "evaluation_result_contract": _unstructure(resolved_evaluation_result_contract),
-        "report_defaults": _unstructure(resolved_report_defaults),
+        "threshold_policy_defaults": unstructure_projection(resolved_threshold_policy_defaults),
+        "nested_replicate_policy": unstructure_projection(resolved_nested_replicate_policy),
+        "result_types": {k: unstructure_projection(v) for k, v in sorted(result_types.items())},
+        "evaluation_result_contract": unstructure_projection(resolved_evaluation_result_contract),
+        "report_defaults": unstructure_projection(resolved_report_defaults),
         "capabilities": sorted(catalogue_capabilities),
         "suppression_behaviors": sorted(catalogue_suppression_behaviors),
         "population_readiness_rule": dict(sorted(catalogue_population_readiness_rule.items())),
-        "eligibility_gates": {k: _unstructure(v) for k, v in sorted(eligibility_gates_dict.items())},
+        "eligibility_gates": {k: unstructure_projection(v) for k, v in sorted(eligibility_gates_dict.items())},
         "analysis_conventions": dict(sorted(catalogue_analysis_conventions.items())),
     }
     scientific_fingerprint = compute_scientific_fingerprint(scientific_projection)
 
     execution_projection = {
         "scientific_fingerprint": scientific_fingerprint.value,
-        "active_execution_profile": _unstructure(resolved_runtime.active_execution_profile),
-        "determinism": _unstructure(resolved_runtime.determinism_enforcement),
-        "device_policy": _unstructure(resolved_runtime.device_policy_rules),
-        "resource_pressure": _unstructure(resolved_runtime.resource_pressure_policy),
-        "raw_source_policy": _unstructure(resolved_runtime.raw_source_policy),
+        "active_execution_profile": unstructure_projection(resolved_runtime.active_execution_profile),
+        "determinism": unstructure_projection(resolved_runtime.determinism_enforcement),
+        "device_policy": unstructure_projection(resolved_runtime.device_policy_rules),
+        "resource_pressure": unstructure_projection(resolved_runtime.resource_pressure_policy),
+        "raw_source_policy": unstructure_projection(resolved_runtime.raw_source_policy),
     }
     execution_fingerprint = compute_execution_fingerprint(execution_projection)
     canonical_scientific_projection = canonicalize_value(scientific_projection)

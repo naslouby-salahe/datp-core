@@ -8,12 +8,13 @@ import inspect
 
 import attrs
 
-from datp_core.config import resolver as resolver_module
-from datp_core.config.resolver import _unstructure, resolve_project_configuration
+from datp_core.config import protocol_resolution as protocol_module
+from datp_core.config.converter import unstructure_projection
+from datp_core.config.resolver import resolve_project_configuration
 
 
-def test_resolver_module_has_no_model_dump_call_in_the_fingerprint_projection_assembly() -> None:
-    source = inspect.getsource(resolver_module)
+def test_protocol_resolution_module_has_no_model_dump_call_in_fingerprint_assembly() -> None:
+    source = inspect.getsource(protocol_module)
     # The sole legitimate use is the Pydantic-to-domain-record conversion helper itself,
     # which runs before any fingerprint projection is assembled.
     call_sites = [line for line in source.splitlines() if ".model_dump(" in line]
@@ -30,7 +31,7 @@ def test_threshold_policy_projection_uses_domain_field_names_not_pydantic_aliase
     # The domain record type itself must not be a Pydantic model (already covered by
     # test_threshold_policy_records.py) -- here we assert its unstructured projection form
     # is a plain dict keyed by the exact attrs field names, with no '$defs'/schema artifacts.
-    projected = _unstructure(policy)
+    projected = unstructure_projection(policy)
     assert isinstance(projected, dict)
     assert "$defs" not in projected
     assert set(projected) == {f.name for f in attrs.fields(type(policy))}
