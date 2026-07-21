@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+import json
 import math
+from hashlib import blake2b
 from io import BytesIO
 from pathlib import Path
 from random import Random
 
 import numpy as np
+import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
 from attrs import define
 
-from datp_core.domain.datasets import DatasetMaterialization
+from datp_core.domain.catalogue import SweepConditionRecord
+from datp_core.domain.datasets import DatasetMaterialization, SetupClientConstructionRecord
 from datp_core.infrastructure.datasets.csv_source import SourceRow, SourceRowFailure, iter_numeric_csv_source
 
 
@@ -172,25 +176,78 @@ def random_fractional_roles(
 
 @define(frozen=True, slots=True, kw_only=True)
 class DirichletPartition:
+    condition: str
+    allocation: str
+    seed: int
+    retry_attempt: int
+    source_domains: tuple[str, ...]
     proportions: tuple[tuple[str, tuple[float, ...]], ...]
+    row_counts: tuple[tuple[str, tuple[tuple[str, int], ...]], ...]
     assignments: tuple[tuple[str, str, int, str], ...]
+
+    def encode(self) -> bytes:
+        payload = {
+            "allocation": self.allocation,
+            "assignments": [
+                {"client_id": client_id, "source_domain": domain, "source_path": source_path, "source_row_index": index}
+                for source_path, domain, index, client_id in self.assignments
+            ],
+            "client_count": len(self.proportions),
+            "feasibility_status": "feasible",
+            "partition_condition": self.condition,
+            "partition_seed": self.seed,
+            "per_client_row_counts": [
+                {"client_id": client_id, "split_counts": dict(counts)} for client_id, counts in self.row_counts
+            ],
+            "per_client_source_domain_proportions": [
+                {"client_id": client_id, "proportions": dict(zip(self.source_domains, proportions, strict=True))}
+                for client_id, proportions in self.proportions
+            ],
+            "retry_attempts_used": self.retry_attempt,
+            "source_domains": list(self.source_domains),
+        }
+        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+
+
+def derive_partition_seed(*, key: str, digest_bytes: int, partition_seed: int, condition: str, attempt: int) -> int:
+    """Derive a deterministic partition retry seed from the configured seed namespace."""
+    if digest_bytes < 1 or attempt < 0:
+        raise ValueError("Partition seed derivation requires positive digest bytes and a non-negative attempt")
+    encoded = f"{key}|attempt_index={attempt}|partition_condition={condition}|partition_seed={partition_seed}".encode()
+    return int.from_bytes(blake2b(encoded, digest_size=digest_bytes).digest(), byteorder="big") % (2**32)
 
 
 def partition_dirichlet_rows(
-    rows: tuple[tuple[str, str, str, int], ...], *, client_count: int, alpha: float, seed: int
+    rows: tuple[tuple[str, str, str, int], ...],
+    *,
+    condition: SweepConditionRecord,
+    client_count: int,
+    seed: int,
+    retry_attempt: int,
 ) -> DirichletPartition:
     """Allocate split-preserving source rows to synthetic clients with locked capacity scoring."""
-    if client_count < 1 or alpha <= 0.0:
-        raise ValueError("Dirichlet partition requires positive client count and alpha")
+    if client_count < 1:
+        raise ValueError("Dirichlet partition requires a positive client count")
     domains = tuple(sorted({domain for _, domain, _, _ in rows}))
     if not domains:
         raise ValueError("Dirichlet partition requires source rows")
     generator = np.random.default_rng(seed)
     client_ids = tuple(f"synthetic_{index:02d}" for index in range(client_count))
-    draws = generator.dirichlet(np.full(len(domains), alpha), size=client_count)
+    if condition.allocation == "dirichlet":
+        if condition.dirichlet_alpha is None or condition.dirichlet_alpha <= 0.0:
+            raise ValueError("Dirichlet conditions require a positive alpha")
+        draws = generator.dirichlet(np.full(len(domains), condition.dirichlet_alpha), size=client_count)
+    elif condition.allocation == "equal_across_source_domains":
+        if condition.dirichlet_alpha is not None:
+            raise ValueError("IID reference conditions must not declare a Dirichlet alpha")
+        draws = np.full((client_count, len(domains)), 1.0 / len(domains))
+    else:
+        raise ValueError(f"Unsupported partition allocation '{condition.allocation}'")
     domain_index = {domain: index for index, domain in enumerate(domains)}
     assignments: list[tuple[str, str, int, str]] = []
-    for split in sorted({split for split, _, _, _ in rows}):
+    splits = tuple(sorted({split for split, _, _, _ in rows}))
+    counts = {client_id: {split: 0 for split in splits} for client_id in client_ids}
+    for split in splits:
         role_rows = sorted((row for row in rows if row[0] == split), key=lambda row: (row[1], row[2], row[3]))
         remaining = [
             len(role_rows) // client_count + (index < len(role_rows) % client_count) for index in range(client_count)
@@ -199,15 +256,92 @@ def partition_dirichlet_rows(
             candidates = [index for index, capacity in enumerate(remaining) if capacity > 0]
             winner = max(candidates, key=lambda index: (draws[index, domain_index[domain]] / remaining[index], -index))
             remaining[winner] -= 1
-            assignments.append((source_path, domain, source_row_index, client_ids[winner]))
+            client_id = client_ids[winner]
+            assignments.append((source_path, domain, source_row_index, client_id))
+            counts[client_id][split] += 1
     if len({(path, row_index) for path, _, row_index, _ in assignments}) != len(assignments):
         raise ValueError("Dirichlet partition assigned a source row more than once")
     return DirichletPartition(
+        condition=condition.name,
+        allocation=condition.allocation,
+        seed=seed,
+        retry_attempt=retry_attempt,
+        source_domains=domains,
         proportions=tuple(
             (client_id, tuple(float(value) for value in draws[index])) for index, client_id in enumerate(client_ids)
         ),
+        row_counts=tuple((client_id, tuple(counts[client_id].items())) for client_id in client_ids),
         assignments=tuple(assignments),
     )
+
+
+def apply_nbaiot_dirichlet_partition(
+    source_path: Path,
+    target_path: Path,
+    *,
+    setup: SetupClientConstructionRecord,
+    condition: SweepConditionRecord,
+    seed_key: str,
+    digest_bytes: int,
+) -> DirichletPartition:
+    """Reassign split-preserved N-BaIoT rows to configured synthetic clients and write the result."""
+    if setup.method != "dirichlet_partitioned_clients" or setup.client_count is None or setup.partition_seed is None:
+        raise ValueError("N-BaIoT Dirichlet materialization requires complete synthetic-client configuration")
+    if setup.attack_labels_used_in_partition_generation is not False:
+        raise ValueError("N-BaIoT Dirichlet materialization must prohibit attack labels during allocation")
+    frame = pl.read_parquet(source_path)
+    required = {"split", "client_id", "source_path", "source_row_index"}
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ValueError(f"N-BaIoT partition input lacks columns: {', '.join(missing)}")
+    rows = tuple(
+        (str(split), str(domain), str(path), int(index))
+        for split, domain, path, index in frame.select(
+            "split", "client_id", "source_path", "source_row_index"
+        ).iter_rows()
+    )
+    retry_policy = setup.retry_policy or {}
+    configured_max_retries = retry_policy.get("max_retries", 0)
+    if not isinstance(configured_max_retries, int) or configured_max_retries < 0:
+        raise ValueError("N-BaIoT Dirichlet retry policy requires a non-negative integer max_retries")
+    max_retries = configured_max_retries
+    minimums = setup.minimum_row_counts or {}
+    for attempt in range(max_retries + 1):
+        seed = derive_partition_seed(
+            key=seed_key,
+            digest_bytes=digest_bytes,
+            partition_seed=int(setup.partition_seed.value),
+            condition=condition.name,
+            attempt=attempt,
+        )
+        partition = partition_dirichlet_rows(
+            rows,
+            condition=condition,
+            client_count=int(setup.client_count.value),
+            seed=seed,
+            retry_attempt=attempt,
+        )
+        if all(
+            dict(counts).get(split, 0) >= minimum
+            for _, counts in partition.row_counts
+            for split, minimum in minimums.items()
+        ):
+            assignments = pl.DataFrame(
+                {
+                    "source_path": [path for path, _, _, _ in partition.assignments],
+                    "source_row_index": [index for _, _, index, _ in partition.assignments],
+                    "client_id": [client_id for _, _, _, client_id in partition.assignments],
+                }
+            )
+            reassigned = frame.drop("client_id").join(
+                assignments, on=("source_path", "source_row_index"), how="left", validate="1:1"
+            )
+            if reassigned["client_id"].null_count() != 0:
+                raise ValueError("N-BaIoT partition left source rows unassigned")
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            reassigned.write_parquet(target_path, compression="zstd")
+            return partition
+    raise ValueError("N-BaIoT Dirichlet partition is infeasible after configured deterministic retries")
 
 
 def write_nbaiot_source_parquet(

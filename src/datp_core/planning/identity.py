@@ -33,7 +33,10 @@ class IdentityBuilder:
 
     @staticmethod
     def _condition_suffix(ctx: StageJobContext) -> str:
-        return "" if ctx.partition_condition is None else f":condition_{ctx.partition_condition}"
+        if ctx.partition_condition is None:
+            return ""
+        _check_no_delimiter(ctx.partition_condition, field_name="partition_condition")
+        return f":condition_{ctx.partition_condition}"
 
     @staticmethod
     def preflight_job_id(ctx: StageJobContext) -> JobId:
@@ -68,7 +71,7 @@ class IdentityBuilder:
         if ctx.evaluation_label is None:
             raise ValueError("evaluation_label is required for threshold job identity")
         return JobId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}:{ctx.evaluation_label}:thresh"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:{ctx.evaluation_label}:thresh"
         )
 
     @staticmethod
@@ -76,7 +79,7 @@ class IdentityBuilder:
         if ctx.evaluation_label is None:
             raise ValueError("evaluation_label is required for evaluation job identity")
         return JobId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}:{ctx.evaluation_label}:eval"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:{ctx.evaluation_label}:eval"
         )
 
     @staticmethod
@@ -120,7 +123,7 @@ class IdentityBuilder:
         if ctx.evaluation_label is None:
             raise ValueError("evaluation_label is required for threshold artifact identity")
         return ArtifactId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}:{ctx.evaluation_label}:threshold_set"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:{ctx.evaluation_label}:threshold_set"
         )
 
     @staticmethod
@@ -128,7 +131,7 @@ class IdentityBuilder:
         if ctx.evaluation_label is None:
             raise ValueError("evaluation_label is required for metrics artifact identity")
         return ArtifactId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}:{ctx.evaluation_label}:metrics"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:{ctx.evaluation_label}:metrics"
         )
 
     @staticmethod

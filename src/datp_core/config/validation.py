@@ -8,6 +8,7 @@ from attrs import define
 
 from datp_core.config.resolver import ResolvedProjectConfiguration, resolve_project_configuration
 from datp_core.config.yaml_loader import ConfigurationError
+from datp_core.domain.catalogue import ConditionSweepRecord
 from datp_core.domain.identifiers import NormalizationStrategyId
 from datp_core.domain.thresholding import FamilyMeanThresholdPolicyRecord
 
@@ -73,6 +74,8 @@ class ProjectConfigurationValidator:
 
         # 4. Validate experiments
         experiment_ids = set(config.experiments)
+        if "partition" not in config.protocol_determinism.seed_namespaces:
+            errors.append("Protocol determinism lacks the required partition seed namespace")
         for exp_id, exp_rec in config.experiments.items():
             if not config.training_profiles.contains(exp_rec.training_profile_id):
                 errors.append(
@@ -102,6 +105,37 @@ class ProjectConfigurationValidator:
             for report_id in exp_rec.report_ids:
                 if not config.report_profiles.contains(report_id):
                     errors.append(f"Experiment '{exp_id}' references unregistered report profile '{report_id}'")
+
+            partition_conditions = tuple(
+                condition
+                for sweep in exp_rec.sweeps
+                if isinstance(sweep, ConditionSweepRecord)
+                for condition in sweep.conditions
+            )
+            population = config.populations.get(exp_rec.population_ids[0])
+            setup = config.datasets.get(population.dataset_id).setup(population.setup_id)
+            is_dirichlet_setup = setup.client_construction.method == "dirichlet_partitioned_clients"
+            if is_dirichlet_setup != bool(partition_conditions):
+                errors.append(
+                    f"Experiment '{exp_id}' and dataset setup '{setup.identifier.value}' disagree "
+                    "on partition conditions"
+                )
+            for condition in partition_conditions:
+                if condition.allocation == "dirichlet" and (
+                    condition.dirichlet_alpha is None or condition.dirichlet_alpha <= 0.0
+                ):
+                    errors.append(
+                        f"Experiment '{exp_id}' condition '{condition.name}' requires a positive Dirichlet alpha"
+                    )
+                if condition.allocation == "equal_across_source_domains" and condition.dirichlet_alpha is not None:
+                    errors.append(
+                        f"Experiment '{exp_id}' IID condition '{condition.name}' must not declare a Dirichlet alpha"
+                    )
+                if condition.allocation not in {"dirichlet", "equal_across_source_domains"}:
+                    errors.append(
+                        f"Experiment '{exp_id}' condition '{condition.name}' has unsupported allocation "
+                        f"'{condition.allocation}'"
+                    )
 
             for ev in exp_rec.evaluations:
                 if ev.threshold_policy_id not in config.threshold_policies:

@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from itertools import product
+
 from datp_core.config.resolver import ResolvedProjectConfiguration
-from datp_core.domain.catalogue import ExperimentRecord
+from datp_core.domain.catalogue import ConditionSweepRecord, ExperimentRecord
 from datp_core.domain.outcomes import StageJob, StageJobContext, StageKind
 from datp_core.planning.graph import PlanningGraph
 from datp_core.planning.identity import IdentityBuilder
@@ -34,12 +36,19 @@ def expand_experiment_jobs(
 
     eval_job_outputs: list = []
     eval_job_ids: list = []
+    conditions = tuple(
+        condition.name
+        for sweep in experiment.sweeps
+        if isinstance(sweep, ConditionSweepRecord)
+        for condition in sweep.conditions
+    ) or (None,)
 
     # 2. Derive jobs per seed
-    for seed in seed_cohort.training_seeds:
+    for seed, condition in product(seed_cohort.training_seeds, conditions):
         seed_ctx = StageJobContext(
             experiment_id=experiment.identifier,
             seed=int(seed.value),
+            partition_condition=condition,
         )
 
         # Dataset materialization
@@ -95,6 +104,7 @@ def expand_experiment_jobs(
             eval_ctx = StageJobContext(
                 experiment_id=experiment.identifier,
                 seed=int(seed.value),
+                partition_condition=condition,
                 evaluation_label=eval_spec.label,
                 population_id=eval_spec.population_id,
                 threshold_policy_id=eval_spec.threshold_policy_id,

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
-from math import sqrt
+from math import isfinite, log, sqrt
 from statistics import mean
 
 from .identifiers import ClientId, MetricId, ThresholdPolicyId
@@ -159,6 +159,54 @@ def assert_auroc_invariant(values: Iterable[float], *, tolerance: float) -> None
         raise ValueError("tolerance must be non-negative")
     if scores and max(scores) - min(scores) > tolerance:
         raise ValueError("AUROC must be invariant across fixed-score threshold policies")
+
+
+def calculate_pairwise_js_divergence(
+    client_scores: Sequence[tuple[ClientId, tuple[float, ...]]], *, histogram_bins: int, logarithm_base: int
+) -> float:
+    """Return the configured mean pairwise JS divergence for benign client score distributions."""
+    if histogram_bins < 1 or logarithm_base != 2:
+        raise ValueError("Pairwise JS divergence requires configured positive bins and base-2 logarithms")
+    if len(client_scores) < 2:
+        raise ValueError("Pairwise JS divergence requires at least two clients")
+    if any(not scores for _, scores in client_scores):
+        raise ValueError("Pairwise JS divergence requires non-empty benign score distributions")
+    values = tuple(score for _, scores in client_scores for score in scores)
+    if not all(isfinite(score) and score >= 0.0 for score in values):
+        raise ValueError("Pairwise JS divergence requires finite non-negative scores")
+    lower, upper = min(values), max(values)
+
+    def histogram(scores: tuple[float, ...]) -> tuple[float, ...]:
+        counts = [0] * histogram_bins
+        for score in scores:
+            index = (
+                0
+                if lower == upper
+                else min(int((score - lower) / (upper - lower) * histogram_bins), histogram_bins - 1)
+            )
+            counts[index] += 1
+        return tuple(count / len(scores) for count in counts)
+
+    distributions = tuple(histogram(scores) for _, scores in client_scores)
+    divergences = []
+    for left_index, left in enumerate(distributions):
+        for right in distributions[left_index + 1 :]:
+            midpoint = tuple((first + second) / 2.0 for first, second in zip(left, right, strict=True))
+            divergences.append(
+                sum(
+                    probability * log(probability / midpoint[index], logarithm_base)
+                    for index, probability in enumerate(left)
+                    if probability > 0.0
+                )
+                / 2.0
+                + sum(
+                    probability * log(probability / midpoint[index], logarithm_base)
+                    for index, probability in enumerate(right)
+                    if probability > 0.0
+                )
+                / 2.0
+            )
+    return mean(divergences)
 
 
 def _linear_quantile(values: tuple[float, ...], probability: float) -> float:

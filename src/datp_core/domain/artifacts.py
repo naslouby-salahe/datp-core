@@ -16,6 +16,7 @@ class ArtifactKind(Enum):
     RESOLVED_CONFIG = "resolved_config"
     MATERIALIZED_DATASET = "materialized_dataset"
     SPLIT_MANIFEST = "split_manifest"
+    PARTITION_MANIFEST = "partition_manifest"
     DATASET_READINESS = "dataset_readiness"
     PREPROCESSING_EVIDENCE = "preprocessing_evidence"
     MODEL_CHECKPOINT = "model_checkpoint"

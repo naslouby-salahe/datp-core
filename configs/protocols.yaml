@@ -86,6 +86,9 @@ determinism:
     model_initialization:
       key: datp_core.model_initialization
       components: [training_seed]
+    partition:
+      key: datp_core.partition
+      components: [partition_seed, partition_condition, attempt_index]
   resolved_seeds_required_in_manifests:
     - training_seed
     - analysis_seed

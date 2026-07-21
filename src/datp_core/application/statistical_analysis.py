@@ -11,6 +11,7 @@ from datp_core.domain.identifiers import MetricId, StatisticalProfileId, Thresho
 from datp_core.domain.statistics import (
     ConfidenceInterval,
     HypothesisTestResult,
+    LinearRegressionResult,
     PairedSeedDifferenceRecord,
     matched_pairs_rank_biserial_correlation,
 )
@@ -28,6 +29,10 @@ class StatisticalAnalysisPort(Protocol):
     ) -> ConfidenceInterval: ...
 
     def wilcoxon(self, left: np.ndarray, right: np.ndarray) -> HypothesisTestResult: ...
+
+    def spearman(self, predictor: np.ndarray, outcome: np.ndarray) -> HypothesisTestResult: ...
+
+    def linear_regression(self, predictor: np.ndarray, outcome: np.ndarray) -> LinearRegressionResult: ...
 
 
 class StatisticalAnalysisUseCase:
@@ -86,4 +91,18 @@ class StatisticalAnalysisUseCase:
             effect_size=matched_pairs_rank_biserial_correlation(arr_a, arr_b) if test_res is not None else None,
             resample_count=profile.resample_count.value,
             analysis_seed=analysis_seed,
+        )
+
+    def analyze_association(
+        self, predictor: tuple[float, ...], outcome: tuple[float, ...]
+    ) -> tuple[HypothesisTestResult, LinearRegressionResult]:
+        predictor_values = np.array(predictor, dtype=np.float64)
+        outcome_values = np.array(outcome, dtype=np.float64)
+        if len(predictor_values) < 3 or predictor_values.shape != outcome_values.shape:
+            raise ValueError("Association analysis requires at least three paired finite observations")
+        if not np.isfinite(predictor_values).all() or not np.isfinite(outcome_values).all():
+            raise ValueError("Association analysis requires finite observations")
+        return (
+            self._statistics.spearman(predictor_values, outcome_values),
+            self._statistics.linear_regression(predictor_values, outcome_values),
         )

@@ -85,6 +85,16 @@ class HypothesisTestResult:
 
 
 @define(frozen=True, slots=True, kw_only=True)
+class LinearRegressionResult:
+    slope: float
+    intercept: float
+    standard_error: float
+    r_squared: float
+    leverage: tuple[float, ...]
+    leave_one_out_slopes: tuple[float, ...]
+
+
+@define(frozen=True, slots=True, kw_only=True)
 class PairedSeedDifferenceRecord:
     metric_id: MetricId
     policy_a_id: ThresholdPolicyId

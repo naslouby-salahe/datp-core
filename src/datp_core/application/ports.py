@@ -12,10 +12,12 @@ from typing import Protocol
 
 import polars as pl
 
+from datp_core.domain.catalogue import SweepConditionRecord
 from datp_core.domain.datasets import (
     AdapterKind,
     DatasetMaterialization,
     DatasetSetup,
+    PartitionSeedContract,
     ResolvedDataset,
 )
 from datp_core.domain.identifiers import DatasetId
@@ -57,6 +59,9 @@ class MaterializationPayload(Protocol):
     @property
     def preprocessing_evidence(self) -> bytes: ...
 
+    @property
+    def partition_evidence(self) -> bytes | None: ...
+
 
 class DatasetMaterializer(Protocol):
     """Port for materializing one resolved dataset to a staged Parquet payload.
@@ -74,6 +79,8 @@ class DatasetMaterializer(Protocol):
         materialization: DatasetMaterialization,
         inventory: SourceInventory,
         staging_root: Path,
+        partition_condition: SweepConditionRecord | None,
+        partition_seed_contract: PartitionSeedContract | None,
     ) -> MaterializationPayload: ...
 
 

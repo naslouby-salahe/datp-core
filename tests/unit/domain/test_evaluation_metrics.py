@@ -7,6 +7,7 @@ from datp_core.domain.evaluation import (
     MetricStatus,
     assert_auroc_invariant,
     calculate_fpr_dispersion,
+    calculate_pairwise_js_divergence,
 )
 from datp_core.domain.identifiers import ClientId
 
@@ -51,3 +52,11 @@ def test_auroc_invariance_rejects_policy_drift() -> None:
     assert_auroc_invariant((0.7, 0.7), tolerance=1e-12)
     with pytest.raises(ValueError, match="invariant"):
         assert_auroc_invariant((0.7, 0.71), tolerance=1e-12)
+
+
+def test_pairwise_js_divergence_uses_shared_histogram_edges() -> None:
+    divergence = calculate_pairwise_js_divergence(
+        ((ClientId("a"), (0.0, 0.1)), (ClientId("b"), (0.9, 1.0))), histogram_bins=2, logarithm_base=2
+    )
+
+    assert divergence == pytest.approx(1.0)

@@ -7,7 +7,7 @@ from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import time
-from typing import Protocol
+from typing import Protocol, cast
 
 import polars as pl
 from safetensors.torch import load as load_safetensors
@@ -28,13 +28,19 @@ from datp_core.domain.artifacts import (
     BytesPayload,
     FilePayload,
 )
-from datp_core.domain.catalogue import PairedThresholdAnalysisRecord
+from datp_core.domain.catalogue import (
+    ConditionSweepRecord,
+    MetricAssociationAnalysisRecord,
+    PairedThresholdAnalysisRecord,
+    SweepConditionRecord,
+)
 from datp_core.domain.checkpoints import select_anchor_checkpoint_round, select_lowest_validation_loss_checkpoint
-from datp_core.domain.evaluation import MetricStatus, calculate_fpr_dispersion
+from datp_core.domain.datasets import PartitionSeedContract
+from datp_core.domain.evaluation import MetricStatus, calculate_fpr_dispersion, calculate_pairwise_js_divergence
 from datp_core.domain.identifiers import ArtifactId, ClientId, DatasetId, RunId
 from datp_core.domain.outcomes import StageJob, StageJobContext, StageJobOutcome, StageKind
 from datp_core.domain.thresholding import BenignCalibrationScores
-from datp_core.domain.values import Seed
+from datp_core.domain.values import PositiveInt, Seed
 from datp_core.infrastructure.datasets.adapter_registry import DatasetAdapterRegistry
 from datp_core.infrastructure.datasets.source_inventory import build_source_inventory
 from datp_core.infrastructure.datasets.split_manifest import encode_split_manifest, read_materialized_split_evidence
@@ -101,6 +107,29 @@ def _parents(config: ResolvedProjectConfiguration, artifacts: tuple[ArtifactKey,
         ArtifactParent(parent_key=artifact, scientific_fingerprint=config.scientific_fingerprint)
         for artifact in artifacts
     )
+
+
+def _partition_contract(
+    config: ResolvedProjectConfiguration, experiment_id, condition_name: str | None
+) -> tuple[SweepConditionRecord | None, PartitionSeedContract | None]:
+    if condition_name is None:
+        return (None, None)
+    experiment = config.experiments.get(experiment_id)
+    matches = tuple(
+        condition
+        for sweep in experiment.sweeps
+        if isinstance(sweep, ConditionSweepRecord)
+        for condition in sweep.conditions
+        if condition.name == condition_name
+    )
+    if len(matches) != 1:
+        raise ValueError(f"Experiment '{experiment_id.value}' has no unique partition condition '{condition_name}'")
+    try:
+        namespace = config.protocol_determinism.seed_namespaces["partition"]
+        digest_bytes = PositiveInt(int(config.protocol_determinism.derived_seed_algorithm["digest_bytes"]))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("Protocol determinism lacks a valid partition seed namespace") from exc
+    return (matches[0], PartitionSeedContract(key=namespace.key, digest_bytes=digest_bytes))
 
 
 class PreflightStageHandler:
@@ -196,6 +225,7 @@ class DatasetMaterializationStageHandler:
         manifest_relative_path = f"{relative_path}.split_manifest"
         readiness_relative_path = f"{relative_path}.readiness"
         preprocessing_relative_path = f"{relative_path}.preprocessing"
+        partition_relative_path = f"{relative_path}.partition_manifest"
         manifest_key = ArtifactKey(
             artifact_id=ArtifactId(f"{job.output.artifact_id.value}:split_manifest"),
             kind=ArtifactKind.SPLIT_MANIFEST,
@@ -208,6 +238,26 @@ class DatasetMaterializationStageHandler:
             artifact_id=ArtifactId(f"{job.output.artifact_id.value}:preprocessing"),
             kind=ArtifactKind.PREPROCESSING_EVIDENCE,
         )
+        partition_key = (
+            ArtifactKey(
+                artifact_id=ArtifactId(f"{job.output.artifact_id.value}:partition_manifest"),
+                kind=ArtifactKind.PARTITION_MANIFEST,
+            )
+            if setup.client_construction.method == "dirichlet_partitioned_clients"
+            else None
+        )
+        try:
+            partition_condition, partition_seed_contract = _partition_contract(
+                self._config, experiment_id, job.context.partition_condition
+            )
+        except ValueError as exc:
+            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+        if (partition_key is None) != (partition_condition is None):
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="Dataset setup and job partition condition are incompatible",
+            )
         reuse = self._repository.assess_reuse(
             relative_path,
             job.output,
@@ -215,6 +265,13 @@ class DatasetMaterializationStageHandler:
             self._config.execution_fingerprint,
         )
         if reuse.can_reuse:
+            companion_artifacts = (
+                (manifest_relative_path, manifest_key),
+                (readiness_relative_path, readiness_key),
+                (preprocessing_relative_path, preprocessing_key),
+            )
+            if partition_key is not None:
+                companion_artifacts += ((partition_relative_path, partition_key),)
             companion_reusable = all(
                 self._repository.assess_reuse(
                     companion_path,
@@ -222,11 +279,7 @@ class DatasetMaterializationStageHandler:
                     self._config.scientific_fingerprint,
                     self._config.execution_fingerprint,
                 ).can_reuse
-                for companion_path, companion_key in (
-                    (manifest_relative_path, manifest_key),
-                    (readiness_relative_path, readiness_key),
-                    (preprocessing_relative_path, preprocessing_key),
-                )
+                for companion_path, companion_key in companion_artifacts
             )
             if not companion_reusable:
                 return StageJobOutcome.failed(
@@ -260,6 +313,8 @@ class DatasetMaterializationStageHandler:
                     materialization=materialization,
                     inventory=inventory,
                     staging_root=staging_root,
+                    partition_condition=partition_condition,
+                    partition_seed_contract=partition_seed_contract,
                 )
                 eligibility = self._config.eligibility_policies.get(dataset.eligibility_policy_id)
                 split_evidence = read_materialized_split_evidence(
@@ -340,6 +395,29 @@ class DatasetMaterializationStageHandler:
                         stage=job.stage,
                         error_message=preprocessing_commit.error_message or "preprocessing evidence commit failed",
                     )
+                if partition_key is not None:
+                    if payload.partition_evidence is None:
+                        return StageJobOutcome.failed(
+                            job_id=job.job_id,
+                            stage=job.stage,
+                            error_message="Dirichlet materialization did not produce partition evidence",
+                        )
+                    partition_commit = _commit_artifact(
+                        self._repository,
+                        self._config,
+                        job.context,
+                        artifact_key=partition_key,
+                        artifact_format=ArtifactFormat.JSON,
+                        relative_path=partition_relative_path,
+                        parents=_parents(self._config, (job.output,)),
+                        payload=BytesPayload(payload_bytes=payload.partition_evidence),
+                    )
+                    if not partition_commit.success:
+                        return StageJobOutcome.failed(
+                            job_id=job.job_id,
+                            stage=job.stage,
+                            error_message=partition_commit.error_message or "partition manifest commit failed",
+                        )
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
         return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
@@ -808,17 +886,31 @@ class StatisticalAnalysisStageHandler:
             return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
         experiment = self._config.experiments.get(job.context.experiment_id)
         paired_analyses = tuple(item for item in experiment.analyses if isinstance(item, PairedThresholdAnalysisRecord))
-        if len(paired_analyses) != len(experiment.analyses):
+        association_analyses = tuple(
+            item for item in experiment.analyses if isinstance(item, MetricAssociationAnalysisRecord)
+        )
+        if len(paired_analyses) + len(association_analyses) != len(experiment.analyses):
             return StageJobOutcome.failed(
                 job_id=job.job_id,
                 stage=job.stage,
                 error_message="Statistical handler does not yet support every configured analysis kind",
             )
         cohort = self._config.seed_cohorts.get(experiment.seed_cohort_id)
+        conditions = tuple(
+            condition.name
+            for sweep in experiment.sweeps
+            if isinstance(sweep, ConditionSweepRecord)
+            for condition in sweep.conditions
+        ) or (None,)
         try:
-            results = [
-                self._analyze_paired(analysis, experiment, cohort.training_seeds, run_id)
+            paired_results = [
+                self._analyze_paired(analysis, experiment, cohort.training_seeds, run_id, condition)
+                for condition in conditions
                 for analysis in paired_analyses
+            ]
+            results = paired_results + [
+                self._analyze_association(analysis, paired_results, experiment, cohort.training_seeds, run_id)
+                for analysis in association_analyses
             ]
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
@@ -842,14 +934,23 @@ class StatisticalAnalysisStageHandler:
         return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
 
     def _analyze_paired(
-        self, analysis: PairedThresholdAnalysisRecord, experiment, seeds, run_id: RunId
+        self,
+        analysis: PairedThresholdAnalysisRecord,
+        experiment,
+        seeds,
+        run_id: RunId,
+        partition_condition: str | None,
     ) -> dict[str, object]:
         left = tuple(
-            self._evaluation_metric(experiment, seed.value, analysis.first_evaluation, analysis.primary_metric, run_id)
+            self._evaluation_metric(
+                experiment, seed.value, analysis.first_evaluation, analysis.primary_metric, run_id, partition_condition
+            )
             for seed in seeds
         )
         right = tuple(
-            self._evaluation_metric(experiment, seed.value, analysis.second_evaluation, analysis.primary_metric, run_id)
+            self._evaluation_metric(
+                experiment, seed.value, analysis.second_evaluation, analysis.primary_metric, run_id, partition_condition
+            )
             for seed in seeds
         )
         record = self._analysis.analyze_paired_seed_differences(
@@ -861,7 +962,7 @@ class StatisticalAnalysisStageHandler:
             analysis.statistical_profile,
             self._config.seed_cohorts.get(experiment.seed_cohort_id).bootstrap_analysis_seed,
         )
-        return {
+        result = {
             "analysis_label": analysis.label,
             "metric": record.metric_id.value,
             "mean_difference": record.mean_difference,
@@ -871,11 +972,98 @@ class StatisticalAnalysisStageHandler:
             "resample_count": record.resample_count,
             "analysis_seed": record.analysis_seed.value,
         }
+        if partition_condition is not None:
+            result["partition_condition"] = partition_condition
+        result["seed_differences"] = [first - second for first, second in zip(left, right, strict=True)]
+        return result
 
-    def _evaluation_metric(self, experiment, seed: int, label: str, metric: str, run_id: RunId) -> float:
+    def _analyze_association(
+        self,
+        analysis: MetricAssociationAnalysisRecord,
+        paired_results: list[dict[str, object]],
+        experiment,
+        seeds,
+        run_id: RunId,
+    ) -> dict[str, object]:
+        if analysis.predictor_metric != "pairwise_js_divergence" or analysis.outcome_metric != "cv_fpr_delta":
+            raise ValueError(f"Unsupported association metrics for analysis '{analysis.label}'")
+        source = [result for result in paired_results if result["analysis_label"] == analysis.outcome_source_analysis]
+        if not source:
+            raise ValueError(f"Association analysis '{analysis.label}' has no paired source analysis")
+        observations: list[dict[str, float | int | str]] = []
+        for result in source:
+            condition = result.get("partition_condition")
+            if not isinstance(condition, str):
+                raise ValueError("Association analysis requires partition-conditioned paired results")
+            differences = cast(list[float], result["seed_differences"])
+            if len(differences) != len(seeds):
+                raise ValueError("Association source has an incomplete paired seed cohort")
+            for seed, difference in zip(seeds, differences, strict=True):
+                observations.append(
+                    {
+                        "partition_condition": condition,
+                        "seed": int(seed.value),
+                        "pairwise_js_divergence": self._calibration_js(experiment, int(seed.value), condition, run_id),
+                        "cv_fpr_delta": difference,
+                    }
+                )
+        predictor = tuple(float(item["pairwise_js_divergence"]) for item in observations)
+        outcome = tuple(float(item["cv_fpr_delta"]) for item in observations)
+        spearman, regression = self._analysis.analyze_association(predictor, outcome)
+        return {
+            "analysis_label": analysis.label,
+            "interpretation_constraint": analysis.interpretation_constraint,
+            "spearman": {"coefficient": spearman.statistic, "p_value": spearman.p_value},
+            "linear_regression": {
+                "coefficient": regression.slope,
+                "intercept": regression.intercept,
+                "standard_error": regression.standard_error,
+                "r_squared": regression.r_squared,
+                "leverage": list(regression.leverage),
+                "leave_one_out_slopes": list(regression.leave_one_out_slopes),
+            },
+            "observations": observations,
+        }
+
+    def _calibration_js(self, experiment, seed: int, partition_condition: str, run_id: RunId) -> float:
+        context = StageJobContext(
+            experiment_id=experiment.identifier, seed=seed, partition_condition=partition_condition
+        )
+        artifact = self._repository.read(
+            f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(context).value}"
+        )
+        if not artifact.found or artifact.payload_bytes is None:
+            raise ValueError(
+                f"Calibration score artifact is unavailable for seed {seed}, condition '{partition_condition}'"
+            )
+        frame = validate_calibration_score_frame(pl.read_parquet(BytesIO(artifact.payload_bytes)))
+        diagnostics = self._config.metric_definitions.heterogeneity_diagnostics.pairwise_js_divergence
+        return calculate_pairwise_js_divergence(
+            tuple(
+                (ClientId(client[0]), tuple(float(value) for value in group["score"].to_list()))
+                for client, group in frame.group_by("client_id", maintain_order=True)
+            ),
+            histogram_bins=diagnostics.histogram_bins,
+            logarithm_base=diagnostics.logarithm_base,
+        )
+
+    def _evaluation_metric(
+        self,
+        experiment,
+        seed: int,
+        label: str,
+        metric: str,
+        run_id: RunId,
+        partition_condition: str | None,
+    ) -> float:
         if metric != "cv_fpr":
             raise ValueError(f"Statistical execution does not support configured metric '{metric}'")
-        context = StageJobContext(experiment_id=experiment.identifier, seed=seed, evaluation_label=label)
+        context = StageJobContext(
+            experiment_id=experiment.identifier,
+            seed=seed,
+            partition_condition=partition_condition,
+            evaluation_label=label,
+        )
         artifact = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
         if not artifact.found or artifact.payload_bytes is None:
             raise ValueError(f"Evaluation artifact is unavailable for seed {seed}, label '{label}'")
@@ -886,7 +1074,19 @@ class StatisticalAnalysisStageHandler:
                 "false_positive_rate"
             ].to_list()
         )
-        dispersion = calculate_fpr_dispersion(fprs, cv_instability_threshold=0.005, quantile_method="linear")
+        evaluation = next(item for item in experiment.evaluations if item.label == label)
+        policy = self._config.threshold_policies.get(evaluation.threshold_policy_id)
+        quantile = getattr(policy, "quantile", None)
+        if not isinstance(quantile, float):
+            raise ValueError(f"Evaluation '{label}' does not bind a quantile threshold policy")
+        definition = self._config.metric_definitions.cross_client_aggregation.cv_fpr
+        if definition.near_zero_mean_threshold_formula != "0.10 * (1 - evaluated_threshold_policy_quantile)":
+            raise ValueError("CV(FPR) near-zero threshold formula is not the configured roadmap formula")
+        dispersion = calculate_fpr_dispersion(
+            fprs,
+            cv_instability_threshold=0.10 * (1.0 - quantile),
+            quantile_method="linear",
+        )
         if dispersion.coefficient_of_variation.status is not MetricStatus.AVAILABLE:
             raise ValueError("Configured CV(FPR) is unavailable for paired statistical analysis")
         assert dispersion.coefficient_of_variation.value is not None

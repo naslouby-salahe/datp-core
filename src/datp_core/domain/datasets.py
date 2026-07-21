@@ -109,6 +109,14 @@ class SetupClientConstructionRecord:
 
 
 @define(frozen=True, slots=True, kw_only=True)
+class PartitionSeedContract:
+    """Resolved deterministic seed derivation contract for synthetic client allocation."""
+
+    key: str
+    digest_bytes: PositiveInt
+
+
+@define(frozen=True, slots=True, kw_only=True)
 class DatasetSetup:
     identifier: DatasetSetupId
     materialization_id: MaterializationId

@@ -7,10 +7,12 @@ from pathlib import Path
 from attrs import define
 
 from datp_core.application.ports import MaterializationPayload, SourceInventory
+from datp_core.domain.catalogue import SweepConditionRecord
 from datp_core.domain.datasets import (
     AdapterKind,
     DatasetMaterialization,
     DatasetSetup,
+    PartitionSeedContract,
     ResolvedDataset,
 )
 from datp_core.infrastructure.datasets.ciciot2023 import write_ciciot2023_materialized_parquet
@@ -24,6 +26,7 @@ class CICIoT2023MaterializationPayload:
     staged_path: Path
     row_count: int
     preprocessing_evidence: bytes
+    partition_evidence: bytes | None = None
 
 
 class CICIoT2023Adapter:
@@ -40,7 +43,11 @@ class CICIoT2023Adapter:
         materialization: DatasetMaterialization,
         inventory: SourceInventory,
         staging_root: Path,
+        partition_condition: SweepConditionRecord | None,
+        partition_seed_contract: PartitionSeedContract | None,
     ) -> MaterializationPayload:
+        if partition_condition is not None or partition_seed_contract is not None:
+            raise ValueError("CICIoT2023 does not support partition-condition materialization")
         inspection = dataset.inspection_contract
         if inspection.benign_label is None:
             raise ValueError("CICIoT2023 configured benign label is absent")

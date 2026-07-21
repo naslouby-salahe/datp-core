@@ -17,3 +17,15 @@ def test_statistical_analysis_uses_the_composed_port() -> None:
     )
     assert result.metric_id.value == "false_positive_rate"
     assert result.effect_size is not None
+
+
+def test_statistical_analysis_executes_association_through_the_composed_port() -> None:
+    spearman, regression = build_application().statistical_analysis.analyze_association(
+        (0.1, 0.2, 0.3, 0.4), (0.2, 0.4, 0.6, 0.8)
+    )
+
+    assert spearman.test_name == "spearman_correlation"
+    assert spearman.statistic == 1.0
+    assert regression.slope == 2.0
+    assert regression.r_squared == 1.0
+    assert len(regression.leverage) == 4

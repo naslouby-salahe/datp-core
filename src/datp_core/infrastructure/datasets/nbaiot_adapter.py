@@ -7,13 +7,16 @@ from pathlib import Path
 from attrs import define
 
 from datp_core.application.ports import MaterializationPayload, SourceInventory
+from datp_core.domain.catalogue import SweepConditionRecord
 from datp_core.domain.datasets import (
     AdapterKind,
     DatasetMaterialization,
     DatasetSetup,
+    PartitionSeedContract,
     ResolvedDataset,
 )
 from datp_core.infrastructure.datasets.nbaiot import (
+    apply_nbaiot_dirichlet_partition,
     consolidate_nbaiot_parquet_sources,
     write_nbaiot_source_parquet,
 )
@@ -27,6 +30,7 @@ class NBaIoTMaterializationPayload:
     staged_path: Path
     row_count: int
     preprocessing_evidence: bytes
+    partition_evidence: bytes | None = None
 
 
 class NBaIoTAdapter:
@@ -43,6 +47,8 @@ class NBaIoTAdapter:
         materialization: DatasetMaterialization,
         inventory: SourceInventory,
         staging_root: Path,
+        partition_condition: SweepConditionRecord | None,
+        partition_seed_contract: PartitionSeedContract | None,
     ) -> MaterializationPayload:
         inspection = dataset.inspection_contract
         if inspection.benign_filename is None:
@@ -71,12 +77,31 @@ class NBaIoTAdapter:
 
         unprocessed_payload = staging_root / "unprocessed.parquet"
         total_rows = consolidate_nbaiot_parquet_sources(tuple(staged_files), unprocessed_payload, chunk_row_count)
+        partition_evidence = None
+        partitioned_payload = unprocessed_payload
+        if setup.client_construction.method == "dirichlet_partitioned_clients":
+            if partition_condition is None:
+                raise ValueError("Dirichlet materialization requires a resolved partition condition")
+            if partition_seed_contract is None:
+                raise ValueError("Dirichlet materialization requires the resolved partition seed contract")
+            partitioned_payload = staging_root / "partitioned.parquet"
+            partition = apply_nbaiot_dirichlet_partition(
+                unprocessed_payload,
+                partitioned_payload,
+                setup=setup.client_construction,
+                condition=partition_condition,
+                seed_key=partition_seed_contract.key,
+                digest_bytes=int(partition_seed_contract.digest_bytes.value),
+            )
+            partition_evidence = partition.encode()
+        elif partition_condition is not None or partition_seed_contract is not None:
+            raise ValueError("Physical-device N-BaIoT materialization cannot use a partition condition")
         payload_file = staging_root / "materialized.parquet"
         feature_columns = dataset.field_schema.model_features
         if feature_columns is None:
             raise ValueError("N-BaIoT materialization requires configured model features")
         normalization = normalize_materialized_parquet(
-            unprocessed_payload,
+            partitioned_payload,
             payload_file,
             feature_columns=feature_columns.order,
             strategy=materialization.normalization_strategy,
@@ -87,4 +112,5 @@ class NBaIoTAdapter:
             staged_path=payload_file,
             row_count=total_rows,
             preprocessing_evidence=normalization.encode(),
+            partition_evidence=partition_evidence,
         )

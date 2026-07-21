@@ -3,11 +3,15 @@
 from pathlib import Path
 
 import polars as pl
+from attrs import evolve
 
 from datp_core.composition.root import build_application
-from datp_core.domain.identifiers import DatasetId, MaterializationId
+from datp_core.domain.catalogue import SweepConditionRecord
+from datp_core.domain.identifiers import DatasetId, DatasetSetupId, MaterializationId
+from datp_core.domain.values import PositiveInt
 from datp_core.infrastructure.datasets.csv_source import SourceRow
 from datp_core.infrastructure.datasets.nbaiot import (
+    apply_nbaiot_dirichlet_partition,
     consolidate_nbaiot_parquet_sources,
     encode_nbaiot_split_as_parquet,
     materialize_nbaiot_source_row,
@@ -25,13 +29,75 @@ def test_dirichlet_partition_preserves_roles_capacity_and_seed_determinism() -> 
         for row_index in range(4)
     )
 
-    first = partition_dirichlet_rows(rows, client_count=3, alpha=0.5, seed=0)
-    second = partition_dirichlet_rows(rows, client_count=3, alpha=0.5, seed=0)
+    condition = SweepConditionRecord(name="alpha_0_5", allocation="dirichlet", dirichlet_alpha=0.5)
+    first = partition_dirichlet_rows(rows, condition=condition, client_count=3, seed=0, retry_attempt=0)
+    second = partition_dirichlet_rows(rows, condition=condition, client_count=3, seed=0, retry_attempt=0)
 
     assert first == second
     assert len(first.assignments) == len(rows)
     assert len({(path, row_index) for path, _, row_index, _ in first.assignments}) == len(rows)
     assert {client_id for _, _, _, client_id in first.assignments} == {"synthetic_00", "synthetic_01", "synthetic_02"}
+
+
+def test_dirichlet_materialization_preserves_rows_and_emits_a_reproducible_manifest(tmp_path: Path) -> None:
+    app = build_application()
+    dataset = app.config.datasets[DatasetId("nbaiot")]
+    setup = dataset.setup(DatasetSetupId("dirichlet_partitioned"))
+    construction = evolve(
+        setup.client_construction,
+        client_count=PositiveInt(3),
+        minimum_row_counts={"train": 1, "calibration": 1, "test": 1},
+        retry_policy={"max_retries": 1},
+    )
+    condition = SweepConditionRecord(
+        name="iid_reference", allocation="equal_across_source_domains", dirichlet_alpha=None
+    )
+    source = tmp_path / "source.parquet"
+    rows = [
+        (split, domain, f"/{domain}/{split}.csv", index)
+        for split in ("train", "calibration", "test")
+        for domain in ("device_a", "device_b")
+        for index in range(6)
+    ]
+    pl.DataFrame(
+        {
+            "split": [split for split, _, _, _ in rows],
+            "client_id": [domain for _, domain, _, _ in rows],
+            "source_path": [path for _, _, path, _ in rows],
+            "source_row_index": [index for _, _, _, index in rows],
+            "is_attack": [False] * len(rows),
+            "feature_1": [float(index) for _, _, _, index in rows],
+        }
+    ).write_parquet(source)
+
+    first_target = tmp_path / "first.parquet"
+    second_target = tmp_path / "second.parquet"
+    first = apply_nbaiot_dirichlet_partition(
+        source,
+        first_target,
+        setup=construction,
+        condition=condition,
+        seed_key="datp_core.partition",
+        digest_bytes=8,
+    )
+    second = apply_nbaiot_dirichlet_partition(
+        source,
+        second_target,
+        setup=construction,
+        condition=condition,
+        seed_key="datp_core.partition",
+        digest_bytes=8,
+    )
+
+    assert first == second
+    assert (
+        pl.read_parquet(first_target)
+        .select("source_path", "source_row_index")
+        .equals(pl.read_parquet(source).select("source_path", "source_row_index"))
+    )
+    assert all(proportions == (0.5, 0.5) for _, proportions in first.proportions)
+    assert all(dict(counts) == {"calibration": 4, "test": 4, "train": 4} for _, counts in first.row_counts)
+    assert b'"feasibility_status":"feasible"' in first.encode()
 
 
 def test_nbaiot_parquet_payload_carries_split_label_provenance_and_features(tmp_path: Path) -> None:
