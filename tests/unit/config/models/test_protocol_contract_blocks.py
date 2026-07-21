@@ -1,5 +1,7 @@
 """Strict typing of the previously-untyped flat protocol contract blocks."""
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -11,7 +13,6 @@ from datp_core.config.models.protocol_config import (
     ThresholdPolicyDefaultsConfig,
 )
 from datp_core.config.yaml_loader import YamlConfigurationReader
-from pathlib import Path
 
 
 def _protocols():

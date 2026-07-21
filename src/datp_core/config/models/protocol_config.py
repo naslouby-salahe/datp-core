@@ -265,7 +265,7 @@ class BaseThresholdPolicyConfig(BaseModel):
 
     policy: str
     quantile: float = Field(ge=0.0, le=1.0)
-    quantile_estimator: str = "linear_interpolated_order_statistic"
+    quantile_estimator: str
 
 
 class SharedMeanThresholdPolicyConfig(BaseThresholdPolicyConfig):

@@ -83,13 +83,3 @@ class ExecuteExperimentUseCase:
             reused_jobs=reused_cnt,
             failed_jobs=failed_cnt,
         )
-
-
-class ResumeExperimentUseCase:
-    """Use case inspecting artifact state to resume experiment execution without redundant recalculation."""
-
-    def __init__(self, executor: ExecuteExperimentUseCase) -> None:
-        self._executor = executor
-
-    def execute(self, experiment_id: ExperimentId) -> ExperimentExecutionReport:
-        return self._executor.execute(experiment_id)

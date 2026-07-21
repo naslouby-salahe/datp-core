@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
 
 
 class AuthoredStudyPopulationConfig(BaseModel):
@@ -130,6 +130,12 @@ class SweepVariableConfig(BaseModel):
 
     values: list[JsonValue] | None = None
     conditions: list[SweepConditionConfig] | None = None
+
+    @model_validator(mode="after")
+    def validate_exactly_one_variant(self) -> SweepVariableConfig:
+        if (self.values is None) == (self.conditions is None):
+            raise ValueError("A sweep variable must author exactly one of 'values' or 'conditions'")
+        return self
 
 
 class CalibrationSubsetConfig(BaseModel):

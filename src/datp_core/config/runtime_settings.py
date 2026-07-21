@@ -2,14 +2,60 @@
 
 from __future__ import annotations
 
+import errno
+import os
+from collections.abc import Mapping
 from pathlib import Path
+from typing import cast
 
-from attrs import define
+from attrs import define, field
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from datp_core.config.models.runtime_config import AuthoredRuntimeConfig
-from datp_core.domain.values import PositiveInt
+from datp_core.config.models.runtime_config import AuthoredRuntimeConfig, RawSourcePolicyConfig
+from datp_core.domain.values import PositiveInt, TypedDomainRegistry, deep_freeze
+
+
+class PathAuthorityError(ValueError):
+    """Raised when a configured root violates the raw-symlink policy or escapes the repository root."""
+
+
+def _resolve_raw_data_root(candidate: Path, policy: RawSourcePolicyConfig) -> Path:
+    """Enforce the authored raw-source symlink policy before ever calling ``.resolve()``.
+
+    ``.resolve()`` silently collapses symlinks; policy violations must be rejected first,
+    while the symlink is still intact and inspectable.
+    """
+    if not candidate.is_symlink():
+        if not candidate.exists():
+            raise PathAuthorityError(f"Raw data root does not exist: {candidate}")
+        return candidate.resolve()
+
+    if not policy.follow_symlink:
+        raise PathAuthorityError(f"Raw data root '{candidate}' is a symlink but follow_symlink is disabled")
+
+    try:
+        resolved = candidate.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        is_loop = isinstance(exc, RuntimeError) or (isinstance(exc, OSError) and exc.errno == errno.ELOOP)
+        if is_loop:
+            if policy.reject_symlink_loop:
+                raise PathAuthorityError(f"Raw data root '{candidate}' has a symlink loop") from exc
+        elif policy.reject_broken_symlink:
+            raise PathAuthorityError(f"Raw data root '{candidate}' is a broken symlink") from exc
+        resolved = candidate.resolve(strict=False)
+
+    if policy.require_resolved_target_readable and not os.access(resolved, os.R_OK):
+        raise PathAuthorityError(f"Raw data root resolved target '{resolved}' is not readable")
+    return resolved
+
+
+def _resolve_contained_root(repository_root: Path, relative_root: str) -> Path:
+    """Resolve a non-raw project root and reject any escape outside ``repository_root``."""
+    resolved = (repository_root / relative_root).resolve()
+    if not resolved.is_relative_to(repository_root):
+        raise PathAuthorityError(f"Configured root '{relative_root}' resolves outside the repository root: {resolved}")
+    return resolved
 
 
 class RuntimeBootstrapSettings(BaseSettings):
@@ -23,10 +69,25 @@ class RuntimeBootstrapSettings(BaseSettings):
     )
 
     repository_root: Path = Field(default_factory=lambda: Path.cwd().resolve())
-    config_root: Path = Field(default_factory=lambda: Path("configs").resolve())
+    config_root: Path | None = None
     dagster_home: Path | None = None
     environment_identity: str = "local_linux"
-    execution_profile: str = "scientific"
+    execution_profile: str
+
+
+def resolve_config_root(settings: RuntimeBootstrapSettings) -> Path:
+    """Single authority for deriving the configuration root from bootstrap settings.
+
+    A relative or omitted ``config_root`` resolves against ``repository_root`` -- never the
+    process working directory. An absolute ``config_root`` is used as authored, even if it
+    points outside ``repository_root`` (an explicit override, not an accident of cwd).
+    """
+    repository_root = settings.repository_root.resolve()
+    if settings.config_root is None:
+        return (repository_root / "configs").resolve()
+    if settings.config_root.is_absolute():
+        return settings.config_root.resolve()
+    return (repository_root / settings.config_root).resolve()
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -49,6 +110,14 @@ class ResolvedProjectPaths:
             raise ValueError(f"Config root must be absolute: {self.config_root}")
 
 
+def _as_mapping_str_int(value: object) -> Mapping[str, int]:
+    return cast("Mapping[str, int]", deep_freeze(value))
+
+
+def _as_mapping_str_int_or_bool(value: object) -> Mapping[str, int | bool]:
+    return cast("Mapping[str, int | bool]", deep_freeze(value))
+
+
 @define(frozen=True, slots=True, kw_only=True)
 class ExecutionProfileRecord:
     """Pure resolved execution profile (runtime.yaml `execution_profiles`)."""
@@ -56,9 +125,9 @@ class ExecutionProfileRecord:
     identifier: str
     device_policy: str
     determinism: str
-    resource_budget: dict[str, int]
-    concurrency: dict[str, int]
-    data_loading: dict[str, int | bool]
+    resource_budget: Mapping[str, int] = field(converter=_as_mapping_str_int)
+    concurrency: Mapping[str, int] = field(converter=_as_mapping_str_int)
+    data_loading: Mapping[str, int | bool] = field(converter=_as_mapping_str_int_or_bool)
     process_start_method: str
     log_interval_rounds: PositiveInt
     atomic_write: bool
@@ -99,12 +168,20 @@ class DeterminismStrictRecord:
     unavailable_determinism_policy: str
 
 
+def _as_mapping_str_str(value: object) -> Mapping[str, str]:
+    return cast("Mapping[str, str]", deep_freeze(value))
+
+
+def _as_mapping_str_tuple_or_bool(value: object) -> Mapping[str, tuple[str, ...] | bool]:
+    return cast("Mapping[str, tuple[str, ...] | bool]", deep_freeze(value))
+
+
 @define(frozen=True, slots=True, kw_only=True)
 class DevicePolicyRecord:
     """Pure resolved device policy (runtime.yaml `device_policy_rules`)."""
 
-    cuda_required: dict[str, str]
-    cpu_only: dict[str, tuple[str, ...] | bool]
+    cuda_required: Mapping[str, str] = field(converter=_as_mapping_str_str)
+    cpu_only: Mapping[str, tuple[str, ...] | bool] = field(converter=_as_mapping_str_tuple_or_bool)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -126,7 +203,7 @@ class ResolvedRuntimeConfiguration:
     determinism_enforcement: DeterminismStrictRecord
     device_policy_rules: DevicePolicyRecord
     resource_pressure_policy: ResourcePressureRecord
-    execution_profiles: dict[str, ExecutionProfileRecord]
+    execution_profiles: TypedDomainRegistry[str, ExecutionProfileRecord]
     active_execution_profile: ExecutionProfileRecord
 
 
@@ -135,27 +212,28 @@ def resolve_runtime_configuration(
     bootstrap_settings: RuntimeBootstrapSettings | None = None,
 ) -> ResolvedRuntimeConfiguration:
     """Resolve runtime paths and configuration once during composition."""
-    settings = bootstrap_settings or RuntimeBootstrapSettings()
+    # execution_profile has no default and is not passed positionally here by design -- it is
+    # required from the environment (DATP_EXECUTION_PROFILE) or an explicit .env entry; pydantic-
+    # settings supplies it at runtime even though pyright cannot see that a Settings subclass'
+    # required fields may be sourced from the environment instead of the constructor call site.
+    settings = bootstrap_settings or RuntimeBootstrapSettings()  # pyright: ignore[reportCallIssue]
     repo_root = settings.repository_root.resolve()
-    config_root = (
-        (repo_root / settings.config_root).resolve()
-        if not settings.config_root.is_absolute()
-        else settings.config_root.resolve()
-    )
+    config_root = resolve_config_root(settings)
 
     roots = authored_runtime.roots
+    raw = authored_runtime.raw_source_policy
+    raw_data_root = _resolve_raw_data_root(repo_root / roots["raw_data"], raw)
     resolved_paths = ResolvedProjectPaths(
         repository_root=repo_root,
         config_root=config_root,
-        raw_data=(repo_root / roots["raw_data"]).resolve(),
-        processed_data=(repo_root / roots["processed_data"]).resolve(),
-        manifests=(repo_root / roots["manifests"]).resolve(),
-        checkpoints=(repo_root / roots["checkpoints"]).resolve(),
-        outputs=(repo_root / roots["outputs"]).resolve(),
-        runtime_state=(repo_root / roots["runtime_state"]).resolve(),
+        raw_data=raw_data_root,
+        processed_data=_resolve_contained_root(repo_root, roots["processed_data"]),
+        manifests=_resolve_contained_root(repo_root, roots["manifests"]),
+        checkpoints=_resolve_contained_root(repo_root, roots["checkpoints"]),
+        outputs=_resolve_contained_root(repo_root, roots["outputs"]),
+        runtime_state=_resolve_contained_root(repo_root, roots["runtime_state"]),
     )
 
-    raw = authored_runtime.raw_source_policy
     strict = authored_runtime.determinism_enforcement.strict
     device = authored_runtime.device_policy_rules
     pressure = authored_runtime.resource_pressure_policy
@@ -219,6 +297,6 @@ def resolve_runtime_configuration(
             ),
             on_budget_exceeded=pressure.on_budget_exceeded,
         ),
-        execution_profiles=execution_profiles,
+        execution_profiles=TypedDomainRegistry(_items=execution_profiles),
         active_execution_profile=active_execution_profile,
     )

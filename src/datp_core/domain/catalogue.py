@@ -289,10 +289,33 @@ class AnalysisSpecRecord:
     statistical_profile: str | None
 
 
+SweepValue = str | int | float | tuple[str, ...]
+
+
 @define(frozen=True, slots=True, kw_only=True)
-class SweepRecord:
+class ValueSweepRecord:
+    """A sweep over an explicit authored list of scalar or list-of-string values."""
+
     name: str
-    values: tuple[str | int | float, ...]
+    values: tuple[SweepValue, ...]
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class SweepConditionRecord:
+    name: str
+    allocation: str
+    dirichlet_alpha: float | None
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ConditionSweepRecord:
+    """A sweep over named authored partition/allocation conditions."""
+
+    name: str
+    conditions: tuple[SweepConditionRecord, ...]
+
+
+SweepRecord = ValueSweepRecord | ConditionSweepRecord
 
 
 @define(frozen=True, slots=True, kw_only=True)

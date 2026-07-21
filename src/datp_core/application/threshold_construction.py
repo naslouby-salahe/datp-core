@@ -41,8 +41,6 @@ class ConstructThresholdsUseCase:
     ) -> ThresholdSet:
         estimator = self._registry.get(policy_id)
         policy = self._config.threshold_policies.get(policy_id)
-        if policy is None:
-            raise KeyError(f"Unknown resolved threshold policy: {policy_id.value}")
         return estimator.estimate(
             ThresholdConstructionRequest(
                 policy_id=policy_id,

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 from pathlib import Path
@@ -16,9 +15,7 @@ from datp_core.domain.artifacts import (
     ArtifactCompatibilityResult,
     ArtifactCorruptionReason,
     ArtifactFileCommitRequest,
-    ArtifactFormat,
     ArtifactKey,
-    ArtifactKind,
     ArtifactLookupResult,
     ArtifactManifest,
     ArtifactParent,
@@ -26,37 +23,31 @@ from datp_core.domain.artifacts import (
     ArtifactReuseDecision,
     ArtifactState,
 )
-from datp_core.domain.fingerprints import Checksum, Fingerprint, compute_file_checksum, compute_payload_checksum
-from datp_core.domain.identifiers import ArtifactId, ExperimentId
-from datp_core.domain.values import Seed
+from datp_core.domain.fingerprints import Fingerprint, compute_file_checksum, compute_payload_checksum
+from datp_core.infrastructure.artifacts.manifest_codec import (
+    ManifestDecodeError,
+    ManifestSchemaIncompatibleError,
+    decode_manifest,
+    encode_manifest,
+)
 
 
-def _manifest_to_json(manifest: ArtifactManifest) -> dict[str, object]:
-    """Canonical manifest JSON payload shared by every atomic commit transaction."""
-    return {
-        "artifact_id": manifest.artifact_key.artifact_id.value,
-        "artifact_kind": manifest.artifact_key.kind.value,
-        "artifact_format": manifest.artifact_format.value,
-        "scientific_fingerprint": manifest.scientific_fingerprint.value,
-        "execution_fingerprint": manifest.execution_fingerprint.value,
-        "payload_checksum": manifest.payload_checksum.value,
-        "relative_path": manifest.relative_path,
-        "state": manifest.state.value,
-        "schema_version": manifest.schema_version,
-        "parents": [
-            {
-                "artifact_id": parent.parent_key.artifact_id.value,
-                "artifact_kind": parent.parent_key.kind.value,
-                "scientific_fingerprint": parent.scientific_fingerprint.value,
-            }
-            for parent in manifest.parents
-        ],
-        "creation_timestamp": manifest.creation_timestamp,
-        "environment_identity": manifest.environment_identity,
-        "experiment_id": manifest.experiment_id.value if manifest.experiment_id else None,
-        "seed": manifest.seed.value if manifest.seed else None,
-        "is_frozen": manifest.is_frozen,
-    }
+def _validate_parent_lineage(artifact_key: ArtifactKey, parents: tuple[ArtifactParent, ...]) -> str | None:
+    """Reject self-referential and duplicate parent lineage declarations before any I/O.
+
+    Full ancestor-existence and deep-cycle validation would require a key-to-path artifact
+    index, which does not exist in Phase 1 (callers reference parents by key only, with no
+    resolvable location) -- that is Phase 2/3 artifact-catalog scope. This bounded check still
+    catches the direct, always-invalid cases representable with today's contract.
+    """
+    seen_keys: list[ArtifactKey] = []
+    for parent in parents:
+        if parent.parent_key == artifact_key:
+            return f"Artifact '{artifact_key}' declares itself as its own parent"
+        if parent.parent_key in seen_keys:
+            return f"Artifact '{artifact_key}' declares duplicate parent lineage for '{parent.parent_key}'"
+        seen_keys.append(parent.parent_key)
+    return None
 
 
 def commit_artifact_atomically(
@@ -65,6 +56,9 @@ def commit_artifact_atomically(
     lock_timeout: float,
 ) -> ArtifactCommitResult:
     """Commit payload bytes and manifest atomically inside a filelock-protected transaction."""
+    lineage_error = _validate_parent_lineage(request.artifact_key, request.parents)
+    if lineage_error is not None:
+        return ArtifactCommitResult(success=False, error_message=lineage_error)
     relative_path = Path(request.relative_path)
     if relative_path.is_absolute() or ".." in relative_path.parts:
         return ArtifactCommitResult(success=False, error_message="Artifact relative path escapes the repository")
@@ -107,8 +101,8 @@ def commit_artifact_atomically(
             )
 
             manifest_path = tmp_dir / "manifest.json"
-            with open(manifest_path, "w", encoding="utf-8") as f:
-                json.dump(_manifest_to_json(manifest), f, indent=2)
+            with open(manifest_path, "wb") as f:
+                f.write(encode_manifest(manifest))
                 f.flush()
                 os.fsync(f.fileno())
 
@@ -129,6 +123,9 @@ def commit_artifact_file_atomically(
     lock_timeout: float,
 ) -> ArtifactCommitResult:
     """Copy a staged file into one atomic artifact transaction without reading it into memory."""
+    lineage_error = _validate_parent_lineage(request.artifact_key, request.parents)
+    if lineage_error is not None:
+        return ArtifactCommitResult(success=False, error_message=lineage_error)
     source_file = Path(request.source_file).resolve()
     relative_path = Path(request.relative_path)
     if not source_file.is_file():
@@ -166,8 +163,8 @@ def commit_artifact_file_atomically(
                 is_frozen=True,
             )
             manifest_path = tmp_dir / "manifest.json"
-            with manifest_path.open("w", encoding="utf-8") as manifest_file:
-                json.dump(_manifest_to_json(manifest), manifest_file, indent=2)
+            with manifest_path.open("wb") as manifest_file:
+                manifest_file.write(encode_manifest(manifest))
                 manifest_file.flush()
                 os.fsync(manifest_file.fileno())
             target_dir.parent.mkdir(parents=True, exist_ok=True)
@@ -186,54 +183,20 @@ def inspect_committed_artifact(relative_path: str, outputs_dir: Path) -> Artifac
     manifest_path = target_dir / "manifest.json"
     if not manifest_path.exists():
         return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.MANIFEST_MISSING)
+
     try:
-        data = json.loads(manifest_path.read_text(encoding="utf-8"))
-        artifact_format = ArtifactFormat(data["artifact_format"])
-        payload_path = target_dir / f"payload.{artifact_format.value}"
-        if not payload_path.exists():
-            return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.PAYLOAD_MISSING)
-        checksum = Checksum(data["payload_checksum"])
-        if compute_file_checksum(payload_path) != checksum:
-            return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.CHECKSUM_MISMATCH)
-        parent_values = data["parents"]
-        if not isinstance(parent_values, list):
-            raise TypeError("parents must be a list")
-        parents = tuple(
-            ArtifactParent(
-                parent_key=ArtifactKey(
-                    artifact_id=ArtifactId(parent["artifact_id"]),
-                    kind=ArtifactKind(parent["artifact_kind"]),
-                ),
-                scientific_fingerprint=Fingerprint(parent["scientific_fingerprint"]),
-            )
-            for parent in parent_values
-            if isinstance(parent, dict)
-        )
-        if len(parents) != len(parent_values):
-            raise TypeError("parents contains a non-mapping value")
-        experiment_value = data["experiment_id"]
-        seed_value = data["seed"]
-        manifest = ArtifactManifest(
-            artifact_key=ArtifactKey(
-                artifact_id=ArtifactId(data["artifact_id"]),
-                kind=ArtifactKind(data["artifact_kind"]),
-            ),
-            artifact_format=artifact_format,
-            state=ArtifactState(data["state"]),
-            relative_path=data["relative_path"],
-            scientific_fingerprint=Fingerprint(data["scientific_fingerprint"]),
-            execution_fingerprint=Fingerprint(data["execution_fingerprint"]),
-            payload_checksum=checksum,
-            schema_version=int(data["schema_version"]),
-            parents=parents,
-            creation_timestamp=float(data["creation_timestamp"]),
-            environment_identity=str(data["environment_identity"]),
-            experiment_id=ExperimentId(experiment_value) if isinstance(experiment_value, str) else None,
-            seed=Seed(seed_value) if isinstance(seed_value, int) and not isinstance(seed_value, bool) else None,
-            is_frozen=bool(data["is_frozen"]),
-        )
-    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        manifest = decode_manifest(manifest_path.read_bytes())
+    except ManifestSchemaIncompatibleError:
+        return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.SCHEMA_INCOMPATIBLE)
+    except ManifestDecodeError:
         return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.MANIFEST_MISSING)
+
+    payload_path = target_dir / f"payload.{manifest.artifact_format.value}"
+    if not payload_path.exists():
+        return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.PAYLOAD_MISSING)
+    if compute_file_checksum(payload_path) != manifest.payload_checksum:
+        return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.CHECKSUM_MISMATCH)
+
     return ArtifactLookupResult(found=True, manifest=manifest)
 
 

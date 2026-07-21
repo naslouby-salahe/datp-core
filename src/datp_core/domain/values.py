@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Iterator, Mapping
+from types import MappingProxyType
 
 from attrs import define, field
 
@@ -157,3 +159,21 @@ class TypedDomainRegistry[K, V]:
 
     def __len__(self) -> int:
         return len(self._items)
+
+    def __getitem__(self, key: K) -> V:
+        return self.get(key)
+
+    def __contains__(self, key: object) -> bool:
+        return key in self._items
+
+    def __iter__(self) -> Iterator[K]:
+        return iter(self._items.keys())
+
+
+def deep_freeze(value: object) -> object:
+    """Recursively convert authored dict/list structures into immutable Mapping/tuple equivalents."""
+    if isinstance(value, Mapping):
+        return MappingProxyType({key: deep_freeze(item) for key, item in value.items()})
+    if isinstance(value, list):
+        return tuple(deep_freeze(item) for item in value)
+    return value

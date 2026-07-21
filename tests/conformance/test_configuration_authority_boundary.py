@@ -1,9 +1,8 @@
 """Conformance: authored configuration models never leak outside the configuration boundary.
 
 Authored Pydantic models (``datp_core.config.models``) may only be imported by the configuration
-layer itself and by the single allowlisted threshold-policy consumer (see the implementation
-decision log: the strict discriminated ``TypedThresholdPolicyConfig`` is the resolved threshold
-contract and is intentionally not duplicated into parallel domain records).
+layer itself, which is solely responsible for resolving every authored value into a pure,
+Pydantic-free domain record before it crosses into infrastructure, application, or domain code.
 """
 
 from __future__ import annotations
@@ -18,8 +17,6 @@ _ALLOWLIST = {
     "config/resolver.py",
     "config/runtime_settings.py",
     "config/yaml_loader.py",
-    "infrastructure/thresholding/base.py",
-    "infrastructure/thresholding/estimators.py",
 }
 
 

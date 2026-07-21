@@ -2,19 +2,49 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
+from types import MappingProxyType
+from typing import cast
 
 import cattrs
 from attrs import define
 
 from datp_core.config.models.dataset_config import CategoricalEncodingConfig
+from datp_core.config.models.experiment_config import SweepVariableConfig
 from datp_core.config.models.protocol_config import (
+    ArtifactIdentityConfig,
+    CalibrationFallbackPolicyConfig,
+    CentralizedPooledThresholdPolicyConfig,
+    ClusterThresholdPolicyConfig,
+    CommunicationEstimationContractConfig,
+    DeterminismProfileConfig,
+    EvaluationResultContractConfig,
+    FamilyMeanThresholdPolicyConfig,
+    FederatedFixedCoefficientPolicyConfig,
+    FederatedMatchedExceedancePolicyConfig,
+    LocalGlobalShrinkagePolicyConfig,
+    LocalQuantileThresholdPolicyConfig,
+    MetricDefinitionsConfig,
+    MetricFormulaConfig,
+    NestedReplicatePolicyConfig,
+    OperationalInputsConfig,
+    ReportDefaultsConfig,
+    ReportProfileConfig,
+    ResultTypeConfig,
+    SharedMeanThresholdPolicyConfig,
+    SharedPooledThresholdPolicyConfig,
+    SharedWeightedThresholdPolicyConfig,
+    SplitConformalThresholdPolicyConfig,
+    ThresholdExchangeEntryConfig,
+    ThresholdPolicyDefaultsConfig,
     TypedThresholdPolicyConfig,
 )
 from datp_core.config.runtime_settings import (
     ResolvedProjectPaths,
     ResolvedRuntimeConfiguration,
     RuntimeBootstrapSettings,
+    resolve_config_root,
     resolve_runtime_configuration,
 )
 from datp_core.config.yaml_loader import ConfigurationError, YamlConfigurationReader
@@ -25,6 +55,7 @@ from datp_core.domain.catalogue import (
     CheckpointConvergenceRecord,
     CheckpointProfileRecord,
     CheckpointSelectionRecord,
+    ConditionSweepRecord,
     EligibilityFallbackRecord,
     EligibilityPolicyRecord,
     EvaluationSpecRecord,
@@ -40,8 +71,11 @@ from datp_core.domain.catalogue import (
     RunRequirement,
     SeedCohortRecord,
     StatisticalProfileRecord,
+    SweepConditionRecord,
     SweepRecord,
+    SweepValue,
     TrainingProfileRecord,
+    ValueSweepRecord,
 )
 from datp_core.domain.datasets import (
     AdapterKind,
@@ -54,7 +88,9 @@ from datp_core.domain.datasets import (
     SourceLayout,
 )
 from datp_core.domain.fingerprints import (
+    CanonicalProjection,
     Fingerprint,
+    canonicalize_value,
     compute_execution_fingerprint,
     compute_scientific_fingerprint,
 )
@@ -73,6 +109,50 @@ from datp_core.domain.identifiers import (
     ThresholdPolicyId,
     TrainingProfileId,
 )
+from datp_core.domain.protocol_contracts import (
+    ArtifactFingerprintsRecord,
+    ArtifactIdentityRecord,
+    BenignDecisionRateRecord,
+    CheckpointStorageRecord,
+    ClusterDiagnosticsRecord,
+    CommunicationEstimationContractRecord,
+    CrossClientAggregationRecord,
+    EvaluationResultContractRecord,
+    FieldEncodingRecord,
+    HeterogeneityDiagnosticsRecord,
+    JsDivergenceRecord,
+    MetricDefinitionsRecord,
+    MetricFormulaRecord,
+    ModelExchangeRecord,
+    NestedReplicatePolicyRecord,
+    OperationalInputsRecord,
+    PrecisionPolicyRecord,
+    ProtocolDeterminismRecord,
+    ReportColumnRecord,
+    ReportDefaultsRecord,
+    ReportProfileRecord,
+    ResultTypeRecord,
+    SeedNamespaceRecord,
+    ThresholdEstimationMetricsRecord,
+    ThresholdExchangeEntryRecord,
+    ThresholdExchangeRecord,
+    ThresholdPolicyDefaultsRecord,
+)
+from datp_core.domain.thresholding import (
+    CalibrationFallbackThresholdPolicyRecord,
+    CentralizedPooledThresholdPolicyRecord,
+    ClusterThresholdPolicyRecord,
+    FamilyMeanThresholdPolicyRecord,
+    FederatedFixedCoefficientThresholdPolicyRecord,
+    FederatedMatchedExceedanceThresholdPolicyRecord,
+    LocalGlobalShrinkageThresholdPolicyRecord,
+    LocalQuantileThresholdPolicyRecord,
+    SharedMeanThresholdPolicyRecord,
+    SharedPooledThresholdPolicyRecord,
+    SharedWeightedThresholdPolicyRecord,
+    SplitConformalThresholdPolicyRecord,
+    ThresholdPolicyRecord,
+)
 from datp_core.domain.values import (
     NonNegativeFloat,
     PositiveFloat,
@@ -81,8 +161,8 @@ from datp_core.domain.values import (
     RelativePath,
     Seed,
     TypedDomainRegistry,
+    deep_freeze,
 )
-
 
 _projection_converter = cattrs.Converter()
 
@@ -92,29 +172,360 @@ def _unstructure(value: object) -> object:
     return _projection_converter.unstructure(value)
 
 
+_THRESHOLD_POLICY_RECORD_TYPES: dict[type[TypedThresholdPolicyConfig], type[ThresholdPolicyRecord]] = {
+    SharedMeanThresholdPolicyConfig: SharedMeanThresholdPolicyRecord,
+    SharedPooledThresholdPolicyConfig: SharedPooledThresholdPolicyRecord,
+    SharedWeightedThresholdPolicyConfig: SharedWeightedThresholdPolicyRecord,
+    LocalQuantileThresholdPolicyConfig: LocalQuantileThresholdPolicyRecord,
+    FamilyMeanThresholdPolicyConfig: FamilyMeanThresholdPolicyRecord,
+    CentralizedPooledThresholdPolicyConfig: CentralizedPooledThresholdPolicyRecord,
+    ClusterThresholdPolicyConfig: ClusterThresholdPolicyRecord,
+    SplitConformalThresholdPolicyConfig: SplitConformalThresholdPolicyRecord,
+    LocalGlobalShrinkagePolicyConfig: LocalGlobalShrinkageThresholdPolicyRecord,
+    CalibrationFallbackPolicyConfig: CalibrationFallbackThresholdPolicyRecord,
+    FederatedMatchedExceedancePolicyConfig: FederatedMatchedExceedanceThresholdPolicyRecord,
+    FederatedFixedCoefficientPolicyConfig: FederatedFixedCoefficientThresholdPolicyRecord,
+}
+
+
+def _resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicyRecord:
+    """Convert an authored threshold-policy variant into its pure domain record, losslessly."""
+    record_type = _THRESHOLD_POLICY_RECORD_TYPES.get(type(cfg))
+    if record_type is None:
+        raise ConfigurationError(f"Unsupported authored threshold policy configuration: {type(cfg).__name__}")
+    return record_type(**cfg.model_dump())
+
+
+def _resolve_metric_formula(cfg: MetricFormulaConfig) -> MetricFormulaRecord:
+    return MetricFormulaRecord(
+        formula=cfg.formula,
+        unit=cfg.unit,
+        direction=cfg.direction,
+        zero_denominator=cfg.zero_denominator,
+        requires=tuple(cfg.requires) if cfg.requires is not None else None,
+        missing_class_behavior=cfg.missing_class_behavior,
+        requires_both_classes=cfg.requires_both_classes,
+        role=cfg.role,
+        invariance_check=cfg.invariance_check,
+        quantile_estimator=cfg.quantile_estimator,
+        zero_sum_behavior=cfg.zero_sum_behavior,
+        zero_oracle_behavior=cfg.zero_oracle_behavior,
+        zero_mean_behavior=cfg.zero_mean_behavior,
+        denominator_stabilizer=cfg.denominator_stabilizer,
+        near_zero_mean_threshold_formula=cfg.near_zero_mean_threshold_formula,
+        near_zero_mean_behavior=cfg.near_zero_mean_behavior,
+        minimum_client_count=cfg.minimum_client_count,
+        weighting=cfg.weighting,
+        comparison_unit=cfg.comparison_unit,
+    )
+
+
+def _resolve_metric_definitions(cfg: MetricDefinitionsConfig) -> MetricDefinitionsRecord:
+    cross_client = cfg.cross_client_aggregation
+    threshold_est = cfg.threshold_estimation
+    js = cfg.heterogeneity_diagnostics.pairwise_js_divergence
+    cluster = cfg.cluster_diagnostics
+    return MetricDefinitionsRecord(
+        prediction_rule=cfg.prediction_rule,
+        per_client_before_aggregation=cfg.per_client_before_aggregation,
+        test_rows_only=cfg.test_rows_only,
+        fpr=_resolve_metric_formula(cfg.fpr),
+        tpr=_resolve_metric_formula(cfg.tpr),
+        balanced_accuracy=_resolve_metric_formula(cfg.balanced_accuracy),
+        macro_f1=_resolve_metric_formula(cfg.macro_f1),
+        auroc=_resolve_metric_formula(cfg.auroc),
+        cross_client_aggregation=CrossClientAggregationRecord(
+            mean_fpr=_resolve_metric_formula(cross_client.mean_fpr),
+            standard_deviation_ddof=cross_client.standard_deviation_ddof,
+            cv_fpr=_resolve_metric_formula(cross_client.cv_fpr),
+            cv_tpr=_resolve_metric_formula(cross_client.cv_tpr),
+            iqr_fpr=_resolve_metric_formula(cross_client.iqr_fpr),
+            fpr_range=_resolve_metric_formula(cross_client.fpr_range),
+            worst_client_fpr=_resolve_metric_formula(cross_client.worst_client_fpr),
+            p10_macro_f1=_resolve_metric_formula(cross_client.p10_macro_f1),
+            worst_client_ba=_resolve_metric_formula(cross_client.worst_client_ba),
+            jain_index=_resolve_metric_formula(cross_client.jain_index),
+            gini_coefficient=_resolve_metric_formula(cross_client.gini_coefficient),
+        ),
+        threshold_estimation=ThresholdEstimationMetricsRecord(
+            absolute_threshold_error=_resolve_metric_formula(threshold_est.absolute_threshold_error),
+            relative_threshold_error=_resolve_metric_formula(threshold_est.relative_threshold_error),
+            oracle_definition=threshold_est.oracle_definition,
+            target_exceedance=_resolve_metric_formula(threshold_est.target_exceedance),
+            signed_attainment_error=_resolve_metric_formula(threshold_est.signed_attainment_error),
+            absolute_attainment_error=_resolve_metric_formula(threshold_est.absolute_attainment_error),
+            threshold_dispersion=_resolve_metric_formula(threshold_est.threshold_dispersion),
+            threshold_variance_across_replicates=_resolve_metric_formula(
+                threshold_est.threshold_variance_across_replicates
+            ),
+        ),
+        heterogeneity_diagnostics=HeterogeneityDiagnosticsRecord(
+            pairwise_js_divergence=JsDivergenceRecord(
+                definition=js.definition,
+                histogram_bins=js.histogram_bins,
+                binning_range=js.binning_range,
+                binning_edges=js.binning_edges,
+                logarithm_base=js.logarithm_base,
+                empty_bin_handling=js.empty_bin_handling,
+                pairwise_aggregation=js.pairwise_aggregation,
+                unit=js.unit,
+                direction=js.direction,
+                minimum_client_count=js.minimum_client_count,
+            )
+        ),
+        cluster_diagnostics=ClusterDiagnosticsRecord(
+            adjusted_rand_index=_resolve_metric_formula(cluster.adjusted_rand_index),
+            within_cluster_dispersion=_resolve_metric_formula(cluster.within_cluster_dispersion),
+            across_cluster_dispersion=_resolve_metric_formula(cluster.across_cluster_dispersion),
+        ),
+        precision_policy=PrecisionPolicyRecord(
+            computation=cfg.precision_policy.computation,
+            rounding=cfg.precision_policy.rounding,
+        ),
+        metric_statuses=tuple(cfg.metric_statuses),
+        forbidden_substitutions=tuple(cfg.forbidden_substitutions),
+    )
+
+
+def _resolve_artifact_identity(cfg: ArtifactIdentityConfig) -> ArtifactIdentityRecord:
+    fp = cfg.fingerprints
+    return ArtifactIdentityRecord(
+        hash_function=cfg.hash_function,
+        digest_bytes=cfg.digest_bytes,
+        canonical_serialization=cfg.canonical_serialization,
+        absolute_paths_excluded_from_identity=cfg.absolute_paths_excluded_from_identity,
+        fingerprints=ArtifactFingerprintsRecord(
+            source=tuple(fp.source),
+            schema_stage=tuple(fp.schema_stage),
+            materialization=tuple(fp.materialization),
+            client_assignment=tuple(fp.client_assignment),
+            model_stage=tuple(fp.model_stage),
+            training=tuple(fp.training),
+            checkpoint=tuple(fp.checkpoint),
+            score=tuple(fp.score),
+            threshold=tuple(fp.threshold),
+            metric=tuple(fp.metric),
+            analysis=tuple(fp.analysis),
+        ),
+        lineage_validation_before_reuse=tuple(cfg.lineage_validation_before_reuse),
+        reuse_rejected_when_any_changes=tuple(cfg.reuse_rejected_when_any_changes),
+    )
+
+
+def _resolve_threshold_exchange_entry(cfg: ThresholdExchangeEntryConfig) -> ThresholdExchangeEntryRecord:
+    return ThresholdExchangeEntryRecord(
+        uplink_fields_per_client=(
+            tuple(cfg.uplink_fields_per_client) if cfg.uplink_fields_per_client is not None else None
+        ),
+        downlink_fields_per_client=(
+            tuple(cfg.downlink_fields_per_client) if cfg.downlink_fields_per_client is not None else None
+        ),
+        candidate_grid_downlink_fields_per_client=(
+            tuple(cfg.candidate_grid_downlink_fields_per_client)
+            if cfg.candidate_grid_downlink_fields_per_client is not None
+            else None
+        ),
+        candidate_grid_uplink_fields_per_client_per_candidate=(
+            tuple(cfg.candidate_grid_uplink_fields_per_client_per_candidate)
+            if cfg.candidate_grid_uplink_fields_per_client_per_candidate is not None
+            else None
+        ),
+    )
+
+
+def _resolve_communication_estimation_contract(
+    cfg: CommunicationEstimationContractConfig,
+) -> CommunicationEstimationContractRecord:
+    exchange = cfg.threshold_exchange
+    return CommunicationEstimationContractRecord(
+        estimate_basis=cfg.estimate_basis,
+        field_encodings=MappingProxyType(
+            {
+                key: FieldEncodingRecord(bytes_per_field=v.bytes_per_field, byte_order=v.byte_order)
+                for key, v in cfg.field_encodings.items()
+            }
+        ),
+        threshold_exchange=ThresholdExchangeRecord(
+            direction=exchange.direction,
+            b1=_resolve_threshold_exchange_entry(exchange.b1),
+            b2=_resolve_threshold_exchange_entry(exchange.b2),
+            b4=_resolve_threshold_exchange_entry(exchange.b4),
+            federated_summary=_resolve_threshold_exchange_entry(exchange.federated_summary),
+        ),
+        candidate_grid_payload=cfg.candidate_grid_payload,
+        model_exchange=ModelExchangeRecord(
+            field_width=cfg.model_exchange.field_width,
+            directions=tuple(cfg.model_exchange.directions),
+            bytes_per_round_formula=cfg.model_exchange.bytes_per_round_formula,
+        ),
+        checkpoint_storage=CheckpointStorageRecord(
+            contents=tuple(cfg.checkpoint_storage.contents),
+            model_parameter_bytes_formula=cfg.checkpoint_storage.model_parameter_bytes_formula,
+        ),
+        filename_match_is_not_lineage_evidence=cfg.filename_match_is_not_lineage_evidence,
+        frozen_artifacts_immutable=cfg.frozen_artifacts_immutable,
+        ambiguous_latest_reference=cfg.ambiguous_latest_reference,
+    )
+
+
+def _resolve_operational_inputs(cfg: OperationalInputsConfig) -> OperationalInputsRecord:
+    rate = cfg.benign_decision_rate
+    return OperationalInputsRecord(
+        benign_decision_rate=BenignDecisionRateRecord(
+            configured=rate.configured,
+            value=rate.value,
+            required_fields=tuple(rate.required_fields),
+            finite_value_validation=rate.finite_value_validation,
+            non_negative_validation=rate.non_negative_validation,
+            unavailable_behavior=rate.unavailable_behavior,
+            invented_rate_forbidden=rate.invented_rate_forbidden,
+        )
+    )
+
+
+def _resolve_protocol_determinism(cfg: DeterminismProfileConfig) -> ProtocolDeterminismRecord:
+    return ProtocolDeterminismRecord(
+        seed_domains=tuple(cfg.seed_domains),
+        partition_seed_independent_of_training_seeds=cfg.partition_seed_independent_of_training_seeds,
+        checkpoint_selection_uses_no_stochastic_seed=cfg.checkpoint_selection_uses_no_stochastic_seed,
+        derived_seed_algorithm=MappingProxyType(dict(cfg.derived_seed_algorithm)),
+        seed_namespaces=MappingProxyType(
+            {
+                key: SeedNamespaceRecord(key=v.key, components=tuple(v.components))
+                for key, v in cfg.seed_namespaces.items()
+            }
+        ),
+        resolved_seeds_required_in_manifests=tuple(cfg.resolved_seeds_required_in_manifests),
+    )
+
+
+def _resolve_threshold_policy_defaults(cfg: ThresholdPolicyDefaultsConfig) -> ThresholdPolicyDefaultsRecord:
+    return ThresholdPolicyDefaultsRecord(
+        source_score_population=cfg.source_score_population,
+        eligibility_filter=cfg.eligibility_filter,
+        attack_rows_forbidden_in_calibration=cfg.attack_rows_forbidden_in_calibration,
+        non_finite_calibration_score=cfg.non_finite_calibration_score,
+        empty_client_calibration=cfg.empty_client_calibration,
+        application_scope=cfg.application_scope,
+        required_diagnostic_fields=tuple(cfg.required_diagnostic_fields),
+    )
+
+
+def _resolve_nested_replicate_policy(cfg: NestedReplicatePolicyConfig) -> NestedReplicatePolicyRecord:
+    return NestedReplicatePolicyRecord(
+        replicate_values_computed_first=cfg.replicate_values_computed_first,
+        summarized_within_seed_before_across_seed_inference=cfg.summarized_within_seed_before_across_seed_inference,
+        seed_level_statistic=cfg.seed_level_statistic,
+        replicates_counted_as_independent_units=cfg.replicates_counted_as_independent_units,
+        additional_required_replicate_statistic=cfg.additional_required_replicate_statistic,
+    )
+
+
+def _resolve_result_type(identifier: str, cfg: ResultTypeConfig) -> ResultTypeRecord:
+    return ResultTypeRecord(identifier=identifier, permitted_evidence_roles=tuple(cfg.permitted_evidence_roles))
+
+
+def _resolve_evaluation_result_contract(cfg: EvaluationResultContractConfig) -> EvaluationResultContractRecord:
+    return EvaluationResultContractRecord(
+        per_evaluation_result_type=cfg.per_evaluation_result_type,
+        per_evaluation_eligibility_result_type=cfg.per_evaluation_eligibility_result_type,
+        per_evaluation_required_records=tuple(cfg.per_evaluation_required_records),
+    )
+
+
+def _resolve_report_defaults(cfg: ReportDefaultsConfig) -> ReportDefaultsRecord:
+    return ReportDefaultsRecord(
+        ordering=cfg.ordering,
+        missing_value_policy=cfg.missing_value_policy,
+        table_output_formats=tuple(cfg.table_output_formats),
+        figure_output_formats=tuple(cfg.figure_output_formats),
+        provenance_required_per_artifact=cfg.provenance_required_per_artifact,
+        analysis_defined_direction_token=cfg.analysis_defined_direction_token,
+    )
+
+
+def _resolve_report_profile(identifier: str, cfg: ReportProfileConfig) -> ReportProfileRecord:
+    return ReportProfileRecord(
+        identifier=identifier,
+        artifact_type=cfg.artifact_type,
+        table_type=cfg.table_type,
+        figure_type=cfg.figure_type,
+        estimate_basis=cfg.estimate_basis,
+        columns=(
+            [ReportColumnRecord(name=c.name, unit=c.unit, direction=c.direction) for c in cfg.columns]
+            if cfg.columns is not None
+            else None
+        ),
+        series=(
+            [ReportColumnRecord(name=c.name, unit=c.unit, direction=c.direction) for c in cfg.series]
+            if cfg.series is not None
+            else None
+        ),
+    )
+
+
+def _resolve_sweep_value(value: object) -> SweepValue:
+    if isinstance(value, list):
+        if not all(isinstance(item, str) for item in value):
+            raise ConfigurationError(f"Sweep value list must contain only strings, got: {value!r}")
+        return tuple(value)
+    if isinstance(value, str | int | float):
+        return value
+    raise ConfigurationError(f"Unsupported authored sweep value: {value!r}")
+
+
+def _resolve_sweep(name: str, cfg: SweepVariableConfig) -> SweepRecord:
+    if cfg.values is not None:
+        return ValueSweepRecord(name=name, values=tuple(_resolve_sweep_value(value) for value in cfg.values))
+    assert cfg.conditions is not None  # enforced by SweepVariableConfig.validate_exactly_one_variant
+    return ConditionSweepRecord(
+        name=name,
+        conditions=tuple(
+            SweepConditionRecord(name=c.name, allocation=c.allocation, dirichlet_alpha=c.dirichlet_alpha)
+            for c in cfg.conditions
+        ),
+    )
+
+
 @define(frozen=True, slots=True, kw_only=True)
 class ResolvedProjectConfiguration:
     """Single resolved project configuration authority loaded once during composition root initialization."""
 
-    datasets: dict[DatasetId, ResolvedDataset]
+    datasets: TypedDomainRegistry[DatasetId, ResolvedDataset]
     populations: TypedDomainRegistry[PopulationId, PopulationRecord]
     experiments: TypedDomainRegistry[ExperimentId, ExperimentRecord]
     training_profiles: TypedDomainRegistry[TrainingProfileId, TrainingProfileRecord]
     checkpoint_profiles: TypedDomainRegistry[CheckpointProfileId, CheckpointProfileRecord]
     seed_cohorts: TypedDomainRegistry[SeedCohortId, SeedCohortRecord]
     statistical_profiles: TypedDomainRegistry[StatisticalProfileId, StatisticalProfileRecord]
-    threshold_policies: dict[ThresholdPolicyId, TypedThresholdPolicyConfig]
-    model_architectures: dict[str, ModelArchitectureRecord]
-    optimizers: dict[str, OptimizerRecord]
-    batching_profiles: dict[str, BatchingRecord]
-    eligibility_policies: dict[EligibilityPolicyId, EligibilityPolicyRecord]
-    normalization_strategies: dict[NormalizationStrategyId, NormalizationStrategyRecord]
-    quantile_estimators: dict[str, QuantileEstimatorRecord]
-    metric_bundles: dict[MetricBundleId, MetricBundleRecord]
+    threshold_policies: TypedDomainRegistry[ThresholdPolicyId, ThresholdPolicyRecord]
+    model_architectures: TypedDomainRegistry[str, ModelArchitectureRecord]
+    optimizers: TypedDomainRegistry[str, OptimizerRecord]
+    batching_profiles: TypedDomainRegistry[str, BatchingRecord]
+    eligibility_policies: TypedDomainRegistry[EligibilityPolicyId, EligibilityPolicyRecord]
+    normalization_strategies: TypedDomainRegistry[NormalizationStrategyId, NormalizationStrategyRecord]
+    quantile_estimators: TypedDomainRegistry[str, QuantileEstimatorRecord]
+    metric_bundles: TypedDomainRegistry[MetricBundleId, MetricBundleRecord]
+    metric_definitions: MetricDefinitionsRecord
+    artifact_identity: ArtifactIdentityRecord
+    communication_estimation_contract: CommunicationEstimationContractRecord
+    operational_inputs: OperationalInputsRecord
+    report_profiles: TypedDomainRegistry[str, ReportProfileRecord]
+    communication_estimation: Mapping[str, object] | None
+    protocol_determinism: ProtocolDeterminismRecord
+    normalization_fit_scopes: Mapping[str, str]
+    normalization_leakage_rule: str
+    threshold_policy_defaults: ThresholdPolicyDefaultsRecord
+    nested_replicate_policy: NestedReplicatePolicyRecord
+    result_types: TypedDomainRegistry[str, ResultTypeRecord]
+    evaluation_result_contract: EvaluationResultContractRecord
+    report_defaults: ReportDefaultsRecord
     runtime: ResolvedRuntimeConfiguration
     paths: ResolvedProjectPaths
     scientific_fingerprint: Fingerprint
     execution_fingerprint: Fingerprint
+    scientific_projection: CanonicalProjection
+    execution_projection: CanonicalProjection
 
 
 def _resolve_adapter_kind(dataset_name: str) -> AdapterKind:
@@ -129,8 +540,11 @@ def resolve_project_configuration(
     bootstrap_settings: RuntimeBootstrapSettings | None = None,
 ) -> ResolvedProjectConfiguration:
     """Execute staged configuration resolution pipeline."""
+    # execution_profile is required from the environment (DATP_EXECUTION_PROFILE), not a default;
+    # see the matching comment in config/runtime_settings.py.
+    bootstrap_settings = bootstrap_settings or RuntimeBootstrapSettings()  # pyright: ignore[reportCallIssue]
     if config_dir is None:
-        config_dir = (bootstrap_settings or RuntimeBootstrapSettings()).config_root
+        config_dir = resolve_config_root(bootstrap_settings)
     config_dir = config_dir.resolve()
     datasets_dir = config_dir / "datasets"
 
@@ -160,6 +574,8 @@ def resolve_project_configuration(
     resolved_datasets: dict[DatasetId, ResolvedDataset] = {}
     for d_cfg in authored_datasets:
         d_id = DatasetId(d_cfg.dataset)
+        if d_id in resolved_datasets:
+            raise ConfigurationError(f"Duplicate dataset identifier across dataset documents: '{d_cfg.dataset}'")
         adapter_kind = _resolve_adapter_kind(d_cfg.dataset)
         raw_root = d_cfg.source_layout.root
         dataset_paths = ResolvedDatasetPaths(
@@ -178,6 +594,18 @@ def resolve_project_configuration(
         materializations = tuple(
             DatasetMaterialization(
                 identifier=MaterializationId(identifier),
+                role=materialization.role,
+                normalization_strategy=materialization.normalization.strategy,
+                normalization_scope=materialization.normalization.scope,
+                vocabulary_fit_split=materialization.vocabulary_fit_split,
+                preprocessing_sequence=tuple(materialization.preprocessing_sequence),
+                row_exclusion=materialization.row_exclusion,
+                split_row_semantics=(
+                    cast(Mapping[str, "str | bool"], deep_freeze(materialization.split_row_semantics))
+                    if materialization.split_row_semantics is not None
+                    else None
+                ),
+                infeasibility_policy=materialization.infeasibility_policy,
                 split_method=materialization.split.method,
                 split_seed=Seed(materialization.split.split_seed)
                 if materialization.split.split_seed is not None
@@ -195,6 +623,36 @@ def resolve_project_configuration(
                     )
                     if value is not None
                 ),
+                split_ordering_basis=materialization.split.ordering_basis,
+                split_ordering_scope=materialization.split.ordering_scope,
+                split_gap_handling=materialization.split.gap_handling,
+                split_attack_rows=materialization.split.attack_rows,
+                split_attack_test_membership=materialization.split.attack_test_membership,
+                split_attack_ordering=materialization.split.attack_ordering,
+                split_benign_attack_deduplication=materialization.split.benign_attack_deduplication,
+                split_role_order=(
+                    tuple(materialization.split.role_order) if materialization.split.role_order is not None else None
+                ),
+                split_excluded_client_folders=(
+                    tuple(materialization.split.excluded_client_folders)
+                    if materialization.split.excluded_client_folders is not None
+                    else None
+                ),
+                split_exclusion_reason=materialization.split.exclusion_reason,
+                split_ordering_field=materialization.split.ordering_field,
+                split_ordering_sort=materialization.split.ordering_sort,
+                split_rollover_policy=materialization.split.rollover_policy,
+                split_rollover_scope=materialization.split.rollover_scope,
+                split_boundary_rule=materialization.split.boundary_rule,
+                split_boundary_index_formula=materialization.split.boundary_index_formula,
+                split_future_leakage_check=materialization.split.future_leakage_check,
+                split_minimum_row_counts=(
+                    cast(Mapping[str, int], deep_freeze(materialization.split.minimum_row_counts))
+                    if materialization.split.minimum_row_counts is not None
+                    else None
+                ),
+                split_missing_client_policy=materialization.split.missing_client_policy,
+                split_chronology_unverifiable_policy=materialization.split.chronology_unverifiable_policy,
             )
             for identifier, materialization in sorted(d_cfg.materializations.items())
         )
@@ -211,15 +669,18 @@ def resolve_project_configuration(
             tuple(categorical_encoding.columns) if isinstance(categorical_encoding, CategoricalEncodingConfig) else ()
         )
         multiclass_label = d_cfg.field_schema.label_fields.multiclass_label
-        label_header = multiclass_label.get("column") if multiclass_label is not None else None
-        if label_header is not None and not isinstance(label_header, str):
-            raise ConfigurationError(f"Dataset '{d_cfg.dataset}' has a non-string multiclass label column")
+        label_header = multiclass_label.column if multiclass_label is not None else None
         if configured_sources is None:
+            if d_cfg.source_layout.attack_file_pattern is None:
+                raise ConfigurationError(
+                    f"Dataset '{d_cfg.dataset}' has a single unconfigured source tree "
+                    "and must author an explicit 'attack_file_pattern'"
+                )
             source_trees = (
                 ConfiguredSourceTree(
                     identifier="primary",
                     root=RelativePath(d_cfg.source_layout.root),
-                    file_pattern=d_cfg.source_layout.attack_file_pattern or "*.csv",
+                    file_pattern=d_cfg.source_layout.attack_file_pattern,
                     expected_column_count=(
                         source_column_count
                         if isinstance(source_column_count, int)
@@ -443,15 +904,17 @@ def resolve_project_configuration(
     statistical_reg = TypedDomainRegistry(_items=statistical_dict)
 
     # 6. Resolve threshold policies
-    threshold_policies_dict: dict[ThresholdPolicyId, TypedThresholdPolicyConfig] = {}
+    threshold_policies_dict: dict[ThresholdPolicyId, ThresholdPolicyRecord] = {}
     for tp_key, tp_cfg in authored_protocols.threshold_policies.items():
         tp_id = ThresholdPolicyId(tp_key)
-        threshold_policies_dict[tp_id] = tp_cfg
+        threshold_policies_dict[tp_id] = _resolve_threshold_policy(tp_cfg)
 
     # 7. Resolve experiments
     experiments_dict: dict[ExperimentId, ExperimentRecord] = {}
     for exp_cfg in authored_experiments.experiments:
         exp_id = ExperimentId(exp_cfg.name)
+        if exp_id in experiments_dict:
+            raise ConfigurationError(f"Duplicate experiment identifier: '{exp_cfg.name}'")
 
         # Validate evaluations threshold policies
         evals_list = []
@@ -504,12 +967,10 @@ def resolve_project_configuration(
             evaluations=tuple(evals_list),
             analyses=tuple(analyses_list),
             report_ids=tuple(exp_cfg.reports),
-            sweeps=tuple(
-                SweepRecord(
-                    name=name,
-                    values=tuple(value for value in sweep.values or () if isinstance(value, str | int | float)),
-                )
-                for name, sweep in sorted((exp_cfg.sweeps or {}).items())
+            sweeps=(
+                tuple(_resolve_sweep(name, sweep) for name, sweep in sorted(exp_cfg.sweeps.items()))
+                if exp_cfg.sweeps is not None
+                else ()
             ),
         )
     experiments_reg = TypedDomainRegistry(_items=experiments_dict)
@@ -635,6 +1096,29 @@ def resolve_project_configuration(
         )
         for k, v in authored_protocols.metric_bundles.items()
     }
+    report_profiles = {key: _resolve_report_profile(key, v) for key, v in authored_protocols.report_profiles.items()}
+    resolved_metric_definitions = _resolve_metric_definitions(authored_protocols.metric_definitions)
+    resolved_artifact_identity = _resolve_artifact_identity(authored_protocols.artifact_identity)
+    resolved_communication_estimation_contract = _resolve_communication_estimation_contract(
+        authored_protocols.communication_estimation_contract
+    )
+    resolved_operational_inputs = _resolve_operational_inputs(authored_protocols.operational_inputs)
+    resolved_communication_estimation = (
+        cast(Mapping[str, object], deep_freeze(authored_protocols.communication_estimation))
+        if authored_protocols.communication_estimation is not None
+        else None
+    )
+    resolved_protocol_determinism = _resolve_protocol_determinism(authored_protocols.determinism)
+    resolved_normalization_fit_scopes = MappingProxyType(dict(authored_protocols.normalization_fit_scopes))
+    resolved_threshold_policy_defaults = _resolve_threshold_policy_defaults(
+        authored_protocols.threshold_policy_defaults
+    )
+    resolved_nested_replicate_policy = _resolve_nested_replicate_policy(authored_protocols.nested_replicate_policy)
+    result_types = {key: _resolve_result_type(key, v) for key, v in authored_protocols.result_types.items()}
+    resolved_evaluation_result_contract = _resolve_evaluation_result_contract(
+        authored_protocols.evaluation_result_contract
+    )
+    resolved_report_defaults = _resolve_report_defaults(authored_protocols.report_defaults)
 
     # Scientific fingerprint computation over full scientific content.
     # Absolute filesystem paths are deliberately excluded from identity (artifact_identity rule);
@@ -655,8 +1139,7 @@ def resolve_project_configuration(
         "populations": {str(k): _unstructure(v) for k, v in sorted(populations_dict.items(), key=lambda x: str(x[0]))},
         "experiments": {str(k): _unstructure(v) for k, v in sorted(experiments_dict.items(), key=lambda x: str(x[0]))},
         "threshold_policies": {
-            str(k): v.model_dump(mode="json")
-            for k, v in sorted(threshold_policies_dict.items(), key=lambda x: str(x[0]))
+            str(k): _unstructure(v) for k, v in sorted(threshold_policies_dict.items(), key=lambda x: str(x[0]))
         },
         "seed_cohorts": {str(k): _unstructure(v) for k, v in sorted(seed_dict.items(), key=lambda x: str(x[0]))},
         "training_profiles": {
@@ -679,37 +1162,69 @@ def resolve_project_configuration(
         "statistical_profiles": {
             str(k): _unstructure(v) for k, v in sorted(statistical_dict.items(), key=lambda x: str(x[0]))
         },
+        "metric_definitions": _unstructure(resolved_metric_definitions),
+        "artifact_identity": _unstructure(resolved_artifact_identity),
+        "communication_estimation_contract": _unstructure(resolved_communication_estimation_contract),
+        "operational_inputs": _unstructure(resolved_operational_inputs),
+        "report_profiles": {k: _unstructure(v) for k, v in sorted(report_profiles.items())},
+        "communication_estimation": _unstructure(resolved_communication_estimation),
+        "protocol_determinism": _unstructure(resolved_protocol_determinism),
+        "normalization_fit_scopes": dict(sorted(resolved_normalization_fit_scopes.items())),
+        "normalization_leakage_rule": authored_protocols.normalization_leakage_rule,
+        "threshold_policy_defaults": _unstructure(resolved_threshold_policy_defaults),
+        "nested_replicate_policy": _unstructure(resolved_nested_replicate_policy),
+        "result_types": {k: _unstructure(v) for k, v in sorted(result_types.items())},
+        "evaluation_result_contract": _unstructure(resolved_evaluation_result_contract),
+        "report_defaults": _unstructure(resolved_report_defaults),
     }
     scientific_fingerprint = compute_scientific_fingerprint(scientific_projection)
 
     execution_projection = {
         "scientific_fingerprint": scientific_fingerprint.value,
-        "runtime_profiles": {k: _unstructure(v) for k, v in sorted(resolved_runtime.execution_profiles.items())},
+        "active_execution_profile": _unstructure(resolved_runtime.active_execution_profile),
         "determinism": _unstructure(resolved_runtime.determinism_enforcement),
         "device_policy": _unstructure(resolved_runtime.device_policy_rules),
         "resource_pressure": _unstructure(resolved_runtime.resource_pressure_policy),
         "raw_source_policy": _unstructure(resolved_runtime.raw_source_policy),
     }
     execution_fingerprint = compute_execution_fingerprint(execution_projection)
+    canonical_scientific_projection = canonicalize_value(scientific_projection)
+    canonical_execution_projection = canonicalize_value(execution_projection)
 
     return ResolvedProjectConfiguration(
-        datasets=resolved_datasets,
+        datasets=TypedDomainRegistry(_items=resolved_datasets),
         populations=populations_reg,
         experiments=experiments_reg,
         training_profiles=training_reg,
         checkpoint_profiles=checkpoint_reg,
         seed_cohorts=seed_reg,
         statistical_profiles=statistical_reg,
-        threshold_policies=threshold_policies_dict,
-        model_architectures=model_architectures,
-        optimizers=optimizers,
-        batching_profiles=batching_profiles,
-        eligibility_policies=eligibility_policies,
-        normalization_strategies=normalization_strategies,
-        quantile_estimators=quantile_estimators,
-        metric_bundles=metric_bundles,
+        threshold_policies=TypedDomainRegistry(_items=threshold_policies_dict),
+        model_architectures=TypedDomainRegistry(_items=model_architectures),
+        optimizers=TypedDomainRegistry(_items=optimizers),
+        batching_profiles=TypedDomainRegistry(_items=batching_profiles),
+        eligibility_policies=TypedDomainRegistry(_items=eligibility_policies),
+        normalization_strategies=TypedDomainRegistry(_items=normalization_strategies),
+        quantile_estimators=TypedDomainRegistry(_items=quantile_estimators),
+        metric_bundles=TypedDomainRegistry(_items=metric_bundles),
+        metric_definitions=resolved_metric_definitions,
+        artifact_identity=resolved_artifact_identity,
+        communication_estimation_contract=resolved_communication_estimation_contract,
+        operational_inputs=resolved_operational_inputs,
+        report_profiles=TypedDomainRegistry(_items=report_profiles),
+        communication_estimation=resolved_communication_estimation,
+        protocol_determinism=resolved_protocol_determinism,
+        normalization_fit_scopes=resolved_normalization_fit_scopes,
+        normalization_leakage_rule=authored_protocols.normalization_leakage_rule,
+        threshold_policy_defaults=resolved_threshold_policy_defaults,
+        nested_replicate_policy=resolved_nested_replicate_policy,
+        result_types=TypedDomainRegistry(_items=result_types),
+        evaluation_result_contract=resolved_evaluation_result_contract,
+        report_defaults=resolved_report_defaults,
         runtime=resolved_runtime,
         paths=paths,
         scientific_fingerprint=scientific_fingerprint,
         execution_fingerprint=execution_fingerprint,
+        scientific_projection=canonical_scientific_projection,
+        execution_projection=canonical_execution_projection,
     )

@@ -5,11 +5,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from attrs import define
-from deepdiff import DeepDiff
 
 from datp_core.config.resolver import ResolvedProjectConfiguration
-from datp_core.config.validation import ProjectConfigurationValidator
-from datp_core.domain.fingerprints import Fingerprint
+from datp_core.config.validation import ProjectConfigurationValidator, ValidationReport
+from datp_core.config.yaml_loader import YamlConfigurationReader
+from datp_core.domain.drift import DriftEntry, diff_canonical_projections
+from datp_core.domain.fingerprints import Fingerprint, canonicalize_value
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -18,7 +19,7 @@ class ConfigurationDriftReport:
 
     has_drift: bool
     drift_kind: str
-    diff_details: dict[str, str]
+    diff_entries: tuple[DriftEntry, ...]
 
 
 class ValidateProjectConfiguration:
@@ -27,9 +28,8 @@ class ValidateProjectConfiguration:
     def __init__(self, config: ResolvedProjectConfiguration) -> None:
         self._config = config
 
-    def execute(self) -> bool:
-        report = ProjectConfigurationValidator().validate(self._config)
-        return report.is_valid
+    def execute(self) -> ValidationReport:
+        return ProjectConfigurationValidator().validate(self._config)
 
 
 class DescribeResolvedProject:
@@ -43,18 +43,20 @@ class DescribeResolvedProject:
 
 
 class ExplainAuthoredConfigurationDrift:
-    """Use case comparing two authored YAML files and reporting differences."""
+    """Use case comparing two authored YAML files and reporting parsed-value differences.
+
+    Both documents are parsed (duplicate-key-safe) before comparison, so formatting, comments,
+    whitespace, and key ordering never produce drift -- only an actual authored-value change does.
+    """
 
     def execute(self, current_yaml_path: Path, expected_yaml_path: Path) -> ConfigurationDriftReport:
-        curr_text = current_yaml_path.read_text(encoding="utf-8")
-        exp_text = expected_yaml_path.read_text(encoding="utf-8")
-        diff = DeepDiff(exp_text, curr_text, ignore_order=True)
-        has_drift = len(diff) > 0
-        diff_str_map = {str(k): str(v) for k, v in diff.items()}
+        current_document = canonicalize_value(YamlConfigurationReader.read_document(current_yaml_path))
+        expected_document = canonicalize_value(YamlConfigurationReader.read_document(expected_yaml_path))
+        entries = diff_canonical_projections(expected_document, current_document)
         return ConfigurationDriftReport(
-            has_drift=has_drift,
+            has_drift=len(entries) > 0,
             drift_kind="authored_yaml",
-            diff_details=diff_str_map,
+            diff_entries=entries,
         )
 
 
@@ -66,19 +68,13 @@ class ExplainResolvedScientificDrift:
         current_config: ResolvedProjectConfiguration,
         expected_config: ResolvedProjectConfiguration,
     ) -> ConfigurationDriftReport:
-        same_fingerprint = current_config.scientific_fingerprint.value == expected_config.scientific_fingerprint.value
-        if same_fingerprint:
-            return ConfigurationDriftReport(has_drift=False, drift_kind="scientific", diff_details={})
-
-        diff = DeepDiff(
-            expected_config.scientific_fingerprint.value,
-            current_config.scientific_fingerprint.value,
-            ignore_order=True,
+        entries = diff_canonical_projections(
+            expected_config.scientific_projection, current_config.scientific_projection
         )
         return ConfigurationDriftReport(
-            has_drift=True,
+            has_drift=len(entries) > 0,
             drift_kind="scientific",
-            diff_details={str(k): str(v) for k, v in diff.items()},
+            diff_entries=entries,
         )
 
 
@@ -90,19 +86,11 @@ class ExplainExecutionConfigurationDrift:
         current_config: ResolvedProjectConfiguration,
         expected_config: ResolvedProjectConfiguration,
     ) -> ConfigurationDriftReport:
-        same_fingerprint = current_config.execution_fingerprint.value == expected_config.execution_fingerprint.value
-        if same_fingerprint:
-            return ConfigurationDriftReport(has_drift=False, drift_kind="execution", diff_details={})
-
-        diff = DeepDiff(
-            expected_config.execution_fingerprint.value,
-            current_config.execution_fingerprint.value,
-            ignore_order=True,
-        )
+        entries = diff_canonical_projections(expected_config.execution_projection, current_config.execution_projection)
         return ConfigurationDriftReport(
-            has_drift=True,
+            has_drift=len(entries) > 0,
             drift_kind="execution",
-            diff_details={str(k): str(v) for k, v in diff.items()},
+            diff_entries=entries,
         )
 
 

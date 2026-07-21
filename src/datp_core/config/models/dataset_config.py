@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class DatasetSourceConfig(BaseModel):
@@ -118,11 +118,19 @@ class ModelFeaturesConfig(BaseModel):
     order: list[str]
 
 
+class MulticlassLabelConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    column: str
+    type: str | None = None
+    case: str | None = None
+
+
 class LabelFieldsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     binary_label: dict[str, str | list[int] | list[str]]
-    multiclass_label: dict[str, JsonValue] | None = None
+    multiclass_label: MulticlassLabelConfig | None = None
     benign_value: dict[str, str | int] | None = None
     attack_class_mapping: dict[str, str] | None = None
     device_family_mapping: dict[str, str] | None = None
@@ -134,7 +142,7 @@ class DatasetFieldSchemaConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     source_column_count: int | dict[str, int]
-    header_required: bool = True
+    header_required: bool
     header_must_be_identical_across_all_source_files: bool | None = None
     header_must_be_identical_across_all_files_in_a_tree: bool | None = None
     merged_header_extends_per_class_header_with: str | None = None

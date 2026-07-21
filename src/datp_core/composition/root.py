@@ -15,7 +15,7 @@ from datp_core.application.configuration import (
     ValidateProjectConfiguration,
 )
 from datp_core.application.dataset_audit import AuditDatasetUseCase
-from datp_core.application.experiment_execution import ExecuteExperimentUseCase, ResumeExperimentUseCase
+from datp_core.application.experiment_execution import ExecuteExperimentUseCase
 from datp_core.application.experiment_planning import PlanExperimentUseCase
 from datp_core.application.stage_handlers import DatasetMaterializationStageHandler, PreflightStageHandler
 from datp_core.application.statistical_analysis import StatisticalAnalysisUseCase
@@ -24,6 +24,39 @@ from datp_core.config.resolver import ResolvedProjectConfiguration, resolve_proj
 from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
 from datp_core.infrastructure.querying.audit_service import DuckDbAuditService
 from datp_core.infrastructure.statistics.scipy_port import ScipyStatisticalAnalysisAdapter
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ConfigOnlyApplication:
+    """Lightweight composition root for configuration-only operations.
+
+    Built from just YAML load + validate + resolve -- no artifact repository, no DuckDB
+    service, no threshold estimators, no statistics adapter, no execution use case. Used by CLI
+    commands that only read or explain configuration, so they never pay for the full
+    application graph.
+    """
+
+    config: ResolvedProjectConfiguration
+    validate_configuration: ValidateProjectConfiguration
+    describe_project: DescribeResolvedProject
+    explain_authored_drift: ExplainAuthoredConfigurationDrift
+    explain_scientific_drift: ExplainResolvedScientificDrift
+    explain_execution_drift: ExplainExecutionConfigurationDrift
+    fingerprint_config: FingerprintResolvedConfiguration
+
+
+def build_config_only_application(config_dir: Path | None = None) -> ConfigOnlyApplication:
+    """Factory composing only the configuration-layer use cases, with no infrastructure."""
+    resolved_config = resolve_project_configuration(config_dir=config_dir)
+    return ConfigOnlyApplication(
+        config=resolved_config,
+        validate_configuration=ValidateProjectConfiguration(config=resolved_config),
+        describe_project=DescribeResolvedProject(config=resolved_config),
+        explain_authored_drift=ExplainAuthoredConfigurationDrift(),
+        explain_scientific_drift=ExplainResolvedScientificDrift(),
+        explain_execution_drift=ExplainExecutionConfigurationDrift(),
+        fingerprint_config=FingerprintResolvedConfiguration(),
+    )
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -40,7 +73,6 @@ class DatpApplication:
     audit_dataset: AuditDatasetUseCase
     plan_experiment: PlanExperimentUseCase
     execute_experiment: ExecuteExperimentUseCase
-    resume_experiment: ResumeExperimentUseCase
     construct_thresholds: ConstructThresholdsUseCase
     statistical_analysis: StatisticalAnalysisUseCase
     audit_service: DuckDbAuditService
@@ -67,7 +99,6 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
             DatasetMaterializationStageHandler(resolved_config, artifact_repository),
         ),
     )
-    resumer = ResumeExperimentUseCase(executor=executor)
     construct_th = ConstructThresholdsUseCase(
         config=resolved_config, registry=build_estimator_registry(resolved_config)
     )
@@ -88,7 +119,6 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
         audit_dataset=audit_ds,
         plan_experiment=planner,
         execute_experiment=executor,
-        resume_experiment=resumer,
         construct_thresholds=construct_th,
         statistical_analysis=statistical_analysis,
         audit_service=audit_svc,

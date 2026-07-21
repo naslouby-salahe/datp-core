@@ -10,23 +10,25 @@ from scipy.stats import skew
 from sklearn.cluster import KMeans
 from sklearn.preprocessing import StandardScaler
 
-from datp_core.config.models.protocol_config import (
-    CalibrationFallbackPolicyConfig,
-    CentralizedPooledThresholdPolicyConfig,
-    ClusterThresholdPolicyConfig,
-    FamilyMeanThresholdPolicyConfig,
-    FederatedFixedCoefficientPolicyConfig,
-    FederatedMatchedExceedancePolicyConfig,
-    LocalGlobalShrinkagePolicyConfig,
-    LocalQuantileThresholdPolicyConfig,
-    SharedMeanThresholdPolicyConfig,
-    SharedPooledThresholdPolicyConfig,
-    SharedWeightedThresholdPolicyConfig,
-    SplitConformalThresholdPolicyConfig,
-    TypedThresholdPolicyConfig,
-)
 from datp_core.domain.identifiers import ThresholdPolicyId
-from datp_core.domain.thresholding import BenignCalibrationScores, ThresholdRecord, ThresholdSet
+from datp_core.domain.thresholding import (
+    BenignCalibrationScores,
+    CalibrationFallbackThresholdPolicyRecord,
+    CentralizedPooledThresholdPolicyRecord,
+    ClusterThresholdPolicyRecord,
+    FamilyMeanThresholdPolicyRecord,
+    FederatedFixedCoefficientThresholdPolicyRecord,
+    FederatedMatchedExceedanceThresholdPolicyRecord,
+    LocalGlobalShrinkageThresholdPolicyRecord,
+    LocalQuantileThresholdPolicyRecord,
+    SharedMeanThresholdPolicyRecord,
+    SharedPooledThresholdPolicyRecord,
+    SharedWeightedThresholdPolicyRecord,
+    SplitConformalThresholdPolicyRecord,
+    ThresholdPolicyRecord,
+    ThresholdRecord,
+    ThresholdSet,
+)
 from datp_core.domain.values import Probability
 from datp_core.infrastructure.thresholding.base import ThresholdConstructionRequest, ThresholdEstimator
 
@@ -41,8 +43,8 @@ def _quantile(values: tuple[float, ...], quantile: float) -> float:
     return result
 
 
-def _policy_quantile(policy: TypedThresholdPolicyConfig) -> Probability:
-    if isinstance(policy, SplitConformalThresholdPolicyConfig):
+def _policy_quantile(policy: ThresholdPolicyRecord) -> Probability:
+    if isinstance(policy, SplitConformalThresholdPolicyRecord):
         return Probability(policy.nominal_coverage)
     return Probability(policy.quantile)
 
@@ -73,7 +75,7 @@ def _records(
 class ConfiguredThresholdEstimator(ThresholdEstimator):
     """One immutable estimator bound to a single resolved policy configuration."""
 
-    def __init__(self, policy_id: ThresholdPolicyId, policy: TypedThresholdPolicyConfig) -> None:
+    def __init__(self, policy_id: ThresholdPolicyId, policy: ThresholdPolicyRecord) -> None:
         self._policy_id = policy_id
         self._policy = policy
 
@@ -91,14 +93,14 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
         quantile = _policy_quantile(policy)
         local = {item.client_id.value: _quantile(item.values, quantile.value) for item in calibration}
 
-        if isinstance(policy, SharedMeanThresholdPolicyConfig):
+        if isinstance(policy, SharedMeanThresholdPolicyRecord):
             shared = float(np.mean(tuple(local.values())))
             return _records(self._policy_id, calibration, {key: shared for key in local}, "shared_mean", quantile)
-        if isinstance(policy, (SharedPooledThresholdPolicyConfig, CentralizedPooledThresholdPolicyConfig)):
+        if isinstance(policy, (SharedPooledThresholdPolicyRecord, CentralizedPooledThresholdPolicyRecord)):
             pooled = tuple(value for item in calibration for value in item.values)
             threshold = _quantile(pooled, quantile.value)
             return _records(self._policy_id, calibration, {key: threshold for key in local}, "pooled", quantile)
-        if isinstance(policy, SharedWeightedThresholdPolicyConfig):
+        if isinstance(policy, SharedWeightedThresholdPolicyRecord):
             count = sum(len(item.values) for item in calibration)
             if count == 0:
                 raise ValueError("Weighted threshold has no calibration rows")
@@ -106,9 +108,9 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
             return _records(
                 self._policy_id, calibration, {key: threshold for key in local}, "shared_weighted", quantile
             )
-        if isinstance(policy, LocalQuantileThresholdPolicyConfig):
+        if isinstance(policy, LocalQuantileThresholdPolicyRecord):
             return _records(self._policy_id, calibration, local, "local", quantile)
-        if isinstance(policy, FamilyMeanThresholdPolicyConfig):
+        if isinstance(policy, FamilyMeanThresholdPolicyRecord):
             if request.family_map is None:
                 raise ValueError("Family threshold requires an explicit resolved client-family mapping")
             families: dict[str, list[float]] = {}
@@ -123,18 +125,18 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
                 for item in calibration
             }
             return _records(self._policy_id, calibration, thresholds, "family_mean", quantile)
-        if isinstance(policy, ClusterThresholdPolicyConfig):
+        if isinstance(policy, ClusterThresholdPolicyRecord):
             return self._cluster(request, local, quantile)
-        if isinstance(policy, SplitConformalThresholdPolicyConfig):
+        if isinstance(policy, SplitConformalThresholdPolicyRecord):
             return self._conformal(calibration, policy, quantile)
-        if isinstance(policy, LocalGlobalShrinkagePolicyConfig):
+        if isinstance(policy, LocalGlobalShrinkageThresholdPolicyRecord):
             coefficient = (
                 policy.shrinkage_weight if policy.shrinkage_weight is not None else request.selected_coefficient
             )
             if coefficient is None:
                 raise ValueError("Shrinkage threshold requires an experiment-selected coefficient")
             return self._shrinkage(calibration, local, coefficient, quantile)
-        if isinstance(policy, CalibrationFallbackPolicyConfig):
+        if isinstance(policy, CalibrationFallbackThresholdPolicyRecord):
             half = policy.weight_formula_constants.get("n_half")
             if not isinstance(half, int) or half <= 0:
                 raise ValueError("Fallback threshold policy requires a positive authored n_half")
@@ -146,9 +148,9 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
                 for item in calibration
             }
             return _records(self._policy_id, calibration, thresholds, "calibration_shrinkage", quantile, lambdas)
-        if isinstance(policy, FederatedMatchedExceedancePolicyConfig):
+        if isinstance(policy, FederatedMatchedExceedanceThresholdPolicyRecord):
             return self._federated_matched(calibration, policy, quantile)
-        if isinstance(policy, FederatedFixedCoefficientPolicyConfig):
+        if isinstance(policy, FederatedFixedCoefficientThresholdPolicyRecord):
             coefficient = policy.fixed_k if policy.fixed_k is not None else request.selected_coefficient
             if coefficient is None:
                 raise ValueError("Fixed-k threshold requires an experiment-selected coefficient")
@@ -162,7 +164,7 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
         quantile: Probability,
     ) -> ThresholdSet:
         policy = self._policy
-        assert isinstance(policy, ClusterThresholdPolicyConfig)
+        assert isinstance(policy, ClusterThresholdPolicyRecord)
         calibration = request.calibration
         if len(calibration) < policy.cluster_count:
             raise ValueError("Cluster threshold has fewer eligible clients than configured clusters")
@@ -213,7 +215,7 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
     def _conformal(
         self,
         calibration: tuple[BenignCalibrationScores, ...],
-        policy: SplitConformalThresholdPolicyConfig,
+        policy: SplitConformalThresholdPolicyRecord,
         quantile: Probability,
     ) -> ThresholdSet:
         thresholds: dict[str, float] = {}
@@ -259,7 +261,7 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
     def _federated_matched(
         self,
         calibration: tuple[BenignCalibrationScores, ...],
-        policy: FederatedMatchedExceedancePolicyConfig,
+        policy: FederatedMatchedExceedanceThresholdPolicyRecord,
         quantile: Probability,
     ) -> ThresholdSet:
         minimum = policy.candidate_grid.get("minimum")

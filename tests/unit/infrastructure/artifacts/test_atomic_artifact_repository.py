@@ -8,6 +8,7 @@ from datp_core.domain.artifacts import (
     ArtifactFormat,
     ArtifactKey,
     ArtifactKind,
+    ArtifactParent,
 )
 from datp_core.domain.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
 from datp_core.domain.identifiers import ArtifactId
@@ -58,6 +59,50 @@ def test_repository_reuses_only_a_matching_frozen_artifact(tmp_path: Path) -> No
     )
     assert decision.can_reuse
     assert decision.existing_manifest is not None
+
+
+def test_artifact_declaring_itself_as_its_own_parent_is_rejected(tmp_path: Path) -> None:
+    request = _request()
+    self_referential = ArtifactCommitRequest(
+        artifact_key=request.artifact_key,
+        artifact_format=request.artifact_format,
+        scientific_fingerprint=request.scientific_fingerprint,
+        execution_fingerprint=request.execution_fingerprint,
+        payload_bytes=request.payload_bytes,
+        relative_path=request.relative_path,
+        parents=(
+            ArtifactParent(parent_key=request.artifact_key, scientific_fingerprint=request.scientific_fingerprint),
+        ),
+        schema_version=request.schema_version,
+        creation_timestamp=request.creation_timestamp,
+        environment_identity=request.environment_identity,
+    )
+    result = commit_artifact_atomically(self_referential, tmp_path, lock_timeout=1.0)
+    assert not result.success
+    assert result.error_message is not None
+    assert "own parent" in result.error_message
+
+
+def test_artifact_declaring_duplicate_parent_lineage_is_rejected(tmp_path: Path) -> None:
+    request = _request()
+    duplicate_parent = ArtifactKey(artifact_id=ArtifactId("some-parent"), kind=ArtifactKind.MATERIALIZED_DATASET)
+    parent_entry = ArtifactParent(parent_key=duplicate_parent, scientific_fingerprint=request.scientific_fingerprint)
+    with_duplicates = ArtifactCommitRequest(
+        artifact_key=request.artifact_key,
+        artifact_format=request.artifact_format,
+        scientific_fingerprint=request.scientific_fingerprint,
+        execution_fingerprint=request.execution_fingerprint,
+        payload_bytes=request.payload_bytes,
+        relative_path=request.relative_path,
+        parents=(parent_entry, parent_entry),
+        schema_version=request.schema_version,
+        creation_timestamp=request.creation_timestamp,
+        environment_identity=request.environment_identity,
+    )
+    result = commit_artifact_atomically(with_duplicates, tmp_path, lock_timeout=1.0)
+    assert not result.success
+    assert result.error_message is not None
+    assert "duplicate parent" in result.error_message
 
 
 def test_file_commit_copies_and_verifies_a_staged_payload_without_in_memory_payload(tmp_path: Path) -> None:

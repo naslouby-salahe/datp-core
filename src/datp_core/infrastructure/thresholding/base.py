@@ -6,18 +6,17 @@ from typing import Protocol, runtime_checkable
 
 from attrs import define
 
-from datp_core.config.models.protocol_config import TypedThresholdPolicyConfig
 from datp_core.domain.identifiers import PopulationId, ThresholdPolicyId
-from datp_core.domain.thresholding import BenignCalibrationScores, ThresholdSet
+from datp_core.domain.thresholding import BenignCalibrationScores, ThresholdPolicyRecord, ThresholdSet
 from datp_core.domain.values import Seed
 
 
 @define(frozen=True, slots=True, kw_only=True)
 class ThresholdConstructionRequest:
-    """Request payload containing calibration scores and typed resolved policy configuration."""
+    """Request payload containing calibration scores and the resolved domain policy record."""
 
     policy_id: ThresholdPolicyId
-    policy: TypedThresholdPolicyConfig
+    policy: ThresholdPolicyRecord
     calibration: tuple[BenignCalibrationScores, ...]
     population_id: PopulationId
     family_map: dict[str, str] | None = None

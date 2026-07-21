@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from enum import Enum
 from pathlib import Path
+from typing import cast
 
-from attrs import define
+from attrs import define, field
 
 from datp_core.domain.identifiers import DatasetId, DatasetSetupId, EligibilityPolicyId, MaterializationId
-from datp_core.domain.values import Probability, RelativePath, Seed
+from datp_core.domain.values import Probability, RelativePath, Seed, deep_freeze
 
 
 class AdapterKind(Enum):
@@ -70,13 +72,45 @@ class DatasetSetup:
     capabilities: tuple[str, ...]
 
 
+def _as_mapping_str_str_or_bool(value: object) -> Mapping[str, str | bool]:
+    return cast("Mapping[str, str | bool]", deep_freeze(value))
+
+
 @define(frozen=True, slots=True, kw_only=True)
 class DatasetMaterialization:
     identifier: MaterializationId
+    role: str | None = None
+    normalization_strategy: str
+    normalization_scope: str
+    vocabulary_fit_split: str | None = None
+    preprocessing_sequence: tuple[str, ...]
+    row_exclusion: Mapping[str, str | bool] = field(converter=_as_mapping_str_str_or_bool)
+    split_row_semantics: Mapping[str, str | bool] | None = None
+    infeasibility_policy: str | None = None
     split_method: str
     split_seed: Seed | None
     split_ratios: tuple[tuple[str, Probability], ...]
     chronological_ratios: tuple[tuple[str, Probability], ...] = ()
+    split_ordering_basis: str | None = None
+    split_ordering_scope: str | None = None
+    split_gap_handling: str | None = None
+    split_attack_rows: str | None = None
+    split_attack_test_membership: str | None = None
+    split_attack_ordering: str | None = None
+    split_benign_attack_deduplication: str | None = None
+    split_role_order: tuple[str, ...] | None = None
+    split_excluded_client_folders: tuple[str, ...] | None = None
+    split_exclusion_reason: str | None = None
+    split_ordering_field: str | None = None
+    split_ordering_sort: str | None = None
+    split_rollover_policy: str | None = None
+    split_rollover_scope: str | None = None
+    split_boundary_rule: str | None = None
+    split_boundary_index_formula: str | None = None
+    split_future_leakage_check: str | None = None
+    split_minimum_row_counts: Mapping[str, int] | None = None
+    split_missing_client_policy: str | None = None
+    split_chronology_unverifiable_policy: str | None = None
 
     def ratio(self, role: str) -> Probability:
         for configured_role, configured_ratio in self.split_ratios:

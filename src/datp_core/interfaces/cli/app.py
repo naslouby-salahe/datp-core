@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import cattrs
 import typer
 from rich.console import Console
 
-from datp_core.composition.root import build_application
+from datp_core.composition.root import build_application, build_config_only_application
+from datp_core.config.resolver import resolve_project_configuration
 from datp_core.domain.identifiers import DatasetId, ExperimentId
 from datp_core.interfaces.cli.formatters import print_catalogue_summary, print_planning_dag
 
@@ -27,28 +29,76 @@ app.add_typer(artifact_app, name="artifact")
 app.add_typer(results_app, name="results")
 
 console = Console()
+_converter = cattrs.Converter()
 
 
 @config_app.command("validate")
 def config_validate() -> None:
-    """Validate all YAML configuration documents against schema rules."""
-    application = build_application()
-    application.validate_configuration.execute()
+    """Validate all YAML configuration documents against schema and cross-reference rules."""
+    application = build_config_only_application()
+    report = application.validate_configuration.execute()
+    for warning in report.warnings:
+        console.print(f"[yellow]Warning:[/yellow] {warning}")
+    if not report.is_valid:
+        console.print("[bold red]Configuration validation failed:[/bold red]")
+        for error in report.errors:
+            console.print(f"  [red]-[/red] {error}")
+        raise typer.Exit(code=1)
     console.print("[bold green]All configuration documents strictly validated successfully![/bold green]")
 
 
 @config_app.command("explain-drift")
 def config_explain_drift(current: Path, expected: Path) -> None:
-    """Explain structural drift between two YAML configuration files."""
-    application = build_application()
+    """Explain structural drift between two authored YAML configuration files."""
+    application = build_config_only_application()
     drift = application.explain_authored_drift.execute(current, expected)
-    console.print_json(data=drift)
+    console.print_json(data=_converter.unstructure(drift))
+    if drift.has_drift:
+        raise typer.Exit(code=1)
+
+
+@config_app.command("explain-scientific-drift")
+def config_explain_scientific_drift(
+    current_config_dir: Path = typer.Option(..., help="Resolved configuration directory to treat as current"),
+    expected_config_dir: Path = typer.Option(..., help="Resolved configuration directory to treat as expected"),
+) -> None:
+    """Explain structured scientific drift between two independently resolved configurations."""
+    application = build_config_only_application()
+    current_config = resolve_project_configuration(config_dir=current_config_dir)
+    expected_config = resolve_project_configuration(config_dir=expected_config_dir)
+    drift = application.explain_scientific_drift.execute(current_config=current_config, expected_config=expected_config)
+    console.print_json(data=_converter.unstructure(drift))
+    if drift.has_drift:
+        raise typer.Exit(code=1)
+
+
+@config_app.command("explain-execution-drift")
+def config_explain_execution_drift(
+    current_config_dir: Path = typer.Option(..., help="Resolved configuration directory to treat as current"),
+    expected_config_dir: Path = typer.Option(..., help="Resolved configuration directory to treat as expected"),
+) -> None:
+    """Explain structured execution drift between two independently resolved configurations."""
+    application = build_config_only_application()
+    current_config = resolve_project_configuration(config_dir=current_config_dir)
+    expected_config = resolve_project_configuration(config_dir=expected_config_dir)
+    drift = application.explain_execution_drift.execute(current_config=current_config, expected_config=expected_config)
+    console.print_json(data=_converter.unstructure(drift))
+    if drift.has_drift:
+        raise typer.Exit(code=1)
+
+
+@config_app.command("fingerprint")
+def config_fingerprint() -> None:
+    """Print the resolved scientific and execution fingerprints for the active configuration."""
+    application = build_config_only_application()
+    scientific, execution = application.fingerprint_config.execute(application.config)
+    console.print_json(data={"scientific_fingerprint": scientific.value, "execution_fingerprint": execution.value})
 
 
 @catalogue_app.command("describe")
 def catalogue_describe() -> None:
     """Describe resolved scientific catalogue records."""
-    application = build_application()
+    application = build_config_only_application()
     resolved = application.describe_project.execute()
     print_catalogue_summary(resolved)
 
@@ -87,20 +137,6 @@ def experiment_run(experiment: str = typer.Option(..., "--config", "-c", help="E
         f"Run ID={report.run_id.value}, Outcomes={len(report.outcomes)}"
     )
     console.print(msg)
-
-
-@experiment_app.command("resume")
-def experiment_resume(experiment: str = typer.Option(..., "--config", "-c", help="Experiment name slug")) -> None:
-    """Resume execution of a partially completed experiment."""
-    application = build_application()
-    report = application.resume_experiment.execute(ExperimentId(experiment))
-    console.print(f"[bold green]Resumed Experiment {experiment}:[/bold green] Run ID={report.run_id.value}")
-
-
-@results_app.command("audit")
-def results_audit() -> None:
-    """Result auditing requires an authored audit profile and is not exposed ad hoc."""
-    raise typer.BadParameter("Use a configured audit profile through the experiment reporting workflow.")
 
 
 @results_app.command("query")

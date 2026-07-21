@@ -44,7 +44,7 @@ class YamlConfigurationReader:
     """Cohesive strict configuration reader loading YAML documents into validated Pydantic models."""
 
     @staticmethod
-    def _read_dict_from_yaml(file_path: Path) -> dict[str, JsonValue]:
+    def read_document(file_path: Path) -> dict[str, JsonValue]:
         if not file_path.exists():
             raise ConfigurationError(f"Configuration file does not exist: {file_path}", source_path=file_path)
         try:
@@ -67,7 +67,7 @@ class YamlConfigurationReader:
     def read_model(cls, file_path: Path, model_cls: type[TModel]) -> TModel:
         if model_cls is type(None) or not issubclass(model_cls, BaseModel):
             raise ConfigurationError(f"Invalid model class: {model_cls}", source_path=file_path)
-        data = cls._read_dict_from_yaml(file_path)
+        data = cls.read_document(file_path)
         try:
             return model_cls.model_validate(data)
         except ValidationError as exc:

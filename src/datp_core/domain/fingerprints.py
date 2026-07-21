@@ -47,7 +47,7 @@ class FingerprintPayload(NamedTuple):
     payload: CanonicalProjection
 
 
-def _canonicalize_value(obj: object) -> CanonicalProjection:
+def canonicalize_value(obj: object) -> CanonicalProjection:
     if isinstance(
         obj,
         (
@@ -68,11 +68,11 @@ def _canonicalize_value(obj: object) -> CanonicalProjection:
     if isinstance(obj, dict):
         if not all(isinstance(key, str) for key in obj):
             raise TypeError("Fingerprint mappings must use string keys")
-        return {key: _canonicalize_value(value) for key, value in sorted(obj.items())}
+        return {key: canonicalize_value(value) for key, value in sorted(obj.items())}
     if isinstance(obj, (list, tuple)):
-        return [_canonicalize_value(item) for item in obj]
+        return [canonicalize_value(item) for item in obj]
     if isinstance(obj, set):
-        return [_canonicalize_value(item) for item in sorted(obj, key=str)]
+        return [canonicalize_value(item) for item in sorted(obj, key=str)]
     if isinstance(obj, float):
         if not math.isfinite(obj):
             raise ValueError(f"Non-finite float values cannot be fingerprinted: {obj}")
@@ -87,7 +87,7 @@ def compute_scientific_fingerprint(scientific_projection: object) -> Fingerprint
     envelope = FingerprintPayload(
         schema_version=1,
         kind="scientific",
-        payload=_canonicalize_value(scientific_projection),
+        payload=canonicalize_value(scientific_projection),
     )
     json_bytes = dumps(
         envelope._asdict(),
@@ -104,7 +104,7 @@ def compute_execution_fingerprint(execution_projection: object) -> Fingerprint:
     envelope = FingerprintPayload(
         schema_version=1,
         kind="execution",
-        payload=_canonicalize_value(execution_projection),
+        payload=canonicalize_value(execution_projection),
     )
     json_bytes = dumps(
         envelope._asdict(),

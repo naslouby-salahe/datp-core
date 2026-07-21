@@ -21,7 +21,6 @@ class ArtifactKind(Enum):
     THRESHOLDS = "thresholds"
     CLIENT_METRICS = "client_metrics"
     STATISTICAL_SUMMARY = "statistical_summary"
-    STATISTICAL_RESULTS = "statistical_results"
     RESULT_REPORT = "result_report"
     REPORT = "report"
 
@@ -30,15 +29,13 @@ class ArtifactFormat(Enum):
     JSON = "json"
     PARQUET = "parquet"
     SAFETENSORS = "safetensors"
-    CSV = "csv"
     TEXT = "text"
 
 
 class ArtifactState(Enum):
-    COMMITTED = "committed"
-    PENDING = "pending"
-    CORRUPT = "corrupt"
-    INCOMPATIBLE = "incompatible"
+    """The atomic commit transaction is all-or-nothing: no partial/pending state is ever
+    reader-visible, so FROZEN is the only lifecycle state a committed manifest can carry."""
+
     FROZEN = "frozen"
 
 
@@ -46,7 +43,6 @@ class ArtifactCorruptionReason(Enum):
     CHECKSUM_MISMATCH = "checksum_mismatch"
     MANIFEST_MISSING = "manifest_missing"
     PAYLOAD_MISSING = "payload_missing"
-    FINGERPRINT_MISMATCH = "fingerprint_mismatch"
     SCHEMA_INCOMPATIBLE = "schema_incompatible"
 
 

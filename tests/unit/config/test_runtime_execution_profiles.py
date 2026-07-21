@@ -1,9 +1,13 @@
 """Resolved execution-profile record tests."""
 
+import shutil
 from pathlib import Path
 
 import pytest
+import yaml
+from pydantic import ValidationError
 
+from datp_core.config.resolver import resolve_project_configuration
 from datp_core.config.runtime_settings import (
     DeterminismStrictRecord,
     DevicePolicyRecord,
@@ -60,13 +64,66 @@ def test_runtime_policies_resolve_to_pure_records() -> None:
     assert runtime.resource_pressure_policy.on_budget_exceeded == "block_execution_and_report"
 
 
-def test_active_execution_profile_defaults_to_scientific() -> None:
-    runtime = resolve_runtime_configuration(authored_runtime=_authored())
-    assert runtime.active_execution_profile is runtime.execution_profiles["scientific"]
+def test_explicit_active_execution_profile_selection_is_honored() -> None:
+    settings = RuntimeBootstrapSettings(execution_profile="scientific")
+    runtime = resolve_runtime_configuration(authored_runtime=_authored(), bootstrap_settings=settings)
+    assert runtime.active_execution_profile is runtime.execution_profiles.get("scientific")
     assert runtime.active_execution_profile.identifier == "scientific"
+
+
+def test_missing_active_execution_profile_selection_is_rejected(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DATP_EXECUTION_PROFILE", raising=False)
+    with pytest.raises(ValidationError):
+        RuntimeBootstrapSettings()  # pyright: ignore[reportCallIssue]
 
 
 def test_unknown_active_execution_profile_is_rejected() -> None:
     settings = RuntimeBootstrapSettings(execution_profile="does_not_exist")
     with pytest.raises(ValueError, match="Active execution profile"):
         resolve_runtime_configuration(authored_runtime=_authored(), bootstrap_settings=settings)
+
+
+def _copy_real_config_tree(tmp_path: Path) -> Path:
+    for name in ("runtime.yaml", "protocols.yaml", "experiments.yaml"):
+        shutil.copy(f"configs/{name}", tmp_path / name)
+    (tmp_path / "datasets").mkdir()
+    for source in Path("configs/datasets").glob("*.yaml"):
+        shutil.copy(source, tmp_path / "datasets" / source.name)
+    return tmp_path
+
+
+def test_changing_active_execution_profile_changes_execution_identity_only(tmp_path: Path) -> None:
+    config_dir = _copy_real_config_tree(tmp_path)
+    scientific_config = resolve_project_configuration(
+        config_dir=config_dir,
+        bootstrap_settings=RuntimeBootstrapSettings(execution_profile="scientific"),
+    )
+    development_config = resolve_project_configuration(
+        config_dir=config_dir,
+        bootstrap_settings=RuntimeBootstrapSettings(execution_profile="development"),
+    )
+
+    assert scientific_config.scientific_fingerprint == development_config.scientific_fingerprint
+    assert scientific_config.execution_fingerprint != development_config.execution_fingerprint
+
+
+def test_editing_an_inactive_execution_profile_does_not_change_execution_identity(tmp_path: Path) -> None:
+    config_dir = _copy_real_config_tree(tmp_path)
+    expected_config = resolve_project_configuration(
+        config_dir=config_dir,
+        bootstrap_settings=RuntimeBootstrapSettings(execution_profile="scientific"),
+    )
+
+    with open(config_dir / "runtime.yaml") as handle:
+        runtime = yaml.safe_load(handle)
+    # "development" is not the active profile in this test -- editing it must not move identity.
+    runtime["execution_profiles"]["development"]["concurrency"]["worker_count"] = 999
+    (config_dir / "runtime.yaml").write_text(yaml.safe_dump(runtime, sort_keys=False))
+
+    current_config = resolve_project_configuration(
+        config_dir=config_dir,
+        bootstrap_settings=RuntimeBootstrapSettings(execution_profile="scientific"),
+    )
+
+    assert current_config.execution_fingerprint == expected_config.execution_fingerprint
+    assert current_config.scientific_fingerprint == expected_config.scientific_fingerprint
