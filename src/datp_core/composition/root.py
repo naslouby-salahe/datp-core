@@ -21,6 +21,7 @@ from datp_core.application.result_audit import AuditResultsUseCase, QueryResults
 from datp_core.application.stage_handlers import (
     DatasetMaterializationStageHandler,
     ModelTrainingStageHandler,
+    OperatingPointEvaluationStageHandler,
     PreflightStageHandler,
     ScoreGenerationStageHandler,
     ThresholdConstructionStageHandler,
@@ -152,6 +153,7 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
             ModelTrainingStageHandler(resolved_config, artifact_repository),
             ScoreGenerationStageHandler(resolved_config, artifact_repository),
             ThresholdConstructionStageHandler(resolved_config, artifact_repository, construct_th),
+            OperatingPointEvaluationStageHandler(resolved_config, artifact_repository),
         ),
     )
     statistical_analysis = StatisticalAnalysisUseCase(

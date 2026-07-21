@@ -55,6 +55,36 @@ def compute_operating_point_metrics(df: pl.DataFrame) -> pl.DataFrame:
             .then(pl.lit("available"))
             .otherwise(pl.lit("unavailable_missing_attack_class")),
         )
+        .with_columns(
+            balanced_accuracy=pl.when((pl.col("benign_total") > 0) & (pl.col("attack_total") > 0))
+            .then((pl.col("true_positive_rate") + (1.0 - pl.col("false_positive_rate"))) / 2.0)
+            .otherwise(None),
+            balanced_accuracy_status=pl.when(pl.col("benign_total") == 0)
+            .then(pl.lit("unavailable_missing_benign_class"))
+            .when(pl.col("attack_total") == 0)
+            .then(pl.lit("unavailable_missing_attack_class"))
+            .otherwise(pl.lit("available")),
+            macro_f1=pl.when((pl.col("benign_total") > 0) & (pl.col("attack_total") > 0))
+            .then(
+                (
+                    (
+                        (2.0 * pl.col("true_negatives"))
+                        / ((2.0 * pl.col("true_negatives")) + pl.col("false_positives") + pl.col("false_negatives"))
+                    )
+                    + (
+                        (2.0 * pl.col("true_positives"))
+                        / ((2.0 * pl.col("true_positives")) + pl.col("false_positives") + pl.col("false_negatives"))
+                    )
+                )
+                / 2.0
+            )
+            .otherwise(None),
+            macro_f1_status=pl.when(pl.col("benign_total") == 0)
+            .then(pl.lit("unavailable_missing_benign_class"))
+            .when(pl.col("attack_total") == 0)
+            .then(pl.lit("unavailable_missing_attack_class"))
+            .otherwise(pl.lit("available")),
+        )
         .sort("client_id")
         .collect()
     )

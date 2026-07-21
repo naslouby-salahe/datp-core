@@ -44,6 +44,7 @@ from datp_core.infrastructure.learning.pytorch_adapter import (
     score_materialized_split,
     set_deterministic_seeds,
 )
+from datp_core.infrastructure.tables.polars_engine import compute_operating_point_metrics
 from datp_core.infrastructure.tables.schemas import (
     validate_calibration_score_frame,
     validate_test_score_frame,
@@ -719,5 +720,65 @@ class ThresholdConstructionStageHandler:
                 job_id=job.job_id,
                 stage=job.stage,
                 error_message=commit.error_message or "threshold artifact commit failed",
+            )
+        return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+
+
+class OperatingPointEvaluationStageHandler:
+    """Evaluate configured thresholds against immutable test scores without score reuse across roles."""
+
+    stage = StageKind.OPERATING_POINT_EVALUATION
+
+    def __init__(self, config: ResolvedProjectConfiguration, repository: ArtifactRepository) -> None:
+        self._config = config
+        self._repository = repository
+
+    def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
+        relative_path = f"runs/{run_id.value}/{job.job_id.value}"
+        if self._repository.assess_reuse(
+            relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
+        ).can_reuse:
+            return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        thresholds = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(job.context).value}")
+        scores = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(job.context).value}")
+        if not thresholds.found or thresholds.payload_bytes is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Threshold artifact is unavailable"
+            )
+        if not scores.found or scores.payload_bytes is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Test score artifact is unavailable"
+            )
+        try:
+            threshold_frame = validate_threshold_frame(pl.read_parquet(BytesIO(thresholds.payload_bytes)))
+            score_frame = validate_test_score_frame(pl.read_parquet(BytesIO(scores.payload_bytes)))
+            evaluation = score_frame.join(threshold_frame.select("client_id", "threshold"), on="client_id", how="left")
+            if evaluation["threshold"].null_count() > 0:
+                raise ValueError("Threshold artifact does not cover every scored client")
+            metrics = compute_operating_point_metrics(evaluation).with_columns(
+                pl.lit(job.context.threshold_policy_id.value if job.context.threshold_policy_id else None).alias(
+                    "policy_id"
+                ),
+                pl.lit(job.context.seed).alias("seed"),
+            )
+        except (OSError, ValueError) as exc:
+            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+        payload = BytesIO()
+        metrics.write_parquet(payload)
+        commit = _commit_artifact(
+            self._repository,
+            self._config,
+            job.context,
+            artifact_key=job.output,
+            artifact_format=ArtifactFormat.PARQUET,
+            relative_path=relative_path,
+            parents=_parents(self._config, job.inputs),
+            payload=BytesPayload(payload_bytes=payload.getvalue()),
+        )
+        if not commit.success:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message=commit.error_message or "metric artifact commit failed",
             )
         return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
