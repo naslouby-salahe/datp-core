@@ -14,6 +14,7 @@ from safetensors.torch import load as load_safetensors
 from safetensors.torch import save as save_safetensors
 
 from datp_core.application.dataset_audit import AuditDatasetUseCase
+from datp_core.application.threshold_construction import ConstructThresholdsUseCase
 from datp_core.config.resolver import ResolvedProjectConfiguration
 from datp_core.domain.artifacts import (
     ArtifactCommitMetadata,
@@ -27,8 +28,9 @@ from datp_core.domain.artifacts import (
     FilePayload,
 )
 from datp_core.domain.checkpoints import select_anchor_checkpoint_round, select_lowest_validation_loss_checkpoint
-from datp_core.domain.identifiers import ArtifactId, DatasetId, RunId
+from datp_core.domain.identifiers import ArtifactId, ClientId, DatasetId, RunId
 from datp_core.domain.outcomes import StageJob, StageJobContext, StageJobOutcome, StageKind
+from datp_core.domain.thresholding import BenignCalibrationScores
 from datp_core.domain.values import Seed
 from datp_core.infrastructure.datasets.adapter_registry import DatasetAdapterRegistry
 from datp_core.infrastructure.datasets.source_inventory import build_source_inventory
@@ -42,7 +44,11 @@ from datp_core.infrastructure.learning.pytorch_adapter import (
     score_materialized_split,
     set_deterministic_seeds,
 )
-from datp_core.infrastructure.tables.schemas import validate_calibration_score_frame, validate_test_score_frame
+from datp_core.infrastructure.tables.schemas import (
+    validate_calibration_score_frame,
+    validate_test_score_frame,
+    validate_threshold_frame,
+)
 from datp_core.planning.identity import IdentityBuilder
 
 
@@ -612,3 +618,106 @@ def _score_split(kind: ArtifactKind) -> str | None:
     if kind is ArtifactKind.TEST_SCORES:
         return "test"
     return None
+
+
+class ThresholdConstructionStageHandler:
+    """Construct one configured threshold set from immutable benign calibration scores."""
+
+    stage = StageKind.THRESHOLD_CONSTRUCTION
+
+    def __init__(
+        self,
+        config: ResolvedProjectConfiguration,
+        repository: ArtifactRepository,
+        thresholds: ConstructThresholdsUseCase,
+    ) -> None:
+        self._config = config
+        self._repository = repository
+        self._thresholds = thresholds
+
+    def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
+        if job.context.threshold_policy_id is None or job.context.population_id is None or job.context.seed is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="Threshold construction requires policy, population, and seed",
+            )
+        relative_path = f"runs/{run_id.value}/{job.job_id.value}"
+        if self._repository.assess_reuse(
+            relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
+        ).can_reuse:
+            return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        calibration = self._repository.read(
+            f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(job.context).value}"
+        )
+        if not calibration.found or calibration.payload_bytes is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Calibration score artifact is unavailable"
+            )
+        experiment = self._config.experiments.get(job.context.experiment_id)
+        population = self._config.populations.get(job.context.population_id)
+        dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
+        evaluation = next((item for item in experiment.evaluations if item.label == job.context.evaluation_label), None)
+        if evaluation is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Evaluation configuration is unavailable"
+            )
+        if evaluation.overrides:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="Sweep-derived threshold overrides require explicit expanded jobs",
+            )
+        try:
+            scores = pl.read_parquet(BytesIO(calibration.payload_bytes))
+            validate_calibration_score_frame(scores)
+            grouped = tuple(
+                BenignCalibrationScores(
+                    client_id=ClientId(str(client_id[0])),
+                    values=tuple(float(value) for value in rows["score"].to_list()),
+                    population_id=job.context.population_id,
+                )
+                for client_id, rows in scores.group_by("client_id", maintain_order=True)
+            )
+            threshold_set = self._thresholds.execute(
+                job.context.threshold_policy_id,
+                grouped,
+                job.context.population_id,
+                dict(dataset.field_schema.label_fields.family_map)
+                if dataset.field_schema.label_fields.family_map
+                else None,
+                Seed(job.context.seed),
+                None,
+            )
+            output = pl.DataFrame(
+                {
+                    "client_id": [record.client_id.value for record in threshold_set.values],
+                    "threshold": [float(record.threshold) for record in threshold_set.values],
+                    "owner_kind": [record.owner for record in threshold_set.values],
+                    "effective_lambda": [record.effective_lambda for record in threshold_set.values],
+                    "policy_id": [threshold_set.policy_id.value] * len(threshold_set.values),
+                    "target_quantile": [threshold_set.target_quantile.value] * len(threshold_set.values),
+                }
+            )
+            validate_threshold_frame(output)
+        except (OSError, ValueError) as exc:
+            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+        payload = BytesIO()
+        output.write_parquet(payload)
+        commit = _commit_artifact(
+            self._repository,
+            self._config,
+            job.context,
+            artifact_key=job.output,
+            artifact_format=ArtifactFormat.PARQUET,
+            relative_path=relative_path,
+            parents=_parents(self._config, job.inputs),
+            payload=BytesPayload(payload_bytes=payload.getvalue()),
+        )
+        if not commit.success:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message=commit.error_message or "threshold artifact commit failed",
+            )
+        return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)

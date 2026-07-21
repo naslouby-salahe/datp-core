@@ -23,6 +23,7 @@ from datp_core.application.stage_handlers import (
     ModelTrainingStageHandler,
     PreflightStageHandler,
     ScoreGenerationStageHandler,
+    ThresholdConstructionStageHandler,
 )
 from datp_core.application.statistical_analysis import StatisticalAnalysisUseCase
 from datp_core.application.threshold_construction import ConstructThresholdsUseCase
@@ -140,6 +141,9 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
     artifact_repository = AtomicArtifactRepository(resolved_config.paths.outputs, lock_timeout=30.0)
     adapter_registry = _build_adapter_registry()
 
+    construct_th = ConstructThresholdsUseCase(
+        config=resolved_config, registry=_build_estimator_registry(resolved_config)
+    )
     executor = ExecuteExperimentUseCase(
         config=resolved_config,
         handlers=(
@@ -147,11 +151,8 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
             DatasetMaterializationStageHandler(resolved_config, artifact_repository, adapter_registry),
             ModelTrainingStageHandler(resolved_config, artifact_repository),
             ScoreGenerationStageHandler(resolved_config, artifact_repository),
+            ThresholdConstructionStageHandler(resolved_config, artifact_repository, construct_th),
         ),
-    )
-
-    construct_th = ConstructThresholdsUseCase(
-        config=resolved_config, registry=_build_estimator_registry(resolved_config)
     )
     statistical_analysis = StatisticalAnalysisUseCase(
         ScipyStatisticalAnalysisAdapter(),
