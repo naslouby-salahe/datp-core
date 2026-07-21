@@ -22,6 +22,7 @@ from datp_core.application.stage_handlers import (
     DatasetMaterializationStageHandler,
     ModelTrainingStageHandler,
     PreflightStageHandler,
+    ScoreGenerationStageHandler,
 )
 from datp_core.application.statistical_analysis import StatisticalAnalysisUseCase
 from datp_core.application.threshold_construction import ConstructThresholdsUseCase
@@ -145,6 +146,7 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
             PreflightStageHandler(resolved_config, artifact_repository),
             DatasetMaterializationStageHandler(resolved_config, artifact_repository, adapter_registry),
             ModelTrainingStageHandler(resolved_config, artifact_repository),
+            ScoreGenerationStageHandler(resolved_config, artifact_repository),
         ),
     )
 

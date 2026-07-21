@@ -73,6 +73,48 @@ def load_benign_client_tensors(
     return tuple(sorted(tensors, key=lambda item: item[0]))
 
 
+def score_materialized_split(
+    model: nn.Module,
+    path: Path,
+    *,
+    split: str,
+    feature_columns: tuple[str, ...],
+    batch_size: int,
+    device: str,
+) -> pl.DataFrame:
+    """Score one materialized split while retaining its immutable row identity."""
+    if split not in {"calibration", "test"}:
+        raise ValueError(f"Scoring does not authorize split '{split}'")
+    identity_columns = ("source_path", "source_row_index", "client_id", "split", "is_attack")
+    frame = pl.read_parquet(path, columns=[*identity_columns, *feature_columns])
+    selected = frame.filter(pl.col("split") == split)
+    if selected.is_empty():
+        raise ValueError(f"Materialized payload has no {split} rows to score")
+    if split == "calibration" and selected["is_attack"].any():
+        raise ValueError("Calibration scoring must not include attack rows")
+    if selected.select(pl.struct("source_path", "source_row_index").is_duplicated().any()).item():
+        raise ValueError("Score input contains duplicate row identities")
+    values = selected.select(*feature_columns).to_numpy()
+    if not np.isfinite(values).all():
+        raise ValueError("Score input contains non-finite feature values")
+    scores = compute_reconstruction_scores(
+        model,
+        torch.tensor(values, dtype=torch.float32),
+        batch_size=batch_size,
+        device=device,
+    ).numpy()
+    if not np.isfinite(scores).all() or (scores < 0.0).any():
+        raise ValueError("Model produced non-finite or negative reconstruction scores")
+    return (
+        selected.select(*identity_columns)
+        .with_columns(
+            pl.col("is_attack").cast(pl.Int8).alias("label"),
+            pl.Series("score", scores),
+        )
+        .drop("is_attack")
+    )
+
+
 class DynamicDenseAutoencoder(nn.Module):
     """Dynamic dense autoencoder architecture built from ModelArchitectureConfig."""
 

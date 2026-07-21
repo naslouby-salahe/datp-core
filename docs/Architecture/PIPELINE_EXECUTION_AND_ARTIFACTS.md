@@ -14,13 +14,15 @@ Scientific experiment meaning, configuration composition, or report layout.
 
 ## Current implementation boundary
 
-The current executor wires preflight, dataset materialization, and
-full-participation FedAvg model training. Materialization commits split,
-readiness, and preprocessing evidence; training requires CUDA, trains only
-on benign training rows, selects a checkpoint only from benign calibration
-loss, and commits SafeTensors weights with selection and derived-seed
-evidence. Unimplemented downstream stages report failure rather than a
-successful-looking skip.
+The current executor wires preflight, dataset materialization,
+full-participation FedAvg model training, and split-separated score
+generation. Materialization commits split, readiness, and preprocessing
+evidence; training requires CUDA, trains only on benign training rows,
+selects a checkpoint only from benign calibration loss, and commits
+SafeTensors weights with selection and derived-seed evidence. Scoring reads
+only that selected checkpoint and persists row-identified calibration or
+test Parquet without applying a threshold. Unimplemented downstream stages
+report failure rather than a successful-looking skip.
 
 > Configuration alignment: executable configuration paths and values are owned
 > by `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md`; this document does not create

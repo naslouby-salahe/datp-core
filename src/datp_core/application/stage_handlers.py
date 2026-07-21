@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import time
 from typing import Protocol
 
+import polars as pl
+from safetensors.torch import load as load_safetensors
 from safetensors.torch import save as save_safetensors
 
 from datp_core.application.dataset_audit import AuditDatasetUseCase
@@ -36,8 +39,10 @@ from datp_core.infrastructure.learning.pytorch_adapter import (
     federated_train_autoencoder,
     load_benign_client_tensors,
     require_cuda_training_device,
+    score_materialized_split,
     set_deterministic_seeds,
 )
+from datp_core.infrastructure.tables.schemas import validate_calibration_score_frame, validate_test_score_frame
 from datp_core.planning.identity import IdentityBuilder
 
 
@@ -494,3 +499,116 @@ class ModelTrainingStageHandler:
                 error_message=selection_commit.error_message or "selection commit failed",
             )
         return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+
+
+class ScoreGenerationStageHandler:
+    """Score one authorized materialized split from its selected model checkpoint."""
+
+    stage = StageKind.SCORE_GENERATION
+
+    def __init__(self, config: ResolvedProjectConfiguration, repository: ArtifactRepository) -> None:
+        self._config = config
+        self._repository = repository
+
+    def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
+        split = _score_split(job.output.kind)
+        if split is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Unknown score artifact kind"
+            )
+        relative_path = f"runs/{run_id.value}/{job.job_id.value}"
+        if self._repository.assess_reuse(
+            relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
+        ).can_reuse:
+            return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        training_path = f"runs/{run_id.value}/{IdentityBuilder.training_job_id(job.context).value}"
+        selection_key = ArtifactKey(
+            artifact_id=ArtifactId(f"{job.inputs[0].artifact_id.value}:selection"),
+            kind=ArtifactKind.CHECKPOINT_SELECTION,
+        )
+        if not self._repository.assess_reuse(
+            f"{training_path}.selection",
+            selection_key,
+            self._config.scientific_fingerprint,
+            self._config.execution_fingerprint,
+        ).can_reuse:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="Selected-checkpoint evidence is unavailable or incompatible",
+            )
+        checkpoint = self._repository.read(training_path)
+        materialization = self._repository.read(
+            f"runs/{run_id.value}/{IdentityBuilder.materialization_job_id(job.context).value}"
+        )
+        if not checkpoint.found or checkpoint.payload_bytes is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Model checkpoint is unavailable"
+            )
+        if not materialization.found or materialization.payload_bytes is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Materialization artifact is unavailable"
+            )
+        experiment = self._config.experiments.get(job.context.experiment_id)
+        profile = self._config.training_profiles.get(experiment.training_profile_id)
+        population = self._config.populations.get(experiment.population_ids[0])
+        dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
+        features = dataset.field_schema.model_features
+        if features is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Dataset has no model feature schema"
+            )
+        architecture = self._config.model_architectures.get(profile.model_architecture_id)
+        batching = self._config.batching_profiles.get(profile.batching_profile_id)
+        try:
+            if self._config.runtime.active_execution_profile.device_policy != "cuda_required":
+                raise ValueError("Score generation requires the configured CUDA-required execution profile")
+            with TemporaryDirectory(prefix="datp_scoring_") as temporary_directory:
+                materialized_path = Path(temporary_directory) / "materialized.parquet"
+                materialized_path.write_bytes(materialization.payload_bytes)
+                model = DynamicDenseAutoencoder(
+                    len(features.order), tuple(int(value.value) for value in architecture.hidden_dims)
+                )
+                model.load_state_dict(load_safetensors(checkpoint.payload_bytes))
+                scores = score_materialized_split(
+                    model,
+                    materialized_path,
+                    split=split,
+                    feature_columns=features.order,
+                    batch_size=int(batching.micro_batch_size.value),
+                    device=require_cuda_training_device(),
+                ).with_columns(
+                    pl.lit(job.inputs[0].artifact_id.value).alias("checkpoint_artifact_id"),
+                    pl.lit(job.context.seed).alias("seed"),
+                    pl.lit("higher_score_means_more_anomalous").alias("score_orientation"),
+                )
+        except (OSError, RuntimeError, ValueError) as exc:
+            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+        validated = (
+            validate_calibration_score_frame(scores) if split == "calibration" else validate_test_score_frame(scores)
+        )
+        payload = BytesIO()
+        validated.write_parquet(payload)
+        commit = _commit_artifact(
+            self._repository,
+            self._config,
+            job.context,
+            artifact_key=job.output,
+            artifact_format=ArtifactFormat.PARQUET,
+            relative_path=relative_path,
+            parents=_parents(self._config, (*job.inputs, selection_key)),
+            payload=BytesPayload(payload_bytes=payload.getvalue()),
+        )
+        if not commit.success:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message=commit.error_message or "score artifact commit failed"
+            )
+        return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+
+
+def _score_split(kind: ArtifactKind) -> str | None:
+    if kind is ArtifactKind.CALIBRATION_SCORES:
+        return "calibration"
+    if kind is ArtifactKind.TEST_SCORES:
+        return "test"
+    return None
