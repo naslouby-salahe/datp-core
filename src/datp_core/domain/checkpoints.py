@@ -48,3 +48,17 @@ def select_anchor_checkpoint_round(
         if relative_change < tolerance:
             return round_number
     return round_cap
+
+
+def select_lowest_validation_loss_checkpoint(
+    *, scheduled_rounds: Sequence[int], recorded_losses: Sequence[tuple[int, float]]
+) -> int:
+    """Select the lowest authorized benign validation loss, breaking ties by earliest round."""
+    schedule = tuple(scheduled_rounds)
+    if not schedule or len(set(schedule)) != len(schedule) or any(round_number < 1 for round_number in schedule):
+        raise ValueError("Checkpoint selection requires unique positive scheduled rounds")
+    losses = dict(recorded_losses)
+    missing = tuple(round_number for round_number in schedule if round_number not in losses)
+    if missing:
+        raise ValueError(f"Checkpoint selection is missing scheduled losses: {', '.join(map(str, missing))}")
+    return min(schedule, key=lambda round_number: (losses[round_number], round_number))

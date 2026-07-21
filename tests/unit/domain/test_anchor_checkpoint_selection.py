@@ -2,7 +2,7 @@
 
 from datp_core.config.resolver import resolve_project_configuration
 from datp_core.domain.catalogue import CheckpointConvergenceRecord
-from datp_core.domain.checkpoints import select_anchor_checkpoint_round
+from datp_core.domain.checkpoints import select_anchor_checkpoint_round, select_lowest_validation_loss_checkpoint
 from datp_core.domain.identifiers import CheckpointProfileId
 from datp_core.domain.values import PositiveFloat, PositiveInt
 
@@ -69,3 +69,10 @@ def test_resolved_anchor_profile_exposes_the_convergence_contract() -> None:
     round_grid = cfg.checkpoint_profiles.get(CheckpointProfileId("datp_core_round_grid"))
     assert round_grid.convergence is None
     assert "auroc_driven_selection" in round_grid.selection.forbidden_selectors
+
+
+def test_journal_selector_uses_scheduled_benign_losses_with_earliest_tie_break() -> None:
+    selected = select_lowest_validation_loss_checkpoint(
+        scheduled_rounds=(25, 50, 75), recorded_losses=((25, 0.2), (50, 0.1), (75, 0.1))
+    )
+    assert selected == 50

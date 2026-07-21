@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import random
 from collections.abc import Mapping
+from copy import deepcopy
 from pathlib import Path
 
 import numpy as np
+import polars as pl
 import torch
 import torch.nn as nn
+from attrs import define
 from torch.utils.data import DataLoader, TensorDataset
 
 from datp_core.domain.artifacts import ArtifactCommitResult, ArtifactKey, ArtifactParent
@@ -32,6 +35,27 @@ def set_deterministic_seeds(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
+
+
+def load_benign_training_tensors(path: Path, feature_columns: tuple[str, ...]) -> tuple[tuple[str, torch.Tensor], ...]:
+    """Load only configured benign training rows, ordered by client and materialization row order."""
+    if not feature_columns:
+        raise ValueError("Training requires configured model feature columns")
+    frame = pl.read_parquet(path, columns=["split", "client_id", "is_attack", *feature_columns])
+    required = {"split", "client_id", "is_attack", *feature_columns}
+    missing = sorted(required - set(frame.columns))
+    if missing:
+        raise ValueError(f"Materialized payload lacks training columns: {', '.join(missing)}")
+    training = frame.filter((pl.col("split") == "train") & ~pl.col("is_attack")).select("client_id", *feature_columns)
+    if training.is_empty():
+        raise ValueError("Materialized payload has no benign training rows")
+    tensors: list[tuple[str, torch.Tensor]] = []
+    for client_id, client_rows in training.group_by("client_id", maintain_order=True):
+        values = client_rows.select(*feature_columns).to_numpy()
+        if not np.isfinite(values).all():
+            raise ValueError(f"Training rows for client '{client_id[0]}' contain non-finite feature values")
+        tensors.append((str(client_id[0]), torch.tensor(values, dtype=torch.float32)))
+    return tuple(sorted(tensors, key=lambda item: item[0]))
 
 
 class DynamicDenseAutoencoder(nn.Module):
@@ -63,6 +87,133 @@ class DynamicDenseAutoencoder(nn.Module):
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         latent = self.encoder(x)
         return self.decoder(latent)
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class FederatedTrainingResult:
+    model: nn.Module
+    round_losses: tuple[tuple[int, float], ...]
+    scheduled_checkpoints: tuple[FederatedCheckpoint, ...]
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class FederatedCheckpoint:
+    round_number: int
+    state: tuple[tuple[str, torch.Tensor], ...]
+
+
+def federated_train_autoencoder(
+    model: nn.Module,
+    client_training_data: tuple[tuple[str, torch.Tensor], ...],
+    *,
+    rounds: int,
+    local_epochs: int,
+    learning_rate: float,
+    batch_size: int,
+    seed: int,
+    device: str,
+    beta_1: float,
+    beta_2: float,
+    epsilon: float,
+    weight_decay: float,
+    amsgrad: bool,
+    shuffle_each_epoch: bool,
+    checkpoint_rounds: tuple[int, ...],
+    proximal_mu: float | None = None,
+) -> FederatedTrainingResult:
+    """Run full-participation FedAvg or FedProx with client-size weighted aggregation."""
+    if rounds < 1 or local_epochs < 1:
+        raise ValueError("Federated training requires positive rounds and local epochs")
+    if not client_training_data:
+        raise ValueError("Federated training requires at least one client")
+    clients = tuple(sorted(client_training_data, key=lambda item: item[0]))
+    if len({client_id for client_id, _ in clients}) != len(clients):
+        raise ValueError("Federated training requires unique client identifiers")
+    if any(data.ndim != 2 or data.shape[0] == 0 for _, data in clients):
+        raise ValueError("Each federated client requires a non-empty two-dimensional training tensor")
+    if proximal_mu is not None and proximal_mu <= 0.0:
+        raise ValueError("FedProx requires a strictly positive proximal coefficient")
+    if any(round_number < 1 or round_number > rounds for round_number in checkpoint_rounds):
+        raise ValueError("Scheduled checkpoint rounds must fall within the configured round budget")
+    if len(set(checkpoint_rounds)) != len(checkpoint_rounds):
+        raise ValueError("Scheduled checkpoint rounds must be unique")
+
+    global_model = deepcopy(model)
+    losses: list[tuple[int, float]] = []
+    checkpoints: list[FederatedCheckpoint] = []
+    for round_index in range(rounds):
+        round_start = {name: tensor.detach().clone() for name, tensor in global_model.state_dict().items()}
+        local_models: list[tuple[int, dict[str, torch.Tensor]]] = []
+        for client_index, (_, data) in enumerate(clients):
+            local_model = deepcopy(global_model)
+            trained = train_autoencoder(
+                local_model,
+                data,
+                local_epochs,
+                learning_rate,
+                batch_size,
+                seed + (round_index * len(clients)) + client_index,
+                device,
+                beta_1,
+                beta_2,
+                epsilon,
+                weight_decay,
+                amsgrad,
+                shuffle_each_epoch,
+                round_start if proximal_mu is not None else None,
+                proximal_mu,
+            )
+            local_models.append((int(data.shape[0]), trained.state_dict()))
+        global_model.load_state_dict(_weighted_average_state(local_models))
+        round_number = round_index + 1
+        losses.append((round_number, _weighted_reconstruction_loss(global_model, clients, device)))
+        if round_number in checkpoint_rounds:
+            checkpoints.append(
+                FederatedCheckpoint(
+                    round_number=round_number,
+                    state=tuple(
+                        (name, value.detach().cpu().clone()) for name, value in global_model.state_dict().items()
+                    ),
+                )
+            )
+    return FederatedTrainingResult(
+        model=global_model,
+        round_losses=tuple(losses),
+        scheduled_checkpoints=tuple(checkpoints),
+    )
+
+
+def _weighted_average_state(client_states: list[tuple[int, dict[str, torch.Tensor]]]) -> dict[str, torch.Tensor]:
+    total_rows = sum(row_count for row_count, _ in client_states)
+    if total_rows < 1:
+        raise ValueError("Federated aggregation requires positive client row counts")
+    keys = set(client_states[0][1])
+    if any(set(state) != keys for _, state in client_states[1:]):
+        raise ValueError("Federated aggregation requires identical model state keys")
+    averaged: dict[str, torch.Tensor] = {}
+    for key in keys:
+        weighted = torch.zeros_like(client_states[0][1][key].detach().cpu())
+        for row_count, state in client_states:
+            weighted += row_count * state[key].detach().cpu()
+        averaged[key] = weighted / total_rows
+    return averaged
+
+
+def _weighted_reconstruction_loss(
+    model: nn.Module, clients: tuple[tuple[str, torch.Tensor], ...], device: str
+) -> float:
+    model = model.to(device)
+    model.eval()
+    weighted_loss = 0.0
+    total_rows = 0
+    with torch.no_grad():
+        for _, data in clients:
+            batch = data.to(device)
+            loss = torch.mean((model(batch) - batch) ** 2).item()
+            row_count = int(data.shape[0])
+            weighted_loss += row_count * loss
+            total_rows += row_count
+    return weighted_loss / total_rows
 
 
 def fedprox_objective(
