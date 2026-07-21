@@ -9,9 +9,9 @@ from datp_core.infrastructure.statistics.scipy_adapter import ScipyStatisticalAn
 
 def test_bca_rejects_fewer_than_ten_paired_seed_differences() -> None:
     with pytest.raises(StatisticalProcedureError, match="at least ten"):
-        ScipyStatisticalAnalysisAdapter().bootstrap_ci(np.array([0.1]), 10_000, 0.95, 300)
+        ScipyStatisticalAnalysisAdapter().bootstrap_ci(np.array([0.1]), 10_000, 0.95, 300, "bca_bootstrap")
 
 
 def test_bca_rejects_identical_paired_seed_differences() -> None:
     with pytest.raises(StatisticalProcedureError, match="identical"):
-        ScipyStatisticalAnalysisAdapter().bootstrap_ci(np.full(10, 0.1), 10_000, 0.95, 300)
+        ScipyStatisticalAnalysisAdapter().bootstrap_ci(np.full(10, 0.1), 10_000, 0.95, 300, "bca_bootstrap")

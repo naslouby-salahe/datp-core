@@ -29,10 +29,13 @@ def _compute_bca_bootstrap_ci(
     resample_count: int,
     confidence_level: float,
     analysis_seed: int,
+    method: str,
 ) -> ConfidenceInterval:
     """BCa bootstrap confidence interval estimation."""
-    if len(data) < 10:
+    if method == "bca_bootstrap" and len(data) < 10:
         raise StatisticalProcedureError("BCa requires at least ten valid paired seed differences")
+    if method == "percentile_bootstrap" and len(data) < 2:
+        raise StatisticalProcedureError("Percentile bootstrap requires at least two valid paired seed differences")
     if not np.isfinite(data).all():
         raise StatisticalProcedureError("BCa requires finite paired seed differences")
     if np.ptp(data) == 0.0:
@@ -44,7 +47,7 @@ def _compute_bca_bootstrap_ci(
             np.mean,
             n_resamples=resample_count,
             confidence_level=confidence_level,
-            method="BCa",
+            method="BCa" if method == "bca_bootstrap" else "percentile",
             rng=np.random.default_rng(analysis_seed),
         )
     except ValueError as exc:
@@ -55,7 +58,7 @@ def _compute_bca_bootstrap_ci(
         lower_bound=float(res.confidence_interval.low),
         upper_bound=float(res.confidence_interval.high),
         confidence_level=Probability(confidence_level),
-        method="bca_bootstrap",
+        method=method,
     )
 
 
@@ -68,12 +71,14 @@ class ScipyStatisticalAnalysisAdapter:
         resample_count: int,
         confidence_level: float,
         analysis_seed: int,
+        method: str,
     ) -> ConfidenceInterval:
         return _compute_bca_bootstrap_ci(
             data,
             resample_count=resample_count,
             confidence_level=confidence_level,
             analysis_seed=analysis_seed,
+            method=method,
         )
 
     def wilcoxon(self, left: np.ndarray, right: np.ndarray) -> HypothesisTestResult:

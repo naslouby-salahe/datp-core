@@ -14,6 +14,7 @@ from safetensors.torch import load as load_safetensors
 from safetensors.torch import save as save_safetensors
 
 from datp_core.application.dataset_audit import AuditDatasetUseCase
+from datp_core.application.statistical_analysis import StatisticalAnalysisUseCase
 from datp_core.application.threshold_construction import ConstructThresholdsUseCase
 from datp_core.config.resolver import ResolvedProjectConfiguration
 from datp_core.domain.artifacts import (
@@ -27,7 +28,9 @@ from datp_core.domain.artifacts import (
     BytesPayload,
     FilePayload,
 )
+from datp_core.domain.catalogue import PairedThresholdAnalysisRecord
 from datp_core.domain.checkpoints import select_anchor_checkpoint_round, select_lowest_validation_loss_checkpoint
+from datp_core.domain.evaluation import MetricStatus, calculate_fpr_dispersion
 from datp_core.domain.identifiers import ArtifactId, ClientId, DatasetId, RunId
 from datp_core.domain.outcomes import StageJob, StageJobContext, StageJobOutcome, StageKind
 from datp_core.domain.thresholding import BenignCalibrationScores
@@ -47,6 +50,7 @@ from datp_core.infrastructure.learning.pytorch_adapter import (
 from datp_core.infrastructure.tables.polars_engine import compute_operating_point_metrics
 from datp_core.infrastructure.tables.schemas import (
     validate_calibration_score_frame,
+    validate_client_metric_frame,
     validate_test_score_frame,
     validate_threshold_frame,
 )
@@ -782,3 +786,113 @@ class OperatingPointEvaluationStageHandler:
                 error_message=commit.error_message or "metric artifact commit failed",
             )
         return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+
+
+class StatisticalAnalysisStageHandler:
+    """Persist configured paired seed analyses from immutable evaluation artifacts."""
+
+    stage = StageKind.STATISTICAL_ANALYSIS
+
+    def __init__(
+        self, config: ResolvedProjectConfiguration, repository: ArtifactRepository, analysis: StatisticalAnalysisUseCase
+    ) -> None:
+        self._config = config
+        self._repository = repository
+        self._analysis = analysis
+
+    def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
+        relative_path = f"runs/{run_id.value}/{job.job_id.value}"
+        if self._repository.assess_reuse(
+            relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
+        ).can_reuse:
+            return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        experiment = self._config.experiments.get(job.context.experiment_id)
+        paired_analyses = tuple(item for item in experiment.analyses if isinstance(item, PairedThresholdAnalysisRecord))
+        if len(paired_analyses) != len(experiment.analyses):
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="Statistical handler does not yet support every configured analysis kind",
+            )
+        cohort = self._config.seed_cohorts.get(experiment.seed_cohort_id)
+        try:
+            results = [
+                self._analyze_paired(analysis, experiment, cohort.training_seeds, run_id)
+                for analysis in paired_analyses
+            ]
+        except (OSError, ValueError) as exc:
+            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+        payload = json.dumps(results, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        commit = _commit_artifact(
+            self._repository,
+            self._config,
+            job.context,
+            artifact_key=job.output,
+            artifact_format=ArtifactFormat.JSON,
+            relative_path=relative_path,
+            parents=_parents(self._config, job.inputs),
+            payload=BytesPayload(payload_bytes=payload),
+        )
+        if not commit.success:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message=commit.error_message or "statistical artifact commit failed",
+            )
+        return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+
+    def _analyze_paired(
+        self, analysis: PairedThresholdAnalysisRecord, experiment, seeds, run_id: RunId
+    ) -> dict[str, object]:
+        left = tuple(
+            self._evaluation_metric(experiment, seed.value, analysis.first_evaluation, analysis.primary_metric, run_id)
+            for seed in seeds
+        )
+        right = tuple(
+            self._evaluation_metric(experiment, seed.value, analysis.second_evaluation, analysis.primary_metric, run_id)
+            for seed in seeds
+        )
+        record = self._analysis.analyze_paired_seed_differences(
+            left,
+            right,
+            analysis.primary_metric,
+            self._evaluation_policy(experiment, analysis.first_evaluation),
+            self._evaluation_policy(experiment, analysis.second_evaluation),
+            analysis.statistical_profile,
+            self._config.seed_cohorts.get(experiment.seed_cohort_id).bootstrap_analysis_seed,
+        )
+        return {
+            "analysis_label": analysis.label,
+            "metric": record.metric_id.value,
+            "mean_difference": record.mean_difference,
+            "confidence_interval": [record.confidence_interval.lower_bound, record.confidence_interval.upper_bound],
+            "p_value": None if record.hypothesis_test is None else record.hypothesis_test.p_value,
+            "rank_biserial": record.effect_size,
+            "resample_count": record.resample_count,
+            "analysis_seed": record.analysis_seed.value,
+        }
+
+    def _evaluation_metric(self, experiment, seed: int, label: str, metric: str, run_id: RunId) -> float:
+        if metric != "cv_fpr":
+            raise ValueError(f"Statistical execution does not support configured metric '{metric}'")
+        context = StageJobContext(experiment_id=experiment.identifier, seed=seed, evaluation_label=label)
+        artifact = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
+        if not artifact.found or artifact.payload_bytes is None:
+            raise ValueError(f"Evaluation artifact is unavailable for seed {seed}, label '{label}'")
+        frame = validate_client_metric_frame(pl.read_parquet(BytesIO(artifact.payload_bytes)))
+        fprs = tuple(
+            float(value)
+            for value in frame.filter(pl.col("false_positive_rate_status") == "available")[
+                "false_positive_rate"
+            ].to_list()
+        )
+        dispersion = calculate_fpr_dispersion(fprs, cv_instability_threshold=0.005, quantile_method="linear")
+        if dispersion.coefficient_of_variation.status is not MetricStatus.AVAILABLE:
+            raise ValueError("Configured CV(FPR) is unavailable for paired statistical analysis")
+        assert dispersion.coefficient_of_variation.value is not None
+        return dispersion.coefficient_of_variation.value
+
+    @staticmethod
+    def _evaluation_policy(experiment, label: str) -> str:
+        evaluation = next(item for item in experiment.evaluations if item.label == label)
+        return evaluation.threshold_policy_id.value

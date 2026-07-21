@@ -24,6 +24,7 @@ class StatisticalAnalysisPort(Protocol):
         resample_count: int,
         confidence_level: float,
         analysis_seed: int,
+        method: str,
     ) -> ConfidenceInterval: ...
 
     def wilcoxon(self, left: np.ndarray, right: np.ndarray) -> HypothesisTestResult: ...
@@ -51,8 +52,14 @@ class StatisticalAnalysisUseCase:
         analysis_seed: Seed,
     ) -> PairedSeedDifferenceRecord:
         profile = self._profiles.get(statistical_profile_id)
-        if profile.method != "bca_bootstrap" or profile.resample_count is None or profile.confidence_level is None:
-            raise ValueError(f"Statistical profile '{statistical_profile_id.value}' is not an executable BCa profile")
+        if (
+            profile.method not in {"bca_bootstrap", "percentile_bootstrap"}
+            or profile.resample_count is None
+            or profile.confidence_level is None
+        ):
+            raise ValueError(
+                f"Statistical profile '{statistical_profile_id.value}' is not an executable bootstrap profile"
+            )
         arr_a = np.array(scores_policy_a, dtype=np.float64)
         arr_b = np.array(scores_policy_b, dtype=np.float64)
         if arr_a.shape != arr_b.shape:
@@ -65,6 +72,7 @@ class StatisticalAnalysisUseCase:
             resample_count=profile.resample_count.value,
             confidence_level=profile.confidence_level.value,
             analysis_seed=analysis_seed.value,
+            method=profile.method,
         )
         test_res = self._statistics.wilcoxon(arr_a, arr_b) if len(arr_a) >= 5 else None
 

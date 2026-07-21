@@ -24,6 +24,7 @@ from datp_core.application.stage_handlers import (
     OperatingPointEvaluationStageHandler,
     PreflightStageHandler,
     ScoreGenerationStageHandler,
+    StatisticalAnalysisStageHandler,
     ThresholdConstructionStageHandler,
 )
 from datp_core.application.statistical_analysis import StatisticalAnalysisUseCase
@@ -145,6 +146,10 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
     construct_th = ConstructThresholdsUseCase(
         config=resolved_config, registry=_build_estimator_registry(resolved_config)
     )
+    statistical_analysis = StatisticalAnalysisUseCase(
+        ScipyStatisticalAnalysisAdapter(),
+        resolved_config.statistical_profiles,
+    )
     executor = ExecuteExperimentUseCase(
         config=resolved_config,
         handlers=(
@@ -154,11 +159,8 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
             ScoreGenerationStageHandler(resolved_config, artifact_repository),
             ThresholdConstructionStageHandler(resolved_config, artifact_repository, construct_th),
             OperatingPointEvaluationStageHandler(resolved_config, artifact_repository),
+            StatisticalAnalysisStageHandler(resolved_config, artifact_repository, statistical_analysis),
         ),
-    )
-    statistical_analysis = StatisticalAnalysisUseCase(
-        ScipyStatisticalAnalysisAdapter(),
-        resolved_config.statistical_profiles,
     )
     audit_svc = DuckDbAuditService(config=resolved_config)
     query_results = QueryResultsUseCase(audit_svc)
