@@ -22,15 +22,13 @@ def test_protocol_resolution_module_has_no_model_dump_call_in_fingerprint_assemb
 
 
 def test_threshold_policy_projection_uses_domain_field_names_not_pydantic_aliases() -> None:
-    """A stray ``model_dump(mode="json")`` on the raw Pydantic model would have produced
-    JSON-mode-specific formatting; the unified cattrs path must not reintroduce it."""
+    # cattrs unstructured projection must use attrs field names, never Pydantic JSON-mode aliases.
     config = resolve_project_configuration()
     policy_id = next(iter(config.threshold_policies))
     policy = config.threshold_policies.get(policy_id)
 
-    # The domain record type itself must not be a Pydantic model (already covered by
-    # test_threshold_policy_records.py) -- here we assert its unstructured projection form
-    # is a plain dict keyed by the exact attrs field names, with no '$defs'/schema artifacts.
+    # The domain record must not be Pydantic -- assert unstructured projection is a plain dict
+    # keyed by exact attrs field names, with no '$defs'/schema artifacts.
     projected = unstructure_projection(policy)
     assert isinstance(projected, dict)
     assert "$defs" not in projected

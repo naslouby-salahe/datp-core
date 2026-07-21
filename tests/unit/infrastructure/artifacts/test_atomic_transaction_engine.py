@@ -1,6 +1,3 @@
-"""Theme 8 — Atomic Artifact Transaction Deduplication: exhaustive tests for both
-payload variants through the single private transaction engine."""
-
 from __future__ import annotations
 
 import json
@@ -27,8 +24,6 @@ from datp_core.infrastructure.artifacts.atomic_commit import (
     commit_artifact_atomically,
 )
 from datp_core.infrastructure.artifacts.manifest_codec import CURRENT_ARTIFACT_SCHEMA_VERSION, decode_manifest
-
-# ── helpers ───────────────────────────────────────────────────────────────────
 
 
 def _metadata(**overrides: object) -> ArtifactCommitMetadata:
@@ -58,9 +53,6 @@ def _file_request(source_file: str, **meta_overrides: object) -> ArtifactCommitR
     return ArtifactCommitRequest(metadata=_metadata(**meta_overrides), payload=FilePayload(source_file=source_file))
 
 
-# ── 1. successful commit (bytes) ──────────────────────────────────────────────
-
-
 def test_bytes_commit_succeeds_and_produces_correct_layout(tmp_path: Path) -> None:
     result = commit_artifact_atomically(_bytes_request(), tmp_path, lock_timeout=1.0)
     assert result.success
@@ -70,9 +62,6 @@ def test_bytes_commit_succeeds_and_produces_correct_layout(tmp_path: Path) -> No
     assert target.is_dir()
     assert (target / "manifest.json").exists()
     assert (target / "payload.text").exists()
-
-
-# ── 2. successful commit (file) ───────────────────────────────────────────────
 
 
 def test_file_commit_succeeds_and_copies_payload(tmp_path: Path) -> None:
@@ -94,9 +83,6 @@ def test_file_commit_leaves_source_file_intact(tmp_path: Path) -> None:
     assert source.read_bytes() == b"original"
 
 
-# ── 3. existing frozen target ─────────────────────────────────────────────────
-
-
 def test_existing_frozen_target_is_rejected_for_bytes(tmp_path: Path) -> None:
     assert commit_artifact_atomically(_bytes_request(), tmp_path, lock_timeout=1.0).success
     second = commit_artifact_atomically(_bytes_request(), tmp_path, lock_timeout=1.0)
@@ -113,9 +99,6 @@ def test_existing_frozen_target_is_rejected_for_file(tmp_path: Path) -> None:
     assert not second.success
     assert second.error_message is not None
     assert "already exists" in second.error_message
-
-
-# ── 4. escaping relative path ─────────────────────────────────────────────────
 
 
 @pytest.mark.parametrize("bad_path", ["/absolute/path", "../escape", "sub/../../escape", "reports/../escape"])
@@ -136,9 +119,6 @@ def test_escaping_relative_path_is_rejected_for_file(bad_path: str, tmp_path: Pa
     assert "escapes" in result.error_message
 
 
-# ── 5. missing/non-file staged source ─────────────────────────────────────────
-
-
 def test_missing_staged_source_is_rejected(tmp_path: Path) -> None:
     result = commit_artifact_atomically(_file_request(str(tmp_path / "no_such_file.dat")), tmp_path, lock_timeout=1.0)
     assert not result.success
@@ -153,9 +133,6 @@ def test_directory_as_staged_source_is_rejected(tmp_path: Path) -> None:
     assert not result.success
     assert result.error_message is not None
     assert "missing" in result.error_message
-
-
-# ── 6. self-parent ────────────────────────────────────────────────────────────
 
 
 def test_self_parent_is_rejected_for_bytes(tmp_path: Path) -> None:
@@ -191,9 +168,6 @@ def test_self_parent_is_rejected_for_file(tmp_path: Path) -> None:
     assert "own parent" in result.error_message
 
 
-# ── 7. duplicate parent ───────────────────────────────────────────────────────
-
-
 def test_duplicate_parent_is_rejected_for_bytes(tmp_path: Path) -> None:
     dup_key = ArtifactKey(artifact_id=ArtifactId("dup"), kind=ArtifactKind.MATERIALIZED_DATASET)
     parent = ArtifactParent(parent_key=dup_key, scientific_fingerprint=_metadata().scientific_fingerprint)
@@ -214,9 +188,6 @@ def test_duplicate_parent_is_rejected_for_file(tmp_path: Path) -> None:
     assert not result.success
     assert result.error_message is not None
     assert "duplicate parent" in result.error_message
-
-
-# ── 8. payload checksum ───────────────────────────────────────────────────────
 
 
 def test_payload_checksum_is_stored_for_bytes(tmp_path: Path) -> None:
@@ -248,9 +219,6 @@ def test_byte_and_file_checksums_match_for_identical_content(tmp_path: Path) -> 
     assert bytes_result.manifest is not None
     assert file_result.manifest is not None
     assert bytes_result.manifest.payload_checksum == file_result.manifest.payload_checksum
-
-
-# ── 9. manifest bytes and decoded fields ──────────────────────────────────────
 
 
 def test_manifest_bytes_are_identical_for_equivalent_metadata(tmp_path: Path) -> None:
@@ -314,9 +282,6 @@ def test_manifest_round_trips_all_fields(tmp_path: Path) -> None:
     assert decoded.is_frozen is True
 
 
-# ── 10. payload filename extension ────────────────────────────────────────────
-
-
 def test_payload_filename_uses_format_value(tmp_path: Path) -> None:
     result = commit_artifact_atomically(
         _bytes_request(artifact_format=ArtifactFormat.PARQUET), tmp_path, lock_timeout=1.0
@@ -331,9 +296,6 @@ def test_payload_filename_for_safetensors_format(tmp_path: Path) -> None:
     )
     assert result.success
     assert (tmp_path / "reports/test-artifact/payload.safetensors").exists()
-
-
-# ── 11. lock-file location ────────────────────────────────────────────────────
 
 
 def test_lock_file_is_created_adjacent_to_target(tmp_path: Path) -> None:
@@ -361,9 +323,6 @@ def test_lock_target_path_equality_bytes_vs_file(tmp_path: Path) -> None:
     assert file_manifest
 
 
-# ── 12. repository read ───────────────────────────────────────────────────────
-
-
 def test_repository_read_returns_payload_bytes_for_bytes_commit(tmp_path: Path) -> None:
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
     assert repository.commit(_bytes_request(b"read me")).success
@@ -388,9 +347,6 @@ def test_repository_read_returns_not_found_for_missing(tmp_path: Path) -> None:
     assert not result.found
 
 
-# ── 13. repository inspect ────────────────────────────────────────────────────
-
-
 def test_repository_inspect_does_not_load_payload_bytes(tmp_path: Path) -> None:
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
     assert repository.commit(_bytes_request(b"large payload" * 100)).success
@@ -398,9 +354,6 @@ def test_repository_inspect_does_not_load_payload_bytes(tmp_path: Path) -> None:
     assert result.found
     assert result.manifest is not None
     assert result.payload_bytes is None  # inspect never loads payload
-
-
-# ── 14. corruption reasons ────────────────────────────────────────────────────
 
 
 def test_corruption_manifest_missing(tmp_path: Path) -> None:
@@ -451,9 +404,6 @@ def test_corruption_schema_incompatible(tmp_path: Path) -> None:
     result = repository.inspect("reports/test-artifact")
     assert not result.found
     assert result.corruption_reason == ArtifactCorruptionReason.SCHEMA_INCOMPATIBLE
-
-
-# ── 15. reuse compatibility ───────────────────────────────────────────────────
 
 
 def test_reuse_accepts_matching_frozen_artifact_bytes(tmp_path: Path) -> None:
@@ -525,16 +475,10 @@ def test_reuse_rejects_missing_artifact(tmp_path: Path) -> None:
     assert decision.reason == "artifact_not_committed"
 
 
-# ── 16. parent-directory fsync behavior ───────────────────────────────────────
-
-
 def test_parent_directory_is_created_by_commit(tmp_path: Path) -> None:
     commit_artifact_atomically(_bytes_request(relative_path="deep/nested/artifact"), tmp_path, lock_timeout=1.0)
     assert (tmp_path / "deep/nested/artifact").is_dir()
     assert (tmp_path / "deep/nested/artifact/manifest.json").exists()
-
-
-# ── 17. no partial reader-visible artifact after injected failure ─────────────
 
 
 def test_failure_before_replace_leaves_no_visible_partial_artifact_bytes(tmp_path: Path) -> None:
@@ -589,9 +533,6 @@ def test_successful_commit_produces_exactly_manifest_and_payload(tmp_path: Path)
     assert contents == {"manifest.json", "payload.json"}
 
 
-# ── projection/fingerprint equality ───────────────────────────────────────────
-
-
 def test_fingerprints_are_identical_for_bytes_and_file_with_same_metadata(tmp_path: Path) -> None:
     content = b"same data"
     source = tmp_path / "staged.dat"
@@ -608,9 +549,6 @@ def test_fingerprints_are_identical_for_bytes_and_file_with_same_metadata(tmp_pa
     assert file_result.manifest is not None
     assert bytes_result.manifest.scientific_fingerprint == file_result.manifest.scientific_fingerprint
     assert bytes_result.manifest.execution_fingerprint == file_result.manifest.execution_fingerprint
-
-
-# ── strict manifest decode parity ─────────────────────────────────────────────
 
 
 def test_strict_manifest_decode_is_identical_for_bytes_and_file(tmp_path: Path) -> None:
@@ -631,8 +569,6 @@ def test_strict_manifest_decode_is_identical_for_bytes_and_file(tmp_path: Path) 
     assert bytes_decoded.schema_version == file_decoded.schema_version
     assert bytes_decoded.is_frozen == file_decoded.is_frozen
 
-
-# ── no duplicate transaction lifecycle code ───────────────────────────────────
 
 # This is a structural claim verified by the engine design:
 #   - _execute_atomic_transaction is the single private engine

@@ -24,7 +24,6 @@ class FakeQueryService:
 
 
 def test_query_results_use_case_delegates_to_port() -> None:
-    """QueryResultsUseCase must delegate execute() to the injected port."""
     fake = FakeQueryService()
     use_case = QueryResultsUseCase(fake)
 
@@ -35,7 +34,6 @@ def test_query_results_use_case_delegates_to_port() -> None:
 
 
 def test_audit_results_use_case_delegates_to_port() -> None:
-    """AuditResultsUseCase must delegate execute() to the injected port."""
     fake = FakeQueryService()
     use_case = AuditResultsUseCase(fake)
 

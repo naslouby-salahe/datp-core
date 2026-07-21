@@ -1,5 +1,3 @@
-"""Conformance: the source package exposes the expected responsibility-oriented layers."""
-
 from __future__ import annotations
 
 from pathlib import Path

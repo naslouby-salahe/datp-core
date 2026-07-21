@@ -1,11 +1,3 @@
-"""Previously-dropped experiment/analysis contract fields now change scientific identity.
-
-Each test targets one authored block that was silently discarded before this repair (see
-DECISION_LOG / CHANGELOG) and proves two things: the field participates in
-the scientific fingerprint (a value change produces a different fingerprint), and -- for the one
-field explicitly classified AUTHORING_METADATA -- a prose-only change does *not*.
-"""
-
 from __future__ import annotations
 
 import attrs

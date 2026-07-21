@@ -1,5 +1,3 @@
-"""Fingerprint determinism and semantic-type tests."""
-
 from pathlib import Path
 
 from datp_core.domain.fingerprints import (

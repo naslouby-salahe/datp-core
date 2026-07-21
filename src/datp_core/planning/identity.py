@@ -31,8 +31,6 @@ class IdentityBuilder:
             raise ValueError("seed is required for per-seed job identity")
         return str(seed)
 
-    # ── JobId ──────────────────────────────────────────────────────────
-
     @staticmethod
     def preflight_job_id(ctx: StageJobContext) -> JobId:
         return JobId(f"{ctx.experiment_id.value}:preflight")
@@ -77,8 +75,6 @@ class IdentityBuilder:
     def report_job_id(ctx: StageJobContext) -> JobId:
         return JobId(f"{ctx.experiment_id.value}:report_generation")
 
-    # ── ArtifactId ─────────────────────────────────────────────────────
-
     @staticmethod
     def preflight_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(f"{ctx.experiment_id.value}:preflight_status")
@@ -122,8 +118,6 @@ class IdentityBuilder:
     @staticmethod
     def final_report_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(f"{ctx.experiment_id.value}:final_report")
-
-    # ── ArtifactKey ────────────────────────────────────────────────────
 
     @staticmethod
     def preflight_key(ctx: StageJobContext) -> ArtifactKey:
@@ -187,8 +181,6 @@ class IdentityBuilder:
             artifact_id=IdentityBuilder.final_report_artifact_id(ctx),
             kind=ArtifactKind.RESULT_REPORT,
         )
-
-    # ── StageJob ───────────────────────────────────────────────────────
 
     @staticmethod
     def preflight_job(ctx: StageJobContext) -> tuple[JobId, ArtifactKey]:

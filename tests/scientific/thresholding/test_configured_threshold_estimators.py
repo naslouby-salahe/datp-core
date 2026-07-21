@@ -1,5 +1,3 @@
-"""Configured threshold-policy estimator tests."""
-
 import pytest
 
 from datp_core.application.threshold_construction import ConstructThresholdsUseCase

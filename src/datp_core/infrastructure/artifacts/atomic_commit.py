@@ -68,7 +68,6 @@ def _execute_atomic_transaction(
     """
     metadata = request.metadata
 
-    # --- Pre-I/O validation ---------------------------------------------------
     lineage_error = _validate_parent_lineage(metadata.artifact_key, metadata.parents)
     if lineage_error is not None:
         return ArtifactCommitResult(success=False, error_message=lineage_error)
@@ -77,14 +76,12 @@ def _execute_atomic_transaction(
     if relative_path.is_absolute() or ".." in relative_path.parts:
         return ArtifactCommitResult(success=False, error_message="Artifact relative path escapes the repository")
 
-    # --- Staged-file validation (before lock, before any transaction I/O) ------
     resolved_source: Path | None = None
     if isinstance(request.payload, FilePayload):
         resolved_source = Path(request.payload.source_file).resolve()
         if not resolved_source.is_file():
             return ArtifactCommitResult(success=False, error_message="Staged artifact source file is missing")
 
-    # --- Locked transaction ---------------------------------------------------
     target_dir = outputs_dir / metadata.relative_path
     lock_file = outputs_dir / f"{metadata.relative_path}.lock"
     lock_file.parent.mkdir(parents=True, exist_ok=True)
@@ -100,7 +97,6 @@ def _execute_atomic_transaction(
             tmp_dir = Path(tmp_dir_str)
             payload_path = tmp_dir / f"payload.{metadata.artifact_format.value}"
 
-            # --- Payload materialization (only variant-specific step) ----------
             if isinstance(request.payload, BytesPayload):
                 with open(payload_path, "wb") as f:
                     f.write(request.payload.payload_bytes)
@@ -116,7 +112,6 @@ def _execute_atomic_transaction(
                     os.fsync(target.fileno())
                 checksum = compute_file_checksum(payload_path)
 
-            # --- Manifest construction (identical for both variants) -----------
             manifest = ArtifactManifest(
                 artifact_key=metadata.artifact_key,
                 artifact_format=metadata.artifact_format,
@@ -134,14 +129,12 @@ def _execute_atomic_transaction(
                 is_frozen=True,
             )
 
-            # --- Manifest write + fsync (identical) ----------------------------
             manifest_path = tmp_dir / "manifest.json"
             with open(manifest_path, "wb") as f:
                 f.write(encode_manifest(manifest))
                 f.flush()
                 os.fsync(f.fileno())
 
-            # --- Atomic directory replacement + parent fsync (identical) -------
             target_dir.parent.mkdir(parents=True, exist_ok=True)
             os.replace(tmp_dir, target_dir)
             parent_fd = os.open(target_dir.parent, os.O_RDONLY)

@@ -1,22 +1,9 @@
-"""Conformance: every authored experiment-catalogue field has an explicit disposition.
+"""Every authored experiment-catalogue leaf field has an explicit SCIENTIFIC / EXECUTION /
+AUTHORING_METADATA disposition. This test introspects the live Pydantic model tree and compares
+it against the _DISPOSITIONS table; it fails when a field is added, renamed, or removed without
+a reviewed disposition decision.
 
-Each leaf field reachable from ``AuthoredExperimentsCatalogueConfig`` must be classified as exactly
-one of ``SCIENTIFIC`` (must be losslessly represented in the resolved domain / scientific
-fingerprint), ``EXECUTION`` (affects only how a run executes, not what is claimed), or
-``AUTHORING_METADATA`` (narrow, defensible display-only prose with no scientific or execution
-meaning). This test introspects the live Pydantic model tree and compares it against the
-`_DISPOSITIONS` table below by structural path -- it fails if a field is added, renamed, or removed
-without an explicit, reviewed disposition decision. Adding a field to `_DISPOSITIONS` is a scientific
-judgment call, not a mechanical unblock: see the mission's "Stop conditions" before classifying a new
-field AUTHORING_METADATA or EXECUTION.
-
-Scope: this walker currently covers only `AuthoredExperimentsCatalogueConfig` (experiments.yaml),
-where a prior audit found confirmed silent-drop gaps (analysis/evaluation/prerequisite/
-capability-requirement fields, and catalogue-level capabilities/suppression/readiness/eligibility-gate/
-analysis-convention blocks). Extending this walker to `AuthoredDatasetConfig`, `AuthoredProtocolsConfig`,
-and `AuthoredRuntimeConfig` is tracked as residual follow-up work (see final report) -- protocols.yaml
-and runtime.yaml were the subject of the immediately preceding hardening pass and dataset_config.py's
-~170 leaves require a comparably sized dedicated surgical pass.
+Scope: AuthoredExperimentsCatalogueConfig only. Dataset/protocol/runtime extension is residual.
 """
 
 from __future__ import annotations
@@ -30,9 +17,7 @@ from datp_core.config.models.experiment_config import AuthoredExperimentsCatalog
 
 Disposition = Literal["SCIENTIFIC", "EXECUTION", "AUTHORING_METADATA"]
 
-# Path -> disposition. Paths use "." as a field separator; a repeated container (list/dict of a
-# BaseModel) collapses to a single segment (its field name), since every element/value shares the
-# same disposition. See the module docstring for scope.
+# "."-delimited paths; repeated-container fields collapse to their field name.
 _DISPOSITIONS: dict[str, Disposition] = {
     "schema_version": "EXECUTION",
     "study_populations.dataset": "SCIENTIFIC",

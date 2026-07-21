@@ -1,5 +1,3 @@
-"""Bounded N-BaIoT staged Parquet commit integration test."""
-
 from pathlib import Path
 
 import polars as pl

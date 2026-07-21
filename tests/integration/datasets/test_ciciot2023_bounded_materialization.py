@@ -1,5 +1,3 @@
-"""Bounded CICIoT2023 merged CSV materialization integration test."""
-
 from pathlib import Path
 
 import polars as pl

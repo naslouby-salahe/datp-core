@@ -1,9 +1,3 @@
-"""Golden tests for resolver decomposition.
-
-Captures the complete resolved representation before the refactor so every
-subsequent change can be verified for identity preservation.
-"""
-
 from __future__ import annotations
 
 import os
@@ -30,9 +24,6 @@ def _resolved() -> ResolvedProjectConfiguration:
     )
 
 
-# ── Fingerprint stability ───────────────────────────────────────────────────
-
-
 def test_scientific_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
     assert _resolved.scientific_fingerprint.value == (
         "ecc4739edcb7afa3261fe6ba3e27dd9a505c826422841627d8bd177dd8c65fd1"
@@ -41,9 +32,6 @@ def test_scientific_fingerprint_is_stable(_resolved: ResolvedProjectConfiguratio
 
 def test_execution_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
     assert _resolved.execution_fingerprint.value == ("d9340977ebf4d70e86b3e30f85b3b9672bc2ed1c23bfdfaa45feb86d4c0c3dfa")
-
-
-# ── Registry cardinality ────────────────────────────────────────────────────
 
 
 def test_registry_cardinality(_resolved: ResolvedProjectConfiguration) -> None:
@@ -66,9 +54,6 @@ def test_registry_cardinality(_resolved: ResolvedProjectConfiguration) -> None:
     assert len(r.report_profiles) > 0
     assert len(r.result_types) > 0
     assert len(r.eligibility_gates._items) > 0  # pyright: ignore[reportPrivateUsage]
-
-
-# ── Registry key order ──────────────────────────────────────────────────────
 
 
 def test_dataset_key_order(_resolved: ResolvedProjectConfiguration) -> None:
@@ -94,9 +79,6 @@ def test_experiment_key_order(_resolved: ResolvedProjectConfiguration) -> None:
     assert len(keys) == 23
     assert keys[0] == "anchor_reproduction"
     assert keys[-1] == "operational_alert_burden"
-
-
-# ── Projection section coverage ─────────────────────────────────────────────
 
 
 def test_scientific_projection_includes_all_sections(_resolved: ResolvedProjectConfiguration) -> None:
@@ -155,9 +137,6 @@ def test_execution_projection_includes_all_sections(_resolved: ResolvedProjectCo
     assert set(ep.keys()) == expected
 
 
-# ── Pydantic leak check ─────────────────────────────────────────────────────
-
-
 def test_no_pydantic_objects_in_resolved_state(_resolved: ResolvedProjectConfiguration) -> None:
     from pydantic import BaseModel
 
@@ -182,9 +161,6 @@ def test_no_pydantic_objects_in_resolved_state(_resolved: ResolvedProjectConfigu
     _check(_resolved)
 
 
-# ── Deterministic re-resolution ─────────────────────────────────────────────
-
-
 def test_repeated_resolution_is_identical() -> None:
     os.environ.setdefault("DATP_EXECUTION_PROFILE", "scientific")
     r1 = resolve_project_configuration(
@@ -199,9 +175,6 @@ def test_repeated_resolution_is_identical() -> None:
     assert r1.execution_fingerprint == r2.execution_fingerprint
     assert r1.scientific_projection == r2.scientific_projection
     assert r1.execution_projection == r2.execution_projection
-
-
-# ── Cross-reference errors preserve context ─────────────────────────────────
 
 
 def test_cross_reference_error_preserves_context(_resolved: ResolvedProjectConfiguration) -> None:

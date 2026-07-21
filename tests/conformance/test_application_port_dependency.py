@@ -1,11 +1,3 @@
-"""Conformance: application use cases depend on ports, not concrete infrastructure.
-
-After Theme 5, the application layer must not import:
-- Concrete dataset writer functions (nbaiot.py, ciciot2023.py)
-- DuckDbAuditService
-- Concrete threshold estimator implementations (estimators.py)
-"""
-
 from __future__ import annotations
 
 import ast

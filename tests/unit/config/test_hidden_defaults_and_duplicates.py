@@ -1,5 +1,3 @@
-"""Regression tests for Phase-1 hidden-default removal, lossy sweep fix, and duplicate rejection."""
-
 from __future__ import annotations
 
 import shutil
@@ -65,8 +63,6 @@ def test_sweep_variable_requires_exactly_one_of_values_or_conditions() -> None:
 
 
 def test_list_of_string_sweep_values_are_retained_losslessly_not_dropped() -> None:
-    """Regression test: fingerprint_feature_subset's list-of-string sweep values used to be
-    silently filtered out entirely by an ``isinstance(value, str | int | float)`` check."""
     cfg = resolve_project_configuration()
     experiment = cfg.experiments.get(ExperimentId("cluster_and_family_threshold_mechanism"))
     sweep_by_name = {sweep.name: sweep for sweep in experiment.sweeps}
@@ -79,8 +75,6 @@ def test_list_of_string_sweep_values_are_retained_losslessly_not_dropped() -> No
 
 
 def test_condition_shaped_sweep_is_resolved_not_dropped() -> None:
-    """Regression test: sweeps using authored 'conditions' (not 'values') used to resolve to
-    an always-empty tuple because only sweep.values was ever read."""
     cfg = resolve_project_configuration()
     experiment = cfg.experiments.get(ExperimentId("controlled_heterogeneity_response"))
     sweep_by_name = {sweep.name: sweep for sweep in experiment.sweeps}

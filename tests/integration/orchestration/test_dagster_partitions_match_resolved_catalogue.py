@@ -1,5 +1,3 @@
-"""Dagster partition derivation integration tests."""
-
 from datp_core.composition.root import build_application
 from datp_core.orchestration.dagster.definitions import build_definitions
 from datp_core.orchestration.dagster.partitions import experiment_partitions, seed_partitions
