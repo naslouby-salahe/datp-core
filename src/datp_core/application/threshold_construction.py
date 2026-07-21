@@ -7,21 +7,16 @@ from datp_core.domain.identifiers import PopulationId, ThresholdPolicyId
 from datp_core.domain.thresholding import BenignCalibrationScores, ThresholdSet
 from datp_core.domain.values import Seed, TypedDomainRegistry
 from datp_core.infrastructure.thresholding.base import ThresholdConstructionRequest, ThresholdEstimator
-from datp_core.infrastructure.thresholding.estimators import ConfiguredThresholdEstimator
-
-
-def build_estimator_registry(
-    config: ResolvedProjectConfiguration,
-) -> TypedDomainRegistry[ThresholdPolicyId, ThresholdEstimator]:
-    """Bind every estimator to its single resolved policy; no adapter-side policy values exist."""
-    estimators: dict[ThresholdPolicyId, ThresholdEstimator] = {
-        policy_id: ConfiguredThresholdEstimator(policy_id, policy)
-        for policy_id, policy in config.threshold_policies.items()
-    }
-    return TypedDomainRegistry(_items=estimators)
 
 
 class ConstructThresholdsUseCase:
+    """Construct threshold sets using estimators injected by the composition root.
+
+    The estimator registry is built from infrastructure implementations in the
+    composition root; this use case only depends on the Protocol, not any
+    concrete estimator class.
+    """
+
     def __init__(
         self,
         config: ResolvedProjectConfiguration,

@@ -2,8 +2,8 @@
 
 import pytest
 
-from datp_core.application.threshold_construction import ConstructThresholdsUseCase, build_estimator_registry
-from datp_core.composition.root import build_application
+from datp_core.application.threshold_construction import ConstructThresholdsUseCase
+from datp_core.composition.root import _build_estimator_registry, build_application
 from datp_core.domain.identifiers import ClientId, PopulationId, ThresholdPolicyId
 from datp_core.domain.thresholding import BenignCalibrationScores, ThresholdSet
 
@@ -22,7 +22,7 @@ def _execute(
     policy_id: ThresholdPolicyId, calibration: tuple[BenignCalibrationScores, ...], coefficient: float | None = None
 ) -> ThresholdSet:
     config = build_application().config
-    use_case = ConstructThresholdsUseCase(config, build_estimator_registry(config))
+    use_case = ConstructThresholdsUseCase(config, _build_estimator_registry(config))
     return use_case.execute(policy_id, calibration, PopulationId("nbaiot_natural_devices"), None, None, coefficient)
 
 
@@ -52,4 +52,4 @@ def test_conformal_and_federated_configured_policies_produce_finite_thresholds(
 
 def test_registry_matches_complete_authored_policy_catalogue() -> None:
     config = build_application().config
-    assert set(build_estimator_registry(config).keys()) == set(config.threshold_policies)
+    assert set(_build_estimator_registry(config).keys()) == set(config.threshold_policies)

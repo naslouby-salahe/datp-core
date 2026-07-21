@@ -143,7 +143,7 @@ def experiment_run(experiment: str = typer.Option(..., "--config", "-c", help="E
 def results_query(sql: str = typer.Argument(..., help="SQL query string")) -> None:
     """Run interactive DuckDB query over Parquet result artifacts."""
     application = build_application()
-    res = application.audit_service.execute_query(sql)
+    res = application.query_results.execute(sql)
     console.print(res)
 
 

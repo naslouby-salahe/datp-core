@@ -4,7 +4,7 @@ from pathlib import Path
 
 from datp_core.application.experiment_planning import PlanExperimentUseCase
 from datp_core.application.stage_handlers import DatasetMaterializationStageHandler
-from datp_core.composition.root import build_application
+from datp_core.composition.root import _build_adapter_registry, build_application
 from datp_core.domain.artifacts import ArtifactCommitRequest, ArtifactFormat
 from datp_core.domain.identifiers import ExperimentId, RunId
 from datp_core.domain.outcomes import JobExecutionStatus, StageKind
@@ -35,6 +35,6 @@ def test_materialization_reuses_a_matching_frozen_artifact_without_reading_raw_s
             environment_identity="test",
         )
     ).success
-    outcome = DatasetMaterializationStageHandler(app.config, repository).execute(job, run_id)
+    outcome = DatasetMaterializationStageHandler(app.config, repository, _build_adapter_registry()).execute(job, run_id)
     assert outcome.status is JobExecutionStatus.REUSED
     assert outcome.produced_artifact == job.output
