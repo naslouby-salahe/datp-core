@@ -11,9 +11,27 @@ from datp_core.infrastructure.datasets.nbaiot import (
     consolidate_nbaiot_parquet_sources,
     encode_nbaiot_split_as_parquet,
     materialize_nbaiot_source_row,
+    partition_dirichlet_rows,
     split_nbaiot_chronological_gapped_rows,
     write_nbaiot_source_parquet,
 )
+
+
+def test_dirichlet_partition_preserves_roles_capacity_and_seed_determinism() -> None:
+    rows = tuple(
+        (split, domain, f"{split}_{domain}.csv", row_index)
+        for split in ("train", "calibration", "test")
+        for domain in ("device_a", "device_b")
+        for row_index in range(4)
+    )
+
+    first = partition_dirichlet_rows(rows, client_count=3, alpha=0.5, seed=0)
+    second = partition_dirichlet_rows(rows, client_count=3, alpha=0.5, seed=0)
+
+    assert first == second
+    assert len(first.assignments) == len(rows)
+    assert len({(path, row_index) for path, _, row_index, _ in first.assignments}) == len(rows)
+    assert {client_id for _, _, _, client_id in first.assignments} == {"synthetic_00", "synthetic_01", "synthetic_02"}
 
 
 def test_nbaiot_parquet_payload_carries_split_label_provenance_and_features(tmp_path: Path) -> None:

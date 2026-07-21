@@ -7,6 +7,7 @@ from io import BytesIO
 from pathlib import Path
 from random import Random
 
+import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 from attrs import define
@@ -167,6 +168,46 @@ def random_fractional_roles(
     for index in indices[train_count : train_count + calibration_count]:
         roles[index] = "calibration"
     return tuple(roles)
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class DirichletPartition:
+    proportions: tuple[tuple[str, tuple[float, ...]], ...]
+    assignments: tuple[tuple[str, str, int, str], ...]
+
+
+def partition_dirichlet_rows(
+    rows: tuple[tuple[str, str, str, int], ...], *, client_count: int, alpha: float, seed: int
+) -> DirichletPartition:
+    """Allocate split-preserving source rows to synthetic clients with locked capacity scoring."""
+    if client_count < 1 or alpha <= 0.0:
+        raise ValueError("Dirichlet partition requires positive client count and alpha")
+    domains = tuple(sorted({domain for _, domain, _, _ in rows}))
+    if not domains:
+        raise ValueError("Dirichlet partition requires source rows")
+    generator = np.random.default_rng(seed)
+    client_ids = tuple(f"synthetic_{index:02d}" for index in range(client_count))
+    draws = generator.dirichlet(np.full(len(domains), alpha), size=client_count)
+    domain_index = {domain: index for index, domain in enumerate(domains)}
+    assignments: list[tuple[str, str, int, str]] = []
+    for split in sorted({split for split, _, _, _ in rows}):
+        role_rows = sorted((row for row in rows if row[0] == split), key=lambda row: (row[1], row[2], row[3]))
+        remaining = [
+            len(role_rows) // client_count + (index < len(role_rows) % client_count) for index in range(client_count)
+        ]
+        for _, domain, source_path, source_row_index in role_rows:
+            candidates = [index for index, capacity in enumerate(remaining) if capacity > 0]
+            winner = max(candidates, key=lambda index: (draws[index, domain_index[domain]] / remaining[index], -index))
+            remaining[winner] -= 1
+            assignments.append((source_path, domain, source_row_index, client_ids[winner]))
+    if len({(path, row_index) for path, _, row_index, _ in assignments}) != len(assignments):
+        raise ValueError("Dirichlet partition assigned a source row more than once")
+    return DirichletPartition(
+        proportions=tuple(
+            (client_id, tuple(float(value) for value in draws[index])) for index, client_id in enumerate(client_ids)
+        ),
+        assignments=tuple(assignments),
+    )
 
 
 def write_nbaiot_source_parquet(
