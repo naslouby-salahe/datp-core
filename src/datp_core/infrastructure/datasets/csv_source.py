@@ -51,8 +51,10 @@ type LabeledSourceRowValidation = LabeledSourceRow | SourceRowFailure
 def iter_numeric_csv_source(path: Path, required_headers: tuple[str, ...]) -> Iterator[SourceRowValidation]:
     """Yield validated source rows or explicit rejections without retaining a whole file."""
     with path.open("r", encoding="utf-8", newline="") as source:
-        reader = csv.DictReader(source)
-        fieldnames = tuple(reader.fieldnames or ())
+        reader = csv.reader(source)
+        raw_headers = next(reader)
+        fieldnames = tuple(raw_headers)
+        header_to_index = {header: idx for idx, header in enumerate(raw_headers)}
         missing = tuple(header for header in required_headers if header not in fieldnames)
         if missing:
             raise ValueError(f"Source {path} is missing required headers: {', '.join(missing)}")
@@ -60,7 +62,7 @@ def iter_numeric_csv_source(path: Path, required_headers: tuple[str, ...]) -> It
             values: list[float] = []
             reason: str | None = None
             for header in required_headers:
-                raw_value = record[header]
+                raw_value = record[header_to_index[header]]
                 if raw_value is None or raw_value.strip() == "":
                     reason = f"blank numeric feature '{header}'"
                     break
@@ -96,22 +98,25 @@ def iter_labeled_numeric_csv_source(
 ) -> Iterator[LabeledSourceRowValidation]:
     """Stream numeric features plus a non-blank label, retaining rejection provenance."""
     with path.open("r", encoding="utf-8", newline="") as source:
-        reader = csv.DictReader(source)
-        fieldnames = tuple(reader.fieldnames or ())
+        reader = csv.reader(source)
+        raw_headers = next(reader)
+        fieldnames = tuple(raw_headers)
+        header_to_index = {header: idx for idx, header in enumerate(raw_headers)}
         required_headers = feature_headers + (label_header,)
+        field_count = len(raw_headers)
         missing = tuple(header for header in required_headers if header not in fieldnames)
         if missing:
             raise ValueError(f"Source {path} is missing required headers: {', '.join(missing)}")
         for source_row_index, record in enumerate(reader, start=1):
-            if None in record or any(record[header] is None for header in required_headers):
+            if len(record) != field_count:
                 yield SourceRowFailure(
                     source_path=path,
                     source_row_index=source_row_index,
                     reason="field count differs from configured header",
                 )
                 continue
-            raw_label = record[label_header]
-            if raw_label is None or not raw_label.strip():
+            raw_label = record[header_to_index[label_header]]
+            if not raw_label.strip():
                 yield SourceRowFailure(
                     source_path=path,
                     source_row_index=source_row_index,
@@ -121,8 +126,8 @@ def iter_labeled_numeric_csv_source(
             values: list[float] = []
             reason: str | None = None
             for header in feature_headers:
-                raw_value = record[header]
-                if raw_value is None or raw_value.strip() == "":
+                raw_value = record[header_to_index[header]]
+                if raw_value.strip() == "":
                     reason = f"blank numeric feature '{header}'"
                     break
                 try:

@@ -105,13 +105,13 @@ def _inventory_source_tree(
     normal_group_dirs = getattr(contract, "normal_group_directories", ())
 
     if device_dirs or normal_group_dirs:
-        candidates = list(source_root.rglob("*.csv"))
+        candidates = source_root.rglob("*.csv")
     else:
         pattern = tree.file_pattern
         if "**" in pattern:
-            candidates = list(source_root.rglob(pattern))
+            candidates = source_root.rglob(pattern)
         else:
-            candidates = list(source_root.glob(pattern))
+            candidates = source_root.glob(pattern)
 
     filtered: list[Path] = []
     for path in candidates:
