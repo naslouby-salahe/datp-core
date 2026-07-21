@@ -32,7 +32,7 @@ class ExecuteExperimentUseCase:
     def execute(self, experiment_id: ExperimentId) -> ExperimentExecutionReport:
         graph = self._planner.execute(experiment_id)
         sorted_jobs = graph.lexicographical_topological_sort()
-        outcomes = []
+        outcomes: list[StageJobOutcome] = []
         outcomes_by_job_id: dict[JobId, StageJobOutcome] = {}
         successful_cnt = 0
         reused_cnt = 0
@@ -50,10 +50,9 @@ class ExecuteExperimentUseCase:
             )
             handler = self._handlers.get(job.stage)
             outcome = (
-                StageJobOutcome(
+                StageJobOutcome.skipped(
                     job_id=job.job_id,
                     stage=job.stage,
-                    status=JobExecutionStatus.SKIPPED,
                     error_message=(
                         "Unavailable prerequisite jobs: "
                         + ", ".join(dependency.value for dependency in unavailable_dependencies)
@@ -62,10 +61,9 @@ class ExecuteExperimentUseCase:
                 if unavailable_dependencies
                 else handler.execute(job, run_id)
                 if handler is not None
-                else StageJobOutcome(
+                else StageJobOutcome.skipped(
                     job_id=job.job_id,
                     stage=job.stage,
-                    status=JobExecutionStatus.SKIPPED,
                     error_message="No stage handler is registered",
                 )
             )

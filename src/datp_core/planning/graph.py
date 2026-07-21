@@ -87,6 +87,7 @@ class PlanningGraph:
                 StageJob(
                     job_id=j.job_id,
                     stage=j.stage,
+                    context=j.context,
                     inputs=j.inputs,
                     output=j.output,
                     dependencies=direct_preds,

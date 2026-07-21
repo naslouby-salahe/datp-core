@@ -6,6 +6,7 @@ from attrs import define
 
 from datp_core.domain.artifacts import ArtifactKey, ArtifactKind
 from datp_core.domain.identifiers import JobId
+from datp_core.domain.outcomes import StageKind
 from datp_core.planning.graph import PlanningGraph
 
 
@@ -58,11 +59,11 @@ class ExecutionPlanValidator:
                         f"Job '{job.job_id}' consumes artifact '{inp.artifact_id}' which has no producer in the plan"
                     )
 
-            if job.stage.value == "threshold_construction" and any(
+            if job.stage is StageKind.THRESHOLD_CONSTRUCTION and any(
                 item.kind is ArtifactKind.TEST_SCORES for item in job.inputs
             ):
                 errors.append(f"Threshold job '{job.job_id}' must not consume test scores")
-            if job.stage.value == "operating_point_evaluation" and any(
+            if job.stage is StageKind.OPERATING_POINT_EVALUATION and any(
                 item.kind is ArtifactKind.CALIBRATION_SCORES for item in job.inputs
             ):
                 errors.append(f"Evaluation job '{job.job_id}' must not consume calibration scores")

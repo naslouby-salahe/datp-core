@@ -16,8 +16,8 @@ from datp_core.domain.artifacts import (
     ArtifactParent,
     ArtifactRepository,
 )
-from datp_core.domain.identifiers import DatasetId, ExperimentId, RunId
-from datp_core.domain.outcomes import JobExecutionStatus, StageJob, StageJobOutcome, StageKind
+from datp_core.domain.identifiers import DatasetId, RunId
+from datp_core.domain.outcomes import StageJob, StageJobOutcome, StageKind
 from datp_core.infrastructure.datasets.ciciot2023 import write_ciciot2023_materialized_parquet
 from datp_core.infrastructure.datasets.nbaiot import (
     consolidate_nbaiot_parquet_sources,
@@ -59,10 +59,9 @@ class PreflightStageHandler:
             self._config.execution_fingerprint,
         )
         if reuse.can_reuse:
-            return StageJobOutcome(
+            return StageJobOutcome.reused(
                 job_id=job.job_id,
                 stage=job.stage,
-                status=JobExecutionStatus.REUSED,
                 produced_artifact=job.output,
             )
         commit = self._repository.commit(
@@ -80,16 +79,14 @@ class PreflightStageHandler:
             )
         )
         if not commit.success:
-            return StageJobOutcome(
+            return StageJobOutcome.failed(
                 job_id=job.job_id,
                 stage=job.stage,
-                status=JobExecutionStatus.FAILED,
-                error_message=commit.error_message,
+                error_message=commit.error_message or "artifact commit failed",
             )
-        return StageJobOutcome(
+        return StageJobOutcome.succeeded(
             job_id=job.job_id,
             stage=job.stage,
-            status=JobExecutionStatus.SUCCESS,
             produced_artifact=job.output,
         )
 
@@ -104,24 +101,22 @@ class DatasetMaterializationStageHandler:
         self._repository = repository
 
     def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
-        experiment_id = ExperimentId(job.job_id.value.split(":", 1)[0])
+        experiment_id = job.context.experiment_id
         experiment = self._config.experiments.get(experiment_id)
         population = self._config.populations.get(experiment.population_ids[0])
         dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
         if dataset.dataset_id.value not in {"nbaiot", "ciciot2023"}:
-            return StageJobOutcome(
+            return StageJobOutcome.failed(
                 job_id=job.job_id,
                 stage=job.stage,
-                status=JobExecutionStatus.FAILED,
                 error_message="Dataset materializer is not implemented for this dataset",
             )
         primary_tree = dataset.inspection_contract.source_trees[0]
         benign_filename = dataset.inspection_contract.benign_filename
         if dataset.dataset_id.value == "nbaiot" and benign_filename is None:
-            return StageJobOutcome(
+            return StageJobOutcome.failed(
                 job_id=job.job_id,
                 stage=job.stage,
-                status=JobExecutionStatus.FAILED,
                 error_message="N-BaIoT configured benign filename is absent",
             )
         setup = dataset.setup(population.setup_id)
@@ -134,10 +129,9 @@ class DatasetMaterializationStageHandler:
             self._config.execution_fingerprint,
         )
         if reuse.can_reuse:
-            return StageJobOutcome(
+            return StageJobOutcome.reused(
                 job_id=job.job_id,
                 stage=job.stage,
-                status=JobExecutionStatus.REUSED,
                 produced_artifact=job.output,
             )
         profile = self._config.runtime.active_execution_profile
@@ -200,15 +194,11 @@ class DatasetMaterializationStageHandler:
                     )
                 )
         except (OSError, ValueError) as exc:
-            return StageJobOutcome(
-                job_id=job.job_id, stage=job.stage, status=JobExecutionStatus.FAILED, error_message=str(exc)
-            )
+            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
         return (
-            StageJobOutcome(
-                job_id=job.job_id, stage=job.stage, status=JobExecutionStatus.SUCCESS, produced_artifact=job.output
-            )
+            StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
             if commit.success
-            else StageJobOutcome(
-                job_id=job.job_id, stage=job.stage, status=JobExecutionStatus.FAILED, error_message=commit.error_message
+            else StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message=commit.error_message or "artifact commit failed"
             )
         )

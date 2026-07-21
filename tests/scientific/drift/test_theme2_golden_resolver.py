@@ -1,4 +1,4 @@
-"""Golden tests for Theme 2 — resolver decomposition.
+"""Golden tests for resolver decomposition.
 
 Captures the complete resolved representation before the refactor so every
 subsequent change can be verified for identity preservation.

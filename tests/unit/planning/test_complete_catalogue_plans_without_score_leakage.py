@@ -3,6 +3,7 @@
 from datp_core.composition.root import build_application
 from datp_core.domain.artifacts import ArtifactKind
 from datp_core.domain.identifiers import ExperimentId
+from datp_core.domain.outcomes import StageKind
 
 
 def test_complete_catalogue_resolves_and_anchor_plan_separates_scores() -> None:
@@ -12,7 +13,7 @@ def test_complete_catalogue_resolves_and_anchor_plan_separates_scores() -> None:
     assert plan.node_count > 0
     plan.validate_acyclic()
     for job in plan.jobs:
-        if job.stage.value == "threshold_construction":
+        if job.stage is StageKind.THRESHOLD_CONSTRUCTION:
             assert all(item.kind is not ArtifactKind.TEST_SCORES for item in job.inputs)
-        if job.stage.value == "operating_point_evaluation":
+        if job.stage is StageKind.OPERATING_POINT_EVALUATION:
             assert all(item.kind is not ArtifactKind.CALIBRATION_SCORES for item in job.inputs)

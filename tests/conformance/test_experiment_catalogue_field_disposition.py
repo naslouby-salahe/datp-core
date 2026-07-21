@@ -11,7 +11,7 @@ judgment call, not a mechanical unblock: see the mission's "Stop conditions" bef
 field AUTHORING_METADATA or EXECUTION.
 
 Scope: this walker currently covers only `AuthoredExperimentsCatalogueConfig` (experiments.yaml),
-where the Theme-0 audit found confirmed silent-drop gaps (analysis/evaluation/prerequisite/
+where a prior audit found confirmed silent-drop gaps (analysis/evaluation/prerequisite/
 capability-requirement fields, and catalogue-level capabilities/suppression/readiness/eligibility-gate/
 analysis-convention blocks). Extending this walker to `AuthoredDatasetConfig`, `AuthoredProtocolsConfig`,
 and `AuthoredRuntimeConfig` is tracked as residual follow-up work (see final report) -- protocols.yaml
