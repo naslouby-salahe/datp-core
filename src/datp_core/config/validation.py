@@ -8,7 +8,7 @@ from attrs import define
 
 from datp_core.config.resolver import ResolvedProjectConfiguration, resolve_project_configuration
 from datp_core.config.yaml_loader import ConfigurationError
-from datp_core.domain.identifiers import NormalizationStrategyId, StatisticalProfileId
+from datp_core.domain.identifiers import NormalizationStrategyId
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -92,9 +92,17 @@ class ProjectConfigurationValidator:
                 errors.append(
                     f"Experiment '{exp_id}' references missing eligibility policy '{exp_rec.eligibility_policy_id}'"
                 )
-            for prerequisite_id in exp_rec.prerequisite_ids:
-                if prerequisite_id not in experiment_ids:
-                    errors.append(f"Experiment '{exp_id}' references unregistered prerequisite '{prerequisite_id}'")
+            for prerequisite in exp_rec.prerequisites:
+                if prerequisite.experiment_id not in experiment_ids:
+                    errors.append(
+                        f"Experiment '{exp_id}' references unregistered prerequisite '{prerequisite.experiment_id}'"
+                    )
+            independent_of = exp_rec.independent_of_experiment
+            if independent_of is not None and independent_of not in experiment_ids:
+                errors.append(
+                    f"Experiment '{exp_id}' references unregistered independent_of_experiment "
+                    f"'{exp_rec.independent_of_experiment}'"
+                )
             for report_id in exp_rec.report_ids:
                 if not config.report_profiles.contains(report_id):
                     errors.append(f"Experiment '{exp_id}' references unregistered report profile '{report_id}'")
@@ -112,12 +120,24 @@ class ProjectConfigurationValidator:
                         f"Experiment '{exp_id}' analysis '{analysis.label}' references "
                         f"unregistered result type '{analysis.result_type}'"
                     )
-                if analysis.statistical_profile is not None and not config.statistical_profiles.contains(
-                    StatisticalProfileId(analysis.statistical_profile)
-                ):
+                if not config.statistical_profiles.contains(analysis.statistical_profile):
                     errors.append(
                         f"Experiment '{exp_id}' analysis '{analysis.label}' references "
                         f"unregistered statistical profile '{analysis.statistical_profile}'"
+                    )
+                secondary_profile = getattr(analysis, "secondary_statistical_profile", None)
+                if secondary_profile is not None and not config.statistical_profiles.contains(secondary_profile):
+                    errors.append(
+                        f"Experiment '{exp_id}' analysis '{analysis.label}' references "
+                        f"unregistered secondary statistical profile '{secondary_profile}'"
+                    )
+
+        # 5. Validate catalogue-level eligibility gates reference registered experiments
+        for gate_id, gate in config.eligibility_gates.items():
+            for target_experiment_id in gate.applies_to_experiments:
+                if target_experiment_id not in experiment_ids:
+                    errors.append(
+                        f"Eligibility gate '{gate_id}' references unregistered experiment '{target_experiment_id}'"
                     )
 
         is_valid = len(errors) == 0

@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field
+
+from datp_core.config.models._base import SchemaVersionOneConfigModel, StrictFrozenConfigModel
 
 
-class DatasetSourceConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class DatasetSourceConfig(StrictFrozenConfigModel):
     role: Literal["executable", "reference_only"]
     root: str
     file_pattern: str
@@ -19,18 +19,14 @@ class DatasetSourceConfig(BaseModel):
     defines_pseudo_clients: bool | None = None
 
 
-class CrossSourceRelationshipConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class CrossSourceRelationshipConfig(StrictFrozenConfigModel):
     row_count_equality_required: bool
     row_level_one_to_one_equivalence_assumed: bool
     join_by_row_position: Literal["forbidden"]
     join_by_any_key: Literal["forbidden"]
 
 
-class DatasetSourceLayoutConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class DatasetSourceLayoutConfig(StrictFrozenConfigModel):
     root: str
     benign_file: str | None = None
     benign_file_pattern: str | None = None
@@ -53,9 +49,7 @@ class DatasetSourceLayoutConfig(BaseModel):
     attack_family_required_per_device: bool | None = None
 
 
-class IdentitySchemeConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class IdentitySchemeConfig(StrictFrozenConfigModel):
     row_identity: dict[str, str | bool | list[str]]
     client_identity: dict[str, str | bool] | None = None
     benign_group_identity: dict[str, str] | None = None
@@ -70,9 +64,7 @@ class IdentitySchemeConfig(BaseModel):
     provenance_fields: list[str]
 
 
-class EndpointIdentityConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class EndpointIdentityConfig(StrictFrozenConfigModel):
     resolution: str
     fields: list[str]
     internal_prefix: str
@@ -85,18 +77,14 @@ class EndpointIdentityConfig(BaseModel):
     unresolved_row_policy: str
 
 
-class RetainedNumericFeaturesConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class RetainedNumericFeaturesConfig(StrictFrozenConfigModel):
     role: Literal["model_feature"]
     order: list[str]
     numeric_parsing: dict[str, list[str] | str]
     on_invalid_value: str
 
 
-class CategoricalEncodingConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class CategoricalEncodingConfig(StrictFrozenConfigModel):
     strategy: str
     columns: list[str]
     vocabulary_scope: str
@@ -110,25 +98,19 @@ class CategoricalEncodingConfig(BaseModel):
     feature_order: list[str]
 
 
-class ModelFeaturesConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ModelFeaturesConfig(StrictFrozenConfigModel):
     role: Literal["model_feature"]
     type: str
     order: list[str]
 
 
-class MulticlassLabelConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class MulticlassLabelConfig(StrictFrozenConfigModel):
     column: str
     type: str | None = None
     case: str | None = None
 
 
-class LabelFieldsConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class LabelFieldsConfig(StrictFrozenConfigModel):
     binary_label: dict[str, str | list[int] | list[str]]
     multiclass_label: MulticlassLabelConfig | None = None
     benign_value: dict[str, str | int] | None = None
@@ -138,9 +120,7 @@ class LabelFieldsConfig(BaseModel):
     family_map: dict[str, str] | None = None
 
 
-class DatasetFieldSchemaConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class DatasetFieldSchemaConfig(StrictFrozenConfigModel):
     source_column_count: int | dict[str, int]
     header_required: bool
     header_must_be_identical_across_all_source_files: bool | None = None
@@ -159,16 +139,12 @@ class DatasetFieldSchemaConfig(BaseModel):
     leakage_exclusions: list[str] | dict[str, str | list[str]]
 
 
-class NormalizationSpecConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class NormalizationSpecConfig(StrictFrozenConfigModel):
     strategy: str
     scope: str
 
 
-class SplitSpecConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class SplitSpecConfig(StrictFrozenConfigModel):
     method: str
     calibration_benign_only: bool
     split_seed: int | None = None
@@ -199,9 +175,7 @@ class SplitSpecConfig(BaseModel):
     chronology_unverifiable_policy: str | None = None
 
 
-class MaterializationConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class MaterializationConfig(StrictFrozenConfigModel):
     materialization_id: str
     role: str | None = None
     normalization: NormalizationSpecConfig
@@ -213,9 +187,7 @@ class MaterializationConfig(BaseModel):
     infeasibility_policy: str | None = None
 
 
-class SetupClientConstructionConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class SetupClientConstructionConfig(StrictFrozenConfigModel):
     method: str
     client_source: str | list[str] | None = None
     client_semantics: str | None = None
@@ -238,9 +210,7 @@ class SetupClientConstructionConfig(BaseModel):
     manifest_fields: list[str] | None = None
 
 
-class SetupConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class SetupConfig(StrictFrozenConfigModel):
     materialization: str
     client_construction: SetupClientConstructionConfig
     provides_capabilities: list[str]
@@ -249,9 +219,7 @@ class SetupConfig(BaseModel):
     client_population_must_equal_setup: str | None = None
 
 
-class SourceContractConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class SourceContractConfig(StrictFrozenConfigModel):
     every_model_feature_present_in_merged_header: bool | None = None
     every_model_feature_present_in_every_file: bool | None = None
     model_feature_count_equals_source_column_count: bool | None = None
@@ -265,7 +233,7 @@ class SourceContractConfig(BaseModel):
     row_integrity_exclusions: dict[str, list[str] | bool | dict[str, dict[str, str]]] | None = None
 
 
-class FingerprintInputsConfig(BaseModel):
+class FingerprintInputsConfig(StrictFrozenConfigModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, populate_by_name=True)
 
     source: list[str]
@@ -274,10 +242,7 @@ class FingerprintInputsConfig(BaseModel):
     client_assignment: list[str]
 
 
-class AuthoredDatasetConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
-    schema_version: int = Field(ge=1)
+class AuthoredDatasetConfig(SchemaVersionOneConfigModel):
     dataset: str
     display_name: str
     schema_id: str
@@ -289,10 +254,3 @@ class AuthoredDatasetConfig(BaseModel):
     eligibility_policy: str
     materializations: dict[str, MaterializationConfig]
     setups: dict[str, SetupConfig]
-
-    @field_validator("schema_version")
-    @classmethod
-    def validate_schema_version(cls, value: int) -> int:
-        if value != 1:
-            raise ValueError(f"Unsupported dataset schema version: {value}")
-        return value

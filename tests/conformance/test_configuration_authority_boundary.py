@@ -30,6 +30,9 @@ def test_authored_config_models_only_imported_by_allowlisted_modules() -> None:
         relative = _relative(path)
         if relative in _ALLOWLIST:
             continue
+        # Intra-model imports within config/models/ are always permitted.
+        if relative.startswith("config/models/"):
+            continue
         if _MARKER in path.read_text(encoding="utf-8"):
             offenders.append(relative)
     assert offenders == [], f"Authored config models leaked into: {offenders}"

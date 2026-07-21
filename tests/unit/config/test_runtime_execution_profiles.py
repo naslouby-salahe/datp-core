@@ -33,8 +33,8 @@ def test_execution_profiles_resolve_to_pure_records() -> None:
     scientific = profiles["scientific"]
     assert scientific.device_policy == "cuda_required"
     assert scientific.determinism == "strict"
-    assert scientific.data_loading["chunk_row_count"] == 50000
-    assert scientific.data_loading["streaming"] is True
+    assert scientific.data_loading.chunk_row_count.value == 50000
+    assert scientific.data_loading.streaming is True
     assert scientific.log_interval_rounds.value == 25
     assert scientific.atomic_write is True
 

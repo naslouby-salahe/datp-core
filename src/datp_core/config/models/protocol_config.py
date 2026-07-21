@@ -4,43 +4,35 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
+from pydantic import ConfigDict, Field, JsonValue, model_validator
+
+from datp_core.config.models._base import SchemaVersionOneConfigModel, StrictFrozenConfigModel
 
 
-class ModelInputDimensionConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ModelInputDimensionConfig(StrictFrozenConfigModel):
     resolution: str
     declared_per_dataset: bool
     validation: str
 
 
-class ModelDecoderConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ModelDecoderConfig(StrictFrozenConfigModel):
     construction: str
     final_layer_output_dim: str
 
 
-class ModelParameterInitializationConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ModelParameterInitializationConfig(StrictFrozenConfigModel):
     weight: str
     bias: str
     applied_to: str
     seeded_by: str
 
 
-class ModelAnomalyScoreConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ModelAnomalyScoreConfig(StrictFrozenConfigModel):
     definition: str
     orientation: str
 
 
-class ModelArchitectureConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ModelArchitectureConfig(StrictFrozenConfigModel):
     kind: Literal["dense_autoencoder"]
     input_dimension: ModelInputDimensionConfig
     hidden_dims: list[int]
@@ -58,9 +50,7 @@ class ModelArchitectureConfig(BaseModel):
     precision: str
 
 
-class OptimizerProfileConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class OptimizerProfileConfig(StrictFrozenConfigModel):
     optimizer_type: str
     learning_rate: float
     beta_1: float
@@ -74,9 +64,7 @@ class OptimizerProfileConfig(BaseModel):
     state_aggregated_by_server: bool
 
 
-class BatchingProfileConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class BatchingProfileConfig(StrictFrozenConfigModel):
     micro_batch_size: int
     gradient_accumulation_steps: int
     effective_batch_size: int
@@ -88,16 +76,12 @@ class BatchingProfileConfig(BaseModel):
     worker_seed_namespace: str
 
 
-class SeedNamespaceConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class SeedNamespaceConfig(StrictFrozenConfigModel):
     key: str
     components: list[str]
 
 
-class DeterminismProfileConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class DeterminismProfileConfig(StrictFrozenConfigModel):
     seed_domains: list[str]
     partition_seed_independent_of_training_seeds: bool
     checkpoint_selection_uses_no_stochastic_seed: bool
@@ -106,18 +90,14 @@ class DeterminismProfileConfig(BaseModel):
     resolved_seeds_required_in_manifests: list[str]
 
 
-class SeedCohortConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class SeedCohortConfig(StrictFrozenConfigModel):
     paired_seed_count: int
     training_seeds: list[int]
     bootstrap_analysis_seed: int
     analysis_seed_model: str
 
 
-class CheckpointSelectorInputConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class CheckpointSelectorInputConfig(StrictFrozenConfigModel):
     population: str
     quantity: str
     client_weighting: str | None = None
@@ -126,9 +106,7 @@ class CheckpointSelectorInputConfig(BaseModel):
     aggregation_over_rows: str | None = None
 
 
-class CheckpointSelectionConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class CheckpointSelectionConfig(StrictFrozenConfigModel):
     rule: str
     selector_input: CheckpointSelectorInputConfig | None = None
     tie_break: str | None = None
@@ -140,9 +118,7 @@ class CheckpointSelectionConfig(BaseModel):
     selection_granularity: str | None = None
 
 
-class CheckpointConvergenceConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class CheckpointConvergenceConfig(StrictFrozenConfigModel):
     metric: str
     rounds_initial: int
     rule: str
@@ -155,9 +131,7 @@ class CheckpointConvergenceConfig(BaseModel):
     no_qualifying_round_behavior: str
 
 
-class CheckpointProfileConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class CheckpointProfileConfig(StrictFrozenConfigModel):
     total_rounds: int | None = None
     total_epochs: int | None = None
     rounds: list[int] | None = None
@@ -169,9 +143,7 @@ class CheckpointProfileConfig(BaseModel):
     selection: CheckpointSelectionConfig
 
 
-class TrainingProfileConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class TrainingProfileConfig(StrictFrozenConfigModel):
     kind: str
     model_architecture: str
     optimizer: str
@@ -201,10 +173,8 @@ class TrainingProfileConfig(BaseModel):
     federation: FederationStrategyConfig | None = None
 
 
-class FederationStrategyConfig(BaseModel):
+class FederationStrategyConfig(StrictFrozenConfigModel):
     """Authored Flower FedAvg participation contract."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     fraction_fit: float
     fraction_evaluate: float
@@ -213,18 +183,14 @@ class FederationStrategyConfig(BaseModel):
     minimum_available_clients: int
 
 
-class EligibilityFallbackConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class EligibilityFallbackConfig(StrictFrozenConfigModel):
     threshold_source: str
     shared_construction: str
     reported_status: str
     enters_primary_dispersion: bool
 
 
-class EligibilityPolicyConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class EligibilityPolicyConfig(StrictFrozenConfigModel):
     minimum_benign_calibration_count: int
     determined_before_test_evaluation: bool
     identical_across_policies_in_one_comparison: bool
@@ -237,9 +203,7 @@ class EligibilityPolicyConfig(BaseModel):
     permitted_use: str | None = None
 
 
-class NormalizationStrategyConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class NormalizationStrategyConfig(StrictFrozenConfigModel):
     formula: str
     fitted_statistics: list[str]
     constant_feature_rule: str
@@ -248,9 +212,7 @@ class NormalizationStrategyConfig(BaseModel):
     standard_deviation_ddof: int | None = None
 
 
-class QuantileEstimatorConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class QuantileEstimatorConfig(StrictFrozenConfigModel):
     sort_order: str
     index_formula: str
     interpolation: str
@@ -260,9 +222,7 @@ class QuantileEstimatorConfig(BaseModel):
     tie_behavior: str
 
 
-class BaseThresholdPolicyConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class BaseThresholdPolicyConfig(StrictFrozenConfigModel):
     policy: str
     quantile: float = Field(ge=0.0, le=1.0)
     quantile_estimator: str
@@ -359,9 +319,7 @@ class ClusterThresholdPolicyConfig(BaseThresholdPolicyConfig):
     threshold_ownership: str
 
 
-class SplitConformalThresholdPolicyConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class SplitConformalThresholdPolicyConfig(StrictFrozenConfigModel):
     policy: Literal["conformal_local_threshold"]
     conformal_mode: str
     coverage_alpha: float
@@ -420,9 +378,7 @@ class CalibrationFallbackPolicyConfig(BaseThresholdPolicyConfig):
     threshold_ownership: str
 
 
-class FederatedMatchedExceedancePolicyConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class FederatedMatchedExceedancePolicyConfig(StrictFrozenConfigModel):
     policy: Literal["federated_summary_statistic_threshold"]
     mode: Literal["matched_exceedance"]
     quantile: float = Field(ge=0.0, le=1.0)
@@ -445,9 +401,7 @@ class FederatedMatchedExceedancePolicyConfig(BaseModel):
     threshold_ownership: str
 
 
-class FederatedFixedCoefficientPolicyConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class FederatedFixedCoefficientPolicyConfig(StrictFrozenConfigModel):
     policy: Literal["federated_summary_statistic_threshold"]
     mode: Literal["fixed_k"]
     quantile: float = Field(ge=0.0, le=1.0)
@@ -488,9 +442,7 @@ TypedThresholdPolicyConfig = (
 )
 
 
-class MetricBundleConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class MetricBundleConfig(StrictFrozenConfigModel):
     metrics: list[str]
     cross_client_aggregation: str | None = None
     primary_dispersion_metric: str | None = None
@@ -499,7 +451,7 @@ class MetricBundleConfig(BaseModel):
     requires_attack_evaluable_clients: bool | None = None
 
 
-class StatisticalProfileConfig(BaseModel):
+class StatisticalProfileConfig(StrictFrozenConfigModel):
     """Strict authored statistical-analysis profile (protocols.yaml ``statistical_profiles``).
 
     A single superset model covering every configured profile shape. ``extra="forbid"``
@@ -507,8 +459,6 @@ class StatisticalProfileConfig(BaseModel):
     bootstrap methods require. This replaces the previous ``dict[str, JsonValue]`` bag so
     that resolution reads typed attributes instead of untyped mapping lookups.
     """
-
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     estimand: str
     unit_of_analysis: str
@@ -567,9 +517,7 @@ class StatisticalProfileConfig(BaseModel):
         return self
 
 
-class ThresholdPolicyDefaultsConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ThresholdPolicyDefaultsConfig(StrictFrozenConfigModel):
     source_score_population: str
     eligibility_filter: str
     attack_rows_forbidden_in_calibration: bool
@@ -579,9 +527,7 @@ class ThresholdPolicyDefaultsConfig(BaseModel):
     required_diagnostic_fields: list[str]
 
 
-class NestedReplicatePolicyConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class NestedReplicatePolicyConfig(StrictFrozenConfigModel):
     replicate_values_computed_first: bool
     summarized_within_seed_before_across_seed_inference: bool
     seed_level_statistic: str
@@ -589,23 +535,17 @@ class NestedReplicatePolicyConfig(BaseModel):
     additional_required_replicate_statistic: str
 
 
-class ResultTypeConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ResultTypeConfig(StrictFrozenConfigModel):
     permitted_evidence_roles: list[str]
 
 
-class EvaluationResultContractConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class EvaluationResultContractConfig(StrictFrozenConfigModel):
     per_evaluation_result_type: str
     per_evaluation_eligibility_result_type: str
     per_evaluation_required_records: list[str]
 
 
-class ReportDefaultsConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ReportDefaultsConfig(StrictFrozenConfigModel):
     ordering: str
     missing_value_policy: str
     table_output_formats: list[str]
@@ -614,17 +554,13 @@ class ReportDefaultsConfig(BaseModel):
     analysis_defined_direction_token: str
 
 
-class ReportColumnConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ReportColumnConfig(StrictFrozenConfigModel):
     name: str
     unit: str
     direction: str
 
 
-class ReportProfileConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ReportProfileConfig(StrictFrozenConfigModel):
     artifact_type: str
     table_type: str | None = None
     figure_type: str | None = None
@@ -633,9 +569,7 @@ class ReportProfileConfig(BaseModel):
     series: list[ReportColumnConfig] | None = None
 
 
-class BenignDecisionRateConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class BenignDecisionRateConfig(StrictFrozenConfigModel):
     configured: bool
     value: float | None = None
     required_fields: list[str]
@@ -645,13 +579,11 @@ class BenignDecisionRateConfig(BaseModel):
     invented_rate_forbidden: bool
 
 
-class OperationalInputsConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class OperationalInputsConfig(StrictFrozenConfigModel):
     benign_decision_rate: BenignDecisionRateConfig
 
 
-class ArtifactFingerprintsConfig(BaseModel):
+class ArtifactFingerprintsConfig(StrictFrozenConfigModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, populate_by_name=True)
 
     source: list[str]
@@ -667,9 +599,7 @@ class ArtifactFingerprintsConfig(BaseModel):
     analysis: list[str]
 
 
-class ArtifactIdentityConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ArtifactIdentityConfig(StrictFrozenConfigModel):
     hash_function: str
     digest_bytes: int
     canonical_serialization: str
@@ -679,25 +609,19 @@ class ArtifactIdentityConfig(BaseModel):
     reuse_rejected_when_any_changes: list[str]
 
 
-class FieldEncodingConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class FieldEncodingConfig(StrictFrozenConfigModel):
     bytes_per_field: int
     byte_order: str
 
 
-class ThresholdExchangeEntryConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ThresholdExchangeEntryConfig(StrictFrozenConfigModel):
     uplink_fields_per_client: list[str] | None = None
     downlink_fields_per_client: list[str] | None = None
     candidate_grid_downlink_fields_per_client: list[str] | None = None
     candidate_grid_uplink_fields_per_client_per_candidate: list[str] | None = None
 
 
-class ThresholdExchangeConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ThresholdExchangeConfig(StrictFrozenConfigModel):
     direction: str
     b1: ThresholdExchangeEntryConfig
     b2: ThresholdExchangeEntryConfig
@@ -705,7 +629,7 @@ class ThresholdExchangeConfig(BaseModel):
     federated_summary: ThresholdExchangeEntryConfig
 
 
-class ModelExchangeConfig(BaseModel):
+class ModelExchangeConfig(StrictFrozenConfigModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, protected_namespaces=())
 
     field_width: str
@@ -713,16 +637,14 @@ class ModelExchangeConfig(BaseModel):
     bytes_per_round_formula: str
 
 
-class CheckpointStorageConfig(BaseModel):
+class CheckpointStorageConfig(StrictFrozenConfigModel):
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, protected_namespaces=())
 
     contents: list[str]
     model_parameter_bytes_formula: str
 
 
-class CommunicationEstimationContractConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class CommunicationEstimationContractConfig(StrictFrozenConfigModel):
     estimate_basis: str
     field_encodings: dict[str, FieldEncodingConfig]
     threshold_exchange: ThresholdExchangeConfig
@@ -734,10 +656,8 @@ class CommunicationEstimationContractConfig(BaseModel):
     ambiguous_latest_reference: str
 
 
-class MetricFormulaConfig(BaseModel):
+class MetricFormulaConfig(StrictFrozenConfigModel):
     """Reusable strict leaf descriptor for a single metric definition (superset of all metric keys)."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
 
     formula: str | None = None
     unit: str | None = None
@@ -760,9 +680,7 @@ class MetricFormulaConfig(BaseModel):
     comparison_unit: str | None = None
 
 
-class CrossClientAggregationConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class CrossClientAggregationConfig(StrictFrozenConfigModel):
     mean_fpr: MetricFormulaConfig
     standard_deviation_ddof: int
     cv_fpr: MetricFormulaConfig
@@ -776,9 +694,7 @@ class CrossClientAggregationConfig(BaseModel):
     gini_coefficient: MetricFormulaConfig
 
 
-class ThresholdEstimationMetricsConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ThresholdEstimationMetricsConfig(StrictFrozenConfigModel):
     absolute_threshold_error: MetricFormulaConfig
     relative_threshold_error: MetricFormulaConfig
     oracle_definition: str
@@ -789,9 +705,7 @@ class ThresholdEstimationMetricsConfig(BaseModel):
     threshold_variance_across_replicates: MetricFormulaConfig
 
 
-class JsDivergenceConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class JsDivergenceConfig(StrictFrozenConfigModel):
     definition: str
     histogram_bins: int
     binning_range: str
@@ -804,30 +718,22 @@ class JsDivergenceConfig(BaseModel):
     minimum_client_count: int
 
 
-class HeterogeneityDiagnosticsConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class HeterogeneityDiagnosticsConfig(StrictFrozenConfigModel):
     pairwise_js_divergence: JsDivergenceConfig
 
 
-class ClusterDiagnosticsConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ClusterDiagnosticsConfig(StrictFrozenConfigModel):
     adjusted_rand_index: MetricFormulaConfig
     within_cluster_dispersion: MetricFormulaConfig
     across_cluster_dispersion: MetricFormulaConfig
 
 
-class PrecisionPolicyConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class PrecisionPolicyConfig(StrictFrozenConfigModel):
     computation: str
     rounding: str
 
 
-class MetricDefinitionsConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class MetricDefinitionsConfig(StrictFrozenConfigModel):
     prediction_rule: str
     per_client_before_aggregation: bool
     test_rows_only: bool
@@ -845,10 +751,7 @@ class MetricDefinitionsConfig(BaseModel):
     forbidden_substitutions: list[str]
 
 
-class AuthoredProtocolsConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
-    schema_version: int = Field(ge=1)
+class AuthoredProtocolsConfig(SchemaVersionOneConfigModel):
     model_architectures: dict[str, ModelArchitectureConfig]
     optimizers: dict[str, OptimizerProfileConfig]
     batching: dict[str, BatchingProfileConfig]
@@ -875,10 +778,3 @@ class AuthoredProtocolsConfig(BaseModel):
     statistical_profiles: dict[str, StatisticalProfileConfig]
     report_profiles: dict[str, ReportProfileConfig]
     communication_estimation: dict[str, JsonValue] | None = None
-
-    @field_validator("schema_version")
-    @classmethod
-    def validate_schema_version(cls, value: int) -> int:
-        if value != 1:
-            raise ValueError(f"Unsupported protocols schema version: {value}")
-        return value

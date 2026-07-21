@@ -2,12 +2,36 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from datp_core.config.models._base import SchemaVersionOneConfigModel, StrictFrozenConfigModel
 
 
-class RawSourcePolicyConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+class DataLoadingConfig(StrictFrozenConfigModel):
+    """Strict typed contract for per-execution-profile data-loading settings."""
 
+    chunk_row_count: int
+    streaming: bool
+
+
+class ResourceBudgetConfig(StrictFrozenConfigModel):
+    """Strict typed contract for per-execution-profile resource budget."""
+
+    max_ram_gib: int
+    max_vram_gib: int | None = None
+
+
+class ConcurrencyConfig(StrictFrozenConfigModel):
+    """Strict typed contract for per-execution-profile concurrency limits.
+
+    Fields vary across execution profiles; all are optional except ``worker_count``.
+    """
+
+    worker_count: int
+    training_concurrency: int | None = None
+    scoring_concurrency: int | None = None
+    audit_concurrency: int | None = None
+
+
+class RawSourcePolicyConfig(StrictFrozenConfigModel):
     follow_symlink: bool
     require_resolved_target_readable: bool
     reject_broken_symlink: bool
@@ -16,9 +40,7 @@ class RawSourcePolicyConfig(BaseModel):
     create_files_under_raw_root: str
 
 
-class DeterminismStrictConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class DeterminismStrictConfig(StrictFrozenConfigModel):
     python_hash_seed: int
     cublas_workspace_config: str
     torch_use_deterministic_algorithms: bool
@@ -36,35 +58,27 @@ class DeterminismStrictConfig(BaseModel):
     unavailable_determinism_policy: str
 
 
-class DeterminismEnforcementConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class DeterminismEnforcementConfig(StrictFrozenConfigModel):
     strict: DeterminismStrictConfig
 
 
-class DevicePolicyRulesConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class DevicePolicyRulesConfig(StrictFrozenConfigModel):
     cuda_required: dict[str, str]
     cpu_only: dict[str, list[str] | bool]
 
 
-class ResourcePressurePolicyConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ResourcePressurePolicyConfig(StrictFrozenConfigModel):
     silent_reduction_of_batch_size: str
     silent_reduction_of_rounds_seeds_clients_or_sample_counts: str
     on_budget_exceeded: str
 
 
-class ExecutionProfileConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class ExecutionProfileConfig(StrictFrozenConfigModel):
     device_policy: str
     determinism: str
-    resource_budget: dict[str, int]
-    concurrency: dict[str, int]
-    data_loading: dict[str, int | bool]
+    resource_budget: ResourceBudgetConfig
+    concurrency: ConcurrencyConfig
+    data_loading: DataLoadingConfig
     process_start_method: str
     log_interval_rounds: int
     atomic_write: bool
@@ -72,20 +86,10 @@ class ExecutionProfileConfig(BaseModel):
     temporary_storage_cleanup: str | None = None
 
 
-class AuthoredRuntimeConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
-    schema_version: int = Field(ge=1)
+class AuthoredRuntimeConfig(SchemaVersionOneConfigModel):
     roots: dict[str, str]
     raw_source_policy: RawSourcePolicyConfig
     determinism_enforcement: DeterminismEnforcementConfig
     device_policy_rules: DevicePolicyRulesConfig
     resource_pressure_policy: ResourcePressurePolicyConfig
     execution_profiles: dict[str, ExecutionProfileConfig]
-
-    @field_validator("schema_version")
-    @classmethod
-    def validate_schema_version(cls, value: int) -> int:
-        if value != 1:
-            raise ValueError(f"Unsupported runtime schema version: {value}")
-        return value

@@ -10,8 +10,17 @@ from typing import cast
 import cattrs
 from attrs import define
 
-from datp_core.config.models.dataset_config import CategoricalEncodingConfig
-from datp_core.config.models.experiment_config import SweepVariableConfig
+from datp_core.config.models.dataset_config import (
+    CategoricalEncodingConfig,
+    DatasetFieldSchemaConfig,
+    DatasetSourceLayoutConfig,
+    EndpointIdentityConfig,
+    IdentitySchemeConfig,
+    LabelFieldsConfig,
+    SetupClientConstructionConfig,
+    SourceContractConfig,
+)
+from datp_core.config.models.experiment_config import AnalysisSpecConfig, AuthoredExperimentConfig, SweepVariableConfig
 from datp_core.config.models.protocol_config import (
     ArtifactIdentityConfig,
     CalibrationFallbackPolicyConfig,
@@ -49,42 +58,72 @@ from datp_core.config.runtime_settings import (
 )
 from datp_core.config.yaml_loader import ConfigurationError, YamlConfigurationReader
 from datp_core.domain.catalogue import (
-    AnalysisSpecRecord,
+    AbsorptionAnalysisRecord,
+    AlertBurdenAnalysisRecord,
+    AnalysisRecord,
+    AnchorEquivalenceAnalysisRecord,
     BatchingRecord,
+    CalibrationSubsetRecord,
     CapabilityRequirementRecord,
     CheckpointConvergenceRecord,
     CheckpointProfileRecord,
     CheckpointSelectionRecord,
+    ClusterStabilityAnalysisRecord,
     ConditionSweepRecord,
+    ConformalCoverageAnalysisRecord,
+    DistributionMechanismAnalysisRecord,
     EligibilityFallbackRecord,
+    EligibilityGateRecord,
     EligibilityPolicyRecord,
     EvaluationSpecRecord,
     EvidenceRole,
     ExperimentRecord,
     FederationProfileRecord,
+    LockedClientDistributionAnalysisRecord,
+    MetricAssociationAnalysisRecord,
     MetricBundleRecord,
     ModelArchitectureRecord,
     NormalizationStrategyRecord,
     OptimizerRecord,
+    PairedThresholdAnalysisRecord,
     PopulationRecord,
+    PrerequisiteSpecRecord,
+    QuantileEstimationAnalysisRecord,
     QuantileEstimatorRecord,
+    RecoveryFractionAnalysisRecord,
+    ResourceCostAnalysisRecord,
     RunRequirement,
     SeedCohortRecord,
     StatisticalProfileRecord,
     SweepConditionRecord,
     SweepRecord,
     SweepValue,
+    TemporalRecoveryAnalysisRecord,
+    ThresholdStabilityAnalysisRecord,
     TrainingProfileRecord,
     ValueSweepRecord,
 )
 from datp_core.domain.datasets import (
     AdapterKind,
+    CategoricalEncodingRecord,
     ConfiguredSourceTree,
+    CrossSourceRelationshipRecord,
+    DatasetFieldSchemaRecord,
     DatasetInspectionContract,
     DatasetMaterialization,
     DatasetSetup,
+    DatasetSourceLayoutContractRecord,
+    DatasetSourceRecord,
+    EndpointIdentityRecord,
+    IdentitySchemeRecord,
+    LabelFieldsRecord,
+    ModelFeaturesRecord,
+    MulticlassLabelRecord,
     ResolvedDataset,
     ResolvedDatasetPaths,
+    RetainedNumericFeaturesRecord,
+    SetupClientConstructionRecord,
+    SourceContractRecord,
     SourceLayout,
 )
 from datp_core.domain.fingerprints import (
@@ -161,6 +200,7 @@ from datp_core.domain.values import (
     RelativePath,
     Seed,
     TypedDomainRegistry,
+    as_optional_frozen_json_mapping,
     deep_freeze,
 )
 
@@ -170,6 +210,17 @@ _projection_converter = cattrs.Converter()
 def _unstructure(value: object) -> object:
     """Convert resolved attrs records into primitive structures for canonical fingerprinting."""
     return _projection_converter.unstructure(value)
+
+
+def _experiment_scientific_projection(record: ExperimentRecord) -> dict[str, object]:
+    """Unstructure an experiment for the scientific fingerprint, excluding display-only prose.
+
+    `display_name` is authored human-readable prose with no bearing on what is executed, evaluated,
+    or claimed; it is the one field in `AuthoredExperimentConfig` classified AUTHORING_METADATA.
+    """
+    projected = cast(dict, _unstructure(record))
+    del projected["display_name"]
+    return projected
 
 
 _THRESHOLD_POLICY_RECORD_TYPES: dict[type[TypedThresholdPolicyConfig], type[ThresholdPolicyRecord]] = {
@@ -487,6 +538,219 @@ def _resolve_sweep(name: str, cfg: SweepVariableConfig) -> SweepRecord:
     )
 
 
+def _require(value: object | None, *, experiment_name: str, analysis_label: str, field_name: str) -> object:
+    if value is None:
+        raise ConfigurationError(
+            f"Experiment '{experiment_name}' analysis '{analysis_label}' is missing required field '{field_name}'"
+        )
+    return value
+
+
+def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) -> AnalysisRecord:
+    def req(field_name: str) -> object:
+        return _require(
+            getattr(a, field_name), experiment_name=exp_cfg.name, analysis_label=a.label, field_name=field_name
+        )
+
+    statistical_profile = StatisticalProfileId(cast(str, req("statistical_profile")))
+    secondary_statistical_profile = (
+        StatisticalProfileId(a.secondary_statistical_profile) if a.secondary_statistical_profile is not None else None
+    )
+
+    if a.kind == "paired_threshold_analysis":
+        return PairedThresholdAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            secondary_statistical_profile=secondary_statistical_profile,
+            first_evaluation=cast(str, req("first_evaluation")),
+            second_evaluation=cast(str, req("second_evaluation")),
+            primary_metric=cast(str, req("primary_metric")),
+            delta_orientation=cast(str, req("delta_orientation")),
+            delta_interpretation=cast(str, req("delta_interpretation")),
+            required_direction=a.required_direction,
+            monotonicity_required=a.monotonicity_required,
+            ordering_inversion_reporting=a.ordering_inversion_reporting,
+            per_sweep_cell=a.per_sweep_cell,
+            full_curve_reporting=a.full_curve_reporting,
+            post_hoc_weight_selection=a.post_hoc_weight_selection,
+        )
+    if a.kind == "absorption_analysis":
+        return AbsorptionAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            absorption_metric=cast(str, req("absorption_metric")),
+            formula=cast(str, req("formula")),
+            band_interpretation=cast(str, req("band_interpretation")),
+            denominator_materiality_rule=cast("float | str", req("denominator_materiality_rule")),
+            undefined_denominator_behavior=cast(str, req("undefined_denominator_behavior")),
+            matching_contract=cast(dict, req("matching_contract")),
+            outcome_bands=cast(list, req("outcome_bands")),
+            outcome_bands_are_mutually_exclusive_and_exhaustive=cast(
+                bool, req("outcome_bands_are_mutually_exclusive_and_exhaustive")
+            ),
+            reference_analysis=cast("str | dict", req("reference_analysis")),
+            stress_test_analysis=cast(str, req("stress_test_analysis")),
+            alternative_path_rule=a.alternative_path_rule,
+        )
+    if a.kind == "alert_burden_analysis":
+        return AlertBurdenAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            formula=cast(str, req("formula")),
+            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
+            required_operational_input=cast(str, req("required_operational_input")),
+            per_client_reporting_required=cast(bool, req("per_client_reporting_required")),
+            unavailable_behavior=cast(str, req("unavailable_behavior")),
+        )
+    if a.kind == "anchor_equivalence_analysis":
+        return AnchorEquivalenceAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            source_analysis=cast(str, req("source_analysis")),
+            comparison_mode=cast(str, req("comparison_mode")),
+            comparison_mode_rule=cast(str, req("comparison_mode_rule")),
+            interval_width_tolerance_multiplier=cast(float, req("interval_width_tolerance_multiplier")),
+            floating_point_tolerance=cast("dict[str, float]", req("floating_point_tolerance")),
+            historical_reference=cast("dict[str, float | str]", req("historical_reference")),
+            statistical_fallback_requirements=tuple(cast("list[str]", req("statistical_fallback_requirements"))),
+            failure_reasons=tuple(cast("list[str]", req("failure_reasons"))),
+            downstream_blocking_behavior=cast(str, req("downstream_blocking_behavior")),
+        )
+    if a.kind == "cluster_stability_analysis":
+        return ClusterStabilityAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            source_evaluation=cast(str, req("source_evaluation")),
+            comparison_unit=cast(str, req("comparison_unit")),
+            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            reference_evaluation=a.reference_evaluation,
+            run_requirement=(RunRequirement(a.run_requirement) if a.run_requirement is not None else None),
+        )
+    if a.kind == "conformal_coverage_analysis":
+        return ConformalCoverageAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            source_evaluation=cast(str, req("source_evaluation")),
+            target_coverage=cast(float, req("target_coverage")),
+            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            coverage_direction=a.coverage_direction,
+        )
+    if a.kind == "distribution_mechanism_analysis":
+        return DistributionMechanismAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
+            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            field_formulas=a.field_formulas,
+        )
+    if a.kind == "locked_client_distribution_analysis":
+        return LockedClientDistributionAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
+            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            locked_client_identifier=cast(str, req("locked_client_identifier")),
+        )
+    if a.kind == "metric_association_analysis":
+        return MetricAssociationAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            secondary_statistical_profile=secondary_statistical_profile,
+            predictor_metric=cast(str, req("predictor_metric")),
+            outcome_metric=cast(str, req("outcome_metric")),
+            outcome_source_analysis=cast(str, req("outcome_source_analysis")),
+            interpretation_constraint=cast(str, req("interpretation_constraint")),
+            grouping_dimension=a.grouping_dimension,
+        )
+    if a.kind == "quantile_estimation_analysis":
+        return QuantileEstimationAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
+            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            oracle_reference=cast(str, req("oracle_reference")),
+        )
+    if a.kind == "recovery_fraction_analysis":
+        return RecoveryFractionAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            formula=cast(str, req("formula")),
+            numerator_analysis=cast(str, req("numerator_analysis")),
+            denominator_analysis=cast(str, req("denominator_analysis")),
+            denominator_composition=cast(str, req("denominator_composition")),
+            denominator_materiality_rule=cast("float | str", req("denominator_materiality_rule")),
+            undefined_denominator_behavior=cast(str, req("undefined_denominator_behavior")),
+        )
+    if a.kind == "resource_cost_analysis":
+        return ResourceCostAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
+            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            estimate_basis=cast(str, req("estimate_basis")),
+        )
+    if a.kind == "temporal_recovery_analysis":
+        return TemporalRecoveryAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            primary_metric=cast(str, req("primary_metric")),
+            static_reference_evaluation=cast(str, req("static_reference_evaluation")),
+            frozen_evaluation=cast(str, req("frozen_evaluation")),
+            recalibrated_evaluation=cast(str, req("recalibrated_evaluation")),
+            recovery_fields=tuple(cast("list[str]", req("recovery_fields"))),
+            drift_excess_formula=cast(str, req("drift_excess_formula")),
+            recovered_amount_formula=cast(str, req("recovered_amount_formula")),
+            recovery_ratio_formula=cast(str, req("recovery_ratio_formula")),
+            meaningful_degradation_rule=cast(str, req("meaningful_degradation_rule")),
+            recovery_ratio_precondition=cast(str, req("recovery_ratio_precondition")),
+            negative_recovery_policy=cast(str, req("negative_recovery_policy")),
+            recovery_ratio_direction=cast(str, req("recovery_ratio_direction")),
+            chronology_unverifiable_policy=cast(str, req("chronology_unverifiable_policy")),
+            outcome_bands=cast(list, req("outcome_bands")),
+            outcome_bands_are_mutually_exclusive_and_exhaustive=cast(
+                bool, req("outcome_bands_are_mutually_exclusive_and_exhaustive")
+            ),
+        )
+    if a.kind == "threshold_stability_analysis":
+        return ThresholdStabilityAnalysisRecord(
+            label=a.label,
+            kind=a.kind,
+            result_type=a.result_type,
+            statistical_profile=statistical_profile,
+            source_evaluation=cast(str, req("source_evaluation")),
+            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            per_sweep_cell=cast(str, req("per_sweep_cell")),
+        )
+    raise ConfigurationError(f"Experiment '{exp_cfg.name}' analysis '{a.label}' has unsupported kind '{a.kind}'")
+
+
 @define(frozen=True, slots=True, kw_only=True)
 class ResolvedProjectConfiguration:
     """Single resolved project configuration authority loaded once during composition root initialization."""
@@ -494,6 +758,11 @@ class ResolvedProjectConfiguration:
     datasets: TypedDomainRegistry[DatasetId, ResolvedDataset]
     populations: TypedDomainRegistry[PopulationId, PopulationRecord]
     experiments: TypedDomainRegistry[ExperimentId, ExperimentRecord]
+    capabilities: tuple[str, ...]
+    suppression_behaviors: tuple[str, ...]
+    population_readiness_rule: Mapping[str, str | bool]
+    eligibility_gates: TypedDomainRegistry[str, EligibilityGateRecord]
+    analysis_conventions: Mapping[str, str]
     training_profiles: TypedDomainRegistry[TrainingProfileId, TrainingProfileRecord]
     checkpoint_profiles: TypedDomainRegistry[CheckpointProfileId, CheckpointProfileRecord]
     seed_cohorts: TypedDomainRegistry[SeedCohortId, SeedCohortRecord]
@@ -526,6 +795,218 @@ class ResolvedProjectConfiguration:
     execution_fingerprint: Fingerprint
     scientific_projection: CanonicalProjection
     execution_projection: CanonicalProjection
+
+
+def _resolve_identity_scheme(cfg: IdentitySchemeConfig) -> IdentitySchemeRecord:
+    return IdentitySchemeRecord(
+        row_identity=cfg.row_identity,
+        client_identity=cfg.client_identity,
+        benign_group_identity=cfg.benign_group_identity,
+        attack_row_group_identity=cfg.attack_row_group_identity,
+        label_identity=cfg.label_identity,
+        attack_family_identity=cfg.attack_family_identity,
+        attack_type_identity=cfg.attack_type_identity,
+        device_identity=cfg.device_identity,
+        device_mac_ip_field=cfg.device_mac_ip_field,
+        timestamp_field=cfg.timestamp_field,
+        chronological_ordering_basis=cfg.chronological_ordering_basis,
+        provenance_fields=tuple(cfg.provenance_fields),
+    )
+
+
+def _resolve_label_fields(cfg: LabelFieldsConfig) -> LabelFieldsRecord:
+    multiclass = cfg.multiclass_label
+    return LabelFieldsRecord(
+        binary_label=cfg.binary_label,
+        multiclass_label=(
+            MulticlassLabelRecord(column=multiclass.column, type=multiclass.type, case=multiclass.case)
+            if multiclass is not None
+            else None
+        ),
+        benign_value=cfg.benign_value,
+        attack_class_mapping=cfg.attack_class_mapping,
+        device_family_mapping=cfg.device_family_mapping,
+        family_taxonomy=cfg.family_taxonomy,
+        family_map=cfg.family_map,
+    )
+
+
+def _resolve_endpoint_identity(cfg: EndpointIdentityConfig) -> EndpointIdentityRecord:
+    return EndpointIdentityRecord(
+        resolution=cfg.resolution,
+        fields=tuple(cfg.fields),
+        internal_prefix=cfg.internal_prefix,
+        subnet_component=cfg.subnet_component,
+        subnet_role_source=cfg.subnet_role_source,
+        subnet_to_group=cfg.subnet_to_group,
+        excluded_endpoints=cfg.excluded_endpoints,
+        direction_normalization=cfg.direction_normalization,
+        use=cfg.use,
+        unresolved_row_policy=cfg.unresolved_row_policy,
+    )
+
+
+def _resolve_categorical_encoding(cfg: CategoricalEncodingConfig) -> CategoricalEncodingRecord:
+    return CategoricalEncodingRecord(
+        strategy=cfg.strategy,
+        columns=tuple(cfg.columns),
+        vocabulary_scope=cfg.vocabulary_scope,
+        vocabulary_artifact=cfg.vocabulary_artifact,
+        vocabulary_fingerprint=cfg.vocabulary_fingerprint,
+        category_order=cfg.category_order,
+        encoded_feature_naming=cfg.encoded_feature_naming,
+        missing_category_policy=cfg.missing_category_policy,
+        unknown_category_policy=cfg.unknown_category_policy,
+        unknown_indicator_distinct_from_missing_indicator=cfg.unknown_indicator_distinct_from_missing_indicator,
+        feature_order=tuple(cfg.feature_order),
+    )
+
+
+def _resolve_field_schema(cfg: DatasetFieldSchemaConfig) -> DatasetFieldSchemaRecord:
+    model_features = cfg.model_features
+    retained_numeric_features = cfg.retained_numeric_features
+    endpoint_identity = cfg.endpoint_identity
+    return DatasetFieldSchemaRecord(
+        source_column_count=cfg.source_column_count,
+        header_required=cfg.header_required,
+        header_must_be_identical_across_all_source_files=cfg.header_must_be_identical_across_all_source_files,
+        header_must_be_identical_across_all_files_in_a_tree=cfg.header_must_be_identical_across_all_files_in_a_tree,
+        merged_header_extends_per_class_header_with=cfg.merged_header_extends_per_class_header_with,
+        label_column_position=cfg.label_column_position,
+        identity_scheme=_resolve_identity_scheme(cfg.identity_scheme),
+        label_fields=_resolve_label_fields(cfg.label_fields),
+        model_features=(
+            ModelFeaturesRecord(role=model_features.role, type=model_features.type, order=tuple(model_features.order))
+            if model_features is not None
+            else None
+        ),
+        source_columns=tuple(cfg.source_columns) if cfg.source_columns is not None else None,
+        endpoint_identity=(_resolve_endpoint_identity(endpoint_identity) if endpoint_identity is not None else None),
+        attack_row_group_policy=cfg.attack_row_group_policy,
+        retained_numeric_features=(
+            RetainedNumericFeaturesRecord(
+                role=retained_numeric_features.role,
+                order=tuple(retained_numeric_features.order),
+                numeric_parsing=retained_numeric_features.numeric_parsing,
+                on_invalid_value=retained_numeric_features.on_invalid_value,
+            )
+            if retained_numeric_features is not None
+            else None
+        ),
+        post_encoding_feature_order=cfg.post_encoding_feature_order,
+        categorical_encoding=(
+            cfg.categorical_encoding
+            if isinstance(cfg.categorical_encoding, str)
+            else _resolve_categorical_encoding(cfg.categorical_encoding)
+        ),
+        leakage_exclusions=cfg.leakage_exclusions,
+    )
+
+
+def _resolve_source_layout_contract(cfg: DatasetSourceLayoutConfig) -> DatasetSourceLayoutContractRecord:
+    cross_source_relationship = cfg.cross_source_relationship
+    return DatasetSourceLayoutContractRecord(
+        root=RelativePath(cfg.root),
+        benign_file=cfg.benign_file,
+        benign_file_pattern=cfg.benign_file_pattern,
+        normal_file_pattern=cfg.normal_file_pattern,
+        attack_file_pattern=cfg.attack_file_pattern,
+        device_dirs=tuple(cfg.device_dirs) if cfg.device_dirs is not None else None,
+        normal_group_folders=tuple(cfg.normal_group_folders) if cfg.normal_group_folders is not None else None,
+        executable_group_folders=(
+            tuple(cfg.executable_group_folders) if cfg.executable_group_folders is not None else None
+        ),
+        attack_files=tuple(cfg.attack_files) if cfg.attack_files is not None else None,
+        ignored_source_suffixes=tuple(cfg.ignored_source_suffixes),
+        ignored_root_entries=tuple(cfg.ignored_root_entries),
+        ignored_subtrees=tuple(cfg.ignored_subtrees),
+        sources=(
+            {
+                key: DatasetSourceRecord(
+                    role=source.role,
+                    root=RelativePath(source.root),
+                    file_pattern=source.file_pattern,
+                    owns=tuple(source.owns) if source.owns is not None else None,
+                    permitted_uses=tuple(source.permitted_uses) if source.permitted_uses is not None else None,
+                    contributes_rows_to_executable_materializations=(
+                        source.contributes_rows_to_executable_materializations
+                    ),
+                    defines_pseudo_clients=source.defines_pseudo_clients,
+                )
+                for key, source in cfg.sources.items()
+            }
+            if cfg.sources is not None
+            else None
+        ),
+        executable_source=cfg.executable_source,
+        cross_source_relationship=(
+            CrossSourceRelationshipRecord(
+                row_count_equality_required=cross_source_relationship.row_count_equality_required,
+                row_level_one_to_one_equivalence_assumed=(
+                    cross_source_relationship.row_level_one_to_one_equivalence_assumed
+                ),
+                join_by_row_position=cross_source_relationship.join_by_row_position,
+                join_by_any_key=cross_source_relationship.join_by_any_key,
+            )
+            if cross_source_relationship is not None
+            else None
+        ),
+        normal_traffic_root=(RelativePath(cfg.normal_traffic_root) if cfg.normal_traffic_root is not None else None),
+        attack_traffic_root=(RelativePath(cfg.attack_traffic_root) if cfg.attack_traffic_root is not None else None),
+        benign_file_required_per_device=cfg.benign_file_required_per_device,
+        attack_family_dirs=tuple(cfg.attack_family_dirs) if cfg.attack_family_dirs is not None else None,
+        attack_family_required_per_device=cfg.attack_family_required_per_device,
+    )
+
+
+def _resolve_source_contract(cfg: SourceContractConfig) -> SourceContractRecord:
+    return SourceContractRecord(
+        every_model_feature_present_in_merged_header=cfg.every_model_feature_present_in_merged_header,
+        every_model_feature_present_in_every_file=cfg.every_model_feature_present_in_every_file,
+        model_feature_count_equals_source_column_count=cfg.model_feature_count_equals_source_column_count,
+        per_class_schema_reference_check=cfg.per_class_schema_reference_check,
+        malformed_row=cfg.malformed_row,
+        empty_label_row=cfg.empty_label_row,
+        reject_unparseable_numeric_model_feature=cfg.reject_unparseable_numeric_model_feature,
+        reject_row_with_field_count_other_than_header=cfg.reject_row_with_field_count_other_than_header,
+        column_role_partition=cfg.column_role_partition,
+        positional_contract=cfg.positional_contract,
+        row_integrity_exclusions=cfg.row_integrity_exclusions,
+    )
+
+
+def _resolve_client_construction(cfg: SetupClientConstructionConfig) -> SetupClientConstructionRecord:
+    client_source: str | tuple[str, ...] | None
+    if cfg.client_source is None or isinstance(cfg.client_source, str):
+        client_source = cfg.client_source
+    else:
+        client_source = tuple(cfg.client_source)
+    return SetupClientConstructionRecord(
+        method=cfg.method,
+        client_source=client_source,
+        client_semantics=cfg.client_semantics,
+        excluded_client_folders=(
+            tuple(cfg.excluded_client_folders) if cfg.excluded_client_folders is not None else None
+        ),
+        client_count=PositiveInt(cfg.client_count) if cfg.client_count is not None else None,
+        partition_condition=cfg.partition_condition,
+        source_mixture_components=cfg.source_mixture_components,
+        label_field=cfg.label_field,
+        partition_seed=Seed(cfg.partition_seed) if cfg.partition_seed is not None else None,
+        partition_axes=cfg.partition_axes,
+        allocation_procedure=cfg.allocation_procedure,
+        same_proportions_govern=(
+            tuple(cfg.same_proportions_govern) if cfg.same_proportions_govern is not None else None
+        ),
+        split_role_preservation=cfg.split_role_preservation,
+        attack_row_assignment=cfg.attack_row_assignment,
+        attack_labels_used_in_partition_generation=cfg.attack_labels_used_in_partition_generation,
+        minimum_row_counts=cfg.minimum_row_counts,
+        retry_policy=cfg.retry_policy,
+        feasibility_failure=cfg.feasibility_failure,
+        manifest_invariants=(tuple(cfg.manifest_invariants) if cfg.manifest_invariants is not None else None),
+        manifest_fields=(tuple(cfg.manifest_fields) if cfg.manifest_fields is not None else None),
+    )
 
 
 def _resolve_adapter_kind(dataset_name: str) -> AdapterKind:
@@ -583,14 +1064,33 @@ def resolve_project_configuration(
             raw_root=(paths.raw_data / raw_root).resolve(),
             processed_root=(paths.processed_data / d_cfg.dataset).resolve(),
         )
-        setups = tuple(
-            DatasetSetup(
-                identifier=DatasetSetupId(identifier),
-                materialization_id=MaterializationId(setup.materialization),
-                capabilities=tuple(setup.provides_capabilities),
+        setup_identifiers = set(d_cfg.setups)
+        setups_list = []
+        for identifier, setup in sorted(d_cfg.setups.items()):
+            if (
+                setup.client_population_must_equal_setup is not None
+                and setup.client_population_must_equal_setup not in setup_identifiers
+            ):
+                raise ConfigurationError(
+                    f"Dataset '{d_cfg.dataset}' setup '{identifier}' references unregistered "
+                    f"client_population_must_equal_setup '{setup.client_population_must_equal_setup}'"
+                )
+            setups_list.append(
+                DatasetSetup(
+                    identifier=DatasetSetupId(identifier),
+                    materialization_id=MaterializationId(setup.materialization),
+                    capabilities=tuple(setup.provides_capabilities),
+                    client_construction=_resolve_client_construction(setup.client_construction),
+                    validation_scope=setup.validation_scope,
+                    eligibility_gate=setup.eligibility_gate,
+                    client_population_must_equal_setup=(
+                        DatasetSetupId(setup.client_population_must_equal_setup)
+                        if setup.client_population_must_equal_setup is not None
+                        else None
+                    ),
+                )
             )
-            for identifier, setup in sorted(d_cfg.setups.items())
-        )
+        setups = tuple(setups_list)
         materializations = tuple(
             DatasetMaterialization(
                 identifier=MaterializationId(identifier),
@@ -646,11 +1146,7 @@ def resolve_project_configuration(
                 split_boundary_rule=materialization.split.boundary_rule,
                 split_boundary_index_formula=materialization.split.boundary_index_formula,
                 split_future_leakage_check=materialization.split.future_leakage_check,
-                split_minimum_row_counts=(
-                    cast(Mapping[str, int], deep_freeze(materialization.split.minimum_row_counts))
-                    if materialization.split.minimum_row_counts is not None
-                    else None
-                ),
+                split_minimum_row_counts=materialization.split.minimum_row_counts,
                 split_missing_client_policy=materialization.split.missing_client_policy,
                 split_chronology_unverifiable_policy=materialization.split.chronology_unverifiable_policy,
             )
@@ -754,6 +1250,14 @@ def resolve_project_configuration(
                 ignored_suffixes=tuple(d_cfg.source_layout.ignored_source_suffixes),
                 ignored_subtrees=tuple(d_cfg.source_layout.ignored_subtrees),
             ),
+            source_layout_contract=_resolve_source_layout_contract(d_cfg.source_layout),
+            field_schema=_resolve_field_schema(d_cfg.field_schema),
+            source_contract=_resolve_source_contract(d_cfg.source_contract),
+            client_identity_contract=(
+                as_optional_frozen_json_mapping(d_cfg.client_identity_contract)
+                if d_cfg.client_identity_contract is not None
+                else None
+            ),
             inspection_contract=inspection_contract,
             setups=setups,
             materializations=materializations,
@@ -793,6 +1297,27 @@ def resolve_project_configuration(
             metric_bundle_id=metric_bundle_id,
         )
     populations_reg = TypedDomainRegistry(_items=populations_dict)
+
+    # 2b. Resolve catalogue-level contracts (capabilities, suppression, readiness, eligibility gates, conventions)
+    eligibility_gates_dict: dict[str, EligibilityGateRecord] = {}
+    for gate_key, gate_cfg in authored_experiments.eligibility_gates.items():
+        eligibility_gates_dict[gate_key] = EligibilityGateRecord(
+            identifier=gate_key,
+            candidate_population=gate_cfg.candidate_population,
+            minimum_benign_calibration_count=PositiveInt(gate_cfg.minimum_benign_calibration_count),
+            minimum_eligible_client_proportion=Probability(gate_cfg.minimum_eligible_client_proportion),
+            evaluation_time=gate_cfg.evaluation_time,
+            failure_outcome=gate_cfg.failure_outcome,
+            population_reduction_without_explicit_roadmap_authorization=(
+                gate_cfg.population_reduction_without_explicit_roadmap_authorization
+            ),
+            applies_to_experiments=tuple(ExperimentId(e) for e in gate_cfg.applies_to_experiments),
+        )
+    eligibility_gates_reg = TypedDomainRegistry(_items=eligibility_gates_dict)
+    catalogue_capabilities = tuple(authored_experiments.capabilities)
+    catalogue_suppression_behaviors = tuple(authored_experiments.suppression_behaviors)
+    catalogue_population_readiness_rule = MappingProxyType(dict(authored_experiments.population_readiness_rule))
+    catalogue_analysis_conventions = MappingProxyType(dict(authored_experiments.analysis_conventions))
 
     # 3. Resolve training profiles
     training_dict: dict[TrainingProfileId, TrainingProfileRecord] = {}
@@ -916,7 +1441,7 @@ def resolve_project_configuration(
         if exp_id in experiments_dict:
             raise ConfigurationError(f"Duplicate experiment identifier: '{exp_cfg.name}'")
 
-        # Validate evaluations threshold policies
+        # Validate evaluations threshold policies and populations
         evals_list = []
         for ev in exp_cfg.evaluations:
             tp_id = ThresholdPolicyId(ev.threshold_policy)
@@ -925,6 +1450,12 @@ def resolve_project_configuration(
                     f"Experiment '{exp_cfg.name}' evaluation '{ev.label}' references "
                     f"unregistered threshold policy '{ev.threshold_policy}'"
                 )
+            eval_population_id = PopulationId(ev.population) if ev.population is not None else None
+            if eval_population_id is not None and eval_population_id not in populations_dict:
+                raise ConfigurationError(
+                    f"Experiment '{exp_cfg.name}' evaluation '{ev.label}' references "
+                    f"unregistered population '{ev.population}'"
+                )
             evals_list.append(
                 EvaluationSpecRecord(
                     label=ev.label,
@@ -932,19 +1463,65 @@ def resolve_project_configuration(
                     run_requirement=(
                         RunRequirement(ev.run_requirement) if ev.run_requirement else RunRequirement.MANDATORY
                     ),
+                    overrides=ev.overrides,
+                    population_id=eval_population_id,
+                    recalibration_mode=ev.recalibration_mode,
                 )
             )
 
-        analyses_list = [
-            AnalysisSpecRecord(
-                label=a.label,
-                kind=a.kind,
-                result_type=a.result_type,
-                primary_metric=a.primary_metric,
-                statistical_profile=a.statistical_profile,
+        analyses_list = [_resolve_analysis(exp_cfg, a) for a in exp_cfg.analyses]
+
+        capability_requirements_list = []
+        for requirement in exp_cfg.capability_requirements:
+            applies_to_population_ids = (
+                tuple(PopulationId(p) for p in requirement.applies_to_populations)
+                if requirement.applies_to_populations is not None
+                else None
             )
-            for a in exp_cfg.analyses
-        ]
+            if applies_to_population_ids is not None:
+                for pop_id in applies_to_population_ids:
+                    if pop_id not in populations_dict:
+                        raise ConfigurationError(
+                            f"Experiment '{exp_cfg.name}' capability requirement '{requirement.capability}' "
+                            f"references unregistered population '{pop_id}'"
+                        )
+            capability_requirements_list.append(
+                CapabilityRequirementRecord(
+                    capability=requirement.capability,
+                    when_unavailable=requirement.when_unavailable,
+                    applies_to_populations=applies_to_population_ids,
+                )
+            )
+
+        calibration_subset_record = (
+            CalibrationSubsetRecord(
+                requested_sample_count=exp_cfg.calibration_subset.requested_sample_count,
+                selection_strategy=exp_cfg.calibration_subset.selection_strategy,
+                nesting_policy=exp_cfg.calibration_subset.nesting_policy,
+                nesting_rule=exp_cfg.calibration_subset.nesting_rule,
+                selection_seed=Seed(exp_cfg.calibration_subset.selection_seed),
+                replicate_count=PositiveInt(exp_cfg.calibration_subset.replicate_count),
+                replicate_seed_derivation=exp_cfg.calibration_subset.replicate_seed_derivation,
+                model_retraining=exp_cfg.calibration_subset.model_retraining,
+                client_eligibility_per_requested_size=exp_cfg.calibration_subset.client_eligibility_per_requested_size,
+                subminimum_eligibility_policy=exp_cfg.calibration_subset.subminimum_eligibility_policy,
+                subminimum_eligibility_policy_applies_to=(
+                    exp_cfg.calibration_subset.subminimum_eligibility_policy_applies_to
+                ),
+                effective_eligibility_policy_by_sweep_condition=(
+                    exp_cfg.calibration_subset.effective_eligibility_policy_by_sweep_condition
+                ),
+                insufficient_row_policy=exp_cfg.calibration_subset.insufficient_row_policy,
+                replicate_aggregation_within_seed=exp_cfg.calibration_subset.replicate_aggregation_within_seed,
+                seed_level_statistic=exp_cfg.calibration_subset.seed_level_statistic,
+                additional_seed_level_statistic=exp_cfg.calibration_subset.additional_seed_level_statistic,
+                independent_inferential_unit=exp_cfg.calibration_subset.independent_inferential_unit,
+                replicates_counted_as_seeds=exp_cfg.calibration_subset.replicates_counted_as_seeds,
+                full_calibration_reference_condition=exp_cfg.calibration_subset.full_calibration_reference_condition,
+            )
+            if exp_cfg.calibration_subset is not None
+            else None
+        )
 
         experiments_dict[exp_id] = ExperimentRecord(
             identifier=exp_id,
@@ -956,14 +1533,11 @@ def resolve_project_configuration(
             checkpoint_profile_id=CheckpointProfileId(exp_cfg.checkpoint_profile),
             seed_cohort_id=SeedCohortId(exp_cfg.seed_cohort),
             eligibility_policy_id=EligibilityPolicyId(exp_cfg.eligibility_policy),
-            prerequisite_ids=tuple(ExperimentId(p.experiment) for p in exp_cfg.prerequisites),
-            capability_requirements=tuple(
-                CapabilityRequirementRecord(
-                    capability=requirement.capability,
-                    when_unavailable=requirement.when_unavailable,
-                )
-                for requirement in exp_cfg.capability_requirements
+            prerequisites=tuple(
+                PrerequisiteSpecRecord(experiment_id=ExperimentId(p.experiment), required_outcome=p.required_outcome)
+                for p in exp_cfg.prerequisites
             ),
+            capability_requirements=tuple(capability_requirements_list),
             evaluations=tuple(evals_list),
             analyses=tuple(analyses_list),
             report_ids=tuple(exp_cfg.reports),
@@ -972,6 +1546,34 @@ def resolve_project_configuration(
                 if exp_cfg.sweeps is not None
                 else ()
             ),
+            readiness_gates=tuple(exp_cfg.readiness_gates),
+            validation_scope=exp_cfg.validation_scope,
+            never_promoted_to_confirmatory=exp_cfg.never_promoted_to_confirmatory,
+            outside_core_causal_ladder=exp_cfg.outside_core_causal_ladder,
+            faithful_reproduction_claim_forbidden=exp_cfg.faithful_reproduction_claim_forbidden,
+            attack_sensitive_metrics_requested=exp_cfg.attack_sensitive_metrics_requested,
+            unavailable_capability_reporting=tuple(exp_cfg.unavailable_capability_reporting),
+            independent_of_experiment=(
+                ExperimentId(exp_cfg.independent_of_experiment)
+                if exp_cfg.independent_of_experiment is not None
+                else None
+            ),
+            calibration_subset=calibration_subset_record,
+            method_naming_rule=exp_cfg.method_naming_rule,
+            personalization_parameter_selection_source=exp_cfg.personalization_parameter_selection_source,
+            run_condition=exp_cfg.run_condition,
+            unavailable_behavior=exp_cfg.unavailable_behavior,
+            blocks_other_experiments_when_unavailable=exp_cfg.blocks_other_experiments_when_unavailable,
+            estimate_basis=exp_cfg.estimate_basis,
+            client_semantics_constraint=exp_cfg.client_semantics_constraint,
+            generalization_constraint=exp_cfg.generalization_constraint,
+            quantitative_claim_gate=exp_cfg.quantitative_claim_gate,
+            population_equivalence_requirement=exp_cfg.population_equivalence_requirement,
+            population_roles=exp_cfg.population_roles,
+            scope_constraint=exp_cfg.scope_constraint,
+            temporal_procedure=exp_cfg.temporal_procedure,
+            primary_coefficient_selection=exp_cfg.primary_coefficient_selection,
+            training_overrides=exp_cfg.training_overrides,
         )
     experiments_reg = TypedDomainRegistry(_items=experiments_dict)
 
@@ -1128,7 +1730,13 @@ def resolve_project_configuration(
         "datasets": {
             str(k): {
                 "schema_id": v.schema_id,
+                "source_layout_contract": _unstructure(v.source_layout_contract),
+                "field_schema": _unstructure(v.field_schema),
+                "source_contract": _unstructure(v.source_contract),
+                "client_identity_contract": _unstructure(v.client_identity_contract),
+                "setups": _unstructure(v.setups),
                 "materializations": _unstructure(v.materializations),
+                "capabilities": list(v.capabilities),
                 "fingerprint_source_fields": list(v.fingerprint_source_fields),
                 "fingerprint_schema_fields": list(v.fingerprint_schema_fields),
                 "fingerprint_materialization_fields": list(v.fingerprint_materialization_fields),
@@ -1137,7 +1745,10 @@ def resolve_project_configuration(
             for k, v in sorted(resolved_datasets.items(), key=lambda x: str(x[0]))
         },
         "populations": {str(k): _unstructure(v) for k, v in sorted(populations_dict.items(), key=lambda x: str(x[0]))},
-        "experiments": {str(k): _unstructure(v) for k, v in sorted(experiments_dict.items(), key=lambda x: str(x[0]))},
+        "experiments": {
+            str(k): _experiment_scientific_projection(v)
+            for k, v in sorted(experiments_dict.items(), key=lambda x: str(x[0]))
+        },
         "threshold_policies": {
             str(k): _unstructure(v) for k, v in sorted(threshold_policies_dict.items(), key=lambda x: str(x[0]))
         },
@@ -1176,6 +1787,11 @@ def resolve_project_configuration(
         "result_types": {k: _unstructure(v) for k, v in sorted(result_types.items())},
         "evaluation_result_contract": _unstructure(resolved_evaluation_result_contract),
         "report_defaults": _unstructure(resolved_report_defaults),
+        "capabilities": sorted(catalogue_capabilities),
+        "suppression_behaviors": sorted(catalogue_suppression_behaviors),
+        "population_readiness_rule": dict(sorted(catalogue_population_readiness_rule.items())),
+        "eligibility_gates": {k: _unstructure(v) for k, v in sorted(eligibility_gates_dict.items())},
+        "analysis_conventions": dict(sorted(catalogue_analysis_conventions.items())),
     }
     scientific_fingerprint = compute_scientific_fingerprint(scientific_projection)
 
@@ -1195,6 +1811,11 @@ def resolve_project_configuration(
         datasets=TypedDomainRegistry(_items=resolved_datasets),
         populations=populations_reg,
         experiments=experiments_reg,
+        capabilities=catalogue_capabilities,
+        suppression_behaviors=catalogue_suppression_behaviors,
+        population_readiness_rule=catalogue_population_readiness_rule,
+        eligibility_gates=eligibility_gates_reg,
+        analysis_conventions=catalogue_analysis_conventions,
         training_profiles=training_reg,
         checkpoint_profiles=checkpoint_reg,
         seed_cohorts=seed_reg,

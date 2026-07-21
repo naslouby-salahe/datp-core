@@ -103,7 +103,7 @@ def test_threshold_policy_record_is_frozen_at_the_union_variant_level(resolved_c
 def test_experiment_record_prerequisite_and_evaluation_tuples_are_immutable(resolved_config) -> None:
     experiment_id = next(iter(resolved_config.experiments))
     experiment = resolved_config.experiments.get(experiment_id)
-    assert isinstance(experiment.prerequisite_ids, tuple)
+    assert isinstance(experiment.prerequisites, tuple)
     assert isinstance(experiment.evaluations, tuple)
     with pytest.raises(FrozenInstanceError):
         experiment.display_name = experiment.display_name

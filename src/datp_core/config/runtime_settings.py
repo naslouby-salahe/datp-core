@@ -119,15 +119,41 @@ def _as_mapping_str_int_or_bool(value: object) -> Mapping[str, int | bool]:
 
 
 @define(frozen=True, slots=True, kw_only=True)
+class DataLoadingRecord:
+    """Pure resolved data-loading contract (runtime.yaml ``data_loading``)."""
+
+    chunk_row_count: PositiveInt
+    streaming: bool
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ResourceBudgetRecord:
+    """Pure resolved resource-budget contract (runtime.yaml ``resource_budget``)."""
+
+    max_ram_gib: PositiveInt
+    max_vram_gib: int | None = None
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ConcurrencyRecord:
+    """Pure resolved concurrency contract (runtime.yaml ``concurrency``)."""
+
+    worker_count: PositiveInt
+    training_concurrency: int | None = None
+    scoring_concurrency: int | None = None
+    audit_concurrency: int | None = None
+
+
+@define(frozen=True, slots=True, kw_only=True)
 class ExecutionProfileRecord:
-    """Pure resolved execution profile (runtime.yaml `execution_profiles`)."""
+    """Pure resolved execution profile (runtime.yaml ``execution_profiles``)."""
 
     identifier: str
     device_policy: str
     determinism: str
-    resource_budget: Mapping[str, int] = field(converter=_as_mapping_str_int)
-    concurrency: Mapping[str, int] = field(converter=_as_mapping_str_int)
-    data_loading: Mapping[str, int | bool] = field(converter=_as_mapping_str_int_or_bool)
+    resource_budget: ResourceBudgetRecord
+    concurrency: ConcurrencyRecord
+    data_loading: DataLoadingRecord
     process_start_method: str
     log_interval_rounds: PositiveInt
     atomic_write: bool
@@ -242,9 +268,20 @@ def resolve_runtime_configuration(
             identifier=key,
             device_policy=profile.device_policy,
             determinism=profile.determinism,
-            resource_budget=dict(profile.resource_budget),
-            concurrency=dict(profile.concurrency),
-            data_loading=dict(profile.data_loading),
+            resource_budget=ResourceBudgetRecord(
+                max_ram_gib=PositiveInt(profile.resource_budget.max_ram_gib),
+                max_vram_gib=profile.resource_budget.max_vram_gib,
+            ),
+            concurrency=ConcurrencyRecord(
+                worker_count=PositiveInt(profile.concurrency.worker_count),
+                training_concurrency=profile.concurrency.training_concurrency,
+                scoring_concurrency=profile.concurrency.scoring_concurrency,
+                audit_concurrency=profile.concurrency.audit_concurrency,
+            ),
+            data_loading=DataLoadingRecord(
+                chunk_row_count=PositiveInt(profile.data_loading.chunk_row_count),
+                streaming=profile.data_loading.streaming,
+            ),
             process_start_method=profile.process_start_method,
             log_interval_rounds=PositiveInt(profile.log_interval_rounds),
             atomic_write=profile.atomic_write,

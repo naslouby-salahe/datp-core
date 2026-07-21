@@ -2,28 +2,24 @@
 
 from __future__ import annotations
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, field_validator, model_validator
+from pydantic import Field, JsonValue, model_validator
+
+from datp_core.config.models._base import SchemaVersionOneConfigModel, StrictFrozenConfigModel
 
 
-class AuthoredStudyPopulationConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class AuthoredStudyPopulationConfig(StrictFrozenConfigModel):
     dataset: str
     setup: str
     metric_bundle: str
 
 
-class CapabilityRequirementConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class CapabilityRequirementConfig(StrictFrozenConfigModel):
     capability: str
     when_unavailable: str
     applies_to_populations: list[str] | None = None
 
 
-class EvaluationSpecConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class EvaluationSpecConfig(StrictFrozenConfigModel):
     label: str
     threshold_policy: str
     overrides: dict[str, JsonValue] | None = None
@@ -32,9 +28,7 @@ class EvaluationSpecConfig(BaseModel):
     recalibration_mode: str | None = None
 
 
-class AnalysisSpecConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class AnalysisSpecConfig(StrictFrozenConfigModel):
     label: str
     kind: str
     result_type: str
@@ -110,24 +104,18 @@ class AnalysisSpecConfig(BaseModel):
     chronology_unverifiable_policy: str | None = None
 
 
-class PrerequisiteSpecConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class PrerequisiteSpecConfig(StrictFrozenConfigModel):
     experiment: str
     required_outcome: str
 
 
-class SweepConditionConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class SweepConditionConfig(StrictFrozenConfigModel):
     name: str
     allocation: str
     dirichlet_alpha: float | None = None
 
 
-class SweepVariableConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class SweepVariableConfig(StrictFrozenConfigModel):
     values: list[JsonValue] | None = None
     conditions: list[SweepConditionConfig] | None = None
 
@@ -138,9 +126,7 @@ class SweepVariableConfig(BaseModel):
         return self
 
 
-class CalibrationSubsetConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class CalibrationSubsetConfig(StrictFrozenConfigModel):
     requested_sample_count: dict[str, str]
     selection_strategy: str
     nesting_policy: str
@@ -162,9 +148,7 @@ class CalibrationSubsetConfig(BaseModel):
     full_calibration_reference_condition: dict[str, JsonValue]
 
 
-class AuthoredExperimentConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class AuthoredExperimentConfig(StrictFrozenConfigModel):
     name: str
     display_name: str
     evidence_role: str
@@ -206,9 +190,7 @@ class AuthoredExperimentConfig(BaseModel):
     training_overrides: dict[str, JsonValue] | None = None
 
 
-class EligibilityGateConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
+class EligibilityGateConfig(StrictFrozenConfigModel):
     candidate_population: str
     minimum_benign_calibration_count: int
     minimum_eligible_client_proportion: float
@@ -218,10 +200,7 @@ class EligibilityGateConfig(BaseModel):
     applies_to_experiments: list[str]
 
 
-class AuthoredExperimentsCatalogueConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-
-    schema_version: int = Field(ge=1)
+class AuthoredExperimentsCatalogueConfig(SchemaVersionOneConfigModel):
     study_populations: dict[str, AuthoredStudyPopulationConfig]
     capabilities: list[str]
     suppression_behaviors: list[str]
@@ -229,10 +208,3 @@ class AuthoredExperimentsCatalogueConfig(BaseModel):
     eligibility_gates: dict[str, EligibilityGateConfig]
     analysis_conventions: dict[str, str]
     experiments: list[AuthoredExperimentConfig]
-
-    @field_validator("schema_version")
-    @classmethod
-    def validate_schema_version(cls, value: int) -> int:
-        if value != 1:
-            raise ValueError(f"Unsupported experiment schema version: {value}")
-        return value

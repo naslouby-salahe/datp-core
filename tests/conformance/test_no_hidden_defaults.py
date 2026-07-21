@@ -14,10 +14,19 @@ import attrs
 
 import datp_core.config.runtime_settings as runtime_settings
 import datp_core.domain.catalogue as catalogue
+import datp_core.domain.datasets as datasets
 
 # (class name, field name) pairs permitted to hold an empty-collection factory default.
 _EMPTY_COLLECTION_ALLOWLIST = {
     ("ExperimentRecord", "sweeps"),
+}
+
+# Record fields that are genuinely optional (None when not authored in YAML).
+_OPTIONAL_NONE_ALLOWLIST = {
+    ("ConcurrencyRecord", "training_concurrency"),
+    ("ConcurrencyRecord", "scoring_concurrency"),
+    ("ConcurrencyRecord", "audit_concurrency"),
+    ("ResourceBudgetRecord", "max_vram_gib"),
 }
 
 # Non-record attrs classes that are not part of the resolved configuration surface.
@@ -30,7 +39,7 @@ def _is_empty_collection_factory(default: object) -> bool:
 
 def test_resolved_records_have_no_hidden_defaults() -> None:
     offenders: list[str] = []
-    for module in (catalogue, runtime_settings):
+    for module in (catalogue, runtime_settings, datasets):
         for class_name, cls in inspect.getmembers(module, inspect.isclass):
             if cls.__module__ != module.__name__ or not attrs.has(cls) or class_name in _EXCLUDED_CLASSES:
                 continue
@@ -40,6 +49,8 @@ def test_resolved_records_have_no_hidden_defaults() -> None:
                 if (class_name, field.name) in _EMPTY_COLLECTION_ALLOWLIST and _is_empty_collection_factory(
                     field.default
                 ):
+                    continue
+                if (class_name, field.name) in _OPTIONAL_NONE_ALLOWLIST and field.default is None:
                     continue
                 offenders.append(f"{class_name}.{field.name} = {field.default!r}")
     assert offenders == [], f"Resolved records must not carry hidden defaults: {offenders}"
