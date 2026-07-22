@@ -427,6 +427,7 @@ setups:
     materialization: group_benign
     client_construction:
       method: sensor_group_clients
+      client_count: 10
       client_source: source_layout.executable_group_folders
     validation_scope: benign_operating_point_equity
     eligibility_gate: edge_external_benign_coverage
@@ -438,6 +439,7 @@ setups:
     materialization: group_chronological
     client_construction:
       method: sensor_group_clients
+      client_count: 9
       client_source: source_layout.executable_group_folders
       excluded_client_folders: [Modbus]
     validation_scope: benign_temporal_operating_point_equity
@@ -451,6 +453,7 @@ setups:
     materialization: group_chronological_static_reference
     client_construction:
       method: sensor_group_clients
+      client_count: 9
       client_source: source_layout.executable_group_folders
       excluded_client_folders: [Modbus]
     client_population_must_equal_setup: chronological_sensor_groups

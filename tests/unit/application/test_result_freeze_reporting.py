@@ -24,7 +24,9 @@ def test_result_freeze_requires_every_configured_analysis_before_rendering() -> 
             "confidence_interval": [0.01, 0.2],
             "sign_consistency": 0.9,
             "seed_differences": [0.1, 0.2],
+            "seed": s,
         }
+        for s in range(5)
         for analysis in experiment.analyses
     ]
     context = StageJobContext(experiment_id=experiment.identifier)

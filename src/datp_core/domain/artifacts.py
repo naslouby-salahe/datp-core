@@ -27,6 +27,7 @@ class ArtifactKind(Enum):
     CALIBRATION_SUBSET = "calibration_subset"
     TEST_SCORES = "test_scores"
     THRESHOLDS = "thresholds"
+    THRESHOLD_DIAGNOSTICS = "threshold_diagnostics"
     CLIENT_METRICS = "client_metrics"
     STATISTICAL_SUMMARY = "statistical_summary"
     RESULT_FREEZE = "result_freeze"

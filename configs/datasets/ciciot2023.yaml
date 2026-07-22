@@ -180,6 +180,7 @@ setups:
     materialization: datp_core
     client_construction:
       method: dataset_file_pseudo_clients
+      client_count: 63
       client_source: source_layout.sources.merged.file_pattern
       client_semantics: file_defined_pseudo_client_not_physical_device
     provides_capabilities:

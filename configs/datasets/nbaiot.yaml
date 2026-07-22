@@ -276,7 +276,7 @@ materializations:
 setups:
   natural_devices:
     materialization: datp_core
-    client_construction: { method: physical_device_clients, client_source: source_layout.device_dirs }
+    client_construction: { method: physical_device_clients, client_source: source_layout.device_dirs, client_count: 9 }
     provides_capabilities:
       - benign_calibration
       - benign_test_false_positive_metrics
@@ -286,7 +286,7 @@ setups:
 
   anchor_natural_devices:
     materialization: anchor
-    client_construction: { method: physical_device_clients, client_source: source_layout.device_dirs }
+    client_construction: { method: physical_device_clients, client_source: source_layout.device_dirs, client_count: 9 }
     provides_capabilities:
       - benign_calibration
       - benign_test_false_positive_metrics

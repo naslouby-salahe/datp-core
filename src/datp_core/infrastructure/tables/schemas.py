@@ -37,7 +37,12 @@ class ClientMetricFrameSchema(pa.DataFrameModel):
     )
     true_positive_rate: float | None = pa.Field(nullable=True, ge=0.0, le=1.0)  # type: ignore
     true_positive_rate_status: str = pa.Field(  # type: ignore
-        isin=["available", "unavailable_missing_attack_class", "unavailable_ineligible_client"]
+        isin=[
+            "available",
+            "unavailable_missing_attack_class",
+            "unavailable_invalid_attack_assignment",
+            "unavailable_ineligible_client",
+        ]
     )
     balanced_accuracy: float | None = pa.Field(nullable=True, ge=0.0, le=1.0)  # type: ignore
     balanced_accuracy_status: str = pa.Field(

@@ -29,6 +29,8 @@ class JobExecutionStatus(Enum):
     SKIPPED = "skipped"
     SUPPRESSED = "suppressed"
     FAILED = "failed"
+    INFEASIBLE = "infeasible"
+    BLOCKED_BY_DEPENDENCY = "blocked_by_dependency"
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -100,3 +102,17 @@ class StageJobOutcome:
     @classmethod
     def suppressed(cls, *, job_id: JobId, stage: StageKind, error_message: str | None = None) -> StageJobOutcome:
         return cls(job_id=job_id, stage=stage, status=JobExecutionStatus.SUPPRESSED, error_message=error_message)
+
+    @classmethod
+    def infeasible(cls, *, job_id: JobId, stage: StageKind, error_message: str) -> StageJobOutcome:
+        if not error_message:
+            raise ValueError("An infeasible outcome must carry an error message")
+        return cls(job_id=job_id, stage=stage, status=JobExecutionStatus.INFEASIBLE, error_message=error_message)
+
+    @classmethod
+    def blocked_by_dependency(cls, *, job_id: JobId, stage: StageKind, error_message: str) -> StageJobOutcome:
+        if not error_message:
+            raise ValueError("A blocked-by-dependency outcome must carry an error message")
+        return cls(
+            job_id=job_id, stage=stage, status=JobExecutionStatus.BLOCKED_BY_DEPENDENCY, error_message=error_message
+        )

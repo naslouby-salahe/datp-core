@@ -66,6 +66,7 @@ from datp_core.domain.outcomes import StageJob, StageJobContext, StageJobOutcome
 from datp_core.domain.protocol_contracts import CommunicationEstimationContractRecord
 from datp_core.domain.run_identity import execution_run_id
 from datp_core.domain.splits import SplitManifest
+from datp_core.domain.statistics import holm_adjust_p_values
 from datp_core.domain.thresholding import (
     BenignCalibrationScores,
     ConformalAttainabilityStatus,
@@ -172,6 +173,21 @@ def _git_revision() -> str:
     except (OSError, subprocess.TimeoutExpired):
         pass
     return "unknown"
+
+
+def _apply_holm_correction(results: list[dict[str, object]]) -> None:
+    """Apply Holm-Bonferroni multiplicity correction to all paired-analysis p-values in place."""
+    paired_indices = [
+        i
+        for i, record in enumerate(results)
+        if record.get("analysis_label") and "p_value" in record and record.get("p_value") is not None
+    ]
+    if len(paired_indices) < 2:
+        return
+    p_values = tuple(float(results[i]["p_value"]) for i in paired_indices)  # type: ignore[arg-type]
+    adjusted = holm_adjust_p_values(p_values)
+    for idx, adj_p in zip(paired_indices, adjusted, strict=True):
+        results[idx]["holm_adjusted_p_value"] = adj_p
 
 
 def _evaluate_readiness_gates(
@@ -435,7 +451,7 @@ class DatasetMaterializationStageHandler:
                     experiment.identifier,
                 )
                 if gate_issues:
-                    return StageJobOutcome.failed(
+                    return StageJobOutcome.infeasible(
                         job_id=job.job_id,
                         stage=job.stage,
                         error_message="Eligibility gate(s) failed: " + "; ".join(gate_issues),
@@ -1943,6 +1959,31 @@ class ThresholdConstructionStageHandler:
                 stage=job.stage,
                 error_message=commit.error_message or "threshold artifact commit failed",
             )
+        if threshold_set.diagnostics:
+            diagnostics_key = ArtifactKey(
+                artifact_id=ArtifactId(f"{job.output.artifact_id.value}:diagnostics"),
+                kind=ArtifactKind.THRESHOLD_DIAGNOSTICS,
+            )
+            diagnostics_relative = f"{relative_path}.diagnostics"
+            diagnostics_payload = json.dumps(threshold_set.diagnostics, separators=(",", ":"), sort_keys=True).encode(
+                "utf-8"
+            )
+            diagnostics_commit = _commit_artifact(
+                self._repository,
+                self._config,
+                job.context,
+                artifact_key=diagnostics_key,
+                artifact_format=ArtifactFormat.JSON,
+                relative_path=diagnostics_relative,
+                parents=_parents(self._config, (job.output,)),
+                payload=BytesPayload(payload_bytes=diagnostics_payload),
+            )
+            if not diagnostics_commit.success:
+                return StageJobOutcome.failed(
+                    job_id=job.job_id,
+                    stage=job.stage,
+                    error_message=diagnostics_commit.error_message or "threshold diagnostics commit failed",
+                )
         return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
 
 
@@ -2207,6 +2248,8 @@ class StatisticalAnalysisStageHandler:
                 results.append(self._ditto_selection(experiment.identifier, run_id))
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+        # Apply Holm-Bonferroni correction across all paired-analysis p-values.
+        _apply_holm_correction(results)
         payload = json.dumps(results, separators=(",", ":"), sort_keys=True).encode("utf-8")
         commit = _commit_artifact(
             self._repository,
@@ -2504,7 +2547,7 @@ class StatisticalAnalysisStageHandler:
                 cv_instability_threshold=0.10 * (1.0 - quantile),
                 quantile_method="linear",
             )
-            if dispersion.coefficient_of_variation.status is not MetricStatus.AVAILABLE:
+            if dispersion.coefficient_of_variation.status is MetricStatus.UNDEFINED_ZERO_DENOMINATOR:
                 raise ValueError("Configured CV(FPR) is unavailable for paired statistical analysis")
             assert dispersion.coefficient_of_variation.value is not None
             values.append(dispersion.coefficient_of_variation.value)

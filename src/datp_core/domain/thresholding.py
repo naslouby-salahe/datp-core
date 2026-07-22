@@ -104,6 +104,7 @@ class ThresholdSet:
     policy_id: ThresholdPolicyId
     values: tuple[ThresholdRecord, ...]
     target_quantile: Probability
+    diagnostics: dict[str, object] = field(factory=dict)
 
     def get_client_threshold(self, client_id: ClientId) -> ThresholdRecord:
         for rec in self.values:

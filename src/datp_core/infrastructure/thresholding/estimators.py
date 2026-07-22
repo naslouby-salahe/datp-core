@@ -64,10 +64,12 @@ def _records(
     cluster_labels: dict[str, int] | None = None,
     conformal_ranks: dict[str, int] | None = None,
     conformal_attainability: dict[str, ConformalAttainabilityStatus] | None = None,
+    diagnostics: dict[str, object] | None = None,
 ) -> ThresholdSet:
     return ThresholdSet(
         policy_id=policy_id,
         target_quantile=quantile,
+        diagnostics=diagnostics or {},
         values=tuple(
             ThresholdRecord(
                 client_id=item.client_id,
@@ -223,7 +225,11 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
         buckets: dict[int, list[float]] = {}
         for item, label in zip(calibration, labels, strict=True):
             buckets.setdefault(int(label), []).append(local[item.client_id.value])
-        aggregation = np.median if policy.aggregation == "robust_median" else np.mean
+        aggregation = (
+            (lambda vs: float(np.quantile(vs, 0.5, method="linear")))
+            if policy.aggregation == "robust_median"
+            else np.mean
+        )
         aggregate = {label: float(aggregation(values)) for label, values in buckets.items()}
         thresholds = {
             item.client_id.value: aggregate[int(label)] for item, label in zip(calibration, labels, strict=True)
@@ -315,12 +321,21 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
         deviation = np.abs(achieved - (1.0 - quantile.value))
         winner = candidates[np.flatnonzero(deviation == np.min(deviation))[-1]]
         threshold = mean + float(winner) * standard_deviation
+        diagnostics: dict[str, object] = {
+            "selected_coefficient": float(winner),
+            "candidate_grid": {"minimum": minimum, "maximum": maximum, "step": step},
+            "pooled_mean": float(mean),
+            "pooled_standard_deviation": float(standard_deviation),
+            "achieved_exceedance": {float(c): float(a) for c, a in zip(candidates, achieved, strict=True)},
+            "tie_set": [float(candidates[i]) for i in np.flatnonzero(deviation == np.min(deviation))],
+        }
         return _records(
             self._policy_id,
             calibration,
             {item.client_id.value: threshold for item in calibration},
             "federated_matched_exceedance",
             quantile,
+            diagnostics=diagnostics,
         )
 
     def _federated_fixed(
