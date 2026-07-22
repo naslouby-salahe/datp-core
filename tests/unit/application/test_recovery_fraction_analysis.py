@@ -4,7 +4,7 @@ import pytest
 
 from datp_core.application.stage_handlers import StatisticalAnalysisStageHandler, _seed_ratio_result
 from datp_core.composition.root import build_application
-from datp_core.domain.catalogue import RecoveryFractionAnalysisRecord
+from datp_core.domain.catalogue import AnchorEquivalenceAnalysisRecord, RecoveryFractionAnalysisRecord
 from datp_core.domain.identifiers import ExperimentId
 
 
@@ -37,3 +37,16 @@ def test_absorption_ratio_reports_per_seed_and_ratio_of_seed_means() -> None:
 
     assert result["per_seed_ratio"] == [0.5, None]
     assert result["ratio_of_seed_means"] == pytest.approx(0.75)
+
+
+def test_anchor_equivalence_requires_every_configured_statistical_fallback_rule() -> None:
+    experiment = build_application().config.experiments.get(ExperimentId("anchor_reproduction"))
+    analysis = next(item for item in experiment.analyses if isinstance(item, AnchorEquivalenceAnalysisRecord))
+
+    result = StatisticalAnalysisStageHandler._analyze_anchor_equivalence(
+        analysis,
+        [{"analysis_label": "anchor_scope_effect", "mean_difference": 0.72, "confidence_interval": [0.66, 0.76]}],
+    )
+
+    assert result["passed"] is True
+    assert result["failure_reasons"] == ()

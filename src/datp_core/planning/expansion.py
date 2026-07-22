@@ -84,13 +84,14 @@ def expand_experiment_jobs(
         else (None,)
     )
 
-    # 2. Materialize once per seed/partition condition, then collect every training cell.
+    # 2. Materialize once per seed, condition, and population, then collect every training cell.
     training_cells: list[tuple[StageJobContext, tuple, tuple]] = []
-    for seed, condition in product(seed_cohort.training_seeds, conditions):
+    for seed, condition, population_id in product(seed_cohort.training_seeds, conditions, experiment.population_ids):
         materialization_ctx = StageJobContext(
             experiment_id=experiment.identifier,
             seed=int(seed.value),
             partition_condition=condition,
+            population_id=population_id,
         )
         mat_ids = builder.materialization_job(materialization_ctx, pf_output, pf_job_id)
         mat_job = StageJob(
@@ -108,6 +109,7 @@ def expand_experiment_jobs(
                 experiment_id=experiment.identifier,
                 seed=int(seed.value),
                 partition_condition=condition,
+                population_id=population_id,
                 federated_proximal_mu=proximal_mu,
                 ditto_proximal_weight=ditto_weight,
             )
@@ -185,7 +187,9 @@ def expand_experiment_jobs(
         )
         analysis_selection_job_id, analysis_selection_output = selection_ids[:2]
 
-    # 3. Derive score, threshold, and evaluation jobs from the collected training cells.
+    # 3. Derive immutable score artifacts, then select each evaluation's declared population and calibration window.
+    calibration_cells_by_training: dict[tuple[int | None, str | None, float | None, float | None, object], list] = {}
+    score_cells: dict[tuple[int | None, str | None, float | None, float | None, object], tuple] = {}
     for seed_ctx, mat_ids, train_ids in training_cells:
         calib_ids = builder.calibration_score_job(
             seed_ctx, train_ids[1], mat_ids[1], train_ids[0], selection_output, selection_job_id
@@ -226,6 +230,7 @@ def expand_experiment_jobs(
                     experiment_id=seed_ctx.experiment_id,
                     seed=seed_ctx.seed,
                     partition_condition=seed_ctx.partition_condition,
+                    population_id=seed_ctx.population_id,
                     federated_proximal_mu=seed_ctx.federated_proximal_mu,
                     ditto_proximal_weight=seed_ctx.ditto_proximal_weight,
                     calibration_sample_count=requested_count,
@@ -243,9 +248,49 @@ def expand_experiment_jobs(
                     )
                 )
                 calibration_cells.append((subset_ctx, subset_ids))
+        key = (
+            seed_ctx.seed,
+            seed_ctx.partition_condition,
+            seed_ctx.federated_proximal_mu,
+            seed_ctx.ditto_proximal_weight,
+            seed_ctx.population_id,
+        )
+        calibration_cells_by_training[key] = calibration_cells
+        score_cells[key] = (seed_ctx, test_ids)
 
-        for calibration_ctx, calibration_ids in calibration_cells:
-            for eval_spec in experiment.evaluations:
+        if seed_ctx.population_id is None:
+            raise ValueError("Training cells require a resolved population")
+        population = config.populations.get(seed_ctx.population_id)
+        dataset = config.datasets.get(population.dataset_id)
+        setup = dataset.setup(population.setup_id)
+        materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
+        if materialization.split_method == "within_client_chronological":
+            future_ids = builder.future_recalibration_score_job(
+                seed_ctx, train_ids[1], mat_ids[1], train_ids[0], selection_output, selection_job_id
+            )
+            jobs.append(
+                StageJob(
+                    job_id=future_ids[0],
+                    stage=StageKind.SCORE_GENERATION,
+                    context=seed_ctx,
+                    inputs=future_ids[2],
+                    output=future_ids[1],
+                    dependencies=future_ids[3],
+                )
+            )
+            score_cells[key] = (seed_ctx, test_ids, future_ids)
+
+    for key, (seed_ctx, test_ids, *future_score_ids) in score_cells.items():
+        for eval_spec in experiment.evaluations:
+            population_id = eval_spec.population_id or experiment.population_ids[0]
+            if population_id != seed_ctx.population_id:
+                continue
+            calibration_cells = calibration_cells_by_training[key]
+            if eval_spec.recalibration_mode == "one_shot":
+                if len(future_score_ids) != 1:
+                    raise ValueError(f"Evaluation '{eval_spec.label}' requires a temporal recalibration score artifact")
+                calibration_cells = [(seed_ctx, future_score_ids[0])]
+            for calibration_ctx, calibration_ids in calibration_cells:
                 quantiles = _evaluation_sweep_values(experiment, eval_spec.overrides, "quantile")
                 shrinkage_weights = _evaluation_sweep_values(experiment, eval_spec.overrides, "shrinkage_weight")
                 fixed_ks = _evaluation_sweep_values(experiment, eval_spec.overrides, "fixed_k")
@@ -266,31 +311,32 @@ def expand_experiment_jobs(
                         federated_summary_fixed_k=fixed_k,
                         fingerprint_features=fingerprint_features,
                         evaluation_label=eval_spec.label,
-                        population_id=eval_spec.population_id,
+                        population_id=population_id,
+                        recalibration_mode=eval_spec.recalibration_mode,
                         threshold_policy_id=eval_spec.threshold_policy_id,
                     )
-
                     thresh_ids = builder.threshold_job(eval_ctx, calibration_ids[1], calibration_ids[0])
-                    thresh_job = StageJob(
-                        job_id=thresh_ids[0],
-                        stage=StageKind.THRESHOLD_CONSTRUCTION,
-                        context=eval_ctx,
-                        inputs=thresh_ids[2],
-                        output=thresh_ids[1],
-                        dependencies=thresh_ids[3],
+                    jobs.append(
+                        StageJob(
+                            job_id=thresh_ids[0],
+                            stage=StageKind.THRESHOLD_CONSTRUCTION,
+                            context=eval_ctx,
+                            inputs=thresh_ids[2],
+                            output=thresh_ids[1],
+                            dependencies=thresh_ids[3],
+                        )
                     )
-                    jobs.append(thresh_job)
-
                     eval_ids = builder.evaluation_job(eval_ctx, thresh_ids[1], test_ids[1], thresh_ids[0], test_ids[0])
-                    eval_job = StageJob(
-                        job_id=eval_ids[0],
-                        stage=StageKind.OPERATING_POINT_EVALUATION,
-                        context=eval_ctx,
-                        inputs=eval_ids[2],
-                        output=eval_ids[1],
-                        dependencies=eval_ids[3],
+                    jobs.append(
+                        StageJob(
+                            job_id=eval_ids[0],
+                            stage=StageKind.OPERATING_POINT_EVALUATION,
+                            context=eval_ctx,
+                            inputs=eval_ids[2],
+                            output=eval_ids[1],
+                            dependencies=eval_ids[3],
+                        )
                     )
-                    jobs.append(eval_job)
                     eval_job_outputs.append(eval_ids[1])
                     eval_job_ids.append(eval_ids[0])
 

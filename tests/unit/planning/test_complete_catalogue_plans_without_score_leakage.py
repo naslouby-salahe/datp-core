@@ -155,3 +155,22 @@ def test_ditto_plan_retains_every_weight_with_distinct_training_identities() -> 
     assert len({job.output.artifact_id for job in training}) == len(training)
     assert len(selector.inputs) == 40
     assert selector.job_id in statistics.dependencies
+
+
+def test_temporal_plan_binds_each_arm_to_its_population_and_recalibration_window() -> None:
+    plan = build_application().plan_experiment.execute(ExperimentId("chronological_recalibration_evaluation"))
+    materializations = tuple(job for job in plan.jobs if job.stage is StageKind.DATASET_MATERIALIZATION)
+    scores = tuple(job for job in plan.jobs if job.stage is StageKind.SCORE_GENERATION)
+    one_shot_thresholds = tuple(
+        job
+        for job in plan.jobs
+        if job.stage is StageKind.THRESHOLD_CONSTRUCTION and job.context.recalibration_mode == "one_shot"
+    )
+
+    assert len(materializations) == 20
+    assert len(scores) == 50
+    assert sum(job.output.kind is ArtifactKind.FUTURE_RECALIBRATION_SCORES for job in scores) == 10
+    assert {job.context.population_id for job in materializations} == {
+        job.context.population_id for job in plan.jobs if job.context.recalibration_mode is not None
+    }
+    assert all(job.inputs[0].kind is ArtifactKind.FUTURE_RECALIBRATION_SCORES for job in one_shot_thresholds)

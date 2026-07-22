@@ -42,6 +42,7 @@ class StageJobContext:
     seed: int | None = None
     evaluation_label: str | None = None
     population_id: PopulationId | None = None
+    recalibration_mode: str | None = None
     threshold_policy_id: ThresholdPolicyId | None = None
     dataset_setup_id: str | None = None
     materialization_id: str | None = None

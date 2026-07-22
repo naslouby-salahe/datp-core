@@ -39,6 +39,13 @@ class IdentityBuilder:
         return f":condition_{ctx.partition_condition}"
 
     @staticmethod
+    def _population_suffix(ctx: StageJobContext) -> str:
+        if ctx.population_id is None:
+            return ""
+        _check_no_delimiter(ctx.population_id.value, field_name="population_id")
+        return f":population_{ctx.population_id.value}"
+
+    @staticmethod
     def _execution_suffix(ctx: StageJobContext) -> str:
         suffixes = ()
         if ctx.federated_proximal_mu is not None:
@@ -76,25 +83,36 @@ class IdentityBuilder:
     @staticmethod
     def materialization_job_id(ctx: StageJobContext) -> JobId:
         return JobId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:mat"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}"
+            f"{IdentityBuilder._population_suffix(ctx)}:mat"
         )
 
     @staticmethod
     def training_job_id(ctx: StageJobContext) -> JobId:
         return JobId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:train"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}"
+            f"{IdentityBuilder._population_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:train"
         )
 
     @staticmethod
     def calibration_score_job_id(ctx: StageJobContext) -> JobId:
         return JobId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:calibration_scores"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}"
+            f"{IdentityBuilder._population_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:calibration_scores"
+        )
+
+    @staticmethod
+    def future_recalibration_score_job_id(ctx: StageJobContext) -> JobId:
+        return JobId(
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}"
+            f"{IdentityBuilder._population_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:future_recalibration_scores"
         )
 
     @staticmethod
     def test_score_job_id(ctx: StageJobContext) -> JobId:
         return JobId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:test_scores"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}"
+            f"{IdentityBuilder._population_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:test_scores"
         )
 
     @staticmethod
@@ -141,7 +159,8 @@ class IdentityBuilder:
     def calibration_subset_job_id(ctx: StageJobContext) -> JobId:
         return JobId(
             f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}"
-            f"{IdentityBuilder._execution_suffix(ctx)}{IdentityBuilder._calibration_subset_suffix(ctx)}:calibration_subset"
+            f"{IdentityBuilder._population_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}"
+            f"{IdentityBuilder._calibration_subset_suffix(ctx)}:calibration_subset"
         )
 
     @staticmethod
@@ -151,32 +170,43 @@ class IdentityBuilder:
     @staticmethod
     def materialization_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}:mat_data"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}"
+            f"{IdentityBuilder._population_suffix(ctx)}:mat_data"
         )
 
     @staticmethod
     def checkpoint_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:checkpoint"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}"
+            f"{IdentityBuilder._population_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:checkpoint"
         )
 
     @staticmethod
     def personalized_checkpoint_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}"
-            f"{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:personalized_checkpoint"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}"
+            f"{IdentityBuilder._population_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:personalized_checkpoint"
         )
 
     @staticmethod
     def calibration_scores_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:calib_scores"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}"
+            f"{IdentityBuilder._population_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:calib_scores"
+        )
+
+    @staticmethod
+    def future_recalibration_scores_artifact_id(ctx: StageJobContext) -> ArtifactId:
+        return ArtifactId(
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}"
+            f"{IdentityBuilder._population_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:future_recalibration_scores"
         )
 
     @staticmethod
     def test_scores_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(
-            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:test_scores"
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}"
+            f"{IdentityBuilder._population_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}:test_scores"
         )
 
     @staticmethod
@@ -223,7 +253,8 @@ class IdentityBuilder:
     def calibration_subset_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(
             f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}"
-            f"{IdentityBuilder._execution_suffix(ctx)}{IdentityBuilder._calibration_subset_suffix(ctx)}:calibration_subset"
+            f"{IdentityBuilder._population_suffix(ctx)}{IdentityBuilder._execution_suffix(ctx)}"
+            f"{IdentityBuilder._calibration_subset_suffix(ctx)}:calibration_subset"
         )
 
     @staticmethod
@@ -259,6 +290,13 @@ class IdentityBuilder:
         return ArtifactKey(
             artifact_id=IdentityBuilder.calibration_scores_artifact_id(ctx),
             kind=ArtifactKind.CALIBRATION_SCORES,
+        )
+
+    @staticmethod
+    def future_recalibration_scores_key(ctx: StageJobContext) -> ArtifactKey:
+        return ArtifactKey(
+            artifact_id=IdentityBuilder.future_recalibration_scores_artifact_id(ctx),
+            kind=ArtifactKind.FUTURE_RECALIBRATION_SCORES,
         )
 
     @staticmethod
@@ -404,6 +442,24 @@ class IdentityBuilder:
         return (
             IdentityBuilder.calibration_score_job_id(ctx),
             IdentityBuilder.calibration_scores_key(ctx),
+            (train_output, mat_output, *selection_inputs),
+            (train_job_id, *selection_dependencies),
+        )
+
+    @staticmethod
+    def future_recalibration_score_job(
+        ctx: StageJobContext,
+        train_output: ArtifactKey,
+        mat_output: ArtifactKey,
+        train_job_id: JobId,
+        selection_output: ArtifactKey | None = None,
+        selection_job_id: JobId | None = None,
+    ) -> tuple[JobId, ArtifactKey, tuple[ArtifactKey, ...], tuple[JobId, ...]]:
+        selection_inputs = () if selection_output is None else (selection_output,)
+        selection_dependencies = () if selection_job_id is None else (selection_job_id,)
+        return (
+            IdentityBuilder.future_recalibration_score_job_id(ctx),
+            IdentityBuilder.future_recalibration_scores_key(ctx),
             (train_output, mat_output, *selection_inputs),
             (train_job_id, *selection_dependencies),
         )

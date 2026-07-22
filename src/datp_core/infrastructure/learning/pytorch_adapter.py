@@ -123,13 +123,13 @@ def score_personalized_materialized_split(
 
 
 def _score_input_frame(path: Path, *, split: str, feature_columns: tuple[str, ...]) -> pl.DataFrame:
-    if split not in {"calibration", "test"}:
+    if split not in {"calibration", "test", "historical_calibration", "future_recalibration", "future_evaluation"}:
         raise ValueError(f"Scoring does not authorize split '{split}'")
     frame = pl.read_parquet(path, columns=[*_SCORE_IDENTITY_COLUMNS, *feature_columns])
     selected = frame.filter(pl.col("split") == split)
     if selected.is_empty():
         raise ValueError(f"Materialized payload has no {split} rows to score")
-    if split == "calibration" and selected["is_attack"].any():
+    if split in {"calibration", "historical_calibration", "future_recalibration"} and selected["is_attack"].any():
         raise ValueError("Calibration scoring must not include attack rows")
     if selected.select(pl.struct("source_path", "source_row_index").is_duplicated().any()).item():
         raise ValueError("Score input contains duplicate row identities")

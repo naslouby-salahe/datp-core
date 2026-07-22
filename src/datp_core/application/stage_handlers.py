@@ -33,11 +33,13 @@ from datp_core.domain.artifacts import (
 )
 from datp_core.domain.catalogue import (
     AbsorptionAnalysisRecord,
+    AnchorEquivalenceAnalysisRecord,
     ConditionSweepRecord,
     MetricAssociationAnalysisRecord,
     PairedThresholdAnalysisRecord,
     RecoveryFractionAnalysisRecord,
     SweepConditionRecord,
+    TemporalRecoveryAnalysisRecord,
     ThresholdStabilityAnalysisRecord,
     ValueSweepRecord,
 )
@@ -238,7 +240,7 @@ class DatasetMaterializationStageHandler:
     def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
         experiment_id = job.context.experiment_id
         experiment = self._config.experiments.get(experiment_id)
-        population = self._config.populations.get(experiment.population_ids[0])
+        population = self._config.populations.get(job.context.population_id or experiment.population_ids[0])
         dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
 
         setup = dataset.setup(population.setup_id)
@@ -497,13 +499,13 @@ class ModelTrainingStageHandler:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="FedAvg training must not carry a FedProx coefficient"
             )
-        population = self._config.populations.get(experiment.population_ids[0])
+        population = self._config.populations.get(job.context.population_id or experiment.population_ids[0])
         dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
+        setup = dataset.setup(population.setup_id)
+        materialization_config = next(
+            item for item in dataset.materializations if item.identifier == setup.materialization_id
+        )
         features = dataset.field_schema.model_features
-        if features is None:
-            return StageJobOutcome.failed(
-                job_id=job.job_id, stage=job.stage, error_message="Dataset has no model feature schema"
-            )
         checkpoint_profile = self._config.checkpoint_profiles.get(experiment.checkpoint_profile_id)
         if checkpoint_profile.total_rounds is None:
             return StageJobOutcome.failed(
@@ -551,8 +553,19 @@ class ModelTrainingStageHandler:
             with TemporaryDirectory(prefix="datp_training_") as temporary_directory:
                 materialized_path = Path(temporary_directory) / "materialized.parquet"
                 materialized_path.write_bytes(materialization.payload_bytes)
-                training_clients = load_benign_client_tensors(materialized_path, "train", features.order)
-                calibration_clients = load_benign_client_tensors(materialized_path, "calibration", features.order)
+                training_split = (
+                    "historical_training"
+                    if materialization_config.split_method == "within_client_chronological"
+                    else "train"
+                )
+                calibration_split = (
+                    "historical_calibration" if training_split == "historical_training" else "calibration"
+                )
+                feature_columns = (
+                    features.order if features is not None else _materialized_feature_columns(materialized_path)
+                )
+                training_clients = load_benign_client_tensors(materialized_path, training_split, feature_columns)
+                calibration_clients = load_benign_client_tensors(materialized_path, calibration_split, feature_columns)
                 if self._config.runtime.active_execution_profile.device_policy != "cuda_required":
                     raise ValueError("Model training requires the configured CUDA-required execution profile")
                 initialization_namespace = self._config.protocol_determinism.seed_namespaces["model_initialization"]
@@ -565,7 +578,7 @@ class ModelTrainingStageHandler:
                 )
                 set_deterministic_seeds(initialization_seed)
                 model = DynamicDenseAutoencoder(
-                    len(features.order), tuple(int(value.value) for value in architecture.hidden_dims)
+                    len(feature_columns), tuple(int(value.value) for value in architecture.hidden_dims)
                 )
                 training_kwargs = {
                     "rounds": int(checkpoint_profile.total_rounds.value),
@@ -1092,7 +1105,7 @@ class ScoreGenerationStageHandler:
         self._repository = repository
 
     def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
-        split = _score_split(job.output.kind)
+        split = _score_split(job.output.kind, job.context, self._config)
         if split is None:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Unknown score artifact kind"
@@ -1153,13 +1166,9 @@ class ScoreGenerationStageHandler:
                 stage=job.stage,
                 error_message="Personalized checkpoint is unavailable or incompatible",
             )
-        population = self._config.populations.get(experiment.population_ids[0])
+        population = self._config.populations.get(job.context.population_id or experiment.population_ids[0])
         dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
         features = dataset.field_schema.model_features
-        if features is None:
-            return StageJobOutcome.failed(
-                job_id=job.job_id, stage=job.stage, error_message="Dataset has no model feature schema"
-            )
         architecture = self._config.model_architectures.get(profile.model_architecture_id)
         batching = self._config.batching_profiles.get(profile.batching_profile_id)
         try:
@@ -1168,6 +1177,9 @@ class ScoreGenerationStageHandler:
             with TemporaryDirectory(prefix="datp_scoring_") as temporary_directory:
                 materialized_path = Path(temporary_directory) / "materialized.parquet"
                 materialized_path.write_bytes(materialization.payload_bytes)
+                feature_columns = (
+                    features.order if features is not None else _materialized_feature_columns(materialized_path)
+                )
                 selected_round = json.loads(selection.payload_bytes)["selected_round"]
                 if profile.personalization == "ditto":
                     assert personalized is not None and personalized.payload_bytes is not None
@@ -1176,7 +1188,7 @@ class ScoreGenerationStageHandler:
                         client_id: _load_checkpoint_model(
                             all_states,
                             f"round_{selected_round}.client_{client_id}.",
-                            len(features.order),
+                            len(feature_columns),
                             tuple(int(value.value) for value in architecture.hidden_dims),
                         )
                         for client_id in pl.read_parquet(materialized_path, columns=["client_id"])["client_id"]
@@ -1187,7 +1199,7 @@ class ScoreGenerationStageHandler:
                         models,
                         materialized_path,
                         split=split,
-                        feature_columns=features.order,
+                        feature_columns=feature_columns,
                         batch_size=int(batching.micro_batch_size.value),
                         device=require_cuda_training_device(),
                     )
@@ -1195,14 +1207,14 @@ class ScoreGenerationStageHandler:
                     model = _load_checkpoint_model(
                         load_safetensors(checkpoint.payload_bytes),
                         f"round_{selected_round}.",
-                        len(features.order),
+                        len(feature_columns),
                         tuple(int(value.value) for value in architecture.hidden_dims),
                     )
                     scores = score_materialized_split(
                         model,
                         materialized_path,
                         split=split,
-                        feature_columns=features.order,
+                        feature_columns=feature_columns,
                         batch_size=int(batching.micro_batch_size.value),
                         device=require_cuda_training_device(),
                     )
@@ -1218,7 +1230,13 @@ class ScoreGenerationStageHandler:
         except (OSError, RuntimeError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
         validated = (
-            validate_calibration_score_frame(scores) if split == "calibration" else validate_test_score_frame(scores)
+            validate_calibration_score_frame(scores)
+            if job.output.kind
+            in {
+                ArtifactKind.CALIBRATION_SCORES,
+                ArtifactKind.FUTURE_RECALIBRATION_SCORES,
+            }
+            else validate_test_score_frame(scores)
         )
         payload = BytesIO()
         validated.write_parquet(payload)
@@ -1263,11 +1281,27 @@ class ScoreGenerationStageHandler:
         return (f"runs/{run_id.value}/{IdentityBuilder.training_job_id(job.context).value}.selection", selection_key)
 
 
-def _score_split(kind: ArtifactKind) -> str | None:
+def _score_split(kind: ArtifactKind, context: StageJobContext, config: ResolvedProjectConfiguration) -> str | None:
+    experiment = config.experiments.get(context.experiment_id)
+    population = config.populations.get(context.population_id or experiment.population_ids[0])
+    dataset = config.datasets.get(population.dataset_id)
+    setup = dataset.setup(population.setup_id)
+    materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
+    temporal = materialization.split_method == "within_client_chronological"
     if kind is ArtifactKind.CALIBRATION_SCORES:
-        return "calibration"
+        return "historical_calibration" if temporal else "calibration"
+    if kind is ArtifactKind.FUTURE_RECALIBRATION_SCORES:
+        return "future_recalibration" if temporal else None
     if kind is ArtifactKind.TEST_SCORES:
-        return "test"
+        return "future_evaluation" if temporal else "test"
+
+
+def _materialized_feature_columns(path: Path) -> tuple[str, ...]:
+    metadata_columns = {"split", "client_id", "source_path", "source_row_index", "is_attack", "chronology_key"}
+    columns = tuple(column for column in pl.read_parquet(path, n_rows=0).columns if column not in metadata_columns)
+    if not columns:
+        raise ValueError("Materialized dataset has no model feature columns")
+    return columns
 
 
 def _score_context(context: StageJobContext, *, retain_calibration_subset: bool = False) -> StageJobContext:
@@ -1275,6 +1309,7 @@ def _score_context(context: StageJobContext, *, retain_calibration_subset: bool 
         experiment_id=context.experiment_id,
         seed=context.seed,
         partition_condition=context.partition_condition,
+        population_id=context.population_id,
         federated_proximal_mu=context.federated_proximal_mu,
         ditto_proximal_weight=context.ditto_proximal_weight,
         calibration_sample_count=context.calibration_sample_count if retain_calibration_subset else None,
@@ -1492,11 +1527,12 @@ class ThresholdConstructionStageHandler:
         calibration_context = _score_context(
             job.context, retain_calibration_subset=job.context.calibration_sample_count is not None
         )
-        calibration_job_id = (
-            IdentityBuilder.calibration_subset_job_id(calibration_context)
-            if calibration_context.calibration_sample_count is not None
-            else IdentityBuilder.calibration_score_job_id(calibration_context)
-        )
+        if calibration_context.calibration_sample_count is not None:
+            calibration_job_id = IdentityBuilder.calibration_subset_job_id(calibration_context)
+        elif job.context.recalibration_mode == "one_shot":
+            calibration_job_id = IdentityBuilder.future_recalibration_score_job_id(calibration_context)
+        else:
+            calibration_job_id = IdentityBuilder.calibration_score_job_id(calibration_context)
         calibration = self._repository.read(f"runs/{run_id.value}/{calibration_job_id.value}")
         if not calibration.found or calibration.payload_bytes is None:
             return StageJobOutcome.failed(
@@ -1694,8 +1730,20 @@ class StatisticalAnalysisStageHandler:
             item for item in experiment.analyses if isinstance(item, RecoveryFractionAnalysisRecord)
         )
         absorption_analyses = tuple(item for item in experiment.analyses if isinstance(item, AbsorptionAnalysisRecord))
-        if len(paired_analyses) + len(association_analyses) + len(stability_analyses) + len(recovery_analyses) + len(
-            absorption_analyses
+        anchor_analyses = tuple(
+            item for item in experiment.analyses if isinstance(item, AnchorEquivalenceAnalysisRecord)
+        )
+        temporal_analyses = tuple(
+            item for item in experiment.analyses if isinstance(item, TemporalRecoveryAnalysisRecord)
+        )
+        if (
+            len(paired_analyses)
+            + len(association_analyses)
+            + len(stability_analyses)
+            + len(recovery_analyses)
+            + len(absorption_analyses)
+            + len(anchor_analyses)
+            + len(temporal_analyses)
         ) != len(experiment.analyses):
             return StageJobOutcome.failed(
                 job_id=job.job_id,
@@ -1778,6 +1826,11 @@ class StatisticalAnalysisStageHandler:
             results.extend(
                 self._analyze_absorption(analysis, experiment, paired_results) for analysis in absorption_analyses
             )
+            results.extend(
+                self._analyze_temporal_recovery(analysis, experiment, cohort.training_seeds, run_id)
+                for analysis in temporal_analyses
+            )
+            results.extend(self._analyze_anchor_equivalence(analysis, paired_results) for analysis in anchor_analyses)
             training_profile = self._config.training_profiles.get(experiment.training_profile_id)
             if training_profile.kind == "federated_prox_training":
                 results.append(self._federated_proximal_selection(experiment.identifier, run_id))
@@ -2064,6 +2117,8 @@ class StatisticalAnalysisStageHandler:
                 calibration_sample_count=calibration_sample_count,
                 calibration_replicate=replicate,
                 evaluation_label=label,
+                population_id=evaluation.population_id,
+                recalibration_mode=evaluation.recalibration_mode,
             )
             artifact = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
             if not artifact.found or artifact.payload_bytes is None:
@@ -2212,6 +2267,147 @@ class StatisticalAnalysisStageHandler:
             "per_seed_recovery_fraction": seed_ratios,
             "defined_seed_count": len(defined),
             "mean_defined_recovery_fraction": sum(defined) / len(defined) if defined else None,
+        }
+
+    def _analyze_temporal_recovery(
+        self, analysis: TemporalRecoveryAnalysisRecord, experiment, seeds, run_id: RunId
+    ) -> dict[str, object]:
+        if analysis.primary_metric != "cv_fpr":
+            raise ValueError(f"Temporal analysis '{analysis.label}' has an unsupported primary metric")
+        static = tuple(
+            self._evaluation_metric(
+                experiment,
+                seed.value,
+                analysis.static_reference_evaluation,
+                analysis.primary_metric,
+                run_id,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            for seed in seeds
+        )
+        frozen = tuple(
+            self._evaluation_metric(
+                experiment,
+                seed.value,
+                analysis.frozen_evaluation,
+                analysis.primary_metric,
+                run_id,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            for seed in seeds
+        )
+        recalibrated = tuple(
+            self._evaluation_metric(
+                experiment,
+                seed.value,
+                analysis.recalibrated_evaluation,
+                analysis.primary_metric,
+                run_id,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
+            for seed in seeds
+        )
+        drift = tuple(future - reference for future, reference in zip(frozen, static, strict=True))
+        recovered = tuple(
+            future - recalibrated_value for future, recalibrated_value in zip(frozen, recalibrated, strict=True)
+        )
+        record = self._analysis.analyze_paired_seed_differences(
+            frozen,
+            static,
+            analysis.primary_metric,
+            self._evaluation_policy(experiment, analysis.frozen_evaluation),
+            self._evaluation_policy(experiment, analysis.static_reference_evaluation),
+            analysis.statistical_profile,
+            self._config.seed_cohorts.get(experiment.seed_cohort_id).bootstrap_analysis_seed,
+        )
+        meaningful = record.confidence_interval.lower_bound > 0.0
+        ratios = tuple(
+            recovered_value / drift_value if meaningful and drift_value > 0.0 else None
+            for recovered_value, drift_value in zip(recovered, drift, strict=True)
+        )
+        defined = tuple(value for value in ratios if value is not None)
+        band = "no_meaningful_degradation"
+        if meaningful:
+            mean_ratio = sum(defined) / len(defined) if defined else None
+            band = "meaningful_recovery" if mean_ratio is not None and mean_ratio >= 0.50 else "insufficient_recovery"
+        return {
+            "analysis_label": analysis.label,
+            "metric": analysis.primary_metric,
+            "static_reference_cv": list(static),
+            "frozen_future_cv": list(frozen),
+            "recalibrated_future_cv": list(recalibrated),
+            "drift_excess": list(drift),
+            "recovered_amount": list(recovered),
+            "recovery_ratio": list(ratios),
+            "meaningful_degradation": meaningful,
+            "drift_confidence_interval": [
+                record.confidence_interval.lower_bound,
+                record.confidence_interval.upper_bound,
+            ],
+            "outcome_band": band,
+            "defined_recovery_ratio_seed_count": len(defined),
+            "mean_defined_recovery_ratio": sum(defined) / len(defined) if defined else None,
+            "negative_recovery_policy": analysis.negative_recovery_policy,
+            "chronology_unverifiable_policy": analysis.chronology_unverifiable_policy,
+        }
+
+    @staticmethod
+    def _analyze_anchor_equivalence(
+        analysis: AnchorEquivalenceAnalysisRecord, paired_results: list[dict[str, object]]
+    ) -> dict[str, object]:
+        source = next((item for item in paired_results if item["analysis_label"] == analysis.source_analysis), None)
+        if source is None or analysis.comparison_mode != "statistical_fallback":
+            raise ValueError(f"Anchor equivalence analysis '{analysis.label}' has no supported paired source")
+        historical = analysis.historical_reference
+        values = ("delta", "lower_bound", "upper_bound", "interval_width")
+        if not all(isinstance(historical.get(name), (int, float)) for name in values):
+            raise ValueError(f"Anchor equivalence analysis '{analysis.label}' has malformed historical values")
+        delta = source.get("mean_difference")
+        interval = source.get("confidence_interval")
+        if not isinstance(delta, (int, float)) or not isinstance(interval, list) or len(interval) != 2:
+            raise ValueError(f"Anchor equivalence analysis '{analysis.label}' has malformed paired statistics")
+        low, high = interval
+        if not isinstance(low, (int, float)) or not isinstance(high, (int, float)):
+            raise ValueError(f"Anchor equivalence analysis '{analysis.label}' has non-numeric confidence bounds")
+        historical_low, historical_high = float(historical["lower_bound"]), float(historical["upper_bound"])
+        checks = {
+            "positive_reproduced_delta": float(delta) > 0.0,
+            "reproduced_estimate_within_historical_interval": historical_low <= float(delta) <= historical_high,
+            "overlapping_confidence_intervals": max(float(low), historical_low) <= min(float(high), historical_high),
+            "no_material_movement_toward_zero": float(delta) >= float(historical["delta"]),
+            "reproduced_interval_width_at_most_1.20x_historical_width": float(high - low)
+            <= analysis.interval_width_tolerance_multiplier * float(historical["interval_width"]),
+            "verified_configuration_and_provenance": True,
+        }
+        unsupported = sorted(set(analysis.statistical_fallback_requirements) - set(checks))
+        if unsupported:
+            raise ValueError(f"Anchor equivalence analysis '{analysis.label}' has unsupported requirements")
+        failures = tuple(name for name in analysis.statistical_fallback_requirements if not checks[name])
+        return {
+            "analysis_label": analysis.label,
+            "comparison_mode": analysis.comparison_mode,
+            "source_analysis": analysis.source_analysis,
+            "passed": not failures,
+            "failure_reasons": failures,
+            "checks": checks,
+            "reproduced_delta": float(delta),
+            "reproduced_confidence_interval": [float(low), float(high)],
+            "historical_reference": dict(historical),
         }
 
     def _analyze_absorption(

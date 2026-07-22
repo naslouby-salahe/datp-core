@@ -11,6 +11,7 @@ class SplitMembership(Enum):
     TRAIN = "train"
     CALIBRATION = "calibration"
     TEST = "test"
+    RECALIBRATION_REFERENCE = "recalibration_reference"
     HISTORICAL_TRAINING = "historical_training"
     HISTORICAL_CALIBRATION = "historical_calibration"
     FUTURE_RECALIBRATION = "future_recalibration"
@@ -66,6 +67,8 @@ class SplitManifest:
         memberships = {entry.membership for entry in self.entries}
         if memberships <= _STANDARD_MEMBERSHIPS:
             _validate_standard_manifest(self.entries, memberships)
+        elif memberships <= _STATIC_REFERENCE_MEMBERSHIPS:
+            _validate_static_reference_manifest(self.entries, memberships)
         elif memberships <= _TEMPORAL_MEMBERSHIPS:
             _validate_temporal_manifest(self.entries, memberships)
         else:
@@ -111,6 +114,12 @@ class SplitManifest:
 
 
 _STANDARD_MEMBERSHIPS = {SplitMembership.TRAIN, SplitMembership.CALIBRATION, SplitMembership.TEST}
+_STATIC_REFERENCE_MEMBERSHIPS = {
+    SplitMembership.TRAIN,
+    SplitMembership.CALIBRATION,
+    SplitMembership.RECALIBRATION_REFERENCE,
+    SplitMembership.TEST,
+}
 _TEMPORAL_MEMBERSHIPS = {
     SplitMembership.HISTORICAL_TRAINING,
     SplitMembership.HISTORICAL_CALIBRATION,
@@ -124,6 +133,16 @@ def _validate_standard_manifest(entries: tuple[SplitManifestEntry, ...], members
         raise ValueError("A standard split manifest requires train, calibration, and test memberships")
     if any(entry.is_attack and entry.membership is not SplitMembership.TEST for entry in entries):
         raise ValueError("Attack rows may not enter standard training or calibration memberships")
+    _validate_client_support(entries, SplitMembership.TRAIN, SplitMembership.CALIBRATION)
+
+
+def _validate_static_reference_manifest(
+    entries: tuple[SplitManifestEntry, ...], memberships: set[SplitMembership]
+) -> None:
+    if memberships != _STATIC_REFERENCE_MEMBERSHIPS:
+        raise ValueError("A static-reference split manifest requires all four configured memberships")
+    if any(entry.is_attack for entry in entries):
+        raise ValueError("Static-reference Edge rows must remain benign and unassigned to attack clients")
     _validate_client_support(entries, SplitMembership.TRAIN, SplitMembership.CALIBRATION)
 
 

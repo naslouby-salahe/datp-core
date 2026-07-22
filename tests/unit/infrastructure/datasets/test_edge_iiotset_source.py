@@ -9,6 +9,7 @@ from datp_core.domain.identifiers import DatasetId, MaterializationId
 from datp_core.infrastructure.datasets.edge_iiotset import (
     EdgeIIoTsetRow,
     EdgeTimestampedRow,
+    encode_edge_chronological_split_as_parquet,
     encode_edge_split_as_parquet,
     fit_edge_train_normalization,
     fit_edge_vocabulary,
@@ -104,6 +105,31 @@ def test_edge_chronological_split_corrects_midnight_rollover_and_excludes_modbus
     assert [row.source_row_index for row in split.historical_train] == [1, 2, 3, 4, 5]
     assert [row.source_row_index for row in split.future_evaluation] == [9, 10]
     assert split.excluded_clients == ("Modbus",)
+    vocabulary = fit_edge_vocabulary(split.historical_train, ("category",))
+    normalization = fit_edge_train_normalization(split.historical_train)
+    encoded = pl.read_parquet(
+        encode_edge_chronological_split_as_parquet(split, ("numeric",), vocabulary, normalization)
+    )
+    assert {"is_attack", "chronology_key"} <= set(encoded.columns)
+    assert set(encoded["split"]) == {
+        "historical_training",
+        "historical_calibration",
+        "future_recalibration",
+        "future_evaluation",
+    }
+
+
+def test_edge_timestamp_parsing_preserves_time_of_day_without_an_absolute_date(tmp_path: Path) -> None:
+    normal = tmp_path / "Normal traffic"
+    attack = tmp_path / "Attack traffic"
+    source = normal / "Distance" / "distance.csv"
+    source.parent.mkdir(parents=True)
+    source.write_text("time,n,c,Attack_label,Attack_type\n2022 04:33:56.369336000,1,a,0,Normal\n")
+    result = next(
+        iter_edge_iiotset_source(source, normal, attack, ("n",), ("c",), "Attack_label", "Attack_type", "time")
+    )
+    assert isinstance(result, EdgeIIoTsetRow)
+    assert result.time_of_day_seconds == 16_436.369336
 
 
 def test_external_edge_index_counts_rejections_and_exact_canonical_rows(tmp_path: Path) -> None:

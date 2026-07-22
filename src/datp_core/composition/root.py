@@ -40,6 +40,7 @@ from datp_core.domain.values import TypedDomainRegistry
 from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
 from datp_core.infrastructure.datasets.adapter_registry import DatasetAdapterRegistry
 from datp_core.infrastructure.datasets.ciciot2023_adapter import CICIoT2023Adapter
+from datp_core.infrastructure.datasets.edge_iiotset_adapter import EdgeIIoTsetAdapter
 from datp_core.infrastructure.datasets.nbaiot_adapter import NBaIoTAdapter
 from datp_core.infrastructure.querying.audit_service import DuckDbAuditService
 from datp_core.infrastructure.statistics.scipy_adapter import ScipyStatisticalAnalysisAdapter
@@ -64,6 +65,7 @@ def _build_adapter_registry() -> DatasetAdapterRegistry:
         adapters={
             AdapterKind.NBAIOT: NBaIoTAdapter(),
             AdapterKind.CICIOT2023: CICIoT2023Adapter(),
+            AdapterKind.EDGE_IIOTSET: EdgeIIoTsetAdapter(),
         }
     )
 

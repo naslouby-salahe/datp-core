@@ -23,6 +23,7 @@ class ArtifactKind(Enum):
     PERSONALIZED_MODEL_CHECKPOINT = "personalized_model_checkpoint"
     CHECKPOINT_SELECTION = "checkpoint_selection"
     CALIBRATION_SCORES = "calibration_scores"
+    FUTURE_RECALIBRATION_SCORES = "future_recalibration_scores"
     CALIBRATION_SUBSET = "calibration_subset"
     TEST_SCORES = "test_scores"
     THRESHOLDS = "thresholds"

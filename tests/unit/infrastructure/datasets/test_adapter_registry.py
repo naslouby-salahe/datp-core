@@ -6,14 +6,16 @@ import pytest
 
 from datp_core.composition.root import _build_adapter_registry
 from datp_core.domain.datasets import AdapterKind
+from datp_core.infrastructure.datasets.adapter_registry import DatasetAdapterRegistry
 
 
-def test_adapter_registry_contains_nbaiot_and_ciciot2023() -> None:
-    """The registry must have adapters for N-BaIoT and CICIoT2023."""
+def test_adapter_registry_contains_every_configured_dataset_adapter() -> None:
+    """The composition root must register every supported dataset materializer."""
     registry = _build_adapter_registry()
     registered = set(registry.registered_kinds)
     assert AdapterKind.NBAIOT in registered
     assert AdapterKind.CICIOT2023 in registered
+    assert AdapterKind.EDGE_IIOTSET in registered
 
 
 def test_adapter_registry_returns_correct_adapter_kind() -> None:
@@ -26,7 +28,7 @@ def test_adapter_registry_returns_correct_adapter_kind() -> None:
 
 def test_adapter_registry_raises_keyerror_for_missing_kind() -> None:
     """Requesting an unregistered AdapterKind must raise KeyError with a descriptive message."""
-    registry = _build_adapter_registry()
+    registry = DatasetAdapterRegistry(adapters={})
 
     with pytest.raises(KeyError, match="No dataset materializer registered for adapter kind"):
         registry.get(AdapterKind.EDGE_IIOTSET)

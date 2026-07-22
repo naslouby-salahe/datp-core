@@ -64,7 +64,8 @@ class ExecutionPlanValidator:
             ):
                 errors.append(f"Threshold job '{job.job_id}' must not consume test scores")
             if job.stage is StageKind.OPERATING_POINT_EVALUATION and any(
-                item.kind is ArtifactKind.CALIBRATION_SCORES for item in job.inputs
+                item.kind in {ArtifactKind.CALIBRATION_SCORES, ArtifactKind.FUTURE_RECALIBRATION_SCORES}
+                for item in job.inputs
             ):
                 errors.append(f"Evaluation job '{job.job_id}' must not consume calibration scores")
 
