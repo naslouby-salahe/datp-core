@@ -128,6 +128,14 @@ independently addressable entries in `experiments.yaml`. See
 
 ## Project structure
 
+The layer/CLI/Make-target design below (§"Project structure" through §"Mandatory
+workflow") predates implementation and was never built as described: there is no
+`Makefile`, no `experiment list/validate/resolve/status/report` CLI action, and no
+`config/compose.py`. See "Current implementation snapshot" at the end of this file
+for the real, verified current tree and CLI. `PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md`
+and `DOMAIN_AND_APPLICATION_ARCHITECTURE.md` describe a similarly unbuilt target
+tree; treat both as historical design input, not as physical-layout ground truth.
+
 ```text
 src/datp_core/   domain · application · config · infrastructure · composition · cli
 configs/         datasets · experiments.yaml · protocols.yaml · runtime.yaml
@@ -135,18 +143,14 @@ tests/           unit · property · contract · integration · architecture · 
 outputs/ models/ runtime-resolved artifact, report, recovery, and external-input roots
 ```
 
-Six import layers, one allowed direction; there is no separate top-level
-`analysis/` layer (framework-free report specifications live in
-`domain/reporting.py` and `application/reporting/`, renderers in
-`infrastructure/reporting/`, `ARCH-05`). `outputs/` and `models/` are
-runtime-resolved and never enter scientific identity (`ART-05`).
-`PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md` is authoritative for every module
-responsibility, boundary, and the placement rule for new work.
+`outputs/` and `models/` are runtime-resolved and never enter scientific identity
+(`ART-05`).
 
 ## Canonical CLI
 
-One canonical CLI, `datp-core experiment <action>`, with exactly seven
-actions and no scientific override flag:
+The `datp-core experiment <action>` seven-action design below was never built.
+See "Current implementation snapshot" for the two real `experiment` actions
+(`plan`, `run`) and the other four command groups.
 
 ```bash
 datp-core experiment list
@@ -165,9 +169,8 @@ experiment, so a bare file path would be ambiguous
 
 ## Zero-input Make targets
 
-Every regularly executed experiment exposes a discoverable, zero-input
-Make target per meaningful action — no `EXPERIMENT=...`, `CONFIG=...`, or
-other parameter (`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §22`):
+No `Makefile` exists in the repository; the target list below was never built.
+Every experiment is currently run via `datp-core experiment run --config <slug>`.
 
 ```bash
 make help              # lists every supported target and its exact experiment
@@ -205,20 +208,15 @@ CLI command or zero-input Make target
 
 Configuration resolution — everything through fingerprinting and
 persistence — is pre-pipeline composition, performed once by
-`config/compose.py`; it is never an executable `PipelineStage`
-(`CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md §3`,
-`PIPELINE_EXECUTION_AND_ARTIFACTS.md §2`).
+`config/resolver.py:resolve_project_configuration`; it is never an executable
+`StageKind` member.
 
 ## Mandatory workflow
 
-`anchor_reproduction` must pass its `AnchorEquivalenceGate` before any
-other experiment runs; `confirmatory_threshold_scope_effect` carries this
-as a typed `ExperimentPrerequisite`, enforced by the planner, not merely by
-Make-target ordering (`SCIENTIFIC_FOUNDATION.md §2`,
-`PIPELINE_EXECUTION_AND_ARTIFACTS.md §7`). `make mandatory-run` sequences
-the anchor and the confirmatory experiment; every other registered
-experiment is independently discoverable through `make experiments` and its
-own Make-target family.
+The `AnchorEquivalenceGate`/`ExperimentPrerequisite` enforcement design below was
+never built: no such types exist, and there is no code-level ordering dependency
+between `anchor_reproduction` and any other experiment today. Anchor-versus-
+confirmatory sequencing is currently an operator discipline, not an enforced gate.
 
 ## Reading order for implementation agents
 
@@ -248,3 +246,63 @@ asserted to exist, to be implemented, to be tested, or to be passing.
 `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §1` defines the six-state status
 vocabulary (`LOCKED`, `DESIGNED_NOT_IMPLEMENTED`, `BLOCKED`, `DEFERRED`,
 `OUT_OF_SCOPE`, `REJECTED`) every design commitment in this package carries.
+
+## Current implementation snapshot
+
+The pre-implementation design in the rest of this package (all sections above,
+and the other seven files) has substantially diverged from what was actually
+built. This section is the one place in the package asserting current fact,
+verified directly against the repository. Where the two disagree, this section
+wins for "does X exist today"; the rest of the package still carries the
+original scientific/architectural rationale.
+
+Top-level packages under `src/datp_core/`: `domain`, `application`, `config`,
+`infrastructure`, `interfaces` (holds `cli/`), `composition`, `planning`,
+`orchestration` (a Dagster integration). There is no top-level `cli/` or
+`analysis/` package. `application/reporting.py` is one file (not a package)
+that calls `matplotlib` directly for figure rendering — `application` is not
+framework-free.
+
+Pipeline stages (`domain/outcomes.py:StageKind`, 11 members, all registered in
+`composition/root.py:build_application`): `PREFLIGHT`,
+`DATASET_MATERIALIZATION`, `MODEL_TRAINING`, `CHECKPOINT_SELECTION`,
+`SCORE_GENERATION`, `CALIBRATION_SUBSAMPLING`, `THRESHOLD_CONSTRUCTION`,
+`OPERATING_POINT_EVALUATION`, `STATISTICAL_ANALYSIS`, `RESULT_FREEZE`,
+`REPORT_GENERATION`. Every stage has a registered handler in
+`application/stage_handlers.py`; none is silently skipped.
+
+Artifact kinds (`domain/artifacts.py:ArtifactKind`, 18 members): `RESOLVED_CONFIG`,
+`MATERIALIZED_DATASET`, `SPLIT_MANIFEST`, `PARTITION_MANIFEST`,
+`DATASET_READINESS`, `PREPROCESSING_EVIDENCE`, `MODEL_CHECKPOINT`,
+`PERSONALIZED_MODEL_CHECKPOINT`, `CHECKPOINT_SELECTION`, `CALIBRATION_SCORES`,
+`FUTURE_RECALIBRATION_SCORES`, `CALIBRATION_SUBSET`, `TEST_SCORES`,
+`THRESHOLDS`, `CLIENT_METRICS`, `STATISTICAL_SUMMARY`, `RESULT_FREEZE`,
+`RESULT_REPORT`, `REPORT`.
+
+CLI (`interfaces/cli/app.py`, Typer sub-apps): `config {validate,
+explain-drift, explain-scientific-drift, explain-execution-drift,
+fingerprint}`, `catalogue describe`, `dataset audit <id>`, `experiment
+{plan, run} --config <slug>`, `results query <sql>`. There is no `list`,
+`validate`, `resolve`, `status`, or `report` action under `experiment`, and
+no `Makefile`/Make targets anywhere in the repository.
+
+Error types actually defined in `src/`: `ResultFreezeError`
+(`application/reporting.py`), `PathAuthorityError` (`config/runtime_settings.py`),
+`ConfigurationError` (`config/yaml_loader.py`), `StatisticalProcedureError`
+(`domain/statistics.py`), `ManifestDecodeError`/`ManifestSchemaIncompatibleError`
+(`infrastructure/artifacts/manifest_codec.py`). There is no `DatpCoreError` base
+class and none of the ~30-plus other named error classes elsewhere in this
+package (`DatasetError`, `TrainingError`, `ThresholdError`, etc.) exist.
+
+`EvidenceRole` (`domain/catalogue.py`, 10 members): `ANCHOR`, `CONFIRMATORY`,
+`SENSITIVITY`, `EXPLORATORY`, `STRESS_TEST`, `COMPARATOR`, `MECHANISM`,
+`SUPPORTIVE`, `BOUNDARY`, `EXTERNAL_VALIDATION`. `RunRequirement` (4 members):
+`MANDATORY`, `CONDITIONAL`, `EXPLORATORY`, `OPTIONAL` — there is no
+`SUPPRESSED` member.
+
+Test tree (`find tests -maxdepth 2 -type d`): `tests/conformance/`,
+`tests/integration/{artifacts,datasets,orchestration}/`,
+`tests/scientific/{catalogue,drift,thresholding}/`,
+`tests/unit/{application,config,domain,infrastructure,interfaces,planning}/`.
+There is no `property/`, `contract/`, `architecture/`, `system/`, or `golden/`
+test directory.

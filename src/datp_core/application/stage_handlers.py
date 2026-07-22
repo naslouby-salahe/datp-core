@@ -1848,7 +1848,13 @@ class ThresholdConstructionStageHandler:
                         ],
                         "policy_id": [threshold_set.policy_id.value] * len(threshold_set.values),
                         "target_quantile": [threshold_set.target_quantile.value] * len(threshold_set.values),
-                    }
+                    },
+                    schema_overrides={
+                        "effective_lambda": pl.Float64,
+                        "cluster_label": pl.Int64,
+                        "finite_sample_rank": pl.Int64,
+                        "attainability_status": pl.String,
+                    },
                 )
             validate_threshold_frame(output)
         except (OSError, ValueError) as exc:

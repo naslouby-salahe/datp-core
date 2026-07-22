@@ -17,6 +17,20 @@ Scientific catalogue selection, runtime execution, or persistence adapters.
 > are owned by `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md`; this document
 > describes their evaluation consequences rather than an alternate YAML schema.
 
+> Divergence notice: the named result/report types below (`ClientEvaluationResult`,
+> `FleetDispersionResult`, `PairedDeltaResult`, `ReportArtifactSpec`,
+> `ReportDefinition`, the closed `TableType`/`FigureType` enums, and the
+> `StatisticalProcedure` discriminated union) do not exist under these names.
+> The real types are `domain/evaluation.py` (`MetricValue`,
+> `ClientConfusionMatrix`, `FprDispersion`, `MetricResultRecord`),
+> `domain/statistics.py` (`ConfidenceInterval`, `HypothesisTestResult`,
+> `LinearRegressionResult`, `PairedSeedDifferenceRecord`, plus free functions
+> `matched_pairs_rank_biserial_correlation`/`holm_adjust_p_values`), and
+> `application/reporting.py` (`freeze_result_family`/`render_frozen_report`,
+> operating on `dict[str, object]` payloads rather than frozen report-row
+> dataclasses). Treat the metric/statistics/claim *narrative* here as intended
+> scientific behavior, but not the specific type names.
+
 ## 1. Primitive evaluation evidence
 
 The evaluator derives every outcome from lineage-bound primitives only:
@@ -477,7 +491,7 @@ explicitly.
 | `DISPERSION_LADDER` | `shared_threshold_construction_sensitivity`, `file_pseudo_client_applicability_boundary` |
 | `SENSITIVITY_GRID` / `HEATMAP` | `threshold_quantile_sensitivity` |
 | `SEVERITY_TREND` | `controlled_heterogeneity_response` |
-| `CLUSTER_STABILITY` / `CONTINGENCY` | `cluster_mechanism` (granularity comparison, adjusted-Rand stability, fingerprint ablation, and robust-median sensitivity, all as evaluations/analyses of this one experiment) |
+| `CLUSTER_STABILITY` / `CONTINGENCY` | `cluster_and_family_threshold_mechanism` (granularity comparison, adjusted-Rand stability, fingerprint ablation, and robust-median sensitivity, all as evaluations/analyses of this one experiment) |
 | `CDF_OVERLAY` | `confirmatory_threshold_scope_effect` (attached client score-distribution overlay analysis, formerly E-M3) |
 | `SCATTER` | `confirmatory_threshold_scope_effect` (attached threshold-shift-detection tradeoff analysis, formerly E-M5), `controlled_heterogeneity_response` (attached heterogeneity–threshold-benefit association, formerly E-M4) |
 | `SENSITIVITY_GRID` | `calibration_window_size_stability` |

@@ -29,6 +29,15 @@ status from `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §1`. A path that is
 physically present in the repository ahead of this specification is
 scaffolding at `DESIGNED_NOT_IMPLEMENTED`, not a conformance claim.
 
+In practice the repository was built against a different, flatter tree than
+the one below (no `config/schemas/`, `composition/registries.py`,
+`cli/main.py`, `application/stages/` or other sub-packages, `analysis/`, or
+`infrastructure/reporting/`; stage handlers all live in one file,
+`application/stage_handlers.py`). For where new work actually belongs today,
+place it by matching the responsibility to the closest existing module in
+`README.md`'s "Current implementation snapshot" rather than recreating a path
+from this document's tree.
+
 ## 1. Repository root
 
 ```text

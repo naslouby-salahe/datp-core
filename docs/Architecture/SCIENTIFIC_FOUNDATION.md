@@ -109,9 +109,9 @@ autoencoder state, preprocessing identity, or checkpoint-selection rule.
 | RQ5 | `STRESS_TEST` | Does threshold-only personalization remain useful against aggregation-side and model-side personalization stress tests? |
 | RQ6 | `EXTERNAL_VALIDATION` / `BOUNDARY` | Does the effect generalize to an independent sensor-group-partitioned dataset, across heterogeneity severity, and where does it fail? |
 
-Evidence roles used throughout this package: `ANCHOR`, `CONFIRMATORY`,
-`SUPPORTIVE`, `EXTERNAL_VALIDATION`, `STRESS_TEST`, `MECHANISM`, `BOUNDARY`,
-`EXPLORATORY` — eight members, every role an *executable* experiment can
+Evidence roles used throughout this package (`domain/catalogue.py:EvidenceRole`): `ANCHOR`, `CONFIRMATORY`,
+`SENSITIVITY`, `EXPLORATORY`, `STRESS_TEST`, `COMPARATOR`, `MECHANISM`,
+`SUPPORTIVE`, `BOUNDARY`, `EXTERNAL_VALIDATION` — ten members, every role an *executable* experiment can
 carry. The prior architecture's `ExperimentRole` also listed `FUTURE_WORK`
 and `FORBIDDEN`; neither names an executable experiment — a future-work or
 forbidden item has no `configs/experiments.yaml` document and never resolves into
@@ -119,7 +119,7 @@ a `RunDefinition`, so it is not an evidence role at all. A named future-work
 item is a `CatalogueDisposition.FUTURE_WORK` entry (`§7.6`), and a forbidden
 claim is a manuscript-discipline rule (roadmap Tier 9), never an experiment.
 This narrowing mirrors `RunRequirement`, which for the identical reason keeps
-only `MANDATORY`/`OPTIONAL`/`SUPPRESSED` and routes rejected and future
+only `MANDATORY`/`CONDITIONAL`/`EXPLORATORY`/`OPTIONAL` and routes rejected and future
 entries to `CatalogueDisposition`
 (`ENGINEERING_DECISIONS_AND_CONFORMANCE.md §4`). Publication tier numbers
 (Tier 1–9) survive only as `tier` traceability metadata on
@@ -127,7 +127,7 @@ entries to `CatalogueDisposition`
 role may (`SCI-14`, defined with `SCI-15`–`SCI-19` in `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §2`).
 
 `EvidenceRole` is not the only classification an experiment carries.
-`RunRequirement` (`MANDATORY`, `OPTIONAL`, `SUPPRESSED`) answers the
+`RunRequirement` (`domain/catalogue.py:RunRequirement`: `MANDATORY`, `CONDITIONAL`, `EXPLORATORY`, `OPTIONAL`) answers the
 different executable question—whether the study is required to run—and is
 never collapsed into `evidence_role`. It is a field of `ExperimentIdentity`
 only; it is never carried by an individual
@@ -300,7 +300,7 @@ All `MANDATORY` unless noted.
 | `shared_threshold_construction_sensitivity` | E-S1 | `SUPPORTIVE`; `TIER_2` | `natural_device_evaluation` | `SharedThreshold(MEAN\|POOLED\|WEIGHTED)`, `LocalThreshold` |
 | `threshold_quantile_sensitivity` | E-S2 | `SUPPORTIVE`; `TIER_2` | `natural_device_evaluation` (sole owner of this sweep; its external-dataset quantile axis is a benign-FPR-scope `regime_d` regime, `evaluation_scope: benign_operating_point_equity`, `§7.3`) | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`; q ∈ {.90, .95, .975, .99} |
 | `controlled_heterogeneity_response` | E-S3 | `SUPPORTIVE`; `TIER_2` | `controlled_heterogeneity_evaluation` (Regime A; the E-M4 "+ Regime D points" seam is a benign-FPR-scope `regime_d` regime using benign score-distribution divergence, `attack_traffic_confined_to_subnet_zero` for attack-sensitive metrics only) | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold` across α; carries the heterogeneity–threshold-benefit association (formerly E-M4) as an attached `AnalysisDefinition` regressing distributional divergence against gain, reusing this experiment's own evaluated results — no separate source inspection, partitioning, training, scoring, or threshold construction |
-| `cluster_mechanism` | E-M1 / E-M2 / E-Q2 | `MECHANISM`; `TIER_5` (+`TIER_7` exploratory for non-canonical K and `ROBUST_MEDIAN`) | `natural_device_evaluation` (Regime A; the "+ D where feasible" external seam is a benign-FPR-scope `regime_d` regime, B1/B2/B4 with `FamilyThreshold` excluded) | One merged experiment with four typed axes: threshold grouping (`FamilyThreshold` vs `ClusterThreshold`), fingerprint feature set (single-feature through all-four-feature subsets), cluster aggregation (`MEAN` vs `ROBUST_MEDIAN`), and authorized cluster count (canonical `K = 3`, mandatory; other K, exploratory only). Granularity comparison, adjusted-Rand stability, fingerprint ablation, and robust-median sensitivity are four `EvaluationDefinition`/`AnalysisDefinition` entries of this one experiment, never four experiment roots |
+| `cluster_and_family_threshold_mechanism` | E-M1 / E-M2 / E-Q2 | `MECHANISM`; `TIER_5` (+`TIER_7` exploratory for non-canonical K and `ROBUST_MEDIAN`) | `natural_device_evaluation` (Regime A; the "+ D where feasible" external seam is a benign-FPR-scope `regime_d` regime, B1/B2/B4 with `FamilyThreshold` excluded) | One merged experiment with four typed axes: threshold grouping (`FamilyThreshold` vs `ClusterThreshold`), fingerprint feature set (single-feature through all-four-feature subsets), cluster aggregation (`MEAN` vs `ROBUST_MEDIAN`), and authorized cluster count (canonical `K = 3`, mandatory; other K, exploratory only). Granularity comparison, adjusted-Rand stability, fingerprint ablation, and robust-median sensitivity are four `EvaluationDefinition`/`AnalysisDefinition` entries of this one experiment, never four experiment roots |
 | `calibration_window_size_stability` | E-V1 | `BOUNDARY`; `TIER_6` (RQ3) | `natural_device_evaluation`, subsampled calibration n ∈ {50, 100, 250, 500, 1000, 5000} | `SharedThreshold`, `LocalThreshold`, `ClusterThreshold`, `CalibrationSizeAwareFallbackThreshold`; each sweep point is a `CalibrationWindowSelection` (`DOMAIN_AND_APPLICATION_ARCHITECTURE.md §12`) |
 | `local_global_threshold_shrinkage` | E-V2 | `SUPPORTIVE`; RQ3 | `natural_device_evaluation` | `LocalGlobalShrinkageThreshold`, λ ∈ {0, .25, .5, .75, 1} |
 | `conformal_local_threshold_coverage` | E-V3 | `SUPPORTIVE`, Tier-1 tautology defense; non-confirmatory | `natural_device_evaluation` (the "+ external" seam is a benign-FPR-scope `regime_d` regime producing benign conformal coverage and FPR dispersion) | `ConformalLocalThreshold`, α = 0.05 |
@@ -373,7 +373,7 @@ never gain their own `configs/experiments.yaml` document.
 | E-M4 | `heterogeneity_threshold_benefit_association` | `controlled_heterogeneity_response` | see `§7.2` |
 
 E-M1, E-M2, and E-Q2 are not attached analyses; they merge into the single
-`cluster_mechanism` experiment root (`§7.2`) because their fingerprint,
+`cluster_and_family_threshold_mechanism` experiment root (`§7.2`) because their fingerprint,
 grouping, and aggregation axes are typed variations of the same mechanism
 question, not analyses of another experiment's fixed output. E-T3, E-Q1,
 and E-Q5 similarly merge into `federated_summary_comparator` (`§7.3`) rather

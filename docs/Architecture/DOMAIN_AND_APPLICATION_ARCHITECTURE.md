@@ -25,6 +25,24 @@ The architecture distinguishes three implementation horizons:
 
 No incomplete concrete adapter, `pass`, broad `NotImplementedError`, fake success result, or placeholder scientific computation is part of the skeleton. A capability is either represented by a real protocol and absent concrete implementation, or implemented fully and registered.
 
+**Divergence notice:** despite the "implementation contract" framing above, the
+repository was built against a materially different tree than §4 below
+describes (no `kernel/`, `artifacts/`, `runtime/`, `datasets/`, `learning/`,
+`thresholding/`, `evaluation/`, `analysis/`, `reporting/`, `catalogue/`,
+`orchestration/{domain,planning,capabilities,...}`, or `composition/bootstrap.py`
+packages exist; the real tree is `domain/application/config/infrastructure/
+interfaces/composition/planning/orchestration`, described in
+`PROJECT_STRUCTURE_AND_MODULE_CATALOGUE.md`'s own divergence notice and in
+`README.md`'s "Current implementation snapshot"). Named types below
+(`RegistryId[TDefinition]`, `FrozenRegistry[K, V]`, `ScientificInvariantKind`,
+the `EvaluationId`/`AnalysisId`/`ClientId` identifiers, the named application
+services and ports in §11) do not exist under these names; the real domain
+identifiers, registries, and application use cases are individually named
+per-type rather than built from these generics — see `domain/identifiers.py`,
+`domain/values.py:TypedDomainRegistry`, `application/*.py`. Treat this document
+as historical design rationale for the domain/application split, not as a
+current or intended physical-layout or type-name reference.
+
 ---
 
 # 1. Responsibility, authority, and precedence

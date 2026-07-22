@@ -17,6 +17,16 @@ Scientific scope, configuration examples, or execution implementation.
 > path or value, the six-file configuration layout in
 > `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md` takes precedence.
 
+> Divergence notice: §6's ~38-class `DatpCoreError` taxonomy does not exist.
+> There is no `DatpCoreError` base class anywhere in `src/`; the real error
+> surface is 6 classes (`ResultFreezeError`, `PathAuthorityError`,
+> `ConfigurationError`, `StatisticalProcedureError`, `ManifestDecodeError`,
+> `ManifestSchemaIncompatibleError` — see `README.md`'s "Current
+> implementation snapshot"), none sharing a common base. §8's test-tree table
+> also does not match the real `tests/` layout (same snapshot). Treat the
+> per-stage error *categories* in §6 as intended failure-mode coverage, not as
+> named classes to import.
+
 ## 1. Status vocabulary
 
 | Status | Meaning |

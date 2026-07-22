@@ -14,17 +14,25 @@ Scientific experiment meaning, configuration composition, or report layout.
 
 ## Current implementation boundary
 
-The current executor wires preflight, dataset materialization,
-full-participation FedAvg model training, split-separated score generation,
-threshold construction, and operating-point evaluation. Materialization commits split, readiness, and preprocessing
-evidence; training requires CUDA, trains only on benign training rows,
-selects a checkpoint only from benign calibration loss, and commits
-SafeTensors weights with selection and derived-seed evidence. Scoring reads
-only that selected checkpoint and persists row-identified calibration or
-test Parquet without applying a threshold. Threshold construction uses only
-the calibration artifact and the configured estimator registry. Evaluation
-joins thresholds only to test scores and retains typed unavailable outcomes.
-Unimplemented downstream stages report failure rather than a successful-looking skip.
+All 11 `StageKind` members are wired with registered handlers in
+`composition/root.py:build_application` (see `README.md`'s "Current
+implementation snapshot" for the ground-truth stage/artifact enum lists —
+this document's own §2/§6.1 stage and artifact-type catalogues below predate
+implementation and use different names/counts than the real
+`domain/outcomes.py:StageKind` and `domain/artifacts.py:ArtifactKind`).
+Preflight and dataset materialization commit split, readiness, and
+preprocessing evidence; training requires CUDA, trains only on benign
+training rows, selects a checkpoint only from benign calibration loss, and
+commits SafeTensors weights with selection and derived-seed evidence.
+Scoring reads only that selected checkpoint and persists row-identified
+calibration or test Parquet without applying a threshold. Threshold
+construction uses only the calibration artifact and the configured
+estimator registry. Evaluation joins thresholds only to test scores and
+retains typed unavailable outcomes. Statistical analysis, result freeze, and
+report generation are also registered and reachable; a handler that is not
+registered for a `StageKind` reports failure rather than a
+successful-looking skip (this no longer applies to any of the 11 stages,
+all of which now have a registered handler).
 
 > Configuration alignment: executable configuration paths and values are owned
 > by `CONFIGURATION_AND_EXPERIMENT_CATALOGUE.md`; this document does not create
@@ -603,7 +611,7 @@ sibling evaluation) already committed.
 | `shared_threshold_construction_sensitivity` | reuses train/score; three extra `THRESHOLD_CONSTRUCT`+`EVALUATE` | mean/pooled/weighted threshold outputs | `PolicyEvaluationResult` ×4 | DISPERSION_LADDER |
 | `threshold_quantile_sensitivity` | reuses scores; per-q `THRESHOLD_CONSTRUCT`+`EVALUATE` | q ∈ {.90,.95,.975,.99} threshold outputs | per-q `PolicyEvaluationResult` | SENSITIVITY_GRID/HEATMAP |
 | `controlled_heterogeneity_response` | full chain per α; `MetricAssociationAnalysis` attached | Dirichlet partitions per α; JS↔gain regression | per-α `PolicyEvaluationResult`, association result | SEVERITY_TREND, SCATTER |
-| `cluster_mechanism` | reuses scores; family/cluster `THRESHOLD_CONSTRUCT`; `ClusterStabilityAnalysis` | cluster assignments, adjusted-Rand, fingerprint-ablation sweep | cluster dispersion, stability | CLUSTER_STABILITY, CONTINGENCY |
+| `cluster_and_family_threshold_mechanism` | reuses scores; family/cluster `THRESHOLD_CONSTRUCT`; `ClusterStabilityAnalysis` | cluster assignments, adjusted-Rand, fingerprint-ablation sweep | cluster dispersion, stability | CLUSTER_STABILITY, CONTINGENCY |
 | `calibration_window_size_stability` | adds `CALIBRATION_SUBSET_SELECT` per size; reuses train | size-scoped calibration subsets, size-aware fallback threshold | per-size `PolicyEvaluationResult` | SENSITIVITY_GRID |
 | `local_global_threshold_shrinkage` | reuses scores; per-λ `THRESHOLD_CONSTRUCT` | λ ∈ {0,.25,.5,.75,1} threshold outputs | per-λ `PolicyEvaluationResult` | LAMBDA_CURVE |
 | `conformal_local_threshold_coverage` | reuses scores; conformal `THRESHOLD_CONSTRUCT`; `ConformalCoverageResult` | split/federated-conformal threshold, coverage | coverage result | coverage table |
