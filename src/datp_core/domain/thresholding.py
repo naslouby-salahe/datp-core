@@ -78,6 +78,7 @@ class ThresholdRecord:
     threshold: NonNegativeFloat | float
     owner: str
     effective_lambda: float | None = None
+    cluster_label: int | None = None
 
     def __post_init__(self) -> None:
         val = float(self.threshold)

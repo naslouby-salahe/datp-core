@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 from time import time
 from typing import Protocol, cast
 
+import numpy as np
 import polars as pl
 from safetensors.torch import load as load_safetensors
 from safetensors.torch import save as save_safetensors
@@ -34,6 +35,7 @@ from datp_core.domain.artifacts import (
 from datp_core.domain.catalogue import (
     AbsorptionAnalysisRecord,
     AnchorEquivalenceAnalysisRecord,
+    ClusterStabilityAnalysisRecord,
     ConditionSweepRecord,
     MetricAssociationAnalysisRecord,
     PairedThresholdAnalysisRecord,
@@ -71,6 +73,7 @@ from datp_core.infrastructure.learning.pytorch_adapter import (
     score_personalized_materialized_split,
     set_deterministic_seeds,
 )
+from datp_core.infrastructure.learning.sklearn_adapter import compute_adjusted_rand_index
 from datp_core.infrastructure.tables.calibration_subsampling import subsample_calibration_scores
 from datp_core.infrastructure.tables.polars_engine import compute_operating_point_metrics
 from datp_core.infrastructure.tables.schemas import (
@@ -1333,6 +1336,14 @@ def _calibration_sample_counts(experiment) -> tuple[int | None, ...]:
     return values
 
 
+def _mean_group_std(groups: list[list[tuple[float, float]]], index: int) -> float | None:
+    return float(np.mean([np.std([item[index] for item in group]) for group in groups])) if groups else None
+
+
+def _group_mean_std(groups: list[list[tuple[float, float]]], index: int) -> float | None:
+    return float(np.std([np.mean([item[index] for item in group]) for group in groups])) if groups else None
+
+
 def _materiality_threshold(rule: float | str) -> float:
     if isinstance(rule, float):
         return rule
@@ -1568,6 +1579,7 @@ class ThresholdConstructionStageHandler:
                         "threshold": pl.Float64,
                         "owner_kind": pl.String,
                         "effective_lambda": pl.Float64,
+                        "cluster_label": pl.Int64,
                         "policy_id": pl.String,
                         "target_quantile": pl.Float64,
                     }
@@ -1603,6 +1615,7 @@ class ThresholdConstructionStageHandler:
                         "threshold": [float(record.threshold) for record in threshold_set.values],
                         "owner_kind": [record.owner for record in threshold_set.values],
                         "effective_lambda": [record.effective_lambda for record in threshold_set.values],
+                        "cluster_label": [record.cluster_label for record in threshold_set.values],
                         "policy_id": [threshold_set.policy_id.value] * len(threshold_set.values),
                         "target_quantile": [threshold_set.target_quantile.value] * len(threshold_set.values),
                     }
@@ -1736,6 +1749,9 @@ class StatisticalAnalysisStageHandler:
         temporal_analyses = tuple(
             item for item in experiment.analyses if isinstance(item, TemporalRecoveryAnalysisRecord)
         )
+        cluster_analyses = tuple(
+            item for item in experiment.analyses if isinstance(item, ClusterStabilityAnalysisRecord)
+        )
         if (
             len(paired_analyses)
             + len(association_analyses)
@@ -1744,6 +1760,7 @@ class StatisticalAnalysisStageHandler:
             + len(absorption_analyses)
             + len(anchor_analyses)
             + len(temporal_analyses)
+            + len(cluster_analyses)
         ) != len(experiment.analyses):
             return StageJobOutcome.failed(
                 job_id=job.job_id,
@@ -1831,6 +1848,10 @@ class StatisticalAnalysisStageHandler:
                 for analysis in temporal_analyses
             )
             results.extend(self._analyze_anchor_equivalence(analysis, paired_results) for analysis in anchor_analyses)
+            results.extend(
+                self._analyze_cluster_stability(analysis, experiment, cohort.training_seeds, run_id)
+                for analysis in cluster_analyses
+            )
             training_profile = self._config.training_profiles.get(experiment.training_profile_id)
             if training_profile.kind == "federated_prox_training":
                 results.append(self._federated_proximal_selection(experiment.identifier, run_id))
@@ -2268,6 +2289,126 @@ class StatisticalAnalysisStageHandler:
             "defined_seed_count": len(defined),
             "mean_defined_recovery_fraction": sum(defined) / len(defined) if defined else None,
         }
+
+    def _analyze_cluster_stability(
+        self, analysis: ClusterStabilityAnalysisRecord, experiment, seeds, run_id: RunId
+    ) -> dict[str, object]:
+        if analysis.reference_evaluation is not None:
+            source = next(item for item in experiment.evaluations if item.label == analysis.source_evaluation)
+            override = (source.overrides or {}).get("fingerprint_features")
+            sweep_name = override.get("from_sweep") if isinstance(override, Mapping) else None
+            subsets = tuple(
+                value
+                for sweep in experiment.sweeps
+                if isinstance(sweep, ValueSweepRecord) and sweep.name == sweep_name
+                for value in sweep.values
+                if isinstance(value, tuple) and all(isinstance(item, str) for item in value)
+            )
+            if not subsets:
+                raise ValueError("Cluster ablation analysis has no configured fingerprint subsets")
+            observations: list[dict[str, object]] = []
+            for seed in seeds:
+                reference = self._cluster_membership(
+                    experiment.identifier, seed.value, analysis.reference_evaluation, None, run_id
+                )
+                for subset in subsets:
+                    ablated = self._cluster_membership(
+                        experiment.identifier, seed.value, analysis.source_evaluation, subset, run_id
+                    )
+                    clients = sorted(set(reference) & set(ablated))
+                    if set(reference) != set(ablated):
+                        raise ValueError("Cluster ablation membership has an incompatible client population")
+                    observations.append(
+                        {
+                            "seed": seed.value,
+                            "fingerprint_features": subset,
+                            "adjusted_rand_index": compute_adjusted_rand_index(
+                                np.array([reference[client] for client in clients]),
+                                np.array([ablated[client] for client in clients]),
+                            ),
+                        }
+                    )
+            return {
+                "analysis_label": analysis.label,
+                "comparison_unit": analysis.comparison_unit,
+                "reference_evaluation": analysis.reference_evaluation,
+                "observations": observations,
+            }
+        memberships: dict[int, dict[str, int]] = {}
+        seed_summaries: list[dict[str, object]] = []
+        for seed in seeds:
+            context = StageJobContext(
+                experiment_id=experiment.identifier, seed=seed.value, evaluation_label=analysis.source_evaluation
+            )
+            thresholds = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}")
+            metrics = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
+            if (
+                not thresholds.found
+                or thresholds.payload_bytes is None
+                or not metrics.found
+                or metrics.payload_bytes is None
+            ):
+                raise ValueError(f"Cluster stability artifacts are unavailable for seed {seed.value}")
+            threshold_frame = pl.read_parquet(BytesIO(thresholds.payload_bytes))
+            if "cluster_label" not in threshold_frame.columns or threshold_frame["cluster_label"].null_count() > 0:
+                raise ValueError(f"Cluster labels are unavailable for seed {seed.value}")
+            metric_frame = validate_client_metric_frame(pl.read_parquet(BytesIO(metrics.payload_bytes)))
+            joined = threshold_frame.join(
+                metric_frame.select("client_id", "false_positive_rate", "false_positive_rate_status"), on="client_id"
+            )
+            labels = {
+                str(client): int(label) for client, label in joined.select("client_id", "cluster_label").iter_rows()
+            }
+            memberships[int(seed.value)] = labels
+            clusters: dict[int, list[tuple[float, float]]] = {}
+            for label, threshold, fpr, status in joined.select(
+                "cluster_label", "threshold", "false_positive_rate", "false_positive_rate_status"
+            ).iter_rows():
+                if status == "available" and fpr is not None:
+                    clusters.setdefault(int(label), []).append((float(threshold), float(fpr)))
+            seed_summaries.append(
+                {
+                    "seed": int(seed.value),
+                    "cluster_membership_per_client": labels,
+                    "cluster_size": {str(label): len(values) for label, values in clusters.items()},
+                    "singleton_cluster_flag": any(len(values) == 1 for values in clusters.values()),
+                    "empty_cluster_flag": False,
+                    "within_cluster_threshold_dispersion": _mean_group_std(list(clusters.values()), 0),
+                    "within_cluster_fpr_dispersion": _mean_group_std(list(clusters.values()), 1),
+                    "across_cluster_threshold_dispersion": _group_mean_std(list(clusters.values()), 0),
+                    "across_cluster_mean_fpr_dispersion": _group_mean_std(list(clusters.values()), 1),
+                }
+            )
+        aris = [
+            compute_adjusted_rand_index(
+                np.array([memberships[left][client] for client in sorted(memberships[left])]),
+                np.array([memberships[right][client] for client in sorted(memberships[left])]),
+            )
+            for index, left in enumerate(sorted(memberships))
+            for right in sorted(memberships)[index + 1 :]
+            if set(memberships[left]) == set(memberships[right])
+        ]
+        return {
+            "analysis_label": analysis.label,
+            "comparison_unit": analysis.comparison_unit,
+            "seed_summaries": seed_summaries,
+            "adjusted_rand_index": aris,
+            "mean_adjusted_rand_index": sum(aris) / len(aris) if aris else None,
+        }
+
+    def _cluster_membership(
+        self, experiment_id, seed: int, label: str, features: tuple[str, ...] | None, run_id: RunId
+    ) -> dict[str, int]:
+        context = StageJobContext(
+            experiment_id=experiment_id, seed=seed, evaluation_label=label, fingerprint_features=features
+        )
+        artifact = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}")
+        if not artifact.found or artifact.payload_bytes is None:
+            raise ValueError(f"Cluster threshold artifact is unavailable for seed {seed}")
+        frame = pl.read_parquet(BytesIO(artifact.payload_bytes))
+        if "cluster_label" not in frame.columns or frame["cluster_label"].null_count() > 0:
+            raise ValueError(f"Cluster labels are unavailable for seed {seed}")
+        return {str(client): int(label) for client, label in frame.select("client_id", "cluster_label").iter_rows()}
 
     def _analyze_temporal_recovery(
         self, analysis: TemporalRecoveryAnalysisRecord, experiment, seeds, run_id: RunId

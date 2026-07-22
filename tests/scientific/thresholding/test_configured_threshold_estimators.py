@@ -66,6 +66,7 @@ def test_cluster_policy_uses_the_explicit_fingerprint_feature_subset(
 
     assert len(result.values) == 3
     assert all(float(value.threshold) >= 0.0 for value in result.values)
+    assert all(value.cluster_label is not None for value in result.values)
 
 
 def test_registry_matches_complete_authored_policy_catalogue() -> None:

@@ -56,6 +56,7 @@ def _records(
     owner: str,
     quantile: Probability,
     lambdas: dict[str, float] | None = None,
+    cluster_labels: dict[str, int] | None = None,
 ) -> ThresholdSet:
     return ThresholdSet(
         policy_id=policy_id,
@@ -66,6 +67,7 @@ def _records(
                 threshold=thresholds[item.client_id.value],
                 owner=owner,
                 effective_lambda=None if lambdas is None else lambdas[item.client_id.value],
+                cluster_label=None if cluster_labels is None else cluster_labels[item.client_id.value],
             )
             for item in calibration
         ),
@@ -213,7 +215,14 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
         thresholds = {
             item.client_id.value: aggregate[int(label)] for item, label in zip(calibration, labels, strict=True)
         }
-        return _records(self._policy_id, calibration, thresholds, f"cluster_k{policy.cluster_count}", quantile)
+        return _records(
+            self._policy_id,
+            calibration,
+            thresholds,
+            f"cluster_k{policy.cluster_count}",
+            quantile,
+            cluster_labels={item.client_id.value: int(label) for item, label in zip(calibration, labels, strict=True)},
+        )
 
     def _conformal(
         self,
