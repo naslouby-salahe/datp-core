@@ -32,9 +32,11 @@ from datp_core.domain.artifacts import (
     FilePayload,
 )
 from datp_core.domain.catalogue import (
+    AbsorptionAnalysisRecord,
     ConditionSweepRecord,
     MetricAssociationAnalysisRecord,
     PairedThresholdAnalysisRecord,
+    RecoveryFractionAnalysisRecord,
     SweepConditionRecord,
     ThresholdStabilityAnalysisRecord,
     ValueSweepRecord,
@@ -46,7 +48,7 @@ from datp_core.domain.checkpoints import (
 )
 from datp_core.domain.datasets import PartitionSeedContract
 from datp_core.domain.evaluation import MetricStatus, calculate_fpr_dispersion, calculate_pairwise_js_divergence
-from datp_core.domain.identifiers import ArtifactId, ClientId, DatasetId, RunId
+from datp_core.domain.identifiers import ArtifactId, ClientId, DatasetId, ExperimentId, RunId
 from datp_core.domain.outcomes import StageJob, StageJobContext, StageJobOutcome, StageKind
 from datp_core.domain.run_identity import execution_run_id
 from datp_core.domain.thresholding import BenignCalibrationScores
@@ -1296,6 +1298,52 @@ def _calibration_sample_counts(experiment) -> tuple[int | None, ...]:
     return values
 
 
+def _materiality_threshold(rule: float | str) -> float:
+    if isinstance(rule, float):
+        return rule
+    if rule == "absolute_denominator_at_least_1.0e-6":
+        return 1.0e-6
+    raise ValueError(f"Unsupported denominator materiality rule: {rule!r}")
+
+
+def _seed_ratio_result(
+    *,
+    label: str,
+    formula: str,
+    numerator: Mapping[str, object],
+    denominator: Mapping[str, object],
+    materiality_rule: float | str,
+    undefined_behavior: str,
+) -> dict[str, object]:
+    numerator_values = numerator.get("seed_differences")
+    denominator_values = denominator.get("seed_differences")
+    if (
+        not isinstance(numerator_values, list)
+        or not isinstance(denominator_values, list)
+        or len(numerator_values) != len(denominator_values)
+        or not all(isinstance(value, int | float) for value in (*numerator_values, *denominator_values))
+    ):
+        raise ValueError(f"Ratio analysis '{label}' has malformed paired seed differences")
+    materiality = _materiality_threshold(materiality_rule)
+    ratios = [
+        None if abs(float(denominator_value)) < materiality else float(numerator_value) / float(denominator_value)
+        for numerator_value, denominator_value in zip(numerator_values, denominator_values, strict=True)
+    ]
+    defined = [value for value in ratios if value is not None]
+    return {
+        "analysis_label": label,
+        "formula": formula,
+        "undefined_denominator_behavior": undefined_behavior,
+        "per_seed_ratio": ratios,
+        "defined_seed_count": len(defined),
+        "mean_defined_ratio": sum(defined) / len(defined) if defined else None,
+        "ratio_of_seed_means": (sum(float(value) for value in numerator_values) / len(numerator_values))
+        / (sum(float(value) for value in denominator_values) / len(denominator_values))
+        if abs(sum(float(value) for value in denominator_values) / len(denominator_values)) >= materiality
+        else None,
+    }
+
+
 def _ineligible_client_metrics(evaluation: pl.DataFrame) -> pl.DataFrame:
     return (
         evaluation.filter(pl.col("threshold").is_null())
@@ -1642,7 +1690,13 @@ class StatisticalAnalysisStageHandler:
         stability_analyses = tuple(
             item for item in experiment.analyses if isinstance(item, ThresholdStabilityAnalysisRecord)
         )
-        if len(paired_analyses) + len(association_analyses) + len(stability_analyses) != len(experiment.analyses):
+        recovery_analyses = tuple(
+            item for item in experiment.analyses if isinstance(item, RecoveryFractionAnalysisRecord)
+        )
+        absorption_analyses = tuple(item for item in experiment.analyses if isinstance(item, AbsorptionAnalysisRecord))
+        if len(paired_analyses) + len(association_analyses) + len(stability_analyses) + len(recovery_analyses) + len(
+            absorption_analyses
+        ) != len(experiment.analyses):
             return StageJobOutcome.failed(
                 job_id=job.job_id,
                 stage=job.stage,
@@ -1719,6 +1773,10 @@ class StatisticalAnalysisStageHandler:
                 )
                 for analysis in stability_analyses
                 for calibration_sample_count in calibration_sample_counts
+            )
+            results.extend(self._analyze_recovery_fraction(analysis, paired_results) for analysis in recovery_analyses)
+            results.extend(
+                self._analyze_absorption(analysis, experiment, paired_results) for analysis in absorption_analyses
             )
             training_profile = self._config.training_profiles.get(experiment.training_profile_id)
             if training_profile.kind == "federated_prox_training":
@@ -2115,6 +2173,121 @@ class StatisticalAnalysisStageHandler:
             "independent_inferential_unit": subset.independent_inferential_unit,
             "seed_results": seed_results,
         }
+
+    @staticmethod
+    def _analyze_recovery_fraction(
+        analysis: RecoveryFractionAnalysisRecord, paired_results: list[dict[str, object]]
+    ) -> dict[str, object]:
+        numerator = next(
+            (result for result in paired_results if result["analysis_label"] == analysis.numerator_analysis), None
+        )
+        denominator_component = next(
+            (result for result in paired_results if result["analysis_label"] == analysis.denominator_analysis), None
+        )
+        if numerator is None or denominator_component is None:
+            raise ValueError(f"Recovery analysis '{analysis.label}' lacks its paired source analyses")
+        numerator_values = numerator.get("seed_differences")
+        component_values = denominator_component.get("seed_differences")
+        if (
+            not isinstance(numerator_values, list)
+            or not isinstance(component_values, list)
+            or len(numerator_values) != len(component_values)
+            or not all(isinstance(value, int | float) for value in (*numerator_values, *component_values))
+        ):
+            raise ValueError(f"Recovery analysis '{analysis.label}' has malformed paired seed differences")
+        if analysis.denominator_composition != "shared_minus_local_gap_of_the_same_seed":
+            raise ValueError(f"Recovery analysis '{analysis.label}' has an unsupported denominator composition")
+        materiality = _materiality_threshold(analysis.denominator_materiality_rule)
+        seed_ratios = [
+            None
+            if abs(float(numerator_value) + float(component_value)) < materiality
+            else float(numerator_value) / (float(numerator_value) + float(component_value))
+            for numerator_value, component_value in zip(numerator_values, component_values, strict=True)
+        ]
+        defined = [value for value in seed_ratios if value is not None]
+        return {
+            "analysis_label": analysis.label,
+            "formula": analysis.formula,
+            "undefined_denominator_behavior": analysis.undefined_denominator_behavior,
+            "per_seed_recovery_fraction": seed_ratios,
+            "defined_seed_count": len(defined),
+            "mean_defined_recovery_fraction": sum(defined) / len(defined) if defined else None,
+        }
+
+    def _analyze_absorption(
+        self, analysis: AbsorptionAnalysisRecord, experiment, paired_results: list[dict[str, object]]
+    ) -> dict[str, object]:
+        stress = next(
+            (result for result in paired_results if result["analysis_label"] == analysis.stress_test_analysis), None
+        )
+        if stress is None:
+            raise ValueError(f"Absorption analysis '{analysis.label}' lacks its stress-test source")
+        reference_experiment, reference_label = self._absorption_reference(analysis)
+        self._validate_absorption_contract(analysis, experiment, reference_experiment)
+        reference_run = execution_run_id(reference_experiment, self._config.execution_fingerprint.value)
+        reference_context = StageJobContext(experiment_id=reference_experiment)
+        artifact = self._repository.read(
+            f"runs/{reference_run.value}/{IdentityBuilder.statistical_analysis_job_id(reference_context).value}"
+        )
+        if not artifact.found or artifact.payload_bytes is None:
+            raise ValueError(f"Absorption analysis '{analysis.label}' reference statistical artifact is unavailable")
+        payload = json.loads(artifact.payload_bytes)
+        if not isinstance(payload, list):
+            raise ValueError(f"Absorption analysis '{analysis.label}' reference statistical artifact is malformed")
+        reference = next(
+            (item for item in payload if isinstance(item, dict) and item.get("analysis_label") == reference_label), None
+        )
+        if not isinstance(reference, dict):
+            raise ValueError(f"Absorption analysis '{analysis.label}' reference analysis is unavailable")
+        return _seed_ratio_result(
+            label=analysis.label,
+            formula=analysis.formula,
+            numerator=stress,
+            denominator=reference,
+            materiality_rule=analysis.denominator_materiality_rule,
+            undefined_behavior=analysis.undefined_denominator_behavior,
+        )
+
+    @staticmethod
+    def _absorption_reference(analysis: AbsorptionAnalysisRecord) -> tuple[ExperimentId, str]:
+        if not isinstance(analysis.reference_analysis, Mapping):
+            raise ValueError(f"Absorption analysis '{analysis.label}' requires an explicit reference experiment")
+        experiment = analysis.reference_analysis.get("experiment")
+        label = analysis.reference_analysis.get("analysis")
+        if not isinstance(experiment, str) or not isinstance(label, str):
+            raise ValueError(f"Absorption analysis '{analysis.label}' reference is malformed")
+        return (ExperimentId(experiment), label)
+
+    def _validate_absorption_contract(
+        self, analysis: AbsorptionAnalysisRecord, experiment, reference_experiment_id: ExperimentId
+    ) -> None:
+        reference = self._config.experiments.get(reference_experiment_id)
+        if experiment.seed_cohort_id != reference.seed_cohort_id:
+            raise ValueError(f"Absorption analysis '{analysis.label}' has an unmatched training-seed cohort")
+        if experiment.checkpoint_profile_id != reference.checkpoint_profile_id:
+            raise ValueError(f"Absorption analysis '{analysis.label}' has an unmatched checkpoint profile")
+        if experiment.eligibility_policy_id != reference.eligibility_policy_id:
+            raise ValueError(f"Absorption analysis '{analysis.label}' has an unmatched eligibility policy")
+        if experiment.population_ids != reference.population_ids:
+            raise ValueError(f"Absorption analysis '{analysis.label}' has an unmatched client population")
+        mapping = analysis.matching_contract.get("evaluation_label_mapping")
+        if not isinstance(mapping, Mapping):
+            raise ValueError(f"Absorption analysis '{analysis.label}' lacks an evaluation-label mapping")
+        reference_mapping = mapping.get("reference")
+        stress_mapping = mapping.get("stress_test")
+        if not isinstance(reference_mapping, Mapping) or not isinstance(stress_mapping, Mapping):
+            raise ValueError(f"Absorption analysis '{analysis.label}' has malformed evaluation-label mappings")
+        for logical_label in ("shared_mean", "local"):
+            reference_label = reference_mapping.get(logical_label)
+            stress_label = stress_mapping.get(logical_label)
+            if not isinstance(reference_label, str) or not isinstance(stress_label, str):
+                raise ValueError(f"Absorption analysis '{analysis.label}' lacks '{logical_label}' label mappings")
+            reference_evaluation = next((item for item in reference.evaluations if item.label == reference_label), None)
+            stress_evaluation = next((item for item in experiment.evaluations if item.label == stress_label), None)
+            if reference_evaluation is None or stress_evaluation is None:
+                raise ValueError(f"Absorption analysis '{analysis.label}' maps an unavailable evaluation")
+            if reference_evaluation.threshold_policy_id != stress_evaluation.threshold_policy_id:
+                raise ValueError(f"Absorption analysis '{analysis.label}' has unmatched threshold policy semantics")
 
     @staticmethod
     def _evaluation_policy(experiment, label: str) -> str:
