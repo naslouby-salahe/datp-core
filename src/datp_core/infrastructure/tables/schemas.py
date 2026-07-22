@@ -58,6 +58,8 @@ class ClientMetricFrameSchema(pa.DataFrameModel):
             "unavailable_ineligible_client",
         ]
     )  # type: ignore
+    auroc: float | None = pa.Field(nullable=True, ge=0.0, le=1.0)  # type: ignore
+    auroc_status: str = pa.Field(isin=["available", "unavailable_single_class", "unavailable_ineligible_client"])  # type: ignore
 
 
 def validate_calibration_score_frame(df: pl.DataFrame) -> pl.DataFrame:

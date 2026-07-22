@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
 from io import BytesIO
@@ -41,6 +42,7 @@ from datp_core.domain.catalogue import (
     ConditionSweepRecord,
     ConformalCoverageAnalysisRecord,
     DistributionMechanismAnalysisRecord,
+    EligibilityGateRecord,
     LockedClientDistributionAnalysisRecord,
     MetricAssociationAnalysisRecord,
     PairedThresholdAnalysisRecord,
@@ -63,6 +65,7 @@ from datp_core.domain.identifiers import ArtifactId, ClientId, DatasetId, Experi
 from datp_core.domain.outcomes import StageJob, StageJobContext, StageJobOutcome, StageKind
 from datp_core.domain.protocol_contracts import CommunicationEstimationContractRecord
 from datp_core.domain.run_identity import execution_run_id
+from datp_core.domain.splits import SplitManifest
 from datp_core.domain.thresholding import (
     BenignCalibrationScores,
     ConformalAttainabilityStatus,
@@ -93,7 +96,7 @@ from datp_core.infrastructure.learning.pytorch_adapter import (
 )
 from datp_core.infrastructure.learning.sklearn_adapter import compute_adjusted_rand_index
 from datp_core.infrastructure.tables.calibration_subsampling import subsample_calibration_scores
-from datp_core.infrastructure.tables.polars_engine import compute_operating_point_metrics
+from datp_core.infrastructure.tables.polars_engine import compute_client_auroc, compute_operating_point_metrics
 from datp_core.infrastructure.tables.schemas import (
     validate_calibration_score_frame,
     validate_client_metric_frame,
@@ -153,6 +156,55 @@ def _parents(config: ResolvedProjectConfiguration, artifacts: tuple[ArtifactKey,
         ArtifactParent(parent_key=artifact, scientific_fingerprint=config.scientific_fingerprint)
         for artifact in artifacts
     )
+
+
+def _git_revision() -> str:
+    """Return the current Git commit hash or 'unknown' if unavailable."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return "unknown"
+
+
+def _evaluate_readiness_gates(
+    gate_names: tuple[str, ...],
+    gates: Mapping[str, EligibilityGateRecord],
+    manifest: SplitManifest,
+    experiment_id: ExperimentId,
+) -> list[str]:
+    """Evaluate configured eligibility gates against a materialized split manifest.
+
+    Returns a list of human-readable failure messages; empty means all gates passed.
+    """
+    issues: list[str] = []
+    for gate_name in gate_names:
+        gate = gates.get(gate_name)
+        if gate is None:
+            issues.append(f"unknown readiness gate: {gate_name}")
+            continue
+        if experiment_id not in gate.applies_to_experiments:
+            continue
+        candidate_count = len(manifest.client_ids)
+        eligible_count = len(manifest.eligible_client_ids)
+        if candidate_count == 0:
+            issues.append(f"{gate_name}: no candidate clients in split manifest")
+            continue
+        proportion = eligible_count / candidate_count
+        if proportion < float(gate.minimum_eligible_client_proportion):
+            issues.append(
+                f"{gate_name}: eligible proportion {proportion:.3f} below minimum "
+                f"{float(gate.minimum_eligible_client_proportion)} "
+                f"({eligible_count}/{candidate_count} clients eligible)"
+            )
+    return issues
 
 
 def _partition_contract(
@@ -375,6 +427,18 @@ class DatasetMaterializationStageHandler:
                         stage=job.stage,
                         error_message="Dataset readiness failed: "
                         + "; ".join(defect.code for defect in readiness.blocking_defects),
+                    )
+                gate_issues = _evaluate_readiness_gates(
+                    experiment.readiness_gates,
+                    self._config.eligibility_gates,  # type: ignore[arg-type]
+                    split_evidence.manifest,
+                    experiment.identifier,
+                )
+                if gate_issues:
+                    return StageJobOutcome.failed(
+                        job_id=job.job_id,
+                        stage=job.stage,
+                        error_message="Eligibility gate(s) failed: " + "; ".join(gate_issues),
                     )
                 split_manifest_payload = encode_split_manifest(split_evidence.manifest)
                 commit = _commit_artifact(
@@ -1631,6 +1695,8 @@ def _ineligible_client_metrics(evaluation: pl.DataFrame) -> pl.DataFrame:
             pl.lit("unavailable_ineligible_client").alias("balanced_accuracy_status"),
             pl.lit(None, dtype=pl.Float64).alias("macro_f1"),
             pl.lit("unavailable_ineligible_client").alias("macro_f1_status"),
+            pl.lit(None, dtype=pl.Float64).alias("auroc"),
+            pl.lit("unavailable_ineligible_client").alias("auroc_status"),
         )
     )
 
@@ -1920,12 +1986,15 @@ class OperatingPointEvaluationStageHandler:
                 metrics = pl.concat((compute_operating_point_metrics(eligible), _ineligible_client_metrics(evaluation)))
             else:
                 metrics = compute_operating_point_metrics(eligible)
+            auroc = compute_client_auroc(score_frame)
+            metrics = metrics.join(auroc, on="client_id", how="left")
             metrics = metrics.with_columns(
                 pl.lit(job.context.threshold_policy_id.value if job.context.threshold_policy_id else None).alias(
                     "policy_id"
                 ),
                 pl.lit(job.context.seed).alias("seed"),
             )
+            validate_client_metric_frame(metrics)
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
         payload = BytesIO()
@@ -2603,7 +2672,7 @@ class StatisticalAnalysisStageHandler:
             metric_frame = validate_client_metric_frame(pl.read_parquet(BytesIO(metrics.payload_bytes)))
             calibration_frame = validate_calibration_score_frame(pl.read_parquet(BytesIO(calibration.payload_bytes)))
             calibration_counts = {
-                str(client_id): len(rows)
+                str(client_id[0]): len(rows)
                 for client_id, rows in calibration_frame.group_by("client_id", maintain_order=True)
             }
             seed_results.append(
@@ -3224,12 +3293,22 @@ class ResultFreezeStageHandler:
         experiment = self._config.experiments.get(job.context.experiment_id)
         try:
             profiles = tuple(self._config.report_profiles.get(identifier) for identifier in experiment.report_ids)
+            seed_cohort = self._config.seed_cohorts.get(experiment.seed_cohort_id)
+            primary_population = experiment.population_ids[0] if experiment.population_ids else None
+            population_record = (
+                self._config.populations.get(primary_population) if primary_population is not None else None
+            )
+            source_revision = _git_revision()
             payload = freeze_result_family(
                 experiment=experiment,
                 report_profiles=profiles,
                 statistical_summary=statistics.payload_bytes,
                 source_artifacts=job.inputs,
                 scientific_fingerprint=self._config.scientific_fingerprint.value,
+                execution_fingerprint=self._config.execution_fingerprint.value,
+                source_revision=source_revision,
+                seed_count=len(seed_cohort.training_seeds),
+                dataset_id=population_record.dataset_id.value if population_record is not None else None,
             )
         except (KeyError, ResultFreezeError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))

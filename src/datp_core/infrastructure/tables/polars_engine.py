@@ -4,11 +4,16 @@ from __future__ import annotations
 
 import polars as pl
 
-from datp_core.infrastructure.tables.schemas import validate_client_metric_frame
+from datp_core.infrastructure.learning.sklearn_adapter import ClientAuroc, compute_roc_auc
 
 
 def compute_operating_point_metrics(df: pl.DataFrame) -> pl.DataFrame:
-    """Compute per-client confusion counts using the configured score-threshold comparison."""
+    """Compute per-client confusion counts using the configured score-threshold comparison.
+
+    Returns a DataFrame with all confusion-count and derived-metric columns EXCEPT
+    AUROC, which is computed separately via ``compute_client_auroc`` and joined
+    by the caller before final schema validation.
+    """
     if df.is_empty():
         raise ValueError("Cannot compute operating point metrics on empty DataFrame")
 
@@ -88,5 +93,32 @@ def compute_operating_point_metrics(df: pl.DataFrame) -> pl.DataFrame:
         .sort("client_id")
         .collect()
     )
+    return aggregated
 
-    return validate_client_metric_frame(aggregated)
+
+def compute_client_auroc(df: pl.DataFrame) -> pl.DataFrame:
+    """Compute per-client AUROC from continuous anomaly scores and binary test labels.
+
+    AUROC uses raw scores and labels (not threshold-based decisions), so it is
+    identical across B1–B4 for the same seed and frozen model.  Single-class
+    clients receive a typed unavailable status rather than a substitute value.
+    """
+    if df.is_empty():
+        raise ValueError("Cannot compute AUROC on empty DataFrame")
+    if "score" not in df.columns or "label" not in df.columns:
+        raise ValueError("AUROC computation requires score and label columns")
+
+    auroc_records: list[dict[str, object]] = []
+    for (client_id,), group in df.group_by("client_id", maintain_order=True):
+        labels = group["label"].to_numpy()
+        scores = group["score"].to_numpy()
+        result: ClientAuroc = compute_roc_auc(labels, scores)
+        auroc_records.append(
+            {
+                "client_id": client_id,
+                "auroc": result.value,
+                "auroc_status": result.status.value,
+            }
+        )
+
+    return pl.DataFrame(auroc_records, schema={"client_id": pl.String, "auroc": pl.Float64, "auroc_status": pl.String})

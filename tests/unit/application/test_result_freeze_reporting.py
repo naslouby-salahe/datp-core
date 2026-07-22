@@ -34,6 +34,9 @@ def test_result_freeze_requires_every_configured_analysis_before_rendering() -> 
         statistical_summary=json.dumps(records).encode("utf-8"),
         source_artifacts=(IdentityBuilder.statistical_summary_key(context),),
         scientific_fingerprint=app.config.scientific_fingerprint.value,
+        execution_fingerprint=app.config.execution_fingerprint.value,
+        source_revision="test",
+        seed_count=5,
     )
 
     report = json.loads(render_frozen_report(payload))
