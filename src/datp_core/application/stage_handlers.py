@@ -6,6 +6,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass
 from io import BytesIO
+from math import ceil
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import time
@@ -37,6 +38,7 @@ from datp_core.domain.catalogue import (
     AnchorEquivalenceAnalysisRecord,
     ClusterStabilityAnalysisRecord,
     ConditionSweepRecord,
+    ConformalCoverageAnalysisRecord,
     MetricAssociationAnalysisRecord,
     PairedThresholdAnalysisRecord,
     RecoveryFractionAnalysisRecord,
@@ -55,7 +57,11 @@ from datp_core.domain.evaluation import MetricStatus, calculate_fpr_dispersion, 
 from datp_core.domain.identifiers import ArtifactId, ClientId, DatasetId, ExperimentId, RunId
 from datp_core.domain.outcomes import StageJob, StageJobContext, StageJobOutcome, StageKind
 from datp_core.domain.run_identity import execution_run_id
-from datp_core.domain.thresholding import BenignCalibrationScores
+from datp_core.domain.thresholding import (
+    BenignCalibrationScores,
+    ConformalAttainabilityStatus,
+    SplitConformalThresholdPolicyRecord,
+)
 from datp_core.domain.values import PositiveInt, Seed
 from datp_core.infrastructure.datasets.adapter_registry import DatasetAdapterRegistry
 from datp_core.infrastructure.datasets.source_inventory import build_source_inventory
@@ -1390,6 +1396,76 @@ def _seed_ratio_result(
     }
 
 
+def _weighted_mean(values: list[tuple[int, int]]) -> float | None:
+    denominator = sum(weight for _, weight in values)
+    return sum(value for value, _ in values) / denominator if denominator else None
+
+
+def _conformal_seed_coverage(
+    thresholds: pl.DataFrame,
+    metrics: pl.DataFrame,
+    calibration_counts: Mapping[str, int],
+    target_coverage: float,
+    coverage_alpha: float,
+    minimum_sample_count: int,
+) -> dict[str, object]:
+    required = ("finite_sample_rank", "attainability_status")
+    if any(field not in thresholds.columns for field in required):
+        raise ValueError("Conformal threshold artifact lacks finite-sample diagnostics")
+    joined = thresholds.join(metrics, on="client_id", how="left")
+    if joined.height != thresholds.height or joined["true_negatives"].null_count() > 0:
+        raise ValueError("Conformal coverage metrics do not cover the threshold population")
+    per_client: dict[str, dict[str, object]] = {}
+    coverages: list[float] = []
+    true_negatives = 0
+    benign_total = 0
+    for client, rank, attainability, tn, fp, fpr_status in joined.select(
+        "client_id",
+        "finite_sample_rank",
+        "attainability_status",
+        "true_negatives",
+        "false_positives",
+        "false_positive_rate_status",
+    ).iter_rows():
+        client_id = str(client)
+        count = calibration_counts.get(client_id)
+        if count is None or rank is None or attainability is None:
+            raise ValueError("Conformal coverage inputs have incomplete per-client diagnostics")
+        expected_rank = min(ceil((count + 1) * (1.0 - coverage_alpha)), count)
+        expected_status = (
+            ConformalAttainabilityStatus.ATTAINABLE
+            if count >= max(minimum_sample_count, ceil(1.0 / coverage_alpha) - 1)
+            else ConformalAttainabilityStatus.UNATTAINABLE
+        )
+        if int(rank) != expected_rank or attainability != expected_status.value:
+            raise ValueError(f"Conformal finite-sample diagnostics disagree for client '{client_id}'")
+        client_true_negatives = int(tn)
+        client_benign_total = client_true_negatives + int(fp)
+        if (client_benign_total > 0) != (fpr_status == MetricStatus.AVAILABLE.value):
+            raise ValueError(f"Conformal coverage metric status disagrees for client '{client_id}'")
+        coverage = client_true_negatives / client_benign_total if client_benign_total else None
+        if coverage is not None:
+            coverages.append(coverage)
+            true_negatives += client_true_negatives
+            benign_total += client_benign_total
+        per_client[client_id] = {
+            "coverage": coverage,
+            "absolute_coverage_error": abs(coverage - target_coverage) if coverage is not None else None,
+            "coverage_status": "available" if coverage is not None else "unavailable_no_benign_test_records",
+            "finite_sample_rank": int(rank),
+            "attainability_status": attainability,
+            "calibration_count": count,
+        }
+    return {
+        "per_client_coverage": per_client,
+        "client_coverages": coverages,
+        "finite_sample_rank": {client: values["finite_sample_rank"] for client, values in per_client.items()},
+        "attainability_status": {client: values["attainability_status"] for client, values in per_client.items()},
+        "benign_true_negatives": true_negatives,
+        "benign_total": benign_total,
+    }
+
+
 def _ineligible_client_metrics(evaluation: pl.DataFrame) -> pl.DataFrame:
     return (
         evaluation.filter(pl.col("threshold").is_null())
@@ -1580,6 +1656,8 @@ class ThresholdConstructionStageHandler:
                         "owner_kind": pl.String,
                         "effective_lambda": pl.Float64,
                         "cluster_label": pl.Int64,
+                        "finite_sample_rank": pl.Int64,
+                        "attainability_status": pl.String,
                         "policy_id": pl.String,
                         "target_quantile": pl.Float64,
                     }
@@ -1616,6 +1694,11 @@ class ThresholdConstructionStageHandler:
                         "owner_kind": [record.owner for record in threshold_set.values],
                         "effective_lambda": [record.effective_lambda for record in threshold_set.values],
                         "cluster_label": [record.cluster_label for record in threshold_set.values],
+                        "finite_sample_rank": [record.finite_sample_rank for record in threshold_set.values],
+                        "attainability_status": [
+                            None if record.attainability_status is None else record.attainability_status.value
+                            for record in threshold_set.values
+                        ],
                         "policy_id": [threshold_set.policy_id.value] * len(threshold_set.values),
                         "target_quantile": [threshold_set.target_quantile.value] * len(threshold_set.values),
                     }
@@ -1752,6 +1835,9 @@ class StatisticalAnalysisStageHandler:
         cluster_analyses = tuple(
             item for item in experiment.analyses if isinstance(item, ClusterStabilityAnalysisRecord)
         )
+        conformal_analyses = tuple(
+            item for item in experiment.analyses if isinstance(item, ConformalCoverageAnalysisRecord)
+        )
         if (
             len(paired_analyses)
             + len(association_analyses)
@@ -1761,6 +1847,7 @@ class StatisticalAnalysisStageHandler:
             + len(anchor_analyses)
             + len(temporal_analyses)
             + len(cluster_analyses)
+            + len(conformal_analyses)
         ) != len(experiment.analyses):
             return StageJobOutcome.failed(
                 job_id=job.job_id,
@@ -1851,6 +1938,10 @@ class StatisticalAnalysisStageHandler:
             results.extend(
                 self._analyze_cluster_stability(analysis, experiment, cohort.training_seeds, run_id)
                 for analysis in cluster_analyses
+            )
+            results.extend(
+                self._analyze_conformal_coverage(analysis, experiment, cohort.training_seeds, run_id)
+                for analysis in conformal_analyses
             )
             training_profile = self._config.training_profiles.get(experiment.training_profile_id)
             if training_profile.kind == "federated_prox_training":
@@ -2288,6 +2379,79 @@ class StatisticalAnalysisStageHandler:
             "per_seed_recovery_fraction": seed_ratios,
             "defined_seed_count": len(defined),
             "mean_defined_recovery_fraction": sum(defined) / len(defined) if defined else None,
+        }
+
+    def _analyze_conformal_coverage(
+        self, analysis: ConformalCoverageAnalysisRecord, experiment, seeds, run_id: RunId
+    ) -> dict[str, object]:
+        evaluation = next(item for item in experiment.evaluations if item.label == analysis.source_evaluation)
+        policy = self._config.threshold_policies.get(evaluation.threshold_policy_id)
+        if not isinstance(policy, SplitConformalThresholdPolicyRecord):
+            raise ValueError(f"Conformal analysis '{analysis.label}' requires a split-conformal threshold policy")
+        if abs(analysis.target_coverage - policy.nominal_coverage) > 1e-12:
+            raise ValueError(f"Conformal analysis '{analysis.label}' target disagrees with its threshold policy")
+        seed_results: list[dict[str, object]] = []
+        for seed in seeds:
+            context = StageJobContext(
+                experiment_id=experiment.identifier,
+                seed=seed.value,
+                evaluation_label=evaluation.label,
+                population_id=evaluation.population_id,
+                recalibration_mode=evaluation.recalibration_mode,
+            )
+            threshold = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}")
+            metrics = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
+            calibration = self._repository.read(
+                f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(_score_context(context)).value}"
+            )
+            if any(
+                not artifact.found or artifact.payload_bytes is None for artifact in (threshold, metrics, calibration)
+            ):
+                raise ValueError(f"Conformal coverage artifacts are unavailable for seed {seed.value}")
+            assert threshold.payload_bytes is not None
+            assert metrics.payload_bytes is not None
+            assert calibration.payload_bytes is not None
+            threshold_frame = validate_threshold_frame(pl.read_parquet(BytesIO(threshold.payload_bytes)))
+            metric_frame = validate_client_metric_frame(pl.read_parquet(BytesIO(metrics.payload_bytes)))
+            calibration_frame = validate_calibration_score_frame(pl.read_parquet(BytesIO(calibration.payload_bytes)))
+            calibration_counts = {
+                str(client_id): len(rows)
+                for client_id, rows in calibration_frame.group_by("client_id", maintain_order=True)
+            }
+            seed_results.append(
+                _conformal_seed_coverage(
+                    threshold_frame,
+                    metric_frame,
+                    calibration_counts,
+                    analysis.target_coverage,
+                    policy.coverage_alpha,
+                    policy.minimum_sample_count,
+                )
+                | {"seed": seed.value}
+            )
+        achieved_marginal = _weighted_mean(
+            [(cast(int, result["benign_true_negatives"]), cast(int, result["benign_total"])) for result in seed_results]
+        )
+        macro_coverages = [
+            value
+            for result in seed_results
+            for value in cast(list[object], result["client_coverages"])
+            if isinstance(value, float)
+        ]
+        achieved_macro = sum(macro_coverages) / len(macro_coverages) if macro_coverages else None
+        return {
+            "analysis_label": analysis.label,
+            "target_coverage": analysis.target_coverage,
+            "achieved_marginal_coverage": achieved_marginal,
+            "achieved_macro_client_coverage": achieved_macro,
+            "per_client_coverage": [result["per_client_coverage"] for result in seed_results],
+            "absolute_coverage_error": (
+                abs(achieved_marginal - analysis.target_coverage) if achieved_marginal is not None else None
+            ),
+            "finite_sample_rank": [result["finite_sample_rank"] for result in seed_results],
+            "attainability_status": [result["attainability_status"] for result in seed_results],
+            "coverage_direction": analysis.coverage_direction,
+            "seed_results": seed_results,
         }
 
     def _analyze_cluster_stability(

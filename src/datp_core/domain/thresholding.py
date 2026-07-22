@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Literal, cast
 
 from attrs import define, field
@@ -72,6 +73,11 @@ class BenignCalibrationScores:
                 raise ValueError("Calibration anomaly scores must be non-negative")
 
 
+class ConformalAttainabilityStatus(StrEnum):
+    ATTAINABLE = "attainable"
+    UNATTAINABLE = "unattainable"
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ThresholdRecord:
     client_id: ClientId
@@ -79,6 +85,8 @@ class ThresholdRecord:
     owner: str
     effective_lambda: float | None = None
     cluster_label: int | None = None
+    finite_sample_rank: int | None = None
+    attainability_status: ConformalAttainabilityStatus | None = None
 
     def __post_init__(self) -> None:
         val = float(self.threshold)
@@ -87,6 +95,8 @@ class ThresholdRecord:
             raise ValueError("Produced threshold value must be finite")
         if val < 0.0:
             raise ValueError("Produced threshold value cannot be negative")
+        if self.finite_sample_rank is not None and self.finite_sample_rank < 1:
+            raise ValueError("Conformal finite-sample rank must be positive")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

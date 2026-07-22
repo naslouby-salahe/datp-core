@@ -21,6 +21,8 @@ class ThresholdFrameSchema(pa.DataFrameModel):
     client_id: str
     threshold: float = pa.Field(ge=0.0)  # type: ignore
     owner_kind: str
+    finite_sample_rank: int | None = pa.Field(nullable=True, ge=1)  # type: ignore
+    attainability_status: str | None = pa.Field(nullable=True, isin=["attainable", "unattainable"])  # type: ignore
 
 
 class ClientMetricFrameSchema(pa.DataFrameModel):

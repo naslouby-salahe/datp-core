@@ -1,8 +1,13 @@
 """Recovery fractions are derived from the matched paired seed gaps."""
 
+import polars as pl
 import pytest
 
-from datp_core.application.stage_handlers import StatisticalAnalysisStageHandler, _seed_ratio_result
+from datp_core.application.stage_handlers import (
+    StatisticalAnalysisStageHandler,
+    _conformal_seed_coverage,
+    _seed_ratio_result,
+)
 from datp_core.composition.root import build_application
 from datp_core.domain.catalogue import AnchorEquivalenceAnalysisRecord, RecoveryFractionAnalysisRecord
 from datp_core.domain.identifiers import ExperimentId
@@ -50,3 +55,43 @@ def test_anchor_equivalence_requires_every_configured_statistical_fallback_rule(
 
     assert result["passed"] is True
     assert result["failure_reasons"] == ()
+
+
+def test_conformal_coverage_uses_held_out_benign_confusion_counts_and_persisted_rank() -> None:
+    result = _conformal_seed_coverage(
+        pl.DataFrame(
+            {
+                "client_id": ["c1", "c2"],
+                "threshold": [1.0, 2.0],
+                "owner_kind": ["split_conformal", "split_conformal"],
+                "finite_sample_rank": [96, 96],
+                "attainability_status": ["attainable", "attainable"],
+            }
+        ),
+        pl.DataFrame(
+            {
+                "client_id": ["c1", "c2"],
+                "true_positives": [0, 0],
+                "false_positives": [10, 0],
+                "true_negatives": [90, 100],
+                "false_negatives": [0, 0],
+                "false_positive_rate": [0.1, 0.0],
+                "false_positive_rate_status": ["available", "available"],
+                "true_positive_rate": [None, None],
+                "true_positive_rate_status": ["unavailable_no_attack_records", "unavailable_no_attack_records"],
+                "balanced_accuracy": [None, None],
+                "balanced_accuracy_status": ["unavailable_no_attack_records", "unavailable_no_attack_records"],
+                "macro_f1": [None, None],
+                "macro_f1_status": ["unavailable_no_attack_records", "unavailable_no_attack_records"],
+            }
+        ),
+        {"c1": 100, "c2": 100},
+        0.95,
+        0.05,
+        100,
+    )
+
+    assert result["benign_true_negatives"] == 190
+    assert result["benign_total"] == 200
+    assert result["client_coverages"] == [0.9, 1.0]
+    assert result["finite_sample_rank"] == {"c1": 96, "c2": 96}

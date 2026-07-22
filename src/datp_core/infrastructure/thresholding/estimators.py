@@ -16,6 +16,7 @@ from datp_core.domain.thresholding import (
     CalibrationFallbackThresholdPolicyRecord,
     CentralizedPooledThresholdPolicyRecord,
     ClusterThresholdPolicyRecord,
+    ConformalAttainabilityStatus,
     FamilyMeanThresholdPolicyRecord,
     FederatedFixedCoefficientThresholdPolicyRecord,
     FederatedMatchedExceedanceThresholdPolicyRecord,
@@ -57,6 +58,8 @@ def _records(
     quantile: Probability,
     lambdas: dict[str, float] | None = None,
     cluster_labels: dict[str, int] | None = None,
+    conformal_ranks: dict[str, int] | None = None,
+    conformal_attainability: dict[str, ConformalAttainabilityStatus] | None = None,
 ) -> ThresholdSet:
     return ThresholdSet(
         policy_id=policy_id,
@@ -68,6 +71,10 @@ def _records(
                 owner=owner,
                 effective_lambda=None if lambdas is None else lambdas[item.client_id.value],
                 cluster_label=None if cluster_labels is None else cluster_labels[item.client_id.value],
+                finite_sample_rank=None if conformal_ranks is None else conformal_ranks[item.client_id.value],
+                attainability_status=(
+                    None if conformal_attainability is None else conformal_attainability[item.client_id.value]
+                ),
             )
             for item in calibration
         ),
@@ -231,13 +238,25 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
         quantile: Probability,
     ) -> ThresholdSet:
         thresholds: dict[str, float] = {}
+        ranks: dict[str, int] = {}
         for item in calibration:
             scores = np.sort(np.asarray(item.values, dtype=np.float64))
             if len(scores) < policy.minimum_sample_count:
                 raise ValueError("Conformal threshold is unattainable for the authored minimum sample count")
             rank = min(math.ceil((len(scores) + 1) * (1.0 - policy.coverage_alpha)), len(scores))
             thresholds[item.client_id.value] = float(scores[rank - 1])
-        return _records(self._policy_id, calibration, thresholds, "split_conformal", quantile)
+            ranks[item.client_id.value] = rank
+        return _records(
+            self._policy_id,
+            calibration,
+            thresholds,
+            "split_conformal",
+            quantile,
+            conformal_ranks=ranks,
+            conformal_attainability={
+                item.client_id.value: ConformalAttainabilityStatus.ATTAINABLE for item in calibration
+            },
+        )
 
     def _shrinkage(
         self,

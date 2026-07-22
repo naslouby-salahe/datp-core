@@ -3,7 +3,7 @@ import pytest
 from datp_core.application.threshold_construction import ConstructThresholdsUseCase
 from datp_core.composition.root import _build_estimator_registry, build_application
 from datp_core.domain.identifiers import ClientId, PopulationId, ThresholdPolicyId
-from datp_core.domain.thresholding import BenignCalibrationScores, ThresholdSet
+from datp_core.domain.thresholding import BenignCalibrationScores, ConformalAttainabilityStatus, ThresholdSet
 
 
 @pytest.fixture
@@ -57,6 +57,15 @@ def test_conformal_and_federated_configured_policies_produce_finite_thresholds(
     assert conformal[0] < conformal[1] < conformal[2]
     assert fixed[0] == fixed[1] == fixed[2]
     assert all(value > 0.0 for value in matched)
+
+
+def test_conformal_thresholds_persist_finite_sample_diagnostics(
+    calibration: tuple[BenignCalibrationScores, ...],
+) -> None:
+    result = _execute(ThresholdPolicyId("conformal_local_p95"), calibration)
+
+    assert [record.finite_sample_rank for record in result.values] == [96, 96, 96]
+    assert all(record.attainability_status is ConformalAttainabilityStatus.ATTAINABLE for record in result.values)
 
 
 def test_cluster_policy_uses_the_explicit_fingerprint_feature_subset(
