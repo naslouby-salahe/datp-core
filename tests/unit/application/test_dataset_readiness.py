@@ -8,36 +8,51 @@ from datp_core.domain.splits import MaterializedSplitEvidence, SplitManifest, Sp
 
 
 def _evidence(*, attack: bool) -> MaterializedSplitEvidence:
-    entries = [
-        SplitManifestEntry(
-            source_path="source.csv",
-            source_row_index=1,
-            client_id="c1",
-            membership=SplitMembership.TRAIN,
-            is_attack=False,
-        ),
-        SplitManifestEntry(
-            source_path="source.csv",
-            source_row_index=2,
-            client_id="c1",
-            membership=SplitMembership.CALIBRATION,
-            is_attack=False,
-        ),
-        SplitManifestEntry(
-            source_path="source.csv",
-            source_row_index=3,
-            client_id="c1",
-            membership=SplitMembership.CALIBRATION,
-            is_attack=False,
-        ),
-        SplitManifestEntry(
-            source_path="source.csv",
-            source_row_index=4,
-            client_id="c1",
-            membership=SplitMembership.TEST,
-            is_attack=attack,
-        ),
-    ]
+    """Synthetic evidence with the 9 physical-device clients expected by nbaiot natural_devices."""
+    clients = tuple(f"c{i}" for i in range(1, 10))  # c1..c9
+    entries = []
+    row_index = 1
+    for client_id in clients:
+        entries.append(
+            SplitManifestEntry(
+                source_path="source.csv",
+                source_row_index=row_index,
+                client_id=client_id,
+                membership=SplitMembership.TRAIN,
+                is_attack=False,
+            )
+        )
+        row_index += 1
+        entries.append(
+            SplitManifestEntry(
+                source_path="source.csv",
+                source_row_index=row_index,
+                client_id=client_id,
+                membership=SplitMembership.CALIBRATION,
+                is_attack=False,
+            )
+        )
+        row_index += 1
+        entries.append(
+            SplitManifestEntry(
+                source_path="source.csv",
+                source_row_index=row_index,
+                client_id=client_id,
+                membership=SplitMembership.CALIBRATION,
+                is_attack=False,
+            )
+        )
+        row_index += 1
+        entries.append(
+            SplitManifestEntry(
+                source_path="source.csv",
+                source_row_index=row_index,
+                client_id=client_id,
+                membership=SplitMembership.TEST,
+                is_attack=attack,
+            )
+        )
+        row_index += 1
     return MaterializedSplitEvidence(
         manifest=SplitManifest(entries=tuple(entries), minimum_benign_calibration_count=2),
         schema_columns=(
@@ -59,8 +74,8 @@ def test_readiness_records_observed_evidence_and_blocks_missing_declared_attack_
     report = audit.assess_materialization(dataset, setup, _evidence(attack=True), compute_payload_checksum(b"source"))
 
     assert report.ready_for_training
-    assert report.class_counts == {"benign": 3, "attack": 1}
-    assert report.projected_eligible_client_ids == ("c1",)
+    assert report.class_counts == {"benign": 27, "attack": 9}
+    assert report.projected_eligible_client_ids == tuple(f"c{i}" for i in range(1, 10))
     assert report.attack_evaluable
     assert b'"ready_for_training":true' in report.encode()
 
