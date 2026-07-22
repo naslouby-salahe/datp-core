@@ -2,9 +2,9 @@
 
 ## Purpose and authority
 
-This document restores the audit and decision record referenced by the navigable roadmap package. It is a faithful, reorganized record of sections 19 and 20 of the authoritative [master roadmap](../Journal_Extension_Master_Roadmap.md); it makes no new scientific decision.
+This document restores the audit and decision record referenced by the navigable roadmap package. It is a faithful, reorganized record of the audit and decision material originally drafted alongside the roadmap package; it makes no new scientific decision.
 
-The master roadmap governs if this record differs from it. Post-result revisions must record the previous rule, new rule, reason, evidence available at the decision time, affected results and claims, approval date, and affected roadmap files.
+[`SCIENTIFIC_SOURCE_OF_TRUTH.md`](./SCIENTIFIC_SOURCE_OF_TRUTH.md) governs if this record differs from it. Post-result revisions must record the previous rule, new rule, reason, evidence available at the decision time, affected results and claims, approval date, and affected roadmap files.
 
 ## Source-roadmap contradictions flagged
 

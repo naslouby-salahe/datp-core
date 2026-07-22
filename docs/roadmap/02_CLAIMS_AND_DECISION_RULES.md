@@ -113,7 +113,7 @@ P10 Macro-F1: 0.344 → 0.300 under B2
 
 These are historical until reproduced with DATP-Core provenance. A weaker ten-seed result is never replaced by the conference estimate.
 
-The historical execution contract is one local epoch with full participation, Adam at learning rate `0.001`, batch size `256`, and per-client standardization fitted on each client’s benign training split. Training begins convergence checks at round 40 and selects the first round whose trailing ten-round FedAvg-weighted benign validation reconstruction loss has relative endpoint change below `0.005`; if none qualifies, round 150 is selected. Exactly one checkpoint is saved at that selected round. The five seed-level B1-minus-B2 deltas use a 95% percentile bootstrap with 10,000 resamples and seed 42.
+The historical execution contract (training hyperparameters, convergence rule, checkpoint selection) is canonical in [`SCIENTIFIC_SOURCE_OF_TRUTH.md` §7](./SCIENTIFIC_SOURCE_OF_TRUTH.md#7-model-and-training-protocol). The five seed-level B1-minus-B2 deltas use a 95% percentile bootstrap with 10,000 resamples and seed 42 (`historical_five_seed_percentile_bootstrap`, [SCIENTIFIC_SOURCE_OF_TRUTH.md §12](./SCIENTIFIC_SOURCE_OF_TRUTH.md#12-statistical-analysis)).
 
 ---
 

@@ -2,7 +2,7 @@
 
 **Working title:** *Device-Aware Threshold Personalization: A Controlled Threshold-Calibration Study for Non-IID Federated IoT Anomaly Detection (Journal Extension).*
 
-**Purpose of this package.** This directory is a navigable, reorganized representation of the single source-of-truth roadmap, [`../Journal_Extension_Master_Roadmap.md`](../Journal_Extension_Master_Roadmap.md). The master roadmap remains authoritative; these files only restructure its existing content for navigation. Where a detail is owned by one file, other files link to it rather than duplicating it.
+**Purpose of this package.** This directory is the active DATP-Core roadmap. [`SCIENTIFIC_SOURCE_OF_TRUTH.md`](./SCIENTIFIC_SOURCE_OF_TRUTH.md) is the canonical authority for every locked scientific fact, formula, value, boundary, and decision rule; this file and files 01–06 own explanation, planning, experiment organization, reporting, and implementation sequencing, and defer to the source of truth for canonical values rather than restating them. Where a detail is owned by one file, other files link to it rather than duplicating it.
 
 ---
 
