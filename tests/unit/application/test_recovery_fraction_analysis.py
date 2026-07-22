@@ -3,8 +3,8 @@
 import polars as pl
 import pytest
 
-from datp_core.application.stage_handlers import (
-    StatisticalAnalysisStageHandler,
+from datp_core.application.analysis_stages import StatisticalAnalysisStageHandler
+from datp_core.application.learning_stages import (
     _conformal_seed_coverage,
     _seed_ratio_result,
     _threshold_tradeoff,

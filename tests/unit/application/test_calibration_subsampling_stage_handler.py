@@ -12,7 +12,8 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.application.stage_handlers import CalibrationSubsamplingStageHandler, _score_context
+from datp_core.application.learning_stages import _score_context
+from datp_core.application.threshold_stages import CalibrationSubsamplingStageHandler
 from datp_core.composition.root import DatpApplication, build_application
 from datp_core.domain.artifacts import (
     ArtifactCommitMetadata,
@@ -24,13 +25,14 @@ from datp_core.domain.identifiers import ExperimentId, RunId
 from datp_core.domain.outcomes import JobExecutionStatus, StageJob, StageKind
 from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
 from datp_core.infrastructure.tables.calibration_subsampling import subsample_calibration_scores
+from datp_core.planning.expansion import expand_experiment_jobs
 from datp_core.planning.identity import IdentityBuilder
 
 _EXPERIMENT_ID = ExperimentId("calibration_window_size_stability")
 
 
 def _jobs(app: DatpApplication) -> dict[int | None, StageJob]:
-    graph = app.plan_experiment.execute(_EXPERIMENT_ID)
+    graph = expand_experiment_jobs(app.config.experiments.get(_EXPERIMENT_ID), app.config)
     matches = [
         job
         for job in graph.jobs

@@ -56,6 +56,15 @@ class ArtifactCorruptionReason(Enum):
     SCHEMA_INCOMPATIBLE = "schema_incompatible"
 
 
+class ArtifactReuseReason(Enum):
+    COMPATIBLE_FROZEN_ARTIFACT = "compatible_frozen_artifact"
+    ARTIFACT_NOT_COMMITTED = "artifact_not_committed"
+    ARTIFACT_NOT_FROZEN = "artifact_not_frozen"
+    KEY_MISMATCH = "artifact_key_mismatch"
+    SCIENTIFIC_FINGERPRINT_MISMATCH = "scientific_fingerprint_mismatch"
+    EXECUTION_FINGERPRINT_MISMATCH = "execution_fingerprint_mismatch"
+
+
 @define(frozen=True, slots=True, kw_only=True)
 class ArtifactKey:
     artifact_id: ArtifactId
@@ -84,7 +93,6 @@ class ArtifactManifest:
     parents: tuple[ArtifactParent, ...]
     creation_timestamp: float
     environment_identity: str
-    is_frozen: bool
     experiment_id: ExperimentId | None = None
     seed: Seed | None = None
 
@@ -153,14 +161,14 @@ class ArtifactLookupResult:
 @define(frozen=True, slots=True, kw_only=True)
 class ArtifactReuseDecision:
     can_reuse: bool
-    reason: str
+    reason: tuple[ArtifactReuseReason, ...]
     existing_manifest: ArtifactManifest | None = None
 
 
 @define(frozen=True, slots=True, kw_only=True)
 class ArtifactCompatibilityResult:
     compatible: bool
-    reasons: tuple[str, ...] = field(factory=tuple)
+    reasons: tuple[ArtifactReuseReason, ...] = field(factory=tuple)
 
 
 @runtime_checkable

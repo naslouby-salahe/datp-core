@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Hashable
 from pathlib import Path
-from typing import TypeVar, cast
+from typing import Any, TypeVar, cast
 
 import yaml
 from pydantic import BaseModel, JsonValue, ValidationError
@@ -27,10 +28,10 @@ class ConfigurationError(Exception):
 
 
 class _DuplicateCheckingSafeLoader(yaml.SafeLoader):
-    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict[object, object]:
-        mapping: dict[object, object] = {}
+    def construct_mapping(self, node: yaml.MappingNode, deep: bool = False) -> dict[Hashable, Any]:
+        mapping: dict[Hashable, Any] = {}
         for key_node, value_node in node.value:
-            key = self.construct_object(key_node, deep=deep)
+            key = cast(Hashable, self.construct_object(key_node, deep=deep))
             if key in mapping:
                 line = key_node.start_mark.line + 1
                 col = key_node.start_mark.column + 1

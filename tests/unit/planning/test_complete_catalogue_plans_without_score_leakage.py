@@ -4,12 +4,13 @@ from datp_core.composition.root import build_application
 from datp_core.domain.artifacts import ArtifactKind
 from datp_core.domain.identifiers import ExperimentId
 from datp_core.domain.outcomes import StageKind
+from datp_core.planning.expansion import expand_experiment_jobs
 
 
 def test_complete_catalogue_resolves_and_anchor_plan_separates_scores() -> None:
     app = build_application()
     assert (len(app.config.populations), len(app.config.experiments)) == (7, 23)
-    plan = app.plan_experiment.execute(ExperimentId("anchor_reproduction"))
+    plan = expand_experiment_jobs(app.config.experiments.get(ExperimentId("anchor_reproduction")), app.config)
     assert plan.node_count > 0
     plan.validate_acyclic()
     for job in plan.jobs:
@@ -21,7 +22,7 @@ def test_complete_catalogue_resolves_and_anchor_plan_separates_scores() -> None:
 
 def test_controlled_heterogeneity_expands_every_partition_condition_without_identity_collisions() -> None:
     app = build_application()
-    plan = app.plan_experiment.execute(ExperimentId("controlled_heterogeneity_response"))
+    plan = expand_experiment_jobs(app.config.experiments.get(ExperimentId("controlled_heterogeneity_response")), app.config)
     materializations = tuple(job for job in plan.jobs if job.stage is StageKind.DATASET_MATERIALIZATION)
     evaluations = tuple(job for job in plan.jobs if job.stage is StageKind.OPERATING_POINT_EVALUATION)
 
@@ -42,7 +43,7 @@ def test_controlled_heterogeneity_expands_every_partition_condition_without_iden
 
 def test_confirmatory_plan_freezes_one_cohort_checkpoint_before_all_scores() -> None:
     app = build_application()
-    plan = app.plan_experiment.execute(ExperimentId("confirmatory_threshold_scope_effect"))
+    plan = expand_experiment_jobs(app.config.experiments.get(ExperimentId("confirmatory_threshold_scope_effect")), app.config)
     selector = next(job for job in plan.jobs if job.stage is StageKind.CHECKPOINT_SELECTION)
     scores = tuple(job for job in plan.jobs if job.stage is StageKind.SCORE_GENERATION)
 
@@ -54,7 +55,7 @@ def test_confirmatory_plan_freezes_one_cohort_checkpoint_before_all_scores() -> 
 
 def test_quantile_sensitivity_expands_every_quantile_without_score_duplication() -> None:
     app = build_application()
-    plan = app.plan_experiment.execute(ExperimentId("threshold_quantile_sensitivity"))
+    plan = expand_experiment_jobs(app.config.experiments.get(ExperimentId("threshold_quantile_sensitivity")), app.config)
     scores = tuple(job for job in plan.jobs if job.stage is StageKind.SCORE_GENERATION)
     thresholds = tuple(job for job in plan.jobs if job.stage is StageKind.THRESHOLD_CONSTRUCTION)
     evaluations = tuple(job for job in plan.jobs if job.stage is StageKind.OPERATING_POINT_EVALUATION)
@@ -67,9 +68,9 @@ def test_quantile_sensitivity_expands_every_quantile_without_score_duplication()
 
 def test_shrinkage_and_fixed_k_sweeps_preserve_unswept_baselines() -> None:
     app = build_application()
-    shrinkage_plan = app.plan_experiment.execute(ExperimentId("local_global_threshold_shrinkage"))
+    shrinkage_plan = expand_experiment_jobs(app.config.experiments.get(ExperimentId("local_global_threshold_shrinkage")), app.config)
     shrinkage = tuple(job for job in shrinkage_plan.jobs if job.stage is StageKind.THRESHOLD_CONSTRUCTION)
-    fixed_k_plan = app.plan_experiment.execute(ExperimentId("federated_summary_comparator"))
+    fixed_k_plan = expand_experiment_jobs(app.config.experiments.get(ExperimentId("federated_summary_comparator")), app.config)
     fixed_k = tuple(job for job in fixed_k_plan.jobs if job.stage is StageKind.THRESHOLD_CONSTRUCTION)
 
     assert len(shrinkage) == 70
@@ -92,7 +93,7 @@ def test_shrinkage_and_fixed_k_sweeps_preserve_unswept_baselines() -> None:
 
 
 def test_calibration_window_sweep_reuses_scores_and_expands_nested_replicates() -> None:
-    plan = build_application().plan_experiment.execute(ExperimentId("calibration_window_size_stability"))
+    plan = expand_experiment_jobs(build_application().config.experiments.get(ExperimentId("calibration_window_size_stability")), build_application().config)
     subsets = tuple(job for job in plan.jobs if job.stage is StageKind.CALIBRATION_SUBSAMPLING)
     scores = tuple(job for job in plan.jobs if job.stage is StageKind.SCORE_GENERATION)
     thresholds = tuple(job for job in plan.jobs if job.stage is StageKind.THRESHOLD_CONSTRUCTION)
@@ -108,7 +109,7 @@ def test_calibration_window_sweep_reuses_scores_and_expands_nested_replicates() 
 
 
 def test_cluster_fingerprint_ablation_expands_only_threshold_and_evaluation_cells() -> None:
-    plan = build_application().plan_experiment.execute(ExperimentId("cluster_and_family_threshold_mechanism"))
+    plan = expand_experiment_jobs(build_application().config.experiments.get(ExperimentId("cluster_and_family_threshold_mechanism")), build_application().config)
     scores = tuple(job for job in plan.jobs if job.stage is StageKind.SCORE_GENERATION)
     ablations = tuple(
         job
@@ -129,7 +130,7 @@ def test_cluster_fingerprint_ablation_expands_only_threshold_and_evaluation_cell
 
 def test_fedprox_plan_retains_all_mu_cells_without_rematerializing() -> None:
     app = build_application()
-    plan = app.plan_experiment.execute(ExperimentId("fedprox_aggregation_stress_test"))
+    plan = expand_experiment_jobs(app.config.experiments.get(ExperimentId("fedprox_aggregation_stress_test")), app.config)
     training = tuple(job for job in plan.jobs if job.stage is StageKind.MODEL_TRAINING)
     materializations = tuple(job for job in plan.jobs if job.stage is StageKind.DATASET_MATERIALIZATION)
     selector = next(job for job in plan.jobs if job.stage is StageKind.CHECKPOINT_SELECTION)
@@ -145,7 +146,7 @@ def test_fedprox_plan_retains_all_mu_cells_without_rematerializing() -> None:
 
 def test_ditto_plan_retains_every_weight_with_distinct_training_identities() -> None:
     app = build_application()
-    plan = app.plan_experiment.execute(ExperimentId("model_personalization_absorption_test"))
+    plan = expand_experiment_jobs(app.config.experiments.get(ExperimentId("model_personalization_absorption_test")), app.config)
     training = tuple(job for job in plan.jobs if job.stage is StageKind.MODEL_TRAINING)
     selector = next(job for job in plan.jobs if job.stage is StageKind.CHECKPOINT_SELECTION)
     statistics = next(job for job in plan.jobs if job.stage is StageKind.STATISTICAL_ANALYSIS)
@@ -158,7 +159,7 @@ def test_ditto_plan_retains_every_weight_with_distinct_training_identities() -> 
 
 
 def test_temporal_plan_binds_each_arm_to_its_population_and_recalibration_window() -> None:
-    plan = build_application().plan_experiment.execute(ExperimentId("chronological_recalibration_evaluation"))
+    plan = expand_experiment_jobs(build_application().config.experiments.get(ExperimentId("chronological_recalibration_evaluation")), build_application().config)
     materializations = tuple(job for job in plan.jobs if job.stage is StageKind.DATASET_MATERIALIZATION)
     scores = tuple(job for job in plan.jobs if job.stage is StageKind.SCORE_GENERATION)
     one_shot_thresholds = tuple(

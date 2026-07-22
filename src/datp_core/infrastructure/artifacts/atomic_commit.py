@@ -24,6 +24,7 @@ from datp_core.domain.artifacts import (
     ArtifactParent,
     ArtifactRepository,
     ArtifactReuseDecision,
+    ArtifactReuseReason,
     ArtifactState,
     BytesPayload,
     FilePayload,
@@ -126,7 +127,6 @@ def _execute_atomic_transaction(
                 environment_identity=metadata.environment_identity,
                 experiment_id=metadata.experiment_id,
                 seed=metadata.seed,
-                is_frozen=True,
             )
 
             manifest_path = tmp_dir / "manifest.json"
@@ -146,47 +146,6 @@ def _execute_atomic_transaction(
     return ArtifactCommitResult(success=True, manifest=manifest)
 
 
-def commit_artifact_atomically(
-    request: ArtifactCommitRequest,
-    outputs_dir: Path,
-    lock_timeout: float,
-) -> ArtifactCommitResult:
-    """Public delegate to the private transaction engine (thin, zero duplicated logic)."""
-    return _execute_atomic_transaction(request, outputs_dir, lock_timeout)
-
-
-def inspect_committed_artifact(relative_path: str, outputs_dir: Path) -> ArtifactLookupResult:
-    """Stream-verify a committed artifact without loading its payload into memory."""
-    target_dir = outputs_dir / relative_path
-    manifest_path = target_dir / "manifest.json"
-    if not manifest_path.exists():
-        return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.MANIFEST_MISSING)
-
-    try:
-        manifest = decode_manifest(manifest_path.read_bytes())
-    except ManifestSchemaIncompatibleError:
-        return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.SCHEMA_INCOMPATIBLE)
-    except ManifestDecodeError:
-        return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.MANIFEST_MISSING)
-
-    payload_path = target_dir / f"payload.{manifest.artifact_format.value}"
-    if not payload_path.exists():
-        return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.PAYLOAD_MISSING)
-    if compute_file_checksum(payload_path) != manifest.payload_checksum:
-        return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.CHECKSUM_MISMATCH)
-
-    return ArtifactLookupResult(found=True, manifest=manifest)
-
-
-def read_committed_artifact(relative_path: str, outputs_dir: Path) -> ArtifactLookupResult:
-    """Read a verified artifact payload for consumers that explicitly need its bytes."""
-    inspection = inspect_committed_artifact(relative_path, outputs_dir)
-    if not inspection.found or inspection.manifest is None:
-        return inspection
-    payload_path = outputs_dir / relative_path / f"payload.{inspection.manifest.artifact_format.value}"
-    return ArtifactLookupResult(found=True, manifest=inspection.manifest, payload_bytes=payload_path.read_bytes())
-
-
 class AtomicArtifactRepository(ArtifactRepository):
     """Filesystem implementation of the one immutable artifact repository port."""
 
@@ -198,10 +157,29 @@ class AtomicArtifactRepository(ArtifactRepository):
         return _execute_atomic_transaction(request, self._outputs_dir, self._lock_timeout)
 
     def read(self, relative_path: str) -> ArtifactLookupResult:
-        return read_committed_artifact(relative_path, self._outputs_dir)
+        inspection = self.inspect(relative_path)
+        if not inspection.found or inspection.manifest is None:
+            return inspection
+        payload_path = self._outputs_dir / relative_path / f"payload.{inspection.manifest.artifact_format.value}"
+        return ArtifactLookupResult(found=True, manifest=inspection.manifest, payload_bytes=payload_path.read_bytes())
 
     def inspect(self, relative_path: str) -> ArtifactLookupResult:
-        return inspect_committed_artifact(relative_path, self._outputs_dir)
+        target_dir = self._outputs_dir / relative_path
+        manifest_path = target_dir / "manifest.json"
+        if not manifest_path.exists():
+            return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.MANIFEST_MISSING)
+        try:
+            manifest = decode_manifest(manifest_path.read_bytes())
+        except ManifestSchemaIncompatibleError:
+            return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.SCHEMA_INCOMPATIBLE)
+        except ManifestDecodeError:
+            return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.MANIFEST_MISSING)
+        payload_path = target_dir / f"payload.{manifest.artifact_format.value}"
+        if not payload_path.exists():
+            return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.PAYLOAD_MISSING)
+        if compute_file_checksum(payload_path) != manifest.payload_checksum:
+            return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.CHECKSUM_MISMATCH)
+        return ArtifactLookupResult(found=True, manifest=manifest)
 
     def assess_reuse(
         self,
@@ -212,11 +190,15 @@ class AtomicArtifactRepository(ArtifactRepository):
     ) -> ArtifactReuseDecision:
         result = self.inspect(relative_path)
         if not result.found or result.manifest is None:
-            return ArtifactReuseDecision(can_reuse=False, reason="artifact_not_committed")
+            return ArtifactReuseDecision(can_reuse=False, reason=(ArtifactReuseReason.ARTIFACT_NOT_COMMITTED,))
         compatibility = _compatibility(result.manifest, artifact_key, scientific_fingerprint, execution_fingerprint)
         return ArtifactReuseDecision(
             can_reuse=compatibility.compatible,
-            reason="compatible_frozen_artifact" if compatibility.compatible else ";".join(compatibility.reasons),
+            reason=(
+                (ArtifactReuseReason.COMPATIBLE_FROZEN_ARTIFACT,)
+                if compatibility.compatible
+                else compatibility.reasons
+            ),
             existing_manifest=result.manifest,
         )
 
@@ -227,13 +209,11 @@ def _compatibility(
     scientific_fingerprint: Fingerprint,
     execution_fingerprint: Fingerprint,
 ) -> ArtifactCompatibilityResult:
-    reasons: list[str] = []
-    if manifest.state is not ArtifactState.FROZEN or not manifest.is_frozen:
-        reasons.append("artifact_not_frozen")
+    reasons: list[ArtifactReuseReason] = []
     if manifest.artifact_key != artifact_key:
-        reasons.append("artifact_key_mismatch")
+        reasons.append(ArtifactReuseReason.KEY_MISMATCH)
     if manifest.scientific_fingerprint != scientific_fingerprint:
-        reasons.append("scientific_fingerprint_mismatch")
+        reasons.append(ArtifactReuseReason.SCIENTIFIC_FINGERPRINT_MISMATCH)
     if manifest.execution_fingerprint != execution_fingerprint:
-        reasons.append("execution_fingerprint_mismatch")
+        reasons.append(ArtifactReuseReason.EXECUTION_FINGERPRINT_MISMATCH)
     return ArtifactCompatibilityResult(compatible=not reasons, reasons=tuple(reasons))

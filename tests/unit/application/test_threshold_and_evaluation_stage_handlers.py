@@ -10,10 +10,10 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from datp_core.application.stage_handlers import (
+from datp_core.application.learning_stages import _score_context
+from datp_core.application.threshold_stages import (
     OperatingPointEvaluationStageHandler,
     ThresholdConstructionStageHandler,
-    _score_context,
 )
 from datp_core.composition.root import build_application
 from datp_core.config.resolver import ResolvedProjectConfiguration
@@ -27,6 +27,7 @@ from datp_core.domain.artifacts import (
 from datp_core.domain.identifiers import ExperimentId, RunId
 from datp_core.domain.outcomes import JobExecutionStatus, StageKind
 from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
+from datp_core.planning.expansion import expand_experiment_jobs
 from datp_core.planning.identity import IdentityBuilder
 
 _CLIENT_A_CALIBRATION = tuple(float(value) for value in range(1, 11))
@@ -67,7 +68,7 @@ def _commit(
 
 def test_threshold_construction_computes_the_exact_shared_mean_of_client_quantiles(tmp_path: Path) -> None:
     app = build_application()
-    graph = app.plan_experiment.execute(ExperimentId("anchor_reproduction"))
+    graph = expand_experiment_jobs(app.config.experiments.get(ExperimentId("anchor_reproduction")), app.config)
     job = next(
         planned
         for planned in graph.jobs
@@ -108,7 +109,7 @@ def test_threshold_construction_computes_the_exact_shared_mean_of_client_quantil
 
 def test_operating_point_evaluation_computes_exact_confusion_counts(tmp_path: Path) -> None:
     app = build_application()
-    graph = app.plan_experiment.execute(ExperimentId("anchor_reproduction"))
+    graph = expand_experiment_jobs(app.config.experiments.get(ExperimentId("anchor_reproduction")), app.config)
     threshold_job = next(
         planned
         for planned in graph.jobs

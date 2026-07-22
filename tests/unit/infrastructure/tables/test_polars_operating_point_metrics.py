@@ -2,7 +2,7 @@
 
 import polars as pl
 
-from datp_core.application.stage_handlers import _ineligible_client_metrics
+from datp_core.application.threshold_stages import _ineligible_client_metrics
 from datp_core.infrastructure.tables.polars_engine import compute_operating_point_metrics
 
 

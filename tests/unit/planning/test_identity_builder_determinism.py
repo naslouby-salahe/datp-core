@@ -2,6 +2,7 @@
 
 from datp_core.composition.root import build_application
 from datp_core.domain.identifiers import ExperimentId
+from datp_core.planning.expansion import expand_experiment_jobs
 from datp_core.planning.identity import IdentityBuilder
 
 
@@ -9,8 +10,8 @@ def test_identity_builder_determinism_across_all_experiments() -> None:
     """Every experiment plan built twice must produce identical job IDs."""
     app = build_application()
     for exp_id in sorted(app.config.experiments.keys(), key=lambda e: e.value):
-        plan_a = app.plan_experiment.execute(exp_id)
-        plan_b = app.plan_experiment.execute(exp_id)
+        plan_a = expand_experiment_jobs(app.config.experiments.get(exp_id), app.config)
+        plan_b = expand_experiment_jobs(app.config.experiments.get(exp_id), app.config)
         jobs_a = {j.job_id.value: (j.output.artifact_id.value, j.stage.value) for j in plan_a.jobs}
         jobs_b = {j.job_id.value: (j.output.artifact_id.value, j.stage.value) for j in plan_b.jobs}
         assert jobs_a == jobs_b, f"Experiment {exp_id.value} produced different plans across two builds"
@@ -20,7 +21,7 @@ def test_no_duplicate_job_ids_in_any_experiment() -> None:
     """No experiment plan may contain duplicate JobId values."""
     app = build_application()
     for exp_id in sorted(app.config.experiments.keys(), key=lambda e: e.value):
-        plan = app.plan_experiment.execute(exp_id)
+        plan = expand_experiment_jobs(app.config.experiments.get(exp_id), app.config)
         seen: set[str] = set()
         for job in plan.jobs:
             assert job.job_id.value not in seen, f"Duplicate JobId '{job.job_id.value}' in experiment '{exp_id.value}'"
@@ -31,7 +32,7 @@ def test_no_duplicate_artifact_ids_in_any_experiment() -> None:
     """No experiment plan may produce duplicate ArtifactId values."""
     app = build_application()
     for exp_id in sorted(app.config.experiments.keys(), key=lambda e: e.value):
-        plan = app.plan_experiment.execute(exp_id)
+        plan = expand_experiment_jobs(app.config.experiments.get(exp_id), app.config)
         seen: set[str] = set()
         for job in plan.jobs:
             assert job.output.artifact_id.value not in seen, (
@@ -64,7 +65,7 @@ def test_typed_context_correctness_for_every_job_stage() -> None:
 
     app = build_application()
     for exp_id in sorted(app.config.experiments.keys(), key=lambda e: e.value):
-        plan = app.plan_experiment.execute(exp_id)
+        plan = expand_experiment_jobs(app.config.experiments.get(exp_id), app.config)
         for job in plan.jobs:
             ctx = job.context
             assert ctx.experiment_id == exp_id

@@ -77,23 +77,6 @@ class PlanningGraph:
         descs = list(nx.descendants(self._graph, job_id))
         return tuple(sorted(descs, key=lambda n: n.value))
 
-    def transitive_reduction(self) -> PlanningGraph:
-        tr_graph = nx.transitive_reduction(self._graph)
-        new_jobs = []
-        for j in self._jobs.values():
-            preds = list(tr_graph.predecessors(j.job_id))
-            direct_preds = tuple(sorted(preds, key=lambda n: n.value))
-            new_jobs.append(
-                StageJob(
-                    job_id=j.job_id,
-                    stage=j.stage,
-                    context=j.context,
-                    inputs=j.inputs,
-                    output=j.output,
-                    dependencies=direct_preds,
-                )
-            )
-        return PlanningGraph(tuple(new_jobs))
 
     @property
     def node_count(self) -> int:

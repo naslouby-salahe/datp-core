@@ -16,7 +16,8 @@ import polars as pl
 import pytest
 from _statistical_analysis_fixtures import client_metric_frame, commit_parquet
 
-from datp_core.application.stage_handlers import StatisticalAnalysisStageHandler, _score_context
+from datp_core.application.analysis_stages import StatisticalAnalysisStageHandler
+from datp_core.application.learning_stages import _score_context
 from datp_core.composition.root import build_application
 from datp_core.domain.catalogue import (
     ConformalCoverageAnalysisRecord,

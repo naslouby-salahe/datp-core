@@ -2,8 +2,7 @@
 
 from pathlib import Path
 
-from datp_core.application.experiment_planning import PlanExperimentUseCase
-from datp_core.application.stage_handlers import DatasetMaterializationStageHandler
+from datp_core.application.data_stages import DatasetMaterializationStageHandler
 from datp_core.composition.root import _build_adapter_registry, build_application
 from datp_core.domain.artifacts import (
     ArtifactCommitMetadata,
@@ -17,13 +16,16 @@ from datp_core.domain.artifacts import (
 from datp_core.domain.identifiers import ArtifactId, ExperimentId, RunId
 from datp_core.domain.outcomes import JobExecutionStatus, StageKind
 from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
+from datp_core.planning.expansion import expand_experiment_jobs
 
 
 def test_materialization_reuses_a_matching_frozen_artifact_without_reading_raw_sources(tmp_path: Path) -> None:
     app = build_application()
     job = next(
         planned
-        for planned in PlanExperimentUseCase(app.config).execute(ExperimentId("anchor_reproduction")).jobs
+        for planned in expand_experiment_jobs(
+            app.config.experiments.get(ExperimentId("anchor_reproduction")), app.config
+        ).jobs
         if planned.stage is StageKind.DATASET_MATERIALIZATION
     )
     run_id = RunId(f"run_anchor_reproduction_{app.config.execution_fingerprint.value[:12]}")

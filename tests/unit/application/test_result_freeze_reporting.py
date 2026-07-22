@@ -7,6 +7,7 @@ from datp_core.application.reporting import freeze_result_family, render_frozen_
 from datp_core.composition.root import build_application
 from datp_core.domain.identifiers import ExperimentId
 from datp_core.domain.outcomes import StageJobContext, StageKind
+from datp_core.planning.expansion import expand_experiment_jobs
 from datp_core.planning.identity import IdentityBuilder
 
 
@@ -53,7 +54,7 @@ def test_result_freeze_requires_every_configured_analysis_before_rendering() -> 
 
 def test_planning_freezes_results_before_report_generation() -> None:
     app = build_application()
-    graph = app.plan_experiment.execute(ExperimentId("centralized_pooled_reference"))
+    graph = expand_experiment_jobs(app.config.experiments.get(ExperimentId("centralized_pooled_reference")), app.config)
     result_freeze = next(job for job in graph.jobs if job.stage is StageKind.RESULT_FREEZE)
     report = next(job for job in graph.jobs if job.stage is StageKind.REPORT_GENERATION)
 

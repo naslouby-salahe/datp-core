@@ -12,7 +12,7 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
-from datp_core.application.stage_handlers import CohortCheckpointSelectionStageHandler
+from datp_core.application.learning_stages import CohortCheckpointSelectionStageHandler
 from datp_core.composition.root import DatpApplication, build_application
 from datp_core.domain.artifacts import (
     ArtifactCommitMetadata,
@@ -27,13 +27,14 @@ from datp_core.domain.checkpoints import select_cohort_validation_checkpoint
 from datp_core.domain.identifiers import ExperimentId, RunId
 from datp_core.domain.outcomes import JobExecutionStatus, StageJob, StageKind
 from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
+from datp_core.planning.expansion import expand_experiment_jobs
 
 _SCHEDULED_ROUNDS = (25, 50, 75, 100, 125, 150, 200)
 
 
 def _cohort_job_and_run_id(app: DatpApplication) -> tuple[StageJob, RunId]:
     experiment_id = ExperimentId("confirmatory_threshold_scope_effect")
-    graph = app.plan_experiment.execute(experiment_id)
+    graph = expand_experiment_jobs(app.config.experiments.get(experiment_id), app.config)
     job = next(item for item in graph.jobs if item.stage is StageKind.CHECKPOINT_SELECTION)
     run_id = RunId(f"run_confirmatory_threshold_scope_effect_{app.config.execution_fingerprint.value[:12]}")
     return job, run_id

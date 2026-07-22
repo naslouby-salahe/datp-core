@@ -15,17 +15,6 @@ import torch.nn as nn
 from attrs import define
 from torch.utils.data import DataLoader, TensorDataset
 
-from datp_core.domain.artifacts import ArtifactCommitResult, ArtifactKey, ArtifactParent
-from datp_core.domain.fingerprints import Fingerprint
-from datp_core.domain.identifiers import ExperimentId
-from datp_core.domain.values import Seed
-from datp_core.infrastructure.artifacts.model_store import (
-    load_model_safetensors as _load_state_dict_safetensors,
-)
-from datp_core.infrastructure.artifacts.model_store import (
-    save_model_safetensors as _save_state_dict_safetensors,
-)
-
 _SCORE_IDENTITY_COLUMNS = ("source_path", "source_row_index", "client_id", "split", "is_attack")
 
 
@@ -584,45 +573,6 @@ def fedprox_objective(
     )
     return reconstruction_loss + ((proximal_mu / 2.0) * penalty)
 
-
-def save_model_safetensors(
-    model: nn.Module,
-    *,
-    outputs_dir: Path,
-    artifact_key: ArtifactKey,
-    scientific_fingerprint: Fingerprint,
-    execution_fingerprint: Fingerprint,
-    relative_path: str,
-    schema_version: int,
-    creation_timestamp: float,
-    environment_identity: str,
-    lock_timeout: float,
-    parents: tuple[ArtifactParent, ...] = (),
-    experiment_id: ExperimentId | None = None,
-    seed: Seed | None = None,
-) -> ArtifactCommitResult:
-    """Persist PyTorch model weights as a SafeTensors artifact via the atomic model store."""
-    return _save_state_dict_safetensors(
-        model.state_dict(),
-        outputs_dir=outputs_dir,
-        artifact_key=artifact_key,
-        scientific_fingerprint=scientific_fingerprint,
-        execution_fingerprint=execution_fingerprint,
-        relative_path=relative_path,
-        schema_version=schema_version,
-        creation_timestamp=creation_timestamp,
-        environment_identity=environment_identity,
-        lock_timeout=lock_timeout,
-        parents=parents,
-        experiment_id=experiment_id,
-        seed=seed,
-    )
-
-
-def load_model_safetensors(model: nn.Module, relative_path: str, outputs_dir: Path) -> nn.Module:
-    """Load PyTorch model weights from a committed, checksum-verified SafeTensors artifact."""
-    model.load_state_dict(_load_state_dict_safetensors(relative_path, outputs_dir))
-    return model
 
 
 def train_autoencoder(

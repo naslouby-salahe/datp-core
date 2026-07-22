@@ -357,6 +357,27 @@ class EligibilityGateRecord:
 # historical_reference) are preserved as frozen JSON rather than speculatively sub-modeled.
 
 
+class AnalysisKind(Enum):
+    PAIRED_THRESHOLD = "paired_threshold_analysis"
+    ABSORPTION = "absorption_analysis"
+    ALERT_BURDEN = "alert_burden_analysis"
+    ANCHOR_EQUIVALENCE = "anchor_equivalence_analysis"
+    CLUSTER_STABILITY = "cluster_stability_analysis"
+    CONFORMAL_COVERAGE = "conformal_coverage_analysis"
+    DISTRIBUTION_MECHANISM = "distribution_mechanism_analysis"
+    LOCKED_CLIENT_DISTRIBUTION = "locked_client_distribution_analysis"
+    METRIC_ASSOCIATION = "metric_association_analysis"
+    QUANTILE_ESTIMATION = "quantile_estimation_analysis"
+    RECOVERY_FRACTION = "recovery_fraction_analysis"
+    RESOURCE_COST = "resource_cost_analysis"
+    TEMPORAL_RECOVERY = "temporal_recovery_analysis"
+    THRESHOLD_STABILITY = "threshold_stability_analysis"
+
+    @classmethod
+    def from_record(cls, record) -> AnalysisKind:
+        return cls(record.kind)
+
+
 @define(frozen=True, slots=True, kw_only=True)
 class PairedThresholdAnalysisRecord:
     label: str

@@ -15,11 +15,11 @@ _EXPECTED_PACKAGES = (
     "infrastructure/datasets",
     "infrastructure/federation",
     "infrastructure/learning",
-    "infrastructure/statistics",
+    "infrastructure/querying",
+    "infrastructure/runtime",
     "infrastructure/tables",
     "infrastructure/thresholding",
     "interfaces",
-    "orchestration",
     "planning",
 )
 

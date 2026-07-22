@@ -231,7 +231,6 @@ class QuantileEstimatorConfig(StrictFrozenConfigModel):
 
 
 class BaseThresholdPolicyConfig(StrictFrozenConfigModel):
-    policy: str
     quantile: float = Field(ge=0.0, le=1.0)
     quantile_estimator: str
 

@@ -53,7 +53,6 @@ class _ArtifactManifestWire(msgspec.Struct, frozen=True, forbid_unknown_fields=T
     environment_identity: str
     experiment_id: str | None
     seed: int | None
-    is_frozen: bool
 
 
 def encode_manifest(manifest: ArtifactManifest) -> bytes:
@@ -80,7 +79,6 @@ def encode_manifest(manifest: ArtifactManifest) -> bytes:
         environment_identity=manifest.environment_identity,
         experiment_id=manifest.experiment_id.value if manifest.experiment_id else None,
         seed=manifest.seed.value if manifest.seed else None,
-        is_frozen=manifest.is_frozen,
     )
     return msgspec.json.encode(wire)
 
@@ -130,7 +128,6 @@ def decode_manifest(payload: bytes) -> ArtifactManifest:
             environment_identity=wire.environment_identity,
             experiment_id=ExperimentId(wire.experiment_id) if wire.experiment_id is not None else None,
             seed=Seed(wire.seed) if wire.seed is not None else None,
-            is_frozen=wire.is_frozen,
         )
     except ValueError as exc:
         raise ManifestDecodeError(f"Manifest contains an invalid value: {exc}") from exc

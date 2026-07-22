@@ -126,8 +126,14 @@ def dataset_audit(dataset_id: str = typer.Argument(..., help="Dataset ID (e.g. n
 @experiment_app.command("plan")
 def experiment_plan(experiment: str = typer.Option(..., "--config", "-c", help="Experiment name slug")) -> None:
     """Plan pre-execution job DAG for an experiment."""
+    from datp_core.planning.expansion import expand_experiment_jobs
+    from datp_core.planning.validation import validate_planning_graph
+    
     application = build_application()
-    graph = application.plan_experiment.execute(ExperimentId(experiment))
+    experiment_id = ExperimentId(experiment)
+    experiment_record = application.config.experiments.get(experiment_id)
+    graph = expand_experiment_jobs(experiment_record, application.config)
+    validate_planning_graph(graph)
     print_planning_dag(graph, experiment)
 
 
@@ -147,7 +153,7 @@ def experiment_run(experiment: str = typer.Option(..., "--config", "-c", help="E
 def results_query(sql: str = typer.Argument(..., help="SQL query string")) -> None:
     """Run interactive DuckDB query over Parquet result artifacts."""
     application = build_application()
-    res = application.query_results.execute(sql)
+    res = application.audit_svc.execute_query(sql)
     console.print(res)
 
 

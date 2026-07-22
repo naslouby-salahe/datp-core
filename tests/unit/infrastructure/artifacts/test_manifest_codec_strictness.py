@@ -21,7 +21,7 @@ from datp_core.domain.artifacts import (
 )
 from datp_core.domain.fingerprints import Checksum, compute_execution_fingerprint, compute_scientific_fingerprint
 from datp_core.domain.identifiers import ArtifactId
-from datp_core.infrastructure.artifacts.atomic_commit import commit_artifact_atomically, inspect_committed_artifact
+from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
 from datp_core.infrastructure.artifacts.manifest_codec import (
     CURRENT_ARTIFACT_SCHEMA_VERSION,
     ManifestDecodeError,
@@ -45,7 +45,6 @@ def _manifest() -> ArtifactManifest:
         parents=(),
         creation_timestamp=1.0,
         environment_identity="test",
-        is_frozen=True,
     )
 
 
@@ -108,21 +107,15 @@ def test_committed_artifact_with_incompatible_schema_version_reports_schema_inco
         ),
         payload=BytesPayload(payload_bytes=b"payload"),
     )
-    assert commit_artifact_atomically(request, tmp_path, lock_timeout=1.0).success
+    repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
+    assert repository.commit(request).success
 
     manifest_path = tmp_path / "reports/schema-mismatch/manifest.json"
     payload = json.loads(manifest_path.read_bytes())
     payload["schema_version"] = CURRENT_ARTIFACT_SCHEMA_VERSION + 1
     manifest_path.write_text(json.dumps(payload))
 
-    result = inspect_committed_artifact("reports/schema-mismatch", tmp_path)
+    result = repository.inspect("reports/schema-mismatch")
     assert not result.found
     assert result.corruption_reason == ArtifactCorruptionReason.SCHEMA_INCOMPATIBLE
 
-
-def test_manifest_with_wrong_field_type_is_rejected() -> None:
-    payload = json.loads(encode_manifest(_manifest()))
-    payload["is_frozen"] = "not_a_bool"
-    encoded = json.dumps(payload).encode("utf-8")
-    with pytest.raises(ManifestDecodeError):
-        decode_manifest(encoded)

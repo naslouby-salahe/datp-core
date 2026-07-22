@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from attrs import define
 
-from datp_core.application.experiment_planning import PlanExperimentUseCase
-from datp_core.application.stage_handlers import StageHandler
+from datp_core.application.stage_protocol import StageHandler
 from datp_core.config.resolver import ResolvedProjectConfiguration
 from datp_core.domain.identifiers import ExperimentId, JobId, RunId
 from datp_core.domain.outcomes import JobExecutionStatus, StageJobOutcome
 from datp_core.domain.run_identity import execution_run_id
+from datp_core.planning.expansion import expand_experiment_jobs
+from datp_core.planning.validation import validate_planning_graph
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -27,11 +28,12 @@ class ExecuteExperimentUseCase:
 
     def __init__(self, config: ResolvedProjectConfiguration, handlers: tuple[StageHandler, ...]) -> None:
         self._config = config
-        self._planner = PlanExperimentUseCase(config=self._config)
         self._handlers = {handler.stage: handler for handler in handlers}
 
     def execute(self, experiment_id: ExperimentId) -> ExperimentExecutionReport:
-        graph = self._planner.execute(experiment_id)
+        experiment = self._config.experiments.get(experiment_id)
+        graph = expand_experiment_jobs(experiment, self._config)
+        validate_planning_graph(graph)
         sorted_jobs = graph.lexicographical_topological_sort()
         outcomes: list[StageJobOutcome] = []
         outcomes_by_job_id: dict[JobId, StageJobOutcome] = {}

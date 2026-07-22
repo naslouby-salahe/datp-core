@@ -69,7 +69,6 @@ class RuntimeBootstrapSettings(BaseSettings):
 
     repository_root: Path  # required — must be set via DATP_REPOSITORY_ROOT env var
     config_root: Path | None = None
-    dagster_home: Path | None = None
     environment_identity: str = "local_linux"
     execution_profile: str
 

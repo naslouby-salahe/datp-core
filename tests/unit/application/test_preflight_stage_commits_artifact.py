@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from datp_core.application.stage_handlers import PreflightStageHandler
+from datp_core.application.data_stages import PreflightStageHandler
 from datp_core.composition.root import build_application
 from datp_core.domain.artifacts import ArtifactKey, ArtifactKind
 from datp_core.domain.identifiers import ArtifactId, ExperimentId, JobId, RunId

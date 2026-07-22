@@ -34,14 +34,10 @@ def test_application_does_not_import_concrete_infrastructure_modules() -> None:
 
 
 def test_stage_handler_has_no_dataset_specific_branch() -> None:
-    """The generic stage handler must not branch on dataset_id string values."""
-    stage_handlers_path = _SRC_ROOT / "application" / "stage_handlers.py"
-    source = stage_handlers_path.read_text(encoding="utf-8")
-
-    # The handler must not reference concrete dataset IDs as strings
+    """The data stage handler must not branch on dataset_id string values."""
+    data_stages_path = _SRC_ROOT / "application" / "data_stages.py"
+    source = data_stages_path.read_text(encoding="utf-8")
     forbidden_patterns = ['"nbaiot"', "'nbaiot'", '"ciciot2023"', "'ciciot2023'"]
-
-    # But we allow them in comments/docstrings only
     lines = source.split("\n")
     for i, line in enumerate(lines, 1):
         stripped = line.strip()
@@ -50,5 +46,5 @@ def test_stage_handler_has_no_dataset_specific_branch() -> None:
         for pattern in forbidden_patterns:
             if pattern in line:
                 raise AssertionError(
-                    f"stage_handlers.py line {i} contains dataset-specific string '{pattern}': {stripped}"
+                    f"data_stages.py line {i} contains dataset-specific string '{pattern}': {stripped}"
                 )

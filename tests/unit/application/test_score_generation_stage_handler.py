@@ -21,7 +21,7 @@ from _synthetic_training_fixtures import (
     commit_materialized_dataset,
 )
 
-from datp_core.application.stage_handlers import ScoreGenerationStageHandler
+from datp_core.application.learning_stages import ScoreGenerationStageHandler
 from datp_core.composition.root import DatpApplication, build_application
 from datp_core.domain.artifacts import (
     ArtifactCommitMetadata,
@@ -36,13 +36,14 @@ from datp_core.domain.identifiers import ExperimentId, RunId
 from datp_core.domain.outcomes import JobExecutionStatus, StageJob, StageKind
 from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
 from datp_core.infrastructure.learning.pytorch_adapter import DynamicDenseAutoencoder
+from datp_core.planning.expansion import expand_experiment_jobs
 from datp_core.planning.identity import IdentityBuilder
 
 _ROUND = 1
 
 
 def _score_jobs(app: DatpApplication, seed: int = 0) -> tuple[StageJob, StageJob]:
-    graph = app.plan_experiment.execute(ExperimentId("anchor_reproduction"))
+    graph = expand_experiment_jobs(app.config.experiments.get(ExperimentId("anchor_reproduction")), app.config)
     calibration_job = next(
         job
         for job in graph.jobs
