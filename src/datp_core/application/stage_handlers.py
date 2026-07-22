@@ -1500,11 +1500,14 @@ def _client_score_distributions(
         benign = sorted(float(value) for value in client_scores.filter(pl.col("label") == 0)["score"].to_list())
         attack = sorted(float(value) for value in client_scores.filter(pl.col("label") == 1)["score"].to_list())
         result[client] = {
-            "benign_score_cdf": _empirical_cdf(benign),
-            "attack_score_cdf": _empirical_cdf(attack),
+            "per_client_benign_score_cdf": _empirical_cdf(benign),
+            "per_client_attack_score_cdf": _empirical_cdf(attack),
+            "per_client_threshold_position": {
+                "threshold": threshold,
+                "benign_cdf": _cdf_position(benign, threshold),
+                "attack_cdf": _cdf_position(attack, threshold),
+            },
             "threshold": threshold,
-            "benign_threshold_position": _cdf_position(benign, threshold),
-            "attack_threshold_position": _cdf_position(attack, threshold),
             "false_positive_rate": metric["false_positive_rate"],
             "false_positive_rate_status": metric["false_positive_rate_status"],
             "true_positive_rate": metric["true_positive_rate"],
