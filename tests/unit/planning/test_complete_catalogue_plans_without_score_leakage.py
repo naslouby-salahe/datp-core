@@ -91,6 +91,22 @@ def test_shrinkage_and_fixed_k_sweeps_preserve_unswept_baselines() -> None:
     assert len([job for job in fixed_k if job.context.federated_summary_fixed_k is None]) == 50
 
 
+def test_calibration_window_sweep_reuses_scores_and_expands_nested_replicates() -> None:
+    plan = build_application().plan_experiment.execute(ExperimentId("calibration_window_size_stability"))
+    subsets = tuple(job for job in plan.jobs if job.stage is StageKind.CALIBRATION_SUBSAMPLING)
+    scores = tuple(job for job in plan.jobs if job.stage is StageKind.SCORE_GENERATION)
+    thresholds = tuple(job for job in plan.jobs if job.stage is StageKind.THRESHOLD_CONSTRUCTION)
+
+    assert len(scores) == 20
+    assert len(subsets) == 6_000
+    assert {job.context.calibration_sample_count for job in subsets} == {50, 100, 250, 500, 1000, 5000}
+    assert {job.context.calibration_replicate for job in subsets} == set(range(100))
+    assert all(job.inputs[0].kind is ArtifactKind.CALIBRATION_SCORES for job in subsets)
+    assert len(thresholds) == 24_040
+    assert sum(job.context.calibration_sample_count is None for job in thresholds) == 40
+    assert len({job.job_id for job in plan.jobs}) == plan.node_count
+
+
 def test_fedprox_plan_retains_all_mu_cells_without_rematerializing() -> None:
     app = build_application()
     plan = app.plan_experiment.execute(ExperimentId("fedprox_aggregation_stress_test"))

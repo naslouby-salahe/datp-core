@@ -15,6 +15,7 @@ class StageKind(Enum):
     MODEL_TRAINING = "model_training"
     CHECKPOINT_SELECTION = "checkpoint_selection"
     SCORE_GENERATION = "score_generation"
+    CALIBRATION_SUBSAMPLING = "calibration_subsampling"
     THRESHOLD_CONSTRUCTION = "threshold_construction"
     OPERATING_POINT_EVALUATION = "operating_point_evaluation"
     STATISTICAL_ANALYSIS = "statistical_analysis"
@@ -50,6 +51,8 @@ class StageJobContext:
     threshold_quantile: float | None = None
     shrinkage_weight: float | None = None
     federated_summary_fixed_k: float | None = None
+    calibration_sample_count: int | None = None
+    calibration_replicate: int | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

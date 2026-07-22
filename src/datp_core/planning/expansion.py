@@ -12,6 +12,26 @@ from datp_core.planning.graph import PlanningGraph
 from datp_core.planning.identity import IdentityBuilder
 
 
+def _sweep_values(experiment: ExperimentRecord, name: str | None) -> tuple[float, ...]:
+    return tuple(
+        float(value)
+        for sweep in experiment.sweeps
+        if isinstance(sweep, ValueSweepRecord) and sweep.name == name
+        for value in sweep.values
+        if isinstance(value, (int, float)) and not isinstance(value, bool)
+    )
+
+
+def _sweep_reference(overrides, name: str) -> str | None:
+    override = None if overrides is None else overrides.get(name)
+    reference = override.get("from_sweep") if isinstance(override, Mapping) else None
+    return reference if isinstance(reference, str) else None
+
+
+def _evaluation_sweep_values(experiment: ExperimentRecord, overrides, name: str) -> tuple[float | None, ...]:
+    return _sweep_values(experiment, _sweep_reference(overrides, name)) or (None,)
+
+
 def expand_experiment_jobs(
     experiment: ExperimentRecord,
     config: ResolvedProjectConfiguration,
@@ -43,15 +63,8 @@ def expand_experiment_jobs(
         if isinstance(sweep, ConditionSweepRecord)
         for condition in sweep.conditions
     ) or (None,)
-    requested_mu_sweep = experiment.training_overrides.get("mu") if experiment.training_overrides is not None else None
-    mu_sweep_name = requested_mu_sweep.get("from_sweep") if isinstance(requested_mu_sweep, Mapping) else None
-    mus = tuple(
-        float(value)
-        for sweep in experiment.sweeps
-        if isinstance(sweep, ValueSweepRecord) and sweep.name == mu_sweep_name
-        for value in sweep.values
-        if isinstance(value, float)
-    ) or (None,)
+    mu_sweep_name = _sweep_reference(experiment.training_overrides, "mu")
+    mus = _sweep_values(experiment, mu_sweep_name) or (None,)
     training_profile = config.training_profiles.get(experiment.training_profile_id)
     ditto_weights = (
         training_profile.personalization_parameter_grid or (None,)
@@ -188,72 +201,82 @@ def expand_experiment_jobs(
         )
         jobs.append(test_score_job)
 
-        for eval_spec in experiment.evaluations:
-            override = None if eval_spec.overrides is None else eval_spec.overrides.get("quantile")
-            sweep_name = override.get("from_sweep") if isinstance(override, Mapping) else None
-            quantiles = tuple(
-                float(value)
-                for sweep in experiment.sweeps
-                if isinstance(sweep, ValueSweepRecord) and sweep.name == sweep_name
-                for value in sweep.values
-                if isinstance(value, float)
-            ) or (None,)
-            shrinkage_override = None if eval_spec.overrides is None else eval_spec.overrides.get("shrinkage_weight")
-            shrinkage_sweep = shrinkage_override.get("from_sweep") if isinstance(shrinkage_override, Mapping) else None
-            shrinkage_weights = tuple(
-                float(value)
-                for sweep in experiment.sweeps
-                if isinstance(sweep, ValueSweepRecord) and sweep.name == shrinkage_sweep
-                for value in sweep.values
-                if isinstance(value, float)
-            ) or (None,)
-            fixed_k_override = None if eval_spec.overrides is None else eval_spec.overrides.get("fixed_k")
-            fixed_k_sweep = fixed_k_override.get("from_sweep") if isinstance(fixed_k_override, Mapping) else None
-            fixed_ks = tuple(
-                float(value)
-                for sweep in experiment.sweeps
-                if isinstance(sweep, ValueSweepRecord) and sweep.name == fixed_k_sweep
-                for value in sweep.values
-                if isinstance(value, float)
-            ) or (None,)
-            for threshold_quantile, shrinkage_weight, fixed_k in product(quantiles, shrinkage_weights, fixed_ks):
-                eval_ctx = StageJobContext(
-                    experiment_id=experiment.identifier,
+        calibration_cells = [(seed_ctx, calib_ids)]
+        if experiment.calibration_subset is not None:
+            requested_sweep = experiment.calibration_subset.requested_sample_count.get("from_sweep")
+            requested_counts = _sweep_values(experiment, requested_sweep)
+            if not requested_counts or any(not value.is_integer() or value < 1.0 for value in requested_counts):
+                raise ValueError("Calibration subset requires a positive integer sample-count sweep")
+            for requested_count, replicate in product(
+                (int(value) for value in requested_counts), range(experiment.calibration_subset.replicate_count.value)
+            ):
+                subset_ctx = StageJobContext(
+                    experiment_id=seed_ctx.experiment_id,
                     seed=seed_ctx.seed,
                     partition_condition=seed_ctx.partition_condition,
                     federated_proximal_mu=seed_ctx.federated_proximal_mu,
                     ditto_proximal_weight=seed_ctx.ditto_proximal_weight,
-                    threshold_quantile=threshold_quantile,
-                    shrinkage_weight=shrinkage_weight,
-                    federated_summary_fixed_k=fixed_k,
-                    evaluation_label=eval_spec.label,
-                    population_id=eval_spec.population_id,
-                    threshold_policy_id=eval_spec.threshold_policy_id,
+                    calibration_sample_count=requested_count,
+                    calibration_replicate=replicate,
                 )
+                subset_ids = builder.calibration_subset_job(subset_ctx, calib_ids[1], calib_ids[0])
+                jobs.append(
+                    StageJob(
+                        job_id=subset_ids[0],
+                        stage=StageKind.CALIBRATION_SUBSAMPLING,
+                        context=subset_ctx,
+                        inputs=subset_ids[2],
+                        output=subset_ids[1],
+                        dependencies=subset_ids[3],
+                    )
+                )
+                calibration_cells.append((subset_ctx, subset_ids))
 
-                thresh_ids = builder.threshold_job(eval_ctx, calib_ids[1], calib_ids[0])
-                thresh_job = StageJob(
-                    job_id=thresh_ids[0],
-                    stage=StageKind.THRESHOLD_CONSTRUCTION,
-                    context=eval_ctx,
-                    inputs=thresh_ids[2],
-                    output=thresh_ids[1],
-                    dependencies=thresh_ids[3],
-                )
-                jobs.append(thresh_job)
+        for calibration_ctx, calibration_ids in calibration_cells:
+            for eval_spec in experiment.evaluations:
+                quantiles = _evaluation_sweep_values(experiment, eval_spec.overrides, "quantile")
+                shrinkage_weights = _evaluation_sweep_values(experiment, eval_spec.overrides, "shrinkage_weight")
+                fixed_ks = _evaluation_sweep_values(experiment, eval_spec.overrides, "fixed_k")
+                for threshold_quantile, shrinkage_weight, fixed_k in product(quantiles, shrinkage_weights, fixed_ks):
+                    eval_ctx = StageJobContext(
+                        experiment_id=experiment.identifier,
+                        seed=seed_ctx.seed,
+                        partition_condition=seed_ctx.partition_condition,
+                        federated_proximal_mu=seed_ctx.federated_proximal_mu,
+                        ditto_proximal_weight=seed_ctx.ditto_proximal_weight,
+                        calibration_sample_count=calibration_ctx.calibration_sample_count,
+                        calibration_replicate=calibration_ctx.calibration_replicate,
+                        threshold_quantile=threshold_quantile,
+                        shrinkage_weight=shrinkage_weight,
+                        federated_summary_fixed_k=fixed_k,
+                        evaluation_label=eval_spec.label,
+                        population_id=eval_spec.population_id,
+                        threshold_policy_id=eval_spec.threshold_policy_id,
+                    )
 
-                eval_ids = builder.evaluation_job(eval_ctx, thresh_ids[1], test_ids[1], thresh_ids[0], test_ids[0])
-                eval_job = StageJob(
-                    job_id=eval_ids[0],
-                    stage=StageKind.OPERATING_POINT_EVALUATION,
-                    context=eval_ctx,
-                    inputs=eval_ids[2],
-                    output=eval_ids[1],
-                    dependencies=eval_ids[3],
-                )
-                jobs.append(eval_job)
-                eval_job_outputs.append(eval_ids[1])
-                eval_job_ids.append(eval_ids[0])
+                    thresh_ids = builder.threshold_job(eval_ctx, calibration_ids[1], calibration_ids[0])
+                    thresh_job = StageJob(
+                        job_id=thresh_ids[0],
+                        stage=StageKind.THRESHOLD_CONSTRUCTION,
+                        context=eval_ctx,
+                        inputs=thresh_ids[2],
+                        output=thresh_ids[1],
+                        dependencies=thresh_ids[3],
+                    )
+                    jobs.append(thresh_job)
+
+                    eval_ids = builder.evaluation_job(eval_ctx, thresh_ids[1], test_ids[1], thresh_ids[0], test_ids[0])
+                    eval_job = StageJob(
+                        job_id=eval_ids[0],
+                        stage=StageKind.OPERATING_POINT_EVALUATION,
+                        context=eval_ctx,
+                        inputs=eval_ids[2],
+                        output=eval_ids[1],
+                        dependencies=eval_ids[3],
+                    )
+                    jobs.append(eval_job)
+                    eval_job_outputs.append(eval_ids[1])
+                    eval_job_ids.append(eval_ids[0])
 
     # 3. Statistical Analysis job across all seed evaluation outputs
     stats_ids = builder.statistical_analysis_job(

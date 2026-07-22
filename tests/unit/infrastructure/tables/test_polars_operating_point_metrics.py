@@ -2,6 +2,7 @@
 
 import polars as pl
 
+from datp_core.application.stage_handlers import _ineligible_client_metrics
 from datp_core.infrastructure.tables.polars_engine import compute_operating_point_metrics
 
 
@@ -44,3 +45,16 @@ def test_complete_class_metrics_follow_the_configured_strict_threshold_rule() ->
     assert result["true_positive_rate"] == 0.5
     assert result["balanced_accuracy"] == 0.5
     assert result["macro_f1"] == 0.5
+
+
+def test_calibration_size_ineligible_client_retains_a_typed_metric_row() -> None:
+    result = _ineligible_client_metrics(
+        pl.DataFrame(
+            {"client_id": ["sample_starved"], "threshold": [None]},
+            schema={"client_id": pl.String, "threshold": pl.Float64},
+        )
+    ).row(0, named=True)
+
+    assert result["false_positive_rate"] is None
+    assert result["false_positive_rate_status"] == "unavailable_ineligible_client"
+    assert result["macro_f1_status"] == "unavailable_ineligible_client"

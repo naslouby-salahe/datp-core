@@ -30,12 +30,21 @@ class ClientMetricFrameSchema(pa.DataFrameModel):
     true_negatives: int = pa.Field(ge=0)  # type: ignore
     false_negatives: int = pa.Field(ge=0)  # type: ignore
     false_positive_rate: float | None = pa.Field(nullable=True, ge=0.0, le=1.0)  # type: ignore
-    false_positive_rate_status: str = pa.Field(isin=["available", "unavailable_missing_benign_class"])  # type: ignore
+    false_positive_rate_status: str = pa.Field(  # type: ignore
+        isin=["available", "unavailable_missing_benign_class", "unavailable_ineligible_client"]
+    )
     true_positive_rate: float | None = pa.Field(nullable=True, ge=0.0, le=1.0)  # type: ignore
-    true_positive_rate_status: str = pa.Field(isin=["available", "unavailable_missing_attack_class"])  # type: ignore
+    true_positive_rate_status: str = pa.Field(  # type: ignore
+        isin=["available", "unavailable_missing_attack_class", "unavailable_ineligible_client"]
+    )
     balanced_accuracy: float | None = pa.Field(nullable=True, ge=0.0, le=1.0)  # type: ignore
     balanced_accuracy_status: str = pa.Field(
-        isin=["available", "unavailable_missing_benign_class", "unavailable_missing_attack_class"]
+        isin=[
+            "available",
+            "unavailable_missing_benign_class",
+            "unavailable_missing_attack_class",
+            "unavailable_ineligible_client",
+        ]
     )  # type: ignore
     macro_f1: float | None = pa.Field(nullable=True, ge=0.0, le=1.0)  # type: ignore
     macro_f1_status: str = pa.Field(
@@ -44,6 +53,7 @@ class ClientMetricFrameSchema(pa.DataFrameModel):
             "unavailable_missing_benign_class",
             "unavailable_missing_attack_class",
             "undefined_zero_denominator",
+            "unavailable_ineligible_client",
         ]
     )  # type: ignore
 

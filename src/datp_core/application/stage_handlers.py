@@ -36,6 +36,7 @@ from datp_core.domain.catalogue import (
     MetricAssociationAnalysisRecord,
     PairedThresholdAnalysisRecord,
     SweepConditionRecord,
+    ThresholdStabilityAnalysisRecord,
     ValueSweepRecord,
 )
 from datp_core.domain.checkpoints import (
@@ -66,6 +67,7 @@ from datp_core.infrastructure.learning.pytorch_adapter import (
     score_personalized_materialized_split,
     set_deterministic_seeds,
 )
+from datp_core.infrastructure.tables.calibration_subsampling import subsample_calibration_scores
 from datp_core.infrastructure.tables.polars_engine import compute_operating_point_metrics
 from datp_core.infrastructure.tables.schemas import (
     validate_calibration_score_frame,
@@ -1266,6 +1268,56 @@ def _score_split(kind: ArtifactKind) -> str | None:
         return "test"
 
 
+def _score_context(context: StageJobContext, *, retain_calibration_subset: bool = False) -> StageJobContext:
+    return StageJobContext(
+        experiment_id=context.experiment_id,
+        seed=context.seed,
+        partition_condition=context.partition_condition,
+        federated_proximal_mu=context.federated_proximal_mu,
+        ditto_proximal_weight=context.ditto_proximal_weight,
+        calibration_sample_count=context.calibration_sample_count if retain_calibration_subset else None,
+        calibration_replicate=context.calibration_replicate if retain_calibration_subset else None,
+    )
+
+
+def _calibration_sample_counts(experiment) -> tuple[int | None, ...]:
+    if experiment.calibration_subset is None:
+        return (None,)
+    sweep_name = experiment.calibration_subset.requested_sample_count.get("from_sweep")
+    values = tuple(
+        int(value)
+        for sweep in experiment.sweeps
+        if isinstance(sweep, ValueSweepRecord) and sweep.name == sweep_name
+        for value in sweep.values
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0
+    )
+    if not values:
+        raise ValueError("Calibration subset requires a positive integer sample-count sweep")
+    return values
+
+
+def _ineligible_client_metrics(evaluation: pl.DataFrame) -> pl.DataFrame:
+    return (
+        evaluation.filter(pl.col("threshold").is_null())
+        .select("client_id")
+        .unique(maintain_order=True)
+        .with_columns(
+            pl.lit(0).alias("true_positives"),
+            pl.lit(0).alias("false_positives"),
+            pl.lit(0).alias("true_negatives"),
+            pl.lit(0).alias("false_negatives"),
+            pl.lit(None, dtype=pl.Float64).alias("false_positive_rate"),
+            pl.lit("unavailable_ineligible_client").alias("false_positive_rate_status"),
+            pl.lit(None, dtype=pl.Float64).alias("true_positive_rate"),
+            pl.lit("unavailable_ineligible_client").alias("true_positive_rate_status"),
+            pl.lit(None, dtype=pl.Float64).alias("balanced_accuracy"),
+            pl.lit("unavailable_ineligible_client").alias("balanced_accuracy_status"),
+            pl.lit(None, dtype=pl.Float64).alias("macro_f1"),
+            pl.lit("unavailable_ineligible_client").alias("macro_f1_status"),
+        )
+    )
+
+
 def _load_checkpoint_model(
     states: Mapping[str, object], prefix: str, input_dimension: int, hidden_dims: tuple[int, ...]
 ) -> DynamicDenseAutoencoder:
@@ -1275,7 +1327,91 @@ def _load_checkpoint_model(
     model = DynamicDenseAutoencoder(input_dimension, hidden_dims)
     model.load_state_dict(state)
     return model
-    return None
+
+
+class CalibrationSubsamplingStageHandler:
+    """Persist one nested, benign-only calibration window without retraining or rescoring."""
+
+    stage = StageKind.CALIBRATION_SUBSAMPLING
+
+    def __init__(self, config: ResolvedProjectConfiguration, repository: ArtifactRepository) -> None:
+        self._config = config
+        self._repository = repository
+
+    def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
+        context = job.context
+        if context.seed is None or context.calibration_sample_count is None or context.calibration_replicate is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="Calibration subsampling requires a seed, sample count, and replicate",
+            )
+        experiment = self._config.experiments.get(context.experiment_id)
+        subset = experiment.calibration_subset
+        if subset is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="Calibration subsampling is not configured for this experiment",
+            )
+        if (
+            subset.selection_strategy != "deterministic_without_replacement"
+            or subset.nesting_policy != "nested_by_size"
+            or subset.model_retraining != "never_thresholds_only_recomputed"
+            or subset.replicate_seed_derivation != "derived_seed_algorithm_with_namespace_calibration_subsample"
+        ):
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="Calibration subset contract is not executable by the configured deterministic sampler",
+            )
+        relative_path = f"runs/{run_id.value}/{job.job_id.value}"
+        if self._repository.assess_reuse(
+            relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
+        ).can_reuse:
+            return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        calibration = self._repository.read(
+            f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(_score_context(context)).value}"
+        )
+        if not calibration.found or calibration.payload_bytes is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Calibration score artifact is unavailable"
+            )
+        try:
+            namespace = self._config.protocol_determinism.seed_namespaces["calibration_subsample"]
+            digest_bytes = int(self._config.protocol_determinism.derived_seed_algorithm["digest_bytes"])
+            scores = validate_calibration_score_frame(pl.read_parquet(BytesIO(calibration.payload_bytes)))
+            sampled = subsample_calibration_scores(
+                scores,
+                requested_sample_count=context.calibration_sample_count,
+                training_seed=context.seed,
+                selection_seed=subset.selection_seed.value,
+                replicate=context.calibration_replicate,
+                namespace_key=namespace.key,
+                digest_bytes=digest_bytes,
+            )
+            validate_calibration_score_frame(sampled)
+        except (KeyError, OSError, ValueError) as exc:
+            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+        payload = BytesIO()
+        sampled.write_parquet(payload)
+        commit = _commit_artifact(
+            self._repository,
+            self._config,
+            context,
+            artifact_key=job.output,
+            artifact_format=ArtifactFormat.PARQUET,
+            relative_path=relative_path,
+            parents=_parents(self._config, job.inputs),
+            payload=BytesPayload(payload_bytes=payload.getvalue()),
+        )
+        if not commit.success:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message=commit.error_message or "calibration subset commit failed",
+            )
+        return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
 
 
 class ThresholdConstructionStageHandler:
@@ -1305,9 +1441,15 @@ class ThresholdConstructionStageHandler:
             relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
         ).can_reuse:
             return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
-        calibration = self._repository.read(
-            f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(job.context).value}"
+        calibration_context = _score_context(
+            job.context, retain_calibration_subset=job.context.calibration_sample_count is not None
         )
+        calibration_job_id = (
+            IdentityBuilder.calibration_subset_job_id(calibration_context)
+            if calibration_context.calibration_sample_count is not None
+            else IdentityBuilder.calibration_score_job_id(calibration_context)
+        )
+        calibration = self._repository.read(f"runs/{run_id.value}/{calibration_job_id.value}")
         if not calibration.found or calibration.payload_bytes is None:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Calibration score artifact is unavailable"
@@ -1334,39 +1476,51 @@ class ThresholdConstructionStageHandler:
         try:
             scores = pl.read_parquet(BytesIO(calibration.payload_bytes))
             validate_calibration_score_frame(scores)
-            grouped = tuple(
-                BenignCalibrationScores(
-                    client_id=ClientId(str(client_id[0])),
-                    values=tuple(float(value) for value in rows["score"].to_list()),
-                    population_id=job.context.population_id,
+            if scores.is_empty():
+                output = pl.DataFrame(
+                    schema={
+                        "client_id": pl.String,
+                        "threshold": pl.Float64,
+                        "owner_kind": pl.String,
+                        "effective_lambda": pl.Float64,
+                        "policy_id": pl.String,
+                        "target_quantile": pl.Float64,
+                    }
                 )
-                for client_id, rows in scores.group_by("client_id", maintain_order=True)
-            )
-            threshold_set = self._thresholds.execute(
-                job.context.threshold_policy_id,
-                grouped,
-                job.context.population_id,
-                dict(dataset.field_schema.label_fields.family_map)
-                if dataset.field_schema.label_fields.family_map
-                else None,
-                Seed(job.context.seed),
-                (
-                    job.context.shrinkage_weight
-                    if job.context.shrinkage_weight is not None
-                    else job.context.federated_summary_fixed_k
-                ),
-                job.context.threshold_quantile,
-            )
-            output = pl.DataFrame(
-                {
-                    "client_id": [record.client_id.value for record in threshold_set.values],
-                    "threshold": [float(record.threshold) for record in threshold_set.values],
-                    "owner_kind": [record.owner for record in threshold_set.values],
-                    "effective_lambda": [record.effective_lambda for record in threshold_set.values],
-                    "policy_id": [threshold_set.policy_id.value] * len(threshold_set.values),
-                    "target_quantile": [threshold_set.target_quantile.value] * len(threshold_set.values),
-                }
-            )
+            else:
+                grouped = tuple(
+                    BenignCalibrationScores(
+                        client_id=ClientId(str(client_id[0])),
+                        values=tuple(float(value) for value in rows["score"].to_list()),
+                        population_id=job.context.population_id,
+                    )
+                    for client_id, rows in scores.group_by("client_id", maintain_order=True)
+                )
+                threshold_set = self._thresholds.execute(
+                    job.context.threshold_policy_id,
+                    grouped,
+                    job.context.population_id,
+                    dict(dataset.field_schema.label_fields.family_map)
+                    if dataset.field_schema.label_fields.family_map
+                    else None,
+                    Seed(job.context.seed),
+                    (
+                        job.context.shrinkage_weight
+                        if job.context.shrinkage_weight is not None
+                        else job.context.federated_summary_fixed_k
+                    ),
+                    job.context.threshold_quantile,
+                )
+                output = pl.DataFrame(
+                    {
+                        "client_id": [record.client_id.value for record in threshold_set.values],
+                        "threshold": [float(record.threshold) for record in threshold_set.values],
+                        "owner_kind": [record.owner for record in threshold_set.values],
+                        "effective_lambda": [record.effective_lambda for record in threshold_set.values],
+                        "policy_id": [threshold_set.policy_id.value] * len(threshold_set.values),
+                        "target_quantile": [threshold_set.target_quantile.value] * len(threshold_set.values),
+                    }
+                )
             validate_threshold_frame(output)
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
@@ -1407,7 +1561,9 @@ class OperatingPointEvaluationStageHandler:
         ).can_reuse:
             return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
         thresholds = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(job.context).value}")
-        scores = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(job.context).value}")
+        scores = self._repository.read(
+            f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(_score_context(job.context)).value}"
+        )
         if not thresholds.found or thresholds.payload_bytes is None:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Threshold artifact is unavailable"
@@ -1420,9 +1576,16 @@ class OperatingPointEvaluationStageHandler:
             threshold_frame = validate_threshold_frame(pl.read_parquet(BytesIO(thresholds.payload_bytes)))
             score_frame = validate_test_score_frame(pl.read_parquet(BytesIO(scores.payload_bytes)))
             evaluation = score_frame.join(threshold_frame.select("client_id", "threshold"), on="client_id", how="left")
-            if evaluation["threshold"].null_count() > 0:
+            if evaluation["threshold"].null_count() > 0 and job.context.calibration_sample_count is None:
                 raise ValueError("Threshold artifact does not cover every scored client")
-            metrics = compute_operating_point_metrics(evaluation).with_columns(
+            eligible = evaluation.filter(pl.col("threshold").is_not_null())
+            if eligible.is_empty():
+                metrics = _ineligible_client_metrics(evaluation)
+            elif evaluation["threshold"].null_count() > 0:
+                metrics = pl.concat((compute_operating_point_metrics(eligible), _ineligible_client_metrics(evaluation)))
+            else:
+                metrics = compute_operating_point_metrics(eligible)
+            metrics = metrics.with_columns(
                 pl.lit(job.context.threshold_policy_id.value if job.context.threshold_policy_id else None).alias(
                     "policy_id"
                 ),
@@ -1474,7 +1637,10 @@ class StatisticalAnalysisStageHandler:
         association_analyses = tuple(
             item for item in experiment.analyses if isinstance(item, MetricAssociationAnalysisRecord)
         )
-        if len(paired_analyses) + len(association_analyses) != len(experiment.analyses):
+        stability_analyses = tuple(
+            item for item in experiment.analyses if isinstance(item, ThresholdStabilityAnalysisRecord)
+        )
+        if len(paired_analyses) + len(association_analyses) + len(stability_analyses) != len(experiment.analyses):
             return StageJobOutcome.failed(
                 job_id=job.job_id,
                 stage=job.stage,
@@ -1516,6 +1682,7 @@ class StatisticalAnalysisStageHandler:
             for value in sweep.values
             if isinstance(value, float)
         ) or (None,)
+        calibration_sample_counts = _calibration_sample_counts(experiment)
         try:
             paired_results = [
                 self._analyze_paired(
@@ -1528,6 +1695,7 @@ class StatisticalAnalysisStageHandler:
                     ditto_weight,
                     threshold_quantile,
                     shrinkage_weight,
+                    calibration_sample_count,
                 )
                 for condition in conditions
                 for proximal_mu in mus
@@ -1535,11 +1703,21 @@ class StatisticalAnalysisStageHandler:
                 for threshold_quantile in threshold_quantiles
                 for shrinkage_weight in shrinkage_weights
                 for analysis in paired_analyses
+                for calibration_sample_count in (
+                    calibration_sample_counts if analysis.per_sweep_cell == "calibration_sample_count" else (None,)
+                )
             ]
             results = paired_results + [
                 self._analyze_association(analysis, paired_results, experiment, cohort.training_seeds, run_id)
                 for analysis in association_analyses
             ]
+            results.extend(
+                self._analyze_threshold_stability(
+                    analysis, experiment, cohort.training_seeds, run_id, calibration_sample_count
+                )
+                for analysis in stability_analyses
+                for calibration_sample_count in calibration_sample_counts
+            )
             training_profile = self._config.training_profiles.get(experiment.training_profile_id)
             if training_profile.kind == "federated_prox_training":
                 results.append(self._federated_proximal_selection(experiment.identifier, run_id))
@@ -1577,6 +1755,7 @@ class StatisticalAnalysisStageHandler:
         ditto_weight: float | None,
         threshold_quantile: float | None,
         shrinkage_weight: float | None,
+        calibration_sample_count: int | None,
     ) -> dict[str, object]:
         left = tuple(
             self._evaluation_metric(
@@ -1590,6 +1769,7 @@ class StatisticalAnalysisStageHandler:
                 ditto_weight,
                 threshold_quantile,
                 shrinkage_weight,
+                calibration_sample_count,
             )
             for seed in seeds
         )
@@ -1605,6 +1785,7 @@ class StatisticalAnalysisStageHandler:
                 ditto_weight,
                 threshold_quantile,
                 shrinkage_weight,
+                calibration_sample_count,
             )
             for seed in seeds
         )
@@ -1643,6 +1824,8 @@ class StatisticalAnalysisStageHandler:
             result["threshold_quantile"] = threshold_quantile
         if shrinkage_weight is not None:
             result["shrinkage_weight"] = shrinkage_weight
+        if calibration_sample_count is not None:
+            result["calibration_sample_count"] = calibration_sample_count
         differences = [first - second for first, second in zip(left, right, strict=True)]
         result["seed_differences"] = differences
         result["sign_consistency"] = sum(value > 0.0 for value in differences) / len(differences)
@@ -1787,6 +1970,7 @@ class StatisticalAnalysisStageHandler:
         ditto_weight: float | None,
         threshold_quantile: float | None,
         shrinkage_weight: float | None,
+        calibration_sample_count: int | None,
     ) -> float:
         if metric != "cv_fpr":
             raise ValueError(f"Statistical execution does not support configured metric '{metric}'")
@@ -1794,26 +1978,6 @@ class StatisticalAnalysisStageHandler:
         overrides = evaluation.overrides or {}
         quantile_override = overrides.get("quantile")
         shrinkage_override = overrides.get("shrinkage_weight")
-        context = StageJobContext(
-            experiment_id=experiment.identifier,
-            seed=seed,
-            partition_condition=partition_condition,
-            federated_proximal_mu=proximal_mu,
-            ditto_proximal_weight=ditto_weight,
-            threshold_quantile=threshold_quantile if isinstance(quantile_override, Mapping) else None,
-            shrinkage_weight=shrinkage_weight if isinstance(shrinkage_override, Mapping) else None,
-            evaluation_label=label,
-        )
-        artifact = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
-        if not artifact.found or artifact.payload_bytes is None:
-            raise ValueError(f"Evaluation artifact is unavailable for seed {seed}, label '{label}'")
-        frame = validate_client_metric_frame(pl.read_parquet(BytesIO(artifact.payload_bytes)))
-        fprs = tuple(
-            float(value)
-            for value in frame.filter(pl.col("false_positive_rate_status") == "available")[
-                "false_positive_rate"
-            ].to_list()
-        )
         policy = self._config.threshold_policies.get(evaluation.threshold_policy_id)
         quantile = threshold_quantile if isinstance(quantile_override, Mapping) else getattr(policy, "quantile", None)
         if not isinstance(quantile, float):
@@ -1821,15 +1985,134 @@ class StatisticalAnalysisStageHandler:
         definition = self._config.metric_definitions.cross_client_aggregation.cv_fpr
         if definition.near_zero_mean_threshold_formula != "0.10 * (1 - evaluated_threshold_policy_quantile)":
             raise ValueError("CV(FPR) near-zero threshold formula is not the configured roadmap formula")
-        dispersion = calculate_fpr_dispersion(
-            fprs,
-            cv_instability_threshold=0.10 * (1.0 - quantile),
-            quantile_method="linear",
-        )
-        if dispersion.coefficient_of_variation.status is not MetricStatus.AVAILABLE:
-            raise ValueError("Configured CV(FPR) is unavailable for paired statistical analysis")
-        assert dispersion.coefficient_of_variation.value is not None
-        return dispersion.coefficient_of_variation.value
+        replicates = (None,)
+        if calibration_sample_count is not None:
+            subset = experiment.calibration_subset
+            if subset is None:
+                raise ValueError("Calibration sample count is invalid for an experiment without a subset contract")
+            replicates = tuple(range(subset.replicate_count.value))
+        values: list[float] = []
+        for replicate in replicates:
+            context = StageJobContext(
+                experiment_id=experiment.identifier,
+                seed=seed,
+                partition_condition=partition_condition,
+                federated_proximal_mu=proximal_mu,
+                ditto_proximal_weight=ditto_weight,
+                threshold_quantile=threshold_quantile if isinstance(quantile_override, Mapping) else None,
+                shrinkage_weight=shrinkage_weight if isinstance(shrinkage_override, Mapping) else None,
+                calibration_sample_count=calibration_sample_count,
+                calibration_replicate=replicate,
+                evaluation_label=label,
+            )
+            artifact = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
+            if not artifact.found or artifact.payload_bytes is None:
+                raise ValueError(f"Evaluation artifact is unavailable for seed {seed}, label '{label}'")
+            frame = validate_client_metric_frame(pl.read_parquet(BytesIO(artifact.payload_bytes)))
+            fprs = tuple(
+                float(value)
+                for value in frame.filter(pl.col("false_positive_rate_status") == "available")[
+                    "false_positive_rate"
+                ].to_list()
+            )
+            dispersion = calculate_fpr_dispersion(
+                fprs,
+                cv_instability_threshold=0.10 * (1.0 - quantile),
+                quantile_method="linear",
+            )
+            if dispersion.coefficient_of_variation.status is not MetricStatus.AVAILABLE:
+                raise ValueError("Configured CV(FPR) is unavailable for paired statistical analysis")
+            assert dispersion.coefficient_of_variation.value is not None
+            values.append(dispersion.coefficient_of_variation.value)
+        return sum(values) / len(values)
+
+    def _analyze_threshold_stability(
+        self,
+        analysis: ThresholdStabilityAnalysisRecord,
+        experiment,
+        seeds,
+        run_id: RunId,
+        calibration_sample_count: int | None,
+    ) -> dict[str, object]:
+        if calibration_sample_count is None:
+            raise ValueError("Threshold stability analysis requires a calibration sample-count sweep")
+        subset = experiment.calibration_subset
+        if subset is None or analysis.per_sweep_cell != "calibration_sample_count":
+            raise ValueError(f"Threshold stability analysis '{analysis.label}' has an incompatible subset contract")
+        evaluation = next(item for item in experiment.evaluations if item.label == analysis.source_evaluation)
+        policy = self._config.threshold_policies.get(evaluation.threshold_policy_id)
+        quantile = getattr(policy, "quantile", None)
+        if not isinstance(quantile, float):
+            raise ValueError("Threshold stability analysis requires a quantile threshold policy")
+        seed_results: list[dict[str, object]] = []
+        for seed in seeds:
+            threshold_values: dict[str, list[float]] = {}
+            fpr_values: dict[str, list[float]] = {}
+            for replicate in range(subset.replicate_count.value):
+                context = StageJobContext(
+                    experiment_id=experiment.identifier,
+                    seed=seed.value,
+                    calibration_sample_count=calibration_sample_count,
+                    calibration_replicate=replicate,
+                    evaluation_label=analysis.source_evaluation,
+                )
+                threshold_artifact = self._repository.read(
+                    f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}"
+                )
+                metrics_artifact = self._repository.read(
+                    f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}"
+                )
+                if (
+                    not threshold_artifact.found
+                    or threshold_artifact.payload_bytes is None
+                    or not metrics_artifact.found
+                    or metrics_artifact.payload_bytes is None
+                ):
+                    raise ValueError(f"Threshold stability artifacts are unavailable for seed {seed.value}")
+                thresholds = validate_threshold_frame(pl.read_parquet(BytesIO(threshold_artifact.payload_bytes)))
+                metrics = validate_client_metric_frame(pl.read_parquet(BytesIO(metrics_artifact.payload_bytes)))
+                for client_id, threshold in thresholds.select("client_id", "threshold").iter_rows():
+                    threshold_values.setdefault(str(client_id), []).append(float(threshold))
+                for client_id, fpr in (
+                    metrics.filter(pl.col("false_positive_rate_status") == "available")
+                    .select("client_id", "false_positive_rate")
+                    .iter_rows()
+                ):
+                    fpr_values.setdefault(str(client_id), []).append(float(fpr))
+            test_context = StageJobContext(experiment_id=experiment.identifier, seed=seed.value)
+            test_artifact = self._repository.read(
+                f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(test_context).value}"
+            )
+            if not test_artifact.found or test_artifact.payload_bytes is None:
+                raise ValueError(f"Test scores are unavailable for threshold stability seed {seed.value}")
+            test_clients = set(
+                validate_test_score_frame(pl.read_parquet(BytesIO(test_artifact.payload_bytes)))["client_id"]
+            )
+            variances = [
+                sum((value - (sum(values) / len(values))) ** 2 for value in values) / len(values)
+                for values in threshold_values.values()
+            ]
+            mean_fprs = [sum(values) / len(values) for values in fpr_values.values()]
+            seed_results.append(
+                {
+                    "seed": seed.value,
+                    "threshold_variance_across_replicates": sum(variances) / len(variances) if variances else None,
+                    "absolute_attainment_error": (
+                        sum(abs(value - (1.0 - quantile)) for value in mean_fprs) / len(mean_fprs)
+                        if mean_fprs
+                        else None
+                    ),
+                    "worst_client_fpr": max(mean_fprs) if mean_fprs else None,
+                    "clients_unavailable_at_size": sorted(test_clients - set(threshold_values)),
+                }
+            )
+        return {
+            "analysis_label": analysis.label,
+            "calibration_sample_count": calibration_sample_count,
+            "replicate_aggregation": subset.replicate_aggregation_within_seed,
+            "independent_inferential_unit": subset.independent_inferential_unit,
+            "seed_results": seed_results,
+        }
 
     @staticmethod
     def _evaluation_policy(experiment, label: str) -> str:
