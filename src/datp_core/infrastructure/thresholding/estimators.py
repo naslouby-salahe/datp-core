@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from typing import cast
 
 import numpy as np
@@ -33,9 +34,32 @@ from datp_core.domain.thresholding import (
 from datp_core.domain.values import Probability
 from datp_core.infrastructure.thresholding.base import ThresholdConstructionRequest, ThresholdEstimator
 
-# protocols.yaml fingerprint_estimators.p95_error: "quantile_0_95_linear_interpolated_order_statistic" --
-# locked independently of a cluster policy's own (possibly swept) threshold-construction quantile.
-_B4_FINGERPRINT_QUANTILE = 0.95
+
+def _fingerprint_quantile(fingerprint_estimators: Mapping[str, str]) -> float:
+    """Extract the p95 fingerprint quantile from the configured estimator name.
+
+    The fingerprint_estimators mapping (from protocols.yaml) contains entries like
+    ``"p95_error": "quantile_0_95_linear_interpolated_order_statistic"``.
+    The quantile value is derived from the estimator name rather than hardcoded,
+    keeping configuration as the sole authority for all scientific values.
+    """
+    estimator = fingerprint_estimators.get("p95_error", "")
+    # Expected format: "quantile_{q}_linear_interpolated_order_statistic"
+    # where q is the quantile value, e.g. "quantile_0_95_..."
+    if estimator.startswith("quantile_"):
+        try:
+            # Extract "0_95" from "quantile_0_95_linear_interpolated_order_statistic"
+            remainder = estimator[len("quantile_") :]
+            suffix = "_linear_interpolated_order_statistic"
+            if remainder.endswith(suffix):
+                quantile_str = remainder[: -len(suffix)].replace("_", ".")
+                return float(quantile_str)
+        except (ValueError, IndexError):
+            pass
+    raise ValueError(
+        f"Cannot determine fingerprint quantile from estimator: {estimator!r}. "
+        f"Expected format: 'quantile_{{q}}_linear_interpolated_order_statistic'"
+    )
 
 
 def _quantile(values: tuple[float, ...], quantile: float) -> float:
@@ -186,6 +210,9 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
         if any(feature not in feature_names for feature in policy.fingerprint_features):
             raise ValueError("Cluster policy declares an unsupported fingerprint feature")
         selected_feature_indexes = tuple(feature_names.index(feature) for feature in policy.fingerprint_features)
+        # p95_error quantile is derived from the configured fingerprint_estimators (protocols.yaml),
+        # not hardcoded — keeping configuration as the sole scientific authority.
+        fingerprint_p95_quantile = _fingerprint_quantile(policy.fingerprint_estimators)
         rows = []
         for item in calibration:
             values = np.asarray(item.values, dtype=np.float64)
@@ -194,9 +221,9 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
                     float(np.mean(values)),
                     float(np.std(values, ddof=1)) if len(values) >= 2 else 0.0,
                     float(skew(values)) if len(values) > 2 else 0.0,
-                    # p95_error is locked to quantile 0.95 by fingerprint_estimators in protocols.yaml
-                    # regardless of this policy's own (possibly swept) threshold-construction quantile.
-                    _quantile(item.values, _B4_FINGERPRINT_QUANTILE),
+                    # p95_error uses the configured fingerprint quantile (from protocols.yaml),
+                    # independently of this policy's own (possibly swept) threshold-construction quantile.
+                    _quantile(item.values, fingerprint_p95_quantile),
                 )
             )
         features = np.asarray(rows, dtype=np.float64)[:, selected_feature_indexes]

@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import cast
 
 from attrs import define, field
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from datp_core.config.models.runtime_config import AuthoredRuntimeConfig, RawSourcePolicyConfig
@@ -68,7 +67,7 @@ class RuntimeBootstrapSettings(BaseSettings):
         extra="forbid",
     )
 
-    repository_root: Path = Field(default_factory=lambda: Path.cwd().resolve())
+    repository_root: Path  # required — must be set via DATP_REPOSITORY_ROOT env var
     config_root: Path | None = None
     dagster_home: Path | None = None
     environment_identity: str = "local_linux"

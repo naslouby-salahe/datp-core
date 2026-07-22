@@ -85,7 +85,7 @@ select = ["E", "F", "I", "N", "UP", "B", "ICN"]
 [tool.pyright]
 include = ["src", "tests"]
 pythonVersion = "3.12"
-typeCheckingMode = "basic"
+typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
 # Mirrors pytest's rootdir-relative "prepend" import mode (pyproject.toml [tool.pytest.ini_options]):

@@ -16,12 +16,18 @@ import pytest
 
 @pytest.fixture(autouse=True, scope="session")
 def _default_test_execution_profile() -> Iterator[None]:
-    previous = os.environ.get("DATP_EXECUTION_PROFILE")
+    previous_profile = os.environ.get("DATP_EXECUTION_PROFILE")
+    previous_root = os.environ.get("DATP_REPOSITORY_ROOT")
     os.environ.setdefault("DATP_EXECUTION_PROFILE", "scientific")
+    os.environ.setdefault("DATP_REPOSITORY_ROOT", os.getcwd())
     try:
         yield
     finally:
-        if previous is None:
+        if previous_profile is None:
             os.environ.pop("DATP_EXECUTION_PROFILE", None)
         else:
-            os.environ["DATP_EXECUTION_PROFILE"] = previous
+            os.environ["DATP_EXECUTION_PROFILE"] = previous_profile
+        if previous_root is None:
+            os.environ.pop("DATP_REPOSITORY_ROOT", None)
+        else:
+            os.environ["DATP_REPOSITORY_ROOT"] = previous_root

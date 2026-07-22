@@ -2,7 +2,7 @@
 
 import nox
 
-nox.options.sessions = ("lint", "typecheck", "tests", "tests_parallel", "imports")
+nox.options.sessions = ("lint", "typecheck", "tests", "tests_parallel", "imports", "coverage")
 
 
 @nox.session(venv_backend="uv")
@@ -39,3 +39,15 @@ def imports(session: nox.Session) -> None:
     """Enforce the layer dependency contracts."""
     session.install(".", "import-linter>=2.0")
     session.run("lint-imports", "--config", "importlinter.ini")
+
+
+@nox.session(venv_backend="uv")
+def coverage(session: nox.Session) -> None:
+    """Run tests with coverage and produce coverage.xml for SonarQube."""
+    session.install(".[cli]", "pytest>=8.0", "hypothesis>=6.0", "pytest-benchmark>=4.0", "pytest-cov>=5.0")
+    session.run(
+        "pytest", "-q",
+        "--cov=src/datp_core",
+        "--cov-report=xml:coverage.xml",
+        "--cov-report=term",
+    )
