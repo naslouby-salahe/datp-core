@@ -1,5 +1,6 @@
 import pytest
 
+from datp_core.application.stage_handlers import _threshold_exchange_cost
 from datp_core.application.threshold_construction import ConstructThresholdsUseCase
 from datp_core.composition.root import _build_estimator_registry, build_application
 from datp_core.domain.identifiers import ClientId, PopulationId, ThresholdPolicyId
@@ -81,3 +82,21 @@ def test_cluster_policy_uses_the_explicit_fingerprint_feature_subset(
 def test_registry_matches_complete_authored_policy_catalogue() -> None:
     config = build_application().config
     assert set(_build_estimator_registry(config).keys()) == set(config.threshold_policies)
+
+
+def test_federated_summary_resource_estimate_counts_every_candidate_exchange() -> None:
+    config = build_application().config
+    fields, payload = _threshold_exchange_cost(
+        config.communication_estimation_contract,
+        config.threshold_policies.get(ThresholdPolicyId("federated_summary_matched_exceedance")),
+        3,
+    )
+
+    assert fields == (
+        "benign_calibration_count_uint64",
+        "benign_local_mean_float64",
+        "benign_local_variance_float64",
+        "candidate_coefficient_float64",
+        "benign_exceedance_count_uint64",
+    )
+    assert payload == 3 * (24 + 501 * 16)

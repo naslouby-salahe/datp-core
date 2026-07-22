@@ -35,13 +35,18 @@ from datp_core.domain.artifacts import (
 )
 from datp_core.domain.catalogue import (
     AbsorptionAnalysisRecord,
+    AlertBurdenAnalysisRecord,
     AnchorEquivalenceAnalysisRecord,
     ClusterStabilityAnalysisRecord,
     ConditionSweepRecord,
     ConformalCoverageAnalysisRecord,
+    DistributionMechanismAnalysisRecord,
+    LockedClientDistributionAnalysisRecord,
     MetricAssociationAnalysisRecord,
     PairedThresholdAnalysisRecord,
+    QuantileEstimationAnalysisRecord,
     RecoveryFractionAnalysisRecord,
+    ResourceCostAnalysisRecord,
     SweepConditionRecord,
     TemporalRecoveryAnalysisRecord,
     ThresholdStabilityAnalysisRecord,
@@ -56,11 +61,18 @@ from datp_core.domain.datasets import PartitionSeedContract
 from datp_core.domain.evaluation import MetricStatus, calculate_fpr_dispersion, calculate_pairwise_js_divergence
 from datp_core.domain.identifiers import ArtifactId, ClientId, DatasetId, ExperimentId, RunId
 from datp_core.domain.outcomes import StageJob, StageJobContext, StageJobOutcome, StageKind
+from datp_core.domain.protocol_contracts import CommunicationEstimationContractRecord
 from datp_core.domain.run_identity import execution_run_id
 from datp_core.domain.thresholding import (
     BenignCalibrationScores,
     ConformalAttainabilityStatus,
+    FederatedMatchedExceedanceThresholdPolicyRecord,
+    LocalQuantileThresholdPolicyRecord,
+    SharedMeanThresholdPolicyRecord,
+    SharedPooledThresholdPolicyRecord,
+    SharedWeightedThresholdPolicyRecord,
     SplitConformalThresholdPolicyRecord,
+    ThresholdPolicyRecord,
 )
 from datp_core.domain.values import PositiveInt, Seed
 from datp_core.infrastructure.datasets.adapter_registry import DatasetAdapterRegistry
@@ -1466,6 +1478,138 @@ def _conformal_seed_coverage(
     }
 
 
+def _client_score_distributions(
+    thresholds: pl.DataFrame, metrics: pl.DataFrame, scores: pl.DataFrame, client_filter: str | None
+) -> dict[str, object]:
+    clients = {str(client) for client in thresholds["client_id"].to_list()}
+    if client_filter is not None:
+        if client_filter not in clients:
+            raise ValueError(f"Locked client '{client_filter}' is unavailable in this evaluation")
+        clients = {client_filter}
+    threshold_by_client = {
+        str(client): float(value) for client, value in thresholds.select("client_id", "threshold").iter_rows()
+    }
+    metrics_by_client = {str(row["client_id"]): row for row in metrics.to_dicts()}
+    result: dict[str, object] = {}
+    for client in sorted(clients):
+        metric = metrics_by_client.get(client)
+        if metric is None:
+            raise ValueError(f"Score distribution metric is unavailable for client '{client}'")
+        client_scores = scores.filter(pl.col("client_id") == client)
+        threshold = threshold_by_client[client]
+        benign = sorted(float(value) for value in client_scores.filter(pl.col("label") == 0)["score"].to_list())
+        attack = sorted(float(value) for value in client_scores.filter(pl.col("label") == 1)["score"].to_list())
+        result[client] = {
+            "benign_score_cdf": _empirical_cdf(benign),
+            "attack_score_cdf": _empirical_cdf(attack),
+            "threshold": threshold,
+            "benign_threshold_position": _cdf_position(benign, threshold),
+            "attack_threshold_position": _cdf_position(attack, threshold),
+            "false_positive_rate": metric["false_positive_rate"],
+            "false_positive_rate_status": metric["false_positive_rate_status"],
+            "true_positive_rate": metric["true_positive_rate"],
+            "true_positive_rate_status": metric["true_positive_rate_status"],
+            "balanced_accuracy": metric["balanced_accuracy"],
+            "balanced_accuracy_status": metric["balanced_accuracy_status"],
+            "macro_f1": metric["macro_f1"],
+            "macro_f1_status": metric["macro_f1_status"],
+        }
+    return result
+
+
+def _empirical_cdf(values: list[float]) -> list[dict[str, float]]:
+    return [{"score": value, "cumulative_probability": (index + 1) / len(values)} for index, value in enumerate(values)]
+
+
+def _cdf_position(values: list[float], threshold: float) -> float | None:
+    return sum(value <= threshold for value in values) / len(values) if values else None
+
+
+def _threshold_tradeoff(baseline: dict[str, object], shifted: dict[str, object]) -> dict[str, dict[str, float | None]]:
+    if set(baseline) != set(shifted):
+        raise ValueError("Threshold trade-off sources have incompatible client populations")
+    baseline_values = cast(dict[str, dict[str, object]], baseline)
+    shifted_values = cast(dict[str, dict[str, object]], shifted)
+    return {
+        client: {
+            "threshold_shift": float(cast(float, shifted_values[client]["threshold"]))
+            - float(cast(float, baseline_values[client]["threshold"])),
+            "fpr_delta": _metric_delta(baseline_values[client], shifted_values[client], "false_positive_rate"),
+            "tpr_delta": _metric_delta(baseline_values[client], shifted_values[client], "true_positive_rate"),
+        }
+        for client in sorted(baseline)
+    }
+
+
+def _metric_delta(baseline: object, shifted: object, metric: str) -> float | None:
+    left = cast(dict[str, object], baseline).get(metric)
+    right = cast(dict[str, object], shifted).get(metric)
+    return float(right) - float(left) if isinstance(left, float) and isinstance(right, float) else None
+
+
+def _calibration_variance_terms(calibration: pl.DataFrame) -> dict[str, float | None]:
+    values = np.asarray(calibration["score"].to_list(), dtype=np.float64)
+    if values.size == 0:
+        raise ValueError("Quantile-estimation analysis requires calibration scores")
+    pooled_variance = float(np.var(values))
+    means_and_variances = []
+    for _, group in calibration.group_by("client_id", maintain_order=True):
+        group_values = np.asarray(group["score"].to_list(), dtype=np.float64)
+        means_and_variances.append((group_values.size, float(group_values.mean()), float(np.var(group_values))))
+    total = sum(count for count, _, _ in means_and_variances)
+    pooled_mean = float(values.mean())
+    within = sum(count * variance for count, _, variance in means_and_variances) / total
+    between = sum(count * (mean - pooled_mean) ** 2 for count, mean, _ in means_and_variances) / total
+    return {
+        "within_term": within,
+        "between_term": between,
+        "between_ratio": between / pooled_variance if pooled_variance else None,
+    }
+
+
+def _threshold_exchange_cost(
+    contract: CommunicationEstimationContractRecord, policy: ThresholdPolicyRecord, client_count: int
+) -> tuple[tuple[str, ...], int]:
+    if isinstance(policy, SharedMeanThresholdPolicyRecord):
+        exchange = contract.threshold_exchange.b1
+        candidate_count = 0
+    elif isinstance(policy, LocalQuantileThresholdPolicyRecord):
+        exchange = contract.threshold_exchange.b2
+        candidate_count = 0
+    elif isinstance(policy, FederatedMatchedExceedanceThresholdPolicyRecord):
+        exchange = contract.threshold_exchange.federated_summary
+        grid = policy.candidate_grid
+        minimum = grid["minimum"]
+        maximum = grid["maximum"]
+        step = grid["step"]
+        if not isinstance(minimum, float) or not isinstance(maximum, float) or not isinstance(step, float):
+            raise ValueError("Federated-summary candidate grid requires finite numeric bounds")
+        candidate_count = round((maximum - minimum) / step) + 1
+    elif isinstance(policy, SharedPooledThresholdPolicyRecord | SharedWeightedThresholdPolicyRecord):
+        return (), 0
+    else:
+        raise ValueError(f"No communication contract is configured for threshold policy '{policy.policy}'")
+    base_fields = tuple(exchange.uplink_fields_per_client or ()) + tuple(exchange.downlink_fields_per_client or ())
+    candidate_fields = tuple(exchange.candidate_grid_downlink_fields_per_client or ()) + tuple(
+        exchange.candidate_grid_uplink_fields_per_client_per_candidate or ()
+    )
+    return (
+        base_fields + candidate_fields,
+        client_count
+        * (
+            sum(_field_bytes(contract, field) for field in base_fields)
+            + candidate_count * sum(_field_bytes(contract, field) for field in candidate_fields)
+        ),
+    )
+
+
+def _field_bytes(contract: CommunicationEstimationContractRecord, field: str) -> int:
+    encoding = next((name for name in contract.field_encodings if field.endswith(name)), None)
+    if encoding is None:
+        raise ValueError(f"Communication field '{field}' has no configured encoding")
+    return contract.field_encodings[encoding].bytes_per_field
+
+
 def _ineligible_client_metrics(evaluation: pl.DataFrame) -> pl.DataFrame:
     return (
         evaluation.filter(pl.col("threshold").is_null())
@@ -1838,6 +1982,19 @@ class StatisticalAnalysisStageHandler:
         conformal_analyses = tuple(
             item for item in experiment.analyses if isinstance(item, ConformalCoverageAnalysisRecord)
         )
+        distribution_analyses = tuple(
+            item for item in experiment.analyses if isinstance(item, DistributionMechanismAnalysisRecord)
+        )
+        locked_distribution_analyses = tuple(
+            item for item in experiment.analyses if isinstance(item, LockedClientDistributionAnalysisRecord)
+        )
+        alert_burden_analyses = tuple(
+            item for item in experiment.analyses if isinstance(item, AlertBurdenAnalysisRecord)
+        )
+        quantile_analyses = tuple(
+            item for item in experiment.analyses if isinstance(item, QuantileEstimationAnalysisRecord)
+        )
+        resource_analyses = tuple(item for item in experiment.analyses if isinstance(item, ResourceCostAnalysisRecord))
         if (
             len(paired_analyses)
             + len(association_analyses)
@@ -1848,6 +2005,11 @@ class StatisticalAnalysisStageHandler:
             + len(temporal_analyses)
             + len(cluster_analyses)
             + len(conformal_analyses)
+            + len(distribution_analyses)
+            + len(locked_distribution_analyses)
+            + len(alert_burden_analyses)
+            + len(quantile_analyses)
+            + len(resource_analyses)
         ) != len(experiment.analyses):
             return StageJobOutcome.failed(
                 job_id=job.job_id,
@@ -1942,6 +2104,23 @@ class StatisticalAnalysisStageHandler:
             results.extend(
                 self._analyze_conformal_coverage(analysis, experiment, cohort.training_seeds, run_id)
                 for analysis in conformal_analyses
+            )
+            results.extend(
+                self._analyze_distribution_mechanism(analysis, experiment, cohort.training_seeds, run_id)
+                for analysis in distribution_analyses
+            )
+            results.extend(
+                self._analyze_locked_client_distribution(analysis, experiment, cohort.training_seeds, run_id)
+                for analysis in locked_distribution_analyses
+            )
+            results.extend(self._analyze_alert_burden(analysis) for analysis in alert_burden_analyses)
+            results.extend(
+                self._analyze_quantile_estimation(analysis, experiment, cohort.training_seeds, run_id)
+                for analysis in quantile_analyses
+            )
+            results.extend(
+                self._analyze_resource_cost(analysis, experiment, cohort.training_seeds, run_id)
+                for analysis in resource_analyses
             )
             training_profile = self._config.training_profiles.get(experiment.training_profile_id)
             if training_profile.kind == "federated_prox_training":
@@ -2453,6 +2632,221 @@ class StatisticalAnalysisStageHandler:
             "coverage_direction": analysis.coverage_direction,
             "seed_results": seed_results,
         }
+
+    def _analyze_distribution_mechanism(
+        self, analysis: DistributionMechanismAnalysisRecord, experiment, seeds, run_id: RunId
+    ) -> dict[str, object]:
+        seed_results = [
+            self._distribution_seed_result(experiment, seed.value, analysis.source_evaluations, run_id)
+            for seed in seeds
+        ]
+        if analysis.field_formulas is None:
+            return {
+                "analysis_label": analysis.label,
+                "produced_fields": analysis.produced_fields,
+                "seed_results": seed_results,
+            }
+        if len(analysis.source_evaluations) < 2:
+            raise ValueError(f"Distribution analysis '{analysis.label}' needs two source evaluations")
+        baseline, shifted = analysis.source_evaluations[:2]
+        return {
+            "analysis_label": analysis.label,
+            "field_formulas": dict(analysis.field_formulas),
+            "produced_fields": analysis.produced_fields,
+            "seed_results": [
+                {
+                    "seed": result["seed"],
+                    "per_client_tradeoff": _threshold_tradeoff(
+                        cast(dict[str, dict[str, object]], result["evaluations"])[baseline],
+                        cast(dict[str, dict[str, object]], result["evaluations"])[shifted],
+                    ),
+                }
+                for result in seed_results
+            ],
+        }
+
+    def _analyze_locked_client_distribution(
+        self, analysis: LockedClientDistributionAnalysisRecord, experiment, seeds, run_id: RunId
+    ) -> dict[str, object]:
+        seed_results = [
+            self._distribution_seed_result(
+                experiment, seed.value, analysis.source_evaluations, run_id, analysis.locked_client_identifier
+            )
+            for seed in seeds
+        ]
+        return {
+            "analysis_label": analysis.label,
+            "locked_client_identifier": analysis.locked_client_identifier,
+            "produced_fields": analysis.produced_fields,
+            "seed_results": seed_results,
+        }
+
+    def _analyze_alert_burden(self, analysis: AlertBurdenAnalysisRecord) -> dict[str, object]:
+        rate = self._config.operational_inputs.benign_decision_rate
+        if not rate.configured or rate.value is None:
+            return {
+                "analysis_label": analysis.label,
+                "formula": analysis.formula,
+                "status": analysis.unavailable_behavior,
+                "reason": f"required operational input '{analysis.required_operational_input}' is not configured",
+                "alerts_per_client_per_day": None,
+                "benign_decision_rate_source": None,
+            }
+        raise ValueError("Configured operational alert-burden rates require executable source provenance")
+
+    def _analyze_quantile_estimation(
+        self, analysis: QuantileEstimationAnalysisRecord, experiment, seeds, run_id: RunId
+    ) -> dict[str, object]:
+        seed_results: list[dict[str, object]] = []
+        for seed in seeds:
+            frames = {
+                label: self._threshold_and_calibration_frame(experiment, seed.value, label, run_id)
+                for label in analysis.source_evaluations
+            }
+            oracle = frames[analysis.oracle_reference][0]
+            oracle_values = {
+                str(client): float(value) for client, value in oracle.select("client_id", "threshold").iter_rows()
+            }
+            if len(set(oracle_values.values())) != 1:
+                raise ValueError("Quantile-estimation oracle must provide one shared threshold")
+            oracle_threshold = next(iter(oracle_values.values()))
+            policies: dict[str, object] = {}
+            for label, (thresholds, calibration) in frames.items():
+                threshold_values = {
+                    str(client): float(value)
+                    for client, value in thresholds.select("client_id", "threshold").iter_rows()
+                }
+                client_results = []
+                for client, threshold in threshold_values.items():
+                    values = calibration.filter(pl.col("client_id") == client)["score"].to_list()
+                    exceedance = sum(float(value) > threshold for value in values) / len(values) if values else None
+                    target = float(thresholds.filter(pl.col("client_id") == client)["target_quantile"][0])
+                    client_results.append(
+                        {
+                            "client_id": client,
+                            "absolute_threshold_error": abs(threshold - oracle_threshold),
+                            "relative_threshold_error": (
+                                abs(threshold - oracle_threshold) / abs(oracle_threshold) if oracle_threshold else None
+                            ),
+                            "achieved_exceedance": exceedance,
+                            "signed_attainment_error": exceedance - (1.0 - target) if exceedance is not None else None,
+                            "absolute_attainment_error": (
+                                abs(exceedance - (1.0 - target)) if exceedance is not None else None
+                            ),
+                        }
+                    )
+                policies[label] = {"per_client": client_results, **_calibration_variance_terms(calibration)}
+            seed_results.append({"seed": seed.value, "oracle_threshold": oracle_threshold, "evaluations": policies})
+        return {
+            "analysis_label": analysis.label,
+            "produced_fields": analysis.produced_fields,
+            "seed_results": seed_results,
+        }
+
+    def _analyze_resource_cost(
+        self, analysis: ResourceCostAnalysisRecord, experiment, seeds, run_id: RunId
+    ) -> dict[str, object]:
+        contract = self._config.communication_estimation_contract
+        if analysis.estimate_basis != contract.estimate_basis:
+            raise ValueError("Resource-cost analysis estimate basis disagrees with the communication contract")
+        seed_results = []
+        for seed in seeds:
+            evaluation_results = []
+            for label in analysis.source_evaluations:
+                evaluation = next(item for item in experiment.evaluations if item.label == label)
+                _, calibration = self._threshold_and_calibration_frame(experiment, seed.value, label, run_id)
+                policy = self._config.threshold_policies.get(evaluation.threshold_policy_id)
+                fields, threshold_bytes = _threshold_exchange_cost(
+                    contract, policy, calibration["client_id"].n_unique()
+                )
+                context = _score_context(
+                    StageJobContext(
+                        experiment_id=experiment.identifier,
+                        seed=seed.value,
+                        population_id=evaluation.population_id,
+                    )
+                )
+                checkpoint = self._repository.read(
+                    f"runs/{run_id.value}/{IdentityBuilder.training_job_id(context).value}"
+                )
+                if not checkpoint.found or checkpoint.payload_bytes is None:
+                    raise ValueError(f"Model checkpoint is unavailable for resource analysis seed {seed.value}")
+                parameters = sum(tensor.numel() for tensor in load_safetensors(checkpoint.payload_bytes).values())
+                model_bytes = 2 * calibration["client_id"].n_unique() * parameters * 4
+                evaluation_results.append(
+                    {
+                        "evaluation": label,
+                        "transmitted_field_list": fields,
+                        "estimated_threshold_message_bytes": threshold_bytes,
+                        "estimated_model_exchange_bytes_per_round": model_bytes,
+                        "estimated_checkpoint_storage_bytes": parameters * 4,
+                    }
+                )
+            seed_results.append({"seed": seed.value, "evaluations": evaluation_results})
+        return {
+            "analysis_label": analysis.label,
+            "estimate_basis": analysis.estimate_basis,
+            "produced_fields": analysis.produced_fields,
+            "seed_results": seed_results,
+        }
+
+    def _distribution_seed_result(
+        self, experiment, seed: int, evaluations: tuple[str, ...], run_id: RunId, client_id: str | None = None
+    ) -> dict[str, object]:
+        result: dict[str, dict[str, object]] = {}
+        for label in evaluations:
+            evaluation = next(item for item in experiment.evaluations if item.label == label)
+            context = StageJobContext(
+                experiment_id=experiment.identifier,
+                seed=seed,
+                evaluation_label=label,
+                population_id=evaluation.population_id,
+                recalibration_mode=evaluation.recalibration_mode,
+            )
+            threshold = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}")
+            metrics = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
+            scores = self._repository.read(
+                f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(_score_context(context)).value}"
+            )
+            if any(not artifact.found or artifact.payload_bytes is None for artifact in (threshold, metrics, scores)):
+                raise ValueError(f"Distribution artifacts are unavailable for seed {seed}, label '{label}'")
+            assert threshold.payload_bytes is not None
+            assert metrics.payload_bytes is not None
+            assert scores.payload_bytes is not None
+            result[label] = _client_score_distributions(
+                validate_threshold_frame(pl.read_parquet(BytesIO(threshold.payload_bytes))),
+                validate_client_metric_frame(pl.read_parquet(BytesIO(metrics.payload_bytes))),
+                validate_test_score_frame(pl.read_parquet(BytesIO(scores.payload_bytes))),
+                client_id,
+            )
+        return {"seed": seed, "evaluations": result}
+
+    def _threshold_and_calibration_frame(
+        self, experiment, seed: int, label: str, run_id: RunId
+    ) -> tuple[pl.DataFrame, pl.DataFrame]:
+        evaluation = next(item for item in experiment.evaluations if item.label == label)
+        context = StageJobContext(
+            experiment_id=experiment.identifier,
+            seed=seed,
+            evaluation_label=label,
+            population_id=evaluation.population_id,
+            recalibration_mode=evaluation.recalibration_mode,
+        )
+        threshold = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}")
+        calibration = self._repository.read(
+            f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(_score_context(context)).value}"
+        )
+        if (
+            not threshold.found
+            or threshold.payload_bytes is None
+            or not calibration.found
+            or calibration.payload_bytes is None
+        ):
+            raise ValueError(f"Quantile-estimation artifacts are unavailable for seed {seed}, label '{label}'")
+        return (
+            validate_threshold_frame(pl.read_parquet(BytesIO(threshold.payload_bytes))),
+            validate_calibration_score_frame(pl.read_parquet(BytesIO(calibration.payload_bytes))),
+        )
 
     def _analyze_cluster_stability(
         self, analysis: ClusterStabilityAnalysisRecord, experiment, seeds, run_id: RunId

@@ -7,6 +7,7 @@ from datp_core.application.stage_handlers import (
     StatisticalAnalysisStageHandler,
     _conformal_seed_coverage,
     _seed_ratio_result,
+    _threshold_tradeoff,
 )
 from datp_core.composition.root import build_application
 from datp_core.domain.catalogue import AnchorEquivalenceAnalysisRecord, RecoveryFractionAnalysisRecord
@@ -95,3 +96,12 @@ def test_conformal_coverage_uses_held_out_benign_confusion_counts_and_persisted_
     assert result["benign_total"] == 200
     assert result["client_coverages"] == [0.9, 1.0]
     assert result["finite_sample_rank"] == {"c1": 96, "c2": 96}
+
+
+def test_threshold_tradeoff_preserves_unavailable_detection_delta() -> None:
+    result = _threshold_tradeoff(
+        {"c1": {"threshold": 1.0, "false_positive_rate": 0.2, "true_positive_rate": None}},
+        {"c1": {"threshold": 1.5, "false_positive_rate": 0.1, "true_positive_rate": None}},
+    )
+
+    assert result == {"c1": {"threshold_shift": 0.5, "fpr_delta": -0.1, "tpr_delta": None}}
