@@ -6,7 +6,7 @@ from attrs import evolve
 
 from datp_core.config.resolver import ResolvedProjectConfiguration
 from datp_core.domain.identifiers import PopulationId, ThresholdPolicyId
-from datp_core.domain.thresholding import BenignCalibrationScores, ThresholdSet
+from datp_core.domain.thresholding import BenignCalibrationScores, ClusterThresholdPolicyRecord, ThresholdSet
 from datp_core.domain.values import Seed, TypedDomainRegistry
 from datp_core.infrastructure.thresholding.base import ThresholdConstructionRequest, ThresholdEstimator
 
@@ -36,6 +36,7 @@ class ConstructThresholdsUseCase:
         seed: Seed | None,
         selected_coefficient: float | None,
         quantile_override: float | None = None,
+        fingerprint_features_override: tuple[str, ...] | None = None,
     ) -> ThresholdSet:
         estimator = self._registry.get(policy_id)
         policy = self._config.threshold_policies.get(policy_id)
@@ -43,6 +44,14 @@ class ConstructThresholdsUseCase:
             if not 0.0 < quantile_override < 1.0 or not hasattr(policy, "quantile"):
                 raise ValueError("Threshold quantile override is invalid for the configured policy")
             policy = evolve(policy, quantile=quantile_override)
+        if fingerprint_features_override is not None:
+            if (
+                not isinstance(policy, ClusterThresholdPolicyRecord)
+                or not fingerprint_features_override
+                or any(feature not in policy.fingerprint_features for feature in fingerprint_features_override)
+            ):
+                raise ValueError("Fingerprint-feature override is invalid for the configured cluster policy")
+            policy = evolve(policy, fingerprint_features=fingerprint_features_override)
         return estimator.estimate(
             ThresholdConstructionRequest(
                 policy_id=policy_id,

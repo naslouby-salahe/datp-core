@@ -17,11 +17,22 @@ def calibration() -> tuple[BenignCalibrationScores, ...]:
 
 
 def _execute(
-    policy_id: ThresholdPolicyId, calibration: tuple[BenignCalibrationScores, ...], coefficient: float | None = None
+    policy_id: ThresholdPolicyId,
+    calibration: tuple[BenignCalibrationScores, ...],
+    coefficient: float | None = None,
+    fingerprint_features: tuple[str, ...] | None = None,
 ) -> ThresholdSet:
     config = build_application().config
     use_case = ConstructThresholdsUseCase(config, _build_estimator_registry(config))
-    return use_case.execute(policy_id, calibration, PopulationId("nbaiot_natural_devices"), None, None, coefficient)
+    return use_case.execute(
+        policy_id,
+        calibration,
+        PopulationId("nbaiot_natural_devices"),
+        None,
+        None,
+        coefficient,
+        fingerprint_features_override=fingerprint_features,
+    )
 
 
 def _values(result: ThresholdSet) -> list[float]:
@@ -46,6 +57,15 @@ def test_conformal_and_federated_configured_policies_produce_finite_thresholds(
     assert conformal[0] < conformal[1] < conformal[2]
     assert fixed[0] == fixed[1] == fixed[2]
     assert all(value > 0.0 for value in matched)
+
+
+def test_cluster_policy_uses_the_explicit_fingerprint_feature_subset(
+    calibration: tuple[BenignCalibrationScores, ...],
+) -> None:
+    result = _execute(ThresholdPolicyId("cluster_k3_mean_p95"), calibration, fingerprint_features=("mean_error",))
+
+    assert len(result.values) == 3
+    assert all(float(value.threshold) >= 0.0 for value in result.values)
 
 
 def test_registry_matches_complete_authored_policy_catalogue() -> None:

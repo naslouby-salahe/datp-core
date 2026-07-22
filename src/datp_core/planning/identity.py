@@ -51,6 +51,12 @@ class IdentityBuilder:
             suffixes += (f":shrinkage_{ctx.shrinkage_weight:g}",)
         if ctx.federated_summary_fixed_k is not None:
             suffixes += (f":fixed_k_{ctx.federated_summary_fixed_k:g}",)
+        if ctx.fingerprint_features is not None:
+            if not ctx.fingerprint_features or any(
+                not feature or ":" in feature for feature in ctx.fingerprint_features
+            ):
+                raise ValueError("Fingerprint-feature identity requires non-empty delimiter-free feature names")
+            suffixes += (f":features_{'+'.join(ctx.fingerprint_features)}",)
         return "".join(suffixes)
 
     @staticmethod

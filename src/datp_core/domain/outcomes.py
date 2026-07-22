@@ -53,6 +53,7 @@ class StageJobContext:
     federated_summary_fixed_k: float | None = None
     calibration_sample_count: int | None = None
     calibration_replicate: int | None = None
+    fingerprint_features: tuple[str, ...] | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

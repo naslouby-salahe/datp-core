@@ -107,6 +107,26 @@ def test_calibration_window_sweep_reuses_scores_and_expands_nested_replicates() 
     assert len({job.job_id for job in plan.jobs}) == plan.node_count
 
 
+def test_cluster_fingerprint_ablation_expands_only_threshold_and_evaluation_cells() -> None:
+    plan = build_application().plan_experiment.execute(ExperimentId("cluster_and_family_threshold_mechanism"))
+    scores = tuple(job for job in plan.jobs if job.stage is StageKind.SCORE_GENERATION)
+    ablations = tuple(
+        job
+        for job in plan.jobs
+        if job.stage is StageKind.THRESHOLD_CONSTRUCTION and job.context.fingerprint_features is not None
+    )
+
+    assert len(scores) == 20
+    assert len(ablations) == 40
+    assert {job.context.fingerprint_features for job in ablations} == {
+        ("mean_error",),
+        ("p95_error",),
+        ("mean_error", "std_error"),
+        ("mean_error", "std_error", "skew_error", "p95_error"),
+    }
+    assert len({job.job_id for job in plan.jobs}) == plan.node_count
+
+
 def test_fedprox_plan_retains_all_mu_cells_without_rematerializing() -> None:
     app = build_application()
     plan = app.plan_experiment.execute(ExperimentId("fedprox_aggregation_stress_test"))

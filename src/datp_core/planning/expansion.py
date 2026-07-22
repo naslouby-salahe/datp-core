@@ -32,6 +32,18 @@ def _evaluation_sweep_values(experiment: ExperimentRecord, overrides, name: str)
     return _sweep_values(experiment, _sweep_reference(overrides, name)) or (None,)
 
 
+def _feature_sweep_values(experiment: ExperimentRecord, overrides) -> tuple[tuple[str, ...] | None, ...]:
+    sweep_name = _sweep_reference(overrides, "fingerprint_features")
+    values = tuple(
+        value
+        for sweep in experiment.sweeps
+        if isinstance(sweep, ValueSweepRecord) and sweep.name == sweep_name
+        for value in sweep.values
+        if isinstance(value, tuple) and value and all(isinstance(feature, str) for feature in value)
+    )
+    return values or (None,)
+
+
 def expand_experiment_jobs(
     experiment: ExperimentRecord,
     config: ResolvedProjectConfiguration,
@@ -237,7 +249,10 @@ def expand_experiment_jobs(
                 quantiles = _evaluation_sweep_values(experiment, eval_spec.overrides, "quantile")
                 shrinkage_weights = _evaluation_sweep_values(experiment, eval_spec.overrides, "shrinkage_weight")
                 fixed_ks = _evaluation_sweep_values(experiment, eval_spec.overrides, "fixed_k")
-                for threshold_quantile, shrinkage_weight, fixed_k in product(quantiles, shrinkage_weights, fixed_ks):
+                fingerprint_feature_sets = _feature_sweep_values(experiment, eval_spec.overrides)
+                for threshold_quantile, shrinkage_weight, fixed_k, fingerprint_features in product(
+                    quantiles, shrinkage_weights, fixed_ks, fingerprint_feature_sets
+                ):
                     eval_ctx = StageJobContext(
                         experiment_id=experiment.identifier,
                         seed=seed_ctx.seed,
@@ -249,6 +264,7 @@ def expand_experiment_jobs(
                         threshold_quantile=threshold_quantile,
                         shrinkage_weight=shrinkage_weight,
                         federated_summary_fixed_k=fixed_k,
+                        fingerprint_features=fingerprint_features,
                         evaluation_label=eval_spec.label,
                         population_id=eval_spec.population_id,
                         threshold_policy_id=eval_spec.threshold_policy_id,

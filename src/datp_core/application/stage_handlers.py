@@ -1467,6 +1467,7 @@ class ThresholdConstructionStageHandler:
             and job.context.threshold_quantile is None
             and job.context.shrinkage_weight is None
             and job.context.federated_summary_fixed_k is None
+            and job.context.fingerprint_features is None
         ):
             return StageJobOutcome.failed(
                 job_id=job.job_id,
@@ -1510,6 +1511,7 @@ class ThresholdConstructionStageHandler:
                         else job.context.federated_summary_fixed_k
                     ),
                     job.context.threshold_quantile,
+                    job.context.fingerprint_features,
                 )
                 output = pl.DataFrame(
                     {

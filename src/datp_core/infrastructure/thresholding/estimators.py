@@ -167,6 +167,10 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
         calibration = request.calibration
         if len(calibration) < policy.cluster_count:
             raise ValueError("Cluster threshold has fewer eligible clients than configured clusters")
+        feature_names = ("mean_error", "std_error", "skew_error", "p95_error")
+        if any(feature not in feature_names for feature in policy.fingerprint_features):
+            raise ValueError("Cluster policy declares an unsupported fingerprint feature")
+        selected_feature_indexes = tuple(feature_names.index(feature) for feature in policy.fingerprint_features)
         rows = []
         for item in calibration:
             values = np.asarray(item.values, dtype=np.float64)
@@ -178,7 +182,7 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
                     local[item.client_id.value],
                 )
             )
-        features = np.asarray(rows, dtype=np.float64)
+        features = np.asarray(rows, dtype=np.float64)[:, selected_feature_indexes]
         if len(np.unique(features, axis=0)) < 2:
             raise ValueError("Cluster threshold has a degenerate fingerprint matrix")
         clustering = policy.clustering
