@@ -88,3 +88,6 @@ pythonVersion = "3.12"
 typeCheckingMode = "basic"
 venvPath = "."
 venv = ".venv"
+# Mirrors pytest's rootdir-relative "prepend" import mode (pyproject.toml [tool.pytest.ini_options]):
+# test files import same-directory helper modules directly, without package __init__.py files.
+executionEnvironments = [{ root = "tests", extraPaths = ["tests/unit/application"] }]

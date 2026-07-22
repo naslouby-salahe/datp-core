@@ -33,6 +33,10 @@ from datp_core.domain.thresholding import (
 from datp_core.domain.values import Probability
 from datp_core.infrastructure.thresholding.base import ThresholdConstructionRequest, ThresholdEstimator
 
+# protocols.yaml fingerprint_estimators.p95_error: "quantile_0_95_linear_interpolated_order_statistic" --
+# locked independently of a cluster policy's own (possibly swept) threshold-construction quantile.
+_B4_FINGERPRINT_QUANTILE = 0.95
+
 
 def _quantile(values: tuple[float, ...], quantile: float) -> float:
     array = np.asarray(values, dtype=np.float64)
@@ -186,9 +190,11 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
             rows.append(
                 (
                     float(np.mean(values)),
-                    float(np.std(values)),
+                    float(np.std(values, ddof=1)) if len(values) >= 2 else 0.0,
                     float(skew(values)) if len(values) > 2 else 0.0,
-                    local[item.client_id.value],
+                    # p95_error is locked to quantile 0.95 by fingerprint_estimators in protocols.yaml
+                    # regardless of this policy's own (possibly swept) threshold-construction quantile.
+                    _quantile(item.values, _B4_FINGERPRINT_QUANTILE),
                 )
             )
         features = np.asarray(rows, dtype=np.float64)[:, selected_feature_indexes]

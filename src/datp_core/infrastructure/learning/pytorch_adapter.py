@@ -140,14 +140,15 @@ def _score_input_frame(path: Path, *, split: str, feature_columns: tuple[str, ..
 
 def _score_output_frame(selected: pl.DataFrame, scores: np.ndarray | None) -> pl.DataFrame:
     if scores is not None:
-        selected = selected.with_columns(pl.Series("score", scores))
+        selected = selected.with_columns(pl.Series("score", scores, dtype=pl.Float64))
     scores = selected["score"].to_numpy()
     if not np.isfinite(scores).all() or (scores < 0.0).any():
         raise ValueError("Model produced non-finite or negative reconstruction scores")
     return (
         selected.select(*_SCORE_IDENTITY_COLUMNS, "score")
         .with_columns(
-            pl.col("is_attack").cast(pl.Int8).alias("label"),
+            pl.col("score").cast(pl.Float64),
+            pl.col("is_attack").cast(pl.Int64).alias("label"),
         )
         .drop("is_attack")
     )

@@ -84,6 +84,40 @@ def test_registry_matches_complete_authored_policy_catalogue() -> None:
     assert set(_build_estimator_registry(config).keys()) == set(config.threshold_policies)
 
 
+def test_cluster_p95_fingerprint_is_locked_to_0_95_regardless_of_swept_quantile() -> None:
+    """protocols.yaml locks fingerprint_estimators.p95_error to a fixed 0.95 quantile; the
+    quantile-sensitivity sweep (mandatory experiment threshold_quantile_sensitivity) overrides
+    the policy's own threshold-construction quantile, which must not leak into this fingerprint
+    dimension. Three clients below share an identical median (quantile 0.5) but have distinct
+    true p95 values, so overriding the swept quantile to 0.5 while restricting the fingerprint
+    to p95_error alone is degenerate under the bug (all three collapse to the same feature value)
+    and non-degenerate under the fix (the fixed-0.95 feature values remain distinct).
+    """
+    calibration = tuple(
+        BenignCalibrationScores(client_id=ClientId(identifier), values=values)
+        for identifier, values in (
+            ("c1", tuple([0.0] * 10 + [5.0] * 9 + [100.0])),
+            ("c2", tuple([0.0] * 10 + [5.0] * 9 + [200.0])),
+            ("c3", tuple([0.0] * 10 + [5.0] * 9 + [300.0])),
+        )
+    )
+    config = build_application().config
+    use_case = ConstructThresholdsUseCase(config, _build_estimator_registry(config))
+
+    result = use_case.execute(
+        ThresholdPolicyId("cluster_k3_mean_p95"),
+        calibration,
+        PopulationId("nbaiot_natural_devices"),
+        None,
+        None,
+        None,
+        quantile_override=0.5,
+        fingerprint_features_override=("p95_error",),
+    )
+
+    assert len({value.cluster_label for value in result.values}) > 1
+
+
 def test_federated_summary_resource_estimate_counts_every_candidate_exchange() -> None:
     config = build_application().config
     fields, payload = _threshold_exchange_cost(

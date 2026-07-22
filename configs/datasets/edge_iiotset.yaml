@@ -138,7 +138,8 @@ field_schema:
     binary_label: { column: Attack_label, values: [0, 1] }
     multiclass_label: { column: Attack_type }
     benign_value: { Attack_label: 0, Attack_type: Normal }
-    family_taxonomy: unavailable
+    # family_taxonomy omitted (defaults to None): Edge-IIoTset has no per-client attack-family
+    # taxonomy, unlike family_taxonomy: str | None's other configured datasets.
 
   endpoint_identity:
     resolution: direction_normalized_internal_endpoint

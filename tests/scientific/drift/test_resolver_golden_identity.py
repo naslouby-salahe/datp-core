@@ -25,13 +25,15 @@ def _resolved() -> ResolvedProjectConfiguration:
 
 
 def test_scientific_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
+    # Golden hash updated after removing the edge_iiotset.yaml family_taxonomy: unavailable
+    # sentinel string (a result-affecting scientific-config correction, see SCIENTIFIC_DRIFT_LEDGER.md D22).
     assert _resolved.scientific_fingerprint.value == (
-        "919462f0773e85b012e6d763d36fa947f781cbc4b9c492ccafc5832405ce0560"
+        "5622c6fb6cdd3475243016a6f051cfcc2128084f3137ecc6ed4d08749c7c5438"
     )
 
 
 def test_execution_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
-    assert _resolved.execution_fingerprint.value == ("f561885ac0e40c0ad38db6d67dfe215a35632ea29539e8bf8d0b2781fe322500")
+    assert _resolved.execution_fingerprint.value == ("3578c12a2f2f0630ef1bf57dadeda1f1aaca302ab8b8eab3ee02d8443de77383")
 
 
 def test_registry_cardinality(_resolved: ResolvedProjectConfiguration) -> None:
