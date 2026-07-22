@@ -53,12 +53,16 @@ from datp_core.infrastructure.datasets.adapter_registry import DatasetAdapterReg
 from datp_core.infrastructure.datasets.source_inventory import build_source_inventory
 from datp_core.infrastructure.datasets.split_manifest import encode_split_manifest, read_materialized_split_evidence
 from datp_core.infrastructure.learning.pytorch_adapter import (
+    DittoTrainingResult,
     DynamicDenseAutoencoder,
+    FederatedTrainingResult,
     derive_model_initialization_seed,
+    ditto_train_autoencoder,
     federated_train_autoencoder,
     load_benign_client_tensors,
     require_cuda_training_device,
     score_materialized_split,
+    score_personalized_materialized_split,
     set_deterministic_seeds,
 )
 from datp_core.infrastructure.tables.polars_engine import compute_operating_point_metrics
@@ -82,6 +86,7 @@ class StageHandler(Protocol):
 @dataclass(frozen=True, slots=True)
 class _TrainingCheckpointSelection:
     round_losses: tuple[tuple[int, float], ...]
+    personalized_round_losses: tuple[tuple[int, float], ...] | None
 
 
 def _commit_artifact(
@@ -462,14 +467,28 @@ class ModelTrainingStageHandler:
                 job_id=job.job_id, stage=job.stage, error_message="Training requires a seed and local epochs"
             )
         proximal_mu = job.context.federated_proximal_mu
+        ditto_weight = job.context.ditto_proximal_weight
+        is_ditto = profile.personalization == "ditto"
         if profile.kind == "federated_prox_training":
-            if proximal_mu is None or proximal_mu <= 0.0:
+            if proximal_mu is None or proximal_mu <= 0.0 or ditto_weight is not None:
                 return StageJobOutcome.failed(
                     job_id=job.job_id,
                     stage=job.stage,
                     error_message="FedProx training requires a positive sweep-resolved mu",
                 )
-        elif proximal_mu is not None:
+        elif is_ditto:
+            if (
+                proximal_mu is not None
+                or ditto_weight is None
+                or ditto_weight <= 0.0
+                or profile.personalized_local_epochs is None
+            ):
+                return StageJobOutcome.failed(
+                    job_id=job.job_id,
+                    stage=job.stage,
+                    error_message="Ditto training requires a positive sweep-resolved personalization weight",
+                )
+        elif proximal_mu is not None or ditto_weight is not None:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="FedAvg training must not carry a FedProx coefficient"
             )
@@ -487,6 +506,8 @@ class ModelTrainingStageHandler:
             )
         relative_path = f"runs/{run_id.value}/{job.job_id.value}"
         selection_relative_path = f"{relative_path}.selection"
+        personalized_relative_path = f"{relative_path}.personalized"
+        personalized_key = IdentityBuilder.personalized_checkpoint_key(job.context)
         selection_key = ArtifactKey(
             artifact_id=ArtifactId(f"{job.output.artifact_id.value}:selection"), kind=ArtifactKind.CHECKPOINT_SELECTION
         )
@@ -501,6 +522,15 @@ class ModelTrainingStageHandler:
                 self._config.scientific_fingerprint,
                 self._config.execution_fingerprint,
             ).can_reuse
+            and (
+                not is_ditto
+                or self._repository.assess_reuse(
+                    personalized_relative_path,
+                    personalized_key,
+                    self._config.scientific_fingerprint,
+                    self._config.execution_fingerprint,
+                ).can_reuse
+            )
         ):
             return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
         materialization_path = f"runs/{run_id.value}/{IdentityBuilder.materialization_job_id(job.context).value}"
@@ -529,51 +559,79 @@ class ModelTrainingStageHandler:
                     training_seed=job.context.seed,
                 )
                 set_deterministic_seeds(initialization_seed)
-                result = federated_train_autoencoder(
-                    DynamicDenseAutoencoder(
-                        len(features.order), tuple(int(value.value) for value in architecture.hidden_dims)
-                    ),
-                    training_clients,
-                    calibration_clients,
-                    rounds=int(checkpoint_profile.total_rounds.value),
-                    local_epochs=int(profile.local_epochs.value),
-                    learning_rate=float(optimizer.learning_rate.value),
-                    batch_size=int(batching.micro_batch_size.value),
-                    seed=job.context.seed,
-                    device=require_cuda_training_device(),
-                    beta_1=optimizer.beta_1,
-                    beta_2=optimizer.beta_2,
-                    epsilon=float(optimizer.epsilon.value),
-                    weight_decay=float(optimizer.weight_decay.value),
-                    amsgrad=optimizer.amsgrad,
-                    shuffle_each_epoch=batching.shuffle_each_epoch,
-                    checkpoint_rounds=tuple(int(value.value) for value in checkpoint_profile.selected_rounds),
-                    shuffle_seed_key=shuffle_namespace.key,
-                    shuffle_seed_digest_bytes=digest_bytes,
-                    proximal_mu=proximal_mu,
+                model = DynamicDenseAutoencoder(
+                    len(features.order), tuple(int(value.value) for value in architecture.hidden_dims)
+                )
+                training_kwargs = {
+                    "rounds": int(checkpoint_profile.total_rounds.value),
+                    "local_epochs": int(profile.local_epochs.value),
+                    "learning_rate": float(optimizer.learning_rate.value),
+                    "batch_size": int(batching.micro_batch_size.value),
+                    "seed": job.context.seed,
+                    "device": require_cuda_training_device(),
+                    "beta_1": optimizer.beta_1,
+                    "beta_2": optimizer.beta_2,
+                    "epsilon": float(optimizer.epsilon.value),
+                    "weight_decay": float(optimizer.weight_decay.value),
+                    "amsgrad": optimizer.amsgrad,
+                    "shuffle_each_epoch": batching.shuffle_each_epoch,
+                    "checkpoint_rounds": tuple(int(value.value) for value in checkpoint_profile.selected_rounds),
+                    "shuffle_seed_key": shuffle_namespace.key,
+                    "shuffle_seed_digest_bytes": digest_bytes,
+                }
+                result = (
+                    ditto_train_autoencoder(
+                        model,
+                        training_clients,
+                        calibration_clients,
+                        personalized_local_epochs=int(cast(PositiveInt, profile.personalized_local_epochs).value),
+                        proximal_weight=cast(float, ditto_weight),
+                        **training_kwargs,
+                    )
+                    if is_ditto
+                    else federated_train_autoencoder(
+                        model, training_clients, calibration_clients, proximal_mu=proximal_mu, **training_kwargs
+                    )
                 )
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+        if is_ditto:
+            ditto_result = cast(DittoTrainingResult, result)
+            round_losses = ditto_result.global_round_losses
+            personalized_round_losses = ditto_result.personalized_round_losses
+            scheduled_rounds = tuple(checkpoint.round_number for checkpoint in ditto_result.scheduled_checkpoints)
+            derived_shuffle_seeds = ditto_result.derived_shuffle_seeds
+            checkpoint_grid = {
+                f"round_{checkpoint.round_number}.{name}": tensor
+                for checkpoint in ditto_result.scheduled_checkpoints
+                for name, tensor in checkpoint.global_state
+            }
+        else:
+            federated_result = cast(FederatedTrainingResult, result)
+            round_losses = federated_result.round_losses
+            personalized_round_losses = None
+            scheduled_rounds = tuple(checkpoint.round_number for checkpoint in federated_result.scheduled_checkpoints)
+            derived_shuffle_seeds = federated_result.derived_shuffle_seeds
+            checkpoint_grid = {
+                f"round_{checkpoint.round_number}.{name}": tensor
+                for checkpoint in federated_result.scheduled_checkpoints
+                for name, tensor in checkpoint.state
+            }
         if checkpoint_profile.convergence is not None:
             selected_round = select_anchor_checkpoint_round(
                 convergence=checkpoint_profile.convergence,
-                recorded_losses=result.round_losses,
+                recorded_losses=round_losses,
                 round_cap=int(checkpoint_profile.total_rounds.value),
             )
         else:
             selected_round = select_lowest_validation_loss_checkpoint(
                 scheduled_rounds=tuple(int(value.value) for value in checkpoint_profile.selected_rounds),
-                recorded_losses=result.round_losses,
+                recorded_losses=round_losses,
             )
-        if selected_round not in {checkpoint.round_number for checkpoint in result.scheduled_checkpoints}:
+        if selected_round not in scheduled_rounds:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Selected checkpoint state was not captured"
             )
-        checkpoint_grid = {
-            f"round_{checkpoint.round_number}.{name}": tensor
-            for checkpoint in result.scheduled_checkpoints
-            for name, tensor in checkpoint.state
-        }
         commit = _commit_artifact(
             self._repository,
             self._config,
@@ -588,16 +646,41 @@ class ModelTrainingStageHandler:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message=commit.error_message or "checkpoint commit failed"
             )
+        if is_ditto:
+            ditto_result = cast(DittoTrainingResult, result)
+            personalized_grid = {
+                f"round_{checkpoint.round_number}.client_{client_id}.{name}": tensor
+                for checkpoint in ditto_result.scheduled_checkpoints
+                for client_id, state in checkpoint.personalized_states
+                for name, tensor in state
+            }
+            personalized_commit = _commit_artifact(
+                self._repository,
+                self._config,
+                job.context,
+                artifact_key=personalized_key,
+                artifact_format=ArtifactFormat.SAFETENSORS,
+                relative_path=personalized_relative_path,
+                parents=_parents(self._config, job.inputs),
+                payload=BytesPayload(payload_bytes=save_safetensors(personalized_grid)),
+            )
+            if not personalized_commit.success:
+                return StageJobOutcome.failed(
+                    job_id=job.job_id,
+                    stage=job.stage,
+                    error_message=personalized_commit.error_message or "personalized checkpoint commit failed",
+                )
         selection_payload = json.dumps(
             {
                 "schema_version": 1,
                 "selected_round": selected_round,
-                "checkpoint_rounds": [checkpoint.round_number for checkpoint in result.scheduled_checkpoints],
-                "round_losses": result.round_losses,
+                "checkpoint_rounds": scheduled_rounds,
+                "round_losses": round_losses,
+                "personalized_round_losses": personalized_round_losses,
+                "ditto_proximal_weight": ditto_weight,
                 "model_initialization_seed": initialization_seed,
                 "dataloader_shuffle_seeds": [
-                    [seed.round_number, seed.client_id, seed.local_epoch, seed.value]
-                    for seed in result.derived_shuffle_seeds
+                    [seed.round_number, seed.client_id, seed.local_epoch, seed.value] for seed in derived_shuffle_seeds
                 ],
             },
             separators=(",", ":"),
@@ -635,6 +718,8 @@ class CohortCheckpointSelectionStageHandler:
         profile = self._config.training_profiles.get(experiment.training_profile_id)
         if profile.kind == "federated_prox_training":
             return self._execute_federated_proximal(job, run_id)
+        if profile.personalization == "ditto":
+            return self._execute_ditto(job, run_id)
         if (
             profile.checkpoint_authorization != "primary_selection_computed_once_on_natural_device_regime"
             or experiment != self._config.primary_federated_checkpoint_experiment()
@@ -780,6 +865,119 @@ class CohortCheckpointSelectionStageHandler:
             )
         return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
 
+    def _execute_ditto(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
+        experiment = self._config.experiments.get(job.context.experiment_id)
+        profile = self._config.training_profiles.get(experiment.training_profile_id)
+        cohort = self._config.seed_cohorts.get(experiment.seed_cohort_id)
+        if (
+            experiment != self._config.primary_ditto_selection_experiment()
+            or profile.personalization_parameter_grid is None
+            or job.context.seed is not None
+        ):
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="Ditto weight selection is only valid for the configured natural-device grid",
+            )
+        contexts = tuple(
+            StageJobContext(
+                experiment_id=experiment.identifier,
+                seed=int(seed.value),
+                ditto_proximal_weight=weight,
+            )
+            for seed in cohort.training_seeds
+            for weight in profile.personalization_parameter_grid
+        )
+        if job.dependencies != tuple(IdentityBuilder.training_job_id(context) for context in contexts):
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="Ditto weight selection does not depend on the exact configured training grid",
+            )
+        relative_path = f"runs/{run_id.value}/{job.job_id.value}"
+        if self._repository.assess_reuse(
+            relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
+        ).can_reuse:
+            return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        try:
+            primary_round, primary_key = self._primary_round()
+            means = tuple(
+                (
+                    weight,
+                    self._mean_ditto_personalized_loss(
+                        run_id, experiment.identifier, cohort.training_seeds, weight, primary_round
+                    ),
+                )
+                for weight in profile.personalization_parameter_grid
+            )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+        selection_keys = tuple(self._training_selection_key(context) for context in contexts)
+        payload = json.dumps(
+            {
+                "schema_version": 1,
+                "selected_ditto_proximal_weight": min(means, key=lambda item: (item[1], item[0]))[0],
+                "locked_primary_round": primary_round,
+                "mean_benign_calibration_loss_by_weight": means,
+                "selector": (
+                    "lowest_natural_device_regime_benign_validation_reconstruction_error_at_locked_global_checkpoint"
+                ),
+            },
+            separators=(",", ":"),
+            sort_keys=True,
+        ).encode("utf-8")
+        commit = _commit_artifact(
+            self._repository,
+            self._config,
+            job.context,
+            artifact_key=job.output,
+            artifact_format=ArtifactFormat.JSON,
+            relative_path=relative_path,
+            parents=_parents(self._config, (*job.inputs, *selection_keys, primary_key)),
+            payload=BytesPayload(payload_bytes=payload),
+        )
+        if not commit.success:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message=commit.error_message or "Ditto weight selection commit failed",
+            )
+        return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+
+    def _mean_ditto_personalized_loss(
+        self, run_id: RunId, experiment_id, seeds, weight: float, selected_round: int
+    ) -> float:
+        losses = tuple(
+            self._personalized_loss_at_round(
+                self._read_training_selection(
+                    run_id,
+                    IdentityBuilder.training_job_id(
+                        StageJobContext(
+                            experiment_id=experiment_id,
+                            seed=int(seed.value),
+                            ditto_proximal_weight=weight,
+                        )
+                    ),
+                    self._training_selection_key(
+                        StageJobContext(
+                            experiment_id=experiment_id,
+                            seed=int(seed.value),
+                            ditto_proximal_weight=weight,
+                        )
+                    ),
+                ),
+                selected_round,
+            )
+            for seed in seeds
+        )
+        return sum(losses) / len(losses)
+
+    @staticmethod
+    def _personalized_loss_at_round(selection: _TrainingCheckpointSelection, selected_round: int) -> float:
+        if selection.personalized_round_losses is None:
+            raise ValueError("Ditto training selection evidence lacks personalized calibration losses")
+        return dict(selection.personalized_round_losses)[selected_round]
+
     def _mean_federated_proximal_loss(
         self, run_id: RunId, experiment_id, seeds, proximal_mu: float, selected_round: int
     ) -> float:
@@ -831,8 +1029,19 @@ class CohortCheckpointSelectionStageHandler:
         parsed = json.loads(selection.payload_bytes)
         if not isinstance(parsed, dict) or not isinstance(parsed.get("round_losses"), list):
             raise ValueError(f"Training checkpoint-selection evidence is malformed for '{dependency.value}'")
+        return _TrainingCheckpointSelection(
+            round_losses=self._losses_from_payload(parsed["round_losses"], dependency),
+            personalized_round_losses=(
+                self._losses_from_payload(parsed["personalized_round_losses"], dependency)
+                if isinstance(parsed.get("personalized_round_losses"), list)
+                else None
+            ),
+        )
+
+    @staticmethod
+    def _losses_from_payload(items: list[object], dependency) -> tuple[tuple[int, float], ...]:
         round_losses: list[tuple[int, float]] = []
-        for item in parsed["round_losses"]:
+        for item in items:
             if (
                 not isinstance(item, list)
                 or len(item) != 2
@@ -841,7 +1050,7 @@ class CohortCheckpointSelectionStageHandler:
             ):
                 raise ValueError(f"Training checkpoint-selection evidence is malformed for '{dependency.value}'")
             round_losses.append((item[0], float(item[1])))
-        return _TrainingCheckpointSelection(round_losses=tuple(round_losses))
+        return tuple(round_losses)
 
     def _primary_round(self) -> tuple[int, ArtifactKey]:
         source = self._config.primary_federated_checkpoint_experiment()
@@ -909,6 +1118,9 @@ class ScoreGenerationStageHandler:
                 job_id=job.job_id, stage=job.stage, error_message="Selected-checkpoint evidence is unreadable"
             )
         checkpoint = self._repository.read(training_path)
+        personalized_key = IdentityBuilder.personalized_checkpoint_key(job.context)
+        personalized_path = f"{training_path}.personalized"
+        personalized = self._repository.read(personalized_path) if profile.personalization == "ditto" else None
         materialization = self._repository.read(
             f"runs/{run_id.value}/{IdentityBuilder.materialization_job_id(job.context).value}"
         )
@@ -919,6 +1131,22 @@ class ScoreGenerationStageHandler:
         if not materialization.found or materialization.payload_bytes is None:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Materialization artifact is unavailable"
+            )
+        if profile.personalization == "ditto" and (
+            not self._repository.assess_reuse(
+                personalized_path,
+                personalized_key,
+                self._config.scientific_fingerprint,
+                self._config.execution_fingerprint,
+            ).can_reuse
+            or personalized is None
+            or not personalized.found
+            or personalized.payload_bytes is None
+        ):
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="Personalized checkpoint is unavailable or incompatible",
             )
         population = self._config.populations.get(experiment.population_ids[0])
         dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
@@ -935,27 +1163,50 @@ class ScoreGenerationStageHandler:
             with TemporaryDirectory(prefix="datp_scoring_") as temporary_directory:
                 materialized_path = Path(temporary_directory) / "materialized.parquet"
                 materialized_path.write_bytes(materialization.payload_bytes)
-                model = DynamicDenseAutoencoder(
-                    len(features.order), tuple(int(value.value) for value in architecture.hidden_dims)
-                )
                 selected_round = json.loads(selection.payload_bytes)["selected_round"]
-                all_states = load_safetensors(checkpoint.payload_bytes)
-                prefix = f"round_{selected_round}."
-                state = {
-                    name.removeprefix(prefix): tensor for name, tensor in all_states.items() if name.startswith(prefix)
-                }
-                if not state:
-                    raise ValueError("Selected checkpoint is absent from the persisted checkpoint grid")
-                model.load_state_dict(state)
-                scores = score_materialized_split(
-                    model,
-                    materialized_path,
-                    split=split,
-                    feature_columns=features.order,
-                    batch_size=int(batching.micro_batch_size.value),
-                    device=require_cuda_training_device(),
-                ).with_columns(
-                    pl.lit(job.inputs[0].artifact_id.value).alias("checkpoint_artifact_id"),
+                if profile.personalization == "ditto":
+                    assert personalized is not None and personalized.payload_bytes is not None
+                    all_states = load_safetensors(personalized.payload_bytes)
+                    models = {
+                        client_id: _load_checkpoint_model(
+                            all_states,
+                            f"round_{selected_round}.client_{client_id}.",
+                            len(features.order),
+                            tuple(int(value.value) for value in architecture.hidden_dims),
+                        )
+                        for client_id in pl.read_parquet(materialized_path, columns=["client_id"])["client_id"]
+                        .unique()
+                        .sort()
+                    }
+                    scores = score_personalized_materialized_split(
+                        models,
+                        materialized_path,
+                        split=split,
+                        feature_columns=features.order,
+                        batch_size=int(batching.micro_batch_size.value),
+                        device=require_cuda_training_device(),
+                    )
+                else:
+                    model = _load_checkpoint_model(
+                        load_safetensors(checkpoint.payload_bytes),
+                        f"round_{selected_round}.",
+                        len(features.order),
+                        tuple(int(value.value) for value in architecture.hidden_dims),
+                    )
+                    scores = score_materialized_split(
+                        model,
+                        materialized_path,
+                        split=split,
+                        feature_columns=features.order,
+                        batch_size=int(batching.micro_batch_size.value),
+                        device=require_cuda_training_device(),
+                    )
+                scores = scores.with_columns(
+                    pl.lit(
+                        personalized_key.artifact_id.value
+                        if profile.personalization == "ditto"
+                        else job.inputs[0].artifact_id.value
+                    ).alias("checkpoint_artifact_id"),
                     pl.lit(job.context.seed).alias("seed"),
                     pl.lit("higher_score_means_more_anomalous").alias("score_orientation"),
                 )
@@ -973,7 +1224,10 @@ class ScoreGenerationStageHandler:
             artifact_key=job.output,
             artifact_format=ArtifactFormat.PARQUET,
             relative_path=relative_path,
-            parents=_parents(self._config, (*job.inputs, selection_key)),
+            parents=_parents(
+                self._config,
+                (*job.inputs, selection_key, *((personalized_key,) if profile.personalization == "ditto" else ())),
+            ),
             payload=BytesPayload(payload_bytes=payload.getvalue()),
         )
         if not commit.success:
@@ -1009,6 +1263,17 @@ def _score_split(kind: ArtifactKind) -> str | None:
         return "calibration"
     if kind is ArtifactKind.TEST_SCORES:
         return "test"
+
+
+def _load_checkpoint_model(
+    states: Mapping[str, object], prefix: str, input_dimension: int, hidden_dims: tuple[int, ...]
+) -> DynamicDenseAutoencoder:
+    state = {name.removeprefix(prefix): tensor for name, tensor in states.items() if name.startswith(prefix)}
+    if not state:
+        raise ValueError("Selected checkpoint is absent from the persisted checkpoint grid")
+    model = DynamicDenseAutoencoder(input_dimension, hidden_dims)
+    model.load_state_dict(state)
+    return model
     return None
 
 
@@ -1220,19 +1485,37 @@ class StatisticalAnalysisStageHandler:
             for value in sweep.values
             if isinstance(value, float)
         ) or (None,)
+        training_profile = self._config.training_profiles.get(experiment.training_profile_id)
+        ditto_weights = (
+            training_profile.personalization_parameter_grid or (None,)
+            if training_profile.personalization == "ditto"
+            else (None,)
+        )
         try:
             paired_results = [
-                self._analyze_paired(analysis, experiment, cohort.training_seeds, run_id, condition, proximal_mu)
+                self._analyze_paired(
+                    analysis,
+                    experiment,
+                    cohort.training_seeds,
+                    run_id,
+                    condition,
+                    proximal_mu,
+                    ditto_weight,
+                )
                 for condition in conditions
                 for proximal_mu in mus
+                for ditto_weight in ditto_weights
                 for analysis in paired_analyses
             ]
             results = paired_results + [
                 self._analyze_association(analysis, paired_results, experiment, cohort.training_seeds, run_id)
                 for analysis in association_analyses
             ]
-            if self._config.training_profiles.get(experiment.training_profile_id).kind == "federated_prox_training":
+            training_profile = self._config.training_profiles.get(experiment.training_profile_id)
+            if training_profile.kind == "federated_prox_training":
                 results.append(self._federated_proximal_selection(experiment.identifier, run_id))
+            if training_profile.personalization == "ditto":
+                results.append(self._ditto_selection(experiment.identifier, run_id))
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
         payload = json.dumps(results, separators=(",", ":"), sort_keys=True).encode("utf-8")
@@ -1262,6 +1545,7 @@ class StatisticalAnalysisStageHandler:
         run_id: RunId,
         partition_condition: str | None,
         proximal_mu: float | None,
+        ditto_weight: float | None,
     ) -> dict[str, object]:
         left = tuple(
             self._evaluation_metric(
@@ -1272,6 +1556,7 @@ class StatisticalAnalysisStageHandler:
                 run_id,
                 partition_condition,
                 proximal_mu,
+                ditto_weight,
             )
             for seed in seeds
         )
@@ -1284,6 +1569,7 @@ class StatisticalAnalysisStageHandler:
                 run_id,
                 partition_condition,
                 proximal_mu,
+                ditto_weight,
             )
             for seed in seeds
         )
@@ -1310,6 +1596,8 @@ class StatisticalAnalysisStageHandler:
             result["partition_condition"] = partition_condition
         if proximal_mu is not None:
             result["federated_proximal_mu"] = proximal_mu
+        if ditto_weight is not None:
+            result["ditto_proximal_weight"] = ditto_weight
         result["seed_differences"] = [first - second for first, second in zip(left, right, strict=True)]
         return result
 
@@ -1335,6 +1623,37 @@ class StatisticalAnalysisStageHandler:
             "selected_proximal_mu": float(payload["selected_proximal_mu"]),
             "locked_primary_round": payload.get("locked_primary_round"),
             "mean_benign_calibration_loss_by_mu": payload.get("mean_benign_calibration_loss_by_mu"),
+        }
+
+    def _ditto_selection(self, experiment_id, run_id: RunId) -> dict[str, object]:
+        source = self._config.primary_ditto_selection_experiment()
+        context = StageJobContext(experiment_id=source.identifier)
+        source_run_id = (
+            run_id
+            if experiment_id == source.identifier
+            else execution_run_id(source.identifier, self._config.execution_fingerprint.value)
+        )
+        relative_path = f"runs/{source_run_id.value}/{IdentityBuilder.ditto_selection_job_id(context).value}"
+        key = IdentityBuilder.ditto_selection_key(context)
+        if not self._repository.assess_reuse(
+            relative_path,
+            key,
+            self._config.scientific_fingerprint,
+            self._config.execution_fingerprint,
+        ).can_reuse:
+            raise ValueError("Ditto weight-selection artifact is unavailable or incompatible")
+        artifact = self._repository.read(relative_path)
+        if not artifact.found or artifact.payload_bytes is None:
+            raise ValueError("Ditto weight-selection artifact is unreadable")
+        payload = json.loads(artifact.payload_bytes)
+        selected_weight = payload.get("selected_ditto_proximal_weight") if isinstance(payload, dict) else None
+        if not isinstance(selected_weight, (int, float)):
+            raise ValueError("Ditto weight-selection artifact is malformed")
+        return {
+            "analysis_label": "ditto_primary_proximal_weight_selection",
+            "selected_ditto_proximal_weight": float(selected_weight),
+            "locked_primary_round": payload.get("locked_primary_round"),
+            "mean_benign_calibration_loss_by_weight": payload.get("mean_benign_calibration_loss_by_weight"),
         }
 
     def _analyze_association(
@@ -1416,6 +1735,7 @@ class StatisticalAnalysisStageHandler:
         run_id: RunId,
         partition_condition: str | None,
         proximal_mu: float | None,
+        ditto_weight: float | None,
     ) -> float:
         if metric != "cv_fpr":
             raise ValueError(f"Statistical execution does not support configured metric '{metric}'")
@@ -1424,6 +1744,7 @@ class StatisticalAnalysisStageHandler:
             seed=seed,
             partition_condition=partition_condition,
             federated_proximal_mu=proximal_mu,
+            ditto_proximal_weight=ditto_weight,
             evaluation_label=label,
         )
         artifact = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")

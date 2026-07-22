@@ -40,7 +40,12 @@ class IdentityBuilder:
 
     @staticmethod
     def _training_suffix(ctx: StageJobContext) -> str:
-        return "" if ctx.federated_proximal_mu is None else f":mu_{ctx.federated_proximal_mu:g}"
+        suffixes = ()
+        if ctx.federated_proximal_mu is not None:
+            suffixes += (f":mu_{ctx.federated_proximal_mu:g}",)
+        if ctx.ditto_proximal_weight is not None:
+            suffixes += (f":lambda_{ctx.ditto_proximal_weight:g}",)
+        return "".join(suffixes)
 
     @staticmethod
     def preflight_job_id(ctx: StageJobContext) -> JobId:
@@ -99,6 +104,10 @@ class IdentityBuilder:
         return JobId(f"{ctx.experiment_id.value}:federated_proximal_coefficient_selection")
 
     @staticmethod
+    def ditto_selection_job_id(ctx: StageJobContext) -> JobId:
+        return JobId(f"{ctx.experiment_id.value}:ditto_proximal_weight_selection")
+
+    @staticmethod
     def report_job_id(ctx: StageJobContext) -> JobId:
         return JobId(f"{ctx.experiment_id.value}:report_generation")
 
@@ -116,6 +125,13 @@ class IdentityBuilder:
     def checkpoint_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(
             f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._training_suffix(ctx)}:checkpoint"
+        )
+
+    @staticmethod
+    def personalized_checkpoint_artifact_id(ctx: StageJobContext) -> ArtifactId:
+        return ArtifactId(
+            f"{ctx.experiment_id.value}:seed_{IdentityBuilder._seed_str(ctx.seed)}"
+            f"{IdentityBuilder._condition_suffix(ctx)}{IdentityBuilder._training_suffix(ctx)}:personalized_checkpoint"
         )
 
     @staticmethod
@@ -159,6 +175,10 @@ class IdentityBuilder:
         return ArtifactId(f"{ctx.experiment_id.value}:federated_proximal_coefficient_selection")
 
     @staticmethod
+    def ditto_selection_artifact_id(ctx: StageJobContext) -> ArtifactId:
+        return ArtifactId(f"{ctx.experiment_id.value}:ditto_proximal_weight_selection")
+
+    @staticmethod
     def final_report_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(f"{ctx.experiment_id.value}:final_report")
 
@@ -181,6 +201,13 @@ class IdentityBuilder:
         return ArtifactKey(
             artifact_id=IdentityBuilder.checkpoint_artifact_id(ctx),
             kind=ArtifactKind.MODEL_CHECKPOINT,
+        )
+
+    @staticmethod
+    def personalized_checkpoint_key(ctx: StageJobContext) -> ArtifactKey:
+        return ArtifactKey(
+            artifact_id=IdentityBuilder.personalized_checkpoint_artifact_id(ctx),
+            kind=ArtifactKind.PERSONALIZED_MODEL_CHECKPOINT,
         )
 
     @staticmethod
@@ -229,6 +256,13 @@ class IdentityBuilder:
     def federated_proximal_selection_key(ctx: StageJobContext) -> ArtifactKey:
         return ArtifactKey(
             artifact_id=IdentityBuilder.federated_proximal_selection_artifact_id(ctx),
+            kind=ArtifactKind.CHECKPOINT_SELECTION,
+        )
+
+    @staticmethod
+    def ditto_selection_key(ctx: StageJobContext) -> ArtifactKey:
+        return ArtifactKey(
+            artifact_id=IdentityBuilder.ditto_selection_artifact_id(ctx),
             kind=ArtifactKind.CHECKPOINT_SELECTION,
         )
 
@@ -283,6 +317,17 @@ class IdentityBuilder:
         return (
             IdentityBuilder.federated_proximal_selection_job_id(ctx),
             IdentityBuilder.federated_proximal_selection_key(ctx),
+            train_outputs,
+            train_job_ids,
+        )
+
+    @staticmethod
+    def ditto_selection_job(
+        ctx: StageJobContext, train_outputs: tuple[ArtifactKey, ...], train_job_ids: tuple[JobId, ...]
+    ) -> tuple[JobId, ArtifactKey, tuple[ArtifactKey, ...], tuple[JobId, ...]]:
+        return (
+            IdentityBuilder.ditto_selection_job_id(ctx),
+            IdentityBuilder.ditto_selection_key(ctx),
             train_outputs,
             train_job_ids,
         )

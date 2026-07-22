@@ -26,12 +26,12 @@ def _resolved() -> ResolvedProjectConfiguration:
 
 def test_scientific_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
     assert _resolved.scientific_fingerprint.value == (
-        "545cfc77f8480f22f4fdeaa5286c5df63316375bdf8d150ac106acd9149e1f24"
+        "919462f0773e85b012e6d763d36fa947f781cbc4b9c492ccafc5832405ce0560"
     )
 
 
 def test_execution_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
-    assert _resolved.execution_fingerprint.value == ("a3ef6fb394907902aa4fa3d068ae8b0ebab95465e432d69a161539eb767793e7")
+    assert _resolved.execution_fingerprint.value == ("f561885ac0e40c0ad38db6d67dfe215a35632ea29539e8bf8d0b2781fe322500")
 
 
 def test_registry_cardinality(_resolved: ResolvedProjectConfiguration) -> None:

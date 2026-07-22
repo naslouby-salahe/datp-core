@@ -1,11 +1,14 @@
 """FedProx uses the locked proximal objective, not a renamed FedAvg loop."""
 
+from copy import deepcopy
+
 import pytest
 import torch
 
 from datp_core.infrastructure.learning.pytorch_adapter import (
     DynamicDenseAutoencoder,
     derive_model_initialization_seed,
+    ditto_train_autoencoder,
     federated_train_autoencoder,
     fedprox_objective,
     require_cuda_training_device,
@@ -99,6 +102,51 @@ def test_federated_training_records_weighted_benign_calibration_loss() -> None:
         ) / sum(tensor.shape[0] for _, tensor in calibration)
 
     assert result.round_losses == ((1, pytest.approx(expected)),)
+
+
+def test_ditto_keeps_persistent_personalized_states_out_of_fedavg_aggregation() -> None:
+    clients = (("a", torch.tensor([[1.0], [2.0]])), ("b", torch.tensor([[5.0], [6.0]])))
+    calibration = (("a", torch.tensor([[1.5]])), ("b", torch.tensor([[5.5]])))
+    kwargs = {
+        "rounds": 2,
+        "local_epochs": 1,
+        "learning_rate": 0.01,
+        "batch_size": 2,
+        "seed": 7,
+        "device": "cpu",
+        "beta_1": 0.9,
+        "beta_2": 0.999,
+        "epsilon": 1.0e-8,
+        "weight_decay": 0.0,
+        "amsgrad": False,
+        "shuffle_each_epoch": False,
+        "checkpoint_rounds": (1, 2),
+        "shuffle_seed_key": "datp_core.dataloader_shuffle",
+        "shuffle_seed_digest_bytes": 8,
+    }
+    torch.manual_seed(11)
+    initial = DynamicDenseAutoencoder(1, (1,))
+    fedavg = federated_train_autoencoder(deepcopy(initial), clients, calibration, **kwargs)
+    ditto = ditto_train_autoencoder(
+        deepcopy(initial),
+        clients,
+        calibration,
+        personalized_local_epochs=1,
+        proximal_weight=0.1,
+        **kwargs,
+    )
+
+    assert fedavg.model.state_dict().keys() == ditto.global_model.state_dict().keys()
+    for name, parameter in fedavg.model.state_dict().items():
+        assert torch.equal(parameter, ditto.global_model.state_dict()[name])
+    assert tuple(client_id for client_id, _ in ditto.personalized_models) == ("a", "b")
+    assert [checkpoint.round_number for checkpoint in ditto.scheduled_checkpoints] == [1, 2]
+    first_personalized = dict(ditto.scheduled_checkpoints[0].personalized_states)
+    second_personalized = dict(ditto.scheduled_checkpoints[1].personalized_states)
+    assert any(
+        not torch.equal(first_personalized["a"][index][1], second_personalized["a"][index][1])
+        for index in range(len(first_personalized["a"]))
+    )
 
 
 def test_seed_derivation_is_stable_and_cuda_never_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:

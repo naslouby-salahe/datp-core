@@ -46,6 +46,7 @@ class StageJobContext:
     materialization_id: str | None = None
     partition_condition: str | None = None
     federated_proximal_mu: float | None = None
+    ditto_proximal_weight: float | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

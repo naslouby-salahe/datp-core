@@ -79,6 +79,10 @@ class ProjectConfigurationValidator:
             config.primary_federated_checkpoint_experiment()
         except ValueError as exc:
             errors.append(str(exc))
+        try:
+            config.primary_ditto_selection_experiment()
+        except ValueError as exc:
+            errors.append(str(exc))
         if "partition" not in config.protocol_determinism.seed_namespaces:
             errors.append("Protocol determinism lacks the required partition seed namespace")
         for exp_id, exp_rec in config.experiments.items():
@@ -113,6 +117,18 @@ class ProjectConfigurationValidator:
                     errors.append(f"Experiment '{exp_id}' references unregistered report profile '{report_id}'")
 
             profile = config.training_profiles.get(exp_rec.training_profile_id)
+            if profile.personalization == "ditto" and (
+                profile.kind != "federated_averaging_training"
+                or profile.personalized_local_epochs is None
+                or profile.personalization_parameter_grid is None
+                or not profile.personalization_parameter_grid
+                or any(weight <= 0.0 for weight in profile.personalization_parameter_grid)
+                or profile.checkpoint_authorization != "lookup_of_federated_averaging_primary_selection"
+            ):
+                errors.append(
+                    f"Ditto experiment '{exp_id}' requires positive configured personalization epochs and grid "
+                    "with locked FedAvg checkpoint lookup"
+                )
             if profile.kind == "federated_prox_training":
                 configured_grid = profile.mu_grid
                 override = exp_rec.training_overrides.get("mu") if exp_rec.training_overrides is not None else None

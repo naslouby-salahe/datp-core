@@ -26,6 +26,8 @@ from datp_core.infrastructure.artifacts.model_store import (
     save_model_safetensors as _save_state_dict_safetensors,
 )
 
+_SCORE_IDENTITY_COLUMNS = ("source_path", "source_row_index", "client_id", "split", "is_attack")
+
 
 def set_deterministic_seeds(seed: int) -> None:
     """Set deterministic random seeds across Python, NumPy, PyTorch CPU and CUDA."""
@@ -83,10 +85,47 @@ def score_materialized_split(
     device: str,
 ) -> pl.DataFrame:
     """Score one materialized split while retaining its immutable row identity."""
+    selected = _score_input_frame(path, split=split, feature_columns=feature_columns)
+    values = selected.select(*feature_columns).to_numpy()
+    scores = compute_reconstruction_scores(
+        model,
+        torch.tensor(values, dtype=torch.float32),
+        batch_size=batch_size,
+        device=device,
+    ).numpy()
+    return _score_output_frame(selected, scores)
+
+
+def score_personalized_materialized_split(
+    models: Mapping[str, nn.Module],
+    path: Path,
+    *,
+    split: str,
+    feature_columns: tuple[str, ...],
+    batch_size: int,
+    device: str,
+) -> pl.DataFrame:
+    """Score one split with the persistent Ditto state bound to each source client."""
+    selected = _score_input_frame(path, split=split, feature_columns=feature_columns).with_row_index("_score_row")
+    chunks: list[pl.DataFrame] = []
+    for client, rows in selected.group_by("client_id", maintain_order=True):
+        client_id = str(client[0])
+        if client_id not in models:
+            raise ValueError(f"Personalized checkpoint is unavailable for client '{client_id}'")
+        scores = compute_reconstruction_scores(
+            models[client_id],
+            torch.tensor(rows.select(*feature_columns).to_numpy(), dtype=torch.float32),
+            batch_size=batch_size,
+            device=device,
+        ).numpy()
+        chunks.append(rows.with_columns(pl.Series("score", scores)))
+    return _score_output_frame(pl.concat(chunks).sort("_score_row").drop("_score_row"), None)
+
+
+def _score_input_frame(path: Path, *, split: str, feature_columns: tuple[str, ...]) -> pl.DataFrame:
     if split not in {"calibration", "test"}:
         raise ValueError(f"Scoring does not authorize split '{split}'")
-    identity_columns = ("source_path", "source_row_index", "client_id", "split", "is_attack")
-    frame = pl.read_parquet(path, columns=[*identity_columns, *feature_columns])
+    frame = pl.read_parquet(path, columns=[*_SCORE_IDENTITY_COLUMNS, *feature_columns])
     selected = frame.filter(pl.col("split") == split)
     if selected.is_empty():
         raise ValueError(f"Materialized payload has no {split} rows to score")
@@ -94,22 +133,21 @@ def score_materialized_split(
         raise ValueError("Calibration scoring must not include attack rows")
     if selected.select(pl.struct("source_path", "source_row_index").is_duplicated().any()).item():
         raise ValueError("Score input contains duplicate row identities")
-    values = selected.select(*feature_columns).to_numpy()
-    if not np.isfinite(values).all():
+    if not np.isfinite(selected.select(*feature_columns).to_numpy()).all():
         raise ValueError("Score input contains non-finite feature values")
-    scores = compute_reconstruction_scores(
-        model,
-        torch.tensor(values, dtype=torch.float32),
-        batch_size=batch_size,
-        device=device,
-    ).numpy()
+    return selected
+
+
+def _score_output_frame(selected: pl.DataFrame, scores: np.ndarray | None) -> pl.DataFrame:
+    if scores is not None:
+        selected = selected.with_columns(pl.Series("score", scores))
+    scores = selected["score"].to_numpy()
     if not np.isfinite(scores).all() or (scores < 0.0).any():
         raise ValueError("Model produced non-finite or negative reconstruction scores")
     return (
-        selected.select(*identity_columns)
+        selected.select(*_SCORE_IDENTITY_COLUMNS, "score")
         .with_columns(
             pl.col("is_attack").cast(pl.Int8).alias("label"),
-            pl.Series("score", scores),
         )
         .drop("is_attack")
     )
@@ -168,6 +206,23 @@ class DataloaderShuffleSeed:
     value: int
 
 
+@define(frozen=True, slots=True, kw_only=True)
+class DittoCheckpoint:
+    round_number: int
+    global_state: tuple[tuple[str, torch.Tensor], ...]
+    personalized_states: tuple[tuple[str, tuple[tuple[str, torch.Tensor], ...]], ...]
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class DittoTrainingResult:
+    global_model: nn.Module
+    personalized_models: tuple[tuple[str, nn.Module], ...]
+    global_round_losses: tuple[tuple[int, float], ...]
+    personalized_round_losses: tuple[tuple[int, float], ...]
+    scheduled_checkpoints: tuple[DittoCheckpoint, ...]
+    derived_shuffle_seeds: tuple[DataloaderShuffleSeed, ...]
+
+
 def federated_train_autoencoder(
     model: nn.Module,
     client_training_data: tuple[tuple[str, torch.Tensor], ...],
@@ -191,26 +246,17 @@ def federated_train_autoencoder(
     proximal_mu: float | None = None,
 ) -> FederatedTrainingResult:
     """Run full-participation FedAvg or FedProx with client-size weighted aggregation."""
-    if rounds < 1 or local_epochs < 1:
-        raise ValueError("Federated training requires positive rounds and local epochs")
-    if not client_training_data:
-        raise ValueError("Federated training requires at least one client")
+    _validate_federated_training_inputs(
+        client_training_data,
+        client_calibration_data,
+        rounds=rounds,
+        local_epochs=local_epochs,
+        checkpoint_rounds=checkpoint_rounds,
+    )
     clients = tuple(sorted(client_training_data, key=lambda item: item[0]))
-    if len({client_id for client_id, _ in clients}) != len(clients):
-        raise ValueError("Federated training requires unique client identifiers")
-    if any(data.ndim != 2 or data.shape[0] == 0 for _, data in clients):
-        raise ValueError("Each federated client requires a non-empty two-dimensional training tensor")
     calibration_clients = tuple(sorted(client_calibration_data, key=lambda item: item[0]))
-    if tuple(client_id for client_id, _ in clients) != tuple(client_id for client_id, _ in calibration_clients):
-        raise ValueError("Each training client requires benign calibration rows for checkpoint selection")
-    if any(data.ndim != 2 or data.shape[0] == 0 for _, data in calibration_clients):
-        raise ValueError("Each federated client requires non-empty two-dimensional calibration tensors")
     if proximal_mu is not None and proximal_mu <= 0.0:
         raise ValueError("FedProx requires a strictly positive proximal coefficient")
-    if any(round_number < 1 or round_number > rounds for round_number in checkpoint_rounds):
-        raise ValueError("Scheduled checkpoint rounds must fall within the configured round budget")
-    if len(set(checkpoint_rounds)) != len(checkpoint_rounds):
-        raise ValueError("Scheduled checkpoint rounds must be unique")
 
     global_model = deepcopy(model)
     losses: list[tuple[int, float]] = []
@@ -279,6 +325,133 @@ def federated_train_autoencoder(
     )
 
 
+def ditto_train_autoencoder(
+    model: nn.Module,
+    client_training_data: tuple[tuple[str, torch.Tensor], ...],
+    client_calibration_data: tuple[tuple[str, torch.Tensor], ...],
+    *,
+    rounds: int,
+    local_epochs: int,
+    personalized_local_epochs: int,
+    proximal_weight: float,
+    learning_rate: float,
+    batch_size: int,
+    seed: int,
+    device: str,
+    beta_1: float,
+    beta_2: float,
+    epsilon: float,
+    weight_decay: float,
+    amsgrad: bool,
+    shuffle_each_epoch: bool,
+    checkpoint_rounds: tuple[int, ...],
+    shuffle_seed_key: str,
+    shuffle_seed_digest_bytes: int,
+) -> DittoTrainingResult:
+    """Train Ditto's aggregated global state and persistent, never-aggregated client states."""
+    _validate_federated_training_inputs(
+        client_training_data,
+        client_calibration_data,
+        rounds=rounds,
+        local_epochs=local_epochs,
+        checkpoint_rounds=checkpoint_rounds,
+    )
+    if personalized_local_epochs < 1 or proximal_weight <= 0.0:
+        raise ValueError("Ditto requires positive personalized local epochs and proximal weight")
+    clients = tuple(sorted(client_training_data, key=lambda item: item[0]))
+    calibration_clients = tuple(sorted(client_calibration_data, key=lambda item: item[0]))
+    global_model = deepcopy(model)
+    personalized_models = {client_id: deepcopy(model) for client_id, _ in clients}
+    global_losses: list[tuple[int, float]] = []
+    personalized_losses: list[tuple[int, float]] = []
+    checkpoints: list[DittoCheckpoint] = []
+    derived_seeds: list[DataloaderShuffleSeed] = []
+
+    for round_index in range(rounds):
+        round_number = round_index + 1
+        round_start = {name: tensor.detach().clone() for name, tensor in global_model.state_dict().items()}
+        local_global_states: list[tuple[int, dict[str, torch.Tensor]]] = []
+        for client_id, data in clients:
+            epoch_seeds = tuple(
+                _derive_dataloader_shuffle_seed(
+                    key=shuffle_seed_key,
+                    digest_bytes=shuffle_seed_digest_bytes,
+                    training_seed=seed,
+                    round_number=round_number,
+                    client_id=client_id,
+                    local_epoch=local_epoch,
+                )
+                for local_epoch in range(max(local_epochs, personalized_local_epochs))
+            )
+            derived_seeds.extend(
+                DataloaderShuffleSeed(
+                    round_number=round_number,
+                    client_id=client_id,
+                    local_epoch=local_epoch,
+                    value=epoch_seed,
+                )
+                for local_epoch, epoch_seed in enumerate(epoch_seeds)
+            )
+            global_local = train_autoencoder(
+                deepcopy(global_model),
+                data,
+                local_epochs,
+                learning_rate,
+                batch_size,
+                epoch_seeds[:local_epochs],
+                device,
+                beta_1,
+                beta_2,
+                epsilon,
+                weight_decay,
+                amsgrad,
+                shuffle_each_epoch,
+                None,
+                None,
+            )
+            local_global_states.append((int(data.shape[0]), global_local.state_dict()))
+            personalized_models[client_id] = train_autoencoder(
+                personalized_models[client_id],
+                data,
+                personalized_local_epochs,
+                learning_rate,
+                batch_size,
+                epoch_seeds[:personalized_local_epochs],
+                device,
+                beta_1,
+                beta_2,
+                epsilon,
+                weight_decay,
+                amsgrad,
+                shuffle_each_epoch,
+                round_start,
+                proximal_weight,
+            )
+        global_model.load_state_dict(_weighted_average_state(local_global_states))
+        global_losses.append((round_number, _weighted_reconstruction_loss(global_model, calibration_clients, device)))
+        personalized_losses.append(
+            (round_number, _weighted_personalized_reconstruction_loss(personalized_models, calibration_clients, device))
+        )
+        if round_number in checkpoint_rounds:
+            checkpoints.append(
+                DittoCheckpoint(
+                    round_number=round_number,
+                    global_state=_state_on_cpu(global_model),
+                    personalized_states=tuple(
+                        (client_id, _state_on_cpu(personalized_models[client_id])) for client_id, _ in clients
+                    ),
+                )
+            )
+    return DittoTrainingResult(
+        global_model=global_model,
+        personalized_models=tuple((client_id, personalized_models[client_id]) for client_id, _ in clients),
+        global_round_losses=tuple(global_losses),
+        personalized_round_losses=tuple(personalized_losses),
+        scheduled_checkpoints=tuple(checkpoints),
+        derived_shuffle_seeds=tuple(derived_seeds),
+    )
+
+
 def _weighted_average_state(client_states: list[tuple[int, dict[str, torch.Tensor]]]) -> dict[str, torch.Tensor]:
     total_rows = sum(row_count for row_count, _ in client_states)
     if total_rows < 1:
@@ -295,6 +468,38 @@ def _weighted_average_state(client_states: list[tuple[int, dict[str, torch.Tenso
     return averaged
 
 
+def _validate_federated_training_inputs(
+    client_training_data: tuple[tuple[str, torch.Tensor], ...],
+    client_calibration_data: tuple[tuple[str, torch.Tensor], ...],
+    *,
+    rounds: int,
+    local_epochs: int,
+    checkpoint_rounds: tuple[int, ...],
+) -> None:
+    if rounds < 1 or local_epochs < 1:
+        raise ValueError("Federated training requires positive rounds and local epochs")
+    clients = tuple(sorted(client_training_data, key=lambda item: item[0]))
+    calibration_clients = tuple(sorted(client_calibration_data, key=lambda item: item[0]))
+    if not clients:
+        raise ValueError("Federated training requires at least one client")
+    if len({client_id for client_id, _ in clients}) != len(clients):
+        raise ValueError("Federated training requires unique client identifiers")
+    if any(data.ndim != 2 or data.shape[0] == 0 for _, data in clients):
+        raise ValueError("Each federated client requires a non-empty two-dimensional training tensor")
+    if tuple(client_id for client_id, _ in clients) != tuple(client_id for client_id, _ in calibration_clients):
+        raise ValueError("Each training client requires benign calibration rows for checkpoint selection")
+    if any(data.ndim != 2 or data.shape[0] == 0 for _, data in calibration_clients):
+        raise ValueError("Each federated client requires non-empty two-dimensional calibration tensors")
+    if any(round_number < 1 or round_number > rounds for round_number in checkpoint_rounds):
+        raise ValueError("Scheduled checkpoint rounds must fall within the configured round budget")
+    if len(set(checkpoint_rounds)) != len(checkpoint_rounds):
+        raise ValueError("Scheduled checkpoint rounds must be unique")
+
+
+def _state_on_cpu(model: nn.Module) -> tuple[tuple[str, torch.Tensor], ...]:
+    return tuple((name, value.detach().cpu().clone()) for name, value in model.state_dict().items())
+
+
 def _weighted_reconstruction_loss(
     model: nn.Module, clients: tuple[tuple[str, torch.Tensor], ...], device: str
 ) -> float:
@@ -309,6 +514,24 @@ def _weighted_reconstruction_loss(
             row_count = int(data.shape[0])
             weighted_loss += row_count * loss
             total_rows += row_count
+    return weighted_loss / total_rows
+
+
+def _weighted_personalized_reconstruction_loss(
+    personalized_models: Mapping[str, nn.Module],
+    clients: tuple[tuple[str, torch.Tensor], ...],
+    device: str,
+) -> float:
+    weighted_loss = 0.0
+    total_rows = 0
+    for client_id, data in clients:
+        if client_id not in personalized_models:
+            raise ValueError(f"Ditto personalized state is unavailable for client '{client_id}'")
+        row_count = int(data.shape[0])
+        weighted_loss += row_count * _weighted_reconstruction_loss(
+            personalized_models[client_id], ((client_id, data),), device
+        )
+        total_rows += row_count
     return weighted_loss / total_rows
 
 

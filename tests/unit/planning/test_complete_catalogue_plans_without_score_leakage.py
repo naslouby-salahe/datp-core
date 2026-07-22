@@ -66,3 +66,17 @@ def test_fedprox_plan_retains_all_mu_cells_without_rematerializing() -> None:
     assert len(selector.inputs) == 40
     assert selector.job_id in statistics.dependencies
     assert selector.output in statistics.inputs
+
+
+def test_ditto_plan_retains_every_weight_with_distinct_training_identities() -> None:
+    app = build_application()
+    plan = app.plan_experiment.execute(ExperimentId("model_personalization_absorption_test"))
+    training = tuple(job for job in plan.jobs if job.stage is StageKind.MODEL_TRAINING)
+    selector = next(job for job in plan.jobs if job.stage is StageKind.CHECKPOINT_SELECTION)
+    statistics = next(job for job in plan.jobs if job.stage is StageKind.STATISTICAL_ANALYSIS)
+
+    assert len(training) == 40
+    assert {job.context.ditto_proximal_weight for job in training} == {0.001, 0.01, 0.1, 1.0}
+    assert len({job.output.artifact_id for job in training}) == len(training)
+    assert len(selector.inputs) == 40
+    assert selector.job_id in statistics.dependencies

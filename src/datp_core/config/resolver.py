@@ -176,6 +176,19 @@ class ResolvedProjectConfiguration:
             raise ValueError("Configuration must define exactly one confirmatory primary FedAvg checkpoint selector")
         return candidates[0]
 
+    def primary_ditto_selection_experiment(self) -> ExperimentRecord:
+        """Return the sole natural-regime Ditto experiment allowed to select its proximal weight."""
+        candidates = tuple(
+            experiment
+            for experiment in self.experiments.values()
+            if self.training_profiles.contains(experiment.training_profile_id)
+            and self.training_profiles.get(experiment.training_profile_id).personalization == "ditto"
+            and experiment.personalization_parameter_selection_source is None
+        )
+        if len(candidates) != 1:
+            raise ValueError("Configuration must define exactly one natural-regime Ditto parameter selector")
+        return candidates[0]
+
 
 def resolve_project_configuration(
     config_dir: Path | None = None,
@@ -278,6 +291,14 @@ def resolve_project_configuration(
             participation=tp_cfg.participation,
             checkpoint_authorization=tp_cfg.checkpoint_authorization,
             personalization=tp_cfg.personalization,
+            personalized_local_epochs=(
+                PositiveInt(tp_cfg.personalized_local_epochs) if tp_cfg.personalized_local_epochs is not None else None
+            ),
+            personalization_parameter_grid=(
+                tuple(tp_cfg.personalization_parameter_grid)
+                if tp_cfg.personalization_parameter_grid is not None
+                else None
+            ),
             proximal_objective=tp_cfg.proximal_objective,
             mu_grid=tuple(tp_cfg.mu_grid) if tp_cfg.mu_grid is not None else None,
             mu_zero_forbidden_as_a_fedprox_condition=tp_cfg.mu_zero_forbidden_as_a_fedprox_condition,

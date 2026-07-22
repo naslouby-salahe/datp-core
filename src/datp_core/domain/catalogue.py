@@ -207,6 +207,8 @@ class TrainingProfileRecord:
     participation: str | None
     checkpoint_authorization: str
     personalization: str | None
+    personalized_local_epochs: PositiveInt | None
+    personalization_parameter_grid: tuple[float, ...] | None
     proximal_objective: str | None
     mu_grid: tuple[float, ...] | None
     mu_zero_forbidden_as_a_fedprox_condition: bool | None

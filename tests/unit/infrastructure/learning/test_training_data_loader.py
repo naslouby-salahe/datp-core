@@ -3,9 +3,14 @@
 from pathlib import Path
 
 import polars as pl
+import pytest
 import torch
 
-from datp_core.infrastructure.learning.pytorch_adapter import load_benign_client_tensors, score_materialized_split
+from datp_core.infrastructure.learning.pytorch_adapter import (
+    load_benign_client_tensors,
+    score_materialized_split,
+    score_personalized_materialized_split,
+)
 
 
 def test_loader_excludes_calibration_test_and_attack_rows_and_sorts_clients(tmp_path: Path) -> None:
@@ -74,3 +79,33 @@ def test_score_materialized_split_preserves_identity_and_excludes_calibration_at
     ]
     assert test["label"].to_list() == [0, 1]
     assert test["source_row_index"].to_list() == [2, 3]
+
+
+def test_personalized_scoring_uses_the_model_bound_to_each_client(tmp_path: Path) -> None:
+    path = tmp_path / "materialized.parquet"
+    pl.DataFrame(
+        {
+            "split": ["test", "test"],
+            "client_id": ["a", "b"],
+            "is_attack": [False, False],
+            "source_path": ["a.csv", "b.csv"],
+            "source_row_index": [1, 1],
+            "feature": [2.0, 2.0],
+        }
+    ).write_parquet(path)
+    identity = torch.nn.Linear(1, 1, bias=False)
+    doubled = torch.nn.Linear(1, 1, bias=False)
+    with torch.no_grad():
+        identity.weight.fill_(1.0)
+        doubled.weight.fill_(2.0)
+
+    scores = score_personalized_materialized_split(
+        {"a": identity, "b": doubled},
+        path,
+        split="test",
+        feature_columns=("feature",),
+        batch_size=8,
+        device="cpu",
+    )
+
+    assert scores.sort("client_id")["score"].to_list() == pytest.approx([0.0, 4.0])

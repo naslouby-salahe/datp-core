@@ -52,6 +52,12 @@ def expand_experiment_jobs(
         for value in sweep.values
         if isinstance(value, float)
     ) or (None,)
+    training_profile = config.training_profiles.get(experiment.training_profile_id)
+    ditto_weights = (
+        training_profile.personalization_parameter_grid or (None,)
+        if training_profile.personalization == "ditto"
+        else (None,)
+    )
 
     # 2. Materialize once per seed/partition condition, then collect every training cell.
     training_cells: list[tuple[StageJobContext, tuple, tuple]] = []
@@ -72,12 +78,13 @@ def expand_experiment_jobs(
         )
         jobs.append(mat_job)
 
-        for proximal_mu in mus:
+        for proximal_mu, ditto_weight in product(mus, ditto_weights):
             seed_ctx = StageJobContext(
                 experiment_id=experiment.identifier,
                 seed=int(seed.value),
                 partition_condition=condition,
                 federated_proximal_mu=proximal_mu,
+                ditto_proximal_weight=ditto_weight,
             )
             train_ids = builder.training_job(seed_ctx, mat_ids[1], mat_ids[0])
             train_job = StageJob(
@@ -91,7 +98,6 @@ def expand_experiment_jobs(
             jobs.append(train_job)
             training_cells.append((seed_ctx, mat_ids, train_ids))
 
-    training_profile = config.training_profiles.get(experiment.training_profile_id)
     selection_output = None
     selection_job_id = None
     analysis_selection_output = None
@@ -118,6 +124,26 @@ def expand_experiment_jobs(
         selection_job_id, selection_output = selection_ids[:2]
     elif training_profile.kind == "federated_prox_training":
         selection_ids = builder.federated_proximal_selection_job(
+            experiment_ctx,
+            tuple(train_ids[1] for _, _, train_ids in training_cells),
+            tuple(train_ids[0] for _, _, train_ids in training_cells),
+        )
+        jobs.append(
+            StageJob(
+                job_id=selection_ids[0],
+                stage=StageKind.CHECKPOINT_SELECTION,
+                context=experiment_ctx,
+                inputs=selection_ids[2],
+                output=selection_ids[1],
+                dependencies=selection_ids[3],
+            )
+        )
+        analysis_selection_job_id, analysis_selection_output = selection_ids[:2]
+    elif (
+        training_profile.personalization == "ditto"
+        and experiment.identifier == config.primary_ditto_selection_experiment().identifier
+    ):
+        selection_ids = builder.ditto_selection_job(
             experiment_ctx,
             tuple(train_ids[1] for _, _, train_ids in training_cells),
             tuple(train_ids[0] for _, _, train_ids in training_cells),
@@ -168,6 +194,7 @@ def expand_experiment_jobs(
                 seed=seed_ctx.seed,
                 partition_condition=seed_ctx.partition_condition,
                 federated_proximal_mu=seed_ctx.federated_proximal_mu,
+                ditto_proximal_weight=seed_ctx.ditto_proximal_weight,
                 evaluation_label=eval_spec.label,
                 population_id=eval_spec.population_id,
                 threshold_policy_id=eval_spec.threshold_policy_id,
