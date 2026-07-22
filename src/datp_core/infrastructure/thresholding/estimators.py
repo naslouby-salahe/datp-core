@@ -84,12 +84,12 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
         return self._policy_id
 
     def estimate(self, request: ThresholdConstructionRequest) -> ThresholdSet:
-        if request.policy_id != self._policy_id or request.policy != self._policy:
-            raise ValueError("Threshold estimator request does not match its resolved policy")
+        if request.policy_id != self._policy_id or type(request.policy) is not type(self._policy):
+            raise ValueError("Threshold estimator request does not match its resolved policy kind")
         calibration = request.calibration
         if not calibration:
             raise ValueError("Threshold construction requires at least one eligible client")
-        policy = self._policy
+        policy = request.policy
         quantile = _policy_quantile(policy)
         local = {item.client_id.value: _quantile(item.values, quantile.value) for item in calibration}
 
@@ -126,7 +126,7 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
             }
             return _records(self._policy_id, calibration, thresholds, "family_mean", quantile)
         if isinstance(policy, ClusterThresholdPolicyRecord):
-            return self._cluster(request, local, quantile)
+            return self._cluster(request, policy, local, quantile)
         if isinstance(policy, SplitConformalThresholdPolicyRecord):
             return self._conformal(calibration, policy, quantile)
         if isinstance(policy, LocalGlobalShrinkageThresholdPolicyRecord):
@@ -160,11 +160,10 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
     def _cluster(
         self,
         request: ThresholdConstructionRequest,
+        policy: ClusterThresholdPolicyRecord,
         local: dict[str, float],
         quantile: Probability,
     ) -> ThresholdSet:
-        policy = self._policy
-        assert isinstance(policy, ClusterThresholdPolicyRecord)
         calibration = request.calibration
         if len(calibration) < policy.cluster_count:
             raise ValueError("Cluster threshold has fewer eligible clients than configured clusters")

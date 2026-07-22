@@ -189,40 +189,71 @@ def expand_experiment_jobs(
         jobs.append(test_score_job)
 
         for eval_spec in experiment.evaluations:
-            eval_ctx = StageJobContext(
-                experiment_id=experiment.identifier,
-                seed=seed_ctx.seed,
-                partition_condition=seed_ctx.partition_condition,
-                federated_proximal_mu=seed_ctx.federated_proximal_mu,
-                ditto_proximal_weight=seed_ctx.ditto_proximal_weight,
-                evaluation_label=eval_spec.label,
-                population_id=eval_spec.population_id,
-                threshold_policy_id=eval_spec.threshold_policy_id,
-            )
+            override = None if eval_spec.overrides is None else eval_spec.overrides.get("quantile")
+            sweep_name = override.get("from_sweep") if isinstance(override, Mapping) else None
+            quantiles = tuple(
+                float(value)
+                for sweep in experiment.sweeps
+                if isinstance(sweep, ValueSweepRecord) and sweep.name == sweep_name
+                for value in sweep.values
+                if isinstance(value, float)
+            ) or (None,)
+            shrinkage_override = None if eval_spec.overrides is None else eval_spec.overrides.get("shrinkage_weight")
+            shrinkage_sweep = shrinkage_override.get("from_sweep") if isinstance(shrinkage_override, Mapping) else None
+            shrinkage_weights = tuple(
+                float(value)
+                for sweep in experiment.sweeps
+                if isinstance(sweep, ValueSweepRecord) and sweep.name == shrinkage_sweep
+                for value in sweep.values
+                if isinstance(value, float)
+            ) or (None,)
+            fixed_k_override = None if eval_spec.overrides is None else eval_spec.overrides.get("fixed_k")
+            fixed_k_sweep = fixed_k_override.get("from_sweep") if isinstance(fixed_k_override, Mapping) else None
+            fixed_ks = tuple(
+                float(value)
+                for sweep in experiment.sweeps
+                if isinstance(sweep, ValueSweepRecord) and sweep.name == fixed_k_sweep
+                for value in sweep.values
+                if isinstance(value, float)
+            ) or (None,)
+            for threshold_quantile, shrinkage_weight, fixed_k in product(quantiles, shrinkage_weights, fixed_ks):
+                eval_ctx = StageJobContext(
+                    experiment_id=experiment.identifier,
+                    seed=seed_ctx.seed,
+                    partition_condition=seed_ctx.partition_condition,
+                    federated_proximal_mu=seed_ctx.federated_proximal_mu,
+                    ditto_proximal_weight=seed_ctx.ditto_proximal_weight,
+                    threshold_quantile=threshold_quantile,
+                    shrinkage_weight=shrinkage_weight,
+                    federated_summary_fixed_k=fixed_k,
+                    evaluation_label=eval_spec.label,
+                    population_id=eval_spec.population_id,
+                    threshold_policy_id=eval_spec.threshold_policy_id,
+                )
 
-            thresh_ids = builder.threshold_job(eval_ctx, calib_ids[1], calib_ids[0])
-            thresh_job = StageJob(
-                job_id=thresh_ids[0],
-                stage=StageKind.THRESHOLD_CONSTRUCTION,
-                context=eval_ctx,
-                inputs=thresh_ids[2],
-                output=thresh_ids[1],
-                dependencies=thresh_ids[3],
-            )
-            jobs.append(thresh_job)
+                thresh_ids = builder.threshold_job(eval_ctx, calib_ids[1], calib_ids[0])
+                thresh_job = StageJob(
+                    job_id=thresh_ids[0],
+                    stage=StageKind.THRESHOLD_CONSTRUCTION,
+                    context=eval_ctx,
+                    inputs=thresh_ids[2],
+                    output=thresh_ids[1],
+                    dependencies=thresh_ids[3],
+                )
+                jobs.append(thresh_job)
 
-            eval_ids = builder.evaluation_job(eval_ctx, thresh_ids[1], test_ids[1], thresh_ids[0], test_ids[0])
-            eval_job = StageJob(
-                job_id=eval_ids[0],
-                stage=StageKind.OPERATING_POINT_EVALUATION,
-                context=eval_ctx,
-                inputs=eval_ids[2],
-                output=eval_ids[1],
-                dependencies=eval_ids[3],
-            )
-            jobs.append(eval_job)
-            eval_job_outputs.append(eval_ids[1])
-            eval_job_ids.append(eval_ids[0])
+                eval_ids = builder.evaluation_job(eval_ctx, thresh_ids[1], test_ids[1], thresh_ids[0], test_ids[0])
+                eval_job = StageJob(
+                    job_id=eval_ids[0],
+                    stage=StageKind.OPERATING_POINT_EVALUATION,
+                    context=eval_ctx,
+                    inputs=eval_ids[2],
+                    output=eval_ids[1],
+                    dependencies=eval_ids[3],
+                )
+                jobs.append(eval_job)
+                eval_job_outputs.append(eval_ids[1])
+                eval_job_ids.append(eval_ids[0])
 
     # 3. Statistical Analysis job across all seed evaluation outputs
     stats_ids = builder.statistical_analysis_job(
@@ -242,8 +273,26 @@ def expand_experiment_jobs(
     )
     jobs.append(stats_job)
 
-    # 4. Report Generation job
-    report_ids = builder.report_job(experiment_ctx, stats_ids[1], stats_ids[0])
+    # 4. Freeze the complete result family before any rendering may begin.
+    result_freeze_ids = builder.result_freeze_job(
+        experiment_ctx,
+        stats_ids[1],
+        stats_ids[0],
+        tuple(eval_job_outputs),
+        tuple(eval_job_ids),
+    )
+    result_freeze_job = StageJob(
+        job_id=result_freeze_ids[0],
+        stage=StageKind.RESULT_FREEZE,
+        context=experiment_ctx,
+        inputs=result_freeze_ids[2],
+        output=result_freeze_ids[1],
+        dependencies=result_freeze_ids[3],
+    )
+    jobs.append(result_freeze_job)
+
+    # 5. Report Generation job
+    report_ids = builder.report_job(experiment_ctx, result_freeze_ids[1], result_freeze_ids[0])
     report_job = StageJob(
         job_id=report_ids[0],
         stage=StageKind.REPORT_GENERATION,

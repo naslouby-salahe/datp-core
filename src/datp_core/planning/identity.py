@@ -45,6 +45,12 @@ class IdentityBuilder:
             suffixes += (f":mu_{ctx.federated_proximal_mu:g}",)
         if ctx.ditto_proximal_weight is not None:
             suffixes += (f":lambda_{ctx.ditto_proximal_weight:g}",)
+        if ctx.threshold_quantile is not None:
+            suffixes += (f":q_{ctx.threshold_quantile:g}",)
+        if ctx.shrinkage_weight is not None:
+            suffixes += (f":shrinkage_{ctx.shrinkage_weight:g}",)
+        if ctx.federated_summary_fixed_k is not None:
+            suffixes += (f":fixed_k_{ctx.federated_summary_fixed_k:g}",)
         return "".join(suffixes)
 
     @staticmethod
@@ -110,6 +116,10 @@ class IdentityBuilder:
     @staticmethod
     def report_job_id(ctx: StageJobContext) -> JobId:
         return JobId(f"{ctx.experiment_id.value}:report_generation")
+
+    @staticmethod
+    def result_freeze_job_id(ctx: StageJobContext) -> JobId:
+        return JobId(f"{ctx.experiment_id.value}:result_freeze")
 
     @staticmethod
     def preflight_artifact_id(ctx: StageJobContext) -> ArtifactId:
@@ -181,6 +191,10 @@ class IdentityBuilder:
     @staticmethod
     def final_report_artifact_id(ctx: StageJobContext) -> ArtifactId:
         return ArtifactId(f"{ctx.experiment_id.value}:final_report")
+
+    @staticmethod
+    def result_freeze_artifact_id(ctx: StageJobContext) -> ArtifactId:
+        return ArtifactId(f"{ctx.experiment_id.value}:result_freeze")
 
     @staticmethod
     def preflight_key(ctx: StageJobContext) -> ArtifactKey:
@@ -271,6 +285,13 @@ class IdentityBuilder:
         return ArtifactKey(
             artifact_id=IdentityBuilder.final_report_artifact_id(ctx),
             kind=ArtifactKind.RESULT_REPORT,
+        )
+
+    @staticmethod
+    def result_freeze_key(ctx: StageJobContext) -> ArtifactKey:
+        return ArtifactKey(
+            artifact_id=IdentityBuilder.result_freeze_artifact_id(ctx),
+            kind=ArtifactKind.RESULT_FREEZE,
         )
 
     @staticmethod
@@ -411,11 +432,26 @@ class IdentityBuilder:
 
     @staticmethod
     def report_job(
-        ctx: StageJobContext, stats_output: ArtifactKey, stats_job_id: JobId
+        ctx: StageJobContext, result_freeze_output: ArtifactKey, result_freeze_job_id: JobId
     ) -> tuple[JobId, ArtifactKey, tuple[ArtifactKey, ...], tuple[JobId, ...]]:
         return (
             IdentityBuilder.report_job_id(ctx),
             IdentityBuilder.result_report_key(ctx),
-            (stats_output,),
-            (stats_job_id,),
+            (result_freeze_output,),
+            (result_freeze_job_id,),
+        )
+
+    @staticmethod
+    def result_freeze_job(
+        ctx: StageJobContext,
+        statistical_output: ArtifactKey,
+        statistical_job_id: JobId,
+        evaluation_outputs: tuple[ArtifactKey, ...],
+        evaluation_job_ids: tuple[JobId, ...],
+    ) -> tuple[JobId, ArtifactKey, tuple[ArtifactKey, ...], tuple[JobId, ...]]:
+        return (
+            IdentityBuilder.result_freeze_job_id(ctx),
+            IdentityBuilder.result_freeze_key(ctx),
+            (statistical_output, *evaluation_outputs),
+            (statistical_job_id, *evaluation_job_ids),
         )

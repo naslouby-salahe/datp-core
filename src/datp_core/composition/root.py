@@ -25,6 +25,7 @@ from datp_core.application.stage_handlers import (
     OperatingPointEvaluationStageHandler,
     PreflightStageHandler,
     ReportGenerationStageHandler,
+    ResultFreezeStageHandler,
     ScoreGenerationStageHandler,
     StatisticalAnalysisStageHandler,
     ThresholdConstructionStageHandler,
@@ -163,6 +164,7 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
             ThresholdConstructionStageHandler(resolved_config, artifact_repository, construct_th),
             OperatingPointEvaluationStageHandler(resolved_config, artifact_repository),
             StatisticalAnalysisStageHandler(resolved_config, artifact_repository, statistical_analysis),
+            ResultFreezeStageHandler(resolved_config, artifact_repository),
             ReportGenerationStageHandler(resolved_config, artifact_repository),
         ),
     )

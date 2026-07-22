@@ -27,6 +27,7 @@ class ArtifactKind(Enum):
     THRESHOLDS = "thresholds"
     CLIENT_METRICS = "client_metrics"
     STATISTICAL_SUMMARY = "statistical_summary"
+    RESULT_FREEZE = "result_freeze"
     RESULT_REPORT = "result_report"
     REPORT = "report"
 

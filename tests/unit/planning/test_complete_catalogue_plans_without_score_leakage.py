@@ -52,6 +52,45 @@ def test_confirmatory_plan_freezes_one_cohort_checkpoint_before_all_scores() -> 
     assert all(selector.output in score.inputs for score in scores)
 
 
+def test_quantile_sensitivity_expands_every_quantile_without_score_duplication() -> None:
+    app = build_application()
+    plan = app.plan_experiment.execute(ExperimentId("threshold_quantile_sensitivity"))
+    scores = tuple(job for job in plan.jobs if job.stage is StageKind.SCORE_GENERATION)
+    thresholds = tuple(job for job in plan.jobs if job.stage is StageKind.THRESHOLD_CONSTRUCTION)
+    evaluations = tuple(job for job in plan.jobs if job.stage is StageKind.OPERATING_POINT_EVALUATION)
+
+    assert len(scores) == 20
+    assert len(thresholds) == len(evaluations) == 120
+    assert {job.context.threshold_quantile for job in thresholds} == {0.9, 0.95, 0.975, 0.99}
+    assert len({job.job_id for job in thresholds}) == len(thresholds)
+
+
+def test_shrinkage_and_fixed_k_sweeps_preserve_unswept_baselines() -> None:
+    app = build_application()
+    shrinkage_plan = app.plan_experiment.execute(ExperimentId("local_global_threshold_shrinkage"))
+    shrinkage = tuple(job for job in shrinkage_plan.jobs if job.stage is StageKind.THRESHOLD_CONSTRUCTION)
+    fixed_k_plan = app.plan_experiment.execute(ExperimentId("federated_summary_comparator"))
+    fixed_k = tuple(job for job in fixed_k_plan.jobs if job.stage is StageKind.THRESHOLD_CONSTRUCTION)
+
+    assert len(shrinkage) == 70
+    assert {job.context.shrinkage_weight for job in shrinkage if job.context.shrinkage_weight is not None} == {
+        0.0,
+        0.25,
+        0.5,
+        0.75,
+        1.0,
+    }
+    assert len([job for job in shrinkage if job.context.shrinkage_weight is None]) == 20
+    assert {
+        job.context.federated_summary_fixed_k for job in fixed_k if job.context.federated_summary_fixed_k is not None
+    } == {
+        2.0,
+        2.5,
+        3.0,
+    }
+    assert len([job for job in fixed_k if job.context.federated_summary_fixed_k is None]) == 50
+
+
 def test_fedprox_plan_retains_all_mu_cells_without_rematerializing() -> None:
     app = build_application()
     plan = app.plan_experiment.execute(ExperimentId("fedprox_aggregation_stress_test"))

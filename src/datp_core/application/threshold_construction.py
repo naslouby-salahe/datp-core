@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from attrs import evolve
+
 from datp_core.config.resolver import ResolvedProjectConfiguration
 from datp_core.domain.identifiers import PopulationId, ThresholdPolicyId
 from datp_core.domain.thresholding import BenignCalibrationScores, ThresholdSet
@@ -33,9 +35,14 @@ class ConstructThresholdsUseCase:
         family_map: dict[str, str] | None,
         seed: Seed | None,
         selected_coefficient: float | None,
+        quantile_override: float | None = None,
     ) -> ThresholdSet:
         estimator = self._registry.get(policy_id)
         policy = self._config.threshold_policies.get(policy_id)
+        if quantile_override is not None:
+            if not 0.0 < quantile_override < 1.0 or not hasattr(policy, "quantile"):
+                raise ValueError("Threshold quantile override is invalid for the configured policy")
+            policy = evolve(policy, quantile=quantile_override)
         return estimator.estimate(
             ThresholdConstructionRequest(
                 policy_id=policy_id,

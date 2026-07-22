@@ -47,6 +47,9 @@ class StageJobContext:
     partition_condition: str | None = None
     federated_proximal_mu: float | None = None
     ditto_proximal_weight: float | None = None
+    threshold_quantile: float | None = None
+    shrinkage_weight: float | None = None
+    federated_summary_fixed_k: float | None = None
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

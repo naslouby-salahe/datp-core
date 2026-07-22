@@ -16,6 +16,7 @@ from safetensors.torch import load as load_safetensors
 from safetensors.torch import save as save_safetensors
 
 from datp_core.application.dataset_audit import AuditDatasetUseCase
+from datp_core.application.reporting import ResultFreezeError, freeze_result_family, render_frozen_report
 from datp_core.application.statistical_analysis import StatisticalAnalysisUseCase
 from datp_core.application.threshold_construction import ConstructThresholdsUseCase
 from datp_core.config.resolver import ResolvedProjectConfiguration
@@ -1319,7 +1320,12 @@ class ThresholdConstructionStageHandler:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Evaluation configuration is unavailable"
             )
-        if evaluation.overrides:
+        if (
+            evaluation.overrides
+            and job.context.threshold_quantile is None
+            and job.context.shrinkage_weight is None
+            and job.context.federated_summary_fixed_k is None
+        ):
             return StageJobOutcome.failed(
                 job_id=job.job_id,
                 stage=job.stage,
@@ -1344,7 +1350,12 @@ class ThresholdConstructionStageHandler:
                 if dataset.field_schema.label_fields.family_map
                 else None,
                 Seed(job.context.seed),
-                None,
+                (
+                    job.context.shrinkage_weight
+                    if job.context.shrinkage_weight is not None
+                    else job.context.federated_summary_fixed_k
+                ),
+                job.context.threshold_quantile,
             )
             output = pl.DataFrame(
                 {
@@ -1491,6 +1502,20 @@ class StatisticalAnalysisStageHandler:
             if training_profile.personalization == "ditto"
             else (None,)
         )
+        threshold_quantiles = tuple(
+            float(value)
+            for sweep in experiment.sweeps
+            if isinstance(sweep, ValueSweepRecord) and sweep.name == "threshold_quantile"
+            for value in sweep.values
+            if isinstance(value, float)
+        ) or (None,)
+        shrinkage_weights = tuple(
+            float(value)
+            for sweep in experiment.sweeps
+            if isinstance(sweep, ValueSweepRecord) and sweep.name == "shrinkage_weight"
+            for value in sweep.values
+            if isinstance(value, float)
+        ) or (None,)
         try:
             paired_results = [
                 self._analyze_paired(
@@ -1501,10 +1526,14 @@ class StatisticalAnalysisStageHandler:
                     condition,
                     proximal_mu,
                     ditto_weight,
+                    threshold_quantile,
+                    shrinkage_weight,
                 )
                 for condition in conditions
                 for proximal_mu in mus
                 for ditto_weight in ditto_weights
+                for threshold_quantile in threshold_quantiles
+                for shrinkage_weight in shrinkage_weights
                 for analysis in paired_analyses
             ]
             results = paired_results + [
@@ -1546,6 +1575,8 @@ class StatisticalAnalysisStageHandler:
         partition_condition: str | None,
         proximal_mu: float | None,
         ditto_weight: float | None,
+        threshold_quantile: float | None,
+        shrinkage_weight: float | None,
     ) -> dict[str, object]:
         left = tuple(
             self._evaluation_metric(
@@ -1557,6 +1588,8 @@ class StatisticalAnalysisStageHandler:
                 partition_condition,
                 proximal_mu,
                 ditto_weight,
+                threshold_quantile,
+                shrinkage_weight,
             )
             for seed in seeds
         )
@@ -1570,6 +1603,8 @@ class StatisticalAnalysisStageHandler:
                 partition_condition,
                 proximal_mu,
                 ditto_weight,
+                threshold_quantile,
+                shrinkage_weight,
             )
             for seed in seeds
         )
@@ -1585,6 +1620,12 @@ class StatisticalAnalysisStageHandler:
         result = {
             "analysis_label": analysis.label,
             "metric": record.metric_id.value,
+            "first_threshold_policy": self._evaluation_policy(experiment, analysis.first_evaluation),
+            "second_threshold_policy": self._evaluation_policy(experiment, analysis.second_evaluation),
+            "first_seed_values": list(left),
+            "second_seed_values": list(right),
+            "first_mean": sum(left) / len(left),
+            "second_mean": sum(right) / len(right),
             "mean_difference": record.mean_difference,
             "confidence_interval": [record.confidence_interval.lower_bound, record.confidence_interval.upper_bound],
             "p_value": None if record.hypothesis_test is None else record.hypothesis_test.p_value,
@@ -1598,7 +1639,15 @@ class StatisticalAnalysisStageHandler:
             result["federated_proximal_mu"] = proximal_mu
         if ditto_weight is not None:
             result["ditto_proximal_weight"] = ditto_weight
-        result["seed_differences"] = [first - second for first, second in zip(left, right, strict=True)]
+        if threshold_quantile is not None:
+            result["threshold_quantile"] = threshold_quantile
+        if shrinkage_weight is not None:
+            result["shrinkage_weight"] = shrinkage_weight
+        differences = [first - second for first, second in zip(left, right, strict=True)]
+        result["seed_differences"] = differences
+        result["sign_consistency"] = sum(value > 0.0 for value in differences) / len(differences)
+        result["zero_difference_count"] = sum(value == 0.0 for value in differences)
+        result["negative_difference_count"] = sum(value < 0.0 for value in differences)
         return result
 
     def _federated_proximal_selection(self, experiment_id, run_id: RunId) -> dict[str, object]:
@@ -1736,15 +1785,23 @@ class StatisticalAnalysisStageHandler:
         partition_condition: str | None,
         proximal_mu: float | None,
         ditto_weight: float | None,
+        threshold_quantile: float | None,
+        shrinkage_weight: float | None,
     ) -> float:
         if metric != "cv_fpr":
             raise ValueError(f"Statistical execution does not support configured metric '{metric}'")
+        evaluation = next(item for item in experiment.evaluations if item.label == label)
+        overrides = evaluation.overrides or {}
+        quantile_override = overrides.get("quantile")
+        shrinkage_override = overrides.get("shrinkage_weight")
         context = StageJobContext(
             experiment_id=experiment.identifier,
             seed=seed,
             partition_condition=partition_condition,
             federated_proximal_mu=proximal_mu,
             ditto_proximal_weight=ditto_weight,
+            threshold_quantile=threshold_quantile if isinstance(quantile_override, Mapping) else None,
+            shrinkage_weight=shrinkage_weight if isinstance(shrinkage_override, Mapping) else None,
             evaluation_label=label,
         )
         artifact = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
@@ -1757,9 +1814,8 @@ class StatisticalAnalysisStageHandler:
                 "false_positive_rate"
             ].to_list()
         )
-        evaluation = next(item for item in experiment.evaluations if item.label == label)
         policy = self._config.threshold_policies.get(evaluation.threshold_policy_id)
-        quantile = getattr(policy, "quantile", None)
+        quantile = threshold_quantile if isinstance(quantile_override, Mapping) else getattr(policy, "quantile", None)
         if not isinstance(quantile, float):
             raise ValueError(f"Evaluation '{label}' does not bind a quantile threshold policy")
         definition = self._config.metric_definitions.cross_client_aggregation.cv_fpr
@@ -1781,10 +1837,10 @@ class StatisticalAnalysisStageHandler:
         return evaluation.threshold_policy_id.value
 
 
-class ReportGenerationStageHandler:
-    """Freeze the configured report request against one immutable statistical summary."""
+class ResultFreezeStageHandler:
+    """Close and validate immutable provenance before report rendering."""
 
-    stage = StageKind.REPORT_GENERATION
+    stage = StageKind.RESULT_FREEZE
 
     def __init__(self, config: ResolvedProjectConfiguration, repository: ArtifactRepository) -> None:
         self._config = config
@@ -1805,21 +1861,61 @@ class ReportGenerationStageHandler:
             )
         experiment = self._config.experiments.get(job.context.experiment_id)
         try:
-            summary = json.loads(statistics.payload_bytes)
-            profiles = [self._config.report_profiles.get(identifier).identifier for identifier in experiment.report_ids]
-        except (KeyError, ValueError, json.JSONDecodeError) as exc:
+            profiles = tuple(self._config.report_profiles.get(identifier) for identifier in experiment.report_ids)
+            payload = freeze_result_family(
+                experiment=experiment,
+                report_profiles=profiles,
+                statistical_summary=statistics.payload_bytes,
+                source_artifacts=job.inputs,
+                scientific_fingerprint=self._config.scientific_fingerprint.value,
+            )
+        except (KeyError, ResultFreezeError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
-        payload = json.dumps(
-            {
-                "schema_version": 1,
-                "experiment_id": experiment.identifier.value,
-                "report_profiles": profiles,
-                "statistical_summary": summary,
-                "scientific_fingerprint": self._config.scientific_fingerprint.value,
-            },
-            separators=(",", ":"),
-            sort_keys=True,
-        ).encode("utf-8")
+        commit = _commit_artifact(
+            self._repository,
+            self._config,
+            job.context,
+            artifact_key=job.output,
+            artifact_format=ArtifactFormat.JSON,
+            relative_path=relative_path,
+            parents=_parents(self._config, job.inputs),
+            payload=BytesPayload(payload_bytes=payload),
+        )
+        if not commit.success:
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message=commit.error_message or "result-freeze artifact commit failed",
+            )
+        return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+
+
+class ReportGenerationStageHandler:
+    """Render configured report artifacts exclusively from a frozen result manifest."""
+
+    stage = StageKind.REPORT_GENERATION
+
+    def __init__(self, config: ResolvedProjectConfiguration, repository: ArtifactRepository) -> None:
+        self._config = config
+        self._repository = repository
+
+    def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
+        relative_path = f"runs/{run_id.value}/{job.job_id.value}"
+        if self._repository.assess_reuse(
+            relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
+        ).can_reuse:
+            return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        result_freeze = self._repository.read(
+            f"runs/{run_id.value}/{IdentityBuilder.result_freeze_job_id(job.context).value}"
+        )
+        if not result_freeze.found or result_freeze.payload_bytes is None:
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Result-freeze manifest is unavailable"
+            )
+        try:
+            payload = render_frozen_report(result_freeze.payload_bytes)
+        except ResultFreezeError as exc:
+            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
         commit = _commit_artifact(
             self._repository,
             self._config,
