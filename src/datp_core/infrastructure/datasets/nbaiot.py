@@ -255,7 +255,7 @@ def partition_dirichlet_rows(
     domain_index = {domain: index for index, domain in enumerate(domains)}
     assignments: list[tuple[str, str, int, str]] = []
     splits = tuple(sorted({split for split, _, _, _ in rows}))
-    counts = {client_id: {split: 0 for split in splits} for client_id in client_ids}
+    counts = {client_id: dict.fromkeys(splits, 0) for client_id in client_ids}
     for split in splits:
         role_rows = sorted((row for row in rows if row[0] == split), key=lambda row: (row[1], row[2], row[3]))
         remaining = [
@@ -263,7 +263,10 @@ def partition_dirichlet_rows(
         ]
         for _, domain, source_path, source_row_index in role_rows:
             candidates = [index for index, capacity in enumerate(remaining) if capacity > 0]
-            winner = max(candidates, key=lambda index: (draws[index, domain_index[domain]] / remaining[index], -index))
+            winner = max(
+                candidates,
+                key=lambda index, domain=domain: (draws[index, domain_index[domain]] / remaining[index], -index),
+            )
             remaining[winner] -= 1
             client_id = client_ids[winner]
             assignments.append((source_path, domain, source_row_index, client_id))

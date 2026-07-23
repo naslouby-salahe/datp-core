@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
@@ -67,7 +68,7 @@ class BenignCalibrationScores:
         if len(self.values) == 0:
             raise ValueError("Benign calibration score values cannot be empty")
         for val in self.values:
-            if not isinstance(val, (int, float)) or val != val or val in (float("inf"), float("-inf")):
+            if not isinstance(val, (int, float)) or not math.isfinite(val):
                 raise ValueError("Calibration score values must be finite numbers")
             if val < 0.0:
                 raise ValueError("Calibration anomaly scores must be non-negative")
@@ -90,8 +91,7 @@ class ThresholdRecord:
 
     def __post_init__(self) -> None:
         val = float(self.threshold)
-        is_finite = isinstance(val, (int, float)) and val == val and val not in (float("inf"), float("-inf"))
-        if not is_finite:
+        if not math.isfinite(val):
             raise ValueError("Produced threshold value must be finite")
         if val < 0.0:
             raise ValueError("Produced threshold value cannot be negative")

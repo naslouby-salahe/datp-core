@@ -144,7 +144,7 @@ class ProjectConfigurationValidator:
                     or not configured_grid
                     or any(value <= 0.0 for value in configured_grid)
                     or profile.mu_zero_forbidden_as_a_fedprox_condition is not True
-                    or tuple(values) != configured_grid
+                    or values != configured_grid
                 ):
                     errors.append(
                         f"FedProx experiment '{exp_id}' must bind its exact positive configured mu grid "

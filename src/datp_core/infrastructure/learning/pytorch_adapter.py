@@ -612,7 +612,7 @@ def train_autoencoder(
 
     for epoch_seed in epoch_seeds:
         set_deterministic_seeds(epoch_seed)
-        loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle_each_epoch)
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle_each_epoch, num_workers=0)
         for (batch_x,) in loader:
             batch_x = batch_x.to(device)
             optimizer.zero_grad()
@@ -636,7 +636,7 @@ def compute_reconstruction_scores(
     model = model.to(device)
     model.eval()
     dataset = TensorDataset(data)
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False)
+    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0)
     scores_list = []
 
     with torch.no_grad():

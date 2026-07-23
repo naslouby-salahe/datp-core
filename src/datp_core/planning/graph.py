@@ -47,7 +47,7 @@ class PlanningGraph:
         generations = list(nx.topological_generations(self._graph))
         res = []
         for gen in generations:
-            sorted_gen_nodes = sorted(list(gen), key=lambda n: n.value)
+            sorted_gen_nodes = sorted(gen, key=lambda n: n.value)
             gen_jobs = tuple(self._jobs[node] for node in sorted_gen_nodes)
             if gen_jobs:
                 res.append(gen_jobs)
@@ -56,26 +56,22 @@ class PlanningGraph:
     def predecessors(self, job_id: JobId) -> tuple[JobId, ...]:
         if job_id not in self._graph:
             return ()
-        preds = list(self._graph.predecessors(job_id))
-        return tuple(sorted(preds, key=lambda n: n.value))
+        return tuple(sorted(self._graph.predecessors(job_id), key=lambda n: n.value))
 
     def successors(self, job_id: JobId) -> tuple[JobId, ...]:
         if job_id not in self._graph:
             return ()
-        succs = list(self._graph.successors(job_id))
-        return tuple(sorted(succs, key=lambda n: n.value))
+        return tuple(sorted(self._graph.successors(job_id), key=lambda n: n.value))
 
     def ancestors(self, job_id: JobId) -> tuple[JobId, ...]:
         if job_id not in self._graph:
             return ()
-        ancs = list(nx.ancestors(self._graph, job_id))
-        return tuple(sorted(ancs, key=lambda n: n.value))
+        return tuple(sorted(nx.ancestors(self._graph, job_id), key=lambda n: n.value))
 
     def descendants(self, job_id: JobId) -> tuple[JobId, ...]:
         if job_id not in self._graph:
             return ()
-        descs = list(nx.descendants(self._graph, job_id))
-        return tuple(sorted(descs, key=lambda n: n.value))
+        return tuple(sorted(nx.descendants(self._graph, job_id), key=lambda n: n.value))
 
     @property
     def node_count(self) -> int:

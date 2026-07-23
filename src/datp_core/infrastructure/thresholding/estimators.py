@@ -134,19 +134,17 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
 
         if isinstance(policy, SharedMeanThresholdPolicyRecord):
             shared = float(np.mean(tuple(local.values())))
-            return _records(self._policy_id, calibration, {key: shared for key in local}, "shared_mean", quantile)
+            return _records(self._policy_id, calibration, dict.fromkeys(local, shared), "shared_mean", quantile)
         if isinstance(policy, (SharedPooledThresholdPolicyRecord, CentralizedPooledThresholdPolicyRecord)):
             pooled = tuple(value for item in calibration for value in item.values)
             threshold = _quantile(pooled, quantile.value)
-            return _records(self._policy_id, calibration, {key: threshold for key in local}, "pooled", quantile)
+            return _records(self._policy_id, calibration, dict.fromkeys(local, threshold), "pooled", quantile)
         if isinstance(policy, SharedWeightedThresholdPolicyRecord):
             count = sum(len(item.values) for item in calibration)
             if count == 0:
                 raise ValueError("Weighted threshold has no calibration rows")
             threshold = sum(len(item.values) * local[item.client_id.value] for item in calibration) / count
-            return _records(
-                self._policy_id, calibration, {key: threshold for key in local}, "shared_weighted", quantile
-            )
+            return _records(self._policy_id, calibration, dict.fromkeys(local, threshold), "shared_weighted", quantile)
         if isinstance(policy, LocalQuantileThresholdPolicyRecord):
             return _records(self._policy_id, calibration, local, "local", quantile)
         if isinstance(policy, FamilyMeanThresholdPolicyRecord):
@@ -314,7 +312,7 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
             thresholds,
             "local_global_shrinkage",
             quantile,
-            {key: coefficient for key in local},
+            dict.fromkeys(local, coefficient),
         )
 
     def _federated_moments(self, calibration: tuple[BenignCalibrationScores, ...]) -> tuple[float, float]:

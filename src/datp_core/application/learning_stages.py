@@ -388,7 +388,7 @@ class CohortCheckpointSelectionStageHandler:
                 scheduled_rounds=scheduled_rounds,
                 seed_losses=seed_losses,
             )
-        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        except (KeyError, TypeError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
         payload = json.dumps(
             {
@@ -462,7 +462,7 @@ class CohortCheckpointSelectionStageHandler:
                 )
                 for proximal_mu in profile.mu_grid
             )
-        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        except (KeyError, TypeError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
         selection_keys = tuple(self._training_selection_key(context) for context in expected_contexts)
         payload = json.dumps(
@@ -541,7 +541,7 @@ class CohortCheckpointSelectionStageHandler:
                 )
                 for weight in profile.personalization_parameter_grid
             )
-        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
+        except (KeyError, TypeError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
         selection_keys = tuple(self._training_selection_key(context) for context in contexts)
         payload = json.dumps(
@@ -949,4 +949,5 @@ def _load_checkpoint_model(
         raise ValueError("Selected checkpoint is absent from the persisted checkpoint grid")
     model = DynamicDenseAutoencoder(input_dimension, hidden_dims)
     model.load_state_dict(state)
+    model.eval()
     return model
