@@ -360,9 +360,7 @@ def _encode_edge_roles_as_parquet(
                 records[header].append(0.0 if high == low else (row.numeric_values[i] - low) / (high - low))
             for i, header in enumerate(categorical_headers):
                 value = row.categorical_values[i]
-                selected = (
-                    "__MISSING__" if value is None else value if value in category_columns[header] else "__UNKNOWN__"
-                )
+                selected = _category_value(value, category_columns[header])
                 for category in (*category_columns[header], "__MISSING__", "__UNKNOWN__"):
                     records[f"{header}={category}"].append(float(category == selected))
     payload = BytesIO()
@@ -456,9 +454,7 @@ def split_edge_chronological_rows(
         ordered = [row for _, row in sorted(corrected, key=lambda value: (value[0], _provenance_key(value[1])))]
         boundaries = [int(sum(fractions[: index + 1]) * len(ordered)) for index in range(3)]
         for index, row in enumerate(ordered):
-            roles[
-                0 if index < boundaries[0] else 1 if index < boundaries[1] else 2 if index < boundaries[2] else 3
-            ].append(row)
+            roles[_split_role(index, boundaries)].append(row)
     return EdgeChronologicalSplitRows(
         historical_train=tuple(roles[0]),
         historical_calibration=tuple(roles[1]),
@@ -483,6 +479,26 @@ def _time_of_day_seconds(value: str) -> float:
     if not math.isfinite(parsed) or not 0.0 <= parsed < 86_400.0:
         raise ValueError("time-of-day is out of range")
     return parsed
+
+
+def _category_value(value: str | None, known: tuple[str, ...]) -> str:
+    """Map a categorical value to one of {known, __MISSING__, __UNKNOWN__}. (S3358)"""
+    if value is None:
+        return "__MISSING__"
+    if value in known:
+        return value
+    return "__UNKNOWN__"
+
+
+def _split_role(index: int, boundaries: tuple[int, int, int]) -> int:
+    """Map an index to a chronological split role. (S3358)"""
+    if index < boundaries[0]:
+        return 0
+    if index < boundaries[1]:
+        return 1
+    if index < boundaries[2]:
+        return 2
+    return 3
 
 
 def _edge_content_hash(row: EdgeIIoTsetRow) -> str:
