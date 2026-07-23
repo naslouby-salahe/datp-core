@@ -14,14 +14,14 @@ from pathlib import Path
 from _synthetic_training_fixtures import build_synthetic_materialized_frame, commit_materialized_dataset
 from safetensors.torch import load as load_safetensors
 
-from datp_core.application.learning_stages import ModelTrainingStageHandler
-from datp_core.composition.root import DatpApplication, build_application
-from datp_core.domain.checkpoints import select_anchor_checkpoint_round
-from datp_core.domain.identifiers import ExperimentId, RunId
-from datp_core.domain.outcomes import JobExecutionStatus, StageJob, StageKind
-from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
-from datp_core.planning.expansion import expand_experiment_jobs
-from datp_core.planning.identity import IdentityBuilder
+from datp_core.learning.training import ModelTrainingStageHandler
+from datp_core.bootstrap import DatpApplication, build_application
+from datp_core.learning.checkpoints import select_anchor_checkpoint_round
+from datp_core.pipeline.identifiers import ExperimentId, RunId
+from datp_core.pipeline.models import JobExecutionStatus, StageJob, StageKind
+from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.experiments.planning import expand_experiment_jobs
+from datp_core.experiments.identity import IdentityBuilder
 
 
 def _anchor_training_job(app: DatpApplication, seed: int = 0) -> StageJob:

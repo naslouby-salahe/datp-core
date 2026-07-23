@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from datp_core.domain.values import PositiveInt, Probability, Seed
+from datp_core.pipeline.values import PositiveInt, Probability, Seed
 
 
 @pytest.mark.parametrize("value", [True, "1", 1.0])

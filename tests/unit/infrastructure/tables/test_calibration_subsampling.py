@@ -2,7 +2,7 @@
 
 import polars as pl
 
-from datp_core.infrastructure.tables.calibration_subsampling import subsample_calibration_scores
+from datp_core.thresholding.calibration import subsample_calibration_scores
 
 
 def _scores() -> pl.DataFrame:

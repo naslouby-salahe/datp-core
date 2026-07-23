@@ -12,21 +12,21 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.application.scoring_support import score_context
-from datp_core.application.threshold_stages import CalibrationSubsamplingStageHandler
-from datp_core.composition.root import DatpApplication, build_application
-from datp_core.domain.artifacts import (
+from datp_core.experiments.sweeps import score_context
+from datp_core.thresholding.calibration import CalibrationSubsamplingStageHandler
+from datp_core.bootstrap import DatpApplication, build_application
+from datp_core.artifacts.models import (
     ArtifactCommitMetadata,
     ArtifactCommitRequest,
     ArtifactFormat,
     BytesPayload,
 )
-from datp_core.domain.identifiers import ExperimentId, RunId
-from datp_core.domain.outcomes import JobExecutionStatus, StageJob, StageKind
-from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
-from datp_core.infrastructure.tables.calibration_subsampling import subsample_calibration_scores
-from datp_core.planning.expansion import expand_experiment_jobs
-from datp_core.planning.identity import IdentityBuilder
+from datp_core.pipeline.identifiers import ExperimentId, RunId
+from datp_core.pipeline.models import JobExecutionStatus, StageJob, StageKind
+from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.thresholding.calibration import subsample_calibration_scores
+from datp_core.experiments.planning import expand_experiment_jobs
+from datp_core.experiments.identity import IdentityBuilder
 
 _EXPERIMENT_ID = ExperimentId("calibration_window_size_stability")
 

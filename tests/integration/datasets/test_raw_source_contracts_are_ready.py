@@ -1,7 +1,7 @@
 """Read-only smoke audits for the configured external raw-data source tree."""
 
-from datp_core.composition.root import build_application
-from datp_core.domain.identifiers import DatasetId
+from datp_core.bootstrap import build_application
+from datp_core.pipeline.identifiers import DatasetId
 
 
 def test_raw_symlink_resolves_to_the_runtime_raw_data_root() -> None:

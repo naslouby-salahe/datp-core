@@ -5,14 +5,14 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.config.resolver import (
+from datp_core.configuration.project import resolve_project_configuration
+from datp_core.configuration.resolution import (
     ResolvedProjectConfiguration,
-    resolve_project_configuration,
 )
-from datp_core.config.runtime_settings import (
+from datp_core.configuration.runtime_resolution import (
     RuntimeBootstrapSettings,
 )
-from datp_core.domain.identifiers import DatasetId
+from datp_core.pipeline.identifiers import DatasetId
 
 
 @pytest.fixture(scope="module")

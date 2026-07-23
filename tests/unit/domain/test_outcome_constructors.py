@@ -2,9 +2,9 @@
 
 import pytest
 
-from datp_core.domain.artifacts import ArtifactId, ArtifactKey, ArtifactKind
-from datp_core.domain.identifiers import JobId
-from datp_core.domain.outcomes import JobExecutionStatus, StageJobOutcome, StageKind
+from datp_core.artifacts.models import ArtifactId, ArtifactKey, ArtifactKind
+from datp_core.pipeline.identifiers import JobId
+from datp_core.pipeline.models import JobExecutionStatus, StageJobOutcome, StageKind
 
 
 def test_succeeded_requires_produced_artifact() -> None:

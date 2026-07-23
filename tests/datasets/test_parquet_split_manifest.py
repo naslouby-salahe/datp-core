@@ -5,7 +5,7 @@ from pathlib import Path
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from datp_core.infrastructure.datasets.split_manifest import encode_split_manifest, read_materialized_split_evidence
+from datp_core.datasets.common import encode_split_manifest, read_materialized_split_evidence
 
 
 def test_extracts_manifest_from_materialized_parquet(tmp_path: Path) -> None:

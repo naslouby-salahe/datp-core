@@ -1,12 +1,12 @@
 from pathlib import Path
 
-from datp_core.domain.fingerprints import (
+from datp_core.configuration.fingerprints import compute_scientific_fingerprint
+from datp_core.pipeline.fingerprints import (
     Fingerprint,
     compute_file_checksum,
     compute_payload_checksum,
-    compute_scientific_fingerprint,
 )
-from datp_core.domain.identifiers import DatasetId
+from datp_core.pipeline.identifiers import DatasetId
 
 
 def test_fingerprint_computation_is_stable_and_semantic() -> None:

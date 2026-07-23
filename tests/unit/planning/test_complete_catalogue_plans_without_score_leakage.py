@@ -1,10 +1,10 @@
 """Plan expansion and calibration/test artifact-isolation tests."""
 
-from datp_core.composition.root import build_application
-from datp_core.domain.artifacts import ArtifactKind
-from datp_core.domain.identifiers import ExperimentId
-from datp_core.domain.outcomes import StageKind
-from datp_core.planning.expansion import expand_experiment_jobs
+from datp_core.bootstrap import build_application
+from datp_core.artifacts.models import ArtifactKind
+from datp_core.pipeline.identifiers import ExperimentId
+from datp_core.pipeline.models import StageKind
+from datp_core.experiments.planning import expand_experiment_jobs
 
 
 def test_complete_catalogue_resolves_and_anchor_plan_separates_scores() -> None:

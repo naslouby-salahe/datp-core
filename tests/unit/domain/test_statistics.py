@@ -2,7 +2,7 @@
 
 import pytest
 
-from datp_core.domain.statistics import (
+from datp_core.analysis.models import (
     StatisticalProcedureError,
     holm_adjust_p_values,
     matched_pairs_rank_biserial_correlation,

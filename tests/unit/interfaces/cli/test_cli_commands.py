@@ -11,8 +11,8 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
-import datp_core.interfaces.cli.app as cli_app_module
-from datp_core.interfaces.cli.app import app
+from datp_core import cli as cli_app_module
+from datp_core.cli import app
 
 runner = CliRunner()
 

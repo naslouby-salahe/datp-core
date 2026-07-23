@@ -6,9 +6,9 @@ import attrs
 import pydantic
 import pytest
 
-from datp_core.config.resolver import resolve_project_configuration
-from datp_core.domain.identifiers import ThresholdPolicyId
-from datp_core.domain.thresholding import (
+from datp_core.configuration.project import resolve_project_configuration
+from datp_core.pipeline.identifiers import ThresholdPolicyId
+from datp_core.thresholding.models import (
     CalibrationFallbackThresholdPolicyRecord,
     CentralizedPooledThresholdPolicyRecord,
     ClusterThresholdPolicyRecord,

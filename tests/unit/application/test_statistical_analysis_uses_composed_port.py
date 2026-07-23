@@ -1,8 +1,8 @@
 """Application statistics port-composition tests."""
 
-from datp_core.composition.root import build_application
-from datp_core.domain.identifiers import StatisticalProfileId
-from datp_core.domain.values import Seed
+from datp_core.bootstrap import build_application
+from datp_core.pipeline.identifiers import StatisticalProfileId
+from datp_core.pipeline.values import Seed
 
 
 def test_statistical_analysis_uses_the_composed_port() -> None:

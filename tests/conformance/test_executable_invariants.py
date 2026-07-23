@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datp_core.config.resolver import resolve_project_configuration
+from datp_core.configuration.project import resolve_project_configuration
 
 
 def test_executable_invariants_are_locked() -> None:
@@ -12,7 +12,7 @@ def test_executable_invariants_are_locked() -> None:
 
     # Assert configured experiments count
     assert len(resolved.experiments) > 0
-    from datp_core.domain.identifiers import ExperimentId
+    from datp_core.pipeline.identifiers import ExperimentId
 
     assert ExperimentId("anchor_reproduction") in resolved.experiments.keys()
 

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from datp_core.infrastructure.datasets.csv_source import (
+from datp_core.datasets.common import (
     LabeledSourceRow,
     SourceRowFailure,
     iter_labeled_numeric_csv_source,

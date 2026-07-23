@@ -10,12 +10,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from datp_core.application.configuration import (
+from datp_core.configuration.project import (
     ExplainAuthoredConfigurationDrift,
     ExplainExecutionConfigurationDrift,
     ExplainResolvedScientificDrift,
 )
-from datp_core.config.resolver import resolve_project_configuration
+from datp_core.configuration.project import resolve_project_configuration
 
 
 def _copy_real_config_tree(tmp_path: Path) -> Path:

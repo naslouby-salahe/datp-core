@@ -6,7 +6,7 @@ import polars as pl
 import pytest
 import torch
 
-from datp_core.infrastructure.learning.pytorch_adapter import (
+from datp_core.learning.scoring import (
     load_benign_client_tensors,
     score_materialized_split,
     score_personalized_materialized_split,

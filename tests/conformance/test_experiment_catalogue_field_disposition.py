@@ -13,7 +13,7 @@ from typing import Literal, get_args, get_origin
 
 from pydantic import BaseModel
 
-from datp_core.config.models.experiment_config import AuthoredExperimentsCatalogueConfig
+from datp_core.configuration.models import AuthoredExperimentsCatalogueConfig
 
 Disposition = Literal["SCIENTIFIC", "EXECUTION", "AUTHORING_METADATA"]
 

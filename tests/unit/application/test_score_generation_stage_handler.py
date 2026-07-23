@@ -21,9 +21,9 @@ from _synthetic_training_fixtures import (
     commit_materialized_dataset,
 )
 
-from datp_core.application.learning_stages import ScoreGenerationStageHandler
-from datp_core.composition.root import DatpApplication, build_application
-from datp_core.domain.artifacts import (
+from datp_core.learning.scoring import ScoreGenerationStageHandler
+from datp_core.bootstrap import DatpApplication, build_application
+from datp_core.artifacts.models import (
     ArtifactCommitMetadata,
     ArtifactCommitRequest,
     ArtifactFormat,
@@ -32,12 +32,12 @@ from datp_core.domain.artifacts import (
     ArtifactKind,
     BytesPayload,
 )
-from datp_core.domain.identifiers import ExperimentId, RunId
-from datp_core.domain.outcomes import JobExecutionStatus, StageJob, StageKind
-from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
-from datp_core.infrastructure.learning.pytorch_adapter import DynamicDenseAutoencoder
-from datp_core.planning.expansion import expand_experiment_jobs
-from datp_core.planning.identity import IdentityBuilder
+from datp_core.pipeline.identifiers import ExperimentId, RunId
+from datp_core.pipeline.models import JobExecutionStatus, StageJob, StageKind
+from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.learning.autoencoder import DynamicDenseAutoencoder
+from datp_core.experiments.planning import expand_experiment_jobs
+from datp_core.experiments.identity import IdentityBuilder
 
 _ROUND = 1
 

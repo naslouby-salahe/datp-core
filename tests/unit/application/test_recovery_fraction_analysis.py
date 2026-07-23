@@ -3,15 +3,12 @@
 import polars as pl
 import pytest
 
-from datp_core.application.analysis_stages import StatisticalAnalysisStageHandler
-from datp_core.application.scoring_support import (
-    conformal_seed_coverage,
-    seed_ratio_result,
-    threshold_tradeoff,
-)
-from datp_core.composition.root import build_application
-from datp_core.domain.catalogue import AnchorEquivalenceAnalysisRecord, RecoveryFractionAnalysisRecord
-from datp_core.domain.identifiers import ExperimentId
+from datp_core.analysis.coverage import conformal_seed_coverage, seed_ratio_result
+from datp_core.analysis.execution import StatisticalAnalysisStageHandler
+from datp_core.bootstrap import build_application
+from datp_core.evaluation.distributions import threshold_tradeoff
+from datp_core.experiments.models import AnchorEquivalenceAnalysisRecord, RecoveryFractionAnalysisRecord
+from datp_core.pipeline.identifiers import ExperimentId
 
 
 def test_recovery_fraction_uses_the_composed_shared_local_denominator() -> None:

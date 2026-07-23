@@ -3,12 +3,13 @@ from __future__ import annotations
 import base64
 import json
 
-from datp_core.application.reporting import freeze_result_family, render_frozen_report
-from datp_core.composition.root import build_application
-from datp_core.domain.identifiers import ExperimentId
-from datp_core.domain.outcomes import StageJobContext, StageKind
-from datp_core.planning.expansion import expand_experiment_jobs
-from datp_core.planning.identity import IdentityBuilder
+from datp_core.reporting.freezing import freeze_result_family
+from datp_core.reporting.rendering import render_frozen_report
+from datp_core.bootstrap import build_application
+from datp_core.pipeline.identifiers import ExperimentId
+from datp_core.pipeline.models import StageJobContext, StageKind
+from datp_core.experiments.planning import expand_experiment_jobs
+from datp_core.experiments.identity import IdentityBuilder
 
 
 def test_result_freeze_requires_every_configured_analysis_before_rendering() -> None:

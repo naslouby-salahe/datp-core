@@ -2,14 +2,14 @@
 
 import pytest
 
-from datp_core.domain.evaluation import (
+from datp_core.evaluation.models import (
     ClientConfusionMatrix,
     MetricStatus,
     assert_auroc_invariant,
     calculate_fpr_dispersion,
     calculate_pairwise_js_divergence,
 )
-from datp_core.domain.identifiers import ClientId
+from datp_core.pipeline.identifiers import ClientId
 
 
 def test_missing_class_metrics_are_explicitly_unavailable() -> None:

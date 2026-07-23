@@ -2,9 +2,9 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.composition.root import build_application
-from datp_core.domain.identifiers import DatasetId, MaterializationId
-from datp_core.infrastructure.datasets.ciciot2023 import write_ciciot2023_materialized_parquet
+from datp_core.bootstrap import build_application
+from datp_core.pipeline.identifiers import DatasetId, MaterializationId
+from datp_core.datasets.ciciot2023 import write_ciciot2023_materialized_parquet
 
 
 def test_ciciot2023_merged_rows_are_globally_deduplicated_then_streamed_to_parquet(tmp_path: Path) -> None:

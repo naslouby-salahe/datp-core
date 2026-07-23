@@ -1,9 +1,9 @@
 """Identity builder determinism and collision tests."""
 
-from datp_core.composition.root import build_application
-from datp_core.domain.identifiers import ExperimentId
-from datp_core.planning.expansion import expand_experiment_jobs
-from datp_core.planning.identity import IdentityBuilder
+from datp_core.bootstrap import build_application
+from datp_core.pipeline.identifiers import ExperimentId
+from datp_core.experiments.planning import expand_experiment_jobs
+from datp_core.experiments.identity import IdentityBuilder
 
 
 def test_identity_builder_determinism_across_all_experiments() -> None:
@@ -43,7 +43,7 @@ def test_no_duplicate_artifact_ids_in_any_experiment() -> None:
 
 def test_identity_builder_purity() -> None:
     """IdentityBuilder methods are stateless — repeated calls produce identical results."""
-    from datp_core.domain.outcomes import StageJobContext
+    from datp_core.pipeline.models import StageJobContext
 
     ctx = StageJobContext(experiment_id=ExperimentId("test_exp"), seed=42)
     builder = IdentityBuilder()
@@ -61,7 +61,7 @@ def test_identity_builder_purity() -> None:
 
 def test_typed_context_correctness_for_every_job_stage() -> None:
     """Every planned job's context maps to the correct stage-required fields."""
-    from datp_core.domain.outcomes import StageKind
+    from datp_core.pipeline.models import StageKind
 
     app = build_application()
     for exp_id in sorted(app.config.experiments.keys(), key=lambda e: e.value):

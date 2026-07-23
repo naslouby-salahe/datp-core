@@ -2,7 +2,7 @@
 
 import pytest
 
-from datp_core.domain.splits import SplitManifest, SplitManifestEntry, SplitMembership
+from datp_core.datasets.models import SplitManifest, SplitManifestEntry, SplitMembership
 
 
 def _entry(

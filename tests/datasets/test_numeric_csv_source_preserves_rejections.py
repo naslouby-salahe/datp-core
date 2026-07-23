@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.infrastructure.datasets.csv_source import read_numeric_csv_source
+from datp_core.datasets.common import read_numeric_csv_source
 
 
 def test_numeric_csv_reader_preserves_valid_rows_and_explicit_rejections(tmp_path: Path) -> None:

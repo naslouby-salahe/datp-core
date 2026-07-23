@@ -1,9 +1,9 @@
 """Stage execution never runs work whose prerequisite did not materialize."""
 
-from datp_core.application.experiment_execution import ExecuteExperimentUseCase
-from datp_core.composition.root import build_application
-from datp_core.domain.identifiers import ExperimentId
-from datp_core.domain.outcomes import JobExecutionStatus, StageKind
+from datp_core.experiments.execution import ExecuteExperimentUseCase
+from datp_core.bootstrap import build_application
+from datp_core.pipeline.identifiers import ExperimentId
+from datp_core.pipeline.models import JobExecutionStatus, StageKind
 
 
 def test_execution_suppresses_jobs_after_an_unavailable_prerequisite() -> None:

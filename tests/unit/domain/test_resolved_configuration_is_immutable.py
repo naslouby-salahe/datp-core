@@ -15,8 +15,8 @@ from typing import cast
 import pytest
 from attrs.exceptions import FrozenInstanceError
 
-from datp_core.config.resolver import resolve_project_configuration
-from datp_core.domain.identifiers import DatasetId, TrainingProfileId
+from datp_core.configuration.project import resolve_project_configuration
+from datp_core.pipeline.identifiers import DatasetId, TrainingProfileId
 
 
 @pytest.fixture(scope="module")

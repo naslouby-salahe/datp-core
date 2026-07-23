@@ -1,7 +1,7 @@
 """FedAvg/FedProx federated training: the shared client-update-weighted aggregation loop.
 
 `train_autoencoder` (the local per-client training step) and the three shared helpers
-(`weighted_average_state`, `validate_federated_training_inputs`, `_weighted_reconstruction_loss`)
+(`weighted_average_state`, `validate_federated_training_inputs`, `weighted_reconstruction_loss`)
 are reused by `learning/personalization.py`'s Ditto training loop -- FedAvg is the core ladder
 algorithm, so this module owns them; Ditto imports them from here rather than duplicating them.
 """
@@ -125,7 +125,7 @@ def federated_train_autoencoder(
             local_models.append((int(data.shape[0]), trained.state_dict()))
         global_model.load_state_dict(weighted_average_state(local_models))
         round_number = round_index + 1
-        losses.append((round_number, _weighted_reconstruction_loss(global_model, calibration_clients, device)))
+        losses.append((round_number, weighted_reconstruction_loss(global_model, calibration_clients, device)))
         if round_number in checkpoint_rounds:
             checkpoints.append(
                 FederatedCheckpoint(
@@ -187,7 +187,7 @@ def validate_federated_training_inputs(
         raise ValueError("Scheduled checkpoint rounds must be unique")
 
 
-def _weighted_reconstruction_loss(
+def weighted_reconstruction_loss(
     model: nn.Module, clients: tuple[tuple[str, torch.Tensor], ...], device: str
 ) -> float:
     model = model.to(device)

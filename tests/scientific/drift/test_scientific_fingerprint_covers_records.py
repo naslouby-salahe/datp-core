@@ -1,10 +1,10 @@
 """Scientific fingerprint sensitivity to resolved record content."""
 
-from datp_core.config.converter import unstructure_projection
-from datp_core.config.resolver import resolve_project_configuration
-from datp_core.domain.catalogue import ModelArchitectureRecord
-from datp_core.domain.fingerprints import compute_scientific_fingerprint
-from datp_core.domain.values import PositiveInt
+from datp_core.configuration.fingerprints import unstructure_projection
+from datp_core.configuration.project import resolve_project_configuration
+from datp_core.learning.models import ModelArchitectureRecord
+from datp_core.configuration.fingerprints import compute_scientific_fingerprint
+from datp_core.pipeline.values import PositiveInt
 
 
 def _model(hidden: tuple[int, ...]) -> ModelArchitectureRecord:

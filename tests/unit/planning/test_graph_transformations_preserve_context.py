@@ -1,8 +1,8 @@
 """Graph transformations preserve StageJob context."""
 
-from datp_core.composition.root import build_application
-from datp_core.domain.identifiers import ExperimentId
-from datp_core.planning.expansion import expand_experiment_jobs
+from datp_core.bootstrap import build_application
+from datp_core.pipeline.identifiers import ExperimentId
+from datp_core.experiments.planning import expand_experiment_jobs
 
 
 def test_topological_sort_preserves_context() -> None:
@@ -33,7 +33,7 @@ def test_topological_generations_preserve_context() -> None:
 
 def test_direct_enum_comparisons_in_validator() -> None:
     """Validator uses direct StageKind enum identity, not string comparisons."""
-    from datp_core.planning.validation import ExecutionPlanValidator
+    from datp_core.experiments.planning import ExecutionPlanValidator
 
     app = build_application()
     plan = expand_experiment_jobs(app.config.experiments.get(ExperimentId("anchor_reproduction")), app.config)

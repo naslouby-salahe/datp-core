@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from datp_core.domain.artifacts import (
+from datp_core.artifacts.models import (
     ArtifactCommitMetadata,
     ArtifactCommitRequest,
     ArtifactFormat,
@@ -12,9 +12,9 @@ from datp_core.domain.artifacts import (
     BytesPayload,
     FilePayload,
 )
-from datp_core.domain.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
-from datp_core.domain.identifiers import ArtifactId
-from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
+from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.configuration.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
+from datp_core.pipeline.identifiers import ArtifactId
 
 
 def _request() -> ArtifactCommitRequest:

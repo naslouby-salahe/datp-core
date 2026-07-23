@@ -8,9 +8,9 @@ import inspect
 
 import attrs
 
-from datp_core.config import protocol_resolution as protocol_module
-from datp_core.config.converter import unstructure_projection
-from datp_core.config.resolver import resolve_project_configuration
+from datp_core.configuration import protocol_resolution as protocol_module
+from datp_core.configuration.fingerprints import unstructure_projection
+from datp_core.configuration.project import resolve_project_configuration
 
 
 def test_protocol_resolution_module_has_no_model_dump_call_in_fingerprint_assembly() -> None:

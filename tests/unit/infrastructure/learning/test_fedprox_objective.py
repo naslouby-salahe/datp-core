@@ -5,14 +5,13 @@ from copy import deepcopy
 import pytest
 import torch
 
-from datp_core.infrastructure.learning.pytorch_adapter import (
+from datp_core.learning.autoencoder import (
     DynamicDenseAutoencoder,
     derive_model_initialization_seed,
-    ditto_train_autoencoder,
-    federated_train_autoencoder,
-    fedprox_objective,
     require_cuda_training_device,
 )
+from datp_core.learning.federated import federated_train_autoencoder, fedprox_objective
+from datp_core.learning.personalization import ditto_train_autoencoder
 
 
 def test_fedprox_objective_adds_half_mu_squared_distance_to_round_start_state() -> None:

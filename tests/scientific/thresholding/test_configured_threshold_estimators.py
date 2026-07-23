@@ -1,10 +1,10 @@
 import pytest
 
-from datp_core.application.scoring_support import threshold_exchange_cost
-from datp_core.application.threshold_construction import ConstructThresholdsUseCase
-from datp_core.composition.root import _build_estimator_registry, build_application
-from datp_core.domain.identifiers import ClientId, PopulationId, ThresholdPolicyId
-from datp_core.domain.thresholding import BenignCalibrationScores, ConformalAttainabilityStatus, ThresholdSet
+from datp_core.analysis.resources import threshold_exchange_cost
+from datp_core.thresholding.construction import ConstructThresholdsUseCase
+from datp_core.bootstrap import _build_estimator_registry, build_application
+from datp_core.pipeline.identifiers import ClientId, PopulationId, ThresholdPolicyId
+from datp_core.thresholding.models import BenignCalibrationScores, ConformalAttainabilityStatus, ThresholdSet
 
 
 @pytest.fixture

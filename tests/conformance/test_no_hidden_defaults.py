@@ -12,9 +12,11 @@ import inspect
 
 import attrs
 
-import datp_core.config.runtime_settings as runtime_settings
-import datp_core.domain.catalogue as catalogue
-import datp_core.domain.datasets as datasets
+import datp_core.configuration.loading as loading
+import datp_core.configuration.runtime_resolution as runtime_resolution
+import datp_core.datasets.models as datasets
+import datp_core.experiments.models as experiments
+import datp_core.learning.models as learning
 
 # (class name, field name) pairs permitted to hold an empty-collection factory default.
 _EMPTY_COLLECTION_ALLOWLIST = {
@@ -39,7 +41,7 @@ def _is_empty_collection_factory(default: object) -> bool:
 
 def test_resolved_records_have_no_hidden_defaults() -> None:
     offenders: list[str] = []
-    for module in (catalogue, runtime_settings, datasets):
+    for module in (experiments, learning, loading, runtime_resolution, datasets):
         for class_name, cls in inspect.getmembers(module, inspect.isclass):
             if cls.__module__ != module.__name__ or not attrs.has(cls) or class_name in _EXCLUDED_CLASSES:
                 continue

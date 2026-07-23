@@ -4,9 +4,8 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.composition.root import build_application
-from datp_core.domain.identifiers import DatasetId, MaterializationId
-from datp_core.infrastructure.datasets.edge_iiotset import (
+from datp_core.bootstrap import build_application
+from datp_core.datasets.edge_iiotset import (
     EdgeIIoTsetRow,
     EdgeTimestampedRow,
     encode_edge_chronological_split_as_parquet,
@@ -18,6 +17,7 @@ from datp_core.infrastructure.datasets.edge_iiotset import (
     split_edge_benign_rows,
     split_edge_chronological_rows,
 )
+from datp_core.pipeline.identifiers import DatasetId, MaterializationId
 
 
 def test_edge_normal_groups_define_clients_and_hex_numeric_values_are_accepted(tmp_path: Path) -> None:

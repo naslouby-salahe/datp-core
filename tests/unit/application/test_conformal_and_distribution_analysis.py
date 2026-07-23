@@ -16,19 +16,19 @@ import polars as pl
 import pytest
 from _statistical_analysis_fixtures import client_metric_frame, commit_parquet
 
-from datp_core.application.analysis_stages import StatisticalAnalysisStageHandler
-from datp_core.application.scoring_support import score_context
-from datp_core.composition.root import build_application
-from datp_core.domain.catalogue import (
+from datp_core.analysis.execution import StatisticalAnalysisStageHandler
+from datp_core.experiments.sweeps import score_context
+from datp_core.bootstrap import build_application
+from datp_core.experiments.models import (
     ConformalCoverageAnalysisRecord,
     DistributionMechanismAnalysisRecord,
     LockedClientDistributionAnalysisRecord,
 )
-from datp_core.domain.identifiers import ExperimentId, RunId
-from datp_core.domain.outcomes import StageJobContext
-from datp_core.domain.values import Seed
-from datp_core.infrastructure.artifacts.atomic_commit import AtomicArtifactRepository
-from datp_core.planning.identity import IdentityBuilder
+from datp_core.pipeline.identifiers import ExperimentId, RunId
+from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.values import Seed
+from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.experiments.identity import IdentityBuilder
 
 
 def test_analyze_conformal_coverage_computes_exact_marginal_and_macro_coverage(tmp_path: Path) -> None:

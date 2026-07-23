@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from datp_core.composition.root import _build_adapter_registry
-from datp_core.domain.datasets import AdapterKind
-from datp_core.infrastructure.datasets.adapter_registry import DatasetAdapterRegistry
+from datp_core.bootstrap import _build_adapter_registry
+from datp_core.datasets.materialization import DatasetAdapterRegistry
+from datp_core.datasets.models import AdapterKind
 
 
 def test_adapter_registry_contains_every_configured_dataset_adapter() -> None:

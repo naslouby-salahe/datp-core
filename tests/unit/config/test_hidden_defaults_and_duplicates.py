@@ -7,13 +7,13 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from datp_core.config.models.dataset_config import DatasetFieldSchemaConfig, MulticlassLabelConfig
-from datp_core.config.models.experiment_config import SweepVariableConfig
-from datp_core.config.models.protocol_config import LocalQuantileThresholdPolicyConfig
-from datp_core.config.resolver import resolve_project_configuration
-from datp_core.config.yaml_loader import ConfigurationError
-from datp_core.domain.catalogue import ConditionSweepRecord, ValueSweepRecord
-from datp_core.domain.identifiers import DatasetId, ExperimentId
+from datp_core.configuration.models import DatasetFieldSchemaConfig, MulticlassLabelConfig
+from datp_core.configuration.models import SweepVariableConfig
+from datp_core.configuration.models import LocalQuantileThresholdPolicyConfig
+from datp_core.configuration.project import resolve_project_configuration
+from datp_core.configuration.loading import ConfigurationError
+from datp_core.experiments.models import ConditionSweepRecord, ValueSweepRecord
+from datp_core.pipeline.identifiers import DatasetId, ExperimentId
 
 
 def test_multiclass_label_is_a_strict_typed_model_not_an_untyped_dict() -> None:

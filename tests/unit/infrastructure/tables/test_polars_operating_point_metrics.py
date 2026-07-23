@@ -2,8 +2,8 @@
 
 import polars as pl
 
-from datp_core.application.threshold_stages import _ineligible_client_metrics
-from datp_core.infrastructure.tables.polars_engine import compute_operating_point_metrics
+from datp_core.evaluation.operating_points import ineligible_client_metrics
+from datp_core.evaluation.operating_points import compute_operating_point_metrics
 
 
 def test_missing_class_metrics_are_null_with_a_typed_status() -> None:
@@ -48,7 +48,7 @@ def test_complete_class_metrics_follow_the_configured_strict_threshold_rule() ->
 
 
 def test_calibration_size_ineligible_client_retains_a_typed_metric_row() -> None:
-    result = _ineligible_client_metrics(
+    result = ineligible_client_metrics(
         pl.DataFrame(
             {"client_id": ["sample_starved"], "threshold": [None]},
             schema={"client_id": pl.String, "threshold": pl.Float64},

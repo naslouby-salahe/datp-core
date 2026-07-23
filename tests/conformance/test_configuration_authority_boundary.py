@@ -1,8 +1,8 @@
 """Conformance: authored configuration models never leak outside the configuration boundary.
 
-Authored Pydantic models (``datp_core.config.models``) may only be imported by the configuration
-layer itself, which is solely responsible for resolving every authored value into a pure,
-Pydantic-free domain record before it crosses into infrastructure, application, or domain code.
+Authored Pydantic models (``datp_core.configuration.models``) may only be imported by the
+configuration layer itself, which is solely responsible for resolving every authored value into
+a pure, Pydantic-free domain record before it crosses into any other feature package.
 """
 
 from __future__ import annotations
@@ -10,17 +10,19 @@ from __future__ import annotations
 from pathlib import Path
 
 _SRC_ROOT = Path(__file__).resolve().parents[2] / "src" / "datp_core"
-_MARKER = "datp_core.config.models"
+_MARKER = "datp_core.configuration.models"
 
-# Files permitted to import authored configuration models.
+# Files permitted to import authored configuration (Pydantic) models.
 _ALLOWLIST = {
-    "config/resolver.py",
-    "config/runtime_settings.py",
-    "config/yaml_loader.py",
-    "config/dataset_resolution.py",
-    "config/converter.py",
-    "config/protocol_resolution.py",
-    "config/experiment_resolution.py",
+    "configuration/resolution.py",
+    "configuration/runtime_resolution.py",
+    "configuration/loading.py",
+    "configuration/dataset_resolution.py",
+    "configuration/fingerprints.py",
+    "configuration/protocol_resolution.py",
+    "configuration/experiment_resolution.py",
+    "configuration/models.py",
+    "configuration/project.py",
 }
 
 
@@ -34,8 +36,8 @@ def test_authored_config_models_only_imported_by_allowlisted_modules() -> None:
         relative = _relative(path)
         if relative in _ALLOWLIST:
             continue
-        # Intra-model imports within config/models/ are always permitted.
-        if relative.startswith("config/models/"):
+        # Intra-model imports within configuration/ are always permitted.
+        if relative.startswith("configuration/"):
             continue
         if _MARKER in path.read_text(encoding="utf-8"):
             offenders.append(relative)

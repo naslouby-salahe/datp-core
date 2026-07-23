@@ -3,8 +3,8 @@
 import numpy as np
 import pytest
 
-from datp_core.application.statistical_analysis import StatisticalAnalysisUseCase
-from datp_core.domain.statistics import StatisticalProcedureError
+from datp_core.analysis.models import StatisticalAnalysisUseCase
+from datp_core.analysis.models import StatisticalProcedureError
 
 
 def test_bca_rejects_fewer_than_ten_paired_seed_differences() -> None:
