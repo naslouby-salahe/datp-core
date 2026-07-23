@@ -34,8 +34,8 @@ def diff_canonical_projections(
     before: CanonicalProjection, after: CanonicalProjection, *, path: str = "$"
 ) -> tuple[DriftEntry, ...]:
     """Walk two canonical projections and report every changed, added, or removed path."""
+    entries: list[DriftEntry] = []
     if isinstance(before, dict) and isinstance(after, dict):
-        entries: list[DriftEntry] = []
         for key in sorted(set(before) | set(after)):
             child_path = f"{path}.{key}"
             if key not in before:
@@ -44,10 +44,7 @@ def diff_canonical_projections(
                 entries.append(DriftEntry(path=child_path, kind="removed", old_value=before[key]))
             else:
                 entries.extend(diff_canonical_projections(before[key], after[key], path=child_path))
-        return tuple(entries)
-
-    if isinstance(before, list) and isinstance(after, list):
-        entries = []
+    elif isinstance(before, list) and isinstance(after, list):
         for index in range(max(len(before), len(after))):
             child_path = f"{path}[{index}]"
             if index >= len(before):
@@ -56,11 +53,9 @@ def diff_canonical_projections(
                 entries.append(DriftEntry(path=child_path, kind="removed", old_value=before[index]))
             else:
                 entries.extend(diff_canonical_projections(before[index], after[index], path=child_path))
-        return tuple(entries)
-
-    if before != after:
-        return (DriftEntry(path=path, kind="changed", old_value=before, new_value=after),)
-    return ()
+    elif before != after:
+        entries.append(DriftEntry(path=path, kind="changed", old_value=before, new_value=after))
+    return tuple(entries)
 
 
 def resolve_project_configuration(
