@@ -36,7 +36,12 @@ from datp_core.experiments.models import (
     QuantileEstimationAnalysisRecord,
 )
 from datp_core.experiments.sweeps import score_context
-from datp_core.pipeline.frames import validate_calibration_score_frame, validate_client_metric_frame, validate_test_score_frame, validate_threshold_frame
+from datp_core.pipeline.frames import (
+    validate_calibration_score_frame,
+    validate_client_metric_frame,
+    validate_test_score_frame,
+    validate_threshold_frame,
+)
 from datp_core.pipeline.identifiers import RunId
 from datp_core.pipeline.models import StageJobContext
 from datp_core.pipeline.values import Seed
@@ -52,6 +57,7 @@ def distribution_seed_result(
     repository: ArtifactRepository,
 ) -> DistributionMechanismSeedResult:
     from collections.abc import Mapping
+
     result: dict[str, Mapping[str, ClientScoreDistributionRecord]] = {}
     for label in evaluations:
         evaluation = next(item for item in experiment.evaluations if item.label == label)
@@ -64,7 +70,9 @@ def distribution_seed_result(
         )
         threshold = repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}")
         metrics = repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
-        scores = repository.read(f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(score_context(context)).value}")
+        scores = repository.read(
+            f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(score_context(context)).value}"
+        )
         if any(not artifact.found or artifact.payload_bytes is None for artifact in (threshold, metrics, scores)):
             raise ValueError(f"Distribution artifacts are unavailable for seed {seed}, label '{label}'")
         assert threshold.payload_bytes is not None
@@ -99,7 +107,12 @@ def threshold_and_calibration_frame(
     calibration = repository.read(
         f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(score_context(context)).value}"
     )
-    if not threshold.found or threshold.payload_bytes is None or not calibration.found or calibration.payload_bytes is None:
+    if (
+        not threshold.found
+        or threshold.payload_bytes is None
+        or not calibration.found
+        or calibration.payload_bytes is None
+    ):
         raise ValueError(f"Quantile-estimation artifacts are unavailable for seed {seed}, label '{label}'")
     return (
         validate_threshold_frame(pl.read_parquet(BytesIO(threshold.payload_bytes))),
@@ -116,7 +129,9 @@ def analyze_distribution_mechanism(
     run_id: RunId,
 ) -> DistributionMechanismAnalysisResult:
     seed_results = tuple(
-        distribution_seed_result(experiment, seed.value, analysis.source_evaluations, run_id, None, repository=repository)
+        distribution_seed_result(
+            experiment, seed.value, analysis.source_evaluations, run_id, None, repository=repository
+        )
         for seed in seeds
     )
     if analysis.field_formulas is None:
@@ -184,7 +199,9 @@ def analyze_quantile_estimation(
             for label in analysis.source_evaluations
         }
         oracle = frames[analysis.oracle_reference][0]
-        oracle_values = {str(client): float(value) for client, value in oracle.select("client_id", "threshold").iter_rows()}
+        oracle_values = {
+            str(client): float(value) for client, value in oracle.select("client_id", "threshold").iter_rows()
+        }
         if len(set(oracle_values.values())) != 1:
             raise ValueError("Quantile-estimation oracle must provide one shared threshold")
         oracle_threshold = next(iter(oracle_values.values()))

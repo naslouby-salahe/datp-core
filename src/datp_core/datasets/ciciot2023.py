@@ -370,7 +370,6 @@ def _split_role(draw: float, train_ratio: float, calibration_ratio: float) -> st
     return "test"
 
 
-
 class CICIoT2023Adapter:
     """CICIoT2023 dataset materializer: merged-source pseudo-client, dedup, random split, Parquet output."""
 

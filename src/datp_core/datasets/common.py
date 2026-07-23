@@ -17,7 +17,6 @@ import pyarrow.parquet as pq
 from attrs import define
 
 from datp_core.datasets.models import MaterializedSplitEvidence, SplitManifest, SplitManifestEntry, SplitMembership
-from datp_core.pipeline.fingerprints import Fingerprint
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -247,41 +246,6 @@ class NormalizationEvidence:
             separators=(",", ":"),
             sort_keys=True,
         ).encode("utf-8")
-
-
-def write_dataframe_parquet(
-    df: pl.DataFrame,
-    target_path: Path,
-    scientific_fingerprint: Fingerprint | None = None,
-    compression: str = "zstd",
-) -> None:
-    """Write Polars DataFrame to Parquet with PyArrow schema validation and metadata injection."""
-    target_path.parent.mkdir(parents=True, exist_ok=True)
-    sorted_df = df.select(sorted(df.columns))
-    arrow_table = sorted_df.to_arrow()
-
-    existing_meta = arrow_table.schema.metadata or {}
-    custom_meta = {
-        b"schema_version": b"1",
-        b"datp_fingerprint": (scientific_fingerprint.value.encode("utf-8") if scientific_fingerprint else b"none"),
-    }
-    merged_meta = {**existing_meta, **custom_meta}
-    arrow_table = arrow_table.replace_schema_metadata(merged_meta)
-
-    pq.write_table(arrow_table, target_path, compression=compression)
-
-
-def read_dataframe_parquet(target_path: Path) -> pl.DataFrame:
-    """Read Parquet file into Polars DataFrame with existence check."""
-    if not target_path.exists():
-        raise FileNotFoundError(f"Parquet file not found: {target_path}")
-    return pl.read_parquet(target_path)
-
-
-def inspect_parquet_schema(target_path: Path) -> dict[str, str]:
-    """Inspect PyArrow Parquet schema column types."""
-    schema = pq.read_schema(target_path)
-    return {name: str(dtype) for name, dtype in zip(schema.names, schema.types, strict=False)}
 
 
 def normalize_materialized_parquet(

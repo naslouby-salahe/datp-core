@@ -659,7 +659,9 @@ def _deduplicated_edge_benign_rows(rows: tuple[EdgeIIoTsetRow, ...]) -> tuple[Ed
     return tuple(canonical.values())
 
 
-def _validate_edge_chronological_minimums(split: EdgeChronologicalSplitRows, materialization: DatasetMaterialization) -> None:
+def _validate_edge_chronological_minimums(
+    split: EdgeChronologicalSplitRows, materialization: DatasetMaterialization
+) -> None:
     minimums = materialization.split_minimum_row_counts or {}
     roles = {
         "historical_train": split.historical_train,

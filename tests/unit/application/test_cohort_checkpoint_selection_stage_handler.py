@@ -12,8 +12,6 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
-from datp_core.learning.checkpoints import CohortCheckpointSelectionStageHandler
-from datp_core.bootstrap import DatpApplication, build_application
 from datp_core.artifacts.models import (
     ArtifactCommitMetadata,
     ArtifactCommitRequest,
@@ -23,11 +21,12 @@ from datp_core.artifacts.models import (
     ArtifactKind,
     BytesPayload,
 )
-from datp_core.learning.checkpoints import select_cohort_validation_checkpoint
+from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.bootstrap import DatpApplication, build_application
+from datp_core.experiments.planning import expand_experiment_jobs
+from datp_core.learning.checkpoints import CohortCheckpointSelectionStageHandler, select_cohort_validation_checkpoint
 from datp_core.pipeline.identifiers import ExperimentId, RunId
 from datp_core.pipeline.models import JobExecutionStatus, StageJob, StageKind
-from datp_core.artifacts.repository import AtomicArtifactRepository
-from datp_core.experiments.planning import expand_experiment_jobs
 
 _SCHEDULED_ROUNDS = (25, 50, 75, 100, 125, 150, 200)
 

@@ -1,8 +1,8 @@
 """Domain models for operating point evaluation, confusion matrices, and metrics."""
 
 from __future__ import annotations
-import math
 
+import math
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from enum import Enum
@@ -11,7 +11,7 @@ from statistics import mean
 
 from attrs import define
 
-from datp_core.pipeline.identifiers import ClientId, MetricBundleId, MetricId, ThresholdPolicyId
+from datp_core.pipeline.identifiers import ClientId, MetricBundleId
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -344,15 +344,3 @@ def _linear_quantile(values: tuple[float, ...], probability: float) -> float:
     upper = min(lower + 1, len(ordered) - 1)
     fraction = position - lower
     return ordered[lower] + ((ordered[upper] - ordered[lower]) * fraction)
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class MetricResultRecord:
-    metric_id: MetricId
-    policy_id: ThresholdPolicyId
-    client_id: ClientId | None
-    value: float | None
-    status: MetricStatus
-
-    def __post_init__(self) -> None:
-        MetricValue(value=self.value, status=self.status)

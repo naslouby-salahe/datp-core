@@ -76,8 +76,12 @@ def analyze_threshold_stability(
                 calibration_replicate=replicate,
                 evaluation_label=analysis.source_evaluation,
             )
-            threshold_artifact = repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}")
-            metrics_artifact = repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
+            threshold_artifact = repository.read(
+                f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}"
+            )
+            metrics_artifact = repository.read(
+                f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}"
+            )
             if (
                 not threshold_artifact.found
                 or threshold_artifact.payload_bytes is None
@@ -99,7 +103,9 @@ def analyze_threshold_stability(
         test_artifact = repository.read(f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(test_context).value}")
         if not test_artifact.found or test_artifact.payload_bytes is None:
             raise ValueError(f"Test scores are unavailable for threshold stability seed {seed.value}")
-        test_clients = set(validate_test_score_frame(pl.read_parquet(BytesIO(test_artifact.payload_bytes)))["client_id"])
+        test_clients = set(
+            validate_test_score_frame(pl.read_parquet(BytesIO(test_artifact.payload_bytes)))["client_id"]
+        )
         variances = [
             sum((value - (sum(values) / len(values))) ** 2 for value in values) / len(values)
             for values in threshold_values.values()
@@ -134,8 +140,12 @@ def analyze_cluster_stability(
     run_id: RunId,
 ) -> ClusterStabilityAnalysisResult:
     if analysis.reference_evaluation is not None:
-        return _analyze_cluster_ablation(analysis, repository=repository, experiment=experiment, seeds=seeds, run_id=run_id)
-    return _analyze_cluster_membership(analysis, repository=repository, experiment=experiment, seeds=seeds, run_id=run_id)
+        return _analyze_cluster_ablation(
+            analysis, repository=repository, experiment=experiment, seeds=seeds, run_id=run_id
+        )
+    return _analyze_cluster_membership(
+        analysis, repository=repository, experiment=experiment, seeds=seeds, run_id=run_id
+    )
 
 
 def _analyze_cluster_ablation(
@@ -162,7 +172,9 @@ def _analyze_cluster_ablation(
     ref_eval = analysis.reference_evaluation
     assert ref_eval is not None  # guarded by _analyze_cluster_ablation caller
     for seed in seeds:
-        reference = _cluster_membership(experiment.identifier, seed.value, ref_eval, None, run_id, repository=repository)
+        reference = _cluster_membership(
+            experiment.identifier, seed.value, ref_eval, None, run_id, repository=repository
+        )
         for subset in subsets:
             ablated = _cluster_membership(
                 experiment.identifier, seed.value, analysis.source_evaluation, subset, run_id, repository=repository
@@ -199,10 +211,17 @@ def _analyze_cluster_membership(
     memberships: dict[int, dict[str, int]] = {}
     seed_summaries: list[ClusterStabilitySeedSummary] = []
     for seed in seeds:
-        context = StageJobContext(experiment_id=experiment.identifier, seed=seed.value, evaluation_label=analysis.source_evaluation)
+        context = StageJobContext(
+            experiment_id=experiment.identifier, seed=seed.value, evaluation_label=analysis.source_evaluation
+        )
         thresholds = repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}")
         metrics = repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
-        if not thresholds.found or thresholds.payload_bytes is None or not metrics.found or metrics.payload_bytes is None:
+        if (
+            not thresholds.found
+            or thresholds.payload_bytes is None
+            or not metrics.found
+            or metrics.payload_bytes is None
+        ):
             raise ValueError(f"Cluster stability artifacts are unavailable for seed {seed.value}")
         threshold_frame = pl.read_parquet(BytesIO(thresholds.payload_bytes))
         if "cluster_label" not in threshold_frame.columns or threshold_frame["cluster_label"].null_count() > 0:
@@ -259,7 +278,9 @@ def _cluster_membership(
     *,
     repository: ArtifactRepository,
 ) -> dict[str, int]:
-    context = StageJobContext(experiment_id=experiment_id, seed=seed, evaluation_label=label, fingerprint_features=features)
+    context = StageJobContext(
+        experiment_id=experiment_id, seed=seed, evaluation_label=label, fingerprint_features=features
+    )
     artifact = repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}")
     if not artifact.found or artifact.payload_bytes is None:
         raise ValueError(f"Cluster threshold artifact is unavailable for seed {seed}")

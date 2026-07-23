@@ -9,7 +9,6 @@ from __future__ import annotations
 
 from typing import cast
 
-
 from datp_core.configuration.fingerprints import unstructure_projection
 from datp_core.configuration.loading import ConfigurationError
 from datp_core.configuration.models import AnalysisSpecConfig, AuthoredExperimentConfig, SweepVariableConfig
@@ -101,11 +100,51 @@ def _build_paired_threshold_analysis_record(
         result_type=a.result_type,
         statistical_profile=statistical_profile,
         secondary_statistical_profile=secondary_statistical_profile,
-        first_evaluation=cast(str, _require(getattr(a, "first_evaluation"), experiment_name=exp_name, analysis_label=a.label, field_name="first_evaluation")),
-        second_evaluation=cast(str, _require(getattr(a, "second_evaluation"), experiment_name=exp_name, analysis_label=a.label, field_name="second_evaluation")),
-        primary_metric=cast(str, _require(getattr(a, "primary_metric"), experiment_name=exp_name, analysis_label=a.label, field_name="primary_metric")),
-        delta_orientation=cast(str, _require(getattr(a, "delta_orientation"), experiment_name=exp_name, analysis_label=a.label, field_name="delta_orientation")),
-        delta_interpretation=cast(str, _require(getattr(a, "delta_interpretation"), experiment_name=exp_name, analysis_label=a.label, field_name="delta_interpretation")),
+        first_evaluation=cast(
+            str,
+            _require(
+                a.first_evaluation,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="first_evaluation",
+            ),
+        ),
+        second_evaluation=cast(
+            str,
+            _require(
+                a.second_evaluation,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="second_evaluation",
+            ),
+        ),
+        primary_metric=cast(
+            str,
+            _require(
+                a.primary_metric,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="primary_metric",
+            ),
+        ),
+        delta_orientation=cast(
+            str,
+            _require(
+                a.delta_orientation,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="delta_orientation",
+            ),
+        ),
+        delta_interpretation=cast(
+            str,
+            _require(
+                a.delta_interpretation,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="delta_interpretation",
+            ),
+        ),
         required_direction=a.required_direction,
         monotonicity_required=a.monotonicity_required,
         ordering_inversion_reporting=a.ordering_inversion_reporting,
@@ -125,22 +164,139 @@ def _build_temporal_recovery_analysis_record(
         kind=a.kind,
         result_type=a.result_type,
         statistical_profile=statistical_profile,
-        primary_metric=cast(str, _require(getattr(a, "primary_metric"), experiment_name=exp_name, analysis_label=a.label, field_name="primary_metric")),
-        static_reference_evaluation=cast(str, _require(getattr(a, "static_reference_evaluation"), experiment_name=exp_name, analysis_label=a.label, field_name="static_reference_evaluation")),
-        frozen_evaluation=cast(str, _require(getattr(a, "frozen_evaluation"), experiment_name=exp_name, analysis_label=a.label, field_name="frozen_evaluation")),
-        recalibrated_evaluation=cast(str, _require(getattr(a, "recalibrated_evaluation"), experiment_name=exp_name, analysis_label=a.label, field_name="recalibrated_evaluation")),
-        recovery_fields=_tuple_str_list(_require(getattr(a, "recovery_fields"), experiment_name=exp_name, analysis_label=a.label, field_name="recovery_fields")),
-        drift_excess_formula=cast(str, _require(getattr(a, "drift_excess_formula"), experiment_name=exp_name, analysis_label=a.label, field_name="drift_excess_formula")),
-        recovered_amount_formula=cast(str, _require(getattr(a, "recovered_amount_formula"), experiment_name=exp_name, analysis_label=a.label, field_name="recovered_amount_formula")),
-        recovery_ratio_formula=cast(str, _require(getattr(a, "recovery_ratio_formula"), experiment_name=exp_name, analysis_label=a.label, field_name="recovery_ratio_formula")),
-        meaningful_degradation_rule=cast(str, _require(getattr(a, "meaningful_degradation_rule"), experiment_name=exp_name, analysis_label=a.label, field_name="meaningful_degradation_rule")),
-        recovery_ratio_precondition=cast(str, _require(getattr(a, "recovery_ratio_precondition"), experiment_name=exp_name, analysis_label=a.label, field_name="recovery_ratio_precondition")),
-        negative_recovery_policy=cast(str, _require(getattr(a, "negative_recovery_policy"), experiment_name=exp_name, analysis_label=a.label, field_name="negative_recovery_policy")),
-        recovery_ratio_direction=cast(str, _require(getattr(a, "recovery_ratio_direction"), experiment_name=exp_name, analysis_label=a.label, field_name="recovery_ratio_direction")),
-        chronology_unverifiable_policy=cast(str, _require(getattr(a, "chronology_unverifiable_policy"), experiment_name=exp_name, analysis_label=a.label, field_name="chronology_unverifiable_policy")),
-        outcome_bands=cast(list, _require(getattr(a, "outcome_bands"), experiment_name=exp_name, analysis_label=a.label, field_name="outcome_bands")),
+        primary_metric=cast(
+            str,
+            _require(
+                a.primary_metric,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="primary_metric",
+            ),
+        ),
+        static_reference_evaluation=cast(
+            str,
+            _require(
+                a.static_reference_evaluation,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="static_reference_evaluation",
+            ),
+        ),
+        frozen_evaluation=cast(
+            str,
+            _require(
+                a.frozen_evaluation,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="frozen_evaluation",
+            ),
+        ),
+        recalibrated_evaluation=cast(
+            str,
+            _require(
+                a.recalibrated_evaluation,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="recalibrated_evaluation",
+            ),
+        ),
+        recovery_fields=_tuple_str_list(
+            _require(
+                a.recovery_fields,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="recovery_fields",
+            )
+        ),
+        drift_excess_formula=cast(
+            str,
+            _require(
+                a.drift_excess_formula,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="drift_excess_formula",
+            ),
+        ),
+        recovered_amount_formula=cast(
+            str,
+            _require(
+                a.recovered_amount_formula,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="recovered_amount_formula",
+            ),
+        ),
+        recovery_ratio_formula=cast(
+            str,
+            _require(
+                a.recovery_ratio_formula,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="recovery_ratio_formula",
+            ),
+        ),
+        meaningful_degradation_rule=cast(
+            str,
+            _require(
+                a.meaningful_degradation_rule,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="meaningful_degradation_rule",
+            ),
+        ),
+        recovery_ratio_precondition=cast(
+            str,
+            _require(
+                a.recovery_ratio_precondition,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="recovery_ratio_precondition",
+            ),
+        ),
+        negative_recovery_policy=cast(
+            str,
+            _require(
+                a.negative_recovery_policy,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="negative_recovery_policy",
+            ),
+        ),
+        recovery_ratio_direction=cast(
+            str,
+            _require(
+                a.recovery_ratio_direction,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="recovery_ratio_direction",
+            ),
+        ),
+        chronology_unverifiable_policy=cast(
+            str,
+            _require(
+                a.chronology_unverifiable_policy,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="chronology_unverifiable_policy",
+            ),
+        ),
+        outcome_bands=cast(
+            list,
+            _require(
+                a.outcome_bands,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="outcome_bands",
+            ),
+        ),
         outcome_bands_are_mutually_exclusive_and_exhaustive=cast(
-            bool, _require(getattr(a, "outcome_bands_are_mutually_exclusive_and_exhaustive"), experiment_name=exp_name, analysis_label=a.label, field_name="outcome_bands_are_mutually_exclusive_and_exhaustive")
+            bool,
+            _require(
+                a.outcome_bands_are_mutually_exclusive_and_exhaustive,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="outcome_bands_are_mutually_exclusive_and_exhaustive",
+            ),
         ),
     )
 
@@ -157,7 +313,9 @@ def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) 
     )
 
     if a.kind == "paired_threshold_analysis":
-        return _build_paired_threshold_analysis_record(exp_cfg.name, a, statistical_profile, secondary_statistical_profile)
+        return _build_paired_threshold_analysis_record(
+            exp_cfg.name, a, statistical_profile, secondary_statistical_profile
+        )
     if a.kind == "absorption_analysis":
         return AbsorptionAnalysisRecord(
             label=a.label,

@@ -1,9 +1,9 @@
 """Identity builder determinism and collision tests."""
 
 from datp_core.bootstrap import build_application
-from datp_core.pipeline.identifiers import ExperimentId
-from datp_core.experiments.planning import expand_experiment_jobs
 from datp_core.experiments.identity import IdentityBuilder
+from datp_core.experiments.planning import expand_experiment_jobs
+from datp_core.pipeline.identifiers import ExperimentId
 
 
 def test_identity_builder_determinism_across_all_experiments() -> None:

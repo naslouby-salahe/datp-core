@@ -11,8 +11,8 @@ stability,coverage,temporal,resources,distributions}.py`` and ``analysis/executi
 """
 
 from __future__ import annotations
-import math
 
+import math
 from collections.abc import Iterable, Mapping
 from math import isfinite
 from typing import cast
@@ -22,100 +22,9 @@ from attrs import asdict, define
 from scipy import stats
 
 from datp_core.evaluation.distributions import ClientScoreDistributionRecord, ThresholdTradeoffEntry
-from datp_core.pipeline.identifiers import ExperimentId, MetricId, StatisticalProfileId, ThresholdPolicyId
-from datp_core.pipeline.values import PositiveInt, Probability, Seed, TypedDomainRegistry
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class StatisticalProfileRecord:
-    """Resolved, executable statistical analysis contract (BCa/percentile bootstrap, Wilcoxon, etc.)."""
-
-    identifier: StatisticalProfileId
-    method: str | None
-    confidence_level: Probability | None
-    resample_count: PositiveInt | None
-    minimum_units: PositiveInt | None
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class FieldEncodingRecord:
-    bytes_per_field: int
-    byte_order: str
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class ThresholdExchangeEntryRecord:
-    uplink_fields_per_client: tuple[str, ...] | None
-    downlink_fields_per_client: tuple[str, ...] | None
-    candidate_grid_downlink_fields_per_client: tuple[str, ...] | None
-    candidate_grid_uplink_fields_per_client_per_candidate: tuple[str, ...] | None
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class ThresholdExchangeRecord:
-    direction: str
-    b1: ThresholdExchangeEntryRecord
-    b2: ThresholdExchangeEntryRecord
-    b4: ThresholdExchangeEntryRecord
-    federated_summary: ThresholdExchangeEntryRecord
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class ModelExchangeRecord:
-    field_width: str
-    directions: tuple[str, ...]
-    bytes_per_round_formula: str
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class CheckpointStorageRecord:
-    contents: tuple[str, ...]
-    model_parameter_bytes_formula: str
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class CommunicationEstimationContractRecord:
-    estimate_basis: str
-    field_encodings: Mapping[str, FieldEncodingRecord]
-    threshold_exchange: ThresholdExchangeRecord
-    candidate_grid_payload: str
-    model_exchange: ModelExchangeRecord
-    checkpoint_storage: CheckpointStorageRecord
-    filename_match_is_not_lineage_evidence: bool
-    frozen_artifacts_immutable: bool
-    ambiguous_latest_reference: str
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class BenignDecisionRateRecord:
-    configured: bool
-    value: float | None
-    required_fields: tuple[str, ...]
-    finite_value_validation: str
-    non_negative_validation: str
-    unavailable_behavior: str
-    invented_rate_forbidden: bool
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class OperationalInputsRecord:
-    benign_decision_rate: BenignDecisionRateRecord
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class NestedReplicatePolicyRecord:
-    replicate_values_computed_first: bool
-    summarized_within_seed_before_across_seed_inference: bool
-    seed_level_statistic: str
-    replicates_counted_as_independent_units: bool
-    additional_required_replicate_statistic: str
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class ResultTypeRecord:
-    identifier: str
-    permitted_evidence_roles: tuple[str, ...]
-
+from datp_core.pipeline.identifiers import MetricId, StatisticalProfileId, ThresholdPolicyId
+from datp_core.pipeline.protocol_types import StatisticalProfileRecord
+from datp_core.pipeline.values import Probability, Seed, TypedDomainRegistry
 
 # --- Pure statistical procedure primitives (BCa/percentile bootstrap, Wilcoxon, Spearman, linear
 # regression, Holm-Bonferroni correction) shared by every paired/temporal/association analysis.
@@ -292,7 +201,9 @@ class StatisticalAnalysisUseCase:
     def _compute_wilcoxon_signed_rank(x: np.ndarray, y: np.ndarray) -> HypothesisTestResult:
         res = stats.wilcoxon(x, y, zero_method="wilcox", correction=True)
         statistic, p_value = cast("tuple[float, float]", res)
-        return HypothesisTestResult(test_name="wilcoxon_signed_rank", statistic=float(statistic), p_value=float(p_value))
+        return HypothesisTestResult(
+            test_name="wilcoxon_signed_rank", statistic=float(statistic), p_value=float(p_value)
+        )
 
     @staticmethod
     def _compute_bca_bootstrap_ci(
@@ -332,7 +243,9 @@ class StatisticalAnalysisUseCase:
         statistic, p_value = cast("tuple[float, float]", stats.spearmanr(predictor, outcome))
         if not np.isfinite((statistic, p_value)).all():
             raise StatisticalProcedureError("Spearman correlation is undefined for the supplied observations")
-        return HypothesisTestResult(test_name="spearman_correlation", statistic=float(statistic), p_value=float(p_value))
+        return HypothesisTestResult(
+            test_name="spearman_correlation", statistic=float(statistic), p_value=float(p_value)
+        )
 
     @staticmethod
     def _compute_linear_regression(predictor: np.ndarray, outcome: np.ndarray) -> LinearRegressionResult:
@@ -710,12 +623,6 @@ class AnchorEquivalenceAnalysisResult:
     reproduced_delta: float
     reproduced_confidence_interval: tuple[float, float]
     historical_reference: Mapping[str, float | str]
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class AbsorptionReference:
-    experiment: ExperimentId
-    analysis: str
 
 
 AnalysisResult = (

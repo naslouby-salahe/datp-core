@@ -14,7 +14,6 @@ from datp_core.pipeline.models import JobExecutionStatus, PlanningGraph, StageJo
 from datp_core.pipeline.stages import StageHandler
 
 
-
 def _execute_or_fail(handler, job, run_id):
     """Execute a handler or return a failure outcome if no handler is registered."""
     if handler is not None:
@@ -24,6 +23,7 @@ def _execute_or_fail(handler, job, run_id):
         stage=job.stage,
         error_message="No stage handler is registered",
     )
+
 
 def run_planning_graph(
     graph: PlanningGraph,

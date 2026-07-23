@@ -8,10 +8,10 @@ from pathlib import Path
 import torch
 
 from datp_core.artifacts.models import ArtifactCorruptionReason, ArtifactFormat, ArtifactKey, ArtifactKind
-from datp_core.configuration.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
-from datp_core.pipeline.identifiers import ArtifactId
 from datp_core.artifacts.repository import AtomicArtifactRepository
 from datp_core.artifacts.serialization import load_model_safetensors, save_model_safetensors
+from datp_core.configuration.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
+from datp_core.pipeline.identifiers import ArtifactId
 
 
 def _tensor_state_dict() -> dict[str, torch.Tensor]:

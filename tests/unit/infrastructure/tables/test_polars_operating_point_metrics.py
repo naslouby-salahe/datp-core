@@ -2,8 +2,7 @@
 
 import polars as pl
 
-from datp_core.evaluation.operating_points import ineligible_client_metrics
-from datp_core.evaluation.operating_points import compute_operating_point_metrics
+from datp_core.evaluation.operating_points import compute_operating_point_metrics, ineligible_client_metrics
 
 
 def test_missing_class_metrics_are_null_with_a_typed_status() -> None:

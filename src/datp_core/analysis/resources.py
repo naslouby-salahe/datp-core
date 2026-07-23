@@ -8,7 +8,6 @@ from safetensors.torch import load as load_safetensors
 from datp_core.analysis.distributions import threshold_and_calibration_frame
 from datp_core.analysis.models import (
     AlertBurdenAnalysisResult,
-    CommunicationEstimationContractRecord,
     ResourceCostAnalysisResult,
     ResourceCostEvaluationResult,
     ResourceCostSeedResult,
@@ -20,6 +19,7 @@ from datp_core.experiments.models import AlertBurdenAnalysisRecord, ExperimentRe
 from datp_core.experiments.sweeps import score_context
 from datp_core.pipeline.identifiers import RunId
 from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.protocol_types import CommunicationEstimationContractRecord
 from datp_core.pipeline.values import Seed
 from datp_core.thresholding.models import (
     FederatedMatchedExceedanceThresholdPolicyRecord,
@@ -97,7 +97,9 @@ def analyze_resource_cost(
             policy = config.threshold_policies.get(evaluation.threshold_policy_id)
             fields, threshold_bytes = threshold_exchange_cost(contract, policy, calibration["client_id"].n_unique())
             context = score_context(
-                StageJobContext(experiment_id=experiment.identifier, seed=seed.value, population_id=evaluation.population_id)
+                StageJobContext(
+                    experiment_id=experiment.identifier, seed=seed.value, population_id=evaluation.population_id
+                )
             )
             checkpoint = repository.read(f"runs/{run_id.value}/{IdentityBuilder.training_job_id(context).value}")
             if not checkpoint.found or checkpoint.payload_bytes is None:

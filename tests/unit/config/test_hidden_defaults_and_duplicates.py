@@ -7,11 +7,14 @@ import pytest
 import yaml
 from pydantic import ValidationError
 
-from datp_core.configuration.models import DatasetFieldSchemaConfig, MulticlassLabelConfig
-from datp_core.configuration.models import SweepVariableConfig
-from datp_core.configuration.models import LocalQuantileThresholdPolicyConfig
-from datp_core.configuration.project import resolve_project_configuration
 from datp_core.configuration.loading import ConfigurationError
+from datp_core.configuration.models import (
+    DatasetFieldSchemaConfig,
+    LocalQuantileThresholdPolicyConfig,
+    MulticlassLabelConfig,
+    SweepVariableConfig,
+)
+from datp_core.configuration.project import resolve_project_configuration
 from datp_core.experiments.models import ConditionSweepRecord, ValueSweepRecord
 from datp_core.pipeline.identifiers import DatasetId, ExperimentId
 

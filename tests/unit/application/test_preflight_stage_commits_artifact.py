@@ -3,12 +3,12 @@
 import json
 from pathlib import Path
 
-from datp_core.datasets.materialization import PreflightStageHandler
-from datp_core.bootstrap import build_application
 from datp_core.artifacts.models import ArtifactKey, ArtifactKind
+from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.bootstrap import build_application
+from datp_core.datasets.materialization import PreflightStageHandler
 from datp_core.pipeline.identifiers import ArtifactId, ExperimentId, JobId, RunId
 from datp_core.pipeline.models import JobExecutionStatus, StageJob, StageJobContext, StageKind
-from datp_core.artifacts.repository import AtomicArtifactRepository
 
 
 def test_preflight_stage_commits_the_resolved_identity_artifact(tmp_path: Path) -> None:

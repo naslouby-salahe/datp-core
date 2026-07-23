@@ -47,7 +47,9 @@ def analyze_temporal_recovery(
     frozen = tuple(metric(analysis.frozen_evaluation, seed) for seed in seeds)
     recalibrated = tuple(metric(analysis.recalibrated_evaluation, seed) for seed in seeds)
     drift = tuple(future - reference for future, reference in zip(frozen, static, strict=True))
-    recovered = tuple(future - recalibrated_value for future, recalibrated_value in zip(frozen, recalibrated, strict=True))
+    recovered = tuple(
+        future - recalibrated_value for future, recalibrated_value in zip(frozen, recalibrated, strict=True)
+    )
     record = statistical_analysis.analyze_paired_seed_differences(
         frozen,
         static,

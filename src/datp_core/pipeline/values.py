@@ -81,11 +81,6 @@ class PositiveInt:
 
 
 @define(frozen=True, slots=True, order=True)
-class PositiveCount(PositiveInt):
-    """Semantic wrapper for positive counts."""
-
-
-@define(frozen=True, slots=True, order=True)
 class Seed:
     value: int = field(validator=validate_non_negative_int, converter=require_int)
 
@@ -107,16 +102,6 @@ class NonNegativeFloat:
 
     def __float__(self) -> float:
         return float(self.value)
-
-
-@define(frozen=True, slots=True, order=True)
-class LearningRate(PositiveFloat):
-    """Semantic wrapper for training learning rates."""
-
-
-@define(frozen=True, slots=True, order=True)
-class ThresholdValue(NonNegativeFloat):
-    """Semantic wrapper for decision threshold values."""
 
 
 @define(frozen=True, slots=True, order=True)
@@ -190,10 +175,6 @@ mutable bag: it is a closed recursive union over exactly the JSON scalar/collect
 def freeze_json(value: object) -> FrozenJson:
     """Freeze an authored JsonValue-shaped structure for domain storage, preserving every field."""
     return cast("FrozenJson", deep_freeze(value))
-
-
-def freeze_json_or_none(value: object | None) -> FrozenJson | None:
-    return None if value is None else freeze_json(value)
 
 
 def as_frozen_json_mapping(value: object) -> Mapping[str, FrozenJson]:

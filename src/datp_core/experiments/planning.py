@@ -11,7 +11,13 @@ from datp_core.artifacts.models import ArtifactKey, ArtifactKind
 from datp_core.configuration.resolution import ResolvedProjectConfiguration
 from datp_core.datasets.models import PartitionSeedContract
 from datp_core.experiments.identity import IdentityBuilder
-from datp_core.experiments.models import ConditionSweepRecord, EvidenceRole, ExperimentRecord, SweepConditionRecord, ValueSweepRecord
+from datp_core.experiments.models import (
+    ConditionSweepRecord,
+    EvidenceRole,
+    ExperimentRecord,
+    SweepConditionRecord,
+    ValueSweepRecord,
+)
 from datp_core.pipeline.identifiers import ExperimentId, JobId
 from datp_core.pipeline.models import PlanningGraph, StageJob, StageJobContext, StageKind
 from datp_core.pipeline.values import PositiveInt
@@ -474,7 +480,6 @@ class ExecutionPlanValidator:
             job_count=graph.node_count,
             dependency_count=graph.edge_count,
         )
-
 
     @staticmethod
     def _validate_job_inputs(graph: PlanningGraph, producers: dict[ArtifactKey, JobId], errors: list[str]) -> None:

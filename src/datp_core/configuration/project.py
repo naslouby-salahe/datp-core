@@ -75,18 +75,6 @@ def resolve_project_configuration(
     return candidate
 
 
-def validate_all_configurations(
-    config_dir: Path | None = None,
-) -> ValidationReport:
-    """Resolve configuration and run validation rules, raising if invalid."""
-    resolved = resolve_project_configuration_candidate(config_dir=config_dir)
-    validator = ProjectConfigurationValidator()
-    report = validator.validate(resolved)
-    if not report.is_valid:
-        raise ConfigurationError(f"Configuration validation failed with errors: {report.errors}")
-    return report
-
-
 @define(frozen=True, slots=True, kw_only=True)
 class ConfigurationDriftReport:
     """Report detailing structural or value differences between two configurations."""

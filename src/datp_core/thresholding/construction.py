@@ -16,7 +16,14 @@ from typing import Protocol, runtime_checkable
 import polars as pl
 from attrs import define, evolve
 
-from datp_core.artifacts.models import ArtifactFormat, ArtifactId, ArtifactKey, ArtifactKind, ArtifactRepository, BytesPayload
+from datp_core.artifacts.models import (
+    ArtifactFormat,
+    ArtifactId,
+    ArtifactKey,
+    ArtifactKind,
+    ArtifactRepository,
+    BytesPayload,
+)
 from datp_core.configuration.resolution import ResolvedProjectConfiguration
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.sweeps import score_context

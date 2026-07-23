@@ -14,8 +14,8 @@ from datp_core.configuration.project import (
     ExplainAuthoredConfigurationDrift,
     ExplainExecutionConfigurationDrift,
     ExplainResolvedScientificDrift,
+    resolve_project_configuration,
 )
-from datp_core.configuration.project import resolve_project_configuration
 
 
 def _copy_real_config_tree(tmp_path: Path) -> Path:

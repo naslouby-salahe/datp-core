@@ -6,9 +6,6 @@ import polars as pl
 from attrs import evolve
 
 from datp_core.bootstrap import build_application
-from datp_core.experiments.models import SweepConditionRecord
-from datp_core.pipeline.identifiers import DatasetId, DatasetSetupId, MaterializationId
-from datp_core.pipeline.values import PositiveInt
 from datp_core.datasets.common import SourceRow
 from datp_core.datasets.nbaiot import (
     apply_nbaiot_dirichlet_partition,
@@ -19,6 +16,9 @@ from datp_core.datasets.nbaiot import (
     split_nbaiot_chronological_gapped_rows,
     write_nbaiot_source_parquet,
 )
+from datp_core.experiments.models import SweepConditionRecord
+from datp_core.pipeline.identifiers import DatasetId, DatasetSetupId, MaterializationId
+from datp_core.pipeline.values import PositiveInt
 
 
 def test_dirichlet_partition_preserves_roles_capacity_and_seed_determinism() -> None:

@@ -10,13 +10,6 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from datp_core.evaluation.operating_points import OperatingPointEvaluationStageHandler
-from datp_core.experiments.sweeps import score_context
-from datp_core.thresholding.construction import (
-    ThresholdConstructionStageHandler,
-)
-from datp_core.bootstrap import build_application
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
 from datp_core.artifacts.models import (
     ArtifactCommitMetadata,
     ArtifactCommitRequest,
@@ -24,11 +17,18 @@ from datp_core.artifacts.models import (
     ArtifactKey,
     BytesPayload,
 )
+from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.bootstrap import build_application
+from datp_core.configuration.resolution import ResolvedProjectConfiguration
+from datp_core.evaluation.operating_points import OperatingPointEvaluationStageHandler
+from datp_core.experiments.identity import IdentityBuilder
+from datp_core.experiments.planning import expand_experiment_jobs
+from datp_core.experiments.sweeps import score_context
 from datp_core.pipeline.identifiers import ExperimentId, RunId
 from datp_core.pipeline.models import JobExecutionStatus, StageKind
-from datp_core.artifacts.repository import AtomicArtifactRepository
-from datp_core.experiments.planning import expand_experiment_jobs
-from datp_core.experiments.identity import IdentityBuilder
+from datp_core.thresholding.construction import (
+    ThresholdConstructionStageHandler,
+)
 
 _CLIENT_A_CALIBRATION = tuple(float(value) for value in range(1, 11))
 _CLIENT_B_CALIBRATION = tuple(float(value) * 10 for value in range(1, 11))

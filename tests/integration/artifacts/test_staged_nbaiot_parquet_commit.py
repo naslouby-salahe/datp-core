@@ -2,7 +2,6 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.bootstrap import build_application
 from datp_core.artifacts.models import (
     ArtifactCommitMetadata,
     ArtifactCommitRequest,
@@ -11,10 +10,11 @@ from datp_core.artifacts.models import (
     ArtifactKind,
     FilePayload,
 )
-from datp_core.configuration.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
-from datp_core.pipeline.identifiers import ArtifactId, DatasetId, MaterializationId
 from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.bootstrap import build_application
+from datp_core.configuration.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
 from datp_core.datasets.nbaiot import consolidate_nbaiot_parquet_sources, write_nbaiot_source_parquet
+from datp_core.pipeline.identifiers import ArtifactId, DatasetId, MaterializationId
 
 
 def test_staged_nbaiot_parquet_consolidation_commits_as_a_frozen_artifact(tmp_path: Path) -> None:

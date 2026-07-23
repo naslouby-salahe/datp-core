@@ -3,13 +3,13 @@
 from pathlib import Path
 
 from datp_core.bootstrap import build_application
-from datp_core.pipeline.identifiers import DatasetId, MaterializationId
 from datp_core.datasets.ciciot2023 import (
     CICIoT2023MaterializedRow,
     canonicalize_and_split_ciciot2023_rows,
     materialize_ciciot2023_merged_identity,
 )
 from datp_core.datasets.common import SourceRow
+from datp_core.pipeline.identifiers import DatasetId, MaterializationId
 
 
 def _row(root: Path, file_name: str, index: int, values: tuple[float, ...], label: str) -> CICIoT2023MaterializedRow:

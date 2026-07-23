@@ -1,12 +1,12 @@
 """Anchor terminal-checkpoint selection-rule tests."""
 
 from datp_core.configuration.project import resolve_project_configuration
-from datp_core.learning.models import CheckpointConvergenceRecord
 from datp_core.learning.checkpoints import (
     select_anchor_checkpoint_round,
     select_cohort_validation_checkpoint,
     select_lowest_validation_loss_checkpoint,
 )
+from datp_core.learning.models import CheckpointConvergenceRecord
 from datp_core.pipeline.identifiers import CheckpointProfileId
 from datp_core.pipeline.values import PositiveFloat, PositiveInt
 

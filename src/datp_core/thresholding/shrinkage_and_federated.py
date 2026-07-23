@@ -59,9 +59,7 @@ def estimate_calibration_fallback(
         + (1.0 - lambdas[item.client_id.value]) * shared
         for item in calibration
     }
-    return build_threshold_set(
-        policy_id, calibration, thresholds, "calibration_shrinkage", target_quantile, lambdas
-    )
+    return build_threshold_set(policy_id, calibration, thresholds, "calibration_shrinkage", target_quantile, lambdas)
 
 
 def federated_moments(calibration: tuple[BenignCalibrationScores, ...]) -> tuple[float, float]:

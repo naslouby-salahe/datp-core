@@ -55,8 +55,12 @@ def analyze_association(
                     partition_condition=condition,
                     seed=seed,
                     pairwise_js_divergence=calibration_js(
-                        config=config, repository=repository, experiment=experiment, seed=seed,
-                        partition_condition=condition, run_id=run_id,
+                        config=config,
+                        repository=repository,
+                        experiment=experiment,
+                        seed=seed,
+                        partition_condition=condition,
+                        run_id=run_id,
                     ),
                     cv_fpr_delta=difference,
                 )
@@ -92,7 +96,9 @@ def calibration_js(
     context = StageJobContext(experiment_id=experiment.identifier, seed=seed, partition_condition=partition_condition)
     artifact = repository.read(f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(context).value}")
     if not artifact.found or artifact.payload_bytes is None:
-        raise ValueError(f"Calibration score artifact is unavailable for seed {seed}, condition '{partition_condition}'")
+        raise ValueError(
+            f"Calibration score artifact is unavailable for seed {seed}, condition '{partition_condition}'"
+        )
     frame = validate_calibration_score_frame(pl.read_parquet(BytesIO(artifact.payload_bytes)))
     diagnostics = config.metric_definitions.heterogeneity_diagnostics.pairwise_js_divergence
     return calculate_pairwise_js_divergence(

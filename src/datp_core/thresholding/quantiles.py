@@ -76,7 +76,5 @@ def estimate_family_mean(
             raise ValueError(f"Client '{item.client_id.value}' has no configured family")
         families.setdefault(family, []).append(local[item.client_id.value])
     family_thresholds = {family: float(np.mean(values)) for family, values in families.items()}
-    thresholds = {
-        item.client_id.value: family_thresholds[family_map[item.client_id.value]] for item in calibration
-    }
+    thresholds = {item.client_id.value: family_thresholds[family_map[item.client_id.value]] for item in calibration}
     return build_threshold_set(policy_id, calibration, thresholds, "family_mean", target_quantile)

@@ -2,8 +2,6 @@
 
 from pathlib import Path
 
-from datp_core.datasets.materialization import DatasetMaterializationStageHandler
-from datp_core.bootstrap import _build_adapter_registry, build_application
 from datp_core.artifacts.models import (
     ArtifactCommitMetadata,
     ArtifactCommitRequest,
@@ -13,10 +11,12 @@ from datp_core.artifacts.models import (
     ArtifactParent,
     BytesPayload,
 )
+from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.bootstrap import _build_adapter_registry, build_application
+from datp_core.datasets.materialization import DatasetMaterializationStageHandler
+from datp_core.experiments.planning import expand_experiment_jobs
 from datp_core.pipeline.identifiers import ArtifactId, ExperimentId, RunId
 from datp_core.pipeline.models import JobExecutionStatus, StageKind
-from datp_core.artifacts.repository import AtomicArtifactRepository
-from datp_core.experiments.planning import expand_experiment_jobs
 
 
 def test_materialization_reuses_a_matching_frozen_artifact_without_reading_raw_sources(tmp_path: Path) -> None:

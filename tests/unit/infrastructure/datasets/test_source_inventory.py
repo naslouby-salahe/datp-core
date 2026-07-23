@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from datp_core.bootstrap import build_application
-from datp_core.pipeline.identifiers import DatasetId
 from datp_core.datasets.discovery import build_source_inventory
+from datp_core.pipeline.identifiers import DatasetId
 
 
 def test_source_inventory_produces_stable_ordered_entries() -> None:

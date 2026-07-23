@@ -29,7 +29,12 @@ from datp_core.artifacts.models import (
     BytesPayload,
     FilePayload,
 )
-from datp_core.artifacts.serialization import ManifestDecodeError, ManifestSchemaIncompatibleError, decode_manifest, encode_manifest
+from datp_core.artifacts.serialization import (
+    ManifestDecodeError,
+    ManifestSchemaIncompatibleError,
+    decode_manifest,
+    encode_manifest,
+)
 from datp_core.pipeline.fingerprints import Fingerprint, compute_file_checksum, compute_payload_checksum
 
 

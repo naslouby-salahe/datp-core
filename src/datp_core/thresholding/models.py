@@ -12,7 +12,7 @@ import numpy as np
 from attrs import define, field
 
 from datp_core.pipeline.identifiers import ClientId, PopulationId, ThresholdPolicyId
-from datp_core.pipeline.values import NonNegativeFloat, PositiveInt, Probability, deep_freeze
+from datp_core.pipeline.values import NonNegativeFloat, Probability, deep_freeze
 
 
 def _as_tuple_str(value: object) -> tuple[str, ...]:
@@ -137,17 +137,6 @@ class ThresholdSet:
             if rec.client_id == client_id:
                 return rec
         raise KeyError(f"No threshold record for client: {client_id}")
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class SampleSizeCheck:
-    client_id: ClientId
-    calibration_count: PositiveInt | int
-    minimum_required: PositiveInt | int
-
-    @property
-    def is_sufficient(self) -> bool:
-        return int(self.calibration_count) >= int(self.minimum_required)
 
 
 @define(frozen=True, slots=True, kw_only=True)

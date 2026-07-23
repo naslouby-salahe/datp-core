@@ -15,13 +15,6 @@ from typing import cast
 
 from attrs import define
 
-from datp_core.analysis.models import (
-    CommunicationEstimationContractRecord,
-    NestedReplicatePolicyRecord,
-    OperationalInputsRecord,
-    ResultTypeRecord,
-    StatisticalProfileRecord,
-)
 from datp_core.artifacts.models import ArtifactIdentityRecord
 from datp_core.configuration.dataset_resolution import resolve_datasets
 from datp_core.configuration.experiment_resolution import (
@@ -104,6 +97,15 @@ from datp_core.pipeline.identifiers import (
     ThresholdPolicyId,
     TrainingProfileId,
 )
+from datp_core.pipeline.protocol_types import (
+    CommunicationEstimationContractRecord,
+    NestedReplicatePolicyRecord,
+    OperationalInputsRecord,
+    ReportDefaultsRecord,
+    ReportProfileRecord,
+    ResultTypeRecord,
+    StatisticalProfileRecord,
+)
 from datp_core.pipeline.values import (
     NonNegativeFloat,
     PositiveFloat,
@@ -113,7 +115,6 @@ from datp_core.pipeline.values import (
     TypedDomainRegistry,
     deep_freeze,
 )
-from datp_core.reporting.models import ReportDefaultsRecord, ReportProfileRecord
 from datp_core.thresholding.models import (
     QuantileEstimatorRecord,
     ThresholdPolicyDefaultsRecord,

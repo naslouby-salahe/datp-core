@@ -31,7 +31,11 @@ from datp_core.experiments.models import (
     RecoveryFractionAnalysisRecord,
 )
 from datp_core.experiments.sweeps import score_context
-from datp_core.pipeline.frames import validate_calibration_score_frame, validate_client_metric_frame, validate_threshold_frame
+from datp_core.pipeline.frames import (
+    validate_calibration_score_frame,
+    validate_client_metric_frame,
+    validate_threshold_frame,
+)
 from datp_core.pipeline.identifiers import ExperimentId, RunId
 from datp_core.pipeline.models import StageJobContext
 from datp_core.pipeline.values import Seed
@@ -200,7 +204,8 @@ def analyze_conformal_coverage(
         metric_frame = validate_client_metric_frame(pl.read_parquet(BytesIO(metrics.payload_bytes)))
         calibration_frame = validate_calibration_score_frame(pl.read_parquet(BytesIO(calibration.payload_bytes)))
         calibration_counts = {
-            str(client_id[0]): len(rows) for client_id, rows in calibration_frame.group_by("client_id", maintain_order=True)
+            str(client_id[0]): len(rows)
+            for client_id, rows in calibration_frame.group_by("client_id", maintain_order=True)
         }
         seed_results.append(
             conformal_seed_coverage(
@@ -235,7 +240,9 @@ def analyze_conformal_coverage(
 def analyze_recovery_fraction(
     analysis: RecoveryFractionAnalysisRecord, paired_results: tuple[PairedThresholdAnalysisResult, ...]
 ) -> RecoveryFractionAnalysisResult:
-    numerator = next((result for result in paired_results if result.analysis_label == analysis.numerator_analysis), None)
+    numerator = next(
+        (result for result in paired_results if result.analysis_label == analysis.numerator_analysis), None
+    )
     denominator_component = next(
         (result for result in paired_results if result.analysis_label == analysis.denominator_analysis), None
     )

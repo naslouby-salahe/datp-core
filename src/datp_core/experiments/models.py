@@ -153,7 +153,7 @@ class AnalysisKind(Enum):
     THRESHOLD_STABILITY = "threshold_stability_analysis"
 
     @classmethod
-    def from_record(cls, record: "AnalysisRecord") -> AnalysisKind:
+    def from_record(cls, record: AnalysisRecord) -> AnalysisKind:
         return cls(record.kind)
 
 

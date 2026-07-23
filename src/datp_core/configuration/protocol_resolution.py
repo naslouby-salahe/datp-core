@@ -17,18 +17,6 @@ from types import MappingProxyType
 
 from attrs import define
 
-from datp_core.analysis.models import (
-    BenignDecisionRateRecord,
-    CheckpointStorageRecord,
-    CommunicationEstimationContractRecord,
-    FieldEncodingRecord,
-    ModelExchangeRecord,
-    NestedReplicatePolicyRecord,
-    OperationalInputsRecord,
-    ResultTypeRecord,
-    ThresholdExchangeEntryRecord,
-    ThresholdExchangeRecord,
-)
 from datp_core.artifacts.models import ArtifactFingerprintsRecord, ArtifactIdentityRecord
 from datp_core.configuration.loading import ConfigurationError
 from datp_core.configuration.models import (
@@ -70,7 +58,21 @@ from datp_core.evaluation.models import (
     PrecisionPolicyRecord,
     ThresholdEstimationMetricsRecord,
 )
-from datp_core.reporting.models import ReportColumnRecord, ReportDefaultsRecord, ReportProfileRecord
+from datp_core.pipeline.protocol_types import (
+    BenignDecisionRateRecord,
+    CheckpointStorageRecord,
+    CommunicationEstimationContractRecord,
+    FieldEncodingRecord,
+    ModelExchangeRecord,
+    NestedReplicatePolicyRecord,
+    OperationalInputsRecord,
+    ReportColumnRecord,
+    ReportDefaultsRecord,
+    ReportProfileRecord,
+    ResultTypeRecord,
+    ThresholdExchangeEntryRecord,
+    ThresholdExchangeRecord,
+)
 from datp_core.thresholding.models import (
     CalibrationFallbackThresholdPolicyRecord,
     CentralizedPooledThresholdPolicyRecord,

@@ -15,7 +15,6 @@ import numpy as np
 import polars as pl
 from safetensors.torch import save as save_safetensors
 
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
 from datp_core.artifacts.models import (
     ArtifactCommitMetadata,
     ArtifactCommitRequest,
@@ -26,6 +25,7 @@ from datp_core.artifacts.models import (
     BytesPayload,
 )
 from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.configuration.resolution import ResolvedProjectConfiguration
 from datp_core.learning.autoencoder import DynamicDenseAutoencoder, set_deterministic_seeds
 
 

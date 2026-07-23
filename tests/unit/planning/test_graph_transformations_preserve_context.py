@@ -1,8 +1,8 @@
 """Graph transformations preserve StageJob context."""
 
 from datp_core.bootstrap import build_application
-from datp_core.pipeline.identifiers import ExperimentId
 from datp_core.experiments.planning import expand_experiment_jobs
+from datp_core.pipeline.identifiers import ExperimentId
 
 
 def test_topological_sort_preserves_context() -> None:

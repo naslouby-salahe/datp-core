@@ -17,7 +17,6 @@ import polars as pl
 import torch
 from safetensors.torch import save as save_safetensors
 
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
 from datp_core.artifacts.models import (
     ArtifactCommitMetadata,
     ArtifactCommitRequest,
@@ -26,6 +25,7 @@ from datp_core.artifacts.models import (
     BytesPayload,
 )
 from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.configuration.resolution import ResolvedProjectConfiguration
 
 
 def commit_parquet(

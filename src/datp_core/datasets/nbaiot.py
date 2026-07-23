@@ -19,7 +19,12 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from attrs import define
 
-from datp_core.datasets.common import SourceRow, SourceRowFailure, iter_numeric_csv_source, normalize_materialized_parquet
+from datp_core.datasets.common import (
+    SourceRow,
+    SourceRowFailure,
+    iter_numeric_csv_source,
+    normalize_materialized_parquet,
+)
 from datp_core.datasets.materialization import SourceInventory
 from datp_core.datasets.models import (
     AdapterKind,

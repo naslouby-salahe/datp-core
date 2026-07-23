@@ -11,11 +11,10 @@ from collections.abc import Mapping
 from hashlib import blake2b
 from json import dumps
 from types import MappingProxyType
-from typing import NamedTuple
 
 import cattrs
 
-from datp_core.pipeline.fingerprints import CanonicalProjection, Fingerprint, canonicalize_value
+from datp_core.pipeline.fingerprints import Fingerprint, FingerprintPayload, canonicalize_value
 
 _PROJECTION_CONVERTER: cattrs.Converter | None = None
 
@@ -54,17 +53,6 @@ def get_projection_converter() -> cattrs.Converter:
 def unstructure_projection(value: object) -> object:
     """Convert resolved domain records into primitive structures for canonical fingerprinting."""
     return get_projection_converter().unstructure(value)
-
-
-def unstructure_mapping_proxy(mp: Mapping) -> dict:
-    """Unstructure a MappingProxyType as a plain dict, for deterministic key ordering."""
-    return dict(mp)
-
-
-class FingerprintPayload(NamedTuple):
-    schema_version: int
-    kind: str
-    payload: CanonicalProjection
 
 
 def compute_scientific_fingerprint(scientific_projection: object) -> Fingerprint:

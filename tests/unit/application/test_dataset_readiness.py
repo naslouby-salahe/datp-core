@@ -1,10 +1,10 @@
 """Materialized evidence is sufficient to make a training readiness decision."""
 
-from datp_core.datasets.readiness import AuditDatasetUseCase
 from datp_core.bootstrap import build_application
+from datp_core.datasets.models import MaterializedSplitEvidence, SplitManifest, SplitManifestEntry, SplitMembership
+from datp_core.datasets.readiness import AuditDatasetUseCase
 from datp_core.pipeline.fingerprints import compute_payload_checksum
 from datp_core.pipeline.identifiers import DatasetId, DatasetSetupId
-from datp_core.datasets.models import MaterializedSplitEvidence, SplitManifest, SplitManifestEntry, SplitMembership
 
 
 def _evidence(*, attack: bool) -> MaterializedSplitEvidence:

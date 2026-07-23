@@ -187,9 +187,7 @@ def validate_federated_training_inputs(
         raise ValueError("Scheduled checkpoint rounds must be unique")
 
 
-def weighted_reconstruction_loss(
-    model: nn.Module, clients: tuple[tuple[str, torch.Tensor], ...], device: str
-) -> float:
+def weighted_reconstruction_loss(model: nn.Module, clients: tuple[tuple[str, torch.Tensor], ...], device: str) -> float:
     model = model.to(device)
     model.eval()
     weighted_loss = 0.0

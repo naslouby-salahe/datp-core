@@ -74,10 +74,6 @@ class StatisticalProfileId(_DomainIdentifier):
     """Identifier for a statistical hypothesis testing protocol."""
 
 
-class ReportProfileId(_DomainIdentifier):
-    """Identifier for a report generation profile."""
-
-
 class DatasetSetupId(_DomainIdentifier):
     """Identifier for a dataset setup profile (e.g. 'natural_devices')."""
 

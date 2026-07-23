@@ -19,9 +19,6 @@ from datp_core.artifacts.models import (
     ArtifactState,
     BytesPayload,
 )
-from datp_core.configuration.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
-from datp_core.pipeline.fingerprints import Checksum
-from datp_core.pipeline.identifiers import ArtifactId
 from datp_core.artifacts.repository import AtomicArtifactRepository
 from datp_core.artifacts.serialization import (
     CURRENT_ARTIFACT_SCHEMA_VERSION,
@@ -30,6 +27,9 @@ from datp_core.artifacts.serialization import (
     decode_manifest,
     encode_manifest,
 )
+from datp_core.configuration.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
+from datp_core.pipeline.fingerprints import Checksum
+from datp_core.pipeline.identifiers import ArtifactId
 
 
 def _manifest() -> ArtifactManifest:

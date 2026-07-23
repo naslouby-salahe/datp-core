@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import attrs
 
-from datp_core.configuration.fingerprints import unstructure_projection
+from datp_core.configuration.fingerprints import compute_scientific_fingerprint, unstructure_projection
 from datp_core.configuration.resolution import _experiment_scientific_projection
 from datp_core.experiments.models import (
     AbsorptionAnalysisRecord,
@@ -13,7 +13,6 @@ from datp_core.experiments.models import (
     PrerequisiteSpecRecord,
     RunRequirement,
 )
-from datp_core.configuration.fingerprints import compute_scientific_fingerprint
 from datp_core.pipeline.identifiers import (
     CheckpointProfileId,
     EligibilityPolicyId,

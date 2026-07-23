@@ -4,9 +4,9 @@ statistically compares one paired result against a historical reference).
 """
 
 from __future__ import annotations
-import math
 
 import json
+import math
 from collections.abc import Mapping
 from io import BytesIO
 
@@ -24,7 +24,11 @@ from datp_core.artifacts.models import ArtifactRepository
 from datp_core.configuration.resolution import ResolvedProjectConfiguration
 from datp_core.evaluation.models import MetricStatus, calculate_fpr_dispersion
 from datp_core.experiments.identity import IdentityBuilder, execution_run_id
-from datp_core.experiments.models import AnchorEquivalenceAnalysisRecord, ExperimentRecord, PairedThresholdAnalysisRecord
+from datp_core.experiments.models import (
+    AnchorEquivalenceAnalysisRecord,
+    ExperimentRecord,
+    PairedThresholdAnalysisRecord,
+)
 from datp_core.pipeline.frames import validate_client_metric_frame
 from datp_core.pipeline.identifiers import ExperimentId, RunId
 from datp_core.pipeline.models import StageJobContext
@@ -201,9 +205,7 @@ def _read_cv_fpr_metric(
     frame = validate_client_metric_frame(pl.read_parquet(BytesIO(artifact.payload_bytes)))
     fprs = tuple(
         float(value)
-        for value in frame.filter(pl.col("false_positive_rate_status") == "available")[
-            "false_positive_rate"
-        ].to_list()
+        for value in frame.filter(pl.col("false_positive_rate_status") == "available")["false_positive_rate"].to_list()
     )
     dispersion = calculate_fpr_dispersion(
         fprs,
@@ -276,7 +278,9 @@ def ditto_selection(
         analysis_label="ditto_primary_proximal_weight_selection",
         selected_ditto_proximal_weight=float(selected_weight),
         locked_primary_round=None if locked_primary_round is None else int(locked_primary_round),
-        mean_benign_calibration_loss_by_weight=None if losses is None else {str(k): float(v) for k, v in losses.items()},
+        mean_benign_calibration_loss_by_weight=None
+        if losses is None
+        else {str(k): float(v) for k, v in losses.items()},
     )
 
 

@@ -5,7 +5,6 @@ from pathlib import Path
 import pytest
 
 from datp_core.bootstrap import build_application
-from datp_core.pipeline.identifiers import DatasetId, MaterializationId
 from datp_core.datasets.common import SourceRow
 from datp_core.datasets.nbaiot import (
     calculate_nbaiot_chronological_boundaries,
@@ -13,6 +12,7 @@ from datp_core.datasets.nbaiot import (
     split_nbaiot_chronological_gapped_rows,
     split_nbaiot_using_resolved_materialization,
 )
+from datp_core.pipeline.identifiers import DatasetId, MaterializationId
 
 
 def test_nbaiot_benign_path_derives_client_and_benign_label(tmp_path: Path) -> None:

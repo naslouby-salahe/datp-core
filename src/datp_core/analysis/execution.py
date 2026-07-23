@@ -21,7 +21,11 @@ from attrs import evolve
 
 from datp_core.analysis.association import analyze_association
 from datp_core.analysis.coverage import analyze_absorption, analyze_conformal_coverage, analyze_recovery_fraction
-from datp_core.analysis.distributions import analyze_distribution_mechanism, analyze_locked_client_distribution, analyze_quantile_estimation
+from datp_core.analysis.distributions import (
+    analyze_distribution_mechanism,
+    analyze_locked_client_distribution,
+    analyze_quantile_estimation,
+)
 from datp_core.analysis.models import (
     AnalysisResult,
     PairedThresholdAnalysisResult,
@@ -29,7 +33,12 @@ from datp_core.analysis.models import (
     analysis_result_to_payload,
     holm_adjust_p_values,
 )
-from datp_core.analysis.paired import analyze_anchor_equivalence, analyze_paired, ditto_selection, federated_proximal_selection
+from datp_core.analysis.paired import (
+    analyze_anchor_equivalence,
+    analyze_paired,
+    ditto_selection,
+    federated_proximal_selection,
+)
 from datp_core.analysis.resources import analyze_alert_burden, analyze_resource_cost
 from datp_core.analysis.stability import analyze_cluster_stability, analyze_threshold_stability
 from datp_core.analysis.temporal import analyze_temporal_recovery
@@ -75,7 +84,9 @@ def apply_holm_correction(results: list[AnalysisResult]) -> list[AnalysisResult]
     adjusted = holm_adjust_p_values(value for _, value in candidates)
     updated = list(results)
     for (index, _), adjusted_value in zip(candidates, adjusted, strict=True):
-        updated[index] = evolve(cast(PairedThresholdAnalysisResult, updated[index]), holm_adjusted_p_value=adjusted_value)
+        updated[index] = evolve(
+            cast(PairedThresholdAnalysisResult, updated[index]), holm_adjusted_p_value=adjusted_value
+        )
     return updated
 
 
@@ -182,7 +193,9 @@ class StatisticalAnalysisStageHandler:
                 )
             if training_profile.personalization == "ditto":
                 results.append(
-                    ditto_selection(experiment.identifier, config=self._config, repository=self._repository, run_id=run_id)
+                    ditto_selection(
+                        experiment.identifier, config=self._config, repository=self._repository, run_id=run_id
+                    )
                 )
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
@@ -300,7 +313,11 @@ class StatisticalAnalysisStageHandler:
                 return [analyze_recovery_fraction(analysis_record, paired_results)]
             case AnalysisKind.ABSORPTION:
                 assert isinstance(analysis_record, AbsorptionAnalysisRecord)
-                return [analyze_absorption(analysis_record, experiment, paired_results, config=config, repository=repository)]
+                return [
+                    analyze_absorption(
+                        analysis_record, experiment, paired_results, config=config, repository=repository
+                    )
+                ]
             case AnalysisKind.ANCHOR_EQUIVALENCE:
                 assert isinstance(analysis_record, AnchorEquivalenceAnalysisRecord)
                 return [analyze_anchor_equivalence(analysis_record, paired_results)]
@@ -328,7 +345,12 @@ class StatisticalAnalysisStageHandler:
                 assert isinstance(analysis_record, ConformalCoverageAnalysisRecord)
                 return [
                     analyze_conformal_coverage(
-                        analysis_record, config=config, repository=repository, experiment=experiment, seeds=seeds, run_id=run_id
+                        analysis_record,
+                        config=config,
+                        repository=repository,
+                        experiment=experiment,
+                        seeds=seeds,
+                        run_id=run_id,
                     )
                 ]
             case AnalysisKind.DISTRIBUTION_MECHANISM:
@@ -359,7 +381,12 @@ class StatisticalAnalysisStageHandler:
                 assert isinstance(analysis_record, ResourceCostAnalysisRecord)
                 return [
                     analyze_resource_cost(
-                        analysis_record, config=config, repository=repository, experiment=experiment, seeds=seeds, run_id=run_id
+                        analysis_record,
+                        config=config,
+                        repository=repository,
+                        experiment=experiment,
+                        seeds=seeds,
+                        run_id=run_id,
                     )
                 ]
             case AnalysisKind.PAIRED_THRESHOLD:

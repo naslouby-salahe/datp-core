@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
+from datp_core.configuration.loading import YamlConfigurationReader
 from datp_core.configuration.models import (
     EvaluationResultContractConfig,
     NestedReplicatePolicyConfig,
@@ -12,7 +13,6 @@ from datp_core.configuration.models import (
     ResultTypeConfig,
     ThresholdPolicyDefaultsConfig,
 )
-from datp_core.configuration.loading import YamlConfigurationReader
 
 
 def _protocols():

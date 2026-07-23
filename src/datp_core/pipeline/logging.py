@@ -46,8 +46,4 @@ def configure_structured_logging(mode: str, level: str) -> None:
     )
 
 
-def get_logger() -> structlog.BoundLogger:
-    return structlog.get_logger()
-
-
-__all__ = ["configure_structured_logging", "get_logger"]
+__all__ = ["configure_structured_logging"]

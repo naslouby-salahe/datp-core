@@ -6,9 +6,9 @@ trailing-window relative loss change is below ``tolerance``; otherwise the round
 """
 
 from __future__ import annotations
-import math
 
 import json
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
