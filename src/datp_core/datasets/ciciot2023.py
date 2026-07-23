@@ -361,6 +361,16 @@ class CICIoT2023MaterializationPayload:
     partition_evidence: bytes | None = None
 
 
+def _split_role(draw: float, train_ratio: float, calibration_ratio: float) -> str:
+    """Map a random draw to a split role. (S3358)"""
+    if draw < train_ratio:
+        return "train"
+    if draw < train_ratio + calibration_ratio:
+        return "calibration"
+    return "test"
+
+
+
 class CICIoT2023Adapter:
     """CICIoT2023 dataset materializer: merged-source pseudo-client, dedup, random split, Parquet output."""
 
