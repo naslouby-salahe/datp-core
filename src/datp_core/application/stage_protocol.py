@@ -70,7 +70,9 @@ def commit_artifact(
     )
 
 
-def artifact_parents(config: ResolvedProjectConfiguration, artifacts: tuple[ArtifactKey, ...]) -> tuple[ArtifactParent, ...]:
+def artifact_parents(
+    config: ResolvedProjectConfiguration, artifacts: tuple[ArtifactKey, ...]
+) -> tuple[ArtifactParent, ...]:
     return tuple(
         ArtifactParent(parent_key=artifact, scientific_fingerprint=config.scientific_fingerprint)
         for artifact in artifacts

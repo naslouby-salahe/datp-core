@@ -547,4 +547,3 @@ def test_strict_manifest_decode_is_identical_for_bytes_and_file(tmp_path: Path) 
     assert bytes_decoded.scientific_fingerprint == file_decoded.scientific_fingerprint
     assert bytes_decoded.execution_fingerprint == file_decoded.execution_fingerprint
     assert bytes_decoded.schema_version == file_decoded.schema_version
-

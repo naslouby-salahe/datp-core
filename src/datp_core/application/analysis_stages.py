@@ -11,19 +11,19 @@ import numpy as np
 import polars as pl
 from safetensors.torch import load as load_safetensors
 
-from datp_core.application.learning_stages import (
-    _calibration_sample_counts,
-    _calibration_variance_terms,
-    _client_score_distributions,
-    _conformal_seed_coverage,
-    _group_mean_std,
-    _materiality_threshold,
-    _mean_group_std,
-    _score_context,
-    _seed_ratio_result,
-    _threshold_exchange_cost,
-    _threshold_tradeoff,
-    _weighted_mean,
+from datp_core.application.scoring_support import (
+    calibration_sample_counts,
+    calibration_variance_terms,
+    client_score_distributions,
+    conformal_seed_coverage,
+    group_mean_std,
+    materiality_threshold,
+    mean_group_std,
+    score_context,
+    seed_ratio_result,
+    threshold_exchange_cost,
+    threshold_tradeoff,
+    weighted_mean,
 )
 from datp_core.application.stage_protocol import (
     apply_holm_correction,
@@ -138,7 +138,7 @@ class StatisticalAnalysisStageHandler:
             for value in sweep.values
             if isinstance(value, float)
         ) or (None,)
-        calibration_sample_counts = _calibration_sample_counts(experiment)
+        calibration_sample_count_values = calibration_sample_counts(experiment)
         try:
             paired_results: list[dict[str, object]] = []
             for analysis in analyses_by_kind.get(AnalysisKind.PAIRED_THRESHOLD, []):
@@ -148,7 +148,7 @@ class StatisticalAnalysisStageHandler:
                             for threshold_quantile in threshold_quantiles:
                                 for shrinkage_weight in shrinkage_weights:
                                     for calibration_sample_count in (
-                                        calibration_sample_counts
+                                        calibration_sample_count_values
                                         if analysis.per_sweep_cell == "calibration_sample_count"
                                         else (None,)
                                     ):
@@ -175,7 +175,7 @@ class StatisticalAnalysisStageHandler:
                     results.extend(handler(self, analysis, paired_results) for analysis in analyses)
                 elif handler._needs_sweep_cells:
                     for analysis in analyses:
-                        for calibration_sample_count in calibration_sample_counts:
+                        for calibration_sample_count in calibration_sample_count_values:
                             results.append(
                                 handler(
                                     self,
@@ -613,7 +613,7 @@ class StatisticalAnalysisStageHandler:
             raise ValueError(f"Recovery analysis '{analysis.label}' has malformed paired seed differences")
         if analysis.denominator_composition != "shared_minus_local_gap_of_the_same_seed":
             raise ValueError(f"Recovery analysis '{analysis.label}' has an unsupported denominator composition")
-        materiality = _materiality_threshold(analysis.denominator_materiality_rule)
+        materiality = materiality_threshold(analysis.denominator_materiality_rule)
         seed_ratios = [
             None
             if abs(float(numerator_value) + float(component_value)) < materiality
@@ -651,7 +651,7 @@ class StatisticalAnalysisStageHandler:
             threshold = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}")
             metrics = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
             calibration = self._repository.read(
-                f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(_score_context(context)).value}"
+                f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(score_context(context)).value}"
             )
             if any(
                 not artifact.found or artifact.payload_bytes is None for artifact in (threshold, metrics, calibration)
@@ -668,7 +668,7 @@ class StatisticalAnalysisStageHandler:
                 for client_id, rows in calibration_frame.group_by("client_id", maintain_order=True)
             }
             seed_results.append(
-                _conformal_seed_coverage(
+                conformal_seed_coverage(
                     threshold_frame,
                     metric_frame,
                     calibration_counts,
@@ -678,7 +678,7 @@ class StatisticalAnalysisStageHandler:
                 )
                 | {"seed": seed.value}
             )
-        achieved_marginal = _weighted_mean(
+        achieved_marginal = weighted_mean(
             [(cast(int, result["benign_true_negatives"]), cast(int, result["benign_total"])) for result in seed_results]
         )
         macro_coverages = [
@@ -726,7 +726,7 @@ class StatisticalAnalysisStageHandler:
             "seed_results": [
                 {
                     "seed": result["seed"],
-                    "per_client_tradeoff": _threshold_tradeoff(
+                    "per_client_tradeoff": threshold_tradeoff(
                         cast(dict[str, dict[str, object]], result["evaluations"])[baseline],
                         cast(dict[str, dict[str, object]], result["evaluations"])[shifted],
                     ),
@@ -805,7 +805,7 @@ class StatisticalAnalysisStageHandler:
                             ),
                         }
                     )
-                policies[label] = {"per_client": client_results, **_calibration_variance_terms(calibration)}
+                policies[label] = {"per_client": client_results, **calibration_variance_terms(calibration)}
             seed_results.append({"seed": seed.value, "oracle_threshold": oracle_threshold, "evaluations": policies})
         return {
             "analysis_label": analysis.label,
@@ -826,10 +826,8 @@ class StatisticalAnalysisStageHandler:
                 evaluation = next(item for item in experiment.evaluations if item.label == label)
                 _, calibration = self._threshold_and_calibration_frame(experiment, seed.value, label, run_id)
                 policy = self._config.threshold_policies.get(evaluation.threshold_policy_id)
-                fields, threshold_bytes = _threshold_exchange_cost(
-                    contract, policy, calibration["client_id"].n_unique()
-                )
-                context = _score_context(
+                fields, threshold_bytes = threshold_exchange_cost(contract, policy, calibration["client_id"].n_unique())
+                context = score_context(
                     StageJobContext(
                         experiment_id=experiment.identifier,
                         seed=seed.value,
@@ -876,14 +874,14 @@ class StatisticalAnalysisStageHandler:
             threshold = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}")
             metrics = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
             scores = self._repository.read(
-                f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(_score_context(context)).value}"
+                f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(score_context(context)).value}"
             )
             if any(not artifact.found or artifact.payload_bytes is None for artifact in (threshold, metrics, scores)):
                 raise ValueError(f"Distribution artifacts are unavailable for seed {seed}, label '{label}'")
             assert threshold.payload_bytes is not None
             assert metrics.payload_bytes is not None
             assert scores.payload_bytes is not None
-            result[label] = _client_score_distributions(
+            result[label] = client_score_distributions(
                 validate_threshold_frame(pl.read_parquet(BytesIO(threshold.payload_bytes))),
                 validate_client_metric_frame(pl.read_parquet(BytesIO(metrics.payload_bytes))),
                 validate_test_score_frame(pl.read_parquet(BytesIO(scores.payload_bytes))),
@@ -904,7 +902,7 @@ class StatisticalAnalysisStageHandler:
         )
         threshold = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(context).value}")
         calibration = self._repository.read(
-            f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(_score_context(context)).value}"
+            f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(score_context(context)).value}"
         )
         if (
             not threshold.found
@@ -1001,10 +999,10 @@ class StatisticalAnalysisStageHandler:
                     "cluster_size": {str(label): len(values) for label, values in clusters.items()},
                     "singleton_cluster_flag": any(len(values) == 1 for values in clusters.values()),
                     "empty_cluster_flag": False,
-                    "within_cluster_threshold_dispersion": _mean_group_std(list(clusters.values()), 0),
-                    "within_cluster_fpr_dispersion": _mean_group_std(list(clusters.values()), 1),
-                    "across_cluster_threshold_dispersion": _group_mean_std(list(clusters.values()), 0),
-                    "across_cluster_mean_fpr_dispersion": _group_mean_std(list(clusters.values()), 1),
+                    "within_cluster_threshold_dispersion": mean_group_std(list(clusters.values()), 0),
+                    "within_cluster_fpr_dispersion": mean_group_std(list(clusters.values()), 1),
+                    "across_cluster_threshold_dispersion": group_mean_std(list(clusters.values()), 0),
+                    "across_cluster_mean_fpr_dispersion": group_mean_std(list(clusters.values()), 1),
                 }
             )
         aris = [
@@ -1204,7 +1202,7 @@ class StatisticalAnalysisStageHandler:
         )
         if not isinstance(reference, dict):
             raise ValueError(f"Absorption analysis '{analysis.label}' reference analysis is unavailable")
-        return _seed_ratio_result(
+        return seed_ratio_result(
             label=analysis.label,
             formula=analysis.formula,
             numerator=stress,
@@ -1298,4 +1296,3 @@ _DISPATCH: dict[AnalysisKind, _DispatchEntry] = {
     AnalysisKind.QUANTILE_ESTIMATION: _DispatchEntry("_analyze_quantile_estimation"),
     AnalysisKind.RESOURCE_COST: _DispatchEntry("_analyze_resource_cost"),
 }
-

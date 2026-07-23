@@ -528,9 +528,7 @@ class EdgeIIoTsetAdapter:
             or inspection.attack_traffic_root is None
             or inspection.binary_label_header is None
         ):
-            raise ValueError(
-                "Edge-IIoTset materialization requires its resolved feature, label, and source contracts"
-            )
+            raise ValueError("Edge-IIoTset materialization requires its resolved feature, label, and source contracts")
         timestamp = dataset.field_schema.identity_scheme.timestamp_field
         timestamp_header = timestamp.get("column") if isinstance(timestamp, Mapping) else timestamp
         if not isinstance(timestamp_header, str):

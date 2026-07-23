@@ -94,7 +94,9 @@ class StatisticalAnalysisUseCase:
     def _compute_wilcoxon_signed_rank(x: np.ndarray, y: np.ndarray) -> HypothesisTestResult:
         res = stats.wilcoxon(x, y, zero_method="wilcox", correction=True)
         statistic, p_value = cast(tuple[float, float], res)
-        return HypothesisTestResult(test_name="wilcoxon_signed_rank", statistic=float(statistic), p_value=float(p_value))
+        return HypothesisTestResult(
+            test_name="wilcoxon_signed_rank", statistic=float(statistic), p_value=float(p_value)
+        )
 
     @staticmethod
     def _compute_bca_bootstrap_ci(
@@ -134,7 +136,9 @@ class StatisticalAnalysisUseCase:
         statistic, p_value = cast(tuple[float, float], stats.spearmanr(predictor, outcome))
         if not np.isfinite((statistic, p_value)).all():
             raise StatisticalProcedureError("Spearman correlation is undefined for the supplied observations")
-        return HypothesisTestResult(test_name="spearman_correlation", statistic=float(statistic), p_value=float(p_value))
+        return HypothesisTestResult(
+            test_name="spearman_correlation", statistic=float(statistic), p_value=float(p_value)
+        )
 
     @staticmethod
     def _compute_linear_regression(predictor: np.ndarray, outcome: np.ndarray) -> LinearRegressionResult:

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.application.learning_stages import _score_context
+from datp_core.application.scoring_support import score_context
 from datp_core.application.threshold_stages import CalibrationSubsamplingStageHandler
 from datp_core.composition.root import DatpApplication, build_application
 from datp_core.domain.artifacts import (
@@ -65,7 +65,7 @@ def _commit_calibration_scores(
     job: StageJob,
     row_count: int,
 ) -> None:
-    calibration_context = _score_context(job.context)
+    calibration_context = score_context(job.context)
     calibration_job_id = IdentityBuilder.calibration_score_job_id(calibration_context)
     payload = BytesIO()
     _calibration_frame(row_count).write_parquet(payload)

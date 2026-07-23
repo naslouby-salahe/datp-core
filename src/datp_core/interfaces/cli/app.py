@@ -128,7 +128,7 @@ def experiment_plan(experiment: str = typer.Option(..., "--config", "-c", help="
     """Plan pre-execution job DAG for an experiment."""
     from datp_core.planning.expansion import expand_experiment_jobs
     from datp_core.planning.validation import validate_planning_graph
-    
+
     application = build_application()
     experiment_id = ExperimentId(experiment)
     experiment_record = application.config.experiments.get(experiment_id)

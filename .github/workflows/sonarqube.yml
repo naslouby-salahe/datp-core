@@ -32,8 +32,13 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-groups --all-extras --frozen
 
+      - name: Provision empty raw-data root
+        run: mkdir -p data/raw
+
       - name: Run tests and collect coverage
-        run: uv run pytest
+        run: >
+          uv run pytest --ignore=tests/integration/datasets/test_raw_source_contracts_are_ready.py
+          --cov=src/datp_core --cov-report=xml:coverage.xml --cov-report=term
 
       - name: Run SonarQube analysis
         uses: SonarSource/sonarqube-scan-action@c7ee0f9df90b7aa20e8dcf9695dcfe2e7da5b4f2

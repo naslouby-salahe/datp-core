@@ -17,7 +17,7 @@ import pytest
 from _statistical_analysis_fixtures import client_metric_frame, commit_parquet
 
 from datp_core.application.analysis_stages import StatisticalAnalysisStageHandler
-from datp_core.application.learning_stages import _score_context
+from datp_core.application.scoring_support import score_context
 from datp_core.composition.root import build_application
 from datp_core.domain.catalogue import (
     ConformalCoverageAnalysisRecord,
@@ -96,7 +96,7 @@ def test_analyze_conformal_coverage_computes_exact_marginal_and_macro_coverage(t
             IdentityBuilder.metrics_key(context),
             client_metric_frame(metric_rows),
         )
-        calibration_context = _score_context(context)
+        calibration_context = score_context(context)
         calibration_frame = pl.DataFrame(
             {
                 "client_id": [client for client in per_client for _ in range(100)],
@@ -219,10 +219,10 @@ def _commit_distribution_fixture(repository: AtomicArtifactRepository, config, e
         )
 
     # Test scores are identical across evaluations for a given seed (they do not depend on the
-    # threshold policy), so `_score_context` collapses every evaluation label's context to the
+    # threshold policy), so `score_context` collapses every evaluation label's context to the
     # same relative path -- commit it exactly once here rather than once per label.
     final_context = StageJobContext(experiment_id=experiment.identifier, seed=seed_value)
-    score_context = _score_context(final_context)
+    test_score_context = score_context(final_context)
     rows = [
         {"client_id": client, "score": score, "label": 0}
         for client, scores in _TEST_SCORES.items()
@@ -236,8 +236,8 @@ def _commit_distribution_fixture(repository: AtomicArtifactRepository, config, e
     commit_parquet(
         repository,
         config,
-        f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(score_context).value}",
-        IdentityBuilder.test_scores_key(score_context),
+        f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(test_score_context).value}",
+        IdentityBuilder.test_scores_key(test_score_context),
         test_frame,
     )
 

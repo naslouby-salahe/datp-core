@@ -7,7 +7,7 @@ from io import BytesIO
 
 import polars as pl
 
-from datp_core.application.learning_stages import _score_context
+from datp_core.application.scoring_support import score_context
 from datp_core.application.stage_protocol import (
     artifact_parents,
     commit_artifact,
@@ -81,7 +81,7 @@ class CalibrationSubsamplingStageHandler:
         ).can_reuse:
             return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
         calibration = self._repository.read(
-            f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(_score_context(context)).value}"
+            f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(score_context(context)).value}"
         )
         if not calibration.found or calibration.payload_bytes is None:
             return StageJobOutcome.failed(
@@ -151,7 +151,7 @@ class ThresholdConstructionStageHandler:
             relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
         ).can_reuse:
             return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
-        calibration_context = _score_context(
+        calibration_context = score_context(
             job.context, retain_calibration_subset=job.context.calibration_sample_count is not None
         )
         if calibration_context.calibration_sample_count is not None:
@@ -316,7 +316,7 @@ class OperatingPointEvaluationStageHandler:
             return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
         thresholds = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(job.context).value}")
         scores = self._repository.read(
-            f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(_score_context(job.context)).value}"
+            f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(score_context(job.context)).value}"
         )
         if not thresholds.found or thresholds.payload_bytes is None:
             return StageJobOutcome.failed(
@@ -371,9 +371,9 @@ class OperatingPointEvaluationStageHandler:
         return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
 
 
-
 def _ineligible_client_metrics(evaluation):
     import polars as pl
+
     return (
         evaluation.filter(pl.col("threshold").is_null())
         .select("client_id")

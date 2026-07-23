@@ -77,7 +77,6 @@ class PlanningGraph:
         descs = list(nx.descendants(self._graph, job_id))
         return tuple(sorted(descs, key=lambda n: n.value))
 
-
     @property
     def node_count(self) -> int:
         return self._graph.number_of_nodes()

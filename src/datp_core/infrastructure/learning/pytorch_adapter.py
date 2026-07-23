@@ -574,7 +574,6 @@ def fedprox_objective(
     return reconstruction_loss + ((proximal_mu / 2.0) * penalty)
 
 
-
 def train_autoencoder(
     model: nn.Module,
     train_data: torch.Tensor,

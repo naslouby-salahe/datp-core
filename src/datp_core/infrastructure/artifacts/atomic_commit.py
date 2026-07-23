@@ -195,9 +195,7 @@ class AtomicArtifactRepository(ArtifactRepository):
         return ArtifactReuseDecision(
             can_reuse=compatibility.compatible,
             reason=(
-                (ArtifactReuseReason.COMPATIBLE_FROZEN_ARTIFACT,)
-                if compatibility.compatible
-                else compatibility.reasons
+                (ArtifactReuseReason.COMPATIBLE_FROZEN_ARTIFACT,) if compatibility.compatible else compatibility.reasons
             ),
             existing_manifest=result.manifest,
         )

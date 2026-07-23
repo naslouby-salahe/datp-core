@@ -4,10 +4,10 @@ import polars as pl
 import pytest
 
 from datp_core.application.analysis_stages import StatisticalAnalysisStageHandler
-from datp_core.application.learning_stages import (
-    _conformal_seed_coverage,
-    _seed_ratio_result,
-    _threshold_tradeoff,
+from datp_core.application.scoring_support import (
+    conformal_seed_coverage,
+    seed_ratio_result,
+    threshold_tradeoff,
 )
 from datp_core.composition.root import build_application
 from datp_core.domain.catalogue import AnchorEquivalenceAnalysisRecord, RecoveryFractionAnalysisRecord
@@ -32,7 +32,7 @@ def test_recovery_fraction_uses_the_composed_shared_local_denominator() -> None:
 
 
 def test_absorption_ratio_reports_per_seed_and_ratio_of_seed_means() -> None:
-    result = _seed_ratio_result(
+    result = seed_ratio_result(
         label="absorption",
         formula="stress / reference",
         numerator={"seed_differences": [0.2, 0.1]},
@@ -59,7 +59,7 @@ def test_anchor_equivalence_requires_every_configured_statistical_fallback_rule(
 
 
 def test_conformal_coverage_uses_held_out_benign_confusion_counts_and_persisted_rank() -> None:
-    result = _conformal_seed_coverage(
+    result = conformal_seed_coverage(
         pl.DataFrame(
             {
                 "client_id": ["c1", "c2"],
@@ -99,7 +99,7 @@ def test_conformal_coverage_uses_held_out_benign_confusion_counts_and_persisted_
 
 
 def test_threshold_tradeoff_preserves_unavailable_detection_delta() -> None:
-    result = _threshold_tradeoff(
+    result = threshold_tradeoff(
         {"c1": {"threshold": 1.0, "false_positive_rate": 0.2, "true_positive_rate": None}},
         {"c1": {"threshold": 1.5, "false_positive_rate": 0.1, "true_positive_rate": None}},
     )

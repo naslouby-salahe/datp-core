@@ -118,4 +118,3 @@ def test_committed_artifact_with_incompatible_schema_version_reports_schema_inco
     result = repository.inspect("reports/schema-mismatch")
     assert not result.found
     assert result.corruption_reason == ArtifactCorruptionReason.SCHEMA_INCOMPATIBLE
-

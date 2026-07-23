@@ -10,7 +10,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from datp_core.application.learning_stages import _score_context
+from datp_core.application.scoring_support import score_context
 from datp_core.application.threshold_stages import (
     OperatingPointEvaluationStageHandler,
     ThresholdConstructionStageHandler,
@@ -78,7 +78,7 @@ def test_threshold_construction_computes_the_exact_shared_mean_of_client_quantil
     assert job.context.threshold_policy_id.value == "shared_mean_p95"
     run_id = RunId(f"run_anchor_reproduction_{app.config.execution_fingerprint.value[:12]}")
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
-    calibration_context = _score_context(job.context, retain_calibration_subset=False)
+    calibration_context = score_context(job.context, retain_calibration_subset=False)
     calibration_job_id = IdentityBuilder.calibration_score_job_id(calibration_context)
     calibration_frame = pl.DataFrame(
         {
@@ -122,7 +122,7 @@ def test_operating_point_evaluation_computes_exact_confusion_counts(tmp_path: Pa
     )
     run_id = RunId(f"run_anchor_reproduction_{app.config.execution_fingerprint.value[:12]}")
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
-    calibration_context = _score_context(threshold_job.context, retain_calibration_subset=False)
+    calibration_context = score_context(threshold_job.context, retain_calibration_subset=False)
     calibration_job_id = IdentityBuilder.calibration_score_job_id(calibration_context)
     calibration_frame = pl.DataFrame(
         {
@@ -142,7 +142,7 @@ def test_operating_point_evaluation_computes_exact_confusion_counts(tmp_path: Pa
     )
     assert threshold_outcome.status is JobExecutionStatus.SUCCESS
 
-    test_score_context = _score_context(eval_job.context)
+    test_score_context = score_context(eval_job.context)
     test_score_job_id = IdentityBuilder.test_score_job_id(test_score_context)
     # Threshold is _EXPECTED_SHARED_MEAN_THRESHOLD (52.525) for both clients.
     # client_a: one score below (benign, correctly rejected) and one above (attack, correctly flagged).

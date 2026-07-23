@@ -1,6 +1,6 @@
 import pytest
 
-from datp_core.application.learning_stages import _threshold_exchange_cost
+from datp_core.application.scoring_support import threshold_exchange_cost
 from datp_core.application.threshold_construction import ConstructThresholdsUseCase
 from datp_core.composition.root import _build_estimator_registry, build_application
 from datp_core.domain.identifiers import ClientId, PopulationId, ThresholdPolicyId
@@ -120,7 +120,7 @@ def test_cluster_p95_fingerprint_is_locked_to_0_95_regardless_of_swept_quantile(
 
 def test_federated_summary_resource_estimate_counts_every_candidate_exchange() -> None:
     config = build_application().config
-    fields, payload = _threshold_exchange_cost(
+    fields, payload = threshold_exchange_cost(
         config.communication_estimation_contract,
         config.threshold_policies.get(ThresholdPolicyId("federated_summary_matched_exceedance")),
         3,

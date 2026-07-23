@@ -73,18 +73,30 @@ def _build_adapter_registry() -> DatasetAdapterRegistry:
     )
 
 
+@define(frozen=True, slots=True, kw_only=True)
+class _CommonConfigUseCases:
+    """Configuration-layer use cases shared by both application variants."""
+
+    validate_configuration: ValidateProjectConfiguration
+    describe_project: DescribeResolvedProject
+    explain_authored_drift: ExplainAuthoredConfigurationDrift
+    explain_scientific_drift: ExplainResolvedScientificDrift
+    explain_execution_drift: ExplainExecutionConfigurationDrift
+    fingerprint_config: FingerprintResolvedConfiguration
+
+
 def _build_common_config_use_cases(
     resolved_config: ResolvedProjectConfiguration,
-) -> dict[str, object]:
+) -> _CommonConfigUseCases:
     """Construct configuration-layer use cases shared by both application variants."""
-    return {
-        "validate_configuration": ValidateProjectConfiguration(config=resolved_config),
-        "describe_project": DescribeResolvedProject(config=resolved_config),
-        "explain_authored_drift": ExplainAuthoredConfigurationDrift(),
-        "explain_scientific_drift": ExplainResolvedScientificDrift(),
-        "explain_execution_drift": ExplainExecutionConfigurationDrift(),
-        "fingerprint_config": FingerprintResolvedConfiguration(),
-    }
+    return _CommonConfigUseCases(
+        validate_configuration=ValidateProjectConfiguration(config=resolved_config),
+        describe_project=DescribeResolvedProject(config=resolved_config),
+        explain_authored_drift=ExplainAuthoredConfigurationDrift(),
+        explain_scientific_drift=ExplainResolvedScientificDrift(),
+        explain_execution_drift=ExplainExecutionConfigurationDrift(),
+        fingerprint_config=FingerprintResolvedConfiguration(),
+    )
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -112,12 +124,12 @@ def build_config_only_application(config_dir: Path | None = None) -> ConfigOnlyA
     cc = _build_common_config_use_cases(resolved_config)
     return ConfigOnlyApplication(
         config=resolved_config,
-        validate_configuration=cc["validate_configuration"],  # type: ignore[arg-type]
-        describe_project=cc["describe_project"],  # type: ignore[arg-type]
-        explain_authored_drift=cc["explain_authored_drift"],  # type: ignore[arg-type]
-        explain_scientific_drift=cc["explain_scientific_drift"],  # type: ignore[arg-type]
-        explain_execution_drift=cc["explain_execution_drift"],  # type: ignore[arg-type]
-        fingerprint_config=cc["fingerprint_config"],  # type: ignore[arg-type]
+        validate_configuration=cc.validate_configuration,
+        describe_project=cc.describe_project,
+        explain_authored_drift=cc.explain_authored_drift,
+        explain_scientific_drift=cc.explain_scientific_drift,
+        explain_execution_drift=cc.explain_execution_drift,
+        fingerprint_config=cc.fingerprint_config,
     )
 
 
@@ -175,12 +187,12 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
 
     return DatpApplication(
         config=resolved_config,
-        validate_configuration=cc["validate_configuration"],  # type: ignore[arg-type]
-        describe_project=cc["describe_project"],  # type: ignore[arg-type]
-        explain_authored_drift=cc["explain_authored_drift"],  # type: ignore[arg-type]
-        explain_scientific_drift=cc["explain_scientific_drift"],  # type: ignore[arg-type]
-        explain_execution_drift=cc["explain_execution_drift"],  # type: ignore[arg-type]
-        fingerprint_config=cc["fingerprint_config"],  # type: ignore[arg-type]
+        validate_configuration=cc.validate_configuration,
+        describe_project=cc.describe_project,
+        explain_authored_drift=cc.explain_authored_drift,
+        explain_scientific_drift=cc.explain_scientific_drift,
+        explain_execution_drift=cc.explain_execution_drift,
+        fingerprint_config=cc.fingerprint_config,
         audit_dataset=audit_ds,
         execute_experiment=executor,
         construct_thresholds=construct_th,
