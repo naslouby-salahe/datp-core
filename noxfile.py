@@ -2,7 +2,7 @@
 
 import nox
 
-nox.options.sessions = ("lint", "typecheck", "tests", "tests_parallel", "imports", "coverage")
+nox.options.sessions = ("lint", "typecheck", "tests", "imports", "coverage")
 
 
 @nox.session(venv_backend="uv")
@@ -22,14 +22,7 @@ def typecheck(session: nox.Session) -> None:
 
 @nox.session(venv_backend="uv")
 def tests(session: nox.Session) -> None:
-    """Run the serial test suite, including Hypothesis and benchmark tests."""
-    session.install(".[cli]", "pytest>=8.0", "hypothesis>=6.0", "pytest-benchmark>=4.0")
-    session.run("pytest", "-q")
-
-
-@nox.session(venv_backend="uv")
-def tests_parallel(session: nox.Session) -> None:
-    """Run the suite under xdist to expose shared-state defects."""
+    """Run the test suite in parallel, including Hypothesis and benchmark tests."""
     session.install(".[cli]", "pytest>=8.0", "hypothesis>=6.0", "pytest-benchmark>=4.0", "pytest-xdist>=3.5")
     session.run("pytest", "-q", "-n", "auto")
 

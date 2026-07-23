@@ -1,0 +1,101 @@
+"""Configuration-specific fingerprint entry points and the cattrs projection converter.
+
+Builds on the generic hashing/canonicalization primitives in ``pipeline.fingerprints``
+(``Fingerprint``, ``canonicalize_value``) to produce the two fingerprint kinds the resolution
+flow ends with: the scientific fingerprint and the execution fingerprint.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from hashlib import blake2b
+from json import dumps
+from types import MappingProxyType
+from typing import NamedTuple
+
+import cattrs
+
+from datp_core.pipeline.fingerprints import CanonicalProjection, Fingerprint, canonicalize_value
+
+_PROJECTION_CONVERTER: cattrs.Converter | None = None
+
+
+def _build_projection_converter() -> cattrs.Converter:
+    converter = cattrs.Converter()
+
+    # MappingProxyType objects must be recursively converted to plain dicts
+    # so the result is fully JSON-serializable.  A bare dict(mp) preserves
+    # nested MappingProxyType values, so the hook walks the entire tree.
+    def _unstructure_mappingproxy(mp: Mapping) -> dict:
+        result: dict = {}
+        for key, value in mp.items():
+            if isinstance(value, MappingProxyType):
+                result[key] = _unstructure_mappingproxy(value)
+            elif isinstance(value, dict):
+                result[key] = {
+                    k: _unstructure_mappingproxy(v) if isinstance(v, MappingProxyType) else v for k, v in value.items()
+                }
+            else:
+                result[key] = value
+        return result
+
+    converter.register_unstructure_hook(MappingProxyType, _unstructure_mappingproxy)
+
+    return converter
+
+
+def get_projection_converter() -> cattrs.Converter:
+    global _PROJECTION_CONVERTER
+    if _PROJECTION_CONVERTER is None:
+        _PROJECTION_CONVERTER = _build_projection_converter()
+    return _PROJECTION_CONVERTER
+
+
+def unstructure_projection(value: object) -> object:
+    """Convert resolved domain records into primitive structures for canonical fingerprinting."""
+    return get_projection_converter().unstructure(value)
+
+
+def unstructure_mapping_proxy(mp: Mapping) -> dict:
+    """Unstructure a MappingProxyType as a plain dict, for deterministic key ordering."""
+    return dict(mp)
+
+
+class FingerprintPayload(NamedTuple):
+    schema_version: int
+    kind: str
+    payload: CanonicalProjection
+
+
+def compute_scientific_fingerprint(scientific_projection: object) -> Fingerprint:
+    """Compute canonical 256-bit BLAKE2b fingerprint for scientific configuration."""
+    envelope = FingerprintPayload(
+        schema_version=1,
+        kind="scientific",
+        payload=canonicalize_value(scientific_projection),
+    )
+    json_bytes = dumps(
+        envelope._asdict(),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    hex_digest = blake2b(json_bytes, digest_size=32).hexdigest()
+    return Fingerprint(value=hex_digest)
+
+
+def compute_execution_fingerprint(execution_projection: object) -> Fingerprint:
+    """Compute canonical 256-bit BLAKE2b fingerprint for execution configuration."""
+    envelope = FingerprintPayload(
+        schema_version=1,
+        kind="execution",
+        payload=canonicalize_value(execution_projection),
+    )
+    json_bytes = dumps(
+        envelope._asdict(),
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    ).encode("utf-8")
+    hex_digest = blake2b(json_bytes, digest_size=32).hexdigest()
+    return Fingerprint(value=hex_digest)
