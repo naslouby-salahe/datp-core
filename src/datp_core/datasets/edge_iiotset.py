@@ -490,7 +490,7 @@ def _category_value(value: str | None, known: tuple[str, ...]) -> str:
     return "__UNKNOWN__"
 
 
-def _split_role(index: int, boundaries: tuple[int, int, int]) -> int:
+def _split_role(index: int, boundaries: list[int]) -> int:
     """Map an index to a chronological split role. (S3358)"""
     if index < boundaries[0]:
         return 0
