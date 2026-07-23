@@ -19,6 +19,8 @@ from datp_core.thresholding.models import (
     build_threshold_set,
 )
 
+_INVALID_CLUSTER_INT_PARAMS = "Cluster policy has invalid authored integer parameters"
+
 
 def fingerprint_quantile(fingerprint_estimators: Mapping[str, str]) -> float:
     """Extract the p95 fingerprint quantile from the configured estimator name.
@@ -86,11 +88,11 @@ def estimate_cluster(
     maximum_iterations = clustering.get("maximum_iterations")
     tolerance = clustering.get("convergence_tolerance")
     if not isinstance(random_seed, int) or isinstance(random_seed, bool):
-        raise ValueError("Cluster policy has invalid authored integer parameters")
+        raise ValueError(_INVALID_CLUSTER_INT_PARAMS)
     if not isinstance(runs, int) or isinstance(runs, bool):
-        raise ValueError("Cluster policy has invalid authored integer parameters")
+        raise ValueError(_INVALID_CLUSTER_INT_PARAMS)
     if not isinstance(maximum_iterations, int) or isinstance(maximum_iterations, bool):
-        raise ValueError("Cluster policy has invalid authored integer parameters")
+        raise ValueError(_INVALID_CLUSTER_INT_PARAMS)
     if not isinstance(tolerance, float):
         raise ValueError("Cluster policy has invalid authored convergence tolerance")
     labels = KMeans(

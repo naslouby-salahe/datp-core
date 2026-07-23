@@ -4,6 +4,7 @@ statistically compares one paired result against a historical reference).
 """
 
 from __future__ import annotations
+import math
 
 import json
 from collections.abc import Mapping
@@ -110,7 +111,7 @@ def analyze_paired(
         analysis_seed=record.analysis_seed.value,
         seed_differences=differences,
         sign_consistency=sum(value > 0.0 for value in differences) / len(differences),
-        zero_difference_count=sum(value == 0.0 for value in differences),
+        zero_difference_count=sum(math.isclose(value, 0.0, abs_tol=0.0) for value in differences),
         negative_difference_count=sum(value < 0.0 for value in differences),
         partition_condition=partition_condition,
         federated_proximal_mu=proximal_mu,

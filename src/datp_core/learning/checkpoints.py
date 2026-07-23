@@ -6,6 +6,7 @@ trailing-window relative loss change is below ``tolerance``; otherwise the round
 """
 
 from __future__ import annotations
+import math
 
 import json
 from collections.abc import Sequence
@@ -56,7 +57,7 @@ def select_anchor_checkpoint_round(
         if round_number < minimum_round:
             continue
         window_start_loss = losses[position - (window - 1)][1]
-        if window_start_loss == 0.0:
+        if math.isclose(window_start_loss, 0.0, abs_tol=0.0):
             relative_change = 0.0
         else:
             relative_change = abs(window_start_loss - loss_value) / abs(window_start_loss)

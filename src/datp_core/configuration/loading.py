@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from collections.abc import Hashable
 from pathlib import Path
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 
 import yaml
 from pydantic import BaseModel, JsonValue, ValidationError
@@ -18,8 +18,6 @@ from datp_core.configuration.models import (
     AuthoredProtocolsConfig,
     AuthoredRuntimeConfig,
 )
-
-TModel = TypeVar("TModel", bound=BaseModel)
 
 
 class ConfigurationError(Exception):
@@ -70,7 +68,7 @@ class YamlConfigurationReader:
         return cast(dict[str, JsonValue], data)
 
     @classmethod
-    def read_model(cls, file_path: Path, model_cls: type[TModel]) -> TModel:
+    def read_model[TModel: BaseModel](cls, file_path: Path, model_cls: type[TModel]) -> TModel:
         if model_cls is type(None) or not issubclass(model_cls, BaseModel):
             raise ConfigurationError(f"Invalid model class: {model_cls}", source_path=file_path)
         data = cls.read_document(file_path)

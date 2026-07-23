@@ -61,6 +61,22 @@ from datp_core.pipeline.values import (
 )
 
 
+def _binary_label_column(d_cfg: object) -> str | None:
+    """Extract the binary label column header from an authored dataset config.
+
+    The nested conditional was extracted from the resolve_datasets body to comply
+    with the S3358 code-quality rule (no deeply nested ternary expressions).
+    """
+    label_fields = getattr(d_cfg, "field_schema", None)
+    if label_fields is None:
+        return None
+    binary_label = getattr(getattr(label_fields, "label_fields", None), "binary_label", None)
+    if binary_label is None:
+        return None
+    column = binary_label.get("column") if isinstance(binary_label, dict) else None
+    return str(column) if isinstance(column, str) else None
+
+
 def resolve_identity_scheme(cfg: IdentitySchemeConfig) -> IdentitySchemeRecord:
     return IdentitySchemeRecord(
         row_identity=cfg.row_identity,
@@ -467,15 +483,7 @@ def resolve_datasets(
                 if d_cfg.source_layout.attack_traffic_root is not None
                 else None
             ),
-            binary_label_header=(
-                (
-                    str(d_cfg.field_schema.label_fields.binary_label["column"])
-                    if isinstance(d_cfg.field_schema.label_fields.binary_label.get("column"), str)
-                    else None
-                )
-                if d_cfg.field_schema.label_fields.binary_label is not None
-                else None
-            ),
+            binary_label_header=_binary_label_column(d_cfg),
         )
         resolved[d_id] = ResolvedDataset(
             dataset_id=d_id,

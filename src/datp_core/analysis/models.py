@@ -11,6 +11,7 @@ stability,coverage,temporal,resources,distributions}.py`` and ``analysis/executi
 """
 
 from __future__ import annotations
+import math
 
 from collections.abc import Iterable, Mapping
 from math import isfinite
@@ -129,7 +130,7 @@ def matched_pairs_rank_biserial_correlation(left: Iterable[float], right: Iterab
     differences = tuple(float(a) - float(b) for a, b in zip(left, right, strict=True))
     if not differences or not all(isfinite(value) for value in differences):
         raise StatisticalProcedureError("Rank-biserial correlation requires finite paired observations")
-    nonzero = tuple(value for value in differences if value != 0.0)
+    nonzero = tuple(value for value in differences if not math.isclose(value, 0.0, abs_tol=0.0))
     if not nonzero:
         raise StatisticalProcedureError("Rank-biserial correlation is undefined when all paired differences are zero")
     ranks = _average_ranks(tuple(abs(value) for value in nonzero))
@@ -303,7 +304,7 @@ class StatisticalAnalysisUseCase:
             raise StatisticalProcedureError("Percentile bootstrap requires at least two valid paired seed differences")
         if not np.isfinite(data).all():
             raise StatisticalProcedureError("BCa requires finite paired seed differences")
-        if np.ptp(data) == 0.0:
+        if math.isclose(float(np.ptp(data)), 0.0, abs_tol=0.0):
             raise StatisticalProcedureError("BCa is degenerate for identical paired seed differences")
 
         try:
@@ -342,7 +343,7 @@ class StatisticalAnalysisUseCase:
             raise StatisticalProcedureError("Linear regression is undefined for the supplied observations")
         centered = predictor - np.mean(predictor)
         denominator = float(np.sum(centered**2))
-        if denominator == 0.0:
+        if math.isclose(denominator, 0.0, abs_tol=0.0):
             raise StatisticalProcedureError("Linear regression requires non-constant predictor observations")
         leverage = tuple(float((1.0 / len(predictor)) + (value**2 / denominator)) for value in centered)
         leave_one_out_slopes = tuple(

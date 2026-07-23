@@ -1,6 +1,7 @@
 """Domain models for operating point evaluation, confusion matrices, and metrics."""
 
 from __future__ import annotations
+import math
 
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
@@ -261,7 +262,7 @@ def calculate_fpr_dispersion(
     standard_deviation = sqrt(sum((value - average) ** 2 for value in fprs) / len(fprs))
     q25 = _linear_quantile(fprs, 0.25)
     q75 = _linear_quantile(fprs, 0.75)
-    if average == 0.0:
+    if math.isclose(average, 0.0, abs_tol=0.0):
         cv = MetricValue.unavailable(MetricStatus.UNDEFINED_ZERO_DENOMINATOR)
     elif average < cv_instability_threshold:
         cv = MetricValue(value=standard_deviation / average, status=MetricStatus.UNDEFINED_NEAR_ZERO_DENOMINATOR)

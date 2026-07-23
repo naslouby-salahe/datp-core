@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import cast
 
+
 from datp_core.configuration.fingerprints import unstructure_projection
 from datp_core.configuration.loading import ConfigurationError
 from datp_core.configuration.models import AnalysisSpecConfig, AuthoredExperimentConfig, SweepVariableConfig
@@ -83,6 +84,11 @@ def _require(value: object | None, *, experiment_name: str, analysis_label: str,
     return value
 
 
+def _tuple_str_list(value: object) -> tuple[str, ...]:
+    """Deduplicated single authoritative cast: 'list[str]' → tuple[str, ...] (S1192)."""
+    return tuple(cast("list[str]", value))
+
+
 def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) -> AnalysisRecord:
     def req(field_name: str) -> object:
         return _require(
@@ -140,8 +146,8 @@ def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) 
             result_type=a.result_type,
             statistical_profile=statistical_profile,
             formula=cast(str, req("formula")),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
-            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
+            produced_fields=_tuple_str_list(req("produced_fields")),
+            source_evaluations=_tuple_str_list(req("source_evaluations")),
             required_operational_input=cast(str, req("required_operational_input")),
             per_client_reporting_required=cast(bool, req("per_client_reporting_required")),
             unavailable_behavior=cast(str, req("unavailable_behavior")),
@@ -158,8 +164,8 @@ def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) 
             interval_width_tolerance_multiplier=cast(float, req("interval_width_tolerance_multiplier")),
             floating_point_tolerance=cast("dict[str, float]", req("floating_point_tolerance")),
             historical_reference=cast("dict[str, float | str]", req("historical_reference")),
-            statistical_fallback_requirements=tuple(cast("list[str]", req("statistical_fallback_requirements"))),
-            failure_reasons=tuple(cast("list[str]", req("failure_reasons"))),
+            statistical_fallback_requirements=_tuple_str_list(req("statistical_fallback_requirements")),
+            failure_reasons=_tuple_str_list(req("failure_reasons")),
             downstream_blocking_behavior=cast(str, req("downstream_blocking_behavior")),
         )
     if a.kind == "cluster_stability_analysis":
@@ -170,7 +176,7 @@ def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) 
             statistical_profile=statistical_profile,
             source_evaluation=cast(str, req("source_evaluation")),
             comparison_unit=cast(str, req("comparison_unit")),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            produced_fields=_tuple_str_list(req("produced_fields")),
             reference_evaluation=a.reference_evaluation,
             run_requirement=(RunRequirement(a.run_requirement) if a.run_requirement is not None else None),
         )
@@ -182,7 +188,7 @@ def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) 
             statistical_profile=statistical_profile,
             source_evaluation=cast(str, req("source_evaluation")),
             target_coverage=cast(float, req("target_coverage")),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            produced_fields=_tuple_str_list(req("produced_fields")),
             coverage_direction=a.coverage_direction,
         )
     if a.kind == "distribution_mechanism_analysis":
@@ -191,8 +197,8 @@ def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) 
             kind=a.kind,
             result_type=a.result_type,
             statistical_profile=statistical_profile,
-            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            source_evaluations=_tuple_str_list(req("source_evaluations")),
+            produced_fields=_tuple_str_list(req("produced_fields")),
             field_formulas=a.field_formulas,
         )
     if a.kind == "locked_client_distribution_analysis":
@@ -201,8 +207,8 @@ def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) 
             kind=a.kind,
             result_type=a.result_type,
             statistical_profile=statistical_profile,
-            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            source_evaluations=_tuple_str_list(req("source_evaluations")),
+            produced_fields=_tuple_str_list(req("produced_fields")),
             locked_client_identifier=cast(str, req("locked_client_identifier")),
         )
     if a.kind == "metric_association_analysis":
@@ -224,8 +230,8 @@ def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) 
             kind=a.kind,
             result_type=a.result_type,
             statistical_profile=statistical_profile,
-            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            source_evaluations=_tuple_str_list(req("source_evaluations")),
+            produced_fields=_tuple_str_list(req("produced_fields")),
             oracle_reference=cast(str, req("oracle_reference")),
         )
     if a.kind == "recovery_fraction_analysis":
@@ -247,8 +253,8 @@ def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) 
             kind=a.kind,
             result_type=a.result_type,
             statistical_profile=statistical_profile,
-            source_evaluations=tuple(cast("list[str]", req("source_evaluations"))),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            source_evaluations=_tuple_str_list(req("source_evaluations")),
+            produced_fields=_tuple_str_list(req("produced_fields")),
             estimate_basis=cast(str, req("estimate_basis")),
         )
     if a.kind == "temporal_recovery_analysis":
@@ -261,7 +267,7 @@ def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) 
             static_reference_evaluation=cast(str, req("static_reference_evaluation")),
             frozen_evaluation=cast(str, req("frozen_evaluation")),
             recalibrated_evaluation=cast(str, req("recalibrated_evaluation")),
-            recovery_fields=tuple(cast("list[str]", req("recovery_fields"))),
+            recovery_fields=_tuple_str_list(req("recovery_fields")),
             drift_excess_formula=cast(str, req("drift_excess_formula")),
             recovered_amount_formula=cast(str, req("recovered_amount_formula")),
             recovery_ratio_formula=cast(str, req("recovery_ratio_formula")),
@@ -282,7 +288,7 @@ def _resolve_analysis(exp_cfg: AuthoredExperimentConfig, a: AnalysisSpecConfig) 
             result_type=a.result_type,
             statistical_profile=statistical_profile,
             source_evaluation=cast(str, req("source_evaluation")),
-            produced_fields=tuple(cast("list[str]", req("produced_fields"))),
+            produced_fields=_tuple_str_list(req("produced_fields")),
             per_sweep_cell=cast(str, req("per_sweep_cell")),
         )
     raise ConfigurationError(f"Experiment '{exp_cfg.name}' analysis '{a.label}' has unsupported kind '{a.kind}'")

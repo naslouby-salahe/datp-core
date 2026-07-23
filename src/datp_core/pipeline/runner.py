@@ -14,6 +14,17 @@ from datp_core.pipeline.models import JobExecutionStatus, PlanningGraph, StageJo
 from datp_core.pipeline.stages import StageHandler
 
 
+
+def _execute_or_fail(handler, job, run_id):
+    """Execute a handler or return a failure outcome if no handler is registered."""
+    if handler is not None:
+        return handler.execute(job, run_id)
+    return StageJobOutcome.failed(
+        job_id=job.job_id,
+        stage=job.stage,
+        error_message="No stage handler is registered",
+    )
+
 def run_planning_graph(
     graph: PlanningGraph,
     handlers: Mapping[StageKind, StageHandler],
@@ -41,13 +52,7 @@ def run_planning_graph(
                 ),
             )
             if unavailable_dependencies
-            else handler.execute(job, run_id)
-            if handler is not None
-            else StageJobOutcome.failed(
-                job_id=job.job_id,
-                stage=job.stage,
-                error_message="No stage handler is registered",
-            )
+            else _execute_or_fail(handler, job, run_id)
         )
         outcomes.append(outcome)
         outcomes_by_job_id[job.job_id] = outcome
