@@ -432,6 +432,15 @@ class PlanValidationResult:
 class ExecutionPlanValidator:
     """Validator performing deep structural and artifact contract checks on planning graphs."""
 
+    @staticmethod
+    def _build_producer_map(graph: PlanningGraph, errors: list[str]) -> dict[ArtifactKey, JobId]:
+        producers: dict[ArtifactKey, JobId] = {}
+        for job in graph.jobs:
+            if job.output in producers:
+                errors.append(f"Multiple producers found for artifact output '{job.output.artifact_id}'")
+            producers[job.output] = job.job_id
+        return producers
+
     def validate(self, graph: PlanningGraph) -> PlanValidationResult:
         errors: list[str] = []
 
@@ -455,14 +464,20 @@ class ExecutionPlanValidator:
         if len(top_order) != graph.node_count:
             errors.append("Topological sort node count mismatch")
 
-        # Map outputs to producer job IDs
-        producers: dict[ArtifactKey, JobId] = {}
-        for job in graph.jobs:
-            if job.output in producers:
-                errors.append(f"Multiple producers found for artifact output '{job.output.artifact_id}'")
-            producers[job.output] = job.job_id
+        producers = self._build_producer_map(graph, errors)
+        self._validate_job_inputs(graph, producers, errors)
 
-        # Validate input artifact producer existence
+        is_valid = len(errors) == 0
+        return PlanValidationResult(
+            is_valid=is_valid,
+            errors=tuple(errors),
+            job_count=graph.node_count,
+            dependency_count=graph.edge_count,
+        )
+
+
+    @staticmethod
+    def _validate_job_inputs(graph: PlanningGraph, producers: dict[ArtifactKey, JobId], errors: list[str]) -> None:
         for job in graph.jobs:
             for inp in job.inputs:
                 if inp not in producers:
@@ -479,14 +494,6 @@ class ExecutionPlanValidator:
                 for item in job.inputs
             ):
                 errors.append(f"Evaluation job '{job.job_id}' must not consume calibration scores")
-
-        is_valid = len(errors) == 0
-        return PlanValidationResult(
-            is_valid=is_valid,
-            errors=tuple(errors),
-            job_count=graph.node_count,
-            dependency_count=graph.edge_count,
-        )
 
 
 def validate_planning_graph(graph: PlanningGraph) -> None:

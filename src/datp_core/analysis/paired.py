@@ -173,26 +173,47 @@ def evaluation_metric(
             population_id=evaluation.population_id,
             recalibration_mode=evaluation.recalibration_mode,
         )
-        artifact = repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
-        if not artifact.found or artifact.payload_bytes is None:
-            raise ValueError(f"Evaluation artifact is unavailable for seed {seed}, label '{label}'")
-        frame = validate_client_metric_frame(pl.read_parquet(BytesIO(artifact.payload_bytes)))
-        fprs = tuple(
-            float(value)
-            for value in frame.filter(pl.col("false_positive_rate_status") == "available")[
-                "false_positive_rate"
-            ].to_list()
+        values.append(
+            _read_cv_fpr_metric(
+                context=context,
+                repository=repository,
+                run_id=run_id,
+                seed=seed,
+                label=label,
+                quantile=quantile,
+            )
         )
-        dispersion = calculate_fpr_dispersion(
-            fprs,
-            cv_instability_threshold=0.10 * (1.0 - quantile),
-            quantile_method="linear",
-        )
-        if dispersion.coefficient_of_variation.status is MetricStatus.UNDEFINED_ZERO_DENOMINATOR:
-            raise ValueError("Configured CV(FPR) is unavailable for paired statistical analysis")
-        assert dispersion.coefficient_of_variation.value is not None
-        values.append(dispersion.coefficient_of_variation.value)
     return sum(values) / len(values)
+
+
+def _read_cv_fpr_metric(
+    *,
+    context: StageJobContext,
+    repository: ArtifactRepository,
+    run_id: RunId,
+    seed: int,
+    label: str,
+    quantile: float,
+) -> float:
+    artifact = repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
+    if not artifact.found or artifact.payload_bytes is None:
+        raise ValueError(f"Evaluation artifact is unavailable for seed {seed}, label '{label}'")
+    frame = validate_client_metric_frame(pl.read_parquet(BytesIO(artifact.payload_bytes)))
+    fprs = tuple(
+        float(value)
+        for value in frame.filter(pl.col("false_positive_rate_status") == "available")[
+            "false_positive_rate"
+        ].to_list()
+    )
+    dispersion = calculate_fpr_dispersion(
+        fprs,
+        cv_instability_threshold=0.10 * (1.0 - quantile),
+        quantile_method="linear",
+    )
+    if dispersion.coefficient_of_variation.status is MetricStatus.UNDEFINED_ZERO_DENOMINATOR:
+        raise ValueError("Configured CV(FPR) is unavailable for paired statistical analysis")
+    assert dispersion.coefficient_of_variation.value is not None
+    return dispersion.coefficient_of_variation.value
 
 
 def evaluation_policy(experiment: ExperimentRecord, label: str) -> str:

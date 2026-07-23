@@ -341,17 +341,27 @@ def _validate_absorption_contract(
     stress_mapping = mapping.get("stress_test")
     if not isinstance(reference_mapping, dict) or not isinstance(stress_mapping, dict):
         raise ValueError(f"Absorption analysis '{analysis.label}' has malformed evaluation-label mappings")
+    _validate_evaluation_label_mapping(analysis.label, reference_mapping, stress_mapping, reference, experiment)
+
+
+def _validate_evaluation_label_mapping(
+    analysis_label: str,
+    reference_mapping: dict,
+    stress_mapping: dict,
+    reference: ExperimentRecord,
+    experiment: ExperimentRecord,
+) -> None:
     for logical_label in ("shared_mean", "local"):
         reference_label = reference_mapping.get(logical_label)
         stress_label = stress_mapping.get(logical_label)
         if not isinstance(reference_label, str) or not isinstance(stress_label, str):
-            raise ValueError(f"Absorption analysis '{analysis.label}' lacks '{logical_label}' label mappings")
+            raise ValueError(f"Absorption analysis '{analysis_label}' lacks '{logical_label}' label mappings")
         reference_evaluation = next((item for item in reference.evaluations if item.label == reference_label), None)
         stress_evaluation = next((item for item in experiment.evaluations if item.label == stress_label), None)
         if reference_evaluation is None or stress_evaluation is None:
-            raise ValueError(f"Absorption analysis '{analysis.label}' maps an unavailable evaluation")
+            raise ValueError(f"Absorption analysis '{analysis_label}' maps an unavailable evaluation")
         if reference_evaluation.threshold_policy_id != stress_evaluation.threshold_policy_id:
-            raise ValueError(f"Absorption analysis '{analysis.label}' has unmatched threshold policy semantics")
+            raise ValueError(f"Absorption analysis '{analysis_label}' has unmatched threshold policy semantics")
 
 
 __all__ = [

@@ -69,26 +69,31 @@ def iter_numeric_csv_source(path: Path, required_headers: tuple[str, ...]) -> It
         if missing:
             raise ValueError(f"Source {path} is missing required headers: {', '.join(missing)}")
         for source_row_index, record in enumerate(reader, start=1):
-            values: list[float] = []
-            reason: str | None = None
-            for header in required_headers:
-                raw_value = record[header_to_index[header]]
-                if raw_value is None or raw_value.strip() == "":
-                    reason = f"blank numeric feature '{header}'"
-                    break
-                try:
-                    value = float(raw_value)
-                except ValueError:
-                    reason = f"unparseable numeric feature '{header}'"
-                    break
-                if not math.isfinite(value):
-                    reason = f"non-finite numeric feature '{header}'"
-                    break
-                values.append(value)
+            values, reason = _parse_numeric_row(record, required_headers, header_to_index)
             if reason is None:
                 yield SourceRow(source_path=path, source_row_index=source_row_index, values=tuple(values))
             else:
                 yield SourceRowFailure(source_path=path, source_row_index=source_row_index, reason=reason)
+
+
+def _parse_numeric_row(
+    record: list[str],
+    required_headers: tuple[str, ...],
+    header_to_index: dict[str, int],
+) -> tuple[list[float], str | None]:
+    values: list[float] = []
+    for header in required_headers:
+        raw_value = record[header_to_index[header]]
+        if raw_value is None or raw_value.strip() == "":
+            return [], f"blank numeric feature '{header}'"
+        try:
+            value = float(raw_value)
+        except ValueError:
+            return [], f"unparseable numeric feature '{header}'"
+        if not math.isfinite(value):
+            return [], f"non-finite numeric feature '{header}'"
+        values.append(value)
+    return values, None
 
 
 def read_numeric_csv_source(path: Path, required_headers: tuple[str, ...]) -> CsvValidationResult:
@@ -133,22 +138,7 @@ def iter_labeled_numeric_csv_source(
                     reason=f"blank categorical label '{label_header}'",
                 )
                 continue
-            values: list[float] = []
-            reason: str | None = None
-            for header in feature_headers:
-                raw_value = record[header_to_index[header]]
-                if raw_value.strip() == "":
-                    reason = f"blank numeric feature '{header}'"
-                    break
-                try:
-                    value = float(raw_value)
-                except ValueError:
-                    reason = f"unparseable numeric feature '{header}'"
-                    break
-                if not math.isfinite(value):
-                    reason = f"non-finite numeric feature '{header}'"
-                    break
-                values.append(value)
+            values, reason = _parse_numeric_row(record, feature_headers, header_to_index)
             if reason is not None:
                 yield SourceRowFailure(source_path=path, source_row_index=source_row_index, reason=reason)
                 continue
