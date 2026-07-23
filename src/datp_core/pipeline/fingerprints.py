@@ -79,6 +79,10 @@ def canonicalize_value(obj: object) -> CanonicalProjection:
         return format(obj, ".17g")
     if isinstance(obj, (str, int, bool)) or obj is None:
         return obj
+    if hasattr(obj, "__attrs_attrs__"):
+        from attrs import asdict
+
+        return canonicalize_value(asdict(obj, recurse=False))
     raise TypeError(f"Unsupported value in fingerprint projection: {type(obj).__name__}")
 
 
