@@ -27,6 +27,7 @@ from datp_core.datasets.models import (
     DatasetSetup,
     PartitionSeedContract,
     ResolvedDataset,
+    SplitMethod,
 )
 from datp_core.experiments.models import SweepConditionRecord
 
@@ -184,7 +185,7 @@ def split_edge_benign_rows(
     rows: tuple[EdgeIIoTsetRow, ...], materialization: DatasetMaterialization
 ) -> EdgeIIoTsetSplitRows:
     """Deduplicate and split valid folder-defined benign clients; never assign attacks to clients."""
-    if materialization.split_method != "random_fractional" or materialization.split_seed is None:
+    if materialization.split_method != SplitMethod.RANDOM_FRACTIONAL or materialization.split_seed is None:
         raise ValueError("Edge-IIoTset benign materialization requires configured random_fractional split and seed")
     train_ratio = float(materialization.ratio("train"))
     calibration_ratio = float(materialization.ratio("calibration"))
@@ -424,7 +425,7 @@ def split_edge_chronological_rows(
     rows: tuple[EdgeTimestampedRow, ...], materialization: DatasetMaterialization, excluded_clients: tuple[str, ...]
 ) -> EdgeChronologicalSplitRows:
     """Apply configured stable per-client chronology with cumulative midnight rollover correction."""
-    if materialization.split_method != "within_client_chronological":
+    if materialization.split_method != SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL:
         raise ValueError("Edge-IIoTset chronological setup requires the configured within_client_chronological method")
     fractions = tuple(
         float(materialization.chronological_ratio(role))
@@ -529,6 +530,8 @@ class EdgeIIoTsetAdapter:
         staging_root: Path,
         partition_condition: SweepConditionRecord | None,
         partition_seed_contract: PartitionSeedContract | None,
+        *,
+        chunk_row_count: int,
     ) -> EdgeIIoTsetMaterializationPayload:
         if partition_condition is not None or partition_seed_contract is not None:
             raise ValueError("Edge-IIoTset does not support partition-condition materialization")
@@ -560,18 +563,18 @@ class EdgeIIoTsetAdapter:
             categorical.columns,
             inspection.binary_label_header,
             labels.multiclass_label.column,
-            timestamp_header if materialization.split_method == "within_client_chronological" else None,
+            timestamp_header if materialization.split_method == SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL else None,
             excluded,
         )
         rows = tuple(row for row in rows if row.client_id not in excluded)
         payload_file = staging_root / "materialized.parquet"
-        if materialization.split_method == "random_fractional":
+        if materialization.split_method == SplitMethod.RANDOM_FRACTIONAL:
             split = split_edge_benign_rows(rows, materialization)
             vocabulary = fit_edge_vocabulary(split.train, categorical.columns)
             normalization = fit_edge_train_normalization(split.train)
             payload = encode_edge_split_as_parquet(split, numeric.order, vocabulary, normalization)
             evidence = {"split_method": materialization.split_method, "excluded_clients": sorted(excluded)}
-        elif materialization.split_method == "within_client_chronological":
+        elif materialization.split_method == SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL:
             chronological = split_edge_chronological_rows(
                 tuple(
                     EdgeTimestampedRow(row=row, time_of_day_seconds=_require_edge_timestamp(row))

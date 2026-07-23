@@ -27,20 +27,20 @@ from datp_core.artifacts.serialization import (
     decode_manifest,
     encode_manifest,
 )
-from datp_core.configuration.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
+from datp_core.configuration.fingerprints import compute_fingerprint
 from datp_core.pipeline.fingerprints import Checksum
 from datp_core.pipeline.identifiers import ArtifactId
 
 
 def _manifest() -> ArtifactManifest:
-    scientific = compute_scientific_fingerprint({"experiment": "codec-test"})
+    scientific = compute_fingerprint("scientific", {"experiment": "codec-test"})
     return ArtifactManifest(
         artifact_key=ArtifactKey(artifact_id=ArtifactId("codec-artifact"), kind=ArtifactKind.REPORT),
         artifact_format=ArtifactFormat.TEXT,
         state=ArtifactState.FROZEN,
         relative_path="reports/codec-artifact",
         scientific_fingerprint=scientific,
-        execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
+        execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
         payload_checksum=Checksum("a" * 64),
         schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
         parents=(),
@@ -93,13 +93,13 @@ def test_schema_version_mismatch_is_reported_distinctly_from_malformed_manifest(
 
 
 def test_committed_artifact_with_incompatible_schema_version_reports_schema_incompatible(tmp_path: Path) -> None:
-    scientific = compute_scientific_fingerprint({"experiment": "schema-mismatch"})
+    scientific = compute_fingerprint("scientific", {"experiment": "schema-mismatch"})
     request = ArtifactCommitRequest(
         metadata=ArtifactCommitMetadata(
             artifact_key=ArtifactKey(artifact_id=ArtifactId("schema-mismatch"), kind=ArtifactKind.REPORT),
             artifact_format=ArtifactFormat.TEXT,
             scientific_fingerprint=scientific,
-            execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
+            execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
             relative_path="reports/schema-mismatch",
             parents=(),
             schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,

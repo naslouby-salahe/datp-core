@@ -39,7 +39,8 @@ def coverage(session: nox.Session) -> None:
     """Run tests with coverage and produce coverage.xml for SonarQube."""
     session.install(".[cli]", "pytest>=8.0", "hypothesis>=6.0", "pytest-benchmark>=4.0", "pytest-cov>=5.0")
     session.run(
-        "pytest", "-q",
+        "pytest",
+        "-q",
         "--cov=src/datp_core",
         "--cov-report=xml:coverage.xml",
         "--cov-report=term",

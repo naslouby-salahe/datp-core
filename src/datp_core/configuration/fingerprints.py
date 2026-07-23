@@ -55,29 +55,12 @@ def unstructure_projection(value: object) -> object:
     return get_projection_converter().unstructure(value)
 
 
-def compute_scientific_fingerprint(scientific_projection: object) -> Fingerprint:
-    """Compute canonical 256-bit BLAKE2b fingerprint for scientific configuration."""
+def compute_fingerprint(kind: str, projection: object) -> Fingerprint:
+    """Compute canonical 256-bit BLAKE2b fingerprint for a configuration projection."""
     envelope = FingerprintPayload(
         schema_version=1,
-        kind="scientific",
-        payload=canonicalize_value(scientific_projection),
-    )
-    json_bytes = dumps(
-        envelope._asdict(),
-        ensure_ascii=False,
-        separators=(",", ":"),
-        sort_keys=True,
-    ).encode("utf-8")
-    hex_digest = blake2b(json_bytes, digest_size=32).hexdigest()
-    return Fingerprint(value=hex_digest)
-
-
-def compute_execution_fingerprint(execution_projection: object) -> Fingerprint:
-    """Compute canonical 256-bit BLAKE2b fingerprint for execution configuration."""
-    envelope = FingerprintPayload(
-        schema_version=1,
-        kind="execution",
-        payload=canonicalize_value(execution_projection),
+        kind=kind,
+        payload=canonicalize_value(projection),
     )
     json_bytes = dumps(
         envelope._asdict(),

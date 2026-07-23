@@ -1005,6 +1005,7 @@ experiments:
           - { name: insufficient_recovery, condition: "meaningful_degradation_established and recovery_ratio < 0.50" }
         outcome_bands_are_mutually_exclusive_and_exhaustive: true
         recovery_ratio_direction: higher_is_better
+        meaningful_recovery_threshold: 0.50
         chronology_unverifiable_policy: typed_infeasibility_outcome
         statistical_profile: paired_seed_ratio_bca
       - label: shared_temporal_recovery
@@ -1027,6 +1028,7 @@ experiments:
           - { name: insufficient_recovery, condition: "meaningful_degradation_established and recovery_ratio < 0.50" }
         outcome_bands_are_mutually_exclusive_and_exhaustive: true
         recovery_ratio_direction: higher_is_better
+        meaningful_recovery_threshold: 0.50
         chronology_unverifiable_policy: typed_infeasibility_outcome
         statistical_profile: paired_seed_ratio_bca
       - label: cluster_temporal_recovery
@@ -1049,6 +1051,7 @@ experiments:
           - { name: insufficient_recovery, condition: "meaningful_degradation_established and recovery_ratio < 0.50" }
         outcome_bands_are_mutually_exclusive_and_exhaustive: true
         recovery_ratio_direction: higher_is_better
+        meaningful_recovery_threshold: 0.50
         chronology_unverifiable_policy: typed_infeasibility_outcome
         statistical_profile: paired_seed_ratio_bca
     reports: [recovery_curve_figure, temporal_recovery_table, dispersion_ladder_table]

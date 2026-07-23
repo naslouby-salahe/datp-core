@@ -12,7 +12,7 @@ from datp_core.artifacts.models import (
 )
 from datp_core.artifacts.repository import AtomicArtifactRepository
 from datp_core.bootstrap import build_application
-from datp_core.configuration.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
+from datp_core.configuration.fingerprints import compute_fingerprint
 from datp_core.datasets.nbaiot import consolidate_nbaiot_parquet_sources, write_nbaiot_source_parquet
 from datp_core.pipeline.identifiers import ArtifactId, DatasetId, MaterializationId
 
@@ -40,14 +40,14 @@ def test_staged_nbaiot_parquet_consolidation_commits_as_a_frozen_artifact(tmp_pa
     )
     consolidated = tmp_path / "consolidated.parquet"
     assert consolidate_nbaiot_parquet_sources((staged,), consolidated, 7) == 98
-    scientific = compute_scientific_fingerprint({"dataset": "nbaiot"})
+    scientific = compute_fingerprint("scientific", {"dataset": "nbaiot"})
     repository = AtomicArtifactRepository(tmp_path / "artifacts", lock_timeout=1.0)
     request = ArtifactCommitRequest(
         metadata=ArtifactCommitMetadata(
             artifact_key=ArtifactKey(artifact_id=ArtifactId("dataset"), kind=ArtifactKind.MATERIALIZED_DATASET),
             artifact_format=ArtifactFormat.PARQUET,
             scientific_fingerprint=scientific,
-            execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
+            execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
             relative_path="datasets/nbaiot",
             parents=(),
             schema_version=1,

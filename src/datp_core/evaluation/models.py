@@ -34,6 +34,7 @@ class MetricFormulaRecord:
     denominator_stabilizer: str | None
     near_zero_mean_threshold_formula: str | None
     near_zero_mean_behavior: str | None
+    near_zero_mean_threshold_factor: float | None
     minimum_client_count: int | None
     weighting: str | None
     comparison_unit: str | None
@@ -291,8 +292,8 @@ def calculate_pairwise_js_divergence(
     client_scores: Sequence[tuple[ClientId, tuple[float, ...]]], *, histogram_bins: int, logarithm_base: int
 ) -> float:
     """Return the configured mean pairwise JS divergence for benign client score distributions."""
-    if histogram_bins < 1 or logarithm_base != 2:
-        raise ValueError("Pairwise JS divergence requires configured positive bins and base-2 logarithms")
+    if histogram_bins < 1 or logarithm_base < 2:
+        raise ValueError("Pairwise JS divergence requires configured positive bins and logarithm base >= 2")
     if len(client_scores) < 2:
         raise ValueError("Pairwise JS divergence requires at least two clients")
     if any(not scores for _, scores in client_scores):

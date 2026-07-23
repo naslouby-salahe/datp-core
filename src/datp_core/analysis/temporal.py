@@ -68,7 +68,8 @@ def analyze_temporal_recovery(
     band = "no_meaningful_degradation"
     if meaningful:
         mean_ratio = sum(defined) / len(defined) if defined else None
-        band = "meaningful_recovery" if mean_ratio is not None and mean_ratio >= 0.50 else "insufficient_recovery"
+        threshold = analysis.meaningful_recovery_threshold
+        band = "meaningful_recovery" if mean_ratio is not None and mean_ratio >= threshold else "insufficient_recovery"
     return TemporalRecoveryAnalysisResult(
         analysis_label=analysis.label,
         metric=analysis.primary_metric,

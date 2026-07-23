@@ -151,6 +151,7 @@ def _resolve_metric_formula(cfg: MetricFormulaConfig) -> MetricFormulaRecord:
         denominator_stabilizer=cfg.denominator_stabilizer,
         near_zero_mean_threshold_formula=cfg.near_zero_mean_threshold_formula,
         near_zero_mean_behavior=cfg.near_zero_mean_behavior,
+        near_zero_mean_threshold_factor=cfg.near_zero_mean_threshold_factor,
         minimum_client_count=cfg.minimum_client_count,
         weighting=cfg.weighting,
         comparison_unit=cfg.comparison_unit,

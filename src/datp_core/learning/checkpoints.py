@@ -22,7 +22,12 @@ from datp_core.artifacts.models import (
 )
 from datp_core.configuration.resolution import ResolvedProjectConfiguration
 from datp_core.experiments.identity import IdentityBuilder, execution_run_id
-from datp_core.learning.models import CheckpointConvergenceRecord
+from datp_core.learning.models import (
+    CheckpointAuthorization,
+    CheckpointConvergenceRecord,
+    PersonalizationStrategy,
+    TrainingProfileKind,
+)
 from datp_core.pipeline.identifiers import RunId
 from datp_core.pipeline.models import StageJob, StageJobContext, StageJobOutcome, StageKind
 from datp_core.pipeline.stages import artifact_parents, commit_artifact
@@ -114,12 +119,12 @@ class CohortCheckpointSelectionStageHandler:
     def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
         experiment = self._config.experiments.get(job.context.experiment_id)
         profile = self._config.training_profiles.get(experiment.training_profile_id)
-        if profile.kind == "federated_prox_training":
+        if profile.kind == TrainingProfileKind.FEDERATED_PROX_TRAINING:
             return self._execute_federated_proximal(job, run_id)
-        if profile.personalization == "ditto":
+        if profile.personalization == PersonalizationStrategy.DITTO:
             return self._execute_ditto(job, run_id)
         if (
-            profile.checkpoint_authorization != "primary_selection_computed_once_on_natural_device_regime"
+            profile.checkpoint_authorization != CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE
             or experiment != self._config.primary_federated_checkpoint_experiment()
             or job.context.seed is not None
             or len(job.inputs) != len(job.dependencies)

@@ -28,13 +28,15 @@ from datp_core.datasets.common import (
 from datp_core.datasets.materialization import SourceInventory
 from datp_core.datasets.models import (
     AdapterKind,
+    ClientConstructionMethod,
     DatasetMaterialization,
     DatasetSetup,
     PartitionSeedContract,
     ResolvedDataset,
     SetupClientConstructionRecord,
+    SplitMethod,
 )
-from datp_core.experiments.models import SweepConditionRecord
+from datp_core.experiments.models import SweepConditionAllocation, SweepConditionRecord
 from datp_core.pipeline.determinism import derive_seed
 
 
@@ -152,7 +154,7 @@ def calculate_nbaiot_chronological_boundaries(
     """Calculate the authored N-BaIoT source-file boundaries before streaming a second pass."""
     if row_count < 0:
         raise ValueError("N-BaIoT source row count cannot be negative")
-    if materialization.split_method != "chronological_gapped":
+    if materialization.split_method != SplitMethod.CHRONOLOGICAL_GAPPED:
         raise ValueError("N-BaIoT chronological materialization requires the configured chronological_gapped method")
     train_end = int(float(materialization.ratio("train")) * row_count)
     first_gap_end = train_end + int(float(materialization.ratio("gap_1")) * row_count)
@@ -171,7 +173,7 @@ def random_fractional_roles(
     row_count: int, materialization: DatasetMaterialization, source_path: Path
 ) -> tuple[str, ...]:
     """Assign exact configured random-fractional benign roles deterministically per source."""
-    if materialization.split_method != "random_fractional" or materialization.split_seed is None:
+    if materialization.split_method != SplitMethod.RANDOM_FRACTIONAL or materialization.split_seed is None:
         raise ValueError("N-BaIoT random materialization requires a configured random_fractional split and seed")
     if row_count < 0 or not math.isclose(
         sum(float(materialization.ratio(role)) for role in ("train", "calibration", "test")),
@@ -258,11 +260,11 @@ def partition_dirichlet_rows(
         raise ValueError("Dirichlet partition requires source rows")
     generator = np.random.default_rng(seed)
     client_ids = tuple(f"synthetic_{index:02d}" for index in range(client_count))
-    if condition.allocation == "dirichlet":
+    if condition.allocation == SweepConditionAllocation.DIRICHLET:
         if condition.dirichlet_alpha is None or condition.dirichlet_alpha <= 0.0:
             raise ValueError("Dirichlet conditions require a positive alpha")
         draws = generator.dirichlet(np.full(len(domains), condition.dirichlet_alpha), size=client_count)
-    elif condition.allocation == "equal_across_source_domains":
+    elif condition.allocation == SweepConditionAllocation.EQUAL_ACROSS_SOURCE_DOMAINS:
         if condition.dirichlet_alpha is not None:
             raise ValueError("IID reference conditions must not declare a Dirichlet alpha")
         draws = np.full((client_count, len(domains)), 1.0 / len(domains))
@@ -313,7 +315,11 @@ def apply_nbaiot_dirichlet_partition(
     digest_bytes: int,
 ) -> DirichletPartition:
     """Reassign split-preserved N-BaIoT rows to configured synthetic clients and write the result."""
-    if setup.method != "dirichlet_partitioned_clients" or setup.client_count is None or setup.partition_seed is None:
+    if (
+        setup.method != ClientConstructionMethod.DIRICHLET_PARTITIONED_CLIENTS
+        or setup.client_count is None
+        or setup.partition_seed is None
+    ):
         raise ValueError("N-BaIoT Dirichlet materialization requires complete synthetic-client configuration")
     if setup.attack_labels_used_in_partition_generation is not False:
         raise ValueError("N-BaIoT Dirichlet materialization must prohibit attack labels during allocation")
@@ -395,7 +401,7 @@ def write_nbaiot_source_parquet(
             valid_benign_count += 1
     random_roles = (
         random_fractional_roles(valid_benign_count, materialization, source_path)
-        if materialization.split_method == "random_fractional"
+        if materialization.split_method == SplitMethod.RANDOM_FRACTIONAL
         else None
     )
     boundaries = (
@@ -473,7 +479,7 @@ def split_nbaiot_using_resolved_materialization(
     rows: tuple[NBaIoTMaterializedRow, ...], materialization: DatasetMaterialization
 ) -> NBaIoTSplitRows:
     """Apply the exact resolved authored N-BaIoT chronological split contract."""
-    if materialization.split_method != "chronological_gapped":
+    if materialization.split_method != SplitMethod.CHRONOLOGICAL_GAPPED:
         raise ValueError("N-BaIoT chronological materialization requires the configured chronological_gapped method")
     return split_nbaiot_chronological_gapped_rows(
         rows,
@@ -544,6 +550,8 @@ class NBaIoTAdapter:
         staging_root: Path,
         partition_condition: SweepConditionRecord | None,
         partition_seed_contract: PartitionSeedContract | None,
+        *,
+        chunk_row_count: int,
     ) -> NBaIoTMaterializationPayload:
         inspection = dataset.inspection_contract
         if inspection.benign_filename is None:
@@ -553,7 +561,6 @@ class NBaIoTAdapter:
         feature_headers = primary_tree.required_headers
         attack_family_directories = inspection.attack_family_directories
         dataset_root = dataset.paths.raw_root.resolve()
-        chunk_row_count = 100_000
 
         staged_files: list[Path] = []
         for source_index, entry in enumerate(inventory.entries):
@@ -574,7 +581,7 @@ class NBaIoTAdapter:
         total_rows = consolidate_nbaiot_parquet_sources(tuple(staged_files), unprocessed_payload, chunk_row_count)
         partition_evidence = None
         partitioned_payload = unprocessed_payload
-        if setup.client_construction.method == "dirichlet_partitioned_clients":
+        if setup.client_construction.method == ClientConstructionMethod.DIRICHLET_PARTITIONED_CLIENTS:
             if partition_condition is None:
                 raise ValueError("Dirichlet materialization requires a resolved partition condition")
             if partition_seed_contract is None:

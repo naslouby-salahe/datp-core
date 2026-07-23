@@ -18,6 +18,7 @@ from datp_core.artifacts.models import (
     BytesPayload,
 )
 from datp_core.configuration.resolution import ResolvedProjectConfiguration
+from datp_core.datasets.models import SplitMethod
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.learning.autoencoder import (
     DynamicDenseAutoencoder,
@@ -27,6 +28,7 @@ from datp_core.learning.autoencoder import (
 )
 from datp_core.learning.checkpoints import select_anchor_checkpoint_round, select_lowest_validation_loss_checkpoint
 from datp_core.learning.federated import FederatedTrainingResult, federated_train_autoencoder
+from datp_core.learning.models import PersonalizationStrategy, TrainingProfileKind
 from datp_core.learning.personalization import DittoTrainingResult, ditto_train_autoencoder
 from datp_core.learning.scoring import load_benign_client_tensors, materialized_feature_columns
 from datp_core.pipeline.identifiers import DatasetId, RunId
@@ -48,7 +50,8 @@ class ModelTrainingStageHandler:
         experiment = self._config.experiments.get(job.context.experiment_id)
         profile = self._config.training_profiles.get(experiment.training_profile_id)
         if (
-            profile.kind not in {"federated_averaging_training", "federated_prox_training"}
+            profile.kind
+            not in {TrainingProfileKind.FEDERATED_AVERAGING_TRAINING, TrainingProfileKind.FEDERATED_PROX_TRAINING}
             or profile.participation != "full"
         ):
             return StageJobOutcome.failed(
@@ -62,8 +65,8 @@ class ModelTrainingStageHandler:
             )
         proximal_mu = job.context.federated_proximal_mu
         ditto_weight = job.context.ditto_proximal_weight
-        is_ditto = profile.personalization == "ditto"
-        if profile.kind == "federated_prox_training":
+        is_ditto = profile.personalization == PersonalizationStrategy.DITTO
+        if profile.kind == TrainingProfileKind.FEDERATED_PROX_TRAINING:
             if proximal_mu is None or proximal_mu <= 0.0 or ditto_weight is not None:
                 return StageJobOutcome.failed(
                     job_id=job.job_id,
@@ -142,7 +145,7 @@ class ModelTrainingStageHandler:
                 materialized_path.write_bytes(materialization.payload_bytes)
                 training_split = (
                     "historical_training"
-                    if materialization_config.split_method == "within_client_chronological"
+                    if materialization_config.split_method == SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL
                     else "train"
                 )
                 calibration_split = (

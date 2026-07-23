@@ -155,6 +155,9 @@ def evaluation_metric(
     definition = config.metric_definitions.cross_client_aggregation.cv_fpr
     if definition.near_zero_mean_threshold_formula != "0.10 * (1 - evaluated_threshold_policy_quantile)":
         raise ValueError("CV(FPR) near-zero threshold formula is not the configured roadmap formula")
+    if definition.near_zero_mean_threshold_factor is None:
+        raise ValueError("CV(FPR) near-zero threshold factor is not configured")
+    instability_factor = definition.near_zero_mean_threshold_factor
     replicates: tuple[int | None, ...] = (None,)
     if calibration_sample_count is not None:
         subset = experiment.calibration_subset
@@ -185,6 +188,7 @@ def evaluation_metric(
                 seed=seed,
                 label=label,
                 quantile=quantile,
+                instability_factor=instability_factor,
             )
         )
     return sum(values) / len(values)
@@ -198,6 +202,7 @@ def _read_cv_fpr_metric(
     seed: int,
     label: str,
     quantile: float,
+    instability_factor: float,
 ) -> float:
     artifact = repository.read(f"runs/{run_id.value}/{IdentityBuilder.evaluation_job_id(context).value}")
     if not artifact.found or artifact.payload_bytes is None:
@@ -209,7 +214,7 @@ def _read_cv_fpr_metric(
     )
     dispersion = calculate_fpr_dispersion(
         fprs,
-        cv_instability_threshold=0.10 * (1.0 - quantile),
+        cv_instability_threshold=instability_factor * (1.0 - quantile),
         quantile_method="linear",
     )
     if dispersion.coefficient_of_variation.status is MetricStatus.UNDEFINED_ZERO_DENOMINATOR:

@@ -25,6 +25,7 @@ from datp_core.configuration.runtime_resolution import ResolvedProjectPaths
 from datp_core.datasets.models import (
     AdapterKind,
     CategoricalEncodingRecord,
+    ClientConstructionMethod,
     ConfiguredSourceTree,
     CrossSourceRelationshipRecord,
     DatasetFieldSchemaRecord,
@@ -38,12 +39,15 @@ from datp_core.datasets.models import (
     LabelFieldsRecord,
     ModelFeaturesRecord,
     MulticlassLabelRecord,
+    NormalizationFitScope,
+    NormalizationStrategy,
     ResolvedDataset,
     ResolvedDatasetPaths,
     RetainedNumericFeaturesRecord,
     SetupClientConstructionRecord,
     SourceContractRecord,
     SourceLayout,
+    SplitMethod,
 )
 from datp_core.pipeline.identifiers import (
     DatasetId,
@@ -262,7 +266,7 @@ def resolve_client_construction(cfg: SetupClientConstructionConfig) -> SetupClie
     else:
         client_source = tuple(cfg.client_source)
     return SetupClientConstructionRecord(
-        method=cfg.method,
+        method=ClientConstructionMethod(cfg.method),
         client_source=client_source,
         client_semantics=cfg.client_semantics,
         excluded_client_folders=(
@@ -344,8 +348,8 @@ def resolve_datasets(
             DatasetMaterialization(
                 identifier=MaterializationId(identifier),
                 role=materialization.role,
-                normalization_strategy=materialization.normalization.strategy,
-                normalization_scope=materialization.normalization.scope,
+                normalization_strategy=NormalizationStrategy(materialization.normalization.strategy),
+                normalization_scope=NormalizationFitScope(materialization.normalization.scope),
                 vocabulary_fit_split=materialization.vocabulary_fit_split,
                 preprocessing_sequence=tuple(materialization.preprocessing_sequence),
                 row_exclusion=materialization.row_exclusion,
@@ -355,7 +359,7 @@ def resolve_datasets(
                     else None
                 ),
                 infeasibility_policy=materialization.infeasibility_policy,
-                split_method=materialization.split.method,
+                split_method=SplitMethod(materialization.split.method),
                 split_seed=Seed(materialization.split.split_seed)
                 if materialization.split.split_seed is not None
                 else None,

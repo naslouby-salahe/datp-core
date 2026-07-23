@@ -28,6 +28,7 @@ from datp_core.datasets.models import (
     DatasetSetup,
     PartitionSeedContract,
     ResolvedDataset,
+    SplitMethod,
 )
 from datp_core.experiments.models import SweepConditionRecord
 
@@ -128,7 +129,7 @@ def canonicalize_and_split_ciciot2023_rows(
     rows: tuple[CICIoT2023MaterializedRow, ...], materialization: DatasetMaterialization
 ) -> CICIoT2023SplitRows:
     """Apply global exact duplicate handling and seeded class-level CICIoT2023 splitting."""
-    if materialization.split_method != "random_fractional":
+    if materialization.split_method != SplitMethod.RANDOM_FRACTIONAL:
         raise ValueError("CICIoT2023 materialization requires the configured random_fractional split")
     if materialization.split_seed is None:
         raise ValueError("CICIoT2023 random split requires an explicit configured split seed")
@@ -202,7 +203,7 @@ def write_ciciot2023_materialized_parquet(
     """Deduplicate merged CSV rows in SQLite, then stream the configured split to Parquet."""
     if not source_paths or batch_size <= 0:
         raise ValueError("CICIoT2023 materialization requires source files and a positive Parquet batch size")
-    if materialization.split_method != "random_fractional" or materialization.split_seed is None:
+    if materialization.split_method != SplitMethod.RANDOM_FRACTIONAL or materialization.split_seed is None:
         raise ValueError("CICIoT2023 materialization requires configured random_fractional split and seed")
     train_ratio = float(materialization.ratio("train"))
     calibration_ratio = float(materialization.ratio("calibration"))
@@ -386,6 +387,8 @@ class CICIoT2023Adapter:
         staging_root: Path,
         partition_condition: SweepConditionRecord | None,
         partition_seed_contract: PartitionSeedContract | None,
+        *,
+        chunk_row_count: int,
     ) -> CICIoT2023MaterializationPayload:
         if partition_condition is not None or partition_seed_contract is not None:
             raise ValueError("CICIoT2023 does not support partition-condition materialization")
@@ -397,7 +400,6 @@ class CICIoT2023Adapter:
         feature_headers = primary_tree.required_headers[:-1]
         label_header = primary_tree.required_headers[-1]
         merged_root = dataset.paths.raw_data_root / primary_tree.root.value
-        chunk_row_count = 100_000
 
         source_paths = tuple(entry.source_path for entry in inventory.entries)
         unprocessed_payload = staging_root / "unprocessed.parquet"

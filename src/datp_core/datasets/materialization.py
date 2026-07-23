@@ -29,6 +29,7 @@ from datp_core.datasets.common import encode_split_manifest, read_materialized_s
 from datp_core.datasets.discovery import build_source_inventory
 from datp_core.datasets.models import (
     AdapterKind,
+    ClientConstructionMethod,
     DatasetMaterialization,
     DatasetSetup,
     PartitionSeedContract,
@@ -100,6 +101,8 @@ class DatasetMaterializer(Protocol):
         staging_root: Path,
         partition_condition: SweepConditionRecord | None,
         partition_seed_contract: PartitionSeedContract | None,
+        *,
+        chunk_row_count: int,
     ) -> MaterializationPayload: ...
 
 
@@ -228,7 +231,7 @@ class DatasetMaterializationStageHandler:
                 artifact_id=ArtifactId(f"{job.output.artifact_id.value}:partition_manifest"),
                 kind=ArtifactKind.PARTITION_MANIFEST,
             )
-            if setup.client_construction.method == "dirichlet_partitioned_clients"
+            if setup.client_construction.method == ClientConstructionMethod.DIRICHLET_PARTITIONED_CLIENTS
             else None
         )
         try:
@@ -300,6 +303,7 @@ class DatasetMaterializationStageHandler:
                     staging_root=staging_root,
                     partition_condition=partition_condition,
                     partition_seed_contract=partition_seed_contract,
+                    chunk_row_count=self._config.runtime.active_execution_profile.data_loading.chunk_row_count.value,
                 )
                 eligibility = self._config.eligibility_policies.get(dataset.eligibility_policy_id)
                 split_evidence = read_materialized_split_evidence(

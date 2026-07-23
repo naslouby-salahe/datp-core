@@ -20,17 +20,17 @@ from datp_core.artifacts.models import (
 )
 from datp_core.artifacts.repository import AtomicArtifactRepository
 from datp_core.artifacts.serialization import CURRENT_ARTIFACT_SCHEMA_VERSION, decode_manifest
-from datp_core.configuration.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
+from datp_core.configuration.fingerprints import compute_fingerprint
 from datp_core.pipeline.identifiers import ArtifactId
 
 
 def _metadata(**overrides: object) -> ArtifactCommitMetadata:
-    scientific = compute_scientific_fingerprint({"experiment": "theme8"})
+    scientific = compute_fingerprint("scientific", {"experiment": "theme8"})
     defaults: dict[str, object] = {
         "artifact_key": ArtifactKey(artifact_id=ArtifactId("test-artifact"), kind=ArtifactKind.REPORT),
         "artifact_format": ArtifactFormat.TEXT,
         "scientific_fingerprint": scientific,
-        "execution_fingerprint": compute_execution_fingerprint({"scientific": scientific}),
+        "execution_fingerprint": compute_fingerprint("execution", {"scientific": scientific}),
         "relative_path": "reports/test-artifact",
         "parents": (),
         "schema_version": CURRENT_ARTIFACT_SCHEMA_VERSION,
@@ -238,7 +238,7 @@ def test_manifest_bytes_are_identical_for_equivalent_metadata(tmp_path: Path) ->
 
 
 def test_manifest_round_trips_all_fields(tmp_path: Path) -> None:
-    scientific = compute_scientific_fingerprint({"experiment": "roundtrip"})
+    scientific = compute_fingerprint("scientific", {"experiment": "roundtrip"})
     key = ArtifactKey(artifact_id=ArtifactId("full-artifact"), kind=ArtifactKind.STATISTICAL_SUMMARY)
     parent_key = ArtifactKey(artifact_id=ArtifactId("parent-artifact"), kind=ArtifactKind.MATERIALIZED_DATASET)
     request = ArtifactCommitRequest(
@@ -246,7 +246,7 @@ def test_manifest_round_trips_all_fields(tmp_path: Path) -> None:
             artifact_key=key,
             artifact_format=ArtifactFormat.JSON,
             scientific_fingerprint=scientific,
-            execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
+            execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
             relative_path="stats/full-artifact",
             parents=(ArtifactParent(parent_key=parent_key, scientific_fingerprint=scientific),),
             schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
@@ -423,7 +423,7 @@ def test_reuse_accepts_matching_frozen_artifact_file(tmp_path: Path) -> None:
 def test_reuse_rejects_fingerprint_mismatch(tmp_path: Path) -> None:
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
     assert repository.commit(_bytes_request()).success
-    different_scientific = compute_scientific_fingerprint({"experiment": "different"})
+    different_scientific = compute_fingerprint("scientific", {"experiment": "different"})
     decision = repository.assess_reuse(
         "reports/test-artifact",
         _metadata().artifact_key,

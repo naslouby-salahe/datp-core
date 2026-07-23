@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from datp_core.configuration.fingerprints import compute_scientific_fingerprint
+from datp_core.configuration.fingerprints import compute_fingerprint
 from datp_core.pipeline.fingerprints import (
     Fingerprint,
     compute_file_checksum,
@@ -10,12 +10,12 @@ from datp_core.pipeline.identifiers import DatasetId
 
 
 def test_fingerprint_computation_is_stable_and_semantic() -> None:
-    first = compute_scientific_fingerprint({"b": 2, "a": [1, 2, 3]})
-    second = compute_scientific_fingerprint({"a": [1, 2, 3], "b": 2})
+    first = compute_fingerprint("scientific", {"b": 2, "a": [1, 2, 3]})
+    second = compute_fingerprint("scientific", {"a": [1, 2, 3], "b": 2})
     assert first == second
     assert isinstance(first, Fingerprint)
     assert len(first.value) == 64
-    assert first != compute_scientific_fingerprint({"value": DatasetId("nbaiot")})
+    assert first != compute_fingerprint("scientific", {"value": DatasetId("nbaiot")})
 
 
 def test_payload_checksum_is_deterministic() -> None:

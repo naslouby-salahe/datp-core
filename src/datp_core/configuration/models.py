@@ -11,6 +11,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+from datp_core.pipeline.protocol_types import BootstrapMethod
+
 # --- shared base classes -----------------------------------------------------------------------
 
 
@@ -382,6 +384,7 @@ class AnalysisSpecConfig(StrictFrozenConfigModel):
     recovery_ratio_precondition: str | None = None
     negative_recovery_policy: str | None = None
     recovery_ratio_direction: str | None = None
+    meaningful_recovery_threshold: float | None = None
     chronology_unverifiable_policy: str | None = None
 
 
@@ -1020,7 +1023,7 @@ class StatisticalProfileConfig(StrictFrozenConfigModel):
 
     @model_validator(mode="after")
     def validate_bootstrap_requirements(self) -> StatisticalProfileConfig:
-        if self.method in {"percentile_bootstrap", "bca_bootstrap"}:
+        if self.method in {BootstrapMethod.PERCENTILE_BOOTSTRAP, BootstrapMethod.BCA_BOOTSTRAP}:
             if self.confidence_level is None:
                 raise ValueError("Bootstrap statistical profile requires a confidence_level")
             if self.resample_count is None:
@@ -1186,6 +1189,7 @@ class MetricFormulaConfig(StrictFrozenConfigModel):
     denominator_stabilizer: str | None = None
     near_zero_mean_threshold_formula: str | None = None
     near_zero_mean_behavior: str | None = None
+    near_zero_mean_threshold_factor: float | None = None
     minimum_client_count: int | None = None
     weighting: str | None = None
     comparison_unit: str | None = None

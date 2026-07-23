@@ -14,7 +14,9 @@ from collections.abc import Mapping
 from attrs import define
 
 from datp_core.configuration.resolution import ResolvedProjectConfiguration
-from datp_core.experiments.models import ConditionSweepRecord, ValueSweepRecord
+from datp_core.datasets.models import ClientConstructionMethod
+from datp_core.experiments.models import ConditionSweepRecord, SweepConditionAllocation, ValueSweepRecord
+from datp_core.learning.models import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
 from datp_core.pipeline.identifiers import NormalizationStrategyId
 from datp_core.thresholding.models import FamilyMeanThresholdPolicyRecord
 
@@ -122,19 +124,19 @@ class ProjectConfigurationValidator:
                     errors.append(f"Experiment '{exp_id}' references unregistered report profile '{report_id}'")
 
             profile = config.training_profiles.get(exp_rec.training_profile_id)
-            if profile.personalization == "ditto" and (
-                profile.kind != "federated_averaging_training"
+            if profile.personalization == PersonalizationStrategy.DITTO and (
+                profile.kind != TrainingProfileKind.FEDERATED_AVERAGING_TRAINING
                 or profile.personalized_local_epochs is None
                 or profile.personalization_parameter_grid is None
                 or not profile.personalization_parameter_grid
                 or any(weight <= 0.0 for weight in profile.personalization_parameter_grid)
-                or profile.checkpoint_authorization != "lookup_of_federated_averaging_primary_selection"
+                or profile.checkpoint_authorization != CheckpointAuthorization.LOOKUP_OF_FEDERATED_AVERAGING
             ):
                 errors.append(
                     f"Ditto experiment '{exp_id}' requires positive configured personalization epochs and grid "
                     "with locked FedAvg checkpoint lookup"
                 )
-            if profile.kind == "federated_prox_training":
+            if profile.kind == TrainingProfileKind.FEDERATED_PROX_TRAINING:
                 configured_grid = profile.mu_grid
                 override = exp_rec.training_overrides.get("mu") if exp_rec.training_overrides is not None else None
                 sweep_name = override.get("from_sweep") if isinstance(override, Mapping) else None
@@ -164,24 +166,32 @@ class ProjectConfigurationValidator:
             )
             population = config.populations.get(exp_rec.population_ids[0])
             setup = config.datasets.get(population.dataset_id).setup(population.setup_id)
-            is_dirichlet_setup = setup.client_construction.method == "dirichlet_partitioned_clients"
+            is_dirichlet_setup = (
+                setup.client_construction.method == ClientConstructionMethod.DIRICHLET_PARTITIONED_CLIENTS
+            )
             if is_dirichlet_setup != bool(partition_conditions):
                 errors.append(
                     f"Experiment '{exp_id}' and dataset setup '{setup.identifier.value}' disagree "
                     "on partition conditions"
                 )
             for condition in partition_conditions:
-                if condition.allocation == "dirichlet" and (
+                if condition.allocation == SweepConditionAllocation.DIRICHLET and (
                     condition.dirichlet_alpha is None or condition.dirichlet_alpha <= 0.0
                 ):
                     errors.append(
                         f"Experiment '{exp_id}' condition '{condition.name}' requires a positive Dirichlet alpha"
                     )
-                if condition.allocation == "equal_across_source_domains" and condition.dirichlet_alpha is not None:
+                if (
+                    condition.allocation == SweepConditionAllocation.EQUAL_ACROSS_SOURCE_DOMAINS
+                    and condition.dirichlet_alpha is not None
+                ):
                     errors.append(
                         f"Experiment '{exp_id}' IID condition '{condition.name}' must not declare a Dirichlet alpha"
                     )
-                if condition.allocation not in {"dirichlet", "equal_across_source_domains"}:
+                if condition.allocation not in {
+                    SweepConditionAllocation.DIRICHLET,
+                    SweepConditionAllocation.EQUAL_ACROSS_SOURCE_DOMAINS,
+                }:
                     errors.append(
                         f"Experiment '{exp_id}' condition '{condition.name}' has unsupported allocation "
                         f"'{condition.allocation}'"

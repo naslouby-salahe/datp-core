@@ -46,6 +46,7 @@ dev = [
     "pytest-xdist>=3.5",
     "pyright>=1.1.390",
     "ruff>=0.8",
+    "pylint>=4.0.6",
 ]
 
 [project.scripts]

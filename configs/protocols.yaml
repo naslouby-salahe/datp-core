@@ -749,6 +749,7 @@ metric_definitions:
       denominator_stabilizer: forbidden
       zero_mean_behavior: undefined_zero_denominator
       near_zero_mean_threshold_formula: "0.10 * (1 - evaluated_threshold_policy_quantile)"
+      near_zero_mean_threshold_factor: 0.10
       near_zero_mean_behavior: retain_numerical_value_with_undefined_near_zero_denominator_warning_status
       minimum_client_count: 2
     cv_tpr:

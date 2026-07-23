@@ -10,7 +10,7 @@ import torch
 from datp_core.artifacts.models import ArtifactCorruptionReason, ArtifactFormat, ArtifactKey, ArtifactKind
 from datp_core.artifacts.repository import AtomicArtifactRepository
 from datp_core.artifacts.serialization import load_model_safetensors, save_model_safetensors
-from datp_core.configuration.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
+from datp_core.configuration.fingerprints import compute_fingerprint
 from datp_core.pipeline.identifiers import ArtifactId
 
 
@@ -19,8 +19,8 @@ def _tensor_state_dict() -> dict[str, torch.Tensor]:
 
 
 def test_safetensors_commit_round_trips_through_checksum_verification(tmp_path: Path) -> None:
-    scientific = compute_scientific_fingerprint({"experiment": "safetensors-test"})
-    execution = compute_execution_fingerprint({"scientific": scientific})
+    scientific = compute_fingerprint("scientific", {"experiment": "safetensors-test"})
+    execution = compute_fingerprint("execution", {"scientific": scientific})
     state_dict = _tensor_state_dict()
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
 
@@ -44,8 +44,8 @@ def test_safetensors_commit_round_trips_through_checksum_verification(tmp_path: 
 
 
 def test_corrupted_safetensors_payload_is_rejected_identically_to_other_formats(tmp_path: Path) -> None:
-    scientific = compute_scientific_fingerprint({"experiment": "safetensors-corruption"})
-    execution = compute_execution_fingerprint({"scientific": scientific})
+    scientific = compute_fingerprint("scientific", {"experiment": "safetensors-corruption"})
+    execution = compute_fingerprint("execution", {"scientific": scientific})
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
 
     result = save_model_safetensors(

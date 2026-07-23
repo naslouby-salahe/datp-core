@@ -66,6 +66,7 @@ from datp_core.experiments.models import (
     ValueSweepRecord,
 )
 from datp_core.experiments.sweeps import calibration_sample_counts
+from datp_core.learning.models import PersonalizationStrategy, TrainingProfileKind
 from datp_core.pipeline.identifiers import RunId
 from datp_core.pipeline.models import StageJob, StageJobOutcome, StageKind
 from datp_core.pipeline.stages import artifact_parents, commit_artifact
@@ -138,7 +139,7 @@ class StatisticalAnalysisStageHandler:
         training_profile = self._config.training_profiles.get(experiment.training_profile_id)
         ditto_weights = (
             training_profile.personalization_parameter_grid or (None,)
-            if training_profile.personalization == "ditto"
+            if training_profile.personalization == PersonalizationStrategy.DITTO
             else (None,)
         )
         threshold_quantiles = tuple(
@@ -185,13 +186,13 @@ class StatisticalAnalysisStageHandler:
                             calibration_sample_count_values=calibration_sample_count_values,
                         )
                     )
-            if training_profile.kind == "federated_prox_training":
+            if training_profile.kind == TrainingProfileKind.FEDERATED_PROX_TRAINING:
                 results.append(
                     federated_proximal_selection(
                         experiment.identifier, config=self._config, repository=self._repository, run_id=run_id
                     )
                 )
-            if training_profile.personalization == "ditto":
+            if training_profile.personalization == PersonalizationStrategy.DITTO:
                 results.append(
                     ditto_selection(
                         experiment.identifier, config=self._config, repository=self._repository, run_id=run_id

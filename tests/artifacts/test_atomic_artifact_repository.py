@@ -13,18 +13,18 @@ from datp_core.artifacts.models import (
     FilePayload,
 )
 from datp_core.artifacts.repository import AtomicArtifactRepository
-from datp_core.configuration.fingerprints import compute_execution_fingerprint, compute_scientific_fingerprint
+from datp_core.configuration.fingerprints import compute_fingerprint
 from datp_core.pipeline.identifiers import ArtifactId
 
 
 def _request() -> ArtifactCommitRequest:
-    scientific = compute_scientific_fingerprint({"experiment": "test"})
+    scientific = compute_fingerprint("scientific", {"experiment": "test"})
     return ArtifactCommitRequest(
         metadata=ArtifactCommitMetadata(
             artifact_key=ArtifactKey(artifact_id=ArtifactId("artifact"), kind=ArtifactKind.REPORT),
             artifact_format=ArtifactFormat.TEXT,
             scientific_fingerprint=scientific,
-            execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
+            execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
             relative_path="reports/artifact",
             parents=(),
             schema_version=1,
@@ -122,13 +122,13 @@ def test_artifact_declaring_duplicate_parent_lineage_is_rejected(tmp_path: Path)
 def test_file_commit_copies_and_verifies_a_staged_payload_without_in_memory_payload(tmp_path: Path) -> None:
     source = tmp_path / "staged.parquet"
     source.write_bytes(b"streamed payload" * 1000)
-    scientific = compute_scientific_fingerprint({"experiment": "file"})
+    scientific = compute_fingerprint("scientific", {"experiment": "file"})
     request = ArtifactCommitRequest(
         metadata=ArtifactCommitMetadata(
             artifact_key=ArtifactKey(artifact_id=ArtifactId("file-artifact"), kind=ArtifactKind.MATERIALIZED_DATASET),
             artifact_format=ArtifactFormat.PARQUET,
             scientific_fingerprint=scientific,
-            execution_fingerprint=compute_execution_fingerprint({"scientific": scientific}),
+            execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
             relative_path="datasets/file-artifact",
             parents=(),
             schema_version=1,

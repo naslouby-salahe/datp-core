@@ -25,8 +25,10 @@ from datp_core.artifacts.models import (
     BytesPayload,
 )
 from datp_core.configuration.resolution import ResolvedProjectConfiguration
+from datp_core.datasets.models import SplitMethod
 from datp_core.experiments.identity import IdentityBuilder, execution_run_id
 from datp_core.learning.autoencoder import DynamicDenseAutoencoder, require_cuda_training_device
+from datp_core.learning.models import CheckpointAuthorization, PersonalizationStrategy
 from datp_core.pipeline.frames import validate_calibration_score_frame, validate_test_score_frame
 from datp_core.pipeline.identifiers import DatasetId, RunId
 from datp_core.pipeline.models import StageJob, StageJobContext, StageJobOutcome, StageKind
@@ -179,7 +181,7 @@ def _score_split(kind: ArtifactKind, context: StageJobContext, config: ResolvedP
     dataset = config.datasets.get(population.dataset_id)
     setup = dataset.setup(population.setup_id)
     materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
-    temporal = materialization.split_method == "within_client_chronological"
+    temporal = materialization.split_method == SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL
     if kind is ArtifactKind.CALIBRATION_SCORES:
         return "historical_calibration" if temporal else "calibration"
     if kind is ArtifactKind.FUTURE_RECALIBRATION_SCORES:
@@ -244,7 +246,11 @@ class ScoreGenerationStageHandler:
         checkpoint = self._repository.read(training_path)
         personalized_key = IdentityBuilder.personalized_checkpoint_key(job.context)
         personalized_path = f"{training_path}.personalized"
-        personalized = self._repository.read(personalized_path) if profile.personalization == "ditto" else None
+        personalized = (
+            self._repository.read(personalized_path)
+            if profile.personalization == PersonalizationStrategy.DITTO
+            else None
+        )
         materialization = self._repository.read(
             f"runs/{run_id.value}/{IdentityBuilder.materialization_job_id(job.context).value}"
         )
@@ -256,7 +262,7 @@ class ScoreGenerationStageHandler:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Materialization artifact is unavailable"
             )
-        if profile.personalization == "ditto" and (
+        if profile.personalization == PersonalizationStrategy.DITTO and (
             not self._repository.assess_reuse(
                 personalized_path,
                 personalized_key,
@@ -287,7 +293,7 @@ class ScoreGenerationStageHandler:
                     features.order if features is not None else materialized_feature_columns(materialized_path)
                 )
                 selected_round = json.loads(selection.payload_bytes)["selected_round"]
-                if profile.personalization == "ditto":
+                if profile.personalization == PersonalizationStrategy.DITTO:
                     assert personalized is not None and personalized.payload_bytes is not None
                     all_states = load_safetensors(personalized.payload_bytes)
                     models = {
@@ -327,7 +333,7 @@ class ScoreGenerationStageHandler:
                 scores = scores.with_columns(
                     pl.lit(
                         personalized_key.artifact_id.value
-                        if profile.personalization == "ditto"
+                        if profile.personalization == PersonalizationStrategy.DITTO
                         else job.inputs[0].artifact_id.value
                     ).alias("checkpoint_artifact_id"),
                     pl.lit(job.context.seed).alias("seed"),
@@ -355,7 +361,11 @@ class ScoreGenerationStageHandler:
             relative_path=relative_path,
             parents=artifact_parents(
                 self._config,
-                (*job.inputs, selection_key, *((personalized_key,) if profile.personalization == "ditto" else ())),
+                (
+                    *job.inputs,
+                    selection_key,
+                    *((personalized_key,) if profile.personalization == PersonalizationStrategy.DITTO else ()),
+                ),
             ),
             payload=BytesPayload(payload_bytes=payload.getvalue()),
         )
@@ -365,14 +375,16 @@ class ScoreGenerationStageHandler:
             )
         return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
 
-    def _selection_location(self, job: StageJob, run_id: RunId, authorization: str) -> tuple[str, ArtifactKey]:
-        if authorization == "primary_selection_computed_once_on_natural_device_regime":
+    def _selection_location(
+        self, job: StageJob, run_id: RunId, authorization: CheckpointAuthorization
+    ) -> tuple[str, ArtifactKey]:
+        if authorization == CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE:
             selection_context = StageJobContext(experiment_id=job.context.experiment_id)
             return (
                 f"runs/{run_id.value}/{IdentityBuilder.cohort_checkpoint_selection_job_id(selection_context).value}",
                 IdentityBuilder.cohort_checkpoint_selection_key(selection_context),
             )
-        if authorization == "lookup_of_federated_averaging_primary_selection":
+        if authorization == CheckpointAuthorization.LOOKUP_OF_FEDERATED_AVERAGING:
             source = self._config.primary_federated_checkpoint_experiment()
             selection_context = StageJobContext(experiment_id=source.identifier)
             source_run_id = execution_run_id(source.identifier, self._config.execution_fingerprint.value)

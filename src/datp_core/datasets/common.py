@@ -16,7 +16,14 @@ import polars as pl
 import pyarrow.parquet as pq
 from attrs import define
 
-from datp_core.datasets.models import MaterializedSplitEvidence, SplitManifest, SplitManifestEntry, SplitMembership
+from datp_core.datasets.models import (
+    MaterializedSplitEvidence,
+    NormalizationFitScope,
+    NormalizationStrategy,
+    SplitManifest,
+    SplitManifestEntry,
+    SplitMembership,
+)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -253,13 +260,13 @@ def normalize_materialized_parquet(
     target_path: Path,
     *,
     feature_columns: tuple[str, ...],
-    strategy: str,
-    scope: str,
+    strategy: NormalizationStrategy,
+    scope: NormalizationFitScope,
 ) -> NormalizationEvidence:
     """Fit configured normalization on benign training rows, then transform every materialized row."""
-    if strategy not in {"min_max", "standard"}:
+    if strategy not in {NormalizationStrategy.MIN_MAX, NormalizationStrategy.STANDARD}:
         raise ValueError(f"Unsupported normalization strategy: {strategy}")
-    if scope not in {"global_train", "per_client_train"}:
+    if scope not in {NormalizationFitScope.GLOBAL_TRAIN, NormalizationFitScope.PER_CLIENT_TRAIN}:
         raise ValueError(f"Unsupported normalization fit scope: {scope}")
     if not feature_columns:
         raise ValueError("Normalization requires at least one configured feature column")
@@ -267,7 +274,7 @@ def normalize_materialized_parquet(
     source = pl.scan_parquet(source_path).with_row_index("__datp_row_order")
     available_columns = set(source.collect_schema().names())
     required_columns = {"split", "is_attack", *feature_columns}
-    if scope == "per_client_train":
+    if scope == NormalizationFitScope.PER_CLIENT_TRAIN:
         required_columns.add("client_id")
     missing_columns = sorted(required_columns - available_columns)
     if missing_columns:
@@ -277,7 +284,7 @@ def normalize_materialized_parquet(
     statistics = _normalization_statistics(train, feature_columns, strategy, scope)
     if statistics.height == 0:
         raise ValueError("Normalization requires benign training rows")
-    if scope == "per_client_train":
+    if scope == NormalizationFitScope.PER_CLIENT_TRAIN:
         observed_clients = set(source.select("client_id").unique().collect()["client_id"].to_list())
         fitted_clients = set(statistics["client_id"].to_list())
         missing_clients = sorted(observed_clients - fitted_clients)
@@ -301,19 +308,22 @@ def normalize_materialized_parquet(
 
 
 def _normalization_statistics(
-    train: pl.LazyFrame, feature_columns: tuple[str, ...], strategy: str, scope: str
+    train: pl.LazyFrame, feature_columns: tuple[str, ...], strategy: NormalizationStrategy, scope: NormalizationFitScope
 ) -> pl.DataFrame:
     aggregations = [
         expression.alias(f"__datp_{name}_{column}")
         for column in feature_columns
         for name, expression in (
-            ("location", pl.col(column).min() if strategy == "min_max" else pl.col(column).mean()),
-            ("scale", pl.col(column).max() if strategy == "min_max" else pl.col(column).std(ddof=0)),
+            ("location", pl.col(column).min() if strategy == NormalizationStrategy.MIN_MAX else pl.col(column).mean()),
+            (
+                "scale",
+                pl.col(column).max() if strategy == NormalizationStrategy.MIN_MAX else pl.col(column).std(ddof=0),
+            ),
         )
     ]
     return (
         train.group_by("client_id").agg(aggregations).collect()
-        if scope == "per_client_train"
+        if scope == NormalizationFitScope.PER_CLIENT_TRAIN
         else train.select(aggregations).collect()
     )
 
@@ -323,7 +333,7 @@ def _normalization_evidence_statistics(
 ) -> tuple[NormalizationScopeStatistics, ...]:
     return tuple(
         NormalizationScopeStatistics(
-            client_id=str(row["client_id"]) if scope == "per_client_train" else None,
+            client_id=str(row["client_id"]) if scope == NormalizationFitScope.PER_CLIENT_TRAIN else None,
             features=tuple(
                 NormalizationFeatureStatistics(
                     feature=column,
@@ -342,7 +352,7 @@ def _normalization_expressions(feature_columns: tuple[str, ...], strategy: str) 
     for column in feature_columns:
         location = pl.col(f"__datp_location_{column}")
         scale = pl.col(f"__datp_scale_{column}")
-        denominator = scale - location if strategy == "min_max" else scale
+        denominator = scale - location if strategy == NormalizationStrategy.MIN_MAX else scale
         expressions.append(
             pl.when(denominator == 0.0).then(0.0).otherwise((pl.col(column) - location) / denominator).alias(column)
         )

@@ -6,7 +6,7 @@ and the per-experiment analysis-kind specifications (what analysis to run and ho
 from __future__ import annotations
 
 from collections.abc import Mapping
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import cast
 
 from attrs import define, field
@@ -56,6 +56,11 @@ class RunRequirement(Enum):
     CONDITIONAL = "conditional"
     EXPLORATORY = "exploratory"
     OPTIONAL = "optional"
+
+
+class SweepConditionAllocation(StrEnum):
+    DIRICHLET = "dirichlet"
+    EQUAL_ACROSS_SOURCE_DOMAINS = "equal_across_source_domains"
 
 
 def _as_reference_analysis(value: object) -> str | Mapping[str, str]:
@@ -342,6 +347,7 @@ class TemporalRecoveryAnalysisRecord:
     recovery_ratio_precondition: str
     negative_recovery_policy: str
     recovery_ratio_direction: str
+    meaningful_recovery_threshold: float
     chronology_unverifiable_policy: str
     outcome_bands: tuple[Mapping[str, str], ...] = field(converter=as_str_mapping_tuple)
     outcome_bands_are_mutually_exclusive_and_exhaustive: bool
@@ -390,7 +396,7 @@ class ValueSweepRecord:
 @define(frozen=True, slots=True, kw_only=True)
 class SweepConditionRecord:
     name: str
-    allocation: str
+    allocation: SweepConditionAllocation
     dirichlet_alpha: float | None
 
 

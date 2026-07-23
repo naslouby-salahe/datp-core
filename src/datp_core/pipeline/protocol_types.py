@@ -7,12 +7,18 @@ so every package can import them without creating circular or transitive import 
 from __future__ import annotations
 
 from collections.abc import Mapping
+from enum import StrEnum
 from typing import cast
 
 from attrs import define, field
 
 from datp_core.pipeline.identifiers import StatisticalProfileId
 from datp_core.pipeline.values import PositiveInt, Probability
+
+
+class BootstrapMethod(StrEnum):
+    BCA_BOOTSTRAP = "bca_bootstrap"
+    PERCENTILE_BOOTSTRAP = "percentile_bootstrap"
 
 
 @define(frozen=True, slots=True, kw_only=True)

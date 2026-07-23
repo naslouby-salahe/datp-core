@@ -155,6 +155,7 @@ _DISPOSITIONS: dict[str, Disposition] = {
     "experiments.analyses.recovery_ratio_precondition": "SCIENTIFIC",
     "experiments.analyses.negative_recovery_policy": "SCIENTIFIC",
     "experiments.analyses.recovery_ratio_direction": "SCIENTIFIC",
+    "experiments.analyses.meaningful_recovery_threshold": "SCIENTIFIC",
     "experiments.analyses.chronology_unverifiable_policy": "SCIENTIFIC",
     "experiments.reports": "SCIENTIFIC",
     "experiments.method_naming_rule": "SCIENTIFIC",

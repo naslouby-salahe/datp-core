@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import Counter
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 from typing import cast
 
@@ -38,6 +38,30 @@ class AdapterKind(Enum):
     NBAIOT = "nbaiot"
     CICIOT2023 = "ciciot2023"
     EDGE_IIOTSET = "edge_iiotset"
+
+
+class SplitMethod(StrEnum):
+    RANDOM_FRACTIONAL = "random_fractional"
+    CHRONOLOGICAL_GAPPED = "chronological_gapped"
+    WITHIN_CLIENT_CHRONOLOGICAL = "within_client_chronological"
+
+
+class ClientConstructionMethod(StrEnum):
+    DATASET_FILE_PSEUDO_CLIENTS = "dataset_file_pseudo_clients"
+    DIRICHLET_PARTITIONED_CLIENTS = "dirichlet_partitioned_clients"
+    PHYSICAL_DEVICE_CLIENTS = "physical_device_clients"
+    SENSOR_GROUP_CLIENTS = "sensor_group_clients"
+
+
+class NormalizationStrategy(StrEnum):
+    MIN_MAX = "min_max"
+    STANDARD = "standard"
+
+
+class NormalizationFitScope(StrEnum):
+    GLOBAL_TRAIN = "global_train"
+    PER_CLIENT_TRAIN = "per_client_train"
+    HISTORICAL_TRAIN = "historical_train"
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -134,7 +158,7 @@ def _as_mapping_str_str_or_bool(value: object) -> Mapping[str, str | bool]:
 class SetupClientConstructionRecord:
     """Pure resolved per-setup client-construction contract (partitioning/allocation procedure)."""
 
-    method: str
+    method: ClientConstructionMethod
     client_source: str | tuple[str, ...] | None
     client_semantics: str | None
     excluded_client_folders: tuple[str, ...] | None
@@ -179,14 +203,14 @@ class DatasetSetup:
 class DatasetMaterialization:
     identifier: MaterializationId
     role: str | None
-    normalization_strategy: str
-    normalization_scope: str
+    normalization_strategy: NormalizationStrategy
+    normalization_scope: NormalizationFitScope
     vocabulary_fit_split: str | None
     preprocessing_sequence: tuple[str, ...]
     row_exclusion: Mapping[str, str | bool] = field(converter=_as_mapping_str_str_or_bool)
     split_row_semantics: Mapping[str, str | bool] | None
     infeasibility_policy: str | None
-    split_method: str
+    split_method: SplitMethod
     split_seed: Seed | None
     split_ratios: tuple[tuple[str, Probability], ...]
     chronological_ratios: tuple[tuple[str, Probability], ...]

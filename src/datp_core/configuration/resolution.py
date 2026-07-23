@@ -23,8 +23,7 @@ from datp_core.configuration.experiment_resolution import (
     _resolve_sweep,
 )
 from datp_core.configuration.fingerprints import (
-    compute_execution_fingerprint,
-    compute_scientific_fingerprint,
+    compute_fingerprint,
     unstructure_projection,
 )
 from datp_core.configuration.loading import ConfigurationError, RuntimeBootstrapSettings, YamlConfigurationReader
@@ -73,13 +72,16 @@ from datp_core.experiments.models import (
 )
 from datp_core.learning.models import (
     BatchingRecord,
+    CheckpointAuthorization,
     CheckpointConvergenceRecord,
     CheckpointProfileRecord,
     CheckpointSelectionRecord,
     FederationProfileRecord,
     ModelArchitectureRecord,
     OptimizerRecord,
+    PersonalizationStrategy,
     SeedCohortRecord,
+    TrainingProfileKind,
     TrainingProfileRecord,
 )
 from datp_core.pipeline.fingerprints import CanonicalProjection, Fingerprint, canonicalize_value
@@ -175,7 +177,7 @@ class ResolvedProjectConfiguration:
             if experiment.evidence_role is EvidenceRole.CONFIRMATORY
             and self.training_profiles.contains(experiment.training_profile_id)
             and self.training_profiles.get(experiment.training_profile_id).checkpoint_authorization
-            == "primary_selection_computed_once_on_natural_device_regime"
+            == CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE
         )
         if len(candidates) != 1:
             raise ValueError("Configuration must define exactly one confirmatory primary FedAvg checkpoint selector")
@@ -187,7 +189,8 @@ class ResolvedProjectConfiguration:
             experiment
             for experiment in self.experiments.values()
             if self.training_profiles.contains(experiment.training_profile_id)
-            and self.training_profiles.get(experiment.training_profile_id).personalization == "ditto"
+            and self.training_profiles.get(experiment.training_profile_id).personalization
+            == PersonalizationStrategy.DITTO
             and experiment.personalization_parameter_selection_source is None
         )
         if len(candidates) != 1:
@@ -295,14 +298,14 @@ def resolve_project_configuration_candidate(
         tp_id = TrainingProfileId(tp_key)
         training_dict[tp_id] = TrainingProfileRecord(
             identifier=tp_id,
-            kind=tp_cfg.kind,
+            kind=TrainingProfileKind(tp_cfg.kind),
             model_architecture_id=tp_cfg.model_architecture,
             optimizer_id=tp_cfg.optimizer,
             batching_profile_id=tp_cfg.batching,
             local_epochs=(PositiveInt(tp_cfg.local_epochs) if tp_cfg.local_epochs is not None else None),
             participation=tp_cfg.participation,
-            checkpoint_authorization=tp_cfg.checkpoint_authorization,
-            personalization=tp_cfg.personalization,
+            checkpoint_authorization=CheckpointAuthorization(tp_cfg.checkpoint_authorization),
+            personalization=PersonalizationStrategy(tp_cfg.personalization) if tp_cfg.personalization else None,
             personalized_local_epochs=(
                 PositiveInt(tp_cfg.personalized_local_epochs) if tp_cfg.personalized_local_epochs is not None else None
             ),
@@ -782,7 +785,7 @@ def resolve_project_configuration_candidate(
         "eligibility_gates": {k: unstructure_projection(v) for k, v in sorted(eligibility_gates_dict.items())},
         "analysis_conventions": dict(sorted(catalogue_analysis_conventions.items())),
     }
-    scientific_fingerprint = compute_scientific_fingerprint(scientific_projection)
+    scientific_fingerprint = compute_fingerprint("scientific", scientific_projection)
 
     execution_projection = {
         "scientific_fingerprint": scientific_fingerprint.value,
@@ -792,7 +795,7 @@ def resolve_project_configuration_candidate(
         "resource_pressure": unstructure_projection(resolved_runtime.resource_pressure_policy),
         "raw_source_policy": unstructure_projection(resolved_runtime.raw_source_policy),
     }
-    execution_fingerprint = compute_execution_fingerprint(execution_projection)
+    execution_fingerprint = compute_fingerprint("execution", execution_projection)
     canonical_scientific_projection = canonicalize_value(scientific_projection)
     canonical_execution_projection = canonicalize_value(execution_projection)
 

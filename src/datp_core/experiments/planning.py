@@ -9,7 +9,7 @@ from attrs import define
 
 from datp_core.artifacts.models import ArtifactKey, ArtifactKind
 from datp_core.configuration.resolution import ResolvedProjectConfiguration
-from datp_core.datasets.models import PartitionSeedContract
+from datp_core.datasets.models import PartitionSeedContract, SplitMethod
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.models import (
     ConditionSweepRecord,
@@ -18,6 +18,7 @@ from datp_core.experiments.models import (
     SweepConditionRecord,
     ValueSweepRecord,
 )
+from datp_core.learning.models import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
 from datp_core.pipeline.identifiers import ExperimentId, JobId
 from datp_core.pipeline.models import PlanningGraph, StageJob, StageJobContext, StageKind
 from datp_core.pipeline.values import PositiveInt
@@ -114,7 +115,7 @@ def expand_experiment_jobs(
     training_profile = config.training_profiles.get(experiment.training_profile_id)
     ditto_weights = (
         training_profile.personalization_parameter_grid or (None,)
-        if training_profile.personalization == "ditto"
+        if training_profile.personalization == PersonalizationStrategy.DITTO
         else (None,)
     )
 
@@ -165,7 +166,7 @@ def expand_experiment_jobs(
     analysis_selection_job_id = None
     if (
         experiment.evidence_role is EvidenceRole.CONFIRMATORY
-        and training_profile.checkpoint_authorization == "primary_selection_computed_once_on_natural_device_regime"
+        and training_profile.checkpoint_authorization == CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE
     ):
         selection_ids = builder.cohort_checkpoint_selection_job(
             experiment_ctx,
@@ -183,7 +184,7 @@ def expand_experiment_jobs(
             )
         )
         selection_job_id, selection_output = selection_ids[:2]
-    elif training_profile.kind == "federated_prox_training":
+    elif training_profile.kind == TrainingProfileKind.FEDERATED_PROX_TRAINING:
         selection_ids = builder.federated_proximal_selection_job(
             experiment_ctx,
             tuple(train_ids[1] for _, _, train_ids in training_cells),
@@ -201,7 +202,7 @@ def expand_experiment_jobs(
         )
         analysis_selection_job_id, analysis_selection_output = selection_ids[:2]
     elif (
-        training_profile.personalization == "ditto"
+        training_profile.personalization == PersonalizationStrategy.DITTO
         and experiment.identifier == config.primary_ditto_selection_experiment().identifier
     ):
         selection_ids = builder.ditto_selection_job(
@@ -298,7 +299,7 @@ def expand_experiment_jobs(
         dataset = config.datasets.get(population.dataset_id)
         setup = dataset.setup(population.setup_id)
         materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
-        if materialization.split_method == "within_client_chronological":
+        if materialization.split_method == SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL:
             future_ids = builder.future_recalibration_score_job(
                 seed_ctx, train_ids[1], mat_ids[1], train_ids[0], selection_output, selection_job_id
             )

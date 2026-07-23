@@ -1,6 +1,6 @@
 """Scientific fingerprint sensitivity to resolved record content."""
 
-from datp_core.configuration.fingerprints import compute_scientific_fingerprint, unstructure_projection
+from datp_core.configuration.fingerprints import compute_fingerprint, unstructure_projection
 from datp_core.configuration.project import resolve_project_configuration
 from datp_core.learning.models import ModelArchitectureRecord
 from datp_core.pipeline.values import PositiveInt
@@ -35,9 +35,9 @@ def _model(hidden: tuple[int, ...]) -> ModelArchitectureRecord:
 
 
 def test_scientific_fingerprint_changes_when_model_architecture_changes() -> None:
-    baseline = compute_scientific_fingerprint({"model": unstructure_projection(_model((80, 40, 20)))})
-    identical = compute_scientific_fingerprint({"model": unstructure_projection(_model((80, 40, 20)))})
-    perturbed = compute_scientific_fingerprint({"model": unstructure_projection(_model((80, 40, 10)))})
+    baseline = compute_fingerprint("scientific", {"model": unstructure_projection(_model((80, 40, 20)))})
+    identical = compute_fingerprint("scientific", {"model": unstructure_projection(_model((80, 40, 20)))})
+    perturbed = compute_fingerprint("scientific", {"model": unstructure_projection(_model((80, 40, 10)))})
     assert baseline == identical
     assert baseline != perturbed
 

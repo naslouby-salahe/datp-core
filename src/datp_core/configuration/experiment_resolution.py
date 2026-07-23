@@ -29,6 +29,7 @@ from datp_core.experiments.models import (
     RecoveryFractionAnalysisRecord,
     ResourceCostAnalysisRecord,
     RunRequirement,
+    SweepConditionAllocation,
     SweepConditionRecord,
     SweepRecord,
     SweepValue,
@@ -69,7 +70,9 @@ def _resolve_sweep(name: str, cfg: SweepVariableConfig) -> SweepRecord:
     return ConditionSweepRecord(
         name=name,
         conditions=tuple(
-            SweepConditionRecord(name=c.name, allocation=c.allocation, dirichlet_alpha=c.dirichlet_alpha)
+            SweepConditionRecord(
+                name=c.name, allocation=SweepConditionAllocation(c.allocation), dirichlet_alpha=c.dirichlet_alpha
+            )
             for c in cfg.conditions
         ),
     )
@@ -269,6 +272,15 @@ def _build_temporal_recovery_analysis_record(
                 experiment_name=exp_name,
                 analysis_label=a.label,
                 field_name="recovery_ratio_direction",
+            ),
+        ),
+        meaningful_recovery_threshold=cast(
+            float,
+            _require(
+                a.meaningful_recovery_threshold,
+                experiment_name=exp_name,
+                analysis_label=a.label,
+                field_name="meaningful_recovery_threshold",
             ),
         ),
         chronology_unverifiable_policy=cast(

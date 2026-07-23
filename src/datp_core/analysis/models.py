@@ -23,7 +23,7 @@ from scipy import stats
 
 from datp_core.evaluation.distributions import ClientScoreDistributionRecord, ThresholdTradeoffEntry
 from datp_core.pipeline.identifiers import MetricId, StatisticalProfileId, ThresholdPolicyId
-from datp_core.pipeline.protocol_types import StatisticalProfileRecord
+from datp_core.pipeline.protocol_types import BootstrapMethod, StatisticalProfileRecord
 from datp_core.pipeline.values import Probability, Seed, TypedDomainRegistry
 
 # --- Pure statistical procedure primitives (BCa/percentile bootstrap, Wilcoxon, Spearman, linear
@@ -148,7 +148,7 @@ class StatisticalAnalysisUseCase:
     ) -> PairedSeedDifferenceRecord:
         profile = self._profiles.get(statistical_profile_id)
         if (
-            profile.method not in {"bca_bootstrap", "percentile_bootstrap"}
+            profile.method not in {BootstrapMethod.BCA_BOOTSTRAP, BootstrapMethod.PERCENTILE_BOOTSTRAP}
             or profile.resample_count is None
             or profile.confidence_level is None
         ):
@@ -162,6 +162,7 @@ class StatisticalAnalysisUseCase:
         diffs = arr_a - arr_b
 
         mean_diff = float(np.mean(diffs))
+        assert profile.method is not None  # guaranteed by the method-not-in-{bca,percentile} guard above
         ci = self._compute_bca_bootstrap_ci(
             diffs,
             resample_count=profile.resample_count.value,
@@ -207,11 +208,15 @@ class StatisticalAnalysisUseCase:
 
     @staticmethod
     def _compute_bca_bootstrap_ci(
-        data: np.ndarray, resample_count: int, confidence_level: float, analysis_seed: int, method: str
+        data: np.ndarray,
+        resample_count: int,
+        confidence_level: float,
+        analysis_seed: int,
+        method: str,
     ) -> ConfidenceInterval:
-        if method == "bca_bootstrap" and len(data) < 10:
+        if method == BootstrapMethod.BCA_BOOTSTRAP and len(data) < 10:
             raise StatisticalProcedureError("BCa requires at least ten valid paired seed differences")
-        if method == "percentile_bootstrap" and len(data) < 2:
+        if method == BootstrapMethod.PERCENTILE_BOOTSTRAP and len(data) < 2:
             raise StatisticalProcedureError("Percentile bootstrap requires at least two valid paired seed differences")
         if not np.isfinite(data).all():
             raise StatisticalProcedureError("BCa requires finite paired seed differences")
@@ -224,7 +229,7 @@ class StatisticalAnalysisUseCase:
                 np.mean,
                 n_resamples=resample_count,
                 confidence_level=confidence_level,
-                method="BCa" if method == "bca_bootstrap" else "percentile",
+                method="BCa" if method == BootstrapMethod.BCA_BOOTSTRAP else "percentile",
                 rng=np.random.default_rng(analysis_seed),
             )
         except ValueError as exc:

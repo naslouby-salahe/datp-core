@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import attrs
 
-from datp_core.configuration.fingerprints import compute_scientific_fingerprint, unstructure_projection
+from datp_core.configuration.fingerprints import compute_fingerprint, unstructure_projection
 from datp_core.configuration.resolution import _experiment_scientific_projection
 from datp_core.experiments.models import (
     AbsorptionAnalysisRecord,
@@ -84,7 +84,7 @@ def _baseline_experiment() -> ExperimentRecord:
 
 
 def _fingerprint_of(record: ExperimentRecord) -> str:
-    return compute_scientific_fingerprint(_experiment_scientific_projection(record)).value
+    return compute_fingerprint("scientific", _experiment_scientific_projection(record)).value
 
 
 def test_evaluation_override_changes_scientific_fingerprint() -> None:
@@ -150,8 +150,8 @@ def test_analysis_specific_contract_field_changes_scientific_fingerprint() -> No
 
     baseline = absorption_analysis("1 - (cv_fpr_local / cv_fpr_shared)")
     perturbed = absorption_analysis("1 - (cv_fpr_shared / cv_fpr_local)")
-    assert compute_scientific_fingerprint(unstructure_projection(baseline)) != compute_scientific_fingerprint(
-        unstructure_projection(perturbed)
+    assert compute_fingerprint("scientific", unstructure_projection(baseline)) != compute_fingerprint(
+        "scientific", unstructure_projection(perturbed)
     )
 
 

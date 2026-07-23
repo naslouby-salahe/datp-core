@@ -1,7 +1,7 @@
 """Canonical hashing and value-canonicalization primitives shared by configuration, artifacts, and datasets.
 
-Configuration-specific fingerprint entry points (compute_scientific_fingerprint,
-compute_execution_fingerprint) live in configuration/fingerprints.py, which builds on these primitives.
+Configuration-specific fingerprint entry points (compute_fingerprint,
+and execution fingerprint) live in configuration/fingerprints.py, which builds on these primitives.
 """
 
 from __future__ import annotations
