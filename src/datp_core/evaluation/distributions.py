@@ -6,6 +6,8 @@ recomputing them from raw score frames themselves.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 import numpy as np
 import polars as pl
 from attrs import define
@@ -107,7 +109,7 @@ def _cdf_position(values: list[float], threshold: float) -> float | None:
 
 
 def threshold_tradeoff(
-    baseline: dict[str, ClientScoreDistributionRecord], shifted: dict[str, ClientScoreDistributionRecord]
+    baseline: Mapping[str, ClientScoreDistributionRecord], shifted: Mapping[str, ClientScoreDistributionRecord]
 ) -> dict[str, ThresholdTradeoffEntry]:
     if set(baseline) != set(shifted):
         raise ValueError("Threshold trade-off sources have incompatible client populations")

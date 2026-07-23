@@ -51,7 +51,8 @@ def distribution_seed_result(
     *,
     repository: ArtifactRepository,
 ) -> DistributionMechanismSeedResult:
-    result: dict[str, ClientScoreDistributionRecord] = {}
+    from collections.abc import Mapping
+    result: dict[str, Mapping[str, ClientScoreDistributionRecord]] = {}
     for label in evaluations:
         evaluation = next(item for item in experiment.evaluations if item.label == label)
         context = StageJobContext(

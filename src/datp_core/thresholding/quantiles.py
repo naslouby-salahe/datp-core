@@ -33,7 +33,7 @@ def estimate_pooled(
     """Shared for `SharedPooledThresholdPolicyRecord` and `CentralizedPooledThresholdPolicyRecord`."""
     pooled = tuple(value for item in calibration for value in item.values)
     threshold = quantile_fn(pooled, target_quantile.value)
-    return build_threshold_set(policy_id, calibration, dict.fromkeys(local, threshold), "pooled", target_quantile)
+    return build_threshold_set(policy_id, calibration, {k: threshold for k in local}, "pooled", target_quantile)
 
 
 def estimate_shared_weighted(

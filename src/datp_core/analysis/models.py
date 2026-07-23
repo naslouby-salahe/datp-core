@@ -529,7 +529,7 @@ class ConformalCoverageAnalysisResult:
 @define(frozen=True, slots=True, kw_only=True)
 class DistributionMechanismSeedResult:
     seed: int
-    evaluations: Mapping[str, ClientScoreDistributionRecord]
+    evaluations: Mapping[str, Mapping[str, ClientScoreDistributionRecord]]
 
 
 @define(frozen=True, slots=True, kw_only=True)

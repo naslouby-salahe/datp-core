@@ -159,8 +159,10 @@ def _analyze_cluster_ablation(
     if not subsets:
         raise ValueError("Cluster ablation analysis has no configured fingerprint subsets")
     observations: list[ClusterAblationObservation] = []
+    ref_eval = analysis.reference_evaluation
+    assert ref_eval is not None  # guarded by _analyze_cluster_ablation caller
     for seed in seeds:
-        reference = _cluster_membership(experiment.identifier, seed.value, analysis.reference_evaluation, None, run_id, repository=repository)
+        reference = _cluster_membership(experiment.identifier, seed.value, ref_eval, None, run_id, repository=repository)
         for subset in subsets:
             ablated = _cluster_membership(
                 experiment.identifier, seed.value, analysis.source_evaluation, subset, run_id, repository=repository
@@ -181,7 +183,7 @@ def _analyze_cluster_ablation(
     return ClusterAblationStabilityResult(
         analysis_label=analysis.label,
         comparison_unit=analysis.comparison_unit,
-        reference_evaluation=analysis.reference_evaluation,
+        reference_evaluation=ref_eval,
         observations=tuple(observations),
     )
 

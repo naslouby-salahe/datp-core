@@ -11,7 +11,7 @@ from datp_core.artifacts.models import ArtifactKey, ArtifactKind
 from datp_core.configuration.resolution import ResolvedProjectConfiguration
 from datp_core.datasets.models import PartitionSeedContract
 from datp_core.experiments.identity import IdentityBuilder
-from datp_core.experiments.models import ConditionSweepRecord, EvidenceRole, ExperimentRecord, ValueSweepRecord
+from datp_core.experiments.models import ConditionSweepRecord, EvidenceRole, ExperimentRecord, SweepConditionRecord, ValueSweepRecord
 from datp_core.pipeline.identifiers import ExperimentId, JobId
 from datp_core.pipeline.models import PlanningGraph, StageJob, StageJobContext, StageKind
 from datp_core.pipeline.values import PositiveInt
@@ -51,7 +51,7 @@ def _feature_sweep_values(experiment: ExperimentRecord, overrides) -> tuple[tupl
 
 def resolve_partition_contract(
     config: ResolvedProjectConfiguration, experiment_id: ExperimentId, condition_name: str | None
-) -> tuple[ConditionSweepRecord | None, PartitionSeedContract | None]:
+) -> tuple[SweepConditionRecord | None, PartitionSeedContract | None]:
     if condition_name is None:
         return (None, None)
     experiment = config.experiments.get(experiment_id)
