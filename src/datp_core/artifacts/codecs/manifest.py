@@ -12,13 +12,15 @@ from datp_core.core.hashing import Checksum, Fingerprint
 from datp_core.core.identifiers import ArtifactId, ExperimentId
 from datp_core.core.seeding import Seed
 
-CURRENT_ARTIFACT_SCHEMA_VERSION = 1
+CURRENT_ARTIFACT_SCHEMA_VERSION = 2
 
 
 class _ArtifactParentWire(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
     artifact_id: str
     artifact_kind: str
+    parent_relative_path: str
     scientific_fingerprint: str
+    execution_fingerprint: str
     source_inventory_fingerprint: str | None = None
 
 
@@ -56,7 +58,9 @@ def encode_manifest(manifest: ArtifactManifest) -> bytes:
             _ArtifactParentWire(
                 artifact_id=parent.parent_key.artifact_id.value,
                 artifact_kind=parent.parent_key.kind.value,
+                parent_relative_path=parent.parent_relative_path,
                 scientific_fingerprint=parent.scientific_fingerprint.value,
+                execution_fingerprint=parent.execution_fingerprint.value,
                 source_inventory_fingerprint=(
                     parent.source_inventory_fingerprint.value
                     if parent.source_inventory_fingerprint
@@ -103,7 +107,9 @@ def decode_manifest(payload: bytes) -> ArtifactManifest:
                     artifact_id=ArtifactId(parent.artifact_id),
                     kind=ArtifactKind(parent.artifact_kind),
                 ),
+                parent_relative_path=parent.parent_relative_path,
                 scientific_fingerprint=Fingerprint(parent.scientific_fingerprint),
+                execution_fingerprint=Fingerprint(parent.execution_fingerprint),
                 source_inventory_fingerprint=(
                     Checksum(parent.source_inventory_fingerprint)
                     if parent.source_inventory_fingerprint is not None

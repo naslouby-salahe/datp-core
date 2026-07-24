@@ -69,7 +69,13 @@ class ResultFreezeStageHandler:
             artifact_key=job.output,
             artifact_format=ArtifactFormat.JSON,
             relative_path=relative_path,
-            parents=artifact_parents(self._config, job.inputs),
+            parents=artifact_parents(
+                self._config,
+                tuple(
+                    (input_key, f"runs/{run_id.value}/{dependency.value}")
+                    for input_key, dependency in zip(job.inputs, job.dependencies, strict=True)
+                ),
+            ),
             payload=BytesPayload(payload_bytes=payload),
         )
         if not commit.success:

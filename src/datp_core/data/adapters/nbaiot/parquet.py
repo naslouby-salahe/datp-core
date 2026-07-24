@@ -16,17 +16,15 @@ from datp_core.data.adapters.nbaiot.splitting import (
 from datp_core.data.contracts.enums import SplitMethod
 from datp_core.data.contracts.materialization import DatasetMaterialization
 from datp_core.data.sources.csv import iter_numeric_csv_source
-from datp_core.data.sources.models import SourceRowFailure
+from datp_core.data.sources.models import SourceRow, SourceRowFailure
 
 
 def materialize_nbaiot_source_row(
-    source_row: "SourceRow",
+    source_row: SourceRow,
     dataset_root: Path,
     benign_filename: str,
     attack_family_directories: tuple[str, ...],
 ) -> NBaIoTMaterializedRow:
-    from datp_core.data.sources.models import SourceRow
-
     try:
         relative_path = source_row.source_path.relative_to(dataset_root)
     except ValueError as exc:

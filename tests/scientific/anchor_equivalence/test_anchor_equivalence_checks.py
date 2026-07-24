@@ -9,6 +9,7 @@ invented one.
 from __future__ import annotations
 
 import pytest
+from attrs import evolve
 
 from datp_core.analysis.comparisons.models import PairedThresholdAnalysisResult
 from datp_core.analysis.statistics.models import ConfidenceInterval
@@ -125,3 +126,52 @@ def test_sign_reversal_fails_every_directional_check(_record: AnchorEquivalenceA
 def test_missing_paired_source_is_rejected(_record: AnchorEquivalenceAnalysisRecord) -> None:
     with pytest.raises(ValueError, match="no supported paired source"):
         analyze_anchor_equivalence(_record, ())
+
+
+def test_wrong_threshold_policy_fails_only_provenance_check(_record: AnchorEquivalenceAnalysisRecord) -> None:
+    # Statistically reproduces the historical anchor exactly, but was computed against the wrong
+    # comparator pair (e.g. a config edit swapped the evaluation labels) -- must be caught even
+    # though every purely statistical check would otherwise pass.
+    source = PairedThresholdAnalysisResult(
+        analysis_label=_record.source_analysis,
+        metric="cv_fpr",
+        first_threshold_policy="shared_mean_p95",
+        second_threshold_policy="family_p95",
+        training_seeds=(0, 1, 2, 3, 4),
+        first_seed_values=(1.0, 1.0, 1.0, 1.0, 1.0),
+        second_seed_values=(0.3, 0.3, 0.3, 0.3, 0.3),
+        first_mean=1.0,
+        second_mean=0.3,
+        mean_difference=0.73,
+        confidence_interval=ConfidenceInterval(
+            lower_bound=0.65, upper_bound=0.77, confidence_level=Probability(0.95), method="bca"
+        ),
+        p_value=0.01,
+        rank_biserial=1.0,
+        resample_count=10_000,
+        analysis_seed=300,
+        seed_differences=(0.7, 0.7, 0.7, 0.7, 0.7),
+        sign_consistency=1.0,
+        zero_difference_count=0,
+        negative_difference_count=0,
+    )
+    result = analyze_anchor_equivalence(_record, (source,))
+    assert not result.passed
+    assert result.failure_reasons == ("verified_configuration_and_provenance",)
+    assert result.checks.positive_reproduced_delta
+    assert result.checks.reproduced_estimate_within_historical_interval
+    assert result.checks.overlapping_confidence_intervals
+    assert result.checks.no_material_movement_toward_zero
+    assert result.checks.reproduced_interval_width_at_most_1_20x_historical_width
+    assert not result.checks.verified_configuration_and_provenance
+
+
+def test_wrong_metric_fails_only_provenance_check(_record: AnchorEquivalenceAnalysisRecord) -> None:
+    source = _paired_result(
+        analysis_label=_record.source_analysis, mean_difference=0.73, lower_bound=0.65, upper_bound=0.77
+    )
+    mismatched = evolve(source, metric="auroc")
+    result = analyze_anchor_equivalence(_record, (mismatched,))
+    assert not result.passed
+    assert result.failure_reasons == ("verified_configuration_and_provenance",)
+    assert not result.checks.verified_configuration_and_provenance

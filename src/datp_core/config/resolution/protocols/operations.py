@@ -11,6 +11,16 @@ from datp_core.config.authored.protocols.operations import (
     OperationalInputsConfig,
     ThresholdExchangeEntryConfig,
 )
+from datp_core.config.operational_contracts import (
+    BenignDecisionRateRecord,
+    CheckpointStorageRecord,
+    CommunicationEstimationContractRecord,
+    FieldEncodingRecord,
+    ModelExchangeRecord,
+    OperationalInputsRecord,
+    ThresholdExchangeEntryRecord,
+    ThresholdExchangeRecord,
+)
 from datp_core.evaluation import (
     ClusterDiagnosticsRecord,
     CrossClientAggregationRecord,
@@ -20,16 +30,6 @@ from datp_core.evaluation import (
     MetricFormulaRecord,
     PrecisionPolicyRecord,
     ThresholdEstimationMetricsRecord,
-)
-from datp_core.analysis.operations.models import (
-    BenignDecisionRateRecord,
-    CheckpointStorageRecord,
-    CommunicationEstimationContractRecord,
-    FieldEncodingRecord,
-    ModelExchangeRecord,
-    OperationalInputsRecord,
-    ThresholdExchangeEntryRecord,
-    ThresholdExchangeRecord,
 )
 
 

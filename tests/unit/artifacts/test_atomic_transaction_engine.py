@@ -135,7 +135,14 @@ def test_self_parent_is_rejected(kind: str, tmp_path: Path) -> None:
             kind,
             tmp_path,
             artifact_key=key,
-            parents=(ArtifactParent(parent_key=key, scientific_fingerprint=_metadata().scientific_fingerprint),),
+            parents=(
+                ArtifactParent(
+                    parent_key=key,
+                    parent_relative_path="some/parent/path",
+                    scientific_fingerprint=_metadata().scientific_fingerprint,
+                    execution_fingerprint=_metadata().execution_fingerprint,
+                ),
+            ),
         )
     )
     assert not result.success
@@ -146,7 +153,12 @@ def test_self_parent_is_rejected(kind: str, tmp_path: Path) -> None:
 @pytest.mark.parametrize("kind", ["bytes", "file"])
 def test_duplicate_parent_is_rejected(kind: str, tmp_path: Path) -> None:
     dup_key = ArtifactKey(artifact_id=ArtifactId("dup"), kind=ArtifactKind.MATERIALIZED_DATASET)
-    parent = ArtifactParent(parent_key=dup_key, scientific_fingerprint=_metadata().scientific_fingerprint)
+    parent = ArtifactParent(
+        parent_key=dup_key,
+        parent_relative_path="some/parent/path",
+        scientific_fingerprint=_metadata().scientific_fingerprint,
+        execution_fingerprint=_metadata().execution_fingerprint,
+    )
     result = AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(
         _request(kind, tmp_path, parents=(parent, parent))
     )
@@ -196,6 +208,7 @@ def test_manifest_bytes_are_identical_for_equivalent_metadata(tmp_path: Path) ->
 
 def test_manifest_round_trips_all_fields(tmp_path: Path) -> None:
     scientific = compute_fingerprint("scientific", {"experiment": "roundtrip"})
+    execution = compute_fingerprint("execution", {"scientific": scientific})
     key = ArtifactKey(artifact_id=ArtifactId("full-artifact"), kind=ArtifactKind.STATISTICAL_SUMMARY)
     parent_key = ArtifactKey(artifact_id=ArtifactId("parent-artifact"), kind=ArtifactKind.MATERIALIZED_DATASET)
     request = ArtifactCommitRequest(
@@ -203,9 +216,16 @@ def test_manifest_round_trips_all_fields(tmp_path: Path) -> None:
             artifact_key=key,
             artifact_format=ArtifactFormat.JSON,
             scientific_fingerprint=scientific,
-            execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
+            execution_fingerprint=execution,
             relative_path="stats/full-artifact",
-            parents=(ArtifactParent(parent_key=parent_key, scientific_fingerprint=scientific),),
+            parents=(
+                ArtifactParent(
+                    parent_key=parent_key,
+                    parent_relative_path="stats/parent-artifact",
+                    scientific_fingerprint=scientific,
+                    execution_fingerprint=execution,
+                ),
+            ),
             schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
             creation_timestamp=42.5,
             environment_identity="ci-test-runner",
@@ -227,6 +247,9 @@ def test_manifest_round_trips_all_fields(tmp_path: Path) -> None:
     assert decoded.schema_version == CURRENT_ARTIFACT_SCHEMA_VERSION
     assert len(decoded.parents) == 1
     assert decoded.parents[0].parent_key == parent_key
+    assert decoded.parents[0].parent_relative_path == "stats/parent-artifact"
+    assert decoded.parents[0].scientific_fingerprint == scientific
+    assert decoded.parents[0].execution_fingerprint == execution
     assert decoded.creation_timestamp == 42.5
     assert decoded.environment_identity == "ci-test-runner"
 

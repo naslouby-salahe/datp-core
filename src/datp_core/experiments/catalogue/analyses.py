@@ -107,6 +107,9 @@ class AnchorEquivalenceAnalysisRecord:
     interval_width_tolerance_multiplier: float
     floating_point_tolerance: Mapping[str, float]
     historical_reference: Mapping[str, float | str]
+    expected_metric: str
+    expected_first_threshold_policy: str
+    expected_second_threshold_policy: str
     statistical_fallback_requirements: tuple[str, ...]
     failure_reasons: tuple[str, ...]
     downstream_blocking_behavior: str

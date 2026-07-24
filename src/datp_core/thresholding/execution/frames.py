@@ -84,4 +84,4 @@ def diagnostics_to_json(diagnostics: object) -> bytes:
         }
     else:
         payload = {"note": "diagnostics_present"}
-    return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True, allow_nan=False).encode("utf-8")

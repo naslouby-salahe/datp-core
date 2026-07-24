@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datp_core.artifacts.identity import ArtifactKey, ArtifactKind
+from datp_core.artifacts.identity import ArtifactKey
 from datp_core.core.hashing import Checksum
 from datp_core.core.identifiers import ArtifactId, ExperimentId, JobId, RunId
 from datp_core.experiments.identity.kinds import IdentityKind, StageIdentitySpec
@@ -15,11 +15,18 @@ _COLON = ":"
 def execution_run_id(
     experiment_id: ExperimentId,
     execution_fingerprint: str,
-    source_provenance_fingerprint: Checksum | None = None,
+    source_provenance_fingerprint: Checksum,
 ) -> RunId:
+    """Construct the run id for an experiment's execution namespace.
+
+    The source-provenance fingerprint is mandatory: a run id built without it names a different,
+    incomplete namespace than the one the experiment actually executes under, which breaks every
+    cross-experiment reference silently reconstructing a partial id. Callers resolving an *existing*
+    experiment's run id (a cross-experiment reference, not the currently executing one) must use
+    ``resolve_experiment_run_id`` instead of calling this function directly.
+    """
     base = f"run_{experiment_id.value}_{execution_fingerprint[:12]}"
-    if source_provenance_fingerprint is not None:
-        base += f"_{source_provenance_fingerprint.value[:12]}"
+    base += f"_{source_provenance_fingerprint.value[:12]}"
     return RunId(base)
 
 
@@ -219,6 +226,14 @@ class IdentityBuilder:
     @staticmethod
     def checkpoint_key(ctx: StageJobContext) -> ArtifactKey:
         return IdentityBuilder.artifact_key(IdentityKind.TRAINING, ctx)
+
+    @staticmethod
+    def federated_proximal_selection_key(ctx: StageJobContext) -> ArtifactKey:
+        return IdentityBuilder.artifact_key(IdentityKind.FEDERATED_PROXIMAL_SELECTION, ctx)
+
+    @staticmethod
+    def ditto_selection_key(ctx: StageJobContext) -> ArtifactKey:
+        return IdentityBuilder.artifact_key(IdentityKind.DITTO_SELECTION, ctx)
 
     @staticmethod
     def calibration_scores_key(ctx: StageJobContext) -> ArtifactKey:

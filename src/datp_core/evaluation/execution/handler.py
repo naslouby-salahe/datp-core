@@ -6,7 +6,7 @@ from io import BytesIO
 
 import polars as pl
 
-from datp_core.artifacts.identity import ArtifactFormat
+from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey
 from datp_core.artifacts.payloads import BytesPayload
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
@@ -35,16 +35,28 @@ class OperatingPointEvaluationStageHandler:
         self._config = config
         self._repository = repository
 
+    def _dependency_reusable(self, relative_path: str, artifact_key: ArtifactKey) -> bool:
+        return self._repository.assess_reuse(
+            relative_path, artifact_key, self._config.scientific_fingerprint, self._config.execution_fingerprint
+        ).can_reuse
+
     def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
         relative_path = f"runs/{run_id.value}/{job.job_id.value}"
-        if self._repository.assess_reuse(
-            relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
-        ).can_reuse:
+        if self._dependency_reusable(relative_path, job.output):
             return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
-        thresholds = self._repository.read(f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(job.context).value}")
-        scores = self._repository.read(
-            f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(score_context(job.context)).value}"
-        )
+        score_ctx = score_context(job.context)
+        threshold_path = f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(job.context).value}"
+        score_path = f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(score_ctx).value}"
+        if not self._dependency_reusable(threshold_path, IdentityBuilder.thresholds_key(job.context)):
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Threshold artifact is unavailable or incompatible"
+            )
+        if not self._dependency_reusable(score_path, IdentityBuilder.test_scores_key(score_ctx)):
+            return StageJobOutcome.failed(
+                job_id=job.job_id, stage=job.stage, error_message="Test score artifact is unavailable or incompatible"
+            )
+        thresholds = self._repository.read(threshold_path)
+        scores = self._repository.read(score_path)
         if not thresholds.found or thresholds.payload_bytes is None:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Threshold artifact is unavailable"
@@ -86,7 +98,13 @@ class OperatingPointEvaluationStageHandler:
             artifact_key=job.output,
             artifact_format=ArtifactFormat.PARQUET,
             relative_path=relative_path,
-            parents=artifact_parents(self._config, job.inputs),
+            parents=artifact_parents(
+                self._config,
+                (
+                    (IdentityBuilder.thresholds_key(job.context), threshold_path),
+                    (IdentityBuilder.test_scores_key(score_ctx), score_path),
+                ),
+            ),
             payload=BytesPayload(payload_bytes=payload.getvalue()),
         )
         if not commit.success:

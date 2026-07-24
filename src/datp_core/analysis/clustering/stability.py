@@ -7,7 +7,9 @@ ablation and seed variation.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
+from typing import Literal
 
 import numpy as np
 from sklearn.metrics import adjusted_rand_score
@@ -16,11 +18,12 @@ from datp_core.analysis.artifact_access.reader import read_parquet_frame
 from datp_core.analysis.clustering.models import (
     ClusterAblationObservation,
     ClusterAblationStabilityResult,
+    ClusterDispersionResult,
+    ClusterDispersionStatus,
     ClusterMembershipStabilityResult,
     ClusterStabilityAnalysisResult,
     ClusterStabilitySeedSummary,
 )
-from datp_core.analysis.statistics.descriptive import group_mean_std, mean_group_std
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
 from datp_core.config.project import ResolvedProjectConfiguration
@@ -106,6 +109,84 @@ def _analyze_cluster_ablation(
     )
 
 
+def _cluster_dispersion(
+    cluster_sizes: Mapping[int, int],
+    value_groups: Mapping[int, list[float]],
+    *,
+    kind: Literal["within", "across"],
+    metric_covered_clients: int | None = None,
+    total_clients: int | None = None,
+) -> ClusterDispersionResult:
+    """Compute a within- or across-cluster dispersion, typed to distinguish every unavailable
+    reason from a genuinely computed value. ``value_groups`` may under-represent ``cluster_sizes``
+    (e.g. clients with no available FPR); ``metric_covered_clients``/``total_clients`` are only
+    supplied for FPR-derived dispersions, where zero metric coverage is a distinct condition from
+    a merely incomplete one.
+    """
+    observed_cluster_count = len(cluster_sizes)
+    non_empty_labels = sorted(label for label, size in cluster_sizes.items() if size > 0)
+    empty_labels = sorted(label for label, size in cluster_sizes.items() if size == 0)
+    if empty_labels:
+        return ClusterDispersionResult(
+            status=ClusterDispersionStatus.UNAVAILABLE_EMPTY_CLUSTER,
+            value=None,
+            reason=f"cluster(s) {empty_labels} have no assigned clients",
+            observed_cluster_count=observed_cluster_count,
+            available_cluster_count=len(non_empty_labels),
+            excluded_client_count=0,
+        )
+    if metric_covered_clients == 0 and total_clients:
+        return ClusterDispersionResult(
+            status=ClusterDispersionStatus.UNAVAILABLE_INCOMPLETE_METRIC_POPULATION,
+            value=None,
+            reason="no metric rows are available for any client in the threshold population",
+            observed_cluster_count=observed_cluster_count,
+            available_cluster_count=0,
+            excluded_client_count=total_clients,
+        )
+    excluded_client_count = sum(cluster_sizes[label] - len(value_groups.get(label, [])) for label in non_empty_labels)
+    no_value_labels = [label for label in non_empty_labels if not value_groups.get(label)]
+    if no_value_labels:
+        return ClusterDispersionResult(
+            status=ClusterDispersionStatus.UNAVAILABLE_NO_AVAILABLE_FPR,
+            value=None,
+            reason=f"cluster(s) {no_value_labels} have no available false-positive-rate values",
+            observed_cluster_count=observed_cluster_count,
+            available_cluster_count=len(non_empty_labels) - len(no_value_labels),
+            excluded_client_count=excluded_client_count,
+        )
+    if kind == "across" and len(non_empty_labels) < 2:
+        return ClusterDispersionResult(
+            status=ClusterDispersionStatus.UNAVAILABLE_INSUFFICIENT_OBSERVATIONS,
+            value=None,
+            reason="fewer than two clusters contribute values; across-cluster dispersion is undefined",
+            observed_cluster_count=observed_cluster_count,
+            available_cluster_count=len(non_empty_labels),
+            excluded_client_count=excluded_client_count,
+        )
+    if kind == "within":
+        value = float(np.mean([np.std(value_groups[label]) for label in non_empty_labels]))
+    else:
+        value = float(np.std([np.mean(value_groups[label]) for label in non_empty_labels]))
+    if not math.isfinite(value):
+        return ClusterDispersionResult(
+            status=ClusterDispersionStatus.UNAVAILABLE_NON_FINITE_INPUT,
+            value=None,
+            reason="dispersion computation produced a non-finite value",
+            observed_cluster_count=observed_cluster_count,
+            available_cluster_count=len(non_empty_labels),
+            excluded_client_count=excluded_client_count,
+        )
+    return ClusterDispersionResult(
+        status=ClusterDispersionStatus.AVAILABLE,
+        value=value,
+        reason=None,
+        observed_cluster_count=observed_cluster_count,
+        available_cluster_count=len(non_empty_labels),
+        excluded_client_count=excluded_client_count,
+    )
+
+
 def _analyze_cluster_membership(
     analysis: ClusterStabilityAnalysisRecord,
     *,
@@ -158,10 +239,16 @@ def _analyze_cluster_membership(
                     f"[0, {expected_cluster_count}) for seed {seed.value}"
                 )
 
-        cluster_membership_counts: dict[int, int] = {label: 0 for label in expected_labels}
+        cluster_membership_counts: dict[int, int] = dict.fromkeys(expected_labels, 0)
         for label_value in threshold_frame["cluster_label"].to_list():
             label_int = int(label_value)
             cluster_membership_counts[label_int] = cluster_membership_counts.get(label_int, 0) + 1
+
+        # Threshold dispersion is built directly from the threshold artifact: every
+        # threshold-bearing client contributes, independent of metric/FPR availability.
+        threshold_groups: dict[int, list[float]] = {label: [] for label in expected_labels}
+        for label, threshold in threshold_frame.select("cluster_label", "threshold").iter_rows():
+            threshold_groups[int(label)].append(float(threshold))
 
         metric_frame = validate_client_metric_frame(
             read_parquet_frame(repository, run_id, IdentityBuilder.evaluation_job_id(context), missing_message=missing)
@@ -169,21 +256,37 @@ def _analyze_cluster_membership(
         metric_client_ids = metric_frame["client_id"].to_list()
         if len(metric_client_ids) != len(set(metric_client_ids)):
             raise ValueError(f"Duplicate client_id in metric frame for seed {seed.value}")
+        unknown_metric_clients = set(metric_client_ids) - set(threshold_client_ids)
+        if unknown_metric_clients:
+            raise ValueError(
+                f"Metric frame references clients outside the threshold population for seed "
+                f"{seed.value}: {sorted(unknown_metric_clients)}"
+            )
 
-        joined = threshold_frame.join(
-            metric_frame.select("client_id", "false_positive_rate", "false_positive_rate_status"), on="client_id"
+        # FPR dispersion is built from a left join against the complete threshold population, so a
+        # client entirely missing from the metric frame is excluded rather than dropping the row.
+        joined = threshold_frame.select("client_id", "cluster_label").join(
+            metric_frame.select("client_id", "false_positive_rate", "false_positive_rate_status"),
+            on="client_id",
+            how="left",
         )
+        if joined.height != len(threshold_client_ids):
+            raise ValueError(f"Threshold/metric join changed the client population for seed {seed.value}")
 
-        threshold_clusters: dict[int, list[tuple[float, float]]] = {label: [] for label in expected_labels}
-        fpr_clusters: dict[int, list[tuple[float, float]]] = {label: [] for label in expected_labels}
-        for label, threshold, fpr, status in joined.select(
-            "cluster_label", "threshold", "false_positive_rate", "false_positive_rate_status"
+        fpr_groups: dict[int, list[float]] = {label: [] for label in expected_labels}
+        metric_covered_clients = 0
+        for label, status, fpr in joined.select(
+            "cluster_label", "false_positive_rate_status", "false_positive_rate"
         ).iter_rows():
-            label_int = int(label)
-            threshold_val = float(threshold)
-            threshold_clusters.setdefault(label_int, []).append((threshold_val, 0.0))
+            if status is not None:
+                metric_covered_clients += 1
             if status == "available" and fpr is not None:
-                fpr_clusters.setdefault(label_int, []).append((threshold_val, float(fpr)))
+                fpr_value = float(fpr)
+                if not math.isfinite(fpr_value):
+                    raise ValueError(
+                        f"Non-finite false-positive-rate value in cluster stability input for seed {seed.value}"
+                    )
+                fpr_groups[int(label)].append(fpr_value)
 
         seed_summaries.append(
             ClusterStabilitySeedSummary(
@@ -196,17 +299,25 @@ def _analyze_cluster_membership(
                 empty_cluster_flag=any(
                     cluster_membership_counts[label] == 0 for label in expected_labels
                 ),
-                within_cluster_threshold_dispersion=mean_group_std(
-                    [threshold_clusters[label] for label in expected_labels], 0
+                within_cluster_threshold_dispersion=_cluster_dispersion(
+                    cluster_membership_counts, threshold_groups, kind="within"
                 ),
-                within_cluster_fpr_dispersion=mean_group_std(
-                    [fpr_clusters[label] for label in expected_labels], 1
+                within_cluster_fpr_dispersion=_cluster_dispersion(
+                    cluster_membership_counts,
+                    fpr_groups,
+                    kind="within",
+                    metric_covered_clients=metric_covered_clients,
+                    total_clients=len(threshold_client_ids),
                 ),
-                across_cluster_threshold_dispersion=group_mean_std(
-                    [threshold_clusters[label] for label in expected_labels], 0
+                across_cluster_threshold_dispersion=_cluster_dispersion(
+                    cluster_membership_counts, threshold_groups, kind="across"
                 ),
-                across_cluster_mean_fpr_dispersion=group_mean_std(
-                    [fpr_clusters[label] for label in expected_labels], 1
+                across_cluster_mean_fpr_dispersion=_cluster_dispersion(
+                    cluster_membership_counts,
+                    fpr_groups,
+                    kind="across",
+                    metric_covered_clients=metric_covered_clients,
+                    total_clients=len(threshold_client_ids),
                 ),
             )
         )

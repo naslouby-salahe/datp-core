@@ -45,7 +45,7 @@ class StatisticalAnalysisStageHandler:
         experiment = self._config.experiments.get(job.context.experiment_id)
         analyses_by_kind: dict[AnalysisKind, list[AnalysisRecord]] = {}
         for analysis_record in experiment.analyses:
-            analyses_by_kind.setdefault(AnalysisKind.from_record(analysis_record), []).append(analysis_record)
+            analyses_by_kind.setdefault(AnalysisKind(analysis_record.kind), []).append(analysis_record)
         unsupported = analyses_by_kind.keys() - set(AnalysisKind)
         if unsupported:
             return StageJobOutcome.failed(

@@ -7,6 +7,7 @@ the real `suppression_behaviors`/`eligibility_gates` decision rule end to end.
 
 from datp_core.core.identifiers import ExperimentId
 from datp_core.core.numbers import PositiveInt, Probability
+from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.contracts import SplitMembership
 from datp_core.data.manifests import SplitManifest, SplitManifestEntry
 from datp_core.data.readiness import evaluate_readiness_gates
@@ -34,6 +35,10 @@ def _gate(
     )
 
 
+def _gates(gate: EligibilityGateRecord) -> TypedDomainRegistry[str, EligibilityGateRecord]:
+    return TypedDomainRegistry({"gate": gate})
+
+
 def _two_client_manifest() -> SplitManifest:
     """One eligible client (c1, 2 benign calibration rows) and one ineligible (c2, 1 row) -> 50%."""
     return SplitManifest(
@@ -54,7 +59,7 @@ def test_experiment_below_the_configured_eligible_proportion_is_suppressed() -> 
     experiment_id = ExperimentId("ineligible_experiment")
     gate = _gate(minimum_eligible_client_proportion=0.75, applies_to_experiments=(experiment_id,))
 
-    issues = evaluate_readiness_gates(("gate",), {"gate": gate}, _two_client_manifest(), experiment_id)
+    issues = evaluate_readiness_gates(("gate",), _gates(gate), _two_client_manifest(), experiment_id)
 
     assert len(issues) == 1
     assert "eligible proportion 0.500 below minimum 0.75" in issues[0]
@@ -64,7 +69,7 @@ def test_experiment_meeting_the_configured_eligible_proportion_is_not_suppressed
     experiment_id = ExperimentId("eligible_experiment")
     gate = _gate(minimum_eligible_client_proportion=0.5, applies_to_experiments=(experiment_id,))
 
-    issues = evaluate_readiness_gates(("gate",), {"gate": gate}, _two_client_manifest(), experiment_id)
+    issues = evaluate_readiness_gates(("gate",), _gates(gate), _two_client_manifest(), experiment_id)
 
     assert issues == []
 
@@ -75,7 +80,7 @@ def test_gate_not_bound_to_the_experiment_never_suppresses_it() -> None:
     experiment_id = ExperimentId("unaffected_experiment")
     gate = _gate(minimum_eligible_client_proportion=1.0, applies_to_experiments=(ExperimentId("other_experiment"),))
 
-    issues = evaluate_readiness_gates(("gate",), {"gate": gate}, _two_client_manifest(), experiment_id)
+    issues = evaluate_readiness_gates(("gate",), _gates(gate), _two_client_manifest(), experiment_id)
 
     assert issues == []
 
@@ -83,6 +88,8 @@ def test_gate_not_bound_to_the_experiment_never_suppresses_it() -> None:
 def test_unknown_gate_name_is_reported_rather_than_silently_ignored() -> None:
     experiment_id = ExperimentId("any_experiment")
 
-    issues = evaluate_readiness_gates(("nonexistent_gate",), {}, _two_client_manifest(), experiment_id)
+    issues = evaluate_readiness_gates(
+        ("nonexistent_gate",), TypedDomainRegistry({}), _two_client_manifest(), experiment_id
+    )
 
     assert issues == ["unknown readiness gate: nonexistent_gate"]

@@ -23,6 +23,7 @@ from datp_core.learning.contracts.checkpoints import (
 from datp_core.learning.contracts.enums import (
     CheckpointAuthorization,
     PersonalizationStrategy,
+    TrainingParticipation,
     TrainingProfileKind,
 )
 from datp_core.learning.contracts.optimization import BatchingRecord, OptimizerRecord
@@ -59,7 +60,7 @@ def resolve_training_profiles(authored: AuthoredProtocolsConfig) -> dict[Trainin
             optimizer_id=tp_cfg.optimizer,
             batching_profile_id=tp_cfg.batching,
             local_epochs=(PositiveInt(tp_cfg.local_epochs) if tp_cfg.local_epochs is not None else None),
-            participation=tp_cfg.participation,
+            participation=TrainingParticipation(tp_cfg.participation) if tp_cfg.participation else None,
             checkpoint_authorization=CheckpointAuthorization(tp_cfg.checkpoint_authorization),
             personalization=PersonalizationStrategy(tp_cfg.personalization) if tp_cfg.personalization else None,
             personalized_local_epochs=(

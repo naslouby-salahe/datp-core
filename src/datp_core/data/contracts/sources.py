@@ -8,12 +8,19 @@ from attrs import define, field
 
 from datp_core.core.immutability import (
     FrozenJson,
-    as_frozen_json_mapping,
     as_optional_frozen_json_mapping,
     as_optional_str_mapping,
     deep_freeze,
 )
 from datp_core.core.paths import RelativePath
+
+
+def _freeze_positional_contract(value: object | None) -> Mapping[str, bool] | None:
+    from typing import cast
+
+    if value is None:
+        return None
+    return cast("Mapping[str, bool]", deep_freeze(value))
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -99,6 +106,6 @@ class SourceContractRecord:
     reject_row_with_field_count_other_than_header: bool | None
     column_role_partition: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
     positional_contract: Mapping[str, bool] | None = field(
-        converter=lambda v: deep_freeze(v) if v is not None else None
+        converter=lambda v: _freeze_positional_contract(v)
     )
     row_integrity_exclusions: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)

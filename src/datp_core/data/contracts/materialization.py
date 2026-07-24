@@ -7,7 +7,7 @@ from typing import cast
 
 from attrs import define, field
 
-from datp_core.core.identifiers import MaterializationId, NormalizationStrategyId
+from datp_core.core.identifiers import MaterializationId
 from datp_core.core.immutability import (
     FrozenJson,
     as_optional_frozen_json_mapping,

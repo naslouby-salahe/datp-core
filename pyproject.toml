@@ -76,6 +76,8 @@ select = ["E", "F", "I", "N", "UP", "B", "ICN"]
 # typer.Option/typer.Argument function-call defaults are the required idiom for declaring CLI
 # parameters; bugbear's B008 only recognizes a single such default per signature as exempt.
 "src/datp_core/cli.py" = ["B008"]
+# __init__.py barrel re-exports are intentional public API
+"__init__.py" = ["F401"]
 
 [tool.pyright]
 include = ["src", "tests"]

@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from datp_core.artifacts.codecs.manifest import CURRENT_ARTIFACT_SCHEMA_VERSION
 from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
 from datp_core.artifacts.lineage import ArtifactParent
 from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload, FilePayload
@@ -20,7 +21,7 @@ def _request() -> ArtifactCommitRequest:
             execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
             relative_path="reports/artifact",
             parents=(),
-            schema_version=1,
+            schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
             creation_timestamp=1.0,
             environment_identity="test",
         ),
@@ -70,7 +71,9 @@ def test_artifact_declaring_itself_as_its_own_parent_is_rejected(tmp_path: Path)
             parents=(
                 ArtifactParent(
                     parent_key=request.metadata.artifact_key,
+                    parent_relative_path=request.metadata.relative_path,
                     scientific_fingerprint=request.metadata.scientific_fingerprint,
+                    execution_fingerprint=request.metadata.execution_fingerprint,
                 ),
             ),
             schema_version=request.metadata.schema_version,
@@ -90,7 +93,10 @@ def test_artifact_declaring_duplicate_parent_lineage_is_rejected(tmp_path: Path)
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
     duplicate_parent = ArtifactKey(artifact_id=ArtifactId("some-parent"), kind=ArtifactKind.MATERIALIZED_DATASET)
     parent_entry = ArtifactParent(
-        parent_key=duplicate_parent, scientific_fingerprint=request.metadata.scientific_fingerprint
+        parent_key=duplicate_parent,
+        parent_relative_path="some/parent/path",
+        scientific_fingerprint=request.metadata.scientific_fingerprint,
+        execution_fingerprint=request.metadata.execution_fingerprint,
     )
     with_duplicates = ArtifactCommitRequest(
         metadata=ArtifactCommitMetadata(
@@ -124,7 +130,7 @@ def test_file_commit_copies_and_verifies_a_staged_payload_without_in_memory_payl
             execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
             relative_path="datasets/file-artifact",
             parents=(),
-            schema_version=1,
+            schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
             creation_timestamp=1.0,
             environment_identity="test",
         ),

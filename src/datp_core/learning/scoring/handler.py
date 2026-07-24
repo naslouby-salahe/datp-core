@@ -16,8 +16,9 @@ from datp_core.artifacts.schemas.scores import validate_calibration_score_frame,
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ArtifactId, DatasetId, RunId
 from datp_core.data.contracts.enums import SplitMembership, SplitMethod
-from datp_core.experiments.identity import IdentityBuilder, execution_run_id
+from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.identity.kinds import IdentityKind
+from datp_core.experiments.identity.run_locator import resolve_experiment_run_id
 from datp_core.learning.contracts.enums import (
     CheckpointAuthorization,
     DevicePolicy,
@@ -107,9 +108,8 @@ class ScoreGenerationStageHandler:
             if profile.personalization == PersonalizationStrategy.DITTO
             else None
         )
-        materialization = self._repository.read(
-            f"runs/{run_id.value}/{IdentityBuilder.materialization_job_id(job.context).value}"
-        )
+        materialization_path = f"runs/{run_id.value}/{IdentityBuilder.materialization_job_id(job.context).value}"
+        materialization = self._repository.read(materialization_path)
         if not checkpoint.found or checkpoint.payload_bytes is None:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Model checkpoint is unavailable"
@@ -217,9 +217,14 @@ class ScoreGenerationStageHandler:
             parents=artifact_parents(
                 self._config,
                 (
-                    *job.inputs,
-                    selection_key,
-                    *((personalized_key,) if profile.personalization == PersonalizationStrategy.DITTO else ()),
+                    (job.inputs[0], training_path),
+                    (job.inputs[1], materialization_path),
+                    (selection_key, selection_path),
+                    *(
+                        ((personalized_key, personalized_path),)
+                        if profile.personalization == PersonalizationStrategy.DITTO
+                        else ()
+                    ),
                 ),
             ),
             payload=BytesPayload(payload_bytes=payload.getvalue()),
@@ -242,7 +247,7 @@ class ScoreGenerationStageHandler:
         if authorization == CheckpointAuthorization.LOOKUP_OF_FEDERATED_AVERAGING:
             source = self._config.primary_federated_checkpoint_experiment()
             selection_context = StageJobContext(experiment_id=source.identifier)
-            source_run_id = execution_run_id(source.identifier, self._config.execution_fingerprint.value)
+            source_run_id = resolve_experiment_run_id(self._config, source.identifier)
             return (
                 f"runs/{source_run_id.value}/{IdentityBuilder.cohort_checkpoint_selection_job_id(selection_context).value}",
                 IdentityBuilder.artifact_key(IdentityKind.COHORT_CHECKPOINT_SELECTION, selection_context),

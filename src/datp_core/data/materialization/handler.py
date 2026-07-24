@@ -5,12 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from attrs import define
-
-from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
+from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind, ArtifactReuseReason
 from datp_core.artifacts.payloads import BytesPayload, FilePayload
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.core.hashing import compute_file_checksum
 from datp_core.core.identifiers import ArtifactId, DatasetId, RunId
 from datp_core.data.contracts.enums import ClientConstructionMethod
 from datp_core.data.manifests.codec import encode_split_manifest, read_materialized_split_evidence
@@ -94,35 +93,45 @@ class DatasetMaterializationStageHandler:
             self._config.execution_fingerprint,
             source_inventory_fingerprint=source_fingerprint,
         )
-        if reuse.can_reuse:
-            companion_artifacts = (
-                (manifest_relative_path, manifest_key),
-                (readiness_relative_path, readiness_key),
-                (preprocessing_relative_path, preprocessing_key),
+
+        companion_specs = (
+            (manifest_relative_path, manifest_key),
+            (readiness_relative_path, readiness_key),
+            (preprocessing_relative_path, preprocessing_key),
+        )
+        if partition_key is not None:
+            companion_specs += ((partition_relative_path, partition_key),)
+        companion_reuse = {
+            companion_key: self._repository.assess_reuse(
+                companion_path,
+                companion_key,
+                self._config.scientific_fingerprint,
+                self._config.execution_fingerprint,
+                source_inventory_fingerprint=source_fingerprint,
             )
-            if partition_key is not None:
-                companion_artifacts += ((partition_relative_path, partition_key),)
-            companion_reusable = all(
-                self._repository.assess_reuse(
-                    companion_path,
-                    companion_key,
-                    self._config.scientific_fingerprint,
-                    self._config.execution_fingerprint,
-                    source_inventory_fingerprint=source_fingerprint,
-                ).can_reuse
-                for companion_path, companion_key in companion_artifacts
-            )
-            if not companion_reusable:
-                return StageJobOutcome.failed(
-                    job_id=job.job_id,
-                    stage=job.stage,
-                    error_message="Materialized artifact lacks compatible immutable split and readiness evidence",
-                )
+            for companion_path, companion_key in companion_specs
+        }
+
+        if reuse.can_reuse and all(decision.can_reuse for decision in companion_reuse.values()):
             return StageJobOutcome.reused(
                 job_id=job.job_id,
                 stage=job.stage,
                 produced_artifact=job.output,
             )
+
+        # A companion that exists but disagrees (wrong key/format/fingerprint) is a conflicting
+        # partial family, never something to silently overwrite -- only a genuinely absent
+        # companion (never committed) is safe to complete via re-materialization below.
+        for companion_key, decision in companion_reuse.items():
+            if not decision.can_reuse and ArtifactReuseReason.ARTIFACT_NOT_COMMITTED not in decision.reason:
+                return StageJobOutcome.failed(
+                    job_id=job.job_id,
+                    stage=job.stage,
+                    error_message=(
+                        f"Materialization companion '{companion_key.artifact_id.value}' conflicts with a "
+                        f"previously committed artifact: {[reason.value for reason in decision.reason]}"
+                    ),
+                )
 
         try:
             adapter = self._adapter_registry.get(dataset.adapter_kind)
@@ -146,6 +155,22 @@ class DatasetMaterializationStageHandler:
                     partition_seed_contract=partition_seed_contract,
                     chunk_row_count=self._config.runtime.active_execution_profile.data_loading.chunk_row_count.value,
                 )
+                # Close the TOCTOU window: verify the source files that were actually read during
+                # materialization still match the inventory the run id and reuse checks above were
+                # computed from. A source change mid-run must never commit under a stale run id.
+                post_materialization_fingerprint = build_source_inventory(dataset).fingerprint()
+                if post_materialization_fingerprint != source_fingerprint:
+                    return StageJobOutcome.failed(
+                        job_id=job.job_id,
+                        stage=job.stage,
+                        error_message=(
+                            "Source files changed during materialization: expected source-inventory "
+                            f"fingerprint {source_fingerprint.value}, observed "
+                            f"{post_materialization_fingerprint.value} after materialization completed. "
+                            "This run's identity is no longer valid for these source files; a newly "
+                            "planned run is required."
+                        ),
+                    )
                 eligibility = self._config.eligibility_policies.get(dataset.eligibility_policy_id)
                 split_evidence = read_materialized_split_evidence(
                     str(payload.staged_path), int(eligibility.minimum_benign_calibration_count)
@@ -172,78 +197,119 @@ class DatasetMaterializationStageHandler:
                         stage=job.stage,
                         error_message="Eligibility gate(s) failed: " + "; ".join(gate_issues),
                     )
-                split_manifest_payload = encode_split_manifest(split_evidence.manifest)
-                commit = commit_artifact(
-                    self._repository,
-                    self._config,
-                    job.context,
-                    artifact_key=job.output,
-                    artifact_format=ArtifactFormat.PARQUET,
-                    relative_path=relative_path,
-                    parents=artifact_parents(self._config, job.inputs, source_inventory_fingerprint=source_fingerprint),
-                    payload=FilePayload(source_file=str(payload.staged_path)),
-                    source_inventory_fingerprint=source_fingerprint,
-                )
-                if not commit.success:
-                    return StageJobOutcome.failed(
-                        job_id=job.job_id,
-                        stage=job.stage,
-                        error_message=commit.error_message or "materialized artifact commit failed",
+
+                if reuse.can_reuse:
+                    # Matching partial family: the primary is already frozen, only companions are
+                    # missing. Re-materialization must deterministically reproduce the exact same
+                    # bytes -- verify before completing the family rather than trusting it blindly.
+                    recomputed_checksum = compute_file_checksum(Path(payload.staged_path))
+                    existing_checksum = reuse.existing_manifest.payload_checksum if reuse.existing_manifest else None
+                    if existing_checksum is None or recomputed_checksum != existing_checksum:
+                        return StageJobOutcome.failed(
+                            job_id=job.job_id,
+                            stage=job.stage,
+                            error_message=(
+                                "Materialized dataset artifact conflicts with the already-frozen primary "
+                                f"artifact: expected payload checksum {existing_checksum}, recomputed "
+                                f"{recomputed_checksum}. Deterministic re-materialization produced different "
+                                "bytes than the frozen artifact."
+                            ),
+                        )
+                else:
+                    commit = commit_artifact(
+                        self._repository,
+                        self._config,
+                        job.context,
+                        artifact_key=job.output,
+                        artifact_format=ArtifactFormat.PARQUET,
+                        relative_path=relative_path,
+                        parents=artifact_parents(
+                            self._config,
+                            tuple(
+                                (input_key, f"runs/{run_id.value}/{dependency_job_id.value}")
+                                for input_key, dependency_job_id in zip(
+                                    job.inputs, job.dependencies, strict=True
+                                )
+                            ),
+                            source_inventory_fingerprint=source_fingerprint,
+                        ),
+                        payload=FilePayload(source_file=str(payload.staged_path)),
+                        source_inventory_fingerprint=source_fingerprint,
                     )
-                manifest_commit = commit_artifact(
-                    self._repository,
-                    self._config,
-                    job.context,
-                    artifact_key=manifest_key,
-                    artifact_format=ArtifactFormat.JSON,
-                    relative_path=manifest_relative_path,
-                    parents=artifact_parents(
-                        self._config, (job.output,), source_inventory_fingerprint=source_fingerprint
-                    ),
-                    payload=BytesPayload(payload_bytes=split_manifest_payload),
-                    source_inventory_fingerprint=source_fingerprint,
-                )
-                if not manifest_commit.success:
-                    return StageJobOutcome.failed(
-                        job_id=job.job_id,
-                        stage=job.stage,
-                        error_message=manifest_commit.error_message or "split manifest commit failed",
+                    if not commit.success:
+                        return StageJobOutcome.failed(
+                            job_id=job.job_id,
+                            stage=job.stage,
+                            error_message=commit.error_message or "materialized artifact commit failed",
+                        )
+
+                if not companion_reuse[manifest_key].can_reuse:
+                    manifest_commit = commit_artifact(
+                        self._repository,
+                        self._config,
+                        job.context,
+                        artifact_key=manifest_key,
+                        artifact_format=ArtifactFormat.JSON,
+                        relative_path=manifest_relative_path,
+                        parents=artifact_parents(
+                            self._config,
+                            ((job.output, relative_path),),
+                            source_inventory_fingerprint=source_fingerprint
+                        ),
+                        payload=BytesPayload(payload_bytes=encode_split_manifest(split_evidence.manifest)),
+                        source_inventory_fingerprint=source_fingerprint,
                     )
-                readiness_commit = commit_artifact(
-                    self._repository,
-                    self._config,
-                    job.context,
-                    artifact_key=readiness_key,
-                    artifact_format=ArtifactFormat.JSON,
-                    relative_path=readiness_relative_path,
-                    parents=artifact_parents(self._config, (job.output,), source_inventory_fingerprint=source_fingerprint),
-                    payload=BytesPayload(payload_bytes=readiness.encode()),
-                    source_inventory_fingerprint=source_fingerprint,
-                )
-                if not readiness_commit.success:
-                    return StageJobOutcome.failed(
-                        job_id=job.job_id,
-                        stage=job.stage,
-                        error_message=readiness_commit.error_message or "dataset readiness commit failed",
+                    if not manifest_commit.success:
+                        return StageJobOutcome.failed(
+                            job_id=job.job_id,
+                            stage=job.stage,
+                            error_message=manifest_commit.error_message or "split manifest commit failed",
+                        )
+                if not companion_reuse[readiness_key].can_reuse:
+                    readiness_commit = commit_artifact(
+                        self._repository,
+                        self._config,
+                        job.context,
+                        artifact_key=readiness_key,
+                        artifact_format=ArtifactFormat.JSON,
+                        relative_path=readiness_relative_path,
+                        parents=artifact_parents(
+                            self._config,
+                            ((job.output, relative_path),),
+                            source_inventory_fingerprint=source_fingerprint
+                        ),
+                        payload=BytesPayload(payload_bytes=readiness.encode()),
+                        source_inventory_fingerprint=source_fingerprint,
                     )
-                preprocessing_commit = commit_artifact(
-                    self._repository,
-                    self._config,
-                    job.context,
-                    artifact_key=preprocessing_key,
-                    artifact_format=ArtifactFormat.JSON,
-                    relative_path=preprocessing_relative_path,
-                    parents=artifact_parents(self._config, (job.output,), source_inventory_fingerprint=source_fingerprint),
-                    payload=BytesPayload(payload_bytes=payload.preprocessing_evidence),
-                    source_inventory_fingerprint=source_fingerprint,
-                )
-                if not preprocessing_commit.success:
-                    return StageJobOutcome.failed(
-                        job_id=job.job_id,
-                        stage=job.stage,
-                        error_message=preprocessing_commit.error_message or "preprocessing evidence commit failed",
+                    if not readiness_commit.success:
+                        return StageJobOutcome.failed(
+                            job_id=job.job_id,
+                            stage=job.stage,
+                            error_message=readiness_commit.error_message or "dataset readiness commit failed",
+                        )
+                if not companion_reuse[preprocessing_key].can_reuse:
+                    preprocessing_commit = commit_artifact(
+                        self._repository,
+                        self._config,
+                        job.context,
+                        artifact_key=preprocessing_key,
+                        artifact_format=ArtifactFormat.JSON,
+                        relative_path=preprocessing_relative_path,
+                        parents=artifact_parents(
+                            self._config,
+                            ((job.output, relative_path),),
+                            source_inventory_fingerprint=source_fingerprint
+                        ),
+                        payload=BytesPayload(payload_bytes=payload.preprocessing_evidence),
+                        source_inventory_fingerprint=source_fingerprint,
                     )
-                if partition_key is not None:
+                    if not preprocessing_commit.success:
+                        return StageJobOutcome.failed(
+                            job_id=job.job_id,
+                            stage=job.stage,
+                            error_message=preprocessing_commit.error_message or "preprocessing evidence commit failed",
+                        )
+                if partition_key is not None and not companion_reuse[partition_key].can_reuse:
                     if payload.partition_evidence is None:
                         return StageJobOutcome.failed(
                             job_id=job.job_id,
@@ -257,7 +323,11 @@ class DatasetMaterializationStageHandler:
                         artifact_key=partition_key,
                         artifact_format=ArtifactFormat.JSON,
                         relative_path=partition_relative_path,
-                        parents=artifact_parents(self._config, (job.output,), source_inventory_fingerprint=source_fingerprint),
+                        parents=artifact_parents(
+                            self._config,
+                            ((job.output, relative_path),),
+                            source_inventory_fingerprint=source_fingerprint
+                        ),
                         payload=BytesPayload(payload_bytes=payload.partition_evidence),
                         source_inventory_fingerprint=source_fingerprint,
                     )

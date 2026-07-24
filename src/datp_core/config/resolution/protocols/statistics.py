@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datp_core.analysis.statistics.models import StatisticalMethod, StatisticalProfileRecord
 from datp_core.config.authored.protocols import AuthoredProtocolsConfig
+from datp_core.config.statistical_profiles import StatisticalMethod, StatisticalProfileRecord
 from datp_core.core.identifiers import StatisticalProfileId
 from datp_core.core.numbers import PositiveInt, Probability
 

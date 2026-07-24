@@ -10,7 +10,8 @@ from datp_core.analysis.selection.models import DittoSelectionResult, FederatedP
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId, RunId
-from datp_core.experiments.identity import IdentityBuilder, execution_run_id
+from datp_core.experiments.identity import IdentityBuilder
+from datp_core.experiments.identity.run_locator import resolve_experiment_run_id
 from datp_core.pipeline.stages.context import StageJobContext
 
 
@@ -50,9 +51,7 @@ def ditto_selection(
     source = config.primary_ditto_selection_experiment()
     context = StageJobContext(experiment_id=source.identifier)
     source_run_id = (
-        run_id
-        if experiment_id == source.identifier
-        else execution_run_id(source.identifier, config.execution_fingerprint.value)
+        run_id if experiment_id == source.identifier else resolve_experiment_run_id(config, source.identifier)
     )
     relative_path = f"runs/{source_run_id.value}/{IdentityBuilder.ditto_selection_job_id(context).value}"
     key = IdentityBuilder.ditto_selection_key(context)

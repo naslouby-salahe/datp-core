@@ -2,10 +2,8 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
-from statistics import mean
 
 from datp_core.core.identifiers import ClientId
 

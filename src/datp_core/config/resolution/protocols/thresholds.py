@@ -3,6 +3,8 @@ discriminated union into their domain records."""
 
 from __future__ import annotations
 
+from typing import Any
+
 from datp_core.config.authored.protocols import AuthoredProtocolsConfig
 from datp_core.config.authored.protocols.thresholds import (
     CalibrationFallbackPolicyConfig,
@@ -97,10 +99,10 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             standardization=ClusterStandardizationConfiguration.from_config(cfg.standardization),
             client_ordering_before_fit=cfg.client_ordering_before_fit,
             kmeans=KMeansConfiguration(
-                random_seed=cfg.clustering["random_seed"],
-                initialization_runs=cfg.clustering["initialization_runs"],
-                maximum_iterations=cfg.clustering["maximum_iterations"],
-                convergence_tolerance=cfg.clustering["convergence_tolerance"],
+                random_seed=int(cfg.clustering["random_seed"]),
+                initialization_runs=int(cfg.clustering["initialization_runs"]),
+                maximum_iterations=int(cfg.clustering["maximum_iterations"]),
+                convergence_tolerance=float(cfg.clustering["convergence_tolerance"]),
             ),
             label_canonicalization=cfg.label_canonicalization,
             insufficient_eligible_clients_behavior=cfg.insufficient_eligible_clients_behavior,
@@ -109,7 +111,7 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             threshold_ownership=cfg.threshold_ownership,
         )
     if isinstance(cfg, (LocalGlobalShrinkagePolicyConfig, CalibrationFallbackPolicyConfig)):
-        common: dict[str, object] = {
+        common: dict[str, Any] = {
             "policy": cfg.policy,
             "quantile": cfg.quantile,
             "quantile_estimator": cfg.quantile_estimator,
@@ -159,7 +161,9 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             client_accumulation_order=cfg.client_accumulation_order,
             zero_total_count_behavior=cfg.zero_total_count_behavior,
             candidate_grid=CandidateGrid.from_config(cfg.candidate_grid),
-            exceedance_exchange=ExceedanceExchange.from_config(cfg.exceedance_exchange),
+            exceedance_exchange=ExceedanceExchange.from_config(
+                {k: tuple(v) if isinstance(v, list) else v for k, v in cfg.exceedance_exchange.items()}
+            ),
             selection=SelectionRules.from_config(cfg.selection),
             required_diagnostics=tuple(cfg.required_diagnostics),
             threshold_ownership=cfg.threshold_ownership,

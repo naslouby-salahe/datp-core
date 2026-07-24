@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Protocol
 
 from datp_core.core.identifiers import DatasetId
-from datp_core.data.contracts.enums import AdapterKind
 from datp_core.data.contracts.dataset import DatasetSetup, ResolvedDataset
+from datp_core.data.contracts.enums import AdapterKind
 from datp_core.data.contracts.materialization import DatasetMaterialization, PartitionSeedContract
 from datp_core.experiments import SweepConditionRecord
 

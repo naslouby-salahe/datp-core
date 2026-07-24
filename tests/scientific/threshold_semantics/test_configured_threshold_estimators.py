@@ -4,9 +4,9 @@ from datp_core.analysis.operations.resource_cost import threshold_exchange_cost
 from datp_core.app import _build_estimator_registry, build_application
 from datp_core.core.identifiers import ClientId, PopulationId, ThresholdPolicyId
 from datp_core.thresholding.estimation.construction import ConstructThresholdsUseCase
+from datp_core.thresholding.estimation.models import ThresholdSet
 from datp_core.thresholding.policies.common import BenignCalibrationScores
 from datp_core.thresholding.policies.enums import ConformalAttainabilityStatus
-from datp_core.thresholding.estimation.models import ThresholdSet
 
 
 @pytest.fixture

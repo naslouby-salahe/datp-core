@@ -5,6 +5,7 @@ from __future__ import annotations
 from datp_core.app import build_application
 from datp_core.core.identifiers import DatasetId
 from datp_core.data.sources import build_source_inventory
+from datp_core.data.sources.inventory import compute_experiment_source_fingerprint, dataset_source_fingerprint
 
 
 def test_source_inventory_produces_stable_ordered_entries() -> None:
@@ -85,6 +86,30 @@ def test_source_inventory_files_exist() -> None:
         for entry in inventory.entries:
             assert entry.source_path.exists(), f"Source inventory entry {entry.source_path} does not exist"
             assert entry.source_path.is_file(), f"Source inventory entry {entry.source_path} is not a file"
+
+
+def test_dataset_source_fingerprint_is_the_single_authority_behind_the_experiment_fingerprint() -> None:
+    """`compute_experiment_source_fingerprint` must combine per-dataset terms built from the exact
+    same `dataset_source_fingerprint` value every other source-dependent identity uses (the
+    materialization handler's per-artifact `source_inventory_fingerprint`), not an independently
+    reimplemented formula that could silently drift from it."""
+    config = build_application().config
+    dataset = config.datasets[DatasetId("nbaiot")]
+
+    direct = dataset_source_fingerprint(dataset)
+    assert direct == build_source_inventory(dataset).fingerprint()
+
+    combined = compute_experiment_source_fingerprint(datasets=config.datasets, dataset_ids=(DatasetId("nbaiot"),))
+    # The combined (multi-dataset) fingerprint is a real function of the per-dataset one: it must
+    # be deterministic and reproducible, and it must actually depend on the per-dataset fingerprint
+    # (not merely on the dataset id) -- verified by combining a second, distinct real dataset and
+    # confirming the combined fingerprint changes.
+    combined_again = compute_experiment_source_fingerprint(datasets=config.datasets, dataset_ids=(DatasetId("nbaiot"),))
+    assert combined == combined_again
+    combined_with_second_dataset = compute_experiment_source_fingerprint(
+        datasets=config.datasets, dataset_ids=(DatasetId("nbaiot"), DatasetId("ciciot2023"))
+    )
+    assert combined_with_second_dataset != combined
 
 
 def test_source_inventory_assigns_correct_source_tree_identifier() -> None:

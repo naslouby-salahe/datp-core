@@ -10,10 +10,10 @@ from pathlib import Path
 from datp_core.data.sources.models import (
     CsvValidationResult,
     LabeledSourceRow,
+    LabeledSourceRowValidation,
     SourceRow,
     SourceRowFailure,
     SourceRowValidation,
-    LabeledSourceRowValidation,
 )
 
 

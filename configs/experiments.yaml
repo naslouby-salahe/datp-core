@@ -131,6 +131,9 @@ experiments:
           cluster_k3_recovery_fraction: 0.52
           local_p10_macro_f1: 0.300
           shared_p10_macro_f1: 0.344
+        expected_metric: cv_fpr
+        expected_first_threshold_policy: shared_mean_p95
+        expected_second_threshold_policy: local_p95
         interval_width_tolerance_multiplier: 1.20
         floating_point_tolerance: { absolute: 1.0e-9, relative: 1.0e-6 }
         failure_reasons: [material_movement_toward_zero, interval_too_wide, configuration_or_provenance_mismatch]

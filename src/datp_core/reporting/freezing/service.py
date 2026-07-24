@@ -7,6 +7,7 @@ from collections.abc import Sequence
 from datetime import UTC, datetime
 
 from datp_core.artifacts.identity import ArtifactKey
+from datp_core.config.report_profiles import ReportColumnRecord, ReportProfileRecord
 from datp_core.experiments import ExperimentRecord
 from datp_core.reporting.freezing.validation import (
     _decode_result_list,
@@ -15,7 +16,6 @@ from datp_core.reporting.freezing.validation import (
     validate_seed_completeness,
     validate_source_artifacts,
 )
-from datp_core.reporting.profiles.models import ReportColumnRecord, ReportProfileRecord
 
 
 def freeze_result_family(
@@ -59,7 +59,7 @@ def freeze_result_family(
         ],
         "statistical_results": results,
     }
-    return json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True, allow_nan=False).encode("utf-8")
 
 
 def _profile_payload(profile: ReportProfileRecord) -> dict[str, object]:

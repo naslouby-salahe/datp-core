@@ -8,7 +8,7 @@ from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.data.contracts.enums import SplitMethod
 from datp_core.experiments.catalogue.evaluations import RecalibrationMode
 from datp_core.experiments.catalogue.models import EvidenceRole, ExperimentRecord
-from datp_core.experiments.catalogue.sweeps import ConditionSweepRecord, ValueSweepRecord
+from datp_core.experiments.catalogue.sweeps import ConditionSweepRecord
 from datp_core.experiments.identity.builder import IdentityBuilder
 from datp_core.experiments.planning.sweeps import (
     _evaluation_sweep_values,

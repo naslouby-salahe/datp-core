@@ -35,6 +35,7 @@ class PreflightStageHandler:
             ensure_ascii=False,
             sort_keys=True,
             separators=(",", ":"),
+            allow_nan=False,
         ).encode("utf-8")
         relative_path = f"runs/{run_id.value}/{job.job_id.value}"
         reuse = self._repository.assess_reuse(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datp_core.config.authored.protocols.reporting import ReportDefaultsConfig, ReportProfileConfig
-from datp_core.reporting.profiles.models import ReportColumnRecord, ReportDefaultsRecord, ReportProfileRecord
+from datp_core.config.report_profiles import ReportColumnRecord, ReportDefaultsRecord, ReportProfileRecord
 
 
 def resolve_report_defaults(cfg: ReportDefaultsConfig) -> ReportDefaultsRecord:

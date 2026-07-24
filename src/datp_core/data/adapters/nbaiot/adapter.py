@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from datp_core.data.adapters.nbaiot.models import NBaIoTMaterializedRow
 from datp_core.data.adapters.nbaiot.parquet import (
     consolidate_nbaiot_parquet_sources,
     write_nbaiot_source_parquet,

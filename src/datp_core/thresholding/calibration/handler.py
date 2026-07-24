@@ -62,9 +62,10 @@ class CalibrationSubsamplingStageHandler:
             relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
         ).can_reuse:
             return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
-        calibration = self._repository.read(
+        calibration_relative_path = (
             f"runs/{run_id.value}/{IdentityBuilder.calibration_score_job_id(score_context(context)).value}"
         )
+        calibration = self._repository.read(calibration_relative_path)
         if not calibration.found or calibration.payload_bytes is None:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Calibration score artifact is unavailable"
@@ -94,7 +95,7 @@ class CalibrationSubsamplingStageHandler:
             artifact_key=job.output,
             artifact_format=ArtifactFormat.PARQUET,
             relative_path=relative_path,
-            parents=artifact_parents(self._config, job.inputs),
+            parents=artifact_parents(self._config, ((job.inputs[0], calibration_relative_path),)),
             payload=BytesPayload(payload_bytes=payload.getvalue()),
         )
         if not commit.success:

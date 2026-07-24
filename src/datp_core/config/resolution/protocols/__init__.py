@@ -7,9 +7,13 @@ from typing import cast
 
 from attrs import define
 
-from datp_core.analysis.statistics.models import NestedReplicatePolicyRecord, StatisticalProfileRecord
 from datp_core.artifacts.manifest import ArtifactIdentityRecord
 from datp_core.config.authored.protocols import AuthoredProtocolsConfig
+from datp_core.config.operational_contracts import (
+    CommunicationEstimationContractRecord,
+    OperationalInputsRecord,
+)
+from datp_core.config.report_profiles import ReportDefaultsRecord, ReportProfileRecord
 from datp_core.config.resolution.protocols.artifacts import resolve_artifact_identity
 from datp_core.config.resolution.protocols.evaluation import (
     resolve_eligibility_policies,
@@ -40,6 +44,7 @@ from datp_core.config.resolution.protocols.training import (
     resolve_seed_cohorts,
     resolve_training_profiles,
 )
+from datp_core.config.statistical_profiles import NestedReplicatePolicyRecord, StatisticalProfileRecord
 from datp_core.core.identifiers import (
     CheckpointProfileId,
     EligibilityPolicyId,
@@ -58,17 +63,12 @@ from datp_core.evaluation import (
     MetricBundleRecord,
     MetricDefinitionsRecord,
 )
-from datp_core.analysis.operations.models import (
-    CommunicationEstimationContractRecord,
-    OperationalInputsRecord,
-)
 from datp_core.experiments import ResultTypeRecord
 from datp_core.learning.contracts.architecture import ModelArchitectureRecord
 from datp_core.learning.contracts.checkpoints import CheckpointProfileRecord
 from datp_core.learning.contracts.optimization import BatchingRecord, OptimizerRecord
 from datp_core.learning.contracts.seeds import SeedCohortRecord
 from datp_core.learning.contracts.training import TrainingProfileRecord
-from datp_core.reporting.profiles.models import ReportDefaultsRecord, ReportProfileRecord
 from datp_core.thresholding.policies.common import QuantileEstimatorRecord, ThresholdPolicyDefaultsRecord
 from datp_core.thresholding.policies.union import ThresholdPolicyRecord
 

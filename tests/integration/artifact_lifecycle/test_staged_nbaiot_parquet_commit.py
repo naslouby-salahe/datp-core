@@ -3,6 +3,7 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.app import build_application
+from datp_core.artifacts.codecs.manifest import CURRENT_ARTIFACT_SCHEMA_VERSION
 from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
 from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, FilePayload
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
@@ -44,7 +45,7 @@ def test_staged_nbaiot_parquet_consolidation_commits_as_a_frozen_artifact(tmp_pa
             execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
             relative_path="datasets/nbaiot",
             parents=(),
-            schema_version=1,
+            schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
             creation_timestamp=1.0,
             environment_identity="test",
         ),

@@ -13,9 +13,10 @@ from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.hashing import Checksum
 from datp_core.core.seeding import Seed
+from datp_core.pipeline.artifacts.lineage import verify_parent_lineage
 from datp_core.pipeline.stages.context import StageJobContext
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 
 
 def _default_clock() -> float:
@@ -35,6 +36,9 @@ def commit_artifact(
     clock: Callable[[], float] = _default_clock,
     source_inventory_fingerprint: Checksum | None = None,
 ) -> ArtifactCommitResult:
+    lineage_error = verify_parent_lineage(repository, parents)
+    if lineage_error is not None:
+        return ArtifactCommitResult(success=False, error_message=lineage_error)
     return repository.commit(
         ArtifactCommitRequest(
             metadata=ArtifactCommitMetadata(

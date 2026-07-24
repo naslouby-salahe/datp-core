@@ -32,9 +32,8 @@ class ReportGenerationStageHandler:
             relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
         ).can_reuse:
             return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
-        result_freeze = self._repository.read(
-            f"runs/{run_id.value}/{IdentityBuilder.result_freeze_job_id(job.context).value}"
-        )
+        result_freeze_relative_path = f"runs/{run_id.value}/{IdentityBuilder.result_freeze_job_id(job.context).value}"
+        result_freeze = self._repository.read(result_freeze_relative_path)
         if not result_freeze.found or result_freeze.payload_bytes is None:
             return StageJobOutcome.failed(
                 job_id=job.job_id, stage=job.stage, error_message="Result-freeze manifest is unavailable"
@@ -50,7 +49,7 @@ class ReportGenerationStageHandler:
             artifact_key=job.output,
             artifact_format=ArtifactFormat.JSON,
             relative_path=relative_path,
-            parents=artifact_parents(self._config, job.inputs),
+            parents=artifact_parents(self._config, ((job.inputs[0], result_freeze_relative_path),)),
             payload=BytesPayload(payload_bytes=payload),
         )
         if not commit.success:

@@ -69,6 +69,9 @@ class AnchorEquivalenceAnalysisConfig(_AnalysisSpecBase):
     interval_width_tolerance_multiplier: float
     floating_point_tolerance: dict[str, float]
     historical_reference: dict[str, float | str]
+    expected_metric: str
+    expected_first_threshold_policy: str
+    expected_second_threshold_policy: str
     statistical_fallback_requirements: list[str]
     failure_reasons: list[str]
     downstream_blocking_behavior: str

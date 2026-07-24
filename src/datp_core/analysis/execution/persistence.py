@@ -13,10 +13,10 @@ from datp_core.analysis.result import AnalysisResult, analysis_result_to_payload
 from datp_core.analysis.statistics.multiplicity import holm_adjust_p_values
 from datp_core.artifacts.identity import ArtifactFormat
 from datp_core.artifacts.payloads import BytesPayload
+from datp_core.artifacts.repository.models import ArtifactCommitResult
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import RunId
-from datp_core.artifacts.repository.models import ArtifactCommitResult
 from datp_core.pipeline.artifacts.commit import commit_artifact
 from datp_core.pipeline.artifacts.lineage import artifact_parents
 from datp_core.pipeline.stages.jobs import StageJob
@@ -53,6 +53,7 @@ def persist_analysis_results(
         [analysis_result_to_payload(result) for result in apply_holm_correction(results)],
         separators=(",", ":"),
         sort_keys=True,
+        allow_nan=False,
     ).encode("utf-8")
     return commit_artifact(
         repository,
@@ -61,7 +62,13 @@ def persist_analysis_results(
         artifact_key=job.output,
         artifact_format=ArtifactFormat.JSON,
         relative_path=relative_path,
-        parents=artifact_parents(config, job.inputs),
+        parents=artifact_parents(
+            config,
+            tuple(
+                (input_key, f"runs/{run_id.value}/{dependency.value}")
+                for input_key, dependency in zip(job.inputs, job.dependencies, strict=True)
+            ),
+        ),
         payload=BytesPayload(payload_bytes=payload),
     )
 

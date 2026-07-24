@@ -82,4 +82,4 @@ class DirichletPartition:
             "retry_attempts_used": self.retry_attempt,
             "source_domains": list(self.source_domains),
         }
-        return json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        return json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")

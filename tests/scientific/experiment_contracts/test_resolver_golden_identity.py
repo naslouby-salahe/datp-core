@@ -11,19 +11,19 @@ from datp_core.core.identifiers import DatasetId
 
 
 def test_scientific_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
-    # Golden hash updated after four str-to-enum typing tightenings: `recalibration_mode`
-    # (`EvaluationSpecRecord`/`StageJobContext`), `ClusterThresholdPolicyRecord.aggregation`,
-    # every `*ThresholdPolicyRecord.threshold_ownership`, and `StatisticalProfileRecord.method`
-    # (now `StatisticalMethod`) -- an enum leaf canonicalizes differently from a plain string in
-    # `canonicalize_value` (core/hashing.py). The underlying authored values are unchanged; only
-    # their resolved Python representation is now a validated enum instead of an unvalidated string.
+    # Golden hash updated after adding `expected_metric`, `expected_first_threshold_policy`, and
+    # `expected_second_threshold_policy` to the `anchor_equivalence` analysis config, so
+    # `verified_configuration_and_provenance` can be derived from the reproduced result's actual
+    # metric/comparator identity instead of a hardcoded `True` (see
+    # `analysis/validation/anchor_equivalence.py`). These are real new scientific values, so the
+    # fingerprint is expected to change.
     assert _resolved.scientific_fingerprint.value == (
-        "beef00a0b7b9575fde37292dc081fdc81d019600c1d28591c2c68a8f63b50b3a"
+        "9e5734bbe095a68210e9c97c098d24d1488156acf9e7b4c6ec7f7b76cc5c2c53"
     )
 
 
 def test_execution_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
-    assert _resolved.execution_fingerprint.value == ("7ee439d1a1a220054bd8e3962256f4af1356de8d98a4e3748bf5b79c0962cba2")
+    assert _resolved.execution_fingerprint.value == ("77b49c53e066a731e61176578585b949bb7767f12cafdf6b5a61860e28ce6d4f")
 
 
 def test_registry_cardinality(_resolved: ResolvedProjectConfiguration) -> None:

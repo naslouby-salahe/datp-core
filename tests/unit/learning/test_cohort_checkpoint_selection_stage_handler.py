@@ -13,6 +13,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from datp_core.app import DatpApplication, build_application
+from datp_core.artifacts.codecs.manifest import CURRENT_ARTIFACT_SCHEMA_VERSION
 from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
 from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
@@ -34,6 +35,21 @@ def _cohort_job_and_run_id(app: DatpApplication) -> tuple[StageJob, RunId]:
     return job, run_id
 
 
+def _commit_seed_checkpoint(
+    repository: AtomicArtifactRepository,
+    app: DatpApplication,
+    run_id: RunId,
+    dependency_value: str,
+    checkpoint_key: ArtifactKey,
+) -> None:
+    """Commit a synthetic training checkpoint so parent-lineage verification passes."""
+    relative_path = f"runs/{run_id.value}/{dependency_value}"
+    result = repository.commit(
+        _commit_request(app, relative_path, checkpoint_key, b"{}", ArtifactFormat.SAFETENSORS)
+    )
+    assert result.success, result.error_message
+
+
 def _commit_seed_selection(
     repository: AtomicArtifactRepository,
     app: DatpApplication,
@@ -52,17 +68,18 @@ def _commit_seed_selection(
 
 
 def _commit_request(
-    app: DatpApplication, relative_path: str, artifact_key: ArtifactKey, payload: bytes
+    app: DatpApplication, relative_path: str, artifact_key: ArtifactKey, payload: bytes,
+    artifact_format: ArtifactFormat = ArtifactFormat.JSON,
 ) -> ArtifactCommitRequest:
     return ArtifactCommitRequest(
         metadata=ArtifactCommitMetadata(
             artifact_key=artifact_key,
-            artifact_format=ArtifactFormat.JSON,
+            artifact_format=artifact_format,
             scientific_fingerprint=app.config.scientific_fingerprint,
             execution_fingerprint=app.config.execution_fingerprint,
             relative_path=relative_path,
             parents=(),
-            schema_version=1,
+            schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
             creation_timestamp=1.0,
             environment_identity="test",
         ),
@@ -83,6 +100,7 @@ def test_cohort_selection_picks_the_round_with_the_lowest_cross_seed_mean_loss(t
         for seed_index in range(10)
     ]
     for dependency, checkpoint_key, losses in zip(job.dependencies, job.inputs, per_seed_losses, strict=True):
+        _commit_seed_checkpoint(repository, app, run_id, dependency.value, checkpoint_key)
         _commit_seed_selection(repository, app, run_id, dependency.value, checkpoint_key, losses)
 
     outcome = CohortCheckpointSelectionStageHandler(app.config, repository).execute(job, run_id)
@@ -105,6 +123,7 @@ def test_cohort_selection_reuses_a_frozen_result_without_recomputation(tmp_path:
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
     per_seed_losses = [[(round_number, 1.0) for round_number in _SCHEDULED_ROUNDS] for _ in range(10)]
     for dependency, checkpoint_key, losses in zip(job.dependencies, job.inputs, per_seed_losses, strict=True):
+        _commit_seed_checkpoint(repository, app, run_id, dependency.value, checkpoint_key)
         _commit_seed_selection(repository, app, run_id, dependency.value, checkpoint_key, losses)
     handler = CohortCheckpointSelectionStageHandler(app.config, repository)
     first = handler.execute(job, run_id)
@@ -121,7 +140,10 @@ def test_cohort_selection_fails_typed_when_a_seed_dependency_is_missing_evidence
     app = build_application()
     job, run_id = _cohort_job_and_run_id(app)
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
-    # Commit evidence for only the first 9 of 10 seeds -- the last dependency is left unavailable.
+    # Commit checkpoints for all 10 seeds so parent-lineage verification passes,
+    # but commit selection evidence for only the first 9 — the last is left unavailable.
+    for dependency, checkpoint_key in zip(job.dependencies, job.inputs, strict=True):
+        _commit_seed_checkpoint(repository, app, run_id, dependency.value, checkpoint_key)
     per_seed_losses = [[(round_number, 1.0) for round_number in _SCHEDULED_ROUNDS] for _ in range(9)]
     for dependency, checkpoint_key, losses in zip(job.dependencies[:9], job.inputs[:9], per_seed_losses, strict=True):
         _commit_seed_selection(repository, app, run_id, dependency.value, checkpoint_key, losses)

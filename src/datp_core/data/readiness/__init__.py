@@ -1,5 +1,6 @@
 """Dataset readiness: audit, materialized assessment, and gate evaluation."""
 
+from datp_core.data.readiness.gates import evaluate_readiness_gates
 from datp_core.data.readiness.models import (
     DatasetAuditIssue,
     DatasetAuditReport,
@@ -7,7 +8,6 @@ from datp_core.data.readiness.models import (
     SourceTreeAudit,
 )
 from datp_core.data.readiness.source_audit import AuditDatasetUseCase
-from datp_core.data.readiness.gates import evaluate_readiness_gates
 
 __all__ = [
     "AuditDatasetUseCase",

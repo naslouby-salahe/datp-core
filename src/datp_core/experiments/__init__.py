@@ -1,16 +1,5 @@
 """Experiment definitions, sweeps, planning, identity, and execution."""
 
-from datp_core.experiments.catalogue.models import (
-    CalibrationSubsetRecord,
-    CapabilityRequirementRecord,
-    EligibilityGateRecord,
-    EvidenceRole,
-    ExperimentRecord,
-    PopulationRecord,
-    PrerequisiteSpecRecord,
-    ResultTypeRecord,
-    RunRequirement,
-)
 from datp_core.experiments.catalogue.analyses import (
     AbsorptionAnalysisRecord,
     AlertBurdenAnalysisRecord,
@@ -32,6 +21,17 @@ from datp_core.experiments.catalogue.analyses import (
 from datp_core.experiments.catalogue.evaluations import (
     EvaluationSpecRecord,
     RecalibrationMode,
+)
+from datp_core.experiments.catalogue.models import (
+    CalibrationSubsetRecord,
+    CapabilityRequirementRecord,
+    EligibilityGateRecord,
+    EvidenceRole,
+    ExperimentRecord,
+    PopulationRecord,
+    PrerequisiteSpecRecord,
+    ResultTypeRecord,
+    RunRequirement,
 )
 from datp_core.experiments.catalogue.sweeps import (
     ConditionSweepRecord,

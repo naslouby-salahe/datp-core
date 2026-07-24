@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datp_core.analysis.statistics.models import NestedReplicatePolicyRecord
 from datp_core.config.authored.protocols import AuthoredProtocolsConfig
 from datp_core.config.authored.protocols.evaluation import (
     EvaluationResultContractConfig,
     NestedReplicatePolicyConfig,
     ResultTypeConfig,
 )
+from datp_core.config.statistical_profiles import NestedReplicatePolicyRecord
 from datp_core.core.identifiers import EligibilityPolicyId
 from datp_core.core.numbers import PositiveInt
 from datp_core.data.contracts import EligibilityFallbackRecord, EligibilityPolicyRecord

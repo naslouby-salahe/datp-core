@@ -33,7 +33,6 @@ from datp_core.learning.contracts.enums import (
     TrainingProfileKind,
 )
 from datp_core.learning.contracts.training import (
-    FederationProfileRecord,
     TrainingProfileRecord,
 )
 

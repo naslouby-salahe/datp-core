@@ -8,11 +8,10 @@ import torch
 from datp_core.learning.model.autoencoder import DynamicDenseAutoencoder
 from datp_core.learning.model.determinism import (
     derive_model_initialization_seed,
-    set_deterministic_seeds,
 )
 from datp_core.learning.model.device import require_cuda_training_device
-from datp_core.learning.training.local import fedprox_objective
 from datp_core.learning.training.federated import federated_train_autoencoder
+from datp_core.learning.training.local import fedprox_objective
 from datp_core.learning.training.personalization import ditto_train_autoencoder
 
 

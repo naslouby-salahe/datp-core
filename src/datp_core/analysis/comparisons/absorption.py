@@ -15,8 +15,9 @@ from datp_core.analysis.comparisons.models import (
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
-from datp_core.experiments.identity import IdentityBuilder, execution_run_id
 from datp_core.experiments import AbsorptionAnalysisRecord, ExperimentRecord
+from datp_core.experiments.identity import IdentityBuilder
+from datp_core.experiments.identity.run_locator import resolve_experiment_run_id
 from datp_core.pipeline.stages.context import StageJobContext
 
 _MATERIALITY_RULE_PATTERN = re.compile(r"^absolute_denominator_at_least_(?P<value>\d+(?:\.\d+)?(?:e[+-]?\d+)?)$")
@@ -82,7 +83,7 @@ def analyze_absorption(
         raise ValueError(f"Absorption analysis '{analysis.label}' lacks its stress-test source")
     reference_experiment, reference_label = _absorption_reference(analysis)
     _validate_absorption_contract(analysis, experiment, reference_experiment, config=config)
-    reference_run = execution_run_id(reference_experiment, config.execution_fingerprint.value)
+    reference_run = resolve_experiment_run_id(config, reference_experiment)
     reference_job_context = StageJobContext(experiment_id=reference_experiment)
     payload = json.loads(
         read_artifact_bytes(

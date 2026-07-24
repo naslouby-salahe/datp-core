@@ -34,6 +34,7 @@ def render_frozen_report(frozen_manifest: bytes) -> bytes:
         },
         separators=(",", ":"),
         sort_keys=True,
+        allow_nan=False,
     ).encode("utf-8")
 
 

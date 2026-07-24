@@ -16,7 +16,11 @@ from datp_core.core.paths import RelativePath
 from datp_core.data.contracts.enums import AdapterKind
 from datp_core.data.contracts.features import DatasetFieldSchemaRecord
 from datp_core.data.contracts.materialization import DatasetMaterialization, SetupClientConstructionRecord
-from datp_core.data.contracts.sources import DatasetInspectionContract, DatasetSourceLayoutContractRecord, SourceContractRecord
+from datp_core.data.contracts.sources import (
+    DatasetInspectionContract,
+    DatasetSourceLayoutContractRecord,
+    SourceContractRecord,
+)
 
 
 @define(frozen=True, slots=True, kw_only=True)

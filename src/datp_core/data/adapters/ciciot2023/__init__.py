@@ -1,6 +1,13 @@
 """CICIoT2023 adapter."""
 
 from datp_core.data.adapters.ciciot2023.adapter import CICIoT2023Adapter
+from datp_core.data.adapters.ciciot2023.identity import (
+    materialize_ciciot2023_merged_identity,
+    materialize_ciciot2023_merged_source_row,
+)
+from datp_core.data.adapters.ciciot2023.index import (
+    write_ciciot2023_materialized_parquet,
+)
 from datp_core.data.adapters.ciciot2023.models import (
     CICIoT2023DeduplicationResult,
     CICIoT2023MaterializationReport,
@@ -8,15 +15,8 @@ from datp_core.data.adapters.ciciot2023.models import (
     CICIoT2023RowIdentity,
     CICIoT2023SplitRows,
 )
-from datp_core.data.adapters.ciciot2023.identity import (
-    materialize_ciciot2023_merged_identity,
-    materialize_ciciot2023_merged_source_row,
-)
 from datp_core.data.adapters.ciciot2023.splitting import (
     canonicalize_and_split_ciciot2023_rows,
-)
-from datp_core.data.adapters.ciciot2023.index import (
-    write_ciciot2023_materialized_parquet,
 )
 
 __all__ = [

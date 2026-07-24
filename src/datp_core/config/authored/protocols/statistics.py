@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from pydantic import model_validator
 
-from datp_core.analysis.statistics.models import BootstrapMethod
 from datp_core.config.authored.base import StrictFrozenConfigModel
+from datp_core.config.statistical_profiles import BootstrapMethod
 
 
 class StatisticalProfileConfig(StrictFrozenConfigModel):

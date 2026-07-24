@@ -2,25 +2,24 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
 from datp_core.core.identifiers import ExperimentId
+from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.manifests.models import SplitManifest
 from datp_core.experiments import EligibilityGateRecord
 
 
 def evaluate_readiness_gates(
     gate_names: tuple[str, ...],
-    gates: Mapping[str, EligibilityGateRecord],
+    gates: TypedDomainRegistry[str, EligibilityGateRecord],
     manifest: SplitManifest,
     experiment_id: ExperimentId,
 ) -> list[str]:
     issues: list[str] = []
     for gate_name in gate_names:
-        gate = gates.get(gate_name)
-        if gate is None:
+        if not gates.contains(gate_name):
             issues.append(f"unknown readiness gate: {gate_name}")
             continue
+        gate = gates.get(gate_name)
         if experiment_id not in gate.applies_to_experiments:
             continue
         candidate_count = len(manifest.client_ids)

@@ -1,5 +1,16 @@
 """Data contracts: resolved dataset contracts, enums, and configuration records."""
 
+from datp_core.data.contracts.dataset import (
+    DatasetSetup,
+    ResolvedDataset,
+    ResolvedDatasetPaths,
+    SourceLayout,
+)
+from datp_core.data.contracts.eligibility import (
+    EligibilityFallbackRecord,
+    EligibilityPolicyRecord,
+    NormalizationStrategyRecord,
+)
 from datp_core.data.contracts.enums import (
     AdapterKind,
     ClientConstructionMethod,
@@ -7,20 +18,6 @@ from datp_core.data.contracts.enums import (
     NormalizationStrategy,
     SplitMembership,
     SplitMethod,
-)
-from datp_core.data.contracts.dataset import (
-    DatasetSetup,
-    ResolvedDataset,
-    ResolvedDatasetPaths,
-    SourceLayout,
-)
-from datp_core.data.contracts.sources import (
-    ConfiguredSourceTree,
-    CrossSourceRelationshipRecord,
-    DatasetInspectionContract,
-    DatasetSourceLayoutContractRecord,
-    DatasetSourceRecord,
-    SourceContractRecord,
 )
 from datp_core.data.contracts.features import (
     CategoricalEncodingRecord,
@@ -37,10 +34,13 @@ from datp_core.data.contracts.materialization import (
     PartitionSeedContract,
     SetupClientConstructionRecord,
 )
-from datp_core.data.contracts.eligibility import (
-    EligibilityFallbackRecord,
-    EligibilityPolicyRecord,
-    NormalizationStrategyRecord,
+from datp_core.data.contracts.sources import (
+    ConfiguredSourceTree,
+    CrossSourceRelationshipRecord,
+    DatasetInspectionContract,
+    DatasetSourceLayoutContractRecord,
+    DatasetSourceRecord,
+    SourceContractRecord,
 )
 
 __all__ = [

@@ -33,10 +33,9 @@ from datp_core.data.materialization import (
     DatasetAdapterRegistry,
     DatasetMaterializationStageHandler,
 )
-from datp_core.experiments.execution import PreflightStageHandler
 from datp_core.data.readiness import AuditDatasetUseCase
 from datp_core.evaluation.execution import OperatingPointEvaluationStageHandler
-from datp_core.experiments.execution import ExecuteExperimentUseCase
+from datp_core.experiments.execution import ExecuteExperimentUseCase, PreflightStageHandler
 from datp_core.learning.checkpoints.handler import CohortCheckpointSelectionStageHandler
 from datp_core.learning.scoring.handler import ScoreGenerationStageHandler
 from datp_core.learning.training.handler import ModelTrainingStageHandler

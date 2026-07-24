@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from attrs import define
 
-from datp_core.core.identifiers import MetricBundleId
-
 
 @define(frozen=True, slots=True, kw_only=True)
 class MetricFormulaRecord:

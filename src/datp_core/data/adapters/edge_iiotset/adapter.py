@@ -113,5 +113,7 @@ class EdgeIIoTsetAdapter:
         return MaterializationResult(
             staged_path=payload_file,
             row_count=len(rows),
-            preprocessing_evidence=json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode(),
+            preprocessing_evidence=json.dumps(
+                evidence, sort_keys=True, separators=(",", ":"), allow_nan=False
+            ).encode(),
         )

@@ -63,4 +63,5 @@ def encode_split_manifest(manifest: SplitManifest) -> bytes:
         ensure_ascii=False,
         separators=(",", ":"),
         sort_keys=True,
+        allow_nan=False,
     ).encode("utf-8")

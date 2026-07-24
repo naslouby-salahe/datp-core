@@ -10,8 +10,12 @@ from datp_core.data.contracts.dataset import DatasetSetup, ResolvedDataset
 from datp_core.data.contracts.enums import SplitMembership
 from datp_core.data.contracts.sources import ConfiguredSourceTree
 from datp_core.data.manifests.models import MaterializedSplitEvidence
-from datp_core.data.readiness.models import DatasetAuditIssue, DatasetAuditReport, DatasetReadinessReport, SourceTreeAudit
-from datp_core.data.sources.inventory import build_source_inventory
+from datp_core.data.readiness.models import (
+    DatasetAuditIssue,
+    DatasetAuditReport,
+    DatasetReadinessReport,
+    SourceTreeAudit,
+)
 
 
 class AuditDatasetUseCase:

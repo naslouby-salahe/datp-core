@@ -11,17 +11,20 @@ from datp_core.core.hashing import Checksum, Fingerprint
 @define(frozen=True, slots=True, kw_only=True)
 class ArtifactParent:
     parent_key: ArtifactKey
+    parent_relative_path: str
     scientific_fingerprint: Fingerprint
+    execution_fingerprint: Fingerprint
     source_inventory_fingerprint: Checksum | None = None
 
 
 def validate_parent_lineage(artifact_key: ArtifactKey, parents: tuple[ArtifactParent, ...]) -> str | None:
     """Reject self-referential and duplicate parent lineage declarations before any I/O.
 
-    Full ancestor-existence and deep-cycle validation would require a key-to-path artifact
-    index, which does not exist in Phase 1 (callers reference parents by key only, with no
-    resolvable location) -- that is Phase 2/3 artifact-catalog scope. This bounded check still
-    catches the direct, always-invalid cases representable with today's contract.
+    This is the cheap, I/O-free structural check run inside the atomic transaction itself. Real
+    ancestor existence, checksum, and fingerprint verification -- which requires reading the
+    parent's own committed manifest via ``parent_relative_path`` -- is
+    ``pipeline.artifacts.lineage.verify_parent_lineage``, run by ``commit_artifact`` before every
+    commit and before every reuse.
     """
     seen_keys: list[ArtifactKey] = []
     for parent in parents:

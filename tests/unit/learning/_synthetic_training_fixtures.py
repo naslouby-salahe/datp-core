@@ -15,6 +15,7 @@ import numpy as np
 import polars as pl
 from safetensors.torch import save as save_safetensors
 
+from datp_core.artifacts.codecs.manifest import CURRENT_ARTIFACT_SCHEMA_VERSION
 from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
 from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
@@ -130,7 +131,7 @@ def _commit(
                 execution_fingerprint=config.execution_fingerprint,
                 relative_path=relative_path,
                 parents=(),
-                schema_version=1,
+                schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
                 creation_timestamp=1.0,
                 environment_identity="test",
             ),

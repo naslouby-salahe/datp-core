@@ -5,7 +5,6 @@ from __future__ import annotations
 import math
 from random import Random
 
-from datp_core.data.adapters.ciciot2023.identity import materialize_ciciot2023_merged_source_row
 from datp_core.data.adapters.ciciot2023.models import (
     CICIoT2023DeduplicationResult,
     CICIoT2023MaterializedRow,
@@ -13,7 +12,6 @@ from datp_core.data.adapters.ciciot2023.models import (
 )
 from datp_core.data.contracts.enums import SplitMethod
 from datp_core.data.contracts.materialization import DatasetMaterialization
-from datp_core.data.sources.csv import iter_labeled_numeric_csv_source
 
 
 def canonicalize_and_split_ciciot2023_rows(
@@ -86,7 +84,6 @@ def _provenance_key(row: CICIoT2023MaterializedRow) -> tuple[str, int]:
 
 def _feature_hash(values: tuple[float, ...]) -> str:
     import hashlib
-    import struct
 
     digest = hashlib.blake2b(digest_size=32)
     digest.update(_serialize_features(values))

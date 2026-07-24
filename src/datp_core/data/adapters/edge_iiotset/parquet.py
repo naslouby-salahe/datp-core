@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import json
-from collections.abc import Mapping
 from io import BytesIO
 from pathlib import Path
 
@@ -16,11 +14,8 @@ from datp_core.data.adapters.edge_iiotset.models import (
     EdgeIIoTsetRow,
     EdgeIIoTsetSplitRows,
     EdgeIIoTsetVocabulary,
-    EdgeTimestampedRow,
 )
-from datp_core.data.adapters.edge_iiotset.splitting import _provenance_key
-from datp_core.data.contracts.features import CategoricalEncodingRecord
-from datp_core.data.contracts.enums import SplitMethod
+from datp_core.data.contracts.materialization import DatasetMaterialization
 from datp_core.data.materialization.ports import SourceInventory
 from datp_core.data.sources.models import SourceRowFailure
 
@@ -180,10 +175,8 @@ def _deduplicated_edge_benign_rows(rows: tuple[EdgeIIoTsetRow, ...]) -> tuple[Ed
 
 
 def _validate_edge_chronological_minimums(
-    split: EdgeChronologicalSplitRows, materialization: "DatasetMaterialization"
+    split: EdgeChronologicalSplitRows, materialization: DatasetMaterialization
 ) -> None:
-    from datp_core.data.contracts.materialization import DatasetMaterialization
-
     minimums = materialization.split_minimum_row_counts or {}
     roles = {
         "historical_train": split.historical_train,

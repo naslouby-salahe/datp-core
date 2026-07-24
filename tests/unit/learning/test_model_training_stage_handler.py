@@ -8,6 +8,7 @@ the test exercises the actual scientific selection rule, not a stand-in.
 from __future__ import annotations
 
 import json
+import shutil
 from dataclasses import replace
 from pathlib import Path
 
@@ -110,6 +111,41 @@ def test_model_training_reuses_a_frozen_checkpoint_without_retraining(tmp_path: 
     assert second.produced_artifact == job.output
     checkpoint_bytes_after_second_call = repository.read(f"runs/{run_id.value}/{job.job_id.value}").payload_bytes
     assert checkpoint_bytes_after_second_call == checkpoint_bytes_after_first_run
+
+
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda_required profile forbids CPU fallback")
+def test_model_training_resumes_a_partial_family_missing_selection_evidence(tmp_path: Path) -> None:
+    """If the checkpoint commits successfully but a crash occurs before selection evidence is
+    committed, the handler must retrain (deterministic given the fixed seed), verify the
+    recomputed checkpoint matches the frozen one byte-for-byte, and complete the family by
+    committing only the missing selection evidence -- not fail permanently."""
+    app = build_application()
+    job = _anchor_training_job(app)
+    run_id = _anchor_run_id(app)
+    repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
+    _commit_synthetic_materialization(app, repository, job)
+    handler = ModelTrainingStageHandler(app.config, repository)
+
+    first = handler.execute(job, run_id)
+    assert first.status is JobExecutionStatus.SUCCESS
+    checkpoint_relative = f"runs/{run_id.value}/{job.job_id.value}"
+    selection_relative = f"{checkpoint_relative}.selection"
+    checkpoint_bytes_after_first_run = repository.read(checkpoint_relative).payload_bytes
+    assert repository.read(selection_relative).found
+
+    # Simulate a crash between the checkpoint commit and the selection commit.
+    selection_dir = tmp_path / selection_relative
+    assert selection_dir.is_dir()
+    shutil.rmtree(selection_dir)
+    assert not repository.read(selection_relative).found
+
+    resumed = handler.execute(job, run_id)
+
+    assert resumed.status is JobExecutionStatus.SUCCESS
+    assert resumed.produced_artifact == job.output
+    assert repository.read(selection_relative).found
+    # The frozen checkpoint itself must never have been recommitted.
+    assert repository.read(checkpoint_relative).payload_bytes == checkpoint_bytes_after_first_run
 
 
 def test_model_training_fails_typed_when_materialization_is_unavailable(tmp_path: Path) -> None:

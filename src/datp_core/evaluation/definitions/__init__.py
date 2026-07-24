@@ -1,5 +1,6 @@
 """Evaluation definitions: metric formula records, bundles, and result contracts."""
 
+from datp_core.evaluation.definitions.bundles import MetricBundleRecord
 from datp_core.evaluation.definitions.metrics import (
     ClusterDiagnosticsRecord,
     CrossClientAggregationRecord,
@@ -10,7 +11,6 @@ from datp_core.evaluation.definitions.metrics import (
     PrecisionPolicyRecord,
     ThresholdEstimationMetricsRecord,
 )
-from datp_core.evaluation.definitions.bundles import MetricBundleRecord
 from datp_core.evaluation.definitions.results import EvaluationResultContractRecord
 
 __all__ = [

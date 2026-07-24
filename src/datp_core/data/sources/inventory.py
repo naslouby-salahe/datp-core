@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from pathlib import Path
 
 from datp_core.core.hashing import Checksum, compute_payload_checksum
 from datp_core.core.identifiers import DatasetId
+from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.contracts.dataset import ResolvedDataset
 from datp_core.data.contracts.sources import ConfiguredSourceTree, DatasetInspectionContract
 from datp_core.data.sources.models import ConcreteSourceEntry, ConcreteSourceInventory
@@ -54,8 +54,19 @@ def build_source_inventory(dataset: ResolvedDataset) -> ConcreteSourceInventory:
     )
 
 
+def dataset_source_fingerprint(dataset: ResolvedDataset) -> Checksum:
+    """The single authoritative source-provenance fingerprint for one dataset: a BLAKE2b checksum
+    over its sorted, ignore-filtered source inventory. Every source-dependent identity in this
+    codebase -- a materialized artifact's ``source_inventory_fingerprint`` and each per-dataset
+    term inside ``compute_experiment_source_fingerprint`` -- must derive from this one function
+    rather than independently calling ``build_source_inventory(dataset).fingerprint()``, so the
+    two can never silently drift into different formulas over the same underlying files.
+    """
+    return build_source_inventory(dataset).fingerprint()
+
+
 def compute_experiment_source_fingerprint(
-    *, datasets: Mapping[DatasetId, ResolvedDataset], dataset_ids: tuple[DatasetId, ...]
+    *, datasets: TypedDomainRegistry[DatasetId, ResolvedDataset], dataset_ids: tuple[DatasetId, ...]
 ) -> Checksum:
     """Compute a deterministic combined source-provenance fingerprint for an experiment.
 
@@ -66,8 +77,7 @@ def compute_experiment_source_fingerprint(
     parts: list[str] = []
     for dataset_id in sorted(dataset_ids, key=lambda d: d.value):
         dataset = datasets[dataset_id]
-        inventory = build_source_inventory(dataset)
-        parts.append(f"{dataset_id.value}:{inventory.fingerprint().value}")
+        parts.append(f"{dataset_id.value}:{dataset_source_fingerprint(dataset).value}")
     payload = "\n".join(parts).encode("utf-8")
     return compute_payload_checksum(payload)
 

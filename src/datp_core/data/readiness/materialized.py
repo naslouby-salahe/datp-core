@@ -7,7 +7,6 @@ from datp_core.data.contracts.dataset import DatasetSetup, ResolvedDataset
 from datp_core.data.contracts.enums import SplitMembership
 from datp_core.data.manifests.models import MaterializedSplitEvidence
 from datp_core.data.readiness.models import DatasetAuditIssue, DatasetReadinessReport
-from datp_core.data.readiness.source_audit import AuditDatasetUseCase
 
 
 class _MaterializedReadinessAssessor:

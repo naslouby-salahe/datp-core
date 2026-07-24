@@ -1,16 +1,5 @@
 """Experiment catalogue records."""
 
-from datp_core.experiments.catalogue.models import (
-    CalibrationSubsetRecord,
-    CapabilityRequirementRecord,
-    EligibilityGateRecord,
-    EvidenceRole,
-    ExperimentRecord,
-    PopulationRecord,
-    PrerequisiteSpecRecord,
-    ResultTypeRecord,
-    RunRequirement,
-)
 from datp_core.experiments.catalogue.analyses import (
     AbsorptionAnalysisRecord,
     AlertBurdenAnalysisRecord,
@@ -29,9 +18,23 @@ from datp_core.experiments.catalogue.analyses import (
     TemporalRecoveryAnalysisRecord,
     ThresholdStabilityAnalysisRecord,
 )
+from datp_core.experiments.catalogue.eligibility import (
+    CapabilityRequirementRecord as EligibilityCapabilityRequirementRecord,
+)
 from datp_core.experiments.catalogue.evaluations import (
     EvaluationSpecRecord,
     RecalibrationMode,
+)
+from datp_core.experiments.catalogue.models import (
+    CalibrationSubsetRecord,
+    CapabilityRequirementRecord,
+    EligibilityGateRecord,
+    EvidenceRole,
+    ExperimentRecord,
+    PopulationRecord,
+    PrerequisiteSpecRecord,
+    ResultTypeRecord,
+    RunRequirement,
 )
 from datp_core.experiments.catalogue.sweeps import (
     ConditionSweepRecord,
@@ -40,9 +43,6 @@ from datp_core.experiments.catalogue.sweeps import (
     SweepRecord,
     SweepValue,
     ValueSweepRecord,
-)
-from datp_core.experiments.catalogue.eligibility import (
-    CapabilityRequirementRecord as EligibilityCapabilityRequirementRecord,
 )
 
 __all__ = [

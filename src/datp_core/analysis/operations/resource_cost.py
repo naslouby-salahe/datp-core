@@ -12,12 +12,12 @@ from datp_core.analysis.operations.models import (
     ResourceCostSeedResult,
 )
 from datp_core.artifacts.repository.port import ArtifactRepository
+from datp_core.config.operational_contracts import CommunicationEstimationContractRecord
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import RunId
 from datp_core.core.seeding import Seed
-from datp_core.analysis.operations.models import CommunicationEstimationContractRecord
-from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments import ExperimentRecord, ResourceCostAnalysisRecord
+from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.planning import score_context
 from datp_core.pipeline.stages.context import StageJobContext
 from datp_core.thresholding.policies.federated import FederatedMatchedExceedanceThresholdPolicyRecord

@@ -28,7 +28,11 @@ def analyze_anchor_equivalence(
         no_material_movement_toward_zero=delta >= float(historical["delta"]),
         reproduced_interval_width_at_most_1_20x_historical_width=(high - low)
         <= analysis.interval_width_tolerance_multiplier * float(historical["interval_width"]),
-        verified_configuration_and_provenance=True,
+        verified_configuration_and_provenance=(
+            source.metric == analysis.expected_metric
+            and source.first_threshold_policy == analysis.expected_first_threshold_policy
+            and source.second_threshold_policy == analysis.expected_second_threshold_policy
+        ),
     )
     checks_by_name = {
         "positive_reproduced_delta": checks.positive_reproduced_delta,

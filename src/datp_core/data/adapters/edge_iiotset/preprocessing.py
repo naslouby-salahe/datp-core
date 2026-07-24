@@ -3,11 +3,10 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 import struct
 from pathlib import Path
 from tempfile import TemporaryDirectory
-
-import sqlite3
 
 from datp_core.data.adapters.edge_iiotset.models import (
     EdgeIIoTsetExternalIndexReport,

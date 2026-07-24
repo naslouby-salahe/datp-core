@@ -7,6 +7,7 @@ from pathlib import Path
 
 import torch
 
+from datp_core.artifacts.codecs.manifest import CURRENT_ARTIFACT_SCHEMA_VERSION
 from datp_core.artifacts.codecs.safetensors import load_model_safetensors, save_model_safetensors
 from datp_core.artifacts.identity import ArtifactCorruptionReason, ArtifactFormat, ArtifactKey, ArtifactKind
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
@@ -31,7 +32,7 @@ def test_safetensors_commit_round_trips_through_checksum_verification(tmp_path: 
         scientific_fingerprint=scientific,
         execution_fingerprint=execution,
         relative_path="checkpoints/model-checkpoint",
-        schema_version=1,
+        schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
         creation_timestamp=1.0,
         environment_identity="test",
     )
@@ -55,7 +56,7 @@ def test_corrupted_safetensors_payload_is_rejected_identically_to_other_formats(
         scientific_fingerprint=scientific,
         execution_fingerprint=execution,
         relative_path="checkpoints/corrupt-checkpoint",
-        schema_version=1,
+        schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
         creation_timestamp=1.0,
         environment_identity="test",
     )

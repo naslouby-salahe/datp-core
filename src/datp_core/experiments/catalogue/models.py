@@ -28,13 +28,12 @@ from datp_core.core.immutability import (
 )
 from datp_core.core.numbers import PositiveInt, Probability
 from datp_core.core.seeding import Seed
+from datp_core.experiments.catalogue.analyses import AnalysisRecord
 from datp_core.experiments.catalogue.evaluations import (
     EvaluationSpecRecord,
-    RecalibrationMode,
     RunRequirement,
 )
 from datp_core.experiments.catalogue.sweeps import SweepRecord
-from datp_core.experiments.catalogue.analyses import AnalysisRecord
 
 
 class EvidenceRole(Enum):

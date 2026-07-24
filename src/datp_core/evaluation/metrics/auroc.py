@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 from sklearn.metrics import roc_auc_score
 
-from datp_core.evaluation.metrics.models import MetricStatus, MetricValue
+from datp_core.evaluation.metrics.models import MetricStatus
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

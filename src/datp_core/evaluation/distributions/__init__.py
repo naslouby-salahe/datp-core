@@ -1,5 +1,6 @@
 """Per-client score-distribution and threshold-tradeoff views."""
 
+from datp_core.evaluation.distributions.cdf import client_score_distributions
 from datp_core.evaluation.distributions.models import (
     CdfPoint,
     ClientScoreDistributionRecord,
@@ -7,7 +8,6 @@ from datp_core.evaluation.distributions.models import (
     ThresholdPositionRecord,
     ThresholdTradeoffEntry,
 )
-from datp_core.evaluation.distributions.cdf import client_score_distributions
 from datp_core.evaluation.distributions.tradeoff import threshold_tradeoff
 from datp_core.evaluation.distributions.variance import calibration_variance_terms
 
