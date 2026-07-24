@@ -6,17 +6,18 @@ _SRC_ROOT = Path(__file__).resolve().parents[3] / "src" / "datp_core"
 
 # All migrated stage-handler modules must exist in the new feature-oriented tree.
 _STAGE_FILES = {
-    "data/materialization.py",
+    "data/materialization/handler.py",
     "pipeline/execution.py",
-    "experiments/planning.py",
-    "learning/checkpoints.py",
-    "learning/training.py",
-    "learning/scoring.py",
-    "thresholding/construction.py",
-    "thresholding/calibration.py",
-    "evaluation/execution.py",
+    "experiments/execution/preflight.py",
+    "learning/checkpoints/handler.py",
+    "learning/training/handler.py",
+    "learning/scoring/handler.py",
+    "thresholding/execution/handler.py",
+    "thresholding/calibration/handler.py",
+    "evaluation/execution/handler.py",
     "analysis/execution/handler.py",
-    "reporting/execution.py",
+    "reporting/execution/freeze_handler.py",
+    "reporting/execution/report_handler.py",
 }
 
 
@@ -28,7 +29,7 @@ def test_stage_handler_modules_exist() -> None:
 
 def test_stage_handler_has_no_dataset_specific_branch() -> None:
     """The data materialization stage handler must not branch on dataset_id string values."""
-    data_stages_path = _SRC_ROOT / "data" / "materialization.py"
+    data_stages_path = _SRC_ROOT / "data" / "materialization" / "handler.py"
     source = data_stages_path.read_text(encoding="utf-8")
     forbidden_patterns = ['"nbaiot"', "'nbaiot'", '"ciciot2023"', "'ciciot2023'"]
     lines = source.split("\n")

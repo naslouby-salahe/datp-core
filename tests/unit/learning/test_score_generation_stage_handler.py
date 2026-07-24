@@ -28,8 +28,8 @@ from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.core.identifiers import ArtifactId, ExperimentId, RunId
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.planning import expand_experiment_jobs
-from datp_core.learning.autoencoder import DynamicDenseAutoencoder
-from datp_core.learning.scoring import ScoreGenerationStageHandler
+from datp_core.learning.model.autoencoder import DynamicDenseAutoencoder
+from datp_core.learning.scoring.handler import ScoreGenerationStageHandler
 from datp_core.pipeline.models import JobExecutionStatus, StageJob, StageKind
 
 _ROUND = 1

@@ -1,1 +1,1 @@
-"""Result freezing, table rendering, figure rendering, and report-package generation."""
+"""Result freezing, table/figure rendering, audit services, and report-package generation."""

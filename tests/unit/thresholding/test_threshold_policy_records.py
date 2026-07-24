@@ -8,19 +8,23 @@ import pytest
 
 from datp_core.config.project import resolve_project_configuration
 from datp_core.core.identifiers import ThresholdPolicyId
-from datp_core.thresholding.models import (
-    CalibrationFallbackThresholdPolicyRecord,
-    CentralizedPooledThresholdPolicyRecord,
-    ClusterThresholdPolicyRecord,
-    FamilyMeanThresholdPolicyRecord,
+from datp_core.thresholding.policies.clustering import ClusterThresholdPolicyRecord
+from datp_core.thresholding.policies.conformal import SplitConformalThresholdPolicyRecord
+from datp_core.thresholding.policies.federated import (
     FederatedFixedCoefficientThresholdPolicyRecord,
     FederatedMatchedExceedanceThresholdPolicyRecord,
-    LocalGlobalShrinkageThresholdPolicyRecord,
+)
+from datp_core.thresholding.policies.grouped import FamilyMeanThresholdPolicyRecord
+from datp_core.thresholding.policies.shared import (
+    CentralizedPooledThresholdPolicyRecord,
     LocalQuantileThresholdPolicyRecord,
     SharedMeanThresholdPolicyRecord,
     SharedPooledThresholdPolicyRecord,
     SharedWeightedThresholdPolicyRecord,
-    SplitConformalThresholdPolicyRecord,
+)
+from datp_core.thresholding.policies.shrinkage import (
+    CalibrationFallbackThresholdPolicyRecord,
+    LocalGlobalShrinkageThresholdPolicyRecord,
 )
 
 # Maps every authored identifier in configs/protocols.yaml's threshold_policies block to the
@@ -81,9 +85,9 @@ def test_cluster_threshold_policy_retains_every_authored_field_losslessly(resolv
 
     assert record.cluster_count == 3
     assert record.aggregation in ("mean", "robust_median")
-    assert len(record.fingerprint_features) > 0
-    assert isinstance(record.fingerprint_estimators, dict) is False  # must be an immutable Mapping, not a plain dict
-    assert record.clustering.get("random_seed") is not None
+    assert len(record.fingerprint.features) > 0
+    assert isinstance(record.fingerprint.estimators, dict) is False
+    assert record.kmeans.random_seed is not None
     assert isinstance(record.required_diagnostics, tuple)
 
 
@@ -94,8 +98,8 @@ def test_federated_matched_exceedance_policy_retains_client_message_and_candidat
     assert isinstance(record, FederatedMatchedExceedanceThresholdPolicyRecord)
 
     assert record.mode == "matched_exceedance"
-    assert record.candidate_grid.get("minimum") is not None
-    assert record.candidate_grid.get("maximum") is not None
+    assert record.candidate_grid.minimum is not None
+    assert record.candidate_grid.maximum is not None
     assert len(record.required_diagnostics) > 0
 
 

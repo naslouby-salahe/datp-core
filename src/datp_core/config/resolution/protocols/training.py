@@ -14,20 +14,20 @@ from datp_core.core.identifiers import CheckpointProfileId, NormalizationStrateg
 from datp_core.core.numbers import NonNegativeFloat, PositiveFloat, PositiveInt
 from datp_core.core.seeding import Seed
 from datp_core.data.contracts import NormalizationStrategyRecord
-from datp_core.learning.models import (
-    BatchingRecord,
-    CheckpointAuthorization,
+from datp_core.learning.contracts.architecture import ModelArchitectureRecord
+from datp_core.learning.contracts.checkpoints import (
     CheckpointConvergenceRecord,
     CheckpointProfileRecord,
     CheckpointSelectionRecord,
-    FederationProfileRecord,
-    ModelArchitectureRecord,
-    OptimizerRecord,
-    PersonalizationStrategy,
-    SeedCohortRecord,
-    TrainingProfileKind,
-    TrainingProfileRecord,
 )
+from datp_core.learning.contracts.enums import (
+    CheckpointAuthorization,
+    PersonalizationStrategy,
+    TrainingProfileKind,
+)
+from datp_core.learning.contracts.optimization import BatchingRecord, OptimizerRecord
+from datp_core.learning.contracts.seeds import SeedCohortRecord
+from datp_core.learning.contracts.training import FederationProfileRecord, TrainingProfileRecord
 
 
 @define(frozen=True, slots=True, kw_only=True)

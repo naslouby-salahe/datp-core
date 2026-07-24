@@ -37,18 +37,17 @@ from datp_core.experiments.execution import PreflightStageHandler
 from datp_core.data.readiness import AuditDatasetUseCase
 from datp_core.evaluation.execution import OperatingPointEvaluationStageHandler
 from datp_core.experiments.execution import ExecuteExperimentUseCase
-from datp_core.learning.checkpoints import CohortCheckpointSelectionStageHandler
-from datp_core.learning.scoring import ScoreGenerationStageHandler
-from datp_core.learning.training import ModelTrainingStageHandler
-from datp_core.reporting.audit import DuckDbAuditService
-from datp_core.reporting.execution import ReportGenerationStageHandler, ResultFreezeStageHandler
-from datp_core.thresholding.calibration import CalibrationSubsamplingStageHandler
-from datp_core.thresholding.construction import (
-    ConfiguredThresholdEstimator,
-    ConstructThresholdsUseCase,
-    ThresholdConstructionStageHandler,
-    ThresholdEstimator,
-)
+from datp_core.learning.checkpoints.handler import CohortCheckpointSelectionStageHandler
+from datp_core.learning.scoring.handler import ScoreGenerationStageHandler
+from datp_core.learning.training.handler import ModelTrainingStageHandler
+from datp_core.reporting.audit.query import DuckDbAuditService
+from datp_core.reporting.execution.freeze_handler import ResultFreezeStageHandler
+from datp_core.reporting.execution.report_handler import ReportGenerationStageHandler
+from datp_core.thresholding.calibration.handler import CalibrationSubsamplingStageHandler
+from datp_core.thresholding.estimation.construction import ConstructThresholdsUseCase
+from datp_core.thresholding.estimation.dispatch import ConfiguredThresholdEstimator
+from datp_core.thresholding.estimation.ports import ThresholdEstimator
+from datp_core.thresholding.execution.handler import ThresholdConstructionStageHandler
 
 
 def _build_estimator_registry(

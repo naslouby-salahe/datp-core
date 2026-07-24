@@ -4,7 +4,7 @@ from datp_core.config.fingerprinting.canonical import compute_fingerprint
 from datp_core.config.fingerprinting.projection import unstructure_projection
 from datp_core.config.project import resolve_project_configuration
 from datp_core.core.numbers import PositiveInt
-from datp_core.learning.models import ModelArchitectureRecord
+from datp_core.learning.contracts.architecture import ModelArchitectureRecord
 
 
 def _model(hidden: tuple[int, ...]) -> ModelArchitectureRecord:

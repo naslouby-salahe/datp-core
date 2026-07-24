@@ -20,7 +20,8 @@ from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitR
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ArtifactId
-from datp_core.learning.autoencoder import DynamicDenseAutoencoder, set_deterministic_seeds
+from datp_core.learning.model.autoencoder import DynamicDenseAutoencoder
+from datp_core.learning.model.determinism import set_deterministic_seeds
 
 
 def build_synthetic_materialized_frame(

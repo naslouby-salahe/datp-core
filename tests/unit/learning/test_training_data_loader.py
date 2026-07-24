@@ -6,8 +6,12 @@ import polars as pl
 import pytest
 import torch
 
-from datp_core.learning.scoring import (
+from datp_core.learning.scoring.data import (
     load_benign_client_tensors,
+    materialized_feature_columns,
+)
+from datp_core.learning.scoring.compute import (
+    compute_reconstruction_scores,
     score_materialized_split,
     score_personalized_materialized_split,
 )

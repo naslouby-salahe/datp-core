@@ -19,7 +19,8 @@ from datp_core.experiments import (
     ValueSweepRecord,
 )
 from datp_core.experiments.planning import calibration_sample_counts
-from datp_core.learning.models import PersonalizationStrategy, TrainingProfileRecord
+from datp_core.learning.contracts.enums import PersonalizationStrategy
+from datp_core.learning.contracts.training import TrainingProfileRecord
 
 
 @define(frozen=True, slots=True, kw_only=True)

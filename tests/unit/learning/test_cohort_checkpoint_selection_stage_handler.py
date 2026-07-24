@@ -18,7 +18,8 @@ from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitR
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.core.identifiers import ArtifactId, ExperimentId, RunId
 from datp_core.experiments.planning import expand_experiment_jobs
-from datp_core.learning.checkpoints import CohortCheckpointSelectionStageHandler, select_cohort_validation_checkpoint
+from datp_core.learning.checkpoints.handler import CohortCheckpointSelectionStageHandler
+from datp_core.learning.checkpoints.selection import select_cohort_validation_checkpoint
 from datp_core.pipeline.models import JobExecutionStatus, StageJob, StageKind
 
 _SCHEDULED_ROUNDS = (25, 50, 75, 100, 125, 150, 200)

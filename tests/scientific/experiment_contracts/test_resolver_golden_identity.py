@@ -18,12 +18,12 @@ def test_scientific_fingerprint_is_stable(_resolved: ResolvedProjectConfiguratio
     # `canonicalize_value` (core/hashing.py). The underlying authored values are unchanged; only
     # their resolved Python representation is now a validated enum instead of an unvalidated string.
     assert _resolved.scientific_fingerprint.value == (
-        "efa04eec9187ab5785b09f298df311737e15b43327e7224e4aead08b56130aee"
+        "beef00a0b7b9575fde37292dc081fdc81d019600c1d28591c2c68a8f63b50b3a"
     )
 
 
 def test_execution_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
-    assert _resolved.execution_fingerprint.value == ("723ed7d2d53daf3a8e8976213202852dfcadb311013e54113b75774e465b71c2")
+    assert _resolved.execution_fingerprint.value == ("7ee439d1a1a220054bd8e3962256f4af1356de8d98a4e3748bf5b79c0962cba2")
 
 
 def test_registry_cardinality(_resolved: ResolvedProjectConfiguration) -> None:

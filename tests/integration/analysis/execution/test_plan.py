@@ -27,10 +27,13 @@ from datp_core.experiments import (
     SweepConditionRecord,
     ValueSweepRecord,
 )
-from datp_core.learning.models import (
+from datp_core.learning.contracts.enums import (
     CheckpointAuthorization,
     PersonalizationStrategy,
     TrainingProfileKind,
+)
+from datp_core.learning.contracts.training import (
+    FederationProfileRecord,
     TrainingProfileRecord,
 )
 

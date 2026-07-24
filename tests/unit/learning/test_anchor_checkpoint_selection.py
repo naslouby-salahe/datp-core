@@ -3,12 +3,12 @@
 from datp_core.config.project import resolve_project_configuration
 from datp_core.core.identifiers import CheckpointProfileId
 from datp_core.core.numbers import PositiveFloat, PositiveInt
-from datp_core.learning.checkpoints import (
+from datp_core.learning.checkpoints.selection import (
     select_anchor_checkpoint_round,
     select_cohort_validation_checkpoint,
     select_lowest_validation_loss_checkpoint,
 )
-from datp_core.learning.models import CheckpointConvergenceRecord
+from datp_core.learning.contracts.checkpoints import CheckpointConvergenceRecord
 
 
 def _convergence(

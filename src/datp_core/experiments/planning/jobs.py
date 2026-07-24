@@ -16,7 +16,7 @@ from datp_core.experiments.planning.sweeps import (
     _sweep_reference,
     _sweep_values,
 )
-from datp_core.learning.models import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
+from datp_core.learning.contracts.enums import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
 from datp_core.pipeline.models import PlanningGraph, StageJob, StageJobContext, StageKind
 
 

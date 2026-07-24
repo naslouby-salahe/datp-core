@@ -3,8 +3,10 @@ import pytest
 from datp_core.analysis.operations.resource_cost import threshold_exchange_cost
 from datp_core.app import _build_estimator_registry, build_application
 from datp_core.core.identifiers import ClientId, PopulationId, ThresholdPolicyId
-from datp_core.thresholding.construction import ConstructThresholdsUseCase
-from datp_core.thresholding.models import BenignCalibrationScores, ConformalAttainabilityStatus, ThresholdSet
+from datp_core.thresholding.estimation.construction import ConstructThresholdsUseCase
+from datp_core.thresholding.policies.common import BenignCalibrationScores
+from datp_core.thresholding.policies.enums import ConformalAttainabilityStatus
+from datp_core.thresholding.estimation.models import ThresholdSet
 
 
 @pytest.fixture
@@ -30,8 +32,7 @@ def _execute(
         calibration,
         PopulationId("nbaiot_natural_devices"),
         None,
-        None,
-        coefficient,
+        selected_coefficient=coefficient,
         fingerprint_features_override=fingerprint_features,
     )
 
@@ -108,7 +109,6 @@ def test_cluster_p95_fingerprint_is_locked_to_0_95_regardless_of_swept_quantile(
         ThresholdPolicyId("cluster_k3_mean_p95"),
         calibration,
         PopulationId("nbaiot_natural_devices"),
-        None,
         None,
         None,
         quantile_override=0.5,

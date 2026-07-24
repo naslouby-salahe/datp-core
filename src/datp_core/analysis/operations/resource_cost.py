@@ -20,14 +20,14 @@ from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments import ExperimentRecord, ResourceCostAnalysisRecord
 from datp_core.experiments.planning import score_context
 from datp_core.pipeline.models import StageJobContext
-from datp_core.thresholding.models import (
-    FederatedMatchedExceedanceThresholdPolicyRecord,
+from datp_core.thresholding.policies.federated import FederatedMatchedExceedanceThresholdPolicyRecord
+from datp_core.thresholding.policies.shared import (
     LocalQuantileThresholdPolicyRecord,
     SharedMeanThresholdPolicyRecord,
     SharedPooledThresholdPolicyRecord,
     SharedWeightedThresholdPolicyRecord,
-    ThresholdPolicyRecord,
 )
+from datp_core.thresholding.policies.union import ThresholdPolicyRecord
 
 
 def threshold_exchange_cost(
@@ -42,11 +42,9 @@ def threshold_exchange_cost(
     elif isinstance(policy, FederatedMatchedExceedanceThresholdPolicyRecord):
         exchange = contract.threshold_exchange.federated_summary
         grid = policy.candidate_grid
-        minimum = grid["minimum"]
-        maximum = grid["maximum"]
-        step = grid["step"]
-        if not isinstance(minimum, float) or not isinstance(maximum, float) or not isinstance(step, float):
-            raise ValueError("Federated-summary candidate grid requires finite numeric bounds")
+        minimum = grid.minimum
+        maximum = grid.maximum
+        step = grid.step
         candidate_count = round((maximum - minimum) / step) + 1
     elif isinstance(policy, SharedPooledThresholdPolicyRecord | SharedWeightedThresholdPolicyRecord):
         return (), 0

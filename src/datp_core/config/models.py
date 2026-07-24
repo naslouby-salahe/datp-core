@@ -42,18 +42,15 @@ from datp_core.experiments import (
     PopulationRecord,
     ResultTypeRecord,
 )
-from datp_core.learning.models import (
-    BatchingRecord,
-    CheckpointAuthorization,
-    CheckpointProfileRecord,
-    ModelArchitectureRecord,
-    OptimizerRecord,
-    PersonalizationStrategy,
-    SeedCohortRecord,
-    TrainingProfileRecord,
-)
-from datp_core.reporting.models import ReportDefaultsRecord, ReportProfileRecord
-from datp_core.thresholding.models import QuantileEstimatorRecord, ThresholdPolicyDefaultsRecord, ThresholdPolicyRecord
+from datp_core.learning.contracts.architecture import ModelArchitectureRecord
+from datp_core.learning.contracts.checkpoints import CheckpointProfileRecord
+from datp_core.learning.contracts.enums import CheckpointAuthorization, PersonalizationStrategy
+from datp_core.learning.contracts.optimization import BatchingRecord, OptimizerRecord
+from datp_core.learning.contracts.seeds import SeedCohortRecord
+from datp_core.learning.contracts.training import TrainingProfileRecord
+from datp_core.reporting.profiles.models import ReportDefaultsRecord, ReportProfileRecord
+from datp_core.thresholding.policies.common import QuantileEstimatorRecord, ThresholdPolicyDefaultsRecord
+from datp_core.thresholding.policies.union import ThresholdPolicyRecord
 
 
 @define(frozen=True, slots=True, kw_only=True)

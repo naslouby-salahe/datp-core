@@ -21,8 +21,8 @@ from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.core.identifiers import ExperimentId, RunId
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.planning import expand_experiment_jobs
-from datp_core.learning.checkpoints import select_anchor_checkpoint_round
-from datp_core.learning.training import ModelTrainingStageHandler
+from datp_core.learning.checkpoints.selection import select_anchor_checkpoint_round
+from datp_core.learning.training.handler import ModelTrainingStageHandler
 from datp_core.pipeline.models import JobExecutionStatus, StageJob, StageKind
 
 

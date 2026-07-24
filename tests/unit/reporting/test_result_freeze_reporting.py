@@ -6,10 +6,11 @@ import json
 from datp_core.app import build_application
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments.identity import IdentityBuilder
+from datp_core.experiments.identity.kinds import IdentityKind
 from datp_core.experiments.planning import expand_experiment_jobs
 from datp_core.pipeline.models import StageJobContext, StageKind
-from datp_core.reporting.freezing import freeze_result_family
-from datp_core.reporting.rendering import render_frozen_report
+from datp_core.reporting.freezing.service import freeze_result_family
+from datp_core.reporting.rendering.package import render_frozen_report
 
 
 def test_result_freeze_requires_every_configured_analysis_before_rendering() -> None:
@@ -36,7 +37,7 @@ def test_result_freeze_requires_every_configured_analysis_before_rendering() -> 
         experiment=experiment,
         report_profiles=profiles,
         statistical_summary=json.dumps(records).encode("utf-8"),
-        source_artifacts=(IdentityBuilder.statistical_summary_key(context),),
+        source_artifacts=(IdentityBuilder.artifact_key(IdentityKind.STATISTICAL_ANALYSIS, context),),
         scientific_fingerprint=app.config.scientific_fingerprint.value,
         execution_fingerprint=app.config.execution_fingerprint.value,
         source_revision="test",

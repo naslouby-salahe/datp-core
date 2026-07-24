@@ -14,8 +14,8 @@ from datp_core.experiments import (
     SweepConditionAllocation,
     ValueSweepRecord,
 )
-from datp_core.learning.models import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
-from datp_core.thresholding.models import FamilyMeanThresholdPolicyRecord
+from datp_core.learning.contracts.enums import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
+from datp_core.thresholding.policies.grouped import FamilyMeanThresholdPolicyRecord
 
 
 class ProjectConfigurationValidator:
