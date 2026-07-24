@@ -30,18 +30,13 @@ jobs:
       - name: Provision empty raw-data root
         run: mkdir -p data/raw
 
-      # The two deselected groups below require infrastructure a generic CI runner cannot have:
-      # real licensed multi-GB datasets (raw-source readiness) and a physical CUDA device
-      # (end-to-end training/scoring). Both fail loudly by design (configs/runtime.yaml:
-      # device_policy_rules, raw_source_policy) rather than silently downgrading -- they are
-      # environment-readiness checks, not portable unit tests, and are exercised on real
-      # developer/CI-GPU hardware instead.
+      # The raw-source readiness audit below requires infrastructure a generic CI runner cannot
+      # have: real licensed multi-GB datasets. It fails loudly by design (configs/runtime.yaml:
+      # raw_source_policy) rather than silently downgrading -- it is an environment-readiness
+      # check, not a portable unit test, and is exercised on real developer hardware instead.
+      # CUDA-required training/scoring tests self-skip via torch.cuda.is_available() when no
+      # CUDA device is present, so they need no CI-side exclusion.
       - name: Run tests and collect coverage
         run: |
           uv run pytest \
-            --ignore=tests/integration/datasets/test_raw_source_contracts_are_ready.py \
-            --deselect=tests/unit/application/test_model_training_stage_handler.py::test_model_training_produces_a_checkpoint_selected_by_the_anchor_convergence_rule \
-            --deselect=tests/unit/application/test_model_training_stage_handler.py::test_model_training_reuses_a_frozen_checkpoint_without_retraining \
-            --deselect=tests/unit/application/test_score_generation_stage_handler.py::test_calibration_scores_exclude_attack_rows_and_preserve_row_identity \
-            --deselect=tests/unit/application/test_score_generation_stage_handler.py::test_test_scores_hand_verified_reconstruction_error_and_labels \
-            --deselect=tests/unit/application/test_score_generation_stage_handler.py::test_score_generation_reuses_a_frozen_score_artifact
+            --ignore=tests/integration/configuration/test_raw_source_contracts_are_ready.py

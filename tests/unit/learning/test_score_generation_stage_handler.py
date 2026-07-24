@@ -143,6 +143,7 @@ def _prepare(
     return app, repository, run_id, calibration_job, test_job, feature_columns, model
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda_required profile forbids CPU fallback")
 def test_calibration_scores_exclude_attack_rows_and_preserve_row_identity(tmp_path: Path) -> None:
     app, repository, run_id, calibration_job, _test_job, _feature_columns, _model = _prepare(tmp_path)
 
@@ -157,6 +158,7 @@ def test_calibration_scores_exclude_attack_rows_and_preserve_row_identity(tmp_pa
     assert scores["source_row_index"].is_duplicated().sum() == 0
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda_required profile forbids CPU fallback")
 def test_test_scores_hand_verified_reconstruction_error_and_labels(tmp_path: Path) -> None:
     app, repository, run_id, _calibration_job, test_job, feature_columns, model = _prepare(tmp_path)
 
@@ -184,6 +186,7 @@ def test_test_scores_hand_verified_reconstruction_error_and_labels(tmp_path: Pat
     assert one_row["score"] == pytest.approx(expected_score)
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda_required profile forbids CPU fallback")
 def test_score_generation_reuses_a_frozen_score_artifact(tmp_path: Path) -> None:
     app, repository, run_id, calibration_job, _test_job, _feature_columns, _model = _prepare(tmp_path)
     handler = ScoreGenerationStageHandler(app.config, repository)

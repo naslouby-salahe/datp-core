@@ -11,6 +11,8 @@ import json
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+import torch
 from _synthetic_training_fixtures import build_synthetic_materialized_frame, commit_materialized_dataset
 from safetensors.torch import load as load_safetensors
 
@@ -51,6 +53,7 @@ def _commit_synthetic_materialization(
     )
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda_required profile forbids CPU fallback")
 def test_model_training_produces_a_checkpoint_selected_by_the_anchor_convergence_rule(tmp_path: Path) -> None:
     app = build_application()
     job = _anchor_training_job(app)
@@ -88,6 +91,7 @@ def test_model_training_produces_a_checkpoint_selected_by_the_anchor_convergence
     assert len(selection["dataloader_shuffle_seeds"]) > 0
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda_required profile forbids CPU fallback")
 def test_model_training_reuses_a_frozen_checkpoint_without_retraining(tmp_path: Path) -> None:
     app = build_application()
     job = _anchor_training_job(app)
