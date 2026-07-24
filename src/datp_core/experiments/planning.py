@@ -1,4 +1,5 @@
-"""Demand-driven stage job derivation, seed expansion, and pre-execution plan validation."""
+"""Demand-driven stage job derivation, seed expansion, sweep-value resolution, score-lookup
+context derivation, and pre-execution plan validation."""
 
 from __future__ import annotations
 
@@ -8,8 +9,10 @@ from itertools import product
 from attrs import define
 
 from datp_core.artifacts.models import ArtifactKey, ArtifactKind
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
-from datp_core.datasets.models import PartitionSeedContract, SplitMethod
+from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.core.identifiers import ExperimentId, JobId
+from datp_core.core.values import PositiveInt
+from datp_core.data.contracts import PartitionSeedContract, SplitMethod
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.models import (
     ConditionSweepRecord,
@@ -19,9 +22,37 @@ from datp_core.experiments.models import (
     ValueSweepRecord,
 )
 from datp_core.learning.models import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
-from datp_core.pipeline.identifiers import ExperimentId, JobId
 from datp_core.pipeline.models import PlanningGraph, StageJob, StageJobContext, StageKind
-from datp_core.pipeline.values import PositiveInt
+
+
+def score_context(context: StageJobContext, *, retain_calibration_subset: bool = False) -> StageJobContext:
+    """Strip evaluation-only fields, returning the context that identifies a score artifact."""
+    return StageJobContext(
+        experiment_id=context.experiment_id,
+        seed=context.seed,
+        partition_condition=context.partition_condition,
+        population_id=context.population_id,
+        federated_proximal_mu=context.federated_proximal_mu,
+        ditto_proximal_weight=context.ditto_proximal_weight,
+        calibration_sample_count=context.calibration_sample_count if retain_calibration_subset else None,
+        calibration_replicate=context.calibration_replicate if retain_calibration_subset else None,
+    )
+
+
+def calibration_sample_counts(experiment: ExperimentRecord) -> tuple[int | None, ...]:
+    if experiment.calibration_subset is None:
+        return (None,)
+    sweep_name = experiment.calibration_subset.requested_sample_count.get("from_sweep")
+    values = tuple(
+        int(value)
+        for sweep in experiment.sweeps
+        if isinstance(sweep, ValueSweepRecord) and sweep.name == sweep_name
+        for value in sweep.values
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0
+    )
+    if not values:
+        raise ValueError("Calibration subset requires a positive integer sample-count sweep")
+    return values
 
 
 def _sweep_values(experiment: ExperimentRecord, name: str | None) -> tuple[float, ...]:

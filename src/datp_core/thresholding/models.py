@@ -11,8 +11,8 @@ from typing import Literal, cast
 import numpy as np
 from attrs import define, field
 
-from datp_core.pipeline.identifiers import ClientId, PopulationId, ThresholdPolicyId
-from datp_core.pipeline.values import NonNegativeFloat, Probability, deep_freeze
+from datp_core.core.identifiers import ClientId, PopulationId, ThresholdPolicyId
+from datp_core.core.values import NonNegativeFloat, Probability, deep_freeze
 
 
 def _as_tuple_str(value: object) -> tuple[str, ...]:

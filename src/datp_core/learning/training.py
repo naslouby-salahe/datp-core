@@ -17,8 +17,10 @@ from datp_core.artifacts.models import (
     ArtifactRepository,
     BytesPayload,
 )
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
-from datp_core.datasets.models import SplitMethod
+from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.core.identifiers import DatasetId, RunId
+from datp_core.core.values import PositiveInt
+from datp_core.data.contracts import SplitMethod
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.learning.autoencoder import (
     DynamicDenseAutoencoder,
@@ -27,14 +29,16 @@ from datp_core.learning.autoencoder import (
     set_deterministic_seeds,
 )
 from datp_core.learning.checkpoints import select_anchor_checkpoint_round, select_lowest_validation_loss_checkpoint
-from datp_core.learning.federated import FederatedTrainingResult, federated_train_autoencoder
 from datp_core.learning.models import PersonalizationStrategy, TrainingProfileKind
-from datp_core.learning.personalization import DittoTrainingResult, ditto_train_autoencoder
 from datp_core.learning.scoring import load_benign_client_tensors, materialized_feature_columns
-from datp_core.pipeline.identifiers import DatasetId, RunId
+from datp_core.learning.strategies import (
+    DittoTrainingResult,
+    FederatedTrainingResult,
+    ditto_train_autoencoder,
+    federated_train_autoencoder,
+)
+from datp_core.pipeline.execution import artifact_parents, commit_artifact
 from datp_core.pipeline.models import StageJob, StageJobOutcome, StageKind
-from datp_core.pipeline.stages import artifact_parents, commit_artifact
-from datp_core.pipeline.values import PositiveInt
 
 
 class ModelTrainingStageHandler:

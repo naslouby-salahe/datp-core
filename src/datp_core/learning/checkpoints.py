@@ -20,7 +20,8 @@ from datp_core.artifacts.models import (
     ArtifactRepository,
     BytesPayload,
 )
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
+from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.core.identifiers import RunId
 from datp_core.experiments.identity import IdentityBuilder, execution_run_id
 from datp_core.learning.models import (
     CheckpointAuthorization,
@@ -28,9 +29,8 @@ from datp_core.learning.models import (
     PersonalizationStrategy,
     TrainingProfileKind,
 )
-from datp_core.pipeline.identifiers import RunId
+from datp_core.pipeline.execution import artifact_parents, commit_artifact
 from datp_core.pipeline.models import StageJob, StageJobContext, StageJobOutcome, StageKind
-from datp_core.pipeline.stages import artifact_parents, commit_artifact
 
 
 def select_anchor_checkpoint_round(

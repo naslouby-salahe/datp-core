@@ -7,9 +7,9 @@ from typing import Protocol, runtime_checkable
 
 from attrs import define, field
 
-from datp_core.pipeline.fingerprints import Checksum, Fingerprint
-from datp_core.pipeline.identifiers import ArtifactId, ExperimentId
-from datp_core.pipeline.values import Seed
+from datp_core.core.hashing import Checksum, Fingerprint
+from datp_core.core.identifiers import ArtifactId, ExperimentId
+from datp_core.core.values import Seed
 
 
 class ArtifactKind(Enum):

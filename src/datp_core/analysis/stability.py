@@ -15,8 +15,8 @@ import numpy as np
 import polars as pl
 from sklearn.metrics import adjusted_rand_score
 
-from datp_core.analysis.coverage import group_mean_std, mean_group_std
-from datp_core.analysis.models import (
+from datp_core.analysis.ratios import group_mean_std, mean_group_std
+from datp_core.analysis.results import (
     ClusterAblationObservation,
     ClusterAblationStabilityResult,
     ClusterMembershipStabilityResult,
@@ -26,7 +26,10 @@ from datp_core.analysis.models import (
     ThresholdStabilitySeedResult,
 )
 from datp_core.artifacts.models import ArtifactRepository
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
+from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.contracts.frames import validate_client_metric_frame, validate_test_score_frame, validate_threshold_frame
+from datp_core.core.identifiers import ExperimentId, RunId
+from datp_core.core.values import Seed
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.models import (
     ClusterStabilityAnalysisRecord,
@@ -34,10 +37,7 @@ from datp_core.experiments.models import (
     ThresholdStabilityAnalysisRecord,
     ValueSweepRecord,
 )
-from datp_core.pipeline.frames import validate_client_metric_frame, validate_test_score_frame, validate_threshold_frame
-from datp_core.pipeline.identifiers import ExperimentId, RunId
 from datp_core.pipeline.models import StageJobContext
-from datp_core.pipeline.values import Seed
 
 
 def compute_adjusted_rand_index(labels_true: np.ndarray, labels_pred: np.ndarray) -> float:

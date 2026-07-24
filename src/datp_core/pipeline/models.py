@@ -8,7 +8,7 @@ from enum import Enum
 import networkx as nx
 
 from datp_core.artifacts.models import ArtifactKey
-from datp_core.pipeline.identifiers import ExperimentId, JobId, PopulationId, ThresholdPolicyId
+from datp_core.core.identifiers import ExperimentId, JobId, PopulationId, ThresholdPolicyId
 
 
 class StageKind(Enum):

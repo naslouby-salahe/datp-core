@@ -11,7 +11,7 @@ from typing import cast
 
 from attrs import define, field
 
-from datp_core.pipeline.identifiers import (
+from datp_core.core.identifiers import (
     CheckpointProfileId,
     DatasetId,
     DatasetSetupId,
@@ -24,7 +24,7 @@ from datp_core.pipeline.identifiers import (
     ThresholdPolicyId,
     TrainingProfileId,
 )
-from datp_core.pipeline.values import (
+from datp_core.core.values import (
     FrozenJson,
     PositiveInt,
     Probability,

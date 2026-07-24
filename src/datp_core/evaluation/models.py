@@ -11,7 +11,7 @@ from statistics import mean
 
 from attrs import define
 
-from datp_core.pipeline.identifiers import ClientId, MetricBundleId
+from datp_core.core.identifiers import ClientId, MetricBundleId
 
 
 @define(frozen=True, slots=True, kw_only=True)

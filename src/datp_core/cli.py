@@ -1,9 +1,7 @@
 """Typer CLI application routing commands to explicit application use cases.
 
-Merges the pre-refactor ``interfaces/cli/{app,formatters}.py`` into one file: section 6's target
-tree has a single top-level ``cli.py`` (argument parsing and presentation only, never concrete
-infrastructure directly -- everything goes through ``bootstrap``), not a ``cli/`` subpackage, and
-the two formatter functions are small enough that a separate module would be a needless split.
+Argument parsing and presentation only, never concrete infrastructure directly -- everything
+goes through ``app.py``.
 """
 
 from __future__ import annotations
@@ -16,11 +14,10 @@ from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
 
-from datp_core.bootstrap import ConfigurationError, build_application, build_config_only_application
-from datp_core.configuration.project import resolve_project_configuration
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
+from datp_core.app import ConfigurationError, build_application, build_config_only_application
+from datp_core.config.project import ResolvedProjectConfiguration, resolve_project_configuration
+from datp_core.core.identifiers import DatasetId, ExperimentId
 from datp_core.experiments.planning import expand_experiment_jobs, validate_planning_graph
-from datp_core.pipeline.identifiers import DatasetId, ExperimentId
 from datp_core.pipeline.models import PlanningGraph
 
 app = typer.Typer(name="datp-core", help="DATP-Core Scientific CLI Application")

@@ -7,21 +7,21 @@ from io import BytesIO
 
 import polars as pl
 
-from datp_core.analysis.models import (
+from datp_core.analysis.results import (
     AssociationCorrelationResult,
     AssociationObservationRecord,
     AssociationRegressionResult,
     MetricAssociationAnalysisResult,
     PairedThresholdAnalysisResult,
-    StatisticalAnalysisUseCase,
 )
+from datp_core.analysis.statistics import StatisticalAnalysisUseCase
 from datp_core.artifacts.models import ArtifactRepository
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
+from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.contracts.frames import validate_calibration_score_frame
+from datp_core.core.identifiers import ClientId, RunId
 from datp_core.evaluation.models import calculate_pairwise_js_divergence
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.models import ExperimentRecord, MetricAssociationAnalysisRecord
-from datp_core.pipeline.frames import validate_calibration_score_frame
-from datp_core.pipeline.identifiers import ClientId, RunId
 from datp_core.pipeline.models import StageJobContext
 
 

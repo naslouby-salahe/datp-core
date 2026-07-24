@@ -24,15 +24,15 @@ from datp_core.artifacts.models import (
     ArtifactRepository,
     BytesPayload,
 )
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
-from datp_core.datasets.models import SplitMethod
+from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.contracts.frames import validate_calibration_score_frame, validate_test_score_frame
+from datp_core.core.identifiers import DatasetId, RunId
+from datp_core.data.contracts import SplitMethod
 from datp_core.experiments.identity import IdentityBuilder, execution_run_id
 from datp_core.learning.autoencoder import DynamicDenseAutoencoder, require_cuda_training_device
 from datp_core.learning.models import CheckpointAuthorization, PersonalizationStrategy
-from datp_core.pipeline.frames import validate_calibration_score_frame, validate_test_score_frame
-from datp_core.pipeline.identifiers import DatasetId, RunId
+from datp_core.pipeline.execution import artifact_parents, commit_artifact
 from datp_core.pipeline.models import StageJob, StageJobContext, StageJobOutcome, StageKind
-from datp_core.pipeline.stages import artifact_parents, commit_artifact
 
 _SCORE_IDENTITY_COLUMNS = ("source_path", "source_row_index", "client_id", "split", "is_attack")
 

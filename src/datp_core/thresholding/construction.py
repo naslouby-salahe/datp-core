@@ -1,10 +1,8 @@
 """Threshold-estimator protocol, configured dispatch across all 12 policy families, the
 construction use case, and the threshold-construction pipeline stage.
 
-`ConfiguredThresholdEstimator.estimate()` dispatches to the family-group modules
-(quantiles.py, grouped.py, conformal.py, shrinkage_and_federated.py) rather than embedding all 12
-families' math in one place -- the estimator-layer mirror of the same 12-family mixing previously
-duplicated across the authored schema and resolver layers (see CURRENT_ARCHITECTURE.md §9.3).
+`ConfiguredThresholdEstimator.estimate()` dispatches to the pure estimator functions in
+`thresholding/estimators.py` rather than embedding all 12 families' math in one place.
 """
 
 from __future__ import annotations
@@ -24,16 +22,27 @@ from datp_core.artifacts.models import (
     ArtifactRepository,
     BytesPayload,
 )
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
+from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.contracts.frames import validate_calibration_score_frame, validate_threshold_frame
+from datp_core.core.identifiers import ClientId, PopulationId, RunId, ThresholdPolicyId
+from datp_core.core.values import Seed, TypedDomainRegistry
 from datp_core.experiments.identity import IdentityBuilder
-from datp_core.experiments.sweeps import score_context
-from datp_core.pipeline.frames import validate_calibration_score_frame, validate_threshold_frame
-from datp_core.pipeline.identifiers import ClientId, PopulationId, RunId, ThresholdPolicyId
+from datp_core.experiments.planning import score_context
+from datp_core.pipeline.execution import artifact_parents, commit_artifact
 from datp_core.pipeline.models import StageJob, StageJobOutcome, StageKind
-from datp_core.pipeline.stages import artifact_parents, commit_artifact
-from datp_core.pipeline.values import Seed, TypedDomainRegistry
-from datp_core.thresholding.conformal import estimate_conformal
-from datp_core.thresholding.grouped import estimate_cluster
+from datp_core.thresholding.estimators import (
+    estimate_calibration_fallback,
+    estimate_cluster,
+    estimate_conformal,
+    estimate_family_mean,
+    estimate_federated_fixed,
+    estimate_federated_matched,
+    estimate_local_quantile,
+    estimate_pooled,
+    estimate_shared_mean,
+    estimate_shared_weighted,
+    estimate_shrinkage,
+)
 from datp_core.thresholding.models import (
     BenignCalibrationScores,
     CalibrationFallbackThresholdPolicyRecord,
@@ -52,19 +61,6 @@ from datp_core.thresholding.models import (
     ThresholdSet,
     policy_quantile,
     quantile,
-)
-from datp_core.thresholding.quantiles import (
-    estimate_family_mean,
-    estimate_local_quantile,
-    estimate_pooled,
-    estimate_shared_mean,
-    estimate_shared_weighted,
-)
-from datp_core.thresholding.shrinkage_and_federated import (
-    estimate_calibration_fallback,
-    estimate_federated_fixed,
-    estimate_federated_matched,
-    estimate_shrinkage,
 )
 
 

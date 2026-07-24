@@ -12,16 +12,19 @@ from io import BytesIO
 
 import polars as pl
 
-from datp_core.analysis.models import (
+from datp_core.analysis.results import (
     AnchorEquivalenceAnalysisResult,
     AnchorEquivalenceChecks,
     DittoSelectionResult,
     FederatedProximalSelectionResult,
     PairedThresholdAnalysisResult,
-    StatisticalAnalysisUseCase,
 )
+from datp_core.analysis.statistics import StatisticalAnalysisUseCase
 from datp_core.artifacts.models import ArtifactRepository
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
+from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.contracts.frames import validate_client_metric_frame
+from datp_core.core.identifiers import ExperimentId, RunId
+from datp_core.core.values import Seed
 from datp_core.evaluation.models import MetricStatus, calculate_fpr_dispersion
 from datp_core.experiments.identity import IdentityBuilder, execution_run_id
 from datp_core.experiments.models import (
@@ -29,10 +32,7 @@ from datp_core.experiments.models import (
     ExperimentRecord,
     PairedThresholdAnalysisRecord,
 )
-from datp_core.pipeline.frames import validate_client_metric_frame
-from datp_core.pipeline.identifiers import ExperimentId, RunId
 from datp_core.pipeline.models import StageJobContext
-from datp_core.pipeline.values import Seed
 
 
 def analyze_paired(

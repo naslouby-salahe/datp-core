@@ -6,8 +6,8 @@ from enum import StrEnum
 
 from attrs import define
 
-from datp_core.pipeline.identifiers import CheckpointProfileId, SeedCohortId, TrainingProfileId
-from datp_core.pipeline.values import NonNegativeFloat, PositiveFloat, PositiveInt, Seed
+from datp_core.core.identifiers import CheckpointProfileId, SeedCohortId, TrainingProfileId
+from datp_core.core.values import NonNegativeFloat, PositiveFloat, PositiveInt, Seed
 
 
 class TrainingProfileKind(StrEnum):

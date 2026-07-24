@@ -8,11 +8,18 @@ from __future__ import annotations
 
 import os
 import shutil
+import subprocess
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from filelock import FileLock
 
+from datp_core.artifacts.codec import (
+    ManifestDecodeError,
+    ManifestSchemaIncompatibleError,
+    decode_manifest,
+    encode_manifest,
+)
 from datp_core.artifacts.models import (
     ArtifactCommitRequest,
     ArtifactCommitResult,
@@ -29,13 +36,23 @@ from datp_core.artifacts.models import (
     BytesPayload,
     FilePayload,
 )
-from datp_core.artifacts.serialization import (
-    ManifestDecodeError,
-    ManifestSchemaIncompatibleError,
-    decode_manifest,
-    encode_manifest,
-)
-from datp_core.pipeline.fingerprints import Fingerprint, compute_file_checksum, compute_payload_checksum
+from datp_core.core.hashing import Fingerprint, compute_file_checksum, compute_payload_checksum
+
+
+def git_revision() -> str:
+    """Capture the current git revision for artifact-commit provenance."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            return result.stdout.strip()
+    except (OSError, subprocess.TimeoutExpired):
+        pass
+    return "unknown"
 
 
 def _validate_parent_lineage(artifact_key: ArtifactKey, parents: tuple[ArtifactParent, ...]) -> str | None:

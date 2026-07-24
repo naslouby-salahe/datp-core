@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from datp_core.artifacts.models import ArtifactFormat, ArtifactRepository, BytesPayload
-from datp_core.artifacts.provenance import git_revision
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
+from datp_core.artifacts.repository import git_revision
+from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.core.identifiers import RunId
 from datp_core.experiments.identity import IdentityBuilder
-from datp_core.pipeline.identifiers import RunId
+from datp_core.pipeline.execution import artifact_parents, commit_artifact
 from datp_core.pipeline.models import StageJob, StageJobOutcome, StageKind
-from datp_core.pipeline.stages import artifact_parents, commit_artifact
 from datp_core.reporting.freezing import ResultFreezeError, freeze_result_family
 from datp_core.reporting.rendering import render_frozen_report
 

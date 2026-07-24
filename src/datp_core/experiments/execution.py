@@ -7,13 +7,12 @@ from __future__ import annotations
 
 from attrs import define
 
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
+from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.core.identifiers import ExperimentId, RunId
 from datp_core.experiments.identity import execution_run_id
 from datp_core.experiments.planning import expand_experiment_jobs, validate_planning_graph
-from datp_core.pipeline.identifiers import ExperimentId, RunId
+from datp_core.pipeline.execution import StageHandler, run_planning_graph
 from datp_core.pipeline.models import JobExecutionStatus, StageJobOutcome
-from datp_core.pipeline.runner import run_planning_graph
-from datp_core.pipeline.stages import StageHandler
 
 
 @define(frozen=True, slots=True, kw_only=True)

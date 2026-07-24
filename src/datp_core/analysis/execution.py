@@ -1,5 +1,5 @@
 """Statistical-analysis pipeline stage: orchestrates the per-analysis-family dispatch across
-``analysis/{paired,association,stability,coverage,temporal,resources,distributions}.py`` and
+``analysis/{paired,association,stability,coverage,ratios,operational,distributions}.py`` and
 persists the typed result list as a JSON artifact.
 
 Two genuine dispatch bugs were found and fixed while migrating this handler out of the untyped
@@ -20,30 +20,27 @@ from typing import cast
 from attrs import evolve
 
 from datp_core.analysis.association import analyze_association
-from datp_core.analysis.coverage import analyze_absorption, analyze_conformal_coverage, analyze_recovery_fraction
+from datp_core.analysis.coverage import analyze_conformal_coverage
 from datp_core.analysis.distributions import (
     analyze_distribution_mechanism,
     analyze_locked_client_distribution,
     analyze_quantile_estimation,
 )
-from datp_core.analysis.models import (
-    AnalysisResult,
-    PairedThresholdAnalysisResult,
-    StatisticalAnalysisUseCase,
-    analysis_result_to_payload,
-    holm_adjust_p_values,
-)
+from datp_core.analysis.operational import analyze_alert_burden, analyze_resource_cost, analyze_temporal_recovery
 from datp_core.analysis.paired import (
     analyze_anchor_equivalence,
     analyze_paired,
     ditto_selection,
     federated_proximal_selection,
 )
-from datp_core.analysis.resources import analyze_alert_burden, analyze_resource_cost
+from datp_core.analysis.ratios import analyze_absorption, analyze_recovery_fraction
+from datp_core.analysis.results import AnalysisResult, PairedThresholdAnalysisResult, analysis_result_to_payload
 from datp_core.analysis.stability import analyze_cluster_stability, analyze_threshold_stability
-from datp_core.analysis.temporal import analyze_temporal_recovery
+from datp_core.analysis.statistics import StatisticalAnalysisUseCase, holm_adjust_p_values
 from datp_core.artifacts.models import ArtifactFormat, ArtifactRepository, BytesPayload
-from datp_core.configuration.resolution import ResolvedProjectConfiguration
+from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.core.identifiers import RunId
+from datp_core.core.values import Seed
 from datp_core.experiments.models import (
     AbsorptionAnalysisRecord,
     AlertBurdenAnalysisRecord,
@@ -65,12 +62,10 @@ from datp_core.experiments.models import (
     ThresholdStabilityAnalysisRecord,
     ValueSweepRecord,
 )
-from datp_core.experiments.sweeps import calibration_sample_counts
+from datp_core.experiments.planning import calibration_sample_counts
 from datp_core.learning.models import PersonalizationStrategy, TrainingProfileKind
-from datp_core.pipeline.identifiers import RunId
+from datp_core.pipeline.execution import artifact_parents, commit_artifact
 from datp_core.pipeline.models import StageJob, StageJobOutcome, StageKind
-from datp_core.pipeline.stages import artifact_parents, commit_artifact
-from datp_core.pipeline.values import Seed
 
 
 def apply_holm_correction(results: list[AnalysisResult]) -> list[AnalysisResult]:

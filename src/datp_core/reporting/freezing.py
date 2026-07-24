@@ -11,8 +11,8 @@ from datetime import UTC, datetime
 from typing import cast
 
 from datp_core.artifacts.models import ArtifactKey
+from datp_core.contracts.protocols import ReportColumnRecord, ReportProfileRecord
 from datp_core.experiments.models import ExperimentRecord
-from datp_core.reporting.models import ReportColumnRecord, ReportProfileRecord
 
 
 class ResultFreezeError(ValueError):
