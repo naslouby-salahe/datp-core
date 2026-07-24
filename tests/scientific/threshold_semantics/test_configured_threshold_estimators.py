@@ -1,6 +1,6 @@
 import pytest
 
-from datp_core.analysis.operational import threshold_exchange_cost
+from datp_core.analysis.operations.resource_cost import threshold_exchange_cost
 from datp_core.app import _build_estimator_registry, build_application
 from datp_core.core.identifiers import ClientId, PopulationId, ThresholdPolicyId
 from datp_core.thresholding.construction import ConstructThresholdsUseCase

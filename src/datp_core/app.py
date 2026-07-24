@@ -9,8 +9,8 @@ from pathlib import Path
 
 from attrs import define
 
-from datp_core.analysis.execution import StatisticalAnalysisStageHandler
-from datp_core.analysis.statistics import StatisticalAnalysisUseCase
+from datp_core.analysis.execution.handler import StatisticalAnalysisStageHandler
+from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
 from datp_core.artifacts.query import DuckDbAuditService
 from datp_core.artifacts.repository import AtomicArtifactRepository
 from datp_core.config.loading import ConfigurationError

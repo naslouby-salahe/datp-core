@@ -1,0 +1,129 @@
+"""Resource-cost analysis: per-round communication and checkpoint-storage cost estimation."""
+
+from __future__ import annotations
+
+from safetensors.torch import load as load_safetensors
+
+from datp_core.analysis.artifact_access.bundles import threshold_and_calibration_frame
+from datp_core.analysis.artifact_access.reader import read_artifact_bytes
+from datp_core.analysis.operations.models import (
+    ResourceCostAnalysisResult,
+    ResourceCostEvaluationResult,
+    ResourceCostSeedResult,
+)
+from datp_core.artifacts.models import ArtifactRepository
+from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.contracts.protocols import CommunicationEstimationContractRecord
+from datp_core.core.identifiers import RunId
+from datp_core.core.values import Seed
+from datp_core.experiments.identity import IdentityBuilder
+from datp_core.experiments.models import ExperimentRecord, ResourceCostAnalysisRecord
+from datp_core.experiments.planning import score_context
+from datp_core.pipeline.models import StageJobContext
+from datp_core.thresholding.models import (
+    FederatedMatchedExceedanceThresholdPolicyRecord,
+    LocalQuantileThresholdPolicyRecord,
+    SharedMeanThresholdPolicyRecord,
+    SharedPooledThresholdPolicyRecord,
+    SharedWeightedThresholdPolicyRecord,
+    ThresholdPolicyRecord,
+)
+
+
+def threshold_exchange_cost(
+    contract: CommunicationEstimationContractRecord, policy: ThresholdPolicyRecord, client_count: int
+) -> tuple[tuple[str, ...], int]:
+    if isinstance(policy, SharedMeanThresholdPolicyRecord):
+        exchange = contract.threshold_exchange.b1
+        candidate_count = 0
+    elif isinstance(policy, LocalQuantileThresholdPolicyRecord):
+        exchange = contract.threshold_exchange.b2
+        candidate_count = 0
+    elif isinstance(policy, FederatedMatchedExceedanceThresholdPolicyRecord):
+        exchange = contract.threshold_exchange.federated_summary
+        grid = policy.candidate_grid
+        minimum = grid["minimum"]
+        maximum = grid["maximum"]
+        step = grid["step"]
+        if not isinstance(minimum, float) or not isinstance(maximum, float) or not isinstance(step, float):
+            raise ValueError("Federated-summary candidate grid requires finite numeric bounds")
+        candidate_count = round((maximum - minimum) / step) + 1
+    elif isinstance(policy, SharedPooledThresholdPolicyRecord | SharedWeightedThresholdPolicyRecord):
+        return (), 0
+    else:
+        raise ValueError(f"No communication contract is configured for threshold policy '{policy.policy}'")
+    base_fields = tuple(exchange.uplink_fields_per_client or ()) + tuple(exchange.downlink_fields_per_client or ())
+    candidate_fields = tuple(exchange.candidate_grid_downlink_fields_per_client or ()) + tuple(
+        exchange.candidate_grid_uplink_fields_per_client_per_candidate or ()
+    )
+    return (
+        base_fields + candidate_fields,
+        client_count
+        * (
+            sum(_field_bytes(contract, field) for field in base_fields)
+            + candidate_count * sum(_field_bytes(contract, field) for field in candidate_fields)
+        ),
+    )
+
+
+def _field_bytes(contract: CommunicationEstimationContractRecord, field: str) -> int:
+    encoding = next((name for name in contract.field_encodings if field.endswith(name)), None)
+    if encoding is None:
+        raise ValueError(f"Communication field '{field}' has no configured encoding")
+    return contract.field_encodings[encoding].bytes_per_field
+
+
+def analyze_resource_cost(
+    analysis: ResourceCostAnalysisRecord,
+    *,
+    config: ResolvedProjectConfiguration,
+    repository: ArtifactRepository,
+    experiment: ExperimentRecord,
+    seeds: tuple[Seed, ...],
+    run_id: RunId,
+) -> ResourceCostAnalysisResult:
+    contract = config.communication_estimation_contract
+    if analysis.estimate_basis != contract.estimate_basis:
+        raise ValueError("Resource-cost analysis estimate basis disagrees with the communication contract")
+    seed_results: list[ResourceCostSeedResult] = []
+    for seed in seeds:
+        evaluation_results: list[ResourceCostEvaluationResult] = []
+        for label in analysis.source_evaluations:
+            evaluation = next(item for item in experiment.evaluations if item.label == label)
+            _, calibration = threshold_and_calibration_frame(
+                repository=repository, experiment=experiment, seed=seed.value, label=label, run_id=run_id
+            )
+            policy = config.threshold_policies.get(evaluation.threshold_policy_id)
+            fields, threshold_bytes = threshold_exchange_cost(contract, policy, calibration["client_id"].n_unique())
+            context = score_context(
+                StageJobContext(
+                    experiment_id=experiment.identifier, seed=seed.value, population_id=evaluation.population_id
+                )
+            )
+            checkpoint_bytes = read_artifact_bytes(
+                repository,
+                run_id,
+                IdentityBuilder.training_job_id(context),
+                missing_message=f"Model checkpoint is unavailable for resource analysis seed {seed.value}",
+            )
+            parameters = sum(tensor.numel() for tensor in load_safetensors(checkpoint_bytes).values())
+            model_bytes = 2 * calibration["client_id"].n_unique() * parameters * 4
+            evaluation_results.append(
+                ResourceCostEvaluationResult(
+                    evaluation=label,
+                    transmitted_field_list=fields,
+                    estimated_threshold_message_bytes=threshold_bytes,
+                    estimated_model_exchange_bytes_per_round=model_bytes,
+                    estimated_checkpoint_storage_bytes=parameters * 4,
+                )
+            )
+        seed_results.append(ResourceCostSeedResult(seed=seed.value, evaluations=tuple(evaluation_results)))
+    return ResourceCostAnalysisResult(
+        analysis_label=analysis.label,
+        estimate_basis=analysis.estimate_basis,
+        produced_fields=analysis.produced_fields,
+        seed_results=tuple(seed_results),
+    )
+
+
+__all__ = ["analyze_resource_cost", "threshold_exchange_cost"]

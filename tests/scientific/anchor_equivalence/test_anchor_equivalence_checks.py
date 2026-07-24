@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import pytest
 
-from datp_core.analysis.paired import analyze_anchor_equivalence
-from datp_core.analysis.results import PairedThresholdAnalysisResult
-from datp_core.analysis.statistics import ConfidenceInterval
+from datp_core.analysis.comparisons.models import PairedThresholdAnalysisResult
+from datp_core.analysis.statistics.models import ConfidenceInterval
+from datp_core.analysis.validation.anchor_equivalence import analyze_anchor_equivalence
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
 from datp_core.core.values import Probability

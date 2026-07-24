@@ -15,7 +15,7 @@ _STAGE_FILES = {
     "thresholding/construction.py",
     "thresholding/calibration.py",
     "evaluation/execution.py",
-    "analysis/execution.py",
+    "analysis/execution/handler.py",
     "reporting/execution.py",
 }
 
