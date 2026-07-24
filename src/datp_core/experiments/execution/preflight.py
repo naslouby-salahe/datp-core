@@ -8,10 +8,10 @@ from datp_core.artifacts.identity import ArtifactFormat
 from datp_core.artifacts.payloads import BytesPayload
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import RunId
 from datp_core.pipeline.artifacts.commit import commit_artifact
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.node_key import node_path
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
 
@@ -22,10 +22,10 @@ class PreflightStageHandler:
         self._config = config
         self._repository = repository
 
-    def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
+    def execute(self, job: StageJob) -> StageJobOutcome:
         payload = json.dumps(
             {
-                "run_id": run_id.value,
+                "experiment_id": job.context.experiment_id.value,
                 "schema_version": 1,
                 "scientific_fingerprint": self._config.scientific_fingerprint.value,
                 "execution_fingerprint": self._config.execution_fingerprint.value,
@@ -37,19 +37,7 @@ class PreflightStageHandler:
             separators=(",", ":"),
             allow_nan=False,
         ).encode("utf-8")
-        relative_path = f"runs/{run_id.value}/{job.job_id.value}"
-        reuse = self._repository.assess_reuse(
-            relative_path,
-            job.output,
-            self._config.scientific_fingerprint,
-            self._config.execution_fingerprint,
-        )
-        if reuse.can_reuse:
-            return StageJobOutcome.reused(
-                job_id=job.job_id,
-                stage=job.stage,
-                produced_artifact=job.output,
-            )
+        relative_path = node_path(job.node_key)
         commit = commit_artifact(
             self._repository,
             self._config,
@@ -62,12 +50,12 @@ class PreflightStageHandler:
         )
         if not commit.success:
             return StageJobOutcome.failed(
-                job_id=job.job_id,
+                node_key=job.node_key,
                 stage=job.stage,
                 error_message=commit.error_message or "artifact commit failed",
             )
         return StageJobOutcome.succeeded(
-            job_id=job.job_id,
+            node_key=job.node_key,
             stage=job.stage,
             produced_artifact=job.output,
         )

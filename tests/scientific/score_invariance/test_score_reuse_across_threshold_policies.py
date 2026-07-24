@@ -45,9 +45,9 @@ def test_score_identity_is_invariant_to_evaluation_label(
     artifact_keys = set()
     for label in labels:
         context = StageJobContext(experiment_id=_anchor_reproduction.identifier, seed=0, evaluation_label=label)
-        job_ids.add(IdentityBuilder.job_id(kind, context).value)
+        job_ids.add(IdentityBuilder.node_key(kind, context).label)
         key = IdentityBuilder.artifact_key(kind, context)
-        artifact_keys.add((key.artifact_id.value, key.kind))
+        artifact_keys.add((key.node_key.label, key.kind))
     assert len(job_ids) == 1, f"{kind} job identity must not depend on evaluation_label, got {job_ids}"
     assert len(artifact_keys) == 1, f"{kind} artifact identity must not depend on evaluation_label, got {artifact_keys}"
 
@@ -58,9 +58,9 @@ def test_downstream_identity_does_depend_on_evaluation_label(
 ) -> None:
     labels = _evaluation_labels(_anchor_reproduction)
     job_ids = {
-        IdentityBuilder.job_id(
+        IdentityBuilder.node_key(
             kind, StageJobContext(experiment_id=_anchor_reproduction.identifier, seed=0, evaluation_label=label)
-        ).value
+        ).label
         for label in labels
     }
     assert len(job_ids) == len(labels), (
@@ -85,9 +85,9 @@ def test_score_identity_ignores_threshold_policy_id_field_directly(
         evaluation_label=labels[0],
         threshold_policy_id=first_policy if base.threshold_policy_id != first_policy else second_policy,
     )
-    assert IdentityBuilder.job_id(IdentityKind.CALIBRATION_SCORE, base) == IdentityBuilder.job_id(
+    assert IdentityBuilder.node_key(IdentityKind.CALIBRATION_SCORE, base) == IdentityBuilder.node_key(
         IdentityKind.CALIBRATION_SCORE, varied
     )
-    assert IdentityBuilder.job_id(IdentityKind.TEST_SCORE, base) == IdentityBuilder.job_id(
+    assert IdentityBuilder.node_key(IdentityKind.TEST_SCORE, base) == IdentityBuilder.node_key(
         IdentityKind.TEST_SCORE, varied
     )

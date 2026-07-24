@@ -6,7 +6,7 @@ from __future__ import annotations
 from datp_core.analysis.distributions.mechanism import distribution_seed_result
 from datp_core.analysis.distributions.models import LockedClientDistributionAnalysisResult
 from datp_core.artifacts.repository.port import ArtifactRepository
-from datp_core.core.identifiers import RunId
+from datp_core.core.identifiers import ExperimentId
 from datp_core.core.seeding import Seed
 from datp_core.experiments import ExperimentRecord, LockedClientDistributionAnalysisRecord
 
@@ -17,14 +17,14 @@ def analyze_locked_client_distribution(
     repository: ArtifactRepository,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    run_id: RunId,
+    experiment_id: ExperimentId,
 ) -> LockedClientDistributionAnalysisResult:
     seed_results = tuple(
         distribution_seed_result(
             experiment,
             seed.value,
             analysis.source_evaluations,
-            run_id,
+            experiment_id,
             analysis.locked_client_identifier,
             repository=repository,
         )

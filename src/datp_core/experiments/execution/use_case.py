@@ -6,7 +6,6 @@ from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments.catalogue.models import CapabilityRequirementRecord, ExperimentRecord
 from datp_core.experiments.execution.report import ExperimentExecutionReport
-from datp_core.experiments.identity.run_locator import resolve_experiment_run_id
 from datp_core.experiments.planning.jobs import expand_experiment_jobs
 from datp_core.experiments.planning.validation import validate_planning_graph
 from datp_core.pipeline.execution.registry import StageHandlerRegistry
@@ -76,6 +75,7 @@ def _validate_experiment_runtime_contracts(
     capability_error = _validate_capability_requirements(experiment, config)
     if capability_error is not None:
         return capability_error
+    # TODO: prerequisite outcomes will be enforced at runtime by the campaign orchestrator
     return _validate_prerequisites(experiment, config)
 
 
@@ -98,26 +98,20 @@ class ExecuteExperimentUseCase:
         contract_error = _validate_experiment_runtime_contracts(experiment, self._config)
         if contract_error is not None:
             return ExperimentExecutionReport(
-                run_id=resolve_experiment_run_id(self._config, experiment_id),
                 experiment_id=experiment_id,
                 outcomes=(),
                 successful_jobs=0,
-                reused_jobs=0,
                 failed_jobs=1,
             )
 
         graph = expand_experiment_jobs(experiment, self._config)
         validate_planning_graph(graph)
 
-        run_id = resolve_experiment_run_id(self._config, experiment_id)
-
-        outcomes = run_planning_graph(graph, self._registry, run_id)
+        outcomes = run_planning_graph(graph, self._registry)
 
         return ExperimentExecutionReport(
-            run_id=run_id,
             experiment_id=experiment_id,
             outcomes=outcomes,
             successful_jobs=sum(outcome.status is JobExecutionStatus.SUCCESS for outcome in outcomes),
-            reused_jobs=sum(outcome.status is JobExecutionStatus.REUSED for outcome in outcomes),
             failed_jobs=sum(outcome.status is JobExecutionStatus.FAILED for outcome in outcomes),
         )

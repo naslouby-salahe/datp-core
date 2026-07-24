@@ -4,10 +4,8 @@ from __future__ import annotations
 
 from typing import Protocol, runtime_checkable
 
-from datp_core.artifacts.identity import ArtifactKey
 from datp_core.artifacts.payloads import ArtifactCommitRequest
-from datp_core.artifacts.repository.models import ArtifactCommitResult, ArtifactLookupResult, ArtifactReuseDecision
-from datp_core.core.hashing import Checksum, Fingerprint
+from datp_core.artifacts.repository.models import ArtifactCommitResult, ArtifactLookupResult
 
 
 @runtime_checkable
@@ -19,12 +17,3 @@ class ArtifactRepository(Protocol):
     def read(self, relative_path: str) -> ArtifactLookupResult: ...
 
     def inspect(self, relative_path: str) -> ArtifactLookupResult: ...
-
-    def assess_reuse(
-        self,
-        relative_path: str,
-        artifact_key: ArtifactKey,
-        scientific_fingerprint: Fingerprint,
-        execution_fingerprint: Fingerprint,
-        source_inventory_fingerprint: Checksum | None = None,
-    ) -> ArtifactReuseDecision: ...

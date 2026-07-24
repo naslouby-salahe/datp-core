@@ -7,38 +7,40 @@ from datp_core.experiments.planning import expand_experiment_jobs
 
 
 def test_identity_builder_determinism_across_all_experiments() -> None:
-    """Every experiment plan built twice must produce identical job IDs."""
+    """Every experiment plan built twice must produce identical node keys."""
     app = build_application()
     for exp_id in sorted(app.config.experiments.keys(), key=lambda e: e.value):
         plan_a = expand_experiment_jobs(app.config.experiments.get(exp_id), app.config)
         plan_b = expand_experiment_jobs(app.config.experiments.get(exp_id), app.config)
-        jobs_a = {j.job_id.value: (j.output.artifact_id.value, j.stage.value) for j in plan_a.jobs}
-        jobs_b = {j.job_id.value: (j.output.artifact_id.value, j.stage.value) for j in plan_b.jobs}
+        jobs_a = {j.node_key.label: (j.output.node_key.label, j.stage.value) for j in plan_a.jobs}
+        jobs_b = {j.node_key.label: (j.output.node_key.label, j.stage.value) for j in plan_b.jobs}
         assert jobs_a == jobs_b, f"Experiment {exp_id.value} produced different plans across two builds"
 
 
-def test_no_duplicate_job_ids_in_any_experiment() -> None:
-    """No experiment plan may contain duplicate JobId values."""
+def test_no_duplicate_node_keys_in_any_experiment() -> None:
+    """No experiment plan may contain duplicate node keys."""
     app = build_application()
     for exp_id in sorted(app.config.experiments.keys(), key=lambda e: e.value):
         plan = expand_experiment_jobs(app.config.experiments.get(exp_id), app.config)
         seen: set[str] = set()
         for job in plan.jobs:
-            assert job.job_id.value not in seen, f"Duplicate JobId '{job.job_id.value}' in experiment '{exp_id.value}'"
-            seen.add(job.job_id.value)
-
-
-def test_no_duplicate_artifact_ids_in_any_experiment() -> None:
-    """No experiment plan may produce duplicate ArtifactId values."""
-    app = build_application()
-    for exp_id in sorted(app.config.experiments.keys(), key=lambda e: e.value):
-        plan = expand_experiment_jobs(app.config.experiments.get(exp_id), app.config)
-        seen: set[str] = set()
-        for job in plan.jobs:
-            assert job.output.artifact_id.value not in seen, (
-                f"Duplicate ArtifactId '{job.output.artifact_id.value}' in experiment '{exp_id.value}'"
+            assert job.node_key.label not in seen, (
+                f"Duplicate node key '{job.node_key.label}' in experiment '{exp_id.value}'"
             )
-            seen.add(job.output.artifact_id.value)
+            seen.add(job.node_key.label)
+
+
+def test_no_duplicate_output_keys_in_any_experiment() -> None:
+    """No experiment plan may produce duplicate output node keys."""
+    app = build_application()
+    for exp_id in sorted(app.config.experiments.keys(), key=lambda e: e.value):
+        plan = expand_experiment_jobs(app.config.experiments.get(exp_id), app.config)
+        seen: set[str] = set()
+        for job in plan.jobs:
+            assert job.output.node_key.label not in seen, (
+                f"Duplicate output key '{job.output.node_key.label}' in experiment '{exp_id.value}'"
+            )
+            seen.add(job.output.node_key.label)
 
 
 def test_identity_builder_purity() -> None:
@@ -47,16 +49,16 @@ def test_identity_builder_purity() -> None:
 
     ctx = StageJobContext(experiment_id=ExperimentId("test_exp"), seed=42)
     builder = IdentityBuilder()
-    id1 = builder.preflight_job_id(ctx)
-    id2 = builder.preflight_job_id(ctx)
+    id1 = builder.preflight_node_key(ctx)
+    id2 = builder.preflight_node_key(ctx)
     assert id1 == id2
-    assert str(id1) == "test_exp:preflight"
+    assert id1.label == "test_exp:preflight"
 
     eval_ctx = StageJobContext(experiment_id=ExperimentId("test_exp"), seed=42, evaluation_label="my_eval")
-    aid1 = builder.threshold_artifact_id(eval_ctx)
-    aid2 = builder.threshold_artifact_id(eval_ctx)
+    aid1 = builder.threshold_node_key(eval_ctx)
+    aid2 = builder.threshold_node_key(eval_ctx)
     assert aid1 == aid2
-    assert str(aid1) == "test_exp:seed_42:my_eval:threshold_set"
+    assert aid1.label == "test_exp:threshold_construction:seed_42:my_eval"
 
 
 def test_typed_context_correctness_for_every_job_stage() -> None:

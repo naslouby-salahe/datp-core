@@ -55,7 +55,7 @@ def freeze_result_family(
         "statistical_procedure_version": experiment.checkpoint_profile_id.value,
         "report_profiles": [_profile_payload(profile) for profile in report_profiles],
         "source_artifacts": [
-            {"artifact_id": artifact.artifact_id.value, "kind": artifact.kind.value} for artifact in source_artifacts
+            {"artifact_id": artifact.node_key.label, "kind": artifact.kind.value} for artifact in source_artifacts
         ],
         "statistical_results": results,
     }

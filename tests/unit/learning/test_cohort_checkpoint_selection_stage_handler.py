@@ -17,33 +17,32 @@ from datp_core.artifacts.codecs.manifest import CURRENT_ARTIFACT_SCHEMA_VERSION
 from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
 from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
-from datp_core.core.identifiers import ArtifactId, ExperimentId, RunId
+from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments.planning import expand_experiment_jobs
 from datp_core.learning.checkpoints.handler import CohortCheckpointSelectionStageHandler
 from datp_core.learning.checkpoints.selection import select_cohort_validation_checkpoint
 from datp_core.pipeline.stages.enums import JobExecutionStatus, StageKind
 from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.node_key import node_path
 
 _SCHEDULED_ROUNDS = (25, 50, 75, 100, 125, 150, 200)
 
 
-def _cohort_job_and_run_id(app: DatpApplication) -> tuple[StageJob, RunId]:
+def _cohort_job(app: DatpApplication) -> StageJob:
     experiment_id = ExperimentId("confirmatory_threshold_scope_effect")
     graph = expand_experiment_jobs(app.config.experiments.get(experiment_id), app.config)
     job = next(item for item in graph.jobs if item.stage is StageKind.CHECKPOINT_SELECTION)
-    run_id = RunId(f"run_confirmatory_threshold_scope_effect_{app.config.execution_fingerprint.value[:12]}")
-    return job, run_id
+    return job
 
 
 def _commit_seed_checkpoint(
     repository: AtomicArtifactRepository,
     app: DatpApplication,
-    run_id: RunId,
-    dependency_value: str,
+    path_prefix: str,
     checkpoint_key: ArtifactKey,
 ) -> None:
     """Commit a synthetic training checkpoint so parent-lineage verification passes."""
-    relative_path = f"runs/{run_id.value}/{dependency_value}"
+    relative_path = path_prefix
     result = repository.commit(
         _commit_request(app, relative_path, checkpoint_key, b"{}", ArtifactFormat.SAFETENSORS)
     )
@@ -53,17 +52,16 @@ def _commit_seed_checkpoint(
 def _commit_seed_selection(
     repository: AtomicArtifactRepository,
     app: DatpApplication,
-    run_id: RunId,
-    dependency_value: str,
+    path_prefix: str,
     checkpoint_key: ArtifactKey,
     round_losses: list[tuple[int, float]],
 ) -> None:
     payload = json.dumps({"round_losses": [list(item) for item in round_losses]}).encode("utf-8")
-    relative_path = f"runs/{run_id.value}/{dependency_value}.selection"
+    selection_relative_path = f"{path_prefix}.selection"
     selection_key = ArtifactKey(
-        artifact_id=ArtifactId(f"{checkpoint_key.artifact_id.value}:selection"), kind=ArtifactKind.CHECKPOINT_SELECTION
+        node_key=checkpoint_key.node_key, kind=ArtifactKind.CHECKPOINT_SELECTION
     )
-    result = repository.commit(_commit_request(app, relative_path, selection_key, payload))
+    result = repository.commit(_commit_request(app, selection_relative_path, selection_key, payload))
     assert result.success, result.error_message
 
 
@@ -89,7 +87,7 @@ def _commit_request(
 
 def test_cohort_selection_picks_the_round_with_the_lowest_cross_seed_mean_loss(tmp_path: Path) -> None:
     app = build_application()
-    job, run_id = _cohort_job_and_run_id(app)
+    job = _cohort_job(app)
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
     # Ten distinct, hand-authored loss curves; round 100 has the lowest mean by construction.
     per_seed_losses = [
@@ -100,13 +98,14 @@ def test_cohort_selection_picks_the_round_with_the_lowest_cross_seed_mean_loss(t
         for seed_index in range(10)
     ]
     for dependency, checkpoint_key, losses in zip(job.dependencies, job.inputs, per_seed_losses, strict=True):
-        _commit_seed_checkpoint(repository, app, run_id, dependency.value, checkpoint_key)
-        _commit_seed_selection(repository, app, run_id, dependency.value, checkpoint_key, losses)
+        dep_path = node_path(dependency)
+        _commit_seed_checkpoint(repository, app, dep_path, checkpoint_key)
+        _commit_seed_selection(repository, app, dep_path, checkpoint_key, losses)
 
-    outcome = CohortCheckpointSelectionStageHandler(app.config, repository).execute(job, run_id)
+    outcome = CohortCheckpointSelectionStageHandler(app.config, repository).execute(job)
 
     assert outcome.status is JobExecutionStatus.SUCCESS
-    read = repository.read(f"runs/{run_id.value}/{job.job_id.value}")
+    read = repository.read(node_path(job.node_key))
     assert read.found and read.payload_bytes is not None
     payload = json.loads(read.payload_bytes)
     expected_round = select_cohort_validation_checkpoint(
@@ -117,50 +116,33 @@ def test_cohort_selection_picks_the_round_with_the_lowest_cross_seed_mean_loss(t
     assert payload["seed_round_losses"] == [[list(item) for item in losses] for losses in per_seed_losses]
 
 
-def test_cohort_selection_reuses_a_frozen_result_without_recomputation(tmp_path: Path) -> None:
-    app = build_application()
-    job, run_id = _cohort_job_and_run_id(app)
-    repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
-    per_seed_losses = [[(round_number, 1.0) for round_number in _SCHEDULED_ROUNDS] for _ in range(10)]
-    for dependency, checkpoint_key, losses in zip(job.dependencies, job.inputs, per_seed_losses, strict=True):
-        _commit_seed_checkpoint(repository, app, run_id, dependency.value, checkpoint_key)
-        _commit_seed_selection(repository, app, run_id, dependency.value, checkpoint_key, losses)
-    handler = CohortCheckpointSelectionStageHandler(app.config, repository)
-    first = handler.execute(job, run_id)
-    assert first.status is JobExecutionStatus.SUCCESS
-    first_bytes = repository.read(f"runs/{run_id.value}/{job.job_id.value}").payload_bytes
-
-    second = handler.execute(job, run_id)
-
-    assert second.status is JobExecutionStatus.REUSED
-    assert repository.read(f"runs/{run_id.value}/{job.job_id.value}").payload_bytes == first_bytes
-
-
 def test_cohort_selection_fails_typed_when_a_seed_dependency_is_missing_evidence(tmp_path: Path) -> None:
     app = build_application()
-    job, run_id = _cohort_job_and_run_id(app)
+    job = _cohort_job(app)
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
     # Commit checkpoints for all 10 seeds so parent-lineage verification passes,
     # but commit selection evidence for only the first 9 — the last is left unavailable.
     for dependency, checkpoint_key in zip(job.dependencies, job.inputs, strict=True):
-        _commit_seed_checkpoint(repository, app, run_id, dependency.value, checkpoint_key)
+        dep_path = node_path(dependency)
+        _commit_seed_checkpoint(repository, app, dep_path, checkpoint_key)
     per_seed_losses = [[(round_number, 1.0) for round_number in _SCHEDULED_ROUNDS] for _ in range(9)]
     for dependency, checkpoint_key, losses in zip(job.dependencies[:9], job.inputs[:9], per_seed_losses, strict=True):
-        _commit_seed_selection(repository, app, run_id, dependency.value, checkpoint_key, losses)
+        dep_path = node_path(dependency)
+        _commit_seed_selection(repository, app, dep_path, checkpoint_key, losses)
 
-    outcome = CohortCheckpointSelectionStageHandler(app.config, repository).execute(job, run_id)
+    outcome = CohortCheckpointSelectionStageHandler(app.config, repository).execute(job)
 
     assert outcome.status is JobExecutionStatus.FAILED
-    assert outcome.error_message is not None and "unavailable" in outcome.error_message.lower()
+    assert outcome.error_message is not None and "unreadable" in outcome.error_message.lower()
 
 
 def test_cohort_selection_rejects_a_per_seed_job_context(tmp_path: Path) -> None:
     app = build_application()
-    job, run_id = _cohort_job_and_run_id(app)
+    job = _cohort_job(app)
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
     per_seed_job = replace(job, context=replace(job.context, seed=0))
 
-    outcome = CohortCheckpointSelectionStageHandler(app.config, repository).execute(per_seed_job, run_id)
+    outcome = CohortCheckpointSelectionStageHandler(app.config, repository).execute(per_seed_job)
 
     assert outcome.status is JobExecutionStatus.FAILED
     assert (

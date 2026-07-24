@@ -8,18 +8,27 @@ from datp_core.artifacts.lineage import ArtifactParent
 from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload, FilePayload
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.config.fingerprinting.canonical import compute_fingerprint
-from datp_core.core.identifiers import ArtifactId
+from datp_core.core.identifiers import ExperimentId
+from datp_core.pipeline.stages.enums import StageKind
+from datp_core.pipeline.stages.node_key import StageNodeKey
+
+
+def _key(label: str = "artifact") -> ArtifactKey:
+    return ArtifactKey(
+        node_key=StageNodeKey(experiment=ExperimentId("test"), stage=StageKind.PREFLIGHT, seed=hash(label) % 10000),
+        kind=ArtifactKind.REPORT,
+    )
 
 
 def _request() -> ArtifactCommitRequest:
     scientific = compute_fingerprint("scientific", {"experiment": "test"})
     return ArtifactCommitRequest(
         metadata=ArtifactCommitMetadata(
-            artifact_key=ArtifactKey(artifact_id=ArtifactId("artifact"), kind=ArtifactKind.REPORT),
+            artifact_key=_key(),
             artifact_format=ArtifactFormat.TEXT,
             scientific_fingerprint=scientific,
             execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
-            relative_path="reports/artifact",
+            relative_path="experiments/test/artifact",
             parents=(),
             schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
             creation_timestamp=1.0,
@@ -32,7 +41,7 @@ def _request() -> ArtifactCommitRequest:
 def test_committed_artifact_is_read_only_after_checksum_verification(tmp_path: Path) -> None:
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
     assert repository.commit(_request()).success
-    read = repository.read("reports/artifact")
+    read = repository.read("experiments/test/artifact")
     assert read.found
     assert read.payload_bytes == b"verified payload"
 
@@ -40,22 +49,8 @@ def test_committed_artifact_is_read_only_after_checksum_verification(tmp_path: P
 def test_corrupt_payload_is_not_returned(tmp_path: Path) -> None:
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
     assert repository.commit(_request()).success
-    (tmp_path / "reports/artifact/payload.text").write_bytes(b"corrupt")
-    assert not repository.read("reports/artifact").found
-
-
-def test_repository_reuses_only_a_matching_frozen_artifact(tmp_path: Path) -> None:
-    request = _request()
-    repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
-    assert repository.commit(request).success
-    decision = repository.assess_reuse(
-        request.metadata.relative_path,
-        request.metadata.artifact_key,
-        request.metadata.scientific_fingerprint,
-        request.metadata.execution_fingerprint,
-    )
-    assert decision.can_reuse
-    assert decision.existing_manifest is not None
+    (tmp_path / "experiments/test/artifact/payload.text").write_bytes(b"corrupt")
+    assert not repository.read("experiments/test/artifact").found
 
 
 def test_artifact_declaring_itself_as_its_own_parent_is_rejected(tmp_path: Path) -> None:
@@ -91,7 +86,10 @@ def test_artifact_declaring_itself_as_its_own_parent_is_rejected(tmp_path: Path)
 def test_artifact_declaring_duplicate_parent_lineage_is_rejected(tmp_path: Path) -> None:
     request = _request()
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
-    duplicate_parent = ArtifactKey(artifact_id=ArtifactId("some-parent"), kind=ArtifactKind.MATERIALIZED_DATASET)
+    duplicate_parent = ArtifactKey(
+        node_key=StageNodeKey(experiment=ExperimentId("test"), stage=StageKind.PREFLIGHT, seed=42),
+        kind=ArtifactKind.MATERIALIZED_DATASET,
+    )
     parent_entry = ArtifactParent(
         parent_key=duplicate_parent,
         parent_relative_path="some/parent/path",
@@ -124,7 +122,10 @@ def test_file_commit_copies_and_verifies_a_staged_payload_without_in_memory_payl
     scientific = compute_fingerprint("scientific", {"experiment": "file"})
     request = ArtifactCommitRequest(
         metadata=ArtifactCommitMetadata(
-            artifact_key=ArtifactKey(artifact_id=ArtifactId("file-artifact"), kind=ArtifactKind.MATERIALIZED_DATASET),
+            artifact_key=ArtifactKey(
+                node_key=StageNodeKey(experiment=ExperimentId("test"), stage=StageKind.PREFLIGHT, seed=43),
+                kind=ArtifactKind.MATERIALIZED_DATASET,
+            ),
             artifact_format=ArtifactFormat.PARQUET,
             scientific_fingerprint=scientific,
             execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),

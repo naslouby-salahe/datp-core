@@ -6,14 +6,13 @@ from io import BytesIO
 
 import polars as pl
 
-from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey
+from datp_core.artifacts.identity import ArtifactFormat
 from datp_core.artifacts.payloads import BytesPayload
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
 from datp_core.artifacts.schemas.scores import validate_test_score_frame
 from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import RunId
 from datp_core.evaluation.metrics.auroc import compute_client_auroc
 from datp_core.evaluation.metrics.operating_point import (
     compute_operating_point_metrics,
@@ -25,6 +24,7 @@ from datp_core.pipeline.artifacts.commit import commit_artifact
 from datp_core.pipeline.artifacts.lineage import artifact_parents
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.node_key import node_path
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
 
@@ -35,35 +35,20 @@ class OperatingPointEvaluationStageHandler:
         self._config = config
         self._repository = repository
 
-    def _dependency_reusable(self, relative_path: str, artifact_key: ArtifactKey) -> bool:
-        return self._repository.assess_reuse(
-            relative_path, artifact_key, self._config.scientific_fingerprint, self._config.execution_fingerprint
-        ).can_reuse
-
-    def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
-        relative_path = f"runs/{run_id.value}/{job.job_id.value}"
-        if self._dependency_reusable(relative_path, job.output):
-            return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+    def execute(self, job: StageJob) -> StageJobOutcome:
+        relative_path = node_path(job.node_key)
         score_ctx = score_context(job.context)
-        threshold_path = f"runs/{run_id.value}/{IdentityBuilder.threshold_job_id(job.context).value}"
-        score_path = f"runs/{run_id.value}/{IdentityBuilder.test_score_job_id(score_ctx).value}"
-        if not self._dependency_reusable(threshold_path, IdentityBuilder.thresholds_key(job.context)):
-            return StageJobOutcome.failed(
-                job_id=job.job_id, stage=job.stage, error_message="Threshold artifact is unavailable or incompatible"
-            )
-        if not self._dependency_reusable(score_path, IdentityBuilder.test_scores_key(score_ctx)):
-            return StageJobOutcome.failed(
-                job_id=job.job_id, stage=job.stage, error_message="Test score artifact is unavailable or incompatible"
-            )
+        threshold_path = node_path(IdentityBuilder.threshold_node_key(job.context))
+        score_path = node_path(IdentityBuilder.test_score_node_key(score_ctx))
         thresholds = self._repository.read(threshold_path)
         scores = self._repository.read(score_path)
         if not thresholds.found or thresholds.payload_bytes is None:
             return StageJobOutcome.failed(
-                job_id=job.job_id, stage=job.stage, error_message="Threshold artifact is unavailable"
+                node_key=job.node_key, stage=job.stage, error_message="Threshold artifact is unavailable"
             )
         if not scores.found or scores.payload_bytes is None:
             return StageJobOutcome.failed(
-                job_id=job.job_id, stage=job.stage, error_message="Test score artifact is unavailable"
+                node_key=job.node_key, stage=job.stage, error_message="Test score artifact is unavailable"
             )
         try:
             threshold_frame = validate_threshold_frame(pl.read_parquet(BytesIO(thresholds.payload_bytes)))
@@ -88,7 +73,7 @@ class OperatingPointEvaluationStageHandler:
             )
             validate_client_metric_frame(metrics)
         except (OSError, ValueError) as exc:
-            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+            return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message=str(exc))
         payload = BytesIO()
         metrics.write_parquet(payload)
         commit = commit_artifact(
@@ -109,8 +94,8 @@ class OperatingPointEvaluationStageHandler:
         )
         if not commit.success:
             return StageJobOutcome.failed(
-                job_id=job.job_id,
+                node_key=job.node_key,
                 stage=job.stage,
                 error_message=commit.error_message or "metric artifact commit failed",
             )
-        return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        return StageJobOutcome.succeeded(node_key=job.node_key, stage=job.stage, produced_artifact=job.output)

@@ -12,7 +12,16 @@ from datp_core.artifacts.codecs.safetensors import load_model_safetensors, save_
 from datp_core.artifacts.identity import ArtifactCorruptionReason, ArtifactFormat, ArtifactKey, ArtifactKind
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.config.fingerprinting.canonical import compute_fingerprint
-from datp_core.core.identifiers import ArtifactId
+from datp_core.core.identifiers import ExperimentId
+from datp_core.pipeline.stages.enums import StageKind
+from datp_core.pipeline.stages.node_key import StageNodeKey
+
+
+def _checkpoint_key(label: str = "model-checkpoint") -> ArtifactKey:
+    return ArtifactKey(
+        node_key=StageNodeKey(experiment=ExperimentId("test"), stage=StageKind.PREFLIGHT, seed=hash(label) % 10000),
+        kind=ArtifactKind.MODEL_CHECKPOINT,
+    )
 
 
 def _tensor_state_dict() -> dict[str, torch.Tensor]:
@@ -28,10 +37,10 @@ def test_safetensors_commit_round_trips_through_checksum_verification(tmp_path: 
     result = save_model_safetensors(
         state_dict,
         repository=repository,
-        artifact_key=ArtifactKey(artifact_id=ArtifactId("model-checkpoint"), kind=ArtifactKind.MODEL_CHECKPOINT),
+        artifact_key=_checkpoint_key(),
         scientific_fingerprint=scientific,
         execution_fingerprint=execution,
-        relative_path="checkpoints/model-checkpoint",
+        relative_path="experiments/test/preflight/model-checkpoint",
         schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
         creation_timestamp=1.0,
         environment_identity="test",
@@ -40,7 +49,7 @@ def test_safetensors_commit_round_trips_through_checksum_verification(tmp_path: 
     assert result.manifest is not None
     assert result.manifest.artifact_format == ArtifactFormat.SAFETENSORS
 
-    loaded = load_model_safetensors("checkpoints/model-checkpoint", repository)
+    loaded = load_model_safetensors("experiments/test/preflight/model-checkpoint", repository)
     assert torch.equal(loaded["encoder.0.weight"], state_dict["encoder.0.weight"])
 
 
@@ -52,19 +61,19 @@ def test_corrupted_safetensors_payload_is_rejected_identically_to_other_formats(
     result = save_model_safetensors(
         _tensor_state_dict(),
         repository=repository,
-        artifact_key=ArtifactKey(artifact_id=ArtifactId("corrupt-checkpoint"), kind=ArtifactKind.MODEL_CHECKPOINT),
+        artifact_key=_checkpoint_key("corrupt-checkpoint"),
         scientific_fingerprint=scientific,
         execution_fingerprint=execution,
-        relative_path="checkpoints/corrupt-checkpoint",
+        relative_path="experiments/test/preflight/corrupt-checkpoint",
         schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
         creation_timestamp=1.0,
         environment_identity="test",
     )
     assert result.success
 
-    payload_path = tmp_path / "checkpoints/corrupt-checkpoint/payload.safetensors"
+    payload_path = tmp_path / "experiments/test/preflight/corrupt-checkpoint/payload.safetensors"
     payload_path.write_bytes(b"corrupted safetensors payload")
 
-    inspection = repository.inspect("checkpoints/corrupt-checkpoint")
+    inspection = repository.inspect("experiments/test/preflight/corrupt-checkpoint")
     assert not inspection.found
     assert inspection.corruption_reason == ArtifactCorruptionReason.CHECKSUM_MISMATCH

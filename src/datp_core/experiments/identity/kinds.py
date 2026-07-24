@@ -7,6 +7,7 @@ from enum import Enum
 from attrs import define
 
 from datp_core.artifacts.identity import ArtifactKind
+from datp_core.pipeline.stages.enums import StageKind
 
 
 class IdentityKind(Enum):
@@ -30,9 +31,8 @@ class IdentityKind(Enum):
 
 @define(frozen=True, slots=True, kw_only=True)
 class StageIdentitySpec:
+    stage_kind: StageKind
     artifact_kind: ArtifactKind
-    job_token: str
-    artifact_token: str
     uses_seed: bool = False
     uses_condition: bool = False
     uses_population: bool = False

@@ -13,7 +13,7 @@ from datp_core.analysis.calibration.models import (
     QuantileEstimationSeedResult,
 )
 from datp_core.artifacts.repository.port import ArtifactRepository
-from datp_core.core.identifiers import RunId
+from datp_core.core.identifiers import ExperimentId
 from datp_core.core.seeding import Seed
 from datp_core.evaluation.distributions import calibration_variance_terms
 from datp_core.experiments import ExperimentRecord, QuantileEstimationAnalysisRecord
@@ -25,13 +25,13 @@ def analyze_quantile_estimation(
     repository: ArtifactRepository,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    run_id: RunId,
+    experiment_id: ExperimentId,
 ) -> QuantileEstimationAnalysisResult:
     seed_results: list[QuantileEstimationSeedResult] = []
     for seed in seeds:
         frames = {
             label: threshold_and_calibration_frame(
-                repository=repository, experiment=experiment, seed=seed.value, label=label, run_id=run_id
+                repository=repository, experiment=experiment, seed=seed.value, label=label, experiment_id=experiment_id
             )
             for label in analysis.source_evaluations
         }

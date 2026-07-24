@@ -22,7 +22,7 @@ from datp_core.analysis.temporal.recovery import analyze_temporal_recovery
 from datp_core.analysis.validation.anchor_equivalence import analyze_anchor_equivalence
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import RunId
+from datp_core.core.identifiers import ExperimentId
 from datp_core.core.seeding import Seed
 from datp_core.experiments import (
     AbsorptionAnalysisRecord,
@@ -54,7 +54,7 @@ def dispatch_paired(
     statistical_analysis: StatisticalAnalysisUseCase,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    run_id: RunId,
+    experiment_id: ExperimentId,
 ) -> tuple[PairedThresholdAnalysisResult, ...]:
     return tuple(
         analyze_paired(
@@ -64,7 +64,7 @@ def dispatch_paired(
             statistical_analysis=statistical_analysis,
             experiment=experiment,
             seeds=seeds,
-            run_id=run_id,
+            experiment_id=experiment_id,
             partition_condition=cell.partition_condition,
             proximal_mu=cell.proximal_mu,
             ditto_weight=cell.ditto_weight,
@@ -85,7 +85,7 @@ def dispatch(
     statistical_analysis: StatisticalAnalysisUseCase,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    run_id: RunId,
+    experiment_id: ExperimentId,
     paired_results: tuple[PairedThresholdAnalysisResult, ...],
     calibration_sample_count_values: tuple[int | None, ...],
 ) -> list[AnalysisResult]:
@@ -101,7 +101,7 @@ def dispatch(
                     statistical_analysis=statistical_analysis,
                     experiment=experiment,
                     seeds=tuple(seed.value for seed in seeds),
-                    run_id=run_id,
+                    experiment_id=experiment_id,
                 )
             ]
         case AnalysisKind.THRESHOLD_STABILITY:
@@ -113,7 +113,7 @@ def dispatch(
                     repository=repository,
                     experiment=experiment,
                     seeds=seeds,
-                    run_id=run_id,
+                    experiment_id=experiment_id,
                     calibration_sample_count=calibration_sample_count,
                 )
                 for calibration_sample_count in calibration_sample_count_values
@@ -139,7 +139,7 @@ def dispatch(
                     statistical_analysis=statistical_analysis,
                     experiment=experiment,
                     seeds=seeds,
-                    run_id=run_id,
+                    experiment_id=experiment_id,
                 )
             ]
         case AnalysisKind.CLUSTER_STABILITY:
@@ -151,7 +151,7 @@ def dispatch(
                     config=config,
                     experiment=experiment,
                     seeds=seeds,
-                    run_id=run_id,
+                    experiment_id=experiment_id,
                 )
             ]
         case AnalysisKind.CONFORMAL_COVERAGE:
@@ -163,21 +163,23 @@ def dispatch(
                     repository=repository,
                     experiment=experiment,
                     seeds=seeds,
-                    run_id=run_id,
+                    experiment_id=experiment_id,
                 )
             ]
         case AnalysisKind.DISTRIBUTION_MECHANISM:
             assert isinstance(analysis_record, DistributionMechanismAnalysisRecord)
             return [
                 analyze_distribution_mechanism(
-                    analysis_record, repository=repository, experiment=experiment, seeds=seeds, run_id=run_id
+                    analysis_record, repository=repository, experiment=experiment, seeds=seeds,
+                    experiment_id=experiment_id,
                 )
             ]
         case AnalysisKind.LOCKED_CLIENT_DISTRIBUTION:
             assert isinstance(analysis_record, LockedClientDistributionAnalysisRecord)
             return [
                 analyze_locked_client_distribution(
-                    analysis_record, repository=repository, experiment=experiment, seeds=seeds, run_id=run_id
+                    analysis_record, repository=repository, experiment=experiment, seeds=seeds,
+                    experiment_id=experiment_id,
                 )
             ]
         case AnalysisKind.ALERT_BURDEN:
@@ -187,7 +189,8 @@ def dispatch(
             assert isinstance(analysis_record, QuantileEstimationAnalysisRecord)
             return [
                 analyze_quantile_estimation(
-                    analysis_record, repository=repository, experiment=experiment, seeds=seeds, run_id=run_id
+                    analysis_record, repository=repository, experiment=experiment, seeds=seeds,
+                    experiment_id=experiment_id,
                 )
             ]
         case AnalysisKind.RESOURCE_COST:
@@ -199,7 +202,7 @@ def dispatch(
                     repository=repository,
                     experiment=experiment,
                     seeds=seeds,
-                    run_id=run_id,
+                    experiment_id=experiment_id,
                 )
             ]
         case AnalysisKind.PAIRED_THRESHOLD:

@@ -21,7 +21,9 @@ from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKi
 from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.core.hashing import Fingerprint
-from datp_core.core.identifiers import ArtifactId, ExperimentId, RunId, ThresholdPolicyId
+from datp_core.core.identifiers import ExperimentId, ThresholdPolicyId
+from datp_core.pipeline.stages.enums import StageKind
+from datp_core.pipeline.stages.node_key import StageNodeKey, node_path
 from datp_core.core.seeding import Seed
 from datp_core.experiments import ClusterStabilityAnalysisRecord
 from datp_core.experiments.catalogue.evaluations import EvaluationSpecRecord, RunRequirement
@@ -102,17 +104,17 @@ def test_non_finite_computation_is_rejected_not_persisted() -> None:
 
 
 def _commit_parquet(
-    repository: AtomicArtifactRepository, *, run_id: str, job_id: str, frame: pl.DataFrame
+    repository: AtomicArtifactRepository, *, node_key: StageNodeKey, frame: pl.DataFrame
 ) -> None:
     buffer = BytesIO()
     frame.write_parquet(buffer)
     request = ArtifactCommitRequest(
         metadata=ArtifactCommitMetadata(
-            artifact_key=ArtifactKey(artifact_id=ArtifactId(job_id), kind=ArtifactKind.CLIENT_METRICS),
+            artifact_key=ArtifactKey(node_key=node_key, kind=ArtifactKind.CLIENT_METRICS),
             artifact_format=ArtifactFormat.PARQUET,
             scientific_fingerprint=_FINGERPRINT,
             execution_fingerprint=_FINGERPRINT,
-            relative_path=f"runs/{run_id}/{job_id}",
+            relative_path=node_path(node_key),
             parents=(),
             schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
             creation_timestamp=time.time(),
@@ -205,14 +207,13 @@ def test_threshold_dispersion_includes_a_client_with_no_metric_row(tmp_path: Pat
         reference_evaluation=None,
         run_requirement=None,
     )
-    run_id = RunId("run1")
     seeds = (Seed(0), Seed(1))
     for seed in seeds:
         context = StageJobContext(
             experiment_id=experiment.identifier, seed=seed.value, evaluation_label="cluster_eval"
         )
-        threshold_job_id = IdentityBuilder.threshold_job_id(context).value
-        evaluation_job_id = IdentityBuilder.evaluation_job_id(context).value
+        threshold_node_key = IdentityBuilder.threshold_node_key(context)
+        evaluation_node_key = IdentityBuilder.evaluation_node_key(context)
         threshold_frame = pl.DataFrame(
             {
                 "client_id": ["c1", "c2", "c3"],
@@ -220,13 +221,13 @@ def test_threshold_dispersion_includes_a_client_with_no_metric_row(tmp_path: Pat
                 "threshold": [0.5, 0.6, 0.7],
             }
         )
-        _commit_parquet(repository, run_id=run_id.value, job_id=threshold_job_id, frame=threshold_frame)
+        _commit_parquet(repository, node_key=threshold_node_key, frame=threshold_frame)
         # c3 has no row at all in the metric frame -- must not silently vanish from threshold
         # dispersion, and must be cleanly excluded (not fabricated) from FPR dispersion.
         metric_frame = pl.DataFrame(
             [_metric_row("c1", fpr=0.1, status="available"), _metric_row("c2", fpr=0.2, status="available")]
         )
-        _commit_parquet(repository, run_id=run_id.value, job_id=evaluation_job_id, frame=metric_frame)
+        _commit_parquet(repository, node_key=evaluation_node_key, frame=metric_frame)
 
     result = analyze_cluster_stability(
         analysis,
@@ -234,7 +235,7 @@ def test_threshold_dispersion_includes_a_client_with_no_metric_row(tmp_path: Pat
         config=config,  # type: ignore[arg-type]
         experiment=experiment,  # type: ignore[arg-type]
         seeds=seeds,
-        run_id=run_id,
+        experiment_id=experiment.identifier,
     )
     assert isinstance(result, ClusterMembershipStabilityResult)
     for summary in result.seed_summaries:
@@ -275,21 +276,18 @@ def test_metric_client_outside_threshold_population_is_rejected(tmp_path: Path) 
         reference_evaluation=None,
         run_requirement=None,
     )
-    run_id = RunId("run1")
     seeds = (Seed(0),)
     context = StageJobContext(experiment_id=experiment.identifier, seed=0, evaluation_label="cluster_eval")
-    threshold_job_id = IdentityBuilder.threshold_job_id(context).value
-    evaluation_job_id = IdentityBuilder.evaluation_job_id(context).value
+    threshold_node_key = IdentityBuilder.threshold_node_key(context)
+    evaluation_node_key = IdentityBuilder.evaluation_node_key(context)
     _commit_parquet(
         repository,
-        run_id=run_id.value,
-        job_id=threshold_job_id,
+        node_key=threshold_node_key,
         frame=pl.DataFrame({"client_id": ["c1", "c2"], "cluster_label": [0, 1], "threshold": [0.5, 0.6]}),
     )
     _commit_parquet(
         repository,
-        run_id=run_id.value,
-        job_id=evaluation_job_id,
+        node_key=evaluation_node_key,
         frame=pl.DataFrame(
             [_metric_row("c1", fpr=0.1, status="available"), _metric_row("ghost", fpr=0.2, status="available")]
         ),
@@ -302,5 +300,5 @@ def test_metric_client_outside_threshold_population_is_rejected(tmp_path: Path) 
             config=config,  # type: ignore[arg-type]
             experiment=experiment,  # type: ignore[arg-type]
             seeds=seeds,
-            run_id=run_id,
+            experiment_id=experiment.identifier,
         )

@@ -1,6 +1,6 @@
 """Filesystem-backed artifact repository implementation.
 
-Thin delegate: every transaction/reuse step lives in transaction.py/reuse.py.
+Thin delegate: every transaction step lives in transaction.py.
 """
 
 from __future__ import annotations
@@ -9,13 +9,12 @@ from pathlib import Path
 
 from datp_core.artifacts.codecs.manifest import decode_manifest
 from datp_core.artifacts.errors import ManifestDecodeError, ManifestSchemaIncompatibleError
-from datp_core.artifacts.identity import ArtifactCorruptionReason, ArtifactKey, ArtifactReuseReason
+from datp_core.artifacts.identity import ArtifactCorruptionReason
 from datp_core.artifacts.payloads import ArtifactCommitRequest
-from datp_core.artifacts.repository.models import ArtifactCommitResult, ArtifactLookupResult, ArtifactReuseDecision
+from datp_core.artifacts.repository.models import ArtifactCommitResult, ArtifactLookupResult
 from datp_core.artifacts.repository.port import ArtifactRepository
-from datp_core.artifacts.repository.reuse import assess_compatibility
 from datp_core.artifacts.repository.transaction import execute_atomic_transaction
-from datp_core.core.hashing import Checksum, Fingerprint, compute_file_checksum
+from datp_core.core.hashing import compute_file_checksum
 
 
 class AtomicArtifactRepository(ArtifactRepository):
@@ -52,32 +51,6 @@ class AtomicArtifactRepository(ArtifactRepository):
         if compute_file_checksum(payload_path) != manifest.payload_checksum:
             return ArtifactLookupResult(found=False, corruption_reason=ArtifactCorruptionReason.CHECKSUM_MISMATCH)
         return ArtifactLookupResult(found=True, manifest=manifest)
-
-    def assess_reuse(
-        self,
-        relative_path: str,
-        artifact_key: ArtifactKey,
-        scientific_fingerprint: Fingerprint,
-        execution_fingerprint: Fingerprint,
-        source_inventory_fingerprint: Checksum | None = None,
-    ) -> ArtifactReuseDecision:
-        result = self.inspect(relative_path)
-        if not result.found or result.manifest is None:
-            return ArtifactReuseDecision(can_reuse=False, reason=(ArtifactReuseReason.ARTIFACT_NOT_COMMITTED,))
-        compatibility = assess_compatibility(
-            result.manifest,
-            artifact_key,
-            scientific_fingerprint,
-            execution_fingerprint,
-            source_inventory_fingerprint=source_inventory_fingerprint,
-        )
-        return ArtifactReuseDecision(
-            can_reuse=compatibility.compatible,
-            reason=(
-                (ArtifactReuseReason.COMPATIBLE_FROZEN_ARTIFACT,) if compatibility.compatible else compatibility.reasons
-            ),
-            existing_manifest=result.manifest,
-        )
 
 
 __all__ = ["AtomicArtifactRepository"]

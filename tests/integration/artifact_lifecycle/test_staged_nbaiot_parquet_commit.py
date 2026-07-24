@@ -8,7 +8,9 @@ from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKi
 from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, FilePayload
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.config.fingerprinting.canonical import compute_fingerprint
-from datp_core.core.identifiers import ArtifactId, DatasetId, MaterializationId
+from datp_core.core.identifiers import DatasetId, ExperimentId, MaterializationId
+from datp_core.pipeline.stages.enums import StageKind
+from datp_core.pipeline.stages.node_key import StageNodeKey
 from datp_core.data.adapters.nbaiot import consolidate_nbaiot_parquet_sources, write_nbaiot_source_parquet
 
 
@@ -39,11 +41,11 @@ def test_staged_nbaiot_parquet_consolidation_commits_as_a_frozen_artifact(tmp_pa
     repository = AtomicArtifactRepository(tmp_path / "artifacts", lock_timeout=1.0)
     request = ArtifactCommitRequest(
         metadata=ArtifactCommitMetadata(
-            artifact_key=ArtifactKey(artifact_id=ArtifactId("dataset"), kind=ArtifactKind.MATERIALIZED_DATASET),
+            artifact_key=ArtifactKey(node_key=StageNodeKey(experiment=ExperimentId("test"), stage=StageKind.PREFLIGHT, seed=7), kind=ArtifactKind.MATERIALIZED_DATASET),
             artifact_format=ArtifactFormat.PARQUET,
             scientific_fingerprint=scientific,
             execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
-            relative_path="datasets/nbaiot",
+            relative_path="experiments/test/preflight/nbaiot",
             parents=(),
             schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
             creation_timestamp=1.0,
@@ -52,6 +54,6 @@ def test_staged_nbaiot_parquet_consolidation_commits_as_a_frozen_artifact(tmp_pa
         payload=FilePayload(source_file=str(consolidated)),
     )
     assert repository.commit(request).success
-    payload = repository.read("datasets/nbaiot").payload_bytes
+    payload = repository.read("experiments/test/preflight/nbaiot").payload_bytes
     assert payload is not None
     assert pl.read_parquet(payload).height == 98

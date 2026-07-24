@@ -35,7 +35,12 @@ from datp_core.data.materialization import (
 )
 from datp_core.data.readiness import AuditDatasetUseCase
 from datp_core.evaluation.execution import OperatingPointEvaluationStageHandler
-from datp_core.experiments.execution import ExecuteExperimentUseCase, PreflightStageHandler
+from datp_core.experiments.execution import (
+    CampaignOrchestrator,
+    ExecuteExperimentUseCase,
+    ExperimentOutputManager,
+    PreflightStageHandler,
+)
 from datp_core.learning.checkpoints.handler import CohortCheckpointSelectionStageHandler
 from datp_core.learning.scoring.handler import ScoreGenerationStageHandler
 from datp_core.learning.training.handler import ModelTrainingStageHandler
@@ -144,6 +149,7 @@ class DatpApplication:
     fingerprint_config: FingerprintResolvedConfiguration
     audit_dataset: AuditDatasetUseCase
     execute_experiment: ExecuteExperimentUseCase
+    run_campaign: CampaignOrchestrator
     construct_thresholds: ConstructThresholdsUseCase
     statistical_analysis: StatisticalAnalysisUseCase
     audit_svc: DuckDbAuditService
@@ -181,6 +187,12 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
             ReportGenerationStageHandler(resolved_config, artifact_repository),
         ),
     )
+    output_manager = ExperimentOutputManager(resolved_config.paths.outputs)
+    campaign = CampaignOrchestrator(
+        config=resolved_config,
+        execute_experiment=executor,
+        output_manager=output_manager,
+    )
     audit_svc = DuckDbAuditService(config=resolved_config)
 
     return DatpApplication(
@@ -193,6 +205,7 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
         fingerprint_config=cc.fingerprint_config,
         audit_dataset=audit_ds,
         execute_experiment=executor,
+        run_campaign=campaign,
         construct_thresholds=construct_th,
         statistical_analysis=statistical_analysis,
         audit_svc=audit_svc,

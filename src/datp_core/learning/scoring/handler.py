@@ -14,11 +14,10 @@ from datp_core.artifacts.payloads import BytesPayload
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.artifacts.schemas.scores import validate_calibration_score_frame, validate_test_score_frame
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import ArtifactId, DatasetId, RunId
+from datp_core.core.identifiers import DatasetId
 from datp_core.data.contracts.enums import SplitMembership, SplitMethod
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.identity.kinds import IdentityKind
-from datp_core.experiments.identity.run_locator import resolve_experiment_run_id
 from datp_core.learning.contracts.enums import (
     CheckpointAuthorization,
     DevicePolicy,
@@ -40,6 +39,7 @@ from datp_core.pipeline.artifacts.lineage import artifact_parents
 from datp_core.pipeline.stages.context import StageJobContext
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.node_key import node_path
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
 
@@ -69,36 +69,21 @@ class ScoreGenerationStageHandler:
         self._config = config
         self._repository = repository
 
-    def execute(self, job: StageJob, run_id: RunId) -> StageJobOutcome:
+    def execute(self, job: StageJob) -> StageJobOutcome:
         split = _score_split(job.output.kind, job.context, self._config)
         if split is None:
             return StageJobOutcome.failed(
-                job_id=job.job_id, stage=job.stage, error_message="Unknown score artifact kind"
+                node_key=job.node_key, stage=job.stage, error_message="Unknown score artifact kind"
             )
-        relative_path = f"runs/{run_id.value}/{job.job_id.value}"
-        if self._repository.assess_reuse(
-            relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
-        ).can_reuse:
-            return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        relative_path = node_path(job.node_key)
         experiment = self._config.experiments.get(job.context.experiment_id)
         profile = self._config.training_profiles.get(experiment.training_profile_id)
-        training_path = f"runs/{run_id.value}/{IdentityBuilder.training_job_id(job.context).value}"
-        selection_path, selection_key = self._selection_location(job, run_id, profile.checkpoint_authorization)
+        training_path = node_path(IdentityBuilder.training_node_key(job.context))
+        selection_path, selection_key = self._selection_location(job, profile.checkpoint_authorization)
         selection = self._repository.read(selection_path)
-        if not self._repository.assess_reuse(
-            selection_path,
-            selection_key,
-            self._config.scientific_fingerprint,
-            self._config.execution_fingerprint,
-        ).can_reuse:
-            return StageJobOutcome.failed(
-                job_id=job.job_id,
-                stage=job.stage,
-                error_message="Selected-checkpoint evidence is unavailable or incompatible",
-            )
         if not selection.found or selection.payload_bytes is None:
             return StageJobOutcome.failed(
-                job_id=job.job_id, stage=job.stage, error_message="Selected-checkpoint evidence is unreadable"
+                node_key=job.node_key, stage=job.stage, error_message="Selected-checkpoint evidence is unreadable"
             )
         checkpoint = self._repository.read(training_path)
         personalized_key = IdentityBuilder.artifact_key(IdentityKind.PERSONALIZED_CHECKPOINT, job.context)
@@ -108,29 +93,21 @@ class ScoreGenerationStageHandler:
             if profile.personalization == PersonalizationStrategy.DITTO
             else None
         )
-        materialization_path = f"runs/{run_id.value}/{IdentityBuilder.materialization_job_id(job.context).value}"
+        materialization_path = node_path(IdentityBuilder.materialization_node_key(job.context))
         materialization = self._repository.read(materialization_path)
         if not checkpoint.found or checkpoint.payload_bytes is None:
             return StageJobOutcome.failed(
-                job_id=job.job_id, stage=job.stage, error_message="Model checkpoint is unavailable"
+                node_key=job.node_key, stage=job.stage, error_message="Model checkpoint is unavailable"
             )
         if not materialization.found or materialization.payload_bytes is None:
             return StageJobOutcome.failed(
-                job_id=job.job_id, stage=job.stage, error_message="Materialization artifact is unavailable"
+                node_key=job.node_key, stage=job.stage, error_message="Materialization artifact is unavailable"
             )
         if profile.personalization == PersonalizationStrategy.DITTO and (
-            not self._repository.assess_reuse(
-                personalized_path,
-                personalized_key,
-                self._config.scientific_fingerprint,
-                self._config.execution_fingerprint,
-            ).can_reuse
-            or personalized is None
-            or not personalized.found
-            or personalized.payload_bytes is None
+            personalized is None or not personalized.found or personalized.payload_bytes is None
         ):
             return StageJobOutcome.failed(
-                job_id=job.job_id,
+                node_key=job.node_key,
                 stage=job.stage,
                 error_message="Personalized checkpoint is unavailable or incompatible",
             )
@@ -187,15 +164,15 @@ class ScoreGenerationStageHandler:
                     )
                 scores = scores.with_columns(
                     pl.lit(
-                        personalized_key.artifact_id.value
+                        personalized_key.node_key.label
                         if profile.personalization == PersonalizationStrategy.DITTO
-                        else job.inputs[0].artifact_id.value
+                        else job.inputs[0].node_key.label
                     ).alias("checkpoint_artifact_id"),
                     pl.lit(job.context.seed).alias("seed"),
                     pl.lit(ScoreOrientation.HIGHER_MORE_ANOMALOUS.value).alias("score_orientation"),
                 )
         except (OSError, RuntimeError, ValueError) as exc:
-            return StageJobOutcome.failed(job_id=job.job_id, stage=job.stage, error_message=str(exc))
+            return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message=str(exc))
         validated = (
             validate_calibration_score_frame(scores)
             if job.output.kind
@@ -231,29 +208,31 @@ class ScoreGenerationStageHandler:
         )
         if not commit.success:
             return StageJobOutcome.failed(
-                job_id=job.job_id, stage=job.stage, error_message=commit.error_message or "score artifact commit failed"
+                node_key=job.node_key, stage=job.stage, error_message=commit.error_message or "score artifact commit failed"
             )
-        return StageJobOutcome.succeeded(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        return StageJobOutcome.succeeded(node_key=job.node_key, stage=job.stage, produced_artifact=job.output)
 
     def _selection_location(
-        self, job: StageJob, run_id: RunId, authorization: CheckpointAuthorization
+        self, job: StageJob, authorization: CheckpointAuthorization
     ) -> tuple[str, ArtifactKey]:
         if authorization == CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE:
             selection_context = StageJobContext(experiment_id=job.context.experiment_id)
             return (
-                f"runs/{run_id.value}/{IdentityBuilder.cohort_checkpoint_selection_job_id(selection_context).value}",
+                node_path(IdentityBuilder.cohort_checkpoint_selection_node_key(selection_context)),
                 IdentityBuilder.artifact_key(IdentityKind.COHORT_CHECKPOINT_SELECTION, selection_context),
             )
         if authorization == CheckpointAuthorization.LOOKUP_OF_FEDERATED_AVERAGING:
             source = self._config.primary_federated_checkpoint_experiment()
             selection_context = StageJobContext(experiment_id=source.identifier)
-            source_run_id = resolve_experiment_run_id(self._config, source.identifier)
             return (
-                f"runs/{source_run_id.value}/{IdentityBuilder.cohort_checkpoint_selection_job_id(selection_context).value}",
+                node_path(IdentityBuilder.cohort_checkpoint_selection_node_key(selection_context)),
                 IdentityBuilder.artifact_key(IdentityKind.COHORT_CHECKPOINT_SELECTION, selection_context),
             )
         selection_key = ArtifactKey(
-            artifact_id=ArtifactId(f"{job.inputs[0].artifact_id.value}:selection"),
+            node_key=job.inputs[0].node_key,
             kind=ArtifactKind.CHECKPOINT_SELECTION,
         )
-        return (f"runs/{run_id.value}/{IdentityBuilder.training_job_id(job.context).value}.selection", selection_key)
+        return (
+            f"{node_path(IdentityBuilder.training_node_key(job.context))}.selection",
+            selection_key,
+        )

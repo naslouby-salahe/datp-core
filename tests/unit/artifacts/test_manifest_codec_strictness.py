@@ -22,16 +22,18 @@ from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitR
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.config.fingerprinting.canonical import compute_fingerprint
 from datp_core.core.hashing import Checksum
-from datp_core.core.identifiers import ArtifactId
+from datp_core.core.identifiers import ExperimentId
+from datp_core.pipeline.stages.enums import StageKind
+from datp_core.pipeline.stages.node_key import StageNodeKey
 
 
 def _manifest() -> ArtifactManifest:
     scientific = compute_fingerprint("scientific", {"experiment": "codec-test"})
     return ArtifactManifest(
-        artifact_key=ArtifactKey(artifact_id=ArtifactId("codec-artifact"), kind=ArtifactKind.REPORT),
+        artifact_key=ArtifactKey(node_key=StageNodeKey(experiment=ExperimentId("test"), stage=StageKind.PREFLIGHT, seed=0), kind=ArtifactKind.REPORT),
         artifact_format=ArtifactFormat.TEXT,
         state=ArtifactState.FROZEN,
-        relative_path="reports/codec-artifact",
+        relative_path="experiments/test/preflight/codec-artifact",
         scientific_fingerprint=scientific,
         execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
         payload_checksum=Checksum("a" * 64),
@@ -89,11 +91,11 @@ def test_committed_artifact_with_incompatible_schema_version_reports_schema_inco
     scientific = compute_fingerprint("scientific", {"experiment": "schema-mismatch"})
     request = ArtifactCommitRequest(
         metadata=ArtifactCommitMetadata(
-            artifact_key=ArtifactKey(artifact_id=ArtifactId("schema-mismatch"), kind=ArtifactKind.REPORT),
+            artifact_key=ArtifactKey(node_key=StageNodeKey(experiment=ExperimentId("test"), stage=StageKind.PREFLIGHT, seed=1), kind=ArtifactKind.REPORT),
             artifact_format=ArtifactFormat.TEXT,
             scientific_fingerprint=scientific,
             execution_fingerprint=compute_fingerprint("execution", {"scientific": scientific}),
-            relative_path="reports/schema-mismatch",
+            relative_path="experiments/test/preflight/schema-mismatch",
             parents=(),
             schema_version=CURRENT_ARTIFACT_SCHEMA_VERSION,
             creation_timestamp=1.0,
@@ -104,11 +106,11 @@ def test_committed_artifact_with_incompatible_schema_version_reports_schema_inco
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
     assert repository.commit(request).success
 
-    manifest_path = tmp_path / "reports/schema-mismatch/manifest.json"
+    manifest_path = tmp_path / "experiments/test/preflight/schema-mismatch/manifest.json"
     payload = json.loads(manifest_path.read_bytes())
     payload["schema_version"] = CURRENT_ARTIFACT_SCHEMA_VERSION + 1
     manifest_path.write_text(json.dumps(payload))
 
-    result = repository.inspect("reports/schema-mismatch")
+    result = repository.inspect("experiments/test/preflight/schema-mismatch")
     assert not result.found
     assert result.corruption_reason == ArtifactCorruptionReason.SCHEMA_INCOMPATIBLE

@@ -57,9 +57,9 @@ def _print_planning_dag(graph: PlanningGraph, experiment_name: str) -> None:
     tree = Tree(f"[bold gold1]Execution Plan DAG for Experiment: {experiment_name}[/bold gold1]")
     top_order = lexicographical_topological_sort(graph)
     for job in top_order:
-        deps = ", ".join([d.value for d in job.dependencies]) or "None"
+        deps = ", ".join([d.label for d in job.dependencies]) or "None"
         line = (
-            f"[green]{job.job_id.value}[/green] [dim]({job.stage.value})[/dim] "
+            f"[green]{job.node_key.label}[/green] [dim]({job.stage.value})[/dim] "
             f"-> Output: [cyan]{job.output}[/cyan] (Deps: {deps})"
         )
         tree.add(line)
@@ -170,15 +170,101 @@ def experiment_plan(experiment: str = typer.Option(..., "--config", "-c", help="
 
 
 @experiment_app.command("run")
-def experiment_run(experiment: str = typer.Option(..., "--config", "-c", help="Experiment name slug")) -> None:
-    """Execute experiment pipeline."""
+def experiment_run(
+    experiment: str = typer.Option(..., "--config", "-c", help="Experiment name slug"),
+    override: bool = typer.Option(False, "--override", help="Delete existing experiment output and run from scratch"),
+    cascade: bool = typer.Option(
+        False,
+        "--cascade",
+        help="With --override, also delete transitive dependent experiment outputs",
+    ),
+) -> None:
+    # TODO: --cascade will validate and delete transitive dependents via the experiment DAG
+    """Execute a single experiment pipeline.
+
+    When a valid completed output exists, the experiment is skipped (SKIPPED_EXISTING).
+    When an incomplete or failed output exists, --override is required to delete and restart.
+    """
+    from datp_core.experiments.execution.output_manager import ExperimentOutputManager
+
     application = build_application()
-    report = application.execute_experiment.execute(ExperimentId(experiment))
+    experiment_id = ExperimentId(experiment)
+    output_manager = ExperimentOutputManager(application.config.paths.outputs)
+
+    if output_manager.is_completed(experiment_id):
+        console.print(
+            f"[blue]Experiment {experiment} skipped because a valid completed output already exists.[/blue]"
+        )
+        console.print("[dim]Use --override to delete it and run the experiment again from scratch.[/dim]")
+        return
+
+    if output_manager.is_incomplete(experiment_id):
+        if not override:
+            console.print(f"[red]Experiment {experiment} has an incomplete or failed output.[/red]")
+            console.print("[dim]Use --override to delete the experiment output and restart from scratch.[/dim]")
+            raise typer.Exit(code=1)
+        console.print(f"[yellow]Deleting incomplete experiment output for {experiment}...[/yellow]")
+        output_manager.delete(experiment_id)
+
+    if override and output_manager.is_completed(experiment_id):
+        console.print(f"[yellow]Deleting completed experiment output for {experiment} (--override)...[/yellow]")
+        output_manager.delete(experiment_id)
+
+    report = application.execute_experiment.execute(experiment_id)
     msg = (
         f"[bold green]Executed Experiment {experiment}:[/bold green] "
-        f"Run ID={report.run_id.value}, Outcomes={len(report.outcomes)}"
+        f"Outcomes={len(report.outcomes)}, Success={report.successful_jobs}, Failed={report.failed_jobs}"
     )
     console.print(msg)
+
+    if report.failed_jobs > 0:
+        raise typer.Exit(code=1)
+
+
+campaign_app = typer.Typer(help="Campaign orchestration commands")
+app.add_typer(campaign_app, name="campaign")
+
+
+@campaign_app.command("run")
+def campaign_run(
+    override_all: bool = typer.Option(
+        False, "--override-all", help="Delete all campaign-managed experiment outputs and run from scratch"
+    ),
+) -> None:
+    """Execute the full scientific campaign in canonical dependency order."""
+    application = build_application()
+    report = application.run_campaign.run(override_all=override_all)
+
+    # Summary table
+    table = Table(title="Campaign Execution Summary")
+    table.add_column("Experiment", style="cyan")
+    table.add_column("Status", style="green")
+
+    for result in report.results:
+        status_style = {
+            "completed_valid": "green",
+            "skipped_existing": "blue",
+            "incomplete_restarted": "yellow",
+            "executed": "green",
+            "blocked_prerequisite": "red",
+            "blocked_anchor": "red",
+            "failed": "red",
+        }.get(result.status.value, "white")
+        table.add_row(result.experiment_id.value, f"[{status_style}]{result.status.value}[/{status_style}]")
+
+    console.print(table)
+    console.print(
+        f"[bold]Total: {report.total_experiments}[/bold] | "
+        f"[green]Completed/Skipped: {report.completed_or_skipped}[/green] | "
+        f"[yellow]Executed: {report.executed}[/yellow] | "
+        f"[red]Blocked: {report.blocked}[/red] | "
+        f"[red]Failed: {report.failed}[/red]"
+    )
+
+    if not report.success:
+        console.print("[bold red]Campaign completed with failures.[/bold red]")
+        raise typer.Exit(code=1)
+    console.print("[bold green]Campaign completed successfully![/bold green]")
 
 
 @results_app.command("query")

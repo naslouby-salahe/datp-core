@@ -6,7 +6,7 @@ from enum import Enum
 
 from attrs import define
 
-from datp_core.core.identifiers import ArtifactId
+from datp_core.pipeline.stages.node_key import StageNodeKey
 
 
 class ArtifactKind(Enum):
@@ -53,20 +53,10 @@ class ArtifactCorruptionReason(Enum):
     SCHEMA_INCOMPATIBLE = "schema_incompatible"
 
 
-class ArtifactReuseReason(Enum):
-    COMPATIBLE_FROZEN_ARTIFACT = "compatible_frozen_artifact"
-    ARTIFACT_NOT_COMMITTED = "artifact_not_committed"
-    ARTIFACT_NOT_FROZEN = "artifact_not_frozen"
-    KEY_MISMATCH = "artifact_key_mismatch"
-    SCIENTIFIC_FINGERPRINT_MISMATCH = "scientific_fingerprint_mismatch"
-    EXECUTION_FINGERPRINT_MISMATCH = "execution_fingerprint_mismatch"
-    SOURCE_INVENTORY_FINGERPRINT_MISMATCH = "source_inventory_fingerprint_mismatch"
-
-
 @define(frozen=True, slots=True, kw_only=True)
 class ArtifactKey:
-    artifact_id: ArtifactId
+    node_key: StageNodeKey
     kind: ArtifactKind
 
     def __str__(self) -> str:
-        return f"{self.kind.value}:{self.artifact_id.value}"
+        return f"{self.kind.value}:{self.node_key.label}"

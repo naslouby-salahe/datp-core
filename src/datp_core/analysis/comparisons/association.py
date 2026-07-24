@@ -15,7 +15,7 @@ from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import ClientId, RunId
+from datp_core.core.identifiers import ClientId, ExperimentId
 from datp_core.evaluation import calculate_pairwise_js_divergence
 from datp_core.experiments import ExperimentRecord, MetricAssociationAnalysisRecord
 from datp_core.experiments.identity import IdentityBuilder
@@ -31,7 +31,7 @@ def analyze_association(
     statistical_analysis: StatisticalAnalysisUseCase,
     experiment: ExperimentRecord,
     seeds: tuple[int, ...],
-    run_id: RunId,
+    experiment_id: ExperimentId,
 ) -> MetricAssociationAnalysisResult:
     if analysis.predictor_metric != "pairwise_js_divergence" or analysis.outcome_metric != "cv_fpr_delta":
         raise ValueError(f"Unsupported association metrics for analysis '{analysis.label}'")
@@ -57,7 +57,7 @@ def analyze_association(
                         experiment=experiment,
                         seed=seed,
                         partition_condition=condition,
-                        run_id=run_id,
+                        experiment_id=experiment_id,
                     ),
                     cv_fpr_delta=difference,
                 )
@@ -88,12 +88,12 @@ def calibration_js(
     experiment: ExperimentRecord,
     seed: int,
     partition_condition: str,
-    run_id: RunId,
+    experiment_id: ExperimentId,
 ) -> float:
     context = StageJobContext(experiment_id=experiment.identifier, seed=seed, partition_condition=partition_condition)
     missing = f"Calibration score artifact is unavailable for seed {seed}, condition '{partition_condition}'"
-    job_id = IdentityBuilder.calibration_score_job_id(context)
-    frame = validate_calibration_score_frame(read_parquet_frame(repository, run_id, job_id, missing_message=missing))
+    job_id = IdentityBuilder.calibration_score_node_key(context)
+    frame = validate_calibration_score_frame(read_parquet_frame(repository, experiment_id, job_id, missing_message=missing))
     diagnostics = config.metric_definitions.heterogeneity_diagnostics.pairwise_js_divergence
     return calculate_pairwise_js_divergence(
         tuple(

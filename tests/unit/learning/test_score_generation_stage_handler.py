@@ -26,13 +26,13 @@ from datp_core.artifacts.codecs.manifest import CURRENT_ARTIFACT_SCHEMA_VERSION
 from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
 from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
-from datp_core.core.identifiers import ArtifactId, ExperimentId, RunId
-from datp_core.experiments.identity import IdentityBuilder
+from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments.planning import expand_experiment_jobs
 from datp_core.learning.model.autoencoder import DynamicDenseAutoencoder
 from datp_core.learning.scoring.handler import ScoreGenerationStageHandler
 from datp_core.pipeline.stages.enums import JobExecutionStatus, StageKind
 from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.node_key import StageNodeKey, node_path
 
 _ROUND = 1
 
@@ -54,10 +54,6 @@ def _score_jobs(app: DatpApplication, seed: int = 0) -> tuple[StageJob, StageJob
         and job.output.kind is ArtifactKind.TEST_SCORES
     )
     return calibration_job, test_job
-
-
-def _run_id(app: DatpApplication) -> RunId:
-    return RunId(f"run_anchor_reproduction_{app.config.execution_fingerprint.value[:12]}")
 
 
 def _commit(
@@ -90,11 +86,10 @@ def _commit(
 def _prepare(
     tmp_path: Path,
 ) -> tuple[
-    DatpApplication, AtomicArtifactRepository, RunId, StageJob, StageJob, tuple[str, ...], DynamicDenseAutoencoder
+    DatpApplication, AtomicArtifactRepository, StageJob, StageJob, tuple[str, ...], DynamicDenseAutoencoder
 ]:
     app = build_application()
     calibration_job, test_job = _score_jobs(app)
-    run_id = _run_id(app)
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
     assert calibration_job.context.population_id is not None
     dataset = app.config.datasets[app.config.populations.get(calibration_job.context.population_id).dataset_id]
@@ -104,8 +99,6 @@ def _prepare(
     commit_materialized_dataset(
         repository,
         app.config,
-        run_id_value=run_id.value,
-        job_id_value=IdentityBuilder.materialization_job_id(calibration_job.context).value,
         output_key=calibration_job.inputs[1],
         frame=frame,
     )
@@ -114,38 +107,38 @@ def _prepare(
     architecture = app.config.model_architectures.get(profile.model_architecture_id)
     hidden_dims = tuple(int(value.value) for value in architecture.hidden_dims)
     checkpoint_bytes, model = build_single_round_checkpoint(feature_columns, hidden_dims, round_number=_ROUND, seed=7)
-    training_job_id = IdentityBuilder.training_job_id(calibration_job.context)
     checkpoint_key = calibration_job.inputs[0]
+    training_path = node_path(checkpoint_key.node_key)
     _commit(
         app,
         repository,
-        f"runs/{run_id.value}/{training_job_id.value}",
+        training_path,
         checkpoint_key,
         ArtifactFormat.SAFETENSORS,
         checkpoint_bytes,
     )
     selection_key = ArtifactKey(
-        artifact_id=ArtifactId(f"{checkpoint_key.artifact_id.value}:selection"), kind=ArtifactKind.CHECKPOINT_SELECTION
+        node_key=checkpoint_key.node_key, kind=ArtifactKind.CHECKPOINT_SELECTION
     )
     _commit(
         app,
         repository,
-        f"runs/{run_id.value}/{training_job_id.value}.selection",
+        f"{training_path}.selection",
         selection_key,
         ArtifactFormat.JSON,
         json.dumps({"selected_round": _ROUND}).encode("utf-8"),
     )
-    return app, repository, run_id, calibration_job, test_job, feature_columns, model
+    return app, repository, calibration_job, test_job, feature_columns, model
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda_required profile forbids CPU fallback")
 def test_calibration_scores_exclude_attack_rows_and_preserve_row_identity(tmp_path: Path) -> None:
-    app, repository, run_id, calibration_job, _test_job, _feature_columns, _model = _prepare(tmp_path)
+    app, repository, calibration_job, _test_job, _feature_columns, _model = _prepare(tmp_path)
 
-    outcome = ScoreGenerationStageHandler(app.config, repository).execute(calibration_job, run_id)
+    outcome = ScoreGenerationStageHandler(app.config, repository).execute(calibration_job)
 
     assert outcome.status is JobExecutionStatus.SUCCESS
-    read = repository.read(f"runs/{run_id.value}/{calibration_job.job_id.value}")
+    read = repository.read(node_path(calibration_job.node_key))
     assert read.found and read.payload_bytes is not None
     scores = pl.read_parquet(read.payload_bytes)
     assert scores.height == 12  # 2 clients x 6 benign calibration rows each; no attack rows exist in calibration
@@ -155,12 +148,12 @@ def test_calibration_scores_exclude_attack_rows_and_preserve_row_identity(tmp_pa
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda_required profile forbids CPU fallback")
 def test_test_scores_hand_verified_reconstruction_error_and_labels(tmp_path: Path) -> None:
-    app, repository, run_id, _calibration_job, test_job, feature_columns, model = _prepare(tmp_path)
+    app, repository, _calibration_job, test_job, feature_columns, model = _prepare(tmp_path)
 
-    outcome = ScoreGenerationStageHandler(app.config, repository).execute(test_job, run_id)
+    outcome = ScoreGenerationStageHandler(app.config, repository).execute(test_job)
 
     assert outcome.status is JobExecutionStatus.SUCCESS
-    read = repository.read(f"runs/{run_id.value}/{test_job.job_id.value}")
+    read = repository.read(node_path(test_job.node_key))
     assert read.found and read.payload_bytes is not None
     scores = pl.read_parquet(read.payload_bytes)
     assert scores.height == 12  # 2 clients x (3 benign + 3 attack) test rows each
@@ -181,27 +174,12 @@ def test_test_scores_hand_verified_reconstruction_error_and_labels(tmp_path: Pat
     assert one_row["score"] == pytest.approx(expected_score)
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda_required profile forbids CPU fallback")
-def test_score_generation_reuses_a_frozen_score_artifact(tmp_path: Path) -> None:
-    app, repository, run_id, calibration_job, _test_job, _feature_columns, _model = _prepare(tmp_path)
-    handler = ScoreGenerationStageHandler(app.config, repository)
-    first = handler.execute(calibration_job, run_id)
-    assert first.status is JobExecutionStatus.SUCCESS
-    first_bytes = repository.read(f"runs/{run_id.value}/{calibration_job.job_id.value}").payload_bytes
-
-    second = handler.execute(calibration_job, run_id)
-
-    assert second.status is JobExecutionStatus.REUSED
-    assert repository.read(f"runs/{run_id.value}/{calibration_job.job_id.value}").payload_bytes == first_bytes
-
-
 def test_score_generation_fails_typed_when_checkpoint_is_unavailable(tmp_path: Path) -> None:
     app = build_application()
     calibration_job, _test_job = _score_jobs(app)
-    run_id = _run_id(app)
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
 
-    outcome = ScoreGenerationStageHandler(app.config, repository).execute(calibration_job, run_id)
+    outcome = ScoreGenerationStageHandler(app.config, repository).execute(calibration_job)
 
     assert outcome.status is JobExecutionStatus.FAILED
-    assert outcome.error_message == "Selected-checkpoint evidence is unavailable or incompatible"
+    assert outcome.error_message is not None and "unreadable" in outcome.error_message.lower()

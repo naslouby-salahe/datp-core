@@ -24,7 +24,8 @@ from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey
 from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.core.hashing import Checksum
-from datp_core.core.identifiers import DatasetId, ExperimentId, JobId, RunId
+from datp_core.core.identifiers import DatasetId, ExperimentId
+from datp_core.pipeline.stages.node_key import StageNodeKey, node_path
 from datp_core.data.contracts.dataset import DatasetSetup, ResolvedDataset
 from datp_core.data.contracts.enums import AdapterKind
 from datp_core.data.contracts.materialization import DatasetMaterialization, PartitionSeedContract
@@ -108,10 +109,6 @@ def _materialization_job(app: DatpApplication, seed: int = 0) -> StageJob:
     )
 
 
-def _run_id(app: DatpApplication) -> RunId:
-    return RunId(f"run_anchor_reproduction_{app.config.execution_fingerprint.value[:12]}")
-
-
 def _fake_registry(app: DatpApplication) -> DatasetAdapterRegistry:
     job = _materialization_job(app)
     assert job.context.population_id is not None
@@ -123,12 +120,11 @@ def _fake_registry(app: DatpApplication) -> DatasetAdapterRegistry:
 def _commit_preflight(
     repository: AtomicArtifactRepository,
     app: DatpApplication,
-    run_id: RunId,
     preflight_key: ArtifactKey,
-    preflight_job_id: JobId,
+    preflight_node_key: StageNodeKey,
 ) -> None:
     """Commit a preflight artifact so parent-lineage verification passes."""
-    relative_path = f"runs/{run_id.value}/{preflight_job_id.value}"
+    relative_path = node_path(preflight_node_key)
     result = repository.commit(
         ArtifactCommitRequest(
             metadata=ArtifactCommitMetadata(
@@ -148,57 +144,6 @@ def _commit_preflight(
     assert result.success, result.error_message
 
 
-def test_materialization_resumes_a_partial_family_missing_one_companion(tmp_path: Path) -> None:
-    """If the primary materialized dataset commits but a crash occurs before the readiness
-    companion is committed, the handler must re-materialize (deterministic given the fake
-    adapter), verify the recomputed primary matches the frozen one byte-for-byte, and complete
-    the family by committing only the missing companion -- not fail permanently."""
-    app = build_application()
-    job = _materialization_job(app)
-    run_id = _run_id(app)
-    repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
-    _commit_preflight(repository, app, run_id, job.inputs[0], job.dependencies[0])
-    handler = DatasetMaterializationStageHandler(app.config, repository, _fake_registry(app))
-
-    first = handler.execute(job, run_id)
-    assert first.status is JobExecutionStatus.SUCCESS, first.error_message
-    primary_relative = f"runs/{run_id.value}/{job.job_id.value}"
-    readiness_relative = f"{primary_relative}.readiness"
-    primary_bytes_after_first_run = repository.read(primary_relative).payload_bytes
-    assert repository.read(readiness_relative).found
-
-    # Simulate a crash between the primary commit and the readiness companion's commit.
-    readiness_dir = tmp_path / readiness_relative
-    assert readiness_dir.is_dir()
-    shutil.rmtree(readiness_dir)
-    assert not repository.read(readiness_relative).found
-
-    resumed = handler.execute(job, run_id)
-
-    assert resumed.status is JobExecutionStatus.SUCCESS, resumed.error_message
-    assert resumed.produced_artifact == job.output
-    assert repository.read(readiness_relative).found
-    # The frozen primary artifact itself must never have been recommitted.
-    assert repository.read(primary_relative).payload_bytes == primary_bytes_after_first_run
-
-
-def test_materialization_reuses_a_complete_family_without_rematerializing(tmp_path: Path) -> None:
-    app = build_application()
-    job = _materialization_job(app)
-    run_id = _run_id(app)
-    repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
-    _commit_preflight(repository, app, run_id, job.inputs[0], job.dependencies[0])
-    handler = DatasetMaterializationStageHandler(app.config, repository, _fake_registry(app))
-
-    first = handler.execute(job, run_id)
-    assert first.status is JobExecutionStatus.SUCCESS, first.error_message
-
-    second = handler.execute(job, run_id)
-
-    assert second.status is JobExecutionStatus.REUSED
-    assert second.produced_artifact == job.output
-
-
 def test_materialization_detects_a_source_change_during_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -207,9 +152,8 @@ def test_materialization_detects_a_source_change_during_execution(
     re-check, the handler must fail explicitly rather than commit under a now-stale fingerprint."""
     app = build_application()
     job = _materialization_job(app)
-    run_id = _run_id(app)
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
-    _commit_preflight(repository, app, run_id, job.inputs[0], job.dependencies[0])
+    _commit_preflight(repository, app, job.inputs[0], job.dependencies[0])
     handler = DatasetMaterializationStageHandler(app.config, repository, _fake_registry(app))
 
     real_build_source_inventory = materialization_handler_module.build_source_inventory
@@ -235,10 +179,10 @@ def test_materialization_detects_a_source_change_during_execution(
 
     monkeypatch.setattr(materialization_handler_module, "build_source_inventory", _fake_build_source_inventory)
 
-    outcome = handler.execute(job, run_id)
+    outcome = handler.execute(job)
 
     assert outcome.status is JobExecutionStatus.FAILED
     assert outcome.error_message is not None
     assert "Source files changed during materialization" in outcome.error_message
     # Nothing must have been committed under the stale identity.
-    assert not repository.read(f"runs/{run_id.value}/{job.job_id.value}").found
+    assert not repository.read(node_path(job.node_key)).found

@@ -18,7 +18,7 @@ from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
 from datp_core.artifacts.schemas.scores import validate_test_score_frame
 from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
-from datp_core.core.identifiers import RunId
+from datp_core.core.identifiers import ExperimentId
 from datp_core.core.seeding import Seed
 from datp_core.evaluation.distributions import (
     ClientScoreDistributionRecord,
@@ -35,7 +35,7 @@ def distribution_seed_result(
     experiment: ExperimentRecord,
     seed: int,
     evaluations: tuple[str, ...],
-    run_id: RunId,
+    experiment_id: ExperimentId,
     client_id: str | None,
     *,
     repository: ArtifactRepository,
@@ -52,14 +52,14 @@ def distribution_seed_result(
         )
         missing = f"Distribution artifacts are unavailable for seed {seed}, label '{label}'"
         threshold_frame = validate_threshold_frame(
-            read_parquet_frame(repository, run_id, IdentityBuilder.threshold_job_id(context), missing_message=missing)
+            read_parquet_frame(repository, experiment_id, IdentityBuilder.threshold_node_key(context), missing_message=missing)
         )
         metric_frame = validate_client_metric_frame(
-            read_parquet_frame(repository, run_id, IdentityBuilder.evaluation_job_id(context), missing_message=missing)
+            read_parquet_frame(repository, experiment_id, IdentityBuilder.evaluation_node_key(context), missing_message=missing)
         )
         score_frame = validate_test_score_frame(
             read_parquet_frame(
-                repository, run_id, IdentityBuilder.test_score_job_id(score_context(context)), missing_message=missing
+                repository, experiment_id, IdentityBuilder.test_score_node_key(score_context(context)), missing_message=missing
             )
         )
         result[label] = client_score_distributions(threshold_frame, metric_frame, score_frame, client_id)
@@ -72,11 +72,11 @@ def analyze_distribution_mechanism(
     repository: ArtifactRepository,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    run_id: RunId,
+    experiment_id: ExperimentId,
 ) -> DistributionMechanismAnalysisResult:
     seed_results = tuple(
         distribution_seed_result(
-            experiment, seed.value, analysis.source_evaluations, run_id, None, repository=repository
+            experiment, seed.value, analysis.source_evaluations, experiment_id, None, repository=repository
         )
         for seed in seeds
     )

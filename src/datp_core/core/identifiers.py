@@ -82,17 +82,5 @@ class MaterializationId(_DomainIdentifier):
     """Identifier for a dataset materialization schema."""
 
 
-class ArtifactId(_DomainIdentifier):
-    """Canonical identifier for a persisted DATP artifact."""
-
-
-class JobId(_DomainIdentifier):
-    """Identifier for a DAG execution stage job."""
-
-
-class RunId(_DomainIdentifier):
-    """Identifier for a specific execution run instance."""
-
-
 class ClientId(_DomainIdentifier):
     """Identifier for a client device or pseudo-client entity."""

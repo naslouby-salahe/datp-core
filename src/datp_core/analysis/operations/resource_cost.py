@@ -14,7 +14,7 @@ from datp_core.analysis.operations.models import (
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.operational_contracts import CommunicationEstimationContractRecord
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import RunId
+from datp_core.core.identifiers import ExperimentId
 from datp_core.core.seeding import Seed
 from datp_core.experiments import ExperimentRecord, ResourceCostAnalysisRecord
 from datp_core.experiments.identity import IdentityBuilder
@@ -78,7 +78,7 @@ def analyze_resource_cost(
     repository: ArtifactRepository,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    run_id: RunId,
+    experiment_id: ExperimentId,
 ) -> ResourceCostAnalysisResult:
     contract = config.communication_estimation_contract
     if analysis.estimate_basis != contract.estimate_basis:
@@ -89,7 +89,7 @@ def analyze_resource_cost(
         for label in analysis.source_evaluations:
             evaluation = next(item for item in experiment.evaluations if item.label == label)
             _, calibration = threshold_and_calibration_frame(
-                repository=repository, experiment=experiment, seed=seed.value, label=label, run_id=run_id
+                repository=repository, experiment=experiment, seed=seed.value, label=label, experiment_id=experiment_id
             )
             policy = config.threshold_policies.get(evaluation.threshold_policy_id)
             fields, threshold_bytes = threshold_exchange_cost(contract, policy, calibration["client_id"].n_unique())
@@ -100,8 +100,8 @@ def analyze_resource_cost(
             )
             checkpoint_bytes = read_artifact_bytes(
                 repository,
-                run_id,
-                IdentityBuilder.training_job_id(context),
+                experiment_id,
+                IdentityBuilder.training_node_key(context),
                 missing_message=f"Model checkpoint is unavailable for resource analysis seed {seed.value}",
             )
             parameters = sum(tensor.numel() for tensor in load_safetensors(checkpoint_bytes).values())

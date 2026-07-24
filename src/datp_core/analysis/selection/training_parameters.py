@@ -9,27 +9,20 @@ from datp_core.analysis.artifact_access.reader import read_artifact_bytes
 from datp_core.analysis.selection.models import DittoSelectionResult, FederatedProximalSelectionResult
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import ExperimentId, RunId
+from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments.identity import IdentityBuilder
-from datp_core.experiments.identity.run_locator import resolve_experiment_run_id
 from datp_core.pipeline.stages.context import StageJobContext
 
 
 def federated_proximal_selection(
-    experiment_id: ExperimentId, *, config: ResolvedProjectConfiguration, repository: ArtifactRepository, run_id: RunId
+    experiment_id: ExperimentId, *, config: ResolvedProjectConfiguration, repository: ArtifactRepository
 ) -> FederatedProximalSelectionResult:
     context = StageJobContext(experiment_id=experiment_id)
-    relative_path = f"runs/{run_id.value}/{IdentityBuilder.federated_proximal_selection_job_id(context).value}"
-    key = IdentityBuilder.federated_proximal_selection_key(context)
-    if not repository.assess_reuse(
-        relative_path, key, config.scientific_fingerprint, config.execution_fingerprint
-    ).can_reuse:
-        raise ValueError("FedProx coefficient-selection artifact is unavailable or incompatible")
     payload = json.loads(
         read_artifact_bytes(
             repository,
-            run_id,
-            IdentityBuilder.federated_proximal_selection_job_id(context),
+            experiment_id,
+            IdentityBuilder.federated_proximal_selection_node_key(context),
             missing_message="FedProx coefficient-selection artifact is unreadable",
         )
     )
@@ -46,24 +39,15 @@ def federated_proximal_selection(
 
 
 def ditto_selection(
-    experiment_id: ExperimentId, *, config: ResolvedProjectConfiguration, repository: ArtifactRepository, run_id: RunId
+    experiment_id: ExperimentId, *, config: ResolvedProjectConfiguration, repository: ArtifactRepository
 ) -> DittoSelectionResult:
     source = config.primary_ditto_selection_experiment()
     context = StageJobContext(experiment_id=source.identifier)
-    source_run_id = (
-        run_id if experiment_id == source.identifier else resolve_experiment_run_id(config, source.identifier)
-    )
-    relative_path = f"runs/{source_run_id.value}/{IdentityBuilder.ditto_selection_job_id(context).value}"
-    key = IdentityBuilder.ditto_selection_key(context)
-    if not repository.assess_reuse(
-        relative_path, key, config.scientific_fingerprint, config.execution_fingerprint
-    ).can_reuse:
-        raise ValueError("Ditto weight-selection artifact is unavailable or incompatible")
     payload = json.loads(
         read_artifact_bytes(
             repository,
-            source_run_id,
-            IdentityBuilder.ditto_selection_job_id(context),
+            source.identifier,
+            IdentityBuilder.ditto_selection_node_key(context),
             missing_message="Ditto weight-selection artifact is unreadable",
         )
     )

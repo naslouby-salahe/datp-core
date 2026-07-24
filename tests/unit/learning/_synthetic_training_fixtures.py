@@ -20,8 +20,10 @@ from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKi
 from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import ArtifactId
+from datp_core.core.identifiers import ExperimentId
 from datp_core.learning.model.autoencoder import DynamicDenseAutoencoder
+from datp_core.pipeline.stages.enums import StageKind
+from datp_core.pipeline.stages.node_key import StageNodeKey
 from datp_core.learning.model.determinism import set_deterministic_seeds
 
 
@@ -70,10 +72,9 @@ def commit_materialized_dataset(
     repository: AtomicArtifactRepository,
     config: ResolvedProjectConfiguration,
     *,
-    run_id_value: str,
-    job_id_value: str,
     output_key: ArtifactKey,
     frame: pl.DataFrame,
+    relative_path: str | None = None,
 ) -> None:
     """Commit a real materialized dataset plus its three required companion artifacts.
 
@@ -82,7 +83,10 @@ def commit_materialized_dataset(
     are sufficient there -- matching the established pattern in
     test_dataset_materialization_reuse.py.
     """
-    relative_path = f"runs/{run_id_value}/{job_id_value}"
+    from datp_core.pipeline.stages.node_key import node_path
+
+    if relative_path is None:
+        relative_path = node_path(output_key.node_key)
     payload = BytesIO()
     frame.write_parquet(payload)
     _commit(repository, config, relative_path, output_key, BytesPayload(payload_bytes=payload.getvalue()))
@@ -91,7 +95,7 @@ def commit_materialized_dataset(
         ("readiness", ArtifactKind.DATASET_READINESS),
         ("preprocessing", ArtifactKind.PREPROCESSING_EVIDENCE),
     ):
-        companion_key = ArtifactKey(artifact_id=ArtifactId(f"{output_key.artifact_id.value}:{suffix}"), kind=kind)
+        companion_key = ArtifactKey(node_key=output_key.node_key, kind=kind)
         _commit(
             repository,
             config,

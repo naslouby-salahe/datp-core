@@ -17,5 +17,5 @@ class PlanningCycleError(ValueError):
 def validate_acyclic(graph: PlanningGraph) -> None:
     nx_graph = graph._graph  # noqa: SLF001
     if not nx.is_directed_acyclic_graph(nx_graph):
-        cycles = [[node.value for node in cycle] for cycle in nx.simple_cycles(nx_graph)]
+        cycles = [[node.label for node in cycle] for cycle in nx.simple_cycles(nx_graph)]
         raise PlanningCycleError(cycles)

@@ -18,7 +18,7 @@ from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
 from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
 from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import RunId
+from datp_core.core.identifiers import ExperimentId
 from datp_core.core.seeding import Seed
 from datp_core.evaluation import MetricStatus
 from datp_core.experiments import ConformalCoverageAnalysisRecord, ExperimentRecord
@@ -104,7 +104,7 @@ def analyze_conformal_coverage(
     repository: ArtifactRepository,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    run_id: RunId,
+    experiment_id: ExperimentId,
 ) -> ConformalCoverageAnalysisResult:
     evaluation = next(item for item in experiment.evaluations if item.label == analysis.source_evaluation)
     policy = config.threshold_policies.get(evaluation.threshold_policy_id)
@@ -124,24 +124,24 @@ def analyze_conformal_coverage(
         threshold_frame = validate_threshold_frame(
             read_parquet_frame(
                 repository,
-                run_id,
-                IdentityBuilder.threshold_job_id(context),
+                experiment_id,
+                IdentityBuilder.threshold_node_key(context),
                 missing_message=f"Conformal coverage artifacts are unavailable for seed {seed.value}",
             )
         )
         metric_frame = validate_client_metric_frame(
             read_parquet_frame(
                 repository,
-                run_id,
-                IdentityBuilder.evaluation_job_id(context),
+                experiment_id,
+                IdentityBuilder.evaluation_node_key(context),
                 missing_message=f"Conformal coverage artifacts are unavailable for seed {seed.value}",
             )
         )
         calibration_frame = validate_calibration_score_frame(
             read_parquet_frame(
                 repository,
-                run_id,
-                IdentityBuilder.calibration_score_job_id(score_context(context)),
+                experiment_id,
+                IdentityBuilder.calibration_score_node_key(score_context(context)),
                 missing_message=f"Conformal coverage artifacts are unavailable for seed {seed.value}",
             )
         )

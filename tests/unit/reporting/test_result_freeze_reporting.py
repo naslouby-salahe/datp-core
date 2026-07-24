@@ -61,5 +61,5 @@ def test_planning_freezes_results_before_report_generation() -> None:
     result_freeze = next(job for job in graph.jobs if job.stage is StageKind.RESULT_FREEZE)
     report = next(job for job in graph.jobs if job.stage is StageKind.REPORT_GENERATION)
 
-    assert result_freeze.job_id in report.dependencies
+    assert result_freeze.node_key in report.dependencies
     assert result_freeze.output in report.inputs

@@ -4,16 +4,16 @@ from __future__ import annotations
 
 import networkx as nx
 
-from datp_core.core.identifiers import JobId
 from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.node_key import StageNodeKey
 
 
 class DuplicateJobError(ValueError):
-    """A JobId appears more than once in the graph."""
+    """A StageNodeKey appears more than once in the graph."""
 
 
 class MissingDependencyError(ValueError):
-    """A job depends on a JobId not present in the graph."""
+    """A job depends on a StageNodeKey not present in the graph."""
 
 
 class DuplicateOutputArtifactError(ValueError):
@@ -22,32 +22,35 @@ class DuplicateOutputArtifactError(ValueError):
 
 class PlanningGraph:
     def __init__(self, jobs: tuple[StageJob, ...]) -> None:
-        self._jobs: dict[JobId, StageJob] = {}
+        self._jobs: dict[StageNodeKey, StageJob] = {}
         for j in jobs:
-            if j.job_id in self._jobs:
-                raise DuplicateJobError(f"Duplicate JobId in planning graph: {j.job_id}")
-            self._jobs[j.job_id] = j
+            if j.node_key in self._jobs:
+                raise DuplicateJobError(f"Duplicate StageNodeKey in planning graph: {j.node_key.label}")
+            self._jobs[j.node_key] = j
 
         job_ids = set(self._jobs.keys())
         for j in jobs:
             for dep_id in j.dependencies:
                 if dep_id not in job_ids:
-                    raise MissingDependencyError(f"Job '{j.job_id}' depends on missing job '{dep_id}'")
+                    raise MissingDependencyError(
+                        f"Job '{j.node_key.label}' depends on missing key '{dep_id.label}'"
+                    )
 
-        outputs: dict[str, JobId] = {}
+        outputs: dict[StageNodeKey, StageJob] = {}
         for j in jobs:
-            output_name = j.output.artifact_id.value
-            if output_name in outputs:
+            if j.output.node_key in outputs:
+                other = outputs[j.output.node_key]
                 raise DuplicateOutputArtifactError(
-                    f"Jobs '{j.job_id}' and '{outputs[output_name]}' both declare output '{output_name}'"
+                    f"Jobs '{j.node_key.label}' and '{other.node_key.label}' both declare output "
+                    f"'{j.output.node_key.label}'"
                 )
-            outputs[output_name] = j.job_id
+            outputs[j.output.node_key] = j
 
         self._graph = nx.DiGraph()
         for j in jobs:
-            self._graph.add_node(j.job_id, job=j)
+            self._graph.add_node(j.node_key, job=j)
             for dep_id in j.dependencies:
-                self._graph.add_edge(dep_id, j.job_id)
+                self._graph.add_edge(dep_id, j.node_key)
 
     @property
     def jobs(self) -> tuple[StageJob, ...]:
@@ -61,5 +64,5 @@ class PlanningGraph:
     def edge_count(self) -> int:
         return self._graph.number_of_edges()
 
-    def _has_job(self, job_id: JobId) -> bool:
-        return job_id in self._graph
+    def _has_job(self, node_key: StageNodeKey) -> bool:
+        return node_key in self._graph

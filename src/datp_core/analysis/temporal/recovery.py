@@ -8,7 +8,7 @@ from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
 from datp_core.analysis.temporal.models import TemporalRecoveryAnalysisResult
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import RunId
+from datp_core.core.identifiers import ExperimentId
 from datp_core.core.seeding import Seed
 from datp_core.experiments import ExperimentRecord, TemporalRecoveryAnalysisRecord
 
@@ -21,7 +21,7 @@ def analyze_temporal_recovery(
     statistical_analysis: StatisticalAnalysisUseCase,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    run_id: RunId,
+    experiment_id: ExperimentId,
 ) -> TemporalRecoveryAnalysisResult:
     if analysis.primary_metric != "cv_fpr":
         raise ValueError(f"Temporal analysis '{analysis.label}' has an unsupported primary metric")
@@ -34,7 +34,7 @@ def analyze_temporal_recovery(
             seed=seed.value,
             label=label,
             metric=analysis.primary_metric,
-            run_id=run_id,
+            experiment_id=experiment_id,
             partition_condition=None,
             proximal_mu=None,
             ditto_weight=None,

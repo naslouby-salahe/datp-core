@@ -9,7 +9,7 @@ from datp_core.analysis.artifact_access.reader import read_parquet_frame
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
 from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
-from datp_core.core.identifiers import RunId
+from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments import ExperimentRecord
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.planning import score_context
@@ -22,7 +22,7 @@ def threshold_and_calibration_frame(
     experiment: ExperimentRecord,
     seed: int,
     label: str,
-    run_id: RunId,
+    experiment_id: ExperimentId,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
     evaluation = experiment_evaluation(experiment, label)
     context = StageJobContext(
@@ -35,16 +35,16 @@ def threshold_and_calibration_frame(
     threshold = validate_threshold_frame(
         read_parquet_frame(
             repository,
-            run_id,
-            IdentityBuilder.threshold_job_id(context),
+            experiment_id,
+            IdentityBuilder.threshold_node_key(context),
             missing_message=f"Quantile-estimation artifacts are unavailable for seed {seed}, label '{label}'",
         )
     )
     calibration = validate_calibration_score_frame(
         read_parquet_frame(
             repository,
-            run_id,
-            IdentityBuilder.calibration_score_job_id(score_context(context)),
+            experiment_id,
+            IdentityBuilder.calibration_score_node_key(score_context(context)),
             missing_message=f"Quantile-estimation artifacts are unavailable for seed {seed}, label '{label}'",
         )
     )

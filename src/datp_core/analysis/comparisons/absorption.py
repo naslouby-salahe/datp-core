@@ -17,7 +17,6 @@ from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments import AbsorptionAnalysisRecord, ExperimentRecord
 from datp_core.experiments.identity import IdentityBuilder
-from datp_core.experiments.identity.run_locator import resolve_experiment_run_id
 from datp_core.pipeline.stages.context import StageJobContext
 
 _MATERIALITY_RULE_PATTERN = re.compile(r"^absolute_denominator_at_least_(?P<value>\d+(?:\.\d+)?(?:e[+-]?\d+)?)$")
@@ -83,13 +82,12 @@ def analyze_absorption(
         raise ValueError(f"Absorption analysis '{analysis.label}' lacks its stress-test source")
     reference_experiment, reference_label = _absorption_reference(analysis)
     _validate_absorption_contract(analysis, experiment, reference_experiment, config=config)
-    reference_run = resolve_experiment_run_id(config, reference_experiment)
     reference_job_context = StageJobContext(experiment_id=reference_experiment)
     payload = json.loads(
         read_artifact_bytes(
             repository,
-            reference_run,
-            IdentityBuilder.statistical_analysis_job_id(reference_job_context),
+            reference_experiment,
+            IdentityBuilder.statistical_analysis_node_key(reference_job_context),
             missing_message=f"Absorption analysis '{analysis.label}' reference statistical artifact is unavailable",
         )
     )

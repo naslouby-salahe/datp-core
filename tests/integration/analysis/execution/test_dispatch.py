@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from datp_core.analysis.execution import dispatch as dispatch_module
-from datp_core.core.identifiers import StatisticalProfileId
+from datp_core.core.identifiers import ExperimentId, StatisticalProfileId
 from datp_core.experiments import (
     AbsorptionAnalysisRecord,
     AlertBurdenAnalysisRecord,
@@ -254,7 +254,7 @@ def test_dispatch_routes_each_analysis_kind_to_its_owning_capability(
         statistical_analysis=None,  # type: ignore[arg-type]
         experiment=None,  # type: ignore[arg-type]
         seeds=(),
-        run_id=None,  # type: ignore[arg-type]
+        experiment_id=ExperimentId("test"),
         paired_results=(),
         calibration_sample_count_values=(None,),
     )
@@ -273,7 +273,7 @@ def test_dispatch_rejects_paired_threshold_since_it_is_routed_separately() -> No
             statistical_analysis=None,  # type: ignore[arg-type]
             experiment=None,  # type: ignore[arg-type]
             seeds=(),
-            run_id=None,  # type: ignore[arg-type]
+            experiment_id=ExperimentId("test"),
             paired_results=(),
             calibration_sample_count_values=(None,),
         )

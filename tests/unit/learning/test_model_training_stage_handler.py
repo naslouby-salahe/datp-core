@@ -19,22 +19,18 @@ from safetensors.torch import load as load_safetensors
 
 from datp_core.app import DatpApplication, build_application
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
-from datp_core.core.identifiers import ExperimentId, RunId
-from datp_core.experiments.identity import IdentityBuilder
+from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments.planning import expand_experiment_jobs
 from datp_core.learning.checkpoints.selection import select_anchor_checkpoint_round
 from datp_core.learning.training.handler import ModelTrainingStageHandler
 from datp_core.pipeline.stages.enums import JobExecutionStatus, StageKind
 from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.node_key import node_path
 
 
 def _anchor_training_job(app: DatpApplication, seed: int = 0) -> StageJob:
     graph = expand_experiment_jobs(app.config.experiments.get(ExperimentId("anchor_reproduction")), app.config)
     return next(job for job in graph.jobs if job.stage is StageKind.MODEL_TRAINING and job.context.seed == seed)
-
-
-def _anchor_run_id(app: DatpApplication) -> RunId:
-    return RunId(f"run_anchor_reproduction_{app.config.execution_fingerprint.value[:12]}")
 
 
 def _commit_synthetic_materialization(
@@ -48,8 +44,6 @@ def _commit_synthetic_materialization(
     commit_materialized_dataset(
         repository,
         app.config,
-        run_id_value=_anchor_run_id(app).value,
-        job_id_value=IdentityBuilder.materialization_job_id(job.context).value,
         output_key=job.inputs[0],
         frame=frame,
     )
@@ -60,23 +54,24 @@ def test_model_training_produces_a_checkpoint_selected_by_the_anchor_convergence
     app = build_application()
     job = _anchor_training_job(app)
     experiment = app.config.experiments.get(ExperimentId("anchor_reproduction"))
-    run_id = _anchor_run_id(app)
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
     _commit_synthetic_materialization(app, repository, job)
 
-    outcome = ModelTrainingStageHandler(app.config, repository).execute(job, run_id)
+    outcome = ModelTrainingStageHandler(app.config, repository).execute(job)
 
     assert outcome.status is JobExecutionStatus.SUCCESS
     assert outcome.produced_artifact == job.output
 
-    checkpoint_read = repository.read(f"runs/{run_id.value}/{job.job_id.value}")
+    checkpoint_relative = node_path(job.node_key)
+    assert checkpoint_relative is not None
+    checkpoint_read = repository.read(checkpoint_relative)
     assert checkpoint_read.found and checkpoint_read.payload_bytes is not None
     checkpoint_states = load_safetensors(checkpoint_read.payload_bytes)
     recorded_rounds = sorted({int(name.split(".", 1)[0].removeprefix("round_")) for name in checkpoint_states})
     checkpoint_profile = app.config.checkpoint_profiles.get(experiment.checkpoint_profile_id)
     assert recorded_rounds == [int(value.value) for value in checkpoint_profile.selected_rounds]
 
-    selection_read = repository.read(f"runs/{run_id.value}/{job.job_id.value}.selection")
+    selection_read = repository.read(f"{checkpoint_relative}.selection")
     assert selection_read.found and selection_read.payload_bytes is not None
     selection = json.loads(selection_read.payload_bytes)
     assert len(selection["round_losses"]) == 150
@@ -93,68 +88,12 @@ def test_model_training_produces_a_checkpoint_selected_by_the_anchor_convergence
     assert len(selection["dataloader_shuffle_seeds"]) > 0
 
 
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda_required profile forbids CPU fallback")
-def test_model_training_reuses_a_frozen_checkpoint_without_retraining(tmp_path: Path) -> None:
-    app = build_application()
-    job = _anchor_training_job(app)
-    run_id = _anchor_run_id(app)
-    repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
-    _commit_synthetic_materialization(app, repository, job)
-    handler = ModelTrainingStageHandler(app.config, repository)
-    first = handler.execute(job, run_id)
-    assert first.status is JobExecutionStatus.SUCCESS
-    checkpoint_bytes_after_first_run = repository.read(f"runs/{run_id.value}/{job.job_id.value}").payload_bytes
-
-    second = handler.execute(job, run_id)
-
-    assert second.status is JobExecutionStatus.REUSED
-    assert second.produced_artifact == job.output
-    checkpoint_bytes_after_second_call = repository.read(f"runs/{run_id.value}/{job.job_id.value}").payload_bytes
-    assert checkpoint_bytes_after_second_call == checkpoint_bytes_after_first_run
-
-
-@pytest.mark.skipif(not torch.cuda.is_available(), reason="cuda_required profile forbids CPU fallback")
-def test_model_training_resumes_a_partial_family_missing_selection_evidence(tmp_path: Path) -> None:
-    """If the checkpoint commits successfully but a crash occurs before selection evidence is
-    committed, the handler must retrain (deterministic given the fixed seed), verify the
-    recomputed checkpoint matches the frozen one byte-for-byte, and complete the family by
-    committing only the missing selection evidence -- not fail permanently."""
-    app = build_application()
-    job = _anchor_training_job(app)
-    run_id = _anchor_run_id(app)
-    repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
-    _commit_synthetic_materialization(app, repository, job)
-    handler = ModelTrainingStageHandler(app.config, repository)
-
-    first = handler.execute(job, run_id)
-    assert first.status is JobExecutionStatus.SUCCESS
-    checkpoint_relative = f"runs/{run_id.value}/{job.job_id.value}"
-    selection_relative = f"{checkpoint_relative}.selection"
-    checkpoint_bytes_after_first_run = repository.read(checkpoint_relative).payload_bytes
-    assert repository.read(selection_relative).found
-
-    # Simulate a crash between the checkpoint commit and the selection commit.
-    selection_dir = tmp_path / selection_relative
-    assert selection_dir.is_dir()
-    shutil.rmtree(selection_dir)
-    assert not repository.read(selection_relative).found
-
-    resumed = handler.execute(job, run_id)
-
-    assert resumed.status is JobExecutionStatus.SUCCESS
-    assert resumed.produced_artifact == job.output
-    assert repository.read(selection_relative).found
-    # The frozen checkpoint itself must never have been recommitted.
-    assert repository.read(checkpoint_relative).payload_bytes == checkpoint_bytes_after_first_run
-
-
 def test_model_training_fails_typed_when_materialization_is_unavailable(tmp_path: Path) -> None:
     app = build_application()
     job = _anchor_training_job(app)
-    run_id = _anchor_run_id(app)
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
 
-    outcome = ModelTrainingStageHandler(app.config, repository).execute(job, run_id)
+    outcome = ModelTrainingStageHandler(app.config, repository).execute(job)
 
     assert outcome.status is JobExecutionStatus.FAILED
     assert outcome.error_message == "Materialization artifact is unavailable"
@@ -165,9 +104,8 @@ def test_model_training_rejects_a_fedprox_coefficient_on_plain_fedavg(tmp_path: 
     job = _anchor_training_job(app)
     contaminated_job = replace(job, context=replace(job.context, federated_proximal_mu=0.5))
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=30.0)
-    run_id = _anchor_run_id(app)
 
-    outcome = ModelTrainingStageHandler(app.config, repository).execute(contaminated_job, run_id)
+    outcome = ModelTrainingStageHandler(app.config, repository).execute(contaminated_job)
 
     assert outcome.status is JobExecutionStatus.FAILED
     assert outcome.error_message == "FedAvg training must not carry a FedProx coefficient"

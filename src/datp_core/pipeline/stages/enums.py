@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import Enum
 
 
-class StageKind(Enum):
+class StageKind(str, Enum):
     PREFLIGHT = "preflight"
     DATASET_MATERIALIZATION = "dataset_materialization"
     MODEL_TRAINING = "model_training"
@@ -21,7 +21,6 @@ class StageKind(Enum):
 
 class JobExecutionStatus(Enum):
     SUCCESS = "success"
-    REUSED = "reused"
     SKIPPED = "skipped"
     SUPPRESSED = "suppressed"
     FAILED = "failed"
@@ -30,5 +29,5 @@ class JobExecutionStatus(Enum):
 
 
 DEPENDENCY_SATISFYING_STATUSES: frozenset[JobExecutionStatus] = frozenset(
-    {JobExecutionStatus.SUCCESS, JobExecutionStatus.REUSED}
+    {JobExecutionStatus.SUCCESS}
 )

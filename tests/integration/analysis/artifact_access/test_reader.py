@@ -16,7 +16,9 @@ from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKi
 from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.core.hashing import Fingerprint
-from datp_core.core.identifiers import ArtifactId, JobId, RunId
+from datp_core.core.identifiers import ExperimentId
+from datp_core.pipeline.stages.node_key import StageNodeKey
+from datp_core.pipeline.stages.enums import StageKind
 
 _FINGERPRINT = Fingerprint("a" * 64)
 
@@ -26,7 +28,7 @@ def _commit(
 ) -> None:
     request = ArtifactCommitRequest(
         metadata=ArtifactCommitMetadata(
-            artifact_key=ArtifactKey(artifact_id=ArtifactId("artifact"), kind=ArtifactKind.CLIENT_METRICS),
+            artifact_key=ArtifactKey(node_key=StageNodeKey(experiment=ExperimentId("test"), stage=StageKind.PREFLIGHT), kind=ArtifactKind.CLIENT_METRICS),
             artifact_format=artifact_format,
             scientific_fingerprint=_FINGERPRINT,
             execution_fingerprint=_FINGERPRINT,
@@ -44,9 +46,9 @@ def _commit(
 
 def test_read_artifact_bytes_returns_the_committed_payload(tmp_path: Path) -> None:
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=5.0)
-    _commit(repository, relative_path="runs/r1/job1", artifact_format=ArtifactFormat.JSON, payload=b'{"a": 1}')
+    _commit(repository, relative_path="experiments/test/preflight", artifact_format=ArtifactFormat.JSON, payload=b'{"a": 1}')
 
-    result = read_artifact_bytes(repository, RunId("r1"), JobId("job1"), missing_message="should not be raised")
+    result = read_artifact_bytes(repository, ExperimentId("test"), StageNodeKey(experiment=ExperimentId("test"), stage=StageKind.PREFLIGHT), missing_message="should not be raised")
 
     assert result == b'{"a": 1}'
 
@@ -55,7 +57,7 @@ def test_read_artifact_bytes_raises_the_supplied_message_when_the_artifact_is_mi
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=5.0)
 
     with pytest.raises(ValueError, match="custom missing-artifact message"):
-        read_artifact_bytes(repository, RunId("r1"), JobId("absent"), missing_message="custom missing-artifact message")
+        read_artifact_bytes(repository, ExperimentId("test"), StageNodeKey(experiment=ExperimentId("test"), stage=StageKind.PREFLIGHT), missing_message="custom missing-artifact message")
 
 
 def test_read_parquet_frame_decodes_the_committed_bytes(tmp_path: Path) -> None:
@@ -63,9 +65,9 @@ def test_read_parquet_frame_decodes_the_committed_bytes(tmp_path: Path) -> None:
     frame = pl.DataFrame({"client_id": ["a", "b"], "value": [1.0, 2.0]})
     buffer = BytesIO()
     frame.write_parquet(buffer)
-    _commit(repository, relative_path="runs/r1/job2", artifact_format=ArtifactFormat.PARQUET, payload=buffer.getvalue())
+    _commit(repository, relative_path="experiments/test/preflight", artifact_format=ArtifactFormat.PARQUET, payload=buffer.getvalue())
 
-    decoded = read_parquet_frame(repository, RunId("r1"), JobId("job2"), missing_message="should not be raised")
+    decoded = read_parquet_frame(repository, ExperimentId("test"), StageNodeKey(experiment=ExperimentId("test"), stage=StageKind.PREFLIGHT), missing_message="should not be raised")
 
     assert decoded.equals(frame)
 
@@ -74,4 +76,4 @@ def test_read_parquet_frame_raises_when_the_artifact_is_missing(tmp_path: Path) 
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=5.0)
 
     with pytest.raises(ValueError, match="frame is unavailable"):
-        read_parquet_frame(repository, RunId("r1"), JobId("absent"), missing_message="frame is unavailable")
+        read_parquet_frame(repository, ExperimentId("test"), StageNodeKey(experiment=ExperimentId("test"), stage=StageKind.PREFLIGHT), missing_message="frame is unavailable")

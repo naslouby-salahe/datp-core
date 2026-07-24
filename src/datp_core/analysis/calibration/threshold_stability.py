@@ -12,7 +12,7 @@ from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
 from datp_core.artifacts.schemas.scores import validate_test_score_frame
 from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import RunId
+from datp_core.core.identifiers import ExperimentId
 from datp_core.core.seeding import Seed
 from datp_core.experiments import ExperimentRecord, ThresholdStabilityAnalysisRecord
 from datp_core.experiments.identity import IdentityBuilder
@@ -26,7 +26,7 @@ def analyze_threshold_stability(
     repository: ArtifactRepository,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    run_id: RunId,
+    experiment_id: ExperimentId,
     calibration_sample_count: int | None,
 ) -> ThresholdStabilityAnalysisResult:
     if calibration_sample_count is None:
@@ -54,12 +54,12 @@ def analyze_threshold_stability(
             missing = f"Threshold stability artifacts are unavailable for seed {seed.value}"
             thresholds = validate_threshold_frame(
                 read_parquet_frame(
-                    repository, run_id, IdentityBuilder.threshold_job_id(context), missing_message=missing
+                    repository, experiment_id, IdentityBuilder.threshold_node_key(context), missing_message=missing
                 )
             )
             metrics = validate_client_metric_frame(
                 read_parquet_frame(
-                    repository, run_id, IdentityBuilder.evaluation_job_id(context), missing_message=missing
+                    repository, experiment_id, IdentityBuilder.evaluation_node_key(context), missing_message=missing
                 )
             )
             for client_id, threshold in thresholds.select("client_id", "threshold").iter_rows():
@@ -75,8 +75,8 @@ def analyze_threshold_stability(
             validate_test_score_frame(
                 read_parquet_frame(
                     repository,
-                    run_id,
-                    IdentityBuilder.test_score_job_id(test_context),
+                    experiment_id,
+                    IdentityBuilder.test_score_node_key(test_context),
                     missing_message=f"Test scores are unavailable for threshold stability seed {seed.value}",
                 )
             )["client_id"]

@@ -41,8 +41,8 @@ def test_controlled_heterogeneity_expands_every_partition_condition_without_iden
         "iid_reference",
     }
     assert all(job.context.partition_condition is not None for job in evaluations)
-    assert len({job.job_id for job in plan.jobs}) == plan.node_count
-    assert len({job.output.artifact_id for job in plan.jobs}) == plan.node_count
+    assert len({job.node_key for job in plan.jobs}) == plan.node_count
+    assert len({job.output.node_key for job in plan.jobs}) == plan.node_count
 
 
 def test_confirmatory_plan_freezes_one_cohort_checkpoint_before_all_scores() -> None:
@@ -55,7 +55,7 @@ def test_confirmatory_plan_freezes_one_cohort_checkpoint_before_all_scores() -> 
 
     assert len(selector.inputs) == 10
     assert len(scores) == 20
-    assert all(selector.job_id in score.dependencies for score in scores)
+    assert all(selector.node_key in score.dependencies for score in scores)
     assert all(selector.output in score.inputs for score in scores)
 
 
@@ -71,7 +71,7 @@ def test_quantile_sensitivity_expands_every_quantile_without_score_duplication()
     assert len(scores) == 20
     assert len(thresholds) == len(evaluations) == 120
     assert {job.context.threshold_quantile for job in thresholds} == {0.9, 0.95, 0.975, 0.99}
-    assert len({job.job_id for job in thresholds}) == len(thresholds)
+    assert len({job.node_key for job in thresholds}) == len(thresholds)
 
 
 def test_shrinkage_and_fixed_k_sweeps_preserve_unswept_baselines() -> None:
@@ -120,7 +120,7 @@ def test_calibration_window_sweep_reuses_scores_and_expands_nested_replicates() 
     assert all(job.inputs[0].kind is ArtifactKind.CALIBRATION_SCORES for job in subsets)
     assert len(thresholds) == 24_040
     assert sum(job.context.calibration_sample_count is None for job in thresholds) == 40
-    assert len({job.job_id for job in plan.jobs}) == plan.node_count
+    assert len({job.node_key for job in plan.jobs}) == plan.node_count
 
 
 def test_cluster_fingerprint_ablation_expands_only_threshold_and_evaluation_cells() -> None:
@@ -143,7 +143,7 @@ def test_cluster_fingerprint_ablation_expands_only_threshold_and_evaluation_cell
         ("mean_error", "std_error"),
         ("mean_error", "std_error", "skew_error", "p95_error"),
     }
-    assert len({job.job_id for job in plan.jobs}) == plan.node_count
+    assert len({job.node_key for job in plan.jobs}) == plan.node_count
 
 
 def test_fedprox_plan_retains_all_mu_cells_without_rematerializing() -> None:
@@ -160,7 +160,7 @@ def test_fedprox_plan_retains_all_mu_cells_without_rematerializing() -> None:
     assert len(training) == 40
     assert {job.context.federated_proximal_mu for job in training} == {0.001, 0.01, 0.1, 1.0}
     assert len(selector.inputs) == 40
-    assert selector.job_id in statistics.dependencies
+    assert selector.node_key in statistics.dependencies
     assert selector.output in statistics.inputs
 
 
@@ -175,9 +175,9 @@ def test_ditto_plan_retains_every_weight_with_distinct_training_identities() -> 
 
     assert len(training) == 40
     assert {job.context.ditto_proximal_weight for job in training} == {0.001, 0.01, 0.1, 1.0}
-    assert len({job.output.artifact_id for job in training}) == len(training)
+    assert len({job.output.node_key for job in training}) == len(training)
     assert len(selector.inputs) == 40
-    assert selector.job_id in statistics.dependencies
+    assert selector.node_key in statistics.dependencies
 
 
 def test_temporal_plan_binds_each_arm_to_its_population_and_recalibration_window() -> None:

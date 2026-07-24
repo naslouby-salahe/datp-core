@@ -12,14 +12,15 @@ from datp_core.analysis.comparisons.models import PairedThresholdAnalysisResult
 from datp_core.analysis.result import AnalysisResult, analysis_result_to_payload
 from datp_core.analysis.statistics.multiplicity import holm_adjust_p_values
 from datp_core.artifacts.identity import ArtifactFormat
+from datp_core.core.identifiers import ExperimentId
 from datp_core.artifacts.payloads import BytesPayload
 from datp_core.artifacts.repository.models import ArtifactCommitResult
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import RunId
 from datp_core.pipeline.artifacts.commit import commit_artifact
 from datp_core.pipeline.artifacts.lineage import artifact_parents
 from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.node_key import node_path
 
 
 def apply_holm_correction(results: list[AnalysisResult]) -> list[AnalysisResult]:
@@ -45,10 +46,10 @@ def persist_analysis_results(
     repository: ArtifactRepository,
     config: ResolvedProjectConfiguration,
     job: StageJob,
-    run_id: RunId,
+    experiment_id: ExperimentId,
     results: list[AnalysisResult],
 ) -> ArtifactCommitResult:
-    relative_path = f"runs/{run_id.value}/{job.job_id.value}"
+    relative_path = node_path(job.node_key)
     payload = json.dumps(
         [analysis_result_to_payload(result) for result in apply_holm_correction(results)],
         separators=(",", ":"),
@@ -65,7 +66,7 @@ def persist_analysis_results(
         parents=artifact_parents(
             config,
             tuple(
-                (input_key, f"runs/{run_id.value}/{dependency.value}")
+                (input_key, node_path(dependency))
                 for input_key, dependency in zip(job.inputs, job.dependencies, strict=True)
             ),
         ),
