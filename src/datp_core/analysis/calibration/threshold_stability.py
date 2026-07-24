@@ -16,7 +16,7 @@ from datp_core.core.identifiers import RunId
 from datp_core.core.seeding import Seed
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments import ExperimentRecord, ThresholdStabilityAnalysisRecord
-from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.stages.context import StageJobContext
 
 
 def analyze_threshold_stability(

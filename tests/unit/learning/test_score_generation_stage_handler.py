@@ -30,7 +30,8 @@ from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.planning import expand_experiment_jobs
 from datp_core.learning.model.autoencoder import DynamicDenseAutoencoder
 from datp_core.learning.scoring.handler import ScoreGenerationStageHandler
-from datp_core.pipeline.models import JobExecutionStatus, StageJob, StageKind
+from datp_core.pipeline.stages.enums import JobExecutionStatus, StageKind
+from datp_core.pipeline.stages.jobs import StageJob
 
 _ROUND = 1
 

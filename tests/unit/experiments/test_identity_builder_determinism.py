@@ -43,7 +43,7 @@ def test_no_duplicate_artifact_ids_in_any_experiment() -> None:
 
 def test_identity_builder_purity() -> None:
     """IdentityBuilder methods are stateless — repeated calls produce identical results."""
-    from datp_core.pipeline.models import StageJobContext
+    from datp_core.pipeline.stages.context import StageJobContext
 
     ctx = StageJobContext(experiment_id=ExperimentId("test_exp"), seed=42)
     builder = IdentityBuilder()
@@ -61,7 +61,7 @@ def test_identity_builder_purity() -> None:
 
 def test_typed_context_correctness_for_every_job_stage() -> None:
     """Every planned job's context maps to the correct stage-required fields."""
-    from datp_core.pipeline.models import StageKind
+    from datp_core.pipeline.stages.enums import StageKind
 
     app = build_application()
     for exp_id in sorted(app.config.experiments.keys(), key=lambda e: e.value):

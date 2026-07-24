@@ -34,8 +34,12 @@ from datp_core.learning.scoring.compute import (
     score_personalized_materialized_split,
 )
 from datp_core.learning.scoring.data import materialized_feature_columns
-from datp_core.pipeline.execution import artifact_parents, commit_artifact
-from datp_core.pipeline.models import StageJob, StageJobContext, StageJobOutcome, StageKind
+from datp_core.pipeline.artifacts.commit import commit_artifact
+from datp_core.pipeline.artifacts.lineage import artifact_parents
+from datp_core.pipeline.stages.context import StageJobContext
+from datp_core.pipeline.stages.enums import StageKind
+from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
 
 def _score_split(kind: ArtifactKind, context: StageJobContext, config: ResolvedProjectConfiguration) -> str | None:

@@ -35,8 +35,11 @@ from datp_core.learning.scoring.data import load_benign_client_tensors, material
 from datp_core.learning.training.federated import federated_train_autoencoder
 from datp_core.learning.training.models import DittoTrainingResult, FederatedTrainingResult
 from datp_core.learning.training.personalization import ditto_train_autoencoder
-from datp_core.pipeline.execution import artifact_parents, commit_artifact
-from datp_core.pipeline.models import StageJob, StageJobOutcome, StageKind
+from datp_core.pipeline.artifacts.commit import commit_artifact
+from datp_core.pipeline.artifacts.lineage import artifact_parents
+from datp_core.pipeline.stages.enums import StageKind
+from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
 
 class ModelTrainingStageHandler:

@@ -18,7 +18,8 @@ from datp_core.app import ConfigurationError, build_application, build_config_on
 from datp_core.config.project import ResolvedProjectConfiguration, resolve_project_configuration
 from datp_core.core.identifiers import DatasetId, ExperimentId
 from datp_core.experiments.planning import expand_experiment_jobs, validate_planning_graph
-from datp_core.pipeline.models import PlanningGraph
+from datp_core.pipeline.graph.model import PlanningGraph
+from datp_core.pipeline.graph.traversal import lexicographical_topological_sort
 
 app = typer.Typer(name="datp-core", help="DATP-Core Scientific CLI Application")
 config_app = typer.Typer(help="Configuration commands")
@@ -54,7 +55,7 @@ def _print_catalogue_summary(catalogue: ResolvedProjectConfiguration) -> None:
 
 def _print_planning_dag(graph: PlanningGraph, experiment_name: str) -> None:
     tree = Tree(f"[bold gold1]Execution Plan DAG for Experiment: {experiment_name}[/bold gold1]")
-    top_order = graph.lexicographical_topological_sort()
+    top_order = lexicographical_topological_sort(graph)
     for job in top_order:
         deps = ", ".join([d.value for d in job.dependencies]) or "None"
         line = (

@@ -15,7 +15,7 @@ from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments.identity import IdentityBuilder, IdentityKind
 from datp_core.experiments import ExperimentRecord
-from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.stages.context import StageJobContext
 
 
 @pytest.fixture(scope="module")

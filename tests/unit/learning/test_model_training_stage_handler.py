@@ -23,7 +23,8 @@ from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.planning import expand_experiment_jobs
 from datp_core.learning.checkpoints.selection import select_anchor_checkpoint_round
 from datp_core.learning.training.handler import ModelTrainingStageHandler
-from datp_core.pipeline.models import JobExecutionStatus, StageJob, StageKind
+from datp_core.pipeline.stages.enums import JobExecutionStatus, StageKind
+from datp_core.pipeline.stages.jobs import StageJob
 
 
 def _anchor_training_job(app: DatpApplication, seed: int = 0) -> StageJob:

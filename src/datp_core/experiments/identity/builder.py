@@ -6,7 +6,7 @@ from datp_core.artifacts.identity import ArtifactKey, ArtifactKind
 from datp_core.core.identifiers import ArtifactId, ExperimentId, JobId, RunId
 from datp_core.experiments.identity.kinds import IdentityKind, StageIdentitySpec
 from datp_core.experiments.identity.specs import _IDENTITY_SPECS
-from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.stages.context import StageJobContext
 
 _COLON = ":"
 

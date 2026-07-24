@@ -27,7 +27,7 @@ from datp_core.core.identifiers import ExperimentId, RunId
 from datp_core.core.seeding import Seed
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments import ClusterStabilityAnalysisRecord, ExperimentRecord, ValueSweepRecord
-from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.stages.context import StageJobContext
 
 
 def compute_adjusted_rand_index(labels_true: np.ndarray, labels_pred: np.ndarray) -> float:

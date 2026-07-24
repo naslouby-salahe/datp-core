@@ -4,7 +4,8 @@ import pytest
 
 from datp_core.artifacts.identity import ArtifactKey, ArtifactKind
 from datp_core.core.identifiers import ArtifactId, JobId
-from datp_core.pipeline.models import JobExecutionStatus, StageJobOutcome, StageKind
+from datp_core.pipeline.stages.enums import JobExecutionStatus, StageKind
+from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
 
 def test_succeeded_requires_produced_artifact() -> None:

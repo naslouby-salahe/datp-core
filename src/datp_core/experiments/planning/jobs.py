@@ -17,7 +17,11 @@ from datp_core.experiments.planning.sweeps import (
     _sweep_values,
 )
 from datp_core.learning.contracts.enums import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
-from datp_core.pipeline.models import PlanningGraph, StageJob, StageJobContext, StageKind
+from datp_core.pipeline.graph.model import PlanningGraph
+from datp_core.pipeline.graph.validation import validate_acyclic
+from datp_core.pipeline.stages.context import StageJobContext
+from datp_core.pipeline.stages.enums import StageKind
+from datp_core.pipeline.stages.jobs import StageJob
 
 
 def expand_experiment_jobs(
@@ -363,5 +367,5 @@ def expand_experiment_jobs(
     jobs.append(report_job)
 
     planning_graph = PlanningGraph(tuple(jobs))
-    planning_graph.validate_acyclic()
+    validate_acyclic(planning_graph)
     return planning_graph

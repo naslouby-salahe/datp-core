@@ -5,7 +5,7 @@ from __future__ import annotations
 from attrs import define
 
 from datp_core.core.identifiers import ExperimentId, RunId
-from datp_core.pipeline.models import StageJobOutcome
+from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
 
 @define(frozen=True, slots=True, kw_only=True)

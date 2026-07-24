@@ -3,6 +3,7 @@
 from datp_core.app import build_application
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments.planning import expand_experiment_jobs
+from datp_core.pipeline.graph.traversal import lexicographical_topological_sort, topological_generations
 
 
 def test_topological_sort_preserves_context() -> None:
@@ -10,7 +11,7 @@ def test_topological_sort_preserves_context() -> None:
     app = build_application()
     for exp_id in sorted(app.config.experiments.keys(), key=lambda e: e.value):
         plan = expand_experiment_jobs(app.config.experiments.get(exp_id), app.config)
-        sorted_jobs = plan.lexicographical_topological_sort()
+        sorted_jobs = lexicographical_topological_sort(plan)
         assert len(sorted_jobs) == plan.node_count
         for job in sorted_jobs:
             assert job.context is not None
@@ -22,7 +23,7 @@ def test_topological_generations_preserve_context() -> None:
     app = build_application()
     for exp_id in sorted(app.config.experiments.keys(), key=lambda e: e.value):
         plan = expand_experiment_jobs(app.config.experiments.get(exp_id), app.config)
-        generations = plan.topological_generations()
+        generations = topological_generations(plan)
         gen_job_count = sum(len(gen) for gen in generations)
         assert gen_job_count == plan.node_count
         for gen in generations:

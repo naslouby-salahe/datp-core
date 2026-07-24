@@ -19,7 +19,9 @@ from datp_core.core.identifiers import RunId
 from datp_core.core.seeding import Seed
 from datp_core.experiments import AnalysisKind, AnalysisRecord, ExperimentRecord, PairedThresholdAnalysisRecord
 from datp_core.learning.contracts.enums import PersonalizationStrategy, TrainingProfileKind
-from datp_core.pipeline.models import StageJob, StageJobOutcome, StageKind
+from datp_core.pipeline.stages.enums import StageKind
+from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
 
 class StatisticalAnalysisStageHandler:

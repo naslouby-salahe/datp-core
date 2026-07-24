@@ -16,8 +16,10 @@ from datp_core.artifacts.payloads import BytesPayload
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import RunId
-from datp_core.pipeline.execution import ArtifactCommitResult, artifact_parents, commit_artifact
-from datp_core.pipeline.models import StageJob
+from datp_core.artifacts.repository.models import ArtifactCommitResult
+from datp_core.pipeline.artifacts.commit import commit_artifact
+from datp_core.pipeline.artifacts.lineage import artifact_parents
+from datp_core.pipeline.stages.jobs import StageJob
 
 
 def apply_holm_correction(results: list[AnalysisResult]) -> list[AnalysisResult]:

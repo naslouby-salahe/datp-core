@@ -19,7 +19,7 @@ from datp_core.analysis.operations.models import CommunicationEstimationContract
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments import ExperimentRecord, ResourceCostAnalysisRecord
 from datp_core.experiments.planning import score_context
-from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.stages.context import StageJobContext
 from datp_core.thresholding.policies.federated import FederatedMatchedExceedanceThresholdPolicyRecord
 from datp_core.thresholding.policies.shared import (
     LocalQuantileThresholdPolicyRecord,

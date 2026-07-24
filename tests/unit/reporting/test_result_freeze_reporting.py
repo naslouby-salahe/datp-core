@@ -8,7 +8,8 @@ from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.identity.kinds import IdentityKind
 from datp_core.experiments.planning import expand_experiment_jobs
-from datp_core.pipeline.models import StageJobContext, StageKind
+from datp_core.pipeline.stages.context import StageJobContext
+from datp_core.pipeline.stages.enums import StageKind
 from datp_core.reporting.freezing.service import freeze_result_family
 from datp_core.reporting.rendering.package import render_frozen_report
 

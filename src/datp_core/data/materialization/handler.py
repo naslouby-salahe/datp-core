@@ -19,8 +19,11 @@ from datp_core.data.readiness.gates import evaluate_readiness_gates
 from datp_core.data.readiness.source_audit import AuditDatasetUseCase
 from datp_core.data.sources.inventory import build_source_inventory
 from datp_core.experiments.planning import resolve_partition_contract
-from datp_core.pipeline.execution import artifact_parents, commit_artifact
-from datp_core.pipeline.models import StageJob, StageJobOutcome, StageKind
+from datp_core.pipeline.artifacts.commit import commit_artifact
+from datp_core.pipeline.artifacts.lineage import artifact_parents
+from datp_core.pipeline.stages.enums import StageKind
+from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
 
 class DatasetMaterializationStageHandler:

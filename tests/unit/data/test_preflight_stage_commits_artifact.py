@@ -8,7 +8,9 @@ from datp_core.artifacts.identity import ArtifactKey, ArtifactKind
 from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.core.identifiers import ArtifactId, ExperimentId, JobId, RunId
 from datp_core.experiments.execution import PreflightStageHandler
-from datp_core.pipeline.models import JobExecutionStatus, StageJob, StageJobContext, StageKind
+from datp_core.pipeline.stages.context import StageJobContext
+from datp_core.pipeline.stages.enums import JobExecutionStatus, StageKind
+from datp_core.pipeline.stages.jobs import StageJob
 
 
 def test_preflight_stage_commits_the_resolved_identity_artifact(tmp_path: Path) -> None:

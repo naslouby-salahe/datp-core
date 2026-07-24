@@ -17,7 +17,7 @@ from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments.identity import IdentityBuilder, execution_run_id
 from datp_core.experiments import AbsorptionAnalysisRecord, ExperimentRecord
-from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.stages.context import StageJobContext
 
 _MATERIALITY_RULE_PATTERN = re.compile(r"^absolute_denominator_at_least_(?P<value>\d+(?:\.\d+)?(?:e[+-]?\d+)?)$")
 

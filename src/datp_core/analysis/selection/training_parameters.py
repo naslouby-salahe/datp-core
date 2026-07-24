@@ -11,7 +11,7 @@ from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId, RunId
 from datp_core.experiments.identity import IdentityBuilder, execution_run_id
-from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.stages.context import StageJobContext
 
 
 def federated_proximal_selection(

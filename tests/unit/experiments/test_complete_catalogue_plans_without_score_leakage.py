@@ -5,7 +5,8 @@ from datp_core.artifacts.identity import ArtifactKind
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments import RecalibrationMode
 from datp_core.experiments.planning import expand_experiment_jobs
-from datp_core.pipeline.models import StageKind
+from datp_core.pipeline.graph.validation import validate_acyclic
+from datp_core.pipeline.stages.enums import StageKind
 
 
 def test_complete_catalogue_resolves_and_anchor_plan_separates_scores() -> None:
@@ -13,7 +14,7 @@ def test_complete_catalogue_resolves_and_anchor_plan_separates_scores() -> None:
     assert (len(app.config.populations), len(app.config.experiments)) == (7, 23)
     plan = expand_experiment_jobs(app.config.experiments.get(ExperimentId("anchor_reproduction")), app.config)
     assert plan.node_count > 0
-    plan.validate_acyclic()
+    validate_acyclic(plan)
     for job in plan.jobs:
         if job.stage is StageKind.THRESHOLD_CONSTRUCTION:
             assert all(item.kind is not ArtifactKind.TEST_SCORES for item in job.inputs)

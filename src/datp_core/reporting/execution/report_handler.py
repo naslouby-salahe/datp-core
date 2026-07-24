@@ -8,8 +8,11 @@ from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import RunId
 from datp_core.experiments.identity import IdentityBuilder
-from datp_core.pipeline.execution import artifact_parents, commit_artifact
-from datp_core.pipeline.models import StageJob, StageJobOutcome, StageKind
+from datp_core.pipeline.artifacts.commit import commit_artifact
+from datp_core.pipeline.artifacts.lineage import artifact_parents
+from datp_core.pipeline.stages.enums import StageKind
+from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.outcomes import StageJobOutcome
 from datp_core.reporting.freezing.errors import ResultFreezeError
 from datp_core.reporting.rendering.package import render_frozen_report
 

@@ -28,7 +28,7 @@ from datp_core.evaluation.distributions import (
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments import DistributionMechanismAnalysisRecord, ExperimentRecord
 from datp_core.experiments.planning import score_context
-from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.stages.context import StageJobContext
 
 
 def distribution_seed_result(

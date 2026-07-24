@@ -7,7 +7,7 @@ _SRC_ROOT = Path(__file__).resolve().parents[3] / "src" / "datp_core"
 # All migrated stage-handler modules must exist in the new feature-oriented tree.
 _STAGE_FILES = {
     "data/materialization/handler.py",
-    "pipeline/execution.py",
+    "pipeline/execution/runner.py",
     "experiments/execution/preflight.py",
     "learning/checkpoints/handler.py",
     "learning/training/handler.py",

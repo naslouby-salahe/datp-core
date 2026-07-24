@@ -24,7 +24,7 @@ from datp_core.evaluation import MetricStatus
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments import ConformalCoverageAnalysisRecord, ExperimentRecord
 from datp_core.experiments.planning import score_context
-from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.stages.context import StageJobContext
 from datp_core.thresholding.policies.conformal import SplitConformalThresholdPolicyRecord
 from datp_core.thresholding.policies.enums import ConformalAttainabilityStatus
 

@@ -19,7 +19,7 @@ from datp_core.core.identifiers import ExperimentId, RunId
 from datp_core.evaluation.execution import OperatingPointEvaluationStageHandler
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.planning import expand_experiment_jobs, score_context
-from datp_core.pipeline.models import JobExecutionStatus, StageKind
+from datp_core.pipeline.stages.enums import JobExecutionStatus, StageKind
 from datp_core.thresholding.execution.handler import (
     ThresholdConstructionStageHandler,
 )

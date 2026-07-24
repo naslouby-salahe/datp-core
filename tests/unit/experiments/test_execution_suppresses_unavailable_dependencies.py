@@ -3,7 +3,7 @@
 from datp_core.app import build_application
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments.execution import ExecuteExperimentUseCase
-from datp_core.pipeline.models import JobExecutionStatus, StageKind
+from datp_core.pipeline.stages.enums import JobExecutionStatus, StageKind
 
 
 def test_execution_suppresses_jobs_after_an_unavailable_prerequisite() -> None:
@@ -13,6 +13,6 @@ def test_execution_suppresses_jobs_after_an_unavailable_prerequisite() -> None:
     materialization = next(outcome for outcome in report.outcomes if outcome.stage is StageKind.DATASET_MATERIALIZATION)
     assert preflight.status is JobExecutionStatus.FAILED
     assert preflight.error_message == "No stage handler is registered"
-    assert materialization.status is JobExecutionStatus.SKIPPED
+    assert materialization.status is JobExecutionStatus.BLOCKED_BY_DEPENDENCY
     assert materialization.error_message is not None
     assert "Unavailable prerequisite jobs" in materialization.error_message

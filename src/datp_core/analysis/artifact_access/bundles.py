@@ -13,7 +13,7 @@ from datp_core.core.identifiers import RunId
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments import ExperimentRecord
 from datp_core.experiments.planning import score_context
-from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.stages.context import StageJobContext
 
 
 def threshold_and_calibration_frame(

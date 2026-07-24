@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.stages.context import StageJobContext
 
 
 def score_context(context: StageJobContext, *, retain_calibration_subset: bool = False) -> StageJobContext:

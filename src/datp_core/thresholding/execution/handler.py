@@ -16,8 +16,11 @@ from datp_core.core.identifiers import ArtifactId, RunId
 from datp_core.experiments import RecalibrationMode
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.planning import score_context
-from datp_core.pipeline.execution import artifact_parents, commit_artifact
-from datp_core.pipeline.models import StageJob, StageJobOutcome, StageKind
+from datp_core.pipeline.artifacts.commit import commit_artifact
+from datp_core.pipeline.artifacts.lineage import artifact_parents
+from datp_core.pipeline.stages.enums import StageKind
+from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.outcomes import StageJobOutcome
 from datp_core.thresholding.estimation.construction import ConstructThresholdsUseCase
 from datp_core.thresholding.execution.frames import (
     calibration_to_benign_scores,

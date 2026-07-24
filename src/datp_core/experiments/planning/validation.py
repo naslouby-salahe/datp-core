@@ -6,7 +6,10 @@ from attrs import define
 
 from datp_core.artifacts.identity import ArtifactKey, ArtifactKind
 from datp_core.core.identifiers import JobId
-from datp_core.pipeline.models import PlanningGraph, StageKind
+from datp_core.pipeline.graph.model import PlanningGraph
+from datp_core.pipeline.graph.traversal import lexicographical_topological_sort
+from datp_core.pipeline.graph.validation import validate_acyclic
+from datp_core.pipeline.stages.enums import StageKind
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -40,11 +43,11 @@ class ExecutionPlanValidator:
             )
 
         try:
-            graph.validate_acyclic()
+            validate_acyclic(graph)
         except ValueError as exc:
             errors.append(str(exc))
 
-        top_order = graph.lexicographical_topological_sort()
+        top_order = lexicographical_topological_sort(graph)
         if len(top_order) != graph.node_count:
             errors.append("Topological sort node count mismatch")
 

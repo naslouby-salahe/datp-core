@@ -10,7 +10,7 @@ from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.core.identifiers import ArtifactId, ExperimentId, RunId
 from datp_core.data.materialization import DatasetMaterializationStageHandler
 from datp_core.experiments.planning import expand_experiment_jobs
-from datp_core.pipeline.models import JobExecutionStatus, StageKind
+from datp_core.pipeline.stages.enums import JobExecutionStatus, StageKind
 
 
 def test_materialization_reuses_a_matching_frozen_artifact_without_reading_raw_sources(tmp_path: Path) -> None:

@@ -21,7 +21,7 @@ from datp_core.core.seeding import Seed
 from datp_core.evaluation import MetricStatus, calculate_fpr_dispersion
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments import ExperimentRecord, PairedThresholdAnalysisRecord
-from datp_core.pipeline.models import StageJobContext
+from datp_core.pipeline.stages.context import StageJobContext
 
 
 def analyze_paired(
