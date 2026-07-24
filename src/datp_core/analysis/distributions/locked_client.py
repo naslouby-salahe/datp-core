@@ -8,7 +8,7 @@ from datp_core.analysis.distributions.models import LockedClientDistributionAnal
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.core.identifiers import RunId
 from datp_core.core.seeding import Seed
-from datp_core.experiments.models import ExperimentRecord, LockedClientDistributionAnalysisRecord
+from datp_core.experiments import ExperimentRecord, LockedClientDistributionAnalysisRecord
 
 
 def analyze_locked_client_distribution(

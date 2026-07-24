@@ -3,7 +3,8 @@
 from datp_core.app import build_application
 from datp_core.core.hashing import compute_payload_checksum
 from datp_core.core.identifiers import DatasetId, DatasetSetupId
-from datp_core.data.manifests import MaterializedSplitEvidence, SplitManifest, SplitManifestEntry, SplitMembership
+from datp_core.data.contracts import SplitMembership
+from datp_core.data.manifests import MaterializedSplitEvidence, SplitManifest, SplitManifestEntry
 from datp_core.data.readiness import AuditDatasetUseCase
 
 

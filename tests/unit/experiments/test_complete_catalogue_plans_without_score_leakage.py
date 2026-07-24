@@ -3,7 +3,7 @@
 from datp_core.app import build_application
 from datp_core.artifacts.identity import ArtifactKind
 from datp_core.core.identifiers import ExperimentId
-from datp_core.experiments.models import RecalibrationMode
+from datp_core.experiments import RecalibrationMode
 from datp_core.experiments.planning import expand_experiment_jobs
 from datp_core.pipeline.models import StageKind
 

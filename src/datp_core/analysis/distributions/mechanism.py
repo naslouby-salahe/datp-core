@@ -26,7 +26,7 @@ from datp_core.evaluation.distributions import (
     threshold_tradeoff,
 )
 from datp_core.experiments.identity import IdentityBuilder
-from datp_core.experiments.models import DistributionMechanismAnalysisRecord, ExperimentRecord
+from datp_core.experiments import DistributionMechanismAnalysisRecord, ExperimentRecord
 from datp_core.experiments.planning import score_context
 from datp_core.pipeline.models import StageJobContext
 

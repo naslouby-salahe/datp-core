@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.experiments.models import EvaluationSpecRecord, ExperimentRecord
+from datp_core.experiments import EvaluationSpecRecord, ExperimentRecord
 
 
 def experiment_evaluation(experiment: ExperimentRecord, label: str) -> EvaluationSpecRecord:

@@ -20,9 +20,9 @@ from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import RunId
 from datp_core.core.seeding import Seed
-from datp_core.evaluation.models import MetricStatus
+from datp_core.evaluation import MetricStatus
 from datp_core.experiments.identity import IdentityBuilder
-from datp_core.experiments.models import ConformalCoverageAnalysisRecord, ExperimentRecord
+from datp_core.experiments import ConformalCoverageAnalysisRecord, ExperimentRecord
 from datp_core.experiments.planning import score_context
 from datp_core.pipeline.models import StageJobContext
 from datp_core.thresholding.models import ConformalAttainabilityStatus, SplitConformalThresholdPolicyRecord

@@ -15,7 +15,7 @@ from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import RunId
 from datp_core.core.seeding import Seed
 from datp_core.experiments.identity import IdentityBuilder
-from datp_core.experiments.models import ExperimentRecord, ThresholdStabilityAnalysisRecord
+from datp_core.experiments import ExperimentRecord, ThresholdStabilityAnalysisRecord
 from datp_core.pipeline.models import StageJobContext
 
 

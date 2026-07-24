@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datp_core.analysis.comparisons.absorption import materiality_threshold
 from datp_core.analysis.comparisons.models import PairedThresholdAnalysisResult, RecoveryFractionAnalysisResult
-from datp_core.experiments.models import RecoveryFractionAnalysisRecord
+from datp_core.experiments import RecoveryFractionAnalysisRecord
 
 
 def analyze_recovery_fraction(

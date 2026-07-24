@@ -26,14 +26,16 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.contracts import EligibilityPolicyRecord, NormalizationStrategyRecord, ResolvedDataset
-from datp_core.evaluation.models import (
-    CommunicationEstimationContractRecord,
+from datp_core.evaluation import (
     EvaluationResultContractRecord,
     MetricBundleRecord,
     MetricDefinitionsRecord,
+)
+from datp_core.analysis.operations.models import (
+    CommunicationEstimationContractRecord,
     OperationalInputsRecord,
 )
-from datp_core.experiments.models import (
+from datp_core.experiments import (
     EligibilityGateRecord,
     EvidenceRole,
     ExperimentRecord,

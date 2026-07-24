@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datp_core.analysis.operations.models import AlertBurdenAnalysisResult
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.experiments.models import AlertBurdenAnalysisRecord
+from datp_core.experiments import AlertBurdenAnalysisRecord
 
 
 def analyze_alert_burden(

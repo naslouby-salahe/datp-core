@@ -9,7 +9,7 @@ import networkx as nx
 
 from datp_core.artifacts.identity import ArtifactKey
 from datp_core.core.identifiers import ExperimentId, JobId, PopulationId, ThresholdPolicyId
-from datp_core.experiments.models import RecalibrationMode
+from datp_core.experiments.catalogue.evaluations import RecalibrationMode
 
 
 class StageKind(Enum):

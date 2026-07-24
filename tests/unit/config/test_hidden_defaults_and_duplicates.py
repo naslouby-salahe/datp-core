@@ -13,7 +13,7 @@ from datp_core.config.authored.protocols import LocalQuantileThresholdPolicyConf
 from datp_core.config.loading import ConfigurationError
 from datp_core.config.project import resolve_project_configuration
 from datp_core.core.identifiers import DatasetId, ExperimentId
-from datp_core.experiments.models import ConditionSweepRecord, ValueSweepRecord
+from datp_core.experiments import ConditionSweepRecord, ValueSweepRecord
 
 
 def test_multiclass_label_is_a_strict_typed_model_not_an_untyped_dict() -> None:

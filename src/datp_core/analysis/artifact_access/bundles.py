@@ -11,7 +11,7 @@ from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
 from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
 from datp_core.core.identifiers import RunId
 from datp_core.experiments.identity import IdentityBuilder
-from datp_core.experiments.models import ExperimentRecord
+from datp_core.experiments import ExperimentRecord
 from datp_core.experiments.planning import score_context
 from datp_core.pipeline.models import StageJobContext
 

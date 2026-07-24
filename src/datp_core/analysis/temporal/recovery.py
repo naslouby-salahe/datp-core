@@ -10,7 +10,7 @@ from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import RunId
 from datp_core.core.seeding import Seed
-from datp_core.experiments.models import ExperimentRecord, TemporalRecoveryAnalysisRecord
+from datp_core.experiments import ExperimentRecord, TemporalRecoveryAnalysisRecord
 
 
 def analyze_temporal_recovery(

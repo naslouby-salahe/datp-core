@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from datp_core.analysis.comparisons.models import PairedThresholdAnalysisResult
 from datp_core.analysis.validation.models import AnchorEquivalenceAnalysisResult, AnchorEquivalenceChecks
-from datp_core.experiments.models import AnchorEquivalenceAnalysisRecord
+from datp_core.experiments import AnchorEquivalenceAnalysisRecord
 
 
 def analyze_anchor_equivalence(

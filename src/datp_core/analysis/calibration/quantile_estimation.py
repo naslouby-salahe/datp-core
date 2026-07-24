@@ -16,7 +16,7 @@ from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.core.identifiers import RunId
 from datp_core.core.seeding import Seed
 from datp_core.evaluation.distributions import calibration_variance_terms
-from datp_core.experiments.models import ExperimentRecord, QuantileEstimationAnalysisRecord
+from datp_core.experiments import ExperimentRecord, QuantileEstimationAnalysisRecord
 
 
 def analyze_quantile_estimation(

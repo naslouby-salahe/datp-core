@@ -12,7 +12,7 @@ from collections.abc import Mapping
 
 from attrs import define
 
-from datp_core.experiments.models import (
+from datp_core.experiments import (
     ConditionSweepRecord,
     ExperimentRecord,
     PairedThresholdAnalysisRecord,

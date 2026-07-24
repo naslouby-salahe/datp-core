@@ -1,0 +1,86 @@
+"""Execution plan validation."""
+
+from __future__ import annotations
+
+from attrs import define
+
+from datp_core.artifacts.identity import ArtifactKey, ArtifactKind
+from datp_core.core.identifiers import JobId
+from datp_core.pipeline.models import PlanningGraph, StageKind
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class PlanValidationResult:
+    is_valid: bool
+    errors: tuple[str, ...]
+    job_count: int
+    dependency_count: int
+
+
+class ExecutionPlanValidator:
+    @staticmethod
+    def _build_producer_map(graph: PlanningGraph, errors: list[str]) -> dict[ArtifactKey, JobId]:
+        producers: dict[ArtifactKey, JobId] = {}
+        for job in graph.jobs:
+            if job.output in producers:
+                errors.append(f"Multiple producers found for artifact output '{job.output.artifact_id}'")
+            producers[job.output] = job.job_id
+        return producers
+
+    def validate(self, graph: PlanningGraph) -> PlanValidationResult:
+        errors: list[str] = []
+
+        if graph.node_count == 0:
+            errors.append("Planning graph contains no job nodes")
+            return PlanValidationResult(
+                is_valid=False,
+                errors=tuple(errors),
+                job_count=0,
+                dependency_count=0,
+            )
+
+        try:
+            graph.validate_acyclic()
+        except ValueError as exc:
+            errors.append(str(exc))
+
+        top_order = graph.lexicographical_topological_sort()
+        if len(top_order) != graph.node_count:
+            errors.append("Topological sort node count mismatch")
+
+        producers = self._build_producer_map(graph, errors)
+        self._validate_job_inputs(graph, producers, errors)
+
+        is_valid = len(errors) == 0
+        return PlanValidationResult(
+            is_valid=is_valid,
+            errors=tuple(errors),
+            job_count=graph.node_count,
+            dependency_count=graph.edge_count,
+        )
+
+    @staticmethod
+    def _validate_job_inputs(graph: PlanningGraph, producers: dict[ArtifactKey, JobId], errors: list[str]) -> None:
+        for job in graph.jobs:
+            for inp in job.inputs:
+                if inp not in producers:
+                    errors.append(
+                        f"Job '{job.job_id}' consumes artifact '{inp.artifact_id}' which has no producer in the plan"
+                    )
+
+            if job.stage is StageKind.THRESHOLD_CONSTRUCTION and any(
+                item.kind is ArtifactKind.TEST_SCORES for item in job.inputs
+            ):
+                errors.append(f"Threshold job '{job.job_id}' must not consume test scores")
+            if job.stage is StageKind.OPERATING_POINT_EVALUATION and any(
+                item.kind in {ArtifactKind.CALIBRATION_SCORES, ArtifactKind.FUTURE_RECALIBRATION_SCORES}
+                for item in job.inputs
+            ):
+                errors.append(f"Evaluation job '{job.job_id}' must not consume calibration scores")
+
+
+def validate_planning_graph(graph: PlanningGraph) -> None:
+    validator = ExecutionPlanValidator()
+    res = validator.validate(graph)
+    if not res.is_valid:
+        raise ValueError(f"Planning graph validation failed: {res.errors}")

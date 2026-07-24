@@ -8,7 +8,7 @@ import pytest
 
 from datp_core.analysis.execution import dispatch as dispatch_module
 from datp_core.core.identifiers import StatisticalProfileId
-from datp_core.experiments.models import (
+from datp_core.experiments import (
     AbsorptionAnalysisRecord,
     AlertBurdenAnalysisRecord,
     AnalysisKind,

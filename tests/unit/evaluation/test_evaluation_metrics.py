@@ -3,7 +3,7 @@
 import pytest
 
 from datp_core.core.identifiers import ClientId
-from datp_core.evaluation.models import (
+from datp_core.evaluation import (
     ClientConfusionMatrix,
     MetricStatus,
     assert_auroc_invariant,

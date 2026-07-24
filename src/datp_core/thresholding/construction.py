@@ -24,7 +24,7 @@ from datp_core.core.identifiers import ArtifactId, ClientId, PopulationId, RunId
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.core.seeding import Seed
 from datp_core.experiments.identity import IdentityBuilder
-from datp_core.experiments.models import RecalibrationMode
+from datp_core.experiments import RecalibrationMode
 from datp_core.experiments.planning import score_context
 from datp_core.pipeline.execution import artifact_parents, commit_artifact
 from datp_core.pipeline.models import StageJob, StageJobOutcome, StageKind

@@ -12,8 +12,8 @@ from datp_core.config.authored.protocols.evaluation import (
 from datp_core.core.identifiers import EligibilityPolicyId
 from datp_core.core.numbers import PositiveInt
 from datp_core.data.contracts import EligibilityFallbackRecord, EligibilityPolicyRecord
-from datp_core.evaluation.models import EvaluationResultContractRecord
-from datp_core.experiments.models import ResultTypeRecord
+from datp_core.evaluation.definitions import EvaluationResultContractRecord
+from datp_core.experiments import ResultTypeRecord
 
 
 def resolve_eligibility_policies(

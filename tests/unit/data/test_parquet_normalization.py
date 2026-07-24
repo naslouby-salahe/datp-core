@@ -5,7 +5,7 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.data.contracts import NormalizationFitScope, NormalizationStrategy
-from datp_core.data.sources import normalize_materialized_parquet
+from datp_core.data.preprocessing import normalize_materialized_parquet
 
 
 def test_global_train_min_max_normalization_does_not_fit_on_held_out_rows(tmp_path: Path) -> None:

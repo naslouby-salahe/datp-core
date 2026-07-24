@@ -32,8 +32,8 @@ from datp_core.data.contracts import AdapterKind
 from datp_core.data.materialization import (
     DatasetAdapterRegistry,
     DatasetMaterializationStageHandler,
-    PreflightStageHandler,
 )
+from datp_core.experiments.execution import PreflightStageHandler
 from datp_core.data.readiness import AuditDatasetUseCase
 from datp_core.evaluation.execution import OperatingPointEvaluationStageHandler
 from datp_core.experiments.execution import ExecuteExperimentUseCase

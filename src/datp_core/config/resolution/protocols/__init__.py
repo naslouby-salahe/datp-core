@@ -53,14 +53,16 @@ from datp_core.core.identifiers import (
 from datp_core.core.immutability import deep_freeze
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.contracts import EligibilityPolicyRecord, NormalizationStrategyRecord
-from datp_core.evaluation.models import (
-    CommunicationEstimationContractRecord,
+from datp_core.evaluation import (
     EvaluationResultContractRecord,
     MetricBundleRecord,
     MetricDefinitionsRecord,
+)
+from datp_core.analysis.operations.models import (
+    CommunicationEstimationContractRecord,
     OperationalInputsRecord,
 )
-from datp_core.experiments.models import ResultTypeRecord
+from datp_core.experiments import ResultTypeRecord
 from datp_core.learning.models import (
     BatchingRecord,
     CheckpointProfileRecord,

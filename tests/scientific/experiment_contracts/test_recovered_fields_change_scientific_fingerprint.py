@@ -15,7 +15,7 @@ from datp_core.core.identifiers import (
     ThresholdPolicyId,
     TrainingProfileId,
 )
-from datp_core.experiments.models import (
+from datp_core.experiments import (
     AbsorptionAnalysisRecord,
     CapabilityRequirementRecord,
     EvaluationSpecRecord,

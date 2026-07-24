@@ -17,7 +17,7 @@ from datp_core.core.identifiers import (
     StatisticalProfileId,
     TrainingProfileId,
 )
-from datp_core.experiments.models import (
+from datp_core.experiments import (
     ConditionSweepRecord,
     EvidenceRole,
     ExperimentRecord,

@@ -16,7 +16,7 @@ from datp_core.analysis.validation.anchor_equivalence import analyze_anchor_equi
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
 from datp_core.core.numbers import Probability
-from datp_core.experiments.models import AnchorEquivalenceAnalysisRecord
+from datp_core.experiments import AnchorEquivalenceAnalysisRecord
 
 
 @pytest.fixture(scope="module")

@@ -18,7 +18,7 @@ from datp_core.data.adapters.nbaiot import (
     write_nbaiot_source_parquet,
 )
 from datp_core.data.sources import SourceRow
-from datp_core.experiments.models import SweepConditionAllocation, SweepConditionRecord
+from datp_core.experiments import SweepConditionAllocation, SweepConditionRecord
 
 
 def test_dirichlet_partition_preserves_roles_capacity_and_seed_determinism() -> None:
