@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datp_core.artifacts.identity import ArtifactKey, ArtifactKind
+from datp_core.core.hashing import Checksum
 from datp_core.core.identifiers import ArtifactId, ExperimentId, JobId, RunId
 from datp_core.experiments.identity.kinds import IdentityKind, StageIdentitySpec
 from datp_core.experiments.identity.specs import _IDENTITY_SPECS
@@ -11,8 +12,15 @@ from datp_core.pipeline.stages.context import StageJobContext
 _COLON = ":"
 
 
-def execution_run_id(experiment_id: ExperimentId, execution_fingerprint: str) -> RunId:
-    return RunId(f"run_{experiment_id.value}_{execution_fingerprint[:12]}")
+def execution_run_id(
+    experiment_id: ExperimentId,
+    execution_fingerprint: str,
+    source_provenance_fingerprint: Checksum | None = None,
+) -> RunId:
+    base = f"run_{experiment_id.value}_{execution_fingerprint[:12]}"
+    if source_provenance_fingerprint is not None:
+        base += f"_{source_provenance_fingerprint.value[:12]}"
+    return RunId(base)
 
 
 def _check_no_delimiter(value: str, *, field_name: str) -> None:

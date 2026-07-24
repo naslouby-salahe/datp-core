@@ -23,11 +23,13 @@ from datp_core.analysis.clustering.models import (
 from datp_core.analysis.statistics.descriptive import group_mean_std, mean_group_std
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
+from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId, RunId
 from datp_core.core.seeding import Seed
-from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments import ClusterStabilityAnalysisRecord, ExperimentRecord, ValueSweepRecord
+from datp_core.experiments.identity import IdentityBuilder
 from datp_core.pipeline.stages.context import StageJobContext
+from datp_core.thresholding.policies.clustering import ClusterThresholdPolicyRecord
 
 
 def compute_adjusted_rand_index(labels_true: np.ndarray, labels_pred: np.ndarray) -> float:
@@ -38,6 +40,7 @@ def analyze_cluster_stability(
     analysis: ClusterStabilityAnalysisRecord,
     *,
     repository: ArtifactRepository,
+    config: ResolvedProjectConfiguration,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
     run_id: RunId,
@@ -47,7 +50,7 @@ def analyze_cluster_stability(
             analysis, repository=repository, experiment=experiment, seeds=seeds, run_id=run_id
         )
     return _analyze_cluster_membership(
-        analysis, repository=repository, experiment=experiment, seeds=seeds, run_id=run_id
+        analysis, repository=repository, config=config, experiment=experiment, seeds=seeds, run_id=run_id
     )
 
 
@@ -107,13 +110,25 @@ def _analyze_cluster_membership(
     analysis: ClusterStabilityAnalysisRecord,
     *,
     repository: ArtifactRepository,
+    config: ResolvedProjectConfiguration,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
     run_id: RunId,
 ) -> ClusterMembershipStabilityResult:
+    evaluation = next(
+        item for item in experiment.evaluations if item.label == analysis.source_evaluation
+    )
+    policy = config.threshold_policies.get(evaluation.threshold_policy_id)
+    if not isinstance(policy, ClusterThresholdPolicyRecord):
+        raise ValueError(
+            f"Cluster stability requires a cluster threshold policy, "
+            f"got '{evaluation.threshold_policy_id.value}'"
+        )
+    expected_cluster_count = policy.cluster_count
+    expected_labels = frozenset(range(expected_cluster_count))
+
     memberships: dict[int, dict[str, int]] = {}
     seed_summaries: list[ClusterStabilitySeedSummary] = []
-    observed_labels: set[int] = set()
     for seed in seeds:
         context = StageJobContext(
             experiment_id=experiment.identifier, seed=seed.value, evaluation_label=analysis.source_evaluation
@@ -135,9 +150,15 @@ def _analyze_cluster_membership(
             for client, label in threshold_frame.select("client_id", "cluster_label").iter_rows()
         }
         memberships[int(seed.value)] = labels
-        observed_labels.update(labels.values())
 
-        cluster_membership_counts: dict[int, int] = {}
+        for label_value in labels.values():
+            if label_value not in expected_labels:
+                raise ValueError(
+                    f"Cluster label {label_value} is outside the configured range "
+                    f"[0, {expected_cluster_count}) for seed {seed.value}"
+                )
+
+        cluster_membership_counts: dict[int, int] = {label: 0 for label in expected_labels}
         for label_value in threshold_frame["cluster_label"].to_list():
             label_int = int(label_value)
             cluster_membership_counts[label_int] = cluster_membership_counts.get(label_int, 0) + 1
@@ -152,24 +173,41 @@ def _analyze_cluster_membership(
         joined = threshold_frame.join(
             metric_frame.select("client_id", "false_positive_rate", "false_positive_rate_status"), on="client_id"
         )
-        fpr_clusters: dict[int, list[tuple[float, float]]] = {}
+
+        threshold_clusters: dict[int, list[tuple[float, float]]] = {label: [] for label in expected_labels}
+        fpr_clusters: dict[int, list[tuple[float, float]]] = {label: [] for label in expected_labels}
         for label, threshold, fpr, status in joined.select(
             "cluster_label", "threshold", "false_positive_rate", "false_positive_rate_status"
         ).iter_rows():
+            label_int = int(label)
+            threshold_val = float(threshold)
+            threshold_clusters.setdefault(label_int, []).append((threshold_val, 0.0))
             if status == "available" and fpr is not None:
-                fpr_clusters.setdefault(int(label), []).append((float(threshold), float(fpr)))
+                fpr_clusters.setdefault(label_int, []).append((threshold_val, float(fpr)))
 
         seed_summaries.append(
             ClusterStabilitySeedSummary(
                 seed=int(seed.value),
                 cluster_membership_per_client=labels,
-                cluster_size={str(label): cluster_membership_counts.get(label, 0) for label in cluster_membership_counts},
-                singleton_cluster_flag=any(count == 1 for count in cluster_membership_counts.values()),
-                empty_cluster_flag=any(count == 0 for count in cluster_membership_counts.values()),
-                within_cluster_threshold_dispersion=mean_group_std(list(fpr_clusters.values()), 0),
-                within_cluster_fpr_dispersion=mean_group_std(list(fpr_clusters.values()), 1),
-                across_cluster_threshold_dispersion=group_mean_std(list(fpr_clusters.values()), 0),
-                across_cluster_mean_fpr_dispersion=group_mean_std(list(fpr_clusters.values()), 1),
+                cluster_size={str(label): cluster_membership_counts[label] for label in expected_labels},
+                singleton_cluster_flag=any(
+                    cluster_membership_counts[label] == 1 for label in expected_labels
+                ),
+                empty_cluster_flag=any(
+                    cluster_membership_counts[label] == 0 for label in expected_labels
+                ),
+                within_cluster_threshold_dispersion=mean_group_std(
+                    [threshold_clusters[label] for label in expected_labels], 0
+                ),
+                within_cluster_fpr_dispersion=mean_group_std(
+                    [fpr_clusters[label] for label in expected_labels], 1
+                ),
+                across_cluster_threshold_dispersion=group_mean_std(
+                    [threshold_clusters[label] for label in expected_labels], 0
+                ),
+                across_cluster_mean_fpr_dispersion=group_mean_std(
+                    [fpr_clusters[label] for label in expected_labels], 1
+                ),
             )
         )
 
@@ -192,6 +230,11 @@ def _analyze_cluster_membership(
         for index, left in enumerate(sorted_seeds)
         for right in sorted_seeds[index + 1 :]
     ]
+    expected_pair_count = len(sorted_seeds) * (len(sorted_seeds) - 1) // 2
+    if len(aris) != expected_pair_count:
+        raise ValueError(
+            f"ARI pair count mismatch: expected {expected_pair_count}, got {len(aris)}"
+        )
     return ClusterMembershipStabilityResult(
         analysis_label=analysis.label,
         comparison_unit=analysis.comparison_unit,

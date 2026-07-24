@@ -5,13 +5,14 @@ from __future__ import annotations
 from attrs import define
 
 from datp_core.artifacts.identity import ArtifactKey
-from datp_core.core.hashing import Fingerprint
+from datp_core.core.hashing import Checksum, Fingerprint
 
 
 @define(frozen=True, slots=True, kw_only=True)
 class ArtifactParent:
     parent_key: ArtifactKey
     scientific_fingerprint: Fingerprint
+    source_inventory_fingerprint: Checksum | None = None
 
 
 def validate_parent_lineage(artifact_key: ArtifactKey, parents: tuple[ArtifactParent, ...]) -> str | None:

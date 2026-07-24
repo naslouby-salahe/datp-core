@@ -116,24 +116,34 @@ class ModelTrainingStageHandler:
         reuse = self._repository.assess_reuse(
             relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
         )
-        if (
-            reuse.can_reuse
-            and self._repository.assess_reuse(
-                selection_relative_path,
-                selection_key,
+        selection_usable = self._repository.assess_reuse(
+            selection_relative_path,
+            selection_key,
+            self._config.scientific_fingerprint,
+            self._config.execution_fingerprint,
+        ).can_reuse
+        personalized_usable = (
+            not is_ditto
+            or self._repository.assess_reuse(
+                personalized_relative_path,
+                personalized_key,
                 self._config.scientific_fingerprint,
                 self._config.execution_fingerprint,
             ).can_reuse
-            and (
-                not is_ditto
-                or self._repository.assess_reuse(
-                    personalized_relative_path,
-                    personalized_key,
-                    self._config.scientific_fingerprint,
-                    self._config.execution_fingerprint,
-                ).can_reuse
-            )
-        ):
+        )
+        if reuse.can_reuse:
+            if not selection_usable:
+                return StageJobOutcome.failed(
+                    job_id=job.job_id,
+                    stage=job.stage,
+                    error_message="Model checkpoint is present but selection metadata is missing or incompatible",
+                )
+            if not personalized_usable:
+                return StageJobOutcome.failed(
+                    job_id=job.job_id,
+                    stage=job.stage,
+                    error_message="Model checkpoint is present but personalized checkpoint is missing or incompatible",
+                )
             return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
         materialization_path = f"runs/{run_id.value}/{IdentityBuilder.materialization_job_id(job.context).value}"
         materialization = self._repository.read(materialization_path)

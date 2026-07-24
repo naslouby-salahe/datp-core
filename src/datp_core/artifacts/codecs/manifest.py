@@ -19,6 +19,7 @@ class _ArtifactParentWire(msgspec.Struct, frozen=True, forbid_unknown_fields=Tru
     artifact_id: str
     artifact_kind: str
     scientific_fingerprint: str
+    source_inventory_fingerprint: str | None = None
 
 
 class _ArtifactManifestWire(msgspec.Struct, frozen=True, forbid_unknown_fields=True):
@@ -56,6 +57,11 @@ def encode_manifest(manifest: ArtifactManifest) -> bytes:
                 artifact_id=parent.parent_key.artifact_id.value,
                 artifact_kind=parent.parent_key.kind.value,
                 scientific_fingerprint=parent.scientific_fingerprint.value,
+                source_inventory_fingerprint=(
+                    parent.source_inventory_fingerprint.value
+                    if parent.source_inventory_fingerprint
+                    else None
+                ),
             )
             for parent in manifest.parents
         ],
@@ -98,6 +104,11 @@ def decode_manifest(payload: bytes) -> ArtifactManifest:
                     kind=ArtifactKind(parent.artifact_kind),
                 ),
                 scientific_fingerprint=Fingerprint(parent.scientific_fingerprint),
+                source_inventory_fingerprint=(
+                    Checksum(parent.source_inventory_fingerprint)
+                    if parent.source_inventory_fingerprint is not None
+                    else None
+                ),
             )
             for parent in wire.parents
         )

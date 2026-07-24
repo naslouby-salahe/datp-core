@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
+from datp_core.core.hashing import Checksum, compute_payload_checksum
+from datp_core.core.identifiers import DatasetId
 from datp_core.data.contracts.dataset import ResolvedDataset
 from datp_core.data.contracts.sources import ConfiguredSourceTree, DatasetInspectionContract
 from datp_core.data.sources.models import ConcreteSourceEntry, ConcreteSourceInventory
@@ -49,6 +52,24 @@ def build_source_inventory(dataset: ResolvedDataset) -> ConcreteSourceInventory:
         dataset_id=dataset.dataset_id,
         entries=tuple(all_entries),
     )
+
+
+def compute_experiment_source_fingerprint(
+    *, datasets: Mapping[DatasetId, ResolvedDataset], dataset_ids: tuple[DatasetId, ...]
+) -> Checksum:
+    """Compute a deterministic combined source-provenance fingerprint for an experiment.
+
+    Builds a source inventory for every dataset the experiment depends on and returns
+    a BLAKE2b checksum over the concatenation of all per-dataset inventory fingerprints.
+    This fingerprint changes when any raw source file content, path, or membership changes.
+    """
+    parts: list[str] = []
+    for dataset_id in sorted(dataset_ids, key=lambda d: d.value):
+        dataset = datasets[dataset_id]
+        inventory = build_source_inventory(dataset)
+        parts.append(f"{dataset_id.value}:{inventory.fingerprint().value}")
+    payload = "\n".join(parts).encode("utf-8")
+    return compute_payload_checksum(payload)
 
 
 def _inventory_source_tree(

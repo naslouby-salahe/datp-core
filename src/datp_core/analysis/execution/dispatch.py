@@ -146,7 +146,12 @@ def dispatch(
             assert isinstance(analysis_record, ClusterStabilityAnalysisRecord)
             return [
                 analyze_cluster_stability(
-                    analysis_record, repository=repository, experiment=experiment, seeds=seeds, run_id=run_id
+                    analysis_record,
+                    repository=repository,
+                    config=config,
+                    experiment=experiment,
+                    seeds=seeds,
+                    run_id=run_id,
                 )
             ]
         case AnalysisKind.CONFORMAL_COVERAGE:

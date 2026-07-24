@@ -180,7 +180,7 @@ class DatasetMaterializationStageHandler:
                     artifact_key=job.output,
                     artifact_format=ArtifactFormat.PARQUET,
                     relative_path=relative_path,
-                    parents=artifact_parents(self._config, job.inputs),
+                    parents=artifact_parents(self._config, job.inputs, source_inventory_fingerprint=source_fingerprint),
                     payload=FilePayload(source_file=str(payload.staged_path)),
                     source_inventory_fingerprint=source_fingerprint,
                 )
@@ -197,7 +197,9 @@ class DatasetMaterializationStageHandler:
                     artifact_key=manifest_key,
                     artifact_format=ArtifactFormat.JSON,
                     relative_path=manifest_relative_path,
-                    parents=artifact_parents(self._config, (job.output,)),
+                    parents=artifact_parents(
+                        self._config, (job.output,), source_inventory_fingerprint=source_fingerprint
+                    ),
                     payload=BytesPayload(payload_bytes=split_manifest_payload),
                     source_inventory_fingerprint=source_fingerprint,
                 )
@@ -214,7 +216,7 @@ class DatasetMaterializationStageHandler:
                     artifact_key=readiness_key,
                     artifact_format=ArtifactFormat.JSON,
                     relative_path=readiness_relative_path,
-                    parents=artifact_parents(self._config, (job.output,)),
+                    parents=artifact_parents(self._config, (job.output,), source_inventory_fingerprint=source_fingerprint),
                     payload=BytesPayload(payload_bytes=readiness.encode()),
                     source_inventory_fingerprint=source_fingerprint,
                 )
@@ -231,7 +233,7 @@ class DatasetMaterializationStageHandler:
                     artifact_key=preprocessing_key,
                     artifact_format=ArtifactFormat.JSON,
                     relative_path=preprocessing_relative_path,
-                    parents=artifact_parents(self._config, (job.output,)),
+                    parents=artifact_parents(self._config, (job.output,), source_inventory_fingerprint=source_fingerprint),
                     payload=BytesPayload(payload_bytes=payload.preprocessing_evidence),
                     source_inventory_fingerprint=source_fingerprint,
                 )
@@ -255,7 +257,7 @@ class DatasetMaterializationStageHandler:
                         artifact_key=partition_key,
                         artifact_format=ArtifactFormat.JSON,
                         relative_path=partition_relative_path,
-                        parents=artifact_parents(self._config, (job.output,)),
+                        parents=artifact_parents(self._config, (job.output,), source_inventory_fingerprint=source_fingerprint),
                         payload=BytesPayload(payload_bytes=payload.partition_evidence),
                         source_inventory_fingerprint=source_fingerprint,
                     )
