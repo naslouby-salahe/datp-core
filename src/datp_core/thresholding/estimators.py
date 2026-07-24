@@ -21,6 +21,7 @@ from sklearn.preprocessing import StandardScaler
 from datp_core.thresholding.models import (
     BenignCalibrationScores,
     CalibrationFallbackThresholdPolicyRecord,
+    ClusterAggregation,
     ClusterThresholdPolicyRecord,
     ConformalAttainabilityStatus,
     FederatedMatchedExceedanceThresholdPolicyRecord,
@@ -211,7 +212,9 @@ def estimate_cluster(
     for item, label in zip(calibration, labels, strict=True):
         buckets.setdefault(int(label), []).append(local[item.client_id.value])
     aggregation = (
-        (lambda vs: float(np.quantile(vs, 0.5, method="linear"))) if policy.aggregation == "robust_median" else np.mean
+        (lambda vs: float(np.quantile(vs, 0.5, method="linear")))
+        if policy.aggregation is ClusterAggregation.ROBUST_MEDIAN
+        else np.mean
     )
     aggregate = {label: float(aggregation(values)) for label, values in buckets.items()}
     thresholds = {item.client_id.value: aggregate[int(label)] for item, label in zip(calibration, labels, strict=True)}

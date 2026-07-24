@@ -3,11 +3,26 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterator, Mapping, Sequence
+from enum import StrEnum
 from types import MappingProxyType
 from typing import cast
 
+import numpy as np
 from attrs import define, field
+
+
+class RecalibrationMode(StrEnum):
+    """Whether an Edge-IIoTset temporal evaluation reuses a frozen threshold, recomputes it
+    one-shot against future-recalibration scores, or the concept does not apply (static reference).
+
+    Shared by `pipeline.models.StageJobContext` and `experiments.models.EvaluationSpecRecord`, so
+    it lives in `core` rather than either feature package to keep the dependency direction intact.
+    """
+
+    FROZEN = "frozen"
+    ONE_SHOT = "one_shot"
+    NOT_APPLICABLE = "not_applicable"
 
 
 def validate_positive_int(instance: object, attribute: object, value: int) -> None:
@@ -203,3 +218,12 @@ def as_int_mapping(value: object) -> Mapping[str, int]:
 
 def as_optional_int_mapping(value: object | None) -> Mapping[str, int] | None:
     return None if value is None else as_int_mapping(value)
+
+
+def linear_quantile(values: Sequence[float], target_quantile: float) -> float:
+    """Canonical linear-interpolation quantile, shared by every scientific consumer.
+
+    Single source of truth for `method="linear"` quantile computation, so threshold
+    construction and FPR-dispersion analysis cannot silently drift apart from each other.
+    """
+    return float(np.quantile(np.asarray(values, dtype=np.float64), target_quantile, method="linear"))

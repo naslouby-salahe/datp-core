@@ -334,7 +334,9 @@ def apply_nbaiot_dirichlet_partition(
         ).iter_rows()
     )
     retry_policy = setup.retry_policy or {}
-    configured_max_retries = retry_policy.get("max_retries", 0)
+    if "max_retries" not in retry_policy:
+        raise ValueError("N-BaIoT Dirichlet retry policy requires an explicit max_retries entry")
+    configured_max_retries = retry_policy["max_retries"]
     if not isinstance(configured_max_retries, int) or configured_max_retries < 0:
         raise ValueError("N-BaIoT Dirichlet retry policy requires a non-negative integer max_retries")
     max_retries = configured_max_retries

@@ -12,7 +12,7 @@ import numpy as np
 from attrs import define, field
 
 from datp_core.core.identifiers import ClientId, PopulationId, ThresholdPolicyId
-from datp_core.core.values import NonNegativeFloat, Probability, deep_freeze
+from datp_core.core.values import NonNegativeFloat, Probability, as_str_mapping, deep_freeze, linear_quantile
 
 
 def _as_tuple_str(value: object) -> tuple[str, ...]:
@@ -21,10 +21,6 @@ def _as_tuple_str(value: object) -> tuple[str, ...]:
 
 def _as_tuple_float(value: object) -> tuple[float, ...]:
     return cast("tuple[float, ...]", deep_freeze(value))
-
-
-def _as_mapping_str_str(value: object) -> Mapping[str, str]:
-    return cast("Mapping[str, str]", deep_freeze(value))
 
 
 def _as_mapping_str_int(value: object) -> Mapping[str, int]:
@@ -105,6 +101,22 @@ class ConformalAttainabilityStatus(StrEnum):
     UNATTAINABLE = "unattainable"
 
 
+class ClusterAggregation(StrEnum):
+    MEAN = "mean"
+    ROBUST_MEDIAN = "robust_median"
+
+
+class ThresholdOwnership(StrEnum):
+    """Descriptive threshold-scope label recorded on every threshold-policy record (never branched
+    on in code; recorded for provenance/reporting only, per every authored policy in protocols.yaml).
+    """
+
+    WHOLE_POPULATION = "one_threshold_for_the_whole_eligible_population"
+    PER_CLIENT = "one_threshold_per_eligible_client"
+    PER_FAMILY = "one_threshold_per_family"
+    PER_CLUSTER = "one_threshold_per_cluster"
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ThresholdRecord:
     client_id: ClientId
@@ -149,7 +161,7 @@ class SharedMeanThresholdPolicyRecord:
     aggregation_formula: str
     sample_weighting: Literal["none"]
     client_accumulation_order: str
-    threshold_ownership: str
+    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -162,7 +174,7 @@ class SharedPooledThresholdPolicyRecord:
     aggregation_formula: str
     concatenation_order: str
     sample_weighting: str
-    threshold_ownership: str
+    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -176,7 +188,7 @@ class SharedWeightedThresholdPolicyRecord:
     sample_weighting: str
     client_accumulation_order: str
     zero_total_weight_behavior: str
-    threshold_ownership: str
+    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -187,7 +199,7 @@ class LocalQuantileThresholdPolicyRecord:
     aggregation_scope: str
     aggregation_formula: str
     sample_weighting: str
-    threshold_ownership: str
+    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -206,7 +218,7 @@ class FamilyMeanThresholdPolicyRecord:
     family_with_no_eligible_member_behavior: str
     client_without_family_label_behavior: str
     unavailable_without_taxonomy: str
-    threshold_ownership: str
+    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -220,7 +232,7 @@ class CentralizedPooledThresholdPolicyRecord:
     concatenation_order: str
     sample_weighting: str
     provenance_separation: str
-    threshold_ownership: str
+    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -230,7 +242,7 @@ class ClusterThresholdPolicyRecord:
     quantile_estimator: str
     canonical: bool | None
     exploratory: bool | None
-    aggregation: str
+    aggregation: ClusterAggregation = field(converter=ClusterAggregation)
     cluster_count: int
     aggregated_quantity: str
     aggregation_formula: str
@@ -238,7 +250,7 @@ class ClusterThresholdPolicyRecord:
     sample_weighting: str
     client_accumulation_order: str
     fingerprint_features: tuple[str, ...] = field(converter=_as_tuple_str)
-    fingerprint_estimators: Mapping[str, str] = field(converter=_as_mapping_str_str)
+    fingerprint_estimators: Mapping[str, str] = field(converter=as_str_mapping)
     fingerprint_degenerate_client_rules: Mapping[str, float | Mapping[str, float]] = field(
         converter=_as_mapping_str_float_or_mapping
     )
@@ -250,7 +262,7 @@ class ClusterThresholdPolicyRecord:
     insufficient_eligible_clients_behavior: str
     degenerate_fingerprint_matrix_behavior: str
     required_diagnostics: tuple[str, ...] = field(converter=_as_tuple_str)
-    threshold_ownership: str
+    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -275,7 +287,7 @@ class SplitConformalThresholdPolicyRecord:
     output_type: str
     exchangeability_limitation: str
     unavailable_behavior: str
-    threshold_ownership: str
+    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -294,7 +306,7 @@ class LocalGlobalShrinkageThresholdPolicyRecord:
     shrinkage_weight_resolution: str
     out_of_range_weight_behavior: str
     effective_lambda_reporting: str
-    threshold_ownership: str
+    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -316,7 +328,7 @@ class CalibrationFallbackThresholdPolicyRecord:
     minimum_calibration_behavior: str
     effective_lambda_reporting: str
     fallback_frequency_reporting: str
-    threshold_ownership: str
+    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -338,9 +350,9 @@ class FederatedMatchedExceedanceThresholdPolicyRecord:
     zero_total_count_behavior: str
     candidate_grid: Mapping[str, str | float | bool] = field(converter=_as_mapping_str_str_or_float_or_bool)
     exceedance_exchange: Mapping[str, tuple[str, ...] | str] = field(converter=_as_mapping_str_tuple_or_str)
-    selection: Mapping[str, str] = field(converter=_as_mapping_str_str)
+    selection: Mapping[str, str] = field(converter=as_str_mapping)
     required_diagnostics: tuple[str, ...] = field(converter=_as_tuple_str)
-    threshold_ownership: str
+    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -366,7 +378,7 @@ class FederatedFixedCoefficientThresholdPolicyRecord:
     fixed_k: float | None
     fixed_k_resolution: str
     required_diagnostics: tuple[str, ...] = field(converter=_as_tuple_str)
-    threshold_ownership: str
+    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
 
 
 ThresholdPolicyRecord = (
@@ -396,7 +408,7 @@ def quantile(values: tuple[float, ...], target_quantile: float) -> float:
     array = np.asarray(values, dtype=np.float64)
     if array.size == 0 or not np.all(np.isfinite(array)):
         raise ValueError("Threshold construction requires finite non-empty calibration scores")
-    result = float(np.quantile(array, target_quantile, method="linear"))
+    result = linear_quantile(values, target_quantile)
     if not math.isfinite(result):
         raise ValueError("Threshold construction produced a non-finite quantile")
     return result

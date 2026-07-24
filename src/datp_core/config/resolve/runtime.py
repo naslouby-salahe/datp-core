@@ -17,7 +17,7 @@ from attrs import define, field
 
 from datp_core.config.loading import RuntimeBootstrapSettings, resolve_config_root
 from datp_core.config.schema.runtime import AuthoredRuntimeConfig, RawSourcePolicyConfig
-from datp_core.core.values import PositiveInt, TypedDomainRegistry, deep_freeze
+from datp_core.core.values import PositiveInt, TypedDomainRegistry, as_str_mapping, deep_freeze
 
 
 class PathAuthorityError(ValueError):
@@ -158,10 +158,6 @@ class DeterminismStrictRecord:
     unavailable_determinism_policy: str
 
 
-def _as_mapping_str_str(value: object) -> Mapping[str, str]:
-    return cast("Mapping[str, str]", deep_freeze(value))
-
-
 def _as_mapping_str_tuple_or_bool(value: object) -> Mapping[str, tuple[str, ...] | bool]:
     return cast("Mapping[str, tuple[str, ...] | bool]", deep_freeze(value))
 
@@ -170,7 +166,7 @@ def _as_mapping_str_tuple_or_bool(value: object) -> Mapping[str, tuple[str, ...]
 class DevicePolicyRecord:
     """Pure resolved device policy (runtime.yaml `device_policy_rules`)."""
 
-    cuda_required: Mapping[str, str] = field(converter=_as_mapping_str_str)
+    cuda_required: Mapping[str, str] = field(converter=as_str_mapping)
     cpu_only: Mapping[str, tuple[str, ...] | bool] = field(converter=_as_mapping_str_tuple_or_bool)
 
 

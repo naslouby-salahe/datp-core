@@ -22,12 +22,27 @@ class BootstrapMethod(StrEnum):
     PERCENTILE_BOOTSTRAP = "percentile_bootstrap"
 
 
+class StatisticalMethod(StrEnum):
+    """Every `statistical_profiles.*.method` value authored in protocols.yaml.
+
+    A superset of `BootstrapMethod`: comparisons like `profile.method in {BootstrapMethod.X, ...}`
+    remain valid because `StrEnum` members compare equal across classes by string value.
+    """
+
+    BCA_BOOTSTRAP = "bca_bootstrap"
+    PERCENTILE_BOOTSTRAP = "percentile_bootstrap"
+    RATIO_OF_SEED_LEVEL_MEANS = "ratio_of_seed_level_means"
+    DESCRIPTIVE_SUMMARY = "descriptive_summary"
+    SPEARMAN_CORRELATION = "spearman_correlation"
+    LINEAR_REGRESSION = "linear_regression"
+
+
 @define(frozen=True, slots=True, kw_only=True)
 class StatisticalProfileRecord:
     """Resolved, executable statistical analysis contract (BCa/percentile bootstrap, Wilcoxon, etc.)."""
 
     identifier: StatisticalProfileId
-    method: str | None
+    method: StatisticalMethod | None
     confidence_level: Probability | None
     resample_count: PositiveInt | None
     minimum_units: PositiveInt | None

@@ -21,15 +21,16 @@ Scientific catalogue selection, runtime execution, or persistence adapters.
 > `FleetDispersionResult`, `PairedDeltaResult`, `ReportArtifactSpec`,
 > `ReportDefinition`, the closed `TableType`/`FigureType` enums, and the
 > `StatisticalProcedure` discriminated union) do not exist under these names.
-> The real types are `domain/evaluation.py` (`MetricValue`,
-> `ClientConfusionMatrix`, `FprDispersion`, `MetricResultRecord`),
-> `domain/statistics.py` (`ConfidenceInterval`, `HypothesisTestResult`,
-> `LinearRegressionResult`, `PairedSeedDifferenceRecord`, plus free functions
+> The real types are `evaluation/models.py` (`MetricValue`,
+> `ClientConfusionMatrix`, `FprDispersion`), `analysis/statistics.py`
+> (`ConfidenceInterval`, `HypothesisTestResult`, `LinearRegressionResult`,
+> `PairedSeedDifferenceRecord`, plus free functions
 > `matched_pairs_rank_biserial_correlation`/`holm_adjust_p_values`), and
-> `application/reporting.py` (`freeze_result_family`/`render_frozen_report`,
-> operating on `dict[str, object]` payloads rather than frozen report-row
-> dataclasses). Treat the metric/statistics/claim *narrative* here as intended
-> scientific behavior, but not the specific type names.
+> `reporting/freezing.py` (`freeze_result_family`) and `reporting/rendering.py`
+> (`render_frozen_report`), operating on `dict[str, object]` payloads rather
+> than frozen report-row dataclasses. Treat the metric/statistics/claim
+> *narrative* here as intended scientific behavior, but not the specific type
+> names.
 
 ## 1. Primitive evaluation evidence
 

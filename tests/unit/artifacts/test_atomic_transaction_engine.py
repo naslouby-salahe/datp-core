@@ -51,6 +51,16 @@ def _file_request(source_file: str, **meta_overrides: object) -> ArtifactCommitR
     return ArtifactCommitRequest(metadata=_metadata(**meta_overrides), payload=FilePayload(source_file=source_file))
 
 
+def _request(kind: str, tmp_path: Path, payload: bytes = b"content", **meta_overrides: object) -> ArtifactCommitRequest:
+    """Build a bytes- or file-payload commit request from the same inputs, for parametrized tests
+    that must exercise both `ArtifactCommitRequest` payload variants identically."""
+    if kind == "bytes":
+        return _bytes_request(payload, **meta_overrides)
+    source = tmp_path / "staged.dat"
+    source.write_bytes(payload)
+    return _file_request(str(source), **meta_overrides)
+
+
 def test_bytes_commit_succeeds_and_produces_correct_layout(tmp_path: Path) -> None:
     result = AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(_bytes_request())
     assert result.success
@@ -81,40 +91,21 @@ def test_file_commit_leaves_source_file_intact(tmp_path: Path) -> None:
     assert source.read_bytes() == b"original"
 
 
-def test_existing_frozen_target_is_rejected_for_bytes(tmp_path: Path) -> None:
+@pytest.mark.parametrize("kind", ["bytes", "file"])
+def test_existing_frozen_target_is_rejected(kind: str, tmp_path: Path) -> None:
     repo = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
-    assert repo.commit(_bytes_request()).success
-    second = repo.commit(_bytes_request())
+    assert repo.commit(_request(kind, tmp_path)).success
+    second = repo.commit(_request(kind, tmp_path))
     assert not second.success
     assert second.error_message is not None
     assert "already exists" in second.error_message
 
 
-def test_existing_frozen_target_is_rejected_for_file(tmp_path: Path) -> None:
-    source = tmp_path / "staged.dat"
-    source.write_bytes(b"content")
-    repo = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
-    assert repo.commit(_file_request(str(source))).success
-    second = repo.commit(_file_request(str(source)))
-    assert not second.success
-    assert second.error_message is not None
-    assert "already exists" in second.error_message
-
-
+@pytest.mark.parametrize("kind", ["bytes", "file"])
 @pytest.mark.parametrize("bad_path", ["/absolute/path", "../escape", "sub/../../escape", "reports/../escape"])
-def test_escaping_relative_path_is_rejected_for_bytes(bad_path: str, tmp_path: Path) -> None:
-    result = AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(_bytes_request(relative_path=bad_path))
-    assert not result.success
-    assert result.error_message is not None
-    assert "escapes" in result.error_message
-
-
-@pytest.mark.parametrize("bad_path", ["/absolute/path", "../escape", "sub/../../escape", "reports/../escape"])
-def test_escaping_relative_path_is_rejected_for_file(bad_path: str, tmp_path: Path) -> None:
-    source = tmp_path / "staged.dat"
-    source.write_bytes(b"content")
+def test_escaping_relative_path_is_rejected(bad_path: str, kind: str, tmp_path: Path) -> None:
     result = AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(
-        _file_request(str(source), relative_path=bad_path)
+        _request(kind, tmp_path, relative_path=bad_path)
     )
     assert not result.success
     assert result.error_message is not None
@@ -139,10 +130,13 @@ def test_directory_as_staged_source_is_rejected(tmp_path: Path) -> None:
     assert "missing" in result.error_message
 
 
-def test_self_parent_is_rejected_for_bytes(tmp_path: Path) -> None:
+@pytest.mark.parametrize("kind", ["bytes", "file"])
+def test_self_parent_is_rejected(kind: str, tmp_path: Path) -> None:
     key = ArtifactKey(artifact_id=ArtifactId("self"), kind=ArtifactKind.REPORT)
     result = AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(
-        _bytes_request(
+        _request(
+            kind,
+            tmp_path,
             artifact_key=key,
             parents=(ArtifactParent(parent_key=key, scientific_fingerprint=_metadata().scientific_fingerprint),),
         )
@@ -152,55 +146,21 @@ def test_self_parent_is_rejected_for_bytes(tmp_path: Path) -> None:
     assert "own parent" in result.error_message
 
 
-def test_self_parent_is_rejected_for_file(tmp_path: Path) -> None:
-    source = tmp_path / "staged.dat"
-    source.write_bytes(b"content")
-    key = ArtifactKey(artifact_id=ArtifactId("self"), kind=ArtifactKind.REPORT)
-    result = AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(
-        _file_request(
-            str(source),
-            artifact_key=key,
-            parents=(ArtifactParent(parent_key=key, scientific_fingerprint=_metadata().scientific_fingerprint),),
-        )
-    )
-    assert not result.success
-    assert result.error_message is not None
-    assert "own parent" in result.error_message
-
-
-def test_duplicate_parent_is_rejected_for_bytes(tmp_path: Path) -> None:
-    dup_key = ArtifactKey(artifact_id=ArtifactId("dup"), kind=ArtifactKind.MATERIALIZED_DATASET)
-    parent = ArtifactParent(parent_key=dup_key, scientific_fingerprint=_metadata().scientific_fingerprint)
-    result = AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(_bytes_request(parents=(parent, parent)))
-    assert not result.success
-    assert result.error_message is not None
-    assert "duplicate parent" in result.error_message
-
-
-def test_duplicate_parent_is_rejected_for_file(tmp_path: Path) -> None:
-    source = tmp_path / "staged.dat"
-    source.write_bytes(b"content")
+@pytest.mark.parametrize("kind", ["bytes", "file"])
+def test_duplicate_parent_is_rejected(kind: str, tmp_path: Path) -> None:
     dup_key = ArtifactKey(artifact_id=ArtifactId("dup"), kind=ArtifactKind.MATERIALIZED_DATASET)
     parent = ArtifactParent(parent_key=dup_key, scientific_fingerprint=_metadata().scientific_fingerprint)
     result = AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(
-        _file_request(str(source), parents=(parent, parent))
+        _request(kind, tmp_path, parents=(parent, parent))
     )
     assert not result.success
     assert result.error_message is not None
     assert "duplicate parent" in result.error_message
 
 
-def test_payload_checksum_is_stored_for_bytes(tmp_path: Path) -> None:
-    result = AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(_bytes_request(b"checksum me"))
-    assert result.success
-    assert result.manifest is not None
-    assert len(result.manifest.payload_checksum.value) == 64
-
-
-def test_payload_checksum_is_stored_for_file(tmp_path: Path) -> None:
-    source = tmp_path / "staged.dat"
-    source.write_bytes(b"checksum me too")
-    result = AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(_file_request(str(source)))
+@pytest.mark.parametrize("kind", ["bytes", "file"])
+def test_payload_checksum_is_stored(kind: str, tmp_path: Path) -> None:
+    result = AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(_request(kind, tmp_path, b"checksum me"))
     assert result.success
     assert result.manifest is not None
     assert len(result.manifest.payload_checksum.value) == 64
@@ -359,21 +319,11 @@ def test_corruption_payload_missing(tmp_path: Path) -> None:
     assert result.corruption_reason == ArtifactCorruptionReason.PAYLOAD_MISSING
 
 
-def test_corruption_checksum_mismatch_for_bytes(tmp_path: Path) -> None:
+@pytest.mark.parametrize("kind", ["bytes", "file"])
+def test_corruption_checksum_mismatch(kind: str, tmp_path: Path) -> None:
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
-    assert repository.commit(_bytes_request(b"original")).success
+    assert repository.commit(_request(kind, tmp_path, b"original")).success
     (tmp_path / "reports/test-artifact/payload.text").write_bytes(b"tampered")
-    result = repository.inspect("reports/test-artifact")
-    assert not result.found
-    assert result.corruption_reason == ArtifactCorruptionReason.CHECKSUM_MISMATCH
-
-
-def test_corruption_checksum_mismatch_for_file(tmp_path: Path) -> None:
-    source = tmp_path / "staged.dat"
-    source.write_bytes(b"original file")
-    repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
-    assert repository.commit(_file_request(str(source))).success
-    (tmp_path / "reports/test-artifact/payload.text").write_bytes(b"tampered file")
     result = repository.inspect("reports/test-artifact")
     assert not result.found
     assert result.corruption_reason == ArtifactCorruptionReason.CHECKSUM_MISMATCH
@@ -391,9 +341,10 @@ def test_corruption_schema_incompatible(tmp_path: Path) -> None:
     assert result.corruption_reason == ArtifactCorruptionReason.SCHEMA_INCOMPATIBLE
 
 
-def test_reuse_accepts_matching_frozen_artifact_bytes(tmp_path: Path) -> None:
+@pytest.mark.parametrize("kind", ["bytes", "file"])
+def test_reuse_accepts_matching_frozen_artifact(kind: str, tmp_path: Path) -> None:
     repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
-    request = _bytes_request()
+    request = _request(kind, tmp_path)
     assert repository.commit(request).success
     decision = repository.assess_reuse(
         request.metadata.relative_path,
@@ -403,21 +354,6 @@ def test_reuse_accepts_matching_frozen_artifact_bytes(tmp_path: Path) -> None:
     )
     assert decision.can_reuse
     assert decision.existing_manifest is not None
-
-
-def test_reuse_accepts_matching_frozen_artifact_file(tmp_path: Path) -> None:
-    source = tmp_path / "staged.dat"
-    source.write_bytes(b"content")
-    repository = AtomicArtifactRepository(tmp_path, lock_timeout=1.0)
-    request = _file_request(str(source))
-    assert repository.commit(request).success
-    decision = repository.assess_reuse(
-        request.metadata.relative_path,
-        request.metadata.artifact_key,
-        request.metadata.scientific_fingerprint,
-        request.metadata.execution_fingerprint,
-    )
-    assert decision.can_reuse
 
 
 def test_reuse_rejects_fingerprint_mismatch(tmp_path: Path) -> None:
@@ -466,7 +402,8 @@ def test_parent_directory_is_created_by_commit(tmp_path: Path) -> None:
     assert (tmp_path / "deep/nested/artifact/manifest.json").exists()
 
 
-def test_failure_before_replace_leaves_no_visible_partial_artifact_bytes(tmp_path: Path) -> None:
+@pytest.mark.parametrize("kind", ["bytes", "file"])
+def test_failure_before_replace_leaves_no_visible_partial_artifact(kind: str, tmp_path: Path) -> None:
     """When manifest encode fails, the exception propagates but no partial directory is visible."""
     target_dir = tmp_path / "reports/test-artifact"
 
@@ -475,23 +412,7 @@ def test_failure_before_replace_leaves_no_visible_partial_artifact_bytes(tmp_pat
         side_effect=ValueError("simulated encode failure"),
     ):
         with pytest.raises(ValueError, match="simulated encode failure"):
-            AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(_bytes_request())
-
-    assert not target_dir.exists()
-
-
-def test_failure_before_replace_leaves_no_visible_partial_artifact_file(tmp_path: Path) -> None:
-    """When manifest encode fails for file commit, the exception propagates but no partial artifact remains."""
-    source = tmp_path / "staged.dat"
-    source.write_bytes(b"staged content")
-    target_dir = tmp_path / "reports/test-artifact"
-
-    with patch(
-        "datp_core.artifacts.repository.encode_manifest",
-        side_effect=ValueError("simulated encode failure"),
-    ):
-        with pytest.raises(ValueError, match="simulated encode failure"):
-            AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(_file_request(str(source)))
+            AtomicArtifactRepository(tmp_path, lock_timeout=1.0).commit(_request(kind, tmp_path))
 
     assert not target_dir.exists()
 

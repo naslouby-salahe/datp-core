@@ -31,12 +31,15 @@ scaffolding at `DESIGNED_NOT_IMPLEMENTED`, not a conformance claim.
 
 In practice the repository was built against a different, flatter tree than
 the one below (no `config/schemas/`, `composition/registries.py`,
-`cli/main.py`, `application/stages/` or other sub-packages, `analysis/`, or
-`infrastructure/reporting/`; stage handlers all live in one file,
-`application/stage_handlers.py`). For where new work actually belongs today,
-place it by matching the responsibility to the closest existing module in
-`README.md`'s "Current implementation snapshot" rather than recreating a path
-from this document's tree.
+`cli/main.py`, `application/stages/` or other sub-packages, or
+`infrastructure/reporting/`; `analysis/` is a real top-level package, not an
+absent one; stage handlers are not concentrated in one file but spread across
+each feature package's own `execution.py`/`checkpoints.py`/`scoring.py`/
+`construction.py`/`calibration.py`). For where new work actually belongs
+today, place it by matching the responsibility to the closest existing module
+in `README.md`'s "Current implementation snapshot" or
+`docs/Architecture/README.md`'s "Current implementation snapshot" rather than
+recreating a path from this document's tree.
 
 ## 1. Repository root
 

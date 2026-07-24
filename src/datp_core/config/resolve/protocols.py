@@ -61,6 +61,7 @@ from datp_core.contracts.protocols import (
     ReportDefaultsRecord,
     ReportProfileRecord,
     ResultTypeRecord,
+    StatisticalMethod,
     StatisticalProfileRecord,
     ThresholdExchangeEntryRecord,
     ThresholdExchangeRecord,
@@ -589,7 +590,7 @@ def _resolve_statistical_profiles(
         profile_id = StatisticalProfileId(profile_key)
         statistical_dict[profile_id] = StatisticalProfileRecord(
             identifier=profile_id,
-            method=profile_cfg.method,
+            method=(StatisticalMethod(profile_cfg.method) if profile_cfg.method is not None else None),
             confidence_level=(
                 Probability(profile_cfg.confidence_level) if profile_cfg.confidence_level is not None else None
             ),

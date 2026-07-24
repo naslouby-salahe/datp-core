@@ -11,7 +11,7 @@ from attrs import define
 from datp_core.artifacts.models import ArtifactKey, ArtifactKind
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId, JobId
-from datp_core.core.values import PositiveInt
+from datp_core.core.values import PositiveInt, RecalibrationMode
 from datp_core.data.contracts import PartitionSeedContract, SplitMethod
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.models import (
@@ -352,7 +352,7 @@ def expand_experiment_jobs(
             if population_id != seed_ctx.population_id:
                 continue
             calibration_cells = calibration_cells_by_training[key]
-            if eval_spec.recalibration_mode == "one_shot":
+            if eval_spec.recalibration_mode is RecalibrationMode.ONE_SHOT:
                 if len(future_score_ids) != 1:
                     raise ValueError(f"Evaluation '{eval_spec.label}' requires a temporal recalibration score artifact")
                 calibration_cells = [(seed_ctx, future_score_ids[0])]

@@ -3,6 +3,7 @@
 from datp_core.app import build_application
 from datp_core.artifacts.models import ArtifactKind
 from datp_core.core.identifiers import ExperimentId
+from datp_core.core.values import RecalibrationMode
 from datp_core.experiments.planning import expand_experiment_jobs
 from datp_core.pipeline.models import StageKind
 
@@ -188,7 +189,8 @@ def test_temporal_plan_binds_each_arm_to_its_population_and_recalibration_window
     one_shot_thresholds = tuple(
         job
         for job in plan.jobs
-        if job.stage is StageKind.THRESHOLD_CONSTRUCTION and job.context.recalibration_mode == "one_shot"
+        if job.stage is StageKind.THRESHOLD_CONSTRUCTION
+        and job.context.recalibration_mode is RecalibrationMode.ONE_SHOT
     )
 
     assert len(materializations) == 20

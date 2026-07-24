@@ -560,6 +560,14 @@ class ProjectConfigurationValidator:
                     f"Experiment '{exp_id}' analysis '{analysis.label}' references "
                     f"unregistered result type '{analysis.result_type}'"
                 )
+            else:
+                result_type = config.result_types[analysis.result_type]
+                if exp_rec.evidence_role.value not in result_type.permitted_evidence_roles:
+                    errors.append(
+                        f"Experiment '{exp_id}' analysis '{analysis.label}' has evidence role "
+                        f"'{exp_rec.evidence_role.value}', which result type '{analysis.result_type}' does not "
+                        f"permit (allowed: {', '.join(result_type.permitted_evidence_roles)})"
+                    )
             if not config.statistical_profiles.contains(analysis.statistical_profile):
                 errors.append(
                     f"Experiment '{exp_id}' analysis '{analysis.label}' references "

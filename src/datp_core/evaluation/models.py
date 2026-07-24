@@ -12,6 +12,7 @@ from statistics import mean
 from attrs import define
 
 from datp_core.core.identifiers import ClientId, MetricBundleId
+from datp_core.core.values import linear_quantile
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -238,9 +239,7 @@ class FprDispersion:
     worst_fpr: MetricValue
 
 
-def calculate_fpr_dispersion(
-    values: Iterable[float], *, cv_instability_threshold: float, quantile_method: str
-) -> FprDispersion:
+def calculate_fpr_dispersion(values: Iterable[float], *, cv_instability_threshold: float) -> FprDispersion:
     """Calculate unweighted cross-client FPR dispersion with explicit undefined states."""
     fprs = tuple(values)
     if not fprs:
@@ -255,14 +254,12 @@ def calculate_fpr_dispersion(
         )
     if cv_instability_threshold <= 0.0:
         raise ValueError("cv_instability_threshold must be positive")
-    if quantile_method != "linear":
-        raise ValueError("Only the configured linear anchor quantile interpolation is supported")
     if any(value < 0.0 or value > 1.0 for value in fprs):
         raise ValueError("FPR values must be in [0, 1]")
     average = mean(fprs)
     standard_deviation = sqrt(sum((value - average) ** 2 for value in fprs) / len(fprs))
-    q25 = _linear_quantile(fprs, 0.25)
-    q75 = _linear_quantile(fprs, 0.75)
+    q25 = linear_quantile(fprs, 0.25)
+    q75 = linear_quantile(fprs, 0.75)
     if math.isclose(average, 0.0, abs_tol=0.0):
         cv = MetricValue.unavailable(MetricStatus.UNDEFINED_ZERO_DENOMINATOR)
     elif average < cv_instability_threshold:
@@ -334,14 +331,3 @@ def calculate_pairwise_js_divergence(
                 / 2.0
             )
     return mean(divergences)
-
-
-def _linear_quantile(values: tuple[float, ...], probability: float) -> float:
-    ordered = tuple(sorted(values))
-    if len(ordered) == 1:
-        return ordered[0]
-    position = (len(ordered) - 1) * probability
-    lower = int(position)
-    upper = min(lower + 1, len(ordered) - 1)
-    fraction = position - lower
-    return ordered[lower] + ((ordered[upper] - ordered[lower]) * fraction)

@@ -5,6 +5,7 @@ ratio-of-paired-differences and denominator-materiality machinery they both buil
 from __future__ import annotations
 
 import json
+import re
 
 import numpy as np
 
@@ -30,12 +31,19 @@ def group_mean_std(groups: list[list[tuple[float, float]]], index: int) -> float
     return float(np.std([np.mean([item[index] for item in group]) for group in groups])) if groups else None
 
 
+_MATERIALITY_RULE_PATTERN = re.compile(r"^absolute_denominator_at_least_(?P<value>\d+(?:\.\d+)?(?:e[+-]?\d+)?)$")
+
+
 def materiality_threshold(rule: float | str) -> float:
-    if isinstance(rule, float):
-        return rule
-    if rule == "absolute_denominator_at_least_1.0e-6":
-        return 1.0e-6
-    raise ValueError(f"Unsupported denominator materiality rule: {rule!r}")
+    """Mechanically extract the numeric denominator-materiality threshold from its authored rule
+    name, rather than duplicating the value as a separately hardcoded literal: the rule's name IS
+    its value, so a changed threshold in configuration is picked up without a code change."""
+    if isinstance(rule, (int, float)):
+        return float(rule)
+    match = _MATERIALITY_RULE_PATTERN.match(rule)
+    if match is None:
+        raise ValueError(f"Unsupported denominator materiality rule: {rule!r}")
+    return float(match.group("value"))
 
 
 def weighted_mean(values: list[tuple[int, int]]) -> float | None:

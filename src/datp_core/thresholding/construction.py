@@ -25,7 +25,7 @@ from datp_core.artifacts.models import (
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.contracts.frames import validate_calibration_score_frame, validate_threshold_frame
 from datp_core.core.identifiers import ClientId, PopulationId, RunId, ThresholdPolicyId
-from datp_core.core.values import Seed, TypedDomainRegistry
+from datp_core.core.values import RecalibrationMode, Seed, TypedDomainRegistry
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.planning import score_context
 from datp_core.pipeline.execution import artifact_parents, commit_artifact
@@ -227,7 +227,7 @@ class ThresholdConstructionStageHandler:
         )
         if calibration_context.calibration_sample_count is not None:
             calibration_job_id = IdentityBuilder.calibration_subset_job_id(calibration_context)
-        elif job.context.recalibration_mode == "one_shot":
+        elif job.context.recalibration_mode is RecalibrationMode.ONE_SHOT:
             calibration_job_id = IdentityBuilder.future_recalibration_score_job_id(calibration_context)
         else:
             calibration_job_id = IdentityBuilder.calibration_score_job_id(calibration_context)

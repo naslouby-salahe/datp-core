@@ -32,7 +32,7 @@ from datp_core.core.identifiers import (
     ThresholdPolicyId,
     TrainingProfileId,
 )
-from datp_core.core.values import PositiveInt, Probability, Seed, TypedDomainRegistry
+from datp_core.core.values import PositiveInt, Probability, RecalibrationMode, Seed, TypedDomainRegistry
 from datp_core.data.contracts import ResolvedDataset
 from datp_core.experiments.models import (
     AbsorptionAnalysisRecord,
@@ -602,7 +602,9 @@ def _resolve_experiment_evaluations(
                 ),
                 overrides=ev.overrides,
                 population_id=eval_population_id,
-                recalibration_mode=ev.recalibration_mode,
+                recalibration_mode=(
+                    RecalibrationMode(ev.recalibration_mode) if ev.recalibration_mode is not None else None
+                ),
             )
         )
     return evals_list

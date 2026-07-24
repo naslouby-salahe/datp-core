@@ -109,7 +109,7 @@ autoencoder state, preprocessing identity, or checkpoint-selection rule.
 | RQ5 | `STRESS_TEST` | Does threshold-only personalization remain useful against aggregation-side and model-side personalization stress tests? |
 | RQ6 | `EXTERNAL_VALIDATION` / `BOUNDARY` | Does the effect generalize to an independent sensor-group-partitioned dataset, across heterogeneity severity, and where does it fail? |
 
-Evidence roles used throughout this package (`domain/catalogue.py:EvidenceRole`): `ANCHOR`, `CONFIRMATORY`,
+Evidence roles used throughout this package (`experiments/models.py:EvidenceRole`): `ANCHOR`, `CONFIRMATORY`,
 `SENSITIVITY`, `EXPLORATORY`, `STRESS_TEST`, `COMPARATOR`, `MECHANISM`,
 `SUPPORTIVE`, `BOUNDARY`, `EXTERNAL_VALIDATION` — ten members, every role an *executable* experiment can
 carry. The prior architecture's `ExperimentRole` also listed `FUTURE_WORK`
@@ -127,7 +127,7 @@ entries to `CatalogueDisposition`
 role may (`SCI-14`, defined with `SCI-15`–`SCI-19` in `ENGINEERING_DECISIONS_AND_CONFORMANCE.md §2`).
 
 `EvidenceRole` is not the only classification an experiment carries.
-`RunRequirement` (`domain/catalogue.py:RunRequirement`: `MANDATORY`, `CONDITIONAL`, `EXPLORATORY`, `OPTIONAL`) answers the
+`RunRequirement` (`experiments/models.py:RunRequirement`: `MANDATORY`, `CONDITIONAL`, `EXPLORATORY`, `OPTIONAL`) answers the
 different executable question—whether the study is required to run—and is
 never collapsed into `evidence_role`. It is a field of `ExperimentIdentity`
 only; it is never carried by an individual

@@ -6,6 +6,10 @@ import pytest
 from pydantic import ValidationError
 
 from datp_core.config.schema import SchemaVersionOneConfigModel, StrictFrozenConfigModel
+from datp_core.config.schema.datasets import AuthoredDatasetConfig
+from datp_core.config.schema.experiments import AuthoredExperimentsCatalogueConfig
+from datp_core.config.schema.protocols import AuthoredProtocolsConfig
+from datp_core.config.schema.runtime import AuthoredRuntimeConfig
 
 
 class ExampleStrict(StrictFrozenConfigModel):
@@ -135,12 +139,6 @@ class TestAllSchemaVersionDocumentsParse:
         instance = AuthoredRuntimeConfig.model_validate(data)
         assert instance.schema_version == 1
 
-    def test_runtime_schema_version_rejected(self) -> None:
-        from datp_core.config.schema.runtime import AuthoredRuntimeConfig
-
-        with pytest.raises(ValidationError, match="schema_version"):
-            AuthoredRuntimeConfig(schema_version=2)  # type: ignore[call-arg]
-
     def test_experiments_schema_version_accepted(self) -> None:
         from datp_core.config.schema.experiments import AuthoredExperimentsCatalogueConfig
 
@@ -156,12 +154,6 @@ class TestAllSchemaVersionDocumentsParse:
         }
         instance = AuthoredExperimentsCatalogueConfig.model_validate(data)
         assert instance.schema_version == 1
-
-    def test_experiments_schema_version_rejected(self) -> None:
-        from datp_core.config.schema.experiments import AuthoredExperimentsCatalogueConfig
-
-        with pytest.raises(ValidationError, match="schema_version"):
-            AuthoredExperimentsCatalogueConfig(schema_version=99)  # type: ignore[call-arg]
 
     def test_protocols_schema_version_accepted(self) -> None:
         from datp_core.config.schema.protocols import AuthoredProtocolsConfig
@@ -328,12 +320,6 @@ class TestAllSchemaVersionDocumentsParse:
         instance = AuthoredProtocolsConfig.model_validate(data)
         assert instance.schema_version == 1
 
-    def test_protocols_schema_version_rejected(self) -> None:
-        from datp_core.config.schema.protocols import AuthoredProtocolsConfig
-
-        with pytest.raises(ValidationError, match="schema_version"):
-            AuthoredProtocolsConfig(schema_version=99)  # type: ignore[call-arg]
-
     def test_dataset_schema_version_accepted(self) -> None:
         from datp_core.config.schema.datasets import AuthoredDatasetConfig
 
@@ -369,8 +355,15 @@ class TestAllSchemaVersionDocumentsParse:
         instance = AuthoredDatasetConfig.model_validate(data)
         assert instance.schema_version == 1
 
-    def test_dataset_schema_version_rejected(self) -> None:
-        from datp_core.config.schema.datasets import AuthoredDatasetConfig
-
+    @pytest.mark.parametrize(
+        ("model_cls", "bad_schema_version"),
+        [
+            (AuthoredRuntimeConfig, 2),
+            (AuthoredExperimentsCatalogueConfig, 99),
+            (AuthoredProtocolsConfig, 99),
+            (AuthoredDatasetConfig, 99),
+        ],
+    )
+    def test_schema_version_rejected(self, model_cls: type[object], bad_schema_version: int) -> None:
         with pytest.raises(ValidationError, match="schema_version"):
-            AuthoredDatasetConfig(schema_version=99)  # type: ignore[call-arg]
+            model_cls(schema_version=bad_schema_version)  # type: ignore[call-arg]

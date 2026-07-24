@@ -14,6 +14,7 @@ from datp_core.core.identifiers import (
     ThresholdPolicyId,
     TrainingProfileId,
 )
+from datp_core.core.values import RecalibrationMode
 from datp_core.experiments.models import (
     AbsorptionAnalysisRecord,
     CapabilityRequirementRecord,
@@ -51,7 +52,7 @@ def _baseline_experiment() -> ExperimentRecord:
                 run_requirement=RunRequirement.MANDATORY,
                 overrides={"quantile": 0.95},
                 population_id=PopulationId("probe_population"),
-                recalibration_mode="none",
+                recalibration_mode=RecalibrationMode.NOT_APPLICABLE,
             ),
         ),
         analyses=(),

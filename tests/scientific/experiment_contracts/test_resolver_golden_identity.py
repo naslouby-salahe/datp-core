@@ -6,34 +6,24 @@ from pathlib import Path
 import pytest
 
 from datp_core.config.loading import RuntimeBootstrapSettings
-from datp_core.config.project import (
-    ResolvedProjectConfiguration,
-    resolve_project_configuration,
-)
+from datp_core.config.project import ResolvedProjectConfiguration, resolve_project_configuration
 from datp_core.core.identifiers import DatasetId
 
 
-@pytest.fixture(scope="module")
-def _resolved() -> ResolvedProjectConfiguration:
-    os.environ.setdefault("DATP_EXECUTION_PROFILE", "scientific")
-    return resolve_project_configuration(
-        config_dir=Path("configs"),
-        bootstrap_settings=RuntimeBootstrapSettings(),  # pyright: ignore[reportCallIssue]
-    )
-
-
 def test_scientific_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
-    # Golden hash updated after `canonicalize_value` (core/hashing.py) stopped embedding
-    # `type(obj).__module__` for enum/identifier leaves -- a purely organizational value (which
-    # package or file currently defines a class) that must never affect the scientific
-    # fingerprint. `__qualname__` alone still disambiguates domain types by name.
+    # Golden hash updated after four str-to-enum typing tightenings: `recalibration_mode`
+    # (`EvaluationSpecRecord`/`StageJobContext`), `ClusterThresholdPolicyRecord.aggregation`,
+    # every `*ThresholdPolicyRecord.threshold_ownership`, and `StatisticalProfileRecord.method`
+    # (now `StatisticalMethod`) -- an enum leaf canonicalizes differently from a plain string in
+    # `canonicalize_value` (core/hashing.py). The underlying authored values are unchanged; only
+    # their resolved Python representation is now a validated enum instead of an unvalidated string.
     assert _resolved.scientific_fingerprint.value == (
-        "9dd8f6647da1879bf24f08b9424d19b7b01cebca9502f397dc43e30e8ae96123"
+        "efa04eec9187ab5785b09f298df311737e15b43327e7224e4aead08b56130aee"
     )
 
 
 def test_execution_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
-    assert _resolved.execution_fingerprint.value == ("3bff6b655c64ac5938404c1f3594627391f548b5c57aaaa85e5d27f8719ac2f5")
+    assert _resolved.execution_fingerprint.value == ("723ed7d2d53daf3a8e8976213202852dfcadb311013e54113b75774e465b71c2")
 
 
 def test_registry_cardinality(_resolved: ResolvedProjectConfiguration) -> None:

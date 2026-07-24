@@ -8,6 +8,7 @@ flow ends with: the scientific fingerprint and the execution fingerprint.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from functools import cache
 from hashlib import blake2b
 from json import dumps
 from types import MappingProxyType
@@ -15,8 +16,6 @@ from types import MappingProxyType
 import cattrs
 
 from datp_core.core.hashing import Fingerprint, FingerprintPayload, canonicalize_value
-
-_PROJECTION_CONVERTER: cattrs.Converter | None = None
 
 
 def _build_projection_converter() -> cattrs.Converter:
@@ -43,11 +42,9 @@ def _build_projection_converter() -> cattrs.Converter:
     return converter
 
 
+@cache
 def get_projection_converter() -> cattrs.Converter:
-    global _PROJECTION_CONVERTER
-    if _PROJECTION_CONVERTER is None:
-        _PROJECTION_CONVERTER = _build_projection_converter()
-    return _PROJECTION_CONVERTER
+    return _build_projection_converter()
 
 
 def unstructure_projection(value: object) -> object:

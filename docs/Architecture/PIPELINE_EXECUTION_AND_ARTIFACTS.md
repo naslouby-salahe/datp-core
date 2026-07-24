@@ -15,11 +15,11 @@ Scientific experiment meaning, configuration composition, or report layout.
 ## Current implementation boundary
 
 All 11 `StageKind` members are wired with registered handlers in
-`composition/root.py:build_application` (see `README.md`'s "Current
+`app.py:DatpApplication` (see `README.md`'s "Current
 implementation snapshot" for the ground-truth stage/artifact enum lists —
 this document's own §2/§6.1 stage and artifact-type catalogues below predate
 implementation and use different names/counts than the real
-`domain/outcomes.py:StageKind` and `domain/artifacts.py:ArtifactKind`).
+`pipeline/models.py:StageKind` and `artifacts/models.py:ArtifactKind`).
 Preflight and dataset materialization commit split, readiness, and
 preprocessing evidence; training requires CUDA, trains only on benign
 training rows, selects a checkpoint only from benign calibration loss, and

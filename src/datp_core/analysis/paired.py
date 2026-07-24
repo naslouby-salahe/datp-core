@@ -212,11 +212,7 @@ def _read_cv_fpr_metric(
         float(value)
         for value in frame.filter(pl.col("false_positive_rate_status") == "available")["false_positive_rate"].to_list()
     )
-    dispersion = calculate_fpr_dispersion(
-        fprs,
-        cv_instability_threshold=instability_factor * (1.0 - quantile),
-        quantile_method="linear",
-    )
+    dispersion = calculate_fpr_dispersion(fprs, cv_instability_threshold=instability_factor * (1.0 - quantile))
     if dispersion.coefficient_of_variation.status is MetricStatus.UNDEFINED_ZERO_DENOMINATOR:
         raise ValueError("Configured CV(FPR) is unavailable for paired statistical analysis")
     assert dispersion.coefficient_of_variation.value is not None

@@ -25,7 +25,7 @@ def test_missing_class_metrics_are_explicitly_unavailable() -> None:
 
 
 def test_cross_client_fpr_dispersion_uses_population_standard_deviation() -> None:
-    result = calculate_fpr_dispersion((0.1, 0.2, 0.3), cv_instability_threshold=0.01, quantile_method="linear")
+    result = calculate_fpr_dispersion((0.1, 0.2, 0.3), cv_instability_threshold=0.01)
 
     assert result.mean_fpr.value == pytest.approx(0.2)
     assert result.standard_deviation.value == pytest.approx((2 / 300) ** 0.5)
@@ -35,14 +35,14 @@ def test_cross_client_fpr_dispersion_uses_population_standard_deviation() -> Non
 
 
 def test_zero_mean_fpr_cv_is_undefined_without_epsilon_stabilization() -> None:
-    result = calculate_fpr_dispersion((0.0, 0.0), cv_instability_threshold=0.01, quantile_method="linear")
+    result = calculate_fpr_dispersion((0.0, 0.0), cv_instability_threshold=0.01)
 
     assert result.coefficient_of_variation.value is None
     assert result.coefficient_of_variation.status is MetricStatus.UNDEFINED_ZERO_DENOMINATOR
 
 
 def test_near_zero_fpr_keeps_numeric_cv_with_an_explicit_warning_status() -> None:
-    result = calculate_fpr_dispersion((0.001, 0.003), cv_instability_threshold=0.01, quantile_method="linear")
+    result = calculate_fpr_dispersion((0.001, 0.003), cv_instability_threshold=0.01)
 
     assert result.coefficient_of_variation.value is not None
     assert result.coefficient_of_variation.status is MetricStatus.UNDEFINED_NEAR_ZERO_DENOMINATOR

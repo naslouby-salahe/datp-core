@@ -455,7 +455,7 @@ def split_edge_chronological_rows(
         ordered = [row for _, row in sorted(corrected, key=lambda value: (value[0], _provenance_key(value[1])))]
         boundaries = [int(sum(fractions[: index + 1]) * len(ordered)) for index in range(3)]
         for index, row in enumerate(ordered):
-            roles[_split_role(index, boundaries)].append(row)
+            roles[_chronological_split_index(index, boundaries)].append(row)
     return EdgeChronologicalSplitRows(
         historical_train=tuple(roles[0]),
         historical_calibration=tuple(roles[1]),
@@ -491,7 +491,7 @@ def _category_value(value: str | None, known: tuple[str, ...]) -> str:
     return "__UNKNOWN__"
 
 
-def _split_role(index: int, boundaries: list[int]) -> int:
+def _chronological_split_index(index: int, boundaries: list[int]) -> int:
     """Map an index to a chronological split role. (S3358)"""
     if index < boundaries[0]:
         return 0
@@ -672,10 +672,15 @@ def _validate_edge_chronological_minimums(
         "future_recalibration": split.future_recalibration,
         "future_evaluation": split.future_evaluation,
     }
+    missing_roles = sorted(set(roles) - set(minimums))
+    if missing_roles:
+        raise ValueError(
+            f"Chronological Edge-IIoTset split is missing configured minimums for: {', '.join(missing_roles)}"
+        )
     for client_id in {row.client_id for rows in roles.values() for row in rows}:
         if client_id is None:
             raise ValueError("Chronological Edge-IIoTset split contains an unassigned client")
         for role, rows in roles.items():
-            required = minimums.get(role, 1)
+            required = minimums[role]
             if sum(row.client_id == client_id for row in rows) < required:
                 raise ValueError(f"Temporal client '{client_id}' lacks the configured minimum for {role}")

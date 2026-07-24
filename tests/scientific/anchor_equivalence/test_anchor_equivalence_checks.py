@@ -8,28 +8,15 @@ invented one.
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
-
 import pytest
 
 from datp_core.analysis.paired import analyze_anchor_equivalence
 from datp_core.analysis.results import PairedThresholdAnalysisResult
 from datp_core.analysis.statistics import ConfidenceInterval
-from datp_core.config.loading import RuntimeBootstrapSettings
-from datp_core.config.project import ResolvedProjectConfiguration, resolve_project_configuration
+from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
 from datp_core.core.values import Probability
 from datp_core.experiments.models import AnchorEquivalenceAnalysisRecord
-
-
-@pytest.fixture(scope="module")
-def _resolved() -> ResolvedProjectConfiguration:
-    os.environ.setdefault("DATP_EXECUTION_PROFILE", "scientific")
-    return resolve_project_configuration(
-        config_dir=Path("configs"),
-        bootstrap_settings=RuntimeBootstrapSettings(),  # pyright: ignore[reportCallIssue]
-    )
 
 
 @pytest.fixture(scope="module")

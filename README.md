@@ -8,25 +8,45 @@ Status: `COMPLETE EXCEPT EXPERIMENT EXECUTION`
 
 ```
 src/datp_core/
-  application/        Stage handlers, use cases, reporting, statistical analysis
-    configuration.py  Resolved-configuration query
-    dataset_audit.py  Dataset readiness audit
-    experiment_execution.py  DAG traversal and dispatch
-    experiment_planning.py   DAG construction and validation
-    ports.py          Repository and adapter interfaces
-    reporting.py      Result freeze, tables, figures
-    result_audit.py   Frozen-result validation
-    stage_handlers.py All 11 stage handlers (~3400 lines)
-    statistical_analysis.py  BCa, Wilcoxon, paired-seed analysis
-    threshold_construction.py  Threshold estimator orchestration
-  composition/        Application wiring (root.py)
-  config/             Configuration resolution, validation, models
-  domain/             Immutable scientific value objects and contracts
-  infrastructure/     Framework adapters (PyTorch, Flower, Polars, SciPy, Parquet)
-  interfaces/         CLI (click)
-  orchestration/      Dagster integration (optional)
-  planning/           Experiment DAG identity and expansion
+  core/            Bottom-layer scientific value objects, identifiers, and typed registries
+                    (imports nothing else in datp_core)
+  contracts/       Resolved protocol-level record types shared across configuration, analysis,
+                    and reporting (imports only core/ and third-party schema libraries)
+  config/          Authored-YAML schema, resolution, fingerprints, and the composition-root
+                    validator (schema/, resolve/, project.py, loading.py, fingerprints.py)
+  data/            Dataset adapters (N-BaIoT, CICIoT2023, Edge-IIoTset), split manifests, and
+                    materialization (adapters/, contracts.py, manifests.py, sources.py)
+  experiments/     Experiment definitions, sweeps, planning, identity, and execution
+  learning/        Model definition, federated/personalization training, checkpoints, and scoring
+  thresholding/    Threshold policy models, calibration, quantile/grouped/conformal/shrinkage
+                    estimators
+  evaluation/      Confusion-matrix, operating-point, AUROC, dispersion, and score-distribution
+                    evaluation
+  analysis/        Paired/association/stability/coverage/temporal/resource analyses, typed
+                    results, and dispatch
+  reporting/       Result freezing, table rendering, figure rendering, and report-package
+                    generation
+  artifacts/       Artifact identity, persistence, serialization, and provenance
+  pipeline/        Stage/job models and DAG execution shared by every feature package
+  app.py           Composition root assembling every feature package's use cases and stage
+                    handlers -- the sole module permitted to import concrete infrastructure
+                    across package boundaries
+  cli.py           Typer CLI routing commands to explicit application use cases
 ```
+
+Import direction across these packages is enforced by `importlinter.ini` (8 contracts): `core`
+imports nothing else in `datp_core`; `contracts` imports only `core`; the config-independent model modules
+(`experiments.models`, `data.contracts`, `learning.models`, `thresholding.models`,
+`evaluation.models`, `analysis.results`, `analysis.statistics`, `artifacts.models`) never import
+`config.project`, `app`, or `cli`; only `cli.py` imports `app.py`; `analysis` never imports
+`reporting`; `data`/`learning`/`thresholding`/`evaluation` never import `analysis`/`reporting`;
+`flwr` is not a dependency anywhere in the package; and `data.contracts`/`experiments.models`
+never import each other, even indirectly (the one place two feature packages' execution-tier
+modules legitimately cross into each other's pure-data tier today).
+
+There is no `orchestration/`, `application/`, `domain/`, `infrastructure/`, `interfaces/`,
+`composition/`, or `planning/` package -- an earlier horizontal-layer architecture was replaced by
+the feature-oriented tree above.
 
 ## Pipeline stages (11 StageKind values)
 
@@ -35,7 +55,7 @@ src/datp_core/
 | PREFLIGHT | PreflightStageHandler | registered |
 | DATASET_MATERIALIZATION | DatasetMaterializationStageHandler | registered |
 | MODEL_TRAINING | ModelTrainingStageHandler | registered |
-| COHORT_CHECKPOINT_SELECTION | CohortCheckpointSelectionStageHandler | registered |
+| CHECKPOINT_SELECTION | CohortCheckpointSelectionStageHandler | registered |
 | SCORE_GENERATION | ScoreGenerationStageHandler | registered |
 | CALIBRATION_SUBSAMPLING | CalibrationSubsamplingStageHandler | registered |
 | THRESHOLD_CONSTRUCTION | ThresholdConstructionStageHandler | registered |
@@ -56,7 +76,7 @@ src/datp_core/
 ## CLI
 
 ```
-datp-core config validate|explain-drift|fingerprint
+datp-core config validate|explain-drift|explain-scientific-drift|explain-execution-drift|fingerprint
 datp-core catalogue describe
 datp-core dataset audit DATASET_ID
 datp-core experiment plan|run -c EXPERIMENT
@@ -84,8 +104,8 @@ external-validation, stress-test, and temporal categories.
 - Ruff: all checks pass
 - Formatting: all files formatted
 - Pyright: 0 errors, 0 warnings
-- Import-linter: 2/2 contracts kept
-- Tests: 360+ passing
+- Import-linter: 8/8 contracts kept
+- Tests: 358 passing, 0 skipped
 
 ## Scientific authority
 

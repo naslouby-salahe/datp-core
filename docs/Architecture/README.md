@@ -256,53 +256,53 @@ verified directly against the repository. Where the two disagree, this section
 wins for "does X exist today"; the rest of the package still carries the
 original scientific/architectural rationale.
 
-Top-level packages under `src/datp_core/`: `domain`, `application`, `config`,
-`infrastructure`, `interfaces` (holds `cli/`), `composition`, `planning`,
-`orchestration` (a Dagster integration). There is no top-level `cli/` or
-`analysis/` package. `application/reporting.py` is one file (not a package)
-that calls `matplotlib` directly for figure rendering — `application` is not
+*(Re-verified against the repository; the horizontal-layer tree this section previously described —
+`domain`, `application`, `composition`, `infrastructure`, `interfaces`, `planning` — no longer
+exists. It was replaced by the feature-oriented tree below; see also the root `README.md`'s
+"Package structure" section, which carries the same information.)*
+
+Top-level packages under `src/datp_core/`: `core`, `contracts`, `config`, `data`, `experiments`,
+`learning`, `thresholding`, `evaluation`, `analysis`, `reporting`, `artifacts`, `pipeline`, plus
+`app.py` (composition root) and `cli.py` (Typer CLI) at the top level. There is no top-level
+`cli/` package — `cli.py` is a single file. `analysis/` is a real top-level package.
+`reporting/rendering.py` calls `matplotlib` directly for figure rendering — `reporting` is not
 framework-free.
 
-Pipeline stages (`domain/outcomes.py:StageKind`, 11 members, all registered in
-`composition/root.py:build_application`): `PREFLIGHT`,
-`DATASET_MATERIALIZATION`, `MODEL_TRAINING`, `CHECKPOINT_SELECTION`,
-`SCORE_GENERATION`, `CALIBRATION_SUBSAMPLING`, `THRESHOLD_CONSTRUCTION`,
-`OPERATING_POINT_EVALUATION`, `STATISTICAL_ANALYSIS`, `RESULT_FREEZE`,
-`REPORT_GENERATION`. Every stage has a registered handler in
-`application/stage_handlers.py`; none is silently skipped.
+Pipeline stages (`pipeline/models.py:StageKind`, 11 members, all registered in
+`app.py:DatpApplication`): `PREFLIGHT`, `DATASET_MATERIALIZATION`, `MODEL_TRAINING`,
+`CHECKPOINT_SELECTION`, `SCORE_GENERATION`, `CALIBRATION_SUBSAMPLING`, `THRESHOLD_CONSTRUCTION`,
+`OPERATING_POINT_EVALUATION`, `STATISTICAL_ANALYSIS`, `RESULT_FREEZE`, `REPORT_GENERATION`. Every
+stage has a registered handler, spread across each feature package's own `execution.py` /
+`checkpoints.py` / `scoring.py` / `construction.py` / `calibration.py` module (there is no single
+`stage_handlers.py` file); none is silently skipped.
 
-Artifact kinds (`domain/artifacts.py:ArtifactKind`, 18 members): `RESOLVED_CONFIG`,
-`MATERIALIZED_DATASET`, `SPLIT_MANIFEST`, `PARTITION_MANIFEST`,
-`DATASET_READINESS`, `PREPROCESSING_EVIDENCE`, `MODEL_CHECKPOINT`,
-`PERSONALIZED_MODEL_CHECKPOINT`, `CHECKPOINT_SELECTION`, `CALIBRATION_SCORES`,
-`FUTURE_RECALIBRATION_SCORES`, `CALIBRATION_SUBSET`, `TEST_SCORES`,
-`THRESHOLDS`, `CLIENT_METRICS`, `STATISTICAL_SUMMARY`, `RESULT_FREEZE`,
-`RESULT_REPORT`, `REPORT`.
+Artifact kinds (`artifacts/models.py:ArtifactKind`, 20 members): `RESOLVED_CONFIG`,
+`MATERIALIZED_DATASET`, `SPLIT_MANIFEST`, `PARTITION_MANIFEST`, `DATASET_READINESS`,
+`PREPROCESSING_EVIDENCE`, `MODEL_CHECKPOINT`, `PERSONALIZED_MODEL_CHECKPOINT`,
+`CHECKPOINT_SELECTION`, `CALIBRATION_SCORES`, `FUTURE_RECALIBRATION_SCORES`, `CALIBRATION_SUBSET`,
+`TEST_SCORES`, `THRESHOLDS`, `THRESHOLD_DIAGNOSTICS`, `CLIENT_METRICS`, `STATISTICAL_SUMMARY`,
+`RESULT_FREEZE`, `RESULT_REPORT`, `REPORT`.
 
-CLI (`interfaces/cli/app.py`, Typer sub-apps): `config {validate,
-explain-drift, explain-scientific-drift, explain-execution-drift,
-fingerprint}`, `catalogue describe`, `dataset audit <id>`, `experiment
-{plan, run} --config <slug>`, `results query <sql>`. There is no `list`,
-`validate`, `resolve`, `status`, or `report` action under `experiment`, and
-no `Makefile`/Make targets anywhere in the repository.
+CLI (`cli.py`, Typer sub-apps): `config {validate, explain-drift, explain-scientific-drift,
+explain-execution-drift, fingerprint}`, `catalogue describe`, `dataset audit <id>`, `experiment
+{plan, run} --config <slug>`, `results query <sql>`. There is no `list`, `validate`, `resolve`,
+`status`, or `report` action under `experiment`, and no `Makefile`/Make targets anywhere in the
+repository.
 
-Error types actually defined in `src/`: `ResultFreezeError`
-(`application/reporting.py`), `PathAuthorityError` (`config/runtime_settings.py`),
-`ConfigurationError` (`config/yaml_loader.py`), `StatisticalProcedureError`
-(`domain/statistics.py`), `ManifestDecodeError`/`ManifestSchemaIncompatibleError`
-(`infrastructure/artifacts/manifest_codec.py`). There is no `DatpCoreError` base
-class and none of the ~30-plus other named error classes elsewhere in this
+Error types actually defined in `src/`: `ConfigurationError` (`config/loading.py`),
+`PathAuthorityError` (`config/resolve/runtime.py`), `StatisticalProcedureError`
+(`analysis/statistics.py`), `ResultFreezeError` (`reporting/freezing.py`),
+`ManifestDecodeError`/`ManifestSchemaIncompatibleError` (`artifacts/codec.py`). There is no
+`DatpCoreError` base class and none of the ~30-plus other named error classes elsewhere in this
 package (`DatasetError`, `TrainingError`, `ThresholdError`, etc.) exist.
 
-`EvidenceRole` (`domain/catalogue.py`, 10 members): `ANCHOR`, `CONFIRMATORY`,
-`SENSITIVITY`, `EXPLORATORY`, `STRESS_TEST`, `COMPARATOR`, `MECHANISM`,
-`SUPPORTIVE`, `BOUNDARY`, `EXTERNAL_VALIDATION`. `RunRequirement` (4 members):
-`MANDATORY`, `CONDITIONAL`, `EXPLORATORY`, `OPTIONAL` — there is no
-`SUPPRESSED` member.
+`EvidenceRole` (`experiments/models.py`, 10 members): `ANCHOR`, `CONFIRMATORY`, `SENSITIVITY`,
+`EXPLORATORY`, `STRESS_TEST`, `COMPARATOR`, `MECHANISM`, `SUPPORTIVE`, `BOUNDARY`,
+`EXTERNAL_VALIDATION`. `RunRequirement` (4 members): `MANDATORY`, `CONDITIONAL`, `EXPLORATORY`,
+`OPTIONAL` — there is no `SUPPRESSED` member.
 
-Test tree (`find tests -maxdepth 2 -type d`): `tests/conformance/`,
-`tests/integration/{artifacts,datasets,orchestration}/`,
-`tests/scientific/{catalogue,drift,thresholding}/`,
-`tests/unit/{application,config,domain,infrastructure,interfaces,planning}/`.
-There is no `property/`, `contract/`, `architecture/`, `system/`, or `golden/`
-test directory.
+Test tree (`find tests -maxdepth 2 -type d`): `tests/integration/{artifact_lifecycle,
+configuration,pipeline}/`, `tests/scientific/{anchor_equivalence,experiment_contracts,
+score_invariance,threshold_semantics}/`, `tests/unit/{analysis,artifacts,config,core,data,
+evaluation,experiments,learning,pipeline,reporting,thresholding}/`. There is no `conformance/`,
+`property/`, `contract/`, `architecture/`, `system/`, or `golden/` test directory.

@@ -28,6 +28,7 @@ from datp_core.core.values import (
     FrozenJson,
     PositiveInt,
     Probability,
+    RecalibrationMode,
     Seed,
     as_frozen_json_mapping,
     as_optional_frozen_json_mapping,
@@ -83,7 +84,7 @@ class EvaluationSpecRecord:
     run_requirement: RunRequirement
     overrides: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
     population_id: PopulationId | None
-    recalibration_mode: str | None
+    recalibration_mode: RecalibrationMode | None
 
 
 @define(frozen=True, slots=True, kw_only=True)
