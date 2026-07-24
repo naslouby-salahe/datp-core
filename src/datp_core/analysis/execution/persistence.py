@@ -11,7 +11,9 @@ from attrs import evolve
 from datp_core.analysis.comparisons.models import PairedThresholdAnalysisResult
 from datp_core.analysis.result import AnalysisResult, analysis_result_to_payload
 from datp_core.analysis.statistics.multiplicity import holm_adjust_p_values
-from datp_core.artifacts.models import ArtifactFormat, ArtifactRepository, BytesPayload
+from datp_core.artifacts.identity import ArtifactFormat
+from datp_core.artifacts.payloads import BytesPayload
+from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import RunId
 from datp_core.pipeline.execution import ArtifactCommitResult, artifact_parents, commit_artifact

@@ -8,16 +8,17 @@ from itertools import product
 
 from attrs import define
 
-from datp_core.artifacts.models import ArtifactKey, ArtifactKind
+from datp_core.artifacts.identity import ArtifactKey, ArtifactKind
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId, JobId
-from datp_core.core.values import PositiveInt, RecalibrationMode
+from datp_core.core.numbers import PositiveInt
 from datp_core.data.contracts import PartitionSeedContract, SplitMethod
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.models import (
     ConditionSweepRecord,
     EvidenceRole,
     ExperimentRecord,
+    RecalibrationMode,
     SweepConditionRecord,
     ValueSweepRecord,
 )

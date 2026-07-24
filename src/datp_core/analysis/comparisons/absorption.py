@@ -12,7 +12,7 @@ from datp_core.analysis.comparisons.models import (
     PairedThresholdAnalysisResult,
     SeedRatioResult,
 )
-from datp_core.artifacts.models import ArtifactRepository
+from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments.identity import IdentityBuilder, execution_run_id

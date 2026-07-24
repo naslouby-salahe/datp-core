@@ -14,19 +14,17 @@ from typing import Protocol, runtime_checkable
 import polars as pl
 from attrs import define, evolve
 
-from datp_core.artifacts.models import (
-    ArtifactFormat,
-    ArtifactId,
-    ArtifactKey,
-    ArtifactKind,
-    ArtifactRepository,
-    BytesPayload,
-)
+from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
+from datp_core.artifacts.payloads import BytesPayload
+from datp_core.artifacts.repository.port import ArtifactRepository
+from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
+from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.contracts.frames import validate_calibration_score_frame, validate_threshold_frame
-from datp_core.core.identifiers import ClientId, PopulationId, RunId, ThresholdPolicyId
-from datp_core.core.values import RecalibrationMode, Seed, TypedDomainRegistry
+from datp_core.core.identifiers import ArtifactId, ClientId, PopulationId, RunId, ThresholdPolicyId
+from datp_core.core.registry import TypedDomainRegistry
+from datp_core.core.seeding import Seed
 from datp_core.experiments.identity import IdentityBuilder
+from datp_core.experiments.models import RecalibrationMode
 from datp_core.experiments.planning import score_context
 from datp_core.pipeline.execution import artifact_parents, commit_artifact
 from datp_core.pipeline.models import StageJob, StageJobOutcome, StageKind

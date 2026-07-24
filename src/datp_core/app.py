@@ -11,8 +11,7 @@ from attrs import define
 
 from datp_core.analysis.execution.handler import StatisticalAnalysisStageHandler
 from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
-from datp_core.artifacts.query import DuckDbAuditService
-from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.config.loading import ConfigurationError
 from datp_core.config.project import (
     DescribeResolvedProject,
@@ -25,7 +24,7 @@ from datp_core.config.project import (
     resolve_project_configuration,
 )
 from datp_core.core.identifiers import ThresholdPolicyId
-from datp_core.core.values import TypedDomainRegistry
+from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.adapters.ciciot2023 import CICIoT2023Adapter
 from datp_core.data.adapters.edge_iiotset import EdgeIIoTsetAdapter
 from datp_core.data.adapters.nbaiot import NBaIoTAdapter
@@ -41,6 +40,7 @@ from datp_core.experiments.execution import ExecuteExperimentUseCase
 from datp_core.learning.checkpoints import CohortCheckpointSelectionStageHandler
 from datp_core.learning.scoring import ScoreGenerationStageHandler
 from datp_core.learning.training import ModelTrainingStageHandler
+from datp_core.reporting.audit import DuckDbAuditService
 from datp_core.reporting.execution import ReportGenerationStageHandler, ResultFreezeStageHandler
 from datp_core.thresholding.calibration import CalibrationSubsamplingStageHandler
 from datp_core.thresholding.construction import (

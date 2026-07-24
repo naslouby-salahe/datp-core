@@ -3,16 +3,10 @@
 from pathlib import Path
 
 from datp_core.app import _build_adapter_registry, build_application
-from datp_core.artifacts.models import (
-    ArtifactCommitMetadata,
-    ArtifactCommitRequest,
-    ArtifactFormat,
-    ArtifactKey,
-    ArtifactKind,
-    ArtifactParent,
-    BytesPayload,
-)
-from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
+from datp_core.artifacts.lineage import ArtifactParent
+from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
+from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.core.identifiers import ArtifactId, ExperimentId, RunId
 from datp_core.data.materialization import DatasetMaterializationStageHandler
 from datp_core.experiments.planning import expand_experiment_jobs

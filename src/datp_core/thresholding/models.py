@@ -12,7 +12,8 @@ import numpy as np
 from attrs import define, field
 
 from datp_core.core.identifiers import ClientId, PopulationId, ThresholdPolicyId
-from datp_core.core.values import NonNegativeFloat, Probability, as_str_mapping, deep_freeze, linear_quantile
+from datp_core.core.immutability import as_str_mapping, deep_freeze
+from datp_core.core.numbers import NonNegativeFloat, Probability, linear_quantile
 
 
 def _as_tuple_str(value: object) -> tuple[str, ...]:

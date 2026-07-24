@@ -7,9 +7,9 @@ from enum import Enum
 
 import networkx as nx
 
-from datp_core.artifacts.models import ArtifactKey
+from datp_core.artifacts.identity import ArtifactKey
 from datp_core.core.identifiers import ExperimentId, JobId, PopulationId, ThresholdPolicyId
-from datp_core.core.values import RecalibrationMode
+from datp_core.experiments.models import RecalibrationMode
 
 
 class StageKind(Enum):

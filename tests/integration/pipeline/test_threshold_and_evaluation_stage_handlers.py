@@ -11,14 +11,9 @@ import polars as pl
 import pytest
 
 from datp_core.app import build_application
-from datp_core.artifacts.models import (
-    ArtifactCommitMetadata,
-    ArtifactCommitRequest,
-    ArtifactFormat,
-    ArtifactKey,
-    BytesPayload,
-)
-from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey
+from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
+from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId, RunId
 from datp_core.evaluation.execution import OperatingPointEvaluationStageHandler

@@ -4,7 +4,8 @@ import math
 
 import pytest
 
-from datp_core.core.values import PositiveInt, Probability, Seed
+from datp_core.core.numbers import PositiveInt, Probability
+from datp_core.core.seeding import Seed
 
 
 @pytest.mark.parametrize("value", [True, "1", 1.0])

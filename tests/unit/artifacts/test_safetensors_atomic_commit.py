@@ -7,10 +7,10 @@ from pathlib import Path
 
 import torch
 
-from datp_core.artifacts.codec import load_model_safetensors, save_model_safetensors
-from datp_core.artifacts.models import ArtifactCorruptionReason, ArtifactFormat, ArtifactKey, ArtifactKind
-from datp_core.artifacts.repository import AtomicArtifactRepository
-from datp_core.config.fingerprints import compute_fingerprint
+from datp_core.artifacts.codecs.safetensors import load_model_safetensors, save_model_safetensors
+from datp_core.artifacts.identity import ArtifactCorruptionReason, ArtifactFormat, ArtifactKey, ArtifactKind
+from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
+from datp_core.config.fingerprinting.canonical import compute_fingerprint
 from datp_core.core.identifiers import ArtifactId
 
 

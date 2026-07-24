@@ -15,17 +15,11 @@ import numpy as np
 import polars as pl
 from safetensors.torch import save as save_safetensors
 
-from datp_core.artifacts.models import (
-    ArtifactCommitMetadata,
-    ArtifactCommitRequest,
-    ArtifactFormat,
-    ArtifactId,
-    ArtifactKey,
-    ArtifactKind,
-    BytesPayload,
-)
-from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
+from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
+from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.core.identifiers import ArtifactId
 from datp_core.learning.autoencoder import DynamicDenseAutoencoder, set_deterministic_seeds
 
 

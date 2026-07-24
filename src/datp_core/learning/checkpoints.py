@@ -12,16 +12,11 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from datp_core.artifacts.models import (
-    ArtifactFormat,
-    ArtifactId,
-    ArtifactKey,
-    ArtifactKind,
-    ArtifactRepository,
-    BytesPayload,
-)
+from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
+from datp_core.artifacts.payloads import BytesPayload
+from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import RunId
+from datp_core.core.identifiers import ArtifactId, RunId
 from datp_core.experiments.identity import IdentityBuilder, execution_run_id
 from datp_core.learning.models import (
     CheckpointAuthorization,

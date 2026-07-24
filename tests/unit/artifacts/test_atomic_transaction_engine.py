@@ -6,21 +6,18 @@ from unittest.mock import patch
 
 import pytest
 
-from datp_core.artifacts.codec import CURRENT_ARTIFACT_SCHEMA_VERSION, decode_manifest
-from datp_core.artifacts.models import (
-    ArtifactCommitMetadata,
-    ArtifactCommitRequest,
+from datp_core.artifacts.codecs.manifest import CURRENT_ARTIFACT_SCHEMA_VERSION, decode_manifest
+from datp_core.artifacts.identity import (
     ArtifactCorruptionReason,
     ArtifactFormat,
     ArtifactKey,
     ArtifactKind,
-    ArtifactParent,
     ArtifactReuseReason,
-    BytesPayload,
-    FilePayload,
 )
-from datp_core.artifacts.repository import AtomicArtifactRepository
-from datp_core.config.fingerprints import compute_fingerprint
+from datp_core.artifacts.lineage import ArtifactParent
+from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload, FilePayload
+from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
+from datp_core.config.fingerprinting.canonical import compute_fingerprint
 from datp_core.core.identifiers import ArtifactId
 
 
@@ -408,7 +405,7 @@ def test_failure_before_replace_leaves_no_visible_partial_artifact(kind: str, tm
     target_dir = tmp_path / "reports/test-artifact"
 
     with patch(
-        "datp_core.artifacts.repository.encode_manifest",
+        "datp_core.artifacts.repository.transaction.encode_manifest",
         side_effect=ValueError("simulated encode failure"),
     ):
         with pytest.raises(ValueError, match="simulated encode failure"):

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.config.loading import RuntimeBootstrapSettings
+from datp_core.config.bootstrap import RuntimeBootstrapSettings
 from datp_core.config.project import ResolvedProjectConfiguration, resolve_project_configuration
 
 

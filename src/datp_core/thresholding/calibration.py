@@ -13,9 +13,11 @@ from io import BytesIO
 import numpy as np
 import polars as pl
 
-from datp_core.artifacts.models import ArtifactFormat, ArtifactRepository, BytesPayload
+from datp_core.artifacts.identity import ArtifactFormat
+from datp_core.artifacts.payloads import BytesPayload
+from datp_core.artifacts.repository.port import ArtifactRepository
+from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.contracts.frames import validate_calibration_score_frame
 from datp_core.core.hashing import derive_seed
 from datp_core.core.identifiers import RunId
 from datp_core.experiments.identity import IdentityBuilder

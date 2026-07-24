@@ -5,14 +5,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from datp_core.config.loading import YamlConfigurationReader
-from datp_core.config.schema.protocols import (
+from datp_core.config.authored.protocols import (
     EvaluationResultContractConfig,
     NestedReplicatePolicyConfig,
     ReportDefaultsConfig,
     ResultTypeConfig,
     ThresholdPolicyDefaultsConfig,
 )
+from datp_core.config.loading import YamlConfigurationReader
 
 
 def _protocols():
@@ -38,7 +38,7 @@ def test_result_type_rejects_unknown_field() -> None:
 
 
 def test_deeply_nested_protocol_blocks_are_strictly_typed() -> None:
-    from datp_core.config.schema.protocols import (
+    from datp_core.config.authored.protocols import (
         ArtifactIdentityConfig,
         CommunicationEstimationContractConfig,
         MetricDefinitionsConfig,

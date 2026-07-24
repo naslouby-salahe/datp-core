@@ -1,6 +1,6 @@
 """Conformance: authored configuration models never leak outside the configuration boundary.
 
-Authored Pydantic models (``datp_core.config.schema.*``) may only be imported by the
+Authored Pydantic models (``datp_core.config.authored.*``) may only be imported by the
 configuration layer itself, which is solely responsible for resolving every authored value into
 a pure, Pydantic-free domain record before it crosses into any other feature package.
 """
@@ -10,22 +10,40 @@ from __future__ import annotations
 from pathlib import Path
 
 _SRC_ROOT = Path(__file__).resolve().parents[3] / "src" / "datp_core"
-_MARKER = "datp_core.config.schema"
+_MARKER = "datp_core.config.authored"
 
 # Files permitted to import authored configuration (Pydantic) models.
 _ALLOWLIST = {
     "config/project.py",
     "config/loading.py",
-    "config/fingerprints.py",
-    "config/resolve/datasets.py",
-    "config/resolve/experiments.py",
-    "config/resolve/protocols.py",
-    "config/resolve/runtime.py",
-    "config/schema/__init__.py",
-    "config/schema/datasets.py",
-    "config/schema/experiments.py",
-    "config/schema/protocols.py",
-    "config/schema/runtime.py",
+    "config/authored/__init__.py",
+    "config/authored/base.py",
+    "config/authored/datasets.py",
+    "config/authored/runtime.py",
+    "config/authored/experiments/__init__.py",
+    "config/authored/experiments/analyses.py",
+    "config/authored/experiments/catalogue.py",
+    "config/authored/experiments/evaluations.py",
+    "config/authored/experiments/sweeps.py",
+    "config/authored/protocols/__init__.py",
+    "config/authored/protocols/artifacts.py",
+    "config/authored/protocols/evaluation.py",
+    "config/authored/protocols/operations.py",
+    "config/authored/protocols/reporting.py",
+    "config/authored/protocols/statistics.py",
+    "config/authored/protocols/thresholds.py",
+    "config/authored/protocols/training.py",
+    "config/resolution/datasets.py",
+    "config/resolution/experiments.py",
+    "config/resolution/protocols/__init__.py",
+    "config/resolution/protocols/artifacts.py",
+    "config/resolution/protocols/evaluation.py",
+    "config/resolution/protocols/operations.py",
+    "config/resolution/protocols/reporting.py",
+    "config/resolution/protocols/statistics.py",
+    "config/resolution/protocols/thresholds.py",
+    "config/resolution/protocols/training.py",
+    "config/resolution/runtime.py",
 }
 
 

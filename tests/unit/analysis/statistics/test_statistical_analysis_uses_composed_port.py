@@ -2,7 +2,7 @@
 
 from datp_core.app import build_application
 from datp_core.core.identifiers import StatisticalProfileId
-from datp_core.core.values import Seed
+from datp_core.core.seeding import Seed
 
 
 def test_statistical_analysis_uses_the_composed_port() -> None:

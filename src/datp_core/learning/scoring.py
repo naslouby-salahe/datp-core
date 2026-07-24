@@ -16,17 +16,12 @@ import torch.nn as nn
 from safetensors.torch import load as load_safetensors
 from torch.utils.data import DataLoader, TensorDataset
 
-from datp_core.artifacts.models import (
-    ArtifactFormat,
-    ArtifactId,
-    ArtifactKey,
-    ArtifactKind,
-    ArtifactRepository,
-    BytesPayload,
-)
+from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
+from datp_core.artifacts.payloads import BytesPayload
+from datp_core.artifacts.repository.port import ArtifactRepository
+from datp_core.artifacts.schemas.scores import validate_calibration_score_frame, validate_test_score_frame
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.contracts.frames import validate_calibration_score_frame, validate_test_score_frame
-from datp_core.core.identifiers import DatasetId, RunId
+from datp_core.core.identifiers import ArtifactId, DatasetId, RunId
 from datp_core.data.contracts import SplitMethod
 from datp_core.experiments.identity import IdentityBuilder, execution_run_id
 from datp_core.learning.autoencoder import DynamicDenseAutoencoder, require_cuda_training_device

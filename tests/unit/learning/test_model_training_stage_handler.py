@@ -17,7 +17,7 @@ from _synthetic_training_fixtures import build_synthetic_materialized_frame, com
 from safetensors.torch import load as load_safetensors
 
 from datp_core.app import DatpApplication, build_application
-from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.core.identifiers import ExperimentId, RunId
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.planning import expand_experiment_jobs

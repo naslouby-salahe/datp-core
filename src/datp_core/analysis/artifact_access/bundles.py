@@ -6,8 +6,9 @@ import polars as pl
 
 from datp_core.analysis.artifact_access.metric_query import experiment_evaluation
 from datp_core.analysis.artifact_access.reader import read_parquet_frame
-from datp_core.artifacts.models import ArtifactRepository
-from datp_core.contracts.frames import validate_calibration_score_frame, validate_threshold_frame
+from datp_core.artifacts.repository.port import ArtifactRepository
+from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
+from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
 from datp_core.core.identifiers import RunId
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.models import ExperimentRecord

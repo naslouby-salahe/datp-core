@@ -8,13 +8,13 @@ import inspect
 
 import attrs
 
-from datp_core.config.fingerprints import unstructure_projection
+from datp_core.config.fingerprinting.projection import unstructure_projection
 from datp_core.config.project import resolve_project_configuration
-from datp_core.config.resolve import protocols as protocol_module
+from datp_core.config.resolution.protocols import thresholds as threshold_module
 
 
 def test_protocol_resolution_module_has_no_model_dump_call_in_fingerprint_assembly() -> None:
-    source = inspect.getsource(protocol_module)
+    source = inspect.getsource(threshold_module)
     # The sole legitimate use is the Pydantic-to-domain-record conversion helper itself,
     # which runs before any fingerprint projection is assembled.
     call_sites = [line for line in source.splitlines() if ".model_dump(" in line]

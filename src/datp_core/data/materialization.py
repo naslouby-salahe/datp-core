@@ -15,17 +15,11 @@ from typing import Protocol
 
 from attrs import define
 
-from datp_core.artifacts.models import (
-    ArtifactFormat,
-    ArtifactId,
-    ArtifactKey,
-    ArtifactKind,
-    ArtifactRepository,
-    BytesPayload,
-    FilePayload,
-)
+from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
+from datp_core.artifacts.payloads import BytesPayload, FilePayload
+from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import DatasetId, RunId
+from datp_core.core.identifiers import ArtifactId, DatasetId, RunId
 from datp_core.data.contracts import (
     AdapterKind,
     ClientConstructionMethod,

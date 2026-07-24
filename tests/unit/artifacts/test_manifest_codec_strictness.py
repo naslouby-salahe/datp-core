@@ -8,26 +8,19 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.artifacts.codec import (
-    CURRENT_ARTIFACT_SCHEMA_VERSION,
-    ManifestDecodeError,
-    ManifestSchemaIncompatibleError,
-    decode_manifest,
-    encode_manifest,
-)
-from datp_core.artifacts.models import (
-    ArtifactCommitMetadata,
-    ArtifactCommitRequest,
+from datp_core.artifacts.codecs.manifest import CURRENT_ARTIFACT_SCHEMA_VERSION, decode_manifest, encode_manifest
+from datp_core.artifacts.errors import ManifestDecodeError, ManifestSchemaIncompatibleError
+from datp_core.artifacts.identity import (
     ArtifactCorruptionReason,
     ArtifactFormat,
     ArtifactKey,
     ArtifactKind,
-    ArtifactManifest,
     ArtifactState,
-    BytesPayload,
 )
-from datp_core.artifacts.repository import AtomicArtifactRepository
-from datp_core.config.fingerprints import compute_fingerprint
+from datp_core.artifacts.manifest import ArtifactManifest
+from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
+from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
+from datp_core.config.fingerprinting.canonical import compute_fingerprint
 from datp_core.core.hashing import Checksum
 from datp_core.core.identifiers import ArtifactId
 

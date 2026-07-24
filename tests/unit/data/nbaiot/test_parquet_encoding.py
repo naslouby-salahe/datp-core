@@ -7,7 +7,7 @@ from attrs import evolve
 
 from datp_core.app import build_application
 from datp_core.core.identifiers import DatasetId, DatasetSetupId, MaterializationId
-from datp_core.core.values import PositiveInt
+from datp_core.core.numbers import PositiveInt
 from datp_core.data.adapters.nbaiot import (
     apply_nbaiot_dirichlet_partition,
     consolidate_nbaiot_parquet_sources,

@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from datp_core.config.schema.protocols import StatisticalProfileConfig
+from datp_core.config.authored.protocols import StatisticalProfileConfig
 
 
 def _bca_payload() -> dict[str, object]:

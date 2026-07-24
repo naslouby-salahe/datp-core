@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from datp_core.artifacts.models import ArtifactFormat, ArtifactRepository, BytesPayload
-from datp_core.artifacts.repository import git_revision
+from datp_core.artifacts.identity import ArtifactFormat
+from datp_core.artifacts.payloads import BytesPayload
+from datp_core.artifacts.provenance import git_revision
+from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import RunId
 from datp_core.experiments.identity import IdentityBuilder

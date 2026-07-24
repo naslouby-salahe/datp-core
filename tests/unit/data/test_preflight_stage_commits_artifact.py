@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 from datp_core.app import build_application
-from datp_core.artifacts.models import ArtifactKey, ArtifactKind
-from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.artifacts.identity import ArtifactKey, ArtifactKind
+from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.core.identifiers import ArtifactId, ExperimentId, JobId, RunId
 from datp_core.data.materialization import PreflightStageHandler
 from datp_core.pipeline.models import JobExecutionStatus, StageJob, StageJobContext, StageKind

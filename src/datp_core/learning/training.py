@@ -9,17 +9,12 @@ from typing import cast
 
 from safetensors.torch import save as save_safetensors
 
-from datp_core.artifacts.models import (
-    ArtifactFormat,
-    ArtifactId,
-    ArtifactKey,
-    ArtifactKind,
-    ArtifactRepository,
-    BytesPayload,
-)
+from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
+from datp_core.artifacts.payloads import BytesPayload
+from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import DatasetId, RunId
-from datp_core.core.values import PositiveInt
+from datp_core.core.identifiers import ArtifactId, DatasetId, RunId
+from datp_core.core.numbers import PositiveInt
 from datp_core.data.contracts import SplitMethod
 from datp_core.experiments.identity import IdentityBuilder
 from datp_core.learning.autoencoder import (

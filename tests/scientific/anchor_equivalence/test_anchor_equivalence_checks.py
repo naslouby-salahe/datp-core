@@ -15,7 +15,7 @@ from datp_core.analysis.statistics.models import ConfidenceInterval
 from datp_core.analysis.validation.anchor_equivalence import analyze_anchor_equivalence
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
-from datp_core.core.values import Probability
+from datp_core.core.numbers import Probability
 from datp_core.experiments.models import AnchorEquivalenceAnalysisRecord
 
 

@@ -6,7 +6,7 @@ the real `suppression_behaviors`/`eligibility_gates` decision rule end to end.
 """
 
 from datp_core.core.identifiers import ExperimentId
-from datp_core.core.values import PositiveInt, Probability
+from datp_core.core.numbers import PositiveInt, Probability
 from datp_core.data.manifests import SplitManifest, SplitManifestEntry, SplitMembership
 from datp_core.data.readiness import evaluate_readiness_gates
 from datp_core.experiments.models import EligibilityGateRecord

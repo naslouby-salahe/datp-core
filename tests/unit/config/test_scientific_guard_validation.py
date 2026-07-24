@@ -3,7 +3,7 @@
 import pytest
 from pydantic import ValidationError
 
-from datp_core.config.schema.protocols import (
+from datp_core.config.authored.protocols import (
     ClusterThresholdPolicyConfig,
     LocalGlobalShrinkagePolicyConfig,
     SeedCohortConfig,

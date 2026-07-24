@@ -13,10 +13,10 @@ from datp_core.analysis.execution.plan import SweepDimensions, expand_paired_ana
 from datp_core.analysis.result import AnalysisResult
 from datp_core.analysis.selection.training_parameters import ditto_selection, federated_proximal_selection
 from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
-from datp_core.artifacts.models import ArtifactRepository
+from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import RunId
-from datp_core.core.values import Seed
+from datp_core.core.seeding import Seed
 from datp_core.experiments.models import AnalysisKind, AnalysisRecord, ExperimentRecord, PairedThresholdAnalysisRecord
 from datp_core.learning.models import PersonalizationStrategy, TrainingProfileKind
 from datp_core.pipeline.models import StageJob, StageJobOutcome, StageKind

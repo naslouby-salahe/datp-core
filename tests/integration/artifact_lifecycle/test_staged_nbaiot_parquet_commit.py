@@ -3,16 +3,10 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.app import build_application
-from datp_core.artifacts.models import (
-    ArtifactCommitMetadata,
-    ArtifactCommitRequest,
-    ArtifactFormat,
-    ArtifactKey,
-    ArtifactKind,
-    FilePayload,
-)
-from datp_core.artifacts.repository import AtomicArtifactRepository
-from datp_core.config.fingerprints import compute_fingerprint
+from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
+from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, FilePayload
+from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
+from datp_core.config.fingerprinting.canonical import compute_fingerprint
 from datp_core.core.identifiers import ArtifactId, DatasetId, MaterializationId
 from datp_core.data.adapters.nbaiot import consolidate_nbaiot_parquet_sources, write_nbaiot_source_parquet
 

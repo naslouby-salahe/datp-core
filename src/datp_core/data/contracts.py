@@ -16,12 +16,8 @@ from datp_core.core.identifiers import (
     MaterializationId,
     NormalizationStrategyId,
 )
-from datp_core.core.values import (
+from datp_core.core.immutability import (
     FrozenJson,
-    PositiveInt,
-    Probability,
-    RelativePath,
-    Seed,
     as_frozen_json_mapping,
     as_int_mapping,
     as_optional_frozen_json_mapping,
@@ -30,6 +26,9 @@ from datp_core.core.values import (
     as_str_mapping,
     deep_freeze,
 )
+from datp_core.core.numbers import PositiveInt, Probability
+from datp_core.core.paths import RelativePath
+from datp_core.core.seeding import Seed
 
 
 class AdapterKind(Enum):

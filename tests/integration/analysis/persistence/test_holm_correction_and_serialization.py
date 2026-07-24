@@ -9,7 +9,7 @@ from datp_core.analysis.comparisons.models import PairedThresholdAnalysisResult
 from datp_core.analysis.execution.persistence import apply_holm_correction
 from datp_core.analysis.result import analysis_result_to_payload
 from datp_core.analysis.statistics.models import ConfidenceInterval
-from datp_core.core.values import Probability
+from datp_core.core.numbers import Probability
 
 
 def _paired_result(*, analysis_label: str, p_value: float | None) -> PairedThresholdAnalysisResult:

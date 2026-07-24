@@ -12,9 +12,13 @@ from io import BytesIO
 
 import polars as pl
 
-from datp_core.artifacts.models import ArtifactFormat, ArtifactRepository, BytesPayload
+from datp_core.artifacts.identity import ArtifactFormat
+from datp_core.artifacts.payloads import BytesPayload
+from datp_core.artifacts.repository.port import ArtifactRepository
+from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
+from datp_core.artifacts.schemas.scores import validate_test_score_frame
+from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.contracts.frames import validate_client_metric_frame, validate_test_score_frame, validate_threshold_frame
 from datp_core.core.identifiers import RunId
 from datp_core.evaluation.metrics import (
     compute_client_auroc,

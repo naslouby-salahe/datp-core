@@ -11,7 +11,7 @@ from io import BytesIO
 
 import polars as pl
 
-from datp_core.artifacts.models import ArtifactRepository
+from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.core.identifiers import JobId, RunId
 
 

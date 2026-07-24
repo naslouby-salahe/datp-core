@@ -2,7 +2,7 @@
 
 Single authority for canonical serialization used in fingerprinting, checksums, and deterministic
 seed derivation across the codebase. Configuration-specific fingerprint entry points live in
-config/fingerprints.py, which builds on these primitives.
+config/fingerprinting/, which builds on these primitives.
 """
 
 from __future__ import annotations
@@ -16,7 +16,9 @@ from typing import NamedTuple
 from attrs import define, field
 
 from datp_core.core.identifiers import _DomainIdentifier
-from datp_core.core.values import NonNegativeFloat, PositiveFloat, PositiveInt, Probability, RelativePath, Seed
+from datp_core.core.numbers import NonNegativeFloat, PositiveFloat, PositiveInt, Probability
+from datp_core.core.paths import RelativePath
+from datp_core.core.seeding import Seed
 
 type CanonicalProjection = str | int | bool | None | list[CanonicalProjection] | dict[str, CanonicalProjection]
 

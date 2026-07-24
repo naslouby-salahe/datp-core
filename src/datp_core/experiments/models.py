@@ -24,12 +24,8 @@ from datp_core.core.identifiers import (
     ThresholdPolicyId,
     TrainingProfileId,
 )
-from datp_core.core.values import (
+from datp_core.core.immutability import (
     FrozenJson,
-    PositiveInt,
-    Probability,
-    RecalibrationMode,
-    Seed,
     as_frozen_json_mapping,
     as_optional_frozen_json_mapping,
     as_optional_str_mapping,
@@ -37,6 +33,18 @@ from datp_core.core.values import (
     as_str_mapping_tuple,
     deep_freeze,
 )
+from datp_core.core.numbers import PositiveInt, Probability
+from datp_core.core.seeding import Seed
+
+
+class RecalibrationMode(StrEnum):
+    """Whether an Edge-IIoTset temporal evaluation reuses a frozen threshold, recomputes it
+    one-shot against future-recalibration scores, or the concept does not apply (static reference).
+    """
+
+    FROZEN = "frozen"
+    ONE_SHOT = "one_shot"
+    NOT_APPLICABLE = "not_applicable"
 
 
 class EvidenceRole(Enum):
@@ -463,3 +471,9 @@ class ExperimentRecord:
         converter=lambda v: v if v is None or isinstance(v, str) else as_frozen_json_mapping(v)
     )
     training_overrides: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ResultTypeRecord:
+    identifier: str
+    permitted_evidence_roles: tuple[str, ...]

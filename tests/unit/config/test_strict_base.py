@@ -5,11 +5,11 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from datp_core.config.schema import SchemaVersionOneConfigModel, StrictFrozenConfigModel
-from datp_core.config.schema.datasets import AuthoredDatasetConfig
-from datp_core.config.schema.experiments import AuthoredExperimentsCatalogueConfig
-from datp_core.config.schema.protocols import AuthoredProtocolsConfig
-from datp_core.config.schema.runtime import AuthoredRuntimeConfig
+from datp_core.config.authored import SchemaVersionOneConfigModel, StrictFrozenConfigModel
+from datp_core.config.authored.datasets import AuthoredDatasetConfig
+from datp_core.config.authored.experiments import AuthoredExperimentsCatalogueConfig
+from datp_core.config.authored.protocols import AuthoredProtocolsConfig
+from datp_core.config.authored.runtime import AuthoredRuntimeConfig
 
 
 class ExampleStrict(StrictFrozenConfigModel):
@@ -75,7 +75,7 @@ class TestAllSchemaVersionDocumentsParse:
     """Prove all four authored document families parse with schema_version=1."""
 
     def test_runtime_schema_version_accepted(self) -> None:
-        from datp_core.config.schema.runtime import AuthoredRuntimeConfig
+        from datp_core.config.authored.runtime import AuthoredRuntimeConfig
 
         data = {
             "schema_version": 1,
@@ -140,7 +140,7 @@ class TestAllSchemaVersionDocumentsParse:
         assert instance.schema_version == 1
 
     def test_experiments_schema_version_accepted(self) -> None:
-        from datp_core.config.schema.experiments import AuthoredExperimentsCatalogueConfig
+        from datp_core.config.authored.experiments import AuthoredExperimentsCatalogueConfig
 
         data = {
             "schema_version": 1,
@@ -156,7 +156,7 @@ class TestAllSchemaVersionDocumentsParse:
         assert instance.schema_version == 1
 
     def test_protocols_schema_version_accepted(self) -> None:
-        from datp_core.config.schema.protocols import AuthoredProtocolsConfig
+        from datp_core.config.authored.protocols import AuthoredProtocolsConfig
 
         data = {
             "schema_version": 1,
@@ -321,7 +321,7 @@ class TestAllSchemaVersionDocumentsParse:
         assert instance.schema_version == 1
 
     def test_dataset_schema_version_accepted(self) -> None:
-        from datp_core.config.schema.datasets import AuthoredDatasetConfig
+        from datp_core.config.authored.datasets import AuthoredDatasetConfig
 
         data = {
             "schema_version": 1,

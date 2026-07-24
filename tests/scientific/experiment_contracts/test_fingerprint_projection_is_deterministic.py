@@ -1,11 +1,7 @@
 from pathlib import Path
 
-from datp_core.config.fingerprints import compute_fingerprint
-from datp_core.core.hashing import (
-    Fingerprint,
-    compute_file_checksum,
-    compute_payload_checksum,
-)
+from datp_core.config.fingerprinting.canonical import compute_fingerprint
+from datp_core.core.hashing import Fingerprint, compute_file_checksum, compute_payload_checksum
 from datp_core.core.identifiers import DatasetId
 
 

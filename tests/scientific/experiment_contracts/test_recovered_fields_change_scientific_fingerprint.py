@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import attrs
 
-from datp_core.config.fingerprints import compute_fingerprint, unstructure_projection
-from datp_core.config.resolve.experiments import _experiment_scientific_projection
+from datp_core.config.fingerprinting.canonical import compute_fingerprint
+from datp_core.config.fingerprinting.projection import unstructure_projection
+from datp_core.config.resolution.experiments import experiment_scientific_projection
 from datp_core.core.identifiers import (
     CheckpointProfileId,
     EligibilityPolicyId,
@@ -14,7 +15,6 @@ from datp_core.core.identifiers import (
     ThresholdPolicyId,
     TrainingProfileId,
 )
-from datp_core.core.values import RecalibrationMode
 from datp_core.experiments.models import (
     AbsorptionAnalysisRecord,
     CapabilityRequirementRecord,
@@ -22,6 +22,7 @@ from datp_core.experiments.models import (
     EvidenceRole,
     ExperimentRecord,
     PrerequisiteSpecRecord,
+    RecalibrationMode,
     RunRequirement,
 )
 
@@ -85,7 +86,7 @@ def _baseline_experiment() -> ExperimentRecord:
 
 
 def _fingerprint_of(record: ExperimentRecord) -> str:
-    return compute_fingerprint("scientific", _experiment_scientific_projection(record)).value
+    return compute_fingerprint("scientific", experiment_scientific_projection(record)).value
 
 
 def test_evaluation_override_changes_scientific_fingerprint() -> None:
@@ -163,7 +164,7 @@ def test_display_name_metadata_change_does_not_change_scientific_fingerprint() -
 
 
 def test_display_name_is_excluded_but_every_other_field_is_present_in_the_scientific_projection() -> None:
-    projection = _experiment_scientific_projection(_baseline_experiment())
+    projection = experiment_scientific_projection(_baseline_experiment())
     assert "display_name" not in projection
     assert projection["temporal_procedure"] == {"boundary_index_formula": "floor(0.6 * n)"}
     assert isinstance(projection["prerequisites"], list)

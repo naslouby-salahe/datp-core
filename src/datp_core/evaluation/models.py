@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum
 from math import isfinite, log, sqrt
@@ -12,7 +12,7 @@ from statistics import mean
 from attrs import define
 
 from datp_core.core.identifiers import ClientId, MetricBundleId
-from datp_core.core.values import linear_quantile
+from datp_core.core.numbers import linear_quantile
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -331,3 +331,68 @@ def calculate_pairwise_js_divergence(
                 / 2.0
             )
     return mean(divergences)
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class FieldEncodingRecord:
+    bytes_per_field: int
+    byte_order: str
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ThresholdExchangeEntryRecord:
+    uplink_fields_per_client: tuple[str, ...] | None
+    downlink_fields_per_client: tuple[str, ...] | None
+    candidate_grid_downlink_fields_per_client: tuple[str, ...] | None
+    candidate_grid_uplink_fields_per_client_per_candidate: tuple[str, ...] | None
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ThresholdExchangeRecord:
+    direction: str
+    b1: ThresholdExchangeEntryRecord
+    b2: ThresholdExchangeEntryRecord
+    b4: ThresholdExchangeEntryRecord
+    federated_summary: ThresholdExchangeEntryRecord
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class ModelExchangeRecord:
+    field_width: str
+    directions: tuple[str, ...]
+    bytes_per_round_formula: str
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class CheckpointStorageRecord:
+    contents: tuple[str, ...]
+    model_parameter_bytes_formula: str
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class CommunicationEstimationContractRecord:
+    estimate_basis: str
+    field_encodings: Mapping[str, FieldEncodingRecord]
+    threshold_exchange: ThresholdExchangeRecord
+    candidate_grid_payload: str
+    model_exchange: ModelExchangeRecord
+    checkpoint_storage: CheckpointStorageRecord
+    filename_match_is_not_lineage_evidence: bool
+    frozen_artifacts_immutable: bool
+    ambiguous_latest_reference: str
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class BenignDecisionRateRecord:
+    configured: bool
+    value: float | None
+    required_fields: tuple[str, ...]
+    finite_value_validation: str
+    non_negative_validation: str
+    unavailable_behavior: str
+    invented_rate_forbidden: bool
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class OperationalInputsRecord:
+    benign_decision_rate: BenignDecisionRateRecord

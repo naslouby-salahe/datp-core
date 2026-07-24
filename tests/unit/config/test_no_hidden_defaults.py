@@ -13,7 +13,7 @@ import inspect
 import attrs
 
 import datp_core.config.loading as loading
-import datp_core.config.resolve.runtime as runtime_resolution
+import datp_core.config.resolution.runtime as runtime_resolution
 import datp_core.data.contracts as datasets
 import datp_core.experiments.models as experiments
 import datp_core.learning.models as learning

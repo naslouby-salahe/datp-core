@@ -7,7 +7,7 @@ import json
 
 from datp_core.analysis.artifact_access.reader import read_artifact_bytes
 from datp_core.analysis.selection.models import DittoSelectionResult, FederatedProximalSelectionResult
-from datp_core.artifacts.models import ArtifactRepository
+from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId, RunId
 from datp_core.experiments.identity import IdentityBuilder, execution_run_id

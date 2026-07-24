@@ -11,18 +11,11 @@ import polars as pl
 import pytest
 
 from datp_core.analysis.artifact_access.reader import read_artifact_bytes, read_parquet_frame
-from datp_core.artifacts.models import (
-    ArtifactCommitMetadata,
-    ArtifactCommitRequest,
-    ArtifactFormat,
-    ArtifactId,
-    ArtifactKey,
-    ArtifactKind,
-    BytesPayload,
-)
-from datp_core.artifacts.repository import AtomicArtifactRepository
+from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
+from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
+from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
 from datp_core.core.hashing import Fingerprint
-from datp_core.core.identifiers import JobId, RunId
+from datp_core.core.identifiers import ArtifactId, JobId, RunId
 
 _FINGERPRINT = Fingerprint("a" * 64)
 

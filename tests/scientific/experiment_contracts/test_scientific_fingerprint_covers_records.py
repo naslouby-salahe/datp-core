@@ -1,8 +1,9 @@
 """Scientific fingerprint sensitivity to resolved record content."""
 
-from datp_core.config.fingerprints import compute_fingerprint, unstructure_projection
+from datp_core.config.fingerprinting.canonical import compute_fingerprint
+from datp_core.config.fingerprinting.projection import unstructure_projection
 from datp_core.config.project import resolve_project_configuration
-from datp_core.core.values import PositiveInt
+from datp_core.core.numbers import PositiveInt
 from datp_core.learning.models import ModelArchitectureRecord
 
 

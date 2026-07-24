@@ -16,15 +16,18 @@ from scipy import stats
 
 from datp_core.analysis.statistics.association import simple_linear_regression, spearman_correlation
 from datp_core.analysis.statistics.models import (
+    BootstrapMethod,
     ConfidenceInterval,
     HypothesisTestResult,
     LinearRegressionResult,
     PairedSeedDifferenceRecord,
     StatisticalProcedureError,
+    StatisticalProfileRecord,
 )
-from datp_core.contracts.protocols import BootstrapMethod, StatisticalProfileRecord
 from datp_core.core.identifiers import MetricId, StatisticalProfileId, ThresholdPolicyId
-from datp_core.core.values import Probability, Seed, TypedDomainRegistry
+from datp_core.core.numbers import Probability
+from datp_core.core.registry import TypedDomainRegistry
+from datp_core.core.seeding import Seed
 
 
 def matched_pairs_rank_biserial_correlation(left: Iterable[float], right: Iterable[float]) -> float:

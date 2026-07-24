@@ -16,8 +16,8 @@ from enum import Enum
 
 from attrs import define
 
-from datp_core.artifacts.models import ArtifactId, ArtifactKey, ArtifactKind
-from datp_core.core.identifiers import ExperimentId, JobId, RunId
+from datp_core.artifacts.identity import ArtifactKey, ArtifactKind
+from datp_core.core.identifiers import ArtifactId, ExperimentId, JobId, RunId
 from datp_core.pipeline.models import StageJobContext
 
 _COLON = ":"

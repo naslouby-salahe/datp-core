@@ -12,9 +12,9 @@ from datp_core.analysis.comparisons.models import (
     PairedThresholdAnalysisResult,
 )
 from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
-from datp_core.artifacts.models import ArtifactRepository
+from datp_core.artifacts.repository.port import ArtifactRepository
+from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.contracts.frames import validate_calibration_score_frame
 from datp_core.core.identifiers import ClientId, RunId
 from datp_core.evaluation.models import calculate_pairwise_js_divergence
 from datp_core.experiments.identity import IdentityBuilder

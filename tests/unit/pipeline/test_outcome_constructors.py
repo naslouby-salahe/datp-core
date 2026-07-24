@@ -2,8 +2,8 @@
 
 import pytest
 
-from datp_core.artifacts.models import ArtifactId, ArtifactKey, ArtifactKind
-from datp_core.core.identifiers import JobId
+from datp_core.artifacts.identity import ArtifactKey, ArtifactKind
+from datp_core.core.identifiers import ArtifactId, JobId
 from datp_core.pipeline.models import JobExecutionStatus, StageJobOutcome, StageKind
 
 

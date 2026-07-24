@@ -2,18 +2,11 @@
 
 from pathlib import Path
 
-from datp_core.artifacts.models import (
-    ArtifactCommitMetadata,
-    ArtifactCommitRequest,
-    ArtifactFormat,
-    ArtifactKey,
-    ArtifactKind,
-    ArtifactParent,
-    BytesPayload,
-    FilePayload,
-)
-from datp_core.artifacts.repository import AtomicArtifactRepository
-from datp_core.config.fingerprints import compute_fingerprint
+from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
+from datp_core.artifacts.lineage import ArtifactParent
+from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload, FilePayload
+from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
+from datp_core.config.fingerprinting.canonical import compute_fingerprint
 from datp_core.core.identifiers import ArtifactId
 
 

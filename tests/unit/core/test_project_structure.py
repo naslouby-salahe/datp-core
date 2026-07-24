@@ -8,7 +8,6 @@ _EXPECTED_PACKAGES = (
     "analysis",
     "artifacts",
     "config",
-    "contracts",
     "core",
     "data",
     "evaluation",

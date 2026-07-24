@@ -1,6 +1,4 @@
-"""Strict PyYAML reader loading authored configuration files into Pydantic 2 models, plus
-environment-driven bootstrap settings that cannot be authored in repository YAML.
-"""
+"""Strict PyYAML reader loading authored configuration files into Pydantic 2 models."""
 
 from __future__ import annotations
 
@@ -10,22 +8,12 @@ from typing import Any, cast
 
 import yaml
 from pydantic import BaseModel, JsonValue, ValidationError
-from pydantic_settings import BaseSettings, SettingsConfigDict
 
-from datp_core.config.schema.datasets import AuthoredDatasetConfig
-from datp_core.config.schema.experiments import AuthoredExperimentsCatalogueConfig
-from datp_core.config.schema.protocols import AuthoredProtocolsConfig
-from datp_core.config.schema.runtime import AuthoredRuntimeConfig
-
-
-class ConfigurationError(Exception):
-    """Typed error for configuration loading, duplicate key, or schema validation failures."""
-
-    def __init__(self, message: str, source_path: Path | None = None, cause: Exception | None = None) -> None:
-        formatted = f"[{source_path}] {message}" if source_path else message
-        super().__init__(formatted)
-        self.source_path = source_path
-        self.cause = cause
+from datp_core.config.authored.datasets import AuthoredDatasetConfig
+from datp_core.config.authored.experiments import AuthoredExperimentsCatalogueConfig
+from datp_core.config.authored.protocols import AuthoredProtocolsConfig
+from datp_core.config.authored.runtime import AuthoredRuntimeConfig
+from datp_core.config.errors import ConfigurationError
 
 
 class _DuplicateCheckingSafeLoader(yaml.SafeLoader):
@@ -55,8 +43,7 @@ class YamlConfigurationReader:
         except yaml.YAMLError as exc:
             raise ConfigurationError(f"YAML parsing error: {exc}", source_path=file_path, cause=exc) from exc
         except ConfigurationError as exc:
-            exc.source_path = file_path
-            raise exc
+            raise ConfigurationError(str(exc), source_path=file_path, cause=exc.cause) from exc
 
         if not isinstance(data, dict):
             raise ConfigurationError(
@@ -113,34 +100,3 @@ class YamlConfigurationReader:
         protocols = cls.read_protocols_document(protocols_path)
         runtime = cls.read_runtime_document(runtime_path)
         return datasets, experiments, protocols, runtime
-
-
-class RuntimeBootstrapSettings(BaseSettings):
-    """External bootstrap settings that cannot be authored in repository YAML."""
-
-    model_config = SettingsConfigDict(
-        env_prefix="DATP_",
-        env_file=".env",
-        env_file_encoding="utf-8",
-        extra="forbid",
-    )
-
-    repository_root: Path  # required — must be set via DATP_REPOSITORY_ROOT env var
-    config_root: Path | None = None
-    environment_identity: str = "local_linux"
-    execution_profile: str
-
-
-def resolve_config_root(settings: RuntimeBootstrapSettings) -> Path:
-    """Single authority for deriving the configuration root from bootstrap settings.
-
-    A relative or omitted ``config_root`` resolves against ``repository_root`` -- never the
-    process working directory. An absolute ``config_root`` is used as authored, even if it
-    points outside ``repository_root`` (an explicit override, not an accident of cwd).
-    """
-    repository_root = settings.repository_root.resolve()
-    if settings.config_root is None:
-        return (repository_root / "configs").resolve()
-    if settings.config_root.is_absolute():
-        return settings.config_root.resolve()
-    return (repository_root / settings.config_root).resolve()
