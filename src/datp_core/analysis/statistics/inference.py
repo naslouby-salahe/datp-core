@@ -31,13 +31,17 @@ from datp_core.core.seeding import Seed
 
 
 def matched_pairs_rank_biserial_correlation(left: Iterable[float], right: Iterable[float]) -> float:
-    """Return the signed-rank effect size for paired observations, with average tie ranks."""
+    """Return the signed-rank effect size for paired observations, with average tie ranks.
+
+    When all paired differences are zero the effect size is 0.0 — there is no evidence of
+    a directional difference.
+    """
     differences = tuple(float(a) - float(b) for a, b in zip(left, right, strict=True))
     if not differences or not all(isfinite(value) for value in differences):
         raise StatisticalProcedureError("Rank-biserial correlation requires finite paired observations")
     nonzero = tuple(value for value in differences if not math.isclose(value, 0.0, abs_tol=0.0))
     if not nonzero:
-        raise StatisticalProcedureError("Rank-biserial correlation is undefined when all paired differences are zero")
+        return 0.0
     ranks = _average_ranks(tuple(abs(value) for value in nonzero))
     positive = sum(rank for difference, rank in zip(nonzero, ranks, strict=True) if difference > 0.0)
     negative = sum(rank for difference, rank in zip(nonzero, ranks, strict=True) if difference < 0.0)
@@ -130,6 +134,14 @@ class StatisticalAnalysisUseCase:
 
     @staticmethod
     def _compute_wilcoxon_signed_rank(x: np.ndarray, y: np.ndarray) -> HypothesisTestResult:
+        differences = x - y
+        nonzero = differences[np.abs(differences) > 0.0]
+        if len(nonzero) == 0:
+            return HypothesisTestResult(
+                test_name="wilcoxon_signed_rank",
+                statistic=0.0,
+                p_value=1.0,
+            )
         res = stats.wilcoxon(x, y, zero_method="wilcox", correction=True)
         statistic, p_value = cast("tuple[float, float]", res)
         return HypothesisTestResult(
@@ -144,14 +156,19 @@ class StatisticalAnalysisUseCase:
         analysis_seed: int,
         method: str,
     ) -> ConfidenceInterval:
+        if not np.isfinite(data).all():
+            raise StatisticalProcedureError("Bootstrap requires finite paired seed differences")
+        if math.isclose(float(np.ptp(data)), 0.0, abs_tol=0.0):
+            return ConfidenceInterval(
+                lower_bound=float(np.mean(data)),
+                upper_bound=float(np.mean(data)),
+                confidence_level=Probability(confidence_level),
+                method=method,
+            )
         if method == BootstrapMethod.BCA_BOOTSTRAP and len(data) < 10:
             raise StatisticalProcedureError("BCa requires at least ten valid paired seed differences")
         if method == BootstrapMethod.PERCENTILE_BOOTSTRAP and len(data) < 2:
             raise StatisticalProcedureError("Percentile bootstrap requires at least two valid paired seed differences")
-        if not np.isfinite(data).all():
-            raise StatisticalProcedureError("BCa requires finite paired seed differences")
-        if math.isclose(float(np.ptp(data)), 0.0, abs_tol=0.0):
-            raise StatisticalProcedureError("BCa is degenerate for identical paired seed differences")
 
         try:
             res = stats.bootstrap(
@@ -163,9 +180,9 @@ class StatisticalAnalysisUseCase:
                 rng=np.random.default_rng(analysis_seed),
             )
         except ValueError as exc:
-            raise StatisticalProcedureError(f"BCa failed: {exc}") from exc
+            raise StatisticalProcedureError(f"Bootstrap failed: {exc}") from exc
         if not np.isfinite((res.confidence_interval.low, res.confidence_interval.high)).all():
-            raise StatisticalProcedureError("BCa produced a non-finite confidence interval")
+            raise StatisticalProcedureError("Bootstrap produced a non-finite confidence interval")
         return ConfidenceInterval(
             lower_bound=float(res.confidence_interval.low),
             upper_bound=float(res.confidence_interval.high),

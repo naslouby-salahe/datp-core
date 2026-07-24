@@ -7,7 +7,7 @@ from attrs import define
 
 from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey
 from datp_core.artifacts.lineage import ArtifactParent
-from datp_core.core.hashing import Fingerprint
+from datp_core.core.hashing import Checksum, Fingerprint
 from datp_core.core.identifiers import ExperimentId
 from datp_core.core.seeding import Seed
 
@@ -27,6 +27,7 @@ class ArtifactCommitMetadata:
     environment_identity: str
     experiment_id: ExperimentId | None = None
     seed: Seed | None = None
+    source_inventory_fingerprint: Checksum | None = None
 
 
 @define(frozen=True, slots=True, kw_only=True)

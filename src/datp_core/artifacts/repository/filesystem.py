@@ -15,7 +15,7 @@ from datp_core.artifacts.repository.models import ArtifactCommitResult, Artifact
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.artifacts.repository.reuse import assess_compatibility
 from datp_core.artifacts.repository.transaction import execute_atomic_transaction
-from datp_core.core.hashing import Fingerprint, compute_file_checksum
+from datp_core.core.hashing import Checksum, Fingerprint, compute_file_checksum
 
 
 class AtomicArtifactRepository(ArtifactRepository):
@@ -59,12 +59,17 @@ class AtomicArtifactRepository(ArtifactRepository):
         artifact_key: ArtifactKey,
         scientific_fingerprint: Fingerprint,
         execution_fingerprint: Fingerprint,
+        source_inventory_fingerprint: Checksum | None = None,
     ) -> ArtifactReuseDecision:
         result = self.inspect(relative_path)
         if not result.found or result.manifest is None:
             return ArtifactReuseDecision(can_reuse=False, reason=(ArtifactReuseReason.ARTIFACT_NOT_COMMITTED,))
         compatibility = assess_compatibility(
-            result.manifest, artifact_key, scientific_fingerprint, execution_fingerprint
+            result.manifest,
+            artifact_key,
+            scientific_fingerprint,
+            execution_fingerprint,
+            source_inventory_fingerprint=source_inventory_fingerprint,
         )
         return ArtifactReuseDecision(
             can_reuse=compatibility.compatible,

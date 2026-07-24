@@ -43,15 +43,15 @@ def _population_suffix(ctx: StageJobContext) -> str:
 def _execution_suffix(ctx: StageJobContext) -> str:
     suffixes = ()
     if ctx.federated_proximal_mu is not None:
-        suffixes += (f":mu_{ctx.federated_proximal_mu:g}",)
+        suffixes += (f":mu_{ctx.federated_proximal_mu:.17g}",)
     if ctx.ditto_proximal_weight is not None:
-        suffixes += (f":lambda_{ctx.ditto_proximal_weight:g}",)
+        suffixes += (f":lambda_{ctx.ditto_proximal_weight:.17g}",)
     if ctx.threshold_quantile is not None:
-        suffixes += (f":q_{ctx.threshold_quantile:g}",)
+        suffixes += (f":q_{ctx.threshold_quantile:.17g}",)
     if ctx.shrinkage_weight is not None:
-        suffixes += (f":shrinkage_{ctx.shrinkage_weight:g}",)
+        suffixes += (f":shrinkage_{ctx.shrinkage_weight:.17g}",)
     if ctx.federated_summary_fixed_k is not None:
-        suffixes += (f":fixed_k_{ctx.federated_summary_fixed_k:g}",)
+        suffixes += (f":fixed_k_{ctx.federated_summary_fixed_k:.17g}",)
     if ctx.fingerprint_features is not None:
         if not ctx.fingerprint_features or any(not feature or ":" in feature for feature in ctx.fingerprint_features):
             raise ValueError("Fingerprint-feature identity requires non-empty delimiter-free feature names")

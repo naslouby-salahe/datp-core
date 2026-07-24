@@ -57,3 +57,4 @@ class ArtifactManifest:
     environment_identity: str
     experiment_id: ExperimentId | None = None
     seed: Seed | None = None
+    source_inventory_fingerprint: Checksum | None = None

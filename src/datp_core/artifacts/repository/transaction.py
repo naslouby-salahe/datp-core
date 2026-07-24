@@ -96,6 +96,7 @@ def execute_atomic_transaction(
                 environment_identity=metadata.environment_identity,
                 experiment_id=metadata.experiment_id,
                 seed=metadata.seed,
+                source_inventory_fingerprint=metadata.source_inventory_fingerprint,
             )
 
             manifest_path = tmp_dir / "manifest.json"

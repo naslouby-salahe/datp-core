@@ -113,6 +113,7 @@ def _analyze_cluster_membership(
 ) -> ClusterMembershipStabilityResult:
     memberships: dict[int, dict[str, int]] = {}
     seed_summaries: list[ClusterStabilitySeedSummary] = []
+    observed_labels: set[int] = set()
     for seed in seeds:
         context = StageJobContext(
             experiment_id=experiment.identifier, seed=seed.value, evaluation_label=analysis.source_evaluation
@@ -121,43 +122,75 @@ def _analyze_cluster_membership(
         threshold_frame = read_parquet_frame(
             repository, run_id, IdentityBuilder.threshold_job_id(context), missing_message=missing
         )
-        if "cluster_label" not in threshold_frame.columns or threshold_frame["cluster_label"].null_count() > 0:
+        if "cluster_label" not in threshold_frame.columns:
             raise ValueError(f"Cluster labels are unavailable for seed {seed.value}")
+        if threshold_frame["cluster_label"].null_count() > 0:
+            raise ValueError(f"Cluster labels contain nulls for seed {seed.value}")
+        threshold_client_ids = threshold_frame["client_id"].to_list()
+        if len(threshold_client_ids) != len(set(threshold_client_ids)):
+            raise ValueError(f"Duplicate client_id in threshold frame for seed {seed.value}")
+
+        labels = {
+            str(client): int(label)
+            for client, label in threshold_frame.select("client_id", "cluster_label").iter_rows()
+        }
+        memberships[int(seed.value)] = labels
+        observed_labels.update(labels.values())
+
+        cluster_membership_counts: dict[int, int] = {}
+        for label_value in threshold_frame["cluster_label"].to_list():
+            label_int = int(label_value)
+            cluster_membership_counts[label_int] = cluster_membership_counts.get(label_int, 0) + 1
+
         metric_frame = validate_client_metric_frame(
             read_parquet_frame(repository, run_id, IdentityBuilder.evaluation_job_id(context), missing_message=missing)
         )
+        metric_client_ids = metric_frame["client_id"].to_list()
+        if len(metric_client_ids) != len(set(metric_client_ids)):
+            raise ValueError(f"Duplicate client_id in metric frame for seed {seed.value}")
+
         joined = threshold_frame.join(
             metric_frame.select("client_id", "false_positive_rate", "false_positive_rate_status"), on="client_id"
         )
-        labels = {str(client): int(label) for client, label in joined.select("client_id", "cluster_label").iter_rows()}
-        memberships[int(seed.value)] = labels
-        clusters: dict[int, list[tuple[float, float]]] = {}
+        fpr_clusters: dict[int, list[tuple[float, float]]] = {}
         for label, threshold, fpr, status in joined.select(
             "cluster_label", "threshold", "false_positive_rate", "false_positive_rate_status"
         ).iter_rows():
             if status == "available" and fpr is not None:
-                clusters.setdefault(int(label), []).append((float(threshold), float(fpr)))
+                fpr_clusters.setdefault(int(label), []).append((float(threshold), float(fpr)))
+
         seed_summaries.append(
             ClusterStabilitySeedSummary(
                 seed=int(seed.value),
                 cluster_membership_per_client=labels,
-                cluster_size={str(label): len(values) for label, values in clusters.items()},
-                singleton_cluster_flag=any(len(values) == 1 for values in clusters.values()),
-                empty_cluster_flag=False,
-                within_cluster_threshold_dispersion=mean_group_std(list(clusters.values()), 0),
-                within_cluster_fpr_dispersion=mean_group_std(list(clusters.values()), 1),
-                across_cluster_threshold_dispersion=group_mean_std(list(clusters.values()), 0),
-                across_cluster_mean_fpr_dispersion=group_mean_std(list(clusters.values()), 1),
+                cluster_size={str(label): cluster_membership_counts.get(label, 0) for label in cluster_membership_counts},
+                singleton_cluster_flag=any(count == 1 for count in cluster_membership_counts.values()),
+                empty_cluster_flag=any(count == 0 for count in cluster_membership_counts.values()),
+                within_cluster_threshold_dispersion=mean_group_std(list(fpr_clusters.values()), 0),
+                within_cluster_fpr_dispersion=mean_group_std(list(fpr_clusters.values()), 1),
+                across_cluster_threshold_dispersion=group_mean_std(list(fpr_clusters.values()), 0),
+                across_cluster_mean_fpr_dispersion=group_mean_std(list(fpr_clusters.values()), 1),
             )
         )
+
+    sorted_seeds = sorted(memberships)
+    reference = memberships[sorted_seeds[0]]
+    reference_clients = set(reference)
+    for seed_value in sorted_seeds[1:]:
+        if set(memberships[seed_value]) != reference_clients:
+            raise ValueError(
+                f"Incompatible client populations across seeds for ARI computation: "
+                f"seed {sorted_seeds[0]} has {len(reference_clients)} clients, "
+                f"seed {seed_value} has {len(memberships[seed_value])} clients"
+            )
+
     aris = [
         compute_adjusted_rand_index(
             np.array([memberships[left][client] for client in sorted(memberships[left])]),
             np.array([memberships[right][client] for client in sorted(memberships[left])]),
         )
-        for index, left in enumerate(sorted(memberships))
-        for right in sorted(memberships)[index + 1 :]
-        if set(memberships[left]) == set(memberships[right])
+        for index, left in enumerate(sorted_seeds)
+        for right in sorted_seeds[index + 1 :]
     ]
     return ClusterMembershipStabilityResult(
         analysis_label=analysis.label,

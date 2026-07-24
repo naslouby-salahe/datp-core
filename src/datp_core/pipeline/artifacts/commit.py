@@ -11,6 +11,7 @@ from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitR
 from datp_core.artifacts.repository.models import ArtifactCommitResult
 from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.core.hashing import Checksum
 from datp_core.core.seeding import Seed
 from datp_core.pipeline.stages.context import StageJobContext
 
@@ -32,6 +33,7 @@ def commit_artifact(
     parents: tuple[ArtifactParent, ...],
     payload: BytesPayload | FilePayload,
     clock: Callable[[], float] = _default_clock,
+    source_inventory_fingerprint: Checksum | None = None,
 ) -> ArtifactCommitResult:
     return repository.commit(
         ArtifactCommitRequest(
@@ -47,6 +49,7 @@ def commit_artifact(
                 environment_identity=config.runtime.bootstrap.environment_identity,
                 experiment_id=context.experiment_id,
                 seed=Seed(context.seed) if context.seed is not None else None,
+                source_inventory_fingerprint=source_inventory_fingerprint,
             ),
             payload=payload,
         )

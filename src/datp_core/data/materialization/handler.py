@@ -85,11 +85,14 @@ class DatasetMaterializationStageHandler:
                 stage=job.stage,
                 error_message="Dataset setup and job partition condition are incompatible",
             )
+        inventory = build_source_inventory(dataset)
+        source_fingerprint = inventory.fingerprint()
         reuse = self._repository.assess_reuse(
             relative_path,
             job.output,
             self._config.scientific_fingerprint,
             self._config.execution_fingerprint,
+            source_inventory_fingerprint=source_fingerprint,
         )
         if reuse.can_reuse:
             companion_artifacts = (
@@ -105,6 +108,7 @@ class DatasetMaterializationStageHandler:
                     companion_key,
                     self._config.scientific_fingerprint,
                     self._config.execution_fingerprint,
+                    source_inventory_fingerprint=source_fingerprint,
                 ).can_reuse
                 for companion_path, companion_key in companion_artifacts
             )
@@ -128,8 +132,6 @@ class DatasetMaterializationStageHandler:
                 stage=job.stage,
                 error_message=str(exc),
             )
-
-        inventory = build_source_inventory(dataset)
 
         try:
             with TemporaryDirectory(prefix=f"datp_{dataset.dataset_id.value}_") as staging_directory:
@@ -180,6 +182,7 @@ class DatasetMaterializationStageHandler:
                     relative_path=relative_path,
                     parents=artifact_parents(self._config, job.inputs),
                     payload=FilePayload(source_file=str(payload.staged_path)),
+                    source_inventory_fingerprint=source_fingerprint,
                 )
                 if not commit.success:
                     return StageJobOutcome.failed(
@@ -196,6 +199,7 @@ class DatasetMaterializationStageHandler:
                     relative_path=manifest_relative_path,
                     parents=artifact_parents(self._config, (job.output,)),
                     payload=BytesPayload(payload_bytes=split_manifest_payload),
+                    source_inventory_fingerprint=source_fingerprint,
                 )
                 if not manifest_commit.success:
                     return StageJobOutcome.failed(
@@ -212,6 +216,7 @@ class DatasetMaterializationStageHandler:
                     relative_path=readiness_relative_path,
                     parents=artifact_parents(self._config, (job.output,)),
                     payload=BytesPayload(payload_bytes=readiness.encode()),
+                    source_inventory_fingerprint=source_fingerprint,
                 )
                 if not readiness_commit.success:
                     return StageJobOutcome.failed(
@@ -228,6 +233,7 @@ class DatasetMaterializationStageHandler:
                     relative_path=preprocessing_relative_path,
                     parents=artifact_parents(self._config, (job.output,)),
                     payload=BytesPayload(payload_bytes=payload.preprocessing_evidence),
+                    source_inventory_fingerprint=source_fingerprint,
                 )
                 if not preprocessing_commit.success:
                     return StageJobOutcome.failed(
@@ -251,6 +257,7 @@ class DatasetMaterializationStageHandler:
                         relative_path=partition_relative_path,
                         parents=artifact_parents(self._config, (job.output,)),
                         payload=BytesPayload(payload_bytes=payload.partition_evidence),
+                        source_inventory_fingerprint=source_fingerprint,
                     )
                     if not partition_commit.success:
                         return StageJobOutcome.failed(

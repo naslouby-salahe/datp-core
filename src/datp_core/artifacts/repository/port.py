@@ -7,7 +7,7 @@ from typing import Protocol, runtime_checkable
 from datp_core.artifacts.identity import ArtifactKey
 from datp_core.artifacts.payloads import ArtifactCommitRequest
 from datp_core.artifacts.repository.models import ArtifactCommitResult, ArtifactLookupResult, ArtifactReuseDecision
-from datp_core.core.hashing import Fingerprint
+from datp_core.core.hashing import Checksum, Fingerprint
 
 
 @runtime_checkable
@@ -26,4 +26,5 @@ class ArtifactRepository(Protocol):
         artifact_key: ArtifactKey,
         scientific_fingerprint: Fingerprint,
         execution_fingerprint: Fingerprint,
+        source_inventory_fingerprint: Checksum | None = None,
     ) -> ArtifactReuseDecision: ...

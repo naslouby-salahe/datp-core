@@ -3,7 +3,6 @@
 import pytest
 
 from datp_core.analysis.statistics.inference import matched_pairs_rank_biserial_correlation
-from datp_core.analysis.statistics.models import StatisticalProcedureError
 
 
 def test_rank_biserial_uses_signed_average_ranks_and_excludes_zero_differences() -> None:
@@ -11,5 +10,7 @@ def test_rank_biserial_uses_signed_average_ranks_and_excludes_zero_differences()
         1.0 / 3.0
     )
 
-    with pytest.raises(StatisticalProcedureError, match="all paired differences are zero"):
-        matched_pairs_rank_biserial_correlation((1.0,), (1.0,))
+
+def test_rank_biserial_returns_zero_when_all_differences_are_zero() -> None:
+    assert matched_pairs_rank_biserial_correlation((1.0,), (1.0,)) == 0.0
+    assert matched_pairs_rank_biserial_correlation((1.0, 2.0, 3.0), (1.0, 2.0, 3.0)) == 0.0

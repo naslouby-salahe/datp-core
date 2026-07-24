@@ -51,10 +51,27 @@ class ThresholdConstructionStageHandler:
                 error_message="Threshold construction requires policy, population, and seed",
             )
         relative_path = f"runs/{run_id.value}/{job.job_id.value}"
-        if self._repository.assess_reuse(
+        diagnostics_key = ArtifactKey(
+            artifact_id=ArtifactId(f"{job.output.artifact_id.value}:diagnostics"),
+            kind=ArtifactKind.THRESHOLD_DIAGNOSTICS,
+        )
+        diagnostics_relative = f"{relative_path}.diagnostics"
+        reuse = self._repository.assess_reuse(
             relative_path, job.output, self._config.scientific_fingerprint, self._config.execution_fingerprint
-        ).can_reuse:
-            return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+        )
+        if reuse.can_reuse:
+            if self._repository.assess_reuse(
+                diagnostics_relative,
+                diagnostics_key,
+                self._config.scientific_fingerprint,
+                self._config.execution_fingerprint,
+            ).can_reuse:
+                return StageJobOutcome.reused(job_id=job.job_id, stage=job.stage, produced_artifact=job.output)
+            return StageJobOutcome.failed(
+                job_id=job.job_id,
+                stage=job.stage,
+                error_message="Threshold artifact is present but diagnostics companion is missing or incompatible",
+            )
         calibration_context = score_context(
             job.context, retain_calibration_subset=job.context.calibration_sample_count is not None
         )
@@ -135,11 +152,6 @@ class ThresholdConstructionStageHandler:
                 error_message=commit.error_message or "threshold artifact commit failed",
             )
         if threshold_set is not None and threshold_set.diagnostics is not None:
-            diagnostics_key = ArtifactKey(
-                artifact_id=ArtifactId(f"{job.output.artifact_id.value}:diagnostics"),
-                kind=ArtifactKind.THRESHOLD_DIAGNOSTICS,
-            )
-            diagnostics_relative = f"{relative_path}.diagnostics"
             diagnostics_payload = diagnostics_to_json(threshold_set.diagnostics)
             diagnostics_commit = commit_artifact(
                 self._repository,

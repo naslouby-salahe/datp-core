@@ -60,6 +60,7 @@ class ArtifactReuseReason(Enum):
     KEY_MISMATCH = "artifact_key_mismatch"
     SCIENTIFIC_FINGERPRINT_MISMATCH = "scientific_fingerprint_mismatch"
     EXECUTION_FINGERPRINT_MISMATCH = "execution_fingerprint_mismatch"
+    SOURCE_INVENTORY_FINGERPRINT_MISMATCH = "source_inventory_fingerprint_mismatch"
 
 
 @define(frozen=True, slots=True, kw_only=True)
