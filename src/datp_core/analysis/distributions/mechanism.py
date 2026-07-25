@@ -14,11 +14,11 @@ from datp_core.analysis.distributions.models import (
     DistributionMechanismTradeoffResult,
     DistributionMechanismTradeoffSeedResult,
 )
-from datp_core.artifacts.repository.port import ArtifactRepository
+from datp_core.analysis.execution.inputs import AnalysisInputBundle
 from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
 from datp_core.artifacts.schemas.scores import validate_test_score_frame
 from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
-from datp_core.core.identifiers import ExperimentId
+from datp_core.artifacts.store import ArtifactStore
 from datp_core.core.seeding import Seed
 from datp_core.evaluation.distributions import (
     ClientScoreDistributionRecord,
@@ -26,7 +26,6 @@ from datp_core.evaluation.distributions import (
     threshold_tradeoff,
 )
 from datp_core.experiments import DistributionMechanismAnalysisRecord, ExperimentRecord
-from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.planning import score_context
 from datp_core.pipeline.stages.context import StageJobContext
 
@@ -35,10 +34,10 @@ def distribution_seed_result(
     experiment: ExperimentRecord,
     seed: int,
     evaluations: tuple[str, ...],
-    experiment_id: ExperimentId,
     client_id: str | None,
     *,
-    repository: ArtifactRepository,
+    store: ArtifactStore,
+    inputs: AnalysisInputBundle,
 ) -> DistributionMechanismSeedResult:
     result: dict[str, Mapping[str, ClientScoreDistributionRecord]] = {}
     for label in evaluations:
@@ -52,14 +51,20 @@ def distribution_seed_result(
         )
         missing = f"Distribution artifacts are unavailable for seed {seed}, label '{label}'"
         threshold_frame = validate_threshold_frame(
-            read_parquet_frame(repository, experiment_id, IdentityBuilder.threshold_node_key(context), missing_message=missing)
+            read_parquet_frame(
+                store, inputs.thresholds(context), missing_message=missing
+            )
         )
         metric_frame = validate_client_metric_frame(
-            read_parquet_frame(repository, experiment_id, IdentityBuilder.evaluation_node_key(context), missing_message=missing)
+            read_parquet_frame(
+                store, inputs.evaluation_metrics(context), missing_message=missing
+            )
         )
         score_frame = validate_test_score_frame(
             read_parquet_frame(
-                repository, experiment_id, IdentityBuilder.test_score_node_key(score_context(context)), missing_message=missing
+                store,
+                inputs.test_scores(score_context(context)),
+                missing_message=missing,
             )
         )
         result[label] = client_score_distributions(threshold_frame, metric_frame, score_frame, client_id)
@@ -69,14 +74,14 @@ def distribution_seed_result(
 def analyze_distribution_mechanism(
     analysis: DistributionMechanismAnalysisRecord,
     *,
-    repository: ArtifactRepository,
+    store: ArtifactStore,
+    inputs: AnalysisInputBundle,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    experiment_id: ExperimentId,
 ) -> DistributionMechanismAnalysisResult:
     seed_results = tuple(
         distribution_seed_result(
-            experiment, seed.value, analysis.source_evaluations, experiment_id, None, repository=repository
+            experiment, seed.value, analysis.source_evaluations, None, store=store, inputs=inputs
         )
         for seed in seeds
     )

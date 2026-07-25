@@ -4,28 +4,28 @@ from __future__ import annotations
 
 import networkx as nx
 
+from datp_core.pipeline.graph.key import GraphNodeKey
 from datp_core.pipeline.stages.jobs import StageJob
-from datp_core.pipeline.stages.node_key import StageNodeKey
 
 
 class DuplicateJobError(ValueError):
-    """A StageNodeKey appears more than once in the graph."""
+    """A graph-private key appears more than once in the graph."""
 
 
 class MissingDependencyError(ValueError):
-    """A job depends on a StageNodeKey not present in the graph."""
+    """A job depends on a graph-private key not present in the graph."""
 
 
-class DuplicateOutputArtifactError(ValueError):
-    """Multiple jobs declare the same output artifact."""
+class DuplicateOutputPathError(ValueError):
+    """Multiple jobs declare the same semantic output path."""
 
 
 class PlanningGraph:
     def __init__(self, jobs: tuple[StageJob, ...]) -> None:
-        self._jobs: dict[StageNodeKey, StageJob] = {}
+        self._jobs: dict[GraphNodeKey, StageJob] = {}
         for j in jobs:
             if j.node_key in self._jobs:
-                raise DuplicateJobError(f"Duplicate StageNodeKey in planning graph: {j.node_key.label}")
+                raise DuplicateJobError(f"Duplicate graph node key: {j.node_key.label}")
             self._jobs[j.node_key] = j
 
         job_ids = set(self._jobs.keys())
@@ -36,15 +36,16 @@ class PlanningGraph:
                         f"Job '{j.node_key.label}' depends on missing key '{dep_id.label}'"
                     )
 
-        outputs: dict[StageNodeKey, StageJob] = {}
+        outputs: dict[str, StageJob] = {}
         for j in jobs:
-            if j.output.node_key in outputs:
-                other = outputs[j.output.node_key]
-                raise DuplicateOutputArtifactError(
-                    f"Jobs '{j.node_key.label}' and '{other.node_key.label}' both declare output "
-                    f"'{j.output.node_key.label}'"
-                )
-            outputs[j.output.node_key] = j
+            for output in j.outputs:
+                if output.relative_path in outputs:
+                    other = outputs[output.relative_path]
+                    raise DuplicateOutputPathError(
+                        f"Jobs '{j.node_key.label}' and '{other.node_key.label}' both declare output "
+                        f"'{output.relative_path}'"
+                    )
+                outputs[output.relative_path] = j
 
         self._graph = nx.DiGraph()
         for j in jobs:
@@ -64,5 +65,5 @@ class PlanningGraph:
     def edge_count(self) -> int:
         return self._graph.number_of_edges()
 
-    def _has_job(self, node_key: StageNodeKey) -> bool:
+    def _has_job(self, node_key: GraphNodeKey) -> bool:
         return node_key in self._graph

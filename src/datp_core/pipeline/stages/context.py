@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 from datp_core.core.identifiers import ExperimentId, PopulationId, ThresholdPolicyId
 
 if TYPE_CHECKING:
+    from datp_core.analysis.execution.inputs import PrerequisiteExperimentResult
     from datp_core.experiments.catalogue.evaluations import RecalibrationMode
 
 
@@ -31,6 +32,7 @@ class StageJobContext:
     calibration_sample_count: int | None = None
     calibration_replicate: int | None = None
     fingerprint_features: tuple[str, ...] | None = None
+    prerequisite_results: tuple[PrerequisiteExperimentResult, ...] = ()
 
     def __post_init__(self) -> None:
         _validate_context(self)

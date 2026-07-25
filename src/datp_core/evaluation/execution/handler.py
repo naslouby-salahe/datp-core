@@ -1,4 +1,4 @@
-"""Operating-point evaluation stage handler."""
+"""Operating-point evaluation from planner-supplied threshold and test-score files."""
 
 from __future__ import annotations
 
@@ -6,65 +6,44 @@ from io import BytesIO
 
 import polars as pl
 
-from datp_core.artifacts.identity import ArtifactFormat
-from datp_core.artifacts.payloads import BytesPayload
-from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
 from datp_core.artifacts.schemas.scores import validate_test_score_frame
 from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
+from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.evaluation.metrics.auroc import compute_client_auroc
-from datp_core.evaluation.metrics.operating_point import (
-    compute_operating_point_metrics,
-    ineligible_client_metrics,
-)
-from datp_core.experiments.identity import IdentityBuilder
-from datp_core.experiments.planning import score_context
-from datp_core.pipeline.artifacts.commit import commit_artifact
-from datp_core.pipeline.artifacts.lineage import artifact_parents
+from datp_core.evaluation.metrics.operating_point import compute_operating_point_metrics, ineligible_client_metrics
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
-from datp_core.pipeline.stages.node_key import node_path
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
 
 class OperatingPointEvaluationStageHandler:
     stage = StageKind.OPERATING_POINT_EVALUATION
 
-    def __init__(self, config: ResolvedProjectConfiguration, repository: ArtifactRepository) -> None:
+    def __init__(self, config: ResolvedProjectConfiguration, store: ArtifactStore) -> None:
         self._config = config
-        self._repository = repository
+        self._store = store
 
     def execute(self, job: StageJob) -> StageJobOutcome:
-        relative_path = node_path(job.node_key)
-        score_ctx = score_context(job.context)
-        threshold_path = node_path(IdentityBuilder.threshold_node_key(job.context))
-        score_path = node_path(IdentityBuilder.test_score_node_key(score_ctx))
-        thresholds = self._repository.read(threshold_path)
-        scores = self._repository.read(score_path)
-        if not thresholds.found or thresholds.payload_bytes is None:
-            return StageJobOutcome.failed(
-                node_key=job.node_key, stage=job.stage, error_message="Threshold artifact is unavailable"
-            )
-        if not scores.found or scores.payload_bytes is None:
-            return StageJobOutcome.failed(
-                node_key=job.node_key, stage=job.stage, error_message="Test score artifact is unavailable"
-            )
         try:
-            threshold_frame = validate_threshold_frame(pl.read_parquet(BytesIO(thresholds.payload_bytes)))
-            score_frame = validate_test_score_frame(pl.read_parquet(BytesIO(scores.payload_bytes)))
-            evaluation = score_frame.join(threshold_frame.select("client_id", "threshold"), on="client_id", how="left")
-            if evaluation["threshold"].null_count() > 0 and job.context.calibration_sample_count is None:
+            thresholds = validate_threshold_frame(
+                pl.read_parquet(BytesIO(self._store.read_bytes(job.input_path("thresholds"))))
+            )
+            scores = validate_test_score_frame(
+                pl.read_parquet(BytesIO(self._store.read_bytes(job.input_path("test_scores"))))
+            )
+            joined = scores.join(thresholds.select("client_id", "threshold"), on="client_id", how="left")
+            if joined["threshold"].null_count() > 0 and job.context.calibration_sample_count is None:
                 raise ValueError("Threshold artifact does not cover every scored client")
-            eligible = evaluation.filter(pl.col("threshold").is_not_null())
+            eligible = joined.filter(pl.col("threshold").is_not_null())
             if eligible.is_empty():
-                metrics = ineligible_client_metrics(evaluation)
-            elif evaluation["threshold"].null_count() > 0:
-                metrics = pl.concat((compute_operating_point_metrics(eligible), ineligible_client_metrics(evaluation)))
+                metrics = ineligible_client_metrics(joined)
+            elif joined["threshold"].null_count() > 0:
+                metrics = pl.concat((compute_operating_point_metrics(eligible), ineligible_client_metrics(joined)))
             else:
                 metrics = compute_operating_point_metrics(eligible)
-            auroc = compute_client_auroc(score_frame)
-            metrics = metrics.join(auroc, on="client_id", how="left")
+            metrics = metrics.join(compute_client_auroc(scores), on="client_id", how="left")
             metrics = metrics.with_columns(
                 pl.lit(job.context.threshold_policy_id.value if job.context.threshold_policy_id else None).alias(
                     "policy_id"
@@ -72,30 +51,9 @@ class OperatingPointEvaluationStageHandler:
                 pl.lit(job.context.seed).alias("seed"),
             )
             validate_client_metric_frame(metrics)
+            payload = BytesIO()
+            metrics.write_parquet(payload)
+            self._store.write_bytes_atomic(job.output_path("client_metrics"), payload.getvalue())
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message=str(exc))
-        payload = BytesIO()
-        metrics.write_parquet(payload)
-        commit = commit_artifact(
-            self._repository,
-            self._config,
-            job.context,
-            artifact_key=job.output,
-            artifact_format=ArtifactFormat.PARQUET,
-            relative_path=relative_path,
-            parents=artifact_parents(
-                self._config,
-                (
-                    (IdentityBuilder.thresholds_key(job.context), threshold_path),
-                    (IdentityBuilder.test_scores_key(score_ctx), score_path),
-                ),
-            ),
-            payload=BytesPayload(payload_bytes=payload.getvalue()),
-        )
-        if not commit.success:
-            return StageJobOutcome.failed(
-                node_key=job.node_key,
-                stage=job.stage,
-                error_message=commit.error_message or "metric artifact commit failed",
-            )
-        return StageJobOutcome.succeeded(node_key=job.node_key, stage=job.stage, produced_artifact=job.output)
+        return StageJobOutcome.succeeded(node_key=job.node_key, stage=job.stage, produced_outputs=job.outputs)

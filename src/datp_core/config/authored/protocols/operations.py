@@ -50,9 +50,6 @@ class CommunicationEstimationContractConfig(StrictFrozenConfigModel):
     candidate_grid_payload: str
     model_exchange: ModelExchangeConfig
     checkpoint_storage: CheckpointStorageConfig
-    filename_match_is_not_lineage_evidence: bool
-    frozen_artifacts_immutable: bool
-    ambiguous_latest_reference: str
 
 
 class MetricFormulaConfig(StrictFrozenConfigModel):

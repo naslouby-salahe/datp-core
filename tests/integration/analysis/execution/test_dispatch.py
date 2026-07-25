@@ -5,8 +5,10 @@ analyses must never reach the generic dispatcher."""
 from __future__ import annotations
 
 import pytest
+from attrs import evolve
 
 from datp_core.analysis.execution import dispatch as dispatch_module
+from datp_core.analysis.execution.inputs import AnalysisInputBundle, PrerequisiteExperimentResult
 from datp_core.core.identifiers import ExperimentId, StatisticalProfileId
 from datp_core.experiments import (
     AbsorptionAnalysisRecord,
@@ -24,6 +26,7 @@ from datp_core.experiments import (
     TemporalRecoveryAnalysisRecord,
     ThresholdStabilityAnalysisRecord,
 )
+from datp_core.reporting.freezing.models import FrozenResultManifest
 
 _PROFILE = StatisticalProfileId("paired_seed_bca")
 
@@ -245,17 +248,20 @@ def test_dispatch_routes_each_analysis_kind_to_its_owning_capability(
         return sentinel
 
     monkeypatch.setattr(dispatch_module, entry_point_name, stub)
+    if kind is AnalysisKind.ABSORPTION:
+        monkeypatch.setattr(dispatch_module, "_reference_paired_result", lambda *_args: object())
 
     result = dispatch_module.dispatch(
         kind,
         record,
         config=None,  # type: ignore[arg-type]
-        repository=None,  # type: ignore[arg-type]
+        store=None,  # type: ignore[arg-type]
+        inputs=AnalysisInputBundle(()),
         statistical_analysis=None,  # type: ignore[arg-type]
         experiment=None,  # type: ignore[arg-type]
         seeds=(),
-        experiment_id=ExperimentId("test"),
         paired_results=(),
+        prerequisite_results=(),
         calibration_sample_count_values=(None,),
     )
 
@@ -269,12 +275,13 @@ def test_dispatch_rejects_paired_threshold_since_it_is_routed_separately() -> No
             AnalysisKind.PAIRED_THRESHOLD,
             None,  # type: ignore[arg-type]
             config=None,  # type: ignore[arg-type]
-            repository=None,  # type: ignore[arg-type]
+            store=None,  # type: ignore[arg-type]
+            inputs=AnalysisInputBundle(()),
             statistical_analysis=None,  # type: ignore[arg-type]
             experiment=None,  # type: ignore[arg-type]
             seeds=(),
-            experiment_id=ExperimentId("test"),
             paired_results=(),
+            prerequisite_results=(),
             calibration_sample_count_values=(None,),
         )
 
@@ -282,3 +289,70 @@ def test_dispatch_rejects_paired_threshold_since_it_is_routed_separately() -> No
 def test_every_analysis_kind_except_paired_threshold_has_dispatch_coverage() -> None:
     covered = set(_RECORDS_AND_ENTRY_POINTS) | {AnalysisKind.PAIRED_THRESHOLD}
     assert covered == set(AnalysisKind)
+
+
+def test_absorption_loads_its_reference_paired_result_only_from_the_configured_prerequisite() -> None:
+    record = _RECORDS_AND_ENTRY_POINTS[AnalysisKind.ABSORPTION][0]
+    assert isinstance(record, AbsorptionAnalysisRecord)
+    prerequisite = PrerequisiteExperimentResult(
+        experiment_id=ExperimentId("reference-experiment"),
+        frozen_result_path="experiments/reference/frozen-result.json",
+        frozen_result_checksum="a" * 64,
+        scientific_fingerprint="reference-science",
+        result=FrozenResultManifest(
+            schema_version=1,
+            experiment_id="reference-experiment",
+            evidence_role="supportive",
+            dataset_id="nbaiot",
+            population_ids=("natural",),
+            seed_cohort_id="cohort",
+            seed_count=2,
+            seeds_present=(1, 2),
+            scientific_fingerprint="reference-science",
+            execution_fingerprint="reference-execution",
+            source_revision="revision",
+            frozen_at="2026-07-25T00:00:00Z",
+            metric_definition_version="metrics-v1",
+            statistical_procedure_version="stats-v1",
+            report_profiles=(),
+            source_files=(),
+            statistical_results=(
+                {
+                    "analysis_label": "ref",
+                    "metric": "cv_fpr",
+                    "first_threshold_policy": "shared_mean_p95",
+                    "second_threshold_policy": "local_p95",
+                    "training_seeds": [1, 2],
+                    "first_seed_values": [0.2, 0.3],
+                    "second_seed_values": [0.1, 0.2],
+                    "first_mean": 0.25,
+                    "second_mean": 0.15,
+                    "mean_difference": 0.1,
+                        "confidence_interval": {
+                            "lower_bound": 0.01,
+                            "upper_bound": 0.2,
+                            "confidence_level": 0.95,
+                            "method": "bca_bootstrap",
+                        },
+                    "p_value": 0.05,
+                    "rank_biserial": 1.0,
+                    "resample_count": 1000,
+                    "analysis_seed": 300,
+                    "seed_differences": [0.1, 0.1],
+                    "sign_consistency": 1.0,
+                    "zero_difference_count": 0,
+                    "negative_difference_count": 0,
+                },
+            ),
+        ),
+    )
+    configured = evolve(
+        record,
+        reference_analysis={"experiment": "reference-experiment", "analysis": "ref"},
+    )
+
+    reference = dispatch_module._reference_paired_result(configured, (prerequisite,))
+
+    assert reference.analysis_label == "ref"
+    with pytest.raises(ValueError, match="requires its prerequisite frozen paired result"):
+        dispatch_module._reference_paired_result(configured, ())

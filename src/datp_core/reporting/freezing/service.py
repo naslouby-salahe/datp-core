@@ -6,7 +6,6 @@ import json
 from collections.abc import Sequence
 from datetime import UTC, datetime
 
-from datp_core.artifacts.identity import ArtifactKey
 from datp_core.config.report_profiles import ReportColumnRecord, ReportProfileRecord
 from datp_core.experiments import ExperimentRecord
 from datp_core.reporting.freezing.validation import (
@@ -14,7 +13,7 @@ from datp_core.reporting.freezing.validation import (
     validate_analysis_labels,
     validate_metric_statuses,
     validate_seed_completeness,
-    validate_source_artifacts,
+    validate_source_files,
 )
 
 
@@ -23,7 +22,7 @@ def freeze_result_family(
     experiment: ExperimentRecord,
     report_profiles: Sequence[ReportProfileRecord],
     statistical_summary: bytes,
-    source_artifacts: Sequence[ArtifactKey],
+    source_files: Sequence[tuple[str, str]],
     scientific_fingerprint: str,
     execution_fingerprint: str,
     source_revision: str,
@@ -34,7 +33,7 @@ def freeze_result_family(
     """Validate one complete result family and encode its immutable render input."""
     results = _decode_result_list(statistical_summary)
     validate_analysis_labels(experiment, results)
-    validate_source_artifacts(source_artifacts)
+    validate_source_files(source_files)
     seeds_present = validate_seed_completeness(results, seed_count)
     validate_metric_statuses(results)
 
@@ -54,9 +53,7 @@ def freeze_result_family(
         "metric_definition_version": experiment.identifier.value,
         "statistical_procedure_version": experiment.checkpoint_profile_id.value,
         "report_profiles": [_profile_payload(profile) for profile in report_profiles],
-        "source_artifacts": [
-            {"artifact_id": artifact.node_key.label, "kind": artifact.kind.value} for artifact in source_artifacts
-        ],
+        "source_files": [{"relative_path": path, "role": role} for path, role in source_files],
         "statistical_results": results,
     }
     return json.dumps(payload, separators=(",", ":"), sort_keys=True, allow_nan=False).encode("utf-8")

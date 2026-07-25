@@ -7,7 +7,7 @@ This document converts the DATP-Core scientific plan into an executable sequence
 It defines:
 
 - which implementation capabilities must exist;
-- which analyses reuse frozen artifacts;
+- which analyses consume explicitly declared current-run files;
 - which analyses require new preprocessing or training;
 - the order of work;
 - the gate that must pass before each stage;
@@ -135,7 +135,7 @@ source validation
 → result freeze
 ```
 
-A downstream stage may reuse a validated upstream artifact.
+A downstream stage consumes only the explicitly declared direct output of an upstream job in the same execution graph.
 
 It must not silently recompute or mutate it.
 
@@ -156,21 +156,14 @@ An empty file or missing row is never used as a failure signal.
 
 ## 2.5 Idempotency and resumption
 
-Rerunning the same resolved configuration must:
+Rerunning an experiment must either validate and skip its complete output folder or start a fresh run from preflight.  It must:
 
-- resolve to the same experiment identity;
-- reuse compatible immutable artifacts;
-- avoid duplicate result families;
-- resume from the latest valid stage;
-- reject stale or incompatible artifacts;
-- never overwrite a frozen result.
+- reject incomplete, corrupt, or incompatible output unless explicitly overridden;
+- never reconstruct or persist a reusable intermediate-artifact cache;
+- record a final manifest only after the frozen result and report files exist;
+- never overwrite a frozen result in place.
 
-Examples:
-
-- threshold changes reuse scores;
-- reporting changes reuse statistics;
-- scoring resumes from checkpoints;
-- failed exports do not retrain models.
+Within one active graph, threshold variants may fan out from the same declared score output and reports may consume the declared statistical output.  This is graph sharing, not cross-run reuse.
 
 ---
 

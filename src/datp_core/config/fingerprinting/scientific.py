@@ -1,6 +1,6 @@
 """Scientific fingerprint projection assembly and the scientific fingerprint builder.
 
-Absolute filesystem paths are deliberately excluded from identity (artifact_identity rule);
+Absolute filesystem paths are deliberately excluded from the scientific projection;
 datasets are projected via their schema id and fingerprint field lists rather than their
 resolved (absolute-path-bearing) record.
 """
@@ -88,7 +88,6 @@ def build_scientific_projection(
             for k, v in sorted(protocols.statistical_profiles.items(), key=lambda x: str(x[0]))
         },
         "metric_definitions": projection_module(protocols.metric_definitions),
-        "artifact_identity": projection_module(protocols.artifact_identity),
         "communication_estimation_contract": projection_module(protocols.communication_estimation_contract),
         "operational_inputs": projection_module(protocols.operational_inputs),
         "report_profiles": {k: projection_module(v) for k, v in sorted(protocols.report_profiles.items())},

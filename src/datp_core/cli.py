@@ -58,9 +58,10 @@ def _print_planning_dag(graph: PlanningGraph, experiment_name: str) -> None:
     top_order = lexicographical_topological_sort(graph)
     for job in top_order:
         deps = ", ".join([d.label for d in job.dependencies]) or "None"
+        outputs = ", ".join(output.relative_path for output in job.outputs)
         line = (
             f"[green]{job.node_key.label}[/green] [dim]({job.stage.value})[/dim] "
-            f"-> Output: [cyan]{job.output}[/cyan] (Deps: {deps})"
+            f"-> Output: [cyan]{outputs}[/cyan] (Deps: {deps})"
         )
         tree.add(line)
     console.print(tree)
@@ -173,44 +174,28 @@ def experiment_plan(experiment: str = typer.Option(..., "--config", "-c", help="
 def experiment_run(
     experiment: str = typer.Option(..., "--config", "-c", help="Experiment name slug"),
     override: bool = typer.Option(False, "--override", help="Delete existing experiment output and run from scratch"),
-    cascade: bool = typer.Option(
-        False,
-        "--cascade",
-        help="With --override, also delete transitive dependent experiment outputs",
-    ),
 ) -> None:
-    # TODO: --cascade will validate and delete transitive dependents via the experiment DAG
     """Execute a single experiment pipeline.
 
     When a valid completed output exists, the experiment is skipped (SKIPPED_EXISTING).
     When an incomplete or failed output exists, --override is required to delete and restart.
     """
-    from datp_core.experiments.execution.output_manager import ExperimentOutputManager
+    from datp_core.experiments.execution.use_case import ExperimentRunStatus
 
     application = build_application()
     experiment_id = ExperimentId(experiment)
-    output_manager = ExperimentOutputManager(application.config.paths.outputs)
-
-    if output_manager.is_completed(experiment_id):
-        console.print(
-            f"[blue]Experiment {experiment} skipped because a valid completed output already exists.[/blue]"
-        )
+    result = application.run_experiment.run(experiment_id, override=override)
+    if result.status is ExperimentRunStatus.SKIPPED_EXISTING:
+        console.print(f"[blue]SKIPPED_EXISTING: experiment {experiment} already has a valid completed output.[/blue]")
         console.print("[dim]Use --override to delete it and run the experiment again from scratch.[/dim]")
         return
-
-    if output_manager.is_incomplete(experiment_id):
-        if not override:
-            console.print(f"[red]Experiment {experiment} has an incomplete or failed output.[/red]")
-            console.print("[dim]Use --override to delete the experiment output and restart from scratch.[/dim]")
-            raise typer.Exit(code=1)
-        console.print(f"[yellow]Deleting incomplete experiment output for {experiment}...[/yellow]")
-        output_manager.delete(experiment_id)
-
-    if override and output_manager.is_completed(experiment_id):
-        console.print(f"[yellow]Deleting completed experiment output for {experiment} (--override)...[/yellow]")
-        output_manager.delete(experiment_id)
-
-    report = application.execute_experiment.execute(experiment_id)
+    if not result.success:
+        console.print(f"[red]Experiment {experiment} was not run: {result.error_message}[/red]")
+        raise typer.Exit(code=1)
+    report = result.report
+    if report is None:
+        console.print(f"[red]Experiment {experiment} completed without an execution report.[/red]")
+        raise typer.Exit(code=1)
     msg = (
         f"[bold green]Executed Experiment {experiment}:[/bold green] "
         f"Outcomes={len(report.outcomes)}, Success={report.successful_jobs}, Failed={report.failed_jobs}"
@@ -242,12 +227,12 @@ def campaign_run(
 
     for result in report.results:
         status_style = {
-            "completed_valid": "green",
             "skipped_existing": "blue",
             "incomplete_restarted": "yellow",
             "executed": "green",
             "blocked_prerequisite": "red",
             "blocked_anchor": "red",
+            "incompatible": "red",
             "failed": "red",
         }.get(result.status.value, "white")
         table.add_row(result.experiment_id.value, f"[{status_style}]{result.status.value}[/{status_style}]")

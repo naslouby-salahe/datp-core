@@ -39,7 +39,6 @@ def test_result_type_rejects_unknown_field() -> None:
 
 def test_deeply_nested_protocol_blocks_are_strictly_typed() -> None:
     from datp_core.config.authored.protocols import (
-        ArtifactIdentityConfig,
         CommunicationEstimationContractConfig,
         MetricDefinitionsConfig,
         OperationalInputsConfig,
@@ -51,10 +50,6 @@ def test_deeply_nested_protocol_blocks_are_strictly_typed() -> None:
     assert protocols.metric_definitions.fpr.direction == "lower_is_better"
     assert protocols.metric_definitions.cross_client_aggregation.standard_deviation_ddof == 0
     assert protocols.metric_definitions.cross_client_aggregation.cv_fpr.minimum_client_count == 2
-
-    assert isinstance(protocols.artifact_identity, ArtifactIdentityConfig)
-    assert protocols.artifact_identity.digest_bytes == 32
-    assert "split_seed" in protocols.artifact_identity.fingerprints.materialization
 
     assert isinstance(protocols.communication_estimation_contract, CommunicationEstimationContractConfig)
     assert protocols.communication_estimation_contract.field_encodings["float64"].bytes_per_field == 8

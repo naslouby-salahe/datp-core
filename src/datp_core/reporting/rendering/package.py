@@ -27,8 +27,8 @@ def render_frozen_report(frozen_manifest: bytes) -> bytes:
             "schema_version": 1,
             "experiment_id": manifest.experiment_id,
             "result_freeze_scientific_fingerprint": manifest.scientific_fingerprint,
-            "source_artifacts": [
-                {"artifact_id": artifact.artifact_id, "kind": artifact.kind} for artifact in manifest.source_artifacts
+            "source_files": [
+                {"relative_path": source.relative_path, "role": source.role} for source in manifest.source_files
             ],
             "rendered_artifacts": rendered,
         },

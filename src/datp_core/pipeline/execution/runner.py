@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from datp_core.pipeline.execution.registry import MissingStageHandlerError, StageHandlerRegistry
+from datp_core.pipeline.graph.key import GraphNodeKey
 from datp_core.pipeline.graph.model import PlanningGraph
 from datp_core.pipeline.graph.traversal import lexicographical_topological_sort
 from datp_core.pipeline.stages.enums import DEPENDENCY_SATISFYING_STATUSES, JobExecutionStatus
 from datp_core.pipeline.stages.jobs import StageJob
-from datp_core.pipeline.stages.node_key import StageNodeKey
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
 
@@ -29,10 +29,10 @@ def _execute_or_fail(registry: StageHandlerRegistry, job: StageJob) -> StageJobO
             f"job '{outcome.node_key.label}' stage '{outcome.stage.value}'"
         )
     if outcome.status is JobExecutionStatus.SUCCESS:
-        if outcome.produced_artifact != job.output:
+        if outcome.produced_outputs != job.outputs:
             raise InvalidHandlerOutcomeError(
                 f"Handler for '{job.stage.value}' job '{job.node_key.label}' "
-                f"produced artifact '{outcome.produced_artifact}' but declared output is '{job.output}'"
+                "produced outputs that differ from its declared outputs"
             )
     return outcome
 
@@ -43,7 +43,7 @@ def run_planning_graph(
 ) -> tuple[StageJobOutcome, ...]:
     sorted_jobs = lexicographical_topological_sort(graph)
     outcomes: list[StageJobOutcome] = []
-    outcomes_by_key: dict[StageNodeKey, StageJobOutcome] = {}
+    outcomes_by_key: dict[GraphNodeKey, StageJobOutcome] = {}
 
     for job in sorted_jobs:
         unavailable_dependencies = tuple(

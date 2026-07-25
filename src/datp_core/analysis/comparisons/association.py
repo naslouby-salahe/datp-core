@@ -11,14 +11,14 @@ from datp_core.analysis.comparisons.models import (
     MetricAssociationAnalysisResult,
     PairedThresholdAnalysisResult,
 )
+from datp_core.analysis.execution.inputs import AnalysisInputBundle
 from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
-from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
+from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import ClientId, ExperimentId
+from datp_core.core.identifiers import ClientId
 from datp_core.evaluation import calculate_pairwise_js_divergence
 from datp_core.experiments import ExperimentRecord, MetricAssociationAnalysisRecord
-from datp_core.experiments.identity import IdentityBuilder
 from datp_core.pipeline.stages.context import StageJobContext
 
 
@@ -27,11 +27,11 @@ def analyze_association(
     paired_results: tuple[PairedThresholdAnalysisResult, ...],
     *,
     config: ResolvedProjectConfiguration,
-    repository: ArtifactRepository,
+    store: ArtifactStore,
+    inputs: AnalysisInputBundle,
     statistical_analysis: StatisticalAnalysisUseCase,
     experiment: ExperimentRecord,
     seeds: tuple[int, ...],
-    experiment_id: ExperimentId,
 ) -> MetricAssociationAnalysisResult:
     if analysis.predictor_metric != "pairwise_js_divergence" or analysis.outcome_metric != "cv_fpr_delta":
         raise ValueError(f"Unsupported association metrics for analysis '{analysis.label}'")
@@ -53,11 +53,11 @@ def analyze_association(
                     seed=seed,
                     pairwise_js_divergence=calibration_js(
                         config=config,
-                        repository=repository,
+                        store=store,
+                        inputs=inputs,
                         experiment=experiment,
                         seed=seed,
                         partition_condition=condition,
-                        experiment_id=experiment_id,
                     ),
                     cv_fpr_delta=difference,
                 )
@@ -84,16 +84,21 @@ def analyze_association(
 def calibration_js(
     *,
     config: ResolvedProjectConfiguration,
-    repository: ArtifactRepository,
+    store: ArtifactStore,
+    inputs: AnalysisInputBundle,
     experiment: ExperimentRecord,
     seed: int,
     partition_condition: str,
-    experiment_id: ExperimentId,
 ) -> float:
     context = StageJobContext(experiment_id=experiment.identifier, seed=seed, partition_condition=partition_condition)
     missing = f"Calibration score artifact is unavailable for seed {seed}, condition '{partition_condition}'"
-    job_id = IdentityBuilder.calibration_score_node_key(context)
-    frame = validate_calibration_score_frame(read_parquet_frame(repository, experiment_id, job_id, missing_message=missing))
+    frame = validate_calibration_score_frame(
+        read_parquet_frame(
+            store,
+            inputs.calibration_scores(context),
+            missing_message=missing,
+        )
+    )
     diagnostics = config.metric_definitions.heterogeneity_diagnostics.pairwise_js_divergence
     return calculate_pairwise_js_divergence(
         tuple(

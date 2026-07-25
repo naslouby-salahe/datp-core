@@ -1,1 +1,1 @@
-"""Artifact identity, persistence, serialization, and provenance."""
+"""Direct-file artifact storage, serialization, and provenance."""

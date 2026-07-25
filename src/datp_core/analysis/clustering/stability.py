@@ -24,13 +24,12 @@ from datp_core.analysis.clustering.models import (
     ClusterStabilityAnalysisResult,
     ClusterStabilitySeedSummary,
 )
-from datp_core.artifacts.repository.port import ArtifactRepository
+from datp_core.analysis.execution.inputs import AnalysisInputBundle
 from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
+from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import ExperimentId
 from datp_core.core.seeding import Seed
 from datp_core.experiments import ClusterStabilityAnalysisRecord, ExperimentRecord, ValueSweepRecord
-from datp_core.experiments.identity import IdentityBuilder
 from datp_core.pipeline.stages.context import StageJobContext
 from datp_core.thresholding.policies.clustering import ClusterThresholdPolicyRecord
 
@@ -42,28 +41,28 @@ def compute_adjusted_rand_index(labels_true: np.ndarray, labels_pred: np.ndarray
 def analyze_cluster_stability(
     analysis: ClusterStabilityAnalysisRecord,
     *,
-    repository: ArtifactRepository,
+    store: ArtifactStore,
+    inputs: AnalysisInputBundle,
     config: ResolvedProjectConfiguration,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    experiment_id: ExperimentId,
 ) -> ClusterStabilityAnalysisResult:
     if analysis.reference_evaluation is not None:
         return _analyze_cluster_ablation(
-            analysis, repository=repository, experiment=experiment, seeds=seeds, experiment_id=experiment_id
+            analysis, store=store, inputs=inputs, experiment=experiment, seeds=seeds
         )
     return _analyze_cluster_membership(
-        analysis, repository=repository, config=config, experiment=experiment, seeds=seeds, experiment_id=experiment_id
+        analysis, store=store, inputs=inputs, config=config, experiment=experiment, seeds=seeds
     )
 
 
 def _analyze_cluster_ablation(
     analysis: ClusterStabilityAnalysisRecord,
     *,
-    repository: ArtifactRepository,
+    store: ArtifactStore,
+    inputs: AnalysisInputBundle,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    experiment_id: ExperimentId,
 ) -> ClusterAblationStabilityResult:
     source = next(item for item in experiment.evaluations if item.label == analysis.source_evaluation)
     override = (source.overrides or {}).get("fingerprint_features")
@@ -82,11 +81,16 @@ def _analyze_cluster_ablation(
     assert ref_eval is not None  # guarded by _analyze_cluster_ablation caller
     for seed in seeds:
         reference = _cluster_membership(
-            experiment.identifier, seed.value, ref_eval, None, repository=repository
+            experiment, seed.value, ref_eval, None, store=store, inputs=inputs
         )
         for subset in subsets:
             ablated = _cluster_membership(
-                experiment.identifier, seed.value, analysis.source_evaluation, subset, repository=repository
+                experiment,
+                seed.value,
+                analysis.source_evaluation,
+                subset,
+                store=store,
+                inputs=inputs,
             )
             clients = sorted(set(reference) & set(ablated))
             if set(reference) != set(ablated):
@@ -190,20 +194,17 @@ def _cluster_dispersion(
 def _analyze_cluster_membership(
     analysis: ClusterStabilityAnalysisRecord,
     *,
-    repository: ArtifactRepository,
+    store: ArtifactStore,
+    inputs: AnalysisInputBundle,
     config: ResolvedProjectConfiguration,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    experiment_id: ExperimentId,
 ) -> ClusterMembershipStabilityResult:
-    evaluation = next(
-        item for item in experiment.evaluations if item.label == analysis.source_evaluation
-    )
+    evaluation = next(item for item in experiment.evaluations if item.label == analysis.source_evaluation)
     policy = config.threshold_policies.get(evaluation.threshold_policy_id)
     if not isinstance(policy, ClusterThresholdPolicyRecord):
         raise ValueError(
-            f"Cluster stability requires a cluster threshold policy, "
-            f"got '{evaluation.threshold_policy_id.value}'"
+            f"Cluster stability requires a cluster threshold policy, got '{evaluation.threshold_policy_id.value}'"
         )
     expected_cluster_count = policy.cluster_count
     expected_labels = frozenset(range(expected_cluster_count))
@@ -211,12 +212,11 @@ def _analyze_cluster_membership(
     memberships: dict[int, dict[str, int]] = {}
     seed_summaries: list[ClusterStabilitySeedSummary] = []
     for seed in seeds:
-        context = StageJobContext(
-            experiment_id=experiment.identifier, seed=seed.value, evaluation_label=analysis.source_evaluation
-        )
         missing = f"Cluster stability artifacts are unavailable for seed {seed.value}"
         threshold_frame = read_parquet_frame(
-            repository, experiment_id, IdentityBuilder.threshold_node_key(context), missing_message=missing
+            store,
+            inputs.thresholds(_evaluation_context(experiment, analysis.source_evaluation, seed.value, None)),
+            missing_message=missing,
         )
         if "cluster_label" not in threshold_frame.columns:
             raise ValueError(f"Cluster labels are unavailable for seed {seed.value}")
@@ -251,7 +251,13 @@ def _analyze_cluster_membership(
             threshold_groups[int(label)].append(float(threshold))
 
         metric_frame = validate_client_metric_frame(
-            read_parquet_frame(repository, experiment_id, IdentityBuilder.evaluation_node_key(context), missing_message=missing)
+            read_parquet_frame(
+                store,
+                inputs.evaluation_metrics(
+                    _evaluation_context(experiment, analysis.source_evaluation, seed.value, None)
+                ),
+                missing_message=missing,
+            )
         )
         metric_client_ids = metric_frame["client_id"].to_list()
         if len(metric_client_ids) != len(set(metric_client_ids)):
@@ -293,12 +299,8 @@ def _analyze_cluster_membership(
                 seed=int(seed.value),
                 cluster_membership_per_client=labels,
                 cluster_size={str(label): cluster_membership_counts[label] for label in expected_labels},
-                singleton_cluster_flag=any(
-                    cluster_membership_counts[label] == 1 for label in expected_labels
-                ),
-                empty_cluster_flag=any(
-                    cluster_membership_counts[label] == 0 for label in expected_labels
-                ),
+                singleton_cluster_flag=any(cluster_membership_counts[label] == 1 for label in expected_labels),
+                empty_cluster_flag=any(cluster_membership_counts[label] == 0 for label in expected_labels),
                 within_cluster_threshold_dispersion=_cluster_dispersion(
                     cluster_membership_counts, threshold_groups, kind="within"
                 ),
@@ -343,9 +345,7 @@ def _analyze_cluster_membership(
     ]
     expected_pair_count = len(sorted_seeds) * (len(sorted_seeds) - 1) // 2
     if len(aris) != expected_pair_count:
-        raise ValueError(
-            f"ARI pair count mismatch: expected {expected_pair_count}, got {len(aris)}"
-        )
+        raise ValueError(f"ARI pair count mismatch: expected {expected_pair_count}, got {len(aris)}")
     return ClusterMembershipStabilityResult(
         analysis_label=analysis.label,
         comparison_unit=analysis.comparison_unit,
@@ -356,25 +356,36 @@ def _analyze_cluster_membership(
 
 
 def _cluster_membership(
-    experiment_id: ExperimentId,
+    experiment: ExperimentRecord,
     seed: int,
     label: str,
     features: tuple[str, ...] | None,
     *,
-    repository: ArtifactRepository,
+    store: ArtifactStore,
+    inputs: AnalysisInputBundle,
 ) -> dict[str, int]:
-    context = StageJobContext(
-        experiment_id=experiment_id, seed=seed, evaluation_label=label, fingerprint_features=features
-    )
     frame = read_parquet_frame(
-        repository,
-        experiment_id,
-        IdentityBuilder.threshold_node_key(context),
+        store,
+        inputs.thresholds(_evaluation_context(experiment, label, seed, features)),
         missing_message=f"Cluster threshold artifact is unavailable for seed {seed}",
     )
     if "cluster_label" not in frame.columns or frame["cluster_label"].null_count() > 0:
         raise ValueError(f"Cluster labels are unavailable for seed {seed}")
     return {str(client): int(label) for client, label in frame.select("client_id", "cluster_label").iter_rows()}
+
+
+def _evaluation_context(
+    experiment: ExperimentRecord, label: str, seed: int, features: tuple[str, ...] | None
+) -> StageJobContext:
+    evaluation = next(item for item in experiment.evaluations if item.label == label)
+    return StageJobContext(
+        experiment_id=experiment.identifier,
+        seed=seed,
+        evaluation_label=label,
+        population_id=evaluation.population_id,
+        recalibration_mode=evaluation.recalibration_mode,
+        fingerprint_features=features,
+    )
 
 
 __all__ = ["analyze_cluster_stability", "compute_adjusted_rand_index"]

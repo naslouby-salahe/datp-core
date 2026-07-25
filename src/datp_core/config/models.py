@@ -6,7 +6,6 @@ from collections.abc import Mapping
 
 from attrs import define
 
-from datp_core.artifacts.manifest import ArtifactIdentityRecord
 from datp_core.config.operational_contracts import (
     CommunicationEstimationContractRecord,
     OperationalInputsRecord,
@@ -79,7 +78,6 @@ class ResolvedProjectConfiguration:
     quantile_estimators: TypedDomainRegistry[str, QuantileEstimatorRecord]
     metric_bundles: TypedDomainRegistry[MetricBundleId, MetricBundleRecord]
     metric_definitions: MetricDefinitionsRecord
-    artifact_identity: ArtifactIdentityRecord
     communication_estimation_contract: CommunicationEstimationContractRecord
     operational_inputs: OperationalInputsRecord
     report_profiles: TypedDomainRegistry[str, ReportProfileRecord]

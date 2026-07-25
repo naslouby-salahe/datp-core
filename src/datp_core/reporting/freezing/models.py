@@ -6,9 +6,9 @@ from attrs import define
 
 
 @define(frozen=True, slots=True, kw_only=True)
-class FrozenSourceArtifact:
-    artifact_id: str
-    kind: str
+class FrozenSourceFile:
+    relative_path: str
+    role: str
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -46,5 +46,5 @@ class FrozenResultManifest:
     metric_definition_version: str
     statistical_procedure_version: str
     report_profiles: tuple[FrozenReportProfile, ...]
-    source_artifacts: tuple[FrozenSourceArtifact, ...]
+    source_files: tuple[FrozenSourceFile, ...]
     statistical_results: tuple[object, ...]

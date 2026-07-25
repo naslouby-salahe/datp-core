@@ -3,9 +3,21 @@
 from __future__ import annotations
 
 
-class ManifestDecodeError(ValueError):
-    """Raised when manifest bytes are not valid, strict, well-formed manifest JSON."""
+class ArtifactStoreError(ValueError):
+    """Base error raised by the direct-file artifact store."""
 
 
-class ManifestSchemaIncompatibleError(ValueError):
-    """Raised when a manifest's schema_version does not match the current codec version."""
+class InvalidArtifactPathError(ArtifactStoreError):
+    """Raised when a store path is absolute, empty, escapes, or traverses a symlink."""
+
+
+class ArtifactFileMissingError(ArtifactStoreError):
+    """Raised when a requested direct artifact file is absent."""
+
+
+class ArtifactFileExistsError(ArtifactStoreError):
+    """Raised when a fresh execution attempts to replace an existing artifact file."""
+
+
+class ArtifactChecksumMismatchError(ArtifactStoreError):
+    """Raised when a direct artifact file does not match its required checksum."""

@@ -701,7 +701,7 @@ Regime A selects one primary **round number** using a non-test rule frozen befor
 
 The selector must be explicitly configured. No default selector is permitted.
 
-The selected round number is reused across main regimes and policies where the checkpoint exists. Model weights remain regime- and seed-specific.
+The selected round number is applied consistently across main regimes and policies where the checkpoint exists. Model weights remain regime- and seed-specific.
 
 ## 13.4 Forbidden selectors
 
@@ -1045,7 +1045,7 @@ Claim-level consequences are defined in [02](./02_CLAIMS_AND_DECISION_RULES.md#1
 
 - [ ] Anchor and journal checkpoint semantics are separate.
 - [ ] All journal checkpoint rounds exist.
-- [ ] One Regime A-selected round is reused.
+- [ ] One Regime A-selected round is applied consistently.
 - [ ] The selector was frozen before outcome inspection.
 - [ ] No test or policy-effect metric selected the round.
 - [ ] Full trajectories remain available.

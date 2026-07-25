@@ -1915,7 +1915,7 @@ After valid Regime A scores exist, execute without retraining:
 - alert burden when a rate exists;
 - optional equity and communication analyses.
 
-These analyses must reuse frozen score artifacts.
+These analyses must consume the explicitly declared score outputs of the same active execution graph; a later standalone run regenerates them from preflight.
 
 ## 17.3 Stage 3 — Controlled heterogeneity
 
@@ -1976,7 +1976,7 @@ Every mandatory experiment must produce enough information to reconstruct its re
 - client-definition version;
 - seed;
 - checkpoint identity;
-- score-artifact identity;
+- score-artifact semantic path and producing stage;
 - policy or comparator;
 - resolved parameter values;
 - eligibility manifest;

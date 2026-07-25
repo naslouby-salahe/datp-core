@@ -10,7 +10,7 @@ from datp_core.reporting.freezing.models import (
     FrozenReportColumn,
     FrozenReportProfile,
     FrozenResultManifest,
-    FrozenSourceArtifact,
+    FrozenSourceFile,
 )
 
 
@@ -26,7 +26,7 @@ def decode_manifest(payload: bytes) -> FrozenResultManifest:
         "scientific_fingerprint",
         "execution_fingerprint",
         "report_profiles",
-        "source_artifacts",
+        "source_files",
         "statistical_results",
         "frozen_at",
     )
@@ -55,9 +55,9 @@ def decode_manifest(payload: bytes) -> FrozenResultManifest:
         if isinstance(p, dict)
     )
 
-    source_artifacts = tuple(
-        FrozenSourceArtifact(artifact_id=str(a["artifact_id"]), kind=str(a["kind"]))
-        for a in decoded["source_artifacts"]
+    source_files = tuple(
+        FrozenSourceFile(relative_path=str(a["relative_path"]), role=str(a["role"]))
+        for a in decoded["source_files"]
         if isinstance(a, dict)
     )
 
@@ -77,6 +77,6 @@ def decode_manifest(payload: bytes) -> FrozenResultManifest:
         metric_definition_version=str(decoded.get("metric_definition_version", "")),
         statistical_procedure_version=str(decoded.get("statistical_procedure_version", "")),
         report_profiles=profiles,
-        source_artifacts=source_artifacts,
+        source_files=source_files,
         statistical_results=tuple(cast(object, r) for r in decoded["statistical_results"]),
     )

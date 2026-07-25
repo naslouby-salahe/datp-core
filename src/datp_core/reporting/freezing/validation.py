@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 
-from datp_core.artifacts.identity import ArtifactKey
 from datp_core.evaluation.metrics.models import MetricStatus
 from datp_core.experiments import ExperimentRecord
 from datp_core.reporting.freezing.errors import ResultFreezeError
@@ -37,10 +36,10 @@ def validate_analysis_labels(experiment: ExperimentRecord, results: list[dict[st
         raise ResultFreezeError(f"Result freeze is missing configured analyses: {', '.join(missing_labels)}")
 
 
-def validate_source_artifacts(source_artifacts: Sequence[ArtifactKey]) -> None:
-    if not source_artifacts:
+def validate_source_files(source_files: Sequence[tuple[str, str]]) -> None:
+    if not source_files:
         raise ResultFreezeError("Result freeze requires the statistical summary artifact")
-    if source_artifacts[0].kind.value != "statistical_summary":
+    if source_files[0][1] != "statistical_result":
         raise ResultFreezeError("Result freeze requires the statistical summary as its first input")
 
 

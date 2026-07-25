@@ -104,7 +104,7 @@ def resolve_checkpoint_profiles(
             tie_break=cp_cfg.selection.tie_break,
             scope=cp_cfg.selection.scope,
             aggregation=cp_cfg.selection.aggregation,
-            selected_round_reuse=cp_cfg.selection.selected_round_reuse,
+            selected_round_application_scope=cp_cfg.selection.selected_round_application_scope,
             selection_granularity=cp_cfg.selection.selection_granularity,
             forbidden_selectors=tuple(cp_cfg.selection.forbidden_selectors or ()),
         )

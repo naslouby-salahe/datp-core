@@ -18,12 +18,12 @@ def test_scientific_fingerprint_is_stable(_resolved: ResolvedProjectConfiguratio
     # `analysis/validation/anchor_equivalence.py`). These are real new scientific values, so the
     # fingerprint is expected to change.
     assert _resolved.scientific_fingerprint.value == (
-        "9e5734bbe095a68210e9c97c098d24d1488156acf9e7b4c6ec7f7b76cc5c2c53"
+        "4eb6bf8de5c21cd175519a1cc6d9663f6f35df1e73b742efeaa2800a983a20b0"
     )
 
 
 def test_execution_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
-    assert _resolved.execution_fingerprint.value == ("77b49c53e066a731e61176578585b949bb7767f12cafdf6b5a61860e28ce6d4f")
+    assert _resolved.execution_fingerprint.value == ("cc5859fb354954b89fdbd0c909e09d2649766d97b122a01acb82769e1b0bed4b")
 
 
 def test_registry_cardinality(_resolved: ResolvedProjectConfiguration) -> None:
@@ -93,7 +93,6 @@ def test_scientific_projection_includes_all_sections(_resolved: ResolvedProjectC
         "metric_bundles",
         "statistical_profiles",
         "metric_definitions",
-        "artifact_identity",
         "communication_estimation_contract",
         "operational_inputs",
         "report_profiles",

@@ -32,7 +32,7 @@ class CheckpointSelectionRecord:
     tie_break: str | None
     scope: str | None
     aggregation: str | None
-    selected_round_reuse: str | None
+    selected_round_application_scope: str | None
     selection_granularity: str | None
     forbidden_selectors: tuple[str, ...]
 

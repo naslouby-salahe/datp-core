@@ -1,15 +1,19 @@
-"""Demand-driven experiment job expansion — materialization, training, scoring, evaluation, analysis."""
+"""Expand one experiment into an active DAG with explicit semantic file paths."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass, replace
 from itertools import product
+from typing import TYPE_CHECKING
 
+from datp_core.config.fingerprinting.canonical import compute_fingerprint
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.data.contracts.enums import SplitMethod
+from datp_core.data.contracts.enums import ClientConstructionMethod, SplitMethod
+from datp_core.data.sources.inventory import compute_experiment_source_fingerprint
 from datp_core.experiments.catalogue.evaluations import RecalibrationMode
 from datp_core.experiments.catalogue.models import EvidenceRole, ExperimentRecord
 from datp_core.experiments.catalogue.sweeps import ConditionSweepRecord
-from datp_core.experiments.identity.builder import IdentityBuilder
+from datp_core.experiments.planning.layout import cell_directory, evaluation_directory, output, shared_output_path
 from datp_core.experiments.planning.sweeps import (
     _evaluation_sweep_values,
     _feature_sweep_values,
@@ -17,37 +21,142 @@ from datp_core.experiments.planning.sweeps import (
     _sweep_values,
 )
 from datp_core.learning.contracts.enums import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
+from datp_core.pipeline.graph.key import GraphNodeKey
 from datp_core.pipeline.graph.model import PlanningGraph
 from datp_core.pipeline.graph.validation import validate_acyclic
 from datp_core.pipeline.stages.context import StageJobContext
 from datp_core.pipeline.stages.enums import StageKind
-from datp_core.pipeline.stages.jobs import StageJob
+from datp_core.pipeline.stages.jobs import AnalysisInputCoordinates, StageInput, StageJob, StageOutput
+
+if TYPE_CHECKING:
+    from datp_core.analysis.execution.inputs import PrerequisiteExperimentResult
+
+
+_SHAREABLE_STAGES = frozenset(
+    {
+        StageKind.DATASET_MATERIALIZATION,
+        StageKind.MODEL_TRAINING,
+        StageKind.CHECKPOINT_SELECTION,
+        StageKind.SCORE_GENERATION,
+    }
+)
+
+_SHARED_OUTPUT_DIRECTORIES = {
+    StageKind.DATASET_MATERIALIZATION: "materializations",
+    StageKind.MODEL_TRAINING: "training",
+    StageKind.CHECKPOINT_SELECTION: "checkpoint-selection",
+    StageKind.SCORE_GENERATION: "scores",
+}
+
+
+@dataclass(frozen=True, slots=True)
+class SharedUpstreamKey:
+    """Exact in-memory structural coordinates for one active campaign producer."""
+
+    stage: StageKind
+    dataset_id: object
+    population_id: object | None
+    materialization_id: object
+    partition_condition: str | None
+    seed: int | None
+    seed_cohort_id: object
+    training_profile_id: object
+    training_overrides_fingerprint: str
+    checkpoint_profile_id: object
+    eligibility_policy_id: object
+    readiness_gates: tuple[str, ...]
+    score_output_name: str | None
+    temporal_mode: str
+    source_fingerprint: str
+    direct_producers: tuple[tuple[GraphNodeKey, str], ...]
+
+
+def _value(value: object | None) -> str:
+    return "-" if value is None else str(getattr(value, "value", value))
+
+
+def _node_key(stage: StageKind, context: StageJobContext, role: str) -> GraphNodeKey:
+    """Build a deterministic key used only for this in-memory graph."""
+
+    coordinates = (
+        context.experiment_id,
+        context.seed,
+        context.population_id,
+        context.partition_condition,
+        context.federated_proximal_mu,
+        context.ditto_proximal_weight,
+        context.evaluation_label,
+        context.threshold_policy_id,
+        context.threshold_quantile,
+        context.shrinkage_weight,
+        context.federated_summary_fixed_k,
+        context.fingerprint_features,
+        context.calibration_sample_count,
+        context.calibration_replicate,
+        context.recalibration_mode,
+    )
+    return GraphNodeKey(label="|".join((stage.value, role, *(_value(value) for value in coordinates))))
+
+
+def _input(name: str, job: StageJob, output_name: str) -> StageInput:
+    return StageInput(name=name, relative_path=job.output_path(output_name), producer=job.node_key)
+
+
+def _job(
+    *,
+    stage: StageKind,
+    context: StageJobContext,
+    role: str,
+    inputs: tuple[StageInput, ...] = (),
+    outputs: tuple[StageOutput, ...],
+    dependencies: tuple[GraphNodeKey, ...] = (),
+) -> StageJob:
+    experiment_prefix = f"experiments/{context.experiment_id.value}/"
+    return StageJob(
+        node_key=_node_key(stage, context, role),
+        stage=stage,
+        context=context,
+        inputs=inputs,
+        outputs=tuple(
+            StageOutput(name=item.name, relative_path=experiment_prefix + item.relative_path) for item in outputs
+        ),
+        dependencies=dependencies,
+    )
+
+
+def _training_outputs(context: StageJobContext, *, personalized: bool) -> tuple[StageOutput, ...]:
+    base = f"training/{cell_directory(context)}"
+    results = [
+        output("checkpoint", f"{base}/checkpoint.safetensors"),
+        output("selection_evidence", f"{base}/selection-evidence.json"),
+    ]
+    if personalized:
+        results.append(output("personalized_checkpoint", f"{base}/personalized-checkpoint.safetensors"))
+    return tuple(results)
+
+
+def _score_output(context: StageJobContext, name: str) -> StageOutput:
+    return output(name, f"scores/{cell_directory(context)}/{name.replace('_', '-')}.parquet")
 
 
 def expand_experiment_jobs(
     experiment: ExperimentRecord,
     config: ResolvedProjectConfiguration,
+    *,
+    prerequisite_results: tuple[PrerequisiteExperimentResult, ...] = (),
 ) -> PlanningGraph:
     seed_cohort = config.seed_cohorts.get(experiment.seed_cohort_id)
-    builder = IdentityBuilder()
     jobs: list[StageJob] = []
-
     experiment_ctx = StageJobContext(experiment_id=experiment.identifier)
 
-    # 1. Preflight check job
-    pf_node_key, pf_output = builder.preflight_job(experiment_ctx)
-    preflight_job = StageJob(
-        node_key=pf_node_key,
+    preflight = _job(
         stage=StageKind.PREFLIGHT,
         context=experiment_ctx,
-        inputs=(),
-        output=pf_output,
-        dependencies=(),
+        role="resolved-configuration",
+        outputs=(output("resolved_configuration", "preflight/resolved-configuration.json"),),
     )
-    jobs.append(preflight_job)
+    jobs.append(preflight)
 
-    eval_outputs: list = []
-    eval_node_keys: list = []
     conditions = tuple(
         condition.name
         for sweep in experiment.sweeps
@@ -59,11 +168,11 @@ def expand_experiment_jobs(
     training_profile = config.training_profiles.get(experiment.training_profile_id)
     ditto_weights = (
         training_profile.personalization_parameter_grid or (None,)
-        if training_profile.personalization == PersonalizationStrategy.DITTO
+        if training_profile.personalization is PersonalizationStrategy.DITTO
         else (None,)
     )
 
-    training_cells: list[tuple[StageJobContext, tuple, tuple]] = []
+    training_cells: list[tuple[StageJobContext, StageJob, StageJob]] = []
     for seed, condition, population_id in product(seed_cohort.training_seeds, conditions, experiment.population_ids):
         materialization_ctx = StageJobContext(
             experiment_id=experiment.identifier,
@@ -71,16 +180,29 @@ def expand_experiment_jobs(
             partition_condition=condition,
             population_id=population_id,
         )
-        mat_ids = builder.materialization_job(materialization_ctx, pf_output, pf_node_key)
-        mat_job = StageJob(
-            node_key=mat_ids[0],
+        materialization_base = f"materializations/{cell_directory(materialization_ctx)}"
+        materialization_outputs = [
+            output("dataset", f"{materialization_base}/dataset.parquet"),
+            output("split_manifest", f"{materialization_base}/split-manifest.json"),
+            output("readiness", f"{materialization_base}/readiness.json"),
+            output("preprocessing", f"{materialization_base}/preprocessing.json"),
+        ]
+        population = config.populations.get(population_id)
+        dataset = config.datasets.get(population.dataset_id)
+        setup = dataset.setup(population.setup_id)
+        if setup.client_construction.method is ClientConstructionMethod.DIRICHLET_PARTITIONED_CLIENTS:
+            materialization_outputs.append(
+                output("partition_manifest", f"{materialization_base}/partition-manifest.json")
+            )
+        materialization = _job(
             stage=StageKind.DATASET_MATERIALIZATION,
             context=materialization_ctx,
-            inputs=mat_ids[2],
-            output=mat_ids[1],
-            dependencies=mat_ids[3],
+            role="materialization",
+            inputs=(_input("resolved_configuration", preflight, "resolved_configuration"),),
+            outputs=tuple(materialization_outputs),
+            dependencies=(preflight.node_key,),
         )
-        jobs.append(mat_job)
+        jobs.append(materialization)
 
         for proximal_mu, ditto_weight in product(mus, ditto_weights):
             seed_ctx = StageJobContext(
@@ -91,111 +213,90 @@ def expand_experiment_jobs(
                 federated_proximal_mu=proximal_mu,
                 ditto_proximal_weight=ditto_weight,
             )
-            train_ids = builder.training_job(seed_ctx, mat_ids[1], mat_ids[0])
-            train_job = StageJob(
-                node_key=train_ids[0],
+            training = _job(
                 stage=StageKind.MODEL_TRAINING,
                 context=seed_ctx,
-                inputs=train_ids[2],
-                output=train_ids[1],
-                dependencies=train_ids[3],
+                role="training",
+                inputs=(_input("materialization", materialization, "dataset"),),
+                outputs=_training_outputs(
+                    seed_ctx, personalized=training_profile.personalization is PersonalizationStrategy.DITTO
+                ),
+                dependencies=(materialization.node_key,),
             )
-            jobs.append(train_job)
-            training_cells.append((seed_ctx, mat_ids, train_ids))
+            jobs.append(training)
+            training_cells.append((seed_ctx, materialization, training))
 
-    selection_output = None
-    selection_node_key = None
-    analysis_selection_output = None
-    analysis_selection_node_key = None
+    selection: StageJob | None = None
     if (
         experiment.evidence_role is EvidenceRole.CONFIRMATORY
-        and training_profile.checkpoint_authorization == CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE
+        and training_profile.checkpoint_authorization is CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE
     ):
-        selection_ids = builder.cohort_checkpoint_selection_job(
-            experiment_ctx,
-            tuple(train_ids[1] for _, _, train_ids in training_cells),
-            tuple(train_ids[0] for _, _, train_ids in training_cells),
-        )
-        jobs.append(
-            StageJob(
-                node_key=selection_ids[0],
-                stage=StageKind.CHECKPOINT_SELECTION,
-                context=experiment_ctx,
-                inputs=selection_ids[2],
-                output=selection_ids[1],
-                dependencies=selection_ids[3],
-            )
-        )
-        selection_node_key, selection_output = selection_ids[:2]
-    elif training_profile.kind == TrainingProfileKind.FEDERATED_PROX_TRAINING:
-        selection_ids = builder.federated_proximal_selection_job(
-            experiment_ctx,
-            tuple(train_ids[1] for _, _, train_ids in training_cells),
-            tuple(train_ids[0] for _, _, train_ids in training_cells),
-        )
-        jobs.append(
-            StageJob(
-                node_key=selection_ids[0],
-                stage=StageKind.CHECKPOINT_SELECTION,
-                context=experiment_ctx,
-                inputs=selection_ids[2],
-                output=selection_ids[1],
-                dependencies=selection_ids[3],
-            )
-        )
-        analysis_selection_node_key, analysis_selection_output = selection_ids[:2]
+        selection_role = "cohort"
+    elif training_profile.kind is TrainingProfileKind.FEDERATED_PROX_TRAINING:
+        selection_role = "fedprox"
     elif (
-        training_profile.personalization == PersonalizationStrategy.DITTO
+        training_profile.personalization is PersonalizationStrategy.DITTO
         and experiment.identifier == config.primary_ditto_selection_experiment().identifier
     ):
-        selection_ids = builder.ditto_selection_job(
-            experiment_ctx,
-            tuple(train_ids[1] for _, _, train_ids in training_cells),
-            tuple(train_ids[0] for _, _, train_ids in training_cells),
-        )
-        jobs.append(
-            StageJob(
-                node_key=selection_ids[0],
-                stage=StageKind.CHECKPOINT_SELECTION,
-                context=experiment_ctx,
-                inputs=selection_ids[2],
-                output=selection_ids[1],
-                dependencies=selection_ids[3],
+        selection_role = "ditto"
+    else:
+        selection_role = None
+
+    if selection_role is not None:
+        selection_inputs: list[StageInput] = []
+        for index, (_, _, training) in enumerate(training_cells):
+            selection_inputs.extend(
+                (
+                    _input(f"checkpoint_{index}", training, "checkpoint"),
+                    _input(f"selection_evidence_{index}", training, "selection_evidence"),
+                )
             )
+        selection = _job(
+            stage=StageKind.CHECKPOINT_SELECTION,
+            context=experiment_ctx,
+            role=selection_role,
+            inputs=tuple(selection_inputs),
+            outputs=(output("checkpoint_selection", f"checkpoint-selection/{selection_role}.json"),),
+            dependencies=tuple(training.node_key for _, _, training in training_cells),
         )
-        analysis_selection_node_key, analysis_selection_output = selection_ids[:2]
+        jobs.append(selection)
 
-    # 3. Score generation and evaluation
-    calibration_cells_by_training: dict[tuple[int | None, str | None, float | None, float | None, object], list] = {}
-    score_cells: dict[tuple[int | None, str | None, float | None, float | None, object], tuple] = {}
-    for seed_ctx, mat_ids, train_ids in training_cells:
-        calib_ids = builder.calibration_score_job(
-            seed_ctx, train_ids[1], mat_ids[1], train_ids[0], selection_output, selection_node_key
-        )
-        calib_score_job = StageJob(
-            node_key=calib_ids[0],
+    calibration_cells_by_training: dict[tuple[object, ...], list[tuple[StageJobContext, StageJob, str]]] = {}
+    score_cells: dict[tuple[object, ...], tuple[StageJobContext, StageJob, StageJob, StageJob | None]] = {}
+    for seed_ctx, materialization, training in training_cells:
+        scoring_inputs = [
+            _input("checkpoint", training, "checkpoint"),
+            _input("materialization", materialization, "dataset"),
+            _input("selection_evidence", training, "selection_evidence"),
+        ]
+        if any(item.name == "personalized_checkpoint" for item in training.outputs):
+            scoring_inputs.append(_input("personalized_checkpoint", training, "personalized_checkpoint"))
+        dependencies = [training.node_key, materialization.node_key]
+        if selection is not None:
+            scoring_inputs.append(_input("checkpoint_selection", selection, "checkpoint_selection"))
+            dependencies.append(selection.node_key)
+
+        calibration = _job(
             stage=StageKind.SCORE_GENERATION,
             context=seed_ctx,
-            inputs=calib_ids[2],
-            output=calib_ids[1],
-            dependencies=calib_ids[3],
+            role="calibration-scores",
+            inputs=tuple(scoring_inputs),
+            outputs=(_score_output(seed_ctx, "calibration_scores"),),
+            dependencies=tuple(dependencies),
         )
-        jobs.append(calib_score_job)
-
-        test_ids = builder.test_score_job(
-            seed_ctx, train_ids[1], mat_ids[1], train_ids[0], selection_output, selection_node_key
-        )
-        test_score_job = StageJob(
-            node_key=test_ids[0],
+        test = _job(
             stage=StageKind.SCORE_GENERATION,
             context=seed_ctx,
-            inputs=test_ids[2],
-            output=test_ids[1],
-            dependencies=test_ids[3],
+            role="test-scores",
+            inputs=tuple(scoring_inputs),
+            outputs=(_score_output(seed_ctx, "test_scores"),),
+            dependencies=tuple(dependencies),
         )
-        jobs.append(test_score_job)
+        jobs.extend((calibration, test))
 
-        calibration_cells = [(seed_ctx, calib_ids)]
+        calibration_cells: list[tuple[StageJobContext, StageJob, str]] = [
+            (seed_ctx, calibration, "calibration_scores")
+        ]
         if experiment.calibration_subset is not None:
             requested_sweep = experiment.calibration_subset.requested_sample_count.get("from_sweep")
             requested_counts = _sweep_values(experiment, requested_sweep)
@@ -214,18 +315,23 @@ def expand_experiment_jobs(
                     calibration_sample_count=requested_count,
                     calibration_replicate=replicate,
                 )
-                subset_ids = builder.calibration_subset_job(subset_ctx, calib_ids[1], calib_ids[0])
-                jobs.append(
-                    StageJob(
-                        node_key=subset_ids[0],
-                        stage=StageKind.CALIBRATION_SUBSAMPLING,
-                        context=subset_ctx,
-                        inputs=subset_ids[2],
-                        output=subset_ids[1],
-                        dependencies=subset_ids[3],
-                    )
+                subset = _job(
+                    stage=StageKind.CALIBRATION_SUBSAMPLING,
+                    context=subset_ctx,
+                    role="calibration-subset",
+                    inputs=(_input("calibration_scores", calibration, "calibration_scores"),),
+                    outputs=(
+                        output(
+                            "calibration_subset_scores",
+                            f"calibration-subsets/{cell_directory(subset_ctx)}/"
+                            f"n-{requested_count}-rep-{replicate}/scores.parquet",
+                        ),
+                    ),
+                    dependencies=(calibration.node_key,),
                 )
-                calibration_cells.append((subset_ctx, subset_ids))
+                jobs.append(subset)
+                calibration_cells.append((subset_ctx, subset, "calibration_subset_scores"))
+
         key = (
             seed_ctx.seed,
             seed_ctx.partition_condition,
@@ -233,50 +339,49 @@ def expand_experiment_jobs(
             seed_ctx.ditto_proximal_weight,
             seed_ctx.population_id,
         )
-        calibration_cells_by_training[key] = calibration_cells
-        score_cells[key] = (seed_ctx, test_ids)
-
+        future: StageJob | None = None
         if seed_ctx.population_id is None:
             raise ValueError("Training cells require a resolved population")
         population = config.populations.get(seed_ctx.population_id)
         dataset = config.datasets.get(population.dataset_id)
         setup = dataset.setup(population.setup_id)
-        materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
-        if materialization.split_method == SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL:
-            future_ids = builder.future_recalibration_score_job(
-                seed_ctx, train_ids[1], mat_ids[1], train_ids[0], selection_output, selection_node_key
+        materialization_contract = next(
+            item for item in dataset.materializations if item.identifier == setup.materialization_id
+        )
+        if materialization_contract.split_method is SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL:
+            future = _job(
+                stage=StageKind.SCORE_GENERATION,
+                context=seed_ctx,
+                role="future-recalibration-scores",
+                inputs=tuple(scoring_inputs),
+                outputs=(_score_output(seed_ctx, "future_recalibration_scores"),),
+                dependencies=tuple(dependencies),
             )
-            jobs.append(
-                StageJob(
-                    node_key=future_ids[0],
-                    stage=StageKind.SCORE_GENERATION,
-                    context=seed_ctx,
-                    inputs=future_ids[2],
-                    output=future_ids[1],
-                    dependencies=future_ids[3],
-                )
-            )
-            score_cells[key] = (seed_ctx, test_ids, future_ids)
+            jobs.append(future)
+        calibration_cells_by_training[key] = calibration_cells
+        score_cells[key] = (seed_ctx, test, calibration, future)
 
-    for key, (seed_ctx, test_ids, *future_score_ids) in score_cells.items():
-        for eval_spec in experiment.evaluations:
-            population_id = eval_spec.population_id or experiment.population_ids[0]
+    evaluation_jobs: list[StageJob] = []
+    for key, (seed_ctx, test, _calibration, future) in score_cells.items():
+        for evaluation in experiment.evaluations:
+            population_id = evaluation.population_id or experiment.population_ids[0]
             if population_id != seed_ctx.population_id:
                 continue
             calibration_cells = calibration_cells_by_training[key]
-            if eval_spec.recalibration_mode is RecalibrationMode.ONE_SHOT:
-                if len(future_score_ids) != 1:
-                    raise ValueError(f"Evaluation '{eval_spec.label}' requires a temporal recalibration score artifact")
-                calibration_cells = [(seed_ctx, future_score_ids[0])]
-            for calibration_ctx, calibration_ids in calibration_cells:
-                quantiles = _evaluation_sweep_values(experiment, eval_spec.overrides, "quantile")
-                shrinkage_weights = _evaluation_sweep_values(experiment, eval_spec.overrides, "shrinkage_weight")
-                fixed_ks = _evaluation_sweep_values(experiment, eval_spec.overrides, "fixed_k")
-                fingerprint_feature_sets = _feature_sweep_values(experiment, eval_spec.overrides)
-                for threshold_quantile, shrinkage_weight, fixed_k, fingerprint_features in product(
-                    quantiles, shrinkage_weights, fixed_ks, fingerprint_feature_sets
+            if evaluation.recalibration_mode is RecalibrationMode.ONE_SHOT:
+                if future is None:
+                    raise ValueError(
+                        f"Evaluation '{evaluation.label}' requires a temporal recalibration score artifact"
+                    )
+                calibration_cells = [(seed_ctx, future, "future_recalibration_scores")]
+            for calibration_ctx, calibration_job, calibration_output in calibration_cells:
+                for quantile, shrinkage, fixed_k, features in product(
+                    _evaluation_sweep_values(experiment, evaluation.overrides, "quantile"),
+                    _evaluation_sweep_values(experiment, evaluation.overrides, "shrinkage_weight"),
+                    _evaluation_sweep_values(experiment, evaluation.overrides, "fixed_k"),
+                    _feature_sweep_values(experiment, evaluation.overrides),
                 ):
-                    eval_ctx = StageJobContext(
+                    evaluation_ctx = StageJobContext(
                         experiment_id=experiment.identifier,
                         seed=seed_ctx.seed,
                         partition_condition=seed_ctx.partition_condition,
@@ -284,90 +389,253 @@ def expand_experiment_jobs(
                         ditto_proximal_weight=seed_ctx.ditto_proximal_weight,
                         calibration_sample_count=calibration_ctx.calibration_sample_count,
                         calibration_replicate=calibration_ctx.calibration_replicate,
-                        threshold_quantile=threshold_quantile,
-                        shrinkage_weight=shrinkage_weight,
+                        threshold_quantile=quantile,
+                        shrinkage_weight=shrinkage,
                         federated_summary_fixed_k=fixed_k,
-                        fingerprint_features=fingerprint_features,
-                        evaluation_label=eval_spec.label,
+                        fingerprint_features=features,
+                        evaluation_label=evaluation.label,
                         population_id=population_id,
-                        recalibration_mode=eval_spec.recalibration_mode,
-                        threshold_policy_id=eval_spec.threshold_policy_id,
+                        recalibration_mode=evaluation.recalibration_mode,
+                        threshold_policy_id=evaluation.threshold_policy_id,
                     )
-                    thresh_ids = builder.threshold_job(eval_ctx, calibration_ids[1], calibration_ids[0])
-                    jobs.append(
-                        StageJob(
-                            node_key=thresh_ids[0],
-                            stage=StageKind.THRESHOLD_CONSTRUCTION,
-                            context=eval_ctx,
-                            inputs=thresh_ids[2],
-                            output=thresh_ids[1],
-                            dependencies=thresh_ids[3],
-                        )
+                    evaluation_base = evaluation_directory(evaluation_ctx)
+                    threshold = _job(
+                        stage=StageKind.THRESHOLD_CONSTRUCTION,
+                        context=evaluation_ctx,
+                        role="thresholds",
+                        inputs=(_input(calibration_output, calibration_job, calibration_output),),
+                        outputs=(
+                            output("thresholds", f"thresholds/{evaluation_base}/thresholds.parquet"),
+                            output("diagnostics", f"thresholds/{evaluation_base}/diagnostics.json"),
+                        ),
+                        dependencies=(calibration_job.node_key,),
                     )
-                    eval_ids = builder.evaluation_job(
-                        eval_ctx, thresh_ids[1], test_ids[1], thresh_ids[0], test_ids[0]
+                    metrics = _job(
+                        stage=StageKind.OPERATING_POINT_EVALUATION,
+                        context=evaluation_ctx,
+                        role="metrics",
+                        inputs=(
+                            _input("thresholds", threshold, "thresholds"),
+                            _input("test_scores", test, "test_scores"),
+                        ),
+                        outputs=(output("client_metrics", f"evaluations/{evaluation_base}/client-metrics.parquet"),),
+                        dependencies=(threshold.node_key, test.node_key),
                     )
-                    jobs.append(
-                        StageJob(
-                            node_key=eval_ids[0],
-                            stage=StageKind.OPERATING_POINT_EVALUATION,
-                            context=eval_ctx,
-                            inputs=eval_ids[2],
-                            output=eval_ids[1],
-                            dependencies=eval_ids[3],
-                        )
-                    )
-                    eval_outputs.append(eval_ids[1])
-                    eval_node_keys.append(eval_ids[0])
+                    jobs.extend((threshold, metrics))
+                    evaluation_jobs.append(metrics)
 
-    # 4. Statistical Analysis job
-    stats_ids = builder.statistical_analysis_job(
-        experiment_ctx,
-        tuple(eval_outputs),
-        tuple(eval_node_keys),
-        () if analysis_selection_output is None else (analysis_selection_output,),
-        () if analysis_selection_node_key is None else (analysis_selection_node_key,),
-    )
-    stats_job = StageJob(
-        node_key=stats_ids[0],
+    # Analysis receives every current-run scientific input explicitly.  It may inspect
+    # only these declared direct dependencies; it never reconstructs a stage path.
+    statistics_inputs = [
+        StageInput(
+            name=f"analysis_input_{index}_{stage_output.name}",
+            relative_path=stage_output.relative_path,
+            producer=stage_job.node_key,
+            coordinates=AnalysisInputCoordinates(
+                producer_stage=stage_job.stage,
+                output_name=stage_output.name,
+                context=stage_job.context,
+            ),
+        )
+        for index, stage_job in enumerate(jobs)
+        for stage_output in stage_job.outputs
+    ]
+    statistics_dependencies = [stage_job.node_key for stage_job in jobs]
+    statistics = _job(
         stage=StageKind.STATISTICAL_ANALYSIS,
-        context=experiment_ctx,
-        inputs=stats_ids[2],
-        output=stats_ids[1],
-        dependencies=stats_ids[3],
+        context=StageJobContext(
+            experiment_id=experiment.identifier,
+            prerequisite_results=prerequisite_results,
+        ),
+        role="statistics",
+        inputs=tuple(statistics_inputs),
+        outputs=(output("statistical_result", "analysis/statistical-result.json"),),
+        dependencies=tuple(statistics_dependencies),
     )
-    jobs.append(stats_job)
+    jobs.append(statistics)
 
-    # 5. Freeze result family
-    result_freeze_ids = builder.result_freeze_job(
-        experiment_ctx,
-        stats_ids[1],
-        stats_ids[0],
-        tuple(eval_outputs),
-        tuple(eval_node_keys),
+    freeze_inputs = [_input("statistical_result", statistics, "statistical_result")]
+    freeze_inputs.extend(
+        _input(f"client_metrics_{index}", metrics, "client_metrics")
+        for index, metrics in enumerate(evaluation_jobs)
     )
-    result_freeze_job = StageJob(
-        node_key=result_freeze_ids[0],
+    result_freeze = _job(
         stage=StageKind.RESULT_FREEZE,
         context=experiment_ctx,
-        inputs=result_freeze_ids[2],
-        output=result_freeze_ids[1],
-        dependencies=result_freeze_ids[3],
+        role="frozen-result",
+        inputs=tuple(freeze_inputs),
+        outputs=(output("frozen_result", "frozen-result.json"),),
+        dependencies=(statistics.node_key, *(metrics.node_key for metrics in evaluation_jobs)),
     )
-    jobs.append(result_freeze_job)
-
-    # 6. Report Generation job
-    report_ids = builder.report_job(experiment_ctx, result_freeze_ids[1], result_freeze_ids[0])
-    report_job = StageJob(
-        node_key=report_ids[0],
+    jobs.append(result_freeze)
+    report = _job(
         stage=StageKind.REPORT_GENERATION,
         context=experiment_ctx,
-        inputs=report_ids[2],
-        output=report_ids[1],
-        dependencies=report_ids[3],
+        role="report",
+        inputs=(_input("frozen_result", result_freeze, "frozen_result"),),
+        outputs=(output("report", "reports/report.md"),),
+        dependencies=(result_freeze.node_key,),
     )
-    jobs.append(report_job)
+    jobs.append(report)
 
-    planning_graph = PlanningGraph(tuple(jobs))
-    validate_acyclic(planning_graph)
-    return planning_graph
+    graph = PlanningGraph(tuple(jobs))
+    validate_acyclic(graph)
+    return graph
+
+
+def expand_campaign_jobs(
+    experiments: tuple[ExperimentRecord, ...],
+    config: ResolvedProjectConfiguration,
+    *,
+    prerequisite_results_by_experiment: dict[object, tuple[PrerequisiteExperimentResult, ...]] | None = None,
+) -> PlanningGraph:
+    """Build one active-campaign DAG with direct edges to exact shared producers.
+
+    The producer map is deliberately local to this planning call.  It records no execution
+    outcome and cannot be consulted by a later command.
+    """
+
+    source_fingerprints: dict[object, str] = {}
+    shared_producers: dict[SharedUpstreamKey, StageJob] = {}
+    rewritten_jobs: list[StageJob] = []
+    output_paths: dict[tuple[GraphNodeKey, str], str] = {}
+    node_keys: dict[GraphNodeKey, GraphNodeKey] = {}
+    shared_ordinal = 0
+
+    for experiment in experiments:
+        prerequisite_results = (prerequisite_results_by_experiment or {}).get(experiment.identifier, ())
+        graph = expand_experiment_jobs(experiment, config, prerequisite_results=prerequisite_results)
+        for job in graph.jobs:
+            inputs = tuple(
+                replace(
+                    item,
+                    producer=node_keys.get(item.producer, item.producer),
+                    relative_path=output_paths.get((item.producer, item.name), item.relative_path),
+                )
+                for item in job.inputs
+            )
+            dependencies = tuple(dict.fromkeys(node_keys.get(item, item) for item in job.dependencies))
+            candidate = replace(job, inputs=inputs, dependencies=dependencies)
+            if candidate.stage not in _SHAREABLE_STAGES:
+                rewritten_jobs.append(candidate)
+                node_keys[job.node_key] = candidate.node_key
+                for stage_output in candidate.outputs:
+                    output_paths[(job.node_key, stage_output.name)] = stage_output.relative_path
+                continue
+
+            key = _shared_upstream_key(candidate, config=config, source_fingerprints=source_fingerprints)
+            producer = shared_producers.get(key)
+            if producer is not None:
+                node_keys[job.node_key] = producer.node_key
+                for stage_output in producer.outputs:
+                    output_paths[(job.node_key, stage_output.name)] = stage_output.relative_path
+                continue
+
+            shared_ordinal += 1
+            producer = replace(
+                candidate,
+                node_key=GraphNodeKey(label=f"shared:{candidate.stage.value}:{shared_ordinal:04d}"),
+                outputs=tuple(
+                    StageOutput(
+                        name=stage_output.name,
+                        relative_path=shared_output_path(
+                            directory=_SHARED_OUTPUT_DIRECTORIES[candidate.stage],
+                            ordinal=shared_ordinal,
+                            output_name=stage_output.name,
+                            source_path=stage_output.relative_path,
+                        ),
+                    )
+                    for stage_output in candidate.outputs
+                ),
+            )
+            shared_producers[key] = producer
+            rewritten_jobs.append(producer)
+            node_keys[job.node_key] = producer.node_key
+            for stage_output in producer.outputs:
+                output_paths[(job.node_key, stage_output.name)] = stage_output.relative_path
+
+    freeze_jobs = {
+        job.context.experiment_id: job for job in rewritten_jobs if job.stage is StageKind.RESULT_FREEZE
+    }
+    campaign_jobs: list[StageJob] = []
+    for job in rewritten_jobs:
+        experiment = config.experiments.get(job.context.experiment_id)
+        if job.stage is not StageKind.STATISTICAL_ANALYSIS or not experiment.prerequisites:
+            campaign_jobs.append(job)
+            continue
+        prerequisite_inputs: list[StageInput] = []
+        prerequisite_dependencies: list[GraphNodeKey] = []
+        for prerequisite in experiment.prerequisites:
+            freeze = freeze_jobs.get(prerequisite.experiment_id)
+            if freeze is None:
+                raise ValueError(
+                    f"Campaign graph lacks frozen result for prerequisite '{prerequisite.experiment_id.value}'"
+                )
+            prerequisite_inputs.append(
+                StageInput(
+                    name=f"prerequisite_frozen_result_{prerequisite.experiment_id.value}",
+                    relative_path=freeze.output_path("frozen_result"),
+                    producer=freeze.node_key,
+                    coordinates=AnalysisInputCoordinates(
+                        producer_stage=StageKind.RESULT_FREEZE,
+                        output_name="frozen_result",
+                        context=freeze.context,
+                    ),
+                )
+            )
+            prerequisite_dependencies.append(freeze.node_key)
+        campaign_jobs.append(
+            replace(
+                job,
+                inputs=(*job.inputs, *prerequisite_inputs),
+                dependencies=(*job.dependencies, *prerequisite_dependencies),
+            )
+        )
+
+    graph = PlanningGraph(tuple(campaign_jobs))
+    validate_acyclic(graph)
+    return graph
+
+
+def _shared_upstream_key(
+    job: StageJob,
+    *,
+    config: ResolvedProjectConfiguration,
+    source_fingerprints: dict[object, str],
+) -> SharedUpstreamKey:
+    experiment = config.experiments.get(job.context.experiment_id)
+    population_id = job.context.population_id or experiment.population_ids[0]
+    population = config.populations.get(population_id)
+    dataset = config.datasets.get(population.dataset_id)
+    setup = dataset.setup(population.setup_id)
+    materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
+    source_fingerprint = source_fingerprints.get(dataset.dataset_id)
+    if source_fingerprint is None:
+        source_fingerprint = compute_experiment_source_fingerprint(
+            datasets=config.datasets, dataset_ids=(dataset.dataset_id,)
+        ).value
+        source_fingerprints[dataset.dataset_id] = source_fingerprint
+    return SharedUpstreamKey(
+        stage=job.stage,
+        dataset_id=dataset.dataset_id,
+        population_id=population_id,
+        materialization_id=materialization.identifier,
+        partition_condition=job.context.partition_condition,
+        seed=job.context.seed,
+        seed_cohort_id=experiment.seed_cohort_id,
+        training_profile_id=experiment.training_profile_id,
+        training_overrides_fingerprint=compute_fingerprint(
+            "campaign-training-overrides", experiment.training_overrides or {}
+        ).value,
+        checkpoint_profile_id=experiment.checkpoint_profile_id,
+        eligibility_policy_id=experiment.eligibility_policy_id,
+        readiness_gates=experiment.readiness_gates,
+        score_output_name=job.outputs[0].name if job.stage is StageKind.SCORE_GENERATION else None,
+        temporal_mode=materialization.split_method.value,
+        source_fingerprint=source_fingerprint,
+        direct_producers=(
+            ()
+            if job.stage is StageKind.DATASET_MATERIALIZATION
+            else tuple((item.producer, item.name) for item in job.inputs)
+        ),
+    )

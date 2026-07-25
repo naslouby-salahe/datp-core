@@ -108,7 +108,6 @@ def resolve_project_configuration_candidate(
         quantile_estimators=protocols.quantile_estimators,
         metric_bundles=protocols.metric_bundles,
         metric_definitions=protocols.metric_definitions,
-        artifact_identity=protocols.artifact_identity,
         communication_estimation_contract=protocols.communication_estimation_contract,
         operational_inputs=protocols.operational_inputs,
         report_profiles=protocols.report_profiles,

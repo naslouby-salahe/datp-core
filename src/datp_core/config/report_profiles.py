@@ -47,7 +47,6 @@ class ReportDefaultsRecord:
     missing_value_policy: str
     table_output_formats: tuple[str, ...]
     figure_output_formats: tuple[str, ...]
-    provenance_required_per_artifact: bool
     analysis_defined_direction_token: str
 
 

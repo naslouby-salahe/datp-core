@@ -6,7 +6,6 @@ from __future__ import annotations
 from pydantic import JsonValue, model_validator
 
 from datp_core.config.authored.base import SchemaVersionOneConfigModel, StrictFrozenConfigModel
-from datp_core.config.authored.protocols.artifacts import ArtifactFingerprintsConfig, ArtifactIdentityConfig
 from datp_core.config.authored.protocols.evaluation import (
     EligibilityFallbackConfig,
     EligibilityPolicyConfig,
@@ -94,7 +93,6 @@ class AuthoredProtocolsConfig(SchemaVersionOneConfigModel):
     nested_replicate_policy: NestedReplicatePolicyConfig
     result_types: dict[str, ResultTypeConfig]
     evaluation_result_contract: EvaluationResultContractConfig
-    artifact_identity: ArtifactIdentityConfig
     communication_estimation_contract: CommunicationEstimationContractConfig
     report_defaults: ReportDefaultsConfig
     operational_inputs: OperationalInputsConfig
@@ -113,8 +111,6 @@ class AuthoredProtocolsConfig(SchemaVersionOneConfigModel):
 
 
 __all__ = [
-    "ArtifactFingerprintsConfig",
-    "ArtifactIdentityConfig",
     "AuthoredProtocolsConfig",
     "BaseThresholdPolicyConfig",
     "BatchingProfileConfig",

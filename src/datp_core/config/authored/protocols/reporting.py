@@ -10,7 +10,6 @@ class ReportDefaultsConfig(StrictFrozenConfigModel):
     missing_value_policy: str
     table_output_formats: list[str]
     figure_output_formats: list[str]
-    provenance_required_per_artifact: bool
     analysis_defined_direction_token: str
 
 

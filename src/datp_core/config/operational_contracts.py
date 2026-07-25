@@ -65,9 +65,6 @@ class CommunicationEstimationContractRecord:
     candidate_grid_payload: str
     model_exchange: ModelExchangeRecord
     checkpoint_storage: CheckpointStorageRecord
-    filename_match_is_not_lineage_evidence: bool
-    frozen_artifacts_immutable: bool
-    ambiguous_latest_reference: str
 
 
 @define(frozen=True, slots=True, kw_only=True)

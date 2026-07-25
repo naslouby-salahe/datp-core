@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import Enum, StrEnum
 
 
-class StageKind(str, Enum):
+class StageKind(StrEnum):
     PREFLIGHT = "preflight"
     DATASET_MATERIALIZATION = "dataset_materialization"
     MODEL_TRAINING = "model_training"
@@ -21,8 +21,6 @@ class StageKind(str, Enum):
 
 class JobExecutionStatus(Enum):
     SUCCESS = "success"
-    SKIPPED = "skipped"
-    SUPPRESSED = "suppressed"
     FAILED = "failed"
     INFEASIBLE = "infeasible"
     BLOCKED_BY_DEPENDENCY = "blocked_by_dependency"

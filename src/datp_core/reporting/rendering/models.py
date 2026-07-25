@@ -34,5 +34,5 @@ class RenderedReportPackage:
     schema_version: int
     experiment_id: str
     scientific_fingerprint: str
-    source_artifacts: tuple[dict[str, str], ...]
+    source_files: tuple[dict[str, str], ...]
     rendered_artifacts: tuple[dict[str, object], ...]

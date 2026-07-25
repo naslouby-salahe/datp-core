@@ -12,7 +12,6 @@ def resolve_report_defaults(cfg: ReportDefaultsConfig) -> ReportDefaultsRecord:
         missing_value_policy=cfg.missing_value_policy,
         table_output_formats=tuple(cfg.table_output_formats),
         figure_output_formats=tuple(cfg.figure_output_formats),
-        provenance_required_per_artifact=cfg.provenance_required_per_artifact,
         analysis_defined_direction_token=cfg.analysis_defined_direction_token,
     )
 

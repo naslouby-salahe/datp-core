@@ -127,7 +127,7 @@ checkpoint_profiles:
       tie_break: earliest_scheduled_round
       aggregation: cross_locked_seed_cohort_mean_reconstruction_error_per_candidate_round
       scope: natural_device_regime_only_fedavg_only_benign_validation_only
-      selected_round_reuse: single_round_number_reused_by_every_profile_declaring_lookup_authorization
+      selected_round_application_scope: single_round_number_applied_by_every_profile_declaring_lookup_authorization
       weights_remain_seed_and_population_specific: true
       forbidden_selectors:
         - per_policy_selection
@@ -993,65 +993,6 @@ evaluation_result_contract:
     - seed_level_metric_record
     - eligibility_manifest
 
-artifact_identity:
-  hash_function: blake2b
-  digest_bytes: 32
-  canonical_serialization: sorted_keys_utf_8_json_without_comments_or_whitespace_variation
-  absolute_paths_excluded_from_identity: true
-  fingerprints:
-    source: [dataset_identifier, dataset_fingerprint_inputs_source, source_inventory_hash]
-    schema: [dataset_identifier, dataset_fingerprint_inputs_schema]
-    materialization:
-      - source_fingerprint
-      - schema_fingerprint
-      - materialization_identifier
-      - preprocessing_sequence
-      - row_exclusion_rules
-      - duplicate_policy
-      - categorical_encoding_vocabulary_fingerprint
-      - post_encoding_feature_order
-      - normalization_strategy
-      - normalization_fit_scope
-      - split_definition
-      - split_seed
-    client_assignment: [materialization_fingerprint, setup_identifier, client_construction, partition_condition, partition_seed]
-    model: [resolved_model_architecture, resolved_input_dimension]
-    training:
-      - client_assignment_fingerprint
-      - model_fingerprint
-      - resolved_training_profile
-      - resolved_optimizer_contract
-      - resolved_batching_contract
-      - training_seed
-      - resolved_training_overrides
-    checkpoint: [training_fingerprint, checkpoint_profile, round_or_epoch, resolved_checkpoint_selection_contract]
-    score: [checkpoint_fingerprint, split_role, score_orientation]
-    threshold: [score_fingerprint, resolved_threshold_policy_contract, resolved_policy_overrides, eligibility_policy]
-    metric: [threshold_fingerprint, metric_bundle, resolved_metric_definitions, metric_definition_version]
-    analysis: [metric_fingerprint, analysis_label, analysis_formulae, score_orientation, reference_analysis, outcome_bands, sweep_coordinates, resolved_statistical_profile, analysis_seed]
-  lineage_validation_before_reuse:
-    - checksum_match
-    - schema_version_match
-    - parent_fingerprint_match
-    - completion_status_completed
-    - non_stale_status
-  reuse_rejected_when_any_changes:
-    - dataset
-    - materialization
-    - client_assignment
-    - split
-    - preprocessing
-    - model
-    - training_algorithm
-    - training_seed
-    - checkpoint
-    - threshold_policy
-    - policy_parameters
-    - metric_definition
-    - analysis_formula
-    - outcome_bands
-    - statistical_profile
-
 communication_estimation_contract:
   estimate_basis: analytical_payload_estimate_never_measured_network_traffic
   field_encodings:
@@ -1072,16 +1013,12 @@ communication_estimation_contract:
   checkpoint_storage:
     contents: [model_parameters_float32, selected_round_uint32, training_seed_uint32, optimizer_state_if_required_for_resumption, training_and_checkpoint_fingerprints]
     model_parameter_bytes_formula: "resolved_model_parameter_count * 4"
-  filename_match_is_not_lineage_evidence: true
-  frozen_artifacts_immutable: true
-  ambiguous_latest_reference: forbidden
 
 report_defaults:
   ordering: deterministic_by_threshold_construction
   missing_value_policy: render_typed_unavailable
   table_output_formats: [markdown, latex]
   figure_output_formats: [pdf, png]
-  provenance_required_per_artifact: true
   analysis_defined_direction_token: from_analysis
 
 report_profiles:

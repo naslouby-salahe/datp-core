@@ -1,10 +1,12 @@
 """Plan expansion and calibration/test artifact-isolation tests."""
 
+from collections import Counter
+
 from datp_core.app import build_application
-from datp_core.artifacts.identity import ArtifactKind
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments import RecalibrationMode
-from datp_core.experiments.planning import expand_experiment_jobs
+from datp_core.experiments.execution.campaign import _canonical_experiment_order
+from datp_core.experiments.planning import expand_campaign_jobs, expand_experiment_jobs
 from datp_core.pipeline.graph.validation import validate_acyclic
 from datp_core.pipeline.stages.enums import StageKind
 
@@ -17,9 +19,9 @@ def test_complete_catalogue_resolves_and_anchor_plan_separates_scores() -> None:
     validate_acyclic(plan)
     for job in plan.jobs:
         if job.stage is StageKind.THRESHOLD_CONSTRUCTION:
-            assert all(item.kind is not ArtifactKind.TEST_SCORES for item in job.inputs)
+            assert all(item.name != "test_scores" for item in job.inputs)
         if job.stage is StageKind.OPERATING_POINT_EVALUATION:
-            assert all(item.kind is not ArtifactKind.CALIBRATION_SCORES for item in job.inputs)
+            assert all("calibration" not in item.name for item in job.inputs)
 
 
 def test_controlled_heterogeneity_expands_every_partition_condition_without_identity_collisions() -> None:
@@ -42,7 +44,9 @@ def test_controlled_heterogeneity_expands_every_partition_condition_without_iden
     }
     assert all(job.context.partition_condition is not None for job in evaluations)
     assert len({job.node_key for job in plan.jobs}) == plan.node_count
-    assert len({job.output.node_key for job in plan.jobs}) == plan.node_count
+    assert len({path.relative_path for job in plan.jobs for path in job.outputs}) == sum(
+        len(job.outputs) for job in plan.jobs
+    )
 
 
 def test_confirmatory_plan_freezes_one_cohort_checkpoint_before_all_scores() -> None:
@@ -53,10 +57,13 @@ def test_confirmatory_plan_freezes_one_cohort_checkpoint_before_all_scores() -> 
     selector = next(job for job in plan.jobs if job.stage is StageKind.CHECKPOINT_SELECTION)
     scores = tuple(job for job in plan.jobs if job.stage is StageKind.SCORE_GENERATION)
 
-    assert len(selector.inputs) == 10
+    assert len(selector.inputs) == 20
     assert len(scores) == 20
     assert all(selector.node_key in score.dependencies for score in scores)
-    assert all(selector.output in score.inputs for score in scores)
+    assert all(
+        any(item.name == "checkpoint_selection" and item.producer == selector.node_key for item in score.inputs)
+        for score in scores
+    )
 
 
 def test_quantile_sensitivity_expands_every_quantile_without_score_duplication() -> None:
@@ -117,7 +124,7 @@ def test_calibration_window_sweep_reuses_scores_and_expands_nested_replicates() 
     assert len(subsets) == 6_000
     assert {job.context.calibration_sample_count for job in subsets} == {50, 100, 250, 500, 1000, 5000}
     assert {job.context.calibration_replicate for job in subsets} == set(range(100))
-    assert all(job.inputs[0].kind is ArtifactKind.CALIBRATION_SCORES for job in subsets)
+    assert all(job.inputs[0].name == "calibration_scores" for job in subsets)
     assert len(thresholds) == 24_040
     assert sum(job.context.calibration_sample_count is None for job in thresholds) == 40
     assert len({job.node_key for job in plan.jobs}) == plan.node_count
@@ -159,9 +166,9 @@ def test_fedprox_plan_retains_all_mu_cells_without_rematerializing() -> None:
     assert len(materializations) == 10
     assert len(training) == 40
     assert {job.context.federated_proximal_mu for job in training} == {0.001, 0.01, 0.1, 1.0}
-    assert len(selector.inputs) == 40
+    assert len(selector.inputs) == 80
     assert selector.node_key in statistics.dependencies
-    assert selector.output in statistics.inputs
+    assert any(item.name == "checkpoint_selection" and item.producer == selector.node_key for item in statistics.inputs)
 
 
 def test_ditto_plan_retains_every_weight_with_distinct_training_identities() -> None:
@@ -175,8 +182,8 @@ def test_ditto_plan_retains_every_weight_with_distinct_training_identities() -> 
 
     assert len(training) == 40
     assert {job.context.ditto_proximal_weight for job in training} == {0.001, 0.01, 0.1, 1.0}
-    assert len({job.output.node_key for job in training}) == len(training)
-    assert len(selector.inputs) == 40
+    assert len({job.output_path("checkpoint") for job in training}) == len(training)
+    assert len(selector.inputs) == 80
     assert selector.node_key in statistics.dependencies
 
 
@@ -196,8 +203,27 @@ def test_temporal_plan_binds_each_arm_to_its_population_and_recalibration_window
 
     assert len(materializations) == 20
     assert len(scores) == 50
-    assert sum(job.output.kind is ArtifactKind.FUTURE_RECALIBRATION_SCORES for job in scores) == 10
+    assert sum(any(item.name == "future_recalibration_scores" for item in job.outputs) for job in scores) == 10
     assert {job.context.population_id for job in materializations} == {
         job.context.population_id for job in plan.jobs if job.context.recalibration_mode is not None
     }
-    assert all(job.inputs[0].kind is ArtifactKind.FUTURE_RECALIBRATION_SCORES for job in one_shot_thresholds)
+    assert all(job.inputs[0].name == "future_recalibration_scores" for job in one_shot_thresholds)
+
+
+def test_campaign_plan_has_one_durable_shared_upstream_producer_per_equivalent_cell() -> None:
+    config = build_application().config
+    ordered_experiments = tuple(
+        config.experiments.get(identifier) for identifier in _canonical_experiment_order(config)
+    )
+
+    plan = expand_campaign_jobs(ordered_experiments, config)
+    consumer_counts = Counter(dependency for job in plan.jobs for dependency in job.dependencies)
+    shared_producers = tuple(job for job in plan.jobs if consumer_counts[job.node_key] > 1)
+
+    assert shared_producers
+    assert all(job.node_key.label.startswith("shared:") for job in shared_producers)
+    assert all(output.relative_path.startswith("shared/") for job in shared_producers for output in job.outputs)
+    assert all(
+        any(input_.producer == producer.node_key for consumer in plan.jobs for input_ in consumer.inputs)
+        for producer in shared_producers
+    )

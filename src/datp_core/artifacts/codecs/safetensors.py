@@ -1,8 +1,6 @@
 """The one sanctioned SafeTensors call site for model-tensor persistence.
 
-Structurally impossible to bypass the atomic commit transaction for model tensors: every
-SafeTensors read/write in the codebase goes through ``save_model_safetensors``/
-``load_model_safetensors`` here.
+Every SafeTensors read/write in the codebase goes through the direct-file store APIs here.
 """
 
 from __future__ import annotations
@@ -11,59 +9,35 @@ import torch
 from safetensors.torch import load as load_safetensors_bytes
 from safetensors.torch import save as save_safetensors_bytes
 
-from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey
-from datp_core.artifacts.lineage import ArtifactParent
-from datp_core.artifacts.payloads import ArtifactCommitMetadata, ArtifactCommitRequest, BytesPayload
-from datp_core.artifacts.repository.models import ArtifactCommitResult
-from datp_core.artifacts.repository.port import ArtifactRepository
-from datp_core.core.hashing import Fingerprint
-from datp_core.core.identifiers import ExperimentId
-from datp_core.core.seeding import Seed
+from datp_core.artifacts.store import ArtifactStore
+from datp_core.core.hashing import Checksum
 
 
-def save_model_safetensors(
+def save_model_safetensors_to_store(
     model_state_dict: dict[str, torch.Tensor],
     *,
-    repository: ArtifactRepository,
-    artifact_key: ArtifactKey,
-    scientific_fingerprint: Fingerprint,
-    execution_fingerprint: Fingerprint,
+    store: ArtifactStore,
     relative_path: str,
-    schema_version: int,
-    creation_timestamp: float,
-    environment_identity: str,
-    parents: tuple[ArtifactParent, ...] = (),
-    experiment_id: ExperimentId | None = None,
-    seed: Seed | None = None,
-) -> ArtifactCommitResult:
-    """Commit model weights as a SafeTensors artifact through the atomic commit transaction."""
+    replace: bool = False,
+) -> Checksum:
+    """Atomically persist model tensors through the direct-file store."""
     clean_tensors = {key: tensor.cpu().contiguous() for key, tensor in model_state_dict.items()}
-    payload_bytes = save_safetensors_bytes(clean_tensors)
-    request = ArtifactCommitRequest(
-        metadata=ArtifactCommitMetadata(
-            artifact_key=artifact_key,
-            artifact_format=ArtifactFormat.SAFETENSORS,
-            scientific_fingerprint=scientific_fingerprint,
-            execution_fingerprint=execution_fingerprint,
-            relative_path=relative_path,
-            parents=parents,
-            schema_version=schema_version,
-            creation_timestamp=creation_timestamp,
-            environment_identity=environment_identity,
-            experiment_id=experiment_id,
-            seed=seed,
-        ),
-        payload=BytesPayload(payload_bytes=payload_bytes),
-    )
-    return repository.commit(request)
+    return store.write_bytes_atomic(relative_path, save_safetensors_bytes(clean_tensors), replace=replace)
 
 
-def load_model_safetensors(relative_path: str, repository: ArtifactRepository) -> dict[str, torch.Tensor]:
-    """Read a committed SafeTensors artifact, verifying its checksum before deserializing."""
-    result = repository.read(relative_path)
-    if not result.found or result.payload_bytes is None:
-        raise FileNotFoundError(f"SafeTensors artifact not found or corrupt: {relative_path}")
-    return load_safetensors_bytes(result.payload_bytes)
+def load_model_safetensors_from_store(
+    relative_path: str,
+    *,
+    store: ArtifactStore,
+    expected_checksum: Checksum | None = None,
+) -> dict[str, torch.Tensor]:
+    """Load direct-file tensors after optional checksum validation."""
+    if expected_checksum is not None:
+        store.validate_file(relative_path, expected_checksum)
+    return load_safetensors_bytes(store.read_bytes(relative_path))
 
 
-__all__ = ["load_model_safetensors", "save_model_safetensors"]
+__all__ = [
+    "load_model_safetensors_from_store",
+    "save_model_safetensors_to_store",
+]

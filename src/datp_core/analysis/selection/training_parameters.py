@@ -1,31 +1,14 @@
-"""Locked training-coefficient selection lookups: the FedProx primary mu and Ditto primary
-proximal weight, each read from a previously committed selection artifact."""
+"""Decode planner-supplied current-run training-coefficient selections."""
 
 from __future__ import annotations
 
 import json
 
-from datp_core.analysis.artifact_access.reader import read_artifact_bytes
 from datp_core.analysis.selection.models import DittoSelectionResult, FederatedProximalSelectionResult
-from datp_core.artifacts.repository.port import ArtifactRepository
-from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import ExperimentId
-from datp_core.experiments.identity import IdentityBuilder
-from datp_core.pipeline.stages.context import StageJobContext
 
 
-def federated_proximal_selection(
-    experiment_id: ExperimentId, *, config: ResolvedProjectConfiguration, repository: ArtifactRepository
-) -> FederatedProximalSelectionResult:
-    context = StageJobContext(experiment_id=experiment_id)
-    payload = json.loads(
-        read_artifact_bytes(
-            repository,
-            experiment_id,
-            IdentityBuilder.federated_proximal_selection_node_key(context),
-            missing_message="FedProx coefficient-selection artifact is unreadable",
-        )
-    )
+def federated_proximal_selection(payload_bytes: bytes) -> FederatedProximalSelectionResult:
+    payload = json.loads(payload_bytes)
     if not isinstance(payload, dict) or not isinstance(payload.get("selected_proximal_mu"), (int, float)):
         raise ValueError("FedProx coefficient-selection artifact is malformed")
     locked_primary_round = payload.get("locked_primary_round")
@@ -38,19 +21,8 @@ def federated_proximal_selection(
     )
 
 
-def ditto_selection(
-    experiment_id: ExperimentId, *, config: ResolvedProjectConfiguration, repository: ArtifactRepository
-) -> DittoSelectionResult:
-    source = config.primary_ditto_selection_experiment()
-    context = StageJobContext(experiment_id=source.identifier)
-    payload = json.loads(
-        read_artifact_bytes(
-            repository,
-            source.identifier,
-            IdentityBuilder.ditto_selection_node_key(context),
-            missing_message="Ditto weight-selection artifact is unreadable",
-        )
-    )
+def ditto_selection(payload_bytes: bytes) -> DittoSelectionResult:
+    payload = json.loads(payload_bytes)
     selected_weight = payload.get("selected_ditto_proximal_weight") if isinstance(payload, dict) else None
     if not isinstance(selected_weight, (int, float)):
         raise ValueError("Ditto weight-selection artifact is malformed")

@@ -370,7 +370,7 @@ Use one non-test Regime A selector, frozen before outcome inspection, and show a
 - [ ] Selector is explicitly configured.
 - [ ] No test or attack metric enters selection.
 - [ ] All candidate checkpoints exist.
-- [ ] One round is reused where required.
+- [ ] One selected round is applied consistently where required.
 - [ ] Full trajectories remain available.
 - [ ] B1 and B2 do not use different rounds.
 
@@ -800,7 +800,7 @@ DATP-Core is written from scratch; the prior project is behavioral only.
 - [ ] No old layout is required.
 - [ ] No compatibility shims exist.
 - [ ] Anchor behavior is independently reproduced.
-- [ ] Every result has new artifact lineage.
+- [ ] Every result has direct-file provenance and a final checksum manifest.
 
 ---
 
@@ -1050,7 +1050,7 @@ Demonstrate depth through:
 ## Reproducibility blockers
 
 - hidden scientific defaults;
-- incomplete artifact lineage;
+- incomplete direct-file provenance or checksum manifest;
 - manually copied manuscript values;
 - unresolved metric inconsistency;
 - missing seed or checkpoint provenance;

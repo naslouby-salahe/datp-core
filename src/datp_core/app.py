@@ -11,7 +11,7 @@ from attrs import define
 
 from datp_core.analysis.execution.handler import StatisticalAnalysisStageHandler
 from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
-from datp_core.artifacts.repository.filesystem import AtomicArtifactRepository
+from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.loading import ConfigurationError
 from datp_core.config.project import (
     DescribeResolvedProject,
@@ -38,6 +38,7 @@ from datp_core.evaluation.execution import OperatingPointEvaluationStageHandler
 from datp_core.experiments.execution import (
     CampaignOrchestrator,
     ExecuteExperimentUseCase,
+    ExperimentLifecycleUseCase,
     ExperimentOutputManager,
     PreflightStageHandler,
 )
@@ -149,7 +150,9 @@ class DatpApplication:
     fingerprint_config: FingerprintResolvedConfiguration
     audit_dataset: AuditDatasetUseCase
     execute_experiment: ExecuteExperimentUseCase
+    run_experiment: ExperimentLifecycleUseCase
     run_campaign: CampaignOrchestrator
+    output_manager: ExperimentOutputManager
     construct_thresholds: ConstructThresholdsUseCase
     statistical_analysis: StatisticalAnalysisUseCase
     audit_svc: DuckDbAuditService
@@ -162,7 +165,7 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
     cc = _build_common_config_use_cases(resolved_config)
 
     audit_ds = AuditDatasetUseCase()
-    artifact_repository = AtomicArtifactRepository(resolved_config.paths.outputs, lock_timeout=30.0)
+    output_store = ArtifactStore(resolved_config.paths.outputs)
     adapter_registry = _build_adapter_registry()
 
     construct_th = ConstructThresholdsUseCase(
@@ -174,23 +177,28 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
     executor = ExecuteExperimentUseCase(
         config=resolved_config,
         handlers=(
-            PreflightStageHandler(resolved_config, artifact_repository),
-            DatasetMaterializationStageHandler(resolved_config, artifact_repository, adapter_registry),
-            ModelTrainingStageHandler(resolved_config, artifact_repository),
-            CohortCheckpointSelectionStageHandler(resolved_config, artifact_repository),
-            ScoreGenerationStageHandler(resolved_config, artifact_repository),
-            CalibrationSubsamplingStageHandler(resolved_config, artifact_repository),
-            ThresholdConstructionStageHandler(resolved_config, artifact_repository, construct_th),
-            OperatingPointEvaluationStageHandler(resolved_config, artifact_repository),
-            StatisticalAnalysisStageHandler(resolved_config, artifact_repository, statistical_analysis),
-            ResultFreezeStageHandler(resolved_config, artifact_repository),
-            ReportGenerationStageHandler(resolved_config, artifact_repository),
+            PreflightStageHandler(resolved_config, output_store),
+            DatasetMaterializationStageHandler(resolved_config, output_store, adapter_registry),
+            ModelTrainingStageHandler(resolved_config, output_store),
+            CohortCheckpointSelectionStageHandler(resolved_config, output_store),
+            ScoreGenerationStageHandler(resolved_config, output_store),
+            CalibrationSubsamplingStageHandler(resolved_config, output_store),
+            ThresholdConstructionStageHandler(resolved_config, output_store, construct_th),
+            OperatingPointEvaluationStageHandler(resolved_config, output_store),
+            StatisticalAnalysisStageHandler(resolved_config, output_store, statistical_analysis),
+            ResultFreezeStageHandler(resolved_config, output_store),
+            ReportGenerationStageHandler(resolved_config, output_store),
         ),
     )
     output_manager = ExperimentOutputManager(resolved_config.paths.outputs)
-    campaign = CampaignOrchestrator(
+    lifecycle = ExperimentLifecycleUseCase(
         config=resolved_config,
         execute_experiment=executor,
+        output_manager=output_manager,
+    )
+    campaign = CampaignOrchestrator(
+        config=resolved_config,
+        lifecycle=lifecycle,
         output_manager=output_manager,
     )
     audit_svc = DuckDbAuditService(config=resolved_config)
@@ -205,7 +213,9 @@ def build_application(config_dir: Path | None = None) -> DatpApplication:
         fingerprint_config=cc.fingerprint_config,
         audit_dataset=audit_ds,
         execute_experiment=executor,
+        run_experiment=lifecycle,
         run_campaign=campaign,
+        output_manager=output_manager,
         construct_thresholds=construct_th,
         statistical_analysis=statistical_analysis,
         audit_svc=audit_svc,

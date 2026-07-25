@@ -121,7 +121,7 @@ class CheckpointSelectionConfig(StrictFrozenConfigModel):
     tie_break: str | None = None
     aggregation: str | None = None
     scope: str | None = None
-    selected_round_reuse: str | None = None
+    selected_round_application_scope: str | None = None
     weights_remain_seed_and_population_specific: bool | None = None
     forbidden_selectors: list[str] | None = None
     selection_granularity: str | None = None

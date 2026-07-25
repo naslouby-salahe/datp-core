@@ -3,21 +3,17 @@ machinery it and recovery-fraction analysis build on."""
 
 from __future__ import annotations
 
-import json
 import re
+from collections.abc import Mapping
 
-from datp_core.analysis.artifact_access.reader import read_artifact_bytes
 from datp_core.analysis.comparisons.models import (
     AbsorptionAnalysisResult,
     PairedThresholdAnalysisResult,
     SeedRatioResult,
 )
-from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments import AbsorptionAnalysisRecord, ExperimentRecord
-from datp_core.experiments.identity import IdentityBuilder
-from datp_core.pipeline.stages.context import StageJobContext
 
 _MATERIALITY_RULE_PATTERN = re.compile(r"^absolute_denominator_at_least_(?P<value>\d+(?:\.\d+)?(?:e[+-]?\d+)?)$")
 
@@ -75,46 +71,27 @@ def analyze_absorption(
     paired_results: tuple[PairedThresholdAnalysisResult, ...],
     *,
     config: ResolvedProjectConfiguration,
-    repository: ArtifactRepository,
+    reference_paired_result: PairedThresholdAnalysisResult,
 ) -> AbsorptionAnalysisResult:
     stress = next((result for result in paired_results if result.analysis_label == analysis.stress_test_analysis), None)
     if stress is None:
         raise ValueError(f"Absorption analysis '{analysis.label}' lacks its stress-test source")
     reference_experiment, reference_label = _absorption_reference(analysis)
     _validate_absorption_contract(analysis, experiment, reference_experiment, config=config)
-    reference_job_context = StageJobContext(experiment_id=reference_experiment)
-    payload = json.loads(
-        read_artifact_bytes(
-            repository,
-            reference_experiment,
-            IdentityBuilder.statistical_analysis_node_key(reference_job_context),
-            missing_message=f"Absorption analysis '{analysis.label}' reference statistical artifact is unavailable",
-        )
-    )
-    if not isinstance(payload, list):
-        raise ValueError(f"Absorption analysis '{analysis.label}' reference statistical artifact is malformed")
-    reference = next(
-        (item for item in payload if isinstance(item, dict) and item.get("analysis_label") == reference_label), None
-    )
-    if not isinstance(reference, dict):
+    if reference_paired_result.analysis_label != reference_label:
         raise ValueError(f"Absorption analysis '{analysis.label}' reference analysis is unavailable")
-    reference_seed_differences = reference.get("seed_differences")
-    if not isinstance(reference_seed_differences, list) or not all(
-        isinstance(value, (int, float)) for value in reference_seed_differences
-    ):
-        raise ValueError(f"Absorption analysis '{analysis.label}' reference analysis is malformed")
     return seed_ratio_result(
         label=analysis.label,
         formula=analysis.formula,
         numerator_seed_differences=stress.seed_differences,
-        denominator_seed_differences=tuple(float(value) for value in reference_seed_differences),
+        denominator_seed_differences=reference_paired_result.seed_differences,
         materiality_rule=analysis.denominator_materiality_rule,
         undefined_behavior=analysis.undefined_denominator_behavior,
     )
 
 
 def _absorption_reference(analysis: AbsorptionAnalysisRecord) -> tuple[ExperimentId, str]:
-    if not isinstance(analysis.reference_analysis, dict):
+    if not isinstance(analysis.reference_analysis, Mapping):
         raise ValueError(f"Absorption analysis '{analysis.label}' requires an explicit reference experiment")
     experiment = analysis.reference_analysis.get("experiment")
     label = analysis.reference_analysis.get("analysis")
@@ -140,19 +117,19 @@ def _validate_absorption_contract(
     if experiment.population_ids != reference.population_ids:
         raise ValueError(f"Absorption analysis '{analysis.label}' has an unmatched client population")
     mapping = analysis.matching_contract.get("evaluation_label_mapping")
-    if not isinstance(mapping, dict):
+    if not isinstance(mapping, Mapping):
         raise ValueError(f"Absorption analysis '{analysis.label}' lacks an evaluation-label mapping")
     reference_mapping = mapping.get("reference")
     stress_mapping = mapping.get("stress_test")
-    if not isinstance(reference_mapping, dict) or not isinstance(stress_mapping, dict):
+    if not isinstance(reference_mapping, Mapping) or not isinstance(stress_mapping, Mapping):
         raise ValueError(f"Absorption analysis '{analysis.label}' has malformed evaluation-label mappings")
     _validate_evaluation_label_mapping(analysis.label, reference_mapping, stress_mapping, reference, experiment)
 
 
 def _validate_evaluation_label_mapping(
     analysis_label: str,
-    reference_mapping: dict,
-    stress_mapping: dict,
+    reference_mapping: Mapping[str, object],
+    stress_mapping: Mapping[str, object],
     reference: ExperimentRecord,
     experiment: ExperimentRecord,
 ) -> None:

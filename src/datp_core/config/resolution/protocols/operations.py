@@ -175,9 +175,6 @@ def resolve_communication_estimation_contract(
             contents=tuple(cfg.checkpoint_storage.contents),
             model_parameter_bytes_formula=cfg.checkpoint_storage.model_parameter_bytes_formula,
         ),
-        filename_match_is_not_lineage_evidence=cfg.filename_match_is_not_lineage_evidence,
-        frozen_artifacts_immutable=cfg.frozen_artifacts_immutable,
-        ambiguous_latest_reference=cfg.ambiguous_latest_reference,
     )
 
 

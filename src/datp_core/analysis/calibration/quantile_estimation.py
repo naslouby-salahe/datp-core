@@ -12,26 +12,35 @@ from datp_core.analysis.calibration.models import (
     QuantileEstimationEvaluationResult,
     QuantileEstimationSeedResult,
 )
-from datp_core.artifacts.repository.port import ArtifactRepository
-from datp_core.core.identifiers import ExperimentId
+from datp_core.analysis.execution.inputs import AnalysisInputBundle
+from datp_core.artifacts.store import ArtifactStore
 from datp_core.core.seeding import Seed
 from datp_core.evaluation.distributions import calibration_variance_terms
 from datp_core.experiments import ExperimentRecord, QuantileEstimationAnalysisRecord
+from datp_core.experiments.planning import score_context
+from datp_core.pipeline.stages.context import StageJobContext
 
 
 def analyze_quantile_estimation(
     analysis: QuantileEstimationAnalysisRecord,
     *,
-    repository: ArtifactRepository,
+    store: ArtifactStore,
+    inputs: AnalysisInputBundle,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    experiment_id: ExperimentId,
 ) -> QuantileEstimationAnalysisResult:
     seed_results: list[QuantileEstimationSeedResult] = []
     for seed in seeds:
         frames = {
             label: threshold_and_calibration_frame(
-                repository=repository, experiment=experiment, seed=seed.value, label=label, experiment_id=experiment_id
+                store=store,
+                threshold_path=inputs.thresholds(
+                    _evaluation_context(experiment, label, seed.value)
+                ),
+                calibration_score_path=inputs.calibration_scores(
+                    score_context(_evaluation_context(experiment, label, seed.value))
+                ),
+                missing_message=f"Quantile-estimation artifacts are unavailable for seed {seed.value}, label '{label}'",
             )
             for label in analysis.source_evaluations
         }
@@ -80,3 +89,14 @@ def analyze_quantile_estimation(
 
 
 __all__ = ["analyze_quantile_estimation"]
+
+
+def _evaluation_context(experiment: ExperimentRecord, label: str, seed: int) -> StageJobContext:
+    evaluation = next(item for item in experiment.evaluations if item.label == label)
+    return StageJobContext(
+        experiment_id=experiment.identifier,
+        seed=seed,
+        evaluation_label=label,
+        population_id=evaluation.population_id,
+        recalibration_mode=evaluation.recalibration_mode,
+    )

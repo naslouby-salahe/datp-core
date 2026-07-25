@@ -1,4 +1,4 @@
-"""Experiment definitions, sweeps, planning, identity, and execution."""
+"""Experiment definitions, sweeps, planning, and execution."""
 
 from datp_core.experiments.catalogue.analyses import (
     AbsorptionAnalysisRecord,
@@ -41,4 +41,3 @@ from datp_core.experiments.catalogue.sweeps import (
     SweepValue,
     ValueSweepRecord,
 )
-from datp_core.experiments.identity.kinds import IdentityKind, StageIdentitySpec

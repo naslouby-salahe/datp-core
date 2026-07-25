@@ -6,18 +6,17 @@ from safetensors.torch import load as load_safetensors
 
 from datp_core.analysis.artifact_access.bundles import threshold_and_calibration_frame
 from datp_core.analysis.artifact_access.reader import read_artifact_bytes
+from datp_core.analysis.execution.inputs import AnalysisInputBundle
 from datp_core.analysis.operations.models import (
     ResourceCostAnalysisResult,
     ResourceCostEvaluationResult,
     ResourceCostSeedResult,
 )
-from datp_core.artifacts.repository.port import ArtifactRepository
+from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.operational_contracts import CommunicationEstimationContractRecord
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import ExperimentId
 from datp_core.core.seeding import Seed
 from datp_core.experiments import ExperimentRecord, ResourceCostAnalysisRecord
-from datp_core.experiments.identity import IdentityBuilder
 from datp_core.experiments.planning import score_context
 from datp_core.pipeline.stages.context import StageJobContext
 from datp_core.thresholding.policies.federated import FederatedMatchedExceedanceThresholdPolicyRecord
@@ -75,10 +74,10 @@ def analyze_resource_cost(
     analysis: ResourceCostAnalysisRecord,
     *,
     config: ResolvedProjectConfiguration,
-    repository: ArtifactRepository,
+    store: ArtifactStore,
+    inputs: AnalysisInputBundle,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    experiment_id: ExperimentId,
 ) -> ResourceCostAnalysisResult:
     contract = config.communication_estimation_contract
     if analysis.estimate_basis != contract.estimate_basis:
@@ -89,19 +88,23 @@ def analyze_resource_cost(
         for label in analysis.source_evaluations:
             evaluation = next(item for item in experiment.evaluations if item.label == label)
             _, calibration = threshold_and_calibration_frame(
-                repository=repository, experiment=experiment, seed=seed.value, label=label, experiment_id=experiment_id
+                store=store,
+                threshold_path=inputs.thresholds(
+                    _evaluation_context(experiment, label, seed.value)
+                ),
+                calibration_score_path=inputs.calibration_scores(
+                    score_context(_evaluation_context(experiment, label, seed.value))
+                ),
+                missing_message=f"Resource analysis artifacts are unavailable for seed {seed.value}, label '{label}'",
             )
             policy = config.threshold_policies.get(evaluation.threshold_policy_id)
             fields, threshold_bytes = threshold_exchange_cost(contract, policy, calibration["client_id"].n_unique())
-            context = score_context(
-                StageJobContext(
-                    experiment_id=experiment.identifier, seed=seed.value, population_id=evaluation.population_id
-                )
+            context = StageJobContext(
+                experiment_id=experiment.identifier, seed=seed.value, population_id=evaluation.population_id
             )
             checkpoint_bytes = read_artifact_bytes(
-                repository,
-                experiment_id,
-                IdentityBuilder.training_node_key(context),
+                store,
+                inputs.checkpoint(context),
                 missing_message=f"Model checkpoint is unavailable for resource analysis seed {seed.value}",
             )
             parameters = sum(tensor.numel() for tensor in load_safetensors(checkpoint_bytes).values())
@@ -125,3 +128,14 @@ def analyze_resource_cost(
 
 
 __all__ = ["analyze_resource_cost", "threshold_exchange_cost"]
+
+
+def _evaluation_context(experiment: ExperimentRecord, label: str, seed: int) -> StageJobContext:
+    evaluation = next(item for item in experiment.evaluations if item.label == label)
+    return StageJobContext(
+        experiment_id=experiment.identifier,
+        seed=seed,
+        evaluation_label=label,
+        population_id=evaluation.population_id,
+        recalibration_mode=evaluation.recalibration_mode,
+    )

@@ -4,11 +4,11 @@ threshold, expressed as a specialized paired-seed comparison against the static 
 from __future__ import annotations
 
 from datp_core.analysis.comparisons.paired import evaluation_metric, evaluation_policy
+from datp_core.analysis.execution.inputs import AnalysisInputBundle
 from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
 from datp_core.analysis.temporal.models import TemporalRecoveryAnalysisResult
-from datp_core.artifacts.repository.port import ArtifactRepository
+from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import ExperimentId
 from datp_core.core.seeding import Seed
 from datp_core.experiments import ExperimentRecord, TemporalRecoveryAnalysisRecord
 
@@ -17,11 +17,11 @@ def analyze_temporal_recovery(
     analysis: TemporalRecoveryAnalysisRecord,
     *,
     config: ResolvedProjectConfiguration,
-    repository: ArtifactRepository,
+    store: ArtifactStore,
+    inputs: AnalysisInputBundle,
     statistical_analysis: StatisticalAnalysisUseCase,
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
-    experiment_id: ExperimentId,
 ) -> TemporalRecoveryAnalysisResult:
     if analysis.primary_metric != "cv_fpr":
         raise ValueError(f"Temporal analysis '{analysis.label}' has an unsupported primary metric")
@@ -29,12 +29,12 @@ def analyze_temporal_recovery(
     def metric(label: str, seed: Seed) -> float:
         return evaluation_metric(
             config=config,
-            repository=repository,
+            store=store,
+            inputs=inputs,
             experiment=experiment,
             seed=seed.value,
             label=label,
             metric=analysis.primary_metric,
-            experiment_id=experiment_id,
             partition_condition=None,
             proximal_mu=None,
             ditto_weight=None,

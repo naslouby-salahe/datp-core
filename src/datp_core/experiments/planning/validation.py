@@ -4,12 +4,11 @@ from __future__ import annotations
 
 from attrs import define
 
-from datp_core.artifacts.identity import ArtifactKey, ArtifactKind
+from datp_core.pipeline.graph.key import GraphNodeKey
 from datp_core.pipeline.graph.model import PlanningGraph
 from datp_core.pipeline.graph.traversal import lexicographical_topological_sort
 from datp_core.pipeline.graph.validation import validate_acyclic
 from datp_core.pipeline.stages.enums import StageKind
-from datp_core.pipeline.stages.node_key import StageNodeKey
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -22,12 +21,13 @@ class PlanValidationResult:
 
 class ExecutionPlanValidator:
     @staticmethod
-    def _build_producer_map(graph: PlanningGraph, errors: list[str]) -> dict[ArtifactKey, StageNodeKey]:
-        producers: dict[ArtifactKey, StageNodeKey] = {}
+    def _build_producer_map(graph: PlanningGraph, errors: list[str]) -> dict[str, GraphNodeKey]:
+        producers: dict[str, GraphNodeKey] = {}
         for job in graph.jobs:
-            if job.output in producers:
-                errors.append(f"Multiple producers found for artifact output '{job.output.node_key.label}'")
-            producers[job.output] = job.node_key
+            for output in job.outputs:
+                if output.relative_path in producers:
+                    errors.append(f"Multiple producers found for output '{output.relative_path}'")
+                producers[output.relative_path] = job.node_key
         return producers
 
     def validate(self, graph: PlanningGraph) -> PlanValidationResult:
@@ -64,24 +64,29 @@ class ExecutionPlanValidator:
 
     @staticmethod
     def _validate_job_inputs(
-        graph: PlanningGraph, producers: dict[ArtifactKey, StageNodeKey], errors: list[str]
+        graph: PlanningGraph, producers: dict[str, GraphNodeKey], errors: list[str]
     ) -> None:
         for job in graph.jobs:
             for inp in job.inputs:
-                if inp not in producers:
+                if inp.relative_path not in producers:
                     errors.append(
-                        f"Job '{job.node_key.label}' consumes artifact '{inp.node_key.label}' "
+                        f"Job '{job.node_key.label}' consumes input '{inp.relative_path}' "
                         "which has no producer in the plan"
                     )
+                elif producers[inp.relative_path] != inp.producer:
+                    errors.append(
+                        f"Job '{job.node_key.label}' input '{inp.name}' declares the wrong producer for "
+                        f"'{inp.relative_path}'"
+                    )
 
-            if job.stage is StageKind.THRESHOLD_CONSTRUCTION and any(
-                item.kind is ArtifactKind.TEST_SCORES for item in job.inputs
-            ):
+            input_names = {item.name for item in job.inputs}
+            if job.stage is StageKind.THRESHOLD_CONSTRUCTION and "test_scores" in input_names:
                 errors.append(f"Threshold job '{job.node_key.label}' must not consume test scores")
-            if job.stage is StageKind.OPERATING_POINT_EVALUATION and any(
-                item.kind in {ArtifactKind.CALIBRATION_SCORES, ArtifactKind.FUTURE_RECALIBRATION_SCORES}
-                for item in job.inputs
-            ):
+            if job.stage is StageKind.OPERATING_POINT_EVALUATION and input_names & {
+                "calibration_scores",
+                "future_recalibration_scores",
+                "calibration_subset_scores",
+            }:
                 errors.append(f"Evaluation job '{job.node_key.label}' must not consume calibration scores")
 
 

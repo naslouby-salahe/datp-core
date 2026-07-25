@@ -1,4 +1,4 @@
-"""Calibration subsampling pipeline stage handler."""
+"""Calibration subsampling stage handler."""
 
 from __future__ import annotations
 
@@ -6,18 +6,11 @@ from io import BytesIO
 
 import polars as pl
 
-from datp_core.artifacts.identity import ArtifactFormat
-from datp_core.artifacts.payloads import BytesPayload
-from datp_core.artifacts.repository.port import ArtifactRepository
 from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
+from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.experiments.identity import IdentityBuilder
-from datp_core.experiments.planning import score_context
-from datp_core.pipeline.artifacts.commit import commit_artifact
-from datp_core.pipeline.artifacts.lineage import artifact_parents
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
-from datp_core.pipeline.stages.node_key import node_path
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
 from datp_core.thresholding.calibration.sampling import subsample_calibration_scores
 from datp_core.thresholding.policies.enums import CalibrationNestingPolicy, CalibrationSelectionStrategy
@@ -26,9 +19,9 @@ from datp_core.thresholding.policies.enums import CalibrationNestingPolicy, Cali
 class CalibrationSubsamplingStageHandler:
     stage = StageKind.CALIBRATION_SUBSAMPLING
 
-    def __init__(self, config: ResolvedProjectConfiguration, repository: ArtifactRepository) -> None:
+    def __init__(self, config: ResolvedProjectConfiguration, store: ArtifactStore) -> None:
         self._config = config
-        self._repository = repository
+        self._store = store
 
     def execute(self, job: StageJob) -> StageJobOutcome:
         context = job.context
@@ -57,17 +50,12 @@ class CalibrationSubsamplingStageHandler:
                 stage=job.stage,
                 error_message="Calibration subset contract is not executable by the configured deterministic sampler",
             )
-        relative_path = node_path(job.node_key)
-        calibration_relative_path = node_path(IdentityBuilder.calibration_score_node_key(score_context(context)))
-        calibration = self._repository.read(calibration_relative_path)
-        if not calibration.found or calibration.payload_bytes is None:
-            return StageJobOutcome.failed(
-                node_key=job.node_key, stage=job.stage, error_message="Calibration score artifact is unavailable"
-            )
         try:
             namespace = self._config.protocol_determinism.seed_namespaces["calibration_subsample"]
             digest_bytes = int(self._config.protocol_determinism.derived_seed_algorithm["digest_bytes"])
-            scores = validate_calibration_score_frame(pl.read_parquet(BytesIO(calibration.payload_bytes)))
+            scores = validate_calibration_score_frame(
+                pl.read_parquet(BytesIO(self._store.read_bytes(job.input_path("calibration_scores"))))
+            )
             sampled = subsample_calibration_scores(
                 scores,
                 requested_sample_count=context.calibration_sample_count,
@@ -77,25 +65,9 @@ class CalibrationSubsamplingStageHandler:
                 namespace_key=namespace.key,
                 digest_bytes=digest_bytes,
             )
-            validate_calibration_score_frame(sampled)
+            payload = BytesIO()
+            validate_calibration_score_frame(sampled).write_parquet(payload)
+            self._store.write_bytes_atomic(job.output_path("calibration_subset_scores"), payload.getvalue())
         except (KeyError, OSError, ValueError) as exc:
             return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message=str(exc))
-        payload = BytesIO()
-        sampled.write_parquet(payload)
-        commit = commit_artifact(
-            self._repository,
-            self._config,
-            context,
-            artifact_key=job.output,
-            artifact_format=ArtifactFormat.PARQUET,
-            relative_path=relative_path,
-            parents=artifact_parents(self._config, ((job.inputs[0], calibration_relative_path),)),
-            payload=BytesPayload(payload_bytes=payload.getvalue()),
-        )
-        if not commit.success:
-            return StageJobOutcome.failed(
-                node_key=job.node_key,
-                stage=job.stage,
-                error_message=commit.error_message or "calibration subset commit failed",
-            )
-        return StageJobOutcome.succeeded(node_key=job.node_key, stage=job.stage, produced_artifact=job.output)
+        return StageJobOutcome.succeeded(node_key=job.node_key, stage=job.stage, produced_outputs=job.outputs)

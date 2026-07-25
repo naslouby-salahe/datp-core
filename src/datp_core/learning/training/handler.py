@@ -9,15 +9,11 @@ from typing import cast
 
 from safetensors.torch import save as save_safetensors
 
-from datp_core.artifacts.identity import ArtifactFormat, ArtifactKey, ArtifactKind
-from datp_core.artifacts.payloads import BytesPayload
-from datp_core.artifacts.repository.port import ArtifactRepository
+from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import DatasetId
 from datp_core.core.numbers import PositiveInt
 from datp_core.data.contracts import SplitMethod
-from datp_core.experiments.identity import IdentityBuilder
-from datp_core.experiments.identity.kinds import IdentityKind
 from datp_core.learning.checkpoints.selection import (
     select_anchor_checkpoint_round,
     select_lowest_validation_loss_checkpoint,
@@ -35,11 +31,8 @@ from datp_core.learning.scoring.data import load_benign_client_tensors, material
 from datp_core.learning.training.federated import federated_train_autoencoder
 from datp_core.learning.training.models import DittoTrainingResult, FederatedTrainingResult
 from datp_core.learning.training.personalization import ditto_train_autoencoder
-from datp_core.pipeline.artifacts.commit import commit_artifact
-from datp_core.pipeline.artifacts.lineage import artifact_parents
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
-from datp_core.pipeline.stages.node_key import node_path
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
 
@@ -48,9 +41,9 @@ class ModelTrainingStageHandler:
 
     stage = StageKind.MODEL_TRAINING
 
-    def __init__(self, config: ResolvedProjectConfiguration, repository: ArtifactRepository) -> None:
+    def __init__(self, config: ResolvedProjectConfiguration, store: ArtifactStore) -> None:
         self._config = config
-        self._repository = repository
+        self._store = store
 
     def execute(self, job: StageJob) -> StageJobOutcome:
         experiment = self._config.experiments.get(job.context.experiment_id)
@@ -93,7 +86,9 @@ class ModelTrainingStageHandler:
                 )
         elif proximal_mu is not None or ditto_weight is not None:
             return StageJobOutcome.failed(
-                node_key=job.node_key, stage=job.stage, error_message="FedAvg training must not carry a FedProx coefficient"
+                node_key=job.node_key,
+                stage=job.stage,
+                error_message="FedAvg training must not carry a FedProx coefficient",
             )
         population = self._config.populations.get(job.context.population_id or experiment.population_ids[0])
         dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
@@ -107,16 +102,9 @@ class ModelTrainingStageHandler:
             return StageJobOutcome.failed(
                 node_key=job.node_key, stage=job.stage, error_message="Checkpoint profile has no round budget"
             )
-        relative_path = node_path(job.node_key)
-        selection_relative_path = f"{relative_path}.selection"
-        personalized_relative_path = f"{relative_path}.personalized"
-        personalized_key = IdentityBuilder.artifact_key(IdentityKind.PERSONALIZED_CHECKPOINT, job.context)
-        selection_key = ArtifactKey(
-            node_key=job.node_key, kind=ArtifactKind.CHECKPOINT_SELECTION
-        )
-        materialization_path = node_path(IdentityBuilder.materialization_node_key(job.context))
-        materialization = self._repository.read(materialization_path)
-        if not materialization.found or materialization.payload_bytes is None:
+        try:
+            materialization_bytes = self._store.read_bytes(job.input_path("materialization"))
+        except (OSError, ValueError):
             return StageJobOutcome.failed(
                 node_key=job.node_key, stage=job.stage, error_message="Materialization artifact is unavailable"
             )
@@ -126,7 +114,7 @@ class ModelTrainingStageHandler:
         try:
             with TemporaryDirectory(prefix="datp_training_") as temporary_directory:
                 materialized_path = Path(temporary_directory) / "materialized.parquet"
-                materialized_path.write_bytes(materialization.payload_bytes)
+                materialized_path.write_bytes(materialization_bytes)
                 training_split = (
                     "historical_training"
                     if materialization_config.split_method == SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL
@@ -224,46 +212,6 @@ class ModelTrainingStageHandler:
             return StageJobOutcome.failed(
                 node_key=job.node_key, stage=job.stage, error_message="Selected checkpoint state was not captured"
             )
-        checkpoint_commit = commit_artifact(
-            self._repository,
-            self._config,
-            job.context,
-            artifact_key=job.output,
-            artifact_format=ArtifactFormat.SAFETENSORS,
-            relative_path=relative_path,
-            parents=artifact_parents(self._config, ((job.inputs[0], materialization_path),)),
-            payload=BytesPayload(payload_bytes=save_safetensors(checkpoint_grid)),
-        )
-        if not checkpoint_commit.success:
-            return StageJobOutcome.failed(
-                node_key=job.node_key,
-                stage=job.stage,
-                error_message=checkpoint_commit.error_message or "training checkpoint commit failed",
-            )
-        if is_ditto:
-            ditto_result = cast(DittoTrainingResult, result)
-            personalized_grid = {
-                f"round_{checkpoint.round_number}.client_{client_id}.{name}": tensor
-                for checkpoint in ditto_result.scheduled_checkpoints
-                for client_id, state in checkpoint.personalized_states
-                for name, tensor in state
-            }
-            personalized_commit = commit_artifact(
-                self._repository,
-                self._config,
-                job.context,
-                artifact_key=personalized_key,
-                artifact_format=ArtifactFormat.SAFETENSORS,
-                relative_path=personalized_relative_path,
-                parents=artifact_parents(self._config, ((job.inputs[0], materialization_path),)),
-                payload=BytesPayload(payload_bytes=save_safetensors(personalized_grid)),
-            )
-            if not personalized_commit.success:
-                return StageJobOutcome.failed(
-                    node_key=job.node_key,
-                    stage=job.stage,
-                    error_message=personalized_commit.error_message or "personalized checkpoint commit failed",
-                )
         selection_payload = json.dumps(
             {
                 "schema_version": 1,
@@ -271,6 +219,7 @@ class ModelTrainingStageHandler:
                 "checkpoint_rounds": scheduled_rounds,
                 "round_losses": round_losses,
                 "personalized_round_losses": personalized_round_losses,
+                "federated_proximal_mu": proximal_mu,
                 "ditto_proximal_weight": ditto_weight,
                 "model_initialization_seed": initialization_seed,
                 "dataloader_shuffle_seeds": [
@@ -280,20 +229,24 @@ class ModelTrainingStageHandler:
             separators=(",", ":"),
             allow_nan=False,
         ).encode("utf-8")
-        selection_commit = commit_artifact(
-            self._repository,
-            self._config,
-            job.context,
-            artifact_key=selection_key,
-            artifact_format=ArtifactFormat.JSON,
-            relative_path=selection_relative_path,
-            parents=artifact_parents(self._config, ((job.output, relative_path),)),
-            payload=BytesPayload(payload_bytes=selection_payload),
-        )
-        if not selection_commit.success:
+        try:
+            self._store.write_bytes_atomic(job.output_path("checkpoint"), save_safetensors(checkpoint_grid))
+            if is_ditto:
+                ditto_result = cast(DittoTrainingResult, result)
+                personalized_grid = {
+                    f"round_{checkpoint.round_number}.client_{client_id}.{name}": tensor
+                    for checkpoint in ditto_result.scheduled_checkpoints
+                    for client_id, state in checkpoint.personalized_states
+                    for name, tensor in state
+                }
+                self._store.write_bytes_atomic(
+                    job.output_path("personalized_checkpoint"), save_safetensors(personalized_grid)
+                )
+            self._store.write_bytes_atomic(job.output_path("selection_evidence"), selection_payload)
+        except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(
                 node_key=job.node_key,
                 stage=job.stage,
-                error_message=selection_commit.error_message or "selection evidence commit failed",
+                error_message=str(exc),
             )
-        return StageJobOutcome.succeeded(node_key=job.node_key, stage=job.stage, produced_artifact=job.output)
+        return StageJobOutcome.succeeded(node_key=job.node_key, stage=job.stage, produced_outputs=job.outputs)
