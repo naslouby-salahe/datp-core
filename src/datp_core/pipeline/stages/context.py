@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from datp_core.core.identifiers import ExperimentId, PopulationId, ThresholdPolicyId
 
 if TYPE_CHECKING:
-    from datp_core.analysis.execution.inputs import PrerequisiteExperimentResult
+    from datp_core.analysis.contracts import PrerequisiteExperimentResult
     from datp_core.experiments.catalogue.evaluations import RecalibrationMode
 
 

@@ -1,5 +1,4 @@
-"""Pure association primitives: rank correlation and simple linear regression, with leave-one-out
-leverage diagnostics."""
+"""Pure association primitives: rank correlation and simple linear regression with leverage diagnostics."""
 
 from __future__ import annotations
 
@@ -9,14 +8,20 @@ from typing import cast
 import numpy as np
 from scipy import stats
 
-from datp_core.analysis.statistics.models import HypothesisTestResult, LinearRegressionResult, StatisticalProcedureError
+from datp_core.analysis.contracts import HypothesisTestResult, LinearRegressionResult
+from datp_core.analysis.enums import HypothesisTestName
+from datp_core.analysis.errors import StatisticalProcedureError
 
 
 def spearman_correlation(predictor: np.ndarray, outcome: np.ndarray) -> HypothesisTestResult:
     statistic, p_value = cast("tuple[float, float]", stats.spearmanr(predictor, outcome))
     if not np.isfinite((statistic, p_value)).all():
         raise StatisticalProcedureError("Spearman correlation is undefined for the supplied observations")
-    return HypothesisTestResult(test_name="spearman_correlation", statistic=float(statistic), p_value=float(p_value))
+    return HypothesisTestResult(
+        test_name=HypothesisTestName.SPEARMAN_CORRELATION.value,
+        statistic=float(statistic),
+        p_value=float(p_value),
+    )
 
 
 def simple_linear_regression(predictor: np.ndarray, outcome: np.ndarray) -> LinearRegressionResult:
@@ -45,6 +50,3 @@ def simple_linear_regression(predictor: np.ndarray, outcome: np.ndarray) -> Line
         leverage=leverage,
         leave_one_out_slopes=leave_one_out_slopes,
     )
-
-
-__all__ = ["simple_linear_regression", "spearman_correlation"]

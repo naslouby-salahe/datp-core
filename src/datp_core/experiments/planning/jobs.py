@@ -31,7 +31,7 @@ from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import AnalysisInputCoordinates, StageInput, StageJob, StageOutput
 
 if TYPE_CHECKING:
-    from datp_core.analysis.execution.inputs import PrerequisiteExperimentResult
+    from datp_core.analysis.contracts import PrerequisiteExperimentResult
 
 
 _SHAREABLE_STAGES = frozenset(

@@ -9,7 +9,7 @@ from pathlib import Path
 
 from attrs import define
 
-from datp_core.analysis.execution.handler import StatisticalAnalysisStageHandler
+from datp_core.analysis.runtime.handler import StatisticalAnalysisStageHandler
 from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
 from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.loading import ConfigurationError

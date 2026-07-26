@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 from time import time
 
-from datp_core.analysis.execution.inputs import PrerequisiteExperimentResult
+from datp_core.analysis.contracts import PrerequisiteExperimentResult
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.freezing import decode_manifest
 from datp_core.core.identifiers import ExperimentId

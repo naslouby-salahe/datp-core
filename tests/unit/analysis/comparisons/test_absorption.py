@@ -4,7 +4,7 @@ configured threshold is picked up without a code change, and an unsupported name
 
 import pytest
 
-from datp_core.analysis.comparisons.absorption import materiality_threshold
+from datp_core.analysis.comparisons.effect_ratios import materiality_threshold
 
 
 def test_numeric_rule_is_returned_directly() -> None:

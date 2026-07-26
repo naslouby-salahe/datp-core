@@ -5,10 +5,10 @@ from __future__ import annotations
 
 import json
 
-from datp_core.analysis.comparisons.models import PairedThresholdAnalysisResult
-from datp_core.analysis.execution.persistence import apply_holm_correction
+from datp_core.analysis.contracts import PairedThresholdAnalysisResult
+from datp_core.analysis.runtime.persistence import apply_holm_correction
 from datp_core.analysis.result import analysis_result_to_payload
-from datp_core.analysis.statistics.models import ConfidenceInterval
+from datp_core.analysis.contracts import ConfidenceInterval
 from datp_core.core.numbers import Probability
 
 

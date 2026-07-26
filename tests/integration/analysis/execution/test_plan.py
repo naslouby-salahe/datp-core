@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from attrs import evolve
 
-from datp_core.analysis.execution.plan import (
+from datp_core.analysis.runtime.planning import (
     PairedAnalysisCell,
     expand_paired_analysis_cells,
     resolve_sweep_dimensions,

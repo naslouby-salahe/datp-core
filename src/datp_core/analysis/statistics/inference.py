@@ -1,8 +1,5 @@
-"""Paired-seed inference: BCa/percentile bootstrap confidence intervals, Wilcoxon signed-rank
-testing, and the matched-pairs rank-biserial effect size, composed behind
-``StatisticalAnalysisUseCase``. Association inference (Spearman, linear regression) is exposed
-through the same use case but its pure primitives live in ``statistics/association.py``.
-"""
+"""Paired-seed inference: BCa/percentile bootstrap, Wilcoxon signed-rank, rank-biserial effect
+size, Holm-Bonferroni correction, composed behind ``StatisticalAnalysisUseCase``."""
 
 from __future__ import annotations
 
@@ -14,14 +11,14 @@ from typing import cast
 import numpy as np
 from scipy import stats
 
-from datp_core.analysis.statistics.association import simple_linear_regression, spearman_correlation
-from datp_core.analysis.statistics.models import (
+from datp_core.analysis.contracts import (
     ConfidenceInterval,
     HypothesisTestResult,
     LinearRegressionResult,
     PairedSeedDifferenceRecord,
-    StatisticalProcedureError,
 )
+from datp_core.analysis.errors import StatisticalProcedureError
+from datp_core.analysis.statistics.association import simple_linear_regression, spearman_correlation
 from datp_core.config.statistical_profiles import BootstrapMethod, StatisticalProfileRecord
 from datp_core.core.identifiers import MetricId, StatisticalProfileId, ThresholdPolicyId
 from datp_core.core.numbers import Probability
@@ -30,10 +27,9 @@ from datp_core.core.seeding import Seed
 
 
 def matched_pairs_rank_biserial_correlation(left: Iterable[float], right: Iterable[float]) -> float:
-    """Return the signed-rank effect size for paired observations, with average tie ranks.
+    """Signed-rank effect size for paired observations with average tie ranks.
 
-    When all paired differences are zero the effect size is 0.0 — there is no evidence of
-    a directional difference.
+    Returns 0.0 when all paired differences are zero.
     """
     differences = tuple(float(a) - float(b) for a, b in zip(left, right, strict=True))
     if not differences or not all(isfinite(value) for value in differences):
@@ -62,9 +58,47 @@ def _average_ranks(values: tuple[float, ...]) -> tuple[float, ...]:
     return tuple(ranks)
 
 
+def holm_adjust_p_values(values: Iterable[float]) -> tuple[float, ...]:
+    """Apply the Holm step-down correction, returning adjusted values in original order."""
+    p_values = tuple(float(value) for value in values)
+    if not all(isfinite(value) and 0.0 <= value <= 1.0 for value in p_values):
+        raise StatisticalProcedureError("Holm correction requires finite p-values in [0, 1]")
+    ordered = sorted(enumerate(p_values), key=lambda item: item[1])
+    adjusted = [0.0] * len(p_values)
+    previous = 0.0
+    for rank, (index, p_value) in enumerate(ordered):
+        corrected = min(1.0, (len(p_values) - rank) * p_value)
+        previous = max(previous, corrected)
+        adjusted[index] = previous
+    return tuple(adjusted)
+
+
+def apply_holm_correction(results: list) -> list:
+    """Apply Holm-Bonferroni correction across every paired-threshold analysis p-value.
+
+    Only ``PairedThresholdAnalysisResult`` instances with non-None p-values are
+    included in the correction family.  Other result types pass through unchanged.
+    """
+    from attrs import evolve
+
+    from datp_core.analysis.contracts import PairedThresholdAnalysisResult
+
+    candidates: list[tuple[int, float]] = [
+        (index, result.p_value)
+        for index, result in enumerate(results)
+        if isinstance(result, PairedThresholdAnalysisResult) and result.p_value is not None
+    ]
+    if len(candidates) < 2:
+        return results
+    adjusted = holm_adjust_p_values(value for _, value in candidates)
+    updated = list(results)
+    for (index, _), adjusted_value in zip(candidates, adjusted, strict=True):
+        updated[index] = evolve(updated[index], holm_adjusted_p_value=adjusted_value)
+    return updated
+
+
 class StatisticalAnalysisUseCase:
-    """Pure statistical analysis using native SciPy methods (BCa/percentile bootstrap, Wilcoxon,
-    Spearman, linear regression)."""
+    """Pure statistical analysis: BCa/percentile bootstrap, Wilcoxon, Spearman, linear regression."""
 
     def __init__(self, profiles: TypedDomainRegistry[StatisticalProfileId, StatisticalProfileRecord]) -> None:
         self._profiles = profiles
@@ -85,18 +119,20 @@ class StatisticalAnalysisUseCase:
             or profile.resample_count is None
             or profile.confidence_level is None
         ):
-            raise ValueError(
+            raise StatisticalProcedureError(
                 f"Statistical profile '{statistical_profile_id.value}' is not an executable bootstrap profile"
             )
         arr_a = np.array(scores_policy_a, dtype=np.float64)
         arr_b = np.array(scores_policy_b, dtype=np.float64)
         if arr_a.shape != arr_b.shape:
-            raise ValueError("Paired seed analysis requires equally sized policy score cohorts")
+            raise StatisticalProcedureError(
+                "Paired seed analysis requires equally sized policy score cohorts"
+            )
         diffs = arr_a - arr_b
 
         mean_diff = float(np.mean(diffs))
-        # guaranteed by the method-not-in-{bca,percentile} guard above
-        assert profile.method is not None
+        if profile.method is None:
+            raise StatisticalProcedureError("Bootstrap profile method must not be None")
         ci = self._compute_bca_bootstrap_ci(
             diffs,
             resample_count=profile.resample_count.value,
@@ -124,9 +160,11 @@ class StatisticalAnalysisUseCase:
         predictor_values = np.array(predictor, dtype=np.float64)
         outcome_values = np.array(outcome, dtype=np.float64)
         if len(predictor_values) < 3 or predictor_values.shape != outcome_values.shape:
-            raise ValueError("Association analysis requires at least three paired finite observations")
+            raise StatisticalProcedureError(
+                "Association analysis requires at least three paired finite observations"
+            )
         if not np.isfinite(predictor_values).all() or not np.isfinite(outcome_values).all():
-            raise ValueError("Association analysis requires finite observations")
+            raise StatisticalProcedureError("Association analysis requires finite observations")
         return (
             spearman_correlation(predictor_values, outcome_values),
             simple_linear_regression(predictor_values, outcome_values),
@@ -191,4 +229,4 @@ class StatisticalAnalysisUseCase:
         )
 
 
-__all__ = ["StatisticalAnalysisUseCase", "matched_pairs_rank_biserial_correlation"]
+__all__ = ["StatisticalAnalysisUseCase", "holm_adjust_p_values", "matched_pairs_rank_biserial_correlation"]

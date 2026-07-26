@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
-from datp_core.analysis.statistics.models import StatisticalProcedureError
+from datp_core.analysis.errors import StatisticalProcedureError
 
 
 def test_bca_rejects_fewer_than_ten_paired_seed_differences_with_variance() -> None:

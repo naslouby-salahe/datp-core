@@ -2,7 +2,7 @@
 
 import pytest
 
-from datp_core.analysis.statistics.multiplicity import holm_adjust_p_values
+from datp_core.analysis.statistics.inference import holm_adjust_p_values
 
 
 def test_holm_adjustment_is_step_down_monotonic_and_preserves_input_order() -> None:

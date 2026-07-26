@@ -11,9 +11,9 @@ from __future__ import annotations
 import pytest
 from attrs import evolve
 
-from datp_core.analysis.comparisons.models import PairedThresholdAnalysisResult
-from datp_core.analysis.statistics.models import ConfidenceInterval
-from datp_core.analysis.validation.anchor_equivalence import analyze_anchor_equivalence
+from datp_core.analysis.contracts import PairedThresholdAnalysisResult
+from datp_core.analysis.contracts import ConfidenceInterval
+from datp_core.analysis.validation import analyze_anchor_equivalence
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
 from datp_core.core.numbers import Probability
