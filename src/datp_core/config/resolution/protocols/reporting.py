@@ -24,14 +24,12 @@ def resolve_report_profile(identifier: str, cfg: ReportProfileConfig) -> ReportP
         figure_type=cfg.figure_type,
         estimate_basis=cfg.estimate_basis,
         columns=(
-            [ReportColumnRecord(name=c.name, unit=c.unit, direction=c.direction)
-                                for c in cfg.columns]
+            [ReportColumnRecord(name=c.name, unit=c.unit, direction=c.direction) for c in cfg.columns]
             if cfg.columns is not None
             else None
         ),
         series=(
-            [ReportColumnRecord(name=c.name, unit=c.unit, direction=c.direction)
-                                for c in cfg.series]
+            [ReportColumnRecord(name=c.name, unit=c.unit, direction=c.direction) for c in cfg.series]
             if cfg.series is not None
             else None
         ),

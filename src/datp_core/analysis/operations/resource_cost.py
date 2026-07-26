@@ -48,10 +48,8 @@ def threshold_exchange_cost(
     elif isinstance(policy, SharedPooledThresholdPolicyRecord | SharedWeightedThresholdPolicyRecord):
         return (), 0
     else:
-        raise ValueError(
-            f"No communication contract is configured for threshold policy '{policy.policy}'")
-    base_fields = tuple(exchange.uplink_fields_per_client or ()) + \
-                        tuple(exchange.downlink_fields_per_client or ())
+        raise ValueError(f"No communication contract is configured for threshold policy '{policy.policy}'")
+    base_fields = tuple(exchange.uplink_fields_per_client or ()) + tuple(exchange.downlink_fields_per_client or ())
     candidate_fields = tuple(exchange.candidate_grid_downlink_fields_per_client or ()) + tuple(
         exchange.candidate_grid_uplink_fields_per_client_per_candidate or ()
     )
@@ -83,8 +81,7 @@ def analyze_resource_cost(
 ) -> ResourceCostAnalysisResult:
     contract = config.communication_estimation_contract
     if analysis.estimate_basis != contract.estimate_basis:
-        raise ValueError(
-            "Resource-cost analysis estimate basis disagrees with the communication contract")
+        raise ValueError("Resource-cost analysis estimate basis disagrees with the communication contract")
     seed_results: list[ResourceCostSeedResult] = []
     for seed in seeds:
         evaluation_results: list[ResourceCostEvaluationResult] = []
@@ -92,16 +89,14 @@ def analyze_resource_cost(
             evaluation = next(item for item in experiment.evaluations if item.label == label)
             _, calibration = threshold_and_calibration_frame(
                 store=store,
-                threshold_path=inputs.thresholds(
-                    _evaluation_context(experiment, label, seed.value)),
+                threshold_path=inputs.thresholds(_evaluation_context(experiment, label, seed.value)),
                 calibration_score_path=inputs.calibration_scores(
                     score_context(_evaluation_context(experiment, label, seed.value))
                 ),
                 missing_message=f"Resource analysis artifacts are unavailable for seed {seed.value}, label '{label}'",
             )
             policy = config.threshold_policies.get(evaluation.threshold_policy_id)
-            fields, threshold_bytes = threshold_exchange_cost(
-                contract, policy, calibration["client_id"].n_unique())
+            fields, threshold_bytes = threshold_exchange_cost(contract, policy, calibration["client_id"].n_unique())
             context = StageJobContext(
                 experiment_id=experiment.identifier, seed=seed.value, population_id=evaluation.population_id
             )
@@ -110,8 +105,7 @@ def analyze_resource_cost(
                 inputs.checkpoint(context),
                 missing_message=f"Model checkpoint is unavailable for resource analysis seed {seed.value}",
             )
-            parameters = sum(tensor.numel()
-                             for tensor in load_safetensors(checkpoint_bytes).values())
+            parameters = sum(tensor.numel() for tensor in load_safetensors(checkpoint_bytes).values())
             model_bytes = 2 * calibration["client_id"].n_unique() * parameters * 4
             evaluation_results.append(
                 ResourceCostEvaluationResult(
@@ -122,8 +116,7 @@ def analyze_resource_cost(
                     estimated_checkpoint_storage_bytes=parameters * 4,
                 )
             )
-        seed_results.append(ResourceCostSeedResult(
-            seed=seed.value, evaluations=tuple(evaluation_results)))
+        seed_results.append(ResourceCostSeedResult(seed=seed.value, evaluations=tuple(evaluation_results)))
     return ResourceCostAnalysisResult(
         analysis_label=analysis.label,
         estimate_basis=analysis.estimate_basis,

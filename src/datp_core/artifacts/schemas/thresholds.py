@@ -11,9 +11,7 @@ class ThresholdFrameSchema(pa.DataFrameModel):
     threshold: float = pa.Field(ge=0.0)  # type: ignore
     owner_kind: str
     finite_sample_rank: int | None = pa.Field(nullable=True, ge=1)  # type: ignore
-    attainability_status: str | None = pa.Field(
-        nullable=True, isin=["attainable", "unattainable"]
-    )  # type: ignore
+    attainability_status: str | None = pa.Field(nullable=True, isin=["attainable", "unattainable"])  # type: ignore
 
 
 def validate_threshold_frame(df: pl.DataFrame) -> pl.DataFrame:

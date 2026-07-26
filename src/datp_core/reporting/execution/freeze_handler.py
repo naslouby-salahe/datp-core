@@ -22,12 +22,10 @@ class ResultFreezeStageHandler:
     def execute(self, job: StageJob) -> StageJobOutcome:
         try:
             experiment = self._config.experiments.get(job.context.experiment_id)
-            profiles = tuple(self._config.report_profiles.get(identifier)
-                             for identifier in experiment.report_ids)
+            profiles = tuple(self._config.report_profiles.get(identifier) for identifier in experiment.report_ids)
             cohort = self._config.seed_cohorts.get(experiment.seed_cohort_id)
             population = (
-                self._config.populations.get(
-                    experiment.population_ids[0]) if experiment.population_ids else None
+                self._config.populations.get(experiment.population_ids[0]) if experiment.population_ids else None
             )
             source_files = [(job.input_path("statistical_result"), "statistical_result")]
             source_files.extend(

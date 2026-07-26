@@ -71,8 +71,7 @@ def _canonical_experiment_order(config: ResolvedProjectConfiguration) -> tuple[E
     remaining = set(dag.nodes())
     ordered: list[ExperimentId] = []
     while remaining:
-        ready = [node for node in remaining if all(
-            parent not in remaining for parent in dag.predecessors(node))]
+        ready = [node for node in remaining if all(parent not in remaining for parent in dag.predecessors(node))]
         if not ready:
             raise ValueError("Experiment dependency graph contains a cycle")
         ready.sort(key=lambda node: (0 if _is_anchor(dag, node) else 1, node.value))
@@ -167,21 +166,17 @@ class CampaignOrchestrator:
 
     @staticmethod
     def _build_report(results: list[CampaignExperimentResult]) -> CampaignReport:
-        completed_or_skipped = sum(
-            result.status is CampaignExperimentStatus.SKIPPED_EXISTING for result in results)
+        completed_or_skipped = sum(result.status is CampaignExperimentStatus.SKIPPED_EXISTING for result in results)
         executed = sum(
-            result.status in {CampaignExperimentStatus.EXECUTED,
-                CampaignExperimentStatus.INCOMPLETE_RESTARTED}
+            result.status in {CampaignExperimentStatus.EXECUTED, CampaignExperimentStatus.INCOMPLETE_RESTARTED}
             for result in results
         )
         blocked = sum(
-            result.status in {CampaignExperimentStatus.BLOCKED_PREREQUISITE,
-                CampaignExperimentStatus.BLOCKED_ANCHOR}
+            result.status in {CampaignExperimentStatus.BLOCKED_PREREQUISITE, CampaignExperimentStatus.BLOCKED_ANCHOR}
             for result in results
         )
         failed = sum(
-            result.status in {CampaignExperimentStatus.FAILED,
-                CampaignExperimentStatus.INCOMPATIBLE}
+            result.status in {CampaignExperimentStatus.FAILED, CampaignExperimentStatus.INCOMPATIBLE}
             for result in results
         )
         return CampaignReport(

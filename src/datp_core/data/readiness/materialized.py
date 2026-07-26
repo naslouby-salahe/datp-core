@@ -45,8 +45,7 @@ class _MaterializedReadinessAssessor:
             defects.append(
                 DatasetAuditIssue(
                     code="unexpected_client_count",
-                    message=(
-                        f"Expected {int(expected_client_count)} clients, observed {len(manifest.client_ids)}"),
+                    message=(f"Expected {int(expected_client_count)} clients, observed {len(manifest.client_ids)}"),
                     path=None,
                 )
             )
@@ -61,8 +60,7 @@ class _MaterializedReadinessAssessor:
             }
             for entry in manifest.entries
         )
-        timestamp_valid = all(
-            entry.chronology_key is not None for entry in manifest.entries) if temporal else None
+        timestamp_valid = all(entry.chronology_key is not None for entry in manifest.entries) if temporal else None
         if temporal and not timestamp_valid:
             defects.append(
                 DatasetAuditIssue(

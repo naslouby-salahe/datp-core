@@ -23,25 +23,21 @@ def iter_edge_iiotset_source(
 ) -> Iterator[EdgeIIoTsetRow | SourceRowFailure]:
     try:
         relative_normal = path.relative_to(normal_root)
-        client_id: str | None = relative_normal.parts[0] if len(
-            relative_normal.parts) >= 2 else None
+        client_id: str | None = relative_normal.parts[0] if len(relative_normal.parts) >= 2 else None
         is_attack = False
     except ValueError:
         try:
             path.relative_to(attack_root)
         except ValueError as exc:
-            raise ValueError(
-                "Edge-IIoTset source path escapes configured normal and attack roots") from exc
+            raise ValueError("Edge-IIoTset source path escapes configured normal and attack roots") from exc
         client_id = None
         is_attack = True
     with path.open("r", encoding="utf-8", newline="") as source:
         reader = csv.DictReader(source)
-        required = numeric_headers + categorical_headers + \
-            (binary_label_header, multiclass_label_header)
+        required = numeric_headers + categorical_headers + (binary_label_header, multiclass_label_header)
         if timestamp_header is not None and timestamp_header not in required:
             required += (timestamp_header,)
-        missing = tuple(header for header in required if header not in tuple(
-            reader.fieldnames or ()))
+        missing = tuple(header for header in required if header not in tuple(reader.fieldnames or ()))
         if missing:
             raise ValueError(f"Source {path} is missing required headers: {', '.join(missing)}")
         for index, record in enumerate(reader, start=1):

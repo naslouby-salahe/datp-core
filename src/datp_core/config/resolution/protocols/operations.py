@@ -91,8 +91,7 @@ def resolve_metric_definitions(cfg: MetricDefinitionsConfig) -> MetricDefinition
             oracle_definition=threshold_est.oracle_definition,
             target_exceedance=resolve_metric_formula(threshold_est.target_exceedance),
             signed_attainment_error=resolve_metric_formula(threshold_est.signed_attainment_error),
-            absolute_attainment_error=resolve_metric_formula(
-                threshold_est.absolute_attainment_error),
+            absolute_attainment_error=resolve_metric_formula(threshold_est.absolute_attainment_error),
             threshold_dispersion=resolve_metric_formula(threshold_est.threshold_dispersion),
             threshold_variance_across_replicates=resolve_metric_formula(
                 threshold_est.threshold_variance_across_replicates

@@ -63,8 +63,7 @@ class AnalysisInputBundle:
         for item in inputs:
             if item.coordinates is None:
                 raise ValueError(f"Analysis input '{item.name}' lacks typed coordinates")
-            artifacts.append(AnalysisArtifactRef(
-                coordinates=item.coordinates, relative_path=item.relative_path))
+            artifacts.append(AnalysisArtifactRef(coordinates=item.coordinates, relative_path=item.relative_path))
         return cls(tuple(artifacts))
 
     def require(self, *, producer_stage: StageKind, output_name: str, context: StageJobContext) -> str:

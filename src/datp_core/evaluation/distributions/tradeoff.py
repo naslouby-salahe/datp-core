@@ -18,10 +18,8 @@ def threshold_tradeoff(
     return {
         client: ThresholdTradeoffEntry(
             threshold_shift=shifted[client].threshold - baseline[client].threshold,
-            fpr_delta=_metric_delta(baseline[client].false_positive_rate,
-                                    shifted[client].false_positive_rate),
-            tpr_delta=_metric_delta(baseline[client].true_positive_rate,
-                                    shifted[client].true_positive_rate),
+            fpr_delta=_metric_delta(baseline[client].false_positive_rate, shifted[client].false_positive_rate),
+            tpr_delta=_metric_delta(baseline[client].true_positive_rate, shifted[client].true_positive_rate),
         )
         for client in sorted(baseline)
     }

@@ -26,5 +26,4 @@ class JobExecutionStatus(Enum):
     BLOCKED_BY_DEPENDENCY = "blocked_by_dependency"
 
 
-DEPENDENCY_SATISFYING_STATUSES: frozenset[JobExecutionStatus] = frozenset(
-    {JobExecutionStatus.SUCCESS})
+DEPENDENCY_SATISFYING_STATUSES: frozenset[JobExecutionStatus] = frozenset({JobExecutionStatus.SUCCESS})

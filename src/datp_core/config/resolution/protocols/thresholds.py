@@ -3,8 +3,6 @@ discriminated union into their domain records."""
 
 from __future__ import annotations
 
-from typing import Any
-
 from datp_core.config.authored.protocols import AuthoredProtocolsConfig
 from datp_core.config.authored.protocols.thresholds import (
     CalibrationFallbackPolicyConfig,
@@ -75,8 +73,7 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
     """Convert an authored threshold-policy variant into its pure domain record, losslessly."""
     record_type = _THRESHOLD_POLICY_RECORD_TYPES.get(type(cfg))
     if record_type is None:
-        raise ConfigurationError(
-            f"Unsupported authored threshold policy configuration: {type(cfg).__name__}")
+        raise ConfigurationError(f"Unsupported authored threshold policy configuration: {type(cfg).__name__}")
     if isinstance(cfg, ClusterThresholdPolicyConfig):
         return ClusterThresholdPolicyRecord(
             policy=cfg.policy,
@@ -112,38 +109,44 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             threshold_ownership=cfg.threshold_ownership,
         )
     if isinstance(cfg, (LocalGlobalShrinkagePolicyConfig, CalibrationFallbackPolicyConfig)):
-        common: dict[str, Any] = {
-            "policy": cfg.policy,
-            "quantile": cfg.quantile,
-            "quantile_estimator": cfg.quantile_estimator,
-            "local_reference": cfg.local_reference,
-            "global_reference": cfg.global_reference,
-            "interpolation_formula": cfg.interpolation_formula,
-            "weight_semantics": cfg.weight_semantics,
-            "weight_scope": cfg.weight_scope,
-            "permitted_weight_range": PermittedWeightRange.from_config(cfg.permitted_weight_range),
-            "threshold_ownership": cfg.threshold_ownership,
-        }
+        permitted_weight_range = PermittedWeightRange.from_config(cfg.permitted_weight_range)
         if isinstance(cfg, CalibrationFallbackPolicyConfig):
             return CalibrationFallbackThresholdPolicyRecord(
+                policy=cfg.policy,
+                quantile=cfg.quantile,
+                quantile_estimator=cfg.quantile_estimator,
+                local_reference=cfg.local_reference,
+                global_reference=cfg.global_reference,
+                interpolation_formula=cfg.interpolation_formula,
+                weight_semantics=cfg.weight_semantics,
+                weight_scope=cfg.weight_scope,
+                permitted_weight_range=permitted_weight_range,
+                threshold_ownership=cfg.threshold_ownership,
                 weight_formula=cfg.weight_formula,
-                weight_formula_constants=WeightFormulaConstants.from_config(
-                    cfg.weight_formula_constants),
+                weight_formula_constants=WeightFormulaConstants.from_config(cfg.weight_formula_constants),
                 weight_monotone_in_calibration_count=cfg.weight_monotone_in_calibration_count,
                 clamping=cfg.clamping,
                 zero_calibration_behavior=cfg.zero_calibration_behavior,
                 minimum_calibration_behavior=cfg.minimum_calibration_behavior,
                 effective_lambda_reporting=cfg.effective_lambda_reporting,
                 fallback_frequency_reporting=cfg.fallback_frequency_reporting,
-                **common,
             )
         return LocalGlobalShrinkageThresholdPolicyRecord(
+            policy=cfg.policy,
+            quantile=cfg.quantile,
+            quantile_estimator=cfg.quantile_estimator,
+            local_reference=cfg.local_reference,
+            global_reference=cfg.global_reference,
+            interpolation_formula=cfg.interpolation_formula,
+            weight_semantics=cfg.weight_semantics,
+            weight_scope=cfg.weight_scope,
+            permitted_weight_range=permitted_weight_range,
+            threshold_ownership=cfg.threshold_ownership,
             shrinkage_weight_grid=tuple(cfg.shrinkage_weight_grid),
             shrinkage_weight=cfg.shrinkage_weight,
             shrinkage_weight_resolution=cfg.shrinkage_weight_resolution,
             out_of_range_weight_behavior=cfg.out_of_range_weight_behavior,
             effective_lambda_reporting=cfg.effective_lambda_reporting,
-            **common,
         )
     if isinstance(cfg, FederatedMatchedExceedancePolicyConfig):
         return FederatedMatchedExceedanceThresholdPolicyRecord(
@@ -164,8 +167,7 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             zero_total_count_behavior=cfg.zero_total_count_behavior,
             candidate_grid=CandidateGrid.from_config(cfg.candidate_grid),
             exceedance_exchange=ExceedanceExchange.from_config(
-                {k: tuple(v) if isinstance(v, list) else v for k,
-                          v in cfg.exceedance_exchange.items()}
+                {k: tuple(v) if isinstance(v, list) else v for k, v in cfg.exceedance_exchange.items()}
             ),
             selection=SelectionRules.from_config(cfg.selection),
             required_diagnostics=tuple(cfg.required_diagnostics),

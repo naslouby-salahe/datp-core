@@ -68,8 +68,7 @@ class ProjectConfigurationValidator:
                     f"'{training.model_architecture_id}'"
                 )
             if not config.optimizers.contains(training.optimizer_id):
-                errors.append(
-                    f"Training profile '{tp_id}' references unregistered optimizer '{training.optimizer_id}'")
+                errors.append(f"Training profile '{tp_id}' references unregistered optimizer '{training.optimizer_id}'")
             if not config.batching_profiles.contains(training.batching_profile_id):
                 errors.append(
                     f"Training profile '{tp_id}' references unregistered batching profile "
@@ -104,8 +103,7 @@ class ProjectConfigurationValidator:
             )
         if profile.kind == TrainingProfileKind.FEDERATED_PROX_TRAINING:
             configured_grid = profile.mu_grid
-            override = exp_rec.training_overrides.get(
-                "mu") if exp_rec.training_overrides is not None else None
+            override = exp_rec.training_overrides.get("mu") if exp_rec.training_overrides is not None else None
             sweep_name = override.get("from_sweep") if isinstance(override, Mapping) else None
             values = tuple(
                 value
@@ -146,8 +144,7 @@ class ProjectConfigurationValidator:
             if condition.allocation == SweepConditionAllocation.DIRICHLET and (
                 condition.dirichlet_alpha is None or condition.dirichlet_alpha <= 0.0
             ):
-                errors.append(
-                    f"Experiment '{exp_id}' condition '{condition.name}' requires a positive Dirichlet alpha")
+                errors.append(f"Experiment '{exp_id}' condition '{condition.name}' requires a positive Dirichlet alpha")
             if (
                 condition.allocation == SweepConditionAllocation.EQUAL_ACROSS_SOURCE_DOMAINS
                 and condition.dirichlet_alpha is not None
@@ -176,8 +173,7 @@ class ProjectConfigurationValidator:
                 )
                 continue
             policy = config.threshold_policies[ev.threshold_policy_id]
-            target_population = config.populations.get(
-                ev.population_id or exp_rec.population_ids[0])
+            target_population = config.populations.get(ev.population_id or exp_rec.population_ids[0])
             target_dataset = config.datasets.get(target_population.dataset_id)
             if (
                 isinstance(policy, FamilyMeanThresholdPolicyRecord)
@@ -241,8 +237,7 @@ class ProjectConfigurationValidator:
                     f"Experiment '{exp_id}' references missing checkpoint profile '{exp_rec.checkpoint_profile_id}'"
                 )
             if not config.seed_cohorts.contains(exp_rec.seed_cohort_id):
-                errors.append(
-                    f"Experiment '{exp_id}' references missing seed cohort '{exp_rec.seed_cohort_id}'")
+                errors.append(f"Experiment '{exp_id}' references missing seed cohort '{exp_rec.seed_cohort_id}'")
             if not config.eligibility_policies.contains(exp_rec.eligibility_policy_id):
                 errors.append(
                     f"Experiment '{exp_id}' references missing eligibility policy '{exp_rec.eligibility_policy_id}'"
@@ -260,8 +255,7 @@ class ProjectConfigurationValidator:
                 )
             for report_id in exp_rec.report_ids:
                 if not config.report_profiles.contains(report_id):
-                    errors.append(
-                        f"Experiment '{exp_id}' references unregistered report profile '{report_id}'")
+                    errors.append(f"Experiment '{exp_id}' references unregistered report profile '{report_id}'")
 
             self._validate_experiment_training_profile(exp_id, exp_rec, config, errors)
             self._validate_experiment_partition_conditions(exp_id, exp_rec, config, errors)

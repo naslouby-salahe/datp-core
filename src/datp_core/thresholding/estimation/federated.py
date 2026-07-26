@@ -26,8 +26,7 @@ def federated_moments(calibration: tuple[BenignCalibrationScores, ...]) -> tuple
     if total <= 0.0:
         raise ValueError("Federated summary threshold has no calibration rows")
     mean = float(np.sum(counts * means) / total)
-    variance = float(np.sum(counts * variances) / total + \
-                     np.sum(counts * (means - mean) ** 2) / total)
+    variance = float(np.sum(counts * variances) / total + np.sum(counts * (means - mean) ** 2) / total)
     return mean, math.sqrt(variance)
 
 
@@ -43,8 +42,7 @@ def estimate_federated_matched(
     mean, standard_deviation = federated_moments(calibration)
     candidates = np.arange(grid.minimum, grid.maximum + grid.step / 2.0, grid.step)
     scores = np.asarray([score for item in calibration for score in item.values], dtype=np.float64)
-    achieved = np.asarray([np.mean(scores > mean + candidate * standard_deviation)
-                          for candidate in candidates])
+    achieved = np.asarray([np.mean(scores > mean + candidate * standard_deviation) for candidate in candidates])
     deviation = np.abs(achieved - (1.0 - target_quantile.value))
     winner = candidates[np.flatnonzero(deviation == np.min(deviation))[-1]]
     threshold = mean + float(winner) * standard_deviation
@@ -55,8 +53,7 @@ def estimate_federated_matched(
         candidate_grid_step=grid.step,
         pooled_mean=float(mean),
         pooled_standard_deviation=float(standard_deviation),
-        achieved_exceedance=tuple((float(c), float(a))
-                                  for c, a in zip(candidates, achieved, strict=True)),
+        achieved_exceedance=tuple((float(c), float(a)) for c, a in zip(candidates, achieved, strict=True)),
         tie_set=tuple(float(candidates[i]) for i in np.flatnonzero(deviation == np.min(deviation))),
     )
     return build_threshold_set(

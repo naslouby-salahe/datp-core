@@ -35,8 +35,7 @@ def analyze_association(
 ) -> MetricAssociationAnalysisResult:
     if analysis.predictor_metric != "pairwise_js_divergence" or analysis.outcome_metric != "cv_fpr_delta":
         raise ValueError(f"Unsupported association metrics for analysis '{analysis.label}'")
-    source = tuple(result for result in paired_results if result.analysis_label ==
-                   analysis.outcome_source_analysis)
+    source = tuple(result for result in paired_results if result.analysis_label == analysis.outcome_source_analysis)
     if not source:
         raise ValueError(f"Association analysis '{analysis.label}' has no paired source analysis")
     observations: list[AssociationObservationRecord] = []
@@ -69,8 +68,7 @@ def analyze_association(
     return MetricAssociationAnalysisResult(
         analysis_label=analysis.label,
         interpretation_constraint=analysis.interpretation_constraint,
-        spearman=AssociationCorrelationResult(
-            coefficient=spearman.statistic, p_value=spearman.p_value),
+        spearman=AssociationCorrelationResult(coefficient=spearman.statistic, p_value=spearman.p_value),
         linear_regression=AssociationRegressionResult(
             coefficient=regression.slope,
             intercept=regression.intercept,
@@ -92,8 +90,7 @@ def calibration_js(
     seed: int,
     partition_condition: str,
 ) -> float:
-    context = StageJobContext(experiment_id=experiment.identifier,
-                              seed=seed, partition_condition=partition_condition)
+    context = StageJobContext(experiment_id=experiment.identifier, seed=seed, partition_condition=partition_condition)
     missing = f"Calibration score artifact is unavailable for seed {seed}, condition '{partition_condition}'"
     frame = validate_calibration_score_frame(
         read_parquet_frame(

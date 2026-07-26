@@ -30,8 +30,7 @@ class MetricValue:
     def __post_init__(self) -> None:
         if self.status is MetricStatus.AVAILABLE and self.value is None:
             raise ValueError("An available metric must have a value")
-        valid_value_statuses = {MetricStatus.AVAILABLE,
-            MetricStatus.UNDEFINED_NEAR_ZERO_DENOMINATOR}
+        valid_value_statuses = {MetricStatus.AVAILABLE, MetricStatus.UNDEFINED_NEAR_ZERO_DENOMINATOR}
         if self.status not in valid_value_statuses and self.value is not None:
             raise ValueError("An unavailable metric must not have a substitute value")
 

@@ -28,6 +28,7 @@ from datp_core.core.identifiers import (
     ThresholdPolicyId,
     TrainingProfileId,
 )
+from datp_core.core.immutability import FrozenJson
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.contracts import EligibilityPolicyRecord, NormalizationStrategyRecord, ResolvedDataset
 from datp_core.evaluation import (
@@ -74,15 +75,14 @@ class ResolvedProjectConfiguration:
     optimizers: TypedDomainRegistry[str, OptimizerRecord]
     batching_profiles: TypedDomainRegistry[str, BatchingRecord]
     eligibility_policies: TypedDomainRegistry[EligibilityPolicyId, EligibilityPolicyRecord]
-    normalization_strategies: TypedDomainRegistry[NormalizationStrategyId,
-        NormalizationStrategyRecord]
+    normalization_strategies: TypedDomainRegistry[NormalizationStrategyId, NormalizationStrategyRecord]
     quantile_estimators: TypedDomainRegistry[str, QuantileEstimatorRecord]
     metric_bundles: TypedDomainRegistry[MetricBundleId, MetricBundleRecord]
     metric_definitions: MetricDefinitionsRecord
     communication_estimation_contract: CommunicationEstimationContractRecord
     operational_inputs: OperationalInputsRecord
     report_profiles: TypedDomainRegistry[str, ReportProfileRecord]
-    communication_estimation: Mapping[str, object] | None
+    communication_estimation: FrozenJson | None
     protocol_determinism: ProtocolDeterminismRecord
     normalization_fit_scopes: Mapping[str, str]
     normalization_leakage_rule: str
@@ -109,8 +109,7 @@ class ResolvedProjectConfiguration:
             == CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE
         )
         if len(candidates) != 1:
-            raise ValueError(
-                "Configuration must define exactly one confirmatory primary FedAvg checkpoint selector")
+            raise ValueError("Configuration must define exactly one confirmatory primary FedAvg checkpoint selector")
         return candidates[0]
 
     def primary_ditto_selection_experiment(self) -> ExperimentRecord:
@@ -124,8 +123,7 @@ class ResolvedProjectConfiguration:
             and experiment.personalization_parameter_selection_source is None
         )
         if len(candidates) != 1:
-            raise ValueError(
-                "Configuration must define exactly one natural-regime Ditto parameter selector")
+            raise ValueError("Configuration must define exactly one natural-regime Ditto parameter selector")
         return candidates[0]
 
 

@@ -22,7 +22,7 @@ class NormalizationScopeStatistics:
     client_id: str | None
     features: tuple[NormalizationFeatureStatistics, ...]
 
-    def as_projection(self) -> dict[str, object]:
+    def as_projection(self) -> dict[str, str | None | list[dict[str, float | str]]]:
         return {
             "client_id": self.client_id,
             "features": [feature.as_projection() for feature in self.features],

@@ -44,8 +44,7 @@ class ThresholdConstructionStageHandler:
         experiment = self._config.experiments.get(job.context.experiment_id)
         population = self._config.populations.get(job.context.population_id)
         dataset = self._config.datasets[population.dataset_id]
-        evaluation = next((item for item in experiment.evaluations if item.label ==
-                          job.context.evaluation_label), None)
+        evaluation = next((item for item in experiment.evaluations if item.label == job.context.evaluation_label), None)
         if evaluation is None:
             return StageJobOutcome.failed(
                 node_key=job.node_key, stage=job.stage, error_message="Evaluation configuration is unavailable"
@@ -93,8 +92,7 @@ class ThresholdConstructionStageHandler:
             if threshold_set is not None and threshold_set.diagnostics is not None:
                 diagnostics = diagnostics_to_json(threshold_set.diagnostics)
             elif requires_diagnostics:
-                raise ValueError(
-                    f"Threshold policy '{job.context.threshold_policy_id.value}' requires diagnostics")
+                raise ValueError(f"Threshold policy '{job.context.threshold_policy_id.value}' requires diagnostics")
             payload = BytesIO()
             frame.write_parquet(payload)
             self._store.write_bytes_atomic(job.output_path("thresholds"), payload.getvalue())

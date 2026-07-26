@@ -82,16 +82,13 @@ def decode_manifest(payload: bytes) -> FrozenResultManifest:
             artifact_type=str(p["artifact_type"]),
             table_type=str(p["table_type"]) if p.get("table_type") is not None else None,
             figure_type=str(p["figure_type"]) if p.get("figure_type") is not None else None,
-            estimate_basis=str(p["estimate_basis"]) if p.get(
-                "estimate_basis") is not None else None,
+            estimate_basis=str(p["estimate_basis"]) if p.get("estimate_basis") is not None else None,
             columns=tuple(
-                FrozenReportColumn(name=str(c["name"]), unit=str(
-                    c["unit"]), direction=str(c["direction"]))
+                FrozenReportColumn(name=str(c["name"]), unit=str(c["unit"]), direction=str(c["direction"]))
                 for c in p.get("columns", [])
             ),
             series=tuple(
-                FrozenReportColumn(name=str(c["name"]), unit=str(
-                    c["unit"]), direction=str(c["direction"]))
+                FrozenReportColumn(name=str(c["name"]), unit=str(c["unit"]), direction=str(c["direction"]))
                 for c in p.get("series", [])
             ),
         )

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 
 from attrs import define
@@ -12,6 +13,7 @@ from datp_core.core.identifiers import (
     EligibilityPolicyId,
     MaterializationId,
 )
+from datp_core.core.immutability import FrozenJson
 from datp_core.core.paths import RelativePath
 from datp_core.data.contracts.enums import AdapterKind
 from datp_core.data.contracts.features import DatasetFieldSchemaRecord
@@ -58,7 +60,7 @@ class ResolvedDataset:
     source_layout_contract: DatasetSourceLayoutContractRecord
     field_schema: DatasetFieldSchemaRecord
     source_contract: SourceContractRecord
-    client_identity_contract: object | None
+    client_identity_contract: Mapping[str, FrozenJson] | None
     inspection_contract: DatasetInspectionContract
     setups: tuple[DatasetSetup, ...]
     materializations: tuple[DatasetMaterialization, ...]

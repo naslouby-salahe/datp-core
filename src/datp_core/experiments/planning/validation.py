@@ -85,8 +85,7 @@ class ExecutionPlanValidator:
                 "future_recalibration_scores",
                 "calibration_subset_scores",
             }:
-                errors.append(
-                    f"Evaluation job '{job.node_key.label}' must not consume calibration scores")
+                errors.append(f"Evaluation job '{job.node_key.label}' must not consume calibration scores")
 
 
 def validate_planning_graph(graph: PlanningGraph) -> None:

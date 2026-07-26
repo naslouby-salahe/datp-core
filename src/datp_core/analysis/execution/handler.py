@@ -43,8 +43,7 @@ class StatisticalAnalysisStageHandler:
         experiment = self._config.experiments.get(job.context.experiment_id)
         analyses_by_kind: dict[AnalysisKind, list[AnalysisRecord]] = {}
         for analysis_record in experiment.analyses:
-            analyses_by_kind.setdefault(AnalysisKind(
-                analysis_record.kind), []).append(analysis_record)
+            analyses_by_kind.setdefault(AnalysisKind(analysis_record.kind), []).append(analysis_record)
         unsupported = analyses_by_kind.keys() - set(AnalysisKind)
         if unsupported:
             return StageJobOutcome.failed(
@@ -134,8 +133,7 @@ class StatisticalAnalysisStageHandler:
         )
 
     def _prerequisite_results(self, job: StageJob) -> tuple[PrerequisiteExperimentResult, ...]:
-        declared = [item for item in job.inputs if item.name.startswith(
-            "prerequisite_frozen_result_")]
+        declared = [item for item in job.inputs if item.name.startswith("prerequisite_frozen_result_")]
         if job.context.prerequisite_results and declared:
             raise ValueError("Analysis job has both planned and preloaded prerequisite results")
         if job.context.prerequisite_results:

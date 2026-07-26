@@ -6,7 +6,9 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
-from datp_core.data.adapters.edge_iiotset.models import EdgeTimestampedRow
+from attrs import asdict
+
+from datp_core.data.adapters.edge_iiotset.models import EdgeMaterializationEvidence, EdgeTimestampedRow
 from datp_core.data.adapters.edge_iiotset.parquet import (
     _deduplicated_edge_benign_rows,
     _read_edge_rows,
@@ -41,12 +43,15 @@ class EdgeIIoTsetAdapter:
         categorical: CategoricalEncodingRecord,
         numeric: RetainedNumericFeaturesRecord,
         excluded: frozenset,
-    ) -> tuple[bytes, dict[str, object]]:
+    ) -> tuple[bytes, EdgeMaterializationEvidence]:
         split = split_edge_benign_rows(rows, materialization)
         vocabulary = fit_edge_vocabulary(split.train, categorical.columns)
         normalization = fit_edge_train_normalization(split.train)
         payload = encode_edge_split_as_parquet(split, numeric.order, vocabulary, normalization)
-        evidence = {"split_method": materialization.split_method.value, "excluded_clients": sorted(excluded)}
+        evidence = EdgeMaterializationEvidence(
+            split_method=materialization.split_method.value,
+            excluded_clients=tuple(sorted(excluded)),
+        )
         return payload, evidence
 
     def _materialize_chronological_split(
@@ -56,7 +61,7 @@ class EdgeIIoTsetAdapter:
         categorical: CategoricalEncodingRecord,
         numeric: RetainedNumericFeaturesRecord,
         excluded: frozenset,
-    ) -> tuple[bytes, dict[str, object]]:
+    ) -> tuple[bytes, EdgeMaterializationEvidence]:
         chronological = split_edge_chronological_rows(
             tuple(
                 EdgeTimestampedRow(row=row, time_of_day_seconds=_require_edge_timestamp(row))
@@ -69,11 +74,11 @@ class EdgeIIoTsetAdapter:
         vocabulary = fit_edge_vocabulary(chronological.historical_train, categorical.columns)
         normalization = fit_edge_train_normalization(chronological.historical_train)
         payload = encode_edge_chronological_split_as_parquet(chronological, numeric.order, vocabulary, normalization)
-        evidence = {
-            "split_method": materialization.split_method.value,
-            "excluded_clients": sorted(excluded),
-            "chronology_validation": "passed",
-        }
+        evidence = EdgeMaterializationEvidence(
+            split_method=materialization.split_method.value,
+            excluded_clients=tuple(sorted(excluded)),
+            chronology_validation="passed",
+        )
         return payload, evidence
 
     def materialize(
@@ -102,8 +107,7 @@ class EdgeIIoTsetAdapter:
             or inspection.attack_traffic_root is None
             or inspection.binary_label_header is None
         ):
-            raise ValueError(
-                "Edge-IIoTset materialization requires its resolved feature, label, and source contracts")
+            raise ValueError("Edge-IIoTset materialization requires its resolved feature, label, and source contracts")
         timestamp = dataset.field_schema.identity_scheme.timestamp_field
         timestamp_header = timestamp.get("column") if isinstance(timestamp, Mapping) else timestamp
         if not isinstance(timestamp_header, str):
@@ -133,13 +137,12 @@ class EdgeIIoTsetAdapter:
                 rows, materialization, categorical, numeric, excluded
             )
         else:
-            raise ValueError(
-                f"Unsupported Edge-IIoTset split method '{materialization.split_method}'")
+            raise ValueError(f"Unsupported Edge-IIoTset split method '{materialization.split_method}'")
         payload_file.write_bytes(payload)
         return MaterializationResult(
             staged_path=payload_file,
             row_count=len(rows),
             preprocessing_evidence=json.dumps(
-                evidence, sort_keys=True, separators=(",", ":"), allow_nan=False
+                asdict(evidence), sort_keys=True, separators=(",", ":"), allow_nan=False
             ).encode(),
         )

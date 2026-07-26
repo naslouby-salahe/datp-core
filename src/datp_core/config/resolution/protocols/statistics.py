@@ -21,15 +21,12 @@ def resolve_statistical_profiles(
         profile_id = StatisticalProfileId(profile_key)
         statistical_dict[profile_id] = StatisticalProfileRecord(
             identifier=profile_id,
-            method=(StatisticalMethod(profile_cfg.method)
-                    if profile_cfg.method is not None else None),
+            method=(StatisticalMethod(profile_cfg.method) if profile_cfg.method is not None else None),
             confidence_level=(
-                Probability(
-                    profile_cfg.confidence_level) if profile_cfg.confidence_level is not None else None
+                Probability(profile_cfg.confidence_level) if profile_cfg.confidence_level is not None else None
             ),
             resample_count=(
-                PositiveInt(
-                    profile_cfg.resample_count) if profile_cfg.resample_count is not None else None
+                PositiveInt(profile_cfg.resample_count) if profile_cfg.resample_count is not None else None
             ),
             minimum_units=PositiveInt(minimum_units) if minimum_units is not None else None,
         )

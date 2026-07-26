@@ -32,12 +32,10 @@ class DatasetMaterializationStageHandler:
 
     def execute(self, job: StageJob) -> StageJobOutcome:
         experiment = self._config.experiments.get(job.context.experiment_id)
-        population = self._config.populations.get(
-            job.context.population_id or experiment.population_ids[0])
+        population = self._config.populations.get(job.context.population_id or experiment.population_ids[0])
         dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
         setup = dataset.setup(population.setup_id)
-        materialization = next(
-            item for item in dataset.materializations if item.identifier == setup.materialization_id)
+        materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
         try:
             partition_condition, partition_seed_contract = resolve_partition_contract(
                 self._config, experiment.identifier, job.context.partition_condition
@@ -100,18 +98,14 @@ class DatasetMaterializationStageHandler:
                     )
                 self._store.write_file_atomic(job.output_path("dataset"), payload.staged_path)
                 self._store.write_bytes_atomic(
-                    job.output_path("split_manifest"), encode_split_manifest(
-                        split_evidence.manifest)
+                    job.output_path("split_manifest"), encode_split_manifest(split_evidence.manifest)
                 )
                 self._store.write_bytes_atomic(job.output_path("readiness"), readiness.encode())
-                self._store.write_bytes_atomic(job.output_path(
-                    "preprocessing"), payload.preprocessing_evidence)
+                self._store.write_bytes_atomic(job.output_path("preprocessing"), payload.preprocessing_evidence)
                 if expects_partition:
                     if payload.partition_evidence is None:
-                        raise ValueError(
-                            "Dirichlet materialization did not produce partition evidence")
-                    self._store.write_bytes_atomic(job.output_path(
-                        "partition_manifest"), payload.partition_evidence)
+                        raise ValueError("Dirichlet materialization did not produce partition evidence")
+                    self._store.write_bytes_atomic(job.output_path("partition_manifest"), payload.partition_evidence)
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message=str(exc))
         return StageJobOutcome.succeeded(node_key=job.node_key, stage=job.stage, produced_outputs=job.outputs)

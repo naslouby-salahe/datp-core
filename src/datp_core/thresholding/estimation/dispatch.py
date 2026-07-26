@@ -56,8 +56,7 @@ class ConfiguredThresholdEstimator(ThresholdEstimator):
             raise ValueError("Threshold construction requires at least one eligible client")
         policy = request.policy
         target_quantile = policy_quantile(policy)
-        local = {item.client_id.value: quantile(
-            item.values, target_quantile.value) for item in calibration}
+        local = {item.client_id.value: quantile(item.values, target_quantile.value) for item in calibration}
 
         if isinstance(policy, SharedMeanThresholdPolicyRecord):
             return estimate_shared_mean(self._policy_id, calibration, local, target_quantile)

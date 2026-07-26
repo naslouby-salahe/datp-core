@@ -32,9 +32,7 @@ class PlanningGraph:
         for j in jobs:
             for dep_id in j.dependencies:
                 if dep_id not in job_ids:
-                    raise MissingDependencyError(
-                        f"Job '{j.node_key.label}' depends on missing key '{dep_id.label}'"
-                    )
+                    raise MissingDependencyError(f"Job '{j.node_key.label}' depends on missing key '{dep_id.label}'")
 
         outputs: dict[str, StageJob] = {}
         for j in jobs:

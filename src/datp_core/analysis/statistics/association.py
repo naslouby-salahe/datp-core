@@ -15,8 +15,7 @@ from datp_core.analysis.statistics.models import HypothesisTestResult, LinearReg
 def spearman_correlation(predictor: np.ndarray, outcome: np.ndarray) -> HypothesisTestResult:
     statistic, p_value = cast("tuple[float, float]", stats.spearmanr(predictor, outcome))
     if not np.isfinite((statistic, p_value)).all():
-        raise StatisticalProcedureError(
-            "Spearman correlation is undefined for the supplied observations")
+        raise StatisticalProcedureError("Spearman correlation is undefined for the supplied observations")
     return HypothesisTestResult(test_name="spearman_correlation", statistic=float(statistic), p_value=float(p_value))
 
 
@@ -25,13 +24,11 @@ def simple_linear_regression(predictor: np.ndarray, outcome: np.ndarray) -> Line
         "tuple[float, float, float, float, float]", stats.linregress(predictor, outcome)
     )
     if not np.isfinite((slope, intercept, standard_error, r_value)).all():
-        raise StatisticalProcedureError(
-            "Linear regression is undefined for the supplied observations")
+        raise StatisticalProcedureError("Linear regression is undefined for the supplied observations")
     centered = predictor - np.mean(predictor)
     denominator = float(np.sum(centered**2))
     if math.isclose(denominator, 0.0, abs_tol=0.0):
-        raise StatisticalProcedureError(
-            "Linear regression requires non-constant predictor observations")
+        raise StatisticalProcedureError("Linear regression requires non-constant predictor observations")
     leverage = tuple(float((1.0 / len(predictor)) + (value**2 / denominator)) for value in centered)
     leave_one_out_slopes = tuple(
         cast(

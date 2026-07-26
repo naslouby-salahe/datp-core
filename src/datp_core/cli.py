@@ -51,9 +51,7 @@ def _print_catalogue_summary(catalogue: ResolvedProjectConfiguration) -> None:
     table.add_row("Seed Cohorts", str(len(catalogue.seed_cohorts)))
 
     console.print(table)
-    console.print(
-        f"[bold blue]Scientific Fingerprint:[/bold blue] {catalogue.scientific_fingerprint.value}"
-    )
+    console.print(f"[bold blue]Scientific Fingerprint:[/bold blue] {catalogue.scientific_fingerprint.value}")
 
 
 def _print_planning_dag(graph: PlanningGraph, experiment_name: str) -> None:
@@ -87,9 +85,7 @@ def config_validate() -> None:
         for error in report.errors:
             console.print(f"  [red]-[/red] {error}")
         raise typer.Exit(code=1)
-    console.print(
-        "[bold green]All configuration documents strictly validated successfully![/bold green]"
-    )
+    console.print("[bold green]All configuration documents strictly validated successfully![/bold green]")
 
 
 @config_app.command("explain-drift")
@@ -104,20 +100,14 @@ def config_explain_drift(current: Path, expected: Path) -> None:
 
 @config_app.command("explain-scientific-drift")
 def config_explain_scientific_drift(
-    current_config_dir: Path = typer.Option(
-        ..., help="Resolved configuration directory to treat as current"
-    ),
-    expected_config_dir: Path = typer.Option(
-        ..., help="Resolved configuration directory to treat as expected"
-    ),
+    current_config_dir: Path = typer.Option(..., help="Resolved configuration directory to treat as current"),
+    expected_config_dir: Path = typer.Option(..., help="Resolved configuration directory to treat as expected"),
 ) -> None:
     """Explain structured scientific drift between two independently resolved configurations."""
     application = build_config_only_application()
     current_config = resolve_project_configuration(config_dir=current_config_dir)
     expected_config = resolve_project_configuration(config_dir=expected_config_dir)
-    drift = application.explain_scientific_drift.execute(
-        current_config=current_config, expected_config=expected_config
-    )
+    drift = application.explain_scientific_drift.execute(current_config=current_config, expected_config=expected_config)
     console.print_json(data=_converter.unstructure(drift))
     if drift.has_drift:
         raise typer.Exit(code=1)
@@ -125,20 +115,14 @@ def config_explain_scientific_drift(
 
 @config_app.command("explain-execution-drift")
 def config_explain_execution_drift(
-    current_config_dir: Path = typer.Option(
-        ..., help="Resolved configuration directory to treat as current"
-    ),
-    expected_config_dir: Path = typer.Option(
-        ..., help="Resolved configuration directory to treat as expected"
-    ),
+    current_config_dir: Path = typer.Option(..., help="Resolved configuration directory to treat as current"),
+    expected_config_dir: Path = typer.Option(..., help="Resolved configuration directory to treat as expected"),
 ) -> None:
     """Explain structured execution drift between two independently resolved configurations."""
     application = build_config_only_application()
     current_config = resolve_project_configuration(config_dir=current_config_dir)
     expected_config = resolve_project_configuration(config_dir=expected_config_dir)
-    drift = application.explain_execution_drift.execute(
-        current_config=current_config, expected_config=expected_config
-    )
+    drift = application.explain_execution_drift.execute(current_config=current_config, expected_config=expected_config)
     console.print_json(data=_converter.unstructure(drift))
     if drift.has_drift:
         raise typer.Exit(code=1)
@@ -197,9 +181,7 @@ def experiment_plan(
 @experiment_app.command("run")
 def experiment_run(
     experiment: str = typer.Option(..., "--config", "-c", help="Experiment name slug"),
-    override: bool = typer.Option(
-        False, "--override", help="Delete existing experiment output and run from scratch"
-    ),
+    override: bool = typer.Option(False, "--override", help="Delete existing experiment output and run from scratch"),
 ) -> None:
     """Execute a single experiment pipeline.
 
@@ -210,14 +192,8 @@ def experiment_run(
     experiment_id = ExperimentId(experiment)
     result = application.run_experiment.run(experiment_id, override=override)
     if result.status is ExperimentRunStatus.SKIPPED_EXISTING:
-        console.print(
-            f"[blue]SKIPPED_EXISTING: experiment {experiment} already has a "
-            "valid completed output.[/blue]"
-        )
-        console.print(
-            "[dim]Use --override to delete it and run the experiment again "
-            "from scratch.[/dim]"
-        )
+        console.print(f"[blue]SKIPPED_EXISTING: experiment {experiment} already has a valid completed output.[/blue]")
+        console.print("[dim]Use --override to delete it and run the experiment again from scratch.[/dim]")
         return
     if not result.success:
         console.print(f"[red]Experiment {experiment} was not run: {result.error_message}[/red]")
@@ -294,6 +270,100 @@ def results_query(sql: str = typer.Argument(..., help="SQL query string")) -> No
     application = build_application()
     res = application.audit_svc.execute_query(sql)
     console.print(res)
+
+
+diagnostic_app = typer.Typer(help="Production diagnostic commands (isolated outputs)")
+app.add_typer(diagnostic_app, name="diagnostic")
+
+
+@diagnostic_app.command("experiment")
+def diagnostic_experiment(
+    experiment: str = typer.Option(..., "--config", "-c", help="Experiment name slug"),
+    seed_index: int = typer.Option(0, "--seed-index", help="Seed index (0-based)"),
+    profile: str = typer.Option("smoke", "--profile", help="Execution profile"),
+) -> None:
+    """Diagnose one experiment through the real pipeline with one seed.
+
+    Output is isolated under .tmp/diagnostics/ — never touches official outputs.
+    """
+    import os
+
+    os.environ.setdefault("DATP_REPOSITORY_ROOT", str(Path.cwd()))
+    os.environ.setdefault("DATP_EXECUTION_PROFILE", profile)
+    os.environ["DATP_OUTPUTS_ROOT"] = str(Path(".tmp/diagnostics").resolve())
+
+    from datp_core.orchestration.diagnostics import run_experiment_diagnostic
+
+    result = run_experiment_diagnostic(experiment, seed_index=seed_index, profile=profile)
+    if result["status"] == "diagnostic_failed":
+        console.print(f"[red]Diagnostic failed: {result['error']}[/red]")
+        raise typer.Exit(code=1)
+    console.print(f"[green]Diagnostic for {experiment}: {result['status']}[/green]")
+    if "scientific_fingerprint" in result and result["scientific_fingerprint"]:
+        console.print(f"[dim]Scientific fingerprint: {result['scientific_fingerprint']}[/dim]")
+
+
+@diagnostic_app.command("campaign")
+def diagnostic_campaign(
+    profile: str = typer.Option("smoke", "--profile", help="Execution profile"),
+) -> None:
+    """Diagnose the complete campaign through the real pipeline, one seed per experiment.
+
+    Output is isolated under .tmp/diagnostics/ — never touches official outputs.
+    """
+    import os
+
+    os.environ.setdefault("DATP_REPOSITORY_ROOT", str(Path.cwd()))
+    os.environ.setdefault("DATP_EXECUTION_PROFILE", profile)
+    os.environ["DATP_OUTPUTS_ROOT"] = str(Path(".tmp/diagnostics").resolve())
+
+    from datp_core.orchestration.diagnostics import run_campaign_diagnostic
+
+    result = run_campaign_diagnostic(profile=profile)
+    console.print("[bold]Campaign diagnostic:[/bold]")
+    console.print(f"  Total: {result['total']}")
+    console.print(f"  Completed/Skipped: {result['completed_or_skipped']}")
+    console.print(f"  Executed: {result['executed']}")
+    console.print(f"  Blocked: {result['blocked']}")
+    console.print(f"  Failed: {result['failed']}")
+    if not result["success"]:
+        console.print("[red]Campaign diagnostic completed with failures.[/red]")
+        raise typer.Exit(code=1)
+    console.print("[green]Campaign diagnostic completed successfully.[/green]")
+
+
+@diagnostic_app.command("dagster")
+def diagnostic_dagster(
+    experiment: str = typer.Option(..., "--config", "-c", help="Experiment name slug"),
+) -> None:
+    """Run one experiment through Dagster (canonical orchestrator).
+
+    Uses the same production pipeline; Dagster adds observability.
+    """
+    import os
+
+    os.environ.setdefault("DATP_REPOSITORY_ROOT", str(Path.cwd()))
+    os.environ.setdefault("DATP_EXECUTION_PROFILE", "smoke")
+
+    from datp_core.config.project import resolve_project_configuration
+    from datp_core.orchestration.dagster_defs import build_dagster_definitions
+
+    config = resolve_project_configuration()
+    exp_ids = tuple(eid.value for eid in config.experiments)
+    defs = build_dagster_definitions(exp_ids)
+
+    job_name = f"datp_{experiment}"
+    job = defs.get_job_def(job_name)
+    if job is None:
+        console.print(f"[red]No Dagster job found for experiment: {experiment}[/red]")
+        raise typer.Exit(code=1)
+
+    result = job.execute_in_process()
+    if result.success:
+        console.print(f"[green]Dagster experiment {experiment} completed successfully.[/green]")
+    else:
+        console.print(f"[red]Dagster experiment {experiment} failed.[/red]")
+        raise typer.Exit(code=1)
 
 
 def main() -> None:

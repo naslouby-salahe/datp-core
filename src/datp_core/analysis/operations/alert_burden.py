@@ -18,8 +18,7 @@ def analyze_alert_burden(
             status=analysis.unavailable_behavior,
             reason=f"required operational input '{analysis.required_operational_input}' is not configured",
         )
-    raise ValueError(
-        "Configured operational alert-burden rates require executable source provenance")
+    raise ValueError("Configured operational alert-burden rates require executable source provenance")
 
 
 __all__ = ["analyze_alert_burden"]

@@ -33,16 +33,14 @@ class OperatingPointEvaluationStageHandler:
             scores = validate_test_score_frame(
                 pl.read_parquet(BytesIO(self._store.read_bytes(job.input_path("test_scores"))))
             )
-            joined = scores.join(thresholds.select("client_id", "threshold"),
-                                 on="client_id", how="left")
+            joined = scores.join(thresholds.select("client_id", "threshold"), on="client_id", how="left")
             if joined["threshold"].null_count() > 0 and job.context.calibration_sample_count is None:
                 raise ValueError("Threshold artifact does not cover every scored client")
             eligible = joined.filter(pl.col("threshold").is_not_null())
             if eligible.is_empty():
                 metrics = ineligible_client_metrics(joined)
             elif joined["threshold"].null_count() > 0:
-                metrics = pl.concat((compute_operating_point_metrics(
-                    eligible), ineligible_client_metrics(joined)))
+                metrics = pl.concat((compute_operating_point_metrics(eligible), ineligible_client_metrics(joined)))
             else:
                 metrics = compute_operating_point_metrics(eligible)
             metrics = metrics.join(compute_client_auroc(scores), on="client_id", how="left")

@@ -99,13 +99,11 @@ class DatasetMaterialization:
         for configured_role, configured_ratio in self.split_ratios:
             if configured_role == role_value:
                 return configured_ratio
-        raise KeyError(
-            f"Materialization '{self.identifier.value}' has no configured ratio for '{role_value}'")
+        raise KeyError(f"Materialization '{self.identifier.value}' has no configured ratio for '{role_value}'")
 
     def chronological_ratio(self, role: str | SplitMembership) -> Probability:
         role_value = role.value if isinstance(role, SplitMembership) else role
         for configured_role, configured_ratio in self.chronological_ratios:
             if configured_role == role_value:
                 return configured_ratio
-        raise KeyError(
-            f"Materialization '{self.identifier.value}' has no chronological ratio for '{role_value}'")
+        raise KeyError(f"Materialization '{self.identifier.value}' has no chronological ratio for '{role_value}'")

@@ -37,8 +37,7 @@ class ClusterDispersionResult:
         if self.status is ClusterDispersionStatus.AVAILABLE and self.value is None:
             raise ValueError("An available cluster dispersion result must have a value")
         if self.status is not ClusterDispersionStatus.AVAILABLE and self.value is not None:
-            raise ValueError(
-                "An unavailable cluster dispersion result must not have a substitute value")
+            raise ValueError("An unavailable cluster dispersion result must not have a substitute value")
 
 
 @define(frozen=True, slots=True, kw_only=True)

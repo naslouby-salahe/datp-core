@@ -57,9 +57,7 @@ def descendants(graph: PlanningGraph, node_key: GraphNodeKey) -> tuple[GraphNode
     return tuple(sorted(nx.descendants(nx_graph, node_key), key=lambda n: n))
 
 
-def try_predecessors(
-    graph: PlanningGraph, node_key: GraphNodeKey
-) -> tuple[GraphNodeKey, ...] | None:
+def try_predecessors(graph: PlanningGraph, node_key: GraphNodeKey) -> tuple[GraphNodeKey, ...] | None:
     if not graph.has_job(node_key):
         return None
     return graph.predecessors(node_key)

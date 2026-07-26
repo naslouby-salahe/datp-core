@@ -3,8 +3,6 @@ record, composed from the focused per-responsibility resolution submodules."""
 
 from __future__ import annotations
 
-from typing import cast
-
 from attrs import define
 
 from datp_core.config.authored.protocols import AuthoredProtocolsConfig
@@ -53,7 +51,7 @@ from datp_core.core.identifiers import (
     ThresholdPolicyId,
     TrainingProfileId,
 )
-from datp_core.core.immutability import deep_freeze
+from datp_core.core.immutability import FrozenJson, freeze_json
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.contracts import EligibilityPolicyRecord, NormalizationStrategyRecord
 from datp_core.evaluation import (
@@ -99,15 +97,14 @@ class ResolvedProtocols:
     optimizers: TypedDomainRegistry[str, OptimizerRecord]
     batching_profiles: TypedDomainRegistry[str, BatchingRecord]
     eligibility_policies: TypedDomainRegistry[EligibilityPolicyId, EligibilityPolicyRecord]
-    normalization_strategies: TypedDomainRegistry[NormalizationStrategyId,
-        NormalizationStrategyRecord]
+    normalization_strategies: TypedDomainRegistry[NormalizationStrategyId, NormalizationStrategyRecord]
     quantile_estimators: TypedDomainRegistry[str, QuantileEstimatorRecord]
     metric_bundles: TypedDomainRegistry[MetricBundleId, MetricBundleRecord]
     report_profiles: TypedDomainRegistry[str, ReportProfileRecord]
     metric_definitions: MetricDefinitionsRecord
     communication_estimation_contract: CommunicationEstimationContractRecord
     operational_inputs: OperationalInputsRecord
-    communication_estimation: dict[str, object] | None
+    communication_estimation: FrozenJson | None
     protocol_determinism: ProtocolDeterminismRecord
     normalization_fit_scopes: dict[str, str]
     normalization_leakage_rule: str
@@ -121,9 +118,7 @@ class ResolvedProtocols:
 def resolve_protocols(authored: AuthoredProtocolsConfig) -> ResolvedProtocols:
     """Resolve the authored protocol document (protocols.yaml) into every immutable protocol record."""
     resolved_communication_estimation = (
-        cast(dict, deep_freeze(authored.communication_estimation))
-        if authored.communication_estimation is not None
-        else None
+        freeze_json(authored.communication_estimation) if authored.communication_estimation is not None else None
     )
     return ResolvedProtocols(
         training_profiles=TypedDomainRegistry(_items=resolve_training_profiles(authored)),
@@ -135,13 +130,11 @@ def resolve_protocols(authored: AuthoredProtocolsConfig) -> ResolvedProtocols:
         optimizers=TypedDomainRegistry(_items=resolve_optimizers(authored)),
         batching_profiles=TypedDomainRegistry(_items=resolve_batching_profiles(authored)),
         eligibility_policies=TypedDomainRegistry(_items=resolve_eligibility_policies(authored)),
-        normalization_strategies=TypedDomainRegistry(
-            _items=resolve_normalization_strategies(authored)),
+        normalization_strategies=TypedDomainRegistry(_items=resolve_normalization_strategies(authored)),
         quantile_estimators=TypedDomainRegistry(_items=resolve_quantile_estimators(authored)),
         metric_bundles=TypedDomainRegistry(_items=_resolve_metric_bundles(authored)),
         report_profiles=TypedDomainRegistry(
-            _items={key: resolve_report_profile(key, v)
-                                                for key, v in authored.report_profiles.items()}
+            _items={key: resolve_report_profile(key, v) for key, v in authored.report_profiles.items()}
         ),
         metric_definitions=resolve_metric_definitions(authored.metric_definitions),
         communication_estimation_contract=resolve_communication_estimation_contract(
@@ -152,13 +145,11 @@ def resolve_protocols(authored: AuthoredProtocolsConfig) -> ResolvedProtocols:
         protocol_determinism=resolve_protocol_determinism(authored.determinism),
         normalization_fit_scopes=dict(authored.normalization_fit_scopes),
         normalization_leakage_rule=authored.normalization_leakage_rule,
-        threshold_policy_defaults=resolve_threshold_policy_defaults(
-            authored.threshold_policy_defaults),
+        threshold_policy_defaults=resolve_threshold_policy_defaults(authored.threshold_policy_defaults),
         nested_replicate_policy=resolve_nested_replicate_policy(authored.nested_replicate_policy),
         result_types=TypedDomainRegistry(
             _items={key: resolve_result_type(key, v) for key, v in authored.result_types.items()}
         ),
-        evaluation_result_contract=resolve_evaluation_result_contract(
-            authored.evaluation_result_contract),
+        evaluation_result_contract=resolve_evaluation_result_contract(authored.evaluation_result_contract),
         report_defaults=resolve_report_defaults(authored.report_defaults),
     )

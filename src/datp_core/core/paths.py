@@ -11,8 +11,7 @@ from attrs import define, field
 
 def validate_relative_path(instance: object, attribute: object, value: str) -> None:
     if not isinstance(value, str) or value.startswith("/") or ".." in value or not value.strip():
-        raise ValueError(
-            f"RelativePath must be a non-empty relative path without parent traversal: {value}")
+        raise ValueError(f"RelativePath must be a non-empty relative path without parent traversal: {value}")
 
 
 @define(frozen=True, slots=True, order=True)

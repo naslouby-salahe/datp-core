@@ -49,10 +49,8 @@ class ConstructThresholdsUseCase:
                 or not fingerprint_features_override
                 or any(feature not in policy.fingerprint.features for feature in fingerprint_features_override)
             ):
-                raise ValueError(
-                    "Fingerprint-feature override is invalid for the configured cluster policy")
-            policy = evolve(policy, fingerprint=evolve(
-                policy.fingerprint, features=fingerprint_features_override))
+                raise ValueError("Fingerprint-feature override is invalid for the configured cluster policy")
+            policy = evolve(policy, fingerprint=evolve(policy.fingerprint, features=fingerprint_features_override))
         return estimator.estimate(
             ThresholdConstructionRequest(
                 policy_id=policy_id,

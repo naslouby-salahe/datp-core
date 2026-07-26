@@ -8,7 +8,7 @@ config/fingerprinting/, which builds on these primitives.
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from enum import Enum
 from hashlib import blake2b
 from pathlib import Path
@@ -21,7 +21,7 @@ from datp_core.core.numbers import NonNegativeFloat, PositiveFloat, PositiveInt,
 from datp_core.core.paths import RelativePath
 from datp_core.core.seeding import Seed
 
-type CanonicalProjection = str | int | bool | None | list[CanonicalProjection] | dict[str, CanonicalProjection]
+type CanonicalProjection = str | int | bool | None | Sequence[CanonicalProjection] | Mapping[str, CanonicalProjection]
 
 
 def validate_hex64(instance: object, attribute: object, value: str) -> None:

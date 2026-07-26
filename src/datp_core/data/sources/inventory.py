@@ -32,8 +32,7 @@ def build_source_inventory(dataset: ResolvedDataset) -> ConcreteSourceInventory:
         if not source_root.is_relative_to(raw_data_root):
             continue
 
-        files = _inventory_source_tree(
-            source_root, tree, ignored_suffixes, ignored_subtrees, inspection)
+        files = _inventory_source_tree(source_root, tree, ignored_suffixes, ignored_subtrees, inspection)
         for file_path in files:
             resolved = file_path.resolve()
             if resolved in seen_paths:

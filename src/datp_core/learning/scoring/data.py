@@ -24,16 +24,14 @@ def load_benign_client_tensors(
     missing = sorted(required - set(frame.columns))
     if missing:
         raise ValueError(f"Materialized payload lacks training columns: {', '.join(missing)}")
-    selected = frame.filter((pl.col("split") == split) & ~pl.col(
-        "is_attack")).select("client_id", *feature_columns)
+    selected = frame.filter((pl.col("split") == split) & ~pl.col("is_attack")).select("client_id", *feature_columns)
     if selected.is_empty():
         raise ValueError(f"Materialized payload has no benign {split} rows")
     tensors: list[tuple[str, torch.Tensor]] = []
     for client_id, client_rows in selected.group_by("client_id", maintain_order=True):
         values = client_rows.select(*feature_columns).to_numpy()
         if not np.isfinite(values).all():
-            raise ValueError(
-                f"Benign {split} rows for client '{client_id[0]}' contain non-finite feature values")
+            raise ValueError(f"Benign {split} rows for client '{client_id[0]}' contain non-finite feature values")
         tensors.append((str(client_id[0]), torch.tensor(values, dtype=torch.float32)))
     return tuple(sorted(tensors, key=lambda item: item[0]))
 
@@ -44,10 +42,8 @@ def materialized_feature_columns(path: Path) -> tuple[str, ...]:
     Shared by the training handler (materialization has no configured ``field_schema.model_features``
     fallback path) and the score-generation stage handler.
     """
-    metadata_columns = {"split", "client_id", "source_path",
-        "source_row_index", "is_attack", "chronology_key"}
-    columns = tuple(column for column in pl.read_parquet(
-        path, n_rows=0).columns if column not in metadata_columns)
+    metadata_columns = {"split", "client_id", "source_path", "source_row_index", "is_attack", "chronology_key"}
+    columns = tuple(column for column in pl.read_parquet(path, n_rows=0).columns if column not in metadata_columns)
     if not columns:
         raise ValueError("Materialized dataset has no model feature columns")
     return columns

@@ -191,8 +191,7 @@ class ExperimentLifecycleUseCase:
         started_at = time()
         self._output_manager.begin(experiment_id)
         try:
-            report = self._execute_experiment.execute(
-                experiment_id, prerequisite_results=prerequisite_results)
+            report = self._execute_experiment.execute(experiment_id, prerequisite_results=prerequisite_results)
             if report.failed_jobs:
                 error = f"{report.failed_jobs} job(s) failed out of {len(report.outcomes)}"
                 self._output_manager.mark_failed(experiment_id, error)
@@ -257,8 +256,7 @@ class ExperimentLifecycleUseCase:
             owned = tuple(
                 outcome for outcome in outcomes if jobs[outcome.node_key].context.experiment_id == experiment.identifier
             )
-            failed = tuple(
-                outcome for outcome in owned if outcome.status is not JobExecutionStatus.SUCCESS)
+            failed = tuple(outcome for outcome in owned if outcome.status is not JobExecutionStatus.SUCCESS)
             report = ExperimentExecutionReport(
                 experiment_id=experiment.identifier,
                 outcomes=owned,
@@ -303,8 +301,7 @@ class ExperimentLifecycleUseCase:
     ) -> ExperimentManifest:
         result = results.get(experiment_id)
         if result is None or result.manifest is None:
-            raise ValueError(
-                f"Campaign prerequisite '{experiment_id.value}' lacks a completed manifest")
+            raise ValueError(f"Campaign prerequisite '{experiment_id.value}' lacks a completed manifest")
         return result.manifest
 
     def _validated_prerequisite_results(self, experiment: ExperimentRecord) -> tuple[PrerequisiteExperimentResult, ...]:
@@ -315,8 +312,7 @@ class ExperimentLifecycleUseCase:
                 raise ValueError(
                     f"Prerequisite '{prerequisite.experiment_id.value}' is not a valid completed experiment"
                 )
-            frozen = self._output_manager.load_frozen_result(
-                prerequisite.experiment_id, inspection.manifest)
+            frozen = self._output_manager.load_frozen_result(prerequisite.experiment_id, inspection.manifest)
             if not self._outcome_is_satisfied(prerequisite.required_outcome, frozen):
                 raise ValueError(
                     f"Prerequisite '{prerequisite.experiment_id.value}' does not satisfy "
@@ -378,8 +374,7 @@ class ExecuteExperimentUseCase:
                 failed_jobs=1,
             )
 
-        graph = expand_experiment_jobs(experiment, self._config,
-                                       prerequisite_results=prerequisite_results)
+        graph = expand_experiment_jobs(experiment, self._config, prerequisite_results=prerequisite_results)
         validate_planning_graph(graph)
 
         outcomes = run_planning_graph(graph, self._registry)
@@ -387,8 +382,7 @@ class ExecuteExperimentUseCase:
         return ExperimentExecutionReport(
             experiment_id=experiment_id,
             outcomes=outcomes,
-            successful_jobs=sum(
-                outcome.status is JobExecutionStatus.SUCCESS for outcome in outcomes),
+            successful_jobs=sum(outcome.status is JobExecutionStatus.SUCCESS for outcome in outcomes),
             failed_jobs=sum(outcome.status is JobExecutionStatus.FAILED for outcome in outcomes),
         )
 

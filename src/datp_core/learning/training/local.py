@@ -68,8 +68,7 @@ def train_autoencoder(
 
     for epoch_seed in epoch_seeds:
         set_deterministic_seeds(epoch_seed)
-        loader = DataLoader(dataset, batch_size=batch_size,
-                            shuffle=shuffle_each_epoch, num_workers=0)
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle_each_epoch, num_workers=0)
         for (batch_x,) in loader:
             batch_x = batch_x.to(device)
             optimizer.zero_grad()

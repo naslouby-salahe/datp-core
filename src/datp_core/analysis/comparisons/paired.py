@@ -137,14 +137,12 @@ def evaluation_metric(
     quantile_override = overrides.get("quantile")
     shrinkage_override = overrides.get("shrinkage_weight")
     policy = config.threshold_policies.get(evaluation.threshold_policy_id)
-    quantile = threshold_quantile if isinstance(
-        quantile_override, Mapping) else getattr(policy, "quantile", None)
+    quantile = threshold_quantile if isinstance(quantile_override, Mapping) else getattr(policy, "quantile", None)
     if not isinstance(quantile, float):
         raise ValueError(f"Evaluation '{label}' does not bind a quantile threshold policy")
     definition = config.metric_definitions.cross_client_aggregation.cv_fpr
     if definition.near_zero_mean_threshold_formula != "0.10 * (1 - evaluated_threshold_policy_quantile)":
-        raise ValueError(
-            "CV(FPR) near-zero threshold formula is not the configured roadmap formula")
+        raise ValueError("CV(FPR) near-zero threshold formula is not the configured roadmap formula")
     if definition.near_zero_mean_threshold_factor is None:
         raise ValueError("CV(FPR) near-zero threshold factor is not configured")
     instability_factor = definition.near_zero_mean_threshold_factor
@@ -152,8 +150,7 @@ def evaluation_metric(
     if calibration_sample_count is not None:
         subset = experiment.calibration_subset
         if subset is None:
-            raise ValueError(
-                "Calibration sample count is invalid for an experiment without a subset contract")
+            raise ValueError("Calibration sample count is invalid for an experiment without a subset contract")
         replicates = tuple(range(subset.replicate_count.value))
     values: list[float] = []
     for replicate in replicates:
@@ -163,8 +160,7 @@ def evaluation_metric(
             partition_condition=partition_condition,
             federated_proximal_mu=proximal_mu,
             ditto_proximal_weight=ditto_weight,
-            threshold_quantile=threshold_quantile if isinstance(
-                quantile_override, Mapping) else None,
+            threshold_quantile=threshold_quantile if isinstance(quantile_override, Mapping) else None,
             shrinkage_weight=shrinkage_weight if isinstance(shrinkage_override, Mapping) else None,
             calibration_sample_count=calibration_sample_count,
             calibration_replicate=replicate,
@@ -206,8 +202,7 @@ def _read_cv_fpr_metric(
         float(value)
         for value in frame.filter(pl.col("false_positive_rate_status") == "available")["false_positive_rate"].to_list()
     )
-    dispersion = calculate_fpr_dispersion(
-        fprs, cv_instability_threshold=instability_factor * (1.0 - quantile))
+    dispersion = calculate_fpr_dispersion(fprs, cv_instability_threshold=instability_factor * (1.0 - quantile))
     if dispersion.coefficient_of_variation.status is not MetricStatus.AVAILABLE:
         raise ValueError(
             f"Configured CV(FPR) is unavailable for paired statistical analysis: "

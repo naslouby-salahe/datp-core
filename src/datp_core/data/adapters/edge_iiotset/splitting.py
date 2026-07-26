@@ -29,8 +29,7 @@ def split_edge_benign_rows(
     rows: tuple[EdgeIIoTsetRow, ...], materialization: DatasetMaterialization
 ) -> EdgeIIoTsetSplitRows:
     if materialization.split_method != SplitMethod.RANDOM_FRACTIONAL or materialization.split_seed is None:
-        raise ValueError(
-            "Edge-IIoTset benign materialization requires configured random_fractional split and seed")
+        raise ValueError("Edge-IIoTset benign materialization requires configured random_fractional split and seed")
     train_ratio = float(materialization.ratio("train"))
     calibration_ratio = float(materialization.ratio("calibration"))
     recalibration_ratio = (
@@ -49,8 +48,7 @@ def split_edge_benign_rows(
         if row.is_attack:
             continue
         if row.client_id is None:
-            raise ValueError(
-                "Edge-IIoTset benign rows require a configured normal-group client identity")
+            raise ValueError("Edge-IIoTset benign rows require a configured normal-group client identity")
         benign_by_client.setdefault(row.client_id, []).append(row)
     train: list[EdgeIIoTsetRow] = []
     calibration: list[EdgeIIoTsetRow] = []
@@ -101,8 +99,7 @@ def split_edge_chronological_rows(
     rows: tuple[EdgeTimestampedRow, ...], materialization: DatasetMaterialization, excluded_clients: tuple[str, ...]
 ) -> EdgeChronologicalSplitRows:
     if materialization.split_method != SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL:
-        raise ValueError(
-            "Edge-IIoTset chronological setup requires the configured within_client_chronological method")
+        raise ValueError("Edge-IIoTset chronological setup requires the configured within_client_chronological method")
     fractions = tuple(
         float(materialization.chronological_ratio(role))
         for role in ("historical_train", "historical_calibration", "future_recalibration", "future_evaluation")
@@ -114,8 +111,7 @@ def split_edge_chronological_rows(
         if timestamped.row.is_attack or timestamped.row.client_id is None:
             raise ValueError("Edge-IIoTset chronological split accepts assigned benign rows only")
         if not math.isfinite(timestamped.time_of_day_seconds) or not 0 <= timestamped.time_of_day_seconds < 86_400:
-            raise ValueError(
-                "Edge-IIoTset time-of-day values must be finite seconds within one day")
+            raise ValueError("Edge-IIoTset time-of-day values must be finite seconds within one day")
         grouped.setdefault(timestamped.row.client_id, []).append(timestamped)
     roles: tuple[list[EdgeIIoTsetRow], list[EdgeIIoTsetRow], list[EdgeIIoTsetRow], list[EdgeIIoTsetRow]] = (
         [],
@@ -134,8 +130,7 @@ def split_edge_chronological_rows(
                 offset += 86_400
             corrected.append((item.time_of_day_seconds + offset, item.row))
             previous = item.time_of_day_seconds
-        ordered = [row for _, row in sorted(
-            corrected, key=lambda value: (value[0], _provenance_key(value[1])))]
+        ordered = [row for _, row in sorted(corrected, key=lambda value: (value[0], _provenance_key(value[1])))]
         boundaries = [int(sum(fractions[: index + 1]) * len(ordered)) for index in range(3)]
         for index, row in enumerate(ordered):
             roles[_chronological_split_index(index, boundaries)].append(row)

@@ -46,8 +46,7 @@ def materialize_nbaiot_source_row(
             is_attack=True,
             source_row=source_row,
         )
-    raise ValueError(
-        "N-BaIoT source row does not satisfy configured benign or attack path semantics")
+    raise ValueError("N-BaIoT source row does not satisfy configured benign or attack path semantics")
 
 
 def write_nbaiot_source_parquet(
@@ -65,8 +64,7 @@ def write_nbaiot_source_parquet(
     valid_benign_count = 0
     for result in iter_numeric_csv_source(source_path, feature_headers):
         if isinstance(result, SourceRowFailure):
-            raise ValueError(
-                f"N-BaIoT source validation rejected row {result.source_row_index} in {source_path}")
+            raise ValueError(f"N-BaIoT source validation rejected row {result.source_row_index} in {source_path}")
         if not materialize_nbaiot_source_row(
             result, dataset_root, benign_filename, attack_family_directories
         ).is_attack:
@@ -77,8 +75,7 @@ def write_nbaiot_source_parquet(
         else None
     )
     boundaries = (
-        calculate_nbaiot_chronological_boundaries(
-            valid_benign_count, materialization) if random_roles is None else None
+        calculate_nbaiot_chronological_boundaries(valid_benign_count, materialization) if random_roles is None else None
     )
     target_path.parent.mkdir(parents=True, exist_ok=True)
     schema = pa.schema(
@@ -98,18 +95,15 @@ def write_nbaiot_source_parquet(
     with pq.ParquetWriter(target_path, schema, compression="zstd", use_dictionary=False) as writer:
         for result in iter_numeric_csv_source(source_path, feature_headers):
             if isinstance(result, SourceRowFailure):
-                raise ValueError(
-                    f"N-BaIoT source changed between validation and write: {source_path}")
-            row = materialize_nbaiot_source_row(
-                result, dataset_root, benign_filename, attack_family_directories)
+                raise ValueError(f"N-BaIoT source changed between validation and write: {source_path}")
+            row = materialize_nbaiot_source_row(result, dataset_root, benign_filename, attack_family_directories)
             if row.is_attack:
                 role = "test"
             elif random_roles is not None:
                 role = random_roles[benign_index]
             else:
                 if boundaries is None:
-                    raise ValueError(
-                        "N-BaIoT materialization requires either random roles or chronological boundaries")
+                    raise ValueError("N-BaIoT materialization requires either random roles or chronological boundaries")
                 role = boundaries.role_for_benign_index(benign_index)
             benign_index += not row.is_attack
             if role == "excluded_gap":

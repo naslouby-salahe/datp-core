@@ -103,13 +103,10 @@ def build_threshold_set(
                 threshold=thresholds[item.client_id.value],
                 owner=owner,
                 effective_lambda=None if lambdas is None else lambdas.get(item.client_id.value),
-                cluster_label=None if cluster_labels is None else cluster_labels.get(
-                    item.client_id.value),
-                finite_sample_rank=None if conformal_ranks is None else conformal_ranks.get(
-                    item.client_id.value),
+                cluster_label=None if cluster_labels is None else cluster_labels.get(item.client_id.value),
+                finite_sample_rank=None if conformal_ranks is None else conformal_ranks.get(item.client_id.value),
                 attainability_status=(
-                    None if conformal_attainability is None else conformal_attainability.get(
-                        item.client_id.value)
+                    None if conformal_attainability is None else conformal_attainability.get(item.client_id.value)
                 ),
             )
             for item in calibration

@@ -95,8 +95,7 @@ def resolve_label_fields(cfg: LabelFieldsConfig) -> LabelFieldsRecord:
     return LabelFieldsRecord(
         binary_label=cfg.binary_label,
         multiclass_label=(
-            MulticlassLabelRecord(column=multiclass.column,
-                                  type=multiclass.type, case=multiclass.case)
+            MulticlassLabelRecord(column=multiclass.column, type=multiclass.type, case=multiclass.case)
             if multiclass is not None
             else None
         ),
@@ -153,14 +152,12 @@ def resolve_field_schema(cfg: DatasetFieldSchemaConfig) -> DatasetFieldSchemaRec
         identity_scheme=resolve_identity_scheme(cfg.identity_scheme),
         label_fields=resolve_label_fields(cfg.label_fields),
         model_features=(
-            ModelFeaturesRecord(role=model_features.role, type=model_features.type,
-                                order=tuple(model_features.order))
+            ModelFeaturesRecord(role=model_features.role, type=model_features.type, order=tuple(model_features.order))
             if model_features is not None
             else None
         ),
         source_columns=tuple(cfg.source_columns) if cfg.source_columns is not None else None,
-        endpoint_identity=(resolve_endpoint_identity(endpoint_identity)
-                           if endpoint_identity is not None else None),
+        endpoint_identity=(resolve_endpoint_identity(endpoint_identity) if endpoint_identity is not None else None),
         attack_row_group_policy=cfg.attack_row_group_policy,
         retained_numeric_features=(
             RetainedNumericFeaturesRecord(
@@ -191,8 +188,7 @@ def resolve_source_layout_contract(cfg: DatasetSourceLayoutConfig) -> DatasetSou
         normal_file_pattern=cfg.normal_file_pattern,
         attack_file_pattern=cfg.attack_file_pattern,
         device_dirs=tuple(cfg.device_dirs) if cfg.device_dirs is not None else None,
-        normal_group_folders=tuple(
-            cfg.normal_group_folders) if cfg.normal_group_folders is not None else None,
+        normal_group_folders=tuple(cfg.normal_group_folders) if cfg.normal_group_folders is not None else None,
         executable_group_folders=(
             tuple(cfg.executable_group_folders) if cfg.executable_group_folders is not None else None
         ),
@@ -207,8 +203,7 @@ def resolve_source_layout_contract(cfg: DatasetSourceLayoutConfig) -> DatasetSou
                     root=RelativePath(source.root),
                     file_pattern=source.file_pattern,
                     owns=tuple(source.owns) if source.owns is not None else None,
-                    permitted_uses=tuple(
-                        source.permitted_uses) if source.permitted_uses is not None else None,
+                    permitted_uses=tuple(source.permitted_uses) if source.permitted_uses is not None else None,
                     contributes_rows_to_executable_materializations=(
                         source.contributes_rows_to_executable_materializations
                     ),
@@ -232,13 +227,10 @@ def resolve_source_layout_contract(cfg: DatasetSourceLayoutConfig) -> DatasetSou
             if cross_source_relationship is not None
             else None
         ),
-        normal_traffic_root=(RelativePath(cfg.normal_traffic_root)
-                             if cfg.normal_traffic_root is not None else None),
-        attack_traffic_root=(RelativePath(cfg.attack_traffic_root)
-                             if cfg.attack_traffic_root is not None else None),
+        normal_traffic_root=(RelativePath(cfg.normal_traffic_root) if cfg.normal_traffic_root is not None else None),
+        attack_traffic_root=(RelativePath(cfg.attack_traffic_root) if cfg.attack_traffic_root is not None else None),
         benign_file_required_per_device=cfg.benign_file_required_per_device,
-        attack_family_dirs=tuple(
-            cfg.attack_family_dirs) if cfg.attack_family_dirs is not None else None,
+        attack_family_dirs=tuple(cfg.attack_family_dirs) if cfg.attack_family_dirs is not None else None,
         attack_family_required_per_device=cfg.attack_family_required_per_device,
     )
 
@@ -288,8 +280,7 @@ def resolve_client_construction(cfg: SetupClientConstructionConfig) -> SetupClie
         minimum_row_counts=cfg.minimum_row_counts,
         retry_policy=cfg.retry_policy,
         feasibility_failure=cfg.feasibility_failure,
-        manifest_invariants=(tuple(cfg.manifest_invariants)
-                             if cfg.manifest_invariants is not None else None),
+        manifest_invariants=(tuple(cfg.manifest_invariants) if cfg.manifest_invariants is not None else None),
         manifest_fields=(tuple(cfg.manifest_fields) if cfg.manifest_fields is not None else None),
     )
 
@@ -348,9 +339,7 @@ def _resolve_materializations(d_cfg: AuthoredDatasetConfig) -> tuple[DatasetMate
             ),
             infeasibility_policy=materialization.infeasibility_policy,
             split_method=SplitMethod(materialization.split.method),
-            split_seed=Seed(materialization.split.split_seed)
-            if materialization.split.split_seed is not None
-            else None,
+            split_seed=Seed(materialization.split.split_seed) if materialization.split.split_seed is not None else None,
             split_ratios=tuple(
                 (role, Probability(ratio)) for role, ratio in sorted((materialization.split.ratios or {}).items())
             ),
@@ -406,8 +395,7 @@ def _resolve_inspection_elements(d_cfg: AuthoredDatasetConfig) -> DatasetInspect
         raise ConfigurationError(f"Dataset '{d_cfg.dataset}' has no resolved model feature headers")
     categorical_encoding = d_cfg.field_schema.categorical_encoding
     required_categorical_headers = (
-        tuple(categorical_encoding.columns) if isinstance(
-            categorical_encoding, CategoricalEncodingConfig) else ()
+        tuple(categorical_encoding.columns) if isinstance(categorical_encoding, CategoricalEncodingConfig) else ()
     )
     multiclass_label = d_cfg.field_schema.label_fields.multiclass_label
     label_header = multiclass_label.column if multiclass_label is not None else None
@@ -438,15 +426,13 @@ def _resolve_inspection_elements(d_cfg: AuthoredDatasetConfig) -> DatasetInspect
                 root=RelativePath(source.root),
                 file_pattern=source.file_pattern,
                 expected_column_count=(
-                    source_column_count if isinstance(
-                        source_column_count, int) else source_column_count[identifier]
+                    source_column_count if isinstance(source_column_count, int) else source_column_count[identifier]
                 ),
                 executable=source.role == "executable",
                 required_headers=(
                     required_model_headers
                     + required_categorical_headers
-                    + ((label_header,) if source.role ==
-                       "executable" and label_header is not None else ())
+                    + ((label_header,) if source.role == "executable" and label_header is not None else ())
                 ),
             )
             for identifier, source in sorted(configured_sources.items())
@@ -494,8 +480,7 @@ def resolve_datasets(
     for d_cfg in authored_datasets:
         d_id = DatasetId(d_cfg.dataset)
         if d_id in resolved:
-            raise ConfigurationError(
-                f"Duplicate dataset identifier across dataset documents: '{d_cfg.dataset}'")
+            raise ConfigurationError(f"Duplicate dataset identifier across dataset documents: '{d_cfg.dataset}'")
         adapter_kind = resolve_adapter_kind(d_cfg.dataset)
         raw_root = d_cfg.source_layout.root
         dataset_paths = ResolvedDatasetPaths(
@@ -528,8 +513,7 @@ def resolve_datasets(
             setups=setups,
             materializations=materializations,
             eligibility_policy_id=EligibilityPolicyId(d_cfg.eligibility_policy),
-            capabilities=tuple(
-                sorted({capability for setup in setups for capability in setup.capabilities})),
+            capabilities=tuple(sorted({capability for setup in setups for capability in setup.capabilities})),
             paths=dataset_paths,
             fingerprint_source_fields=tuple(d_cfg.fingerprint_inputs.source),
             fingerprint_schema_fields=tuple(d_cfg.fingerprint_inputs.schema_fields),

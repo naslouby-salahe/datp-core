@@ -98,15 +98,11 @@ class SourceContractRecord:
     every_model_feature_present_in_merged_header: bool | None
     every_model_feature_present_in_every_file: bool | None
     model_feature_count_equals_source_column_count: bool | None
-    per_class_schema_reference_check: Mapping[str, FrozenJson] | None = field(
-        converter=as_optional_frozen_json_mapping)
+    per_class_schema_reference_check: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
     malformed_row: Mapping[str, str] | None = field(converter=as_optional_str_mapping)
     empty_label_row: Mapping[str, str] | None = field(converter=as_optional_str_mapping)
     reject_unparseable_numeric_model_feature: bool | None
     reject_row_with_field_count_other_than_header: bool | None
-    column_role_partition: Mapping[str, FrozenJson] | None = field(
-        converter=as_optional_frozen_json_mapping)
-    positional_contract: Mapping[str, bool] | None = field(
-        converter=lambda v: _freeze_positional_contract(v))
-    row_integrity_exclusions: Mapping[str, FrozenJson] | None = field(
-        converter=as_optional_frozen_json_mapping)
+    column_role_partition: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
+    positional_contract: Mapping[str, bool] | None = field(converter=lambda v: _freeze_positional_contract(v))
+    row_integrity_exclusions: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)

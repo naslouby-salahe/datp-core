@@ -24,8 +24,7 @@ class _DuplicateCheckingSafeLoader(yaml.SafeLoader):
             if key in mapping:
                 line = key_node.start_mark.line + 1
                 col = key_node.start_mark.column + 1
-                raise ConfigurationError(
-                    f"Duplicate YAML key '{key}' found at line {line}, column {col}")
+                raise ConfigurationError(f"Duplicate YAML key '{key}' found at line {line}, column {col}")
             value = self.construct_object(value_node, deep=deep)
             mapping[key] = value
         return mapping
@@ -37,14 +36,12 @@ class YamlConfigurationReader:
     @staticmethod
     def read_document(file_path: Path) -> dict[str, JsonValue]:
         if not file_path.exists():
-            raise ConfigurationError(
-                f"Configuration file does not exist: {file_path}", source_path=file_path)
+            raise ConfigurationError(f"Configuration file does not exist: {file_path}", source_path=file_path)
         try:
             raw_text = file_path.read_text(encoding="utf-8")
             data = yaml.load(raw_text, Loader=_DuplicateCheckingSafeLoader)
         except yaml.YAMLError as exc:
-            raise ConfigurationError(
-                f"YAML parsing error: {exc}", source_path=file_path, cause=exc) from exc
+            raise ConfigurationError(f"YAML parsing error: {exc}", source_path=file_path, cause=exc) from exc
         except ConfigurationError as exc:
             raise ConfigurationError(str(exc), source_path=file_path, cause=exc.cause) from exc
 

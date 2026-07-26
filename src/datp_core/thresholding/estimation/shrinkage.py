@@ -22,8 +22,7 @@ def estimate_shrinkage(
     if not 0.0 <= coefficient <= 1.0:
         raise ValueError("Shrinkage coefficient is outside the authored permitted range")
     shared = float(np.mean(tuple(local.values())))
-    thresholds = {key: coefficient * value + \
-        (1.0 - coefficient) * shared for key, value in local.items()}
+    thresholds = {key: coefficient * value + (1.0 - coefficient) * shared for key, value in local.items()}
     return build_threshold_set(
         policy_id,
         calibration,
@@ -45,8 +44,7 @@ def estimate_calibration_fallback(
     if half <= 0:
         raise ValueError("Fallback threshold policy requires a positive authored n_half")
     shared = float(np.mean(tuple(local.values())))
-    lambdas = {item.client_id.value: len(
-        item.values) / (len(item.values) + half) for item in calibration}
+    lambdas = {item.client_id.value: len(item.values) / (len(item.values) + half) for item in calibration}
     thresholds = {
         item.client_id.value: lambdas[item.client_id.value] * local[item.client_id.value]
         + (1.0 - lambdas[item.client_id.value]) * shared

@@ -62,4 +62,13 @@ class EdgeIIoTsetExternalIndexReport:
     canonical_rows: int
 
 
-type EdgeIIoTsetSourceResult = EdgeIIoTsetRow | object  # SourceRowFailure in practice
+@define(frozen=True, slots=True, kw_only=True)
+class EdgeMaterializationEvidence:
+    split_method: str
+    excluded_clients: tuple[str, ...]
+    chronology_validation: str | None = None
+
+
+type EdgeIIoTsetSourceResult = (
+    EdgeIIoTsetRow  # SourceRowFailure represented upstream; this alias scoped to successful rows
+)

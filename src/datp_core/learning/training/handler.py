@@ -61,8 +61,7 @@ class ModelTrainingStageHandler:
             ditto_result = cast(DittoTrainingResult, result)
             round_losses = ditto_result.global_round_losses
             personalized_round_losses = ditto_result.personalized_round_losses
-            scheduled_rounds = tuple(
-                checkpoint.round_number for checkpoint in ditto_result.scheduled_checkpoints)
+            scheduled_rounds = tuple(checkpoint.round_number for checkpoint in ditto_result.scheduled_checkpoints)
             derived_shuffle_seeds = ditto_result.derived_shuffle_seeds
             checkpoint_grid = {
                 f"round_{checkpoint.round_number}.{name}": tensor
@@ -73,8 +72,7 @@ class ModelTrainingStageHandler:
             federated_result = cast(FederatedTrainingResult, result)
             round_losses = federated_result.round_losses
             personalized_round_losses = None
-            scheduled_rounds = tuple(
-                checkpoint.round_number for checkpoint in federated_result.scheduled_checkpoints)
+            scheduled_rounds = tuple(checkpoint.round_number for checkpoint in federated_result.scheduled_checkpoints)
             derived_shuffle_seeds = federated_result.derived_shuffle_seeds
             checkpoint_grid = {
                 f"round_{checkpoint.round_number}.{name}": tensor
@@ -224,21 +222,15 @@ class ModelTrainingStageHandler:
                     "historical_calibration" if training_split == "historical_training" else "calibration"
                 )
                 feature_columns = (
-                    features.order if features is not None else materialized_feature_columns(
-                        materialized_path)
+                    features.order if features is not None else materialized_feature_columns(materialized_path)
                 )
-                training_clients = load_benign_client_tensors(
-                    materialized_path, training_split, feature_columns)
-                calibration_clients = load_benign_client_tensors(
-                    materialized_path, calibration_split, feature_columns)
+                training_clients = load_benign_client_tensors(materialized_path, training_split, feature_columns)
+                calibration_clients = load_benign_client_tensors(materialized_path, calibration_split, feature_columns)
                 if self._config.runtime.active_execution_profile.device_policy != DevicePolicy.CUDA_REQUIRED.value:
-                    raise ValueError(
-                        "Model training requires the configured CUDA-required execution profile")
-                initialization_namespace = self._config.protocol_determinism.seed_namespaces[
-                    "model_initialization"]
+                    raise ValueError("Model training requires the configured CUDA-required execution profile")
+                initialization_namespace = self._config.protocol_determinism.seed_namespaces["model_initialization"]
                 shuffle_namespace = self._config.protocol_determinism.seed_namespaces["dataloader_shuffle"]
-                digest_bytes = int(
-                    self._config.protocol_determinism.derived_seed_algorithm["digest_bytes"])
+                digest_bytes = int(self._config.protocol_determinism.derived_seed_algorithm["digest_bytes"])
                 initialization_seed = derive_model_initialization_seed(
                     key=initialization_namespace.key,
                     digest_bytes=digest_bytes,
@@ -246,8 +238,7 @@ class ModelTrainingStageHandler:
                 )
                 set_deterministic_seeds(initialization_seed)
                 model = DynamicDenseAutoencoder(
-                    len(feature_columns), tuple(int(value.value)
-                        for value in architecture.hidden_dims)
+                    len(feature_columns), tuple(int(value.value) for value in architecture.hidden_dims)
                 )
                 training_kwargs = {
                     "rounds": int(checkpoint_profile.total_rounds.value),
@@ -271,8 +262,7 @@ class ModelTrainingStageHandler:
                         model,
                         training_clients,
                         calibration_clients,
-                        personalized_local_epochs=int(
-                            cast(PositiveInt, profile.personalized_local_epochs).value),
+                        personalized_local_epochs=int(cast(PositiveInt, profile.personalized_local_epochs).value),
                         proximal_weight=cast(float, ditto_weight),
                         **training_kwargs,
                     )

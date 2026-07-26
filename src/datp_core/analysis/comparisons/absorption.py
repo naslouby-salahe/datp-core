@@ -15,8 +15,7 @@ from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments import AbsorptionAnalysisRecord, ExperimentRecord
 
-_MATERIALITY_RULE_PATTERN = re.compile(
-    r"^absolute_denominator_at_least_(?P<value>\d+(?:\.\d+)?(?:e[+-]?\d+)?)$")
+_MATERIALITY_RULE_PATTERN = re.compile(r"^absolute_denominator_at_least_(?P<value>\d+(?:\.\d+)?(?:e[+-]?\d+)?)$")
 
 
 def materiality_threshold(rule: float | str) -> float:
@@ -74,15 +73,13 @@ def analyze_absorption(
     config: ResolvedProjectConfiguration,
     reference_paired_result: PairedThresholdAnalysisResult,
 ) -> AbsorptionAnalysisResult:
-    stress = next((result for result in paired_results if result.analysis_label ==
-                  analysis.stress_test_analysis), None)
+    stress = next((result for result in paired_results if result.analysis_label == analysis.stress_test_analysis), None)
     if stress is None:
         raise ValueError(f"Absorption analysis '{analysis.label}' lacks its stress-test source")
     reference_experiment, reference_label = _absorption_reference(analysis)
     _validate_absorption_contract(analysis, experiment, reference_experiment, config=config)
     if reference_paired_result.analysis_label != reference_label:
-        raise ValueError(
-            f"Absorption analysis '{analysis.label}' reference analysis is unavailable")
+        raise ValueError(f"Absorption analysis '{analysis.label}' reference analysis is unavailable")
     return seed_ratio_result(
         label=analysis.label,
         formula=analysis.formula,
@@ -95,8 +92,7 @@ def analyze_absorption(
 
 def _absorption_reference(analysis: AbsorptionAnalysisRecord) -> tuple[ExperimentId, str]:
     if not isinstance(analysis.reference_analysis, Mapping):
-        raise ValueError(
-            f"Absorption analysis '{analysis.label}' requires an explicit reference experiment")
+        raise ValueError(f"Absorption analysis '{analysis.label}' requires an explicit reference experiment")
     experiment = analysis.reference_analysis.get("experiment")
     label = analysis.reference_analysis.get("analysis")
     if not isinstance(experiment, str) or not isinstance(label, str):
@@ -113,28 +109,21 @@ def _validate_absorption_contract(
 ) -> None:
     reference = config.experiments.get(reference_experiment_id)
     if experiment.seed_cohort_id != reference.seed_cohort_id:
-        raise ValueError(
-            f"Absorption analysis '{analysis.label}' has an unmatched training-seed cohort")
+        raise ValueError(f"Absorption analysis '{analysis.label}' has an unmatched training-seed cohort")
     if experiment.checkpoint_profile_id != reference.checkpoint_profile_id:
-        raise ValueError(
-            f"Absorption analysis '{analysis.label}' has an unmatched checkpoint profile")
+        raise ValueError(f"Absorption analysis '{analysis.label}' has an unmatched checkpoint profile")
     if experiment.eligibility_policy_id != reference.eligibility_policy_id:
-        raise ValueError(
-            f"Absorption analysis '{analysis.label}' has an unmatched eligibility policy")
+        raise ValueError(f"Absorption analysis '{analysis.label}' has an unmatched eligibility policy")
     if experiment.population_ids != reference.population_ids:
-        raise ValueError(
-            f"Absorption analysis '{analysis.label}' has an unmatched client population")
+        raise ValueError(f"Absorption analysis '{analysis.label}' has an unmatched client population")
     mapping = analysis.matching_contract.get("evaluation_label_mapping")
     if not isinstance(mapping, Mapping):
-        raise ValueError(
-            f"Absorption analysis '{analysis.label}' lacks an evaluation-label mapping")
+        raise ValueError(f"Absorption analysis '{analysis.label}' lacks an evaluation-label mapping")
     reference_mapping = mapping.get("reference")
     stress_mapping = mapping.get("stress_test")
     if not isinstance(reference_mapping, Mapping) or not isinstance(stress_mapping, Mapping):
-        raise ValueError(
-            f"Absorption analysis '{analysis.label}' has malformed evaluation-label mappings")
-    _validate_evaluation_label_mapping(
-        analysis.label, reference_mapping, stress_mapping, reference, experiment)
+        raise ValueError(f"Absorption analysis '{analysis.label}' has malformed evaluation-label mappings")
+    _validate_evaluation_label_mapping(analysis.label, reference_mapping, stress_mapping, reference, experiment)
 
 
 def _validate_evaluation_label_mapping(
@@ -148,18 +137,13 @@ def _validate_evaluation_label_mapping(
         reference_label = reference_mapping.get(logical_label)
         stress_label = stress_mapping.get(logical_label)
         if not isinstance(reference_label, str) or not isinstance(stress_label, str):
-            raise ValueError(
-                f"Absorption analysis '{analysis_label}' lacks '{logical_label}' label mappings")
-        reference_evaluation = next(
-            (item for item in reference.evaluations if item.label == reference_label), None)
-        stress_evaluation = next(
-            (item for item in experiment.evaluations if item.label == stress_label), None)
+            raise ValueError(f"Absorption analysis '{analysis_label}' lacks '{logical_label}' label mappings")
+        reference_evaluation = next((item for item in reference.evaluations if item.label == reference_label), None)
+        stress_evaluation = next((item for item in experiment.evaluations if item.label == stress_label), None)
         if reference_evaluation is None or stress_evaluation is None:
-            raise ValueError(
-                f"Absorption analysis '{analysis_label}' maps an unavailable evaluation")
+            raise ValueError(f"Absorption analysis '{analysis_label}' maps an unavailable evaluation")
         if reference_evaluation.threshold_policy_id != stress_evaluation.threshold_policy_id:
-            raise ValueError(
-                f"Absorption analysis '{analysis_label}' has unmatched threshold policy semantics")
+            raise ValueError(f"Absorption analysis '{analysis_label}' has unmatched threshold policy semantics")
 
 
 __all__ = ["analyze_absorption", "materiality_threshold", "seed_ratio_result"]

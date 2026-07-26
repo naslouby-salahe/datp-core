@@ -133,8 +133,7 @@ def _training_outputs(context: StageJobContext, *, personalized: bool) -> tuple[
         output("selection_evidence", f"{base}/selection-evidence.json"),
     ]
     if personalized:
-        results.append(output("personalized_checkpoint",
-                       f"{base}/personalized-checkpoint.safetensors"))
+        results.append(output("personalized_checkpoint", f"{base}/personalized-checkpoint.safetensors"))
     return tuple(results)
 
 
@@ -545,8 +544,7 @@ def expand_campaign_jobs(
     experiments: tuple[ExperimentRecord, ...],
     config: ResolvedProjectConfiguration,
     *,
-    prerequisite_results_by_experiment: dict[object,
-        tuple[PrerequisiteExperimentResult, ...]] | None = None,
+    prerequisite_results_by_experiment: dict[object, tuple[PrerequisiteExperimentResult, ...]] | None = None,
 ) -> PlanningGraph:
     """Build one active-campaign DAG with direct edges to exact shared producers.
 
@@ -562,10 +560,8 @@ def expand_campaign_jobs(
     shared_ordinal = 0
 
     for experiment in experiments:
-        prerequisite_results = (prerequisite_results_by_experiment or {}
-                                ).get(experiment.identifier, ())
-        graph = expand_experiment_jobs(
-            experiment, config, prerequisite_results=prerequisite_results)
+        prerequisite_results = (prerequisite_results_by_experiment or {}).get(experiment.identifier, ())
+        graph = expand_experiment_jobs(experiment, config, prerequisite_results=prerequisite_results)
         for job in graph.jobs:
             inputs = tuple(
                 replace(
@@ -575,8 +571,7 @@ def expand_campaign_jobs(
                 )
                 for item in job.inputs
             )
-            dependencies = tuple(dict.fromkeys(node_keys.get(item, item)
-                                 for item in job.dependencies))
+            dependencies = tuple(dict.fromkeys(node_keys.get(item, item) for item in job.dependencies))
             candidate = replace(job, inputs=inputs, dependencies=dependencies)
             if candidate.stage not in _SHAREABLE_STAGES:
                 rewritten_jobs.append(candidate)
@@ -585,8 +580,7 @@ def expand_campaign_jobs(
                     output_paths[(job.node_key, stage_output.name)] = stage_output.relative_path
                 continue
 
-            key = _shared_upstream_key(candidate, config=config,
-                                       source_fingerprints=source_fingerprints)
+            key = _shared_upstream_key(candidate, config=config, source_fingerprints=source_fingerprints)
             producer = shared_producers.get(key)
             if producer is not None:
                 node_keys[job.node_key] = producer.node_key
@@ -617,8 +611,7 @@ def expand_campaign_jobs(
             for stage_output in producer.outputs:
                 output_paths[(job.node_key, stage_output.name)] = stage_output.relative_path
 
-    freeze_jobs = {
-        job.context.experiment_id: job for job in rewritten_jobs if job.stage is StageKind.RESULT_FREEZE}
+    freeze_jobs = {job.context.experiment_id: job for job in rewritten_jobs if job.stage is StageKind.RESULT_FREEZE}
     campaign_jobs: list[StageJob] = []
     for job in rewritten_jobs:
         experiment = config.experiments.get(job.context.experiment_id)
@@ -670,8 +663,7 @@ def _shared_upstream_key(
     population = config.populations.get(population_id)
     dataset = config.datasets.get(population.dataset_id)
     setup = dataset.setup(population.setup_id)
-    materialization = next(
-        item for item in dataset.materializations if item.identifier == setup.materialization_id)
+    materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
     source_fingerprint = source_fingerprints.get(dataset.dataset_id)
     if source_fingerprint is None:
         source_fingerprint = compute_experiment_source_fingerprint(

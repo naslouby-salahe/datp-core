@@ -63,8 +63,7 @@ def distribution_seed_result(
                 missing_message=missing,
             )
         )
-        result[label] = client_score_distributions(
-            threshold_frame, metric_frame, score_frame, client_id)
+        result[label] = client_score_distributions(threshold_frame, metric_frame, score_frame, client_id)
     return DistributionMechanismSeedResult(seed=seed, evaluations=result)
 
 
@@ -77,8 +76,7 @@ def analyze_distribution_mechanism(
     seeds: tuple[Seed, ...],
 ) -> DistributionMechanismAnalysisResult:
     seed_results = tuple(
-        distribution_seed_result(experiment, seed.value,
-                                 analysis.source_evaluations, None, store=store, inputs=inputs)
+        distribution_seed_result(experiment, seed.value, analysis.source_evaluations, None, store=store, inputs=inputs)
         for seed in seeds
     )
     if analysis.field_formulas is None:
@@ -95,8 +93,7 @@ def analyze_distribution_mechanism(
         seed_results=tuple(
             DistributionMechanismTradeoffSeedResult(
                 seed=result.seed,
-                per_client_tradeoff=threshold_tradeoff(
-                    result.evaluations[baseline], result.evaluations[shifted]),
+                per_client_tradeoff=threshold_tradeoff(result.evaluations[baseline], result.evaluations[shifted]),
             )
             for result in seed_results
         ),

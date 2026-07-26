@@ -89,8 +89,7 @@ def estimate_cluster(
     feature_names = ("mean_error", "std_error", "skew_error", "p95_error")
     if any(feature not in feature_names for feature in policy.fingerprint.features):
         raise ValueError("Cluster policy declares an unsupported fingerprint feature")
-    selected_feature_indexes = tuple(feature_names.index(feature)
-                                     for feature in policy.fingerprint.features)
+    selected_feature_indexes = tuple(feature_names.index(feature) for feature in policy.fingerprint.features)
     fingerprint_p95_quantile = _fingerprint_quantile(policy.fingerprint.estimators)
     rows = []
     for item in calibration:
@@ -127,8 +126,7 @@ def estimate_cluster(
 
     canonical_buckets: dict[int, list[float]] = {}
     for item, raw_label in zip(calibration, raw_labels, strict=True):
-        canonical_buckets.setdefault(canonical_map[raw_label], []).append(
-            local[item.client_id.value])
+        canonical_buckets.setdefault(canonical_map[raw_label], []).append(local[item.client_id.value])
     canonical_thresholds = {
         canonical: _aggregate(values, policy.aggregation) for canonical, values in canonical_buckets.items()
     }
