@@ -36,20 +36,17 @@ def build_scientific_projection(
             for k, v in sorted(resolved_datasets.items(), key=lambda x: str(x[0]))
         },
         "populations": {
-            str(k): projection_module(v)
-            for k, v in sorted(catalogue.populations.items(), key=lambda x: str(x[0]))
+            str(k): projection_module(v) for k, v in sorted(catalogue.populations.items(), key=lambda x: str(x[0]))
         },
         "experiments": {
-            str(k): _sci_proj(v)
-            for k, v in sorted(catalogue.experiments.items(), key=lambda x: str(x[0]))
+            str(k): _sci_proj(v) for k, v in sorted(catalogue.experiments.items(), key=lambda x: str(x[0]))
         },
         "threshold_policies": {
             str(k): projection_module(v)
             for k, v in sorted(protocols.threshold_policies.items(), key=lambda x: str(x[0]))
         },
         "seed_cohorts": {
-            str(k): projection_module(v)
-            for k, v in sorted(protocols.seed_cohorts.items(), key=lambda x: str(x[0]))
+            str(k): projection_module(v) for k, v in sorted(protocols.seed_cohorts.items(), key=lambda x: str(x[0]))
         },
         "training_profiles": {
             str(k): projection_module(v)
@@ -59,15 +56,9 @@ def build_scientific_projection(
             str(k): projection_module(v)
             for k, v in sorted(protocols.checkpoint_profiles.items(), key=lambda x: str(x[0]))
         },
-        "model_architectures": {
-            k: projection_module(v) for k, v in sorted(protocols.model_architectures.items())
-        },
-        "optimizers": {
-            k: projection_module(v) for k, v in sorted(protocols.optimizers.items())
-        },
-        "batching": {
-            k: projection_module(v) for k, v in sorted(protocols.batching_profiles.items())
-        },
+        "model_architectures": {k: projection_module(v) for k, v in sorted(protocols.model_architectures.items())},
+        "optimizers": {k: projection_module(v) for k, v in sorted(protocols.optimizers.items())},
+        "batching": {k: projection_module(v) for k, v in sorted(protocols.batching_profiles.items())},
         "eligibility_policies": {
             str(k): projection_module(v)
             for k, v in sorted(protocols.eligibility_policies.items(), key=lambda x: str(x[0]))
@@ -76,12 +67,9 @@ def build_scientific_projection(
             str(k): projection_module(v)
             for k, v in sorted(protocols.normalization_strategies.items(), key=lambda x: str(x[0]))
         },
-        "quantile_estimators": {
-            k: projection_module(v) for k, v in sorted(protocols.quantile_estimators.items())
-        },
+        "quantile_estimators": {k: projection_module(v) for k, v in sorted(protocols.quantile_estimators.items())},
         "metric_bundles": {
-            str(k): projection_module(v)
-            for k, v in sorted(protocols.metric_bundles.items(), key=lambda x: str(x[0]))
+            str(k): projection_module(v) for k, v in sorted(protocols.metric_bundles.items(), key=lambda x: str(x[0]))
         },
         "statistical_profiles": {
             str(k): projection_module(v)
@@ -103,8 +91,6 @@ def build_scientific_projection(
         "capabilities": sorted(catalogue.capabilities),
         "suppression_behaviors": sorted(catalogue.suppression_behaviors),
         "population_readiness_rule": dict(sorted(catalogue.population_readiness_rule.items())),
-        "eligibility_gates": {
-            k: projection_module(v) for k, v in sorted(catalogue.eligibility_gates.items())
-        },
+        "eligibility_gates": {k: projection_module(v) for k, v in sorted(catalogue.eligibility_gates.items())},
         "analysis_conventions": dict(sorted(catalogue.analysis_conventions.items())),
     }

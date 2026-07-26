@@ -22,7 +22,9 @@ def save_model_safetensors_to_store(
 ) -> Checksum:
     """Atomically persist model tensors through the direct-file store."""
     clean_tensors = {key: tensor.cpu().contiguous() for key, tensor in model_state_dict.items()}
-    return store.write_bytes_atomic(relative_path, save_safetensors_bytes(clean_tensors), replace=replace)
+    return store.write_bytes_atomic(
+        relative_path, save_safetensors_bytes(clean_tensors), replace=replace
+    )
 
 
 def load_model_safetensors_from_store(

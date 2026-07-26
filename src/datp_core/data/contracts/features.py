@@ -37,13 +37,15 @@ class LabelFieldsRecord:
 @define(frozen=True, slots=True, kw_only=True)
 class IdentitySchemeRecord:
     row_identity: Mapping[str, FrozenJson] = field(converter=as_frozen_json_mapping)
-    client_identity: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
+    client_identity: Mapping[str, FrozenJson] | None = field(
+        converter=as_optional_frozen_json_mapping)
     benign_group_identity: Mapping[str, str] | None = field(converter=as_optional_str_mapping)
     attack_row_group_identity: str | None
     label_identity: Mapping[str, str] | None = field(converter=as_optional_str_mapping)
     attack_family_identity: Mapping[str, str] | None = field(converter=as_optional_str_mapping)
     attack_type_identity: Mapping[str, str] | None = field(converter=as_optional_str_mapping)
-    device_identity: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
+    device_identity: Mapping[str, FrozenJson] | None = field(
+        converter=as_optional_frozen_json_mapping)
     device_mac_ip_field: str | None
     timestamp_field: str | Mapping[str, FrozenJson] = field(
         converter=lambda v: v if isinstance(v, str) else as_frozen_json_mapping(v)

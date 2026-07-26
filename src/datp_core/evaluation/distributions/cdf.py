@@ -30,8 +30,10 @@ def client_score_distributions(
             raise ValueError(f"Score distribution metric is unavailable for client '{client}'")
         client_scores = scores.filter(pl.col("client_id") == client)
         threshold = threshold_by_client[client]
-        benign = sorted(float(value) for value in client_scores.filter(pl.col("label") == 0)["score"].to_list())
-        attack = sorted(float(value) for value in client_scores.filter(pl.col("label") == 1)["score"].to_list())
+        benign = sorted(float(value)
+                        for value in client_scores.filter(pl.col("label") == 0)["score"].to_list())
+        attack = sorted(float(value)
+                        for value in client_scores.filter(pl.col("label") == 1)["score"].to_list())
         result[client] = ClientScoreDistributionRecord(
             per_client_benign_score_cdf=_empirical_cdf(benign),
             per_client_attack_score_cdf=_empirical_cdf(attack),

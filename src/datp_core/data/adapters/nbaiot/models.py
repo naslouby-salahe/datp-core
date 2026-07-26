@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from attrs import define
 
 from datp_core.data.contracts.enums import SplitMembership
@@ -36,7 +38,8 @@ class NBaIoTChronologicalBoundaries:
 
     def role_for_benign_index(self, index: int) -> str:
         if not 0 <= index < self.row_count:
-            raise IndexError("N-BaIoT benign source-row index is outside the configured source count")
+            raise IndexError(
+                "N-BaIoT benign source-row index is outside the configured source count")
         if index < self.train_end:
             return SplitMembership.TRAIN.value
         if index < self.first_gap_end:
@@ -60,12 +63,11 @@ class DirichletPartition:
     assignments: tuple[tuple[str, str, int, str], ...]
 
     def encode(self) -> bytes:
-        import json
-
         payload = {
             "allocation": self.allocation.value,
             "assignments": [
-                {"client_id": client_id, "source_domain": domain, "source_path": source_path, "source_row_index": index}
+                {"client_id": client_id, "source_domain": domain,
+                    "source_path": source_path, "source_row_index": index}
                 for source_path, domain, index, client_id in self.assignments
             ],
             "client_count": len(self.proportions),
@@ -76,7 +78,8 @@ class DirichletPartition:
                 {"client_id": client_id, "split_counts": dict(counts)} for client_id, counts in self.row_counts
             ],
             "per_client_source_domain_proportions": [
-                {"client_id": client_id, "proportions": dict(zip(self.source_domains, proportions, strict=True))}
+                {"client_id": client_id, "proportions": dict(
+                    zip(self.source_domains, proportions, strict=True))}
                 for client_id, proportions in self.proportions
             ],
             "retry_attempts_used": self.retry_attempt,

@@ -1,0 +1,23 @@
+[MASTER]
+ignore-paths=^src/datp_core\.egg-info/
+
+[MESSAGES CONTROL]
+disable=
+    missing-function-docstring,
+    missing-class-docstring,
+
+[FORMAT]
+max-line-length=120
+max-module-lines=2000
+
+[DESIGN]
+max-args=8
+max-locals=20
+max-attributes=15
+max-public-methods=30
+
+[IMPORTS]
+allow-wildcard-with-all=yes
+
+[BASIC]
+good-names=i,j,k,ex,_,x,y,X,Y,id,fn,db,ax,ci,mu,pi,N,n,df,tp,fp,tn,fn

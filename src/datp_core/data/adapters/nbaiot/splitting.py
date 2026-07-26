@@ -23,11 +23,13 @@ def split_nbaiot_chronological_gapped_rows(
     second_gap_fraction: float,
     test_fraction: float,
 ) -> NBaIoTSplitRows:
-    fractions = (train_fraction, first_gap_fraction, calibration_fraction, second_gap_fraction, test_fraction)
+    fractions = (train_fraction, first_gap_fraction,
+                 calibration_fraction, second_gap_fraction, test_fraction)
     if any(not 0.0 <= fraction <= 1.0 for fraction in fractions) or not math.isclose(
         sum(fractions), 1.0, rel_tol=0.0, abs_tol=1.0e-12
     ):
-        raise ValueError("N-BaIoT chronological split fractions must be probabilities summing exactly to one")
+        raise ValueError(
+            "N-BaIoT chronological split fractions must be probabilities summing exactly to one")
     benign = tuple(row for row in rows if not row.is_attack)
     attack = tuple(row for row in rows if row.is_attack)
     if tuple(sorted(benign, key=lambda row: row.source_row.source_row_index)) != benign:
@@ -52,7 +54,8 @@ def calculate_nbaiot_chronological_boundaries(
     if row_count < 0:
         raise ValueError("N-BaIoT source row count cannot be negative")
     if materialization.split_method != SplitMethod.CHRONOLOGICAL_GAPPED:
-        raise ValueError("N-BaIoT chronological materialization requires the configured chronological_gapped method")
+        raise ValueError(
+            "N-BaIoT chronological materialization requires the configured chronological_gapped method")
     train_end = int(float(materialization.ratio("train")) * row_count)
     first_gap_end = train_end + int(float(materialization.ratio("gap_1")) * row_count)
     calibration_end = first_gap_end + int(float(materialization.ratio("calibration")) * row_count)
@@ -70,7 +73,8 @@ def random_fractional_roles(
     row_count: int, materialization: DatasetMaterialization, source_path: Path
 ) -> tuple[str, ...]:
     if materialization.split_method != SplitMethod.RANDOM_FRACTIONAL or materialization.split_seed is None:
-        raise ValueError("N-BaIoT random materialization requires a configured random_fractional split and seed")
+        raise ValueError(
+            "N-BaIoT random materialization requires a configured random_fractional split and seed")
     if row_count < 0 or not math.isclose(
         sum(float(materialization.ratio(role)) for role in ("train", "calibration", "test")),
         1.0,
@@ -94,7 +98,8 @@ def split_nbaiot_using_resolved_materialization(
     rows: tuple[NBaIoTMaterializedRow, ...], materialization: DatasetMaterialization
 ) -> NBaIoTSplitRows:
     if materialization.split_method != SplitMethod.CHRONOLOGICAL_GAPPED:
-        raise ValueError("N-BaIoT chronological materialization requires the configured chronological_gapped method")
+        raise ValueError(
+            "N-BaIoT chronological materialization requires the configured chronological_gapped method")
     return split_nbaiot_chronological_gapped_rows(
         rows,
         float(materialization.ratio("train")),

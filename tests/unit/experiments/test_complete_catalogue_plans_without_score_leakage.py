@@ -165,7 +165,9 @@ def test_fedprox_plan_retains_all_mu_cells_without_rematerializing() -> None:
     assert {job.context.federated_proximal_mu for job in training} == {0.001, 0.01, 0.1, 1.0}
     assert len(selector.inputs) == 80
     assert selector.node_key in statistics.dependencies
-    assert any(item.name == "checkpoint_selection" and item.producer == selector.node_key for item in statistics.inputs)
+    assert any(
+        item.name.endswith("checkpoint_selection") and item.producer == selector.node_key for item in statistics.inputs
+    )
 
 
 def test_ditto_plan_retains_every_weight_with_distinct_training_identities() -> None:

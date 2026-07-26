@@ -7,7 +7,7 @@ import random
 import numpy as np
 import torch
 
-from datp_core.core.hashing import derive_seed
+from datp_core.core.seeding import derive_seed
 
 
 def set_deterministic_seeds(seed: int) -> None:

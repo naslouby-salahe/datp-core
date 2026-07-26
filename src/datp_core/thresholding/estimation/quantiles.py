@@ -41,7 +41,8 @@ def estimate_shared_mean(
 ) -> ThresholdSet:
     shared = float(np.mean(tuple(local.values())))
     return build_threshold_set(
-        policy_id, calibration, dict.fromkeys(local, shared), ThresholdOwnerKind.SHARED_MEAN, target_quantile
+        policy_id, calibration, dict.fromkeys(
+            local, shared), ThresholdOwnerKind.SHARED_MEAN, target_quantile
     )
 
 
@@ -55,7 +56,8 @@ def estimate_pooled(
     pooled = tuple(value for item in calibration for value in item.values)
     threshold = quantile_fn(pooled, target_quantile.value)
     return build_threshold_set(
-        policy_id, calibration, {k: threshold for k in local}, ThresholdOwnerKind.POOLED, target_quantile
+        policy_id, calibration, {
+            k: threshold for k in local}, ThresholdOwnerKind.POOLED, target_quantile
     )
 
 
@@ -70,7 +72,8 @@ def estimate_shared_weighted(
         raise ValueError("Weighted threshold has no calibration rows")
     threshold = sum(len(item.values) * local[item.client_id.value] for item in calibration) / count
     return build_threshold_set(
-        policy_id, calibration, dict.fromkeys(local, threshold), ThresholdOwnerKind.SHARED_WEIGHTED, target_quantile
+        policy_id, calibration, dict.fromkeys(
+            local, threshold), ThresholdOwnerKind.SHARED_WEIGHTED, target_quantile
     )
 
 

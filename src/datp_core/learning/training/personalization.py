@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from datp_core.learning.model.determinism import derive_dataloader_shuffle_seed
 from datp_core.learning.training.aggregation import (
@@ -65,7 +65,8 @@ def ditto_train_autoencoder(
 
     for round_index in range(rounds):
         round_number = round_index + 1
-        round_start = {name: tensor.detach().clone() for name, tensor in global_model.state_dict().items()}
+        round_start = {name: tensor.detach().clone()
+                                           for name, tensor in global_model.state_dict().items()}
         local_global_states: list[tuple[int, dict[str, torch.Tensor]]] = []
         for client_id, data in clients:
             epoch_seeds = tuple(
@@ -124,9 +125,11 @@ def ditto_train_autoencoder(
                 proximal_weight,
             )
         global_model.load_state_dict(weighted_average_state(local_global_states))
-        global_losses.append((round_number, weighted_reconstruction_loss(global_model, calibration_clients, device)))
+        global_losses.append((round_number, weighted_reconstruction_loss(
+            global_model, calibration_clients, device)))
         personalized_losses.append(
-            (round_number, _weighted_personalized_reconstruction_loss(personalized_models, calibration_clients, device))
+            (round_number, _weighted_personalized_reconstruction_loss(
+                personalized_models, calibration_clients, device))
         )
         if round_number in checkpoint_rounds:
             checkpoints.append(
@@ -140,7 +143,8 @@ def ditto_train_autoencoder(
             )
     return DittoTrainingResult(
         global_model=global_model,
-        personalized_models=tuple((client_id, personalized_models[client_id]) for client_id, _ in clients),
+        personalized_models=tuple(
+            (client_id, personalized_models[client_id]) for client_id, _ in clients),
         global_round_losses=tuple(global_losses),
         personalized_round_losses=tuple(personalized_losses),
         scheduled_checkpoints=tuple(checkpoints),

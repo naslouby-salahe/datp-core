@@ -50,7 +50,8 @@ def resolve_sweep_dimensions(experiment: ExperimentRecord, training_profile: Tra
         if isinstance(sweep, ConditionSweepRecord)
         for condition in sweep.conditions
     ) or (None,)
-    mu_sweep = experiment.training_overrides.get("mu") if experiment.training_overrides is not None else None
+    mu_sweep = experiment.training_overrides.get(
+        "mu") if experiment.training_overrides is not None else None
     mu_sweep_name = mu_sweep.get("from_sweep") if isinstance(mu_sweep, Mapping) else None
     mus = tuple(
         float(value)
@@ -92,7 +93,8 @@ def expand_paired_analysis_cells(
     analysis: PairedThresholdAnalysisRecord, dimensions: SweepDimensions
 ) -> tuple[PairedAnalysisCell, ...]:
     calibration_sample_counts_for_analysis = (
-        dimensions.calibration_sample_count_values if analysis.per_sweep_cell == "calibration_sample_count" else (None,)
+        dimensions.calibration_sample_count_values if analysis.per_sweep_cell == "calibration_sample_count" else (
+            None,)
     )
     return tuple(
         PairedAnalysisCell(

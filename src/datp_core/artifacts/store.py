@@ -7,11 +7,9 @@ file unless it makes the replacement explicit.
 
 from __future__ import annotations
 
-import os
-import shutil
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 
+from datp_core.artifacts.atomic import atomic_copy_file, atomic_write_bytes
 from datp_core.artifacts.errors import (
     ArtifactChecksumMismatchError,
     ArtifactFileExistsError,
@@ -33,41 +31,17 @@ class ArtifactStore:
         self._root = root.resolve()
 
     def write_bytes_atomic(self, relative_path: str, payload: bytes, *, replace: bool = False) -> Checksum:
-        """Atomically write bytes, rejecting an accidental fresh-run overwrite."""
         target = self._target(relative_path, create_parent=True)
         self._reject_existing(target, replace)
-        with NamedTemporaryFile(mode="wb", dir=target.parent, prefix=".tmp_artifact_", delete=False) as temporary:
-            temporary.write(payload)
-            temporary.flush()
-            os.fsync(temporary.fileno())
-            temporary_path = Path(temporary.name)
-        try:
-            os.replace(temporary_path, target)
-            self._fsync_directory(target.parent)
-        finally:
-            if temporary_path.exists():
-                temporary_path.unlink()
+        atomic_write_bytes(target, payload, prefix=".tmp_artifact_")
         return compute_file_checksum(target)
 
     def write_file_atomic(self, relative_path: str, source: Path, *, replace: bool = False) -> Checksum:
-        """Atomically copy a regular source file into the store."""
         if not source.is_file():
             raise ArtifactFileMissingError(f"Artifact source file is missing: {source}")
         target = self._target(relative_path, create_parent=True)
         self._reject_existing(target, replace)
-        with source.open("rb") as input_file, NamedTemporaryFile(
-            mode="wb", dir=target.parent, prefix=".tmp_artifact_", delete=False
-        ) as temporary:
-            shutil.copyfileobj(input_file, temporary, length=1_048_576)
-            temporary.flush()
-            os.fsync(temporary.fileno())
-            temporary_path = Path(temporary.name)
-        try:
-            os.replace(temporary_path, target)
-            self._fsync_directory(target.parent)
-        finally:
-            if temporary_path.exists():
-                temporary_path.unlink()
+        atomic_copy_file(target, source, prefix=".tmp_artifact_")
         return compute_file_checksum(target)
 
     def read_bytes(self, relative_path: str) -> bytes:
@@ -117,14 +91,6 @@ class ArtifactStore:
             raise ArtifactFileExistsError(f"Artifact file already exists: {target}")
         if target.exists() and not target.is_file():
             raise ArtifactFileExistsError(f"Artifact target is not a file: {target}")
-
-    @staticmethod
-    def _fsync_directory(directory: Path) -> None:
-        descriptor = os.open(directory, os.O_RDONLY)
-        try:
-            os.fsync(descriptor)
-        finally:
-            os.close(descriptor)
 
 
 __all__ = ["ArtifactStore"]

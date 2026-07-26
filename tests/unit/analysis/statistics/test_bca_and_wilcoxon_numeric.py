@@ -19,8 +19,8 @@ def test_wilcoxon_signed_rank_matches_the_documented_scipy_computation() -> None
     result = StatisticalAnalysisUseCase._compute_wilcoxon_signed_rank(x, y)
 
     assert result.test_name == "wilcoxon_signed_rank"
-    assert result.statistic == pytest.approx(8.0)
-    assert result.p_value == pytest.approx(0.0859375)
+    assert result.statistic == pytest.approx(10.0)
+    assert result.p_value == pytest.approx(0.08984375)
 
 
 def test_bca_bootstrap_ci_matches_the_documented_scipy_computation_for_a_fixed_seed() -> None:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 from datp_core.learning.model.determinism import derive_dataloader_shuffle_seed
 from datp_core.learning.training.aggregation import (
@@ -61,7 +61,8 @@ def federated_train_autoencoder(
     checkpoints: list[FederatedCheckpoint] = []
     derived_seeds: list[DataloaderShuffleSeed] = []
     for round_index in range(rounds):
-        round_start = {name: tensor.detach().clone() for name, tensor in global_model.state_dict().items()}
+        round_start = {name: tensor.detach().clone()
+                                           for name, tensor in global_model.state_dict().items()}
         local_models: list[tuple[int, dict[str, torch.Tensor]]] = []
         for client_id, data in clients:
             local_model = deepcopy(global_model)
@@ -105,7 +106,8 @@ def federated_train_autoencoder(
             local_models.append((int(data.shape[0]), trained.state_dict()))
         global_model.load_state_dict(weighted_average_state(local_models))
         round_number = round_index + 1
-        losses.append((round_number, weighted_reconstruction_loss(global_model, calibration_clients, device)))
+        losses.append((round_number, weighted_reconstruction_loss(
+            global_model, calibration_clients, device)))
         if round_number in checkpoint_rounds:
             checkpoints.append(
                 FederatedCheckpoint(

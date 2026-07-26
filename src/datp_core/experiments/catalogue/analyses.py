@@ -78,7 +78,8 @@ class AbsorptionAnalysisRecord:
     outcome_bands_are_mutually_exclusive_and_exhaustive: bool
     reference_analysis: str | Mapping[str, str] = field(converter=_as_reference_analysis)
     stress_test_analysis: str
-    alternative_path_rule: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
+    alternative_path_rule: Mapping[str, FrozenJson] | None = field(
+        converter=as_optional_frozen_json_mapping)
 
 
 @define(frozen=True, slots=True, kw_only=True)

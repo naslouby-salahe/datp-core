@@ -38,12 +38,14 @@ def _resolve_raw_data_root(candidate: Path, policy: RawSourcePolicyConfig) -> Pa
         return candidate.resolve()
 
     if not policy.follow_symlink:
-        raise PathAuthorityError(f"Raw data root '{candidate}' is a symlink but follow_symlink is disabled")
+        raise PathAuthorityError(
+            f"Raw data root '{candidate}' is a symlink but follow_symlink is disabled")
 
     try:
         resolved = candidate.resolve(strict=True)
     except (OSError, RuntimeError) as exc:
-        is_loop = isinstance(exc, RuntimeError) or (isinstance(exc, OSError) and exc.errno == errno.ELOOP)
+        is_loop = isinstance(exc, RuntimeError) or (
+            isinstance(exc, OSError) and exc.errno == errno.ELOOP)
         if is_loop:
             if policy.reject_symlink_loop:
                 raise PathAuthorityError(f"Raw data root '{candidate}' has a symlink loop") from exc
@@ -60,7 +62,8 @@ def _resolve_contained_root(repository_root: Path, relative_root: str) -> Path:
     """Resolve a non-raw project root and reject any escape outside ``repository_root``."""
     resolved = (repository_root / relative_root).resolve()
     if not resolved.is_relative_to(repository_root):
-        raise PathAuthorityError(f"Configured root '{relative_root}' resolves outside the repository root: {resolved}")
+        raise PathAuthorityError(
+            f"Configured root '{relative_root}' resolves outside the repository root: {resolved}")
     return resolved
 
 
@@ -287,7 +290,8 @@ def resolve_runtime_configuration(
         ),
         device_policy_rules=DevicePolicyRecord(
             cuda_required=dict(device.cuda_required),
-            cpu_only={k: (tuple(v) if isinstance(v, list) else v) for k, v in device.cpu_only.items()},
+            cpu_only={k: (tuple(v) if isinstance(v, list) else v)
+                          for k, v in device.cpu_only.items()},
         ),
         resource_pressure_policy=ResourcePressureRecord(
             silent_reduction_of_batch_size=pressure.silent_reduction_of_batch_size,

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import polars as pl
 import torch
-import torch.nn as nn
+from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 
 from datp_core.learning.scoring.data import _score_input_frame, _score_output_frame
@@ -67,7 +67,8 @@ def score_personalized_materialized_split(
     device: str,
 ) -> pl.DataFrame:
     """Score one split with the persistent Ditto state bound to each source client."""
-    selected = _score_input_frame(path, split=split, feature_columns=feature_columns).with_row_index("_score_row")
+    selected = _score_input_frame(
+        path, split=split, feature_columns=feature_columns).with_row_index("_score_row")
     chunks: list[pl.DataFrame] = []
     for client, rows in selected.group_by("client_id", maintain_order=True):
         client_id = str(client[0])

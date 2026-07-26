@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import torch
-import torch.nn as nn
 from attrs import define
+from torch import nn
 
 
 @define(frozen=True, slots=True, kw_only=True)

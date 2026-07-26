@@ -132,7 +132,8 @@ def dispatch(
                     experiment,
                     paired_results,
                     config=config,
-                    reference_paired_result=_reference_paired_result(analysis_record, prerequisite_results),
+                    reference_paired_result=_reference_paired_result(
+                        analysis_record, prerequisite_results),
                 )
             ]
         case AnalysisKind.ANCHOR_EQUIVALENCE:
@@ -237,7 +238,8 @@ def _reference_paired_result(
     label = reference.get("analysis")
     if not isinstance(experiment, str) or not isinstance(label, str):
         raise ValueError(f"Absorption analysis '{analysis.label}' has a malformed reference")
-    result = next((item for item in prerequisite_results if item.experiment_id.value == experiment), None)
+    result = next(
+        (item for item in prerequisite_results if item.experiment_id.value == experiment), None)
     if result is None:
         raise ValueError(
             f"Absorption analysis '{analysis.label}' requires its prerequisite frozen paired result to be supplied"

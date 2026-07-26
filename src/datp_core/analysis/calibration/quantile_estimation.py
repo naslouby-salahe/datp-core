@@ -35,8 +35,7 @@ def analyze_quantile_estimation(
             label: threshold_and_calibration_frame(
                 store=store,
                 threshold_path=inputs.thresholds(
-                    _evaluation_context(experiment, label, seed.value)
-                ),
+                    _evaluation_context(experiment, label, seed.value)),
                 calibration_score_path=inputs.calibration_scores(
                     score_context(_evaluation_context(experiment, label, seed.value))
                 ),
@@ -59,18 +58,23 @@ def analyze_quantile_estimation(
             client_results: list[QuantileEstimationClientResult] = []
             for client, threshold in threshold_values.items():
                 values = calibration.filter(pl.col("client_id") == client)["score"].to_list()
-                exceedance = sum(float(value) > threshold for value in values) / len(values) if values else None
-                target = float(thresholds.filter(pl.col("client_id") == client)["target_quantile"][0])
+                exceedance = sum(float(value) > threshold for value in values) / \
+                                 len(values) if values else None
+                target = float(thresholds.filter(
+                    pl.col("client_id") == client)["target_quantile"][0])
                 client_results.append(
                     QuantileEstimationClientResult(
                         client_id=client,
                         absolute_threshold_error=abs(threshold - oracle_threshold),
                         relative_threshold_error=(
-                            abs(threshold - oracle_threshold) / abs(oracle_threshold) if oracle_threshold else None
+                            abs(threshold - oracle_threshold) / \
+                                abs(oracle_threshold) if oracle_threshold else None
                         ),
                         achieved_exceedance=exceedance,
-                        signed_attainment_error=exceedance - (1.0 - target) if exceedance is not None else None,
-                        absolute_attainment_error=abs(exceedance - (1.0 - target)) if exceedance is not None else None,
+                        signed_attainment_error=exceedance - \
+                            (1.0 - target) if exceedance is not None else None,
+                        absolute_attainment_error=abs(
+                            exceedance - (1.0 - target)) if exceedance is not None else None,
                     )
                 )
             variance_terms = calibration_variance_terms(calibration)
@@ -81,10 +85,12 @@ def analyze_quantile_estimation(
                 between_ratio=variance_terms.between_ratio,
             )
         seed_results.append(
-            QuantileEstimationSeedResult(seed=seed.value, oracle_threshold=oracle_threshold, evaluations=policies)
+            QuantileEstimationSeedResult(
+                seed=seed.value, oracle_threshold=oracle_threshold, evaluations=policies)
         )
     return QuantileEstimationAnalysisResult(
-        analysis_label=analysis.label, produced_fields=analysis.produced_fields, seed_results=tuple(seed_results)
+        analysis_label=analysis.label, produced_fields=analysis.produced_fields, seed_results=tuple(
+            seed_results)
     )
 
 

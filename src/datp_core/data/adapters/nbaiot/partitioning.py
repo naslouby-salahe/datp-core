@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from datp_core.core.hashing import derive_seed
+from datp_core.core.seeding import derive_seed
 from datp_core.data.adapters.nbaiot.models import DirichletPartition
 from datp_core.data.contracts.enums import ClientConstructionMethod
 from datp_core.data.contracts.materialization import SetupClientConstructionRecord
@@ -46,7 +46,8 @@ def partition_dirichlet_rows(
     if condition.allocation == SweepConditionAllocation.DIRICHLET:
         if condition.dirichlet_alpha is None or condition.dirichlet_alpha <= 0.0:
             raise ValueError("Dirichlet conditions require a positive alpha")
-        draws = generator.dirichlet(np.full(len(domains), condition.dirichlet_alpha), size=client_count)
+        draws = generator.dirichlet(
+            np.full(len(domains), condition.dirichlet_alpha), size=client_count)
     elif condition.allocation == SweepConditionAllocation.EQUAL_ACROSS_SOURCE_DOMAINS:
         if condition.dirichlet_alpha is not None:
             raise ValueError("IID reference conditions must not declare a Dirichlet alpha")
@@ -58,7 +59,8 @@ def partition_dirichlet_rows(
     splits = tuple(sorted({split for split, _, _, _ in rows}))
     counts = {client_id: dict.fromkeys(splits, 0) for client_id in client_ids}
     for split in splits:
-        role_rows = sorted((row for row in rows if row[0] == split), key=lambda row: (row[1], row[2], row[3]))
+        role_rows = sorted(
+            (row for row in rows if row[0] == split), key=lambda row: (row[1], row[2], row[3]))
         remaining = [
             len(role_rows) // client_count + (index < len(role_rows) % client_count) for index in range(client_count)
         ]
@@ -66,7 +68,8 @@ def partition_dirichlet_rows(
             candidates = [index for index, capacity in enumerate(remaining) if capacity > 0]
             winner = max(
                 candidates,
-                key=lambda index, domain=domain: (draws[index, domain_index[domain]] / remaining[index], -index),
+                key=lambda index, domain=domain: (
+                    draws[index, domain_index[domain]] / remaining[index], -index),
             )
             remaining[winner] -= 1
             client_id = client_ids[winner]
@@ -102,9 +105,11 @@ def apply_nbaiot_dirichlet_partition(
         or setup.client_count is None
         or setup.partition_seed is None
     ):
-        raise ValueError("N-BaIoT Dirichlet materialization requires complete synthetic-client configuration")
+        raise ValueError(
+            "N-BaIoT Dirichlet materialization requires complete synthetic-client configuration")
     if setup.attack_labels_used_in_partition_generation is not False:
-        raise ValueError("N-BaIoT Dirichlet materialization must prohibit attack labels during allocation")
+        raise ValueError(
+            "N-BaIoT Dirichlet materialization must prohibit attack labels during allocation")
     frame = pl.read_parquet(source_path)
     required = {"split", "client_id", "source_path", "source_row_index"}
     missing = sorted(required - set(frame.columns))
@@ -121,7 +126,8 @@ def apply_nbaiot_dirichlet_partition(
         raise ValueError("N-BaIoT Dirichlet retry policy requires an explicit max_retries entry")
     configured_max_retries = retry_policy["max_retries"]
     if not isinstance(configured_max_retries, int) or configured_max_retries < 0:
-        raise ValueError("N-BaIoT Dirichlet retry policy requires a non-negative integer max_retries")
+        raise ValueError(
+            "N-BaIoT Dirichlet retry policy requires a non-negative integer max_retries")
     max_retries = configured_max_retries
     minimums = setup.minimum_row_counts or {}
     for attempt in range(max_retries + 1):
@@ -159,4 +165,5 @@ def apply_nbaiot_dirichlet_partition(
             target_path.parent.mkdir(parents=True, exist_ok=True)
             reassigned.write_parquet(target_path, compression="zstd")
             return partition
-    raise ValueError("N-BaIoT Dirichlet partition is infeasible after configured deterministic retries")
+    raise ValueError(
+        "N-BaIoT Dirichlet partition is infeasible after configured deterministic retries")

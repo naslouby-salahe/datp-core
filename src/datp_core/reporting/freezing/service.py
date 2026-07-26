@@ -59,22 +59,21 @@ def freeze_result_family(
     return json.dumps(payload, separators=(",", ":"), sort_keys=True, allow_nan=False).encode("utf-8")
 
 
-def _profile_payload(profile: ReportProfileRecord) -> dict[str, object]:
-    def columns(values: tuple[ReportColumnRecord, ...] | None) -> list[dict[str, object]]:
-        return (
-            []
-            if values is None
-            else [{"name": value.name, "unit": value.unit, "direction": value.direction} for value in values]
-        )
+def _columns_payload(values: tuple[ReportColumnRecord, ...] | None) -> list[dict[str, object]]:
+    if values is None:
+        return []
+    return [{"name": value.name, "unit": value.unit, "direction": value.direction} for value in values]
 
+
+def _profile_payload(profile: ReportProfileRecord) -> dict[str, object]:
     return {
         "identifier": profile.identifier,
         "artifact_type": profile.artifact_type,
         "table_type": profile.table_type,
         "figure_type": profile.figure_type,
         "estimate_basis": profile.estimate_basis,
-        "columns": columns(profile.columns),
-        "series": columns(profile.series),
+        "columns": _columns_payload(profile.columns),
+        "series": _columns_payload(profile.series),
     }
 
 

@@ -21,7 +21,8 @@ class StageHandlerRegistry:
         seen: set[StageKind] = set()
         for kind in handlers:
             if kind in seen:
-                raise DuplicateStageHandlerError(f"Duplicate handler registered for stage '{kind.value}'")
+                raise DuplicateStageHandlerError(
+                    f"Duplicate handler registered for stage '{kind.value}'")
             seen.add(kind)
         self._handlers: Mapping[StageKind, StageHandler] = dict(handlers)
 
@@ -29,7 +30,8 @@ class StageHandlerRegistry:
         try:
             return self._handlers[stage]
         except KeyError:
-            raise MissingStageHandlerError(f"No handler registered for stage '{stage.value}'") from None
+            raise MissingStageHandlerError(
+                f"No handler registered for stage '{stage.value}'") from None
 
     @property
     def registered_stages(self) -> tuple[StageKind, ...]:

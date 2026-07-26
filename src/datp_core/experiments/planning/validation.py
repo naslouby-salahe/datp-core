@@ -63,9 +63,7 @@ class ExecutionPlanValidator:
         )
 
     @staticmethod
-    def _validate_job_inputs(
-        graph: PlanningGraph, producers: dict[str, GraphNodeKey], errors: list[str]
-    ) -> None:
+    def _validate_job_inputs(graph: PlanningGraph, producers: dict[str, GraphNodeKey], errors: list[str]) -> None:
         for job in graph.jobs:
             for inp in job.inputs:
                 if inp.relative_path not in producers:
@@ -87,7 +85,8 @@ class ExecutionPlanValidator:
                 "future_recalibration_scores",
                 "calibration_subset_scores",
             }:
-                errors.append(f"Evaluation job '{job.node_key.label}' must not consume calibration scores")
+                errors.append(
+                    f"Evaluation job '{job.node_key.label}' must not consume calibration scores")
 
 
 def validate_planning_graph(graph: PlanningGraph) -> None:

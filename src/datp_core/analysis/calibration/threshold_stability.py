@@ -32,8 +32,10 @@ def analyze_threshold_stability(
         raise ValueError("Threshold stability analysis requires a calibration sample-count sweep")
     subset = experiment.calibration_subset
     if subset is None or analysis.per_sweep_cell != "calibration_sample_count":
-        raise ValueError(f"Threshold stability analysis '{analysis.label}' has an incompatible subset contract")
-    evaluation = next(item for item in experiment.evaluations if item.label == analysis.source_evaluation)
+        raise ValueError(
+            f"Threshold stability analysis '{analysis.label}' has an incompatible subset contract")
+    evaluation = next(item for item in experiment.evaluations if item.label ==
+                      analysis.source_evaluation)
     policy = config.threshold_policies.get(evaluation.threshold_policy_id)
     quantile = getattr(policy, "quantile", None)
     if not isinstance(quantile, float):
@@ -52,9 +54,7 @@ def analyze_threshold_stability(
             )
             missing = f"Threshold stability artifacts are unavailable for seed {seed.value}"
             thresholds = validate_threshold_frame(
-                read_parquet_frame(
-                    store, inputs.thresholds(context), missing_message=missing
-                )
+                read_parquet_frame(store, inputs.thresholds(context), missing_message=missing)
             )
             metrics = validate_client_metric_frame(
                 read_parquet_frame(
@@ -89,9 +89,11 @@ def analyze_threshold_stability(
         seed_results.append(
             ThresholdStabilitySeedResult(
                 seed=seed.value,
-                threshold_variance_across_replicates=sum(variances) / len(variances) if variances else None,
+                threshold_variance_across_replicates=sum(
+                    variances) / len(variances) if variances else None,
                 absolute_attainment_error=(
-                    sum(abs(value - (1.0 - quantile)) for value in mean_fprs) / len(mean_fprs) if mean_fprs else None
+                    sum(abs(value - (1.0 - quantile))
+                        for value in mean_fprs) / len(mean_fprs) if mean_fprs else None
                 ),
                 worst_client_fpr=max(mean_fprs) if mean_fprs else None,
                 clients_unavailable_at_size=tuple(sorted(test_clients - set(threshold_values))),

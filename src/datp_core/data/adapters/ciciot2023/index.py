@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 import struct
 from pathlib import Path
+from random import Random
 from tempfile import TemporaryDirectory
 
 import pyarrow as pa
@@ -12,6 +13,11 @@ import pyarrow.parquet as pq
 
 from datp_core.data.adapters.ciciot2023.identity import materialize_ciciot2023_merged_source_row
 from datp_core.data.adapters.ciciot2023.models import CICIoT2023MaterializationReport
+from datp_core.data.adapters.ciciot2023.splitting import (
+    _equivalence_hash,
+    _serialize_features,
+    _validate_split_ratios,
+)
 from datp_core.data.contracts.materialization import DatasetMaterialization
 from datp_core.data.sources.csv import iter_labeled_numeric_csv_source
 from datp_core.data.sources.models import SourceRowFailure
@@ -27,19 +33,13 @@ def write_ciciot2023_materialized_parquet(
     materialization: DatasetMaterialization,
     batch_size: int,
 ) -> CICIoT2023MaterializationReport:
-    import math
-
     from datp_core.data.contracts.enums import SplitMethod
 
     if not source_paths or batch_size <= 0:
         raise ValueError("CICIoT2023 materialization requires source files and a positive Parquet batch size")
     if materialization.split_method != SplitMethod.RANDOM_FRACTIONAL or materialization.split_seed is None:
         raise ValueError("CICIoT2023 materialization requires configured random_fractional split and seed")
-    train_ratio = float(materialization.ratio("train"))
-    calibration_ratio = float(materialization.ratio("calibration"))
-    test_ratio = float(materialization.ratio("test"))
-    if not math.isclose(train_ratio + calibration_ratio + test_ratio, 1.0, rel_tol=0.0, abs_tol=1.0e-12):
-        raise ValueError("CICIoT2023 random split ratios must sum exactly to one")
+    train_ratio, calibration_ratio, test_ratio = _validate_split_ratios(materialization)
     source_rows_seen = 0
     excluded_rows = 0
     with TemporaryDirectory(prefix="datp_ciciot2023_") as temporary_directory:
@@ -72,7 +72,7 @@ def write_ciciot2023_materialized_parquet(
                             row.identity.source_path.as_posix(),
                             row.identity.source_row_index,
                             row.multiclass_label,
-                            bytes.fromhex(_equivalence_hash_bytes((row.source_row.values, row.identity.is_attack))),
+                            bytes.fromhex(_equivalence_hash((row.source_row.values, row.identity.is_attack))),
                         ),
                     )
             canonical_rows = int(database.execute("SELECT COUNT(*) FROM canonical_rows").fetchone()[0])
@@ -83,8 +83,6 @@ def write_ciciot2023_materialized_parquet(
                 ).fetchone()[0]
             )
             database.execute("UPDATE canonical_rows SET split = 'test' WHERE is_attack = 1")
-            from random import Random
-
             generator = Random(materialization.split_seed.value)
             for is_attack, features in database.execute(
                 "SELECT is_attack, features FROM canonical_rows WHERE is_attack = 0 ORDER BY class_digest"
@@ -158,21 +156,7 @@ def _write_ciciot_parquet_from_index(
     return written_rows
 
 
-def _serialize_features(values: tuple[float, ...]) -> bytes:
-    return struct.pack(f"!{len(values)}d", *values)
-
-
 def _deserialize_features(payload: bytes, feature_count: int) -> tuple[float, ...]:
     if len(payload) != feature_count * 8:
         raise ValueError("CICIoT2023 equivalence index has an invalid feature payload width")
     return struct.unpack(f"!{feature_count}d", payload)
-
-
-def _equivalence_hash_bytes(equivalence_key: tuple[tuple[float, ...], bool]) -> str:
-    import hashlib
-
-    feature_values, is_attack = equivalence_key
-    digest = hashlib.blake2b(digest_size=32)
-    digest.update(bytes((is_attack,)))
-    digest.update(_serialize_features(feature_values))
-    return digest.hexdigest()

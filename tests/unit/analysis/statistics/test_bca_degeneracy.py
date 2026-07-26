@@ -15,16 +15,12 @@ def test_bca_rejects_fewer_than_ten_paired_seed_differences_with_variance() -> N
 
 
 def test_bca_returns_degenerate_ci_for_identical_paired_seed_differences() -> None:
-    result = StatisticalAnalysisUseCase._compute_bca_bootstrap_ci(
-        np.full(10, 0.1), 10_000, 0.95, 300, "bca_bootstrap"
-    )
+    result = StatisticalAnalysisUseCase._compute_bca_bootstrap_ci(np.full(10, 0.1), 10_000, 0.95, 300, "bca_bootstrap")
     assert result.lower_bound == 0.1
     assert result.upper_bound == 0.1
 
 
 def test_bca_single_value_is_valid_degenerate_ci() -> None:
-    result = StatisticalAnalysisUseCase._compute_bca_bootstrap_ci(
-        np.array([0.1]), 10_000, 0.95, 300, "bca_bootstrap"
-    )
+    result = StatisticalAnalysisUseCase._compute_bca_bootstrap_ci(np.array([0.1]), 10_000, 0.95, 300, "bca_bootstrap")
     assert result.lower_bound == 0.1
     assert result.upper_bound == 0.1

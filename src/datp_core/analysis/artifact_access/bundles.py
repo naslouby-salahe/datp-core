@@ -17,7 +17,8 @@ def threshold_and_calibration_frame(
     calibration_score_path: str,
     missing_message: str,
 ) -> tuple[pl.DataFrame, pl.DataFrame]:
-    threshold = validate_threshold_frame(read_parquet_frame(store, threshold_path, missing_message=missing_message))
+    threshold = validate_threshold_frame(read_parquet_frame(
+        store, threshold_path, missing_message=missing_message))
     calibration = validate_calibration_score_frame(
         read_parquet_frame(store, calibration_score_path, missing_message=missing_message)
     )

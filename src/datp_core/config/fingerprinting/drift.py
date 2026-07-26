@@ -46,7 +46,8 @@ def diff_canonical_projections(
             elif index >= len(after):
                 entries.append(DriftEntry(path=child_path, kind="removed", old_value=before[index]))
             else:
-                entries.extend(diff_canonical_projections(before[index], after[index], path=child_path))
+                entries.extend(diff_canonical_projections(
+                    before[index], after[index], path=child_path))
     elif before != after:
         entries.append(DriftEntry(path=path, kind="changed", old_value=before, new_value=after))
     return tuple(entries)
@@ -69,8 +70,10 @@ class ExplainAuthoredConfigurationDrift:
     """
 
     def execute(self, current_yaml_path: Path, expected_yaml_path: Path) -> ConfigurationDriftReport:
-        current_document = canonicalize_value(YamlConfigurationReader.read_document(current_yaml_path))
-        expected_document = canonicalize_value(YamlConfigurationReader.read_document(expected_yaml_path))
+        current_document = canonicalize_value(
+            YamlConfigurationReader.read_document(current_yaml_path))
+        expected_document = canonicalize_value(
+            YamlConfigurationReader.read_document(expected_yaml_path))
         entries = diff_canonical_projections(expected_document, current_document)
         return ConfigurationDriftReport(
             has_drift=len(entries) > 0,

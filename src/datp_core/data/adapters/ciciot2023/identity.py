@@ -18,7 +18,8 @@ def materialize_ciciot2023_merged_identity(
     try:
         source_path.relative_to(merged_root)
     except ValueError as exc:
-        raise ValueError("CICIoT2023 merged source path escapes the configured merged root") from exc
+        raise ValueError(
+            "CICIoT2023 merged source path escapes the configured merged root") from exc
     if source_row_index < 1:
         raise ValueError("CICIoT2023 source row index must be one-based and positive")
     normalized_label = label.strip()

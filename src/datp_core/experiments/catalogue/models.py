@@ -84,7 +84,8 @@ class CalibrationSubsetRecord:
     additional_seed_level_statistic: str
     independent_inferential_unit: str
     replicates_counted_as_seeds: bool
-    full_calibration_reference_condition: Mapping[str, FrozenJson] = field(converter=as_frozen_json_mapping)
+    full_calibration_reference_condition: Mapping[str, FrozenJson] = field(
+        converter=as_frozen_json_mapping)
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -130,7 +131,8 @@ class ExperimentRecord:
     outside_core_causal_ladder: bool | None
     faithful_reproduction_claim_forbidden: bool | None
     attack_sensitive_metrics_requested: bool | None
-    unavailable_capability_reporting: tuple[Mapping[str, str], ...] = field(converter=as_str_mapping_tuple)
+    unavailable_capability_reporting: tuple[Mapping[str, str], ...] = field(
+        converter=as_str_mapping_tuple)
     independent_of_experiment: ExperimentId | None
     calibration_subset: CalibrationSubsetRecord | None
     method_naming_rule: str | None
@@ -145,11 +147,13 @@ class ExperimentRecord:
     population_equivalence_requirement: str | None
     population_roles: Mapping[str, str] | None = field(converter=as_optional_str_mapping)
     scope_constraint: str | None
-    temporal_procedure: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
+    temporal_procedure: Mapping[str, FrozenJson] | None = field(
+        converter=as_optional_frozen_json_mapping)
     primary_coefficient_selection: str | Mapping[str, FrozenJson] | None = field(
         converter=lambda v: v if v is None or isinstance(v, str) else as_frozen_json_mapping(v)
     )
-    training_overrides: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
+    training_overrides: Mapping[str, FrozenJson] | None = field(
+        converter=as_optional_frozen_json_mapping)
 
 
 @define(frozen=True, slots=True, kw_only=True)

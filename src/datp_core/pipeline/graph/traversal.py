@@ -16,7 +16,7 @@ class UnknownJobError(KeyError):
 
 def lexicographical_topological_sort(graph: PlanningGraph) -> tuple[StageJob, ...]:
     validate_acyclic(graph)
-    nx_graph = graph._graph  # noqa: SLF001
+    nx_graph = graph.graph
     sorted_nodes = list(nx.lexicographical_topological_sort(nx_graph, key=lambda n: n))
     jobs_by_key = {j.node_key: j for j in graph.jobs}
     return tuple(jobs_by_key[node] for node in sorted_nodes)
@@ -24,7 +24,7 @@ def lexicographical_topological_sort(graph: PlanningGraph) -> tuple[StageJob, ..
 
 def topological_generations(graph: PlanningGraph) -> tuple[tuple[StageJob, ...], ...]:
     validate_acyclic(graph)
-    nx_graph = graph._graph  # noqa: SLF001
+    nx_graph = graph.graph
     result: list[tuple[StageJob, ...]] = []
     jobs_by_key = {j.node_key: j for j in graph.jobs}
     for gen in nx.topological_generations(nx_graph):
@@ -37,35 +37,34 @@ def topological_generations(graph: PlanningGraph) -> tuple[tuple[StageJob, ...],
 
 def predecessors(graph: PlanningGraph, node_key: GraphNodeKey) -> tuple[GraphNodeKey, ...]:
     _require_job(graph, node_key)
-    nx_graph = graph._graph  # noqa: SLF001
-    return tuple(sorted(nx_graph.predecessors(node_key), key=lambda n: n))
+    return graph.predecessors(node_key)
 
 
 def successors(graph: PlanningGraph, node_key: GraphNodeKey) -> tuple[GraphNodeKey, ...]:
     _require_job(graph, node_key)
-    nx_graph = graph._graph  # noqa: SLF001
-    return tuple(sorted(nx_graph.successors(node_key), key=lambda n: n))
+    return graph.successors(node_key)
 
 
 def ancestors(graph: PlanningGraph, node_key: GraphNodeKey) -> tuple[GraphNodeKey, ...]:
     _require_job(graph, node_key)
-    nx_graph = graph._graph  # noqa: SLF001
+    nx_graph = graph.graph
     return tuple(sorted(nx.ancestors(nx_graph, node_key), key=lambda n: n))
 
 
 def descendants(graph: PlanningGraph, node_key: GraphNodeKey) -> tuple[GraphNodeKey, ...]:
     _require_job(graph, node_key)
-    nx_graph = graph._graph  # noqa: SLF001
+    nx_graph = graph.graph
     return tuple(sorted(nx.descendants(nx_graph, node_key), key=lambda n: n))
 
 
-def try_predecessors(graph: PlanningGraph, node_key: GraphNodeKey) -> tuple[GraphNodeKey, ...] | None:
-    if not graph._has_job(node_key):  # noqa: SLF001
+def try_predecessors(
+    graph: PlanningGraph, node_key: GraphNodeKey
+) -> tuple[GraphNodeKey, ...] | None:
+    if not graph.has_job(node_key):
         return None
-    nx_graph = graph._graph  # noqa: SLF001
-    return tuple(sorted(nx_graph.predecessors(node_key), key=lambda n: n))
+    return graph.predecessors(node_key)
 
 
 def _require_job(graph: PlanningGraph, node_key: GraphNodeKey) -> None:
-    if not graph._has_job(node_key):  # noqa: SLF001
+    if not graph.has_job(node_key):
         raise UnknownJobError(f"Unknown key '{node_key.label}' in graph query")

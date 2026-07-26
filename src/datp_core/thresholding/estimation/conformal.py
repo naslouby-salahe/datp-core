@@ -25,7 +25,8 @@ def estimate_conformal(
     for item in calibration:
         scores = np.sort(np.asarray(item.values, dtype=np.float64))
         if len(scores) < policy.minimum_sample_count:
-            raise ValueError("Conformal threshold is unattainable for the authored minimum sample count")
+            raise ValueError(
+                "Conformal threshold is unattainable for the authored minimum sample count")
         rank = min(math.ceil((len(scores) + 1) * (1.0 - policy.coverage_alpha)), len(scores))
         thresholds[item.client_id.value] = float(scores[rank - 1])
         ranks[item.client_id.value] = rank
@@ -36,5 +37,6 @@ def estimate_conformal(
         ThresholdOwnerKind.SPLIT_CONFORMAL,
         target_quantile,
         conformal_ranks=ranks,
-        conformal_attainability={item.client_id.value: ConformalAttainabilityStatus.ATTAINABLE for item in calibration},
+        conformal_attainability={
+            item.client_id.value: ConformalAttainabilityStatus.ATTAINABLE for item in calibration},
     )

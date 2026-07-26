@@ -328,12 +328,12 @@ def test_absorption_loads_its_reference_paired_result_only_from_the_configured_p
                     "first_mean": 0.25,
                     "second_mean": 0.15,
                     "mean_difference": 0.1,
-                        "confidence_interval": {
-                            "lower_bound": 0.01,
-                            "upper_bound": 0.2,
-                            "confidence_level": 0.95,
-                            "method": "bca_bootstrap",
-                        },
+                    "confidence_interval": {
+                        "lower_bound": 0.01,
+                        "upper_bound": 0.2,
+                        "confidence_level": 0.95,
+                        "method": "bca_bootstrap",
+                    },
                     "p_value": 0.05,
                     "rank_biserial": 1.0,
                     "resample_count": 1000,

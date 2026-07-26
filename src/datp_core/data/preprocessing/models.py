@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from attrs import define
 
 
@@ -35,8 +37,6 @@ class NormalizationEvidence:
     fitted_statistics: tuple[NormalizationScopeStatistics, ...]
 
     def encode(self) -> bytes:
-        import json
-
         return json.dumps(
             {
                 "schema_version": 1,

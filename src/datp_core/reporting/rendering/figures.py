@@ -30,7 +30,8 @@ def render_figure(profile: Mapping[str, object], results: list[Mapping[str, obje
     for result in results:
         values = result.get("seed_differences")
         if isinstance(values, list) and all(isinstance(value, int | float) for value in values):
-            axis.plot(range(1, len(values) + 1), values, marker="o", label=str(result["analysis_label"]))
+            axis.plot(range(1, len(values) + 1), values, marker="o",
+                      label=str(result["analysis_label"]))
             plotted = True
     if plotted:
         axis.axhline(0.0, color="black", linewidth=0.8)

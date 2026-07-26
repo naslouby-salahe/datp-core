@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import hashlib
 import math
+import struct
 from random import Random
 
 from datp_core.data.adapters.ciciot2023.models import (
@@ -14,6 +16,15 @@ from datp_core.data.contracts.enums import SplitMethod
 from datp_core.data.contracts.materialization import DatasetMaterialization
 
 
+def _validate_split_ratios(materialization: DatasetMaterialization) -> tuple[float, float, float]:
+    train_ratio = float(materialization.ratio("train"))
+    calibration_ratio = float(materialization.ratio("calibration"))
+    test_ratio = float(materialization.ratio("test"))
+    if not math.isclose(train_ratio + calibration_ratio + test_ratio, 1.0, rel_tol=0.0, abs_tol=1.0e-12):
+        raise ValueError("CICIoT2023 random split ratios must sum exactly to one")
+    return train_ratio, calibration_ratio, test_ratio
+
+
 def canonicalize_and_split_ciciot2023_rows(
     rows: tuple[CICIoT2023MaterializedRow, ...], materialization: DatasetMaterialization
 ) -> CICIoT2023SplitRows:
@@ -21,11 +32,7 @@ def canonicalize_and_split_ciciot2023_rows(
         raise ValueError("CICIoT2023 materialization requires the configured random_fractional split")
     if materialization.split_seed is None:
         raise ValueError("CICIoT2023 random split requires an explicit configured split seed")
-    train_ratio = float(materialization.ratio("train"))
-    calibration_ratio = float(materialization.ratio("calibration"))
-    test_ratio = float(materialization.ratio("test"))
-    if not math.isclose(train_ratio + calibration_ratio + test_ratio, 1.0, rel_tol=0.0, abs_tol=1.0e-12):
-        raise ValueError("CICIoT2023 random split ratios must sum exactly to one")
+    train_ratio, calibration_ratio, test_ratio = _validate_split_ratios(materialization)
 
     ordered_rows = tuple(sorted(rows, key=_provenance_key))
     equivalence_classes: dict[tuple[tuple[float, ...], bool], list[CICIoT2023MaterializedRow]] = {}
@@ -83,16 +90,12 @@ def _provenance_key(row: CICIoT2023MaterializedRow) -> tuple[str, int]:
 
 
 def _feature_hash(values: tuple[float, ...]) -> str:
-    import hashlib
-
     digest = hashlib.blake2b(digest_size=32)
     digest.update(_serialize_features(values))
     return digest.hexdigest()
 
 
 def _equivalence_hash(equivalence_key: tuple[tuple[float, ...], bool]) -> str:
-    import hashlib
-
     feature_values, is_attack = equivalence_key
     digest = hashlib.blake2b(digest_size=32)
     digest.update(bytes((is_attack,)))
@@ -101,6 +104,4 @@ def _equivalence_hash(equivalence_key: tuple[tuple[float, ...], bool]) -> str:
 
 
 def _serialize_features(values: tuple[float, ...]) -> bytes:
-    import struct
-
     return struct.pack(f"!{len(values)}d", *values)

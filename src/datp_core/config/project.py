@@ -42,7 +42,8 @@ def resolve_project_configuration_candidate(
     directly outside this module and tests that intentionally exercise resolution in isolation
     from validation.
     """
-    bootstrap_settings = bootstrap_settings or RuntimeBootstrapSettings()  # pyright: ignore[reportCallIssue]
+    bootstrap_settings = bootstrap_settings or RuntimeBootstrapSettings(
+    )  # pyright: ignore[reportCallIssue]
     if config_dir is None:
         config_dir = resolve_config_root(bootstrap_settings)
     config_dir = config_dir.resolve()
@@ -50,7 +51,8 @@ def resolve_project_configuration_candidate(
 
     dataset_paths = tuple(sorted(datasets_dir.glob("*.yaml")))
     if not dataset_paths:
-        raise ConfigurationError("No dataset configuration documents found", source_path=datasets_dir)
+        raise ConfigurationError("No dataset configuration documents found",
+                                 source_path=datasets_dir)
     experiments_path = config_dir / "experiments.yaml"
     protocols_path = config_dir / "protocols.yaml"
     runtime_path = config_dir / "runtime.yaml"
@@ -70,7 +72,8 @@ def resolve_project_configuration_candidate(
     )
     resolved_datasets = resolve_datasets(authored_datasets, resolved_runtime.paths)
     protocols = resolve_protocols(authored_protocols)
-    catalogue = resolve_experiment_catalogue(authored_experiments, resolved_datasets, protocols.threshold_policies)
+    catalogue = resolve_experiment_catalogue(
+        authored_experiments, resolved_datasets, protocols.threshold_policies)
 
     scientific_projection = build_scientific_projection(
         resolved_datasets=resolved_datasets,
@@ -134,10 +137,12 @@ def resolve_project_configuration(
     bootstrap_settings: RuntimeBootstrapSettings | None = None,
 ) -> ResolvedProjectConfiguration:
     """Resolve and validate the complete project configuration -- the sole public entry point."""
-    candidate = resolve_project_configuration_candidate(config_dir=config_dir, bootstrap_settings=bootstrap_settings)
+    candidate = resolve_project_configuration_candidate(
+        config_dir=config_dir, bootstrap_settings=bootstrap_settings)
     validation_report = ProjectConfigurationValidator().validate(candidate)
     if not validation_report.is_valid:
-        raise ConfigurationError(f"Resolved configuration violates scientific guards: {validation_report.errors}")
+        raise ConfigurationError(
+            f"Resolved configuration violates scientific guards: {validation_report.errors}")
     return candidate
 
 
@@ -169,8 +174,10 @@ class ExplainAuthoredConfigurationDrift:
     """
 
     def execute(self, current_yaml_path: Path, expected_yaml_path: Path) -> ConfigurationDriftReport:
-        current_document = canonicalize_value(YamlConfigurationReader.read_document(current_yaml_path))
-        expected_document = canonicalize_value(YamlConfigurationReader.read_document(expected_yaml_path))
+        current_document = canonicalize_value(
+            YamlConfigurationReader.read_document(current_yaml_path))
+        expected_document = canonicalize_value(
+            YamlConfigurationReader.read_document(expected_yaml_path))
         entries = diff_canonical_projections(expected_document, current_document)
         return ConfigurationDriftReport(
             has_drift=len(entries) > 0,
@@ -206,8 +213,7 @@ class ExplainExecutionConfigurationDrift:
         expected_config: ResolvedProjectConfiguration,
     ) -> ConfigurationDriftReport:
         entries = diff_canonical_projections(
-            expected_config.execution_projection, current_config.execution_projection
-        )
+            expected_config.execution_projection, current_config.execution_projection)
         return ConfigurationDriftReport(
             has_drift=len(entries) > 0,
             drift_kind="execution",

@@ -118,7 +118,8 @@ class SplitManifest:
 
 def _validate_standard_manifest(entries: tuple[SplitManifestEntry, ...], memberships: set[SplitMembership]) -> None:
     if memberships != _STANDARD_MEMBERSHIPS:
-        raise ValueError("A standard split manifest requires train, calibration, and test memberships")
+        raise ValueError(
+            "A standard split manifest requires train, calibration, and test memberships")
     if any(entry.is_attack and entry.membership is not SplitMembership.TEST for entry in entries):
         raise ValueError("Attack rows may not enter standard training or calibration memberships")
     _validate_client_support(entries, SplitMembership.TRAIN, SplitMembership.CALIBRATION)
@@ -128,9 +129,11 @@ def _validate_static_reference_manifest(
     entries: tuple[SplitManifestEntry, ...], memberships: set[SplitMembership]
 ) -> None:
     if memberships != _STATIC_REFERENCE_MEMBERSHIPS:
-        raise ValueError("A static-reference split manifest requires all four configured memberships")
+        raise ValueError(
+            "A static-reference split manifest requires all four configured memberships")
     if any(entry.is_attack for entry in entries):
-        raise ValueError("Static-reference Edge rows must remain benign and unassigned to attack clients")
+        raise ValueError(
+            "Static-reference Edge rows must remain benign and unassigned to attack clients")
     _validate_client_support(entries, SplitMembership.TRAIN, SplitMembership.CALIBRATION)
 
 
@@ -145,7 +148,8 @@ def _validate_temporal_manifest(entries: tuple[SplitManifestEntry, ...], members
         for entry in entries
     ):
         raise ValueError("Attack rows may not enter temporal training or calibration memberships")
-    _validate_client_support(entries, SplitMembership.HISTORICAL_TRAINING, SplitMembership.HISTORICAL_CALIBRATION)
+    _validate_client_support(entries, SplitMembership.HISTORICAL_TRAINING,
+                             SplitMembership.HISTORICAL_CALIBRATION)
     order = {membership: index for index, membership in enumerate(SplitMembership)}
     for client_id in {entry.client_id for entry in entries}:
         client_entries = sorted(
@@ -165,4 +169,5 @@ def _validate_client_support(
     for client_id in clients:
         client_memberships = {entry.membership for entry in entries if entry.client_id == client_id}
         if training_membership not in client_memberships or calibration_membership not in client_memberships:
-            raise ValueError(f"Client '{client_id}' lacks required training or calibration membership")
+            raise ValueError(
+                f"Client '{client_id}' lacks required training or calibration membership")

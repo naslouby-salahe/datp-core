@@ -1,6 +1,6 @@
-"""Sweep value resolution for planning."""
-
 from __future__ import annotations
+
+from collections.abc import Mapping
 
 from datp_core.experiments.catalogue.models import ExperimentRecord
 from datp_core.experiments.catalogue.sweeps import ValueSweepRecord
@@ -17,8 +17,6 @@ def _sweep_values(experiment: ExperimentRecord, name: str | None) -> tuple[float
 
 
 def _sweep_reference(overrides, name: str) -> str | None:
-    from collections.abc import Mapping
-
     override = None if overrides is None else overrides.get(name)
     reference = override.get("from_sweep") if isinstance(override, Mapping) else None
     return reference if isinstance(reference, str) else None

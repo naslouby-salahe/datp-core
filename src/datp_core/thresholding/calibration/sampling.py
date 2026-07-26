@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 
-from datp_core.core.hashing import derive_seed
+from datp_core.core.seeding import derive_seed
 
 
 def subsample_calibration_scores(
@@ -24,7 +24,8 @@ def subsample_calibration_scores(
         )
     required = {"client_id", "source_path", "source_row_index", "score"}
     if missing := required - set(scores.columns):
-        raise ValueError(f"Calibration scores lack deterministic subsampling columns: {', '.join(sorted(missing))}")
+        raise ValueError(
+            f"Calibration scores lack deterministic subsampling columns: {', '.join(sorted(missing))}")
     ordered = scores.sort("client_id", "source_path", "source_row_index")
     samples: list[pl.DataFrame] = []
     for client, client_scores in ordered.group_by("client_id", maintain_order=True):
@@ -38,8 +39,10 @@ def subsample_calibration_scores(
             selection_seed=selection_seed,
             replicate=replicate,
         )
-        positions = np.random.default_rng(seed).permutation(client_scores.height)[:requested_sample_count]
-        samples.append(client_scores.gather(pl.Series(positions)).sort("source_path", "source_row_index"))
+        positions = np.random.default_rng(seed).permutation(
+            client_scores.height)[:requested_sample_count]
+        samples.append(client_scores.gather(pl.Series(positions)
+                       ).sort("source_path", "source_row_index"))
     if not samples:
         return ordered.head(0)
     return pl.concat(samples).sort("client_id", "source_path", "source_row_index")

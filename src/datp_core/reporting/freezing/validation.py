@@ -33,7 +33,8 @@ def validate_analysis_labels(experiment: ExperimentRecord, results: list[dict[st
     actual_labels = {record["analysis_label"] for record in results}
     missing_labels = sorted(expected_labels - actual_labels)
     if missing_labels:
-        raise ResultFreezeError(f"Result freeze is missing configured analyses: {', '.join(missing_labels)}")
+        raise ResultFreezeError(
+            f"Result freeze is missing configured analyses: {', '.join(missing_labels)}")
 
 
 def validate_source_files(source_files: Sequence[tuple[str, str]]) -> None:

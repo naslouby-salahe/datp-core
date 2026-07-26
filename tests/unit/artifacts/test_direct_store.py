@@ -95,8 +95,6 @@ def test_safetensors_direct_api_uses_store_checksum_validation(tmp_path: Path) -
         {"weight": torch.tensor([1.0, 2.0])}, store=store, relative_path="models/checkpoint.safetensors"
     )
 
-    loaded = load_model_safetensors_from_store(
-        "models/checkpoint.safetensors", store=store, expected_checksum=checksum
-    )
+    loaded = load_model_safetensors_from_store("models/checkpoint.safetensors", store=store, expected_checksum=checksum)
 
     assert torch.equal(loaded["weight"], torch.tensor([1.0, 2.0]))

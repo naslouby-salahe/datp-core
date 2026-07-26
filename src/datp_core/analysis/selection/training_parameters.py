@@ -17,13 +17,15 @@ def federated_proximal_selection(payload_bytes: bytes) -> FederatedProximalSelec
         analysis_label="fedprox_primary_coefficient_selection",
         selected_proximal_mu=float(payload["selected_proximal_mu"]),
         locked_primary_round=None if locked_primary_round is None else int(locked_primary_round),
-        mean_benign_calibration_loss_by_mu=None if losses is None else {str(k): float(v) for k, v in losses.items()},
+        mean_benign_calibration_loss_by_mu=None if losses is None else {
+            str(k): float(v) for k, v in losses.items()},
     )
 
 
 def ditto_selection(payload_bytes: bytes) -> DittoSelectionResult:
     payload = json.loads(payload_bytes)
-    selected_weight = payload.get("selected_ditto_proximal_weight") if isinstance(payload, dict) else None
+    selected_weight = payload.get(
+        "selected_ditto_proximal_weight") if isinstance(payload, dict) else None
     if not isinstance(selected_weight, (int, float)):
         raise ValueError("Ditto weight-selection artifact is malformed")
     locked_primary_round = payload.get("locked_primary_round")

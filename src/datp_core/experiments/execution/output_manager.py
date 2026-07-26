@@ -4,14 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import shutil
 from dataclasses import asdict, dataclass, field
 from enum import Enum
 from pathlib import Path
-from tempfile import NamedTemporaryFile
 from time import time
 
+from datp_core.artifacts.atomic import atomic_write_bytes
 from datp_core.artifacts.provenance import git_revision
 from datp_core.core.identifiers import ExperimentId
 
@@ -253,7 +252,7 @@ class ExperimentOutputManager:
         )
         self._write_json(directory / self._MANIFEST, asdict(manifest))
         self._write_json(directory / self._STATUS, {"status": ExperimentStatus.COMPLETED.value, "updated_at": time()})
-        self._write_bytes(directory / self._COMPLETED, b"")
+        atomic_write_bytes(directory / self._COMPLETED, b"", prefix=".tmp_lifecycle_")
         return manifest
 
     def delete(self, experiment_id: ExperimentId) -> None:
@@ -317,9 +316,7 @@ class ExperimentOutputManager:
             directory / "frozen_result.json",
         ]
         candidates.extend(
-            path
-            for name in ("frozen_result", "frozen-result")
-            for path in (directory / name).rglob("*.json")
+            path for name in ("frozen_result", "frozen-result") for path in (directory / name).rglob("*.json")
         )
         regular_candidates = [path for path in candidates if path.is_file() and not path.is_symlink()]
         if len(regular_candidates) != 1:
@@ -420,22 +417,11 @@ class ExperimentOutputManager:
 
     @staticmethod
     def _write_json(path: Path, payload: object) -> None:
-        ExperimentOutputManager._write_bytes(
-            path, json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        atomic_write_bytes(
+            path,
+            json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8"),
+            prefix=".tmp_lifecycle_",
         )
-
-    @staticmethod
-    def _write_bytes(path: Path, payload: bytes) -> None:
-        with NamedTemporaryFile(mode="wb", dir=path.parent, prefix=".tmp_lifecycle_", delete=False) as temporary:
-            temporary.write(payload)
-            temporary.flush()
-            os.fsync(temporary.fileno())
-            temporary_path = Path(temporary.name)
-        try:
-            os.replace(temporary_path, path)
-        finally:
-            if temporary_path.exists():
-                temporary_path.unlink()
 
 
 __all__ = ["ExperimentManifest", "ExperimentOutputManager", "ExperimentStatus", "OutputInspection", "OutputState"]

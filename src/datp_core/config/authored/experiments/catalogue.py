@@ -52,7 +52,8 @@ class AuthoredExperimentConfig(StrictFrozenConfigModel):
     sweeps: dict[str, SweepVariableConfig] | None = None
     calibration_subset: CalibrationSubsetConfig | None = None
     evaluations: list[EvaluationSpecConfig] = Field(default_factory=list)
-    analyses: list[Annotated[AnalysisSpecConfig, Field(discriminator="kind")]] = Field(default_factory=list)
+    analyses: list[Annotated[AnalysisSpecConfig, Field(
+        discriminator="kind")]] = Field(default_factory=list)
     reports: list[str] = Field(default_factory=list)
     method_naming_rule: str | None = None
     personalization_parameter_selection_source: str | None = None

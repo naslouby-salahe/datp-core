@@ -22,9 +22,11 @@ def analyze_recovery_fraction(
     numerator_values = numerator.seed_differences
     component_values = denominator_component.seed_differences
     if len(numerator_values) != len(component_values):
-        raise ValueError(f"Recovery analysis '{analysis.label}' has malformed paired seed differences")
+        raise ValueError(
+            f"Recovery analysis '{analysis.label}' has malformed paired seed differences")
     if analysis.denominator_composition != "shared_minus_local_gap_of_the_same_seed":
-        raise ValueError(f"Recovery analysis '{analysis.label}' has an unsupported denominator composition")
+        raise ValueError(
+            f"Recovery analysis '{analysis.label}' has an unsupported denominator composition")
     materiality = materiality_threshold(analysis.denominator_materiality_rule)
     seed_ratios = [
         None

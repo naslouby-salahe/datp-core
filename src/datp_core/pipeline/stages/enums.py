@@ -27,5 +27,4 @@ class JobExecutionStatus(Enum):
 
 
 DEPENDENCY_SATISFYING_STATUSES: frozenset[JobExecutionStatus] = frozenset(
-    {JobExecutionStatus.SUCCESS}
-)
+    {JobExecutionStatus.SUCCESS})

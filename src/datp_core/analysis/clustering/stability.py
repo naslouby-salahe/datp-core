@@ -48,9 +48,7 @@ def analyze_cluster_stability(
     seeds: tuple[Seed, ...],
 ) -> ClusterStabilityAnalysisResult:
     if analysis.reference_evaluation is not None:
-        return _analyze_cluster_ablation(
-            analysis, store=store, inputs=inputs, experiment=experiment, seeds=seeds
-        )
+        return _analyze_cluster_ablation(analysis, store=store, inputs=inputs, experiment=experiment, seeds=seeds)
     return _analyze_cluster_membership(
         analysis, store=store, inputs=inputs, config=config, experiment=experiment, seeds=seeds
     )
@@ -64,7 +62,8 @@ def _analyze_cluster_ablation(
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
 ) -> ClusterAblationStabilityResult:
-    source = next(item for item in experiment.evaluations if item.label == analysis.source_evaluation)
+    source = next(item for item in experiment.evaluations if item.label ==
+                  analysis.source_evaluation)
     override = (source.overrides or {}).get("fingerprint_features")
     sweep_name = override.get("from_sweep") if isinstance(override, Mapping) else None
     subsets = tuple(
@@ -81,8 +80,7 @@ def _analyze_cluster_ablation(
     assert ref_eval is not None  # guarded by _analyze_cluster_ablation caller
     for seed in seeds:
         reference = _cluster_membership(
-            experiment, seed.value, ref_eval, None, store=store, inputs=inputs
-        )
+            experiment, seed.value, ref_eval, None, store=store, inputs=inputs)
         for subset in subsets:
             ablated = _cluster_membership(
                 experiment,
@@ -94,7 +92,8 @@ def _analyze_cluster_ablation(
             )
             clients = sorted(set(reference) & set(ablated))
             if set(reference) != set(ablated):
-                raise ValueError("Cluster ablation membership has an incompatible client population")
+                raise ValueError(
+                    "Cluster ablation membership has an incompatible client population")
             observations.append(
                 ClusterAblationObservation(
                     seed=seed.value,
@@ -148,7 +147,8 @@ def _cluster_dispersion(
             available_cluster_count=0,
             excluded_client_count=total_clients,
         )
-    excluded_client_count = sum(cluster_sizes[label] - len(value_groups.get(label, [])) for label in non_empty_labels)
+    excluded_client_count = sum(
+        cluster_sizes[label] - len(value_groups.get(label, [])) for label in non_empty_labels)
     no_value_labels = [label for label in non_empty_labels if not value_groups.get(label)]
     if no_value_labels:
         return ClusterDispersionResult(
@@ -200,7 +200,8 @@ def _analyze_cluster_membership(
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
 ) -> ClusterMembershipStabilityResult:
-    evaluation = next(item for item in experiment.evaluations if item.label == analysis.source_evaluation)
+    evaluation = next(item for item in experiment.evaluations if item.label ==
+                      analysis.source_evaluation)
     policy = config.threshold_policies.get(evaluation.threshold_policy_id)
     if not isinstance(policy, ClusterThresholdPolicyRecord):
         raise ValueError(
@@ -215,7 +216,8 @@ def _analyze_cluster_membership(
         missing = f"Cluster stability artifacts are unavailable for seed {seed.value}"
         threshold_frame = read_parquet_frame(
             store,
-            inputs.thresholds(_evaluation_context(experiment, analysis.source_evaluation, seed.value, None)),
+            inputs.thresholds(_evaluation_context(
+                experiment, analysis.source_evaluation, seed.value, None)),
             missing_message=missing,
         )
         if "cluster_label" not in threshold_frame.columns:
@@ -277,7 +279,8 @@ def _analyze_cluster_membership(
             how="left",
         )
         if joined.height != len(threshold_client_ids):
-            raise ValueError(f"Threshold/metric join changed the client population for seed {seed.value}")
+            raise ValueError(
+                f"Threshold/metric join changed the client population for seed {seed.value}")
 
         fpr_groups: dict[int, list[float]] = {label: [] for label in expected_labels}
         metric_covered_clients = 0
@@ -298,9 +301,12 @@ def _analyze_cluster_membership(
             ClusterStabilitySeedSummary(
                 seed=int(seed.value),
                 cluster_membership_per_client=labels,
-                cluster_size={str(label): cluster_membership_counts[label] for label in expected_labels},
-                singleton_cluster_flag=any(cluster_membership_counts[label] == 1 for label in expected_labels),
-                empty_cluster_flag=any(cluster_membership_counts[label] == 0 for label in expected_labels),
+                cluster_size={
+                    str(label): cluster_membership_counts[label] for label in expected_labels},
+                singleton_cluster_flag=any(
+                    cluster_membership_counts[label] == 1 for label in expected_labels),
+                empty_cluster_flag=any(
+                    cluster_membership_counts[label] == 0 for label in expected_labels),
                 within_cluster_threshold_dispersion=_cluster_dispersion(
                     cluster_membership_counts, threshold_groups, kind="within"
                 ),
@@ -345,7 +351,8 @@ def _analyze_cluster_membership(
     ]
     expected_pair_count = len(sorted_seeds) * (len(sorted_seeds) - 1) // 2
     if len(aris) != expected_pair_count:
-        raise ValueError(f"ARI pair count mismatch: expected {expected_pair_count}, got {len(aris)}")
+        raise ValueError(
+            f"ARI pair count mismatch: expected {expected_pair_count}, got {len(aris)}")
     return ClusterMembershipStabilityResult(
         analysis_label=analysis.label,
         comparison_unit=analysis.comparison_unit,

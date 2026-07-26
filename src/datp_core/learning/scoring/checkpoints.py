@@ -33,7 +33,8 @@ def build_model_from_state_dict(
     hidden_dims:
         Hidden-layer dimensions used when constructing the autoencoder.
     """
-    state = {name.removeprefix(prefix): tensor for name, tensor in states.items() if name.startswith(prefix)}
+    state = {name.removeprefix(prefix): tensor for name,
+                               tensor in states.items() if name.startswith(prefix)}
     if not state:
         raise ValueError("Selected checkpoint is absent from the persisted checkpoint grid")
     model = DynamicDenseAutoencoder(input_dimension, hidden_dims)

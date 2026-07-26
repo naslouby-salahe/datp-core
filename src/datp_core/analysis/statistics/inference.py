@@ -37,13 +37,16 @@ def matched_pairs_rank_biserial_correlation(left: Iterable[float], right: Iterab
     """
     differences = tuple(float(a) - float(b) for a, b in zip(left, right, strict=True))
     if not differences or not all(isfinite(value) for value in differences):
-        raise StatisticalProcedureError("Rank-biserial correlation requires finite paired observations")
+        raise StatisticalProcedureError(
+            "Rank-biserial correlation requires finite paired observations")
     nonzero = tuple(value for value in differences if not math.isclose(value, 0.0, abs_tol=0.0))
     if not nonzero:
         return 0.0
     ranks = _average_ranks(tuple(abs(value) for value in nonzero))
-    positive = sum(rank for difference, rank in zip(nonzero, ranks, strict=True) if difference > 0.0)
-    negative = sum(rank for difference, rank in zip(nonzero, ranks, strict=True) if difference < 0.0)
+    positive = sum(rank for difference, rank in zip(
+        nonzero, ranks, strict=True) if difference > 0.0)
+    negative = sum(rank for difference, rank in zip(
+        nonzero, ranks, strict=True) if difference < 0.0)
     return (positive - negative) / (positive + negative)
 
 
@@ -81,7 +84,8 @@ class StatisticalAnalysisUseCase:
     ) -> PairedSeedDifferenceRecord:
         profile = self._profiles.get(statistical_profile_id)
         if (
-            profile.method not in {BootstrapMethod.BCA_BOOTSTRAP, BootstrapMethod.PERCENTILE_BOOTSTRAP}
+            profile.method not in {BootstrapMethod.BCA_BOOTSTRAP,
+                BootstrapMethod.PERCENTILE_BOOTSTRAP}
             or profile.resample_count is None
             or profile.confidence_level is None
         ):
@@ -95,7 +99,8 @@ class StatisticalAnalysisUseCase:
         diffs = arr_a - arr_b
 
         mean_diff = float(np.mean(diffs))
-        assert profile.method is not None  # guaranteed by the method-not-in-{bca,percentile} guard above
+        # guaranteed by the method-not-in-{bca,percentile} guard above
+        assert profile.method is not None
         ci = self._compute_bca_bootstrap_ci(
             diffs,
             resample_count=profile.resample_count.value,
@@ -112,7 +117,8 @@ class StatisticalAnalysisUseCase:
             mean_difference=mean_diff,
             confidence_interval=ci,
             hypothesis_test=test_res,
-            effect_size=matched_pairs_rank_biserial_correlation(arr_a, arr_b) if test_res is not None else None,
+            effect_size=matched_pairs_rank_biserial_correlation(
+                arr_a, arr_b) if test_res is not None else None,
             resample_count=profile.resample_count.value,
             analysis_seed=analysis_seed,
         )
@@ -123,7 +129,8 @@ class StatisticalAnalysisUseCase:
         predictor_values = np.array(predictor, dtype=np.float64)
         outcome_values = np.array(outcome, dtype=np.float64)
         if len(predictor_values) < 3 or predictor_values.shape != outcome_values.shape:
-            raise ValueError("Association analysis requires at least three paired finite observations")
+            raise ValueError(
+                "Association analysis requires at least three paired finite observations")
         if not np.isfinite(predictor_values).all() or not np.isfinite(outcome_values).all():
             raise ValueError("Association analysis requires finite observations")
         return (
@@ -141,7 +148,7 @@ class StatisticalAnalysisUseCase:
                 statistic=0.0,
                 p_value=1.0,
             )
-        res = stats.wilcoxon(x, y, zero_method="wilcox", correction=True)
+        res = stats.wilcoxon(x, y, zero_method="pratt", correction=True)
         statistic, p_value = cast("tuple[float, float]", res)
         return HypothesisTestResult(
             test_name="wilcoxon_signed_rank", statistic=float(statistic), p_value=float(p_value)
@@ -165,9 +172,11 @@ class StatisticalAnalysisUseCase:
                 method=method,
             )
         if method == BootstrapMethod.BCA_BOOTSTRAP and len(data) < 10:
-            raise StatisticalProcedureError("BCa requires at least ten valid paired seed differences")
+            raise StatisticalProcedureError(
+                "BCa requires at least ten valid paired seed differences")
         if method == BootstrapMethod.PERCENTILE_BOOTSTRAP and len(data) < 2:
-            raise StatisticalProcedureError("Percentile bootstrap requires at least two valid paired seed differences")
+            raise StatisticalProcedureError(
+                "Percentile bootstrap requires at least two valid paired seed differences")
 
         try:
             res = stats.bootstrap(

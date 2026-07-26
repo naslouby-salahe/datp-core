@@ -52,9 +52,11 @@ def evaluation_directory(context: StageJobContext) -> str:
         if value is not None:
             parts.append(value)
     if context.fingerprint_features is not None:
-        parts.append("features-" + "+".join(_segment(item, fallback="none") for item in context.fingerprint_features))
+        parts.append("features-" + "+".join(_segment(item, fallback="none")
+                     for item in context.fingerprint_features))
     if context.calibration_sample_count is not None:
-        parts.append(f"calibration-n-{context.calibration_sample_count}-rep-{context.calibration_replicate}")
+        parts.append(
+            f"calibration-n-{context.calibration_sample_count}-rep-{context.calibration_replicate}")
     if context.recalibration_mode is not None:
         parts.append(f"recalibration-{_segment(context.recalibration_mode, fallback='none')}")
     return "/".join(parts)

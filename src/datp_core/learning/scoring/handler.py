@@ -40,7 +40,8 @@ def _score_split(output_name: str, context, config: ResolvedProjectConfiguration
     population = config.populations.get(context.population_id or experiment.population_ids[0])
     dataset = config.datasets.get(population.dataset_id)
     setup = dataset.setup(population.setup_id)
-    materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
+    materialization = next(
+        item for item in dataset.materializations if item.identifier == setup.materialization_id)
     temporal = materialization.split_method is SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL
     if output_name == "calibration_scores":
         return SplitMembership.HISTORICAL_CALIBRATION.value if temporal else SplitMembership.CALIBRATION.value
@@ -67,13 +68,13 @@ class ScoreGenerationStageHandler:
         profile = self._config.training_profiles.get(experiment.training_profile_id)
         try:
             selection_path = job.input_path("selection_evidence")
-            if (
-                profile.checkpoint_authorization is CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE
-                and any(item.name == "checkpoint_selection" for item in job.inputs)
+            if profile.checkpoint_authorization is CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE and any(
+                item.name == "checkpoint_selection" for item in job.inputs
             ):
                 selection_path = job.input_path("checkpoint_selection")
             selection = json.loads(self._store.read_bytes(selection_path))
-            selected_round = selection.get("selected_round") if isinstance(selection, dict) else None
+            selected_round = selection.get(
+                "selected_round") if isinstance(selection, dict) else None
             if not isinstance(selected_round, int):
                 raise ValueError("Selected-checkpoint evidence is malformed")
             checkpoint = self._store.read_bytes(job.input_path("checkpoint"))
@@ -86,23 +87,27 @@ class ScoreGenerationStageHandler:
         except (KeyError, OSError, ValueError) as exc:
             return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message=str(exc))
 
-        population = self._config.populations.get(job.context.population_id or experiment.population_ids[0])
+        population = self._config.populations.get(
+            job.context.population_id or experiment.population_ids[0])
         dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
         architecture = self._config.model_architectures.get(profile.model_architecture_id)
         batching = self._config.batching_profiles.get(profile.batching_profile_id)
         try:
             if self._config.runtime.active_execution_profile.device_policy != DevicePolicy.CUDA_REQUIRED.value:
-                raise ValueError("Score generation requires the configured CUDA-required execution profile")
+                raise ValueError(
+                    "Score generation requires the configured CUDA-required execution profile")
             with TemporaryDirectory(prefix="datp_scoring_") as temporary_directory:
                 materialized_path = Path(temporary_directory) / "materialized.parquet"
                 materialized_path.write_bytes(materialization)
                 features = dataset.field_schema.model_features
                 feature_columns = (
-                    features.order if features is not None else materialized_feature_columns(materialized_path)
+                    features.order if features is not None else materialized_feature_columns(
+                        materialized_path)
                 )
                 if personalized is not None:
                     client_ids = (
-                        pl.read_parquet(materialized_path, columns=["client_id"])["client_id"].unique().sort().to_list()
+                        pl.read_parquet(materialized_path, columns=["client_id"])[
+                                        "client_id"].unique().sort().to_list()
                     )
                     models = build_personalized_models_from_bytes(
                         personalized,

@@ -42,7 +42,8 @@ def _encode_edge_roles_as_parquet(
         raise ValueError("Edge-IIoTset normalization width differs from numeric schema")
     encoded_headers = list(numeric_headers)
     for header in categorical_headers:
-        encoded_headers += [f"{header}={value}" for value in (*category_columns[header], "__MISSING__", "__UNKNOWN__")]
+        encoded_headers += [f"{header}={value}" for value in (
+            *category_columns[header], "__MISSING__", "__UNKNOWN__")]
     records: dict[str, list[object]] = {
         "split": [],
         "client_id": [],
@@ -57,7 +58,8 @@ def _encode_edge_roles_as_parquet(
     for role, rows in roles:
         for row in rows:
             if row.is_attack or row.client_id is None:
-                raise ValueError("Edge-IIoTset client artifact may only contain benign assigned rows")
+                raise ValueError(
+                    "Edge-IIoTset client artifact may only contain benign assigned rows")
             records["split"].append(role)
             records["client_id"].append(row.client_id)
             records["source_path"].append(row.source_path.as_posix())
@@ -68,7 +70,8 @@ def _encode_edge_roles_as_parquet(
                 chronology_key += 1
             for i, header in enumerate(numeric_headers):
                 low, high = normalization.minimums[i], normalization.maximums[i]
-                records[header].append(0.0 if high == low else (row.numeric_values[i] - low) / (high - low))
+                records[header].append(0.0 if high == low else (
+                    row.numeric_values[i] - low) / (high - low))
             for i, header in enumerate(categorical_headers):
                 value = row.categorical_values[i]
                 selected = _category_value(value, category_columns[header])
@@ -157,7 +160,8 @@ def _read_edge_rows(
 
 def _require_edge_timestamp(row: EdgeIIoTsetRow) -> float:
     if row.time_of_day_seconds is None:
-        raise ValueError(f"Temporal Edge-IIoTset row lacks a timestamp: {row.source_path}:{row.source_row_index}")
+        raise ValueError(
+            f"Temporal Edge-IIoTset row lacks a timestamp: {row.source_path}:{row.source_row_index}")
     return row.time_of_day_seconds
 
 
@@ -195,4 +199,5 @@ def _validate_edge_chronological_minimums(
         for role, rows in roles.items():
             required = minimums[role]
             if sum(row.client_id == client_id for row in rows) < required:
-                raise ValueError(f"Temporal client '{client_id}' lacks the configured minimum for {role}")
+                raise ValueError(
+                    f"Temporal client '{client_id}' lacks the configured minimum for {role}")

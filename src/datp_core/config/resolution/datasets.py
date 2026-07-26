@@ -11,6 +11,7 @@ from collections.abc import Mapping, Sequence
 from typing import cast
 
 from datp_core.config.authored.datasets import (
+    AuthoredDatasetConfig,
     CategoricalEncodingConfig,
     DatasetFieldSchemaConfig,
     DatasetSourceLayoutConfig,
@@ -61,13 +62,8 @@ from datp_core.data.contracts import (
 )
 
 
-def _binary_label_column(d_cfg: object) -> str | None:
-    """Extract the binary label column header from an authored dataset config.
-
-    The nested conditional was extracted from the resolve_datasets body to comply
-    with the S3358 code-quality rule (no deeply nested ternary expressions).
-    """
-    label_fields = getattr(d_cfg, "field_schema", None)
+def _binary_label_column(d_cfg: AuthoredDatasetConfig) -> str | None:
+    label_fields = d_cfg.field_schema
     if label_fields is None:
         return None
     binary_label = getattr(getattr(label_fields, "label_fields", None), "binary_label", None)
@@ -99,7 +95,8 @@ def resolve_label_fields(cfg: LabelFieldsConfig) -> LabelFieldsRecord:
     return LabelFieldsRecord(
         binary_label=cfg.binary_label,
         multiclass_label=(
-            MulticlassLabelRecord(column=multiclass.column, type=multiclass.type, case=multiclass.case)
+            MulticlassLabelRecord(column=multiclass.column,
+                                  type=multiclass.type, case=multiclass.case)
             if multiclass is not None
             else None
         ),
@@ -156,12 +153,14 @@ def resolve_field_schema(cfg: DatasetFieldSchemaConfig) -> DatasetFieldSchemaRec
         identity_scheme=resolve_identity_scheme(cfg.identity_scheme),
         label_fields=resolve_label_fields(cfg.label_fields),
         model_features=(
-            ModelFeaturesRecord(role=model_features.role, type=model_features.type, order=tuple(model_features.order))
+            ModelFeaturesRecord(role=model_features.role, type=model_features.type,
+                                order=tuple(model_features.order))
             if model_features is not None
             else None
         ),
         source_columns=tuple(cfg.source_columns) if cfg.source_columns is not None else None,
-        endpoint_identity=(resolve_endpoint_identity(endpoint_identity) if endpoint_identity is not None else None),
+        endpoint_identity=(resolve_endpoint_identity(endpoint_identity)
+                           if endpoint_identity is not None else None),
         attack_row_group_policy=cfg.attack_row_group_policy,
         retained_numeric_features=(
             RetainedNumericFeaturesRecord(
@@ -192,7 +191,8 @@ def resolve_source_layout_contract(cfg: DatasetSourceLayoutConfig) -> DatasetSou
         normal_file_pattern=cfg.normal_file_pattern,
         attack_file_pattern=cfg.attack_file_pattern,
         device_dirs=tuple(cfg.device_dirs) if cfg.device_dirs is not None else None,
-        normal_group_folders=tuple(cfg.normal_group_folders) if cfg.normal_group_folders is not None else None,
+        normal_group_folders=tuple(
+            cfg.normal_group_folders) if cfg.normal_group_folders is not None else None,
         executable_group_folders=(
             tuple(cfg.executable_group_folders) if cfg.executable_group_folders is not None else None
         ),
@@ -207,7 +207,8 @@ def resolve_source_layout_contract(cfg: DatasetSourceLayoutConfig) -> DatasetSou
                     root=RelativePath(source.root),
                     file_pattern=source.file_pattern,
                     owns=tuple(source.owns) if source.owns is not None else None,
-                    permitted_uses=tuple(source.permitted_uses) if source.permitted_uses is not None else None,
+                    permitted_uses=tuple(
+                        source.permitted_uses) if source.permitted_uses is not None else None,
                     contributes_rows_to_executable_materializations=(
                         source.contributes_rows_to_executable_materializations
                     ),
@@ -231,10 +232,13 @@ def resolve_source_layout_contract(cfg: DatasetSourceLayoutConfig) -> DatasetSou
             if cross_source_relationship is not None
             else None
         ),
-        normal_traffic_root=(RelativePath(cfg.normal_traffic_root) if cfg.normal_traffic_root is not None else None),
-        attack_traffic_root=(RelativePath(cfg.attack_traffic_root) if cfg.attack_traffic_root is not None else None),
+        normal_traffic_root=(RelativePath(cfg.normal_traffic_root)
+                             if cfg.normal_traffic_root is not None else None),
+        attack_traffic_root=(RelativePath(cfg.attack_traffic_root)
+                             if cfg.attack_traffic_root is not None else None),
         benign_file_required_per_device=cfg.benign_file_required_per_device,
-        attack_family_dirs=tuple(cfg.attack_family_dirs) if cfg.attack_family_dirs is not None else None,
+        attack_family_dirs=tuple(
+            cfg.attack_family_dirs) if cfg.attack_family_dirs is not None else None,
         attack_family_required_per_device=cfg.attack_family_required_per_device,
     )
 
@@ -284,7 +288,8 @@ def resolve_client_construction(cfg: SetupClientConstructionConfig) -> SetupClie
         minimum_row_counts=cfg.minimum_row_counts,
         retry_policy=cfg.retry_policy,
         feasibility_failure=cfg.feasibility_failure,
-        manifest_invariants=(tuple(cfg.manifest_invariants) if cfg.manifest_invariants is not None else None),
+        manifest_invariants=(tuple(cfg.manifest_invariants)
+                             if cfg.manifest_invariants is not None else None),
         manifest_fields=(tuple(cfg.manifest_fields) if cfg.manifest_fields is not None else None),
     )
 
@@ -296,6 +301,190 @@ def resolve_adapter_kind(dataset_name: str) -> AdapterKind:
         raise ConfigurationError(f"Unsupported dataset adapter kind: {dataset_name}") from exc
 
 
+def _resolve_setups(d_cfg: AuthoredDatasetConfig) -> tuple[DatasetSetup, ...]:
+    setup_identifiers = set(d_cfg.setups)
+    setups_list = []
+    for identifier, setup in sorted(d_cfg.setups.items()):
+        if (
+            setup.client_population_must_equal_setup is not None
+            and setup.client_population_must_equal_setup not in setup_identifiers
+        ):
+            raise ConfigurationError(
+                f"Dataset '{d_cfg.dataset}' setup '{identifier}' references unregistered "
+                f"client_population_must_equal_setup '{setup.client_population_must_equal_setup}'"
+            )
+        setups_list.append(
+            DatasetSetup(
+                identifier=DatasetSetupId(identifier),
+                materialization_id=MaterializationId(setup.materialization),
+                capabilities=tuple(setup.provides_capabilities),
+                client_construction=resolve_client_construction(setup.client_construction),
+                validation_scope=setup.validation_scope,
+                eligibility_gate=setup.eligibility_gate,
+                client_population_must_equal_setup=(
+                    DatasetSetupId(setup.client_population_must_equal_setup)
+                    if setup.client_population_must_equal_setup is not None
+                    else None
+                ),
+            )
+        )
+    return tuple(setups_list)
+
+
+def _resolve_materializations(d_cfg: AuthoredDatasetConfig) -> tuple[DatasetMaterialization, ...]:
+    return tuple(
+        DatasetMaterialization(
+            identifier=MaterializationId(identifier),
+            role=materialization.role,
+            normalization_strategy=NormalizationStrategy(materialization.normalization.strategy),
+            normalization_scope=NormalizationFitScope(materialization.normalization.scope),
+            vocabulary_fit_split=materialization.vocabulary_fit_split,
+            preprocessing_sequence=tuple(materialization.preprocessing_sequence),
+            row_exclusion=materialization.row_exclusion,
+            split_row_semantics=(
+                cast(Mapping[str, "str | bool"], deep_freeze(materialization.split_row_semantics))
+                if materialization.split_row_semantics is not None
+                else None
+            ),
+            infeasibility_policy=materialization.infeasibility_policy,
+            split_method=SplitMethod(materialization.split.method),
+            split_seed=Seed(materialization.split.split_seed)
+            if materialization.split.split_seed is not None
+            else None,
+            split_ratios=tuple(
+                (role, Probability(ratio)) for role, ratio in sorted((materialization.split.ratios or {}).items())
+            ),
+            chronological_ratios=tuple(
+                (role, Probability(value))
+                for role, value in (
+                    ("historical_train", materialization.split.historical_train_fraction),
+                    ("historical_calibration", materialization.split.historical_calibration_fraction),
+                    ("future_recalibration", materialization.split.future_recalibration_fraction),
+                    ("future_evaluation", materialization.split.future_evaluation_fraction),
+                )
+                if value is not None
+            ),
+            split_ordering_basis=materialization.split.ordering_basis,
+            split_ordering_scope=materialization.split.ordering_scope,
+            split_gap_handling=materialization.split.gap_handling,
+            split_attack_rows=materialization.split.attack_rows,
+            split_attack_test_membership=materialization.split.attack_test_membership,
+            split_attack_ordering=materialization.split.attack_ordering,
+            split_benign_attack_deduplication=materialization.split.benign_attack_deduplication,
+            split_role_order=(
+                tuple(materialization.split.role_order) if materialization.split.role_order is not None else None
+            ),
+            split_excluded_client_folders=(
+                tuple(materialization.split.excluded_client_folders)
+                if materialization.split.excluded_client_folders is not None
+                else None
+            ),
+            split_exclusion_reason=materialization.split.exclusion_reason,
+            split_ordering_field=materialization.split.ordering_field,
+            split_ordering_sort=materialization.split.ordering_sort,
+            split_rollover_policy=materialization.split.rollover_policy,
+            split_rollover_scope=materialization.split.rollover_scope,
+            split_boundary_rule=materialization.split.boundary_rule,
+            split_boundary_index_formula=materialization.split.boundary_index_formula,
+            split_future_leakage_check=materialization.split.future_leakage_check,
+            split_minimum_row_counts=materialization.split.minimum_row_counts,
+            split_missing_client_policy=materialization.split.missing_client_policy,
+            split_chronology_unverifiable_policy=materialization.split.chronology_unverifiable_policy,
+        )
+        for identifier, materialization in sorted(d_cfg.materializations.items())
+    )
+
+
+def _resolve_inspection_elements(d_cfg: AuthoredDatasetConfig) -> DatasetInspectionContract:
+    source_column_count = d_cfg.field_schema.source_column_count
+    configured_sources = d_cfg.source_layout.sources
+    if d_cfg.field_schema.model_features is not None:
+        required_model_headers = tuple(d_cfg.field_schema.model_features.order)
+    elif d_cfg.field_schema.retained_numeric_features is not None:
+        required_model_headers = tuple(d_cfg.field_schema.retained_numeric_features.order)
+    else:
+        raise ConfigurationError(f"Dataset '{d_cfg.dataset}' has no resolved model feature headers")
+    categorical_encoding = d_cfg.field_schema.categorical_encoding
+    required_categorical_headers = (
+        tuple(categorical_encoding.columns) if isinstance(
+            categorical_encoding, CategoricalEncodingConfig) else ()
+    )
+    multiclass_label = d_cfg.field_schema.label_fields.multiclass_label
+    label_header = multiclass_label.column if multiclass_label is not None else None
+    if configured_sources is None:
+        if d_cfg.source_layout.attack_file_pattern is None:
+            raise ConfigurationError(
+                f"Dataset '{d_cfg.dataset}' has a single unconfigured source tree "
+                "and must author an explicit 'attack_file_pattern'"
+            )
+        source_trees = (
+            ConfiguredSourceTree(
+                identifier="primary",
+                root=RelativePath(d_cfg.source_layout.root),
+                file_pattern=d_cfg.source_layout.attack_file_pattern,
+                expected_column_count=(
+                    source_column_count
+                    if isinstance(source_column_count, int)
+                    else next(iter(source_column_count.values()))
+                ),
+                executable=True,
+                required_headers=required_model_headers + required_categorical_headers,
+            ),
+        )
+    else:
+        source_trees = tuple(
+            ConfiguredSourceTree(
+                identifier=identifier,
+                root=RelativePath(source.root),
+                file_pattern=source.file_pattern,
+                expected_column_count=(
+                    source_column_count if isinstance(
+                        source_column_count, int) else source_column_count[identifier]
+                ),
+                executable=source.role == "executable",
+                required_headers=(
+                    required_model_headers
+                    + required_categorical_headers
+                    + ((label_header,) if source.role ==
+                       "executable" and label_header is not None else ())
+                ),
+            )
+            for identifier, source in sorted(configured_sources.items())
+        )
+    return DatasetInspectionContract(
+        source_trees=source_trees,
+        require_identical_headers=(
+            d_cfg.field_schema.header_must_be_identical_across_all_source_files is True
+            or d_cfg.field_schema.header_must_be_identical_across_all_files_in_a_tree is True
+        ),
+        device_directories=tuple(d_cfg.source_layout.device_dirs or ()),
+        benign_filename=d_cfg.source_layout.benign_file,
+        benign_file_required_per_device=d_cfg.source_layout.benign_file_required_per_device is True,
+        attack_family_directories=tuple(d_cfg.source_layout.attack_family_dirs or ()),
+        attack_family_required_per_device=d_cfg.source_layout.attack_family_required_per_device is True,
+        normal_group_directories=tuple(d_cfg.source_layout.normal_group_folders or ()),
+        attack_filenames=tuple(d_cfg.source_layout.attack_files or ()),
+        ignored_root_entries=tuple(d_cfg.source_layout.ignored_root_entries),
+        benign_label=(
+            str(d_cfg.field_schema.label_fields.binary_label.get("benign_value"))
+            if d_cfg.field_schema.label_fields.binary_label is not None
+            and isinstance(d_cfg.field_schema.label_fields.binary_label.get("benign_value"), str)
+            else None
+        ),
+        normal_traffic_root=(
+            RelativePath(d_cfg.source_layout.normal_traffic_root)
+            if d_cfg.source_layout.normal_traffic_root is not None
+            else None
+        ),
+        attack_traffic_root=(
+            RelativePath(d_cfg.source_layout.attack_traffic_root)
+            if d_cfg.source_layout.attack_traffic_root is not None
+            else None
+        ),
+        binary_label_header=_binary_label_column(d_cfg),
+    )
+
+
 def resolve_datasets(
     authored_datasets: Sequence,  # Sequence[AuthoredDatasetConfig]
     paths: ResolvedProjectPaths,
@@ -305,7 +494,8 @@ def resolve_datasets(
     for d_cfg in authored_datasets:
         d_id = DatasetId(d_cfg.dataset)
         if d_id in resolved:
-            raise ConfigurationError(f"Duplicate dataset identifier across dataset documents: '{d_cfg.dataset}'")
+            raise ConfigurationError(
+                f"Duplicate dataset identifier across dataset documents: '{d_cfg.dataset}'")
         adapter_kind = resolve_adapter_kind(d_cfg.dataset)
         raw_root = d_cfg.source_layout.root
         dataset_paths = ResolvedDatasetPaths(
@@ -313,178 +503,9 @@ def resolve_datasets(
             raw_root=(paths.raw_data / raw_root).resolve(),
             processed_root=(paths.processed_data / d_cfg.dataset).resolve(),
         )
-        setup_identifiers = set(d_cfg.setups)
-        setups_list = []
-        for identifier, setup in sorted(d_cfg.setups.items()):
-            if (
-                setup.client_population_must_equal_setup is not None
-                and setup.client_population_must_equal_setup not in setup_identifiers
-            ):
-                raise ConfigurationError(
-                    f"Dataset '{d_cfg.dataset}' setup '{identifier}' references unregistered "
-                    f"client_population_must_equal_setup '{setup.client_population_must_equal_setup}'"
-                )
-            setups_list.append(
-                DatasetSetup(
-                    identifier=DatasetSetupId(identifier),
-                    materialization_id=MaterializationId(setup.materialization),
-                    capabilities=tuple(setup.provides_capabilities),
-                    client_construction=resolve_client_construction(setup.client_construction),
-                    validation_scope=setup.validation_scope,
-                    eligibility_gate=setup.eligibility_gate,
-                    client_population_must_equal_setup=(
-                        DatasetSetupId(setup.client_population_must_equal_setup)
-                        if setup.client_population_must_equal_setup is not None
-                        else None
-                    ),
-                )
-            )
-        setups = tuple(setups_list)
-        materializations = tuple(
-            DatasetMaterialization(
-                identifier=MaterializationId(identifier),
-                role=materialization.role,
-                normalization_strategy=NormalizationStrategy(materialization.normalization.strategy),
-                normalization_scope=NormalizationFitScope(materialization.normalization.scope),
-                vocabulary_fit_split=materialization.vocabulary_fit_split,
-                preprocessing_sequence=tuple(materialization.preprocessing_sequence),
-                row_exclusion=materialization.row_exclusion,
-                split_row_semantics=(
-                    cast(Mapping[str, "str | bool"], deep_freeze(materialization.split_row_semantics))
-                    if materialization.split_row_semantics is not None
-                    else None
-                ),
-                infeasibility_policy=materialization.infeasibility_policy,
-                split_method=SplitMethod(materialization.split.method),
-                split_seed=Seed(materialization.split.split_seed)
-                if materialization.split.split_seed is not None
-                else None,
-                split_ratios=tuple(
-                    (role, Probability(ratio)) for role, ratio in sorted((materialization.split.ratios or {}).items())
-                ),
-                chronological_ratios=tuple(
-                    (role, Probability(value))
-                    for role, value in (
-                        ("historical_train", materialization.split.historical_train_fraction),
-                        ("historical_calibration", materialization.split.historical_calibration_fraction),
-                        ("future_recalibration", materialization.split.future_recalibration_fraction),
-                        ("future_evaluation", materialization.split.future_evaluation_fraction),
-                    )
-                    if value is not None
-                ),
-                split_ordering_basis=materialization.split.ordering_basis,
-                split_ordering_scope=materialization.split.ordering_scope,
-                split_gap_handling=materialization.split.gap_handling,
-                split_attack_rows=materialization.split.attack_rows,
-                split_attack_test_membership=materialization.split.attack_test_membership,
-                split_attack_ordering=materialization.split.attack_ordering,
-                split_benign_attack_deduplication=materialization.split.benign_attack_deduplication,
-                split_role_order=(
-                    tuple(materialization.split.role_order) if materialization.split.role_order is not None else None
-                ),
-                split_excluded_client_folders=(
-                    tuple(materialization.split.excluded_client_folders)
-                    if materialization.split.excluded_client_folders is not None
-                    else None
-                ),
-                split_exclusion_reason=materialization.split.exclusion_reason,
-                split_ordering_field=materialization.split.ordering_field,
-                split_ordering_sort=materialization.split.ordering_sort,
-                split_rollover_policy=materialization.split.rollover_policy,
-                split_rollover_scope=materialization.split.rollover_scope,
-                split_boundary_rule=materialization.split.boundary_rule,
-                split_boundary_index_formula=materialization.split.boundary_index_formula,
-                split_future_leakage_check=materialization.split.future_leakage_check,
-                split_minimum_row_counts=materialization.split.minimum_row_counts,
-                split_missing_client_policy=materialization.split.missing_client_policy,
-                split_chronology_unverifiable_policy=materialization.split.chronology_unverifiable_policy,
-            )
-            for identifier, materialization in sorted(d_cfg.materializations.items())
-        )
-        source_column_count = d_cfg.field_schema.source_column_count
-        configured_sources = d_cfg.source_layout.sources
-        if d_cfg.field_schema.model_features is not None:
-            required_model_headers = tuple(d_cfg.field_schema.model_features.order)
-        elif d_cfg.field_schema.retained_numeric_features is not None:
-            required_model_headers = tuple(d_cfg.field_schema.retained_numeric_features.order)
-        else:
-            raise ConfigurationError(f"Dataset '{d_cfg.dataset}' has no resolved model feature headers")
-        categorical_encoding = d_cfg.field_schema.categorical_encoding
-        required_categorical_headers = (
-            tuple(categorical_encoding.columns) if isinstance(categorical_encoding, CategoricalEncodingConfig) else ()
-        )
-        multiclass_label = d_cfg.field_schema.label_fields.multiclass_label
-        label_header = multiclass_label.column if multiclass_label is not None else None
-        if configured_sources is None:
-            if d_cfg.source_layout.attack_file_pattern is None:
-                raise ConfigurationError(
-                    f"Dataset '{d_cfg.dataset}' has a single unconfigured source tree "
-                    "and must author an explicit 'attack_file_pattern'"
-                )
-            source_trees = (
-                ConfiguredSourceTree(
-                    identifier="primary",
-                    root=RelativePath(d_cfg.source_layout.root),
-                    file_pattern=d_cfg.source_layout.attack_file_pattern,
-                    expected_column_count=(
-                        source_column_count
-                        if isinstance(source_column_count, int)
-                        else next(iter(source_column_count.values()))
-                    ),
-                    executable=True,
-                    required_headers=required_model_headers + required_categorical_headers,
-                ),
-            )
-        else:
-            source_trees = tuple(
-                ConfiguredSourceTree(
-                    identifier=identifier,
-                    root=RelativePath(source.root),
-                    file_pattern=source.file_pattern,
-                    expected_column_count=(
-                        source_column_count if isinstance(source_column_count, int) else source_column_count[identifier]
-                    ),
-                    executable=source.role == "executable",
-                    required_headers=(
-                        required_model_headers
-                        + required_categorical_headers
-                        + ((label_header,) if source.role == "executable" and label_header is not None else ())
-                    ),
-                )
-                for identifier, source in sorted(configured_sources.items())
-            )
-        inspection_contract = DatasetInspectionContract(
-            source_trees=source_trees,
-            require_identical_headers=(
-                d_cfg.field_schema.header_must_be_identical_across_all_source_files is True
-                or d_cfg.field_schema.header_must_be_identical_across_all_files_in_a_tree is True
-            ),
-            device_directories=tuple(d_cfg.source_layout.device_dirs or ()),
-            benign_filename=d_cfg.source_layout.benign_file,
-            benign_file_required_per_device=d_cfg.source_layout.benign_file_required_per_device is True,
-            attack_family_directories=tuple(d_cfg.source_layout.attack_family_dirs or ()),
-            attack_family_required_per_device=d_cfg.source_layout.attack_family_required_per_device is True,
-            normal_group_directories=tuple(d_cfg.source_layout.normal_group_folders or ()),
-            attack_filenames=tuple(d_cfg.source_layout.attack_files or ()),
-            ignored_root_entries=tuple(d_cfg.source_layout.ignored_root_entries),
-            benign_label=(
-                str(d_cfg.field_schema.label_fields.binary_label.get("benign_value"))
-                if d_cfg.field_schema.label_fields.binary_label is not None
-                and isinstance(d_cfg.field_schema.label_fields.binary_label.get("benign_value"), str)
-                else None
-            ),
-            normal_traffic_root=(
-                RelativePath(d_cfg.source_layout.normal_traffic_root)
-                if d_cfg.source_layout.normal_traffic_root is not None
-                else None
-            ),
-            attack_traffic_root=(
-                RelativePath(d_cfg.source_layout.attack_traffic_root)
-                if d_cfg.source_layout.attack_traffic_root is not None
-                else None
-            ),
-            binary_label_header=_binary_label_column(d_cfg),
-        )
+        setups = _resolve_setups(d_cfg)
+        materializations = _resolve_materializations(d_cfg)
+        inspection_contract = _resolve_inspection_elements(d_cfg)
         resolved[d_id] = ResolvedDataset(
             dataset_id=d_id,
             adapter_kind=adapter_kind,
@@ -507,7 +528,8 @@ def resolve_datasets(
             setups=setups,
             materializations=materializations,
             eligibility_policy_id=EligibilityPolicyId(d_cfg.eligibility_policy),
-            capabilities=tuple(sorted({capability for setup in setups for capability in setup.capabilities})),
+            capabilities=tuple(
+                sorted({capability for setup in setups for capability in setup.capabilities})),
             paths=dataset_paths,
             fingerprint_source_fields=tuple(d_cfg.fingerprint_inputs.source),
             fingerprint_schema_fields=tuple(d_cfg.fingerprint_inputs.schema_fields),

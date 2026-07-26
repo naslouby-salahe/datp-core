@@ -8,6 +8,7 @@ from time import time
 
 from datp_core.analysis.execution.inputs import PrerequisiteExperimentResult
 from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.core.freezing import decode_manifest
 from datp_core.core.identifiers import ExperimentId
 from datp_core.data.sources.inventory import compute_experiment_source_fingerprint
 from datp_core.experiments.catalogue.models import CapabilityRequirementRecord, ExperimentRecord
@@ -25,7 +26,6 @@ from datp_core.pipeline.graph.model import PlanningGraph
 from datp_core.pipeline.stages.enums import JobExecutionStatus
 from datp_core.pipeline.stages.handlers import StageHandler
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
-from datp_core.reporting.freezing.codec import decode_manifest
 
 
 def _validate_capability_requirements(experiment: ExperimentRecord, config: ResolvedProjectConfiguration) -> str | None:
@@ -89,16 +89,17 @@ def _validate_experiment_runtime_contracts(
     capability_error = _validate_capability_requirements(experiment, config)
     if capability_error is not None:
         return capability_error
-    # TODO: prerequisite outcomes will be enforced at runtime by the campaign orchestrator
     return _validate_prerequisites(experiment, config)
 
 
-_KNOWN_PREREQUISITE_OUTCOMES: frozenset[str] = frozenset({
-    "completed",
-    "anchor_equivalence_passed",
-    "faithful_reproduction_claim_forbidden",
-    "quantitative_claim_gate_passed",
-})
+_KNOWN_PREREQUISITE_OUTCOMES: frozenset[str] = frozenset(
+    {
+        "completed",
+        "anchor_equivalence_passed",
+        "faithful_reproduction_claim_forbidden",
+        "quantitative_claim_gate_passed",
+    }
+)
 
 
 class ExperimentRunStatus(Enum):
@@ -190,7 +191,8 @@ class ExperimentLifecycleUseCase:
         started_at = time()
         self._output_manager.begin(experiment_id)
         try:
-            report = self._execute_experiment.execute(experiment_id, prerequisite_results=prerequisite_results)
+            report = self._execute_experiment.execute(
+                experiment_id, prerequisite_results=prerequisite_results)
             if report.failed_jobs:
                 error = f"{report.failed_jobs} job(s) failed out of {len(report.outcomes)}"
                 self._output_manager.mark_failed(experiment_id, error)
@@ -255,7 +257,8 @@ class ExperimentLifecycleUseCase:
             owned = tuple(
                 outcome for outcome in outcomes if jobs[outcome.node_key].context.experiment_id == experiment.identifier
             )
-            failed = tuple(outcome for outcome in owned if outcome.status is not JobExecutionStatus.SUCCESS)
+            failed = tuple(
+                outcome for outcome in owned if outcome.status is not JobExecutionStatus.SUCCESS)
             report = ExperimentExecutionReport(
                 experiment_id=experiment.identifier,
                 outcomes=owned,
@@ -300,12 +303,11 @@ class ExperimentLifecycleUseCase:
     ) -> ExperimentManifest:
         result = results.get(experiment_id)
         if result is None or result.manifest is None:
-            raise ValueError(f"Campaign prerequisite '{experiment_id.value}' lacks a completed manifest")
+            raise ValueError(
+                f"Campaign prerequisite '{experiment_id.value}' lacks a completed manifest")
         return result.manifest
 
-    def _validated_prerequisite_results(
-        self, experiment: ExperimentRecord
-    ) -> tuple[PrerequisiteExperimentResult, ...]:
+    def _validated_prerequisite_results(self, experiment: ExperimentRecord) -> tuple[PrerequisiteExperimentResult, ...]:
         results: list[PrerequisiteExperimentResult] = []
         for prerequisite in experiment.prerequisites:
             inspection = self._output_manager.inspect(prerequisite.experiment_id)
@@ -313,7 +315,8 @@ class ExperimentLifecycleUseCase:
                 raise ValueError(
                     f"Prerequisite '{prerequisite.experiment_id.value}' is not a valid completed experiment"
                 )
-            frozen = self._output_manager.load_frozen_result(prerequisite.experiment_id, inspection.manifest)
+            frozen = self._output_manager.load_frozen_result(
+                prerequisite.experiment_id, inspection.manifest)
             if not self._outcome_is_satisfied(prerequisite.required_outcome, frozen):
                 raise ValueError(
                     f"Prerequisite '{prerequisite.experiment_id.value}' does not satisfy "
@@ -326,8 +329,10 @@ class ExperimentLifecycleUseCase:
                     frozen_result_checksum=inspection.manifest.frozen_result_fingerprint,
                     scientific_fingerprint=inspection.manifest.scientific_fingerprint,
                     result=decode_manifest(
-                        (self._output_manager.experiment_dir(prerequisite.experiment_id)
-                         / inspection.manifest.frozen_result_path).read_bytes()
+                        (
+                            self._output_manager.experiment_dir(prerequisite.experiment_id)
+                            / inspection.manifest.frozen_result_path
+                        ).read_bytes()
                     ),
                 )
             )
@@ -373,7 +378,8 @@ class ExecuteExperimentUseCase:
                 failed_jobs=1,
             )
 
-        graph = expand_experiment_jobs(experiment, self._config, prerequisite_results=prerequisite_results)
+        graph = expand_experiment_jobs(experiment, self._config,
+                                       prerequisite_results=prerequisite_results)
         validate_planning_graph(graph)
 
         outcomes = run_planning_graph(graph, self._registry)
@@ -381,7 +387,8 @@ class ExecuteExperimentUseCase:
         return ExperimentExecutionReport(
             experiment_id=experiment_id,
             outcomes=outcomes,
-            successful_jobs=sum(outcome.status is JobExecutionStatus.SUCCESS for outcome in outcomes),
+            successful_jobs=sum(
+                outcome.status is JobExecutionStatus.SUCCESS for outcome in outcomes),
             failed_jobs=sum(outcome.status is JobExecutionStatus.FAILED for outcome in outcomes),
         )
 

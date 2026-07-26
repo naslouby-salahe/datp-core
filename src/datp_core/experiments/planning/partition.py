@@ -23,10 +23,12 @@ def resolve_partition_contract(
         if condition.name == condition_name
     )
     if len(matches) != 1:
-        raise ValueError(f"Experiment '{experiment_id.value}' has no unique partition condition '{condition_name}'")
+        raise ValueError(
+            f"Experiment '{experiment_id.value}' has no unique partition condition '{condition_name}'")
     try:
         namespace = config.protocol_determinism.seed_namespaces["partition"]
-        digest_bytes = PositiveInt(int(config.protocol_determinism.derived_seed_algorithm["digest_bytes"]))
+        digest_bytes = PositiveInt(
+            int(config.protocol_determinism.derived_seed_algorithm["digest_bytes"]))
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("Protocol determinism lacks a valid partition seed namespace") from exc
     return (matches[0], PartitionSeedContract(key=namespace.key, digest_bytes=digest_bytes))

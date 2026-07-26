@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import torch
-import torch.nn as nn
+from torch import nn
 
 
 def weighted_average_state(client_states: list[tuple[int, dict[str, torch.Tensor]]]) -> dict[str, torch.Tensor]:
@@ -39,11 +39,14 @@ def validate_federated_training_inputs(
     if len({client_id for client_id, _ in clients}) != len(clients):
         raise ValueError("Federated training requires unique client identifiers")
     if any(data.ndim != 2 or data.shape[0] == 0 for _, data in clients):
-        raise ValueError("Each federated client requires a non-empty two-dimensional training tensor")
+        raise ValueError(
+            "Each federated client requires a non-empty two-dimensional training tensor")
     if tuple(client_id for client_id, _ in clients) != tuple(client_id for client_id, _ in calibration_clients):
-        raise ValueError("Each training client requires benign calibration rows for checkpoint selection")
+        raise ValueError(
+            "Each training client requires benign calibration rows for checkpoint selection")
     if any(data.ndim != 2 or data.shape[0] == 0 for _, data in calibration_clients):
-        raise ValueError("Each federated client requires non-empty two-dimensional calibration tensors")
+        raise ValueError(
+            "Each federated client requires non-empty two-dimensional calibration tensors")
     if any(round_number < 1 or round_number > rounds for round_number in checkpoint_rounds):
         raise ValueError("Scheduled checkpoint rounds must fall within the configured round budget")
     if len(set(checkpoint_rounds)) != len(checkpoint_rounds):

@@ -101,6 +101,7 @@ def iter_labeled_numeric_csv_source(
                 yield SourceRowFailure(source_path=path, source_row_index=source_row_index, reason=reason)
                 continue
             yield LabeledSourceRow(
-                source_row=SourceRow(source_path=path, source_row_index=source_row_index, values=tuple(values)),
+                source_row=SourceRow(
+                    source_path=path, source_row_index=source_row_index, values=tuple(values)),
                 label=raw_label.strip(),
             )

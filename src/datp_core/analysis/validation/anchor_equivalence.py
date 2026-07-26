@@ -11,16 +11,20 @@ from datp_core.experiments import AnchorEquivalenceAnalysisRecord
 def analyze_anchor_equivalence(
     analysis: AnchorEquivalenceAnalysisRecord, paired_results: tuple[PairedThresholdAnalysisResult, ...]
 ) -> AnchorEquivalenceAnalysisResult:
-    source = next((item for item in paired_results if item.analysis_label == analysis.source_analysis), None)
+    source = next((item for item in paired_results if item.analysis_label ==
+                  analysis.source_analysis), None)
     if source is None or analysis.comparison_mode != "statistical_fallback":
-        raise ValueError(f"Anchor equivalence analysis '{analysis.label}' has no supported paired source")
+        raise ValueError(
+            f"Anchor equivalence analysis '{analysis.label}' has no supported paired source")
     historical = analysis.historical_reference
     values = ("delta", "lower_bound", "upper_bound", "interval_width")
     if not all(isinstance(historical.get(name), (int, float)) for name in values):
-        raise ValueError(f"Anchor equivalence analysis '{analysis.label}' has malformed historical values")
+        raise ValueError(
+            f"Anchor equivalence analysis '{analysis.label}' has malformed historical values")
     delta = source.mean_difference
     low, high = source.confidence_interval.lower_bound, source.confidence_interval.upper_bound
-    historical_low, historical_high = float(historical["lower_bound"]), float(historical["upper_bound"])
+    historical_low, historical_high = float(
+        historical["lower_bound"]), float(historical["upper_bound"])
     checks = AnchorEquivalenceChecks(
         positive_reproduced_delta=delta > 0.0,
         reproduced_estimate_within_historical_interval=historical_low <= delta <= historical_high,
@@ -46,8 +50,10 @@ def analyze_anchor_equivalence(
     }
     unsupported = sorted(set(analysis.statistical_fallback_requirements) - set(checks_by_name))
     if unsupported:
-        raise ValueError(f"Anchor equivalence analysis '{analysis.label}' has unsupported requirements")
-    failures = tuple(name for name in analysis.statistical_fallback_requirements if not checks_by_name[name])
+        raise ValueError(
+            f"Anchor equivalence analysis '{analysis.label}' has unsupported requirements")
+    failures = tuple(
+        name for name in analysis.statistical_fallback_requirements if not checks_by_name[name])
     return AnchorEquivalenceAnalysisResult(
         analysis_label=analysis.label,
         comparison_mode=analysis.comparison_mode,

@@ -21,6 +21,8 @@ from datp_core.experiments.planning.sweeps import (
     _sweep_values,
 )
 from datp_core.learning.contracts.enums import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
+from datp_core.learning.contracts.seeds import SeedCohortRecord
+from datp_core.learning.contracts.training import TrainingProfileRecord
 from datp_core.pipeline.graph.key import GraphNodeKey
 from datp_core.pipeline.graph.model import PlanningGraph
 from datp_core.pipeline.graph.validation import validate_acyclic
@@ -131,7 +133,8 @@ def _training_outputs(context: StageJobContext, *, personalized: bool) -> tuple[
         output("selection_evidence", f"{base}/selection-evidence.json"),
     ]
     if personalized:
-        results.append(output("personalized_checkpoint", f"{base}/personalized-checkpoint.safetensors"))
+        results.append(output("personalized_checkpoint",
+                       f"{base}/personalized-checkpoint.safetensors"))
     return tuple(results)
 
 
@@ -139,39 +142,18 @@ def _score_output(context: StageJobContext, name: str) -> StageOutput:
     return output(name, f"scores/{cell_directory(context)}/{name.replace('_', '-')}.parquet")
 
 
-def expand_experiment_jobs(
+def _create_training_cells(
     experiment: ExperimentRecord,
     config: ResolvedProjectConfiguration,
-    *,
-    prerequisite_results: tuple[PrerequisiteExperimentResult, ...] = (),
-) -> PlanningGraph:
-    seed_cohort = config.seed_cohorts.get(experiment.seed_cohort_id)
+    experiment_ctx: StageJobContext,
+    preflight: StageJob,
+    seed_cohort: SeedCohortRecord,
+    conditions: tuple[str | None, ...],
+    mus: tuple[float | None, ...],
+    ditto_weights: tuple[float | None, ...],
+    training_profile: TrainingProfileRecord,
+) -> tuple[list[StageJob], list[tuple[StageJobContext, StageJob, StageJob]]]:
     jobs: list[StageJob] = []
-    experiment_ctx = StageJobContext(experiment_id=experiment.identifier)
-
-    preflight = _job(
-        stage=StageKind.PREFLIGHT,
-        context=experiment_ctx,
-        role="resolved-configuration",
-        outputs=(output("resolved_configuration", "preflight/resolved-configuration.json"),),
-    )
-    jobs.append(preflight)
-
-    conditions = tuple(
-        condition.name
-        for sweep in experiment.sweeps
-        if isinstance(sweep, ConditionSweepRecord)
-        for condition in sweep.conditions
-    ) or (None,)
-    mu_sweep_name = _sweep_reference(experiment.training_overrides, "mu")
-    mus = _sweep_values(experiment, mu_sweep_name) or (None,)
-    training_profile = config.training_profiles.get(experiment.training_profile_id)
-    ditto_weights = (
-        training_profile.personalization_parameter_grid or (None,)
-        if training_profile.personalization is PersonalizationStrategy.DITTO
-        else (None,)
-    )
-
     training_cells: list[tuple[StageJobContext, StageJob, StageJob]] = []
     for seed, condition, population_id in product(seed_cohort.training_seeds, conditions, experiment.population_ids):
         materialization_ctx = StageJobContext(
@@ -225,42 +207,61 @@ def expand_experiment_jobs(
             )
             jobs.append(training)
             training_cells.append((seed_ctx, materialization, training))
+    return jobs, training_cells
 
-    selection: StageJob | None = None
+
+def _create_selection_stage(
+    experiment: ExperimentRecord,
+    training_profile: TrainingProfileRecord,
+    config: ResolvedProjectConfiguration,
+    experiment_ctx: StageJobContext,
+    training_cells: list[tuple[StageJobContext, StageJob, StageJob]],
+) -> StageJob | None:
+    role: str | None
     if (
         experiment.evidence_role is EvidenceRole.CONFIRMATORY
         and training_profile.checkpoint_authorization is CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE
     ):
-        selection_role = "cohort"
+        role = "cohort"
     elif training_profile.kind is TrainingProfileKind.FEDERATED_PROX_TRAINING:
-        selection_role = "fedprox"
+        role = "fedprox"
     elif (
         training_profile.personalization is PersonalizationStrategy.DITTO
         and experiment.identifier == config.primary_ditto_selection_experiment().identifier
     ):
-        selection_role = "ditto"
+        role = "ditto"
     else:
-        selection_role = None
+        return None
 
-    if selection_role is not None:
-        selection_inputs: list[StageInput] = []
-        for index, (_, _, training) in enumerate(training_cells):
-            selection_inputs.extend(
-                (
-                    _input(f"checkpoint_{index}", training, "checkpoint"),
-                    _input(f"selection_evidence_{index}", training, "selection_evidence"),
-                )
+    inputs: list[StageInput] = []
+    for index, (_, _, training) in enumerate(training_cells):
+        inputs.extend(
+            (
+                _input(f"checkpoint_{index}", training, "checkpoint"),
+                _input(f"selection_evidence_{index}", training, "selection_evidence"),
             )
-        selection = _job(
-            stage=StageKind.CHECKPOINT_SELECTION,
-            context=experiment_ctx,
-            role=selection_role,
-            inputs=tuple(selection_inputs),
-            outputs=(output("checkpoint_selection", f"checkpoint-selection/{selection_role}.json"),),
-            dependencies=tuple(training.node_key for _, _, training in training_cells),
         )
-        jobs.append(selection)
+    return _job(
+        stage=StageKind.CHECKPOINT_SELECTION,
+        context=experiment_ctx,
+        role=role,
+        inputs=tuple(inputs),
+        outputs=(output("checkpoint_selection", f"checkpoint-selection/{role}.json"),),
+        dependencies=tuple(training.node_key for _, _, training in training_cells),
+    )
 
+
+def _create_scoring_and_calibration_cells(
+    experiment: ExperimentRecord,
+    training_cells: list[tuple[StageJobContext, StageJob, StageJob]],
+    selection: StageJob | None,
+    config: ResolvedProjectConfiguration,
+) -> tuple[
+    list[StageJob],
+    dict[tuple[object, ...], list[tuple[StageJobContext, StageJob, str]]],
+    dict[tuple[object, ...], tuple[StageJobContext, StageJob, StageJob, StageJob | None]],
+]:
+    jobs: list[StageJob] = []
     calibration_cells_by_training: dict[tuple[object, ...], list[tuple[StageJobContext, StageJob, str]]] = {}
     score_cells: dict[tuple[object, ...], tuple[StageJobContext, StageJob, StageJob, StageJob | None]] = {}
     for seed_ctx, materialization, training in training_cells:
@@ -294,9 +295,7 @@ def expand_experiment_jobs(
         )
         jobs.extend((calibration, test))
 
-        calibration_cells: list[tuple[StageJobContext, StageJob, str]] = [
-            (seed_ctx, calibration, "calibration_scores")
-        ]
+        calibration_cells: list[tuple[StageJobContext, StageJob, str]] = [(seed_ctx, calibration, "calibration_scores")]
         if experiment.calibration_subset is not None:
             requested_sweep = experiment.calibration_subset.requested_sample_count.get("from_sweep")
             requested_counts = _sweep_values(experiment, requested_sweep)
@@ -360,7 +359,15 @@ def expand_experiment_jobs(
             jobs.append(future)
         calibration_cells_by_training[key] = calibration_cells
         score_cells[key] = (seed_ctx, test, calibration, future)
+    return jobs, calibration_cells_by_training, score_cells
 
+
+def _create_evaluation_jobs(
+    experiment: ExperimentRecord,
+    score_cells: dict[tuple[object, ...], tuple[StageJobContext, StageJob, StageJob, StageJob | None]],
+    calibration_cells_by_training: dict[tuple[object, ...], list[tuple[StageJobContext, StageJob, str]]],
+) -> tuple[list[StageJob], list[StageJob]]:
+    jobs: list[StageJob] = []
     evaluation_jobs: list[StageJob] = []
     for key, (seed_ctx, test, _calibration, future) in score_cells.items():
         for evaluation in experiment.evaluations:
@@ -423,6 +430,58 @@ def expand_experiment_jobs(
                     )
                     jobs.extend((threshold, metrics))
                     evaluation_jobs.append(metrics)
+    return jobs, evaluation_jobs
+
+
+def expand_experiment_jobs(
+    experiment: ExperimentRecord,
+    config: ResolvedProjectConfiguration,
+    *,
+    prerequisite_results: tuple[PrerequisiteExperimentResult, ...] = (),
+) -> PlanningGraph:
+    seed_cohort = config.seed_cohorts.get(experiment.seed_cohort_id)
+    jobs: list[StageJob] = []
+    experiment_ctx = StageJobContext(experiment_id=experiment.identifier)
+
+    preflight = _job(
+        stage=StageKind.PREFLIGHT,
+        context=experiment_ctx,
+        role="resolved-configuration",
+        outputs=(output("resolved_configuration", "preflight/resolved-configuration.json"),),
+    )
+    jobs.append(preflight)
+
+    conditions = tuple(
+        condition.name
+        for sweep in experiment.sweeps
+        if isinstance(sweep, ConditionSweepRecord)
+        for condition in sweep.conditions
+    ) or (None,)
+    mu_sweep_name = _sweep_reference(experiment.training_overrides, "mu")
+    mus = _sweep_values(experiment, mu_sweep_name) or (None,)
+    training_profile = config.training_profiles.get(experiment.training_profile_id)
+    ditto_weights = (
+        training_profile.personalization_parameter_grid or (None,)
+        if training_profile.personalization is PersonalizationStrategy.DITTO
+        else (None,)
+    )
+
+    training_jobs, training_cells = _create_training_cells(
+        experiment, config, experiment_ctx, preflight, seed_cohort, conditions, mus, ditto_weights, training_profile
+    )
+    jobs.extend(training_jobs)
+
+    selection = _create_selection_stage(experiment, training_profile, config, experiment_ctx, training_cells)
+    if selection is not None:
+        jobs.append(selection)
+
+    scoring_jobs, calibration_cells_by_training, score_cells = _create_scoring_and_calibration_cells(
+        experiment, training_cells, selection, config
+    )
+    jobs.extend(scoring_jobs)
+
+    eval_jobs_result, evaluation_jobs = _create_evaluation_jobs(experiment, score_cells, calibration_cells_by_training)
+    jobs.extend(eval_jobs_result)
 
     # Analysis receives every current-run scientific input explicitly.  It may inspect
     # only these declared direct dependencies; it never reconstructs a stage path.
@@ -456,8 +515,7 @@ def expand_experiment_jobs(
 
     freeze_inputs = [_input("statistical_result", statistics, "statistical_result")]
     freeze_inputs.extend(
-        _input(f"client_metrics_{index}", metrics, "client_metrics")
-        for index, metrics in enumerate(evaluation_jobs)
+        _input(f"client_metrics_{index}", metrics, "client_metrics") for index, metrics in enumerate(evaluation_jobs)
     )
     result_freeze = _job(
         stage=StageKind.RESULT_FREEZE,
@@ -487,7 +545,8 @@ def expand_campaign_jobs(
     experiments: tuple[ExperimentRecord, ...],
     config: ResolvedProjectConfiguration,
     *,
-    prerequisite_results_by_experiment: dict[object, tuple[PrerequisiteExperimentResult, ...]] | None = None,
+    prerequisite_results_by_experiment: dict[object,
+        tuple[PrerequisiteExperimentResult, ...]] | None = None,
 ) -> PlanningGraph:
     """Build one active-campaign DAG with direct edges to exact shared producers.
 
@@ -503,8 +562,10 @@ def expand_campaign_jobs(
     shared_ordinal = 0
 
     for experiment in experiments:
-        prerequisite_results = (prerequisite_results_by_experiment or {}).get(experiment.identifier, ())
-        graph = expand_experiment_jobs(experiment, config, prerequisite_results=prerequisite_results)
+        prerequisite_results = (prerequisite_results_by_experiment or {}
+                                ).get(experiment.identifier, ())
+        graph = expand_experiment_jobs(
+            experiment, config, prerequisite_results=prerequisite_results)
         for job in graph.jobs:
             inputs = tuple(
                 replace(
@@ -514,7 +575,8 @@ def expand_campaign_jobs(
                 )
                 for item in job.inputs
             )
-            dependencies = tuple(dict.fromkeys(node_keys.get(item, item) for item in job.dependencies))
+            dependencies = tuple(dict.fromkeys(node_keys.get(item, item)
+                                 for item in job.dependencies))
             candidate = replace(job, inputs=inputs, dependencies=dependencies)
             if candidate.stage not in _SHAREABLE_STAGES:
                 rewritten_jobs.append(candidate)
@@ -523,7 +585,8 @@ def expand_campaign_jobs(
                     output_paths[(job.node_key, stage_output.name)] = stage_output.relative_path
                 continue
 
-            key = _shared_upstream_key(candidate, config=config, source_fingerprints=source_fingerprints)
+            key = _shared_upstream_key(candidate, config=config,
+                                       source_fingerprints=source_fingerprints)
             producer = shared_producers.get(key)
             if producer is not None:
                 node_keys[job.node_key] = producer.node_key
@@ -555,8 +618,7 @@ def expand_campaign_jobs(
                 output_paths[(job.node_key, stage_output.name)] = stage_output.relative_path
 
     freeze_jobs = {
-        job.context.experiment_id: job for job in rewritten_jobs if job.stage is StageKind.RESULT_FREEZE
-    }
+        job.context.experiment_id: job for job in rewritten_jobs if job.stage is StageKind.RESULT_FREEZE}
     campaign_jobs: list[StageJob] = []
     for job in rewritten_jobs:
         experiment = config.experiments.get(job.context.experiment_id)
@@ -608,7 +670,8 @@ def _shared_upstream_key(
     population = config.populations.get(population_id)
     dataset = config.datasets.get(population.dataset_id)
     setup = dataset.setup(population.setup_id)
-    materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
+    materialization = next(
+        item for item in dataset.materializations if item.identifier == setup.materialization_id)
     source_fingerprint = source_fingerprints.get(dataset.dataset_id)
     if source_fingerprint is None:
         source_fingerprint = compute_experiment_source_fingerprint(

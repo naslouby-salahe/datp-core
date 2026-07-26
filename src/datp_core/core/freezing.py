@@ -1,26 +1,67 @@
-"""Frozen manifest encoding and decoding with typed models."""
-
 from __future__ import annotations
 
 import json
 from typing import cast
 
-from datp_core.reporting.freezing.errors import ResultFreezeError
-from datp_core.reporting.freezing.models import (
-    FrozenReportColumn,
-    FrozenReportProfile,
-    FrozenResultManifest,
-    FrozenSourceFile,
-)
+from attrs import define
+
+
+class FrozenResultDecodeError(ValueError):
+    """A frozen result manifest cannot be decoded."""
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class FrozenSourceFile:
+    relative_path: str
+    role: str
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class FrozenReportColumn:
+    name: str
+    unit: str
+    direction: str
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class FrozenReportProfile:
+    identifier: str
+    artifact_type: str
+    table_type: str | None
+    figure_type: str | None
+    estimate_basis: str | None
+    columns: tuple[FrozenReportColumn, ...]
+    series: tuple[FrozenReportColumn, ...]
+
+
+@define(frozen=True, slots=True, kw_only=True)
+class FrozenResultManifest:
+    schema_version: int
+    experiment_id: str
+    evidence_role: str
+    dataset_id: str | None
+    population_ids: tuple[str, ...]
+    seed_cohort_id: str
+    seed_count: int
+    seeds_present: tuple[int, ...]
+    scientific_fingerprint: str
+    execution_fingerprint: str
+    source_revision: str
+    frozen_at: str
+    metric_definition_version: str
+    statistical_procedure_version: str
+    report_profiles: tuple[FrozenReportProfile, ...]
+    source_files: tuple[FrozenSourceFile, ...]
+    statistical_results: tuple[object, ...]
 
 
 def decode_manifest(payload: bytes) -> FrozenResultManifest:
     try:
         decoded = json.loads(payload)
     except json.JSONDecodeError as exc:
-        raise ResultFreezeError("Result-freeze artifact is not valid JSON") from exc
+        raise FrozenResultDecodeError("Result-freeze artifact is not valid JSON") from exc
     if not isinstance(decoded, dict):
-        raise ResultFreezeError("Result-freeze artifact must be a JSON object")
+        raise FrozenResultDecodeError("Result-freeze artifact must be a JSON object")
     required = (
         "experiment_id",
         "scientific_fingerprint",
@@ -31,9 +72,9 @@ def decode_manifest(payload: bytes) -> FrozenResultManifest:
         "frozen_at",
     )
     if any(field not in decoded for field in required):
-        raise ResultFreezeError("Result-freeze artifact lacks required provenance fields")
+        raise FrozenResultDecodeError("Result-freeze artifact lacks required provenance fields")
     if not isinstance(decoded["report_profiles"], list) or not isinstance(decoded["statistical_results"], list):
-        raise ResultFreezeError("Result-freeze artifact has malformed report records")
+        raise FrozenResultDecodeError("Result-freeze artifact has malformed report records")
 
     profiles = tuple(
         FrozenReportProfile(

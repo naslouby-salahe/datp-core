@@ -59,12 +59,16 @@ def resolve_training_profiles(authored: AuthoredProtocolsConfig) -> dict[Trainin
             model_architecture_id=tp_cfg.model_architecture,
             optimizer_id=tp_cfg.optimizer,
             batching_profile_id=tp_cfg.batching,
-            local_epochs=(PositiveInt(tp_cfg.local_epochs) if tp_cfg.local_epochs is not None else None),
-            participation=TrainingParticipation(tp_cfg.participation) if tp_cfg.participation else None,
+            local_epochs=(PositiveInt(tp_cfg.local_epochs)
+                          if tp_cfg.local_epochs is not None else None),
+            participation=TrainingParticipation(
+                tp_cfg.participation) if tp_cfg.participation else None,
             checkpoint_authorization=CheckpointAuthorization(tp_cfg.checkpoint_authorization),
-            personalization=PersonalizationStrategy(tp_cfg.personalization) if tp_cfg.personalization else None,
+            personalization=PersonalizationStrategy(
+                tp_cfg.personalization) if tp_cfg.personalization else None,
             personalized_local_epochs=(
-                PositiveInt(tp_cfg.personalized_local_epochs) if tp_cfg.personalized_local_epochs is not None else None
+                PositiveInt(
+                    tp_cfg.personalized_local_epochs) if tp_cfg.personalized_local_epochs is not None else None
             ),
             personalization_parameter_grid=(
                 tuple(tp_cfg.personalization_parameter_grid)
@@ -79,8 +83,10 @@ def resolve_training_profiles(authored: AuthoredProtocolsConfig) -> dict[Trainin
                     fraction_fit=tp_cfg.federation.fraction_fit,
                     fraction_evaluate=tp_cfg.federation.fraction_evaluate,
                     minimum_fit_clients=PositiveInt(tp_cfg.federation.minimum_fit_clients),
-                    minimum_evaluate_clients=PositiveInt(tp_cfg.federation.minimum_evaluate_clients),
-                    minimum_available_clients=PositiveInt(tp_cfg.federation.minimum_available_clients),
+                    minimum_evaluate_clients=PositiveInt(
+                        tp_cfg.federation.minimum_evaluate_clients),
+                    minimum_available_clients=PositiveInt(
+                        tp_cfg.federation.minimum_available_clients),
                 )
                 if tp_cfg.federation is not None
                 else None
@@ -127,7 +133,8 @@ def resolve_checkpoint_profiles(
         checkpoint_dict[cp_id] = CheckpointProfileRecord(
             identifier=cp_id,
             total_rounds=PositiveInt(total_rounds),
-            selected_rounds=tuple(PositiveInt(round_number) for round_number in (selected_rounds or ())),
+            selected_rounds=tuple(PositiveInt(round_number)
+                                  for round_number in (selected_rounds or ())),
             early_stopping=cp_cfg.early_stopping,
             selection_rule=cp_cfg.selection.rule,
             selection=selection_record,

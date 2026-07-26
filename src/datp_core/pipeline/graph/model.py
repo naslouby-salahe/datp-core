@@ -65,5 +65,23 @@ class PlanningGraph:
     def edge_count(self) -> int:
         return self._graph.number_of_edges()
 
-    def _has_job(self, node_key: GraphNodeKey) -> bool:
+    def has_job(self, node_key: GraphNodeKey) -> bool:
         return node_key in self._graph
+
+    @property
+    def graph(self) -> nx.DiGraph:
+        return self._graph
+
+    @property
+    def nodes(self) -> tuple[GraphNodeKey, ...]:
+        return tuple(sorted(self._graph.nodes()))
+
+    @property
+    def edges(self) -> tuple[tuple[GraphNodeKey, GraphNodeKey], ...]:
+        return tuple(self._graph.edges())
+
+    def successors(self, node_key: GraphNodeKey) -> tuple[GraphNodeKey, ...]:
+        return tuple(sorted(self._graph.successors(node_key)))
+
+    def predecessors(self, node_key: GraphNodeKey) -> tuple[GraphNodeKey, ...]:
+        return tuple(sorted(self._graph.predecessors(node_key)))

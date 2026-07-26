@@ -1,10 +1,9 @@
-"""Exact, planner-declared inputs consumed by statistical analyses."""
-
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
+from typing import TYPE_CHECKING
 
 from datp_core.analysis.comparisons.models import PairedThresholdAnalysisResult
 from datp_core.analysis.statistics.models import ConfidenceInterval
@@ -13,7 +12,9 @@ from datp_core.core.numbers import Probability
 from datp_core.pipeline.stages.context import StageJobContext
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import AnalysisInputCoordinates, StageInput
-from datp_core.reporting.freezing.models import FrozenResultManifest
+
+if TYPE_CHECKING:
+    from datp_core.core.freezing import FrozenResultManifest
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -62,7 +63,8 @@ class AnalysisInputBundle:
         for item in inputs:
             if item.coordinates is None:
                 raise ValueError(f"Analysis input '{item.name}' lacks typed coordinates")
-            artifacts.append(AnalysisArtifactRef(coordinates=item.coordinates, relative_path=item.relative_path))
+            artifacts.append(AnalysisArtifactRef(
+                coordinates=item.coordinates, relative_path=item.relative_path))
         return cls(tuple(artifacts))
 
     def require(self, *, producer_stage: StageKind, output_name: str, context: StageJobContext) -> str:
@@ -75,8 +77,7 @@ class AnalysisInputBundle:
             return self._paths[coordinates]
         except KeyError as exc:
             raise ValueError(
-                f"Analysis input is not declared: stage={producer_stage.value}, output={output_name}, "
-                f"context={context}"
+                f"Analysis input is not declared: stage={producer_stage.value}, output={output_name}, context={context}"
             ) from exc
 
     def evaluation_metrics(self, context: StageJobContext) -> str:

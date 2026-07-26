@@ -90,7 +90,8 @@ def index_edge_benign_sources(
                         (
                             result.client_id,
                             struct.pack(f"!{len(result.numeric_values)}d", *result.numeric_values),
-                            json.dumps(result.categorical_values, separators=(",", ":"), ensure_ascii=False),
+                            json.dumps(result.categorical_values, separators=(
+                                ",", ":"), ensure_ascii=False),
                             result.source_path.as_posix(),
                             result.source_row_index,
                         ),

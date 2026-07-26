@@ -52,9 +52,11 @@ class CalibrationSubsamplingStageHandler:
             )
         try:
             namespace = self._config.protocol_determinism.seed_namespaces["calibration_subsample"]
-            digest_bytes = int(self._config.protocol_determinism.derived_seed_algorithm["digest_bytes"])
+            digest_bytes = int(
+                self._config.protocol_determinism.derived_seed_algorithm["digest_bytes"])
             scores = validate_calibration_score_frame(
-                pl.read_parquet(BytesIO(self._store.read_bytes(job.input_path("calibration_scores"))))
+                pl.read_parquet(BytesIO(self._store.read_bytes(
+                    job.input_path("calibration_scores"))))
             )
             sampled = subsample_calibration_scores(
                 scores,
@@ -67,7 +69,8 @@ class CalibrationSubsamplingStageHandler:
             )
             payload = BytesIO()
             validate_calibration_score_frame(sampled).write_parquet(payload)
-            self._store.write_bytes_atomic(job.output_path("calibration_subset_scores"), payload.getvalue())
+            self._store.write_bytes_atomic(job.output_path(
+                "calibration_subset_scores"), payload.getvalue())
         except (KeyError, OSError, ValueError) as exc:
             return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message=str(exc))
         return StageJobOutcome.succeeded(node_key=job.node_key, stage=job.stage, produced_outputs=job.outputs)

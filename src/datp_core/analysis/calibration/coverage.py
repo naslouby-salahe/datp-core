@@ -66,7 +66,8 @@ def conformal_seed_coverage(
             else ConformalAttainabilityStatus.UNATTAINABLE
         )
         if int(rank) != expected_rank or attainability != expected_status.value:
-            raise ValueError(f"Conformal finite-sample diagnostics disagree for client '{client_id}'")
+            raise ValueError(
+                f"Conformal finite-sample diagnostics disagree for client '{client_id}'")
         client_true_negatives = int(tn)
         client_benign_total = client_true_negatives + int(fp)
         if (client_benign_total > 0) != (fpr_status == MetricStatus.AVAILABLE.value):
@@ -78,7 +79,8 @@ def conformal_seed_coverage(
             benign_total += client_benign_total
         per_client[client_id] = ConformalClientCoverageRecord(
             coverage=coverage,
-            absolute_coverage_error=abs(coverage - target_coverage) if coverage is not None else None,
+            absolute_coverage_error=abs(
+                coverage - target_coverage) if coverage is not None else None,
             coverage_status="available" if coverage is not None else "unavailable_no_benign_test_records",
             finite_sample_rank=int(rank),
             attainability_status=attainability,
@@ -88,8 +90,10 @@ def conformal_seed_coverage(
         seed=seed,
         per_client_coverage=per_client,
         client_coverages=tuple(coverages),
-        finite_sample_rank={client: record.finite_sample_rank for client, record in per_client.items()},
-        attainability_status={client: record.attainability_status for client, record in per_client.items()},
+        finite_sample_rank={client: record.finite_sample_rank for client,
+            record in per_client.items()},
+        attainability_status={client: record.attainability_status for client,
+            record in per_client.items()},
         benign_true_negatives=true_negatives,
         benign_total=benign_total,
     )
@@ -104,12 +108,15 @@ def analyze_conformal_coverage(
     experiment: ExperimentRecord,
     seeds: tuple[Seed, ...],
 ) -> ConformalCoverageAnalysisResult:
-    evaluation = next(item for item in experiment.evaluations if item.label == analysis.source_evaluation)
+    evaluation = next(item for item in experiment.evaluations if item.label ==
+                      analysis.source_evaluation)
     policy = config.threshold_policies.get(evaluation.threshold_policy_id)
     if not isinstance(policy, SplitConformalThresholdPolicyRecord):
-        raise ValueError(f"Conformal analysis '{analysis.label}' requires a split-conformal threshold policy")
+        raise ValueError(
+            f"Conformal analysis '{analysis.label}' requires a split-conformal threshold policy")
     if abs(analysis.target_coverage - policy.nominal_coverage) > 1e-12:
-        raise ValueError(f"Conformal analysis '{analysis.label}' target disagrees with its threshold policy")
+        raise ValueError(
+            f"Conformal analysis '{analysis.label}' target disagrees with its threshold policy")
     seed_results: list[ConformalSeedCoverageResult] = []
     for seed in seeds:
         context = StageJobContext(
@@ -162,7 +169,8 @@ def analyze_conformal_coverage(
                 seed=seed.value,
             )
         )
-    achieved_marginal = weighted_mean([(result.benign_true_negatives, result.benign_total) for result in seed_results])
+    achieved_marginal = weighted_mean(
+        [(result.benign_true_negatives, result.benign_total) for result in seed_results])
     macro_coverages = [value for result in seed_results for value in result.client_coverages]
     achieved_macro = sum(macro_coverages) / len(macro_coverages) if macro_coverages else None
     return ConformalCoverageAnalysisResult(

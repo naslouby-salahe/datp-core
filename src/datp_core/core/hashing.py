@@ -14,7 +14,7 @@ from hashlib import blake2b
 from pathlib import Path
 from typing import NamedTuple
 
-from attrs import define, field
+from attrs import asdict, define, field
 
 from datp_core.core.identifiers import _DomainIdentifier
 from datp_core.core.numbers import NonNegativeFloat, PositiveFloat, PositiveInt, Probability
@@ -92,8 +92,6 @@ def canonicalize_value(obj: object) -> CanonicalProjection:
     if isinstance(obj, (str, int, bool)) or obj is None:
         return obj
     if hasattr(obj, "__attrs_attrs__"):
-        from attrs import asdict
-
         return canonicalize_value(asdict(obj, recurse=False))
     raise TypeError(f"Unsupported value in fingerprint projection: {type(obj).__name__}")
 
@@ -115,16 +113,5 @@ def compute_file_checksum(path: Path, chunk_size: int = 1_048_576) -> Checksum:
     return Checksum(value=digest.hexdigest())
 
 
-def derive_seed(key: str, digest_bytes: int, components: tuple[tuple[str, int | str], ...]) -> int:
-    """Derive a deterministic seed from an ordered key and named, ascending-sorted components.
-
-    Single canonical formula shared by every feature that derives a seed from a namespace key and
-    named components (dataloader shuffling in learning/, partition retries in data/, calibration
-    subsampling in thresholding/).
-    """
-    if not key or digest_bytes < 1:
-        raise ValueError("Seed derivation requires a key and positive digest length")
-    if tuple(name for name, _ in components) != tuple(sorted(name for name, _ in components)):
-        raise ValueError("Seed derivation components must be ordered by ascending name")
-    encoded = "|".join((key, *(f"{name}={value}" for name, value in components))).encode("utf-8")
-    return int.from_bytes(blake2b(encoded, digest_size=digest_bytes).digest(), "big") % (2**32)
+# derive_seed is defined in datp_core.core.seeding as the single canonical authority.
+# It is re-exported from there; do not duplicate it here.

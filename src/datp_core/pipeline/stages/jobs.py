@@ -80,11 +80,11 @@ class StageJob:
         if len({item.relative_path for item in self.outputs}) != len(self.outputs):
             raise ValueError(f"Job '{self.node_key.label}' has duplicate output paths")
         if any(item.producer not in dependency_keys for item in self.inputs):
-            raise ValueError(f"Job '{self.node_key.label}' has an input without a direct dependency")
-        if self.stage is StageKind.STATISTICAL_ANALYSIS and any(
-            item.coordinates is None for item in self.inputs
-        ):
-            raise ValueError(f"Statistical job '{self.node_key.label}' requires typed analysis input coordinates")
+            raise ValueError(
+                f"Job '{self.node_key.label}' has an input without a direct dependency")
+        if self.stage is StageKind.STATISTICAL_ANALYSIS and any(item.coordinates is None for item in self.inputs):
+            raise ValueError(
+                f"Statistical job '{self.node_key.label}' requires typed analysis input coordinates")
 
     def input_path(self, name: str) -> str:
         return next(item.relative_path for item in self.inputs if item.name == name)

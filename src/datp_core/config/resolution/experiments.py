@@ -110,7 +110,8 @@ def _resolve_sweep(name: str, cfg: SweepVariableConfig) -> SweepRecord:
     if cfg.values is not None:
         return ValueSweepRecord(name=name, values=tuple(_resolve_sweep_value(value) for value in cfg.values))
     if cfg.conditions is None:
-        raise ConfigurationError(f"Sweep variable '{name}' authors neither 'values' nor 'conditions'")
+        raise ConfigurationError(
+            f"Sweep variable '{name}' authors neither 'values' nor 'conditions'")
     return ConditionSweepRecord(
         name=name,
         conditions=tuple(
@@ -210,7 +211,8 @@ def _resolve_analysis(a: AnalysisSpecConfig) -> AnalysisRecord:
                 comparison_unit=a.comparison_unit,
                 produced_fields=tuple(a.produced_fields),
                 reference_evaluation=a.reference_evaluation,
-                run_requirement=(RunRequirement(a.run_requirement) if a.run_requirement is not None else None),
+                run_requirement=(RunRequirement(a.run_requirement)
+                                 if a.run_requirement is not None else None),
             )
         case ConformalCoverageAnalysisConfig():
             return ConformalCoverageAnalysisRecord(
@@ -329,7 +331,8 @@ def _resolve_analysis(a: AnalysisSpecConfig) -> AnalysisRecord:
                 per_sweep_cell=a.per_sweep_cell,
             )
         case _:
-            raise ConfigurationError(f"Unsupported authored analysis configuration: {type(a).__name__}")
+            raise ConfigurationError(
+                f"Unsupported authored analysis configuration: {type(a).__name__}")
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -354,7 +357,8 @@ def _resolve_populations(
         pop_id = PopulationId(pop_key)
         target_dataset_id = DatasetId(pop_cfg.dataset)
         if target_dataset_id not in resolved_datasets:
-            raise ConfigurationError(f"Population '{pop_key}' references unregistered dataset '{pop_cfg.dataset}'")
+            raise ConfigurationError(
+                f"Population '{pop_key}' references unregistered dataset '{pop_cfg.dataset}'")
         dataset_obj = resolved_datasets[target_dataset_id]
         setup_id = DatasetSetupId(pop_cfg.setup)
         if not any(setup.identifier == setup_id for setup in dataset_obj.setups):
@@ -380,7 +384,8 @@ def _resolve_eligibility_gates(
             identifier=gate_key,
             candidate_population=gate_cfg.candidate_population,
             minimum_benign_calibration_count=PositiveInt(gate_cfg.minimum_benign_calibration_count),
-            minimum_eligible_client_proportion=Probability(gate_cfg.minimum_eligible_client_proportion),
+            minimum_eligible_client_proportion=Probability(
+                gate_cfg.minimum_eligible_client_proportion),
             evaluation_time=gate_cfg.evaluation_time,
             failure_outcome=gate_cfg.failure_outcome,
             population_reduction_without_explicit_roadmap_authorization=(
@@ -415,12 +420,14 @@ def _resolve_experiment_evaluations(
                 label=ev.label,
                 threshold_policy_id=tp_id,
                 run_requirement=(
-                    RunRequirement(ev.run_requirement) if ev.run_requirement else RunRequirement.MANDATORY
+                    RunRequirement(
+                        ev.run_requirement) if ev.run_requirement else RunRequirement.MANDATORY
                 ),
                 overrides=ev.overrides,
                 population_id=eval_population_id,
                 recalibration_mode=(
-                    RecalibrationMode(ev.recalibration_mode) if ev.recalibration_mode is not None else None
+                    RecalibrationMode(
+                        ev.recalibration_mode) if ev.recalibration_mode is not None else None
                 ),
             )
         )
@@ -490,7 +497,8 @@ def _resolve_experiment(
     exp_id = ExperimentId(exp_cfg.name)
     evals_list = _resolve_experiment_evaluations(exp_cfg, threshold_policies, populations_dict)
     analyses_list = [_resolve_analysis(a) for a in exp_cfg.analyses]
-    capability_requirements_list = _resolve_experiment_capability_requirements(exp_cfg, populations_dict)
+    capability_requirements_list = _resolve_experiment_capability_requirements(
+        exp_cfg, populations_dict)
     return ExperimentRecord(
         identifier=exp_id,
         display_name=exp_cfg.display_name,
@@ -502,7 +510,8 @@ def _resolve_experiment(
         seed_cohort_id=SeedCohortId(exp_cfg.seed_cohort),
         eligibility_policy_id=EligibilityPolicyId(exp_cfg.eligibility_policy),
         prerequisites=tuple(
-            PrerequisiteSpecRecord(experiment_id=ExperimentId(p.experiment), required_outcome=p.required_outcome)
+            PrerequisiteSpecRecord(experiment_id=ExperimentId(
+                p.experiment), required_outcome=p.required_outcome)
             for p in exp_cfg.prerequisites
         ),
         capability_requirements=tuple(capability_requirements_list),
@@ -522,7 +531,8 @@ def _resolve_experiment(
         attack_sensitive_metrics_requested=exp_cfg.attack_sensitive_metrics_requested,
         unavailable_capability_reporting=tuple(exp_cfg.unavailable_capability_reporting),
         independent_of_experiment=(
-            ExperimentId(exp_cfg.independent_of_experiment) if exp_cfg.independent_of_experiment is not None else None
+            ExperimentId(
+                exp_cfg.independent_of_experiment) if exp_cfg.independent_of_experiment is not None else None
         ),
         calibration_subset=_resolve_calibration_subset(exp_cfg),
         method_naming_rule=exp_cfg.method_naming_rule,
@@ -557,7 +567,8 @@ def resolve_experiment_catalogue(
         exp_id = ExperimentId(exp_cfg.name)
         if exp_id in experiments_dict:
             raise ConfigurationError(f"Duplicate experiment identifier: '{exp_cfg.name}'")
-        experiments_dict[exp_id] = _resolve_experiment(exp_cfg, threshold_policies, populations_dict)
+        experiments_dict[exp_id] = _resolve_experiment(
+            exp_cfg, threshold_policies, populations_dict)
 
     return ResolvedExperimentCatalogue(
         populations=TypedDomainRegistry(_items=populations_dict),

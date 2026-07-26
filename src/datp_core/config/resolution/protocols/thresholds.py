@@ -75,7 +75,8 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
     """Convert an authored threshold-policy variant into its pure domain record, losslessly."""
     record_type = _THRESHOLD_POLICY_RECORD_TYPES.get(type(cfg))
     if record_type is None:
-        raise ConfigurationError(f"Unsupported authored threshold policy configuration: {type(cfg).__name__}")
+        raise ConfigurationError(
+            f"Unsupported authored threshold policy configuration: {type(cfg).__name__}")
     if isinstance(cfg, ClusterThresholdPolicyConfig):
         return ClusterThresholdPolicyRecord(
             policy=cfg.policy,
@@ -126,7 +127,8 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
         if isinstance(cfg, CalibrationFallbackPolicyConfig):
             return CalibrationFallbackThresholdPolicyRecord(
                 weight_formula=cfg.weight_formula,
-                weight_formula_constants=WeightFormulaConstants.from_config(cfg.weight_formula_constants),
+                weight_formula_constants=WeightFormulaConstants.from_config(
+                    cfg.weight_formula_constants),
                 weight_monotone_in_calibration_count=cfg.weight_monotone_in_calibration_count,
                 clamping=cfg.clamping,
                 zero_calibration_behavior=cfg.zero_calibration_behavior,
@@ -162,7 +164,8 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             zero_total_count_behavior=cfg.zero_total_count_behavior,
             candidate_grid=CandidateGrid.from_config(cfg.candidate_grid),
             exceedance_exchange=ExceedanceExchange.from_config(
-                {k: tuple(v) if isinstance(v, list) else v for k, v in cfg.exceedance_exchange.items()}
+                {k: tuple(v) if isinstance(v, list) else v for k,
+                          v in cfg.exceedance_exchange.items()}
             ),
             selection=SelectionRules.from_config(cfg.selection),
             required_diagnostics=tuple(cfg.required_diagnostics),

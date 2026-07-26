@@ -35,7 +35,8 @@ def calculate_fpr_dispersion(values: Iterable[float], *, cv_instability_threshol
     if math.isclose(average, 0.0, abs_tol=0.0):
         cv = MetricValue.unavailable(MetricStatus.UNDEFINED_ZERO_DENOMINATOR)
     elif average < cv_instability_threshold:
-        cv = MetricValue(value=standard_deviation / average, status=MetricStatus.UNDEFINED_NEAR_ZERO_DENOMINATOR)
+        cv = MetricValue(value=standard_deviation / average,
+                         status=MetricStatus.UNDEFINED_NEAR_ZERO_DENOMINATOR)
     else:
         cv = MetricValue.available(standard_deviation / average)
     stable = MetricValue.available
@@ -61,7 +62,8 @@ def calculate_pairwise_js_divergence(
     client_scores: Sequence[tuple[ClientId, tuple[float, ...]]], *, histogram_bins: int, logarithm_base: int
 ) -> float:
     if histogram_bins < 1 or logarithm_base < 2:
-        raise ValueError("Pairwise JS divergence requires configured positive bins and logarithm base >= 2")
+        raise ValueError(
+            "Pairwise JS divergence requires configured positive bins and logarithm base >= 2")
     if len(client_scores) < 2:
         raise ValueError("Pairwise JS divergence requires at least two clients")
     if any(not scores for _, scores in client_scores):
@@ -86,7 +88,8 @@ def calculate_pairwise_js_divergence(
     divergences = []
     for left_index, left in enumerate(distributions):
         for right in distributions[left_index + 1 :]:
-            midpoint = tuple((first + second) / 2.0 for first, second in zip(left, right, strict=True))
+            midpoint = tuple((first + second) / 2.0 for first,
+                             second in zip(left, right, strict=True))
             divergences.append(
                 sum(
                     probability * log(probability / midpoint[index], logarithm_base)

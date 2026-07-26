@@ -17,6 +17,7 @@ from datp_core.analysis.selection.training_parameters import ditto_selection, fe
 from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
 from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.core.freezing import decode_manifest
 from datp_core.core.identifiers import ExperimentId
 from datp_core.core.seeding import Seed
 from datp_core.experiments import AnalysisKind, AnalysisRecord, ExperimentRecord, PairedThresholdAnalysisRecord
@@ -24,7 +25,6 @@ from datp_core.learning.contracts.enums import PersonalizationStrategy, Training
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
-from datp_core.reporting.freezing.codec import decode_manifest
 
 
 class StatisticalAnalysisStageHandler:
@@ -43,7 +43,8 @@ class StatisticalAnalysisStageHandler:
         experiment = self._config.experiments.get(job.context.experiment_id)
         analyses_by_kind: dict[AnalysisKind, list[AnalysisRecord]] = {}
         for analysis_record in experiment.analyses:
-            analyses_by_kind.setdefault(AnalysisKind(analysis_record.kind), []).append(analysis_record)
+            analyses_by_kind.setdefault(AnalysisKind(
+                analysis_record.kind), []).append(analysis_record)
         unsupported = analyses_by_kind.keys() - set(AnalysisKind)
         if unsupported:
             return StageJobOutcome.failed(
@@ -133,9 +134,8 @@ class StatisticalAnalysisStageHandler:
         )
 
     def _prerequisite_results(self, job: StageJob) -> tuple[PrerequisiteExperimentResult, ...]:
-        declared = [
-            item for item in job.inputs if item.name.startswith("prerequisite_frozen_result_")
-        ]
+        declared = [item for item in job.inputs if item.name.startswith(
+            "prerequisite_frozen_result_")]
         if job.context.prerequisite_results and declared:
             raise ValueError("Analysis job has both planned and preloaded prerequisite results")
         if job.context.prerequisite_results:
