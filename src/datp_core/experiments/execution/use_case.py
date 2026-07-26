@@ -272,12 +272,18 @@ class ExperimentLifecycleUseCase:
                     error_message=error,
                 )
                 continue
+            prerequisite_fingerprints = {
+                prerequisite.experiment_id.value: self._required_campaign_manifest(
+                    prerequisite.experiment_id, results
+                ).frozen_result_fingerprint
+                for prerequisite in experiment.prerequisites
+            }
             manifest = self._output_manager.finalize_from_directory(
                 experiment.identifier,
                 scientific_fingerprint=self._config.scientific_fingerprint.value,
                 execution_fingerprint=self._config.execution_fingerprint.value,
                 source_data_fingerprint=source_fingerprint,
-                prerequisite_result_fingerprints={},
+                prerequisite_result_fingerprints=prerequisite_fingerprints,
                 started_at=started_at,
             )
             results[experiment.identifier] = ExperimentRunResult(
@@ -287,6 +293,15 @@ class ExperimentLifecycleUseCase:
                 manifest=manifest,
             )
         return tuple(results[experiment_id] for experiment_id in experiment_ids)
+
+    @staticmethod
+    def _required_campaign_manifest(
+        experiment_id: ExperimentId, results: dict[ExperimentId, ExperimentRunResult]
+    ) -> ExperimentManifest:
+        result = results.get(experiment_id)
+        if result is None or result.manifest is None:
+            raise ValueError(f"Campaign prerequisite '{experiment_id.value}' lacks a completed manifest")
+        return result.manifest
 
     def _validated_prerequisite_results(
         self, experiment: ExperimentRecord

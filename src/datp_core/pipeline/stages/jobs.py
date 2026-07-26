@@ -66,9 +66,10 @@ class StageJob:
     dependencies: tuple[GraphNodeKey, ...]
 
     def __post_init__(self) -> None:
-        if len(set(self.dependencies)) != len(self.dependencies):
+        dependency_keys = frozenset(self.dependencies)
+        if len(dependency_keys) != len(self.dependencies):
             raise ValueError(f"Job '{self.node_key.label}' has duplicate dependencies")
-        if self.node_key in self.dependencies:
+        if self.node_key in dependency_keys:
             raise ValueError(f"Job '{self.node_key.label}' cannot depend on itself")
         if not self.outputs:
             raise ValueError(f"Job '{self.node_key.label}' must declare at least one output")
@@ -78,7 +79,7 @@ class StageJob:
             raise ValueError(f"Job '{self.node_key.label}' has duplicate outputs")
         if len({item.relative_path for item in self.outputs}) != len(self.outputs):
             raise ValueError(f"Job '{self.node_key.label}' has duplicate output paths")
-        if any(item.producer not in self.dependencies for item in self.inputs):
+        if any(item.producer not in dependency_keys for item in self.inputs):
             raise ValueError(f"Job '{self.node_key.label}' has an input without a direct dependency")
         if self.stage is StageKind.STATISTICAL_ANALYSIS and any(
             item.coordinates is None for item in self.inputs

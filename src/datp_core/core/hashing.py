@@ -8,6 +8,7 @@ config/fingerprinting/, which builds on these primitives.
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from enum import Enum
 from hashlib import blake2b
 from pathlib import Path
@@ -76,7 +77,7 @@ def canonicalize_value(obj: object) -> CanonicalProjection:
         return {"type": type(obj).__qualname__, "value": str(obj.value)}
     if isinstance(obj, Enum):
         return {"enum": type(obj).__qualname__, "value": str(obj.value)}
-    if isinstance(obj, dict):
+    if isinstance(obj, Mapping):
         if not all(isinstance(key, str) for key in obj):
             raise TypeError("Fingerprint mappings must use string keys")
         return {key: canonicalize_value(value) for key, value in sorted(obj.items())}

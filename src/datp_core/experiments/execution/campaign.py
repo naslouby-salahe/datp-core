@@ -13,9 +13,6 @@ from datp_core.experiments.catalogue.models import EvidenceRole, ExperimentRecor
 from datp_core.experiments.execution.output_manager import ExperimentOutputManager, OutputState
 from datp_core.experiments.execution.report import ExperimentExecutionReport
 from datp_core.experiments.execution.use_case import ExperimentLifecycleUseCase, ExperimentRunStatus
-from datp_core.experiments.planning import expand_campaign_jobs
-from datp_core.experiments.planning.validation import validate_planning_graph
-from datp_core.pipeline.graph.model import PlanningGraph
 
 
 class CampaignExperimentStatus(Enum):
@@ -103,19 +100,10 @@ class CampaignOrchestrator:
         self._output_manager = output_manager
         self._dag = _build_experiment_dag(config)
         self._order = _canonical_experiment_order(config)
-        self._campaign_plan = expand_campaign_jobs(
-            tuple(config.experiments[experiment_id] for experiment_id in self._order), config
-        )
-        validate_planning_graph(self._campaign_plan)
 
     @property
     def experiment_order(self) -> tuple[ExperimentId, ...]:
         return self._order
-
-    @property
-    def campaign_plan(self) -> PlanningGraph:
-        """The one deterministic, planning-scoped campaign graph."""
-        return self._campaign_plan
 
     def run(self, *, override_all: bool = False) -> CampaignReport:
         if override_all:

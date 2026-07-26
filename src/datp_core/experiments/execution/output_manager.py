@@ -360,6 +360,12 @@ class ExperimentOutputManager:
             return "manifest frozen-result checksum disagrees with inventory"
         if any(report not in manifest.checksums for report in manifest.report_paths):
             return "manifest inventory omits a required report"
+        try:
+            actual_inventory = self._checksum_inventory(directory)
+        except ValueError as exc:
+            return str(exc)
+        if set(actual_inventory) != set(manifest.checksums):
+            return "manifest inventory does not exactly match experiment output files"
         for relative, expected in manifest.checksums.items():
             try:
                 path = self._safe_relative(directory, relative)
@@ -405,7 +411,12 @@ class ExperimentOutputManager:
         relative = Path(relative_path)
         if not relative_path or relative.is_absolute() or ".." in relative.parts:
             raise ValueError(f"manifest contains unsafe output path: {relative_path!r}")
-        return directory / relative
+        path = directory
+        for part in relative.parts:
+            path /= part
+            if path.is_symlink():
+                raise ValueError(f"manifest output path traverses a symlink: {relative_path!r}")
+        return path
 
     @staticmethod
     def _write_json(path: Path, payload: object) -> None:

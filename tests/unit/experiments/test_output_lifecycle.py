@@ -56,6 +56,31 @@ def test_completed_output_with_changed_direct_file_is_corrupt(tmp_path: Path) ->
     assert manager.inspect(experiment_id).state is OutputState.CORRUPT
 
 
+def test_completed_output_with_untracked_file_is_corrupt(tmp_path: Path) -> None:
+    manager = ExperimentOutputManager(tmp_path)
+    experiment_id = ExperimentId("anchor")
+    _finalize(manager, experiment_id)
+    (manager.experiment_dir(experiment_id) / "reports" / "untracked.md").write_text("unexpected", encoding="utf-8")
+
+    assert manager.inspect(experiment_id).state is OutputState.CORRUPT
+
+
+def test_completed_output_with_symlinked_parent_is_corrupt(tmp_path: Path) -> None:
+    manager = ExperimentOutputManager(tmp_path)
+    experiment_id = ExperimentId("anchor")
+    _finalize(manager, experiment_id)
+    directory = manager.experiment_dir(experiment_id)
+    external = tmp_path / "external"
+    external.mkdir()
+    report = directory / "reports" / "summary.md"
+    report.unlink()
+    (directory / "reports").rmdir()
+    (directory / "reports").symlink_to(external, target_is_directory=True)
+    (external / "summary.md").write_text("report", encoding="utf-8")
+
+    assert manager.inspect(experiment_id).state is OutputState.CORRUPT
+
+
 def test_finalization_accepts_the_planner_frozen_result_location(tmp_path: Path) -> None:
     manager = ExperimentOutputManager(tmp_path)
     experiment_id = ExperimentId("planner-location")

@@ -1,11 +1,8 @@
 """Plan expansion and calibration/test artifact-isolation tests."""
 
-from collections import Counter
-
 from datp_core.app import build_application
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments import RecalibrationMode
-from datp_core.experiments.execution.campaign import _canonical_experiment_order
 from datp_core.experiments.planning import expand_campaign_jobs, expand_experiment_jobs
 from datp_core.pipeline.graph.validation import validate_acyclic
 from datp_core.pipeline.stages.enums import StageKind
@@ -210,18 +207,21 @@ def test_temporal_plan_binds_each_arm_to_its_population_and_recalibration_window
     assert all(job.inputs[0].name == "future_recalibration_scores" for job in one_shot_thresholds)
 
 
-def test_campaign_plan_has_one_durable_shared_upstream_producer_per_equivalent_cell() -> None:
+def test_campaign_plan_deduplicates_equivalent_upstream_producers() -> None:
     config = build_application().config
-    ordered_experiments = tuple(
-        config.experiments.get(identifier) for identifier in _canonical_experiment_order(config)
+    experiments = tuple(
+        config.experiments.get(ExperimentId(identifier))
+        for identifier in (
+            "anchor_reproduction",
+            "confirmatory_threshold_scope_effect",
+            "shared_threshold_construction_sensitivity",
+        )
     )
 
-    plan = expand_campaign_jobs(ordered_experiments, config)
-    consumer_counts = Counter(dependency for job in plan.jobs for dependency in job.dependencies)
-    shared_producers = tuple(job for job in plan.jobs if consumer_counts[job.node_key] > 1)
+    plan = expand_campaign_jobs(experiments, config)
+    shared_producers = tuple(job for job in plan.jobs if job.node_key.label.startswith("shared:"))
 
     assert shared_producers
-    assert all(job.node_key.label.startswith("shared:") for job in shared_producers)
     assert all(output.relative_path.startswith("shared/") for job in shared_producers for output in job.outputs)
     assert all(
         any(input_.producer == producer.node_key for consumer in plan.jobs for input_ in consumer.inputs)

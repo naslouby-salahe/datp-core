@@ -79,6 +79,16 @@ def test_symlinked_parent_is_rejected(tmp_path: Path) -> None:
         ArtifactStore(tmp_path).write_bytes_atomic("linked/escape.json", b"blocked")
 
 
+def test_symlinked_root_is_rejected(tmp_path: Path) -> None:
+    target = tmp_path / "target"
+    target.mkdir()
+    root = tmp_path / "linked-root"
+    root.symlink_to(target, target_is_directory=True)
+
+    with pytest.raises(InvalidArtifactPathError, match="root may not be a symlink"):
+        ArtifactStore(root)
+
+
 def test_safetensors_direct_api_uses_store_checksum_validation(tmp_path: Path) -> None:
     store = ArtifactStore(tmp_path)
     checksum = save_model_safetensors_to_store(

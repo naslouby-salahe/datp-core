@@ -25,7 +25,11 @@ class ArtifactStore:
     """Atomic direct-file persistence rooted at one output directory."""
 
     def __init__(self, root: Path) -> None:
+        if root.is_symlink():
+            raise InvalidArtifactPathError(f"Artifact root may not be a symlink: {root}")
         root.mkdir(parents=True, exist_ok=True)
+        if root.is_symlink() or not root.is_dir():
+            raise InvalidArtifactPathError(f"Artifact root must be a regular directory: {root}")
         self._root = root.resolve()
 
     def write_bytes_atomic(self, relative_path: str, payload: bytes, *, replace: bool = False) -> Checksum:
