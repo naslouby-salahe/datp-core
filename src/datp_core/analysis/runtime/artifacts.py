@@ -16,10 +16,11 @@ from typing import TypeVar
 
 import polars as pl
 from attrs import define
+from pydantic import TypeAdapter
 from safetensors.torch import load as load_safetensors
 
 from datp_core.analysis.contracts import (
-    AnalysisResultContract,
+    AnalysisResult,
     CheckpointSelectionArtifact,
     DittoLossObservation,
     FederatedProximalLossObservation,
@@ -27,7 +28,6 @@ from datp_core.analysis.contracts import (
 )
 from datp_core.analysis.enums import ArtifactKind
 from datp_core.analysis.errors import ArtifactMissingError, ArtifactSchemaViolationError
-from datp_core.analysis.runtime.codec import EncodedAnalysisResult, decode_analysis_result
 from datp_core.artifacts.errors import ArtifactFileMissingError
 from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
 from datp_core.artifacts.schemas.scores import validate_calibration_score_frame, validate_test_score_frame
@@ -37,7 +37,9 @@ from datp_core.pipeline.stages.context import StageJobContext
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import AnalysisInputCoordinates, StageInput
 
-T = TypeVar("T", bound=AnalysisResultContract)
+T = TypeVar("T", bound=AnalysisResult)
+
+_adapter = TypeAdapter(tuple[AnalysisResult, ...])
 
 
 @define(frozen=True, slots=True, kw_only=True)
@@ -135,40 +137,24 @@ class AnalysisArtifactRepository:
             if not isinstance(parsed, dict):
                 raise ArtifactSchemaViolationError("Checkpoint selection payload must be a JSON dictionary")
 
-            fedprox_mu = parsed.get("selected_proximal_mu")
-            ditto_weight = parsed.get("selected_ditto_proximal_weight")
-            locked_round = parsed.get("locked_primary_round")
-            fedprox_losses_raw = parsed.get("mean_benign_calibration_loss_by_mu")
-            ditto_losses_raw = parsed.get("mean_benign_calibration_loss_by_weight")
+            # Transform storage format (dict-based losses) to model format (tuple of observations)
+            fedprox_losses_raw = parsed.pop("mean_benign_calibration_loss_by_mu", None)
+            ditto_losses_raw = parsed.pop("mean_benign_calibration_loss_by_weight", None)
 
-            fedprox_losses = (
-                tuple(
-                    FederatedProximalLossObservation(
-                        proximal_mu=float(k), mean_benign_calibration_loss=float(v)
-                    )
+            if isinstance(fedprox_losses_raw, dict):
+                parsed["federated_proximal_losses"] = [
+                    FederatedProximalLossObservation(proximal_mu=float(k), mean_benign_calibration_loss=float(v))
                     for k, v in fedprox_losses_raw.items()
-                )
-                if isinstance(fedprox_losses_raw, dict)
-                else ()
-            )
-            ditto_losses = (
-                tuple(
-                    DittoLossObservation(
-                        proximal_weight=float(k), mean_benign_calibration_loss=float(v)
-                    )
-                    for k, v in ditto_losses_raw.items()
-                )
-                if isinstance(ditto_losses_raw, dict)
-                else ()
-            )
+                ]
 
-            return CheckpointSelectionArtifact(
-                selected_proximal_mu=float(fedprox_mu) if isinstance(fedprox_mu, (int, float)) else None,
-                selected_ditto_proximal_weight=float(ditto_weight) if isinstance(ditto_weight, (int, float)) else None,
-                locked_primary_round=int(locked_round) if isinstance(locked_round, int) else None,
-                federated_proximal_losses=fedprox_losses,
-                ditto_losses=ditto_losses,
-            )
+            if isinstance(ditto_losses_raw, dict):
+                parsed["ditto_losses"] = [
+                    DittoLossObservation(proximal_weight=float(k), mean_benign_calibration_loss=float(v))
+                    for k, v in ditto_losses_raw.items()
+                ]
+
+            return CheckpointSelectionArtifact.model_validate(parsed)
+
         except (json.JSONDecodeError, TypeError, ValueError) as exc:
             raise ArtifactSchemaViolationError(f"Cannot parse checkpoint selection JSON at {path}: {exc}") from exc
 
@@ -191,41 +177,17 @@ class AnalysisArtifactRepository:
             raise ArtifactMissingError(f"Prerequisite result '{reference.analysis_label.value}' is unavailable")
 
         data = self._read_bytes(path)
+
         try:
-            envelopes_raw = json.loads(data.decode("utf-8"))
-        except (json.JSONDecodeError, TypeError) as exc:
+            results = _adapter.validate_json(data)
+        except Exception as exc:
             raise ArtifactSchemaViolationError(
-                f"Prerequisite frozen artifact at {path} is not valid JSON: {exc}"
+                f"Prerequisite frozen artifact at {path} failed Pydantic validation: {exc}"
             ) from exc
 
-        if not isinstance(envelopes_raw, list):
-            raise ArtifactSchemaViolationError(f"Prerequisite frozen artifact at {path} must be a JSON array")
-
-        for item in envelopes_raw:
-            if not isinstance(item, dict):
-                continue
-            raw_kind = item.get("result_kind")
-            payload_version = item.get("payload_version")
-            item_data = item.get("data")
-            if not isinstance(raw_kind, str) or not isinstance(payload_version, int) or not isinstance(item_data, dict):
-                continue
-
-            try:
-                kind = reference.result_kind
-                envelope = EncodedAnalysisResult(
-                    result_kind=kind,
-                    payload_version=payload_version,
-                    data=item_data,
-                )
-                decoded = decode_analysis_result(envelope)
-            except Exception:
-                continue
-
-            if (
-                isinstance(decoded, expected_type)
-                and getattr(decoded, "analysis_label", None) == reference.analysis_label
-            ):
-                return decoded
+        for result in results:
+            if isinstance(result, expected_type) and result.analysis_label == reference.analysis_label:
+                return result
 
         type_name = expected_type.__name__
         raise ArtifactMissingError(

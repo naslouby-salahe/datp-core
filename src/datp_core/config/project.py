@@ -10,6 +10,10 @@ from __future__ import annotations
 from pathlib import Path
 from types import MappingProxyType
 
+from datp_core.config.authored.datasets import AuthoredDatasetConfig
+from datp_core.config.authored.experiments import AuthoredExperimentsCatalogueConfig
+from datp_core.config.authored.protocols import AuthoredProtocolsConfig
+from datp_core.config.authored.runtime import AuthoredRuntimeConfig
 from datp_core.config.bootstrap import RuntimeBootstrapSettings, resolve_config_root
 from datp_core.config.errors import ConfigurationError
 from datp_core.config.fingerprinting.canonical import compute_fingerprint
@@ -31,39 +35,23 @@ from datp_core.core.hashing import Fingerprint, canonicalize_value
 from datp_core.core.registry import TypedDomainRegistry
 
 
-def resolve_project_configuration_candidate(
-    config_dir: Path | None = None,
-    bootstrap_settings: RuntimeBootstrapSettings | None = None,
+def resolve_from_authored_documents(
+    authored_datasets: tuple[AuthoredDatasetConfig, ...],
+    authored_experiments: AuthoredExperimentsCatalogueConfig,
+    authored_protocols: AuthoredProtocolsConfig,
+    authored_runtime: AuthoredRuntimeConfig,
+    bootstrap_settings: RuntimeBootstrapSettings,
 ) -> ResolvedProjectConfiguration:
-    """Execute the staged configuration resolution pipeline, returning an UNVALIDATED candidate.
+    """Resolve authored Pydantic documents into a resolved project configuration.
 
-    Callers needing a fully validated configuration must use ``resolve_project_configuration``
-    instead, which validates this candidate before returning it. This function must not be called
-    directly outside this module and tests that intentionally exercise resolution in isolation
-    from validation.
+    This shared pipeline performs per-document resolution, fingerprinting, and
+    assembly. It does NOT perform cross-document validation -- callers should
+    validate the result via ``ProjectConfigurationValidator`` before use.
+
+    Used by both the file-based loading path
+    (``resolve_project_configuration_candidate``) and programmatic composition
+    (``compose_project_config`` in ``composition.py``).
     """
-    bootstrap_settings = bootstrap_settings or RuntimeBootstrapSettings()  # pyright: ignore[reportCallIssue]
-    if config_dir is None:
-        config_dir = resolve_config_root(bootstrap_settings)
-    config_dir = config_dir.resolve()
-    datasets_dir = config_dir / "datasets"
-
-    dataset_paths = tuple(sorted(datasets_dir.glob("*.yaml")))
-    if not dataset_paths:
-        raise ConfigurationError("No dataset configuration documents found", source_path=datasets_dir)
-    experiments_path = config_dir / "experiments.yaml"
-    protocols_path = config_dir / "protocols.yaml"
-    runtime_path = config_dir / "runtime.yaml"
-
-    authored_datasets, authored_experiments, authored_protocols, authored_runtime = (
-        YamlConfigurationReader.read_project_documents(
-            dataset_paths=dataset_paths,
-            experiments_path=experiments_path,
-            protocols_path=protocols_path,
-            runtime_path=runtime_path,
-        )
-    )
-
     resolved_runtime = resolve_runtime_configuration(
         authored_runtime=authored_runtime,
         bootstrap_settings=bootstrap_settings,
@@ -126,6 +114,48 @@ def resolve_project_configuration_candidate(
         execution_fingerprint=execution_fingerprint,
         scientific_projection=canonicalize_value(scientific_projection),
         execution_projection=canonicalize_value(execution_projection),
+    )
+
+
+def resolve_project_configuration_candidate(
+    config_dir: Path | None = None,
+    bootstrap_settings: RuntimeBootstrapSettings | None = None,
+) -> ResolvedProjectConfiguration:
+    """Execute the staged configuration resolution pipeline, returning an UNVALIDATED candidate.
+
+    Callers needing a fully validated configuration must use ``resolve_project_configuration``
+    instead, which validates this candidate before returning it. This function must not be called
+    directly outside this module and tests that intentionally exercise resolution in isolation
+    from validation.
+    """
+    bootstrap_settings = bootstrap_settings or RuntimeBootstrapSettings()  # pyright: ignore[reportCallIssue]
+    if config_dir is None:
+        config_dir = resolve_config_root(bootstrap_settings)
+    config_dir = config_dir.resolve()
+    datasets_dir = config_dir / "datasets"
+
+    dataset_paths = tuple(sorted(datasets_dir.glob("*.yaml")))
+    if not dataset_paths:
+        raise ConfigurationError("No dataset configuration documents found", source_path=datasets_dir)
+    experiments_path = config_dir / "experiments.yaml"
+    protocols_path = config_dir / "protocols.yaml"
+    runtime_path = config_dir / "runtime.yaml"
+
+    authored_datasets, authored_experiments, authored_protocols, authored_runtime = (
+        YamlConfigurationReader.read_project_documents(
+            dataset_paths=dataset_paths,
+            experiments_path=experiments_path,
+            protocols_path=protocols_path,
+            runtime_path=runtime_path,
+        )
+    )
+
+    return resolve_from_authored_documents(
+        authored_datasets=authored_datasets,
+        authored_experiments=authored_experiments,
+        authored_protocols=authored_protocols,
+        authored_runtime=authored_runtime,
+        bootstrap_settings=bootstrap_settings,
     )
 
 

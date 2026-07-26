@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from typing import cast as _cast
+
 import polars as pl
 
 from datp_core.analysis.contracts import (
     PairedAnalysisCell,
+    QuantileThresholdPolicy,
     ThresholdStabilityAnalysisResult,
     ThresholdStabilitySeedResult,
 )
@@ -13,7 +16,7 @@ from datp_core.analysis.enums import ReplicateAggregation, SweepDimensionKind
 from datp_core.analysis.errors import InvalidAnalysisConfigurationError
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
 from datp_core.analysis.runtime.runner import run_analysis
-from datp_core.artifacts.schemas.columns import MetricColumn, ThresholdColumn
+from datp_core.artifacts.schemas.columns import MetricColumn, ScoreColumn, ThresholdColumn
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel
 from datp_core.evaluation import MetricStatus
 from datp_core.experiments import ThresholdStabilityAnalysisRecord
@@ -40,17 +43,17 @@ def analyze_threshold_stability(
     eval_label = EvaluationLabel(specification.source_evaluation)
     policy_id = context.threshold_policy_id(eval_label)
     policy = context.config.threshold_policies.get(policy_id)
-    q_val = getattr(policy, "quantile", None)
-    if q_val is None:
+    if not hasattr(policy, "quantile"):
         raise InvalidAnalysisConfigurationError(
-            "Threshold stability analysis requires a quantile threshold policy"
+            f"Threshold stability requires a quantile-based threshold policy, "
+            f"got {type(policy).__name__ if policy is not None else 'None'}"
         )
-    quantile = float(q_val)
+    quantile = float(_cast(QuantileThresholdPolicy, policy).quantile)
 
     seed_results: list[ThresholdStabilitySeedResult] = []
     for seed in context.seeds:
-        threshold_values: dict[ClientId, list[float]] = {}
-        fpr_values: dict[ClientId, list[float]] = {}
+        replicate_thresholds: list[pl.DataFrame] = []
+        replicate_fpr: list[pl.DataFrame] = []
 
         for replicate in range(subset.replicate_count.value):
             eval_ctx = context.evaluation_context(
@@ -62,43 +65,82 @@ def analyze_threshold_stability(
             thresholds = context.artifacts.thresholds(eval_ctx)
             metrics = context.artifacts.client_metrics(eval_ctx)
 
-            for client_id, threshold in thresholds.select(
-                ThresholdColumn.CLIENT_ID.value, ThresholdColumn.THRESHOLD.value
-            ).iter_rows():
-                cid = ClientId(str(client_id))
-                threshold_values.setdefault(cid, []).append(float(threshold))
-
-            for client_id, fpr in (
+            replicate_thresholds.append(
+                thresholds.select(
+                    pl.col(ThresholdColumn.CLIENT_ID.value).cast(pl.String),
+                    pl.col(ThresholdColumn.THRESHOLD.value),
+                )
+            )
+            replicate_fpr.append(
                 metrics.filter(
                     pl.col(MetricColumn.FALSE_POSITIVE_RATE_STATUS.value) == MetricStatus.AVAILABLE.value
+                ).select(
+                    pl.col(MetricColumn.CLIENT_ID.value).cast(pl.String),
+                    pl.col(MetricColumn.FALSE_POSITIVE_RATE.value),
                 )
-                .select(MetricColumn.CLIENT_ID.value, MetricColumn.FALSE_POSITIVE_RATE.value)
-                .iter_rows()
-            ):
-                cid = ClientId(str(client_id))
-                fpr_values.setdefault(cid, []).append(float(fpr))
+            )
 
+        all_thresholds = pl.concat(replicate_thresholds)
+        all_fpr = pl.concat(replicate_fpr)
+
+        # Per-client threshold variance (population variance, ddof=0)
+        client_threshold_var = (
+            all_thresholds.group_by(ThresholdColumn.CLIENT_ID.value)
+            .agg(pl.col(ThresholdColumn.THRESHOLD.value).var(ddof=0).alias("threshold_variance"))
+        )
+
+        # Per-client mean FPR across replicates
+        client_mean_fpr = (
+            all_fpr.group_by(MetricColumn.CLIENT_ID.value)
+            .agg(pl.col(MetricColumn.FALSE_POSITIVE_RATE.value).mean().alias("mean_fpr"))
+        )
+
+        # Test score clients — use ScoreColumn for score-frame schema ownership
         test_score_ctx = context.score_context(eval_label, seed)
         test_scores = context.artifacts.test_scores(test_score_ctx)
-        test_clients = {ClientId(str(cid)) for cid in test_scores[ThresholdColumn.CLIENT_ID.value].unique()}
 
-        variances = [
-            sum((value - (sum(values) / len(values))) ** 2 for value in values) / len(values)
-            for values in threshold_values.values()
-        ]
-        mean_fprs = [sum(values) / len(values) for values in fpr_values.values()]
-        unavailable_clients = tuple(sorted(test_clients - set(threshold_values), key=lambda c: c.value))
+        # Clients present in test scores but absent from thresholds (anti-join)
+        unavailable_df = (
+            test_scores.select(pl.col(ScoreColumn.CLIENT_ID.value).cast(pl.String))
+            .unique()
+            .join(
+                all_thresholds.select(pl.col(ThresholdColumn.CLIENT_ID.value).cast(pl.String)).unique(),
+                on=ThresholdColumn.CLIENT_ID.value,
+                how="anti",
+            )
+        )
+        unavailable_clients = tuple(
+            sorted(
+                (ClientId(str(cid)) for cid in unavailable_df[ScoreColumn.CLIENT_ID.value]),
+                key=lambda c: c.value,
+            )
+        )
+
+        # Seed-level aggregate statistics
+        if client_threshold_var.height == 0:
+            threshold_variance_across_replicates: float | None = None
+        else:
+            threshold_variance_across_replicates = _cast(
+                float, client_threshold_var["threshold_variance"].mean()
+            )
+
+        if client_mean_fpr.height == 0:
+            absolute_attainment_error: float | None = None
+            worst_client_fpr: float | None = None
+        else:
+            target_fpr = 1.0 - quantile
+            mean_fpr_values = client_mean_fpr["mean_fpr"]
+            absolute_attainment_error = _cast(
+                float, (mean_fpr_values - target_fpr).abs().mean()
+            )
+            worst_client_fpr = _cast(float, mean_fpr_values.max())
 
         seed_results.append(
             ThresholdStabilitySeedResult(
                 seed=seed,
-                threshold_variance_across_replicates=sum(variances) / len(variances) if variances else None,
-                absolute_attainment_error=(
-                    sum(abs(value - (1.0 - quantile)) for value in mean_fprs) / len(mean_fprs)
-                    if mean_fprs
-                    else None
-                ),
-                worst_client_fpr=max(mean_fprs) if mean_fprs else None,
+                threshold_variance_across_replicates=threshold_variance_across_replicates,
+                absolute_attainment_error=absolute_attainment_error,
+                worst_client_fpr=worst_client_fpr,
                 clients_unavailable_at_size=unavailable_clients,
             )
         )

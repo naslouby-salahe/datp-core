@@ -9,9 +9,11 @@ from __future__ import annotations
 
 import math
 from collections.abc import Sequence
+from typing import Any
 
 import numpy as np
 from attrs import define, field
+from pydantic_core import core_schema
 
 
 def validate_positive_int(instance: object, attribute: object, value: int) -> None:
@@ -78,6 +80,21 @@ class PositiveInt:
     def __int__(self) -> int:
         return self.value
 
+    @classmethod
+    def __get_pydantic_core_schema__(cls, _source_type: Any, _handler: Any) -> core_schema.CoreSchema:
+        return core_schema.no_info_plain_validator_function(
+            cls._pydantic_validate,
+            serialization=core_schema.plain_serializer_function_ser_schema(lambda v: v.value),
+        )
+
+    @classmethod
+    def _pydantic_validate(cls, v: object) -> PositiveInt:
+        if isinstance(v, cls):
+            return v
+        if isinstance(v, bool) or not isinstance(v, int):
+            raise ValueError(f"Expected int for PositiveInt, got {type(v).__name__}")
+        return cls(v)
+
 
 @define(frozen=True, slots=True, order=True)
 class PositiveFloat:
@@ -85,6 +102,21 @@ class PositiveFloat:
 
     def __float__(self) -> float:
         return float(self.value)
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, _source_type: Any, _handler: Any) -> core_schema.CoreSchema:
+        return core_schema.no_info_plain_validator_function(
+            cls._pydantic_validate,
+            serialization=core_schema.plain_serializer_function_ser_schema(lambda v: v.value),
+        )
+
+    @classmethod
+    def _pydantic_validate(cls, v: object) -> PositiveFloat:
+        if isinstance(v, cls):
+            return v
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(f"Expected number for PositiveFloat, got {type(v).__name__}")
+        return cls(float(v))
 
 
 @define(frozen=True, slots=True, order=True)
@@ -94,6 +126,21 @@ class NonNegativeFloat:
     def __float__(self) -> float:
         return float(self.value)
 
+    @classmethod
+    def __get_pydantic_core_schema__(cls, _source_type: Any, _handler: Any) -> core_schema.CoreSchema:
+        return core_schema.no_info_plain_validator_function(
+            cls._pydantic_validate,
+            serialization=core_schema.plain_serializer_function_ser_schema(lambda v: v.value),
+        )
+
+    @classmethod
+    def _pydantic_validate(cls, v: object) -> NonNegativeFloat:
+        if isinstance(v, cls):
+            return v
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(f"Expected number for NonNegativeFloat, got {type(v).__name__}")
+        return cls(float(v))
+
 
 @define(frozen=True, slots=True, order=True)
 class Probability:
@@ -101,6 +148,21 @@ class Probability:
 
     def __float__(self) -> float:
         return float(self.value)
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, _source_type: Any, _handler: Any) -> core_schema.CoreSchema:
+        return core_schema.no_info_plain_validator_function(
+            cls._pydantic_validate,
+            serialization=core_schema.plain_serializer_function_ser_schema(lambda v: v.value),
+        )
+
+    @classmethod
+    def _pydantic_validate(cls, v: object) -> Probability:
+        if isinstance(v, cls):
+            return v
+        if isinstance(v, bool) or not isinstance(v, (int, float)):
+            raise ValueError(f"Expected number for Probability, got {type(v).__name__}")
+        return cls(float(v))
 
 
 def linear_quantile(values: Sequence[float], target_quantile: float) -> float:

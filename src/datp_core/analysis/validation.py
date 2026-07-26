@@ -23,7 +23,7 @@ def analyze_anchor_equivalence(
     specification: AnchorEquivalenceAnalysisRecord,
     context: AnalysisExecutionContext,
     cell: PairedAnalysisCell | None = None,
-) -> AnchorEquivalenceAnalysisResult:
+) -> tuple[AnchorEquivalenceAnalysisResult, ...]:
     """Execute anchor-equivalence validation using prerequisite paired results."""
     source_label = AnalysisLabel(specification.source_analysis)
     comparison_mode = AnchorComparisonMode(specification.comparison_mode)
@@ -92,7 +92,7 @@ def analyze_anchor_equivalence(
 
     failures = tuple(req for req in configured_requirements if not checks_by_name[req])
 
-    return AnchorEquivalenceAnalysisResult(
+    return (AnchorEquivalenceAnalysisResult(
         analysis_label=AnalysisLabel(specification.label),
         comparison_mode=comparison_mode,
         source_analysis=source_label,
@@ -102,4 +102,4 @@ def analyze_anchor_equivalence(
         reproduced_delta=delta,
         reproduced_confidence_interval=(low, high),
         historical_reference=hist_ref,
-    )
+    ),)

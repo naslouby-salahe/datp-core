@@ -23,7 +23,7 @@ from datp_core.analysis.errors import (
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
 from datp_core.analysis.runtime.runner import run_analysis
 from datp_core.analysis.statistics.descriptive import ratio_of_totals
-from datp_core.artifacts.schemas.columns import MetricColumn, ThresholdColumn
+from datp_core.artifacts.schemas.columns import MetricColumn, ScoreColumn, ThresholdColumn
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel
 from datp_core.core.seeding import Seed
 from datp_core.evaluation import MetricStatus
@@ -52,58 +52,98 @@ def conformal_seed_coverage(
     if joined.height != thresholds.height or joined[MetricColumn.TRUE_NEGATIVES.value].null_count() > 0:
         raise PopulationAlignmentError("Conformal coverage metrics do not cover the threshold population")
 
-    counts_map = dict(calibration_counts)
-    per_client_records: list[ConformalClientCoverageRecord] = []
-    true_negatives = 0
-    benign_total = 0
+    # Convert calibration counts to a Polars frame and join
+    cal_counts = pl.from_dict({
+        ThresholdColumn.CLIENT_ID.value: [str(c_id) for c_id, _ in calibration_counts],
+        "_calibration_count": [cnt for _, cnt in calibration_counts],
+    })
+    joined = joined.join(cal_counts, on=ThresholdColumn.CLIENT_ID.value, how="left")
 
-    for client, rank, attainability, tn, fp, fpr_status in joined.select(
-        ThresholdColumn.CLIENT_ID.value,
-        ThresholdColumn.FINITE_SAMPLE_RANK.value,
-        ThresholdColumn.ATTAINABILITY_STATUS.value,
-        MetricColumn.TRUE_NEGATIVES.value,
-        MetricColumn.FALSE_POSITIVES.value,
-        MetricColumn.FALSE_POSITIVE_RATE_STATUS.value,
-    ).iter_rows():
-        client_id = ClientId(str(client))
-        count = counts_map.get(client_id)
-        if count is None or rank is None or attainability is None:
-            raise ArtifactSchemaViolationError("Conformal coverage inputs have incomplete per-client diagnostics")
-        expected_rank = min(ceil((count + 1) * (1.0 - coverage_alpha)), count)
-        expected_status = (
-            ConformalAttainabilityStatus.ATTAINABLE
-            if count >= max(minimum_sample_count, ceil(1.0 / coverage_alpha) - 1)
-            else ConformalAttainabilityStatus.UNATTAINABLE
+    # Validate completeness of per-client diagnostics
+    incomplete = joined.filter(
+        pl.col("_calibration_count").is_null()
+        | pl.col(ThresholdColumn.FINITE_SAMPLE_RANK.value).is_null()
+        | pl.col(ThresholdColumn.ATTAINABILITY_STATUS.value).is_null()
+    )
+    if incomplete.height > 0:
+        raise ArtifactSchemaViolationError("Conformal coverage inputs have incomplete per-client diagnostics")
+
+    # Compute expected finite-sample rank
+    expected_rank = pl.min_horizontal(
+        ((pl.col("_calibration_count") + 1) * (1.0 - coverage_alpha)).ceil().cast(pl.Int64),
+        pl.col("_calibration_count"),
+    )
+
+    # Compute expected attainability status
+    min_calibration = max(minimum_sample_count, ceil(1.0 / coverage_alpha) - 1)
+    expected_status = (
+        pl.when(pl.col("_calibration_count") >= min_calibration)
+        .then(pl.lit(ConformalAttainabilityStatus.ATTAINABLE.value))
+        .otherwise(pl.lit(ConformalAttainabilityStatus.UNATTAINABLE.value))
+    )
+
+    # Validate finite-sample diagnostics
+    diagnostics_off = joined.filter(
+        (pl.col(ThresholdColumn.FINITE_SAMPLE_RANK.value).cast(pl.Int64) != expected_rank)
+        | (pl.col(ThresholdColumn.ATTAINABILITY_STATUS.value) != expected_status)
+    )
+    if diagnostics_off.height > 0:
+        raise ScientificContractViolationError(
+            f"Conformal finite-sample diagnostics disagree for seed '{seed.value}'"
         )
-        if int(rank) != expected_rank or attainability != expected_status.value:
-            raise ScientificContractViolationError(
-                f"Conformal finite-sample diagnostics disagree for client '{client_id.value}'"
-            )
-        client_true_negatives = int(tn)
-        client_benign_total = client_true_negatives + int(fp)
-        if (client_benign_total > 0) != (fpr_status == MetricStatus.AVAILABLE.value):
-            raise ScientificContractViolationError(
-                f"Conformal coverage metric status disagrees for client '{client_id.value}'"
-            )
-        coverage = client_true_negatives / client_benign_total if client_benign_total else None
-        if coverage is not None:
-            true_negatives += client_true_negatives
-            benign_total += client_benign_total
-        per_client_records.append(
-            ConformalClientCoverageRecord(
-                client_id=client_id,
-                coverage=coverage,
-                absolute_coverage_error=abs(coverage - target_coverage) if coverage is not None else None,
-                coverage_status=(
-                    CoverageStatus.AVAILABLE
-                    if coverage is not None
-                    else CoverageStatus.UNAVAILABLE_NO_BENIGN_TEST_RECORDS
-                ),
-                finite_sample_rank=int(rank),
-                attainability_status=ConformalAttainabilityStatus(attainability),
-                calibration_count=count,
-            )
+
+    # Validate FPR status consistency
+    benign_total_expr = pl.col(MetricColumn.TRUE_NEGATIVES.value) + pl.col(MetricColumn.FALSE_POSITIVES.value)
+    fpr_off = joined.filter(
+        (benign_total_expr > 0)
+        != (pl.col(MetricColumn.FALSE_POSITIVE_RATE_STATUS.value) == MetricStatus.AVAILABLE.value)
+    )
+    if fpr_off.height > 0:
+        raise ScientificContractViolationError(
+            f"Conformal coverage metric status disagrees for seed '{seed.value}'"
         )
+
+    # Compute per-client coverage vectorially
+    coverage_expr = (
+        pl.when(benign_total_expr > 0)
+        .then(pl.col(MetricColumn.TRUE_NEGATIVES.value) / benign_total_expr)
+        .otherwise(None)
+    )
+
+    # Aggregate seed-level totals (clients with available coverage only)
+    has_coverage = coverage_expr.is_not_null()
+    true_negatives = joined.filter(has_coverage).select(
+        pl.col(MetricColumn.TRUE_NEGATIVES.value).sum()
+    ).item()
+    benign_total = joined.filter(has_coverage).select(
+        benign_total_expr.sum()
+    ).item()
+
+    # Build per-client coverage frame — the only place where iter_rows is used
+    per_client = joined.select(
+        pl.col(ThresholdColumn.CLIENT_ID.value),
+        coverage_expr.alias("coverage"),
+        (coverage_expr - target_coverage).abs().alias("absolute_coverage_error"),
+        pl.when(has_coverage)
+        .then(pl.lit(CoverageStatus.AVAILABLE.value))
+        .otherwise(pl.lit(CoverageStatus.UNAVAILABLE_NO_BENIGN_TEST_RECORDS.value))
+        .alias("coverage_status"),
+        pl.col(ThresholdColumn.FINITE_SAMPLE_RANK.value).cast(pl.Int64).alias("finite_sample_rank"),
+        pl.col(ThresholdColumn.ATTAINABILITY_STATUS.value).alias("attainability_status"),
+        pl.col("_calibration_count").alias("calibration_count"),
+    )
+    per_client_records = [
+        ConformalClientCoverageRecord(
+            client_id=ClientId(str(row[0])),
+            coverage=row[1],
+            absolute_coverage_error=row[2],
+            coverage_status=CoverageStatus(row[3]),
+            finite_sample_rank=row[4],
+            attainability_status=ConformalAttainabilityStatus(row[5]),
+            calibration_count=row[6],
+        )
+        for row in per_client.iter_rows()
+    ]
     return ConformalSeedCoverageResult(
         seed=seed,
         per_client_coverage=tuple(per_client_records),
@@ -141,7 +181,7 @@ def analyze_conformal_coverage(
 
         calibration_counts = tuple(
             (ClientId(str(client_id[0])), len(rows))
-            for client_id, rows in calibration_frame.group_by(MetricColumn.CLIENT_ID.value, maintain_order=True)
+            for client_id, rows in calibration_frame.group_by(ScoreColumn.CLIENT_ID.value, maintain_order=True)
         )
         seed_results.append(
             conformal_seed_coverage(

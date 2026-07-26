@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import ClassVar, Protocol, runtime_checkable
+from typing import Annotated, Literal, Protocol, runtime_checkable
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from datp_core.analysis.enums import (
     AlertBurdenStatus,
@@ -28,7 +28,6 @@ from datp_core.analysis.enums import (
     UndefinedDenominatorBehavior,
 )
 from datp_core.analysis.errors import PrerequisiteResultMissingError, StatisticalProcedureError
-from datp_core.analysis.runtime.registry import RESULT_REGISTRY
 from datp_core.core.identifiers import (
     AnalysisLabel,
     ClientId,
@@ -52,24 +51,25 @@ class QuantileThresholdPolicy(Protocol):
     quantile: float
 
 
-@runtime_checkable
-class AnalysisResultContract(Protocol):
-    """Protocol for every persisted analysis result."""
 
-    result_kind: ClassVar[AnalysisResultKind]
-    payload_version: ClassVar[int]
+class FrozenModel(BaseModel):
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        strict=True,
+        validate_default=True,
+        arbitrary_types_allowed=True,
+    )
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AnalysisCell:
+class AnalysisCell(FrozenModel):
     """Explicit immutable record representing one cell in a sweep dimension."""
 
     dimension: SweepDimensionKind
     value: float | int | str | tuple[str, ...] | PartitionConditionId
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class PairedAnalysisCell:
+class PairedAnalysisCell(FrozenModel):
     """One valid combination of sweep dimensions for a paired-threshold analysis."""
 
     partition_condition: PartitionConditionId | None = None
@@ -81,8 +81,7 @@ class PairedAnalysisCell:
 
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ConfidenceInterval:
+class ConfidenceInterval(FrozenModel):
     """A confidence interval with its construction method."""
 
     lower_bound: float
@@ -90,19 +89,20 @@ class ConfidenceInterval:
     confidence_level: Probability
     method: ConfidenceIntervalMethod
 
-    def __attrs_post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate_bounds(self) -> ConfidenceInterval:
         if self.lower_bound > self.upper_bound:
             raise StatisticalProcedureError(
                 f"Confidence interval lower bound {self.lower_bound} exceeds upper bound {self.upper_bound}"
             )
+        return self
 
     @property
     def excludes_zero_positive(self) -> bool:
         return self.lower_bound > 0.0
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class HypothesisTestResult:
+class HypothesisTestResult(FrozenModel):
     """Result of a statistical hypothesis test."""
 
     test_name: HypothesisTestName
@@ -112,8 +112,7 @@ class HypothesisTestResult:
     alternative: AlternativeHypothesis = AlternativeHypothesis.TWO_SIDED
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class LinearRegressionResult:
+class LinearRegressionResult(FrozenModel):
     """Simple linear regression with leverage diagnostics."""
 
     slope: float
@@ -124,8 +123,7 @@ class LinearRegressionResult:
     leave_one_out_slopes: tuple[float, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class PairedSeedDifferenceRecord:
+class PairedSeedDifferenceRecord(FrozenModel):
     """One paired-seed statistical comparison between two threshold policies."""
 
     metric_id: MetricId
@@ -140,14 +138,13 @@ class PairedSeedDifferenceRecord:
 
 
 # ---------------------------------------------------------------------------
-# Result Classes Implementing AnalysisResultContract
+# Result Classes with Discriminated Union
 # ---------------------------------------------------------------------------
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class PairedThresholdAnalysisResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.PAIRED_THRESHOLD
-    payload_version: ClassVar[int] = 1
+class PairedThresholdAnalysisResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.PAIRED_THRESHOLD] = AnalysisResultKind.PAIRED_THRESHOLD
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     metric: MetricId
@@ -177,20 +174,17 @@ class PairedThresholdAnalysisResult:
     holm_adjusted_p_value: float | None = None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FederatedProximalLossObservation:
+class FederatedProximalLossObservation(FrozenModel):
     proximal_mu: float
     mean_benign_calibration_loss: float
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DittoLossObservation:
+class DittoLossObservation(FrozenModel):
     proximal_weight: float
     mean_benign_calibration_loss: float
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class CheckpointSelectionArtifact:
+class CheckpointSelectionArtifact(FrozenModel):
     selected_proximal_mu: float | None = None
     selected_ditto_proximal_weight: float | None = None
     locked_primary_round: int | None = None
@@ -198,10 +192,9 @@ class CheckpointSelectionArtifact:
     ditto_losses: tuple[DittoLossObservation, ...] = ()
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FederatedProximalSelectionResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.FEDERATED_PROXIMAL_SELECTION
-    payload_version: ClassVar[int] = 1
+class FederatedProximalSelectionResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.FEDERATED_PROXIMAL_SELECTION] = AnalysisResultKind.FEDERATED_PROXIMAL_SELECTION
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     selected_proximal_mu: float
@@ -209,10 +202,9 @@ class FederatedProximalSelectionResult:
     calibration_losses: tuple[FederatedProximalLossObservation, ...] | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DittoSelectionResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.DITTO_SELECTION
-    payload_version: ClassVar[int] = 1
+class DittoSelectionResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.DITTO_SELECTION] = AnalysisResultKind.DITTO_SELECTION
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     selected_ditto_proximal_weight: float
@@ -220,16 +212,14 @@ class DittoSelectionResult:
     calibration_losses: tuple[DittoLossObservation, ...] | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AnchorHistoricalReference:
+class AnchorHistoricalReference(FrozenModel):
     delta: float
     lower_bound: float
     upper_bound: float
     interval_width: float
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AnchorEquivalenceChecks:
+class AnchorEquivalenceChecks(FrozenModel):
     positive_reproduced_delta: bool
     reproduced_estimate_within_historical_interval: bool
     overlapping_confidence_intervals: bool
@@ -238,10 +228,9 @@ class AnchorEquivalenceChecks:
     verified_configuration_and_provenance: bool
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AnchorEquivalenceAnalysisResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.ANCHOR_EQUIVALENCE
-    payload_version: ClassVar[int] = 1
+class AnchorEquivalenceAnalysisResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.ANCHOR_EQUIVALENCE] = AnalysisResultKind.ANCHOR_EQUIVALENCE
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     comparison_mode: AnchorComparisonMode
@@ -254,8 +243,7 @@ class AnchorEquivalenceAnalysisResult:
     historical_reference: AnchorHistoricalReference
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ConformalClientCoverageRecord:
+class ConformalClientCoverageRecord(FrozenModel):
     client_id: ClientId
     coverage: float | None
     absolute_coverage_error: float | None
@@ -265,18 +253,16 @@ class ConformalClientCoverageRecord:
     calibration_count: int
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ConformalSeedCoverageResult:
+class ConformalSeedCoverageResult(FrozenModel):
     seed: Seed
     per_client_coverage: tuple[ConformalClientCoverageRecord, ...]
     benign_true_negatives: int
     benign_total: int
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ConformalCoverageAnalysisResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.CONFORMAL_COVERAGE
-    payload_version: ClassVar[int] = 1
+class ConformalCoverageAnalysisResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.CONFORMAL_COVERAGE] = AnalysisResultKind.CONFORMAL_COVERAGE
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     target_coverage: float
@@ -287,8 +273,7 @@ class ConformalCoverageAnalysisResult:
     seed_results: tuple[ConformalSeedCoverageResult, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class QuantileEstimationClientResult:
+class QuantileEstimationClientResult(FrozenModel):
     client_id: ClientId
     absolute_threshold_error: float
     relative_threshold_error: float | None
@@ -297,8 +282,7 @@ class QuantileEstimationClientResult:
     absolute_attainment_error: float | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class QuantileEstimationEvaluationResult:
+class QuantileEstimationEvaluationResult(FrozenModel):
     evaluation_label: EvaluationLabel
     per_client: tuple[QuantileEstimationClientResult, ...]
     within_term: float
@@ -306,25 +290,22 @@ class QuantileEstimationEvaluationResult:
     between_ratio: float | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class QuantileEstimationSeedResult:
+class QuantileEstimationSeedResult(FrozenModel):
     seed: Seed
     oracle_threshold: float
     evaluations: tuple[QuantileEstimationEvaluationResult, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class QuantileEstimationAnalysisResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.QUANTILE_ESTIMATION
-    payload_version: ClassVar[int] = 1
+class QuantileEstimationAnalysisResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.QUANTILE_ESTIMATION] = AnalysisResultKind.QUANTILE_ESTIMATION
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     produced_fields: tuple[ProducedField, ...]
     seed_results: tuple[QuantileEstimationSeedResult, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ThresholdStabilitySeedResult:
+class ThresholdStabilitySeedResult(FrozenModel):
     seed: Seed
     threshold_variance_across_replicates: float | None
     absolute_attainment_error: float | None
@@ -332,10 +313,9 @@ class ThresholdStabilitySeedResult:
     clients_unavailable_at_size: tuple[ClientId, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ThresholdStabilityAnalysisResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.THRESHOLD_STABILITY
-    payload_version: ClassVar[int] = 1
+class ThresholdStabilityAnalysisResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.THRESHOLD_STABILITY] = AnalysisResultKind.THRESHOLD_STABILITY
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     calibration_sample_count: int
@@ -344,14 +324,12 @@ class ThresholdStabilityAnalysisResult:
     seed_results: tuple[ThresholdStabilitySeedResult, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AssociationCorrelationResult:
+class AssociationCorrelationResult(FrozenModel):
     coefficient: float
     p_value: float
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AssociationRegressionResult:
+class AssociationRegressionResult(FrozenModel):
     coefficient: float
     intercept: float
     standard_error: float
@@ -360,18 +338,16 @@ class AssociationRegressionResult:
     leave_one_out_slopes: tuple[float, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AssociationObservationRecord:
+class AssociationObservationRecord(FrozenModel):
     partition_condition: PartitionConditionId
     seed: Seed
     pairwise_js_divergence: float
     cv_fpr_delta: float
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class MetricAssociationAnalysisResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.METRIC_ASSOCIATION
-    payload_version: ClassVar[int] = 1
+class MetricAssociationAnalysisResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.METRIC_ASSOCIATION] = AnalysisResultKind.METRIC_ASSOCIATION
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     interpretation_constraint: str
@@ -380,16 +356,14 @@ class MetricAssociationAnalysisResult:
     observations: tuple[AssociationObservationRecord, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class CountRatioObservation:
+class CountRatioObservation(FrozenModel):
     """Observation pair of numerator and denominator counts/totals for ratio-of-totals calculation."""
 
     numerator: float
     denominator: float
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class PrerequisiteAnalysisReference:
+class PrerequisiteAnalysisReference(FrozenModel):
     """Typed reference coordinates for resolving a prerequisite analysis result."""
 
     experiment_id: ExperimentId
@@ -397,10 +371,9 @@ class PrerequisiteAnalysisReference:
     result_kind: AnalysisResultKind
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AbsorptionAnalysisResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.ABSORPTION
-    payload_version: ClassVar[int] = 1
+class AbsorptionAnalysisResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.ABSORPTION] = AnalysisResultKind.ABSORPTION
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     formula: str
@@ -411,10 +384,9 @@ class AbsorptionAnalysisResult:
     ratio_of_seed_means: float | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class RecoveryFractionAnalysisResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.RECOVERY_FRACTION
-    payload_version: ClassVar[int] = 1
+class RecoveryFractionAnalysisResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.RECOVERY_FRACTION] = AnalysisResultKind.RECOVERY_FRACTION
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     formula: str
@@ -424,20 +396,17 @@ class RecoveryFractionAnalysisResult:
     mean_defined_recovery_fraction: float | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClientClusterMembership:
+class ClientClusterMembership(FrozenModel):
     client_id: ClientId
     cluster_label: ClusterLabel
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClusterSize:
+class ClusterSize(FrozenModel):
     cluster_label: ClusterLabel
     client_count: int
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClusterDispersionResult:
+class ClusterDispersionResult(FrozenModel):
     status: ClusterDispersionStatus
     value: float | None
     reason: str | None
@@ -446,17 +415,15 @@ class ClusterDispersionResult:
     excluded_client_count: int
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClusterAblationObservation:
+class ClusterAblationObservation(FrozenModel):
     seed: Seed
     fingerprint_features: tuple[str, ...]
     adjusted_rand_index: float
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClusterAblationStabilityResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.CLUSTER_ABLATION
-    payload_version: ClassVar[int] = 1
+class ClusterAblationStabilityResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.CLUSTER_ABLATION] = AnalysisResultKind.CLUSTER_ABLATION
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     comparison_unit: str
@@ -464,8 +431,7 @@ class ClusterAblationStabilityResult:
     observations: tuple[ClusterAblationObservation, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClusterStabilitySeedSummary:
+class ClusterStabilitySeedSummary(FrozenModel):
     seed: Seed
     cluster_memberships: tuple[ClientClusterMembership, ...]
     cluster_sizes: tuple[ClusterSize, ...]
@@ -477,10 +443,9 @@ class ClusterStabilitySeedSummary:
     across_cluster_mean_fpr_dispersion: ClusterDispersionResult
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClusterMembershipStabilityResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.CLUSTER_STABILITY
-    payload_version: ClassVar[int] = 1
+class ClusterMembershipStabilityResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.CLUSTER_STABILITY] = AnalysisResultKind.CLUSTER_STABILITY
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     comparison_unit: str
@@ -492,56 +457,48 @@ class ClusterMembershipStabilityResult:
 ClusterStabilityAnalysisResult = ClusterAblationStabilityResult | ClusterMembershipStabilityResult
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClientDistributionEntry:
+class ClientDistributionEntry(FrozenModel):
     client_id: ClientId
     distribution: ClientScoreDistributionRecord
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class EvaluationDistributionResult:
+class EvaluationDistributionResult(FrozenModel):
     evaluation_label: EvaluationLabel
     clients: tuple[ClientDistributionEntry, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DistributionMechanismSeedResult:
+class DistributionMechanismSeedResult(FrozenModel):
     seed: Seed
     evaluations: tuple[EvaluationDistributionResult, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DistributionMechanismRawResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.DISTRIBUTION_MECHANISM
-    payload_version: ClassVar[int] = 1
+class DistributionMechanismRawResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.DISTRIBUTION_MECHANISM] = AnalysisResultKind.DISTRIBUTION_MECHANISM
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     produced_fields: tuple[ProducedField, ...]
     seed_results: tuple[DistributionMechanismSeedResult, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClientTradeoffEntry:
+class ClientTradeoffEntry(FrozenModel):
     client_id: ClientId
     tradeoff: ThresholdTradeoffEntry
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DistributionMechanismTradeoffSeedResult:
+class DistributionMechanismTradeoffSeedResult(FrozenModel):
     seed: Seed
     per_client_tradeoff: tuple[ClientTradeoffEntry, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FieldFormulaContract:
+class FieldFormulaContract(FrozenModel):
     field: ProducedField
     formula: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DistributionMechanismTradeoffResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.DISTRIBUTION_TRADEOFF
-    payload_version: ClassVar[int] = 1
+class DistributionMechanismTradeoffResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.DISTRIBUTION_TRADEOFF] = AnalysisResultKind.DISTRIBUTION_TRADEOFF
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     field_formulas: tuple[FieldFormulaContract, ...]
@@ -552,10 +509,9 @@ class DistributionMechanismTradeoffResult:
 DistributionMechanismAnalysisResult = DistributionMechanismRawResult | DistributionMechanismTradeoffResult
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class LockedClientDistributionAnalysisResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.LOCKED_CLIENT_DISTRIBUTION
-    payload_version: ClassVar[int] = 1
+class LockedClientDistributionAnalysisResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.LOCKED_CLIENT_DISTRIBUTION] = AnalysisResultKind.LOCKED_CLIENT_DISTRIBUTION
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     locked_client_identifier: ClientId
@@ -563,10 +519,9 @@ class LockedClientDistributionAnalysisResult:
     seed_results: tuple[DistributionMechanismSeedResult, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class TemporalRecoveryAnalysisResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.TEMPORAL_RECOVERY
-    payload_version: ClassVar[int] = 1
+class TemporalRecoveryAnalysisResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.TEMPORAL_RECOVERY] = AnalysisResultKind.TEMPORAL_RECOVERY
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     metric: MetricId
@@ -585,10 +540,9 @@ class TemporalRecoveryAnalysisResult:
     chronology_unverifiable_policy: ChronologyPolicy
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AlertBurdenAnalysisResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.ALERT_BURDEN
-    payload_version: ClassVar[int] = 1
+class AlertBurdenAnalysisResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.ALERT_BURDEN] = AnalysisResultKind.ALERT_BURDEN
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     formula: str
@@ -598,8 +552,7 @@ class AlertBurdenAnalysisResult:
     benign_decision_rate_source: str | None = None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ResourceCostEvaluationResult:
+class ResourceCostEvaluationResult(FrozenModel):
     evaluation: EvaluationLabel
     transmitted_field_list: tuple[CommunicationFieldIdentifier, ...]
     estimated_threshold_message_bytes: int
@@ -607,16 +560,14 @@ class ResourceCostEvaluationResult:
     estimated_checkpoint_storage_bytes: int
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ResourceCostSeedResult:
+class ResourceCostSeedResult(FrozenModel):
     seed: Seed
     evaluations: tuple[ResourceCostEvaluationResult, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ResourceCostAnalysisResult:
-    result_kind: ClassVar[AnalysisResultKind] = AnalysisResultKind.RESOURCE_COST
-    payload_version: ClassVar[int] = 1
+class ResourceCostAnalysisResult(FrozenModel):
+    result_kind: Literal[AnalysisResultKind.RESOURCE_COST] = AnalysisResultKind.RESOURCE_COST
+    payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
     estimate_basis: ResourceEstimateBasis
@@ -629,15 +580,14 @@ class ResourceCostAnalysisResult:
 # ---------------------------------------------------------------------------
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class PrerequisiteExperimentResult:
+class PrerequisiteExperimentResult(FrozenModel):
     """A validated, immutable frozen result supplied by a configured prerequisite."""
 
     experiment_id: ExperimentId
     frozen_result_path: str
     frozen_result_checksum: str
     scientific_fingerprint: str
-    statistical_results: tuple[AnalysisResultContract, ...]
+    statistical_results: tuple[AnalysisResult, ...]
 
     def paired_result(self, analysis_label: AnalysisLabel) -> PairedThresholdAnalysisResult:
         """Return the unique paired result matching *analysis_label*."""
@@ -654,25 +604,25 @@ class PrerequisiteExperimentResult:
         return matches[0]
 
 
-for _cls in (
-    PairedThresholdAnalysisResult,
-    ConformalCoverageAnalysisResult,
-    QuantileEstimationAnalysisResult,
-    ThresholdStabilityAnalysisResult,
-    MetricAssociationAnalysisResult,
-    AbsorptionAnalysisResult,
-    RecoveryFractionAnalysisResult,
-    ClusterAblationStabilityResult,
-    ClusterMembershipStabilityResult,
-    DistributionMechanismRawResult,
-    DistributionMechanismTradeoffResult,
-    LockedClientDistributionAnalysisResult,
-    TemporalRecoveryAnalysisResult,
-    AlertBurdenAnalysisResult,
-    ResourceCostAnalysisResult,
-    FederatedProximalSelectionResult,
-    DittoSelectionResult,
-    AnchorEquivalenceAnalysisResult,
-):
-    RESULT_REGISTRY.register_result_class(_cls)
+AnalysisResult = Annotated[
+    PairedThresholdAnalysisResult
+    | ConformalCoverageAnalysisResult
+    | QuantileEstimationAnalysisResult
+    | ThresholdStabilityAnalysisResult
+    | MetricAssociationAnalysisResult
+    | AbsorptionAnalysisResult
+    | RecoveryFractionAnalysisResult
+    | ClusterAblationStabilityResult
+    | ClusterMembershipStabilityResult
+    | DistributionMechanismRawResult
+    | DistributionMechanismTradeoffResult
+    | LockedClientDistributionAnalysisResult
+    | TemporalRecoveryAnalysisResult
+    | AlertBurdenAnalysisResult
+    | ResourceCostAnalysisResult
+    | FederatedProximalSelectionResult
+    | DittoSelectionResult
+    | AnchorEquivalenceAnalysisResult,
+    Field(discriminator="result_kind"),
+]
 

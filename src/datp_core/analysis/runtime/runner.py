@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from attrs import define
 
-from datp_core.analysis.contracts import AnalysisResultContract, PairedAnalysisCell
+from datp_core.analysis.contracts import AnalysisResult, PairedAnalysisCell
 from datp_core.analysis.errors import UnsupportedAnalysisRecordError
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
 
@@ -25,7 +25,7 @@ def run_analysis(
     specification: object,
     context: AnalysisExecutionContext,
     cell: PairedAnalysisCell | None = None,
-) -> tuple[AnalysisResultContract, ...] | AnalysisResultContract:
+) -> tuple[AnalysisResult, ...]:
     """Dispatch an analysis specification to its registered implementation."""
     raise UnsupportedAnalysisRecordError(
         f"No implementation registered for analysis type: {type(specification).__name__}"
@@ -67,8 +67,5 @@ class AnalysisRunner:
         specification: AnalysisRecord,
         *,
         cell: PairedAnalysisCell | None = None,
-    ) -> tuple[AnalysisResultContract, ...]:
-        result = run_analysis(specification, self.context, cell)
-        if isinstance(result, tuple):
-            return result
-        return (result,)
+    ) -> tuple[AnalysisResult, ...]:
+        return run_analysis(specification, self.context, cell)

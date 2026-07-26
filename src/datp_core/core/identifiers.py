@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from attrs import define, field
+from pydantic_core import core_schema
 
 _HEX64_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
@@ -24,6 +26,25 @@ class _DomainIdentifier:
 
     def __str__(self) -> str:
         return self.value
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, _source_type: Any, _handler: Any
+    ) -> core_schema.CoreSchema:
+        return core_schema.no_info_plain_validator_function(
+            cls._pydantic_validate,
+            serialization=core_schema.plain_serializer_function_ser_schema(
+                lambda v: v.value,
+            ),
+        )
+
+    @classmethod
+    def _pydantic_validate(cls, v: object) -> _DomainIdentifier:
+        if isinstance(v, cls):
+            return v
+        if not isinstance(v, str):
+            raise ValueError(f"Expected str for {cls.__name__}, got {type(v).__name__}")
+        return cls(v)
 
 
 class DatasetId(_DomainIdentifier):

@@ -7,14 +7,13 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Sequence
 from math import isfinite
-from typing import cast
-
 import numpy as np
-from attrs import evolve
+import pandas as pd
+import pingouin as pg
 from scipy import stats
 
 from datp_core.analysis.contracts import (
-    AnalysisResultContract,
+    AnalysisResult,
     ConfidenceInterval,
     HypothesisTestResult,
     LinearRegressionResult,
@@ -32,50 +31,33 @@ from datp_core.core.seeding import Seed
 
 
 def matched_pairs_rank_biserial_correlation(left: Iterable[float], right: Iterable[float]) -> float:
-    """Signed-rank effect size for paired observations with average tie ranks."""
+    """Signed-rank effect size for paired observations using Pingouin."""
     differences = tuple(float(a) - float(b) for a, b in zip(left, right, strict=True))
     if not differences or not all(isfinite(value) for value in differences):
         raise StatisticalProcedureError("Rank-biserial correlation requires finite paired observations")
     nonzero = tuple(value for value in differences if not math.isclose(value, 0.0, abs_tol=0.0))
     if not nonzero:
         return 0.0
-    ranks = _average_ranks(tuple(abs(value) for value in nonzero))
-    positive = sum(rank for difference, rank in zip(nonzero, ranks, strict=True) if difference > 0.0)
-    negative = sum(rank for difference, rank in zip(nonzero, ranks, strict=True) if difference < 0.0)
-    return (positive - negative) / (positive + negative)
-
-
-def _average_ranks(values: tuple[float, ...]) -> tuple[float, ...]:
-    ranks = [0.0] * len(values)
-    ordered = sorted(enumerate(values), key=lambda item: item[1])
-    start = 0
-    while start < len(ordered):
-        end = start + 1
-        while end < len(ordered) and ordered[end][1] == ordered[start][1]:
-            end += 1
-        average_rank = ((start + 1) + end) / 2.0
-        for index, _ in ordered[start:end]:
-            ranks[index] = average_rank
-        start = end
-    return tuple(ranks)
+    df = pd.DataFrame({"x": list(left), "y": list(right)})
+    res = pg.wilcoxon(df["x"], df["y"], alternative="two-sided")
+    rbc = float(res["RBC"].iloc[0])
+    if not isfinite(rbc):
+        raise StatisticalProcedureError("Pingouin returned non-finite rank-biserial correlation")
+    return rbc
 
 
 def holm_adjust_p_values(values: Iterable[float]) -> tuple[float, ...]:
-    """Apply the Holm step-down correction, returning adjusted values in original order."""
+    """Apply the Holm step-down correction using Pingouin, returning adjusted values in original order."""
     p_values = tuple(float(value) for value in values)
     if not all(isfinite(value) and 0.0 <= value <= 1.0 for value in p_values):
         raise StatisticalProcedureError("Holm correction requires finite p-values in [0, 1]")
-    ordered = sorted(enumerate(p_values), key=lambda item: item[1])
-    adjusted = [0.0] * len(p_values)
-    previous = 0.0
-    for rank, (index, p_value) in enumerate(ordered):
-        corrected = min(1.0, (len(p_values) - rank) * p_value)
-        previous = max(previous, corrected)
-        adjusted[index] = previous
-    return tuple(adjusted)
+    if len(p_values) < 2:
+        return p_values
+    _, adjusted = pg.multicomp(list(p_values), method="holm")
+    return tuple(float(v) for v in adjusted)
 
 
-def apply_holm_correction(results: Sequence[AnalysisResultContract]) -> tuple[AnalysisResultContract, ...]:
+def apply_holm_correction(results: Sequence[AnalysisResult]) -> tuple[AnalysisResult, ...]:
     """Apply Holm-Bonferroni correction across every paired-threshold analysis p-value."""
     candidates: list[tuple[int, float]] = [
         (index, result.p_value)
@@ -89,7 +71,7 @@ def apply_holm_correction(results: Sequence[AnalysisResultContract]) -> tuple[An
     for (index, _), adjusted_value in zip(candidates, adjusted, strict=True):
         res = updated[index]
         if isinstance(res, PairedThresholdAnalysisResult):
-            updated[index] = evolve(res, holm_adjusted_p_value=adjusted_value)
+            updated[index] = res.model_copy(update={"holm_adjusted_p_value": adjusted_value})
     return tuple(updated)
 
 
@@ -180,12 +162,12 @@ class StatisticalAnalysisUseCase:
                 p_value=1.0,
                 alternative=AlternativeHypothesis.TWO_SIDED,
             )
-        res = stats.wilcoxon(x, y, zero_method="pratt", correction=True)
-        statistic, p_value = cast("tuple[float, float]", res)
+        df = pd.DataFrame({"x": x, "y": y})
+        res = pg.wilcoxon(df["x"], df["y"], alternative="two-sided")
         return HypothesisTestResult(
             test_name=HypothesisTestName.WILCOXON_SIGNED_RANK,
-            statistic=float(statistic),
-            p_value=float(p_value),
+            statistic=float(res["W-val"].iloc[0]),
+            p_value=float(res["p-val"].iloc[0]),
             alternative=AlternativeHypothesis.TWO_SIDED,
         )
 

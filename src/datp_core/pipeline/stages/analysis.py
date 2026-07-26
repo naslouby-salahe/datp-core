@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from datp_core.analysis.contracts import AnalysisResultContract
+from datp_core.analysis.contracts import AnalysisResult
 from datp_core.analysis.errors import AnalysisError
 from datp_core.analysis.runtime.artifacts import AnalysisArtifactRepository, _ArtifactPathIndex
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
@@ -56,7 +56,7 @@ class StatisticalAnalysisStageHandler:
             runner = AnalysisRunner(context=context)
             dimensions = resolve_sweep_dimensions(experiment, training_profile)
 
-            results_list: list[AnalysisResultContract] = []
+            results_list: list[AnalysisResult] = []
             for analysis_record in experiment.analyses:
                 if isinstance(analysis_record, PairedThresholdAnalysisRecord):
                     cells = expand_paired_analysis_cells(analysis_record, dimensions)
@@ -74,7 +74,7 @@ class StatisticalAnalysisStageHandler:
                 selection_payload = artifacts.checkpoint_selection(sel_ctx)
                 results_list.append(ditto_selection(selection_payload))
 
-            finalized: Sequence[AnalysisResultContract] = apply_holm_correction(results_list)
+            finalized: Sequence[AnalysisResult] = apply_holm_correction(results_list)
             persist_analysis_results(store=self._store, job=job, results=finalized)
 
         except AnalysisError as exc:
