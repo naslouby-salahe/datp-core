@@ -1,22 +1,27 @@
 """Paired-seed inference: BCa/percentile bootstrap, Wilcoxon signed-rank, rank-biserial effect
-size, Holm-Bonferroni correction, composed behind ``StatisticalAnalysisUseCase``."""
+size, Holm-Bonferroni correction, composed behind ``StatisticalAnalysisUseCase``.
+"""
 
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from math import isfinite
 from typing import cast
 
 import numpy as np
+from attrs import evolve
 from scipy import stats
 
 from datp_core.analysis.contracts import (
+    AnalysisResultContract,
     ConfidenceInterval,
     HypothesisTestResult,
     LinearRegressionResult,
     PairedSeedDifferenceRecord,
+    PairedThresholdAnalysisResult,
 )
+from datp_core.analysis.enums import AlternativeHypothesis, ConfidenceIntervalMethod, HypothesisTestName
 from datp_core.analysis.errors import StatisticalProcedureError
 from datp_core.analysis.statistics.association import simple_linear_regression, spearman_correlation
 from datp_core.config.statistical_profiles import BootstrapMethod, StatisticalProfileRecord
@@ -27,10 +32,7 @@ from datp_core.core.seeding import Seed
 
 
 def matched_pairs_rank_biserial_correlation(left: Iterable[float], right: Iterable[float]) -> float:
-    """Signed-rank effect size for paired observations with average tie ranks.
-
-    Returns 0.0 when all paired differences are zero.
-    """
+    """Signed-rank effect size for paired observations with average tie ranks."""
     differences = tuple(float(a) - float(b) for a, b in zip(left, right, strict=True))
     if not differences or not all(isfinite(value) for value in differences):
         raise StatisticalProcedureError("Rank-biserial correlation requires finite paired observations")
@@ -73,28 +75,22 @@ def holm_adjust_p_values(values: Iterable[float]) -> tuple[float, ...]:
     return tuple(adjusted)
 
 
-def apply_holm_correction(results: list) -> list:
-    """Apply Holm-Bonferroni correction across every paired-threshold analysis p-value.
-
-    Only ``PairedThresholdAnalysisResult`` instances with non-None p-values are
-    included in the correction family.  Other result types pass through unchanged.
-    """
-    from attrs import evolve
-
-    from datp_core.analysis.contracts import PairedThresholdAnalysisResult
-
+def apply_holm_correction(results: Sequence[AnalysisResultContract]) -> tuple[AnalysisResultContract, ...]:
+    """Apply Holm-Bonferroni correction across every paired-threshold analysis p-value."""
     candidates: list[tuple[int, float]] = [
         (index, result.p_value)
         for index, result in enumerate(results)
         if isinstance(result, PairedThresholdAnalysisResult) and result.p_value is not None
     ]
     if len(candidates) < 2:
-        return results
+        return tuple(results)
     adjusted = holm_adjust_p_values(value for _, value in candidates)
     updated = list(results)
     for (index, _), adjusted_value in zip(candidates, adjusted, strict=True):
-        updated[index] = evolve(updated[index], holm_adjusted_p_value=adjusted_value)
-    return updated
+        res = updated[index]
+        if isinstance(res, PairedThresholdAnalysisResult):
+            updated[index] = evolve(res, holm_adjusted_p_value=adjusted_value)
+    return tuple(updated)
 
 
 class StatisticalAnalysisUseCase:
@@ -107,9 +103,9 @@ class StatisticalAnalysisUseCase:
         self,
         scores_policy_a: tuple[float, ...],
         scores_policy_b: tuple[float, ...],
-        metric_name: str,
-        policy_a_name: str,
-        policy_b_name: str,
+        metric_id: MetricId,
+        policy_a_id: ThresholdPolicyId,
+        policy_b_id: ThresholdPolicyId,
         statistical_profile_id: StatisticalProfileId,
         analysis_seed: Seed,
     ) -> PairedSeedDifferenceRecord:
@@ -129,23 +125,26 @@ class StatisticalAnalysisUseCase:
                 "Paired seed analysis requires equally sized policy score cohorts"
             )
         diffs = arr_a - arr_b
-
         mean_diff = float(np.mean(diffs))
-        if profile.method is None:
-            raise StatisticalProcedureError("Bootstrap profile method must not be None")
+
+        method_enum = (
+            ConfidenceIntervalMethod.BCA_BOOTSTRAP
+            if profile.method == BootstrapMethod.BCA_BOOTSTRAP
+            else ConfidenceIntervalMethod.PERCENTILE_BOOTSTRAP
+        )
         ci = self._compute_bca_bootstrap_ci(
             diffs,
             resample_count=profile.resample_count.value,
             confidence_level=profile.confidence_level.value,
             analysis_seed=analysis_seed.value,
-            method=profile.method,
+            method=method_enum,
         )
         test_res = self._compute_wilcoxon_signed_rank(arr_a, arr_b) if len(arr_a) >= 5 else None
 
         return PairedSeedDifferenceRecord(
-            metric_id=MetricId(metric_name),
-            policy_a_id=ThresholdPolicyId(policy_a_name),
-            policy_b_id=ThresholdPolicyId(policy_b_name),
+            metric_id=metric_id,
+            policy_a_id=policy_a_id,
+            policy_b_id=policy_b_id,
             mean_difference=mean_diff,
             confidence_interval=ci,
             hypothesis_test=test_res,
@@ -176,14 +175,18 @@ class StatisticalAnalysisUseCase:
         nonzero = differences[np.abs(differences) > 0.0]
         if len(nonzero) == 0:
             return HypothesisTestResult(
-                test_name="wilcoxon_signed_rank",
+                test_name=HypothesisTestName.WILCOXON_SIGNED_RANK,
                 statistic=0.0,
                 p_value=1.0,
+                alternative=AlternativeHypothesis.TWO_SIDED,
             )
         res = stats.wilcoxon(x, y, zero_method="pratt", correction=True)
         statistic, p_value = cast("tuple[float, float]", res)
         return HypothesisTestResult(
-            test_name="wilcoxon_signed_rank", statistic=float(statistic), p_value=float(p_value)
+            test_name=HypothesisTestName.WILCOXON_SIGNED_RANK,
+            statistic=float(statistic),
+            p_value=float(p_value),
+            alternative=AlternativeHypothesis.TWO_SIDED,
         )
 
     @staticmethod
@@ -192,7 +195,7 @@ class StatisticalAnalysisUseCase:
         resample_count: int,
         confidence_level: float,
         analysis_seed: int,
-        method: str,
+        method: ConfidenceIntervalMethod,
     ) -> ConfidenceInterval:
         if not np.isfinite(data).all():
             raise StatisticalProcedureError("Bootstrap requires finite paired seed differences")
@@ -203,10 +206,12 @@ class StatisticalAnalysisUseCase:
                 confidence_level=Probability(confidence_level),
                 method=method,
             )
-        if method == BootstrapMethod.BCA_BOOTSTRAP and len(data) < 10:
+        if method == ConfidenceIntervalMethod.BCA_BOOTSTRAP and len(data) < 10:
             raise StatisticalProcedureError("BCa requires at least ten valid paired seed differences")
-        if method == BootstrapMethod.PERCENTILE_BOOTSTRAP and len(data) < 2:
-            raise StatisticalProcedureError("Percentile bootstrap requires at least two valid paired seed differences")
+        if method == ConfidenceIntervalMethod.PERCENTILE_BOOTSTRAP and len(data) < 2:
+            raise StatisticalProcedureError(
+                "Percentile bootstrap requires at least two valid paired seed differences"
+            )
 
         try:
             res = stats.bootstrap(
@@ -214,10 +219,10 @@ class StatisticalAnalysisUseCase:
                 np.mean,
                 n_resamples=resample_count,
                 confidence_level=confidence_level,
-                method="BCa" if method == BootstrapMethod.BCA_BOOTSTRAP else "percentile",
+                method="BCa" if method == ConfidenceIntervalMethod.BCA_BOOTSTRAP else "percentile",
                 rng=np.random.default_rng(analysis_seed),
             )
-        except ValueError as exc:
+        except Exception as exc:
             raise StatisticalProcedureError(f"Bootstrap failed: {exc}") from exc
         if not np.isfinite((res.confidence_interval.low, res.confidence_interval.high)).all():
             raise StatisticalProcedureError("Bootstrap produced a non-finite confidence interval")
@@ -227,6 +232,3 @@ class StatisticalAnalysisUseCase:
             confidence_level=Probability(confidence_level),
             method=method,
         )
-
-
-__all__ = ["StatisticalAnalysisUseCase", "holm_adjust_p_values", "matched_pairs_rank_biserial_correlation"]

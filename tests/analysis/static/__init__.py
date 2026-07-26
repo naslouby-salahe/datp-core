@@ -1,0 +1,1 @@
+"""Static architecture AST tests."""

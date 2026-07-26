@@ -9,22 +9,25 @@ import numpy as np
 from scipy import stats
 
 from datp_core.analysis.contracts import HypothesisTestResult, LinearRegressionResult
-from datp_core.analysis.enums import HypothesisTestName
+from datp_core.analysis.enums import AlternativeHypothesis, HypothesisTestName
 from datp_core.analysis.errors import StatisticalProcedureError
 
 
 def spearman_correlation(predictor: np.ndarray, outcome: np.ndarray) -> HypothesisTestResult:
+    """Compute Spearman rank correlation with exact hypothesis test result."""
     statistic, p_value = cast("tuple[float, float]", stats.spearmanr(predictor, outcome))
     if not np.isfinite((statistic, p_value)).all():
         raise StatisticalProcedureError("Spearman correlation is undefined for the supplied observations")
     return HypothesisTestResult(
-        test_name=HypothesisTestName.SPEARMAN_CORRELATION.value,
+        test_name=HypothesisTestName.SPEARMAN_CORRELATION,
         statistic=float(statistic),
         p_value=float(p_value),
+        alternative=AlternativeHypothesis.TWO_SIDED,
     )
 
 
 def simple_linear_regression(predictor: np.ndarray, outcome: np.ndarray) -> LinearRegressionResult:
+    """Compute simple linear regression with leverage diagnostics."""
     slope, intercept, r_value, _, standard_error = cast(
         "tuple[float, float, float, float, float]", stats.linregress(predictor, outcome)
     )

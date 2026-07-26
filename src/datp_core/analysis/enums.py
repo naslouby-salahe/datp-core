@@ -33,6 +33,14 @@ class CoverageStatus(StrEnum):
     UNAVAILABLE_NO_BENIGN_TEST_RECORDS = "unavailable_no_benign_test_records"
 
 
+class CoverageDirection(StrEnum):
+    """Coverage direction specification."""
+
+    TWO_SIDED = "two_sided"
+    UPPER = "upper"
+    LOWER = "lower"
+
+
 # ---------------------------------------------------------------------------
 # Hypothesis testing
 # ---------------------------------------------------------------------------
@@ -77,8 +85,19 @@ class ClusterDispersionKind(StrEnum):
     ACROSS = "across"
 
 
+class ClusterDispersionStatus(StrEnum):
+    """Closed outcome of a within- or across-cluster dispersion computation."""
+
+    AVAILABLE = "available"
+    UNAVAILABLE_EMPTY_CLUSTER = "unavailable_empty_cluster"
+    UNAVAILABLE_NO_AVAILABLE_FPR = "unavailable_no_available_fpr"
+    UNAVAILABLE_INSUFFICIENT_OBSERVATIONS = "unavailable_insufficient_observations"
+    UNAVAILABLE_INCOMPLETE_METRIC_POPULATION = "unavailable_incomplete_metric_population"
+    UNAVAILABLE_NON_FINITE_INPUT = "unavailable_non_finite_input"
+
+
 # ---------------------------------------------------------------------------
-# Temporal recovery
+# Temporal recovery & chronology
 # ---------------------------------------------------------------------------
 
 
@@ -95,6 +114,13 @@ class NegativeRecoveryBehavior(StrEnum):
 
     CLAMP_TO_ZERO = "clamp_to_zero"
     REPORT_NEGATIVE = "report_negative"
+
+
+class ChronologyPolicy(StrEnum):
+    """Policy for verifying chronology of temporal evaluations."""
+
+    STRICT_VERIFICATION = "strict_verification"
+    ALLOW_UNVERIFIABLE = "allow_unverifiable"
 
 
 # ---------------------------------------------------------------------------
@@ -140,6 +166,7 @@ class DenominatorComposition(StrEnum):
 
     SHARED_MEAN = "shared_mean"
     LOCAL = "local"
+    GAP = "shared_minus_local_gap_of_the_same_seed"
 
 
 class MaterialityRuleKind(StrEnum):
@@ -209,6 +236,44 @@ class CommunicationFieldIdentifier(StrEnum):
 
 
 # ---------------------------------------------------------------------------
+# Units, fields, aggregations
+# ---------------------------------------------------------------------------
+
+
+class ComparisonUnit(StrEnum):
+    """Unit of comparison across evaluations or seeds."""
+
+    SEED = "seed"
+    EVALUATION = "evaluation"
+    PARTITION = "partition"
+    CLIENT = "client"
+
+
+class ProducedField(StrEnum):
+    """Fields produced by multi-field analyses."""
+
+    THRESHOLD = "threshold"
+    EXCEEDANCE = "exceedance"
+    SCORE = "score"
+    COVERAGE = "coverage"
+    DISPERSION = "dispersion"
+
+
+class ReplicateAggregation(StrEnum):
+    """Method for aggregating across replicates within a seed."""
+
+    MEAN = "mean"
+    MEDIAN = "median"
+
+
+class InferentialUnit(StrEnum):
+    """Unit of statistical inference."""
+
+    SEED = "seed"
+    CLIENT = "client"
+
+
+# ---------------------------------------------------------------------------
 # Artifact and result kinds
 # ---------------------------------------------------------------------------
 
@@ -238,10 +303,12 @@ class AnalysisResultKind(StrEnum):
     ABSORPTION = "absorption_analysis_result"
     CONFORMAL_COVERAGE = "conformal_coverage_analysis_result"
     DISTRIBUTION_MECHANISM = "distribution_mechanism_analysis_result"
+    DISTRIBUTION_TRADEOFF = "distribution_tradeoff_analysis_result"
     LOCKED_CLIENT_DISTRIBUTION = "locked_client_distribution_analysis_result"
     ALERT_BURDEN = "alert_burden_analysis_result"
     QUANTILE_ESTIMATION = "quantile_estimation_analysis_result"
     RESOURCE_COST = "resource_cost_analysis_result"
     CLUSTER_STABILITY = "cluster_stability_analysis_result"
+    CLUSTER_ABLATION = "cluster_ablation_analysis_result"
     TEMPORAL_RECOVERY = "temporal_recovery_analysis_result"
     ANCHOR_EQUIVALENCE = "anchor_equivalence_analysis_result"

@@ -15,7 +15,7 @@ _STAGE_FILES = {
     "thresholding/execution/handler.py",
     "thresholding/calibration/handler.py",
     "evaluation/execution/handler.py",
-    "analysis/execution/handler.py",
+    "pipeline/stages/analysis.py",
     "reporting/execution/freeze_handler.py",
     "reporting/execution/report_handler.py",
 }

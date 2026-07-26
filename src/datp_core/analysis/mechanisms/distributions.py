@@ -2,157 +2,139 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-
-from attrs import define
-
+from datp_core.analysis.contracts import (
+    ClientDistributionEntry,
+    ClientTradeoffEntry,
+    DistributionMechanismAnalysisResult,
+    DistributionMechanismRawResult,
+    DistributionMechanismSeedResult,
+    DistributionMechanismTradeoffResult,
+    DistributionMechanismTradeoffSeedResult,
+    EvaluationDistributionResult,
+    FieldFormulaContract,
+    LockedClientDistributionAnalysisResult,
+    PairedAnalysisCell,
+)
+from datp_core.analysis.enums import ProducedField
 from datp_core.analysis.errors import ScientificContractViolationError
-from datp_core.analysis.runtime.artifacts import AnalysisInputBundle
-from datp_core.analysis.runtime.artifacts import AnalysisArtifactRepository
+from datp_core.analysis.runtime.context import AnalysisExecutionContext
+from datp_core.analysis.runtime.runner import run_analysis
+from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel
 from datp_core.core.seeding import Seed
 from datp_core.evaluation.distributions import (
-    ClientScoreDistributionRecord,
-    ThresholdTradeoffEntry,
     client_score_distributions,
     threshold_tradeoff,
 )
 from datp_core.experiments import (
     DistributionMechanismAnalysisRecord,
-    ExperimentRecord,
     LockedClientDistributionAnalysisRecord,
 )
-from datp_core.experiments.planning import score_context
-from datp_core.pipeline.stages.context import StageJobContext
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class DistributionMechanismSeedResult:
-    seed: int
-    evaluations: Mapping[str, Mapping[str, ClientScoreDistributionRecord]]
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class DistributionMechanismRawResult:
-    analysis_label: str
-    produced_fields: tuple[str, ...]
-    seed_results: tuple[DistributionMechanismSeedResult, ...]
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class DistributionMechanismTradeoffSeedResult:
-    seed: int
-    per_client_tradeoff: Mapping[str, ThresholdTradeoffEntry]
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class DistributionMechanismTradeoffResult:
-    analysis_label: str
-    field_formulas: Mapping[str, str]
-    produced_fields: tuple[str, ...]
-    seed_results: tuple[DistributionMechanismTradeoffSeedResult, ...]
-
-
-DistributionMechanismAnalysisResult = DistributionMechanismRawResult | DistributionMechanismTradeoffResult
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class LockedClientDistributionAnalysisResult:
-    analysis_label: str
-    locked_client_identifier: str
-    produced_fields: tuple[str, ...]
-    seed_results: tuple[DistributionMechanismSeedResult, ...]
-
-
-def _evaluation_spec(experiment: ExperimentRecord, label: str):
-    """Return the evaluation spec for *label*."""
-    return next(item for item in experiment.evaluations if item.label == label)
 
 
 def distribution_seed_result(
-    experiment: ExperimentRecord,
-    seed: int,
-    evaluations: tuple[str, ...],
-    client_id: str | None,
-    *,
-    artifacts: AnalysisArtifactRepository,
-    inputs: AnalysisInputBundle,
+    context: AnalysisExecutionContext,
+    seed: Seed,
+    evaluations: tuple[EvaluationLabel, ...],
+    client_id: ClientId | None,
 ) -> DistributionMechanismSeedResult:
-    result: dict[str, Mapping[str, ClientScoreDistributionRecord]] = {}
+    """Extract score distributions across evaluations for one seed."""
+    eval_results: list[EvaluationDistributionResult] = []
     for label in evaluations:
-        evaluation = _evaluation_spec(experiment, label)
-        context = StageJobContext(
-            experiment_id=experiment.identifier,
-            seed=seed,
-            evaluation_label=label,
-            population_id=evaluation.population_id,
-            recalibration_mode=evaluation.recalibration_mode,
+        eval_ctx = context.evaluation_context(label, seed)
+        score_ctx = context.score_context(label, seed)
+
+        threshold_frame = context.artifacts.thresholds(eval_ctx)
+        metric_frame = context.artifacts.client_metrics(eval_ctx)
+        score_frame = context.artifacts.test_scores(score_ctx)
+
+        dist_dict = client_score_distributions(
+            threshold_frame, metric_frame, score_frame, client_id.value if client_id is not None else None
         )
-        threshold_frame = artifacts.threshold_frame(inputs.thresholds(context))
-        metric_frame = artifacts.client_metric_frame(inputs.evaluation_metrics(context))
-        score_frame = artifacts.test_score_frame(inputs.test_scores(score_context(context)))
-        result[label] = client_score_distributions(threshold_frame, metric_frame, score_frame, client_id)
-    return DistributionMechanismSeedResult(seed=seed, evaluations=result)
+        entries = tuple(
+            ClientDistributionEntry(client_id=ClientId(cid), distribution=dist)
+            for cid, dist in dist_dict.items()
+        )
+        eval_results.append(EvaluationDistributionResult(evaluation_label=label, clients=entries))
+
+    return DistributionMechanismSeedResult(seed=seed, evaluations=tuple(eval_results))
 
 
+@run_analysis.register
 def analyze_distribution_mechanism(
-    analysis: DistributionMechanismAnalysisRecord,
-    *,
-    artifacts: AnalysisArtifactRepository,
-    inputs: AnalysisInputBundle,
-    experiment: ExperimentRecord,
-    seeds: tuple[Seed, ...],
-) -> DistributionMechanismAnalysisResult:
+    specification: DistributionMechanismAnalysisRecord,
+    context: AnalysisExecutionContext,
+    cell: PairedAnalysisCell | None = None,
+) -> tuple[DistributionMechanismAnalysisResult, ...]:
+    """Execute distribution-mechanism analysis across seeds."""
+    evals = tuple(EvaluationLabel(label) for label in specification.source_evaluations)
+    produced_fields = tuple(ProducedField(field) for field in specification.produced_fields)
+
     seed_results = tuple(
-        distribution_seed_result(
-            experiment, seed.value, analysis.source_evaluations, None, artifacts=artifacts, inputs=inputs
-        )
-        for seed in seeds
+        distribution_seed_result(context, seed, evals, None) for seed in context.seeds
     )
-    if analysis.field_formulas is None:
-        return DistributionMechanismRawResult(
-            analysis_label=analysis.label, produced_fields=analysis.produced_fields, seed_results=seed_results
+
+    if specification.field_formulas is None:
+        raw_res = DistributionMechanismRawResult(
+            analysis_label=AnalysisLabel(specification.label),
+            produced_fields=produced_fields,
+            seed_results=seed_results,
         )
-    if len(analysis.source_evaluations) < 2:
+        return (raw_res,)
+
+    if len(evals) < 2:
         raise ScientificContractViolationError(
-            f"Distribution analysis '{analysis.label}' needs two source evaluations"
+            f"Distribution analysis '{specification.label}' needs two source evaluations"
         )
-    baseline, shifted = analysis.source_evaluations[:2]
-    return DistributionMechanismTradeoffResult(
-        analysis_label=analysis.label,
-        field_formulas=analysis.field_formulas,
-        produced_fields=analysis.produced_fields,
-        seed_results=tuple(
-            DistributionMechanismTradeoffSeedResult(
-                seed=result.seed,
-                per_client_tradeoff=threshold_tradeoff(result.evaluations[baseline], result.evaluations[shifted]),
-            )
-            for result in seed_results
-        ),
+
+    field_formulas = tuple(
+        FieldFormulaContract(field=ProducedField(k), formula=specification.field_formulas[k])
+        for k in specification.field_formulas
     )
 
+    tradeoff_seeds: list[DistributionMechanismTradeoffSeedResult] = []
+    for res in seed_results:
+        baseline_dist = {entry.client_id: entry.distribution for entry in res.evaluations[0].clients}
+        shifted_dist = {entry.client_id: entry.distribution for entry in res.evaluations[1].clients}
+        tradeoff_map = threshold_tradeoff(
+            {cid.value: dist for cid, dist in baseline_dist.items()},
+            {cid.value: dist for cid, dist in shifted_dist.items()},
+        )
+        entries = tuple(
+            ClientTradeoffEntry(client_id=ClientId(cid), tradeoff=tradeoff)
+            for cid, tradeoff in tradeoff_map.items()
+        )
+        tradeoff_seeds.append(
+            DistributionMechanismTradeoffSeedResult(seed=res.seed, per_client_tradeoff=entries)
+        )
 
+    tradeoff_res = DistributionMechanismTradeoffResult(
+        analysis_label=AnalysisLabel(specification.label),
+        field_formulas=field_formulas,
+        produced_fields=produced_fields,
+        seed_results=tuple(tradeoff_seeds),
+    )
+    return (tradeoff_res,)
+
+
+@run_analysis.register
 def analyze_locked_client_distribution(
-    analysis: LockedClientDistributionAnalysisRecord,
-    *,
-    artifacts: AnalysisArtifactRepository,
-    inputs: AnalysisInputBundle,
-    experiment: ExperimentRecord,
-    seeds: tuple[Seed, ...],
-) -> LockedClientDistributionAnalysisResult:
+    specification: LockedClientDistributionAnalysisRecord,
+    context: AnalysisExecutionContext,
+    cell: PairedAnalysisCell | None = None,
+) -> tuple[LockedClientDistributionAnalysisResult, ...]:
+    """Execute locked-client distribution analysis across seeds."""
+    evals = tuple(EvaluationLabel(label) for label in specification.source_evaluations)
+    locked_client = ClientId(specification.locked_client_identifier)
+    produced_fields = tuple(ProducedField(field) for field in specification.produced_fields)
+
     seed_results = tuple(
-        distribution_seed_result(
-            experiment,
-            seed.value,
-            analysis.source_evaluations,
-            analysis.locked_client_identifier,
-            artifacts=artifacts,
-            inputs=inputs,
-        )
-        for seed in seeds
+        distribution_seed_result(context, seed, evals, locked_client)
+        for seed in context.seeds
     )
-    return LockedClientDistributionAnalysisResult(
-        analysis_label=analysis.label,
-        locked_client_identifier=analysis.locked_client_identifier,
-        produced_fields=analysis.produced_fields,
+    res = LockedClientDistributionAnalysisResult(
+        analysis_label=AnalysisLabel(specification.label),
+        locked_client_identifier=locked_client,
+        produced_fields=produced_fields,
         seed_results=seed_results,
     )
+    return (res,)

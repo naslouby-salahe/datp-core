@@ -6,6 +6,8 @@ from collections.abc import Mapping
 
 from attrs import define
 
+from datp_core.analysis.contracts import PairedAnalysisCell
+from datp_core.core.identifiers import PartitionConditionId
 from datp_core.experiments import (
     ConditionSweepRecord,
     ExperimentRecord,
@@ -18,22 +20,10 @@ from datp_core.learning.contracts.training import TrainingProfileRecord
 
 
 @define(frozen=True, slots=True, kw_only=True)
-class PairedAnalysisCell:
-    """One valid combination of sweep dimensions for a paired-threshold analysis."""
-
-    partition_condition: str | None
-    proximal_mu: float | None
-    ditto_weight: float | None
-    threshold_quantile: float | None
-    shrinkage_weight: float | None
-    calibration_sample_count: int | None
-
-
-@define(frozen=True, slots=True, kw_only=True)
 class SweepDimensions:
     """Resolved sweep dimensions extracted from experiment configuration."""
 
-    conditions: tuple[str | None, ...]
+    conditions: tuple[PartitionConditionId | None, ...]
     mus: tuple[float | None, ...]
     ditto_weights: tuple[float | None, ...]
     threshold_quantiles: tuple[float | None, ...]
@@ -44,7 +34,7 @@ class SweepDimensions:
 def resolve_sweep_dimensions(experiment: ExperimentRecord, training_profile: TrainingProfileRecord) -> SweepDimensions:
     """Extract sweep dimensions from experiment and training profile configuration."""
     conditions = tuple(
-        condition.name
+        PartitionConditionId(condition.name)
         for sweep in experiment.sweeps
         if isinstance(sweep, ConditionSweepRecord)
         for condition in sweep.conditions

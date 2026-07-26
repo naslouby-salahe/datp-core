@@ -174,6 +174,7 @@ class MetricAssociationAnalysisRecord:
     outcome_source_analysis: str
     interpretation_constraint: str
     grouping_dimension: str | None
+    calibration_source_evaluation: str | None = None
 
 
 @define(frozen=True, slots=True, kw_only=True)

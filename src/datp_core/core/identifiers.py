@@ -84,3 +84,20 @@ class MaterializationId(_DomainIdentifier):
 
 class ClientId(_DomainIdentifier):
     """Identifier for a client device or pseudo-client entity."""
+
+
+class AnalysisLabel(_DomainIdentifier):
+    """Identifier for an analysis specification or result label."""
+
+
+class EvaluationLabel(_DomainIdentifier):
+    """Identifier for an operating-point evaluation label."""
+
+
+class PartitionConditionId(_DomainIdentifier):
+    """Identifier for a data partition condition (e.g. 'clean', 'adversarial')."""
+
+
+class ClusterLabel(_DomainIdentifier):
+    """Identifier for a client cluster group label."""
+
