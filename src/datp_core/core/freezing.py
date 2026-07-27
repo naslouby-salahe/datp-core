@@ -1,58 +1,59 @@
 from __future__ import annotations
 
 import json
-from typing import cast
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
+
+from datp_core.reporting.profiles.enums import ReportArtifactType, ReportFigureType, ReportTableType
 
 
 class FrozenResultDecodeError(ValueError):
     """A frozen result manifest cannot be decoded."""
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FrozenSourceFile:
+class FrozenSourceFile(BaseModel):
+    model_config = ConfigDict(frozen=True)
     relative_path: str
     role: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FrozenReportColumn:
+class FrozenReportColumn(BaseModel):
+    model_config = ConfigDict(frozen=True)
     name: str
     unit: str
     direction: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FrozenReportProfile:
+class FrozenReportProfile(BaseModel):
+    model_config = ConfigDict(frozen=True)
     identifier: str
-    artifact_type: str
-    table_type: str | None
-    figure_type: str | None
-    estimate_basis: str | None
-    columns: tuple[FrozenReportColumn, ...]
-    series: tuple[FrozenReportColumn, ...]
+    artifact_type: ReportArtifactType
+    table_type: ReportTableType | None = None
+    figure_type: ReportFigureType | None = None
+    estimate_basis: str | None = None
+    columns: tuple[FrozenReportColumn, ...] = ()
+    series: tuple[FrozenReportColumn, ...] = ()
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FrozenResultManifest:
-    schema_version: int
+class FrozenResultManifest(BaseModel):
+    model_config = ConfigDict(frozen=True)
+    schema_version: int = 1
     experiment_id: str
-    evidence_role: str
-    dataset_id: str | None
-    population_ids: tuple[str, ...]
-    seed_cohort_id: str
-    seed_count: int
-    seeds_present: tuple[int, ...]
+    evidence_role: str = ""
+    dataset_id: str | None = None
+    population_ids: tuple[str, ...] = ()
+    seed_cohort_id: str = ""
+    seed_count: int = 0
+    seeds_present: tuple[int, ...] = ()
     scientific_fingerprint: str
     execution_fingerprint: str
-    source_revision: str
+    source_revision: str = ""
     frozen_at: str
-    metric_definition_version: str
-    statistical_procedure_version: str
-    report_profiles: tuple[FrozenReportProfile, ...]
-    source_files: tuple[FrozenSourceFile, ...]
-    statistical_results: tuple[object, ...]
+    metric_definition_version: str = ""
+    statistical_procedure_version: str = ""
+    report_profiles: tuple[FrozenReportProfile, ...] = ()
+    source_files: tuple[FrozenSourceFile, ...] = ()
+    statistical_results: tuple[dict[str, object], ...] = ()
 
 
 def decode_manifest(payload: bytes) -> FrozenResultManifest:
@@ -119,5 +120,5 @@ def decode_manifest(payload: bytes) -> FrozenResultManifest:
         statistical_procedure_version=str(decoded.get("statistical_procedure_version", "")),
         report_profiles=profiles,
         source_files=source_files,
-        statistical_results=tuple(cast(object, r) for r in decoded["statistical_results"]),
+        statistical_results=tuple(decoded["statistical_results"]),
     )

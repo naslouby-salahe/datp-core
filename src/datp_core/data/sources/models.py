@@ -4,21 +4,21 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.hashing import Checksum, compute_file_checksum, compute_payload_checksum
 from datp_core.core.identifiers import DatasetId
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ConcreteSourceEntry:
+class ConcreteSourceEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
     source_path: Path
     relative_path: Path
     source_tree_identifier: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ConcreteSourceInventory:
+class ConcreteSourceInventory(BaseModel):
+    model_config = ConfigDict(frozen=True)
     dataset_id: DatasetId
     entries: tuple[ConcreteSourceEntry, ...]
 
@@ -34,28 +34,28 @@ class ConcreteSourceInventory:
         return compute_payload_checksum(payload)
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class SourceRow:
+class SourceRow(BaseModel):
+    model_config = ConfigDict(frozen=True)
     source_path: Path
     source_row_index: int
     values: tuple[float, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class LabeledSourceRow:
+class LabeledSourceRow(BaseModel):
+    model_config = ConfigDict(frozen=True)
     source_row: SourceRow
     label: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class SourceRowFailure:
+class SourceRowFailure(BaseModel):
+    model_config = ConfigDict(frozen=True)
     source_path: Path
     source_row_index: int
     reason: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class CsvValidationResult:
+class CsvValidationResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
     rows: tuple[SourceRow, ...]
     failures: tuple[SourceRowFailure, ...]
 

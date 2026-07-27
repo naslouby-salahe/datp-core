@@ -1,8 +1,13 @@
-"""Experiment planning: job construction, graph expansion, validation."""
+"""Experiment planning: compilation, job construction, graph expansion, validation."""
 
-from datp_core.experiments.planning.context import score_context
-from datp_core.experiments.planning.jobs import SharedUpstreamKey, expand_campaign_jobs, expand_experiment_jobs
+from datp_core.experiments.planning.builder import ExperimentPlanBuilder
+from datp_core.experiments.planning.compilation import (
+    CompiledEvaluation,
+    CompiledExperiment,
+    compile_experiment,
+)
 from datp_core.experiments.planning.partition import resolve_partition_contract
+from datp_core.experiments.planning.paths import ExperimentPaths
 from datp_core.experiments.planning.sweeps import calibration_sample_counts
 from datp_core.experiments.planning.validation import (
     ExecutionPlanValidator,
@@ -11,12 +16,13 @@ from datp_core.experiments.planning.validation import (
 )
 
 __all__ = [
+    "CompiledEvaluation",
+    "CompiledExperiment",
     "ExecutionPlanValidator",
+    "ExperimentPaths",
+    "ExperimentPlanBuilder",
     "PlanValidationResult",
-    "SharedUpstreamKey",
-    "expand_campaign_jobs",
-    "expand_experiment_jobs",
+    "compile_experiment",
     "resolve_partition_contract",
-    "score_context",
     "validate_planning_graph",
 ]

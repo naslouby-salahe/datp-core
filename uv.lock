@@ -317,9 +317,11 @@ dependencies = [
     { name = "safetensors" },
     { name = "scikit-learn" },
     { name = "scipy" },
+    { name = "shellingham" },
     { name = "statsmodels" },
     { name = "structlog" },
     { name = "torch" },
+    { name = "typer" },
 ]
 
 [package.optional-dependencies]
@@ -372,9 +374,11 @@ requires-dist = [
     { name = "safetensors", specifier = ">=0.4" },
     { name = "scikit-learn", specifier = "==1.9.0" },
     { name = "scipy", specifier = "==1.18.0" },
+    { name = "shellingham", specifier = ">=1.5.4" },
     { name = "statsmodels", specifier = ">=0.14" },
     { name = "structlog", specifier = ">=24.1" },
     { name = "torch", specifier = "==2.10.0" },
+    { name = "typer", specifier = ">=0.20.1" },
     { name = "typer", marker = "extra == 'cli'", specifier = ">=0.12" },
 ]
 provides-extras = ["cli", "hardware"]

@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class MaterializationResult:
+class MaterializationResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
     staged_path: Path
     row_count: int
     preprocessing_evidence: bytes

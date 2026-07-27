@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import cast
+from typing import Annotated, cast
 
-from attrs import define, field
+from pydantic import BaseModel, ConfigDict
+from pydantic.functional_validators import BeforeValidator
 
 from datp_core.core.immutability import (
     FrozenJson,
@@ -22,8 +23,19 @@ def _freeze_positional_contract(value: object | None) -> Mapping[str, bool] | No
     return cast("Mapping[str, bool]", deep_freeze(value))
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ConfiguredSourceTree:
+# ---- Annotated field types with conversion validators ----
+
+_OptionalFrozenJsonMappingField = Annotated[
+    Mapping[str, FrozenJson] | None,
+    BeforeValidator(as_optional_frozen_json_mapping),
+]
+_OptionalStrMappingField = Annotated[Mapping[str, str] | None, BeforeValidator(as_optional_str_mapping)]
+_PositionalContractField = Annotated[Mapping[str, bool] | None, BeforeValidator(_freeze_positional_contract)]
+
+
+class ConfiguredSourceTree(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     identifier: str
     root: RelativePath
     file_pattern: str
@@ -32,8 +44,9 @@ class ConfiguredSourceTree:
     required_headers: tuple[str, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DatasetInspectionContract:
+class DatasetInspectionContract(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     source_trees: tuple[ConfiguredSourceTree, ...]
     require_identical_headers: bool
     device_directories: tuple[str, ...]
@@ -50,8 +63,9 @@ class DatasetInspectionContract:
     binary_label_header: str | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DatasetSourceRecord:
+class DatasetSourceRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     role: str
     root: RelativePath
     file_pattern: str
@@ -61,16 +75,18 @@ class DatasetSourceRecord:
     defines_pseudo_clients: bool | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class CrossSourceRelationshipRecord:
+class CrossSourceRelationshipRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     row_count_equality_required: bool
     row_level_one_to_one_equivalence_assumed: bool
     join_by_row_position: str
     join_by_any_key: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DatasetSourceLayoutContractRecord:
+class DatasetSourceLayoutContractRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     root: RelativePath
     benign_file: str | None
     benign_file_pattern: str | None
@@ -93,16 +109,17 @@ class DatasetSourceLayoutContractRecord:
     attack_family_required_per_device: bool | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class SourceContractRecord:
+class SourceContractRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     every_model_feature_present_in_merged_header: bool | None
     every_model_feature_present_in_every_file: bool | None
     model_feature_count_equals_source_column_count: bool | None
-    per_class_schema_reference_check: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
-    malformed_row: Mapping[str, str] | None = field(converter=as_optional_str_mapping)
-    empty_label_row: Mapping[str, str] | None = field(converter=as_optional_str_mapping)
+    per_class_schema_reference_check: _OptionalFrozenJsonMappingField
+    malformed_row: _OptionalStrMappingField
+    empty_label_row: _OptionalStrMappingField
     reject_unparseable_numeric_model_feature: bool | None
     reject_row_with_field_count_other_than_header: bool | None
-    column_role_partition: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
-    positional_contract: Mapping[str, bool] | None = field(converter=lambda v: _freeze_positional_contract(v))
-    row_integrity_exclusions: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
+    column_role_partition: _OptionalFrozenJsonMappingField
+    positional_contract: _PositionalContractField
+    row_integrity_exclusions: _OptionalFrozenJsonMappingField

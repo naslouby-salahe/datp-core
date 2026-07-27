@@ -25,7 +25,7 @@ def test_simple_linear_regression() -> None:
     outcome = np.array([2.0, 4.0, 6.0, 8.0, 10.0], dtype=np.float64)
 
     reg = simple_linear_regression(predictor, outcome)
-    assert reg.slope == 2.0
-    assert reg.intercept == 0.0
+    assert reg.slope == pytest.approx(2.0)
+    assert reg.intercept == pytest.approx(0.0, abs=1e-15)
     assert reg.r_squared == 1.0
     assert len(reg.leverage) == 5

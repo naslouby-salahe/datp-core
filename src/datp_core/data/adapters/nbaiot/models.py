@@ -4,23 +4,23 @@ from __future__ import annotations
 
 import json
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.data.contracts.enums import SplitMembership
 from datp_core.data.sources.models import SourceRow
 from datp_core.experiments import SweepConditionAllocation
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class NBaIoTMaterializedRow:
+class NBaIoTMaterializedRow(BaseModel):
+    model_config = ConfigDict(frozen=True)
     client_id: str
     attack_family: str | None
     is_attack: bool
     source_row: SourceRow
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class NBaIoTSplitRows:
+class NBaIoTSplitRows(BaseModel):
+    model_config = ConfigDict(frozen=True)
     train: tuple[NBaIoTMaterializedRow, ...]
     calibration: tuple[NBaIoTMaterializedRow, ...]
     test_benign: tuple[NBaIoTMaterializedRow, ...]
@@ -28,8 +28,8 @@ class NBaIoTSplitRows:
     excluded_gap_rows: tuple[NBaIoTMaterializedRow, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class NBaIoTChronologicalBoundaries:
+class NBaIoTChronologicalBoundaries(BaseModel):
+    model_config = ConfigDict(frozen=True)
     train_end: int
     first_gap_end: int
     calibration_end: int
@@ -50,8 +50,8 @@ class NBaIoTChronologicalBoundaries:
         return SplitMembership.TEST.value
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DirichletPartition:
+class DirichletPartition(BaseModel):
+    model_config = ConfigDict(frozen=True)
     condition: str
     allocation: SweepConditionAllocation
     seed: int

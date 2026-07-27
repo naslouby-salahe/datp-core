@@ -19,7 +19,7 @@ def dummy_experiment() -> ExperimentRecord:
     eval_spec = EvaluationSpecRecord(
         label="eval_main",
         population_id=PopulationId("pop_1"),
-        recalibration_mode="recalibrate",  # type: ignore[arg-type]
+        recalibration_mode="frozen",  # type: ignore[arg-type]
         threshold_policy_id=ThresholdPolicyId("pol_1"),
         run_requirement=RunRequirement.MANDATORY,
         overrides=None,
@@ -33,7 +33,7 @@ def dummy_experiment() -> ExperimentRecord:
 
 
 def test_context_evaluation_lookup(dummy_experiment: ExperimentRecord) -> None:
-    ctx = AnalysisExecutionContext(
+    ctx = AnalysisExecutionContext.model_construct(
         config=MagicMock(),
         artifacts=MagicMock(),
         experiment=dummy_experiment,
@@ -48,7 +48,7 @@ def test_context_evaluation_lookup(dummy_experiment: ExperimentRecord) -> None:
 
 
 def test_context_stage_job_context_factories(dummy_experiment: ExperimentRecord) -> None:
-    ctx = AnalysisExecutionContext(
+    ctx = AnalysisExecutionContext.model_construct(
         config=MagicMock(),
         artifacts=MagicMock(),
         experiment=dummy_experiment,

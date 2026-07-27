@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class MetricFormulaRecord:
+class MetricFormulaRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     formula: str | None
     unit: str | None
     direction: str | None
@@ -29,8 +30,9 @@ class MetricFormulaRecord:
     comparison_unit: str | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class CrossClientAggregationRecord:
+class CrossClientAggregationRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     mean_fpr: MetricFormulaRecord
     standard_deviation_ddof: int
     cv_fpr: MetricFormulaRecord
@@ -44,8 +46,9 @@ class CrossClientAggregationRecord:
     gini_coefficient: MetricFormulaRecord
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ThresholdEstimationMetricsRecord:
+class ThresholdEstimationMetricsRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     absolute_threshold_error: MetricFormulaRecord
     relative_threshold_error: MetricFormulaRecord
     oracle_definition: str
@@ -56,8 +59,9 @@ class ThresholdEstimationMetricsRecord:
     threshold_variance_across_replicates: MetricFormulaRecord
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class JsDivergenceRecord:
+class JsDivergenceRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     definition: str
     histogram_bins: int
     binning_range: str
@@ -70,26 +74,30 @@ class JsDivergenceRecord:
     minimum_client_count: int
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class HeterogeneityDiagnosticsRecord:
+class HeterogeneityDiagnosticsRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     pairwise_js_divergence: JsDivergenceRecord
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClusterDiagnosticsRecord:
+class ClusterDiagnosticsRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     adjusted_rand_index: MetricFormulaRecord
     within_cluster_dispersion: MetricFormulaRecord
     across_cluster_dispersion: MetricFormulaRecord
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class PrecisionPolicyRecord:
+class PrecisionPolicyRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     computation: str
     rounding: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class MetricDefinitionsRecord:
+class MetricDefinitionsRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     prediction_rule: str
     per_client_before_aggregation: bool
     test_rows_only: bool

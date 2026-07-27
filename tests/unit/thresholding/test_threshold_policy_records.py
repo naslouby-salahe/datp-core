@@ -1,8 +1,9 @@
-"""Every resolved threshold policy is a pure, frozen domain record -- never a Pydantic model."""
+"""Every resolved threshold policy is a pure, frozen domain record -- every record is a Pydantic frozen BaseModel."""
 
 from __future__ import annotations
 
-import attrs
+from collections.abc import Mapping
+
 import pydantic
 import pytest
 
@@ -65,17 +66,17 @@ def test_resolved_threshold_policy_is_the_expected_pure_domain_record(
     record = resolved_threshold_policies.get(ThresholdPolicyId(policy_key))
 
     assert isinstance(record, expected_type)
-    assert not isinstance(record, pydantic.BaseModel)
-    assert attrs.has(type(record))
+    assert isinstance(record, pydantic.BaseModel)
+    assert record.model_config.get("frozen") is True
 
 
 @pytest.mark.parametrize("policy_key", sorted(_EXPECTED_RECORD_TYPE_BY_POLICY_ID))
 def test_resolved_threshold_policy_record_is_frozen(resolved_threshold_policies, policy_key: str) -> None:
     record = resolved_threshold_policies.get(ThresholdPolicyId(policy_key))
-    first_field = attrs.fields(type(record))[0].name
+    first_field = next(iter(record.model_fields))
     current_value = getattr(record, first_field)
 
-    with pytest.raises(attrs.exceptions.FrozenInstanceError):
+    with pytest.raises(pydantic.ValidationError):
         setattr(record, first_field, current_value)
 
 
@@ -86,7 +87,8 @@ def test_cluster_threshold_policy_retains_every_authored_field_losslessly(resolv
     assert record.cluster_count == 3
     assert record.aggregation in ("mean", "robust_median")
     assert len(record.fingerprint.features) > 0
-    assert isinstance(record.fingerprint.estimators, dict) is False
+    assert isinstance(record.fingerprint.estimators, Mapping)
+    assert len(record.fingerprint.estimators) == 4
     assert record.kmeans.random_seed is not None
     assert isinstance(record.required_diagnostics, tuple)
 

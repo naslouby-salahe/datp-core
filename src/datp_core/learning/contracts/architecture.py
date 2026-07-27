@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.numbers import PositiveInt
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ModelArchitectureRecord:
+class ModelArchitectureRecord(BaseModel):
     """Pure resolved fixed-autoencoder architecture contract."""
+
+    model_config = ConfigDict(frozen=True)
 
     identifier: str
     kind: str

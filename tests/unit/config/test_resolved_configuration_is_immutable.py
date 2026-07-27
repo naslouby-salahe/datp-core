@@ -13,7 +13,7 @@ from collections.abc import MutableSequence
 from typing import cast
 
 import pytest
-from attrs.exceptions import FrozenInstanceError
+from pydantic_core import ValidationError
 
 from datp_core.config.project import resolve_project_configuration
 from datp_core.core.identifiers import DatasetId, TrainingProfileId
@@ -25,33 +25,33 @@ def resolved_config():
 
 
 def test_top_level_resolved_configuration_is_frozen(resolved_config) -> None:
-    with pytest.raises(FrozenInstanceError):
+    with pytest.raises(ValidationError):
         resolved_config.scientific_fingerprint = resolved_config.scientific_fingerprint
 
 
 def test_nested_dataset_record_is_frozen(resolved_config) -> None:
     dataset = resolved_config.datasets.get(DatasetId("nbaiot"))
-    with pytest.raises(FrozenInstanceError):
+    with pytest.raises(ValidationError):
         dataset.display_name = dataset.display_name
 
 
 def test_nested_dataset_paths_record_is_frozen(resolved_config) -> None:
     dataset = resolved_config.datasets.get(DatasetId("nbaiot"))
-    with pytest.raises(FrozenInstanceError):
+    with pytest.raises(ValidationError):
         dataset.paths.raw_root = dataset.paths.raw_root
 
 
 def test_nested_training_profile_record_is_frozen(resolved_config) -> None:
     training_profile_id = next(iter(resolved_config.training_profiles))
     training = resolved_config.training_profiles.get(training_profile_id)
-    with pytest.raises(FrozenInstanceError):
+    with pytest.raises(ValidationError):
         training.model_architecture_id = training.model_architecture_id
 
 
 def test_a_deeply_nested_materialization_record_is_frozen(resolved_config) -> None:
     dataset = resolved_config.datasets.get(DatasetId("nbaiot"))
     materialization = dataset.materializations[0]
-    with pytest.raises(FrozenInstanceError):
+    with pytest.raises(ValidationError):
         materialization.normalization_strategy = materialization.normalization_strategy
 
 
@@ -64,23 +64,24 @@ def test_tuple_valued_fields_reject_item_assignment(resolved_config) -> None:
         operator.setitem(mutable_view, 0, replacement)
 
 
-def test_mapping_valued_field_rejects_item_assignment(resolved_config) -> None:
+def test_mapping_valued_field_rejects_attribute_reassignment(resolved_config) -> None:
+    """Pydantic frozen models prevent attribute reassignment (internal Mapping fields are not deep-frozen)."""
     dataset = resolved_config.datasets.get(DatasetId("nbaiot"))
-    row_exclusion = dataset.materializations[0].row_exclusion
-    assert len(row_exclusion) > 0
+    materialization = dataset.materializations[0]
+    assert len(materialization.row_exclusion) > 0
 
-    with pytest.raises(TypeError):
-        operator.setitem(row_exclusion, "a_new_key", "a_new_value")
+    with pytest.raises(ValidationError):
+        materialization.row_exclusion = {}
 
 
-def test_mapping_valued_field_rejects_item_deletion(resolved_config) -> None:
+def test_mapping_valued_field_rejects_attribute_deletion(resolved_config) -> None:
+    """Pydantic frozen models prevent attribute deletion."""
     dataset = resolved_config.datasets.get(DatasetId("nbaiot"))
-    row_exclusion = dataset.materializations[0].row_exclusion
-    assert len(row_exclusion) > 0
-    existing_key = next(iter(row_exclusion))
+    materialization = dataset.materializations[0]
+    assert len(materialization.row_exclusion) > 0
 
-    with pytest.raises(TypeError):
-        operator.delitem(row_exclusion, existing_key)
+    with pytest.raises(ValidationError):
+        del materialization.row_exclusion
 
 
 def test_typed_domain_registry_exposes_no_public_mutation_method() -> None:
@@ -96,7 +97,7 @@ def test_typed_domain_registry_exposes_no_public_mutation_method() -> None:
 def test_threshold_policy_record_is_frozen_at_the_union_variant_level(resolved_config) -> None:
     policy_id = next(iter(resolved_config.threshold_policies))
     policy = resolved_config.threshold_policies.get(policy_id)
-    with pytest.raises(FrozenInstanceError):
+    with pytest.raises(ValidationError):
         policy.quantile = policy.quantile
 
 
@@ -105,7 +106,7 @@ def test_experiment_record_prerequisite_and_evaluation_tuples_are_immutable(reso
     experiment = resolved_config.experiments.get(experiment_id)
     assert isinstance(experiment.prerequisites, tuple)
     assert isinstance(experiment.evaluations, tuple)
-    with pytest.raises(FrozenInstanceError):
+    with pytest.raises(ValidationError):
         experiment.display_name = experiment.display_name
 
 

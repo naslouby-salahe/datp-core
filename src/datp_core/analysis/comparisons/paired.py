@@ -174,9 +174,7 @@ def evaluation_metric(
         )
 
         if not isinstance(quantile, float):
-            raise InvalidAnalysisConfigurationError(
-                f"Evaluation '{label.value}' requires a numeric quantile"
-            )
+            raise InvalidAnalysisConfigurationError(f"Evaluation '{label.value}' requires a numeric quantile")
         values.append(
             _read_cv_fpr_metric(
                 context=context,
@@ -196,11 +194,12 @@ def _read_cv_fpr_metric(
     instability_factor: float,
 ) -> float:
     frame = context.artifacts.client_metrics(eval_ctx)
+    # Polars-to-Python bridge: calculate_fpr_dispersion uses statistics & math functions
     fprs = tuple(
         float(value)
-        for value in frame.filter(
-            pl.col(MetricColumn.FALSE_POSITIVE_RATE_STATUS.value) == MetricStatus.AVAILABLE
-        )[MetricColumn.FALSE_POSITIVE_RATE.value].to_list()
+        for value in frame.filter(pl.col(MetricColumn.FALSE_POSITIVE_RATE_STATUS.value) == MetricStatus.AVAILABLE)[
+            MetricColumn.FALSE_POSITIVE_RATE.value
+        ].to_list()
     )
     dispersion = calculate_fpr_dispersion(fprs, cv_instability_threshold=instability_factor * (1.0 - quantile))
     if dispersion.coefficient_of_variation.status is not MetricStatus.AVAILABLE:
@@ -209,7 +208,5 @@ def _read_cv_fpr_metric(
             f"{dispersion.coefficient_of_variation.status.value}"
         )
     if dispersion.coefficient_of_variation.value is None:
-        raise StatisticalProcedureError(
-            "CV(FPR) coefficient of variation is unexpectedly None"
-        )
+        raise StatisticalProcedureError("CV(FPR) coefficient of variation is unexpectedly None")
     return dispersion.coefficient_of_variation.value

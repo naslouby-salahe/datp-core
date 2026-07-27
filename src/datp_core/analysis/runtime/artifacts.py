@@ -15,8 +15,7 @@ from io import BytesIO
 from typing import TypeVar
 
 import polars as pl
-from attrs import define
-from pydantic import TypeAdapter
+from pydantic import BaseModel, ConfigDict, TypeAdapter
 from safetensors.torch import load as load_safetensors
 
 from datp_core.analysis.contracts import (
@@ -33,7 +32,7 @@ from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
 from datp_core.artifacts.schemas.scores import validate_calibration_score_frame, validate_test_score_frame
 from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
 from datp_core.artifacts.store import ArtifactStore
-from datp_core.pipeline.stages.context import StageJobContext
+from datp_core.pipeline.stages.context import AnalysisContext, DataContext, EvaluationContext, TrainingContext
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import AnalysisInputCoordinates, StageInput
 
@@ -42,9 +41,10 @@ T = TypeVar("T", bound=AnalysisResult)
 _adapter = TypeAdapter(tuple[AnalysisResult, ...])
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AnalysisArtifactReference:
+class AnalysisArtifactReference(BaseModel):
     """Typed reference mapping declared input coordinates to relative storage path."""
+
+    model_config = ConfigDict(frozen=True)
 
     coordinates: AnalysisInputCoordinates
     relative_path: str
@@ -54,9 +54,7 @@ class _ArtifactPathIndex:
     """Immutable exact-coordinate index over declared stage inputs."""
 
     def __init__(self, references: tuple[AnalysisArtifactReference, ...]) -> None:
-        by_coordinates: dict[AnalysisInputCoordinates, str] = {
-            ref.coordinates: ref.relative_path for ref in references
-        }
+        by_coordinates: dict[AnalysisInputCoordinates, str] = {ref.coordinates: ref.relative_path for ref in references}
         if len(by_coordinates) != len(references):
             raise ArtifactSchemaViolationError("Statistical analysis has duplicate artifact coordinates")
         self._paths: dict[AnalysisInputCoordinates, str] = by_coordinates
@@ -72,7 +70,13 @@ class _ArtifactPathIndex:
             )
         return cls(tuple(artifact_refs))
 
-    def resolve(self, *, producer_stage: StageKind, output_name: str, context: StageJobContext) -> str:
+    def resolve(
+        self,
+        *,
+        producer_stage: StageKind,
+        output_name: str,
+        context: DataContext | TrainingContext | EvaluationContext | AnalysisContext,
+    ) -> str:
         coordinates = AnalysisInputCoordinates(
             producer_stage=producer_stage,
             output_name=output_name,
@@ -82,8 +86,7 @@ class _ArtifactPathIndex:
             return self._paths[coordinates]
         except KeyError:
             raise ArtifactMissingError(
-                f"Analysis input not declared: stage={producer_stage.value}, "
-                f"output={output_name}, context={context}"
+                f"Analysis input not declared: stage={producer_stage.value}, output={output_name}, context={context}"
             ) from None
 
 
@@ -94,29 +97,29 @@ class AnalysisArtifactRepository:
         self._store = store
         self._path_index = path_index
 
-    def thresholds(self, context: StageJobContext) -> pl.DataFrame:
+    def thresholds(self, context: EvaluationContext) -> pl.DataFrame:
         """Load and validate the threshold frame for *context*."""
         path = self._resolve(context, ArtifactKind.THRESHOLD, StageKind.THRESHOLD_CONSTRUCTION, "thresholds")
         return self._read_validated_frame(path, validate_threshold_frame, "threshold")
 
-    def calibration_scores(self, context: StageJobContext) -> pl.DataFrame:
+    def calibration_scores(self, context: TrainingContext | EvaluationContext) -> pl.DataFrame:
         """Load and validate the calibration scores frame for *context*."""
         path = self._resolve(context, ArtifactKind.CALIBRATION_SCORE, StageKind.SCORE_GENERATION, "calibration_scores")
         return self._read_validated_frame(path, validate_calibration_score_frame, "calibration score")
 
-    def test_scores(self, context: StageJobContext) -> pl.DataFrame:
+    def test_scores(self, context: TrainingContext | EvaluationContext) -> pl.DataFrame:
         """Load and validate the test scores frame for *context*."""
         path = self._resolve(context, ArtifactKind.TEST_SCORE, StageKind.SCORE_GENERATION, "test_scores")
         return self._read_validated_frame(path, validate_test_score_frame, "test score")
 
-    def client_metrics(self, context: StageJobContext) -> pl.DataFrame:
+    def client_metrics(self, context: EvaluationContext) -> pl.DataFrame:
         """Load and validate the client metrics frame for *context*."""
         path = self._resolve(
             context, ArtifactKind.CLIENT_METRIC, StageKind.OPERATING_POINT_EVALUATION, "client_metrics"
         )
         return self._read_validated_frame(path, validate_client_metric_frame, "client metric")
 
-    def checkpoint_parameter_count(self, context: StageJobContext) -> int:
+    def checkpoint_parameter_count(self, context: TrainingContext | EvaluationContext) -> int:
         """Inspect the model checkpoint safetensors artifact and return total parameter count."""
         path = self._resolve(context, ArtifactKind.CHECKPOINT, StageKind.MODEL_TRAINING, "checkpoint")
         data = self._read_bytes(path)
@@ -126,7 +129,7 @@ class AnalysisArtifactRepository:
         except (TypeError, ValueError, RuntimeError) as exc:
             raise ArtifactSchemaViolationError(f"Cannot parse checkpoint safetensors at {path}: {exc}") from exc
 
-    def checkpoint_selection(self, context: StageJobContext) -> CheckpointSelectionArtifact:
+    def checkpoint_selection(self, context: DataContext) -> CheckpointSelectionArtifact:
         """Load and parse checkpoint selection JSON artifact into typed record."""
         path = self._resolve(
             context, ArtifactKind.CHECKPOINT_SELECTION, StageKind.CHECKPOINT_SELECTION, "checkpoint_selection"
@@ -164,7 +167,7 @@ class AnalysisArtifactRepository:
         expected_type: type[T],
     ) -> T:
         """Load and decode a prerequisite analysis result of expected_type matching reference."""
-        ctx = StageJobContext(experiment_id=reference.experiment_id)
+        ctx = AnalysisContext(experiment_id=reference.experiment_id)
         path = (
             self._path_index.resolve(
                 producer_stage=StageKind.RESULT_FREEZE, output_name="statistical_result", context=ctx
@@ -197,7 +200,11 @@ class AnalysisArtifactRepository:
     # -- Internal helpers --------------------------------------------------
 
     def _resolve(
-        self, context: StageJobContext, kind: ArtifactKind, producer_stage: StageKind, output_name: str
+        self,
+        context: DataContext | TrainingContext | EvaluationContext | AnalysisContext,
+        kind: ArtifactKind,
+        producer_stage: StageKind,
+        output_name: str,
     ) -> str:
         if self._path_index is None:
             raise ArtifactMissingError(f"Cannot resolve '{kind.value}' artifact — no path index configured")

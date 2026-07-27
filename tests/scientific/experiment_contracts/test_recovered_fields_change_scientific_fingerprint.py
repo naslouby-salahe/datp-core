@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import attrs
-
 from datp_core.config.fingerprinting.canonical import compute_fingerprint
 from datp_core.config.fingerprinting.projection import unstructure_projection
 from datp_core.config.resolution.experiments import experiment_scientific_projection
@@ -91,41 +89,42 @@ def _fingerprint_of(record: ExperimentRecord) -> str:
 
 def test_evaluation_override_changes_scientific_fingerprint() -> None:
     baseline = _baseline_experiment()
-    changed_override = attrs.evolve(
-        baseline,
-        evaluations=(attrs.evolve(baseline.evaluations[0], overrides={"quantile": 0.99}),),
+    changed_override = baseline.model_copy(
+        update={"evaluations": (baseline.evaluations[0].model_copy(update={"overrides": {"quantile": 0.99}}),)}
     )
     assert _fingerprint_of(baseline) != _fingerprint_of(changed_override)
 
 
 def test_prerequisite_required_outcome_changes_scientific_fingerprint() -> None:
     baseline = _baseline_experiment()
-    changed_outcome = attrs.evolve(
-        baseline,
-        prerequisites=(PrerequisiteSpecRecord(experiment_id=ExperimentId("upstream"), required_outcome="failed"),),
+    changed_outcome = baseline.model_copy(
+        update={
+            "prerequisites": (
+                PrerequisiteSpecRecord(experiment_id=ExperimentId("upstream"), required_outcome="failed"),
+            )
+        }
     )
     assert _fingerprint_of(baseline) != _fingerprint_of(changed_outcome)
 
 
 def test_capability_requirement_population_scope_changes_scientific_fingerprint() -> None:
     baseline = _baseline_experiment()
-    changed_scope = attrs.evolve(
-        baseline,
-        capability_requirements=(
-            attrs.evolve(
-                baseline.capability_requirements[0],
-                applies_to_populations=(PopulationId("a_different_population"),),
-            ),
-        ),
+    changed_scope = baseline.model_copy(
+        update={
+            "capability_requirements": (
+                baseline.capability_requirements[0].model_copy(
+                    update={"applies_to_populations": (PopulationId("a_different_population"),)}
+                ),
+            )
+        }
     )
     assert _fingerprint_of(baseline) != _fingerprint_of(changed_scope)
 
 
 def test_temporal_procedure_changes_scientific_fingerprint() -> None:
     baseline = _baseline_experiment()
-    changed_procedure = attrs.evolve(
-        baseline,
-        temporal_procedure={"boundary_index_formula": "floor(0.75 * n)"},
+    changed_procedure = baseline.model_copy(
+        update={"temporal_procedure": {"boundary_index_formula": "floor(0.75 * n)"}}
     )
     assert _fingerprint_of(baseline) != _fingerprint_of(changed_procedure)
 
@@ -159,7 +158,7 @@ def test_analysis_specific_contract_field_changes_scientific_fingerprint() -> No
 
 def test_display_name_metadata_change_does_not_change_scientific_fingerprint() -> None:
     baseline = _baseline_experiment()
-    renamed = attrs.evolve(baseline, display_name="A Completely Different Display Name")
+    renamed = baseline.model_copy(update={"display_name": "A Completely Different Display Name"})
     assert _fingerprint_of(baseline) == _fingerprint_of(renamed)
 
 

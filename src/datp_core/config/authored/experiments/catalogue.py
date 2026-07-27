@@ -10,6 +10,7 @@ from datp_core.config.authored.base import SchemaVersionOneConfigModel, StrictFr
 from datp_core.config.authored.experiments.analyses import AnalysisSpecConfig
 from datp_core.config.authored.experiments.evaluations import EvaluationSpecConfig
 from datp_core.config.authored.experiments.sweeps import CalibrationSubsetConfig, SweepVariableConfig
+from datp_core.config.domain_models import AnalysisConventions, PopulationReadinessRule
 
 
 class AuthoredStudyPopulationConfig(StrictFrozenConfigModel):
@@ -85,9 +86,9 @@ class AuthoredExperimentsCatalogueConfig(SchemaVersionOneConfigModel):
     study_populations: dict[str, AuthoredStudyPopulationConfig]
     capabilities: list[str]
     suppression_behaviors: list[str]
-    population_readiness_rule: dict[str, str | bool]
+    population_readiness_rule: PopulationReadinessRule
     eligibility_gates: dict[str, EligibilityGateConfig]
-    analysis_conventions: dict[str, str]
+    analysis_conventions: AnalysisConventions
     experiments: list[AuthoredExperimentConfig]
 
 

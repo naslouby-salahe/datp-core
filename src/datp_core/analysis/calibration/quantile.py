@@ -40,9 +40,7 @@ def analyze_quantile_estimation(
         # Validate one unique oracle threshold using Polars
         unique_thresholds = oracle_thresholds.select(ThresholdColumn.THRESHOLD.value).unique()
         if unique_thresholds.height != 1:
-            raise ScientificContractViolationError(
-                "Quantile-estimation oracle must provide one shared threshold"
-            )
+            raise ScientificContractViolationError("Quantile-estimation oracle must provide one shared threshold")
         oracle_threshold = float(unique_thresholds.item(0, 0))
 
         evaluation_results: list[QuantileEstimationEvaluationResult] = []
@@ -55,8 +53,7 @@ def analyze_quantile_estimation(
             # Join thresholds with calibration scores by client
             # Compute exceedance: count(score > threshold) / count(score) per client
             exceedance_frame = (
-                calibration
-                .join(
+                calibration.join(
                     thresholds.select(
                         ThresholdColumn.CLIENT_ID.value,
                         ThresholdColumn.THRESHOLD.value,
@@ -66,34 +63,42 @@ def analyze_quantile_estimation(
                     how="inner",
                 )
                 .group_by(ScoreColumn.CLIENT_ID.value, maintain_order=True)
-                .agg([
-                    (pl.col(ScoreColumn.SCORE.value) > pl.col(ThresholdColumn.THRESHOLD.value))
-                    .sum()
-                    .alias("exceed_count"),
-                    pl.col(ScoreColumn.SCORE.value).count().alias("total_count"),
-                    pl.col(ThresholdColumn.THRESHOLD.value).first().alias("threshold"),
-                    pl.col(ScoreColumn.TARGET_QUANTILE.value).first().alias("target_quantile"),
-                ])
-                .with_columns([
-                    (pl.col("exceed_count") / pl.col("total_count")).alias("achieved_exceedance"),
-                    (pl.col("threshold") - pl.lit(oracle_threshold)).abs().alias("absolute_threshold_error"),
-                    (
-                        (pl.col("threshold") - pl.lit(oracle_threshold)).abs()
-                        / pl.lit(abs(oracle_threshold)) if oracle_threshold != 0.0
-                        else pl.lit(None)
-                    ).alias("relative_threshold_error"),
-                ])
-                .with_columns([
-                    (
-                        pl.col("achieved_exceedance") - (pl.lit(1.0) - pl.col("target_quantile"))
-                    ).alias("signed_attainment_error"),
-                ])
-                .with_columns([
-                    pl.col("signed_attainment_error").abs().alias("absolute_attainment_error"),
-                ])
+                .agg(
+                    [
+                        (pl.col(ScoreColumn.SCORE.value) > pl.col(ThresholdColumn.THRESHOLD.value))
+                        .sum()
+                        .alias("exceed_count"),
+                        pl.col(ScoreColumn.SCORE.value).count().alias("total_count"),
+                        pl.col(ThresholdColumn.THRESHOLD.value).first().alias("threshold"),
+                        pl.col(ScoreColumn.TARGET_QUANTILE.value).first().alias("target_quantile"),
+                    ]
+                )
+                .with_columns(
+                    [
+                        (pl.col("exceed_count") / pl.col("total_count")).alias("achieved_exceedance"),
+                        (pl.col("threshold") - pl.lit(oracle_threshold)).abs().alias("absolute_threshold_error"),
+                        (
+                            (pl.col("threshold") - pl.lit(oracle_threshold)).abs() / pl.lit(abs(oracle_threshold))
+                            if oracle_threshold != 0.0
+                            else pl.lit(None)
+                        ).alias("relative_threshold_error"),
+                    ]
+                )
+                .with_columns(
+                    [
+                        (pl.col("achieved_exceedance") - (pl.lit(1.0) - pl.col("target_quantile"))).alias(
+                            "signed_attainment_error"
+                        ),
+                    ]
+                )
+                .with_columns(
+                    [
+                        pl.col("signed_attainment_error").abs().alias("absolute_attainment_error"),
+                    ]
+                )
             )
 
-            # Build client result records
+            # Domain object construction requires Python iteration from Polars
             client_results: list[QuantileEstimationClientResult] = []
             for row in exceedance_frame.select(
                 ScoreColumn.CLIENT_ID.value,
@@ -102,16 +107,19 @@ def analyze_quantile_estimation(
                 "relative_threshold_error",
                 "signed_attainment_error",
                 "absolute_attainment_error",
-            ).iter_rows():
-                client_id_str, achieved, abs_err, rel_err, signed_err, abs_att = row
+            ).iter_rows(named=True):
+                rel_err = float(row.relative_threshold_error) if row.relative_threshold_error is not None else None
+                ach_exc = float(row.achieved_exceedance) if row.achieved_exceedance is not None else None
+                sat_err = float(row.signed_attainment_error) if row.signed_attainment_error is not None else None
+                abs_err = float(row.absolute_attainment_error) if row.absolute_attainment_error is not None else None
                 client_results.append(
                     QuantileEstimationClientResult(
-                        client_id=ClientId(str(client_id_str)),
-                        absolute_threshold_error=float(abs_err),
-                        relative_threshold_error=float(rel_err) if rel_err is not None else None,
-                        achieved_exceedance=float(achieved) if achieved is not None else None,
-                        signed_attainment_error=float(signed_err) if signed_err is not None else None,
-                        absolute_attainment_error=float(abs_att) if abs_att is not None else None,
+                        client_id=ClientId(str(row.client_id)),
+                        absolute_threshold_error=float(row.absolute_threshold_error),
+                        relative_threshold_error=rel_err,
+                        achieved_exceedance=ach_exc,
+                        signed_attainment_error=sat_err,
+                        absolute_attainment_error=abs_err,
                     )
                 )
 

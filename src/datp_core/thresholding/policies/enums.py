@@ -42,13 +42,12 @@ class ThresholdPolicyKind(StrEnum):
     SHARED_WEIGHTED = "shared_weighted"
     LOCAL_QUANTILE = "local_quantile"
     FAMILY_MEAN = "family_mean"
-    CENTRALIZED_POOLED = "centralized_pooled"
     CLUSTER = "cluster"
-    SPLIT_CONFORMAL = "split_conformal"
-    LOCAL_GLOBAL_SHRINKAGE = "local_global_shrinkage"
+    CONFORMAL = "conformal"
+    SHRINKAGE = "shrinkage"
     CALIBRATION_FALLBACK = "calibration_fallback"
-    FEDERATED_MATCHED_EXCEEDANCE = "federated_matched_exceedance"
-    FEDERATED_FIXED_COEFFICIENT = "federated_fixed_coefficient"
+    FEDERATED_MATCHED = "federated_matched"
+    FEDERATED_FIXED = "federated_fixed"
 
 
 class CalibrationSelectionStrategy(StrEnum):

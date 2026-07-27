@@ -23,9 +23,7 @@ def test_persist_analysis_results() -> None:
         analysis_label=AnalysisLabel("sel"),
         selected_proximal_mu=0.05,
         locked_primary_round=5,
-        calibration_losses=(
-            FederatedProximalLossObservation(proximal_mu=0.05, mean_benign_calibration_loss=0.02),
-        ),
+        calibration_losses=(FederatedProximalLossObservation(proximal_mu=0.05, mean_benign_calibration_loss=0.02),),
     )
 
     persist_analysis_results(store=store, job=job, results=[result])

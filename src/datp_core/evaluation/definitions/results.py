@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class EvaluationResultContractRecord:
+class EvaluationResultContractRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     per_evaluation_result_type: str
     per_evaluation_eligibility_result_type: str
     per_evaluation_required_records: tuple[str, ...]

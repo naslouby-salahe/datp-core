@@ -25,10 +25,10 @@ class RuntimeBootstrapSettings(BaseSettings):
         extra="forbid",
     )
 
-    repository_root: Path  # required — must be set via DATP_REPOSITORY_ROOT env var
+    repository_root: Path = Path(".")
     config_root: Path | None = None
     environment_identity: str = "local_linux"
-    execution_profile: str
+    execution_profile: str = "scientific"
 
 
 def resolve_config_root(settings: RuntimeBootstrapSettings) -> Path:

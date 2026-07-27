@@ -72,9 +72,7 @@ def compose_project_config(
     #    the isinstance check guarantees we have a dict at this point.
     raw = cast("dict[str, object]", OmegaConf.to_container(cfg, resolve=True))
     if not isinstance(raw, dict):
-        raise ConfigurationError(
-            f"Composed configuration root must be a mapping, got {type(raw).__name__}"
-        )
+        raise ConfigurationError(f"Composed configuration root must be a mapping, got {type(raw).__name__}")
 
     # 5. Validate each composed section through its authored Pydantic model
     documents = _parse_authored_sections(raw)
@@ -91,9 +89,7 @@ def compose_project_config(
     # 7. Cross-document scientific guard validation
     validation_report = ProjectConfigurationValidator().validate(resolved)
     if not validation_report.is_valid:
-        raise ConfigurationError(
-            f"Resolved configuration violates scientific guards: {validation_report.errors}"
-        )
+        raise ConfigurationError(f"Resolved configuration violates scientific guards: {validation_report.errors}")
 
     return resolved
 
@@ -176,10 +172,7 @@ def _parse_authored_sections(
     if not isinstance(runtime_raw, dict):
         raise ConfigurationError("Composed configuration 'runtime' section must be a mapping")
 
-    authored_datasets = tuple(
-        AuthoredDatasetConfig.model_validate(ds_data)
-        for ds_data in datasets_raw.values()
-    )
+    authored_datasets = tuple(AuthoredDatasetConfig.model_validate(ds_data) for ds_data in datasets_raw.values())
     authored_experiments = AuthoredExperimentsCatalogueConfig.model_validate(experiments_raw)
     authored_protocols = AuthoredProtocolsConfig.model_validate(protocols_raw)
     authored_runtime = AuthoredRuntimeConfig.model_validate(runtime_raw)

@@ -3,9 +3,10 @@ record, composed from the focused per-responsibility resolution submodules."""
 
 from __future__ import annotations
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.config.authored.protocols import AuthoredProtocolsConfig
+from datp_core.config.domain_models import NormalizationFitScopes
 from datp_core.config.operational_contracts import (
     CommunicationEstimationContractRecord,
     OperationalInputsRecord,
@@ -84,8 +85,8 @@ def _resolve_metric_bundles(authored: AuthoredProtocolsConfig) -> dict[MetricBun
     }
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ResolvedProtocols:
+class ResolvedProtocols(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     """Every immutable record resolved from the authored protocol document (protocols.yaml)."""
 
     training_profiles: TypedDomainRegistry[TrainingProfileId, TrainingProfileRecord]
@@ -106,7 +107,7 @@ class ResolvedProtocols:
     operational_inputs: OperationalInputsRecord
     communication_estimation: FrozenJson | None
     protocol_determinism: ProtocolDeterminismRecord
-    normalization_fit_scopes: dict[str, str]
+    normalization_fit_scopes: NormalizationFitScopes
     normalization_leakage_rule: str
     threshold_policy_defaults: ThresholdPolicyDefaultsRecord
     nested_replicate_policy: NestedReplicatePolicyRecord
@@ -143,7 +144,7 @@ def resolve_protocols(authored: AuthoredProtocolsConfig) -> ResolvedProtocols:
         operational_inputs=resolve_operational_inputs(authored.operational_inputs),
         communication_estimation=resolved_communication_estimation,
         protocol_determinism=resolve_protocol_determinism(authored.determinism),
-        normalization_fit_scopes=dict(authored.normalization_fit_scopes),
+        normalization_fit_scopes=authored.normalization_fit_scopes,
         normalization_leakage_rule=authored.normalization_leakage_rule,
         threshold_policy_defaults=resolve_threshold_policy_defaults(authored.threshold_policy_defaults),
         nested_replicate_policy=resolve_nested_replicate_policy(authored.nested_replicate_policy),

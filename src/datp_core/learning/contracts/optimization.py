@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.numbers import NonNegativeFloat, PositiveFloat, PositiveInt
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class OptimizerRecord:
+class OptimizerRecord(BaseModel):
     """Pure resolved optimizer contract."""
+
+    model_config = ConfigDict(frozen=True)
 
     identifier: str
     optimizer_type: str
@@ -25,9 +26,10 @@ class OptimizerRecord:
     state_aggregated_by_server: bool
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class BatchingRecord:
+class BatchingRecord(BaseModel):
     """Pure resolved batching contract."""
+
+    model_config = ConfigDict(frozen=True)
 
     identifier: str
     micro_batch_size: PositiveInt

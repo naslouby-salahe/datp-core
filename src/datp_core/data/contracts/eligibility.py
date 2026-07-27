@@ -2,22 +2,24 @@
 
 from __future__ import annotations
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.identifiers import EligibilityPolicyId, NormalizationStrategyId
 from datp_core.core.numbers import PositiveInt
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class EligibilityFallbackRecord:
+class EligibilityFallbackRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     threshold_source: str
     shared_construction: str
     reported_status: str
     enters_primary_dispersion: bool
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class EligibilityPolicyRecord:
+class EligibilityPolicyRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     identifier: EligibilityPolicyId
     minimum_benign_calibration_count: PositiveInt
     determined_before_test_evaluation: bool
@@ -31,8 +33,9 @@ class EligibilityPolicyRecord:
     permitted_use: str | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class NormalizationStrategyRecord:
+class NormalizationStrategyRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     identifier: NormalizationStrategyId
     formula: str
     fitted_statistics: tuple[str, ...]

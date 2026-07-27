@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.config.resolution.runtime import ResolvedRuntimeConfiguration
 from datp_core.core.hashing import CanonicalProjection, Fingerprint
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ExecutionProjection:
+class ExecutionProjection(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     scientific_fingerprint: str
     active_execution_profile: CanonicalProjection
     determinism: CanonicalProjection

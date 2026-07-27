@@ -33,9 +33,7 @@ def analyze_association(
         specification.predictor_metric != MetricIdentifier.PAIRWISE_JS_DIVERGENCE
         or specification.outcome_metric != MetricIdentifier.CV_FPR_DELTA
     ):
-        raise InvalidAnalysisConfigurationError(
-            f"Unsupported association metrics for analysis '{specification.label}'"
-        )
+        raise InvalidAnalysisConfigurationError(f"Unsupported association metrics for analysis '{specification.label}'")
 
     # In single execution architecture, prerequisite results are passed through prerequisite_result or context
     # Note: caller will need to supply paired results or repo lookup.
@@ -56,15 +54,11 @@ def analyze_association(
 
     condition = paired_result.partition_condition
     if condition is None:
-        raise ScientificContractViolationError(
-            "Association analysis requires partition-conditioned paired results"
-        )
+        raise ScientificContractViolationError("Association analysis requires partition-conditioned paired results")
 
     differences = paired_result.seed_differences
     if len(differences) != len(context.seeds):
-        raise ScientificContractViolationError(
-            "Association source has an incomplete paired seed cohort"
-        )
+        raise ScientificContractViolationError("Association source has an incomplete paired seed cohort")
 
     cal_eval = (
         EvaluationLabel(specification.calibration_source_evaluation)
@@ -122,6 +116,7 @@ def calibration_js(
     frame = context.artifacts.calibration_scores(score_ctx)
 
     diagnostics = context.config.metric_definitions.heterogeneity_diagnostics.pairwise_js_divergence
+    # Polars-to-Python bridge: calculate_pairwise_js_divergence does Python histogram math
     return calculate_pairwise_js_divergence(
         tuple(
             (

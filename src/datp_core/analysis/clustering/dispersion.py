@@ -63,10 +63,10 @@ def cluster_dispersion(
 
     excluded = int(per_cluster.select((pl.col("total") - pl.col("non_null")).sum()).item())
 
-    # -- Empty cluster detection ------------------------------------------------
-    present_labels = set(non_empty["cluster_label"].cast(pl.Utf8).to_list())
-    all_expected = {str(i) for i in range(expected_cluster_count)}
-    empty_labels = sorted(all_expected - present_labels)
+    # -- Empty cluster detection (Polars anti-join to avoid Python set diff) -----
+    expected_clusters = pl.DataFrame({"cluster_label": [str(i) for i in range(expected_cluster_count)]})
+    present_clusters = non_empty.select(pl.col("cluster_label").cast(pl.Utf8).unique().alias("cluster_label"))
+    empty_labels = expected_clusters.join(present_clusters, on="cluster_label", how="anti").to_series().to_list()
 
     if empty_labels:
         return ClusterDispersionResult(
@@ -92,7 +92,7 @@ def cluster_dispersion(
     # -- Clusters that exist but have zero non-null values ----------------------
     no_value = non_empty.filter(pl.col("non_null") == 0)
     if no_value.height > 0:
-        no_value_labels = sorted(no_value["cluster_label"].cast(pl.Utf8).to_list())
+        no_value_labels = no_value.select(pl.col("cluster_label").cast(pl.Utf8).sort()).to_series().to_list()
         return ClusterDispersionResult(
             status=ClusterDispersionStatus.UNAVAILABLE_NO_AVAILABLE_FPR,
             value=None,

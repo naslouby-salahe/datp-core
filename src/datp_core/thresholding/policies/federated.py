@@ -3,20 +3,17 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Literal
+from typing import Annotated, ClassVar, Literal
 
-from attrs import define, field
+from pydantic import BaseModel, BeforeValidator, ConfigDict
 
-from datp_core.thresholding.policies.common import (
-    _as_mapping_str_object,
-    _as_tuple_float,
-    _as_tuple_str,
-)
-from datp_core.thresholding.policies.enums import ThresholdOwnership
+from datp_core.core.immutability import deep_freeze
+from datp_core.thresholding.policies.enums import ThresholdOwnership, ThresholdPolicyKind
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class CandidateGrid:
+class CandidateGrid(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     minimum: float
     maximum: float
     step: float
@@ -30,8 +27,9 @@ class CandidateGrid:
         )
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ExceedanceExchange:
+class ExceedanceExchange(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     fields: tuple[str, ...]
     aggregation: str
 
@@ -43,8 +41,9 @@ class ExceedanceExchange:
         return cls(fields=(), aggregation=str(config.get("aggregation", "")))
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class SelectionRules:
+class SelectionRules(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     metric: str
     tie_break: str
 
@@ -56,13 +55,15 @@ class SelectionRules:
         )
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FederatedMatchedExceedanceThresholdPolicyRecord:
+class FederatedMatchedExceedanceThresholdPolicyRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    kind: ClassVar[ThresholdPolicyKind] = ThresholdPolicyKind.FEDERATED_MATCHED
     policy: Literal["federated_summary_statistic_threshold"]
     mode: Literal["matched_exceedance"]
     quantile: float
     primary_comparator: bool
-    client_message: Mapping[str, object] = field(converter=_as_mapping_str_object)
+    client_message: Annotated[Mapping[str, object], BeforeValidator(deep_freeze)]
     global_mean_formula: str
     within_term_formula: str
     between_term_formula: str
@@ -76,18 +77,20 @@ class FederatedMatchedExceedanceThresholdPolicyRecord:
     candidate_grid: CandidateGrid
     exceedance_exchange: ExceedanceExchange
     selection: SelectionRules
-    required_diagnostics: tuple[str, ...] = field(converter=_as_tuple_str)
-    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
+    required_diagnostics: tuple[str, ...]
+    threshold_ownership: ThresholdOwnership
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FederatedFixedCoefficientThresholdPolicyRecord:
+class FederatedFixedCoefficientThresholdPolicyRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    kind: ClassVar[ThresholdPolicyKind] = ThresholdPolicyKind.FEDERATED_FIXED
     policy: Literal["federated_summary_statistic_threshold"]
     mode: Literal["fixed_k"]
     quantile: float
     primary_comparator: bool
     supplementary_sensitivity_only: bool
-    client_message: Mapping[str, object] = field(converter=_as_mapping_str_object)
+    client_message: Annotated[Mapping[str, object], BeforeValidator(deep_freeze)]
     global_mean_formula: str
     within_term_formula: str
     between_term_formula: str
@@ -99,8 +102,8 @@ class FederatedFixedCoefficientThresholdPolicyRecord:
     client_accumulation_order: str
     zero_total_count_behavior: str
     threshold_formula: str
-    fixed_k_grid: tuple[float, ...] = field(converter=_as_tuple_float)
+    fixed_k_grid: tuple[float, ...]
     fixed_k: float | None
     fixed_k_resolution: str
-    required_diagnostics: tuple[str, ...] = field(converter=_as_tuple_str)
-    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
+    required_diagnostics: tuple[str, ...]
+    threshold_ownership: ThresholdOwnership

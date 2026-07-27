@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.pipeline.graph.key import GraphNodeKey
 from datp_core.pipeline.graph.model import PlanningGraph
@@ -11,8 +11,8 @@ from datp_core.pipeline.graph.validation import validate_acyclic
 from datp_core.pipeline.stages.enums import StageKind
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class PlanValidationResult:
+class PlanValidationResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
     is_valid: bool
     errors: tuple[str, ...]
     job_count: int

@@ -5,8 +5,7 @@ from __future__ import annotations
 from io import BytesIO
 from pathlib import Path
 
-import pyarrow as pa
-import pyarrow.parquet as pq
+import polars as pl
 
 from datp_core.data.adapters.edge_iiotset.models import (
     EdgeChronologicalSplitRows,
@@ -18,14 +17,6 @@ from datp_core.data.adapters.edge_iiotset.models import (
 from datp_core.data.contracts.materialization import DatasetMaterialization
 from datp_core.data.materialization.ports import SourceInventory
 from datp_core.data.sources.models import SourceRowFailure
-
-
-def _category_value(value: str | None, known: tuple[str, ...]) -> str:
-    if value is None:
-        return "__MISSING__"
-    if value in known:
-        return value
-    return "__UNKNOWN__"
 
 
 def _encode_edge_roles_as_parquet(
@@ -43,39 +34,55 @@ def _encode_edge_roles_as_parquet(
     encoded_headers = list(numeric_headers)
     for header in categorical_headers:
         encoded_headers += [f"{header}={value}" for value in (*category_columns[header], "__MISSING__", "__UNKNOWN__")]
-    records: dict[str, list[object]] = {
-        "split": [],
-        "client_id": [],
-        "source_path": [],
-        "source_row_index": [],
-        "is_attack": [],
-    }
-    if chronological:
-        records["chronology_key"] = []
-    records.update({header: [] for header in encoded_headers})
+
+    records: list[dict[str, object]] = []
     chronology_key = 0
     for role, rows in roles:
         for row in rows:
             if row.is_attack or row.client_id is None:
                 raise ValueError("Edge-IIoTset client artifact may only contain benign assigned rows")
-            records["split"].append(role)
-            records["client_id"].append(row.client_id)
-            records["source_path"].append(row.source_path.as_posix())
-            records["source_row_index"].append(row.source_row_index)
-            records["is_attack"].append(False)
+            record: dict[str, object] = {
+                "split": role,
+                "client_id": row.client_id,
+                "source_path": row.source_path.as_posix(),
+                "source_row_index": row.source_row_index,
+                "is_attack": False,
+            }
             if chronological:
-                records["chronology_key"].append(chronology_key)
+                record["chronology_key"] = chronology_key
                 chronology_key += 1
             for i, header in enumerate(numeric_headers):
-                low, high = normalization.minimums[i], normalization.maximums[i]
-                records[header].append(0.0 if high == low else (row.numeric_values[i] - low) / (high - low))
+                record[header] = float(row.numeric_values[i])
             for i, header in enumerate(categorical_headers):
-                value = row.categorical_values[i]
-                selected = _category_value(value, category_columns[header])
-                for category in (*category_columns[header], "__MISSING__", "__UNKNOWN__"):
-                    records[f"{header}={category}"].append(float(category == selected))
+                record[header] = row.categorical_values[i]
+            records.append(record)
+
+    df = pl.DataFrame(records)
+
+    num_norm_exprs: list[pl.Expr] = []
+    for i, header in enumerate(numeric_headers):
+        low, high = normalization.minimums[i], normalization.maximums[i]
+        if high == low:
+            num_norm_exprs.append(pl.lit(0.0).alias(header))
+        else:
+            num_norm_exprs.append(((pl.col(header) - low) / (high - low)).alias(header))
+    df = df.with_columns(num_norm_exprs)
+
+    for header in categorical_headers:
+        known = category_columns[header]
+        fallback_categories = ("__MISSING__", "__UNKNOWN__")
+        for category in (*known, *fallback_categories):
+            col_name = f"{header}={category}"
+            df = df.with_columns(pl.when(pl.col(header) == category).then(1.0).otherwise(0.0).alias(col_name))
+        df = df.drop(header)
+
+    base_cols = ["split", "client_id", "source_path", "source_row_index", "is_attack"]
+    if chronological:
+        base_cols.append("chronology_key")
+    df = df.select(*base_cols, *encoded_headers)
+
     payload = BytesIO()
-    pq.write_table(pa.table(records), payload, compression="zstd", use_dictionary=False)
+    df.write_parquet(payload, compression="zstd")
     return payload.getvalue()
 
 

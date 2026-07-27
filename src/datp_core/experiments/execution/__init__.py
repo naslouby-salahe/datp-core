@@ -1,6 +1,6 @@
-"""Experiment execution: use case, report, preflight handler, campaign orchestrator, output manager."""
+"""Experiment execution: runner, campaign, report, preflight handler, output manager."""
 
-from datp_core.experiments.execution.campaign import CampaignExperimentResult, CampaignOrchestrator, CampaignReport
+from datp_core.experiments.execution.campaign import CampaignExperimentResult, CampaignReport, CampaignRunner
 from datp_core.experiments.execution.output_manager import (
     ExperimentManifest,
     ExperimentOutputManager,
@@ -10,24 +10,24 @@ from datp_core.experiments.execution.output_manager import (
 )
 from datp_core.experiments.execution.preflight import PreflightStageHandler
 from datp_core.experiments.execution.report import ExperimentExecutionReport
-from datp_core.experiments.execution.use_case import (
+from datp_core.experiments.execution.runner import (
     ExecuteExperimentUseCase,
-    ExperimentLifecycleUseCase,
+    ExperimentRunner,
     ExperimentRunResult,
     ExperimentRunStatus,
 )
 
 __all__ = [
     "CampaignExperimentResult",
-    "CampaignOrchestrator",
     "CampaignReport",
+    "CampaignRunner",
     "ExecuteExperimentUseCase",
     "ExperimentExecutionReport",
-    "ExperimentLifecycleUseCase",
     "ExperimentManifest",
     "ExperimentOutputManager",
     "ExperimentRunResult",
     "ExperimentRunStatus",
+    "ExperimentRunner",
     "ExperimentStatus",
     "OutputInspection",
     "OutputState",

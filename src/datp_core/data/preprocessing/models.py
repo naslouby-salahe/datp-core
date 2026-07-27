@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import json
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class NormalizationFeatureStatistics:
+class NormalizationFeatureStatistics(BaseModel):
+    model_config = ConfigDict(frozen=True)
     feature: str
     location: float
     scale: float
@@ -17,8 +17,8 @@ class NormalizationFeatureStatistics:
         return {"feature": self.feature, "location": self.location, "scale": self.scale}
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class NormalizationScopeStatistics:
+class NormalizationScopeStatistics(BaseModel):
+    model_config = ConfigDict(frozen=True)
     client_id: str | None
     features: tuple[NormalizationFeatureStatistics, ...]
 
@@ -29,8 +29,8 @@ class NormalizationScopeStatistics:
         }
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class NormalizationEvidence:
+class NormalizationEvidence(BaseModel):
+    model_config = ConfigDict(frozen=True)
     strategy: str
     scope: str
     feature_columns: tuple[str, ...]

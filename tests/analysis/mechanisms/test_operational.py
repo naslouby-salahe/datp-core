@@ -4,22 +4,23 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
-from datp_core.analysis.enums import ProducedField, ResourceEstimateBasis
-from datp_core.analysis.mechanisms.operational import analyze_resource_cost, threshold_exchange_cost
+from datp_core.analysis.mechanisms.operational import analyze_resource_cost
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
 from datp_core.analysis.runtime.runner import register_analysis_capabilities
 from datp_core.config.operational_contracts import (
+    CheckpointStorageRecord,
     CommunicationEstimationContractRecord,
     FieldEncodingRecord,
     ModelExchangeRecord,
     ThresholdExchangeEntryRecord,
     ThresholdExchangeRecord,
 )
-from datp_core.core.identifiers import AnalysisLabel, EvaluationLabel, ExperimentId, PopulationId
+from datp_core.core.identifiers import ExperimentId, PopulationId, StatisticalProfileId, ThresholdPolicyId
 from datp_core.core.seeding import Seed
 from datp_core.experiments import (
     EvaluationSpecRecord,
     ExperimentRecord,
+    RecalibrationMode,
     ResourceCostAnalysisRecord,
     RunRequirement,
 )
@@ -67,7 +68,10 @@ def _build_dummy_contract(bytes_per_field: int = 4, direction_count: int = 2) ->
             directions=directions,
             bytes_per_round_formula="",
         ),
-        checkpoint_storage=MagicMock(),
+        checkpoint_storage=CheckpointStorageRecord(
+            contents=("model_parameters",),
+            model_parameter_bytes_formula="parameter_count * bytes_per_param",
+        ),
     )
 
 
@@ -81,7 +85,7 @@ def test_resource_cost_respects_encoding_width_and_directions() -> None:
         label="resource_test",
         kind="resource_cost",
         result_type="resource_cost_analysis_result",
-        statistical_profile=None,  # type: ignore[arg-type]
+        statistical_profile=StatisticalProfileId("resource_cost_profile"),
         estimate_basis="communication_contract",
         source_evaluations=("eval_1",),
         produced_fields=("threshold",),
@@ -98,12 +102,12 @@ def test_resource_cost_respects_encoding_width_and_directions() -> None:
     config1.communication_estimation_contract = contract_4bytes_2dirs
     policy_mock = MagicMock(spec=SharedMeanThresholdPolicyRecord)
     policy_mock.policy = "shared_threshold"
-    config1.threshold_policies = {"pol_1": policy_mock}
+    config1.threshold_policies = {ThresholdPolicyId("pol_1"): policy_mock}
 
     eval_spec = EvaluationSpecRecord(
         label="eval_1",
         population_id=PopulationId("pop_1"),
-        recalibration_mode="recalibrate",
+        recalibration_mode=RecalibrationMode.FROZEN,
         threshold_policy_id="pol_1",  # type: ignore[arg-type]
         run_requirement=RunRequirement.MANDATORY,
         overrides=None,
@@ -113,7 +117,7 @@ def test_resource_cost_respects_encoding_width_and_directions() -> None:
     exp.evaluations = (eval_spec,)
     exp.population_ids = (PopulationId("pop_1"),)
 
-    ctx1 = AnalysisExecutionContext(
+    ctx1 = AnalysisExecutionContext.model_construct(
         config=config1,
         artifacts=artifacts,
         experiment=exp,
@@ -132,9 +136,9 @@ def test_resource_cost_respects_encoding_width_and_directions() -> None:
     # Now change contract to 8 bytes and 1 direction
     config2 = MagicMock()
     config2.communication_estimation_contract = contract_8bytes_1dir
-    config2.threshold_policies = {"pol_1": policy_mock}
+    config2.threshold_policies = {ThresholdPolicyId("pol_1"): policy_mock}
 
-    ctx2 = AnalysisExecutionContext(
+    ctx2 = AnalysisExecutionContext.model_construct(
         config=config2,
         artifacts=artifacts,
         experiment=exp,

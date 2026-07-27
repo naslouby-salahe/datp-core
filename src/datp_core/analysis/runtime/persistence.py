@@ -14,7 +14,6 @@ from datp_core.analysis.contracts import AnalysisResult
 from datp_core.artifacts.store import ArtifactStore
 from datp_core.pipeline.stages.jobs import StageJob
 
-
 _adapter = TypeAdapter(tuple[AnalysisResult, ...])
 
 

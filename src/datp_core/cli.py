@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import cattrs
 import typer
 from rich.console import Console
 from rich.table import Table
@@ -17,10 +16,7 @@ from rich.tree import Tree
 from datp_core.app import ConfigurationError, build_application, build_config_only_application
 from datp_core.config.project import ResolvedProjectConfiguration, resolve_project_configuration
 from datp_core.core.identifiers import DatasetId, ExperimentId
-from datp_core.experiments.execution.use_case import ExperimentRunStatus
-from datp_core.experiments.planning import expand_experiment_jobs, validate_planning_graph
-from datp_core.pipeline.graph.model import PlanningGraph
-from datp_core.pipeline.graph.traversal import lexicographical_topological_sort
+from datp_core.experiments.execution.runner import ExperimentRunStatus
 
 app = typer.Typer(name="datp-core", help="DATP-Core Scientific CLI Application")
 config_app = typer.Typer(help="Configuration commands")
@@ -36,7 +32,8 @@ app.add_typer(experiment_app, name="experiment")
 app.add_typer(results_app, name="results")
 
 console = Console()
-_converter = cattrs.Converter()
+
+_EXPERIMENT_SLUG_HELP = "Experiment name slug"
 
 
 def _print_catalogue_summary(catalogue: ResolvedProjectConfiguration) -> None:
@@ -54,7 +51,9 @@ def _print_catalogue_summary(catalogue: ResolvedProjectConfiguration) -> None:
     console.print(f"[bold blue]Scientific Fingerprint:[/bold blue] {catalogue.scientific_fingerprint.value}")
 
 
-def _print_planning_dag(graph: PlanningGraph, experiment_name: str) -> None:
+def _print_planning_dag(graph, experiment_name: str) -> None:
+    from datp_core.pipeline.graph.traversal import lexicographical_topological_sort
+
     tree = Tree(f"[bold gold1]Execution Plan DAG for Experiment: {experiment_name}[/bold gold1]")
     top_order = lexicographical_topological_sort(graph)
     for job in top_order:
@@ -93,7 +92,7 @@ def config_explain_drift(current: Path, expected: Path) -> None:
     """Explain structural drift between two authored YAML configuration files."""
     application = build_config_only_application()
     drift = application.explain_authored_drift.execute(current, expected)
-    console.print_json(data=_converter.unstructure(drift))
+    console.print_json(data=drift.model_dump(mode="json"))
     if drift.has_drift:
         raise typer.Exit(code=1)
 
@@ -108,7 +107,7 @@ def config_explain_scientific_drift(
     current_config = resolve_project_configuration(config_dir=current_config_dir)
     expected_config = resolve_project_configuration(config_dir=expected_config_dir)
     drift = application.explain_scientific_drift.execute(current_config=current_config, expected_config=expected_config)
-    console.print_json(data=_converter.unstructure(drift))
+    console.print_json(data=drift.model_dump(mode="json"))
     if drift.has_drift:
         raise typer.Exit(code=1)
 
@@ -123,7 +122,7 @@ def config_explain_execution_drift(
     current_config = resolve_project_configuration(config_dir=current_config_dir)
     expected_config = resolve_project_configuration(config_dir=expected_config_dir)
     drift = application.explain_execution_drift.execute(current_config=current_config, expected_config=expected_config)
-    console.print_json(data=_converter.unstructure(drift))
+    console.print_json(data=drift.model_dump(mode="json"))
     if drift.has_drift:
         raise typer.Exit(code=1)
 
@@ -167,20 +166,18 @@ def dataset_audit(dataset_id: str = typer.Argument(..., help="Dataset ID (e.g. n
 
 @experiment_app.command("plan")
 def experiment_plan(
-    experiment: str = typer.Option(..., "--config", "-c", help="Experiment name slug"),
+    experiment: str = typer.Option(..., "--config", "-c", help=_EXPERIMENT_SLUG_HELP),
 ) -> None:
     """Plan pre-execution job DAG for an experiment."""
     application = build_application()
     experiment_id = ExperimentId(experiment)
-    experiment_record = application.config.experiments.get(experiment_id)
-    graph = expand_experiment_jobs(experiment_record, application.config)
-    validate_planning_graph(graph)
+    graph = application.build_experiment_plan(experiment_id)
     _print_planning_dag(graph, experiment)
 
 
 @experiment_app.command("run")
 def experiment_run(
-    experiment: str = typer.Option(..., "--config", "-c", help="Experiment name slug"),
+    experiment: str = typer.Option(..., "--config", "-c", help=_EXPERIMENT_SLUG_HELP),
     override: bool = typer.Option(False, "--override", help="Delete existing experiment output and run from scratch"),
 ) -> None:
     """Execute a single experiment pipeline.
@@ -229,7 +226,6 @@ def campaign_run(
     application = build_application()
     report = application.run_campaign.run(override_all=override_all)
 
-    # Summary table
     table = Table(title="Campaign Execution Summary")
     table.add_column("Experiment", style="cyan")
     table.add_column("Status", style="green")
@@ -278,7 +274,7 @@ app.add_typer(diagnostic_app, name="diagnostic")
 
 @diagnostic_app.command("experiment")
 def diagnostic_experiment(
-    experiment: str = typer.Option(..., "--config", "-c", help="Experiment name slug"),
+    experiment: str = typer.Option(..., "--config", "-c", help=_EXPERIMENT_SLUG_HELP),
     seed_index: int = typer.Option(0, "--seed-index", help="Seed index (0-based)"),
     profile: str = typer.Option("smoke", "--profile", help="Execution profile"),
 ) -> None:
@@ -286,21 +282,15 @@ def diagnostic_experiment(
 
     Output is isolated under .tmp/diagnostics/ — never touches official outputs.
     """
-    import os
-
-    os.environ.setdefault("DATP_REPOSITORY_ROOT", str(Path.cwd()))
-    os.environ.setdefault("DATP_EXECUTION_PROFILE", profile)
-    os.environ["DATP_OUTPUTS_ROOT"] = str(Path(".tmp/diagnostics").resolve())
-
-    from datp_core.orchestration.diagnostics import run_experiment_diagnostic
+    from datp_core.orchestration.diagnostics import ExperimentDiagnosticStatus, run_experiment_diagnostic
 
     result = run_experiment_diagnostic(experiment, seed_index=seed_index, profile=profile)
-    if result["status"] == "diagnostic_failed":
-        console.print(f"[red]Diagnostic failed: {result['error']}[/red]")
+    if result.status is ExperimentDiagnosticStatus.DIAGNOSTIC_FAILED:
+        console.print(f"[red]Diagnostic failed: {result.error}[/red]")
         raise typer.Exit(code=1)
-    console.print(f"[green]Diagnostic for {experiment}: {result['status']}[/green]")
-    if "scientific_fingerprint" in result and result["scientific_fingerprint"]:
-        console.print(f"[dim]Scientific fingerprint: {result['scientific_fingerprint']}[/dim]")
+    console.print(f"[green]Diagnostic for {experiment}: {result.status.value}[/green]")
+    if result.scientific_fingerprint:
+        console.print(f"[dim]Scientific fingerprint: {result.scientific_fingerprint}[/dim]")
 
 
 @diagnostic_app.command("campaign")
@@ -311,22 +301,16 @@ def diagnostic_campaign(
 
     Output is isolated under .tmp/diagnostics/ — never touches official outputs.
     """
-    import os
-
-    os.environ.setdefault("DATP_REPOSITORY_ROOT", str(Path.cwd()))
-    os.environ.setdefault("DATP_EXECUTION_PROFILE", profile)
-    os.environ["DATP_OUTPUTS_ROOT"] = str(Path(".tmp/diagnostics").resolve())
-
     from datp_core.orchestration.diagnostics import run_campaign_diagnostic
 
     result = run_campaign_diagnostic(profile=profile)
     console.print("[bold]Campaign diagnostic:[/bold]")
-    console.print(f"  Total: {result['total']}")
-    console.print(f"  Completed/Skipped: {result['completed_or_skipped']}")
-    console.print(f"  Executed: {result['executed']}")
-    console.print(f"  Blocked: {result['blocked']}")
-    console.print(f"  Failed: {result['failed']}")
-    if not result["success"]:
+    console.print(f"  Total: {result.total}")
+    console.print(f"  Completed/Skipped: {result.completed_or_skipped}")
+    console.print(f"  Executed: {result.executed}")
+    console.print(f"  Blocked: {result.blocked}")
+    console.print(f"  Failed: {result.failed}")
+    if not result.success:
         console.print("[red]Campaign diagnostic completed with failures.[/red]")
         raise typer.Exit(code=1)
     console.print("[green]Campaign diagnostic completed successfully.[/green]")
@@ -334,24 +318,15 @@ def diagnostic_campaign(
 
 @diagnostic_app.command("dagster")
 def diagnostic_dagster(
-    experiment: str = typer.Option(..., "--config", "-c", help="Experiment name slug"),
+    experiment: str = typer.Option(..., "--config", "-c", help=_EXPERIMENT_SLUG_HELP),
 ) -> None:
     """Run one experiment through Dagster (canonical orchestrator).
 
     Uses the same production pipeline; Dagster adds observability.
     """
-    import os
-
-    os.environ.setdefault("DATP_REPOSITORY_ROOT", str(Path.cwd()))
-    os.environ.setdefault("DATP_EXECUTION_PROFILE", "smoke")
-
-    from datp_core.config.project import resolve_project_configuration
     from datp_core.orchestration.dagster_defs import build_dagster_definitions
 
-    config = resolve_project_configuration()
-    exp_ids = tuple(eid.value for eid in config.experiments)
-    defs = build_dagster_definitions(exp_ids)
-
+    defs = build_dagster_definitions()
     job_name = f"datp_{experiment}"
     job = defs.get_job_def(job_name)
     if job is None:

@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import polars as pl
-from attrs import evolve
 
 from datp_core.app import build_application
 from datp_core.core.identifiers import DatasetId, DatasetSetupId, MaterializationId
@@ -45,11 +44,12 @@ def test_dirichlet_materialization_preserves_rows_and_emits_a_reproducible_manif
     app = build_application()
     dataset = app.config.datasets[DatasetId("nbaiot")]
     setup = dataset.setup(DatasetSetupId("dirichlet_partitioned"))
-    construction = evolve(
-        setup.client_construction,
-        client_count=PositiveInt(3),
-        minimum_row_counts={"train": 1, "calibration": 1, "test": 1},
-        retry_policy={"max_retries": 1},
+    construction = setup.client_construction.model_copy(
+        update={
+            "client_count": PositiveInt(3),
+            "minimum_row_counts": {"train": 1, "calibration": 1, "test": 1},
+            "retry_policy": {"max_retries": 1},
+        }
     )
     condition = SweepConditionRecord(
         name="iid_reference",

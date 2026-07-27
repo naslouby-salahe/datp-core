@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Literal
+from typing import Annotated, Literal
 
-from attrs import define, field
+from pydantic import BaseModel, BeforeValidator, ConfigDict
 
 from datp_core.core.immutability import as_str_mapping
 from datp_core.thresholding.policies.common import (
@@ -15,18 +15,20 @@ from datp_core.thresholding.policies.common import (
 from datp_core.thresholding.policies.enums import ClusterAggregation, ThresholdOwnership
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClusterFingerprintConfiguration:
-    features: tuple[str, ...] = field(converter=_as_tuple_str)
-    estimators: Mapping[str, str] = field(converter=as_str_mapping)
-    degenerate_client_rules: Mapping[str, float | Mapping[str, float]] = field(
-        converter=_as_mapping_str_float_or_mapping
-    )
+class ClusterFingerprintConfiguration(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    features: Annotated[tuple[str, ...], BeforeValidator(_as_tuple_str)]
+    estimators: Annotated[Mapping[str, str], BeforeValidator(as_str_mapping)]
+    degenerate_client_rules: Annotated[
+        Mapping[str, float | Mapping[str, float]], BeforeValidator(_as_mapping_str_float_or_mapping)
+    ]
     non_finite_value_behavior: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClusterStandardizationConfiguration:
+class ClusterStandardizationConfiguration(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     method: str
     with_mean: bool
 
@@ -38,22 +40,24 @@ class ClusterStandardizationConfiguration:
         )
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class KMeansConfiguration:
+class KMeansConfiguration(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     random_seed: int
     initialization_runs: int
     maximum_iterations: int
     convergence_tolerance: float
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClusterThresholdPolicyRecord:
+class ClusterThresholdPolicyRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     policy: Literal["cluster_threshold"]
     quantile: float
     quantile_estimator: str
     canonical: bool | None
     exploratory: bool | None
-    aggregation: ClusterAggregation = field(converter=ClusterAggregation)
+    aggregation: ClusterAggregation
     cluster_count: int
     aggregated_quantity: str
     aggregation_formula: str
@@ -67,5 +71,5 @@ class ClusterThresholdPolicyRecord:
     label_canonicalization: str
     insufficient_eligible_clients_behavior: str
     degenerate_fingerprint_matrix_behavior: str
-    required_diagnostics: tuple[str, ...] = field(converter=_as_tuple_str)
-    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
+    required_diagnostics: Annotated[tuple[str, ...], BeforeValidator(_as_tuple_str)]
+    threshold_ownership: ThresholdOwnership

@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from datp_core.pipeline.graph.key import GraphNodeKey
-from datp_core.pipeline.stages.context import StageJobContext
+from datp_core.pipeline.stages.context import AnalysisContext, DataContext, EvaluationContext, TrainingContext
 from datp_core.pipeline.stages.enums import StageKind
 
 
@@ -21,7 +21,7 @@ class AnalysisInputCoordinates:
 
     producer_stage: StageKind
     output_name: str
-    context: StageJobContext
+    context: DataContext | TrainingContext | EvaluationContext | AnalysisContext
 
     def __post_init__(self) -> None:
         if not self.output_name:
@@ -60,7 +60,7 @@ class StageOutput:
 class StageJob:
     node_key: GraphNodeKey
     stage: StageKind
-    context: StageJobContext
+    context: DataContext | TrainingContext | EvaluationContext | AnalysisContext
     inputs: tuple[StageInput, ...]
     outputs: tuple[StageOutput, ...]
     dependencies: tuple[GraphNodeKey, ...]

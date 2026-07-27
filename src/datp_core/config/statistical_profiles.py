@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.identifiers import StatisticalProfileId
 from datp_core.core.numbers import PositiveInt, Probability
@@ -43,8 +43,8 @@ class StatisticalMethod(StrEnum):
     LINEAR_REGRESSION = "linear_regression"
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class StatisticalProfileRecord:
+class StatisticalProfileRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     """Resolved, executable statistical analysis contract (BCa/percentile bootstrap, Wilcoxon, etc.)."""
 
     identifier: StatisticalProfileId
@@ -54,8 +54,9 @@ class StatisticalProfileRecord:
     minimum_units: PositiveInt | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class NestedReplicatePolicyRecord:
+class NestedReplicatePolicyRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     replicate_values_computed_first: bool
     summarized_within_seed_before_across_seed_inference: bool
     seed_level_statistic: str

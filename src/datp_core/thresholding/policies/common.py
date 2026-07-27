@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import cast
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.identifiers import ClientId, PopulationId
 from datp_core.core.immutability import deep_freeze
@@ -53,8 +53,9 @@ def _as_mapping_str_tuple_or_str(value: object) -> Mapping[str, tuple[str, ...] 
     return cast("Mapping[str, tuple[str, ...] | str]", deep_freeze(value))
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ThresholdPolicyDefaultsRecord:
+class ThresholdPolicyDefaultsRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     source_score_population: str
     eligibility_filter: str
     attack_rows_forbidden_in_calibration: bool
@@ -64,8 +65,9 @@ class ThresholdPolicyDefaultsRecord:
     required_diagnostic_fields: tuple[str, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class QuantileEstimatorRecord:
+class QuantileEstimatorRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     identifier: str
     sort_order: str
     index_formula: str

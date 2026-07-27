@@ -100,11 +100,15 @@ def threshold_exchange_cost(
 
 
 def _field_bytes(contract: CommunicationEstimationContractRecord, field: CommunicationFieldIdentifier) -> int:
+    # Wire-level field names encode their data type as the suffix after the last
+    # underscore, e.g. "benign_calibration_count_uint64" -> "uint64".
+    # Try the full value first, then extract the type suffix.
     encoding = contract.field_encodings.get(field.value)
     if encoding is None:
-        raise InvalidAnalysisConfigurationError(
-            f"Communication field '{field.value}' has no configured encoding"
-        )
+        type_key = field.value.rsplit("_", 1)[-1]
+        encoding = contract.field_encodings.get(type_key)
+    if encoding is None:
+        raise InvalidAnalysisConfigurationError(f"Communication field '{field.value}' has no configured encoding")
     return encoding.bytes_per_field
 
 

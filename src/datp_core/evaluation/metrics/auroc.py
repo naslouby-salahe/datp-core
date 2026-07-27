@@ -31,23 +31,21 @@ def compute_roc_auc(labels: np.ndarray, scores: np.ndarray) -> ClientAuroc:
     return ClientAuroc.available(float(roc_auc_score(labels, scores)))
 
 
+def _compute_auroc_for_group(group_df: pl.DataFrame) -> pl.DataFrame:
+    """Compute AUROC for a single per-client group, used by map_groups."""
+    labels = group_df["label"].to_numpy()
+    scores = group_df["score"].to_numpy()
+    result = compute_roc_auc(labels, scores)
+    return pl.DataFrame(
+        {"auroc": [result.value], "auroc_status": [result.status.value]},
+        schema={"auroc": pl.Float64, "auroc_status": pl.String},
+    )
+
+
 def compute_client_auroc(df: pl.DataFrame) -> pl.DataFrame:
     if df.is_empty():
         raise ValueError("Cannot compute AUROC on empty DataFrame")
     if "score" not in df.columns or "label" not in df.columns:
         raise ValueError("AUROC computation requires score and label columns")
 
-    auroc_records: list[dict[str, object]] = []
-    for (client_id,), group in df.group_by("client_id", maintain_order=True):
-        labels = group["label"].to_numpy()
-        scores = group["score"].to_numpy()
-        result: ClientAuroc = compute_roc_auc(labels, scores)
-        auroc_records.append(
-            {
-                "client_id": client_id,
-                "auroc": result.value,
-                "auroc_status": result.status.value,
-            }
-        )
-
-    return pl.DataFrame(auroc_records, schema={"client_id": pl.String, "auroc": pl.Float64, "auroc_status": pl.String})
+    return df.group_by("client_id", maintain_order=True).map_groups(_compute_auroc_for_group)

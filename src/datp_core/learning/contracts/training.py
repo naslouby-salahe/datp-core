@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.identifiers import TrainingProfileId
 from datp_core.core.numbers import PositiveInt
@@ -14,9 +14,10 @@ from datp_core.learning.contracts.enums import (
 )
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FederationProfileRecord:
+class FederationProfileRecord(BaseModel):
     """Pure resolved Flower participation contract."""
+
+    model_config = ConfigDict(frozen=True)
 
     fraction_fit: float
     fraction_evaluate: float
@@ -25,8 +26,9 @@ class FederationProfileRecord:
     minimum_available_clients: PositiveInt
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class TrainingProfileRecord:
+class TrainingProfileRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     identifier: TrainingProfileId
     kind: TrainingProfileKind
     model_architecture_id: str

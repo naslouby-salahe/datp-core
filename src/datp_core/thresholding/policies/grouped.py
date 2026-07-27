@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from typing import Literal
 
-from attrs import define, field
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.thresholding.policies.enums import ThresholdOwnership
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FamilyMeanThresholdPolicyRecord:
+class FamilyMeanThresholdPolicyRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     policy: Literal["family_threshold"]
     quantile: float
     quantile_estimator: str
@@ -25,4 +26,4 @@ class FamilyMeanThresholdPolicyRecord:
     family_with_no_eligible_member_behavior: str
     client_without_family_label_behavior: str
     unavailable_without_taxonomy: str
-    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
+    threshold_ownership: ThresholdOwnership

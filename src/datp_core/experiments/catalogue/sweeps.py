@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 
 class SweepConditionAllocation(StrEnum):
@@ -15,21 +15,21 @@ class SweepConditionAllocation(StrEnum):
 SweepValue = str | int | float | tuple[str, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ValueSweepRecord:
+class ValueSweepRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     name: str
     values: tuple[SweepValue, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class SweepConditionRecord:
+class SweepConditionRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     name: str
     allocation: SweepConditionAllocation
     dirichlet_alpha: float | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ConditionSweepRecord:
+class ConditionSweepRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     name: str
     conditions: tuple[SweepConditionRecord, ...]
 

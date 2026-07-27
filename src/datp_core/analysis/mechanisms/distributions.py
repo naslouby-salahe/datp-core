@@ -51,8 +51,7 @@ def distribution_seed_result(
             threshold_frame, metric_frame, score_frame, client_id.value if client_id is not None else None
         )
         entries = tuple(
-            ClientDistributionEntry(client_id=ClientId(cid), distribution=dist)
-            for cid, dist in dist_dict.items()
+            ClientDistributionEntry(client_id=ClientId(cid), distribution=dist) for cid, dist in dist_dict.items()
         )
         eval_results.append(EvaluationDistributionResult(evaluation_label=label, clients=entries))
 
@@ -69,9 +68,7 @@ def analyze_distribution_mechanism(
     evals = tuple(EvaluationLabel(label) for label in specification.source_evaluations)
     produced_fields = tuple(ProducedField(field) for field in specification.produced_fields)
 
-    seed_results = tuple(
-        distribution_seed_result(context, seed, evals, None) for seed in context.seeds
-    )
+    seed_results = tuple(distribution_seed_result(context, seed, evals, None) for seed in context.seeds)
 
     if specification.field_formulas is None:
         raw_res = DistributionMechanismRawResult(
@@ -100,12 +97,9 @@ def analyze_distribution_mechanism(
             {cid.value: dist for cid, dist in shifted_dist.items()},
         )
         entries = tuple(
-            ClientTradeoffEntry(client_id=ClientId(cid), tradeoff=tradeoff)
-            for cid, tradeoff in tradeoff_map.items()
+            ClientTradeoffEntry(client_id=ClientId(cid), tradeoff=tradeoff) for cid, tradeoff in tradeoff_map.items()
         )
-        tradeoff_seeds.append(
-            DistributionMechanismTradeoffSeedResult(seed=res.seed, per_client_tradeoff=entries)
-        )
+        tradeoff_seeds.append(DistributionMechanismTradeoffSeedResult(seed=res.seed, per_client_tradeoff=entries))
 
     tradeoff_res = DistributionMechanismTradeoffResult(
         analysis_label=AnalysisLabel(specification.label),
@@ -127,10 +121,7 @@ def analyze_locked_client_distribution(
     locked_client = ClientId(specification.locked_client_identifier)
     produced_fields = tuple(ProducedField(field) for field in specification.produced_fields)
 
-    seed_results = tuple(
-        distribution_seed_result(context, seed, evals, locked_client)
-        for seed in context.seeds
-    )
+    seed_results = tuple(distribution_seed_result(context, seed, evals, locked_client) for seed in context.seeds)
     res = LockedClientDistributionAnalysisResult(
         analysis_label=AnalysisLabel(specification.label),
         locked_client_identifier=locked_client,

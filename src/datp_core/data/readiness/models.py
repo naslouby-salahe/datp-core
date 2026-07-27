@@ -5,21 +5,22 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.hashing import Checksum
 from datp_core.core.identifiers import DatasetId, DatasetSetupId
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DatasetAuditIssue:
+class DatasetAuditIssue(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+
     code: str
     message: str
     path: Path | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class SourceTreeAudit:
+class SourceTreeAudit(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     identifier: str
     root: Path
     configured_file_pattern: str
@@ -29,8 +30,8 @@ class SourceTreeAudit:
     headers_identical: bool
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DatasetAuditReport:
+class DatasetAuditReport(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     dataset_id: DatasetId
     display_name: str
     schema_id: str
@@ -48,8 +49,8 @@ class DatasetAuditReport:
         return self.raw_source_found and self.readable and not self.issues
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DatasetReadinessReport:
+class DatasetReadinessReport(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     dataset_id: DatasetId
     setup_id: DatasetSetupId
     source_fingerprint: Checksum

@@ -53,10 +53,12 @@ def conformal_seed_coverage(
         raise PopulationAlignmentError("Conformal coverage metrics do not cover the threshold population")
 
     # Convert calibration counts to a Polars frame and join
-    cal_counts = pl.from_dict({
-        ThresholdColumn.CLIENT_ID.value: [str(c_id) for c_id, _ in calibration_counts],
-        "_calibration_count": [cnt for _, cnt in calibration_counts],
-    })
+    cal_counts = pl.from_dict(
+        {
+            ThresholdColumn.CLIENT_ID.value: [str(c_id) for c_id, _ in calibration_counts],
+            "_calibration_count": [cnt for _, cnt in calibration_counts],
+        }
+    )
     joined = joined.join(cal_counts, on=ThresholdColumn.CLIENT_ID.value, how="left")
 
     # Validate completeness of per-client diagnostics
@@ -88,9 +90,7 @@ def conformal_seed_coverage(
         | (pl.col(ThresholdColumn.ATTAINABILITY_STATUS.value) != expected_status)
     )
     if diagnostics_off.height > 0:
-        raise ScientificContractViolationError(
-            f"Conformal finite-sample diagnostics disagree for seed '{seed.value}'"
-        )
+        raise ScientificContractViolationError(f"Conformal finite-sample diagnostics disagree for seed '{seed.value}'")
 
     # Validate FPR status consistency
     benign_total_expr = pl.col(MetricColumn.TRUE_NEGATIVES.value) + pl.col(MetricColumn.FALSE_POSITIVES.value)
@@ -99,9 +99,7 @@ def conformal_seed_coverage(
         != (pl.col(MetricColumn.FALSE_POSITIVE_RATE_STATUS.value) == MetricStatus.AVAILABLE.value)
     )
     if fpr_off.height > 0:
-        raise ScientificContractViolationError(
-            f"Conformal coverage metric status disagrees for seed '{seed.value}'"
-        )
+        raise ScientificContractViolationError(f"Conformal coverage metric status disagrees for seed '{seed.value}'")
 
     # Compute per-client coverage vectorially
     coverage_expr = (
@@ -112,12 +110,8 @@ def conformal_seed_coverage(
 
     # Aggregate seed-level totals (clients with available coverage only)
     has_coverage = coverage_expr.is_not_null()
-    true_negatives = joined.filter(has_coverage).select(
-        pl.col(MetricColumn.TRUE_NEGATIVES.value).sum()
-    ).item()
-    benign_total = joined.filter(has_coverage).select(
-        benign_total_expr.sum()
-    ).item()
+    true_negatives = joined.filter(has_coverage).select(pl.col(MetricColumn.TRUE_NEGATIVES.value).sum()).item()
+    benign_total = joined.filter(has_coverage).select(benign_total_expr.sum()).item()
 
     # Build per-client coverage frame — the only place where iter_rows is used
     per_client = joined.select(
@@ -132,17 +126,18 @@ def conformal_seed_coverage(
         pl.col(ThresholdColumn.ATTAINABILITY_STATUS.value).alias("attainability_status"),
         pl.col("_calibration_count").alias("calibration_count"),
     )
+    # Domain object construction requires Python iteration from Polars
     per_client_records = [
         ConformalClientCoverageRecord(
-            client_id=ClientId(str(row[0])),
-            coverage=row[1],
-            absolute_coverage_error=row[2],
-            coverage_status=CoverageStatus(row[3]),
-            finite_sample_rank=row[4],
-            attainability_status=ConformalAttainabilityStatus(row[5]),
-            calibration_count=row[6],
+            client_id=ClientId(str(row.client_id)),
+            coverage=row.coverage,
+            absolute_coverage_error=row.absolute_coverage_error,
+            coverage_status=CoverageStatus(row.coverage_status),
+            finite_sample_rank=row.finite_sample_rank,
+            attainability_status=ConformalAttainabilityStatus(row.attainability_status),
+            calibration_count=row.calibration_count,
         )
-        for row in per_client.iter_rows()
+        for row in per_client.iter_rows(named=True)
     ]
     return ConformalSeedCoverageResult(
         seed=seed,
@@ -205,10 +200,7 @@ def analyze_conformal_coverage(
         ]
     )
     macro_coverages = [
-        item.coverage
-        for res in seed_results
-        for item in res.per_client_coverage
-        if item.coverage is not None
+        item.coverage for res in seed_results for item in res.per_client_coverage if item.coverage is not None
     ]
     achieved_macro = sum(macro_coverages) / len(macro_coverages) if macro_coverages else None
     direction = CoverageDirection(specification.coverage_direction) if specification.coverage_direction else None

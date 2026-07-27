@@ -7,10 +7,10 @@ resolved (absolute-path-bearing) record.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Sequence
 from typing import Protocol
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.config.resolution.experiments import ResolvedExperimentCatalogue
 from datp_core.config.resolution.protocols import ResolvedProtocols
@@ -34,15 +34,15 @@ def _sorted_items[K, V](source: HasItems[K, V]) -> dict[str, V]:
     return {str(k): v for k, v in sorted(source.items(), key=lambda x: str(x[0]))}
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DatasetProjection:
+class DatasetProjection(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     schema_id: str
-    source_layout_contract: CanonicalProjection
-    field_schema: CanonicalProjection
-    source_contract: CanonicalProjection
-    client_identity_contract: CanonicalProjection
-    setups: CanonicalProjection
-    materializations: CanonicalProjection
+    source_layout_contract: object
+    field_schema: object
+    source_contract: object
+    client_identity_contract: object
+    setups: object
+    materializations: object
     capabilities: Sequence[str]
     fingerprint_source_fields: Sequence[str]
     fingerprint_schema_fields: Sequence[str]
@@ -52,7 +52,7 @@ class DatasetProjection:
 
 def _build_dataset_projection(
     dataset: ResolvedDataset,
-    projection_module: Callable[[object], CanonicalProjection],
+    projection_module: Callable[[object], object],
 ) -> DatasetProjection:
     return DatasetProjection(
         schema_id=dataset.schema_id,
@@ -70,41 +70,41 @@ def _build_dataset_projection(
     )
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ScientificProjection:
-    datasets: Mapping[str, DatasetProjection]
-    populations: Mapping[str, CanonicalProjection]
-    experiments: Mapping[str, CanonicalProjection]
-    threshold_policies: Mapping[str, CanonicalProjection]
-    seed_cohorts: Mapping[str, CanonicalProjection]
-    training_profiles: Mapping[str, CanonicalProjection]
-    checkpoint_profiles: Mapping[str, CanonicalProjection]
-    model_architectures: Mapping[str, CanonicalProjection]
-    optimizers: Mapping[str, CanonicalProjection]
-    batching: Mapping[str, CanonicalProjection]
-    eligibility_policies: Mapping[str, CanonicalProjection]
-    normalization_strategies: Mapping[str, CanonicalProjection]
-    quantile_estimators: Mapping[str, CanonicalProjection]
-    metric_bundles: Mapping[str, CanonicalProjection]
-    statistical_profiles: Mapping[str, CanonicalProjection]
-    metric_definitions: CanonicalProjection
-    communication_estimation_contract: CanonicalProjection
-    operational_inputs: CanonicalProjection
-    report_profiles: Mapping[str, CanonicalProjection]
-    communication_estimation: CanonicalProjection
-    protocol_determinism: CanonicalProjection
-    normalization_fit_scopes: Mapping[str, str]
+class ScientificProjection(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
+    datasets: object
+    populations: object
+    experiments: object
+    threshold_policies: object
+    seed_cohorts: object
+    training_profiles: object
+    checkpoint_profiles: object
+    model_architectures: object
+    optimizers: object
+    batching: object
+    eligibility_policies: object
+    normalization_strategies: object
+    quantile_estimators: object
+    metric_bundles: object
+    statistical_profiles: object
+    metric_definitions: object
+    communication_estimation_contract: object
+    operational_inputs: object
+    report_profiles: object
+    communication_estimation: object
+    protocol_determinism: object
+    normalization_fit_scopes: object
     normalization_leakage_rule: str
-    threshold_policy_defaults: CanonicalProjection
-    nested_replicate_policy: CanonicalProjection
-    result_types: Mapping[str, CanonicalProjection]
-    evaluation_result_contract: CanonicalProjection
-    report_defaults: CanonicalProjection
+    threshold_policy_defaults: object
+    nested_replicate_policy: object
+    result_types: object
+    evaluation_result_contract: object
+    report_defaults: object
     capabilities: Sequence[str]
     suppression_behaviors: Sequence[str]
-    population_readiness_rule: Mapping[str, str | bool]
-    eligibility_gates: Mapping[str, CanonicalProjection]
-    analysis_conventions: Mapping[str, str]
+    population_readiness_rule: object
+    eligibility_gates: object
+    analysis_conventions: object
 
 
 def build_scientific_projection(
@@ -140,7 +140,7 @@ def build_scientific_projection(
         report_profiles=_project(protocols.report_profiles, projection_module),
         communication_estimation=projection_module(protocols.communication_estimation),
         protocol_determinism=projection_module(protocols.protocol_determinism),
-        normalization_fit_scopes=dict(sorted(protocols.normalization_fit_scopes.items())),
+        normalization_fit_scopes=protocols.normalization_fit_scopes,
         normalization_leakage_rule=protocols.normalization_leakage_rule,
         threshold_policy_defaults=projection_module(protocols.threshold_policy_defaults),
         nested_replicate_policy=projection_module(protocols.nested_replicate_policy),
@@ -149,7 +149,7 @@ def build_scientific_projection(
         report_defaults=projection_module(protocols.report_defaults),
         capabilities=tuple(sorted(catalogue.capabilities)),
         suppression_behaviors=tuple(sorted(catalogue.suppression_behaviors)),
-        population_readiness_rule=dict(sorted(catalogue.population_readiness_rule.items())),
+        population_readiness_rule=catalogue.population_readiness_rule,
         eligibility_gates=_project(catalogue.eligibility_gates, projection_module),
-        analysis_conventions=dict(sorted(catalogue.analysis_conventions.items())),
+        analysis_conventions=catalogue.analysis_conventions,
     )

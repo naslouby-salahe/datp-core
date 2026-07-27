@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from attrs import evolve
-
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import PopulationId, ThresholdPolicyId
 from datp_core.core.registry import TypedDomainRegistry
@@ -42,7 +40,7 @@ class ConstructThresholdsUseCase:
         if quantile_override is not None:
             if not 0.0 < quantile_override < 1.0 or not _has_quantile(policy):
                 raise ValueError("Threshold quantile override is invalid for the configured policy")
-            policy = evolve(policy, quantile=quantile_override)
+            policy = policy.model_copy(update={"quantile": quantile_override})
         if fingerprint_features_override is not None:
             if (
                 not isinstance(policy, ClusterThresholdPolicyRecord)
@@ -50,7 +48,8 @@ class ConstructThresholdsUseCase:
                 or any(feature not in policy.fingerprint.features for feature in fingerprint_features_override)
             ):
                 raise ValueError("Fingerprint-feature override is invalid for the configured cluster policy")
-            policy = evolve(policy, fingerprint=evolve(policy.fingerprint, features=fingerprint_features_override))
+            updated_fingerprint = policy.fingerprint.model_copy(update={"features": fingerprint_features_override})
+            policy = policy.model_copy(update={"fingerprint": updated_fingerprint})
         return estimator.estimate(
             ThresholdConstructionRequest(
                 policy_id=policy_id,

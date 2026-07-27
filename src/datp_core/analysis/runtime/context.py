@@ -1,14 +1,14 @@
 """Immutable analysis execution context — sole authority for evaluation lookups,
-``StageJobContext`` construction, and typed domain operations.
+context construction, and typed domain operations.
 
 Capability modules must use this context instead of constructing
-``StageJobContext`` manually, calling ``getattr(policy, …)``, or performing
-``next(item for item in …)`` searches.
+evaluation/model/selection contexts manually, calling ``getattr(policy, …)``, or
+performing ``next(item for item in …)`` searches.
 """
 
 from __future__ import annotations
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.analysis.errors import InvalidAnalysisConfigurationError
 from datp_core.analysis.runtime.artifacts import AnalysisArtifactRepository
@@ -17,12 +17,13 @@ from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import EvaluationLabel, PartitionConditionId, PopulationId, ThresholdPolicyId
 from datp_core.core.seeding import Seed
 from datp_core.experiments import EvaluationSpecRecord, ExperimentRecord
-from datp_core.pipeline.stages.context import StageJobContext
+from datp_core.pipeline.stages.context import DataContext, EvaluationContext, TrainingContext
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AnalysisExecutionContext:
+class AnalysisExecutionContext(BaseModel):
     """Immutable context holding resolved configuration and artifact access for one analysis run."""
+
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     config: ResolvedProjectConfiguration
     artifacts: AnalysisArtifactRepository
@@ -66,10 +67,10 @@ class AnalysisExecutionContext:
         calibration_sample_count: int | None = None,
         calibration_replicate: int | None = None,
         fingerprint_features: tuple[str, ...] | None = None,
-    ) -> StageJobContext:
-        """Construct a ``StageJobContext`` with complete evaluation metadata."""
+    ) -> EvaluationContext:
+        """Construct an ``EvaluationContext`` with complete evaluation metadata."""
         eval_spec = self.evaluation(label)
-        return StageJobContext(
+        return EvaluationContext(
             experiment_id=self.experiment.identifier,
             seed=seed.value,
             evaluation_label=label.value,
@@ -96,10 +97,10 @@ class AnalysisExecutionContext:
         calibration_sample_count: int | None = None,
         calibration_replicate: int | None = None,
         fingerprint_features: tuple[str, ...] | None = None,
-    ) -> StageJobContext:
-        """Construct a ``StageJobContext`` for score generation artifacts."""
+    ) -> EvaluationContext:
+        """Construct an ``EvaluationContext`` for score generation artifacts."""
         eval_spec = self.evaluation(label)
-        return StageJobContext(
+        return EvaluationContext(
             experiment_id=self.experiment.identifier,
             seed=seed.value,
             evaluation_label=label.value,
@@ -118,12 +119,14 @@ class AnalysisExecutionContext:
         seed: Seed,
         *,
         population_id: PopulationId | None = None,
-    ) -> StageJobContext:
-        """Construct a ``StageJobContext`` for model training / checkpoint artifacts."""
-        pop_id = population_id if population_id is not None else (
-            self.experiment.population_ids[0] if self.experiment.population_ids else None
+    ) -> TrainingContext:
+        """Construct a ``TrainingContext`` for model training / checkpoint artifacts."""
+        pop_id = (
+            population_id
+            if population_id is not None
+            else (self.experiment.population_ids[0] if self.experiment.population_ids else None)
         )
-        return StageJobContext(
+        return TrainingContext(
             experiment_id=self.experiment.identifier,
             seed=seed.value,
             population_id=pop_id,
@@ -132,9 +135,9 @@ class AnalysisExecutionContext:
     def selection_context(
         self,
         seed: Seed,
-    ) -> StageJobContext:
-        """Construct a ``StageJobContext`` for checkpoint selection artifacts."""
-        return StageJobContext(
+    ) -> DataContext:
+        """Construct a ``DataContext`` for checkpoint selection artifacts."""
+        return DataContext(
             experiment_id=self.experiment.identifier,
             seed=seed.value,
         )

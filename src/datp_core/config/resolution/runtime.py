@@ -11,13 +11,11 @@ import errno
 import os
 from collections.abc import Mapping
 from pathlib import Path
-from typing import cast
 
-from attrs import define, field
+from pydantic import BaseModel, ConfigDict, model_validator
 
 from datp_core.config.authored.runtime import AuthoredRuntimeConfig, RawSourcePolicyConfig
 from datp_core.config.bootstrap import RuntimeBootstrapSettings, resolve_config_root
-from datp_core.core.immutability import as_str_mapping, deep_freeze
 from datp_core.core.numbers import PositiveInt
 from datp_core.core.registry import TypedDomainRegistry
 
@@ -64,8 +62,8 @@ def _resolve_contained_root(repository_root: Path, relative_root: str) -> Path:
     return resolved
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ResolvedProjectPaths:
+class ResolvedProjectPaths(BaseModel):
+    model_config = ConfigDict(frozen=True)
     """Immutable resolved project paths resolved once at bootstrap time."""
 
     repository_root: Path
@@ -77,31 +75,33 @@ class ResolvedProjectPaths:
     outputs: Path
     runtime_state: Path
 
-    def __attrs_post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate_paths(self) -> ResolvedProjectPaths:
         if not self.repository_root.is_absolute():
             raise ValueError(f"Repository root must be absolute: {self.repository_root}")
         if not self.config_root.is_absolute():
             raise ValueError(f"Config root must be absolute: {self.config_root}")
+        return self
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DataLoadingRecord:
+class DataLoadingRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     """Pure resolved data-loading contract (runtime.yaml ``data_loading``)."""
 
     chunk_row_count: PositiveInt
     streaming: bool
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ResourceBudgetRecord:
+class ResourceBudgetRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     """Pure resolved resource-budget contract (runtime.yaml ``resource_budget``)."""
 
     max_ram_gib: PositiveInt
     max_vram_gib: int | None = None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ConcurrencyRecord:
+class ConcurrencyRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     """Pure resolved concurrency contract (runtime.yaml ``concurrency``)."""
 
     worker_count: PositiveInt
@@ -110,8 +110,8 @@ class ConcurrencyRecord:
     audit_concurrency: int | None = None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ExecutionProfileRecord:
+class ExecutionProfileRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     """Pure resolved execution profile (runtime.yaml ``execution_profiles``)."""
 
     identifier: str
@@ -127,8 +127,8 @@ class ExecutionProfileRecord:
     temporary_storage_cleanup: str | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class RawSourcePolicyRecord:
+class RawSourcePolicyRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     """Pure resolved raw-source access policy (runtime.yaml `raw_source_policy`)."""
 
     follow_symlink: bool
@@ -139,8 +139,8 @@ class RawSourcePolicyRecord:
     create_files_under_raw_root: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DeterminismStrictRecord:
+class DeterminismStrictRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     """Pure resolved strict determinism-enforcement contract."""
 
     python_hash_seed: int
@@ -160,20 +160,16 @@ class DeterminismStrictRecord:
     unavailable_determinism_policy: str
 
 
-def _as_mapping_str_tuple_or_bool(value: object) -> Mapping[str, tuple[str, ...] | bool]:
-    return cast("Mapping[str, tuple[str, ...] | bool]", deep_freeze(value))
-
-
-@define(frozen=True, slots=True, kw_only=True)
-class DevicePolicyRecord:
+class DevicePolicyRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     """Pure resolved device policy (runtime.yaml `device_policy_rules`)."""
 
-    cuda_required: Mapping[str, str] = field(converter=as_str_mapping)
-    cpu_only: Mapping[str, tuple[str, ...] | bool] = field(converter=_as_mapping_str_tuple_or_bool)
+    cuda_required: Mapping[str, str]
+    cpu_only: Mapping[str, tuple[str, ...] | bool]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ResourcePressureRecord:
+class ResourcePressureRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     """Pure resolved resource-pressure policy (runtime.yaml `resource_pressure_policy`)."""
 
     silent_reduction_of_batch_size: str
@@ -181,8 +177,8 @@ class ResourcePressureRecord:
     on_budget_exceeded: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ResolvedRuntimeConfiguration:
+class ResolvedRuntimeConfiguration(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     """Fully resolved runtime configuration combining bootstrap settings and runtime.yaml."""
 
     bootstrap: RuntimeBootstrapSettings

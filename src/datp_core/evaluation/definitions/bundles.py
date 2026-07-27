@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.identifiers import MetricBundleId
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class MetricBundleRecord:
+class MetricBundleRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     identifier: MetricBundleId
     metrics: tuple[str, ...]
     cross_client_aggregation: str | None

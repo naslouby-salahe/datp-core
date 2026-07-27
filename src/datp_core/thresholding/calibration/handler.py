@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from io import BytesIO
+from typing import cast
 
 import polars as pl
 
 from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
 from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.pipeline.stages.context import EvaluationContext
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
@@ -24,14 +26,14 @@ class CalibrationSubsamplingStageHandler:
         self._store = store
 
     def execute(self, job: StageJob) -> StageJobOutcome:
-        context = job.context
-        if context.seed is None or context.calibration_sample_count is None or context.calibration_replicate is None:
+        ctx = cast(EvaluationContext, job.context)
+        if ctx.seed is None or ctx.calibration_sample_count is None or ctx.calibration_replicate is None:
             return StageJobOutcome.failed(
                 node_key=job.node_key,
                 stage=job.stage,
                 error_message="Calibration subsampling requires a seed, sample count, and replicate",
             )
-        experiment = self._config.experiments.get(context.experiment_id)
+        experiment = self._config.experiments.get(ctx.experiment_id)
         subset = experiment.calibration_subset
         if subset is None:
             return StageJobOutcome.failed(
@@ -58,10 +60,10 @@ class CalibrationSubsamplingStageHandler:
             )
             sampled = subsample_calibration_scores(
                 scores,
-                requested_sample_count=context.calibration_sample_count,
-                training_seed=context.seed,
+                requested_sample_count=ctx.calibration_sample_count,
+                training_seed=ctx.seed,
                 selection_seed=subset.selection_seed.value,
-                replicate=context.calibration_replicate,
+                replicate=ctx.calibration_replicate,
                 namespace_key=namespace.key,
                 digest_bytes=digest_bytes,
             )

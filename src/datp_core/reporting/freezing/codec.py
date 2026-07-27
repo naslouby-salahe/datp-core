@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from typing import cast
 
 from datp_core.reporting.freezing.errors import ResultFreezeError
 from datp_core.reporting.freezing.models import (
@@ -78,5 +77,5 @@ def decode_manifest(payload: bytes) -> FrozenResultManifest:
         statistical_procedure_version=str(decoded.get("statistical_procedure_version", "")),
         report_profiles=profiles,
         source_files=source_files,
-        statistical_results=tuple(cast(object, r) for r in decoded["statistical_results"]),
+        statistical_results=tuple(decoded["statistical_results"]),
     )

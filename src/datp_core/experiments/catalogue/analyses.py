@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from enum import Enum
 from typing import cast
 
-from attrs import define, field
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from datp_core.core.identifiers import StatisticalProfileId
 from datp_core.core.immutability import (
@@ -42,8 +42,8 @@ def _as_reference_analysis(value: object) -> str | Mapping[str, str]:
     return cast("Mapping[str, str]", deep_freeze(value))
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class PairedThresholdAnalysisRecord:
+class PairedThresholdAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str
@@ -62,8 +62,8 @@ class PairedThresholdAnalysisRecord:
     post_hoc_weight_selection: str | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AbsorptionAnalysisRecord:
+class AbsorptionAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str
@@ -73,16 +73,36 @@ class AbsorptionAnalysisRecord:
     band_interpretation: str
     denominator_materiality_rule: float | str
     undefined_denominator_behavior: str
-    matching_contract: Mapping[str, FrozenJson] = field(converter=as_frozen_json_mapping)
-    outcome_bands: tuple[Mapping[str, str], ...] = field(converter=as_str_mapping_tuple)
+    matching_contract: Mapping[str, FrozenJson]
+    outcome_bands: tuple[Mapping[str, str], ...]
     outcome_bands_are_mutually_exclusive_and_exhaustive: bool
-    reference_analysis: str | Mapping[str, str] = field(converter=_as_reference_analysis)
+    reference_analysis: str | Mapping[str, str]
     stress_test_analysis: str
-    alternative_path_rule: Mapping[str, FrozenJson] | None = field(converter=as_optional_frozen_json_mapping)
+    alternative_path_rule: Mapping[str, FrozenJson] | None
+
+    @field_validator("matching_contract", mode="before")
+    @classmethod
+    def _convert_matching_contract(cls, v: object) -> Mapping[str, FrozenJson]:
+        return as_frozen_json_mapping(v)
+
+    @field_validator("outcome_bands", mode="before")
+    @classmethod
+    def _convert_outcome_bands(cls, v: object) -> tuple[Mapping[str, str], ...]:
+        return as_str_mapping_tuple(v)
+
+    @field_validator("reference_analysis", mode="before")
+    @classmethod
+    def _convert_reference_analysis(cls, v: object) -> str | Mapping[str, str]:
+        return _as_reference_analysis(v)
+
+    @field_validator("alternative_path_rule", mode="before")
+    @classmethod
+    def _convert_alternative_path_rule(cls, v: object) -> Mapping[str, FrozenJson] | None:
+        return as_optional_frozen_json_mapping(v)
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AlertBurdenAnalysisRecord:
+class AlertBurdenAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str
@@ -95,8 +115,8 @@ class AlertBurdenAnalysisRecord:
     unavailable_behavior: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class AnchorEquivalenceAnalysisRecord:
+class AnchorEquivalenceAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str
@@ -115,8 +135,8 @@ class AnchorEquivalenceAnalysisRecord:
     downstream_blocking_behavior: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClusterStabilityAnalysisRecord:
+class ClusterStabilityAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str
@@ -128,8 +148,8 @@ class ClusterStabilityAnalysisRecord:
     run_requirement: RunRequirement | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ConformalCoverageAnalysisRecord:
+class ConformalCoverageAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str
@@ -140,8 +160,8 @@ class ConformalCoverageAnalysisRecord:
     coverage_direction: str | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DistributionMechanismAnalysisRecord:
+class DistributionMechanismAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str
@@ -151,8 +171,8 @@ class DistributionMechanismAnalysisRecord:
     field_formulas: Mapping[str, str] | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class LockedClientDistributionAnalysisRecord:
+class LockedClientDistributionAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str
@@ -162,8 +182,8 @@ class LockedClientDistributionAnalysisRecord:
     locked_client_identifier: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class MetricAssociationAnalysisRecord:
+class MetricAssociationAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str
@@ -177,8 +197,8 @@ class MetricAssociationAnalysisRecord:
     calibration_source_evaluation: str | None = None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class QuantileEstimationAnalysisRecord:
+class QuantileEstimationAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str
@@ -188,8 +208,8 @@ class QuantileEstimationAnalysisRecord:
     oracle_reference: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class RecoveryFractionAnalysisRecord:
+class RecoveryFractionAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str
@@ -202,8 +222,8 @@ class RecoveryFractionAnalysisRecord:
     undefined_denominator_behavior: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ResourceCostAnalysisRecord:
+class ResourceCostAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str
@@ -213,8 +233,8 @@ class ResourceCostAnalysisRecord:
     estimate_basis: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class TemporalRecoveryAnalysisRecord:
+class TemporalRecoveryAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str
@@ -233,12 +253,17 @@ class TemporalRecoveryAnalysisRecord:
     recovery_ratio_direction: str
     meaningful_recovery_threshold: float
     chronology_unverifiable_policy: str
-    outcome_bands: tuple[Mapping[str, str], ...] = field(converter=as_str_mapping_tuple)
+    outcome_bands: tuple[Mapping[str, str], ...]
     outcome_bands_are_mutually_exclusive_and_exhaustive: bool
 
+    @field_validator("outcome_bands", mode="before")
+    @classmethod
+    def _convert_outcome_bands(cls, v: object) -> tuple[Mapping[str, str], ...]:
+        return as_str_mapping_tuple(v)
 
-@define(frozen=True, slots=True, kw_only=True)
-class ThresholdStabilityAnalysisRecord:
+
+class ThresholdStabilityAnalysisRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     label: str
     kind: str
     result_type: str

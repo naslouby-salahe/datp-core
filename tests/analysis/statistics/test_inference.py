@@ -5,16 +5,15 @@ from __future__ import annotations
 import pytest
 
 from datp_core.analysis.contracts import ConfidenceInterval, PairedThresholdAnalysisResult
-from datp_core.analysis.enums import AlternativeHypothesis, ConfidenceIntervalMethod
-from datp_core.analysis.errors import StatisticalProcedureError
+from datp_core.analysis.enums import ConfidenceIntervalMethod
 from datp_core.analysis.statistics.inference import (
     apply_holm_correction,
     holm_adjust_p_values,
     matched_pairs_rank_biserial_correlation,
 )
 from datp_core.core.identifiers import AnalysisLabel, MetricId, ThresholdPolicyId
-from datp_core.core.seeding import Seed
 from datp_core.core.numbers import Probability
+from datp_core.core.seeding import Seed
 
 
 def test_matched_pairs_rank_biserial_correlation_numeric() -> None:

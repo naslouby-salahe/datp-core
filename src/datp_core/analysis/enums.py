@@ -228,11 +228,29 @@ class OperationalInputIdentifier(StrEnum):
 
 
 class CommunicationFieldIdentifier(StrEnum):
-    """Fields referenced in threshold-communication estimates."""
+    """Fields referenced in threshold-communication estimates.
+
+    Wire-level field names encode their data type as the suffix after the last
+    underscore (``_float64``, ``_uint64``, ``_uint32``) for byte-width lookup.
+    """
 
     THRESHOLD = "threshold"
     CLUSTER_LABEL = "cluster_label"
     CALIBRATION_SCORE = "calibration_score"
+    LOCAL_QUANTILE = "local_quantile_float64"
+    SHARED_THRESHOLD = "shared_threshold_float64"
+    LOCAL_THRESHOLD = "local_threshold_float64"
+    MEAN_ERROR = "mean_error_float64"
+    STD_ERROR = "std_error_float64"
+    SKEW_ERROR = "skew_error_float64"
+    P95_ERROR = "p95_error_float64"
+    CLUSTER_IDENTIFIER = "cluster_identifier_uint32"
+    CLUSTER_THRESHOLD = "cluster_threshold_float64"
+    BENIGN_CALIBRATION_COUNT = "benign_calibration_count_uint64"
+    BENIGN_LOCAL_MEAN = "benign_local_mean_float64"
+    BENIGN_LOCAL_VARIANCE = "benign_local_variance_float64"
+    CANDIDATE_COEFFICIENT = "candidate_coefficient_float64"
+    BENIGN_EXCEEDANCE_COUNT = "benign_exceedance_count_uint64"
 
 
 # ---------------------------------------------------------------------------

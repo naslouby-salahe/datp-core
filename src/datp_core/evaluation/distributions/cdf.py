@@ -14,14 +14,15 @@ from datp_core.evaluation.distributions.models import (
 def client_score_distributions(
     thresholds: pl.DataFrame, metrics: pl.DataFrame, scores: pl.DataFrame, client_filter: str | None
 ) -> dict[str, ClientScoreDistributionRecord]:
-    clients = {str(client) for client in thresholds["client_id"].to_list()}
+    # Polars unique before Python bridge
+    clients = {str(client) for client in thresholds["client_id"].unique().to_list()}
     if client_filter is not None:
         if client_filter not in clients:
             raise ValueError(f"Locked client '{client_filter}' is unavailable in this evaluation")
         clients = {client_filter}
-    threshold_by_client = {
-        str(client): float(value) for client, value in thresholds.select("client_id", "threshold").iter_rows()
-    }
+    # Column-based access instead of row iteration
+    _thresh = thresholds.select("client_id", "threshold").to_dict(as_series=False)
+    threshold_by_client = {str(c): float(v) for c, v in zip(_thresh["client_id"], _thresh["threshold"], strict=False)}
     metrics_by_client = {str(row["client_id"]): row for row in metrics.to_dicts()}
     result: dict[str, ClientScoreDistributionRecord] = {}
     for client in sorted(clients):
@@ -30,8 +31,9 @@ def client_score_distributions(
             raise ValueError(f"Score distribution metric is unavailable for client '{client}'")
         client_scores = scores.filter(pl.col("client_id") == client)
         threshold = threshold_by_client[client]
-        benign = sorted(float(value) for value in client_scores.filter(pl.col("label") == 0)["score"].to_list())
-        attack = sorted(float(value) for value in client_scores.filter(pl.col("label") == 1)["score"].to_list())
+        # Polars sort before Python bridge
+        benign = client_scores.filter(pl.col("label") == 0).select(pl.col("score").sort()).to_series().to_list()
+        attack = client_scores.filter(pl.col("label") == 1).select(pl.col("score").sort()).to_series().to_list()
         result[client] = ClientScoreDistributionRecord(
             per_client_benign_score_cdf=_empirical_cdf(benign),
             per_client_attack_score_cdf=_empirical_cdf(attack),

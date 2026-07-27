@@ -7,6 +7,7 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Sequence
 from math import isfinite
+
 import numpy as np
 import pandas as pd
 import pingouin as pg
@@ -103,9 +104,7 @@ class StatisticalAnalysisUseCase:
         arr_a = np.array(scores_policy_a, dtype=np.float64)
         arr_b = np.array(scores_policy_b, dtype=np.float64)
         if arr_a.shape != arr_b.shape:
-            raise StatisticalProcedureError(
-                "Paired seed analysis requires equally sized policy score cohorts"
-            )
+            raise StatisticalProcedureError("Paired seed analysis requires equally sized policy score cohorts")
         diffs = arr_a - arr_b
         mean_diff = float(np.mean(diffs))
 
@@ -141,9 +140,7 @@ class StatisticalAnalysisUseCase:
         predictor_values = np.array(predictor, dtype=np.float64)
         outcome_values = np.array(outcome, dtype=np.float64)
         if len(predictor_values) < 3 or predictor_values.shape != outcome_values.shape:
-            raise StatisticalProcedureError(
-                "Association analysis requires at least three paired finite observations"
-            )
+            raise StatisticalProcedureError("Association analysis requires at least three paired finite observations")
         if not np.isfinite(predictor_values).all() or not np.isfinite(outcome_values).all():
             raise StatisticalProcedureError("Association analysis requires finite observations")
         return (
@@ -191,9 +188,7 @@ class StatisticalAnalysisUseCase:
         if method == ConfidenceIntervalMethod.BCA_BOOTSTRAP and len(data) < 10:
             raise StatisticalProcedureError("BCa requires at least ten valid paired seed differences")
         if method == ConfidenceIntervalMethod.PERCENTILE_BOOTSTRAP and len(data) < 2:
-            raise StatisticalProcedureError(
-                "Percentile bootstrap requires at least two valid paired seed differences"
-            )
+            raise StatisticalProcedureError("Percentile bootstrap requires at least two valid paired seed differences")
 
         try:
             res = stats.bootstrap(

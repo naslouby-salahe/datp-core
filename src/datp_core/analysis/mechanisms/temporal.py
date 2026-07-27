@@ -35,16 +35,13 @@ def analyze_temporal_recovery(
     recal_eval = EvaluationLabel(specification.recalibrated_evaluation)
 
     static = tuple(
-        evaluation_metric(context=context, label=static_eval, metric_id=metric_id, seed=seed)
-        for seed in context.seeds
+        evaluation_metric(context=context, label=static_eval, metric_id=metric_id, seed=seed) for seed in context.seeds
     )
     frozen = tuple(
-        evaluation_metric(context=context, label=frozen_eval, metric_id=metric_id, seed=seed)
-        for seed in context.seeds
+        evaluation_metric(context=context, label=frozen_eval, metric_id=metric_id, seed=seed) for seed in context.seeds
     )
     recalibrated = tuple(
-        evaluation_metric(context=context, label=recal_eval, metric_id=metric_id, seed=seed)
-        for seed in context.seeds
+        evaluation_metric(context=context, label=recal_eval, metric_id=metric_id, seed=seed) for seed in context.seeds
     )
 
     neg_policy = NegativeRecoveryBehavior(specification.negative_recovery_policy)
@@ -59,10 +56,7 @@ def analyze_temporal_recovery(
     drift = tuple(f_val - s_val for f_val, s_val in zip(frozen, static, strict=True))
     raw_recovered = [f_val - r_val for f_val, r_val in zip(frozen, recalibrated, strict=True)]
 
-    recovered = tuple(
-        max(0.0, r) if neg_policy == NegativeRecoveryBehavior.CLAMP_TO_ZERO else r
-        for r in raw_recovered
-    )
+    recovered = tuple(max(0.0, r) if neg_policy == NegativeRecoveryBehavior.CLAMP_TO_ZERO else r for r in raw_recovered)
 
     frozen_policy_id = context.threshold_policy_id(frozen_eval)
     static_policy_id = context.threshold_policy_id(static_eval)

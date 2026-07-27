@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.identifiers import (
     DatasetId,
@@ -17,7 +17,10 @@ from datp_core.core.immutability import FrozenJson
 from datp_core.core.paths import RelativePath
 from datp_core.data.contracts.enums import AdapterKind
 from datp_core.data.contracts.features import DatasetFieldSchemaRecord
-from datp_core.data.contracts.materialization import DatasetMaterialization, SetupClientConstructionRecord
+from datp_core.data.contracts.materialization import (
+    DatasetMaterialization,
+    SetupClientConstructionRecord,
+)
 from datp_core.data.contracts.sources import (
     DatasetInspectionContract,
     DatasetSourceLayoutContractRecord,
@@ -25,22 +28,25 @@ from datp_core.data.contracts.sources import (
 )
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ResolvedDatasetPaths:
+class ResolvedDatasetPaths(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     raw_data_root: Path
     raw_root: Path
     processed_root: Path
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class SourceLayout:
+class SourceLayout(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     root: RelativePath
     ignored_suffixes: tuple[str, ...]
     ignored_subtrees: tuple[str, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DatasetSetup:
+class DatasetSetup(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     identifier: DatasetSetupId
     materialization_id: MaterializationId
     capabilities: tuple[str, ...]
@@ -50,8 +56,9 @@ class DatasetSetup:
     client_population_must_equal_setup: DatasetSetupId | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ResolvedDataset:
+class ResolvedDataset(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     dataset_id: DatasetId
     adapter_kind: AdapterKind
     display_name: str

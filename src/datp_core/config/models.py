@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from pydantic import BaseModel, ConfigDict
 
-from attrs import define
-
+from datp_core.config.domain_models import AnalysisConventions, NormalizationFitScopes, PopulationReadinessRule
 from datp_core.config.operational_contracts import (
     CommunicationEstimationContractRecord,
     OperationalInputsRecord,
@@ -53,19 +52,20 @@ from datp_core.thresholding.policies.common import QuantileEstimatorRecord, Thre
 from datp_core.thresholding.policies.union import ThresholdPolicyRecord
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ResolvedProjectConfiguration:
+class ResolvedProjectConfiguration(BaseModel):
     """Single resolved project configuration authority loaded once during composition root
     initialization."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", arbitrary_types_allowed=True)
 
     datasets: TypedDomainRegistry[DatasetId, ResolvedDataset]
     populations: TypedDomainRegistry[PopulationId, PopulationRecord]
     experiments: TypedDomainRegistry[ExperimentId, ExperimentRecord]
     capabilities: tuple[str, ...]
     suppression_behaviors: tuple[str, ...]
-    population_readiness_rule: Mapping[str, str | bool]
+    population_readiness_rule: PopulationReadinessRule
     eligibility_gates: TypedDomainRegistry[str, EligibilityGateRecord]
-    analysis_conventions: Mapping[str, str]
+    analysis_conventions: AnalysisConventions
     training_profiles: TypedDomainRegistry[TrainingProfileId, TrainingProfileRecord]
     checkpoint_profiles: TypedDomainRegistry[CheckpointProfileId, CheckpointProfileRecord]
     seed_cohorts: TypedDomainRegistry[SeedCohortId, SeedCohortRecord]
@@ -84,7 +84,7 @@ class ResolvedProjectConfiguration:
     report_profiles: TypedDomainRegistry[str, ReportProfileRecord]
     communication_estimation: FrozenJson | None
     protocol_determinism: ProtocolDeterminismRecord
-    normalization_fit_scopes: Mapping[str, str]
+    normalization_fit_scopes: NormalizationFitScopes
     normalization_leakage_rule: str
     threshold_policy_defaults: ThresholdPolicyDefaultsRecord
     nested_replicate_policy: NestedReplicatePolicyRecord
@@ -127,10 +127,10 @@ class ResolvedProjectConfiguration:
         return candidates[0]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ValidationReport:
+class ValidationReport(BaseModel):
     """Typed validation result report."""
 
+    model_config = ConfigDict(frozen=True)
     is_valid: bool
     errors: tuple[str, ...]
     warnings: tuple[str, ...]

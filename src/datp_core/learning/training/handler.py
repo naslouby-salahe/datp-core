@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import cast
@@ -11,14 +12,24 @@ import torch
 from safetensors.torch import save as save_safetensors
 
 from datp_core.artifacts.store import ArtifactStore
-from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import DatasetId
+from datp_core.config.resolution.protocols.training import ProtocolDeterminismRecord
+from datp_core.config.resolution.runtime import ResolvedRuntimeConfiguration
+from datp_core.core.identifiers import (
+    CheckpointProfileId,
+    DatasetId,
+    ExperimentId,
+    PopulationId,
+    TrainingProfileId,
+)
 from datp_core.core.numbers import PositiveInt
-from datp_core.data.contracts import SplitMethod
+from datp_core.core.registry import TypedDomainRegistry
+from datp_core.data.contracts import ResolvedDataset, SplitMethod
+from datp_core.experiments import ExperimentRecord, PopulationRecord
 from datp_core.learning.checkpoints.selection import (
     select_anchor_checkpoint_round,
     select_lowest_validation_loss_checkpoint,
 )
+from datp_core.learning.contracts.architecture import ModelArchitectureRecord
 from datp_core.learning.contracts.checkpoints import CheckpointProfileRecord
 from datp_core.learning.contracts.enums import (
     DevicePolicy,
@@ -26,6 +37,7 @@ from datp_core.learning.contracts.enums import (
     TrainingParticipation,
     TrainingProfileKind,
 )
+from datp_core.learning.contracts.optimization import BatchingRecord, OptimizerRecord
 from datp_core.learning.contracts.training import TrainingProfileRecord
 from datp_core.learning.model.autoencoder import DynamicDenseAutoencoder
 from datp_core.learning.model.determinism import derive_model_initialization_seed, set_deterministic_seeds
@@ -34,9 +46,26 @@ from datp_core.learning.scoring.data import load_benign_client_tensors, material
 from datp_core.learning.training.federated import federated_train_autoencoder
 from datp_core.learning.training.models import DataloaderShuffleSeed, DittoTrainingResult, FederatedTrainingResult
 from datp_core.learning.training.personalization import ditto_train_autoencoder
+from datp_core.pipeline.stages.context import TrainingContext
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
+
+
+@dataclass(frozen=True, slots=True)
+class ModelTrainingHandlerConfiguration:
+    """Narrow configuration for ModelTrainingStageHandler — only the registries it needs."""
+
+    experiments: TypedDomainRegistry[ExperimentId, ExperimentRecord]
+    training_profiles: TypedDomainRegistry[TrainingProfileId, TrainingProfileRecord]
+    populations: TypedDomainRegistry[PopulationId, PopulationRecord]
+    datasets: TypedDomainRegistry[DatasetId, ResolvedDataset]
+    checkpoint_profiles: TypedDomainRegistry[CheckpointProfileId, CheckpointProfileRecord]
+    model_architectures: TypedDomainRegistry[str, ModelArchitectureRecord]
+    optimizers: TypedDomainRegistry[str, OptimizerRecord]
+    batching_profiles: TypedDomainRegistry[str, BatchingRecord]
+    runtime: ResolvedRuntimeConfiguration
+    protocol_determinism: ProtocolDeterminismRecord
 
 
 class ModelTrainingStageHandler:
@@ -44,7 +73,7 @@ class ModelTrainingStageHandler:
 
     stage = StageKind.MODEL_TRAINING
 
-    def __init__(self, config: ResolvedProjectConfiguration, store: ArtifactStore) -> None:
+    def __init__(self, config: ModelTrainingHandlerConfiguration, store: ArtifactStore) -> None:
         self._config = config
         self._store = store
 
@@ -164,7 +193,8 @@ class ModelTrainingStageHandler:
         return None
 
     def execute(self, job: StageJob) -> StageJobOutcome:
-        experiment = self._config.experiments.get(job.context.experiment_id)
+        ctx = cast(TrainingContext, job.context)
+        experiment = self._config.experiments.get(ctx.experiment_id)
         profile = self._config.training_profiles.get(experiment.training_profile_id)
         if (
             profile.kind
@@ -176,19 +206,19 @@ class ModelTrainingStageHandler:
                 stage=job.stage,
                 error_message=f"Training profile '{profile.identifier.value}' is not implemented by the FedAvg stage",
             )
-        if job.context.seed is None or profile.local_epochs is None:
+        if ctx.seed is None or profile.local_epochs is None:
             return StageJobOutcome.failed(
                 node_key=job.node_key, stage=job.stage, error_message="Training requires a seed and local epochs"
             )
-        proximal_mu = job.context.federated_proximal_mu
-        ditto_weight = job.context.ditto_proximal_weight
+        proximal_mu = ctx.federated_proximal_mu
+        ditto_weight = ctx.ditto_proximal_weight
         is_ditto = profile.personalization == PersonalizationStrategy.DITTO
 
         error = self._check_profile_parameter_errors(profile, proximal_mu, ditto_weight, is_ditto, job)
         if error is not None:
             return error
 
-        population = self._config.populations.get(job.context.population_id or experiment.population_ids[0])
+        population = self._config.populations.get(ctx.population_id or experiment.population_ids[0])
         dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
         setup = dataset.setup(population.setup_id)
         materialization_config = next(
@@ -234,7 +264,7 @@ class ModelTrainingStageHandler:
                 initialization_seed = derive_model_initialization_seed(
                     key=initialization_namespace.key,
                     digest_bytes=digest_bytes,
-                    training_seed=job.context.seed,
+                    training_seed=ctx.seed,
                 )
                 set_deterministic_seeds(initialization_seed)
                 model = DynamicDenseAutoencoder(
@@ -245,7 +275,7 @@ class ModelTrainingStageHandler:
                     "local_epochs": int(profile.local_epochs.value),
                     "learning_rate": float(optimizer.learning_rate.value),
                     "batch_size": int(batching.micro_batch_size.value),
-                    "seed": job.context.seed,
+                    "seed": ctx.seed,
                     "device": require_cuda_training_device(),
                     "beta_1": optimizer.beta_1,
                     "beta_2": optimizer.beta_2,

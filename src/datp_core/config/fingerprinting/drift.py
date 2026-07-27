@@ -8,14 +8,14 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.config.loading import YamlConfigurationReader
 from datp_core.core.hashing import CanonicalProjection, canonicalize_value
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DriftEntry:
+class DriftEntry(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     """One structural difference between two canonical projections."""
 
     path: str
@@ -52,8 +52,8 @@ def diff_canonical_projections(
     return tuple(entries)
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ConfigurationDriftReport:
+class ConfigurationDriftReport(BaseModel):
+    model_config = ConfigDict(frozen=True)
     """Report detailing structural or value differences between two configurations."""
 
     has_drift: bool

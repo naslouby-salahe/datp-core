@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.identifiers import CheckpointProfileId
 from datp_core.core.numbers import PositiveFloat, PositiveInt
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class CheckpointConvergenceRecord:
+class CheckpointConvergenceRecord(BaseModel):
     """Pure resolved historical convergence rule (anchor terminal-checkpoint selection)."""
+
+    model_config = ConfigDict(frozen=True)
 
     metric: str
     rounds_initial: PositiveInt
@@ -24,9 +25,10 @@ class CheckpointConvergenceRecord:
     no_qualifying_round_behavior: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class CheckpointSelectionRecord:
+class CheckpointSelectionRecord(BaseModel):
     """Pure resolved checkpoint selection contract."""
+
+    model_config = ConfigDict(frozen=True)
 
     rule: str
     tie_break: str | None
@@ -37,8 +39,9 @@ class CheckpointSelectionRecord:
     forbidden_selectors: tuple[str, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class CheckpointProfileRecord:
+class CheckpointProfileRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     identifier: CheckpointProfileId
     total_rounds: PositiveInt | None
     selected_rounds: tuple[PositiveInt, ...]

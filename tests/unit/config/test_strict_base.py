@@ -147,9 +147,17 @@ class TestAllSchemaVersionDocumentsParse:
             "study_populations": {},
             "capabilities": [],
             "suppression_behaviors": [],
-            "population_readiness_rule": {},
+            "population_readiness_rule": {
+                "blocked_population_outcome": "test",
+                "blocks_only_experiments_binding_that_population": True,
+                "blocked_population_reporting": "test",
+            },
             "eligibility_gates": {},
-            "analysis_conventions": {},
+            "analysis_conventions": {
+                "paired_delta_definition": "test",
+                "delta_direction_resolution": "test",
+                "raw_metric_direction_resolution": "test",
+            },
             "experiments": [],
         }
         instance = AuthoredExperimentsCatalogueConfig.model_validate(data)
@@ -176,7 +184,11 @@ class TestAllSchemaVersionDocumentsParse:
             "training_profiles": {},
             "eligibility_policies": {},
             "normalization_strategies": {},
-            "normalization_fit_scopes": {},
+            "normalization_fit_scopes": {
+                "global_train": "test",
+                "historical_train": "test",
+                "per_client_train": "test",
+            },
             "normalization_leakage_rule": "no_restriction",
             "quantile_estimators": {},
             "threshold_policy_defaults": {

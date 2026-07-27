@@ -16,7 +16,9 @@ def test_ast_forbidden_patterns_in_analysis_package() -> None:
         # Check for forbidden strings in raw content
         assert "AnalysisInputBundle" not in content, f"Forbidden 'AnalysisInputBundle' found in {rel_path}"
         assert "_evaluation_context" not in content, f"Forbidden '_evaluation_context' found in {rel_path}"
-        assert "context: AnalysisExecutionContext | None" not in content, f"Forbidden dual architecture found in {rel_path}"
+        assert "context: AnalysisExecutionContext | None" not in content, (
+            f"Forbidden dual architecture found in {rel_path}"
+        )
         assert "TODO" not in content, f"Forbidden 'TODO' found in {rel_path}"
         assert "FIXME" not in content, f"Forbidden 'FIXME' found in {rel_path}"
         assert "raise ValueError" not in content, f"Forbidden 'raise ValueError' found in {rel_path}"
@@ -31,12 +33,11 @@ def test_ast_forbidden_patterns_in_analysis_package() -> None:
                 for target in node.targets:
                     if isinstance(target, ast.Name) and target.id == "__all__":
                         pytest_fail = f"Forbidden internal __all__ assignment found in {rel_path}"
-                        assert False, pytest_fail
+                        raise AssertionError(pytest_fail)
 
             # Check capability specific AST rules (excluding runtime/ and contracts.py/enums.py/errors.py)
             if "runtime" not in py_file.parts:
                 if isinstance(node, ast.ImportFrom):
-                    module = node.module or ""
                     assert "ArtifactStore" not in [alias.name for alias in node.names], (
                         f"Capability file {rel_path} must not import ArtifactStore"
                     )

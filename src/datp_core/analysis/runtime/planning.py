@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.analysis.contracts import PairedAnalysisCell
 from datp_core.core.identifiers import PartitionConditionId
@@ -19,9 +19,10 @@ from datp_core.learning.contracts.enums import PersonalizationStrategy
 from datp_core.learning.contracts.training import TrainingProfileRecord
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class SweepDimensions:
+class SweepDimensions(BaseModel):
     """Resolved sweep dimensions extracted from experiment configuration."""
+
+    model_config = ConfigDict(frozen=True)
 
     conditions: tuple[PartitionConditionId | None, ...]
     mus: tuple[float | None, ...]

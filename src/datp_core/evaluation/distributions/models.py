@@ -2,24 +2,24 @@
 
 from __future__ import annotations
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class CdfPoint:
+class CdfPoint(BaseModel):
+    model_config = ConfigDict(frozen=True)
     score: float
     cumulative_probability: float
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ThresholdPositionRecord:
+class ThresholdPositionRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     threshold: float
     benign_cdf: float | None
     attack_cdf: float | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClientScoreDistributionRecord:
+class ClientScoreDistributionRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
     per_client_benign_score_cdf: tuple[CdfPoint, ...]
     per_client_attack_score_cdf: tuple[CdfPoint, ...]
     per_client_threshold_position: ThresholdPositionRecord
@@ -34,15 +34,15 @@ class ClientScoreDistributionRecord:
     macro_f1_status: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ThresholdTradeoffEntry:
+class ThresholdTradeoffEntry(BaseModel):
+    model_config = ConfigDict(frozen=True)
     threshold_shift: float
     fpr_delta: float | None
     tpr_delta: float | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class QuantileVarianceTerms:
+class QuantileVarianceTerms(BaseModel):
+    model_config = ConfigDict(frozen=True)
     within_term: float
     between_term: float
     between_ratio: float | None

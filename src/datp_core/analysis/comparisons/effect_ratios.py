@@ -42,9 +42,7 @@ def absorption_analysis_result(
 ) -> AbsorptionAnalysisResult:
     """Calculate ratio of paired differences across seeds with materiality thresholding."""
     if len(numerator_seed_differences) != len(denominator_seed_differences):
-        raise ScientificContractViolationError(
-            f"Ratio analysis '{label.value}' has malformed paired seed differences"
-        )
+        raise ScientificContractViolationError(f"Ratio analysis '{label.value}' has malformed paired seed differences")
     ratios = [
         None if abs(denominator_value) < materiality_threshold_value else numerator_value / denominator_value
         for numerator_value, denominator_value in zip(

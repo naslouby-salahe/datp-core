@@ -2,25 +2,26 @@
 
 from __future__ import annotations
 
-import numpy as np
 import polars as pl
 
 from datp_core.evaluation.distributions.models import QuantileVarianceTerms
 
 
 def calibration_variance_terms(calibration: pl.DataFrame) -> QuantileVarianceTerms:
-    values = np.asarray(calibration["score"].to_list(), dtype=np.float64)
-    if values.size == 0:
+    if calibration.height == 0:
         raise ValueError("Quantile-estimation analysis requires calibration scores")
-    pooled_variance = float(np.var(values))
-    means_and_variances: list[tuple[int, float, float]] = []
-    for _, group in calibration.group_by("client_id", maintain_order=True):
-        group_values = np.asarray(group["score"].to_list(), dtype=np.float64)
-        means_and_variances.append((group_values.size, float(group_values.mean()), float(np.var(group_values))))
-    total = sum(count for count, _, _ in means_and_variances)
-    pooled_mean = float(values.mean())
-    within = sum(count * variance for count, _, variance in means_and_variances) / total
-    between = sum(count * (mean - pooled_mean) ** 2 for count, mean, _ in means_and_variances) / total
+    # Polars-native aggregation eliminates Python group iteration and numpy bridge
+    scores = calibration["score"]
+    pooled_mean = scores.mean()
+    pooled_variance = scores.var(ddof=0)
+    group_stats = calibration.group_by("client_id").agg(
+        pl.len().alias("count"),
+        pl.col("score").mean().alias("mean"),
+        pl.col("score").var(ddof=0).alias("variance"),
+    )
+    total = group_stats["count"].sum()
+    within = float((group_stats["count"] * group_stats["variance"]).sum() / total)
+    between = float((group_stats["count"] * (group_stats["mean"] - pooled_mean) ** 2).sum() / total)
     return QuantileVarianceTerms(
         within_term=within,
         between_term=between,

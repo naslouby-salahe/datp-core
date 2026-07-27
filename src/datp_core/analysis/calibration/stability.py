@@ -84,15 +84,13 @@ def analyze_threshold_stability(
         all_fpr = pl.concat(replicate_fpr)
 
         # Per-client threshold variance (population variance, ddof=0)
-        client_threshold_var = (
-            all_thresholds.group_by(ThresholdColumn.CLIENT_ID.value)
-            .agg(pl.col(ThresholdColumn.THRESHOLD.value).var(ddof=0).alias("threshold_variance"))
+        client_threshold_var = all_thresholds.group_by(ThresholdColumn.CLIENT_ID.value).agg(
+            pl.col(ThresholdColumn.THRESHOLD.value).var(ddof=0).alias("threshold_variance")
         )
 
         # Per-client mean FPR across replicates
-        client_mean_fpr = (
-            all_fpr.group_by(MetricColumn.CLIENT_ID.value)
-            .agg(pl.col(MetricColumn.FALSE_POSITIVE_RATE.value).mean().alias("mean_fpr"))
+        client_mean_fpr = all_fpr.group_by(MetricColumn.CLIENT_ID.value).agg(
+            pl.col(MetricColumn.FALSE_POSITIVE_RATE.value).mean().alias("mean_fpr")
         )
 
         # Test score clients — use ScoreColumn for score-frame schema ownership
@@ -120,9 +118,7 @@ def analyze_threshold_stability(
         if client_threshold_var.height == 0:
             threshold_variance_across_replicates: float | None = None
         else:
-            threshold_variance_across_replicates = _cast(
-                float, client_threshold_var["threshold_variance"].mean()
-            )
+            threshold_variance_across_replicates = _cast(float, client_threshold_var["threshold_variance"].mean())
 
         if client_mean_fpr.height == 0:
             absolute_attainment_error: float | None = None
@@ -130,9 +126,7 @@ def analyze_threshold_stability(
         else:
             target_fpr = 1.0 - quantile
             mean_fpr_values = client_mean_fpr["mean_fpr"]
-            absolute_attainment_error = _cast(
-                float, (mean_fpr_values - target_fpr).abs().mean()
-            )
+            absolute_attainment_error = _cast(float, (mean_fpr_values - target_fpr).abs().mean())
             worst_client_fpr = _cast(float, mean_fpr_values.max())
 
         seed_results.append(

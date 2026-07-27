@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+from typing import cast
 
 import polars as pl
 
@@ -10,6 +11,7 @@ from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
 from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
 from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.pipeline.stages.context import EvaluationContext
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
@@ -33,18 +35,19 @@ class ThresholdConstructionStageHandler:
         self._thresholds = thresholds
 
     def execute(self, job: StageJob) -> StageJobOutcome:
-        if job.context.threshold_policy_id is None or job.context.population_id is None or job.context.seed is None:
+        ctx = cast(EvaluationContext, job.context)
+        if ctx.threshold_policy_id is None or ctx.population_id is None or ctx.seed is None:
             return StageJobOutcome.failed(
                 node_key=job.node_key,
                 stage=job.stage,
                 error_message="Threshold construction requires policy, population, and seed",
             )
-        policy = self._config.threshold_policies.get(job.context.threshold_policy_id)
+        policy = self._config.threshold_policies.get(ctx.threshold_policy_id)
         requires_diagnostics = bool(getattr(policy, "required_diagnostics", ()))
-        experiment = self._config.experiments.get(job.context.experiment_id)
-        population = self._config.populations.get(job.context.population_id)
+        experiment = self._config.experiments.get(ctx.experiment_id)
+        population = self._config.populations.get(ctx.population_id)
         dataset = self._config.datasets[population.dataset_id]
-        evaluation = next((item for item in experiment.evaluations if item.label == job.context.evaluation_label), None)
+        evaluation = next((item for item in experiment.evaluations if item.label == ctx.evaluation_label), None)
         if evaluation is None:
             return StageJobOutcome.failed(
                 node_key=job.node_key, stage=job.stage, error_message="Evaluation configuration is unavailable"
@@ -52,10 +55,10 @@ class ThresholdConstructionStageHandler:
         if evaluation.overrides and all(
             value is None
             for value in (
-                job.context.threshold_quantile,
-                job.context.shrinkage_weight,
-                job.context.federated_summary_fixed_k,
-                job.context.fingerprint_features,
+                ctx.threshold_quantile,
+                ctx.shrinkage_weight,
+                ctx.federated_summary_fixed_k,
+                ctx.fingerprint_features,
             )
         ):
             return StageJobOutcome.failed(
@@ -72,19 +75,17 @@ class ThresholdConstructionStageHandler:
                 frame = empty_threshold_frame()
             else:
                 threshold_set = self._thresholds.execute(
-                    job.context.threshold_policy_id,
-                    calibration_to_benign_scores(scores, job.context.population_id),
-                    job.context.population_id,
+                    ctx.threshold_policy_id,
+                    calibration_to_benign_scores(scores, ctx.population_id),
+                    ctx.population_id,
                     (
                         dict(dataset.field_schema.label_fields.family_map)
                         if dataset.field_schema.label_fields.family_map
                         else None
                     ),
-                    job.context.shrinkage_weight
-                    if job.context.shrinkage_weight is not None
-                    else job.context.federated_summary_fixed_k,
-                    job.context.threshold_quantile,
-                    job.context.fingerprint_features,
+                    ctx.shrinkage_weight if ctx.shrinkage_weight is not None else ctx.federated_summary_fixed_k,
+                    ctx.threshold_quantile,
+                    ctx.fingerprint_features,
                 )
                 frame = threshold_set_to_frame(threshold_set)
             validate_threshold_frame(frame)
@@ -92,7 +93,7 @@ class ThresholdConstructionStageHandler:
             if threshold_set is not None and threshold_set.diagnostics is not None:
                 diagnostics = diagnostics_to_json(threshold_set.diagnostics)
             elif requires_diagnostics:
-                raise ValueError(f"Threshold policy '{job.context.threshold_policy_id.value}' requires diagnostics")
+                raise ValueError(f"Threshold policy '{ctx.threshold_policy_id.value}' requires diagnostics")
             payload = BytesIO()
             frame.write_parquet(payload)
             self._store.write_bytes_atomic(job.output_path("thresholds"), payload.getvalue())

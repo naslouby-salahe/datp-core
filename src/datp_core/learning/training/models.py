@@ -3,41 +3,41 @@
 from __future__ import annotations
 
 import torch
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 from torch import nn
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FederatedCheckpoint:
+class FederatedCheckpoint(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     round_number: int
     state: tuple[tuple[str, torch.Tensor], ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DataloaderShuffleSeed:
+class DataloaderShuffleSeed(BaseModel):
+    model_config = ConfigDict(frozen=True)
     round_number: int
     client_id: str
     local_epoch: int
     value: int
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FederatedTrainingResult:
+class FederatedTrainingResult(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     model: nn.Module
     round_losses: tuple[tuple[int, float], ...]
     scheduled_checkpoints: tuple[FederatedCheckpoint, ...]
     derived_shuffle_seeds: tuple[DataloaderShuffleSeed, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DittoCheckpoint:
+class DittoCheckpoint(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     round_number: int
     global_state: tuple[tuple[str, torch.Tensor], ...]
     personalized_states: tuple[tuple[str, tuple[tuple[str, torch.Tensor], ...]], ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class DittoTrainingResult:
+class DittoTrainingResult(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     global_model: nn.Module
     personalized_models: tuple[tuple[str, nn.Module], ...]
     global_round_losses: tuple[tuple[int, float], ...]

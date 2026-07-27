@@ -62,6 +62,7 @@ from datp_core.config.authored.protocols.training import (
     SeedCohortConfig,
     TrainingProfileConfig,
 )
+from datp_core.config.domain_models import NormalizationFitScopes
 
 
 class MetricBundleConfig(StrictFrozenConfigModel):
@@ -83,7 +84,7 @@ class AuthoredProtocolsConfig(SchemaVersionOneConfigModel):
     training_profiles: dict[str, TrainingProfileConfig]
     eligibility_policies: dict[str, EligibilityPolicyConfig]
     normalization_strategies: dict[str, NormalizationStrategyConfig]
-    normalization_fit_scopes: dict[str, str]
+    normalization_fit_scopes: NormalizationFitScopes
     normalization_leakage_rule: str
     quantile_estimators: dict[str, QuantileEstimatorConfig]
     threshold_policy_defaults: ThresholdPolicyDefaultsConfig

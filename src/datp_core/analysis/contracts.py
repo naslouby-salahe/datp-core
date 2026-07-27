@@ -51,7 +51,6 @@ class QuantileThresholdPolicy(Protocol):
     quantile: float
 
 
-
 class FrozenModel(BaseModel):
     model_config = ConfigDict(
         extra="forbid",
@@ -78,7 +77,6 @@ class PairedAnalysisCell(FrozenModel):
     threshold_quantile: float | None = None
     shrinkage_weight: float | None = None
     calibration_sample_count: int | None = None
-
 
 
 class ConfidenceInterval(FrozenModel):
@@ -193,7 +191,9 @@ class CheckpointSelectionArtifact(FrozenModel):
 
 
 class FederatedProximalSelectionResult(FrozenModel):
-    result_kind: Literal[AnalysisResultKind.FEDERATED_PROXIMAL_SELECTION] = AnalysisResultKind.FEDERATED_PROXIMAL_SELECTION
+    result_kind: Literal[AnalysisResultKind.FEDERATED_PROXIMAL_SELECTION] = (
+        AnalysisResultKind.FEDERATED_PROXIMAL_SELECTION
+    )
     payload_version: Literal[1] = 1
 
     analysis_label: AnalysisLabel
@@ -625,4 +625,3 @@ AnalysisResult = Annotated[
     | AnchorEquivalenceAnalysisResult,
     Field(discriminator="result_kind"),
 ]
-

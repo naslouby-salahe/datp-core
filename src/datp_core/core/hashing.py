@@ -93,6 +93,8 @@ def canonicalize_value(obj: object) -> CanonicalProjection:
         return obj
     if hasattr(obj, "__attrs_attrs__"):
         return canonicalize_value(asdict(obj, recurse=False))
+    if hasattr(obj, "model_dump"):
+        return canonicalize_value(obj.model_dump())
     raise TypeError(f"Unsupported value in fingerprint projection: {type(obj).__name__}")
 
 

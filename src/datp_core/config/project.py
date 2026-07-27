@@ -8,7 +8,6 @@ performs cross-document validation, constructs fingerprints, and produces the im
 from __future__ import annotations
 
 from pathlib import Path
-from types import MappingProxyType
 
 from datp_core.config.authored.datasets import AuthoredDatasetConfig
 from datp_core.config.authored.experiments import AuthoredExperimentsCatalogueConfig
@@ -80,9 +79,9 @@ def resolve_from_authored_documents(
         experiments=catalogue.experiments,
         capabilities=catalogue.capabilities,
         suppression_behaviors=catalogue.suppression_behaviors,
-        population_readiness_rule=MappingProxyType(catalogue.population_readiness_rule),
+        population_readiness_rule=catalogue.population_readiness_rule,
         eligibility_gates=catalogue.eligibility_gates,
-        analysis_conventions=MappingProxyType(catalogue.analysis_conventions),
+        analysis_conventions=catalogue.analysis_conventions,
         training_profiles=protocols.training_profiles,
         checkpoint_profiles=protocols.checkpoint_profiles,
         seed_cohorts=protocols.seed_cohorts,
@@ -101,7 +100,7 @@ def resolve_from_authored_documents(
         report_profiles=protocols.report_profiles,
         communication_estimation=protocols.communication_estimation,
         protocol_determinism=protocols.protocol_determinism,
-        normalization_fit_scopes=MappingProxyType(protocols.normalization_fit_scopes),
+        normalization_fit_scopes=protocols.normalization_fit_scopes,
         normalization_leakage_rule=protocols.normalization_leakage_rule,
         threshold_policy_defaults=protocols.threshold_policy_defaults,
         nested_replicate_policy=protocols.nested_replicate_policy,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from io import BytesIO
 from pathlib import Path
 
-import pyarrow as pa
+import polars as pl
 import pyarrow.parquet as pq
 
 from datp_core.data.adapters.nbaiot.models import NBaIoTMaterializedRow, NBaIoTSplitRows
@@ -15,8 +15,7 @@ from datp_core.data.adapters.nbaiot.splitting import (
 )
 from datp_core.data.contracts.enums import SplitMethod
 from datp_core.data.contracts.materialization import DatasetMaterialization
-from datp_core.data.sources.csv import iter_numeric_csv_source
-from datp_core.data.sources.models import SourceRow, SourceRowFailure
+from datp_core.data.sources.models import SourceRow
 
 
 def materialize_nbaiot_source_row(
@@ -49,6 +48,28 @@ def materialize_nbaiot_source_row(
     raise ValueError("N-BaIoT source row does not satisfy configured benign or attack path semantics")
 
 
+def _resolve_nbaiot_source_classification(
+    source_path: Path,
+    dataset_root: Path,
+    benign_filename: str,
+    attack_family_directories: tuple[str, ...],
+) -> tuple[str, bool, str | None]:
+    """Return (client_id, is_attack, attack_family) from the source path once."""
+    try:
+        relative_path = source_path.relative_to(dataset_root)
+    except ValueError as exc:
+        raise ValueError("N-BaIoT source path is outside the configured dataset root") from exc
+    if len(relative_path.parts) < 2:
+        raise ValueError("N-BaIoT source path has no configured device-directory identity")
+    client_id = relative_path.parts[0]
+    is_attack = relative_path.name != benign_filename
+    if not is_attack:
+        return (client_id, False, None)
+    if len(relative_path.parts) >= 3 and relative_path.parts[1] in attack_family_directories:
+        return (client_id, True, relative_path.parts[1])
+    raise ValueError("N-BaIoT source path does not satisfy configured benign or attack path semantics")
+
+
 def write_nbaiot_source_parquet(
     source_path: Path,
     target_path: Path,
@@ -61,69 +82,83 @@ def write_nbaiot_source_parquet(
 ) -> int:
     if batch_size <= 0:
         raise ValueError("N-BaIoT Parquet batch size must be positive")
-    valid_benign_count = 0
-    for result in iter_numeric_csv_source(source_path, feature_headers):
-        if isinstance(result, SourceRowFailure):
-            raise ValueError(f"N-BaIoT source validation rejected row {result.source_row_index} in {source_path}")
-        if not materialize_nbaiot_source_row(
-            result, dataset_root, benign_filename, attack_family_directories
-        ).is_attack:
-            valid_benign_count += 1
-    random_roles = (
-        random_fractional_roles(valid_benign_count, materialization, source_path)
-        if materialization.split_method == SplitMethod.RANDOM_FRACTIONAL
-        else None
+
+    client_id, is_attack_source, attack_family = _resolve_nbaiot_source_classification(
+        source_path, dataset_root, benign_filename, attack_family_directories
     )
-    boundaries = (
-        calculate_nbaiot_chronological_boundaries(valid_benign_count, materialization) if random_roles is None else None
-    )
+
+    df = pl.read_csv(source_path)
+    for header in feature_headers:
+        if header not in df.columns:
+            raise ValueError(f"N-BaIoT source {source_path} is missing required header '{header}'")
+
+    df = df.select(*feature_headers)
+    for header in feature_headers:
+        df = df.with_columns(pl.col(header).cast(pl.Float64))
+        bad = df.filter(pl.col(header).is_null() | ~pl.col(header).is_finite())
+        if bad.height > 0:
+            raise ValueError(f"N-BaIoT source {source_path}: invalid numeric value in column '{header}'")
+
+    df = df.with_row_index("__source_order")
+    total_rows = df.height
+
+    if is_attack_source:
+        df = df.with_columns(
+            pl.lit("test").alias("split"),
+            pl.lit(client_id).alias("client_id"),
+            pl.lit(True).alias("is_attack"),
+            pl.lit(attack_family).alias("attack_family"),
+            pl.lit(source_path.as_posix()).alias("source_path"),
+            (pl.col("__source_order") + 1).alias("source_row_index"),
+        )
+    else:
+        benign_count = total_rows
+        random_roles = (
+            random_fractional_roles(benign_count, materialization, source_path)
+            if materialization.split_method == SplitMethod.RANDOM_FRACTIONAL
+            else None
+        )
+
+        if random_roles is not None:
+            df = df.with_columns(pl.Series("__role", random_roles))
+            df = df.with_columns(pl.col("__role").alias("split")).drop("__role")
+        else:
+            boundaries = calculate_nbaiot_chronological_boundaries(benign_count, materialization)
+            df = df.with_columns(
+                pl.when(pl.col("__source_order") < boundaries.train_end)
+                .then(pl.lit("train"))
+                .when(pl.col("__source_order") < boundaries.first_gap_end)
+                .then(pl.lit("excluded_gap"))
+                .when(pl.col("__source_order") < boundaries.calibration_end)
+                .then(pl.lit("calibration"))
+                .when(pl.col("__source_order") < boundaries.second_gap_end)
+                .then(pl.lit("excluded_gap"))
+                .otherwise(pl.lit("test"))
+                .alias("split")
+            )
+
+        df = df.with_columns(
+            pl.lit(client_id).alias("client_id"),
+            pl.lit(False).alias("is_attack"),
+            pl.lit(None, dtype=pl.String).alias("attack_family"),
+            pl.lit(source_path.as_posix()).alias("source_path"),
+            (pl.col("__source_order") + 1).alias("source_row_index"),
+        )
+
+    df = df.filter(pl.col("split") != "excluded_gap").drop("__source_order")
+    output_columns = [
+        "split",
+        "client_id",
+        "is_attack",
+        "attack_family",
+        "source_path",
+        "source_row_index",
+        *feature_headers,
+    ]
+    df = df.select(*output_columns)
     target_path.parent.mkdir(parents=True, exist_ok=True)
-    schema = pa.schema(
-        [
-            ("split", pa.string()),
-            ("client_id", pa.string()),
-            ("is_attack", pa.bool_()),
-            ("attack_family", pa.string()),
-            ("source_path", pa.string()),
-            ("source_row_index", pa.int64()),
-            *((header, pa.float64()) for header in feature_headers),
-        ]
-    )
-    benign_index = 0
-    written = 0
-    records: dict[str, list[object]] = {field.name: [] for field in schema}
-    with pq.ParquetWriter(target_path, schema, compression="zstd", use_dictionary=False) as writer:
-        for result in iter_numeric_csv_source(source_path, feature_headers):
-            if isinstance(result, SourceRowFailure):
-                raise ValueError(f"N-BaIoT source changed between validation and write: {source_path}")
-            row = materialize_nbaiot_source_row(result, dataset_root, benign_filename, attack_family_directories)
-            if row.is_attack:
-                role = "test"
-            elif random_roles is not None:
-                role = random_roles[benign_index]
-            else:
-                if boundaries is None:
-                    raise ValueError("N-BaIoT materialization requires either random roles or chronological boundaries")
-                role = boundaries.role_for_benign_index(benign_index)
-            benign_index += not row.is_attack
-            if role == "excluded_gap":
-                continue
-            records["split"].append(role)
-            records["client_id"].append(row.client_id)
-            records["is_attack"].append(row.is_attack)
-            records["attack_family"].append(row.attack_family)
-            records["source_path"].append(row.source_row.source_path.as_posix())
-            records["source_row_index"].append(row.source_row.source_row_index)
-            for header, value in zip(feature_headers, row.source_row.values, strict=True):
-                records[header].append(value)
-            if len(records["split"]) == batch_size:
-                writer.write_table(pa.table(records, schema=schema))
-                written += len(records["split"])
-                records = {field.name: [] for field in schema}
-        if records["split"]:
-            writer.write_table(pa.table(records, schema=schema))
-            written += len(records["split"])
-    return written
+    df.write_parquet(target_path, compression="zstd")
+    return df.height
 
 
 def consolidate_nbaiot_parquet_sources(source_paths: tuple[Path, ...], target_path: Path, batch_size: int) -> int:
@@ -152,28 +187,21 @@ def encode_nbaiot_split_as_parquet(split: NBaIoTSplitRows, feature_headers: tupl
         *(("test", row) for row in split.test_benign),
         *(("test", row) for row in split.test_attack),
     )
-    records: dict[str, list[object]] = {
-        "split": [],
-        "client_id": [],
-        "is_attack": [],
-        "attack_family": [],
-        "source_path": [],
-        "source_row_index": [],
-    }
-    records.update({header: [] for header in feature_headers})
+    records: list[dict[str, object]] = []
     for split_name, materialized_row in ordered_rows:
         values = materialized_row.source_row.values
         if len(values) != len(feature_headers):
             raise ValueError("N-BaIoT source row width does not match the resolved feature schema")
-        records["split"].append(split_name)
-        records["client_id"].append(materialized_row.client_id)
-        records["is_attack"].append(materialized_row.is_attack)
-        records["attack_family"].append(materialized_row.attack_family)
-        records["source_path"].append(materialized_row.source_row.source_path.as_posix())
-        records["source_row_index"].append(materialized_row.source_row.source_row_index)
-        for header, value in zip(feature_headers, values, strict=True):
-            records[header].append(value)
-    table = pa.table(records)
+        record: dict[str, object] = {
+            "split": split_name,
+            "client_id": materialized_row.client_id,
+            "is_attack": materialized_row.is_attack,
+            "attack_family": materialized_row.attack_family,
+            "source_path": materialized_row.source_row.source_path.as_posix(),
+            "source_row_index": materialized_row.source_row.source_row_index,
+        }
+        record.update(zip(feature_headers, values, strict=True))
+        records.append(record)
     payload = BytesIO()
-    pq.write_table(table, payload, compression="zstd", use_dictionary=False)
+    pl.DataFrame(records).write_parquet(payload, compression="zstd")
     return payload.getvalue()

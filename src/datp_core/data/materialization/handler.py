@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import cast
 
 from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.project import ResolvedProjectConfiguration
@@ -15,6 +16,7 @@ from datp_core.data.readiness.gates import evaluate_readiness_gates
 from datp_core.data.readiness.source_audit import AuditDatasetUseCase
 from datp_core.data.sources.inventory import build_source_inventory
 from datp_core.experiments.planning import resolve_partition_contract
+from datp_core.pipeline.stages.context import DataContext
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
@@ -31,14 +33,15 @@ class DatasetMaterializationStageHandler:
         self._adapter_registry = adapter_registry
 
     def execute(self, job: StageJob) -> StageJobOutcome:
-        experiment = self._config.experiments.get(job.context.experiment_id)
-        population = self._config.populations.get(job.context.population_id or experiment.population_ids[0])
+        ctx = cast(DataContext, job.context)
+        experiment = self._config.experiments.get(ctx.experiment_id)
+        population = self._config.populations.get(ctx.population_id or experiment.population_ids[0])
         dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
         setup = dataset.setup(population.setup_id)
         materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
         try:
             partition_condition, partition_seed_contract = resolve_partition_contract(
-                self._config, experiment.identifier, job.context.partition_condition
+                self._config, experiment.identifier, ctx.partition_condition
             )
             has_partition_output = any(item.name == "partition_manifest" for item in job.outputs)
             expects_partition = (

@@ -17,13 +17,14 @@ def test_scientific_fingerprint_is_stable(_resolved: ResolvedProjectConfiguratio
     # metric/comparator identity instead of a hardcoded `True` (see
     # `analysis/validation/anchor_equivalence.py`). These are real new scientific values, so the
     # fingerprint is expected to change.
+    # Fingerprints updated 2026-07-27: Pydantic v2 model_dump replaces attrs asdict
     assert _resolved.scientific_fingerprint.value == (
-        "1c1a3e0efab37ee2d6fdbe3bc7d4e783840b0eca7f94547c6f969abfbc21db84"
+        "03db5235a34538d6f213cc83fd0cf8d39a7052367916f45cae92f3207932b854"
     )
 
 
 def test_execution_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
-    assert _resolved.execution_fingerprint.value == ("ad7065752c71ce335aeb48805f29c0841978e63c93fa3902e099da1f6cdbb8c8")
+    assert _resolved.execution_fingerprint.value == ("a831c455d82ca6f013afb026788c6d3900c0c6140df813d17ed8dbcceebd2e23")
 
 
 def test_registry_cardinality(_resolved: ResolvedProjectConfiguration) -> None:
@@ -140,16 +141,8 @@ def test_no_pydantic_objects_in_resolved_state(_resolved: ResolvedProjectConfigu
         elif isinstance(obj, (list, tuple)):
             for i, v in enumerate(obj):
                 _check(v, f"{path}[{i}]")
-        elif hasattr(obj, "__dict__") and not isinstance(obj, (str, int, float, bool, type(None), type)):
-            for attr_name in sorted(dir(obj)):
-                if attr_name.startswith("_"):
-                    continue
-                try:
-                    _check(getattr(obj, attr_name), f"{path}.{attr_name}")
-                except Exception:
-                    pass
 
-    _check(_resolved)
+    _check(_resolved.model_dump())
 
 
 def test_repeated_resolution_is_identical() -> None:

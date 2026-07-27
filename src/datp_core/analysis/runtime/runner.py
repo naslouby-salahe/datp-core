@@ -8,7 +8,7 @@ from __future__ import annotations
 from functools import singledispatch
 from typing import TYPE_CHECKING
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.analysis.contracts import AnalysisResult, PairedAnalysisCell
 from datp_core.analysis.errors import UnsupportedAnalysisRecordError
@@ -53,13 +53,14 @@ def register_analysis_capabilities() -> None:
     import datp_core.analysis.validation  # noqa: F401
 
 
-@define(frozen=True, slots=True)
-class AnalysisRunner:
+class AnalysisRunner(BaseModel):
     """Resolves and executes the correct analysis implementation for each analysis record type."""
+
+    model_config = ConfigDict(frozen=True)
 
     context: AnalysisExecutionContext
 
-    def __attrs_post_init__(self) -> None:
+    def model_post_init(self, __context: object) -> None:
         register_analysis_capabilities()
 
     def run(

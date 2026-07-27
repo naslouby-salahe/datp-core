@@ -18,25 +18,28 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class FieldEncodingRecord:
+class FieldEncodingRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     bytes_per_field: int
     byte_order: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ThresholdExchangeEntryRecord:
+class ThresholdExchangeEntryRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     uplink_fields_per_client: tuple[str, ...] | None
     downlink_fields_per_client: tuple[str, ...] | None
     candidate_grid_downlink_fields_per_client: tuple[str, ...] | None
     candidate_grid_uplink_fields_per_client_per_candidate: tuple[str, ...] | None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ThresholdExchangeRecord:
+class ThresholdExchangeRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     direction: str
     b1: ThresholdExchangeEntryRecord
     b2: ThresholdExchangeEntryRecord
@@ -44,21 +47,24 @@ class ThresholdExchangeRecord:
     federated_summary: ThresholdExchangeEntryRecord
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ModelExchangeRecord:
+class ModelExchangeRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     field_width: str
     directions: tuple[str, ...]
     bytes_per_round_formula: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class CheckpointStorageRecord:
+class CheckpointStorageRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     contents: tuple[str, ...]
     model_parameter_bytes_formula: str
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class CommunicationEstimationContractRecord:
+class CommunicationEstimationContractRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     estimate_basis: str
     field_encodings: Mapping[str, FieldEncodingRecord]
     threshold_exchange: ThresholdExchangeRecord
@@ -67,8 +73,9 @@ class CommunicationEstimationContractRecord:
     checkpoint_storage: CheckpointStorageRecord
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class BenignDecisionRateRecord:
+class BenignDecisionRateRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     configured: bool
     value: float | None
     required_fields: tuple[str, ...]
@@ -78,8 +85,9 @@ class BenignDecisionRateRecord:
     invented_rate_forbidden: bool
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class OperationalInputsRecord:
+class OperationalInputsRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     benign_decision_rate: BenignDecisionRateRecord
 
 

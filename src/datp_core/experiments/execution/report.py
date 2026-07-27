@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.identifiers import ExperimentId
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ExperimentExecutionReport:
+class ExperimentExecutionReport(BaseModel):
+    model_config = ConfigDict(frozen=True)
     experiment_id: ExperimentId
     outcomes: tuple[StageJobOutcome, ...]
     successful_jobs: int

@@ -28,9 +28,7 @@ class _DomainIdentifier:
         return self.value
 
     @classmethod
-    def __get_pydantic_core_schema__(
-        cls, _source_type: Any, _handler: Any
-    ) -> core_schema.CoreSchema:
+    def __get_pydantic_core_schema__(cls, _source_type: Any, _handler: Any) -> core_schema.CoreSchema:
         return core_schema.no_info_plain_validator_function(
             cls._pydantic_validate,
             serialization=core_schema.plain_serializer_function_ser_schema(
@@ -121,4 +119,3 @@ class PartitionConditionId(_DomainIdentifier):
 
 class ClusterLabel(_DomainIdentifier):
     """Identifier for a client cluster group label."""
-

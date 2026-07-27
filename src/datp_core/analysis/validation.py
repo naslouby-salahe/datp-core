@@ -86,20 +86,20 @@ def analyze_anchor_equivalence(
         AnchorCheckIdentifier.VERIFIED_CONFIGURATION_AND_PROVENANCE: checks.verified_configuration_and_provenance,
     }
 
-    configured_requirements = {
-        AnchorCheckIdentifier(req) for req in specification.statistical_fallback_requirements
-    }
+    configured_requirements = {AnchorCheckIdentifier(req) for req in specification.statistical_fallback_requirements}
 
     failures = tuple(req for req in configured_requirements if not checks_by_name[req])
 
-    return (AnchorEquivalenceAnalysisResult(
-        analysis_label=AnalysisLabel(specification.label),
-        comparison_mode=comparison_mode,
-        source_analysis=source_label,
-        passed=not failures,
-        failure_reasons=failures,
-        checks=checks,
-        reproduced_delta=delta,
-        reproduced_confidence_interval=(low, high),
-        historical_reference=hist_ref,
-    ),)
+    return (
+        AnchorEquivalenceAnalysisResult(
+            analysis_label=AnalysisLabel(specification.label),
+            comparison_mode=comparison_mode,
+            source_analysis=source_label,
+            passed=not failures,
+            failure_reasons=failures,
+            checks=checks,
+            reproduced_delta=delta,
+            reproduced_confidence_interval=(low, high),
+            historical_reference=hist_ref,
+        ),
+    )

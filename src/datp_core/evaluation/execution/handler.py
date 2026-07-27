@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+from typing import cast
 
 import polars as pl
 
@@ -13,6 +14,7 @@ from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.evaluation.metrics.auroc import compute_client_auroc
 from datp_core.evaluation.metrics.operating_point import compute_operating_point_metrics, ineligible_client_metrics
+from datp_core.pipeline.stages.context import EvaluationContext
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
@@ -26,6 +28,7 @@ class OperatingPointEvaluationStageHandler:
         self._store = store
 
     def execute(self, job: StageJob) -> StageJobOutcome:
+        ctx = cast(EvaluationContext, job.context)
         try:
             thresholds = validate_threshold_frame(
                 pl.read_parquet(BytesIO(self._store.read_bytes(job.input_path("thresholds"))))
@@ -34,7 +37,7 @@ class OperatingPointEvaluationStageHandler:
                 pl.read_parquet(BytesIO(self._store.read_bytes(job.input_path("test_scores"))))
             )
             joined = scores.join(thresholds.select("client_id", "threshold"), on="client_id", how="left")
-            if joined["threshold"].null_count() > 0 and job.context.calibration_sample_count is None:
+            if joined["threshold"].null_count() > 0 and ctx.calibration_sample_count is None:
                 raise ValueError("Threshold artifact does not cover every scored client")
             eligible = joined.filter(pl.col("threshold").is_not_null())
             if eligible.is_empty():
@@ -45,10 +48,8 @@ class OperatingPointEvaluationStageHandler:
                 metrics = compute_operating_point_metrics(eligible)
             metrics = metrics.join(compute_client_auroc(scores), on="client_id", how="left")
             metrics = metrics.with_columns(
-                pl.lit(job.context.threshold_policy_id.value if job.context.threshold_policy_id else None).alias(
-                    "policy_id"
-                ),
-                pl.lit(job.context.seed).alias("seed"),
+                pl.lit(ctx.threshold_policy_id.value if ctx.threshold_policy_id else None).alias("policy_id"),
+                pl.lit(ctx.seed).alias("seed"),
             )
             validate_client_metric_frame(metrics)
             payload = BytesIO()

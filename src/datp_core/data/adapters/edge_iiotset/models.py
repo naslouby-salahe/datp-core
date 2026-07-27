@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class EdgeIIoTsetRow:
+class EdgeIIoTsetRow(BaseModel):
+    model_config = ConfigDict(frozen=True)
     client_id: str | None
     is_attack: bool
     source_path: Path
@@ -19,8 +19,8 @@ class EdgeIIoTsetRow:
     time_of_day_seconds: float | None = None
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class EdgeIIoTsetSplitRows:
+class EdgeIIoTsetSplitRows(BaseModel):
+    model_config = ConfigDict(frozen=True)
     train: tuple[EdgeIIoTsetRow, ...]
     calibration: tuple[EdgeIIoTsetRow, ...]
     test: tuple[EdgeIIoTsetRow, ...]
@@ -29,14 +29,14 @@ class EdgeIIoTsetSplitRows:
     recalibration_reference: tuple[EdgeIIoTsetRow, ...] = ()
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class EdgeTimestampedRow:
+class EdgeTimestampedRow(BaseModel):
+    model_config = ConfigDict(frozen=True)
     row: EdgeIIoTsetRow
     time_of_day_seconds: float
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class EdgeChronologicalSplitRows:
+class EdgeChronologicalSplitRows(BaseModel):
+    model_config = ConfigDict(frozen=True)
     historical_train: tuple[EdgeIIoTsetRow, ...]
     historical_calibration: tuple[EdgeIIoTsetRow, ...]
     future_recalibration: tuple[EdgeIIoTsetRow, ...]
@@ -44,26 +44,26 @@ class EdgeChronologicalSplitRows:
     excluded_clients: tuple[str, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class EdgeIIoTsetVocabulary:
+class EdgeIIoTsetVocabulary(BaseModel):
+    model_config = ConfigDict(frozen=True)
     categories_by_column: tuple[tuple[str, tuple[str, ...]], ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class EdgeIIoTsetNormalization:
+class EdgeIIoTsetNormalization(BaseModel):
+    model_config = ConfigDict(frozen=True)
     minimums: tuple[float, ...]
     maximums: tuple[float, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class EdgeIIoTsetExternalIndexReport:
+class EdgeIIoTsetExternalIndexReport(BaseModel):
+    model_config = ConfigDict(frozen=True)
     source_rows_seen: int
     excluded_rows: int
     canonical_rows: int
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class EdgeMaterializationEvidence:
+class EdgeMaterializationEvidence(BaseModel):
+    model_config = ConfigDict(frozen=True)
     split_method: str
     excluded_clients: tuple[str, ...]
     chronology_validation: str | None = None

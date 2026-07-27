@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 from pathlib import Path
 
-from attrs import asdict
-
-from datp_core.data.adapters.edge_iiotset.models import EdgeMaterializationEvidence, EdgeTimestampedRow
+from datp_core.data.adapters.edge_iiotset.models import (
+    EdgeIIoTsetRow,
+    EdgeMaterializationEvidence,
+    EdgeTimestampedRow,
+)
 from datp_core.data.adapters.edge_iiotset.parquet import (
     _deduplicated_edge_benign_rows,
     _read_edge_rows,
@@ -38,7 +39,7 @@ class EdgeIIoTsetAdapter:
 
     def _materialize_random_fractional(
         self,
-        rows: tuple,
+        rows: tuple[EdgeIIoTsetRow, ...],
         materialization: DatasetMaterialization,
         categorical: CategoricalEncodingRecord,
         numeric: RetainedNumericFeaturesRecord,
@@ -56,7 +57,7 @@ class EdgeIIoTsetAdapter:
 
     def _materialize_chronological_split(
         self,
-        rows: tuple,
+        rows: tuple[EdgeIIoTsetRow, ...],
         materialization: DatasetMaterialization,
         categorical: CategoricalEncodingRecord,
         numeric: RetainedNumericFeaturesRecord,
@@ -108,8 +109,15 @@ class EdgeIIoTsetAdapter:
             or inspection.binary_label_header is None
         ):
             raise ValueError("Edge-IIoTset materialization requires its resolved feature, label, and source contracts")
-        timestamp = dataset.field_schema.identity_scheme.timestamp_field
-        timestamp_header = timestamp.get("column") if isinstance(timestamp, Mapping) else timestamp
+        timestamp_field = dataset.field_schema.identity_scheme.timestamp_field
+        timestamp_header: str | None
+        match timestamp_field:
+            case str() as col:
+                timestamp_header = col
+            case {"column": str() as col}:
+                timestamp_header = col
+            case _:
+                timestamp_header = None
         if not isinstance(timestamp_header, str):
             raise ValueError("Edge-IIoTset timestamp field must resolve to a column name")
         normal_root = (dataset.paths.raw_data_root / inspection.normal_traffic_root.value).resolve()
@@ -143,6 +151,6 @@ class EdgeIIoTsetAdapter:
             staged_path=payload_file,
             row_count=len(rows),
             preprocessing_evidence=json.dumps(
-                asdict(evidence), sort_keys=True, separators=(",", ":"), allow_nan=False
+                evidence.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), allow_nan=False
             ).encode(),
         )

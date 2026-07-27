@@ -5,7 +5,7 @@ from __future__ import annotations
 
 from types import MappingProxyType
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.config.authored.protocols import AuthoredProtocolsConfig
 from datp_core.config.authored.protocols.training import DeterminismProfileConfig
@@ -31,14 +31,15 @@ from datp_core.learning.contracts.seeds import SeedCohortRecord
 from datp_core.learning.contracts.training import FederationProfileRecord, TrainingProfileRecord
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class SeedNamespaceRecord:
+class SeedNamespaceRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     key: str
     components: tuple[str, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ProtocolDeterminismRecord:
+class ProtocolDeterminismRecord(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     """Protocols.yaml's own seed/determinism contract (distinct from runtime.yaml's execution determinism)."""
 
     seed_domains: tuple[str, ...]

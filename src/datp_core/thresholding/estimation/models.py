@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.identifiers import ClientId, PopulationId, ThresholdPolicyId
 from datp_core.core.numbers import NonNegativeFloat, Probability
@@ -36,8 +36,8 @@ class ThresholdRecord:
             raise ValueError("Cluster label must be non-negative")
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class MatchedExceedanceDiagnostics:
+class MatchedExceedanceDiagnostics(BaseModel):
+    model_config = ConfigDict(frozen=True)
     selected_coefficient: float
     candidate_grid_minimum: float
     candidate_grid_maximum: float
@@ -48,8 +48,8 @@ class MatchedExceedanceDiagnostics:
     tie_set: tuple[float, ...]
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ClusterDiagnostics:
+class ClusterDiagnostics(BaseModel):
+    model_config = ConfigDict(frozen=True)
     cluster_count: int
     cluster_labels: tuple[tuple[str, int], ...]
 
@@ -71,8 +71,8 @@ class ThresholdSet:
         raise KeyError(f"No threshold record for client: {client_id}")
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ThresholdConstructionRequest:
+class ThresholdConstructionRequest(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     policy_id: ThresholdPolicyId
     policy: ThresholdPolicyRecord
     calibration: tuple[BenignCalibrationScores, ...]

@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
-from attrs import define, field
+from pydantic import BaseModel, BeforeValidator, ConfigDict
 
 from datp_core.thresholding.policies.common import _as_tuple_str
 from datp_core.thresholding.policies.enums import ThresholdOwnership
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class SplitConformalThresholdPolicyRecord:
+class SplitConformalThresholdPolicyRecord(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     policy: Literal["conformal_local_threshold"]
     conformal_mode: str
     coverage_alpha: float
@@ -27,9 +28,9 @@ class SplitConformalThresholdPolicyRecord:
     calibration_unit: str
     calibration_scope: str
     evaluation_unit: str
-    coverage_breakdown: tuple[str, ...] = field(converter=_as_tuple_str)
+    coverage_breakdown: Annotated[tuple[str, ...], BeforeValidator(_as_tuple_str)]
     coverage_target_error: str
     output_type: str
     exchangeability_limitation: str
     unavailable_behavior: str
-    threshold_ownership: ThresholdOwnership = field(converter=ThresholdOwnership)
+    threshold_ownership: ThresholdOwnership

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from attrs import define
+from pydantic import BaseModel, ConfigDict
 
 from datp_core.config.authored.experiments.analyses import (
     AbsorptionAnalysisConfig,
@@ -30,6 +30,7 @@ from datp_core.config.authored.experiments.analyses import (
 )
 from datp_core.config.authored.experiments.catalogue import AuthoredExperimentConfig, AuthoredExperimentsCatalogueConfig
 from datp_core.config.authored.experiments.sweeps import SweepVariableConfig
+from datp_core.config.domain_models import AnalysisConventions, PopulationReadinessRule
 from datp_core.config.errors import ConfigurationError
 from datp_core.config.fingerprinting.projection import unstructure_projection
 from datp_core.core.identifiers import (
@@ -332,17 +333,17 @@ def _resolve_analysis(a: AnalysisSpecConfig) -> AnalysisRecord:
             raise ConfigurationError(f"Unsupported authored analysis configuration: {type(a).__name__}")
 
 
-@define(frozen=True, slots=True, kw_only=True)
-class ResolvedExperimentCatalogue:
+class ResolvedExperimentCatalogue(BaseModel):
+    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     """Every immutable record resolved from the authored experiment catalogue document (experiments.yaml)."""
 
     populations: TypedDomainRegistry[PopulationId, PopulationRecord]
     experiments: TypedDomainRegistry[ExperimentId, ExperimentRecord]
     capabilities: tuple[str, ...]
     suppression_behaviors: tuple[str, ...]
-    population_readiness_rule: dict[str, str | bool]
+    population_readiness_rule: PopulationReadinessRule
     eligibility_gates: TypedDomainRegistry[str, EligibilityGateRecord]
-    analysis_conventions: dict[str, str]
+    analysis_conventions: AnalysisConventions
 
 
 def _resolve_populations(
@@ -564,7 +565,7 @@ def resolve_experiment_catalogue(
         experiments=TypedDomainRegistry(_items=experiments_dict),
         capabilities=tuple(authored_experiments.capabilities),
         suppression_behaviors=tuple(authored_experiments.suppression_behaviors),
-        population_readiness_rule=dict(authored_experiments.population_readiness_rule),
+        population_readiness_rule=authored_experiments.population_readiness_rule,
         eligibility_gates=TypedDomainRegistry(_items=eligibility_gates_dict),
-        analysis_conventions=dict(authored_experiments.analysis_conventions),
+        analysis_conventions=authored_experiments.analysis_conventions,
     )
