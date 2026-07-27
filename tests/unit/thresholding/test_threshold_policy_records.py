@@ -9,11 +9,13 @@ from datp_core.config.project import resolve_project_configuration
 from datp_core.core.identifiers import ThresholdPolicyId
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.thresholding.policies import (
+    CalibrationFallbackPolicy,
     ClusterPolicy,
     ConformalPolicy,
-    FederatedPolicy,
+    FederatedFixedPolicy,
+    FederatedMatchedPolicy,
+    FixedShrinkagePolicy,
     QuantilePolicy,
-    ShrinkagePolicy,
     ThresholdPolicyRecord,
 )
 
@@ -87,7 +89,7 @@ def test_federated_matched_policy_retains_grid_fields(
     resolved_threshold_policies,
 ) -> None:
     record = resolved_threshold_policies.get(ThresholdPolicyId("federated_summary_matched_exceedance"))
-    assert isinstance(record, FederatedPolicy)
+    assert isinstance(record, FederatedMatchedPolicy)
 
     assert record.candidate_grid_minimum is not None
     assert record.candidate_grid_maximum is not None
@@ -107,15 +109,14 @@ def test_conformal_policy_has_coverage_alpha_not_quantile(
 
 def test_shrinkage_policy_has_weight(resolved_threshold_policies) -> None:
     record = resolved_threshold_policies.get(ThresholdPolicyId("local_global_shrinkage_p95"))
-    assert isinstance(record, ShrinkagePolicy)
+    assert isinstance(record, FixedShrinkagePolicy)
     assert record.kind.value == "shrinkage"
 
 
 def test_fallback_policy_has_n_half(resolved_threshold_policies) -> None:
     record = resolved_threshold_policies.get(ThresholdPolicyId("calibration_size_aware_fallback_p95"))
-    assert isinstance(record, ShrinkagePolicy)
+    assert isinstance(record, CalibrationFallbackPolicy)
     assert record.kind.value == "calibration_fallback"
-    assert record.n_half is not None
     assert record.n_half > 0
 
 
@@ -125,8 +126,8 @@ def test_quantile_policy_has_quantile_in_range(resolved_threshold_policies) -> N
     assert 0.0 < record.quantile < 1.0
 
 
-def test_federated_fixed_policy_has_fixed_k(resolved_threshold_policies) -> None:
+def test_federated_fixed_policy_has_fixed_coefficient(resolved_threshold_policies) -> None:
     record = resolved_threshold_policies.get(ThresholdPolicyId("federated_summary_fixed_k"))
-    assert isinstance(record, FederatedPolicy)
+    assert isinstance(record, FederatedFixedPolicy)
     assert record.kind.value == "federated_fixed"
-    # fixed_k may be None when configured as a sweep target; resolved at experiment planning time
+    # fixed_coefficient may be None when configured as a sweep target

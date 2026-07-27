@@ -22,7 +22,6 @@ from datp_core.thresholding.models import (
     FamilyAssignments,
     InsufficientCalibrationError,
     NonFiniteCalibrationError,
-    ThresholdingError,
     ThresholdRecord,
     ThresholdSet,
 )
@@ -154,9 +153,11 @@ def estimate_cluster(
     if not np.isfinite(features).all():
         raise NonFiniteCalibrationError("Cluster threshold has a non-finite fingerprint component")
     unique_rows = len(np.unique(features, axis=0))
-    if unique_rows < 2:
-        raise ThresholdingError(
-            f"Cluster threshold has {unique_rows} distinct fingerprint row(s); at least 2 are required"
+    if unique_rows < cluster_count:
+        raise InsufficientCalibrationError(
+            f"Cluster threshold requires at least {cluster_count} distinct fingerprint rows "
+            f"but only {unique_rows} unique row(s) exist across {len(calibration)} eligible clients "
+            f"using features {[f.value for f in fingerprint_features]}"
         )
 
     labels = KMeans(

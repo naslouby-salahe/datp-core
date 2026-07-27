@@ -24,11 +24,13 @@ from datp_core.thresholding.models import (
     UnsupportedThresholdPolicyError,
 )
 from datp_core.thresholding.policies import (
+    CalibrationFallbackPolicy,
     ClusterPolicy,
     ConformalPolicy,
-    FederatedPolicy,
+    FederatedFixedPolicy,
+    FederatedMatchedPolicy,
+    FixedShrinkagePolicy,
     QuantilePolicy,
-    ShrinkagePolicy,
     ThresholdPolicyRecord,
 )
 
@@ -40,12 +42,14 @@ __all__ = [
     "ClusterPolicy",
     "ConformalPolicy",
     "EmptyCalibrationError",
-    "FederatedPolicy",
+    "CalibrationFallbackPolicy",
+    "FederatedFixedPolicy",
+    "FederatedMatchedPolicy",
     "FingerprintFeature",
+    "FixedShrinkagePolicy",
     "InsufficientCalibrationError",
     "NonFiniteCalibrationError",
     "QuantilePolicy",
-    "ShrinkagePolicy",
     "ThresholdConstructionRequest",
     "ThresholdDiagnostics",
     "ThresholdPolicyKind",

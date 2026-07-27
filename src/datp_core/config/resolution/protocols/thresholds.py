@@ -22,11 +22,13 @@ from datp_core.config.errors import ConfigurationError
 from datp_core.core.identifiers import ThresholdPolicyId
 from datp_core.thresholding.enums import ClusterAggregation, FingerprintFeature, ThresholdPolicyKind
 from datp_core.thresholding.policies import (
+    CalibrationFallbackPolicy,
     ClusterPolicy,
     ConformalPolicy,
-    FederatedPolicy,
+    FederatedFixedPolicy,
+    FederatedMatchedPolicy,
+    FixedShrinkagePolicy,
     QuantilePolicy,
-    ShrinkagePolicy,
     ThresholdPolicyRecord,
 )
 
@@ -35,7 +37,7 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
     """Convert an authored threshold-policy variant into its domain record."""
     if isinstance(cfg, SharedMeanThresholdPolicyConfig):
         return QuantilePolicy(kind=ThresholdPolicyKind.SHARED_MEAN, quantile=cfg.quantile)
-    if isinstance(cfg, SharedPooledThresholdPolicyConfig):
+    if isinstance(cfg, (SharedPooledThresholdPolicyConfig, CentralizedPooledThresholdPolicyConfig)):
         return QuantilePolicy(kind=ThresholdPolicyKind.SHARED_POOLED, quantile=cfg.quantile)
     if isinstance(cfg, SharedWeightedThresholdPolicyConfig):
         return QuantilePolicy(kind=ThresholdPolicyKind.SHARED_WEIGHTED, quantile=cfg.quantile)
@@ -43,8 +45,6 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
         return QuantilePolicy(kind=ThresholdPolicyKind.LOCAL_QUANTILE, quantile=cfg.quantile)
     if isinstance(cfg, FamilyMeanThresholdPolicyConfig):
         return QuantilePolicy(kind=ThresholdPolicyKind.FAMILY_MEAN, quantile=cfg.quantile)
-    if isinstance(cfg, CentralizedPooledThresholdPolicyConfig):
-        return QuantilePolicy(kind=ThresholdPolicyKind.SHARED_POOLED, quantile=cfg.quantile)
     if isinstance(cfg, ClusterThresholdPolicyConfig):
         return ClusterPolicy(
             kind=ThresholdPolicyKind.CLUSTER,
@@ -64,32 +64,30 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             minimum_sample_count=cfg.minimum_sample_count,
         )
     if isinstance(cfg, LocalGlobalShrinkagePolicyConfig):
-        return ShrinkagePolicy(
+        return FixedShrinkagePolicy(
             kind=ThresholdPolicyKind.SHRINKAGE,
             quantile=cfg.quantile,
             shrinkage_weight=cfg.shrinkage_weight,
         )
     if isinstance(cfg, CalibrationFallbackPolicyConfig):
-        return ShrinkagePolicy(
+        return CalibrationFallbackPolicy(
             kind=ThresholdPolicyKind.CALIBRATION_FALLBACK,
             quantile=cfg.quantile,
             n_half=cfg.weight_formula_constants["n_half"],
         )
     if isinstance(cfg, FederatedMatchedExceedancePolicyConfig):
-        return FederatedPolicy(
+        return FederatedMatchedPolicy(
             kind=ThresholdPolicyKind.FEDERATED_MATCHED,
             quantile=cfg.quantile,
-            primary_comparator=cfg.primary_comparator,
             candidate_grid_minimum=float(cfg.candidate_grid["minimum"]),
             candidate_grid_maximum=float(cfg.candidate_grid["maximum"]),
             candidate_grid_step=float(cfg.candidate_grid["step"]),
         )
     if isinstance(cfg, FederatedFixedCoefficientPolicyConfig):
-        return FederatedPolicy(
+        return FederatedFixedPolicy(
             kind=ThresholdPolicyKind.FEDERATED_FIXED,
             quantile=cfg.quantile,
-            primary_comparator=cfg.primary_comparator,
-            fixed_k=cfg.fixed_k if cfg.fixed_k is not None else None,
+            fixed_coefficient=cfg.fixed_k,
         )
     raise ConfigurationError(f"Unsupported authored threshold policy configuration: {type(cfg).__name__}")
 

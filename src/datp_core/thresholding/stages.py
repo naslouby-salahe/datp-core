@@ -10,6 +10,7 @@ from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
 from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
 from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.core.identifiers import ClientId
 from datp_core.pipeline.stages.context import EvaluationContext
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
@@ -18,6 +19,7 @@ from datp_core.thresholding.calibration import subsample_calibration_scores
 from datp_core.thresholding.engine import ThresholdEngine
 from datp_core.thresholding.models import (
     CalibrationSampleRequest,
+    EmptyCalibrationError,
     FamilyAssignments,
     InsufficientCalibrationError,
     ThresholdConstructionRequest,
@@ -26,7 +28,6 @@ from datp_core.thresholding.models import (
 from datp_core.thresholding.serialization import (
     calibration_to_benign_scores,
     diagnostics_to_json,
-    empty_threshold_frame,
     threshold_set_to_frame,
 )
 
@@ -138,31 +139,32 @@ class ThresholdConstructionStageHandler:
                 pl.read_parquet(BytesIO(self._store.read_bytes(job.input_path("calibration_scores"))))
             )
             if scores.is_empty():
-                frame = empty_threshold_frame()
-                diagnostics = b"{}"
-            else:
-                family_assignments = None
-                if dataset.field_schema.label_fields.family_map:
-                    family_assignments = FamilyAssignments(
-                        mapping=tuple((k, v) for k, v in dict(dataset.field_schema.label_fields.family_map).items())
+                raise EmptyCalibrationError("Calibration score frame is empty — cannot construct thresholds")
+
+            family_assignments = None
+            if dataset.field_schema.label_fields.family_map:
+                family_assignments = FamilyAssignments(
+                    mapping=tuple(
+                        (ClientId(k), v) for k, v in dict(dataset.field_schema.label_fields.family_map).items()
                     )
-                request = ThresholdConstructionRequest(
-                    policy_id=ctx.threshold_policy_id,
-                    policy=policy,
-                    calibration=calibration_to_benign_scores(scores, ctx.population_id),
-                    population_id=ctx.population_id,
-                    family_assignments=family_assignments,
                 )
-                threshold_set = self._engine.construct(request)
-                frame = threshold_set_to_frame(threshold_set)
-                diagnostics = diagnostics_to_json(threshold_set.diagnostics)
+            request = ThresholdConstructionRequest(
+                policy_id=ctx.threshold_policy_id,
+                policy=policy,
+                calibration=calibration_to_benign_scores(scores, ctx.population_id),
+                population_id=ctx.population_id,
+                family_assignments=family_assignments,
+            )
+            threshold_set = self._engine.construct(request)
+            frame = threshold_set_to_frame(threshold_set)
+            diagnostics = diagnostics_to_json(threshold_set.diagnostics)
 
             validate_threshold_frame(frame)
             payload = BytesIO()
             frame.write_parquet(payload)
             self._store.write_bytes_atomic(job.output_path("thresholds"), payload.getvalue())
             self._store.write_bytes_atomic(job.output_path("diagnostics"), diagnostics)
-        except (OSError, ValueError, ThresholdingError) as exc:
+        except (OSError, ThresholdingError) as exc:
             return StageJobOutcome.failed(
                 node_key=job.node_key,
                 stage=job.stage,

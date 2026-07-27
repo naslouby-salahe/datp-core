@@ -1,4 +1,4 @@
-"""Strict typed threshold policies — one discriminated union, no descriptive fields."""
+"""Strict typed threshold policies — discriminated union, no descriptive fields."""
 
 from __future__ import annotations
 
@@ -13,10 +13,14 @@ from datp_core.thresholding.enums import (
 )
 
 
-class QuantilePolicy(BaseModel):
-    """Shared-mean, pooled, weighted, local-quantile, and family-mean policies."""
+class FrozenPolicyModel(BaseModel):
+    """Shared frozen base for all threshold policy models."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
+
+
+class QuantilePolicy(FrozenPolicyModel):
+    """Shared-mean, pooled, weighted, local-quantile, and family-mean policies."""
 
     kind: Literal[
         ThresholdPolicyKind.SHARED_MEAN,
@@ -28,10 +32,8 @@ class QuantilePolicy(BaseModel):
     quantile: float = Field(gt=0.0, lt=1.0)
 
 
-class ClusterPolicy(BaseModel):
+class ClusterPolicy(FrozenPolicyModel):
     """Cluster threshold policy (B4)."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal[ThresholdPolicyKind.CLUSTER]
     quantile: float = Field(gt=0.0, lt=1.0)
@@ -50,73 +52,80 @@ class ClusterPolicy(BaseModel):
         return self
 
 
-class ConformalPolicy(BaseModel):
+class ConformalPolicy(FrozenPolicyModel):
     """Split-conformal threshold policy (B2-conf)."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid")
 
     kind: Literal[ThresholdPolicyKind.CONFORMAL]
     coverage_alpha: float = Field(gt=0.0, lt=1.0)
     minimum_sample_count: int = Field(ge=1)
 
 
-class ShrinkagePolicy(BaseModel):
-    """Local-global shrinkage and calibration-size-aware fallback policies."""
+class FixedShrinkagePolicy(FrozenPolicyModel):
+    """Local-global shrinkage with a fixed lambda weight.
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    shrinkage_weight may be None when the policy is a sweep target;
+    it must be resolved before reaching the threshold engine.
+    """
 
-    kind: Literal[
-        ThresholdPolicyKind.SHRINKAGE,
-        ThresholdPolicyKind.CALIBRATION_FALLBACK,
-    ]
+    kind: Literal[ThresholdPolicyKind.SHRINKAGE]
     quantile: float = Field(gt=0.0, lt=1.0)
     shrinkage_weight: float | None = None
-    n_half: int | None = None
-
-    @model_validator(mode="after")
-    def _validate_shrinkage_config(self) -> ShrinkagePolicy:
-        if self.kind == ThresholdPolicyKind.SHRINKAGE:
-            if self.shrinkage_weight is not None and not 0.0 <= self.shrinkage_weight <= 1.0:
-                raise ValueError("Shrinkage weight must be in [0.0, 1.0]")
-        if self.kind == ThresholdPolicyKind.CALIBRATION_FALLBACK:
-            if self.n_half is None or self.n_half <= 0:
-                raise ValueError("Calibration fallback requires a positive n_half")
-        return self
 
 
-class FederatedPolicy(BaseModel):
-    """Federated summary-statistic threshold policies."""
+class CalibrationFallbackPolicy(FrozenPolicyModel):
+    """Calibration-size-aware fallback — lambda = n_k / (n_k + n_half)."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
-
-    kind: Literal[
-        ThresholdPolicyKind.FEDERATED_MATCHED,
-        ThresholdPolicyKind.FEDERATED_FIXED,
-    ]
+    kind: Literal[ThresholdPolicyKind.CALIBRATION_FALLBACK]
     quantile: float = Field(gt=0.0, lt=1.0)
-    primary_comparator: bool = False
-    candidate_grid_minimum: float | None = None
-    candidate_grid_maximum: float | None = None
-    candidate_grid_step: float | None = None
-    fixed_k: float | None = None
+    n_half: int = Field(ge=1)
+
+
+class FederatedMatchedPolicy(FrozenPolicyModel):
+    """Matched-exceedance federated threshold via candidate-grid search."""
+
+    kind: Literal[ThresholdPolicyKind.FEDERATED_MATCHED]
+    quantile: float = Field(gt=0.0, lt=1.0)
+    candidate_grid_minimum: float
+    candidate_grid_maximum: float
+    candidate_grid_step: float = Field(gt=0.0)
 
     @model_validator(mode="after")
-    def _validate_federated_config(self) -> FederatedPolicy:
-        if self.kind == ThresholdPolicyKind.FEDERATED_MATCHED:
-            if (
-                self.candidate_grid_minimum is None
-                or self.candidate_grid_maximum is None
-                or self.candidate_grid_step is None
-            ):
-                raise ValueError("Matched-exceedance policy requires candidate_grid minimum, maximum, and step")
-            if self.candidate_grid_step <= 0.0:
-                raise ValueError("Candidate grid step must be positive")
-            if self.candidate_grid_minimum >= self.candidate_grid_maximum:
-                raise ValueError("Candidate grid minimum must be less than maximum")
+    def _validate_grid(self) -> FederatedMatchedPolicy:
+        if self.candidate_grid_minimum >= self.candidate_grid_maximum:
+            raise ValueError("Candidate grid minimum must be less than maximum")
+        span = self.candidate_grid_maximum - self.candidate_grid_minimum
+        quotient = span / self.candidate_grid_step
+        if not _is_integer_within_tolerance(quotient):
+            raise ValueError(
+                f"Candidate grid span ({span}) must be exactly divisible by step "
+                f"({self.candidate_grid_step}); got quotient {quotient}"
+            )
         return self
+
+
+class FederatedFixedPolicy(FrozenPolicyModel):
+    """Fixed-coefficient federated threshold: τ = μ + k · σ.
+
+    fixed_coefficient may be None when the policy is a sweep target;
+    it must be resolved before reaching the threshold engine.
+    """
+
+    kind: Literal[ThresholdPolicyKind.FEDERATED_FIXED]
+    quantile: float = Field(gt=0.0, lt=1.0)
+    fixed_coefficient: float | None = None
+
+
+def _is_integer_within_tolerance(value: float, *, tolerance: float = 1e-9) -> bool:
+    return abs(value - round(value)) < tolerance
 
 
 ThresholdPolicyRecord = Annotated[
-    QuantilePolicy | ClusterPolicy | ConformalPolicy | ShrinkagePolicy | FederatedPolicy,
+    QuantilePolicy
+    | ClusterPolicy
+    | ConformalPolicy
+    | FixedShrinkagePolicy
+    | CalibrationFallbackPolicy
+    | FederatedMatchedPolicy
+    | FederatedFixedPolicy,
     Field(discriminator="kind"),
 ]

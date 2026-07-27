@@ -18,11 +18,13 @@ from datp_core.thresholding.models import (
     ThresholdSet,
 )
 from datp_core.thresholding.policies import (
+    CalibrationFallbackPolicy,
     ClusterPolicy,
     ConformalPolicy,
-    FederatedPolicy,
+    FederatedFixedPolicy,
+    FederatedMatchedPolicy,
+    FixedShrinkagePolicy,
     QuantilePolicy,
-    ShrinkagePolicy,
 )
 
 
@@ -43,7 +45,13 @@ def population_id() -> PopulationId:
 
 
 def _execute(
-    policy: QuantilePolicy | ClusterPolicy | ConformalPolicy | ShrinkagePolicy | FederatedPolicy,
+    policy: QuantilePolicy
+    | ClusterPolicy
+    | ConformalPolicy
+    | FixedShrinkagePolicy
+    | CalibrationFallbackPolicy
+    | FederatedFixedPolicy
+    | FederatedMatchedPolicy,
     calibration: tuple[BenignCalibrationScores, ...],
     population_id: PopulationId,
     policy_id: ThresholdPolicyId | None = None,
@@ -104,14 +112,14 @@ def test_conformal_and_federated_policies_produce_finite_thresholds(
     )
     fixed = _values(
         _execute(
-            FederatedPolicy(kind=ThresholdPolicyKind.FEDERATED_FIXED, quantile=0.95, fixed_k=3.0),
+            FederatedFixedPolicy(kind=ThresholdPolicyKind.FEDERATED_FIXED, quantile=0.95, fixed_coefficient=3.0),
             calibration,
             population_id,
         )
     )
     matched = _values(
         _execute(
-            FederatedPolicy(
+            FederatedMatchedPolicy(
                 kind=ThresholdPolicyKind.FEDERATED_MATCHED,
                 quantile=0.95,
                 candidate_grid_minimum=0.0,
@@ -254,7 +262,7 @@ def test_shrinkage_produces_intermediate_thresholds(
     )
     shrunk = _values(
         _execute(
-            ShrinkagePolicy(kind=ThresholdPolicyKind.SHRINKAGE, quantile=0.95, shrinkage_weight=0.5),
+            FixedShrinkagePolicy(kind=ThresholdPolicyKind.SHRINKAGE, quantile=0.95, shrinkage_weight=0.5),
             calibration,
             population_id,
         )
@@ -272,7 +280,7 @@ def test_calibration_fallback_produces_valid_thresholds(
     population_id: PopulationId,
 ) -> None:
     result = _execute(
-        ShrinkagePolicy(kind=ThresholdPolicyKind.CALIBRATION_FALLBACK, quantile=0.95, n_half=50),
+        CalibrationFallbackPolicy(kind=ThresholdPolicyKind.CALIBRATION_FALLBACK, quantile=0.95, n_half=50),
         calibration,
         population_id,
     )

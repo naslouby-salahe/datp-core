@@ -14,11 +14,13 @@ from datp_core.thresholding.enums import ClusterAggregation, ThresholdPolicyKind
 
 if TYPE_CHECKING:
     from datp_core.thresholding.policies import (
+        CalibrationFallbackPolicy,
         ClusterPolicy,
         ConformalPolicy,
-        FederatedPolicy,
+        FederatedFixedPolicy,
+        FederatedMatchedPolicy,
+        FixedShrinkagePolicy,
         QuantilePolicy,
-        ShrinkagePolicy,
     )
 
 
@@ -270,7 +272,15 @@ class ThresholdConstructionRequest:
     """Fully resolved, immutable command for threshold construction."""
 
     policy_id: ThresholdPolicyId
-    policy: QuantilePolicy | ClusterPolicy | ConformalPolicy | ShrinkagePolicy | FederatedPolicy
+    policy: (
+        FixedShrinkagePolicy
+        | CalibrationFallbackPolicy
+        | FederatedMatchedPolicy
+        | FederatedFixedPolicy
+        | QuantilePolicy
+        | ClusterPolicy
+        | ConformalPolicy
+    )
     calibration: tuple[BenignCalibrationScores, ...]
     population_id: PopulationId
     family_assignments: FamilyAssignments | None = None
