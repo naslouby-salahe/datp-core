@@ -169,6 +169,7 @@ def test_cluster_policy_uses_explicit_fingerprint_features(
             cluster_count=2,
             aggregation=ClusterAggregation.MEAN,
             fingerprint_features=(FingerprintFeature.MEAN_ERROR,),
+            fingerprint_quantile=0.95,
             kmeans_random_seed=42,
             kmeans_initialization_runs=10,
             kmeans_maximum_iterations=300,
@@ -186,10 +187,10 @@ def test_cluster_policy_uses_explicit_fingerprint_features(
 
 
 def test_cluster_p95_fingerprint_is_locked_to_0_95_regardless_of_swept_quantile() -> None:
-    """The fingerprint p95 is always computed at 0.95, independent of the policy quantile.
+    """The fingerprint quantile is always computed at configured value, independent of sweep.
 
-    Three clients share identical median but distinct true p95 values.
-    With quantile=0.5 and fingerprint_features=(P95_ERROR,), the feature values
+    Three clients share identical median but distinct true quantile values.
+    With quantile=0.5 and fingerprint_features=(QUANTILE_ERROR,), the feature values
     should remain distinct (not collapse to the same value).
     """
     cal = tuple(
@@ -206,7 +207,8 @@ def test_cluster_p95_fingerprint_is_locked_to_0_95_regardless_of_swept_quantile(
             quantile=0.5,
             cluster_count=2,
             aggregation=ClusterAggregation.MEAN,
-            fingerprint_features=(FingerprintFeature.P95_ERROR,),
+            fingerprint_features=(FingerprintFeature.QUANTILE_ERROR,),
+            fingerprint_quantile=0.95,
             kmeans_random_seed=42,
             kmeans_initialization_runs=10,
             kmeans_maximum_iterations=300,

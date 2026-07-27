@@ -20,10 +20,10 @@ from datp_core.thresholding.estimators.quantile import (
     estimate_shared_mean,
     estimate_shared_weighted,
     estimate_shrinkage,
-    quantile,
 )
 from datp_core.thresholding.models import (
     EmptyCalibrationError,
+    ThresholdConfigurationError,
     ThresholdConstructionRequest,
     ThresholdSet,
     UnsupportedThresholdPolicyError,
@@ -52,86 +52,114 @@ class ThresholdEngine:
 
         policy = request.policy
 
-        match policy.kind:
-            case ThresholdPolicyKind.SHARED_MEAN:
-                assert isinstance(policy, QuantilePolicy)
-                return estimate_shared_mean(request.policy_id, request.calibration, Probability(policy.quantile))
-            case ThresholdPolicyKind.SHARED_POOLED:
-                assert isinstance(policy, QuantilePolicy)
-                return estimate_pooled(request.policy_id, request.calibration, Probability(policy.quantile))
-            case ThresholdPolicyKind.SHARED_WEIGHTED:
-                assert isinstance(policy, QuantilePolicy)
-                return estimate_shared_weighted(request.policy_id, request.calibration, Probability(policy.quantile))
-            case ThresholdPolicyKind.LOCAL_QUANTILE:
-                assert isinstance(policy, QuantilePolicy)
-                return estimate_local_quantile(request.policy_id, request.calibration, Probability(policy.quantile))
-            case ThresholdPolicyKind.FAMILY_MEAN:
-                assert isinstance(policy, QuantilePolicy)
+        match policy:
+            case QuantilePolicy(kind=ThresholdPolicyKind.SHARED_MEAN, quantile=quantile):
+                return estimate_shared_mean(request.policy_id, request.calibration, Probability(quantile))
+            case QuantilePolicy(kind=ThresholdPolicyKind.SHARED_POOLED, quantile=quantile):
+                return estimate_pooled(request.policy_id, request.calibration, Probability(quantile))
+            case QuantilePolicy(kind=ThresholdPolicyKind.SHARED_WEIGHTED, quantile=quantile):
+                return estimate_shared_weighted(request.policy_id, request.calibration, Probability(quantile))
+            case QuantilePolicy(kind=ThresholdPolicyKind.LOCAL_QUANTILE, quantile=quantile):
+                return estimate_local_quantile(request.policy_id, request.calibration, Probability(quantile))
+            case QuantilePolicy(kind=ThresholdPolicyKind.FAMILY_MEAN, quantile=quantile):
                 if request.family_assignments is None:
-                    raise EmptyCalibrationError("Family-mean threshold requires family assignments")
+                    raise ThresholdConfigurationError("Family-mean threshold requires family assignments")
+                fam = request.family_assignments
+                cal_ids = {c.client_id for c in request.calibration}
+                assigned_ids = {cid for cid, _ in fam.mapping}
+                missing = cal_ids - assigned_ids
+                if missing:
+                    raise ThresholdConfigurationError(
+                        f"Calibration clients missing from family assignments: {[str(c) for c in sorted(missing)]}"
+                    )
+                extra = assigned_ids - cal_ids
+                if extra:
+                    raise ThresholdConfigurationError(
+                        f"Family assignments for clients not in calibration: {[str(c) for c in sorted(extra)]}"
+                    )
                 return estimate_family_mean(
                     request.policy_id,
                     request.calibration,
-                    Probability(policy.quantile),
+                    Probability(quantile),
                     request.family_assignments,
-                    quantile_fn=quantile,
                 )
-            case ThresholdPolicyKind.CLUSTER:
-                assert isinstance(policy, ClusterPolicy)
+            case ClusterPolicy(
+                kind=ThresholdPolicyKind.CLUSTER,
+                quantile=quantile,
+                fingerprint_quantile=fingerprint_quantile,
+                cluster_count=cluster_count,
+                aggregation=aggregation,
+                fingerprint_features=fingerprint_features,
+                kmeans_random_seed=kmeans_random_seed,
+                kmeans_initialization_runs=kmeans_initialization_runs,
+                kmeans_maximum_iterations=kmeans_maximum_iterations,
+                kmeans_convergence_tolerance=kmeans_convergence_tolerance,
+            ):
                 return estimate_cluster(
                     request.policy_id,
                     request.calibration,
-                    Probability(policy.quantile),
-                    cluster_count=policy.cluster_count,
-                    aggregation=policy.aggregation,
-                    fingerprint_features=policy.fingerprint_features,
-                    kmeans_random_seed=policy.kmeans_random_seed,
-                    kmeans_initialization_runs=policy.kmeans_initialization_runs,
-                    kmeans_maximum_iterations=policy.kmeans_maximum_iterations,
-                    kmeans_convergence_tolerance=policy.kmeans_convergence_tolerance,
-                    quantile_fn=quantile,
+                    Probability(quantile),
+                    cluster_count=cluster_count,
+                    aggregation=aggregation,
+                    fingerprint_features=fingerprint_features,
+                    fingerprint_quantile=fingerprint_quantile,
+                    kmeans_random_seed=kmeans_random_seed,
+                    kmeans_initialization_runs=kmeans_initialization_runs,
+                    kmeans_maximum_iterations=kmeans_maximum_iterations,
+                    kmeans_convergence_tolerance=kmeans_convergence_tolerance,
                 )
-            case ThresholdPolicyKind.CONFORMAL:
-                assert isinstance(policy, ConformalPolicy)
+            case ConformalPolicy(
+                kind=ThresholdPolicyKind.CONFORMAL,
+                coverage_alpha=coverage_alpha,
+                minimum_sample_count=minimum_sample_count,
+            ):
                 return estimate_conformal(
                     request.policy_id,
                     request.calibration,
-                    coverage_alpha=policy.coverage_alpha,
-                    minimum_sample_count=policy.minimum_sample_count,
+                    coverage_alpha=coverage_alpha,
+                    minimum_sample_count=minimum_sample_count,
                 )
-            case ThresholdPolicyKind.SHRINKAGE:
-                assert isinstance(policy, FixedShrinkagePolicy)
+            case FixedShrinkagePolicy(
+                kind=ThresholdPolicyKind.SHRINKAGE, quantile=quantile, shrinkage_weight=shrinkage_weight
+            ):
                 return estimate_shrinkage(
                     request.policy_id,
                     request.calibration,
-                    Probability(policy.quantile),
-                    policy.shrinkage_weight,
+                    Probability(quantile),
+                    shrinkage_weight,
                 )
-            case ThresholdPolicyKind.CALIBRATION_FALLBACK:
-                assert isinstance(policy, CalibrationFallbackPolicy)
+            case CalibrationFallbackPolicy(
+                kind=ThresholdPolicyKind.CALIBRATION_FALLBACK, quantile=quantile, n_half=n_half
+            ):
                 return estimate_calibration_fallback(
                     request.policy_id,
                     request.calibration,
-                    Probability(policy.quantile),
-                    policy.n_half,
+                    Probability(quantile),
+                    n_half,
                 )
-            case ThresholdPolicyKind.FEDERATED_MATCHED:
-                assert isinstance(policy, FederatedMatchedPolicy)
+            case FederatedMatchedPolicy(
+                kind=ThresholdPolicyKind.FEDERATED_MATCHED,
+                quantile=quantile,
+                candidate_grid_minimum=candidate_grid_minimum,
+                candidate_grid_maximum=candidate_grid_maximum,
+                candidate_grid_step=candidate_grid_step,
+            ):
                 return estimate_federated_matched(
                     request.policy_id,
                     request.calibration,
-                    Probability(policy.quantile),
-                    grid_minimum=policy.candidate_grid_minimum,
-                    grid_maximum=policy.candidate_grid_maximum,
-                    grid_step=policy.candidate_grid_step,
+                    Probability(quantile),
+                    grid_minimum=candidate_grid_minimum,
+                    grid_maximum=candidate_grid_maximum,
+                    grid_step=candidate_grid_step,
                 )
-            case ThresholdPolicyKind.FEDERATED_FIXED:
-                assert isinstance(policy, FederatedFixedPolicy)
+            case FederatedFixedPolicy(
+                kind=ThresholdPolicyKind.FEDERATED_FIXED, quantile=quantile, fixed_coefficient=fixed_coefficient
+            ):
                 return estimate_federated_fixed(
                     request.policy_id,
                     request.calibration,
-                    Probability(policy.quantile),
-                    policy.fixed_coefficient,
+                    Probability(quantile),
+                    fixed_coefficient,
                 )
             case _:
                 raise UnsupportedThresholdPolicyError(f"No estimator for threshold policy kind: {policy.kind.value}")

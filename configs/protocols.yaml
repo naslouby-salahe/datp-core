@@ -342,96 +342,37 @@ threshold_policies:
     policy: shared_threshold
     construction: mean
     quantile: 0.95
-    quantile_estimator: linear_interpolated_order_statistic
-    aggregation_scope: all_eligible_clients_of_the_evaluated_population
-    aggregation_formula: "tau_shared = (1 / K_eligible) * sum_k(quantile(scores_k, q))"
-    sample_weighting: none
-    client_accumulation_order: ascending_client_identifier
     threshold_ownership: one_threshold_for_the_whole_eligible_population
   shared_pooled_p95:
     policy: shared_threshold
     construction: pooled
     quantile: 0.95
-    quantile_estimator: linear_interpolated_order_statistic
-    aggregation_scope: concatenated_benign_calibration_scores_of_all_eligible_clients
-    aggregation_formula: "tau_pooled = quantile(concat_k(scores_k), q)"
-    concatenation_order: ascending_client_identifier
-    sample_weighting: implicit_by_calibration_row_count
     threshold_ownership: one_threshold_for_the_whole_eligible_population
   shared_weighted_p95:
     policy: shared_threshold
     construction: weighted
     quantile: 0.95
-    quantile_estimator: linear_interpolated_order_statistic
-    aggregation_scope: all_eligible_clients_of_the_evaluated_population
-    aggregation_formula: "tau_weighted = sum_k(n_k * quantile(scores_k, q)) / sum_k(n_k)"
-    sample_weighting: eligible_benign_calibration_row_count
-    client_accumulation_order: ascending_client_identifier
-    zero_total_weight_behavior: typed_unavailable_ineligible_population
     threshold_ownership: one_threshold_for_the_whole_eligible_population
   local_p95:
     policy: local_threshold
     quantile: 0.95
-    quantile_estimator: linear_interpolated_order_statistic
-    aggregation_scope: single_client
-    aggregation_formula: "tau_k = quantile(scores_k, q)"
-    sample_weighting: none
     threshold_ownership: one_threshold_per_eligible_client
   family_p95:
     policy: family_threshold
     quantile: 0.95
-    quantile_estimator: linear_interpolated_order_statistic
-    requires_capability: family_taxonomy
-    taxonomy_source: dataset_field_schema_label_fields_family_map
-    aggregated_quantity: eligible_member_local_quantile_thresholds
-    aggregation_scope: clients_sharing_one_family_label
-    aggregation_formula: "tau_f = (1 / |eligible members of f|) * sum_{k in f}(quantile(scores_k, q))"
-    sample_weighting: none
-    client_accumulation_order: ascending_client_identifier
-    singleton_family_behavior: family_threshold_equals_the_single_member_local_threshold_and_is_reported_as_singleton
-    family_with_no_eligible_member_behavior: family_receives_no_threshold_and_is_reported_as_empty_family
-    client_without_family_label_behavior: typed_failure_unmapped_client_family
-    unavailable_without_taxonomy: typed_unavailable_unsupported_regime
     threshold_ownership: one_threshold_per_family
   centralized_pooled_p95:
     policy: centralized_pooled_threshold
     quantile: 0.95
-    quantile_estimator: linear_interpolated_order_statistic
-    source_score_population: pooled_benign_calibration_scores_of_the_centralized_model
-    aggregation_scope: pooled_across_all_clients
-    aggregation_formula: "tau_b0 = quantile(concat_k(centralized_scores_k), q)"
-    concatenation_order: ascending_client_identifier
-    sample_weighting: implicit_by_calibration_row_count
-    provenance_separation: centralized_scores_only_never_federated_scores
     threshold_ownership: one_threshold_for_the_whole_eligible_population
 
   cluster_k3_mean_p95:
     policy: cluster_threshold
-    canonical: true
     aggregation: mean
     cluster_count: 3
     quantile: 0.95
-    quantile_estimator: linear_interpolated_order_statistic
-    aggregated_quantity: eligible_member_local_quantile_thresholds
-    aggregation_formula: "tau_c = (1 / |members of c|) * sum_{k in c}(quantile(scores_k, q))"
-    sample_weighting: none
-    client_accumulation_order: ascending_client_identifier
-    fingerprint_features: [mean_error, std_error, skew_error, p95_error]
-    fingerprint_estimators:
-      mean_error: arithmetic_mean
-      std_error: standard_deviation_ddof_1
-      skew_error: fisher_pearson_moment_coefficient_of_skewness_uncorrected
-      p95_error: quantile_0_95_linear_interpolated_order_statistic
-    fingerprint_degenerate_client_rules:
-      fewer_than_two_calibration_scores: { std_error: 0.0, skew_error: 0.0 }
-      non_finite_skew_value: 0.0
-    fingerprint_non_finite_value_behavior: typed_failure_non_finite_fingerprint
-    standardization:
-      method: zero_mean_unit_variance
-      standard_deviation_ddof: 0
-      fit_scope: the_eligible_client_fingerprint_matrix_of_the_current_population_seed_and_checkpoint
-      constant_dimension_rule: zero_variance_dimension_uses_scale_one_and_becomes_an_all_zero_centered_column
-    client_ordering_before_fit: ascending_client_identifier
+    fingerprint_features: [mean_error, std_error, skew_error, quantile_error]
+    fingerprint_quantile: 0.95
     clustering:
       algorithm: k_means_lloyd
       initialization: k_means_plus_plus
@@ -439,48 +380,14 @@ threshold_policies:
       maximum_iterations: 300
       convergence_tolerance: 1.0e-4
       random_seed: 42
-    label_canonicalization: relabel_clusters_by_ascending_cluster_threshold_then_by_smallest_member_client_identifier
-    insufficient_eligible_clients_behavior: typed_unavailable_when_eligible_client_count_is_less_than_cluster_count
-    degenerate_fingerprint_matrix_behavior: typed_unavailable_when_fewer_than_two_distinct_fingerprints
-    required_diagnostics:
-      - cluster_membership_per_client
-      - cluster_size
-      - singleton_cluster_flag
-      - empty_cluster_flag
-      - within_cluster_threshold_dispersion
-      - within_cluster_fpr_dispersion
-      - across_cluster_threshold_dispersion
-      - across_cluster_mean_fpr_dispersion
-      - standardizer_center_and_scale
     threshold_ownership: one_threshold_per_cluster
   cluster_k9_mean_p95:
     policy: cluster_threshold
-    canonical: false
-    exploratory: true
     aggregation: mean
     cluster_count: 9
     quantile: 0.95
-    quantile_estimator: linear_interpolated_order_statistic
-    aggregated_quantity: eligible_member_local_quantile_thresholds
-    aggregation_formula: "tau_c = (1 / |members of c|) * sum_{k in c}(quantile(scores_k, q))"
-    sample_weighting: none
-    client_accumulation_order: ascending_client_identifier
-    fingerprint_features: [mean_error, std_error, skew_error, p95_error]
-    fingerprint_estimators:
-      mean_error: arithmetic_mean
-      std_error: standard_deviation_ddof_1
-      skew_error: fisher_pearson_moment_coefficient_of_skewness_uncorrected
-      p95_error: quantile_0_95_linear_interpolated_order_statistic
-    fingerprint_degenerate_client_rules:
-      fewer_than_two_calibration_scores: { std_error: 0.0, skew_error: 0.0 }
-      non_finite_skew_value: 0.0
-    fingerprint_non_finite_value_behavior: typed_failure_non_finite_fingerprint
-    standardization:
-      method: zero_mean_unit_variance
-      standard_deviation_ddof: 0
-      fit_scope: the_eligible_client_fingerprint_matrix_of_the_current_population_seed_and_checkpoint
-      constant_dimension_rule: zero_variance_dimension_uses_scale_one_and_becomes_an_all_zero_centered_column
-    client_ordering_before_fit: ascending_client_identifier
+    fingerprint_features: [mean_error, std_error, skew_error, quantile_error]
+    fingerprint_quantile: 0.95
     clustering:
       algorithm: k_means_lloyd
       initialization: k_means_plus_plus
@@ -488,49 +395,14 @@ threshold_policies:
       maximum_iterations: 300
       convergence_tolerance: 1.0e-4
       random_seed: 42
-    label_canonicalization: relabel_clusters_by_ascending_cluster_threshold_then_by_smallest_member_client_identifier
-    insufficient_eligible_clients_behavior: typed_unavailable_when_eligible_client_count_is_less_than_cluster_count
-    degenerate_fingerprint_matrix_behavior: typed_unavailable_when_fewer_than_two_distinct_fingerprints
-    required_diagnostics:
-      - cluster_membership_per_client
-      - cluster_size
-      - singleton_cluster_flag
-      - empty_cluster_flag
-      - within_cluster_threshold_dispersion
-      - within_cluster_fpr_dispersion
-      - across_cluster_threshold_dispersion
-      - across_cluster_mean_fpr_dispersion
-      - standardizer_center_and_scale
     threshold_ownership: one_threshold_per_cluster
   cluster_k3_robust_median_p95:
     policy: cluster_threshold
-    canonical: false
-    exploratory: true
     aggregation: robust_median
     cluster_count: 3
     quantile: 0.95
-    quantile_estimator: linear_interpolated_order_statistic
-    aggregated_quantity: eligible_member_local_quantile_thresholds
-    aggregation_formula: "tau_c = quantile({quantile(scores_k, q) : k in c}, 0.5)"
-    median_estimator: linear_interpolated_order_statistic
-    sample_weighting: none
-    client_accumulation_order: ascending_client_identifier
-    fingerprint_features: [mean_error, std_error, skew_error, p95_error]
-    fingerprint_estimators:
-      mean_error: arithmetic_mean
-      std_error: standard_deviation_ddof_1
-      skew_error: fisher_pearson_moment_coefficient_of_skewness_uncorrected
-      p95_error: quantile_0_95_linear_interpolated_order_statistic
-    fingerprint_degenerate_client_rules:
-      fewer_than_two_calibration_scores: { std_error: 0.0, skew_error: 0.0 }
-      non_finite_skew_value: 0.0
-    fingerprint_non_finite_value_behavior: typed_failure_non_finite_fingerprint
-    standardization:
-      method: zero_mean_unit_variance
-      standard_deviation_ddof: 0
-      fit_scope: the_eligible_client_fingerprint_matrix_of_the_current_population_seed_and_checkpoint
-      constant_dimension_rule: zero_variance_dimension_uses_scale_one_and_becomes_an_all_zero_centered_column
-    client_ordering_before_fit: ascending_client_identifier
+    fingerprint_features: [mean_error, std_error, skew_error, quantile_error]
+    fingerprint_quantile: 0.95
     clustering:
       algorithm: k_means_lloyd
       initialization: k_means_plus_plus
@@ -538,167 +410,44 @@ threshold_policies:
       maximum_iterations: 300
       convergence_tolerance: 1.0e-4
       random_seed: 42
-    label_canonicalization: relabel_clusters_by_ascending_cluster_threshold_then_by_smallest_member_client_identifier
-    insufficient_eligible_clients_behavior: typed_unavailable_when_eligible_client_count_is_less_than_cluster_count
-    degenerate_fingerprint_matrix_behavior: typed_unavailable_when_fewer_than_two_distinct_fingerprints
-    required_diagnostics:
-      - cluster_membership_per_client
-      - cluster_size
-      - singleton_cluster_flag
-      - empty_cluster_flag
-      - within_cluster_threshold_dispersion
-      - within_cluster_fpr_dispersion
-      - across_cluster_threshold_dispersion
-      - across_cluster_mean_fpr_dispersion
-      - standardizer_center_and_scale
     threshold_ownership: one_threshold_per_cluster
 
   conformal_local_p95:
     policy: conformal_local_threshold
-    conformal_mode: split_conformal
     coverage_alpha: 0.05
     nominal_coverage: 0.95
     target_exceedance: 0.05
-    rank_formula: "rank = min(ceil((n + 1) * (1 - coverage_alpha)), n)"
-    order_statistic_selection: ascending_calibration_score_order_statistic_at_rank
-    interpolation: none_exact_order_statistic
-    tie_break: nearest_higher_order_statistic
-    finite_sample_attainability_rule: "attainable only when n >= ceil(1 / coverage_alpha) - 1"
-    unattainable_behavior: typed_unavailable_conformal_level_unattainable
     minimum_sample_count: 100
-    calibration_unit: per_client_benign_calibration_scores
-    calibration_scope: per_client_never_pooled
-    evaluation_unit: per_client_benign_test_scores
-    coverage_breakdown: [marginal_sample_weighted_coverage, macro_client_coverage, per_client_coverage]
-    coverage_target_error: absolute_achieved_minus_target_coverage
-    output_type: one_threshold_per_eligible_client
-    exchangeability_limitation: within_client_exchangeability_assumed_not_verified_across_clients
-    unavailable_behavior: typed_unavailable_if_client_below_minimum_sample_count
     threshold_ownership: one_threshold_per_eligible_client
 
   local_global_shrinkage_p95:
     policy: local_global_shrinkage_threshold
     quantile: 0.95
-    quantile_estimator: linear_interpolated_order_statistic
-    local_reference: local_p95
-    global_reference: shared_mean_p95
-    interpolation_formula: "tau_k(lambda) = lambda * tau_local_k + (1 - lambda) * tau_shared"
-    weight_semantics: lambda_one_is_fully_local_and_lambda_zero_is_fully_shared
-    weight_scope: one_global_value_per_sweep_cell_identical_for_every_client_seed_and_window
-    permitted_weight_range: { minimum: 0.0, maximum: 1.0 }
     shrinkage_weight_grid: [0.0, 0.25, 0.5, 0.75, 1.0]
-    shrinkage_weight: null
-    shrinkage_weight_resolution: required_from_experiment_sweep
-    out_of_range_weight_behavior: typed_failure_invalid_shrinkage_weight
-    effective_lambda_reporting: reported_per_client
+    shrinkage_weight: 1.0
     threshold_ownership: one_threshold_per_eligible_client
 
   calibration_size_aware_fallback_p95:
     policy: calibration_size_aware_fallback_threshold
     quantile: 0.95
-    quantile_estimator: linear_interpolated_order_statistic
-    local_reference: local_p95
-    global_reference: shared_mean_p95
-    interpolation_formula: "tau_k(n_k) = lambda(n_k) * tau_local_k + (1 - lambda(n_k)) * tau_shared"
-    weight_semantics: lambda_one_is_fully_local_and_lambda_zero_is_fully_shared
-    weight_scope: per_client_determined_only_by_that_clients_benign_calibration_count
-    weight_formula: "lambda(n) = n / (n + n_half)"
-    weight_formula_constants: { n_half: 100 }
-    weight_monotone_in_calibration_count: true
-    clamping: clamp_to_closed_interval_zero_one
-    permitted_weight_range: { minimum: 0.0, maximum: 1.0 }
-    zero_calibration_behavior: lambda_equals_zero_full_fallback_to_global_reference
-    minimum_calibration_behavior: no_separate_minimum_lambda_the_formula_applies_at_every_positive_count
-    effective_lambda_reporting: reported_per_client
-    fallback_frequency_reporting: reported_as_fraction_of_clients_at_lambda_floor
+    n_half: 100
     threshold_ownership: one_threshold_per_eligible_client
 
   federated_summary_matched_exceedance:
     policy: federated_summary_statistic_threshold
     mode: matched_exceedance
-    primary_comparator: true
-    client_message:
-      fields: [benign_calibration_count, benign_local_mean, benign_local_variance]
-      variance_convention: population_variance_ddof_0_over_the_clients_benign_calibration_scores
-      raw_scores_transmitted: false
-      attack_labels_transmitted: false
-    global_mean_formula: "mu_global = sum_k(n_k * mu_k) / sum_k(n_k)"
-    within_term_formula: "within = sum_k(n_k * sigma_k_squared) / sum_k(n_k)"
-    between_term_formula: "between = sum_k(n_k * (mu_k - mu_global)^2) / sum_k(n_k)"
-    pooled_variance_formula: "sigma_global_squared = within + between"
-    between_term_mandatory: true
-    between_ratio_formula: "between_ratio = between / (within + between)"
-    between_ratio_zero_denominator_behavior: typed_undefined_zero_denominator
-    global_standard_deviation_formula: "sigma_global = sqrt(sigma_global_squared)"
-    client_accumulation_order: ascending_client_identifier
-    zero_total_count_behavior: typed_unavailable_ineligible_population
+    quantile: 0.95
     candidate_grid:
-      formula: "tau(k) = mu_global + k * sigma_global"
       minimum: 0.00
       maximum: 5.00
       step: 0.01
-      inclusive_endpoints: true
-    exceedance_exchange:
-      client_returns: [benign_exceedance_count_per_candidate, benign_calibration_count]
-      exceedance_rule: "score > tau(k) counts as an exceedance"
-      achieved_exceedance_formula: "achieved(k) = sum_k'(exceedance_count_k'(k)) / sum_k'(n_k')"
-    selection:
-      target_exceedance_formula: "1 - quantile"
-      objective: "k_star = argmin_k |achieved(k) - target_exceedance|"
-      tie_break: largest_candidate_k
-    quantile: 0.95
-    required_diagnostics:
-      - selected_coefficient
-      - selected_threshold
-      - achieved_exceedance
-      - target_exceedance
-      - absolute_target_deviation
-      - within_term
-      - between_term
-      - pooled_variance
-      - between_ratio
-      - candidate_grid_evaluation_record
-      - tie_set
-      - transmitted_field_list
-      - estimated_payload_bytes
     threshold_ownership: one_threshold_for_the_whole_eligible_population
   federated_summary_fixed_k:
     policy: federated_summary_statistic_threshold
     mode: fixed_k
-    primary_comparator: false
-    supplementary_sensitivity_only: true
-    client_message:
-      fields: [benign_calibration_count, benign_local_mean, benign_local_variance]
-      variance_convention: population_variance_ddof_0_over_the_clients_benign_calibration_scores
-      raw_scores_transmitted: false
-      attack_labels_transmitted: false
-    global_mean_formula: "mu_global = sum_k(n_k * mu_k) / sum_k(n_k)"
-    within_term_formula: "within = sum_k(n_k * sigma_k_squared) / sum_k(n_k)"
-    between_term_formula: "between = sum_k(n_k * (mu_k - mu_global)^2) / sum_k(n_k)"
-    pooled_variance_formula: "sigma_global_squared = within + between"
-    between_term_mandatory: true
-    between_ratio_formula: "between_ratio = between / (within + between)"
-    between_ratio_zero_denominator_behavior: typed_undefined_zero_denominator
-    global_standard_deviation_formula: "sigma_global = sqrt(sigma_global_squared)"
-    client_accumulation_order: ascending_client_identifier
-    zero_total_count_behavior: typed_unavailable_ineligible_population
-    threshold_formula: "tau = mu_global + fixed_k * sigma_global"
     fixed_k_grid: [2.0, 2.5, 3.0]
-    fixed_k: null
-    fixed_k_resolution: required_from_experiment_sweep
+    fixed_k: 3.0
     quantile: 0.95
-    required_diagnostics:
-      - fixed_coefficient
-      - selected_threshold
-      - achieved_exceedance
-      - target_exceedance
-      - absolute_target_deviation
-      - within_term
-      - between_term
-      - pooled_variance
-      - between_ratio
-      - transmitted_field_list
-      - estimated_payload_bytes
     threshold_ownership: one_threshold_for_the_whole_eligible_population
 
 metric_definitions:
@@ -974,7 +723,7 @@ communication_estimation_contract:
     direction: client_to_server_then_server_to_clients
     b1: { uplink_fields_per_client: [local_quantile_float64], downlink_fields_per_client: [shared_threshold_float64] }
     b2: { uplink_fields_per_client: [], downlink_fields_per_client: [local_threshold_float64] }
-    b4: { uplink_fields_per_client: [mean_error_float64, std_error_float64, skew_error_float64, p95_error_float64], downlink_fields_per_client: [cluster_identifier_uint32, cluster_threshold_float64] }
+    b4: { uplink_fields_per_client: [mean_error_float64, std_error_float64, skew_error_float64, quantile_error_float64], downlink_fields_per_client: [cluster_identifier_uint32, cluster_threshold_float64] }
     federated_summary: { uplink_fields_per_client: [benign_calibration_count_uint64, benign_local_mean_float64, benign_local_variance_float64], candidate_grid_downlink_fields_per_client: [candidate_coefficient_float64], candidate_grid_uplink_fields_per_client_per_candidate: [benign_exceedance_count_uint64] }
   candidate_grid_payload: count_every_candidate_downlink_and_every_client_candidate_uplink_without_compression
   model_exchange:

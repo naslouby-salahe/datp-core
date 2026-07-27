@@ -405,9 +405,9 @@ experiments:
       fingerprint_feature_subset:
         values:
           - [mean_error]
-          - [p95_error]
+          - [quantile_error]
           - [mean_error, std_error]
-          - [mean_error, std_error, skew_error, p95_error]
+          - [mean_error, std_error, skew_error, quantile_error]
     evaluations:
       - { label: shared_mean, threshold_policy: shared_mean_p95 }
       - { label: local, threshold_policy: local_p95 }

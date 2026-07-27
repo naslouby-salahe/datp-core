@@ -15,9 +15,13 @@ class ThresholdColumn(StrEnum):
 
     CLIENT_ID = "client_id"
     THRESHOLD = "threshold"
-    FINITE_SAMPLE_RANK = "finite_sample_rank"
-    ATTAINABILITY_STATUS = "attainability_status"
+    POLICY_KIND = "policy_kind"
+    SCOPE = "scope"
+    EFFECTIVE_LAMBDA = "effective_lambda"
     CLUSTER_LABEL = "cluster_label"
+    FINITE_SAMPLE_RANK = "finite_sample_rank"
+    POLICY_ID = "policy_id"
+    TARGET_QUANTILE = "target_quantile"
 
 
 class MetricColumn(StrEnum):
@@ -35,4 +39,6 @@ class ScoreColumn(StrEnum):
 
     CLIENT_ID = "client_id"
     SCORE = "score"
+    SOURCE_PATH = "source_path"
+    SOURCE_ROW_INDEX = "source_row_index"
     TARGET_QUANTILE = "target_quantile"

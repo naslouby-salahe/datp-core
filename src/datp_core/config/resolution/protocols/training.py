@@ -43,9 +43,17 @@ class ProtocolDeterminismRecord(BaseModel):
     seed_domains: tuple[str, ...]
     partition_seed_independent_of_training_seeds: bool
     checkpoint_selection_uses_no_stochastic_seed: bool
-    derived_seed_algorithm: dict[str, object]
+    derived_seed_digest_bytes: PositiveInt
     seed_namespaces: dict[str, SeedNamespaceRecord]
     resolved_seeds_required_in_manifests: tuple[str, ...]
+
+    @property
+    def calibration_subsample_namespace(self) -> SeedNamespaceRecord:
+        """Seed namespace for deterministic calibration subsampling."""
+        namespace = self.seed_namespaces.get("calibration_subsample")
+        if namespace is None:
+            raise ValueError("Missing seed namespace 'calibration_subsample' in protocol determinism")
+        return namespace
 
 
 def resolve_training_profiles(authored: AuthoredProtocolsConfig) -> dict[TrainingProfileId, TrainingProfileRecord]:
@@ -242,7 +250,7 @@ def resolve_protocol_determinism(cfg: DeterminismProfileConfig) -> ProtocolDeter
         seed_domains=tuple(cfg.seed_domains),
         partition_seed_independent_of_training_seeds=cfg.partition_seed_independent_of_training_seeds,
         checkpoint_selection_uses_no_stochastic_seed=cfg.checkpoint_selection_uses_no_stochastic_seed,
-        derived_seed_algorithm=dict(cfg.derived_seed_algorithm),
+        derived_seed_digest_bytes=PositiveInt(cfg.derived_seed_algorithm["digest_bytes"]),
         seed_namespaces={
             key: SeedNamespaceRecord(key=v.key, components=tuple(v.components))
             for key, v in cfg.seed_namespaces.items()

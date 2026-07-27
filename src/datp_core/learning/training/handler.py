@@ -263,7 +263,7 @@ class ModelTrainingStageHandler:
                     raise ValueError("Model training requires the configured CUDA-required execution profile")
                 initialization_namespace = self._config.protocol_determinism.seed_namespaces["model_initialization"]
                 shuffle_namespace = self._config.protocol_determinism.seed_namespaces["dataloader_shuffle"]
-                digest_bytes = int(self._config.protocol_determinism.derived_seed_algorithm["digest_bytes"])  # type: ignore[reportArgumentType]
+                digest_bytes = self._config.protocol_determinism.derived_seed_digest_bytes
                 initialization_seed = derive_model_initialization_seed(
                     key=initialization_namespace.key,
                     digest_bytes=digest_bytes,

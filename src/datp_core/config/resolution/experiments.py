@@ -83,7 +83,7 @@ from datp_core.experiments import (
     ThresholdStabilityAnalysisRecord,
     ValueSweepRecord,
 )
-from datp_core.thresholding import ThresholdPolicyRecord
+from datp_core.thresholding.policies import ThresholdPolicyRecord
 
 
 def experiment_scientific_projection(record: ExperimentRecord) -> dict[str, object]:

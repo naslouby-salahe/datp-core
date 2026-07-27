@@ -52,6 +52,7 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             cluster_count=cfg.cluster_count,
             aggregation=ClusterAggregation(cfg.aggregation),
             fingerprint_features=tuple(FingerprintFeature(f) for f in cfg.fingerprint_features),
+            fingerprint_quantile=cfg.fingerprint_quantile,
             kmeans_random_seed=int(cfg.clustering["random_seed"]),
             kmeans_initialization_runs=int(cfg.clustering["initialization_runs"]),
             kmeans_maximum_iterations=int(cfg.clustering["maximum_iterations"]),
@@ -64,6 +65,10 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             minimum_sample_count=cfg.minimum_sample_count,
         )
     if isinstance(cfg, LocalGlobalShrinkagePolicyConfig):
+        if cfg.shrinkage_weight is None:
+            raise ConfigurationError(
+                "shrinkage_weight is None — must be resolved to a concrete value before building the domain record"
+            )
         return FixedShrinkagePolicy(
             kind=ThresholdPolicyKind.SHRINKAGE,
             quantile=cfg.quantile,
@@ -73,7 +78,7 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
         return CalibrationFallbackPolicy(
             kind=ThresholdPolicyKind.CALIBRATION_FALLBACK,
             quantile=cfg.quantile,
-            n_half=cfg.weight_formula_constants["n_half"],
+            n_half=cfg.n_half,
         )
     if isinstance(cfg, FederatedMatchedExceedancePolicyConfig):
         return FederatedMatchedPolicy(
@@ -84,6 +89,10 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             candidate_grid_step=float(cfg.candidate_grid["step"]),
         )
     if isinstance(cfg, FederatedFixedCoefficientPolicyConfig):
+        if cfg.fixed_k is None:
+            raise ConfigurationError(
+                "fixed_k is None — must be resolved to a concrete value before building the domain record"
+            )
         return FederatedFixedPolicy(
             kind=ThresholdPolicyKind.FEDERATED_FIXED,
             quantile=cfg.quantile,

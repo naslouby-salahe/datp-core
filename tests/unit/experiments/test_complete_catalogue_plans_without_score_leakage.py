@@ -164,9 +164,9 @@ def test_cluster_fingerprint_ablation_expands_only_threshold_and_evaluation_cell
     assert len(ablations) == 40
     assert {job.context.fingerprint_features for job in ablations} == {
         ("mean_error",),
-        ("p95_error",),
+        ("quantile_error",),
         ("mean_error", "std_error"),
-        ("mean_error", "std_error", "skew_error", "p95_error"),
+        ("mean_error", "std_error", "skew_error", "quantile_error"),
     }
     assert len({job.node_key for job in plan.jobs}) == plan.node_count
 

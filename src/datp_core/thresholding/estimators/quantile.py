@@ -8,7 +8,7 @@ import numpy as np
 
 from datp_core.core.identifiers import ThresholdPolicyId
 from datp_core.core.numbers import Probability, linear_quantile
-from datp_core.thresholding.enums import ThresholdPolicyKind, ThresholdScope
+from datp_core.thresholding.enums import ThresholdDiagnosticsKind, ThresholdPolicyKind, ThresholdScope
 from datp_core.thresholding.models import (
     BenignCalibrationScores,
     CalibrationFallbackDiagnostics,
@@ -16,7 +16,7 @@ from datp_core.thresholding.models import (
     InsufficientCalibrationError,
     NonFiniteCalibrationError,
     ShrinkageDiagnostics,
-    ThresholdDiagnostics,
+    ThresholdConfigurationError,
     ThresholdRecord,
     ThresholdSet,
 )
@@ -40,52 +40,6 @@ def _local_quantiles(
     return {item.client_id.value: quantile(item.values, target_quantile.value) for item in calibration}
 
 
-def _policy_quantile(policy: object) -> Probability:
-    """Extract the effective target quantile from a policy."""
-    if hasattr(policy, "coverage_alpha"):
-        return Probability(float(getattr(policy, "nominal_coverage", 1.0 - policy.coverage_alpha)))
-    if hasattr(policy, "quantile"):
-        return Probability(float(policy.quantile))
-    raise ValueError("Policy has no quantile or coverage field")
-
-
-def _build_threshold_set(
-    policy_id: ThresholdPolicyId,
-    policy_kind: ThresholdPolicyKind,
-    scope: ThresholdScope,
-    calibration: tuple[BenignCalibrationScores, ...],
-    thresholds: dict[str, float],
-    target_quantile: Probability,
-    *,
-    effective_lambdas: dict[str, float] | None = None,
-    cluster_labels: dict[str, int] | None = None,
-    conformal_ranks: dict[str, int] | None = None,
-    diagnostics: ThresholdDiagnostics | None = None,
-) -> ThresholdSet:
-    return ThresholdSet(
-        policy_id=policy_id,
-        policy_kind=policy_kind,
-        scope=scope,
-        target_quantile=target_quantile,
-        diagnostics=diagnostics,
-        values=tuple(
-            ThresholdRecord(
-                client_id=item.client_id,
-                threshold=thresholds[item.client_id.value],
-                policy_kind=policy_kind,
-                scope=scope,
-                effective_lambda=(None if effective_lambdas is None else effective_lambdas.get(item.client_id.value)),
-                cluster_label=(None if cluster_labels is None else cluster_labels.get(item.client_id.value)),
-                finite_sample_rank=(None if conformal_ranks is None else conformal_ranks.get(item.client_id.value)),
-            )
-            for item in calibration
-        ),
-    )
-
-
-# ── Shared mean ────────────────────────────────────────────────────────────
-
-
 def estimate_shared_mean(
     policy_id: ThresholdPolicyId,
     calibration: tuple[BenignCalibrationScores, ...],
@@ -93,17 +47,21 @@ def estimate_shared_mean(
 ) -> ThresholdSet:
     local = _local_quantiles(calibration, target_quantile)
     shared = float(np.mean(tuple(local.values())))
-    return _build_threshold_set(
-        policy_id,
-        ThresholdPolicyKind.SHARED_MEAN,
-        ThresholdScope.SHARED,
-        calibration,
-        dict.fromkeys(local, shared),
-        target_quantile,
+    return ThresholdSet(
+        policy_id=policy_id,
+        policy_kind=ThresholdPolicyKind.SHARED_MEAN,
+        scope=ThresholdScope.SHARED,
+        target_quantile=target_quantile,
+        values=tuple(
+            ThresholdRecord(
+                client_id=item.client_id,
+                threshold=shared,
+                policy_kind=ThresholdPolicyKind.SHARED_MEAN,
+                scope=ThresholdScope.SHARED,
+            )
+            for item in calibration
+        ),
     )
-
-
-# ── Pooled ─────────────────────────────────────────────────────────────────
 
 
 def estimate_pooled(
@@ -111,20 +69,23 @@ def estimate_pooled(
     calibration: tuple[BenignCalibrationScores, ...],
     target_quantile: Probability,
 ) -> ThresholdSet:
-    local = _local_quantiles(calibration, target_quantile)
     pooled = tuple(value for item in calibration for value in item.values)
     threshold = quantile(pooled, target_quantile.value)
-    return _build_threshold_set(
-        policy_id,
-        ThresholdPolicyKind.SHARED_POOLED,
-        ThresholdScope.SHARED,
-        calibration,
-        {k: threshold for k in local},
-        target_quantile,
+    return ThresholdSet(
+        policy_id=policy_id,
+        policy_kind=ThresholdPolicyKind.SHARED_POOLED,
+        scope=ThresholdScope.SHARED,
+        target_quantile=target_quantile,
+        values=tuple(
+            ThresholdRecord(
+                client_id=item.client_id,
+                threshold=threshold,
+                policy_kind=ThresholdPolicyKind.SHARED_POOLED,
+                scope=ThresholdScope.SHARED,
+            )
+            for item in calibration
+        ),
     )
-
-
-# ── Weighted ───────────────────────────────────────────────────────────────
 
 
 def estimate_shared_weighted(
@@ -137,17 +98,21 @@ def estimate_shared_weighted(
     if count == 0:
         raise InsufficientCalibrationError("Weighted threshold has no calibration rows")
     threshold = sum(len(item.values) * local[item.client_id.value] for item in calibration) / count
-    return _build_threshold_set(
-        policy_id,
-        ThresholdPolicyKind.SHARED_WEIGHTED,
-        ThresholdScope.SHARED,
-        calibration,
-        dict.fromkeys(local, threshold),
-        target_quantile,
+    return ThresholdSet(
+        policy_id=policy_id,
+        policy_kind=ThresholdPolicyKind.SHARED_WEIGHTED,
+        scope=ThresholdScope.SHARED,
+        target_quantile=target_quantile,
+        values=tuple(
+            ThresholdRecord(
+                client_id=item.client_id,
+                threshold=threshold,
+                policy_kind=ThresholdPolicyKind.SHARED_WEIGHTED,
+                scope=ThresholdScope.SHARED,
+            )
+            for item in calibration
+        ),
     )
-
-
-# ── Local ──────────────────────────────────────────────────────────────────
 
 
 def estimate_local_quantile(
@@ -156,17 +121,21 @@ def estimate_local_quantile(
     target_quantile: Probability,
 ) -> ThresholdSet:
     local = _local_quantiles(calibration, target_quantile)
-    return _build_threshold_set(
-        policy_id,
-        ThresholdPolicyKind.LOCAL_QUANTILE,
-        ThresholdScope.CLIENT,
-        calibration,
-        local,
-        target_quantile,
+    return ThresholdSet(
+        policy_id=policy_id,
+        policy_kind=ThresholdPolicyKind.LOCAL_QUANTILE,
+        scope=ThresholdScope.CLIENT,
+        target_quantile=target_quantile,
+        values=tuple(
+            ThresholdRecord(
+                client_id=item.client_id,
+                threshold=local[item.client_id.value],
+                policy_kind=ThresholdPolicyKind.LOCAL_QUANTILE,
+                scope=ThresholdScope.CLIENT,
+            )
+            for item in calibration
+        ),
     )
-
-
-# ── Conformal ──────────────────────────────────────────────────────────────
 
 
 def estimate_conformal(
@@ -189,22 +158,27 @@ def estimate_conformal(
         thresholds[item.client_id.value] = float(scores[rank - 1])
         ranks[item.client_id.value] = rank
     diagnostics = ConformalDiagnostics(
+        kind=ThresholdDiagnosticsKind.CONFORMAL,
         ranks=tuple((cid, r) for cid, r in ranks.items()),
         coverage_alpha=coverage_alpha,
     )
-    return _build_threshold_set(
-        policy_id,
-        ThresholdPolicyKind.CONFORMAL,
-        ThresholdScope.CLIENT,
-        calibration,
-        thresholds,
-        Probability(nominal_coverage),
-        conformal_ranks=ranks,
+    return ThresholdSet(
+        policy_id=policy_id,
+        policy_kind=ThresholdPolicyKind.CONFORMAL,
+        scope=ThresholdScope.CLIENT,
+        target_quantile=Probability(nominal_coverage),
         diagnostics=diagnostics,
+        values=tuple(
+            ThresholdRecord(
+                client_id=item.client_id,
+                threshold=thresholds[item.client_id.value],
+                policy_kind=ThresholdPolicyKind.CONFORMAL,
+                scope=ThresholdScope.CLIENT,
+                finite_sample_rank=ranks[item.client_id.value],
+            )
+            for item in calibration
+        ),
     )
-
-
-# ── Shrinkage ──────────────────────────────────────────────────────────────
 
 
 def estimate_shrinkage(
@@ -214,26 +188,31 @@ def estimate_shrinkage(
     coefficient: float,
 ) -> ThresholdSet:
     if not 0.0 <= coefficient <= 1.0:
-        raise ValueError("Shrinkage coefficient is outside the permitted range [0.0, 1.0]")
+        raise ThresholdConfigurationError("Shrinkage coefficient is outside the permitted range [0.0, 1.0]")
     local = _local_quantiles(calibration, target_quantile)
     shared = float(np.mean(tuple(local.values())))
     thresholds = {key: coefficient * value + (1.0 - coefficient) * shared for key, value in local.items()}
     diagnostics = ShrinkageDiagnostics(
+        kind=ThresholdDiagnosticsKind.SHRINKAGE,
         effective_lambdas=tuple((cid, coefficient) for cid in local),
     )
-    return _build_threshold_set(
-        policy_id,
-        ThresholdPolicyKind.SHRINKAGE,
-        ThresholdScope.CLIENT,
-        calibration,
-        thresholds,
-        target_quantile,
-        effective_lambdas=dict.fromkeys(local, coefficient),
+    return ThresholdSet(
+        policy_id=policy_id,
+        policy_kind=ThresholdPolicyKind.SHRINKAGE,
+        scope=ThresholdScope.CLIENT,
+        target_quantile=target_quantile,
         diagnostics=diagnostics,
+        values=tuple(
+            ThresholdRecord(
+                client_id=item.client_id,
+                threshold=thresholds[item.client_id.value],
+                policy_kind=ThresholdPolicyKind.SHRINKAGE,
+                scope=ThresholdScope.CLIENT,
+                effective_lambda=coefficient,
+            )
+            for item in calibration
+        ),
     )
-
-
-# ── Calibration fallback ───────────────────────────────────────────────────
 
 
 def estimate_calibration_fallback(
@@ -243,7 +222,7 @@ def estimate_calibration_fallback(
     n_half: int,
 ) -> ThresholdSet:
     if n_half <= 0:
-        raise ValueError("Fallback threshold policy requires a positive n_half")
+        raise ThresholdConfigurationError("Fallback threshold policy requires a positive n_half")
     local = _local_quantiles(calibration, target_quantile)
     shared = float(np.mean(tuple(local.values())))
     lambdas = {item.client_id.value: len(item.values) / (len(item.values) + n_half) for item in calibration}
@@ -253,17 +232,25 @@ def estimate_calibration_fallback(
         for item in calibration
     }
     diagnostics = CalibrationFallbackDiagnostics(
+        kind=ThresholdDiagnosticsKind.CALIBRATION_FALLBACK,
         effective_lambdas=tuple((cid, lam) for cid, lam in lambdas.items()),
         n_half=n_half,
         calibration_counts=tuple((item.client_id.value, len(item.values)) for item in calibration),
     )
-    return _build_threshold_set(
-        policy_id,
-        ThresholdPolicyKind.CALIBRATION_FALLBACK,
-        ThresholdScope.CLIENT,
-        calibration,
-        thresholds,
-        target_quantile,
-        effective_lambdas=lambdas,
+    return ThresholdSet(
+        policy_id=policy_id,
+        policy_kind=ThresholdPolicyKind.CALIBRATION_FALLBACK,
+        scope=ThresholdScope.CLIENT,
+        target_quantile=target_quantile,
         diagnostics=diagnostics,
+        values=tuple(
+            ThresholdRecord(
+                client_id=item.client_id,
+                threshold=thresholds[item.client_id.value],
+                policy_kind=ThresholdPolicyKind.CALIBRATION_FALLBACK,
+                scope=ThresholdScope.CLIENT,
+                effective_lambda=lambdas[item.client_id.value],
+            )
+            for item in calibration
+        ),
     )

@@ -8,6 +8,7 @@ from pathlib import Path
 from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.identifiers import (
+    ClientId,
     DatasetId,
     DatasetSetupId,
     EligibilityPolicyId,
@@ -25,6 +26,7 @@ from datp_core.data.contracts.sources import (
     DatasetSourceLayoutContractRecord,
     SourceContractRecord,
 )
+from datp_core.thresholding.models import FamilyAssignments
 
 
 class ResolvedDatasetPaths(BaseModel):
@@ -83,3 +85,12 @@ class ResolvedDataset(BaseModel):
             if setup.identifier == identifier:
                 return setup
         raise KeyError(f"Dataset setup not registered: {identifier}")
+
+    @property
+    def family_assignments(self) -> FamilyAssignments | None:
+        family_map = self.field_schema.label_fields.family_map
+        if not family_map:
+            return None
+        return FamilyAssignments(
+            mapping=tuple((ClientId(k), v) for k, v in family_map.items())
+        )

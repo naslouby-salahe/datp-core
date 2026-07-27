@@ -216,7 +216,7 @@ class CommunicationFieldIdentifier(StrEnum):
     MEAN_ERROR = "mean_error_float64"
     STD_ERROR = "std_error_float64"
     SKEW_ERROR = "skew_error_float64"
-    P95_ERROR = "p95_error_float64"
+    QUANTILE_ERROR = "quantile_error_float64"
     CLUSTER_IDENTIFIER = "cluster_identifier_uint32"
     CLUSTER_THRESHOLD = "cluster_threshold_float64"
     BENIGN_CALIBRATION_COUNT = "benign_calibration_count_uint64"

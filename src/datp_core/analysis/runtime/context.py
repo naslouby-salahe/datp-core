@@ -22,7 +22,7 @@ from datp_core.evaluation.definitions.metrics import MetricDefinitionsRecord
 from datp_core.experiments import EvaluationSpecRecord, ExperimentRecord
 from datp_core.learning.contracts.seeds import SeedCohortRecord
 from datp_core.pipeline.stages.context import DataContext, EvaluationContext, TrainingContext
-from datp_core.thresholding import ThresholdPolicyRecord
+from datp_core.thresholding.policies import ThresholdPolicyRecord
 
 
 class AnalysisExecutionContext(BaseModel):

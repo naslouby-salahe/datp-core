@@ -9,7 +9,6 @@ from pydantic import ValidationError
 
 from datp_core.config.authored.datasets import DatasetFieldSchemaConfig, MulticlassLabelConfig
 from datp_core.config.authored.experiments import SweepVariableConfig
-from datp_core.config.authored.protocols import LocalQuantileThresholdPolicyConfig
 from datp_core.config.loading import ConfigurationError
 from datp_core.config.project import resolve_project_configuration
 from datp_core.core.identifiers import DatasetId, ExperimentId
@@ -23,20 +22,6 @@ def test_multiclass_label_is_a_strict_typed_model_not_an_untyped_dict() -> None:
 
     with pytest.raises(ValidationError, match="extra_forbidden"):
         MulticlassLabelConfig.model_validate({"column": "Label", "unexpected": "x"})
-
-
-def test_quantile_estimator_is_required_not_defaulted() -> None:
-    with pytest.raises(ValidationError):
-        LocalQuantileThresholdPolicyConfig.model_validate(
-            {
-                "policy": "local_threshold",
-                "quantile": 0.95,
-                "aggregation_scope": "per_client",
-                "aggregation_formula": "identity",
-                "sample_weighting": "none",
-                "threshold_ownership": "local",
-            }
-        )
 
 
 def test_header_required_is_required_not_defaulted() -> None:
@@ -71,7 +56,7 @@ def test_list_of_string_sweep_values_are_retained_losslessly_not_dropped() -> No
     assert isinstance(subset_sweep, ValueSweepRecord)
     assert len(subset_sweep.values) == 4
     assert ("mean_error",) in subset_sweep.values
-    assert ("mean_error", "std_error", "skew_error", "p95_error") in subset_sweep.values
+    assert ("mean_error", "std_error", "skew_error", "quantile_error") in subset_sweep.values
 
 
 def test_condition_shaped_sweep_is_resolved_not_dropped() -> None:

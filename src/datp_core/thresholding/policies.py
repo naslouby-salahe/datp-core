@@ -40,6 +40,7 @@ class ClusterPolicy(FrozenPolicyModel):
     cluster_count: int = Field(ge=2)
     aggregation: ClusterAggregation
     fingerprint_features: tuple[FingerprintFeature, ...] = Field(min_length=1)
+    fingerprint_quantile: float = Field(gt=0.0, lt=1.0)
     kmeans_random_seed: int
     kmeans_initialization_runs: int = Field(ge=1)
     kmeans_maximum_iterations: int = Field(ge=1)
@@ -61,15 +62,11 @@ class ConformalPolicy(FrozenPolicyModel):
 
 
 class FixedShrinkagePolicy(FrozenPolicyModel):
-    """Local-global shrinkage with a fixed lambda weight.
-
-    shrinkage_weight may be None when the policy is a sweep target;
-    it must be resolved before reaching the threshold engine.
-    """
+    """Local-global shrinkage with a fixed lambda weight."""
 
     kind: Literal[ThresholdPolicyKind.SHRINKAGE]
     quantile: float = Field(gt=0.0, lt=1.0)
-    shrinkage_weight: float | None = None
+    shrinkage_weight: float = Field(ge=0.0, le=1.0)
 
 
 class CalibrationFallbackPolicy(FrozenPolicyModel):
@@ -104,15 +101,11 @@ class FederatedMatchedPolicy(FrozenPolicyModel):
 
 
 class FederatedFixedPolicy(FrozenPolicyModel):
-    """Fixed-coefficient federated threshold: τ = μ + k · σ.
-
-    fixed_coefficient may be None when the policy is a sweep target;
-    it must be resolved before reaching the threshold engine.
-    """
+    """Fixed-coefficient federated threshold: tau = mu + k * sigma."""
 
     kind: Literal[ThresholdPolicyKind.FEDERATED_FIXED]
     quantile: float = Field(gt=0.0, lt=1.0)
-    fixed_coefficient: float | None = None
+    fixed_coefficient: float
 
 
 def _is_integer_within_tolerance(value: float, *, tolerance: float = 1e-9) -> bool:

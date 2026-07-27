@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import pytest
@@ -98,3 +99,49 @@ def test_safetensors_direct_api_uses_store_checksum_validation(tmp_path: Path) -
     loaded = load_model_safetensors_from_store("models/checkpoint.safetensors", store=store, expected_checksum=checksum)
 
     assert torch.equal(loaded["weight"], torch.tensor([1.0, 2.0]))
+
+
+def test_write_bytes_batch_writes_all_and_returns_checksums(tmp_path: Path) -> None:
+    store = ArtifactStore(tmp_path)
+    payloads = {
+        "metrics/train.json": b'{"loss": 0.5}',
+        "metrics/eval.json": b'{"accuracy": 0.95}',
+    }
+    checksums = store.write_bytes_batch(payloads)
+
+    assert (tmp_path / "metrics" / "train.json").exists()
+    assert (tmp_path / "metrics" / "eval.json").exists()
+    assert store.read_bytes("metrics/train.json") == b'{"loss": 0.5}'
+    assert store.read_bytes("metrics/eval.json") == b'{"accuracy": 0.95}'
+    assert set(checksums.keys()) == {"metrics/train.json", "metrics/eval.json"}
+    store.validate_file("metrics/train.json", checksums["metrics/train.json"])
+    store.validate_file("metrics/eval.json", checksums["metrics/eval.json"])
+
+
+def test_write_bytes_batch_failure_cleans_up_no_partial_output(tmp_path: Path) -> None:
+    store = ArtifactStore(tmp_path)
+
+    blocked = tmp_path / "blocked"
+    blocked.mkdir()
+    os.chmod(blocked, 0o555)  # read+execute, no write — blocks file creation
+    try:
+        with pytest.raises(OSError):
+            store.write_bytes_batch({
+                "ok/file_a.bin": b"data a",
+                "blocked/file_b.bin": b"data b",
+            })
+
+        assert not (tmp_path / "ok" / "file_a.bin").exists()
+        assert not (tmp_path / "blocked" / "file_b.bin").exists()
+    finally:
+        os.chmod(blocked, 0o755)
+
+
+def test_write_bytes_batch_rejects_existing(tmp_path: Path) -> None:
+    store = ArtifactStore(tmp_path)
+    store.write_bytes_atomic("existing.bin", b"original")
+
+    with pytest.raises(ArtifactFileExistsError):
+        store.write_bytes_batch({"existing.bin": b"overwrite"})
+
+    assert store.read_bytes("existing.bin") == b"original"

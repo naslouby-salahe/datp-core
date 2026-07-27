@@ -7,9 +7,11 @@ file unless it makes the replacement explicit.
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 
-from datp_core.artifacts.atomic import atomic_copy_file, atomic_write_bytes
+from datp_core.artifacts.atomic import atomic_copy_file, atomic_write_bytes, fsync_directory
 from datp_core.artifacts.errors import (
     ArtifactChecksumMismatchError,
     ArtifactFileExistsError,
@@ -43,6 +45,53 @@ class ArtifactStore:
         self._reject_existing(target, replace)
         atomic_copy_file(target, source, prefix=".tmp_artifact_")
         return compute_file_checksum(target)
+
+    def write_bytes_batch(
+        self, payloads: dict[str, bytes], *, replace: bool = False
+    ) -> dict[str, Checksum]:
+        """Atomically batch-write multiple artifact files.
+
+        Writes every payload to a temporary file, then promotes all
+        temporaries to their target paths via os.replace.  If any write
+        fails, all temporaries are cleaned up before the error propagates.
+        """
+        temps: dict[str, Path] = {}
+        targets: dict[str, Path] = {}
+        try:
+            for relative_path, payload in payloads.items():
+                target = self._target(relative_path, create_parent=True)
+                self._reject_existing(target, replace)
+                targets[relative_path] = target
+                with NamedTemporaryFile(
+                    mode="wb", dir=target.parent, prefix=".tmp_batch_", delete=False
+                ) as tmp:
+                    temps[relative_path] = Path(tmp.name)
+                    tmp.write(payload)
+                    tmp.flush()
+                    os.fsync(tmp.fileno())
+        except BaseException:
+            for temp in temps.values():
+                temp.unlink(missing_ok=True)
+            raise
+
+        try:
+            for relative_path in payloads:
+                os.replace(temps[relative_path], targets[relative_path])
+            fsynced: set[Path] = set()
+            for relative_path in payloads:
+                parent = targets[relative_path].parent
+                if parent not in fsynced:
+                    fsynced.add(parent)
+                    fsync_directory(parent)
+        except BaseException:
+            for temp in temps.values():
+                temp.unlink(missing_ok=True)
+            raise
+
+        return {
+            relative_path: compute_file_checksum(targets[relative_path])
+            for relative_path in payloads
+        }
 
     def read_bytes(self, relative_path: str) -> bytes:
         target = self._target(relative_path, create_parent=False)

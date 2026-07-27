@@ -5,6 +5,17 @@ from __future__ import annotations
 from enum import StrEnum
 
 
+class ThresholdDiagnosticsKind(StrEnum):
+    """Every implemented threshold diagnostics variant."""
+
+    CLUSTER = "cluster"
+    CONFORMAL = "conformal"
+    SHRINKAGE = "shrinkage"
+    CALIBRATION_FALLBACK = "calibration_fallback"
+    FEDERATED_MATCHED = "federated_matched"
+    FEDERATED_FIXED = "federated_fixed"
+
+
 class ThresholdPolicyKind(StrEnum):
     """Every implemented threshold construction strategy."""
 
@@ -39,12 +50,8 @@ class FingerprintFeature(StrEnum):
     MEAN_ERROR = "mean_error"
     STD_ERROR = "std_error"
     SKEW_ERROR = "skew_error"
-    P95_ERROR = "p95_error"
+    QUANTILE_ERROR = "quantile_error"
 
 
-class CalibrationSelectionStrategy(StrEnum):
-    DETERMINISTIC_WITHOUT_REPLACEMENT = "deterministic_without_replacement"
-
-
-class CalibrationNestingPolicy(StrEnum):
-    NESTED_BY_SIZE = "nested_by_size"
+class TieBreakRule(StrEnum):
+    SELECT_HIGHEST_COEFFICIENT = "select_highest_coefficient"

@@ -4,13 +4,20 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 
 from datp_core.core.identifiers import ClientId, PopulationId, ThresholdPolicyId
 from datp_core.core.numbers import Probability
-from datp_core.thresholding.enums import ClusterAggregation, ThresholdPolicyKind, ThresholdScope
+from datp_core.thresholding.enums import (
+    ClusterAggregation,
+    FingerprintFeature,
+    ThresholdDiagnosticsKind,
+    ThresholdPolicyKind,
+    ThresholdScope,
+    TieBreakRule,
+)
 
 if TYPE_CHECKING:
     from datp_core.thresholding.policies import (
@@ -22,9 +29,6 @@ if TYPE_CHECKING:
         FixedShrinkagePolicy,
         QuantilePolicy,
     )
-
-
-# ── Exceptions ──────────────────────────────────────────────────────────────
 
 
 class ThresholdingError(Exception):
@@ -59,9 +63,6 @@ class ThresholdArtifactError(ThresholdingError):
     """Threshold artifact is invalid or missing required data."""
 
 
-# ── Calibration domain types ───────────────────────────────────────────────
-
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BenignCalibrationScores:
     """Benign-only calibration scores for one eligible client."""
@@ -88,30 +89,18 @@ class CalibrationSampleRequest:
     training_seed: int
     selection_seed: int
     replicate: int
-    namespace_key: str
+    namespace_key: str  # canonical boundary type — config's SeedNamespaceRecord.key
     digest_bytes: int
 
     def __post_init__(self) -> None:
         if self.requested_sample_count < 1:
-            raise ValueError("Requested sample count must be positive")
+            raise ThresholdConfigurationError("Requested sample count must be positive")
         if self.replicate < 0:
-            raise ValueError("Replicate must be non-negative")
+            raise ThresholdConfigurationError("Replicate must be non-negative")
         if self.digest_bytes < 1:
-            raise ValueError("Digest bytes must be positive")
+            raise ThresholdConfigurationError("Digest bytes must be positive")
         if not self.namespace_key:
-            raise ValueError("Namespace key must be non-empty")
-
-
-@dataclass(frozen=True, slots=True, kw_only=True)
-class CalibrationSampleResult:
-    """Result of deterministic calibration subsampling."""
-
-    sampled_scores: tuple[BenignCalibrationScores, ...]
-    sample_count: int
-    replicate: int
-
-
-# ── Family assignments ─────────────────────────────────────────────────────
+            raise ThresholdConfigurationError("Namespace key must be non-empty")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -122,15 +111,20 @@ class FamilyAssignments:
 
     def __post_init__(self) -> None:
         if len(self.mapping) == 0:
-            raise ValueError("Family assignments must be non-empty")
+            raise ThresholdConfigurationError("Family assignments must be non-empty")
+        seen_clients: set[ClientId] = set()
         families: set[str] = set()
-        for _, family in self.mapping:
+        for client_id, family in self.mapping:
+            if client_id in seen_clients:
+                raise ThresholdConfigurationError(f"Duplicate client ID in family assignments: {client_id}")
+            seen_clients.add(client_id)
+            if not family.strip():
+                raise ThresholdConfigurationError(f"Family label for client {client_id} must not be blank")
             families.add(family)
         if len(families) < 1:
-            raise ValueError("At least one distinct family label is required")
-
-
-# ── Threshold records and sets ─────────────────────────────────────────────
+            raise ThresholdConfigurationError("At least one distinct family label is required")
+        sorted_mapping = tuple(sorted(self.mapping, key=lambda x: x[0].value))
+        object.__setattr__(self, "mapping", sorted_mapping)
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -155,95 +149,167 @@ class ThresholdRecord:
         if self.cluster_label is not None and self.cluster_label < 0:
             raise ThresholdingError("Cluster label must be non-negative")
 
+        if self.effective_lambda is not None:
+            if not math.isfinite(self.effective_lambda):
+                raise InvalidThresholdPolicyError("Effective lambda must be finite")
+            if not 0.0 <= self.effective_lambda <= 1.0:
+                raise InvalidThresholdPolicyError("Effective lambda must be in [0.0, 1.0]")
+            if self.policy_kind not in {
+                ThresholdPolicyKind.SHRINKAGE,
+                ThresholdPolicyKind.CALIBRATION_FALLBACK,
+            }:
+                raise InvalidThresholdPolicyError(f"Effective lambda is not allowed for policy kind {self.policy_kind}")
 
-# ── Diagnostics — typed discriminated union ────────────────────────────────
+        if self.policy_kind in {
+            ThresholdPolicyKind.SHARED_MEAN,
+            ThresholdPolicyKind.SHARED_POOLED,
+            ThresholdPolicyKind.SHARED_WEIGHTED,
+            ThresholdPolicyKind.FEDERATED_MATCHED,
+            ThresholdPolicyKind.FEDERATED_FIXED,
+        }:
+            if self.scope is not ThresholdScope.SHARED:
+                raise InvalidThresholdPolicyError(f"Policy {self.policy_kind} requires SHARED scope, got {self.scope}")
+            if self.cluster_label is not None:
+                raise InvalidThresholdPolicyError(f"Policy {self.policy_kind} must not have a cluster_label")
+            if self.finite_sample_rank is not None:
+                raise InvalidThresholdPolicyError(f"Policy {self.policy_kind} must not have a finite_sample_rank")
+        elif self.policy_kind is ThresholdPolicyKind.LOCAL_QUANTILE:
+            if self.scope is not ThresholdScope.CLIENT:
+                raise InvalidThresholdPolicyError(f"LOCAL_QUANTILE policy requires CLIENT scope, got {self.scope}")
+            if self.cluster_label is not None:
+                raise InvalidThresholdPolicyError("LOCAL_QUANTILE must not have a cluster_label")
+            if self.finite_sample_rank is not None:
+                raise InvalidThresholdPolicyError("LOCAL_QUANTILE must not have a finite_sample_rank")
+        elif self.policy_kind is ThresholdPolicyKind.FAMILY_MEAN:
+            if self.scope is not ThresholdScope.FAMILY:
+                raise InvalidThresholdPolicyError(f"FAMILY_MEAN policy requires FAMILY scope, got {self.scope}")
+            if self.cluster_label is not None:
+                raise InvalidThresholdPolicyError("FAMILY_MEAN must not have a cluster_label")
+            if self.finite_sample_rank is not None:
+                raise InvalidThresholdPolicyError("FAMILY_MEAN must not have a finite_sample_rank")
+        elif self.policy_kind is ThresholdPolicyKind.CLUSTER:
+            if self.scope is not ThresholdScope.CLUSTER:
+                raise InvalidThresholdPolicyError(f"CLUSTER policy requires CLUSTER scope, got {self.scope}")
+            if self.cluster_label is None:
+                raise InvalidThresholdPolicyError("CLUSTER policy requires a cluster_label")
+            if self.finite_sample_rank is not None:
+                raise InvalidThresholdPolicyError("CLUSTER must not have a finite_sample_rank")
+        elif self.policy_kind is ThresholdPolicyKind.CONFORMAL:
+            if self.scope is not ThresholdScope.CLIENT:
+                raise InvalidThresholdPolicyError(f"CONFORMAL policy requires CLIENT scope, got {self.scope}")
+            if self.cluster_label is not None:
+                raise InvalidThresholdPolicyError("CONFORMAL must not have a cluster_label")
+            if self.finite_sample_rank is None:
+                raise InvalidThresholdPolicyError("CONFORMAL policy requires a finite_sample_rank")
+        elif self.policy_kind in {
+            ThresholdPolicyKind.SHRINKAGE,
+            ThresholdPolicyKind.CALIBRATION_FALLBACK,
+        }:
+            if self.scope is not ThresholdScope.CLIENT:
+                raise InvalidThresholdPolicyError(f"{self.policy_kind} policy requires CLIENT scope, got {self.scope}")
+            if self.cluster_label is not None:
+                raise InvalidThresholdPolicyError(f"{self.policy_kind} must not have a cluster_label")
+            if self.finite_sample_rank is not None:
+                raise InvalidThresholdPolicyError(f"{self.policy_kind} must not have a finite_sample_rank")
+            if self.effective_lambda is None:
+                raise InvalidThresholdPolicyError(f"{self.policy_kind} policy requires an effective_lambda")
 
 
-class ClusterDiagnostics(BaseModel):
+class FrozenDiagnosticsModel(BaseModel):
+    """Frozen base for all threshold diagnostics models — forbids inf/nan values."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", allow_inf_nan=False)
+
+
+class ClusterDiagnostics(FrozenDiagnosticsModel):
     """Complete cluster assignment diagnostics."""
 
-    model_config = ConfigDict(frozen=True)
-
+    kind: Literal[ThresholdDiagnosticsKind.CLUSTER]
     cluster_count: int
+    eligible_client_count: int
+    unique_fingerprint_row_count: int
     cluster_labels: tuple[tuple[str, int], ...]
     aggregation: ClusterAggregation
-    fingerprint_features: tuple[str, ...]
+    fingerprint_features: tuple[FingerprintFeature, ...]
+    fingerprint_quantile: float
+    kmeans_random_seed: int
+    kmeans_initialization_runs: int
+    kmeans_maximum_iterations: int
+    kmeans_convergence_tolerance: float
+    cluster_members: tuple[tuple[int, tuple[str, ...]], ...]
+    cluster_thresholds: tuple[tuple[int, float], ...]
 
 
-class ConformalDiagnostics(BaseModel):
+class ConformalDiagnostics(FrozenDiagnosticsModel):
     """Per-client conformal rank diagnostics."""
 
-    model_config = ConfigDict(frozen=True)
-
+    kind: Literal[ThresholdDiagnosticsKind.CONFORMAL]
     ranks: tuple[tuple[str, int], ...]
     coverage_alpha: float
 
 
-class ShrinkageDiagnostics(BaseModel):
+class ShrinkageDiagnostics(FrozenDiagnosticsModel):
     """Per-client shrinkage weight diagnostics."""
 
-    model_config = ConfigDict(frozen=True)
-
+    kind: Literal[ThresholdDiagnosticsKind.SHRINKAGE]
     effective_lambdas: tuple[tuple[str, float], ...]
 
 
-class CalibrationFallbackDiagnostics(BaseModel):
+class CalibrationFallbackDiagnostics(FrozenDiagnosticsModel):
     """Per-client calibration-size-aware lambda diagnostics."""
 
-    model_config = ConfigDict(frozen=True)
-
+    kind: Literal[ThresholdDiagnosticsKind.CALIBRATION_FALLBACK]
     effective_lambdas: tuple[tuple[str, float], ...]
     n_half: int
     calibration_counts: tuple[tuple[str, int], ...]
 
 
-class FederatedMatchedDiagnostics(BaseModel):
+class FederatedMatchedDiagnostics(FrozenDiagnosticsModel):
     """Matched-exceedance candidate search diagnostics."""
 
-    model_config = ConfigDict(frozen=True)
-
-    selected_coefficient: float
+    kind: Literal[ThresholdDiagnosticsKind.FEDERATED_MATCHED]
+    matched_coefficient: float
+    target_exceedance: float
     candidate_grid_minimum: float
     candidate_grid_maximum: float
     candidate_grid_step: float
-    pooled_mean: float
-    pooled_standard_deviation: float
     achieved_exceedance: tuple[tuple[float, float], ...]
     tie_set: tuple[float, ...]
-
-
-class FederatedFixedDiagnostics(BaseModel):
-    """Fixed-coefficient federated diagnostics."""
-
-    model_config = ConfigDict(frozen=True)
-
-    coefficient: float
+    tie_rule: TieBreakRule
     pooled_mean: float
     pooled_standard_deviation: float
+    selected_threshold: float
+    selected_deviation: float
+    total_calibration_count: int
 
 
-class CalibrationSamplingDiagnostics(BaseModel):
-    """Calibration subsampling diagnostics."""
+class FederatedFixedDiagnostics(FrozenDiagnosticsModel):
+    """Fixed-coefficient federated diagnostics."""
 
-    model_config = ConfigDict(frozen=True)
+    kind: Literal[ThresholdDiagnosticsKind.FEDERATED_FIXED]
+    fixed_coefficient: float
+    pooled_mean: float
+    pooled_standard_deviation: float
+    selected_threshold: float
+    total_calibration_count: int
 
-    requested_count: int
-    replicate: int
-    client_counts: tuple[tuple[str, int], ...]
 
-
-ThresholdDiagnostics = (
+ThresholdDiagnostics = Annotated[
     ClusterDiagnostics
     | ConformalDiagnostics
     | ShrinkageDiagnostics
     | CalibrationFallbackDiagnostics
     | FederatedMatchedDiagnostics
-    | FederatedFixedDiagnostics
-    | CalibrationSamplingDiagnostics
-)
+    | FederatedFixedDiagnostics,
+    Field(discriminator="kind"),
+]
+
+_diagnostics_adapter = TypeAdapter(ThresholdDiagnostics)
 
 
-# ── ThresholdSet ───────────────────────────────────────────────────────────
+def get_diagnostics_adapter() -> TypeAdapter[ThresholdDiagnostics]:
+    """Return the module-level TypeAdapter for ThresholdDiagnostics."""
+    return _diagnostics_adapter
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -257,14 +323,70 @@ class ThresholdSet:
     target_quantile: Probability
     diagnostics: ThresholdDiagnostics | None = None
 
+    def __post_init__(self) -> None:
+        if len(self.values) == 0:
+            raise ThresholdConfigurationError("Threshold set must contain at least one record")
+
+        seen_client_ids: set[ClientId] = set()
+        for rec in self.values:
+            if rec.client_id in seen_client_ids:
+                raise ThresholdConfigurationError(f"Duplicate client ID in threshold set: {rec.client_id}")
+            seen_client_ids.add(rec.client_id)
+            if rec.policy_kind is not self.policy_kind:
+                raise InvalidThresholdPolicyError(
+                    f"Record policy_kind {rec.policy_kind} does not match set policy_kind {self.policy_kind}"
+                )
+            if rec.scope is not self.scope:
+                raise InvalidThresholdPolicyError(f"Record scope {rec.scope} does not match set scope {self.scope}")
+
+        _kinds_requiring_diagnostics = {
+            ThresholdPolicyKind.CLUSTER,
+            ThresholdPolicyKind.CONFORMAL,
+            ThresholdPolicyKind.SHRINKAGE,
+            ThresholdPolicyKind.CALIBRATION_FALLBACK,
+            ThresholdPolicyKind.FEDERATED_MATCHED,
+            ThresholdPolicyKind.FEDERATED_FIXED,
+        }
+        _kinds_forbidding_diagnostics = {
+            ThresholdPolicyKind.SHARED_MEAN,
+            ThresholdPolicyKind.SHARED_POOLED,
+            ThresholdPolicyKind.SHARED_WEIGHTED,
+            ThresholdPolicyKind.LOCAL_QUANTILE,
+            ThresholdPolicyKind.FAMILY_MEAN,
+        }
+        if self.policy_kind in _kinds_requiring_diagnostics and self.diagnostics is None:
+            raise InvalidThresholdPolicyError(
+                f"Policy kind {self.policy_kind} requires diagnostics but diagnostics is None"
+            )
+        if self.policy_kind in _kinds_forbidding_diagnostics and self.diagnostics is not None:
+            raise InvalidThresholdPolicyError(f"Policy kind {self.policy_kind} must not have diagnostics")
+        if self.diagnostics is not None:
+            _policy_for_diag = {
+                ThresholdDiagnosticsKind.CLUSTER: ThresholdPolicyKind.CLUSTER,
+                ThresholdDiagnosticsKind.CONFORMAL: ThresholdPolicyKind.CONFORMAL,
+                ThresholdDiagnosticsKind.SHRINKAGE: ThresholdPolicyKind.SHRINKAGE,
+                ThresholdDiagnosticsKind.CALIBRATION_FALLBACK: ThresholdPolicyKind.CALIBRATION_FALLBACK,
+                ThresholdDiagnosticsKind.FEDERATED_MATCHED: ThresholdPolicyKind.FEDERATED_MATCHED,
+                ThresholdDiagnosticsKind.FEDERATED_FIXED: ThresholdPolicyKind.FEDERATED_FIXED,
+            }
+            expected_policy = _policy_for_diag.get(self.diagnostics.kind)
+            if expected_policy is None:
+                raise InvalidThresholdPolicyError(
+                    f"Diagnostics kind {self.diagnostics.kind} is not associated with any policy kind"
+                )
+            if expected_policy is not self.policy_kind:
+                raise InvalidThresholdPolicyError(
+                    f"Diagnostics kind {self.diagnostics.kind} is not compatible with policy kind {self.policy_kind}"
+                )
+
+        sorted_values = tuple(sorted(self.values, key=lambda r: r.client_id.value))
+        object.__setattr__(self, "values", sorted_values)
+
     def get_client_threshold(self, client_id: ClientId) -> ThresholdRecord:
         for rec in self.values:
             if rec.client_id == client_id:
                 return rec
         raise KeyError(f"No threshold record for client: {client_id}")
-
-
-# ── Construction request ───────────────────────────────────────────────────
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)

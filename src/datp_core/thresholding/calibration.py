@@ -5,22 +5,20 @@ from __future__ import annotations
 import numpy as np
 import polars as pl
 
-from datp_core.core.identifiers import ClientId
+from datp_core.artifacts.schemas.columns import ScoreColumn
 from datp_core.core.seeding import derive_seed
 from datp_core.thresholding.models import (
     CalibrationSampleRequest,
-    CalibrationSampleResult,
     InsufficientCalibrationError,
+    ThresholdConfigurationError,
 )
-
-_CALIBRATION_COLUMNS: frozenset[str] = frozenset({"client_id", "source_path", "source_row_index", "score"})
 
 
 def subsample_calibration_scores(
     scores: pl.DataFrame,
     *,
     request: CalibrationSampleRequest,
-) -> CalibrationSampleResult:
+) -> pl.DataFrame:
     """Deterministically subsample calibration scores without replacement.
 
     Args:
@@ -28,25 +26,30 @@ def subsample_calibration_scores(
         request: Validated subsample request.
 
     Returns:
-        CalibrationSampleResult with sampled scores per client.
+        Sampled calibration score frame with canonical columns.
 
     Raises:
         InsufficientCalibrationError: When any required client lacks enough rows.
     """
-    missing = _CALIBRATION_COLUMNS - set(scores.columns)
+    expected_calibration_columns: frozenset[str] = frozenset(
+        {
+            ScoreColumn.CLIENT_ID.value,
+            ScoreColumn.SOURCE_PATH.value,
+            ScoreColumn.SOURCE_ROW_INDEX.value,
+            ScoreColumn.SCORE.value,
+        }
+    )
+    missing = expected_calibration_columns - set(scores.columns)
     if missing:
-        raise ValueError(f"Calibration scores lack required columns: {', '.join(sorted(missing))}")
-    ordered = scores.sort("client_id", "source_path", "source_row_index")
-
-    # Collect all required client IDs
-    required_clients: set[str] = set()
-    for client_id in ordered["client_id"].unique().to_list():
-        required_clients.add(str(client_id))
+        raise ThresholdConfigurationError(f"Calibration scores lack required columns: {', '.join(sorted(missing))}")
+    ordered = scores.sort(
+        ScoreColumn.CLIENT_ID.value, ScoreColumn.SOURCE_PATH.value, ScoreColumn.SOURCE_ROW_INDEX.value
+    )
 
     # Check every required client has enough rows
     insufficient: list[tuple[str, int, int]] = []
     samples: list[pl.DataFrame] = []
-    for client, client_scores in ordered.group_by("client_id", maintain_order=True):
+    for client, client_scores in ordered.group_by(ScoreColumn.CLIENT_ID.value, maintain_order=True):
         client_str = str(client[0])
         available = client_scores.height
         if available < request.requested_sample_count:
@@ -61,7 +64,11 @@ def subsample_calibration_scores(
             replicate=request.replicate,
         )
         positions = np.random.default_rng(seed).permutation(available)[: request.requested_sample_count]
-        samples.append(client_scores.gather(pl.Series(positions)).sort("source_path", "source_row_index"))
+        samples.append(
+            client_scores.gather(pl.Series(positions)).sort(
+                ScoreColumn.SOURCE_PATH.value, ScoreColumn.SOURCE_ROW_INDEX.value
+            )
+        )
 
     if insufficient:
         detail = "; ".join(f"client '{cid}' has {avail} rows, needs {need}" for cid, avail, need in insufficient)
@@ -76,20 +83,8 @@ def subsample_calibration_scores(
             f"for replicate {request.replicate}"
         )
 
-    result_frame = pl.concat(samples).sort("client_id", "source_path", "source_row_index")
-    sampled_scores: list = []
-    for client_id_str, rows in result_frame.group_by("client_id", maintain_order=True):
-        sampled_scores.append(
-            (
-                ClientId(str(client_id_str[0])),
-                tuple(float(v) for v in rows["score"].to_list()),
-            )
-        )
-
-    return CalibrationSampleResult(
-        sampled_scores=tuple(sampled_scores),
-        sample_count=request.requested_sample_count,
-        replicate=request.replicate,
+    return pl.concat(samples).sort(
+        ScoreColumn.CLIENT_ID.value, ScoreColumn.SOURCE_PATH.value, ScoreColumn.SOURCE_ROW_INDEX.value
     )
 
 

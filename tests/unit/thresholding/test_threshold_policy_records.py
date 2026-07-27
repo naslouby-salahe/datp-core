@@ -5,9 +5,16 @@ from __future__ import annotations
 import pydantic
 import pytest
 
+from datp_core.config.authored.protocols.thresholds import (
+    FederatedFixedCoefficientPolicyConfig,
+    LocalGlobalShrinkagePolicyConfig,
+)
+from datp_core.config.errors import ConfigurationError
 from datp_core.config.project import resolve_project_configuration
+from datp_core.config.resolution.protocols.thresholds import resolve_threshold_policy
 from datp_core.core.identifiers import ThresholdPolicyId
 from datp_core.core.registry import TypedDomainRegistry
+from datp_core.thresholding.enums import ThresholdPolicyKind
 from datp_core.thresholding.policies import (
     CalibrationFallbackPolicy,
     ClusterPolicy,
@@ -130,4 +137,71 @@ def test_federated_fixed_policy_has_fixed_coefficient(resolved_threshold_policie
     record = resolved_threshold_policies.get(ThresholdPolicyId("federated_summary_fixed_k"))
     assert isinstance(record, FederatedFixedPolicy)
     assert record.kind.value == "federated_fixed"
-    # fixed_coefficient may be None when configured as a sweep target
+
+
+# --- None-rejection: Pydantic field type prevents None at construction ---
+
+
+def test_fixed_shrinkage_policy_shrinkage_weight_is_not_optional() -> None:
+    """shrinkage_weight field is typed float, not float | None."""
+    field = FixedShrinkagePolicy.model_fields["shrinkage_weight"]
+    assert field.annotation is float
+
+
+def test_federated_fixed_policy_fixed_coefficient_is_not_optional() -> None:
+    """fixed_coefficient field is typed float, not float | None."""
+    field = FederatedFixedPolicy.model_fields["fixed_coefficient"]
+    assert field.annotation is float
+
+
+# --- None-rejection: Runtime instantiation with None raises ValidationError ---
+
+
+def test_fixed_shrinkage_policy_instantiation_rejects_none() -> None:
+    """Passing shrinkage_weight=None raises pydantic.ValidationError."""
+    with pytest.raises(pydantic.ValidationError):
+        FixedShrinkagePolicy(
+            kind=ThresholdPolicyKind.SHRINKAGE,
+            quantile=0.95,
+            shrinkage_weight=None,
+        )
+
+
+def test_federated_fixed_policy_instantiation_rejects_none() -> None:
+    """Passing fixed_coefficient=None raises pydantic.ValidationError."""
+    with pytest.raises(pydantic.ValidationError):
+        FederatedFixedPolicy(
+            kind=ThresholdPolicyKind.FEDERATED_FIXED,
+            quantile=0.95,
+            fixed_coefficient=None,
+        )
+
+
+# --- None-rejection: Config resolver rejects unresolved sweep values ---
+
+
+def test_resolver_rejects_none_shrinkage_weight() -> None:
+    """resolve_threshold_policy raises ConfigurationError when shrinkage_weight is None."""
+    cfg = LocalGlobalShrinkagePolicyConfig(
+        policy="local_global_shrinkage_threshold",
+        quantile=0.95,
+        shrinkage_weight_grid=[0.1, 0.5, 0.9],
+        shrinkage_weight=None,
+        threshold_ownership="shared",
+    )
+    with pytest.raises(ConfigurationError, match="shrinkage_weight is None"):
+        resolve_threshold_policy(cfg)
+
+
+def test_resolver_rejects_none_fixed_k() -> None:
+    """resolve_threshold_policy raises ConfigurationError when fixed_k is None."""
+    cfg = FederatedFixedCoefficientPolicyConfig(
+        policy="federated_summary_statistic_threshold",
+        mode="fixed_k",
+        quantile=0.95,
+        fixed_k_grid=[1.0, 2.0, 3.0],
+        fixed_k=None,
+        threshold_ownership="shared",
+    )
+    with pytest.raises(ConfigurationError, match="fixed_k is None"):
+        resolve_threshold_policy(cfg)

@@ -14,7 +14,7 @@ def atomic_write_bytes(target: Path, payload: bytes, *, prefix: str = ".tmp_") -
         temp_path = Path(temporary.name)
     try:
         os.replace(temp_path, target)
-        _fsync_directory(target.parent)
+        fsync_directory(target.parent)
     finally:
         if temp_path.exists():
             temp_path.unlink()
@@ -31,13 +31,13 @@ def atomic_copy_file(target: Path, source: Path, *, prefix: str = ".tmp_") -> No
         temp_path = Path(temporary.name)
     try:
         os.replace(temp_path, target)
-        _fsync_directory(target.parent)
+        fsync_directory(target.parent)
     finally:
         if temp_path.exists():
             temp_path.unlink()
 
 
-def _fsync_directory(directory: Path) -> None:
+def fsync_directory(directory: Path) -> None:
     descriptor = os.open(directory, os.O_RDONLY)
     try:
         os.fsync(descriptor)
