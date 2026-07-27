@@ -16,7 +16,7 @@ from datp_core.analysis.runtime.context import AnalysisExecutionContext
 from datp_core.artifacts.schemas.columns import ScoreColumn
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel, PartitionConditionId
 from datp_core.core.seeding import Seed
-from datp_core.evaluation import calculate_pairwise_js_divergence
+from datp_core.evaluation.diagnostics import calculate_pairwise_js_divergence
 from datp_core.experiments import MetricAssociationAnalysisRecord
 
 

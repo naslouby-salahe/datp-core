@@ -17,12 +17,12 @@ from datp_core.analysis.enums import (
 )
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel, MetricId
 from datp_core.core.seeding import Seed
-from datp_core.evaluation.distributions import ClientScoreDistributionRecord, ThresholdTradeoffEntry
+from datp_core.evaluation.models import ClientScoreDistribution, ThresholdTradeoff
 
 
 class ClientDistributionEntry(FrozenModel):
     client_id: ClientId
-    distribution: ClientScoreDistributionRecord
+    distribution: ClientScoreDistribution
 
 
 class EvaluationDistributionResult(FrozenModel):
@@ -45,7 +45,7 @@ class DistributionMechanismRawResult(FrozenModel):
 
 class ClientTradeoffEntry(FrozenModel):
     client_id: ClientId
-    tradeoff: ThresholdTradeoffEntry
+    tradeoff: ThresholdTradeoff
 
 
 class DistributionMechanismTradeoffSeedResult(FrozenModel):

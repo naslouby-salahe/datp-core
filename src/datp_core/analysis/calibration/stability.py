@@ -13,7 +13,7 @@ from datp_core.analysis.errors import InvalidAnalysisConfigurationError
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
 from datp_core.artifacts.schemas.columns import MetricColumn, ScoreColumn, ThresholdColumn
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel
-from datp_core.evaluation import MetricStatus
+from datp_core.evaluation.enums import MetricStatus
 from datp_core.experiments import ThresholdStabilityAnalysisRecord
 
 

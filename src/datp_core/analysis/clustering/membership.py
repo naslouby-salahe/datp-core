@@ -32,7 +32,7 @@ from datp_core.analysis.runtime.context import AnalysisExecutionContext
 from datp_core.artifacts.schemas.columns import MetricColumn, ThresholdColumn
 from datp_core.core.identifiers import AnalysisLabel, ClientId, ClusterLabel, EvaluationLabel
 from datp_core.core.seeding import Seed
-from datp_core.evaluation.metrics.models import MetricStatus
+from datp_core.evaluation.enums import MetricStatus
 from datp_core.experiments import ClusterStabilityAnalysisRecord, ValueSweepRecord
 from datp_core.thresholding.policies import ClusterPolicy
 

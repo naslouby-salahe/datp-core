@@ -15,7 +15,7 @@ from datp_core.config.report_profiles import ReportProfileRecord
 from datp_core.core.identifiers import DatasetId, ExperimentId
 from datp_core.data.contracts.dataset import ResolvedDataset
 from datp_core.data.contracts.eligibility import EligibilityPolicyRecord
-from datp_core.evaluation.definitions.bundles import MetricBundleRecord
+from datp_core.evaluation.specs import MetricBundleSpec
 from datp_core.experiments.catalogue.analyses import AnalysisRecord
 from datp_core.experiments.catalogue.evaluations import EvaluationSpecRecord
 from datp_core.experiments.catalogue.models import ExperimentRecord, PopulationRecord
@@ -36,7 +36,7 @@ class CompiledEvaluation:
     record: EvaluationSpecRecord
     population: PopulationRecord
     threshold_policy: ThresholdPolicyRecord
-    metric_bundle: MetricBundleRecord
+    metric_bundle: MetricBundleSpec
 
 
 @dataclass(frozen=True, slots=True)

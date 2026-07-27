@@ -16,7 +16,7 @@ from datp_core.analysis.errors import ScientificContractViolationError
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
 from datp_core.artifacts.schemas.columns import ScoreColumn, ThresholdColumn
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel
-from datp_core.evaluation.distributions import calibration_variance_terms
+from datp_core.evaluation.diagnostics import calculate_calibration_variance
 from datp_core.experiments import QuantileEstimationAnalysisRecord
 
 
@@ -121,8 +121,8 @@ def analyze_quantile_estimation(
                     )
                 )
 
-            # Keep existing variance terms call
-            variance_terms = calibration_variance_terms(calibration)
+            ddof = context.metric_definitions.cross_client_aggregation.standard_deviation_ddof
+            variance_terms = calculate_calibration_variance(calibration, ddof=ddof)
             evaluation_results.append(
                 QuantileEstimationEvaluationResult(
                     evaluation_label=label,

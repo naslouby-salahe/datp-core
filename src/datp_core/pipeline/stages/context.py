@@ -13,6 +13,7 @@ from dataclasses import dataclass
 
 from datp_core.analysis.contracts import PrerequisiteExperimentResult
 from datp_core.core.identifiers import ExperimentId, PopulationId, ThresholdPolicyId
+from datp_core.evaluation.enums import MissingThresholdPolicy
 from datp_core.experiments.catalogue.evaluations import RecalibrationMode
 
 
@@ -53,6 +54,7 @@ class EvaluationContext(TrainingContext):
     fingerprint_features: tuple[str, ...] | None = None
     calibration_sample_count: int | None = None
     calibration_replicate: int | None = None
+    missing_threshold_policy: MissingThresholdPolicy = MissingThresholdPolicy.FAIL
     recalibration_mode: RecalibrationMode | None = None
 
     def __post_init__(self) -> None:

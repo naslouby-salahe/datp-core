@@ -46,11 +46,11 @@ def distribution_seed_result(
         metric_frame = context.artifacts.client_metrics(eval_ctx)
         score_frame = context.artifacts.test_scores(score_ctx)
 
-        dist_dict = client_score_distributions(
-            threshold_frame, metric_frame, score_frame, client_id.value if client_id is not None else None
+        distributions = client_score_distributions(
+            threshold_frame, metric_frame, score_frame, client_id
         )
         entries = tuple(
-            ClientDistributionEntry(client_id=ClientId(cid), distribution=dist) for cid, dist in dist_dict.items()
+            ClientDistributionEntry(client_id=d.client_id, distribution=d) for d in distributions
         )
         eval_results.append(EvaluationDistributionResult(evaluation_label=label, clients=entries))
 
@@ -88,14 +88,11 @@ def analyze_distribution_mechanism(
 
     tradeoff_seeds: list[DistributionMechanismTradeoffSeedResult] = []
     for res in seed_results:
-        baseline_dist = {entry.client_id: entry.distribution for entry in res.evaluations[0].clients}
-        shifted_dist = {entry.client_id: entry.distribution for entry in res.evaluations[1].clients}
-        tradeoff_map = threshold_tradeoff(
-            {cid.value: dist for cid, dist in baseline_dist.items()},
-            {cid.value: dist for cid, dist in shifted_dist.items()},
-        )
+        baseline_dist = tuple(entry.distribution for entry in res.evaluations[0].clients)
+        shifted_dist = tuple(entry.distribution for entry in res.evaluations[1].clients)
+        tradeoff_map = threshold_tradeoff(baseline_dist, shifted_dist)
         entries = tuple(
-            ClientTradeoffEntry(client_id=ClientId(cid), tradeoff=tradeoff) for cid, tradeoff in tradeoff_map.items()
+            ClientTradeoffEntry(client_id=t.client_id, tradeoff=t) for t in tradeoff_map
         )
         tradeoff_seeds.append(DistributionMechanismTradeoffSeedResult(seed=res.seed, per_client_tradeoff=entries))
 

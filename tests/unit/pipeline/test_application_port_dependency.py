@@ -13,7 +13,7 @@ _STAGE_FILES = {
     "learning/training/handler.py",
     "learning/scoring/handler.py",
     "thresholding/stages.py",
-    "evaluation/execution/handler.py",
+    "evaluation/stage.py",
     "pipeline/stages/analysis.py",
     "reporting/execution/freeze_handler.py",
     "reporting/execution/report_handler.py",

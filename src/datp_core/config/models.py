@@ -29,10 +29,10 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.contracts import EligibilityPolicyRecord, NormalizationStrategyRecord, ResolvedDataset
-from datp_core.evaluation import (
-    EvaluationResultContractRecord,
-    MetricBundleRecord,
-    MetricDefinitionsRecord,
+from datp_core.evaluation.specs import (
+    EvaluationResultContract,
+    MetricBundleSpec,
+    MetricDefinitions,
 )
 from datp_core.experiments import (
     EligibilityGateRecord,
@@ -74,8 +74,8 @@ class ResolvedProjectConfiguration(BaseModel):
     batching_profiles: TypedDomainRegistry[str, BatchingRecord]
     eligibility_policies: TypedDomainRegistry[EligibilityPolicyId, EligibilityPolicyRecord]
     normalization_strategies: TypedDomainRegistry[NormalizationStrategyId, NormalizationStrategyRecord]
-    metric_bundles: TypedDomainRegistry[MetricBundleId, MetricBundleRecord]
-    metric_definitions: MetricDefinitionsRecord
+    metric_bundles: TypedDomainRegistry[MetricBundleId, MetricBundleSpec]
+    metric_definitions: MetricDefinitions
     communication_estimation_contract: CommunicationEstimationContractRecord
     operational_inputs: OperationalInputsRecord
     report_profiles: TypedDomainRegistry[str, ReportProfileRecord]
@@ -85,7 +85,7 @@ class ResolvedProjectConfiguration(BaseModel):
     normalization_leakage_rule: str
     nested_replicate_policy: NestedReplicatePolicyRecord
     result_types: TypedDomainRegistry[str, ResultTypeRecord]
-    evaluation_result_contract: EvaluationResultContractRecord
+    evaluation_result_contract: EvaluationResultContract
     report_defaults: ReportDefaultsRecord
     runtime: ResolvedRuntimeConfiguration
     paths: ResolvedProjectPaths

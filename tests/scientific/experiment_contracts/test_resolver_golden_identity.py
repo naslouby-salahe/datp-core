@@ -11,20 +11,15 @@ from datp_core.core.identifiers import DatasetId
 
 
 def test_scientific_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
-    # Golden hash updated after adding `expected_metric`, `expected_first_threshold_policy`, and
-    # `expected_second_threshold_policy` to the `anchor_equivalence` analysis config, so
-    # `verified_configuration_and_provenance` can be derived from the reproduced result's actual
-    # metric/comparator identity instead of a hardcoded `True` (see
-    # `analysis/validation/anchor_equivalence.py`). These are real new scientific values, so the
-    # fingerprint is expected to change.
-    # Fingerprints updated 2026-07-27: Pydantic v2 model_dump replaces attrs asdict
+    # Updated 2026-07-27: enum-typed spec fields (MetricUnit, MetricDirection, etc.)
+    # change the scientific fingerprint.
     assert _resolved.scientific_fingerprint.value == (
-        "37ef02f2c28dddcbb1d01ccb2bac0824142864b06f2d6154d96d3ac4aa9b9b91"
+        "5258f5cb2cacebce7d00b92634ee84937487eb980aa0e0d96a19564b74354e8e"
     )
 
 
 def test_execution_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
-    assert _resolved.execution_fingerprint.value == ("63ad1a272c3dde0ee986a061b9c52664c050dfd0010f3b11a91ebb3ab3dd72c8")
+    assert _resolved.execution_fingerprint.value == ("a3e494439d1d9555b18e2476e7c959fe60bfaa7692de14c790f7357535b6855e")
 
 
 def test_registry_cardinality(_resolved: ResolvedProjectConfiguration) -> None:

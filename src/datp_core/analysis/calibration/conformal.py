@@ -22,7 +22,7 @@ from datp_core.analysis.statistics.descriptive import ratio_of_totals
 from datp_core.artifacts.schemas.columns import MetricColumn, ScoreColumn, ThresholdColumn
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel
 from datp_core.core.seeding import Seed
-from datp_core.evaluation import MetricStatus
+from datp_core.evaluation.enums import MetricStatus
 from datp_core.experiments import ConformalCoverageAnalysisRecord
 from datp_core.thresholding.policies import ConformalPolicy
 

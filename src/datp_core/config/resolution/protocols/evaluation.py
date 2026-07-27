@@ -12,7 +12,7 @@ from datp_core.config.statistical_profiles import NestedReplicatePolicyRecord
 from datp_core.core.identifiers import EligibilityPolicyId
 from datp_core.core.numbers import PositiveInt
 from datp_core.data.contracts import EligibilityFallbackRecord, EligibilityPolicyRecord
-from datp_core.evaluation.definitions import EvaluationResultContractRecord
+from datp_core.evaluation.specs import EvaluationResultContract
 from datp_core.experiments import ResultTypeRecord
 
 
@@ -58,8 +58,8 @@ def resolve_result_type(identifier: str, cfg: ResultTypeConfig) -> ResultTypeRec
     return ResultTypeRecord(identifier=identifier, permitted_evidence_roles=tuple(cfg.permitted_evidence_roles))
 
 
-def resolve_evaluation_result_contract(cfg: EvaluationResultContractConfig) -> EvaluationResultContractRecord:
-    return EvaluationResultContractRecord(
+def resolve_evaluation_result_contract(cfg: EvaluationResultContractConfig) -> EvaluationResultContract:
+    return EvaluationResultContract(
         per_evaluation_result_type=cfg.per_evaluation_result_type,
         per_evaluation_eligibility_result_type=cfg.per_evaluation_eligibility_result_type,
         per_evaluation_required_records=tuple(cfg.per_evaluation_required_records),

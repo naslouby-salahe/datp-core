@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 
-from datp_core.evaluation.metrics.models import MetricStatus
+from datp_core.evaluation.enums import MetricStatus
 from datp_core.experiments import ExperimentRecord
 from datp_core.reporting.freezing.errors import ResultFreezeError
 

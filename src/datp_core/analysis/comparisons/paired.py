@@ -18,7 +18,8 @@ from datp_core.analysis.runtime.context import AnalysisExecutionContext
 from datp_core.artifacts.schemas.columns import MetricColumn
 from datp_core.core.identifiers import AnalysisLabel, EvaluationLabel, MetricId
 from datp_core.core.seeding import Seed
-from datp_core.evaluation import MetricStatus, calculate_fpr_dispersion
+from datp_core.evaluation.enums import MetricStatus
+from datp_core.evaluation.diagnostics import calculate_fpr_dispersion
 from datp_core.experiments import PairedThresholdAnalysisRecord
 
 
@@ -195,7 +196,10 @@ def _read_cv_fpr_metric(
             MetricColumn.FALSE_POSITIVE_RATE.value
         ].to_list()
     )
-    dispersion = calculate_fpr_dispersion(fprs, cv_instability_threshold=instability_factor * (1.0 - quantile))
+    ddof = context.metric_definitions.cross_client_aggregation.standard_deviation_ddof
+    dispersion = calculate_fpr_dispersion(
+        fprs, cv_instability_threshold=instability_factor * (1.0 - quantile), ddof=ddof
+    )
     if dispersion.coefficient_of_variation.status is not MetricStatus.AVAILABLE:
         raise StatisticalProcedureError(
             f"Configured CV(FPR) is unavailable for paired statistical analysis: "

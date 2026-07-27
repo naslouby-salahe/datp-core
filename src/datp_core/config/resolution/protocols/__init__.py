@@ -50,10 +50,10 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.contracts import EligibilityPolicyRecord, NormalizationStrategyRecord
-from datp_core.evaluation import (
-    EvaluationResultContractRecord,
-    MetricBundleRecord,
-    MetricDefinitionsRecord,
+from datp_core.evaluation.specs import (
+    EvaluationResultContract,
+    MetricBundleSpec,
+    MetricDefinitions,
 )
 from datp_core.experiments import ResultTypeRecord
 from datp_core.learning.contracts.architecture import ModelArchitectureRecord
@@ -64,9 +64,9 @@ from datp_core.learning.contracts.training import TrainingProfileRecord
 from datp_core.thresholding.policies import ThresholdPolicyRecord
 
 
-def _resolve_metric_bundles(authored: AuthoredProtocolsConfig) -> dict[MetricBundleId, MetricBundleRecord]:
+def _resolve_metric_bundles(authored: AuthoredProtocolsConfig) -> dict[MetricBundleId, MetricBundleSpec]:
     return {
-        MetricBundleId(k): MetricBundleRecord(
+        MetricBundleId(k): MetricBundleSpec(
             identifier=MetricBundleId(k),
             metrics=tuple(v.metrics),
             cross_client_aggregation=v.cross_client_aggregation,
@@ -93,9 +93,9 @@ class ResolvedProtocols(BaseModel):
     batching_profiles: TypedDomainRegistry[str, BatchingRecord]
     eligibility_policies: TypedDomainRegistry[EligibilityPolicyId, EligibilityPolicyRecord]
     normalization_strategies: TypedDomainRegistry[NormalizationStrategyId, NormalizationStrategyRecord]
-    metric_bundles: TypedDomainRegistry[MetricBundleId, MetricBundleRecord]
+    metric_bundles: TypedDomainRegistry[MetricBundleId, MetricBundleSpec]
     report_profiles: TypedDomainRegistry[str, ReportProfileRecord]
-    metric_definitions: MetricDefinitionsRecord
+    metric_definitions: MetricDefinitions
     communication_estimation_contract: CommunicationEstimationContractRecord
     operational_inputs: OperationalInputsRecord
     communication_estimation: dict[str, object] | None
@@ -104,7 +104,7 @@ class ResolvedProtocols(BaseModel):
     normalization_leakage_rule: str
     nested_replicate_policy: NestedReplicatePolicyRecord
     result_types: TypedDomainRegistry[str, ResultTypeRecord]
-    evaluation_result_contract: EvaluationResultContractRecord
+    evaluation_result_contract: EvaluationResultContract
     report_defaults: ReportDefaultsRecord
 
 

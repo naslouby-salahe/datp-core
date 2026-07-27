@@ -48,7 +48,7 @@ from datp_core.data.materialization import (
     DatasetMaterializationStageHandler,
 )
 from datp_core.data.readiness import AuditDatasetUseCase
-from datp_core.evaluation.execution import OperatingPointEvaluationStageHandler
+from datp_core.evaluation.stage import OperatingPointEvaluationStageHandler
 from datp_core.experiments.catalogue.analyses import AnalysisKind
 from datp_core.experiments.execution import (
     CampaignRunner,
