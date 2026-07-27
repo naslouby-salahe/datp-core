@@ -17,18 +17,9 @@ from datp_core.experiments import (
     ValueSweepRecord,
 )
 from datp_core.learning.contracts.enums import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
-from datp_core.thresholding.policies.clustering import ClusterThresholdPolicyRecord
-from datp_core.thresholding.policies.grouped import FamilyMeanThresholdPolicyRecord
-from datp_core.thresholding.policies.shared import (
-    CentralizedPooledThresholdPolicyRecord,
-    LocalQuantileThresholdPolicyRecord,
-    SharedMeanThresholdPolicyRecord,
-    SharedPooledThresholdPolicyRecord,
-    SharedWeightedThresholdPolicyRecord,
-)
-from datp_core.thresholding.policies.shrinkage import (
-    CalibrationFallbackThresholdPolicyRecord,
-    LocalGlobalShrinkageThresholdPolicyRecord,
+from datp_core.thresholding.enums import ThresholdPolicyKind
+from datp_core.thresholding.policies import (
+    QuantilePolicy,
 )
 
 
@@ -41,7 +32,6 @@ class ProjectConfigurationValidator:
 
         self._validate_datasets(config, errors, warnings)
         self._validate_training_profiles(config, errors)
-        self._validate_threshold_policy_estimators(config, errors)
         self._validate_experiments(config, errors)
         self._validate_eligibility_gates(config, errors)
 
@@ -87,26 +77,6 @@ class ProjectConfigurationValidator:
                 errors.append(
                     f"Training profile '{tp_id}' references unregistered batching profile "
                     f"'{training.batching_profile_id}'"
-                )
-
-    @staticmethod
-    def _validate_threshold_policy_estimators(config: ResolvedProjectConfiguration, errors: list[str]) -> None:
-        for tp_id, policy in config.threshold_policies.items():
-            if not isinstance(policy, (
-                SharedMeanThresholdPolicyRecord,
-                SharedPooledThresholdPolicyRecord,
-                SharedWeightedThresholdPolicyRecord,
-                LocalQuantileThresholdPolicyRecord,
-                CentralizedPooledThresholdPolicyRecord,
-                FamilyMeanThresholdPolicyRecord,
-                ClusterThresholdPolicyRecord,
-                LocalGlobalShrinkageThresholdPolicyRecord,
-                CalibrationFallbackThresholdPolicyRecord,
-            )):
-                continue
-            if not config.quantile_estimators.contains(policy.quantile_estimator):
-                errors.append(
-                    f"Threshold policy '{tp_id}' references unregistered quantile estimator '{policy.quantile_estimator}'"
                 )
 
     @staticmethod
@@ -201,7 +171,8 @@ class ProjectConfigurationValidator:
             target_population = config.populations.get(ev.population_id or exp_rec.population_ids[0])
             target_dataset = config.datasets.get(target_population.dataset_id)
             if (
-                isinstance(policy, FamilyMeanThresholdPolicyRecord)
+                isinstance(policy, QuantilePolicy)
+                and policy.kind == ThresholdPolicyKind.FAMILY_MEAN
                 and "family_taxonomy" not in target_dataset.capabilities
             ):
                 errors.append(

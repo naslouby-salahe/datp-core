@@ -11,7 +11,6 @@ from datp_core.config.authored.protocols import (
     NestedReplicatePolicyConfig,
     ReportDefaultsConfig,
     ResultTypeConfig,
-    ThresholdPolicyDefaultsConfig,
 )
 from datp_core.config.loading import YamlConfigurationReader
 
@@ -22,8 +21,6 @@ def _protocols() -> AuthoredProtocolsConfig:
 
 def test_flat_protocol_blocks_resolve_to_strict_models() -> None:
     protocols = _protocols()
-    assert isinstance(protocols.threshold_policy_defaults, ThresholdPolicyDefaultsConfig)
-    assert protocols.threshold_policy_defaults.attack_rows_forbidden_in_calibration is True
     assert isinstance(protocols.nested_replicate_policy, NestedReplicatePolicyConfig)
     assert protocols.nested_replicate_policy.replicates_counted_as_independent_units is False
     assert isinstance(protocols.evaluation_result_contract, EvaluationResultContractConfig)

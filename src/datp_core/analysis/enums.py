@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from enum import StrEnum
 
+
 class MetricIdentifier(StrEnum):
     """Primary metric names recognised across analysis capabilities."""
 

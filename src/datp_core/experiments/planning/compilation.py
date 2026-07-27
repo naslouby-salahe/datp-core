@@ -22,7 +22,7 @@ from datp_core.experiments.catalogue.models import ExperimentRecord, PopulationR
 from datp_core.learning.contracts.checkpoints import CheckpointProfileRecord
 from datp_core.learning.contracts.seeds import SeedCohortRecord
 from datp_core.learning.contracts.training import TrainingProfileRecord
-from datp_core.thresholding.policies.union import ThresholdPolicyRecord
+from datp_core.thresholding import ThresholdPolicyRecord
 
 
 @dataclass(frozen=True, slots=True)

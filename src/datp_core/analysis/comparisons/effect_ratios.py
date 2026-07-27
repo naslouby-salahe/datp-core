@@ -103,9 +103,7 @@ def analyze_absorption(
         reference_exp_id = context.experiment.identifier
         reference_label = AnalysisLabel(ref_analysis)
     else:
-        raise InvalidAnalysisConfigurationError(
-            f"Unsupported reference_analysis type: {type(ref_analysis).__name__}"
-        )
+        raise InvalidAnalysisConfigurationError(f"Unsupported reference_analysis type: {type(ref_analysis).__name__}")
 
     _validate_absorption_contract(specification, context, reference_exp_id)
     ref_paired_ref = PrerequisiteAnalysisReference(

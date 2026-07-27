@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from enum import Enum
-
 from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator

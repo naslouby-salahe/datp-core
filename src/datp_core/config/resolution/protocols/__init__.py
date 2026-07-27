@@ -25,11 +25,7 @@ from datp_core.config.resolution.protocols.operations import (
 )
 from datp_core.config.resolution.protocols.reporting import resolve_report_defaults, resolve_report_profile
 from datp_core.config.resolution.protocols.statistics import resolve_statistical_profiles
-from datp_core.config.resolution.protocols.thresholds import (
-    resolve_quantile_estimators,
-    resolve_threshold_policies,
-    resolve_threshold_policy_defaults,
-)
+from datp_core.config.resolution.protocols.thresholds import resolve_threshold_policies
 from datp_core.config.resolution.protocols.training import (
     ProtocolDeterminismRecord,
     resolve_batching_profiles,
@@ -65,8 +61,7 @@ from datp_core.learning.contracts.checkpoints import CheckpointProfileRecord
 from datp_core.learning.contracts.optimization import BatchingRecord, OptimizerRecord
 from datp_core.learning.contracts.seeds import SeedCohortRecord
 from datp_core.learning.contracts.training import TrainingProfileRecord
-from datp_core.thresholding.policies.common import QuantileEstimatorRecord, ThresholdPolicyDefaultsRecord
-from datp_core.thresholding.policies.union import ThresholdPolicyRecord
+from datp_core.thresholding.policies import ThresholdPolicyRecord
 
 
 def _resolve_metric_bundles(authored: AuthoredProtocolsConfig) -> dict[MetricBundleId, MetricBundleRecord]:
@@ -98,7 +93,6 @@ class ResolvedProtocols(BaseModel):
     batching_profiles: TypedDomainRegistry[str, BatchingRecord]
     eligibility_policies: TypedDomainRegistry[EligibilityPolicyId, EligibilityPolicyRecord]
     normalization_strategies: TypedDomainRegistry[NormalizationStrategyId, NormalizationStrategyRecord]
-    quantile_estimators: TypedDomainRegistry[str, QuantileEstimatorRecord]
     metric_bundles: TypedDomainRegistry[MetricBundleId, MetricBundleRecord]
     report_profiles: TypedDomainRegistry[str, ReportProfileRecord]
     metric_definitions: MetricDefinitionsRecord
@@ -108,7 +102,6 @@ class ResolvedProtocols(BaseModel):
     protocol_determinism: ProtocolDeterminismRecord
     normalization_fit_scopes: NormalizationFitScopes
     normalization_leakage_rule: str
-    threshold_policy_defaults: ThresholdPolicyDefaultsRecord
     nested_replicate_policy: NestedReplicatePolicyRecord
     result_types: TypedDomainRegistry[str, ResultTypeRecord]
     evaluation_result_contract: EvaluationResultContractRecord
@@ -131,7 +124,6 @@ def resolve_protocols(authored: AuthoredProtocolsConfig) -> ResolvedProtocols:
         batching_profiles=TypedDomainRegistry(_items=resolve_batching_profiles(authored)),
         eligibility_policies=TypedDomainRegistry(_items=resolve_eligibility_policies(authored)),
         normalization_strategies=TypedDomainRegistry(_items=resolve_normalization_strategies(authored)),
-        quantile_estimators=TypedDomainRegistry(_items=resolve_quantile_estimators(authored)),
         metric_bundles=TypedDomainRegistry(_items=_resolve_metric_bundles(authored)),
         report_profiles=TypedDomainRegistry(
             _items={key: resolve_report_profile(key, v) for key, v in authored.report_profiles.items()}
@@ -145,7 +137,6 @@ def resolve_protocols(authored: AuthoredProtocolsConfig) -> ResolvedProtocols:
         protocol_determinism=resolve_protocol_determinism(authored.determinism),
         normalization_fit_scopes=authored.normalization_fit_scopes,
         normalization_leakage_rule=authored.normalization_leakage_rule,
-        threshold_policy_defaults=resolve_threshold_policy_defaults(authored.threshold_policy_defaults),
         nested_replicate_policy=resolve_nested_replicate_policy(authored.nested_replicate_policy),
         result_types=TypedDomainRegistry(
             _items={key: resolve_result_type(key, v) for key, v in authored.result_types.items()}

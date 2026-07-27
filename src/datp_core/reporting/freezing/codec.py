@@ -4,13 +4,13 @@ from __future__ import annotations
 
 import json
 
-from datp_core.reporting.freezing.errors import ResultFreezeError
 from datp_core.core.freezing import (
     FrozenReportColumn,
     FrozenReportProfile,
     FrozenResultManifest,
     FrozenSourceFile,
 )
+from datp_core.reporting.freezing.errors import ResultFreezeError
 from datp_core.reporting.profiles.enums import ReportArtifactType, ReportFigureType, ReportTableType
 
 

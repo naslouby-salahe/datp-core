@@ -337,35 +337,6 @@ normalization_fit_scopes:
   per_client_train: fitted_independently_on_each_clients_benign_training_rows
 normalization_leakage_rule: calibration_test_future_recalibration_and_future_evaluation_rows_are_transformed_but_never_influence_the_fit
 
-quantile_estimators:
-  linear_interpolated_order_statistic:
-    sort_order: ascending
-    index_formula: "h = (n - 1) * p"
-    interpolation: "x_sorted[floor(h)] + (h - floor(h)) * (x_sorted[floor(h) + 1] - x_sorted[floor(h)])"
-    single_element_behavior: return_the_single_value
-    empty_input_behavior: typed_failure_empty_quantile_population
-    non_finite_input_behavior: typed_failure_non_finite_score_population
-    tie_behavior: duplicate_values_are_retained_and_the_index_formula_is_unaffected
-
-threshold_policy_defaults:
-  source_score_population: per_client_benign_calibration_scores_of_the_selected_checkpoint
-  eligibility_filter: the_experiment_eligibility_policy_applied_before_any_threshold_is_formed
-  attack_rows_forbidden_in_calibration: true
-  non_finite_calibration_score: typed_failure_non_finite_score_population
-  empty_client_calibration: client_treated_as_ineligible_and_receives_the_declared_deployment_fallback
-  application_scope: threshold_applied_to_the_clients_held_out_test_scores_only
-  required_diagnostic_fields:
-    - threshold_value_per_client
-    - threshold_owner_scope
-    - group_membership_where_applicable
-    - eligible_calibration_count_per_client
-    - achieved_benign_exceedance_on_calibration
-    - achieved_benign_exceedance_on_held_out_test
-    - signed_attainment_error
-    - absolute_attainment_error
-    - eligible_client_count
-    - fallback_client_count
-
 threshold_policies:
   shared_mean_p95:
     policy: shared_threshold

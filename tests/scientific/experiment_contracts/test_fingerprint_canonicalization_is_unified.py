@@ -15,10 +15,10 @@ from datp_core.config.resolution.protocols import thresholds as threshold_module
 
 def test_protocol_resolution_module_has_no_model_dump_call_in_fingerprint_assembly() -> None:
     source = inspect.getsource(threshold_module)
-    # The sole legitimate use is the Pydantic-to-domain-record conversion helper itself,
-    # which runs before any fingerprint projection is assembled.
+    # All resolution is explicit field-by-field mapping — no model_dump() pass-through.
+    # This ensures only executable fields enter the domain record and fingerprint projection.
     call_sites = [line for line in source.splitlines() if ".model_dump(" in line]
-    assert call_sites == ["    return record_type(**cfg.model_dump())"]
+    assert call_sites == []
 
 
 def test_threshold_policy_projection_uses_domain_field_names_not_pydantic_aliases() -> None:

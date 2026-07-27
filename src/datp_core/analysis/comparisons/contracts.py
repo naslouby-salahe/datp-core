@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
-
-from datp_core.analysis._base import FrozenModel
-from datp_core.analysis._base import ConfidenceInterval
-from datp_core.analysis.enums import AnalysisResultKind, AnchorCheckIdentifier, AnchorComparisonMode, UndefinedDenominatorBehavior
+from datp_core.analysis._base import ConfidenceInterval, FrozenModel
+from datp_core.analysis.enums import (
+    AnalysisResultKind,
+    AnchorCheckIdentifier,
+    AnchorComparisonMode,
+    UndefinedDenominatorBehavior,
+)
 from datp_core.core.identifiers import AnalysisLabel, MetricId, PartitionConditionId, ThresholdPolicyId
 from datp_core.core.seeding import Seed
 

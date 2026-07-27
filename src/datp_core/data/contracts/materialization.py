@@ -19,8 +19,6 @@ from datp_core.data.contracts.enums import (
     SplitMethod,
 )
 
-
-
 _OptionalStrMappingField = Annotated[Mapping[str, str] | None, BeforeValidator(lambda v: dict(v) if v is not None else None)]
 _OptionalIntMappingField = Annotated[Mapping[str, int] | None, BeforeValidator(lambda v: dict(v) if v is not None else None)]
 _OptionalObjectMappingField = Annotated[

@@ -47,8 +47,7 @@ from datp_core.learning.contracts.enums import CheckpointAuthorization, Personal
 from datp_core.learning.contracts.optimization import BatchingRecord, OptimizerRecord
 from datp_core.learning.contracts.seeds import SeedCohortRecord
 from datp_core.learning.contracts.training import TrainingProfileRecord
-from datp_core.thresholding.policies.common import QuantileEstimatorRecord, ThresholdPolicyDefaultsRecord
-from datp_core.thresholding.policies.union import ThresholdPolicyRecord
+from datp_core.thresholding.policies import ThresholdPolicyRecord
 
 
 class ResolvedProjectConfiguration(BaseModel):
@@ -75,7 +74,6 @@ class ResolvedProjectConfiguration(BaseModel):
     batching_profiles: TypedDomainRegistry[str, BatchingRecord]
     eligibility_policies: TypedDomainRegistry[EligibilityPolicyId, EligibilityPolicyRecord]
     normalization_strategies: TypedDomainRegistry[NormalizationStrategyId, NormalizationStrategyRecord]
-    quantile_estimators: TypedDomainRegistry[str, QuantileEstimatorRecord]
     metric_bundles: TypedDomainRegistry[MetricBundleId, MetricBundleRecord]
     metric_definitions: MetricDefinitionsRecord
     communication_estimation_contract: CommunicationEstimationContractRecord
@@ -85,7 +83,6 @@ class ResolvedProjectConfiguration(BaseModel):
     protocol_determinism: ProtocolDeterminismRecord
     normalization_fit_scopes: NormalizationFitScopes
     normalization_leakage_rule: str
-    threshold_policy_defaults: ThresholdPolicyDefaultsRecord
     nested_replicate_policy: NestedReplicatePolicyRecord
     result_types: TypedDomainRegistry[str, ResultTypeRecord]
     evaluation_result_contract: EvaluationResultContractRecord

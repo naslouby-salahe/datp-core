@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datp_core.analysis.contracts import PairedAnalysisCell
+from datp_core.analysis.enums import ProducedField
+from datp_core.analysis.errors import ScientificContractViolationError
 from datp_core.analysis.mechanisms.contracts import (
     ClientDistributionEntry,
     ClientTradeoffEntry,
@@ -14,9 +17,6 @@ from datp_core.analysis.mechanisms.contracts import (
     FieldFormulaContract,
     LockedClientDistributionAnalysisResult,
 )
-from datp_core.analysis.contracts import PairedAnalysisCell
-from datp_core.analysis.enums import ProducedField
-from datp_core.analysis.errors import ScientificContractViolationError
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel
 from datp_core.core.seeding import Seed

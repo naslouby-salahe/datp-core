@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
-
 from datp_core.analysis._base import FrozenModel
 from datp_core.analysis.enums import AnalysisResultKind, ClusterDispersionStatus
 from datp_core.core.identifiers import AnalysisLabel, ClientId, ClusterLabel, EvaluationLabel

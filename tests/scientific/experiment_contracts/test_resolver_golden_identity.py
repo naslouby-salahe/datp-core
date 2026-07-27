@@ -19,12 +19,12 @@ def test_scientific_fingerprint_is_stable(_resolved: ResolvedProjectConfiguratio
     # fingerprint is expected to change.
     # Fingerprints updated 2026-07-27: Pydantic v2 model_dump replaces attrs asdict
     assert _resolved.scientific_fingerprint.value == (
-        "9d8ffb2a00c14e6f9d501f27e57819fde1778bed63553373d0e35530a66d77ca"
+        "af28f6592d069e1cc9322436027e0da4ad9ee54bbc6e66c7381b7695482555c6"
     )
 
 
 def test_execution_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
-    assert _resolved.execution_fingerprint.value == ("59c4b106c3ed8f883a36d3ac29ad15f30f9bc184a38d75a7b0c49362940217d0")
+    assert _resolved.execution_fingerprint.value == ("7c4f65f859551c29898da80c7ef869531ff2f24aebc23c34579bae5e9635922d")
 
 
 def test_registry_cardinality(_resolved: ResolvedProjectConfiguration) -> None:
@@ -42,7 +42,6 @@ def test_registry_cardinality(_resolved: ResolvedProjectConfiguration) -> None:
     assert len(r.batching_profiles) > 0
     assert len(r.eligibility_policies) > 0
     assert len(r.normalization_strategies) > 0
-    assert len(r.quantile_estimators) > 0
     assert len(r.metric_bundles) > 0
     assert len(r.report_profiles) > 0
     assert len(r.result_types) > 0
@@ -90,7 +89,6 @@ def test_scientific_projection_includes_all_sections(_resolved: ResolvedProjectC
         "batching",
         "eligibility_policies",
         "normalization_strategies",
-        "quantile_estimators",
         "metric_bundles",
         "statistical_profiles",
         "metric_definitions",
@@ -101,7 +99,6 @@ def test_scientific_projection_includes_all_sections(_resolved: ResolvedProjectC
         "protocol_determinism",
         "normalization_fit_scopes",
         "normalization_leakage_rule",
-        "threshold_policy_defaults",
         "nested_replicate_policy",
         "result_types",
         "evaluation_result_contract",

@@ -20,7 +20,6 @@ from datp_core.core.identifiers import (
     PopulationId,
     TrainingProfileId,
 )
-from datp_core.core.numbers import PositiveInt
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.contracts import ResolvedDataset, SplitMembership, SplitMethod
 from datp_core.experiments import ExperimentRecord, PopulationRecord

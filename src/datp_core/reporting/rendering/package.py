@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 
+from datp_core.core.freezing import FrozenReportProfile
 from datp_core.reporting.freezing.codec import decode_manifest
 from datp_core.reporting.freezing.errors import ResultFreezeError
-from datp_core.core.freezing import FrozenReportProfile
 from datp_core.reporting.rendering.figures import render_figure
 from datp_core.reporting.rendering.tables import render_table
 

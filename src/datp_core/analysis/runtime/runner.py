@@ -30,9 +30,7 @@ class AnalysisHandlerRegistry:
         handler: Callable[..., tuple[AnalysisResult, ...]],
     ) -> None:
         if kind in self._handlers:
-            raise DuplicateAnalysisRegistrationError(
-                f"Analysis handler already registered for kind: {kind.value}"
-            )
+            raise DuplicateAnalysisRegistrationError(f"Analysis handler already registered for kind: {kind.value}")
         self._handlers[kind] = handler
 
     def dispatch(
@@ -44,7 +42,5 @@ class AnalysisHandlerRegistry:
         kind = AnalysisKind(specification.kind)
         handler = self._handlers.get(kind)
         if handler is None:
-            raise UnsupportedAnalysisRecordError(
-                f"No handler registered for analysis kind: {kind.value}"
-            )
+            raise UnsupportedAnalysisRecordError(f"No handler registered for analysis kind: {kind.value}")
         return handler(specification, context, cell)

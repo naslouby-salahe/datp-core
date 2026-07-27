@@ -10,8 +10,6 @@ from pydantic.functional_validators import BeforeValidator
 
 from datp_core.core.paths import RelativePath
 
-
-
 _OptionalObjectMappingField = Annotated[
     Mapping[str, object] | None,
     BeforeValidator(lambda v: dict(v) if v is not None else None),

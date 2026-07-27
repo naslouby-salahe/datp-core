@@ -38,8 +38,7 @@ from datp_core.config.project import (
     ValidateProjectConfiguration,
     resolve_project_configuration,
 )
-from datp_core.core.identifiers import ExperimentId, ThresholdPolicyId
-from datp_core.core.registry import TypedDomainRegistry
+from datp_core.core.identifiers import ExperimentId
 from datp_core.data.adapters.ciciot2023 import CICIoT2023Adapter
 from datp_core.data.adapters.edge_iiotset import EdgeIIoTsetAdapter
 from datp_core.data.adapters.nbaiot import NBaIoTAdapter
@@ -74,22 +73,16 @@ from datp_core.pipeline.stages.analysis import StatisticalAnalysisStageHandler
 from datp_core.reporting.audit.query import DuckDbAuditService
 from datp_core.reporting.execution.freeze_handler import ResultFreezeStageHandler
 from datp_core.reporting.execution.report_handler import ReportGenerationStageHandler
-from datp_core.thresholding.calibration.handler import CalibrationSubsamplingStageHandler
-from datp_core.thresholding.estimation.construction import ConstructThresholdsUseCase
-from datp_core.thresholding.estimation.estimators import ESTIMATOR_KIND_REGISTRY
-from datp_core.thresholding.estimation.ports import ThresholdEstimator
-from datp_core.thresholding.execution.handler import ThresholdConstructionStageHandler
+from datp_core.thresholding.engine import ThresholdEngine
+from datp_core.thresholding.stages import (
+    CalibrationSubsamplingStageHandler,
+    ThresholdConstructionStageHandler,
+)
 
 
-def _build_estimator_registry(
-    config: ResolvedProjectConfiguration,
-) -> TypedDomainRegistry[ThresholdPolicyId, ThresholdEstimator]:
-    """Bind every estimator to its single resolved policy; no adapter-side policy values exist."""
-    estimators: dict[ThresholdPolicyId, ThresholdEstimator] = {
-        policy_id: ESTIMATOR_KIND_REGISTRY.create(policy_id, policy)
-        for policy_id, policy in config.threshold_policies.items()
-    }
-    return TypedDomainRegistry(_items=estimators)
+def _build_threshold_engine() -> ThresholdEngine:
+    """Create the threshold engine — no registry, no estimator classes, pure dispatch."""
+    return ThresholdEngine()
 
 
 def _build_adapter_registry() -> DatasetAdapterRegistry:
@@ -221,7 +214,7 @@ class DatpApplication(BaseModel):
     run_experiment: ExperimentRunner
     run_campaign: CampaignRunner
     output_manager: ExperimentOutputManager
-    construct_thresholds: ConstructThresholdsUseCase
+    construct_thresholds: ThresholdEngine
     statistical_analysis: StatisticalAnalysisUseCase
     audit_svc: DuckDbAuditService
     plan_builder: ExperimentPlanBuilder
@@ -288,9 +281,7 @@ def build_application(
     )
     plan_builder = ExperimentPlanBuilder(paths=experiment_paths)
 
-    construct_th = ConstructThresholdsUseCase(
-        config=resolved_config, registry=_build_estimator_registry(resolved_config)
-    )
+    construct_th = _build_threshold_engine()
     statistical_analysis = StatisticalAnalysisUseCase(
         resolved_config.statistical_profiles,
     )

@@ -43,12 +43,10 @@ from datp_core.config.authored.protocols.thresholds import (
     FederatedMatchedExceedancePolicyConfig,
     LocalGlobalShrinkagePolicyConfig,
     LocalQuantileThresholdPolicyConfig,
-    QuantileEstimatorConfig,
     SharedMeanThresholdPolicyConfig,
     SharedPooledThresholdPolicyConfig,
     SharedWeightedThresholdPolicyConfig,
     SplitConformalThresholdPolicyConfig,
-    ThresholdPolicyDefaultsConfig,
     TypedThresholdPolicyConfig,
 )
 from datp_core.config.authored.protocols.training import (
@@ -86,8 +84,6 @@ class AuthoredProtocolsConfig(SchemaVersionOneConfigModel):
     normalization_strategies: dict[str, NormalizationStrategyConfig]
     normalization_fit_scopes: NormalizationFitScopes
     normalization_leakage_rule: str
-    quantile_estimators: dict[str, QuantileEstimatorConfig]
-    threshold_policy_defaults: ThresholdPolicyDefaultsConfig
     threshold_policies: dict[str, TypedThresholdPolicyConfig]
     metric_definitions: MetricDefinitionsConfig
     metric_bundles: dict[str, MetricBundleConfig]
@@ -147,7 +143,6 @@ __all__ = [
     "OperationalInputsConfig",
     "OptimizerProfileConfig",
     "PrecisionPolicyConfig",
-    "QuantileEstimatorConfig",
     "ReportColumnConfig",
     "ReportDefaultsConfig",
     "ReportProfileConfig",
@@ -161,7 +156,6 @@ __all__ = [
     "ThresholdEstimationMetricsConfig",
     "ThresholdExchangeConfig",
     "ThresholdExchangeEntryConfig",
-    "ThresholdPolicyDefaultsConfig",
     "TrainingProfileConfig",
     "TypedThresholdPolicyConfig",
 ]

@@ -4,10 +4,17 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
-
 from datp_core.analysis._base import FrozenModel
-from datp_core.analysis.enums import AlertBurdenStatus, AnalysisResultKind, ChronologyPolicy, CommunicationFieldIdentifier, NegativeRecoveryBehavior, ProducedField, ResourceEstimateBasis, TemporalOutcomeBand
+from datp_core.analysis.enums import (
+    AlertBurdenStatus,
+    AnalysisResultKind,
+    ChronologyPolicy,
+    CommunicationFieldIdentifier,
+    NegativeRecoveryBehavior,
+    ProducedField,
+    ResourceEstimateBasis,
+    TemporalOutcomeBand,
+)
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel, MetricId
 from datp_core.core.seeding import Seed
 from datp_core.evaluation.distributions import ClientScoreDistributionRecord, ThresholdTradeoffEntry

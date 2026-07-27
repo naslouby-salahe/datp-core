@@ -6,10 +6,6 @@ from collections.abc import Mapping as _Mapping
 
 import polars as pl
 
-from datp_core.analysis.clustering.dispersion import (
-    cluster_dispersion,
-    compute_adjusted_rand_index,
-)
 from datp_core.analysis.clustering.contracts import (
     ClientClusterMembership,
     ClusterAblationObservation,
@@ -18,6 +14,10 @@ from datp_core.analysis.clustering.contracts import (
     ClusterSize,
     ClusterStabilityAnalysisResult,
     ClusterStabilitySeedSummary,
+)
+from datp_core.analysis.clustering.dispersion import (
+    cluster_dispersion,
+    compute_adjusted_rand_index,
 )
 from datp_core.analysis.contracts import PairedAnalysisCell
 from datp_core.analysis.enums import ClusterDispersionKind
@@ -34,7 +34,7 @@ from datp_core.core.identifiers import AnalysisLabel, ClientId, ClusterLabel, Ev
 from datp_core.core.seeding import Seed
 from datp_core.evaluation.metrics.models import MetricStatus
 from datp_core.experiments import ClusterStabilityAnalysisRecord, ValueSweepRecord
-from datp_core.thresholding.policies.clustering import ClusterThresholdPolicyRecord
+from datp_core.thresholding.policies import ClusterPolicy
 
 
 def analyze_cluster_stability(
@@ -136,7 +136,7 @@ def _analyze_cluster_membership(
     policy_id = context.threshold_policy_id(source_label)
     policy = context.threshold_policies.get(policy_id)
 
-    if not isinstance(policy, ClusterThresholdPolicyRecord):
+    if not isinstance(policy, ClusterPolicy):
         raise InvalidAnalysisConfigurationError(
             f"Cluster stability requires a cluster threshold policy, got '{policy_id.value}'"
         )

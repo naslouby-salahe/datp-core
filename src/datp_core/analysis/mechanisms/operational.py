@@ -2,12 +2,6 @@
 
 from __future__ import annotations
 
-from datp_core.analysis.mechanisms.contracts import (
-    AlertBurdenAnalysisResult,
-    ResourceCostAnalysisResult,
-    ResourceCostEvaluationResult,
-    ResourceCostSeedResult,
-)
 from datp_core.analysis.contracts import PairedAnalysisCell
 from datp_core.analysis.enums import (
     AlertBurdenStatus,
@@ -16,19 +10,19 @@ from datp_core.analysis.enums import (
     ResourceEstimateBasis,
 )
 from datp_core.analysis.errors import InvalidAnalysisConfigurationError
+from datp_core.analysis.mechanisms.contracts import (
+    AlertBurdenAnalysisResult,
+    ResourceCostAnalysisResult,
+    ResourceCostEvaluationResult,
+    ResourceCostSeedResult,
+)
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
 from datp_core.artifacts.schemas.columns import MetricColumn
 from datp_core.config.operational_contracts import CommunicationEstimationContractRecord
 from datp_core.core.identifiers import AnalysisLabel, EvaluationLabel
 from datp_core.experiments import AlertBurdenAnalysisRecord, ResourceCostAnalysisRecord
-from datp_core.thresholding.policies.federated import FederatedMatchedExceedanceThresholdPolicyRecord
-from datp_core.thresholding.policies.shared import (
-    LocalQuantileThresholdPolicyRecord,
-    SharedMeanThresholdPolicyRecord,
-    SharedPooledThresholdPolicyRecord,
-    SharedWeightedThresholdPolicyRecord,
-)
-from datp_core.thresholding.policies.union import ThresholdPolicyRecord
+from datp_core.thresholding import ThresholdPolicyRecord
+from datp_core.thresholding.enums import ThresholdPolicyKind
 
 
 def analyze_alert_burden(
@@ -62,23 +56,27 @@ def threshold_exchange_cost(
     contract: CommunicationEstimationContractRecord, policy: ThresholdPolicyRecord, client_count: int
 ) -> tuple[tuple[CommunicationFieldIdentifier, ...], int]:
     """Calculate threshold exchange cost and transmitted fields from communication contract."""
-    if isinstance(policy, SharedMeanThresholdPolicyRecord):
+    if policy.kind == ThresholdPolicyKind.SHARED_MEAN:
         exchange = contract.threshold_exchange.b1
         candidate_count = 0
-    elif isinstance(policy, LocalQuantileThresholdPolicyRecord):
+    elif policy.kind == ThresholdPolicyKind.LOCAL_QUANTILE:
         exchange = contract.threshold_exchange.b2
         candidate_count = 0
-    elif isinstance(policy, FederatedMatchedExceedanceThresholdPolicyRecord):
+    elif policy.kind == ThresholdPolicyKind.FEDERATED_MATCHED:
         exchange = contract.threshold_exchange.federated_summary
-        grid = policy.candidate_grid
-        if grid.step <= 0 or grid.maximum < grid.minimum:
+        grid_min = policy.candidate_grid_minimum
+        grid_max = policy.candidate_grid_maximum
+        grid_step = policy.candidate_grid_step
+        if grid_min is None or grid_max is None or grid_step is None:
+            raise InvalidAnalysisConfigurationError("Matched-exceedance policy is missing candidate grid fields")
+        if grid_step <= 0 or grid_max < grid_min:
             raise InvalidAnalysisConfigurationError("Invalid candidate grid bounds or step")
-        candidate_count = round((grid.maximum - grid.minimum) / grid.step) + 1
-    elif isinstance(policy, SharedPooledThresholdPolicyRecord | SharedWeightedThresholdPolicyRecord):
+        candidate_count = round((grid_max - grid_min) / grid_step) + 1
+    elif policy.kind in (ThresholdPolicyKind.SHARED_POOLED, ThresholdPolicyKind.SHARED_WEIGHTED):
         return (), 0
     else:
         raise InvalidAnalysisConfigurationError(
-            f"No communication contract is configured for threshold policy '{policy.policy}'"
+            f"No communication contract is configured for threshold policy '{policy.kind.value}'"
         )
 
     base_raw = tuple(exchange.uplink_fields_per_client or ()) + tuple(exchange.downlink_fields_per_client or ())

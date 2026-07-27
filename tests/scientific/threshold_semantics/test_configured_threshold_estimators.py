@@ -1,39 +1,61 @@
+"""Scientific-invariant tests using the new ThresholdEngine and typed policies."""
+
+from __future__ import annotations
+
 import pytest
 
-from datp_core.analysis.mechanisms.operational import threshold_exchange_cost
-from datp_core.app import _build_estimator_registry, build_application
 from datp_core.core.identifiers import ClientId, PopulationId, ThresholdPolicyId
-from datp_core.thresholding.estimation.construction import ConstructThresholdsUseCase
-from datp_core.thresholding.estimation.models import ThresholdSet
-from datp_core.thresholding.policies.common import BenignCalibrationScores
-from datp_core.thresholding.policies.enums import ConformalAttainabilityStatus
+from datp_core.thresholding.engine import ThresholdEngine
+from datp_core.thresholding.enums import (
+    ClusterAggregation,
+    FingerprintFeature,
+    ThresholdPolicyKind,
+)
+from datp_core.thresholding.models import (
+    BenignCalibrationScores,
+    ConformalDiagnostics,
+    ThresholdConstructionRequest,
+    ThresholdSet,
+)
+from datp_core.thresholding.policies import (
+    ClusterPolicy,
+    ConformalPolicy,
+    FederatedPolicy,
+    QuantilePolicy,
+    ShrinkagePolicy,
+)
 
 
 @pytest.fixture
 def calibration() -> tuple[BenignCalibrationScores, ...]:
     return tuple(
         BenignCalibrationScores(
-            client_id=ClientId(identifier), values=tuple(float(multiplier * i) for i in range(1, 101))
+            client_id=ClientId(identifier),
+            values=tuple(float(multiplier * i) for i in range(1, 101)),
         )
         for identifier, multiplier in (("c1", 1), ("c2", 2), ("c3", 3))
     )
 
 
+@pytest.fixture
+def population_id() -> PopulationId:
+    return PopulationId("nbaiot_natural_devices")
+
+
 def _execute(
-    policy_id: ThresholdPolicyId,
+    policy: QuantilePolicy | ClusterPolicy | ConformalPolicy | ShrinkagePolicy | FederatedPolicy,
     calibration: tuple[BenignCalibrationScores, ...],
-    coefficient: float | None = None,
-    fingerprint_features: tuple[str, ...] | None = None,
+    population_id: PopulationId,
+    policy_id: ThresholdPolicyId | None = None,
 ) -> ThresholdSet:
-    config = build_application().config
-    use_case = ConstructThresholdsUseCase(config, _build_estimator_registry(config))
-    return use_case.execute(
-        policy_id,
-        calibration,
-        PopulationId("nbaiot_natural_devices"),
-        None,
-        selected_coefficient=coefficient,
-        fingerprint_features_override=fingerprint_features,
+    engine = ThresholdEngine()
+    return engine.construct(
+        ThresholdConstructionRequest(
+            policy_id=policy_id or ThresholdPolicyId("test"),
+            policy=policy,
+            calibration=calibration,
+            population_id=population_id,
+        )
     )
 
 
@@ -41,60 +63,128 @@ def _values(result: ThresholdSet) -> list[float]:
     return [float(value.threshold) for value in result.values]
 
 
-def test_shared_and_local_configured_policies_preserve_scope_semantics(
+# ── Scope semantics ────────────────────────────────────────────────────────
+
+
+def test_shared_and_local_policies_preserve_scope_semantics(
     calibration: tuple[BenignCalibrationScores, ...],
+    population_id: PopulationId,
 ) -> None:
-    shared = _values(_execute(ThresholdPolicyId("shared_mean_p95"), calibration))
-    local = _values(_execute(ThresholdPolicyId("local_p95"), calibration))
+    shared = _values(
+        _execute(
+            QuantilePolicy(kind=ThresholdPolicyKind.SHARED_MEAN, quantile=0.95),
+            calibration,
+            population_id,
+        )
+    )
+    local = _values(
+        _execute(
+            QuantilePolicy(kind=ThresholdPolicyKind.LOCAL_QUANTILE, quantile=0.95),
+            calibration,
+            population_id,
+        )
+    )
     assert shared[0] == shared[1] == shared[2]
     assert local[0] < local[1] < local[2]
 
 
-def test_conformal_and_federated_configured_policies_produce_finite_thresholds(
+# ── Conformal and federated finite thresholds ──────────────────────────────
+
+
+def test_conformal_and_federated_policies_produce_finite_thresholds(
     calibration: tuple[BenignCalibrationScores, ...],
+    population_id: PopulationId,
 ) -> None:
-    conformal = _values(_execute(ThresholdPolicyId("conformal_local_p95"), calibration))
-    fixed = _values(_execute(ThresholdPolicyId("federated_summary_fixed_k"), calibration, 3.0))
-    matched = _values(_execute(ThresholdPolicyId("federated_summary_matched_exceedance"), calibration))
+    conformal = _values(
+        _execute(
+            ConformalPolicy(kind=ThresholdPolicyKind.CONFORMAL, coverage_alpha=0.05, minimum_sample_count=1),
+            calibration,
+            population_id,
+        )
+    )
+    fixed = _values(
+        _execute(
+            FederatedPolicy(kind=ThresholdPolicyKind.FEDERATED_FIXED, quantile=0.95, fixed_k=3.0),
+            calibration,
+            population_id,
+        )
+    )
+    matched = _values(
+        _execute(
+            FederatedPolicy(
+                kind=ThresholdPolicyKind.FEDERATED_MATCHED,
+                quantile=0.95,
+                candidate_grid_minimum=0.0,
+                candidate_grid_maximum=5.0,
+                candidate_grid_step=0.01,
+            ),
+            calibration,
+            population_id,
+        )
+    )
     assert conformal[0] < conformal[1] < conformal[2]
     assert fixed[0] == fixed[1] == fixed[2]
     assert all(value > 0.0 for value in matched)
 
 
+# ── Conformal diagnostics ──────────────────────────────────────────────────
+
+
 def test_conformal_thresholds_persist_finite_sample_diagnostics(
     calibration: tuple[BenignCalibrationScores, ...],
+    population_id: PopulationId,
 ) -> None:
-    result = _execute(ThresholdPolicyId("conformal_local_p95"), calibration)
+    result = _execute(
+        ConformalPolicy(kind=ThresholdPolicyKind.CONFORMAL, coverage_alpha=0.05, minimum_sample_count=1),
+        calibration,
+        population_id,
+    )
 
     assert [record.finite_sample_rank for record in result.values] == [96, 96, 96]
-    assert all(record.attainability_status is ConformalAttainabilityStatus.ATTAINABLE for record in result.values)
+    assert result.diagnostics is not None
+    assert isinstance(result.diagnostics, ConformalDiagnostics)
+    assert result.diagnostics.coverage_alpha == 0.05
+    assert len(result.diagnostics.ranks) == 3
 
 
-def test_cluster_policy_uses_the_explicit_fingerprint_feature_subset(
+# ── Cluster fingerprint feature subset ─────────────────────────────────────
+
+
+def test_cluster_policy_uses_explicit_fingerprint_features(
     calibration: tuple[BenignCalibrationScores, ...],
+    population_id: PopulationId,
 ) -> None:
-    result = _execute(ThresholdPolicyId("cluster_k3_mean_p95"), calibration, fingerprint_features=("mean_error",))
-
+    result = _execute(
+        ClusterPolicy(
+            kind=ThresholdPolicyKind.CLUSTER,
+            quantile=0.95,
+            cluster_count=2,
+            aggregation=ClusterAggregation.MEAN,
+            fingerprint_features=(FingerprintFeature.MEAN_ERROR,),
+            kmeans_random_seed=42,
+            kmeans_initialization_runs=10,
+            kmeans_maximum_iterations=300,
+            kmeans_convergence_tolerance=1e-4,
+        ),
+        calibration,
+        population_id,
+    )
     assert len(result.values) == 3
     assert all(float(value.threshold) >= 0.0 for value in result.values)
     assert all(value.cluster_label is not None for value in result.values)
 
 
-def test_registry_matches_complete_authored_policy_catalogue() -> None:
-    config = build_application().config
-    assert set(_build_estimator_registry(config).keys()) == set(config.threshold_policies)
+# ── Fingerprint quantile locked to 0.95 regardless of policy quantile ──────
 
 
 def test_cluster_p95_fingerprint_is_locked_to_0_95_regardless_of_swept_quantile() -> None:
-    """protocols.yaml locks fingerprint_estimators.p95_error to a fixed 0.95 quantile; the
-    quantile-sensitivity sweep (mandatory experiment threshold_quantile_sensitivity) overrides
-    the policy's own threshold-construction quantile, which must not leak into this fingerprint
-    dimension. Three clients below share an identical median (quantile 0.5) but have distinct
-    true p95 values, so overriding the swept quantile to 0.5 while restricting the fingerprint
-    to p95_error alone is degenerate under the bug (all three collapse to the same feature value)
-    and non-degenerate under the fix (the fixed-0.95 feature values remain distinct).
+    """The fingerprint p95 is always computed at 0.95, independent of the policy quantile.
+
+    Three clients share identical median but distinct true p95 values.
+    With quantile=0.5 and fingerprint_features=(P95_ERROR,), the feature values
+    should remain distinct (not collapse to the same value).
     """
-    calibration = tuple(
+    cal = tuple(
         BenignCalibrationScores(client_id=ClientId(identifier), values=values)
         for identifier, values in (
             ("c1", tuple([0.0] * 10 + [5.0] * 9 + [100.0])),
@@ -102,35 +192,93 @@ def test_cluster_p95_fingerprint_is_locked_to_0_95_regardless_of_swept_quantile(
             ("c3", tuple([0.0] * 10 + [5.0] * 9 + [300.0])),
         )
     )
-    config = build_application().config
-    use_case = ConstructThresholdsUseCase(config, _build_estimator_registry(config))
-
-    result = use_case.execute(
-        ThresholdPolicyId("cluster_k3_mean_p95"),
-        calibration,
+    result = _execute(
+        ClusterPolicy(
+            kind=ThresholdPolicyKind.CLUSTER,
+            quantile=0.5,
+            cluster_count=2,
+            aggregation=ClusterAggregation.MEAN,
+            fingerprint_features=(FingerprintFeature.P95_ERROR,),
+            kmeans_random_seed=42,
+            kmeans_initialization_runs=10,
+            kmeans_maximum_iterations=300,
+            kmeans_convergence_tolerance=1e-4,
+        ),
+        cal,
         PopulationId("nbaiot_natural_devices"),
-        None,
-        None,
-        quantile_override=0.5,
-        fingerprint_features_override=("p95_error",),
     )
-
     assert len({value.cluster_label for value in result.values}) > 1
 
 
-def test_federated_summary_resource_estimate_counts_every_candidate_exchange() -> None:
-    config = build_application().config
-    fields, payload = threshold_exchange_cost(
-        config.communication_estimation_contract,
-        config.threshold_policies.get(ThresholdPolicyId("federated_summary_matched_exceedance")),
-        3,
-    )
+# ── Conformal insufficient calibration ─────────────────────────────────────
 
-    assert fields == (
-        "benign_calibration_count_uint64",
-        "benign_local_mean_float64",
-        "benign_local_variance_float64",
-        "candidate_coefficient_float64",
-        "benign_exceedance_count_uint64",
+
+def test_conformal_rejects_insufficient_calibration() -> None:
+    from datp_core.thresholding.models import InsufficientCalibrationError
+
+    cal = tuple(
+        BenignCalibrationScores(
+            client_id=ClientId(f"c{i}"),
+            values=tuple(float(j) for j in range(1, 6)),
+        )
+        for i in range(3)
     )
-    assert payload == 3 * (24 + 501 * 16)
+    with pytest.raises(InsufficientCalibrationError):
+        _execute(
+            ConformalPolicy(kind=ThresholdPolicyKind.CONFORMAL, coverage_alpha=0.05, minimum_sample_count=10),
+            cal,
+            PopulationId("nbaiot_natural_devices"),
+        )
+
+
+# ── Shrinkage ──────────────────────────────────────────────────────────────
+
+
+def test_shrinkage_produces_intermediate_thresholds(
+    calibration: tuple[BenignCalibrationScores, ...],
+    population_id: PopulationId,
+) -> None:
+    local = _values(
+        _execute(
+            QuantilePolicy(kind=ThresholdPolicyKind.LOCAL_QUANTILE, quantile=0.95),
+            calibration,
+            population_id,
+        )
+    )
+    shared = _values(
+        _execute(
+            QuantilePolicy(kind=ThresholdPolicyKind.SHARED_MEAN, quantile=0.95),
+            calibration,
+            population_id,
+        )
+    )
+    shrunk = _values(
+        _execute(
+            ShrinkagePolicy(kind=ThresholdPolicyKind.SHRINKAGE, quantile=0.95, shrinkage_weight=0.5),
+            calibration,
+            population_id,
+        )
+    )
+    # Shrinkage thresholds should lie between local and shared
+    for s, l, sh in zip(shrunk, local, shared, strict=True):
+        assert min(l, sh) <= s <= max(l, sh)
+
+
+# ── Calibration fallback ───────────────────────────────────────────────────
+
+
+def test_calibration_fallback_produces_valid_thresholds(
+    calibration: tuple[BenignCalibrationScores, ...],
+    population_id: PopulationId,
+) -> None:
+    result = _execute(
+        ShrinkagePolicy(kind=ThresholdPolicyKind.CALIBRATION_FALLBACK, quantile=0.95, n_half=50),
+        calibration,
+        population_id,
+    )
+    values = _values(result)
+    assert len(values) == 3
+    assert all(v > 0.0 for v in values)
+    from datp_core.thresholding.models import CalibrationFallbackDiagnostics
+
+    assert isinstance(result.diagnostics, CalibrationFallbackDiagnostics)

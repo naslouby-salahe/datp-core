@@ -190,16 +190,6 @@ class TestAllSchemaVersionDocumentsParse:
                 "per_client_train": "test",
             },
             "normalization_leakage_rule": "no_restriction",
-            "quantile_estimators": {},
-            "threshold_policy_defaults": {
-                "source_score_population": "local",
-                "eligibility_filter": "none",
-                "attack_rows_forbidden_in_calibration": True,
-                "non_finite_calibration_score": "reject",
-                "empty_client_calibration": "reject",
-                "application_scope": "global",
-                "required_diagnostic_fields": [],
-            },
             "threshold_policies": {},
             "metric_definitions": {
                 "prediction_rule": "threshold",

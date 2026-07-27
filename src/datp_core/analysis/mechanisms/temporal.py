@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datp_core.analysis.comparisons.paired import evaluation_metric
-from datp_core.analysis.mechanisms.contracts import TemporalRecoveryAnalysisResult
 from datp_core.analysis.contracts import PairedAnalysisCell
 from datp_core.analysis.enums import (
     ChronologyPolicy,
@@ -12,6 +11,7 @@ from datp_core.analysis.enums import (
     TemporalOutcomeBand,
 )
 from datp_core.analysis.errors import InvalidAnalysisConfigurationError, ScientificContractViolationError
+from datp_core.analysis.mechanisms.contracts import TemporalRecoveryAnalysisResult
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
 from datp_core.core.identifiers import AnalysisLabel, EvaluationLabel, MetricId
 from datp_core.experiments import TemporalRecoveryAnalysisRecord

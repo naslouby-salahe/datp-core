@@ -23,7 +23,7 @@ from datp_core.experiments import (
     ResourceCostAnalysisRecord,
     RunRequirement,
 )
-from datp_core.thresholding.policies.shared import SharedMeanThresholdPolicyRecord
+from datp_core.thresholding.enums import ThresholdPolicyKind
 
 
 def _build_dummy_contract(bytes_per_field: int = 4, direction_count: int = 2) -> CommunicationEstimationContractRecord:
@@ -96,8 +96,8 @@ def test_resource_cost_respects_encoding_width_and_directions() -> None:
     artifacts.calibration_scores.return_value = calibration_frame
     artifacts.checkpoint_parameter_count.return_value = 1000
 
-    policy_mock = MagicMock(spec=SharedMeanThresholdPolicyRecord)
-    policy_mock.policy = "shared_threshold"
+    policy_mock = MagicMock()
+    policy_mock.kind = ThresholdPolicyKind.SHARED_MEAN
 
     eval_spec = EvaluationSpecRecord(
         label="eval_1",

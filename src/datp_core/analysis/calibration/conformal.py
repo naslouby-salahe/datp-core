@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from math import ceil
-
 import polars as pl
 
 from datp_core.analysis.calibration.contracts import (
@@ -26,8 +24,7 @@ from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel
 from datp_core.core.seeding import Seed
 from datp_core.evaluation import MetricStatus
 from datp_core.experiments import ConformalCoverageAnalysisRecord
-from datp_core.thresholding.policies.conformal import SplitConformalThresholdPolicyRecord
-from datp_core.thresholding.policies.enums import ConformalAttainabilityStatus
+from datp_core.thresholding.policies import ConformalPolicy
 
 _COVERAGE_TARGET_TOLERANCE = 1e-12
 
@@ -38,12 +35,11 @@ def conformal_seed_coverage(
     calibration_counts: tuple[tuple[ClientId, int], ...],
     target_coverage: float,
     coverage_alpha: float,
-    minimum_sample_count: int,
     *,
     seed: Seed,
 ) -> ConformalSeedCoverageResult:
     """Compute per-client conformal coverage diagnostics for one seed."""
-    required = (ThresholdColumn.FINITE_SAMPLE_RANK.value, ThresholdColumn.ATTAINABILITY_STATUS.value)
+    required = (ThresholdColumn.FINITE_SAMPLE_RANK.value,)
     if any(field not in thresholds.columns for field in required):
         raise ArtifactSchemaViolationError("Conformal threshold artifact lacks finite-sample diagnostics")
     joined = thresholds.join(metrics, on=ThresholdColumn.CLIENT_ID.value, how="left")
@@ -61,9 +57,7 @@ def conformal_seed_coverage(
 
     # Validate completeness of per-client diagnostics
     incomplete = joined.filter(
-        pl.col("_calibration_count").is_null()
-        | pl.col(ThresholdColumn.FINITE_SAMPLE_RANK.value).is_null()
-        | pl.col(ThresholdColumn.ATTAINABILITY_STATUS.value).is_null()
+        pl.col("_calibration_count").is_null() | pl.col(ThresholdColumn.FINITE_SAMPLE_RANK.value).is_null()
     )
     if incomplete.height > 0:
         raise ArtifactSchemaViolationError("Conformal coverage inputs have incomplete per-client diagnostics")
@@ -74,21 +68,10 @@ def conformal_seed_coverage(
         pl.col("_calibration_count"),
     )
 
-    # Compute expected attainability status
-    min_calibration = max(minimum_sample_count, ceil(1.0 / coverage_alpha) - 1)
-    expected_status = (
-        pl.when(pl.col("_calibration_count") >= min_calibration)
-        .then(pl.lit(ConformalAttainabilityStatus.ATTAINABLE.value))
-        .otherwise(pl.lit(ConformalAttainabilityStatus.UNATTAINABLE.value))
-    )
-
-    # Validate finite-sample diagnostics
-    diagnostics_off = joined.filter(
-        (pl.col(ThresholdColumn.FINITE_SAMPLE_RANK.value).cast(pl.Int64) != expected_rank)
-        | (pl.col(ThresholdColumn.ATTAINABILITY_STATUS.value) != expected_status)
-    )
+    # Validate finite-sample rank
+    diagnostics_off = joined.filter(pl.col(ThresholdColumn.FINITE_SAMPLE_RANK.value).cast(pl.Int64) != expected_rank)
     if diagnostics_off.height > 0:
-        raise ScientificContractViolationError(f"Conformal finite-sample diagnostics disagree for seed '{seed.value}'")
+        raise ScientificContractViolationError(f"Conformal finite-sample rank disagrees for seed '{seed.value}'")
 
     # Validate FPR status consistency
     benign_total_expr = pl.col(MetricColumn.TRUE_NEGATIVES.value) + pl.col(MetricColumn.FALSE_POSITIVES.value)
@@ -121,7 +104,6 @@ def conformal_seed_coverage(
         .otherwise(pl.lit(CoverageStatus.UNAVAILABLE_NO_BENIGN_TEST_RECORDS.value))
         .alias("coverage_status"),
         pl.col(ThresholdColumn.FINITE_SAMPLE_RANK.value).cast(pl.Int64).alias("finite_sample_rank"),
-        pl.col(ThresholdColumn.ATTAINABILITY_STATUS.value).alias("attainability_status"),
         pl.col("_calibration_count").alias("calibration_count"),
     )
     # Domain object construction requires Python iteration from Polars
@@ -132,7 +114,6 @@ def conformal_seed_coverage(
             absolute_coverage_error=row.absolute_coverage_error,  # type: ignore[reportAttributeAccessIssue]
             coverage_status=CoverageStatus(row.coverage_status),  # type: ignore[reportAttributeAccessIssue]
             finite_sample_rank=row.finite_sample_rank,  # type: ignore[reportAttributeAccessIssue]
-            attainability_status=ConformalAttainabilityStatus(row.attainability_status),  # type: ignore[reportAttributeAccessIssue]
             calibration_count=row.calibration_count,  # type: ignore[reportAttributeAccessIssue]
         )
         for row in per_client.iter_rows(named=True)
@@ -154,11 +135,11 @@ def analyze_conformal_coverage(
     eval_label = EvaluationLabel(specification.source_evaluation)
     policy_id = context.threshold_policy_id(eval_label)
     policy = context.threshold_policies.get(policy_id)
-    if not isinstance(policy, SplitConformalThresholdPolicyRecord):
+    if not isinstance(policy, ConformalPolicy):
         raise InvalidAnalysisConfigurationError(
             f"Conformal analysis '{specification.label}' requires a split-conformal threshold policy"
         )
-    if abs(specification.target_coverage - policy.nominal_coverage) > _COVERAGE_TARGET_TOLERANCE:
+    if abs(specification.target_coverage - (1.0 - policy.coverage_alpha)) > _COVERAGE_TARGET_TOLERANCE:
         raise InvalidAnalysisConfigurationError(
             f"Conformal analysis '{specification.label}' target disagrees with its threshold policy"
         )
@@ -182,7 +163,6 @@ def analyze_conformal_coverage(
                 calibration_counts,
                 specification.target_coverage,
                 policy.coverage_alpha,
-                policy.minimum_sample_count,
                 seed=seed,
             )
         )

@@ -83,7 +83,6 @@ class ScientificProjection(BaseModel):
     batching: object
     eligibility_policies: object
     normalization_strategies: object
-    quantile_estimators: object
     metric_bundles: object
     statistical_profiles: object
     metric_definitions: object
@@ -94,7 +93,6 @@ class ScientificProjection(BaseModel):
     protocol_determinism: object
     normalization_fit_scopes: object
     normalization_leakage_rule: str
-    threshold_policy_defaults: object
     nested_replicate_policy: object
     result_types: object
     evaluation_result_contract: object
@@ -130,7 +128,6 @@ def build_scientific_projection(
         batching=_project(protocols.batching_profiles, projection_module),
         eligibility_policies=_project(protocols.eligibility_policies, projection_module),
         normalization_strategies=_project(protocols.normalization_strategies, projection_module),
-        quantile_estimators=_project(protocols.quantile_estimators, projection_module),
         metric_bundles=_project(protocols.metric_bundles, projection_module),
         statistical_profiles=_project(protocols.statistical_profiles, projection_module),
         metric_definitions=projection_module(protocols.metric_definitions),
@@ -141,7 +138,6 @@ def build_scientific_projection(
         protocol_determinism=projection_module(protocols.protocol_determinism),
         normalization_fit_scopes=protocols.normalization_fit_scopes,
         normalization_leakage_rule=protocols.normalization_leakage_rule,
-        threshold_policy_defaults=projection_module(protocols.threshold_policy_defaults),
         nested_replicate_policy=projection_module(protocols.nested_replicate_policy),
         result_types=_project(protocols.result_types, projection_module),
         evaluation_result_contract=projection_module(protocols.evaluation_result_contract),

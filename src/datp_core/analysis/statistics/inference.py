@@ -14,7 +14,13 @@ import pingouin as pg
 from scipy import stats
 
 from datp_core.analysis.comparisons.contracts import PairedThresholdAnalysisResult
-from datp_core.analysis.contracts import AnalysisResult, ConfidenceInterval, HypothesisTestResult, LinearRegressionResult, PairedSeedDifferenceRecord
+from datp_core.analysis.contracts import (
+    AnalysisResult,
+    ConfidenceInterval,
+    HypothesisTestResult,
+    LinearRegressionResult,
+    PairedSeedDifferenceRecord,
+)
 from datp_core.analysis.enums import AlternativeHypothesis, ConfidenceIntervalMethod, HypothesisTestName
 from datp_core.analysis.errors import StatisticalProcedureError
 from datp_core.analysis.statistics.association import simple_linear_regression, spearman_correlation

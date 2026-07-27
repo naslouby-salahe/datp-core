@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field
-
 from datp_core.analysis._base import FrozenModel
 from datp_core.analysis.enums import (
     AnalysisResultKind,
@@ -16,7 +14,6 @@ from datp_core.analysis.enums import (
 )
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel
 from datp_core.core.seeding import Seed
-from datp_core.thresholding.policies.enums import ConformalAttainabilityStatus
 
 
 class ConformalClientCoverageRecord(FrozenModel):
@@ -25,7 +22,6 @@ class ConformalClientCoverageRecord(FrozenModel):
     absolute_coverage_error: float | None
     coverage_status: CoverageStatus
     finite_sample_rank: int
-    attainability_status: ConformalAttainabilityStatus
     calibration_count: int
 
 
