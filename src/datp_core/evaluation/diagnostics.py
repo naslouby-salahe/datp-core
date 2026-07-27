@@ -1,30 +1,48 @@
-"""FPR dispersion, AUROC invariance, pairwise JS divergence, calibration variance."""
+"""Deterministic evaluation diagnostics."""
 
 from __future__ import annotations
 
-import math
 from collections.abc import Iterable, Sequence
 from math import isfinite, sqrt
 from statistics import mean
 
+import numpy as np
 import polars as pl
 from scipy.spatial.distance import jensenshannon
 
-from datp_core.core.identifiers import ClientId
 from datp_core.core.numbers import linear_quantile
-from datp_core.evaluation.enums import MetricStatus
-from datp_core.evaluation.models import FprDispersion, MetricValue, QuantileVarianceTerms
+from datp_core.evaluation.enums import EvaluationColumn, MetricStatus
+from datp_core.evaluation.models import (
+    ClientScoreSeries,
+    FprDispersion,
+    MetricValue,
+    QuantileVarianceTerms,
+)
 
 
 def calculate_fpr_dispersion(
     values: Iterable[float],
     *,
     cv_instability_threshold: float,
-    ddof: int = 0,
+    ddof: int,
 ) -> FprDispersion:
+    if (
+        cv_instability_threshold <= 0.0
+        or not isfinite(cv_instability_threshold)
+    ):
+        raise ValueError(
+            "cv_instability_threshold must be finite and positive"
+        )
+
+    if ddof < 0:
+        raise ValueError("ddof must be non-negative")
+
     fprs = tuple(values)
+
     if not fprs:
-        unavailable = MetricValue.unavailable(MetricStatus.UNDEFINED_ZERO_DENOMINATOR)
+        unavailable = MetricValue.unavailable(
+            MetricStatus.UNDEFINED_ZERO_DENOMINATOR
+        )
         return FprDispersion(
             mean_fpr=unavailable,
             standard_deviation=unavailable,
@@ -33,118 +51,281 @@ def calculate_fpr_dispersion(
             value_range=unavailable,
             worst_fpr=unavailable,
         )
-    if cv_instability_threshold <= 0.0:
-        raise ValueError("cv_instability_threshold must be positive")
+
+    if ddof >= len(fprs):
+        raise ValueError(
+            "ddof must be smaller than the client count, "
+            f"got {ddof} for {len(fprs)} clients"
+        )
+
     if any(not isfinite(value) for value in fprs):
         raise ValueError("FPR values must be finite")
-    if any(value < 0.0 or value > 1.0 for value in fprs):
+
+    if any(not 0.0 <= value <= 1.0 for value in fprs):
         raise ValueError("FPR values must be in [0, 1]")
+
     average = mean(fprs)
-    n = len(fprs)
-    if not (0 <= ddof < n):
-        raise ValueError(f"ddof must satisfy 0 <= ddof < n, got ddof={ddof} with n={n}")
-    variance = sum((value - average) ** 2 for value in fprs) / (n - ddof)
-    if variance < 0.0:
-        raise ValueError(f"Negative variance computed with ddof={ddof}")
+    variance = (
+        sum((value - average) ** 2 for value in fprs)
+        / (len(fprs) - ddof)
+    )
     standard_deviation = sqrt(variance)
+
     q25 = linear_quantile(fprs, 0.25)
     q75 = linear_quantile(fprs, 0.75)
-    if math.isclose(average, 0.0, abs_tol=0.0):
-        cv = MetricValue.unavailable(MetricStatus.UNDEFINED_ZERO_DENOMINATOR)
+
+    if average == 0.0:
+        coefficient_of_variation = MetricValue.unavailable(
+            MetricStatus.UNDEFINED_ZERO_DENOMINATOR
+        )
     elif average < cv_instability_threshold:
-        cv = MetricValue(value=standard_deviation / average, status=MetricStatus.UNDEFINED_NEAR_ZERO_DENOMINATOR)
+        coefficient_of_variation = MetricValue.warning(
+            standard_deviation / average,
+            MetricStatus.UNDEFINED_NEAR_ZERO_DENOMINATOR,
+        )
     else:
-        cv = MetricValue.available(standard_deviation / average)
+        coefficient_of_variation = MetricValue.available(
+            standard_deviation / average
+        )
+
     return FprDispersion(
         mean_fpr=MetricValue.available(average),
         standard_deviation=MetricValue.available(standard_deviation),
-        coefficient_of_variation=cv,
+        coefficient_of_variation=coefficient_of_variation,
         iqr=MetricValue.available(q75 - q25),
         value_range=MetricValue.available(max(fprs) - min(fprs)),
         worst_fpr=MetricValue.available(max(fprs)),
     )
 
 
-def assert_auroc_invariant(values: Iterable[float], *, tolerance: float) -> None:
-    scores = tuple(values)
-    if tolerance < 0.0:
-        raise ValueError("tolerance must be non-negative")
-    if scores and max(scores) - min(scores) > tolerance:
-        raise ValueError("AUROC must be invariant across fixed-score threshold policies")
+def assert_auroc_invariant(
+    values: Iterable[float],
+    *,
+    tolerance: float,
+) -> None:
+    if tolerance < 0.0 or not isfinite(tolerance):
+        raise ValueError("tolerance must be finite and non-negative")
+
+    aurocs = tuple(values)
+
+    if any(
+        not isfinite(value) or not 0.0 <= value <= 1.0
+        for value in aurocs
+    ):
+        raise ValueError("AUROC values must be finite and in [0, 1]")
+
+    if aurocs and max(aurocs) - min(aurocs) > tolerance:
+        raise ValueError(
+            "AUROC must be invariant across fixed-score threshold policies"
+        )
 
 
 def calculate_pairwise_js_divergence(
-    client_scores: Sequence[tuple[ClientId, tuple[float, ...]]],
+    client_scores: Sequence[ClientScoreSeries],
     *,
     histogram_bins: int,
     logarithm_base: int,
 ) -> float:
-    if histogram_bins < 1 or logarithm_base < 2:
-        raise ValueError("Pairwise JS divergence requires configured positive bins and logarithm base >= 2")
+    if histogram_bins < 1:
+        raise ValueError("histogram_bins must be positive")
+
+    if logarithm_base < 2:
+        raise ValueError("logarithm_base must be at least 2")
+
     if len(client_scores) < 2:
-        raise ValueError("Pairwise JS divergence requires at least two clients")
-    if any(not scores for _, scores in client_scores):
-        raise ValueError("Pairwise JS divergence requires non-empty benign score distributions")
-    values = tuple(score for _, scores in client_scores for score in scores)
-    if not all(isfinite(score) and score >= 0.0 for score in values):
-        raise ValueError("Pairwise JS divergence requires finite non-negative scores")
-    lower, upper = min(values), max(values)
+        raise ValueError(
+            "Pairwise JS divergence requires at least two clients"
+        )
 
-    def histogram(scores: tuple[float, ...]) -> tuple[float, ...]:
-        counts = [0] * histogram_bins
-        for score in scores:
-            index = (
-                0
-                if lower == upper
-                else min(int((score - lower) / (upper - lower) * histogram_bins), histogram_bins - 1)
-            )
-            counts[index] += 1
-        return tuple(count / len(scores) for count in counts)
+    pooled = np.fromiter(
+        (
+            score
+            for client in client_scores
+            for score in client.scores
+        ),
+        dtype=np.float64,
+    )
 
-    distributions = tuple(histogram(scores) for _, scores in client_scores)
+    lower = float(pooled.min())
+    upper = float(pooled.max())
+
+    if lower == upper:
+        half_width = max(abs(lower), 1.0) * 0.5
+        lower -= half_width
+        upper += half_width
+
+    edges = np.linspace(
+        lower,
+        upper,
+        histogram_bins + 1,
+        dtype=np.float64,
+    )
+
+    distributions = tuple(
+        np.histogram(
+            np.asarray(client.scores, dtype=np.float64),
+            bins=edges,
+        )[0].astype(np.float64)
+        for client in client_scores
+    )
+
+    normalized = tuple(
+        distribution / distribution.sum()
+        for distribution in distributions
+    )
+
     divergences: list[float] = []
-    for left_index, left in enumerate(distributions):
-        for right in distributions[left_index + 1 :]:
-            distance = jensenshannon(left, right, base=float(logarithm_base))
-            if distance is None:
-                raise ValueError("JS distance computation returned None")
-            divergences.append(float(distance) ** 2)
+
+    for left_index, left in enumerate(normalized):
+        for right in normalized[left_index + 1 :]:
+            distance = float(
+                jensenshannon(
+                    left,
+                    right,
+                    base=float(logarithm_base),
+                )
+            )
+
+            if not isfinite(distance):
+                raise ValueError(
+                    "Jensen-Shannon distance must be finite"
+                )
+
+            divergences.append(distance * distance)
+
     return mean(divergences)
 
 
-def calculate_calibration_variance(calibration: pl.DataFrame, *, ddof: int = 0) -> QuantileVarianceTerms:
-    if calibration.height == 0:
-        raise ValueError("Calibration variance requires calibration scores")
-    if "score" not in calibration.columns or "client_id" not in calibration.columns:
-        raise ValueError("Calibration variance requires score and client_id columns")
+def calculate_calibration_variance(
+    calibration: pl.DataFrame,
+    *,
+    ddof: int,
+) -> QuantileVarianceTerms:
     if ddof < 0:
-        raise ValueError(f"ddof must be non-negative, got {ddof}")
-    scores_col = calibration["score"]
-    if scores_col.is_null().any() or scores_col.is_nan().any() or scores_col.is_infinite().any():
-        raise ValueError("Calibration scores must be finite")
-    pooled_mean = scores_col.mean()
-    group_stats = calibration.group_by("client_id").agg(
-        pl.len().alias("count"),
-        pl.col("score").mean().alias("mean"),
-        pl.col("score").var(ddof=ddof).alias("variance"),
+        raise ValueError("ddof must be non-negative")
+
+    required = (
+        EvaluationColumn.CLIENT_ID,
+        EvaluationColumn.SCORE,
     )
-    insufficient = group_stats.filter(pl.col("count") <= ddof)
-    if insufficient.height > 0:
+
+    missing = tuple(
+        column
+        for column in required
+        if column not in calibration.columns
+    )
+
+    if missing:
         raise ValueError(
-            f"Insufficient rows for ddof={ddof}: "
-            f"{[(r['client_id'], r['count']) for r in insufficient.iter_rows(named=True)]}"
+            "Calibration frame is missing columns: "
+            f"{[column.value for column in missing]}"
         )
-    total_count = float(group_stats["count"].sum())
-    within = float((group_stats["count"] * group_stats["variance"]).sum()) / total_count
-    between = float((group_stats["count"] * (group_stats["mean"] - pooled_mean) ** 2).sum()) / total_count
+
+    if calibration.is_empty():
+        raise ValueError(
+            "Calibration variance requires calibration scores"
+        )
+
+    normalized = calibration.select(
+        pl.col(EvaluationColumn.CLIENT_ID).cast(
+            pl.String,
+            strict=True,
+        ),
+        pl.col(EvaluationColumn.SCORE).cast(
+            pl.Float64,
+            strict=True,
+        ),
+    )
+
+    if normalized.get_column(
+        EvaluationColumn.CLIENT_ID
+    ).is_null().any():
+        raise ValueError(
+            "Calibration client IDs must not be null"
+        )
+
+    scores = normalized.get_column(EvaluationColumn.SCORE)
+
+    if (
+        scores.is_null().any()
+        or scores.is_nan().any()
+        or scores.is_infinite().any()
+    ):
+        raise ValueError("Calibration scores must be finite")
+
+    counts = normalized.group_by(
+        EvaluationColumn.CLIENT_ID
+    ).agg(
+        pl.len().alias("_count")
+    )
+
+    insufficient = counts.filter(
+        pl.col("_count") <= ddof
+    )
+
+    if not insufficient.is_empty():
+        offending = tuple(
+            insufficient.iter_rows(named=False)
+        )
+        raise ValueError(
+            f"Every client requires more than ddof={ddof} rows; "
+            f"offending groups: {offending}"
+        )
+
+    pooled_mean_raw = scores.mean()
+
+    if pooled_mean_raw is None:
+        raise ValueError(
+            "Calibration pooled mean is unavailable"
+        )
+
+    pooled_mean = float(pooled_mean_raw)
+
+    group_stats = normalized.group_by(
+        EvaluationColumn.CLIENT_ID
+    ).agg(
+        pl.len().alias("_count"),
+        pl.col(EvaluationColumn.SCORE)
+        .mean()
+        .alias("_mean"),
+        pl.col(EvaluationColumn.SCORE)
+        .var(ddof=ddof)
+        .alias("_variance"),
+    )
+
+    if group_stats.get_column(
+        "_variance"
+    ).is_null().any():
+        raise ValueError(
+            "Calibration variance produced null group variances"
+        )
+
+    total_count = float(
+        group_stats.get_column("_count").sum()
+    )
+
+    within = float(
+        (
+            group_stats.get_column("_count")
+            * group_stats.get_column("_variance")
+        ).sum()
+    ) / total_count
+
+    between = float(
+        (
+            group_stats.get_column("_count")
+            * (
+                group_stats.get_column("_mean")
+                - pooled_mean
+            )
+            ** 2
+        ).sum()
+    ) / total_count
+
     total = within + between
-    between_ratio: float | None
-    if total > 0.0 and math.isfinite(total):
-        between_ratio = between / total
-    else:
-        between_ratio = None
+
     return QuantileVarianceTerms(
         within_term=within,
         between_term=between,
-        between_ratio=between_ratio,
+        between_ratio=None if total == 0.0 else between / total,
     )

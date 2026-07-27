@@ -1,4 +1,4 @@
-"""Operating-point evaluation: confusion counts, per-client metrics, AUROC."""
+"""Per-client operating-point and AUROC evaluation."""
 
 from __future__ import annotations
 
@@ -6,32 +6,176 @@ import numpy as np
 import polars as pl
 from sklearn.metrics import roc_auc_score
 
-from datp_core.evaluation.enums import MetricStatus, MissingThresholdPolicy
-
-_OPERATING_POINT_RESULT_SCHEMA: dict[str, type] = {
-    "client_id": pl.String,
-    "true_positives": pl.Int64,
-    "false_positives": pl.Int64,
-    "true_negatives": pl.Int64,
-    "false_negatives": pl.Int64,
-    "false_positive_rate": pl.Float64,
-    "false_positive_rate_status": pl.String,
-    "true_positive_rate": pl.Float64,
-    "true_positive_rate_status": pl.String,
-    "balanced_accuracy": pl.Float64,
-    "balanced_accuracy_status": pl.String,
-    "macro_f1": pl.Float64,
-    "macro_f1_status": pl.String,
-    "auroc": pl.Float64,
-    "auroc_status": pl.String,
-}
-_OPERATING_POINT_RESULT_COLUMNS: tuple[str, ...] = tuple(_OPERATING_POINT_RESULT_SCHEMA)
+from datp_core.evaluation.enums import (
+    EvaluationColumn,
+    MetricStatus,
+    MissingThresholdPolicy,
+)
 
 
-def _validate_input_columns(df: pl.DataFrame, required: tuple[str, ...], label: str) -> None:
-    missing = [c for c in required if c not in df.columns]
+_RESULT_FIELDS = (
+    (EvaluationColumn.CLIENT_ID, pl.String),
+    (EvaluationColumn.TRUE_POSITIVES, pl.Int64),
+    (EvaluationColumn.FALSE_POSITIVES, pl.Int64),
+    (EvaluationColumn.TRUE_NEGATIVES, pl.Int64),
+    (EvaluationColumn.FALSE_NEGATIVES, pl.Int64),
+    (EvaluationColumn.FALSE_POSITIVE_RATE, pl.Float64),
+    (EvaluationColumn.FALSE_POSITIVE_RATE_STATUS, pl.String),
+    (EvaluationColumn.TRUE_POSITIVE_RATE, pl.Float64),
+    (EvaluationColumn.TRUE_POSITIVE_RATE_STATUS, pl.String),
+    (EvaluationColumn.BALANCED_ACCURACY, pl.Float64),
+    (EvaluationColumn.BALANCED_ACCURACY_STATUS, pl.String),
+    (EvaluationColumn.MACRO_F1, pl.Float64),
+    (EvaluationColumn.MACRO_F1_STATUS, pl.String),
+    (EvaluationColumn.AUROC, pl.Float64),
+    (EvaluationColumn.AUROC_STATUS, pl.String),
+)
+
+_COUNT_COLUMNS = (
+    EvaluationColumn.TRUE_POSITIVES,
+    EvaluationColumn.FALSE_POSITIVES,
+    EvaluationColumn.TRUE_NEGATIVES,
+    EvaluationColumn.FALSE_NEGATIVES,
+)
+
+_STATUS_COLUMNS = (
+    EvaluationColumn.FALSE_POSITIVE_RATE_STATUS,
+    EvaluationColumn.TRUE_POSITIVE_RATE_STATUS,
+    EvaluationColumn.BALANCED_ACCURACY_STATUS,
+    EvaluationColumn.MACRO_F1_STATUS,
+    EvaluationColumn.AUROC_STATUS,
+)
+
+
+def _normalize_scores(
+    scores: pl.DataFrame,
+) -> pl.DataFrame:
+    required = (
+        EvaluationColumn.CLIENT_ID,
+        EvaluationColumn.SCORE,
+        EvaluationColumn.LABEL,
+    )
+
+    missing = tuple(
+        column
+        for column in required
+        if column not in scores.columns
+    )
+
     if missing:
-        raise ValueError(f"{label} missing required columns: {missing}")
+        raise ValueError(
+            "Scores missing columns: "
+            f"{[column.value for column in missing]}"
+        )
+
+    if scores.is_empty():
+        raise ValueError(
+            "Cannot evaluate an empty score frame"
+        )
+
+    normalized = scores.select(
+        pl.col(EvaluationColumn.CLIENT_ID).cast(
+            pl.String,
+            strict=True,
+        ),
+        pl.col(EvaluationColumn.SCORE).cast(
+            pl.Float64,
+            strict=True,
+        ),
+        pl.col(EvaluationColumn.LABEL).cast(
+            pl.Int8,
+            strict=True,
+        ),
+    )
+
+    if normalized.get_column(
+        EvaluationColumn.CLIENT_ID
+    ).is_null().any():
+        raise ValueError(
+            "Score client IDs must not be null"
+        )
+
+    score_values = normalized.get_column(
+        EvaluationColumn.SCORE
+    )
+
+    if (
+        score_values.is_null().any()
+        or score_values.is_nan().any()
+        or score_values.is_infinite().any()
+    ):
+        raise ValueError("Scores must be finite")
+
+    labels = normalized.get_column(
+        EvaluationColumn.LABEL
+    )
+
+    if labels.is_null().any() or not labels.is_in((0, 1)).all():
+        raise ValueError(
+            "Labels must be binary and non-null"
+        )
+
+    return normalized
+
+
+def _normalize_thresholds(
+    thresholds: pl.DataFrame,
+) -> pl.DataFrame:
+    required = (
+        EvaluationColumn.CLIENT_ID,
+        EvaluationColumn.THRESHOLD,
+    )
+
+    missing = tuple(
+        column
+        for column in required
+        if column not in thresholds.columns
+    )
+
+    if missing:
+        raise ValueError(
+            "Thresholds missing columns: "
+            f"{[column.value for column in missing]}"
+        )
+
+    normalized = thresholds.select(
+        pl.col(EvaluationColumn.CLIENT_ID).cast(
+            pl.String,
+            strict=True,
+        ),
+        pl.col(EvaluationColumn.THRESHOLD).cast(
+            pl.Float64,
+            strict=True,
+        ),
+    )
+
+    if normalized.get_column(
+        EvaluationColumn.CLIENT_ID
+    ).is_null().any():
+        raise ValueError(
+            "Threshold client IDs must not be null"
+        )
+
+    if normalized.get_column(
+        EvaluationColumn.CLIENT_ID
+    ).is_duplicated().any():
+        raise ValueError(
+            "Threshold client IDs must be unique"
+        )
+
+    non_null = normalized.get_column(
+        EvaluationColumn.THRESHOLD
+    ).drop_nulls()
+
+    if (
+        non_null.is_nan().any()
+        or non_null.is_infinite().any()
+    ):
+        raise ValueError(
+            "Non-null thresholds must be finite"
+        )
+
+    return normalized
 
 
 def evaluate_operating_points(
@@ -40,220 +184,495 @@ def evaluate_operating_points(
     *,
     missing_threshold_policy: MissingThresholdPolicy,
 ) -> pl.DataFrame:
-    """Compute per-client operating-point metrics and AUROC.
+    normalized_scores = _normalize_scores(scores)
+    normalized_thresholds = _normalize_thresholds(thresholds)
 
-    Produces one canonical output schema for all scored clients.
-    Eligible and ineligible rows share identical columns and dtypes.
-    AUROC is computed for every scored client independently of threshold eligibility.
-    """
-    _validate_input_columns(scores, ("client_id", "score", "label"), "Scores")
-    _validate_input_columns(thresholds, ("client_id", "threshold"), "Thresholds")
-    if scores.is_empty():
-        raise ValueError("Cannot evaluate operating points on empty scores DataFrame")
+    scored_clients = normalized_scores.select(
+        EvaluationColumn.CLIENT_ID
+    ).unique()
 
-    _validate_finite_scores(scores)
-    _validate_finite_thresholds(thresholds)
+    extra_thresholds = (
+        normalized_thresholds
+        .select(EvaluationColumn.CLIENT_ID)
+        .join(
+            scored_clients,
+            on=EvaluationColumn.CLIENT_ID,
+            how="anti",
+        )
+    )
 
-    score_client_ids = scores["client_id"]
-    if score_client_ids.is_null().any():
-        raise ValueError("Scores contain null client_id values")
-    threshold_client_ids = thresholds["client_id"]
-    if threshold_client_ids.is_null().any():
-        raise ValueError("Thresholds contain null client_id values")
-    if threshold_client_ids.is_duplicated().any():
-        raise ValueError("Thresholds contain duplicate client_id values")
+    if not extra_thresholds.is_empty():
+        raise ValueError(
+            "Thresholds contain unscored clients: "
+            f"{tuple(extra_thresholds.iter_rows(named=False))}"
+        )
 
-    joined = scores.join(
-        thresholds.select("client_id", "threshold"),
-        on="client_id",
+    joined = normalized_scores.join(
+        normalized_thresholds,
+        on=EvaluationColumn.CLIENT_ID,
         how="left",
         validate="m:1",
     )
 
-    eligible = joined.filter(pl.col("threshold").is_not_null())
+    missing_clients = (
+        joined
+        .filter(
+            pl.col(EvaluationColumn.THRESHOLD).is_null()
+        )
+        .select(EvaluationColumn.CLIENT_ID)
+        .unique()
+        .sort(EvaluationColumn.CLIENT_ID)
+    )
 
-    if joined["threshold"].null_count() > 0:
-        if missing_threshold_policy is MissingThresholdPolicy.FAIL:
-            missing_clients = joined.filter(pl.col("threshold").is_null()).select("client_id").unique()
-            raise ValueError(
-                f"Threshold artifact does not cover every scored client: {missing_clients['client_id'].to_list()}"
-            )
-        ineligible = _build_ineligible_rows(joined)
-        if eligible.is_empty():
-            metrics = ineligible
-        else:
-            eligible_metrics = _compute_eligible_metrics(eligible)
-            metrics = pl.concat((eligible_metrics, ineligible), how="vertical")
+    if (
+        not missing_clients.is_empty()
+        and missing_threshold_policy
+        is MissingThresholdPolicy.FAIL
+    ):
+        raise ValueError(
+            "Missing thresholds for clients: "
+            f"{tuple(missing_clients.iter_rows(named=False))}"
+        )
+
+    eligible = joined.filter(
+        pl.col(EvaluationColumn.THRESHOLD).is_not_null()
+    )
+
+    ineligible = joined.filter(
+        pl.col(EvaluationColumn.THRESHOLD).is_null()
+    )
+
+    if eligible.is_empty():
+        metrics = _ineligible_rows(ineligible)
+    elif ineligible.is_empty():
+        metrics = _eligible_rows(eligible)
     else:
-        metrics = _compute_eligible_metrics(eligible)
+        metrics = pl.concat(
+            (
+                _eligible_rows(eligible),
+                _ineligible_rows(ineligible),
+            ),
+            how="vertical",
+        )
 
-    auroc = _compute_auroc_all_clients(scores)
-    metrics = metrics.join(auroc, on="client_id", how="left", validate="m:1")
+    result = metrics.join(
+        _auroc_rows(normalized_scores),
+        on=EvaluationColumn.CLIENT_ID,
+        how="left",
+        validate="1:1",
+    )
 
-    metrics = metrics.select(_OPERATING_POINT_RESULT_COLUMNS).sort("client_id")
+    result = (
+        result
+        .select(
+            pl.col(column)
+            .cast(dtype, strict=True)
+            .alias(column)
+            for column, dtype in _RESULT_FIELDS
+        )
+        .sort(EvaluationColumn.CLIENT_ID)
+    )
 
-    if metrics.is_duplicated().any():
-        raise ValueError("Result contains duplicate rows")
-    if metrics["client_id"].n_unique() != metrics.height:
-        raise ValueError("Result has duplicate client_id values")
-    if metrics["auroc"].is_null().any() and metrics["auroc_status"].is_null().any():
-        raise ValueError("Result is missing AUROC rows")
+    _validate_result(result, scored_clients)
 
-    return metrics
-
-
-def _validate_finite_scores(df: pl.DataFrame) -> None:
-    score_col = df["score"]
-    if score_col.is_null().any():
-        raise ValueError("Scores contain null values")
-    if score_col.is_nan().any():
-        raise ValueError("Scores contain NaN values")
-    if score_col.is_infinite().any():
-        raise ValueError("Scores contain infinite values")
-    if "label" in df.columns:
-        label_col = df["label"]
-        unique_labels = label_col.unique().to_list()
-        if any(label not in (0, 1) for label in unique_labels):
-            raise ValueError(f"Labels must be binary (0 or 1), found: {unique_labels}")
-
-
-def _validate_finite_thresholds(df: pl.DataFrame) -> None:
-    if "threshold" not in df.columns:
-        return
-    threshold_col = df["threshold"]
-    non_null = threshold_col.drop_nulls()
-    if non_null.is_nan().any():
-        raise ValueError("Thresholds contain NaN values")
-    if non_null.is_infinite().any():
-        raise ValueError("Thresholds contain infinite values")
+    return result
 
 
-def _compute_eligible_metrics(df: pl.DataFrame) -> pl.DataFrame:
+def _eligible_rows(
+    frame: pl.DataFrame,
+) -> pl.DataFrame:
     return (
-        df.lazy()
+        frame.lazy()
         .with_columns(
-            is_pred_attack=(pl.col("score") > pl.col("threshold")).cast(pl.Int64),
-            is_benign=(pl.col("label") == 0).cast(pl.Int64),
-            is_attack=(pl.col("label") == 1).cast(pl.Int64),
+            _predicted_attack=(
+                pl.col(EvaluationColumn.SCORE)
+                > pl.col(EvaluationColumn.THRESHOLD)
+            ).cast(pl.Int64),
+            _benign=(
+                pl.col(EvaluationColumn.LABEL) == 0
+            ).cast(pl.Int64),
+            _attack=(
+                pl.col(EvaluationColumn.LABEL) == 1
+            ).cast(pl.Int64),
         )
         .with_columns(
-            tp=pl.col("is_pred_attack") * pl.col("is_attack"),
-            fp=pl.col("is_pred_attack") * pl.col("is_benign"),
-            tn=(1 - pl.col("is_pred_attack")) * pl.col("is_benign"),
-            fn=(1 - pl.col("is_pred_attack")) * pl.col("is_attack"),
+            _tp=pl.col("_predicted_attack") * pl.col("_attack"),
+            _fp=pl.col("_predicted_attack") * pl.col("_benign"),
+            _tn=(
+                1 - pl.col("_predicted_attack")
+            ) * pl.col("_benign"),
+            _fn=(
+                1 - pl.col("_predicted_attack")
+            ) * pl.col("_attack"),
         )
-        .group_by("client_id")
+        .group_by(EvaluationColumn.CLIENT_ID)
         .agg(
-            true_positives=pl.col("tp").sum(),
-            false_positives=pl.col("fp").sum(),
-            true_negatives=pl.col("tn").sum(),
-            false_negatives=pl.col("fn").sum(),
+            pl.col("_tp")
+            .sum()
+            .alias(EvaluationColumn.TRUE_POSITIVES),
+            pl.col("_fp")
+            .sum()
+            .alias(EvaluationColumn.FALSE_POSITIVES),
+            pl.col("_tn")
+            .sum()
+            .alias(EvaluationColumn.TRUE_NEGATIVES),
+            pl.col("_fn")
+            .sum()
+            .alias(EvaluationColumn.FALSE_NEGATIVES),
         )
         .with_columns(
-            benign_total=pl.col("false_positives") + pl.col("true_negatives"),
-            attack_total=pl.col("true_positives") + pl.col("false_negatives"),
+            _benign_total=(
+                pl.col(EvaluationColumn.FALSE_POSITIVES)
+                + pl.col(EvaluationColumn.TRUE_NEGATIVES)
+            ),
+            _attack_total=(
+                pl.col(EvaluationColumn.TRUE_POSITIVES)
+                + pl.col(EvaluationColumn.FALSE_NEGATIVES)
+            ),
         )
         .with_columns(
-            false_positive_rate=pl.when(pl.col("benign_total") > 0)
-            .then(pl.col("false_positives") / pl.col("benign_total"))
-            .otherwise(None),
-            false_positive_rate_status=pl.when(pl.col("benign_total") > 0)
+            pl.when(pl.col("_benign_total") > 0)
+            .then(
+                pl.col(EvaluationColumn.FALSE_POSITIVES)
+                / pl.col("_benign_total")
+            )
+            .otherwise(None)
+            .alias(EvaluationColumn.FALSE_POSITIVE_RATE),
+
+            pl.when(pl.col("_benign_total") > 0)
             .then(pl.lit(MetricStatus.AVAILABLE.value))
-            .otherwise(pl.lit(MetricStatus.UNAVAILABLE_MISSING_BENIGN_CLASS.value)),
-            true_positive_rate=pl.when(pl.col("attack_total") > 0)
-            .then(pl.col("true_positives") / pl.col("attack_total"))
-            .otherwise(None),
-            true_positive_rate_status=pl.when(pl.col("attack_total") > 0)
+            .otherwise(
+                pl.lit(
+                    MetricStatus
+                    .UNAVAILABLE_MISSING_BENIGN_CLASS
+                    .value
+                )
+            )
+            .alias(
+                EvaluationColumn.FALSE_POSITIVE_RATE_STATUS
+            ),
+
+            pl.when(pl.col("_attack_total") > 0)
+            .then(
+                pl.col(EvaluationColumn.TRUE_POSITIVES)
+                / pl.col("_attack_total")
+            )
+            .otherwise(None)
+            .alias(EvaluationColumn.TRUE_POSITIVE_RATE),
+
+            pl.when(pl.col("_attack_total") > 0)
             .then(pl.lit(MetricStatus.AVAILABLE.value))
-            .otherwise(pl.lit(MetricStatus.UNAVAILABLE_MISSING_ATTACK_CLASS.value)),
+            .otherwise(
+                pl.lit(
+                    MetricStatus
+                    .UNAVAILABLE_MISSING_ATTACK_CLASS
+                    .value
+                )
+            )
+            .alias(
+                EvaluationColumn.TRUE_POSITIVE_RATE_STATUS
+            ),
         )
         .with_columns(
-            balanced_accuracy=pl.when((pl.col("benign_total") > 0) & (pl.col("attack_total") > 0))
-            .then((pl.col("true_positive_rate") + (1.0 - pl.col("false_positive_rate"))) / 2.0)
-            .otherwise(None),
-            balanced_accuracy_status=pl.when(pl.col("benign_total") == 0)
-            .then(pl.lit(MetricStatus.UNAVAILABLE_MISSING_BENIGN_CLASS.value))
-            .when(pl.col("attack_total") == 0)
-            .then(pl.lit(MetricStatus.UNAVAILABLE_MISSING_ATTACK_CLASS.value))
-            .otherwise(pl.lit(MetricStatus.AVAILABLE.value)),
-            macro_f1=pl.when((pl.col("benign_total") > 0) & (pl.col("attack_total") > 0))
+            pl.when(
+                (pl.col("_benign_total") > 0)
+                & (pl.col("_attack_total") > 0)
+            )
             .then(
                 (
-                    (
-                        (2.0 * pl.col("true_negatives"))
-                        / ((2.0 * pl.col("true_negatives")) + pl.col("false_positives") + pl.col("false_negatives"))
+                    pl.col(
+                        EvaluationColumn.TRUE_POSITIVE_RATE
                     )
-                    + (
-                        (2.0 * pl.col("true_positives"))
-                        / ((2.0 * pl.col("true_positives")) + pl.col("false_positives") + pl.col("false_negatives"))
+                    + 1.0
+                    - pl.col(
+                        EvaluationColumn.FALSE_POSITIVE_RATE
                     )
                 )
                 / 2.0
             )
-            .otherwise(None),
-            macro_f1_status=pl.when(pl.col("benign_total") == 0)
-            .then(pl.lit(MetricStatus.UNAVAILABLE_MISSING_BENIGN_CLASS.value))
-            .when(pl.col("attack_total") == 0)
-            .then(pl.lit(MetricStatus.UNAVAILABLE_MISSING_ATTACK_CLASS.value))
-            .otherwise(pl.lit(MetricStatus.AVAILABLE.value)),
+            .otherwise(None)
+            .alias(EvaluationColumn.BALANCED_ACCURACY),
+
+            pl.when(pl.col("_benign_total") == 0)
+            .then(
+                pl.lit(
+                    MetricStatus
+                    .UNAVAILABLE_MISSING_BENIGN_CLASS
+                    .value
+                )
+            )
+            .when(pl.col("_attack_total") == 0)
+            .then(
+                pl.lit(
+                    MetricStatus
+                    .UNAVAILABLE_MISSING_ATTACK_CLASS
+                    .value
+                )
+            )
+            .otherwise(
+                pl.lit(MetricStatus.AVAILABLE.value)
+            )
+            .alias(
+                EvaluationColumn.BALANCED_ACCURACY_STATUS
+            ),
+
+            pl.when(
+                (pl.col("_benign_total") > 0)
+                & (pl.col("_attack_total") > 0)
+            )
+            .then(
+                (
+                    (
+                        2.0
+                        * pl.col(
+                            EvaluationColumn.TRUE_NEGATIVES
+                        )
+                        / (
+                            2.0
+                            * pl.col(
+                                EvaluationColumn.TRUE_NEGATIVES
+                            )
+                            + pl.col(
+                                EvaluationColumn.FALSE_POSITIVES
+                            )
+                            + pl.col(
+                                EvaluationColumn.FALSE_NEGATIVES
+                            )
+                        )
+                    )
+                    + (
+                        2.0
+                        * pl.col(
+                            EvaluationColumn.TRUE_POSITIVES
+                        )
+                        / (
+                            2.0
+                            * pl.col(
+                                EvaluationColumn.TRUE_POSITIVES
+                            )
+                            + pl.col(
+                                EvaluationColumn.FALSE_POSITIVES
+                            )
+                            + pl.col(
+                                EvaluationColumn.FALSE_NEGATIVES
+                            )
+                        )
+                    )
+                )
+                / 2.0
+            )
+            .otherwise(None)
+            .alias(EvaluationColumn.MACRO_F1),
+
+            pl.when(pl.col("_benign_total") == 0)
+            .then(
+                pl.lit(
+                    MetricStatus
+                    .UNAVAILABLE_MISSING_BENIGN_CLASS
+                    .value
+                )
+            )
+            .when(pl.col("_attack_total") == 0)
+            .then(
+                pl.lit(
+                    MetricStatus
+                    .UNAVAILABLE_MISSING_ATTACK_CLASS
+                    .value
+                )
+            )
+            .otherwise(
+                pl.lit(MetricStatus.AVAILABLE.value)
+            )
+            .alias(EvaluationColumn.MACRO_F1_STATUS),
         )
-        .drop("benign_total", "attack_total")
-        .sort("client_id")
+        .drop("_benign_total", "_attack_total")
         .collect()
     )
 
 
-def _build_ineligible_rows(joined: pl.DataFrame) -> pl.DataFrame:
-    ineligible_status = MetricStatus.UNAVAILABLE_INELIGIBLE_CLIENT.value
+def _ineligible_rows(
+    frame: pl.DataFrame,
+) -> pl.DataFrame:
+    status = MetricStatus.UNAVAILABLE_INELIGIBLE_CLIENT.value
+
     return (
-        joined.filter(pl.col("threshold").is_null())
-        .select("client_id")
-        .unique(maintain_order=True)
+        frame.select(EvaluationColumn.CLIENT_ID)
+        .unique()
         .with_columns(
-            pl.lit(None, dtype=pl.Int64).alias("true_positives"),
-            pl.lit(None, dtype=pl.Int64).alias("false_positives"),
-            pl.lit(None, dtype=pl.Int64).alias("true_negatives"),
-            pl.lit(None, dtype=pl.Int64).alias("false_negatives"),
-            pl.lit(None, dtype=pl.Float64).alias("false_positive_rate"),
-            pl.lit(ineligible_status).alias("false_positive_rate_status"),
-            pl.lit(None, dtype=pl.Float64).alias("true_positive_rate"),
-            pl.lit(ineligible_status).alias("true_positive_rate_status"),
-            pl.lit(None, dtype=pl.Float64).alias("balanced_accuracy"),
-            pl.lit(ineligible_status).alias("balanced_accuracy_status"),
-            pl.lit(None, dtype=pl.Float64).alias("macro_f1"),
-            pl.lit(ineligible_status).alias("macro_f1_status"),
+            *(
+                pl.lit(None, dtype=pl.Int64).alias(column)
+                for column in _COUNT_COLUMNS
+            ),
+            pl.lit(None, dtype=pl.Float64).alias(
+                EvaluationColumn.FALSE_POSITIVE_RATE
+            ),
+            pl.lit(status).alias(
+                EvaluationColumn.FALSE_POSITIVE_RATE_STATUS
+            ),
+            pl.lit(None, dtype=pl.Float64).alias(
+                EvaluationColumn.TRUE_POSITIVE_RATE
+            ),
+            pl.lit(status).alias(
+                EvaluationColumn.TRUE_POSITIVE_RATE_STATUS
+            ),
+            pl.lit(None, dtype=pl.Float64).alias(
+                EvaluationColumn.BALANCED_ACCURACY
+            ),
+            pl.lit(status).alias(
+                EvaluationColumn.BALANCED_ACCURACY_STATUS
+            ),
+            pl.lit(None, dtype=pl.Float64).alias(
+                EvaluationColumn.MACRO_F1
+            ),
+            pl.lit(status).alias(
+                EvaluationColumn.MACRO_F1_STATUS
+            ),
         )
     )
 
 
-def _compute_auroc_all_clients(scores: pl.DataFrame) -> pl.DataFrame:
-    if "score" not in scores.columns or "label" not in scores.columns:
-        raise ValueError("AUROC computation requires score and label columns")
-
-    grouped = scores.group_by("client_id", maintain_order=True).agg(
-        pl.col("label").alias("_labels"),
-        pl.col("score").alias("_scores"),
+def _auroc_rows(
+    scores: pl.DataFrame,
+) -> pl.DataFrame:
+    grouped = scores.group_by(
+        EvaluationColumn.CLIENT_ID,
+        maintain_order=True,
+    ).agg(
+        pl.col(EvaluationColumn.LABEL).alias("_labels"),
+        pl.col(EvaluationColumn.SCORE).alias("_scores"),
     )
 
-    result_client_ids: list[str] = []
-    result_aurocs: list[float | None] = []
-    result_statuses: list[str] = []
-    for row in grouped.iter_rows(named=True):
-        labels_array = np.asarray(row["_labels"], dtype=np.int64)
-        scores_array = np.asarray(row["_scores"], dtype=np.float64)
-        result_client_ids.append(str(row["client_id"]))
-        if len(np.unique(labels_array)) < 2:
-            result_aurocs.append(None)
-            result_statuses.append(MetricStatus.UNAVAILABLE_SINGLE_CLASS.value)
+    client_ids: list[str] = []
+    values: list[float | None] = []
+    statuses: list[str] = []
+
+    for client_raw, labels_raw, scores_raw in grouped.iter_rows(
+        named=False
+    ):
+        labels = np.asarray(
+            labels_raw,
+            dtype=np.int8,
+        )
+
+        client_scores = np.asarray(
+            scores_raw,
+            dtype=np.float64,
+        )
+
+        client_ids.append(str(client_raw))
+
+        if np.unique(labels).size < 2:
+            values.append(None)
+            statuses.append(
+                MetricStatus.UNAVAILABLE_SINGLE_CLASS.value
+            )
         else:
-            result_aurocs.append(float(roc_auc_score(labels_array, scores_array)))
-            result_statuses.append(MetricStatus.AVAILABLE.value)
+            values.append(
+                float(
+                    roc_auc_score(
+                        labels,
+                        client_scores,
+                    )
+                )
+            )
+            statuses.append(
+                MetricStatus.AVAILABLE.value
+            )
 
     return pl.DataFrame(
-        {
-            "client_id": result_client_ids,
-            "auroc": result_aurocs,
-            "auroc_status": result_statuses,
-        },
-        schema={"client_id": pl.String, "auroc": pl.Float64, "auroc_status": pl.String},
+        (
+            pl.Series(
+                EvaluationColumn.CLIENT_ID,
+                client_ids,
+                dtype=pl.String,
+            ),
+            pl.Series(
+                EvaluationColumn.AUROC,
+                values,
+                dtype=pl.Float64,
+            ),
+            pl.Series(
+                EvaluationColumn.AUROC_STATUS,
+                statuses,
+                dtype=pl.String,
+            ),
+        )
     )
+
+
+def _validate_result(
+    result: pl.DataFrame,
+    scored_clients: pl.DataFrame,
+) -> None:
+    if result.height != scored_clients.height:
+        raise ValueError(
+            "Evaluation must produce exactly one row "
+            "per scored client"
+        )
+
+    if result.get_column(
+        EvaluationColumn.CLIENT_ID
+    ).is_duplicated().any():
+        raise ValueError(
+            "Evaluation result contains duplicate client IDs"
+        )
+
+    if any(
+        result.get_column(column).is_null().any()
+        for column in _STATUS_COLUMNS
+    ):
+        raise ValueError(
+            "Metric statuses must never be null"
+        )
+
+    valid_statuses = tuple(
+        status.value
+        for status in MetricStatus
+    )
+
+    for column in _STATUS_COLUMNS:
+        if not result.get_column(column).is_in(
+            valid_statuses
+        ).all():
+            raise ValueError(
+                f"Invalid metric status in {column.value}"
+            )
+
+    auroc = result.get_column(EvaluationColumn.AUROC)
+    auroc_status = result.get_column(
+        EvaluationColumn.AUROC_STATUS
+    )
+
+    available = (
+        auroc_status == MetricStatus.AVAILABLE.value
+    )
+
+    if auroc.filter(available).is_null().any():
+        raise ValueError(
+            "Available AUROC rows require values"
+        )
+
+    if auroc.filter(~available).is_not_null().any():
+        raise ValueError(
+            "Unavailable AUROC rows must not contain values"
+        )
+
+    ineligible = (
+        result.get_column(
+            EvaluationColumn.FALSE_POSITIVE_RATE_STATUS
+        )
+        == MetricStatus.UNAVAILABLE_INELIGIBLE_CLIENT.value
+    )
+
+    for column in _COUNT_COLUMNS:
+        values = result.get_column(column)
+
+        if values.filter(ineligible).is_not_null().any():
+            raise ValueError(
+                "Ineligible confusion counts must be null"
+            )
+
+        if values.filter(~ineligible).is_null().any():
+            raise ValueError(
+                "Eligible confusion counts must be available"
+            )

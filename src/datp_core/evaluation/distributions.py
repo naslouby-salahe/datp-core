@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
+from numbers import Real
+
 import polars as pl
 
 from datp_core.core.identifiers import ClientId
-from datp_core.evaluation.enums import MetricStatus
+from datp_core.evaluation.enums import (
+    EvaluationColumn,
+    MetricStatus,
+)
 from datp_core.evaluation.models import (
     CdfPoint,
     ClientScoreDistribution,
@@ -14,55 +20,217 @@ from datp_core.evaluation.models import (
     ThresholdTradeoff,
 )
 
-_REQUIRED_METRIC_COLUMNS: tuple[str, ...] = (
-    "client_id",
-    "false_positive_rate",
-    "false_positive_rate_status",
-    "true_positive_rate",
-    "true_positive_rate_status",
-    "balanced_accuracy",
-    "balanced_accuracy_status",
-    "macro_f1",
-    "macro_f1_status",
+
+_METRIC_COLUMNS = (
+    EvaluationColumn.FALSE_POSITIVE_RATE,
+    EvaluationColumn.FALSE_POSITIVE_RATE_STATUS,
+    EvaluationColumn.TRUE_POSITIVE_RATE,
+    EvaluationColumn.TRUE_POSITIVE_RATE_STATUS,
+    EvaluationColumn.BALANCED_ACCURACY,
+    EvaluationColumn.BALANCED_ACCURACY_STATUS,
+    EvaluationColumn.MACRO_F1,
+    EvaluationColumn.MACRO_F1_STATUS,
 )
 
 
-def _validate_distribution_inputs(
-    thresholds: pl.DataFrame, metrics: pl.DataFrame, scores: pl.DataFrame
-) -> None:
-    for col in ("client_id", "threshold"):
-        if col not in thresholds.columns:
-            raise ValueError(f"Thresholds missing column: {col}")
-    for col in _REQUIRED_METRIC_COLUMNS:
-        if col not in metrics.columns:
-            raise ValueError(f"Metrics missing column: {col}")
-    for col in ("client_id", "score", "label"):
-        if col not in scores.columns:
-            raise ValueError(f"Scores missing column: {col}")
-    if thresholds["client_id"].is_duplicated().any():
-        raise ValueError("Duplicate client_id in thresholds")
-    if metrics["client_id"].is_duplicated().any():
-        raise ValueError("Duplicate client_id in metrics")
+def _normalize_inputs(
+    thresholds: pl.DataFrame,
+    metrics: pl.DataFrame,
+    scores: pl.DataFrame,
+) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame]:
+    threshold_required = (
+        EvaluationColumn.CLIENT_ID,
+        EvaluationColumn.THRESHOLD,
+    )
+
+    metric_required = (
+        EvaluationColumn.CLIENT_ID,
+        *_METRIC_COLUMNS,
+    )
+
+    score_required = (
+        EvaluationColumn.CLIENT_ID,
+        EvaluationColumn.SCORE,
+        EvaluationColumn.LABEL,
+    )
+
+    for label, frame, required in (
+        ("Thresholds", thresholds, threshold_required),
+        ("Metrics", metrics, metric_required),
+        ("Scores", scores, score_required),
+    ):
+        missing = tuple(
+            column
+            for column in required
+            if column not in frame.columns
+        )
+
+        if missing:
+            raise ValueError(
+                f"{label} missing columns: "
+                f"{[column.value for column in missing]}"
+            )
+
+    normalized_thresholds = thresholds.select(
+        pl.col(EvaluationColumn.CLIENT_ID).cast(
+            pl.String,
+            strict=True,
+        ),
+        pl.col(EvaluationColumn.THRESHOLD).cast(
+            pl.Float64,
+            strict=True,
+        ),
+    )
+
+    normalized_metrics = metrics.select(
+        pl.col(EvaluationColumn.CLIENT_ID).cast(
+            pl.String,
+            strict=True,
+        ),
+        *(pl.col(column) for column in _METRIC_COLUMNS),
+    )
+
+    normalized_scores = scores.select(
+        pl.col(EvaluationColumn.CLIENT_ID).cast(
+            pl.String,
+            strict=True,
+        ),
+        pl.col(EvaluationColumn.SCORE).cast(
+            pl.Float64,
+            strict=True,
+        ),
+        pl.col(EvaluationColumn.LABEL).cast(
+            pl.Int8,
+            strict=True,
+        ),
+    )
+
+    if normalized_thresholds.get_column(
+        EvaluationColumn.CLIENT_ID
+    ).is_null().any():
+        raise ValueError(
+            "Threshold client IDs must not be null"
+        )
+
+    if normalized_metrics.get_column(
+        EvaluationColumn.CLIENT_ID
+    ).is_null().any():
+        raise ValueError(
+            "Metric client IDs must not be null"
+        )
+
+    if normalized_scores.get_column(
+        EvaluationColumn.CLIENT_ID
+    ).is_null().any():
+        raise ValueError(
+            "Score client IDs must not be null"
+        )
+
+    if normalized_thresholds.get_column(
+        EvaluationColumn.CLIENT_ID
+    ).is_duplicated().any():
+        raise ValueError(
+            "Threshold client IDs must be unique"
+        )
+
+    if normalized_metrics.get_column(
+        EvaluationColumn.CLIENT_ID
+    ).is_duplicated().any():
+        raise ValueError(
+            "Metric client IDs must be unique"
+        )
+
+    threshold_values = normalized_thresholds.get_column(
+        EvaluationColumn.THRESHOLD
+    )
+
+    score_values = normalized_scores.get_column(
+        EvaluationColumn.SCORE
+    )
+
+    if (
+        threshold_values.is_null().any()
+        or threshold_values.is_nan().any()
+        or threshold_values.is_infinite().any()
+    ):
+        raise ValueError(
+            "Distribution thresholds must be finite and non-null"
+        )
+
+    if (
+        score_values.is_null().any()
+        or score_values.is_nan().any()
+        or score_values.is_infinite().any()
+    ):
+        raise ValueError("Distribution scores must be finite")
+
+    labels = normalized_scores.get_column(
+        EvaluationColumn.LABEL
+    )
+
+    if labels.is_null().any() or not labels.is_in((0, 1)).all():
+        raise ValueError(
+            "Distribution labels must be binary and non-null"
+        )
+
+    return (
+        normalized_thresholds,
+        normalized_metrics,
+        normalized_scores,
+    )
 
 
-def _build_metric_value(val: object, status_str: str) -> MetricValue:
-    status = MetricStatus(status_str)
-    if val is None:
+def _metric_value(
+    value: object,
+    status_value: object,
+) -> MetricValue:
+    status = MetricStatus(str(status_value))
+
+    if value is None:
         return MetricValue.unavailable(status)
-    if isinstance(val, (int, float)):
-        return MetricValue(value=float(val), status=status)
-    return MetricValue.unavailable(MetricStatus.FAILED_INVALID_ARTIFACT)
+
+    if not isinstance(value, Real):
+        raise ValueError(
+            "Metric value must be numeric or null, "
+            f"got {type(value).__name__}"
+        )
+
+    numeric = float(value)
+
+    if status is MetricStatus.UNDEFINED_NEAR_ZERO_DENOMINATOR:
+        return MetricValue.warning(numeric, status)
+
+    return MetricValue(
+        value=numeric,
+        status=status,
+    )
 
 
-def _empirical_cdf(values: list[float]) -> tuple[CdfPoint, ...]:
+def _empirical_cdf(
+    values: Sequence[float],
+) -> tuple[CdfPoint, ...]:
+    count = len(values)
+
     return tuple(
-        CdfPoint(score=value, cumulative_probability=(index + 1) / len(values))
+        CdfPoint(
+            score=value,
+            cumulative_probability=(index + 1) / count,
+        )
         for index, value in enumerate(values)
     )
 
 
-def _cdf_position(values: list[float], threshold: float) -> float | None:
-    return sum(value <= threshold for value in values) / len(values) if values else None
+def _cdf_position(
+    values: Sequence[float],
+    threshold: float,
+) -> float | None:
+    if not values:
+        return None
+
+    return (
+        sum(value <= threshold for value in values)
+        / len(values)
+    )
 
 
 def client_score_distributions(
@@ -71,73 +239,156 @@ def client_score_distributions(
     scores: pl.DataFrame,
     client_filter: ClientId | None,
 ) -> tuple[ClientScoreDistribution, ...]:
-    _validate_distribution_inputs(thresholds, metrics, scores)
+    thresholds, metrics, scores = _normalize_inputs(
+        thresholds,
+        metrics,
+        scores,
+    )
 
-    client_ids = sorted(str(c) for c in thresholds["client_id"].unique().to_list())
+    selected_clients = thresholds.select(
+        EvaluationColumn.CLIENT_ID
+    )
+
     if client_filter is not None:
-        filter_str = str(client_filter)
-        if filter_str not in client_ids:
-            raise ValueError(f"Locked client '{filter_str}' is unavailable in this evaluation")
-        client_ids = [filter_str]
+        selected_clients = selected_clients.filter(
+            pl.col(EvaluationColumn.CLIENT_ID)
+            == str(client_filter)
+        )
 
-    thresholds_filtered = thresholds.filter(pl.col("client_id").is_in(client_ids))
-    metrics_filtered = metrics.filter(pl.col("client_id").is_in(client_ids))
+        if selected_clients.is_empty():
+            raise ValueError(
+                f"Locked client '{client_filter}' "
+                "is unavailable in this evaluation"
+            )
 
-    missing_threshold = set(client_ids) - set(str(c) for c in thresholds_filtered["client_id"].to_list())
-    if missing_threshold:
-        raise ValueError(f"Missing threshold rows for clients: {missing_threshold}")
-    missing_metric = set(client_ids) - set(str(c) for c in metrics_filtered["client_id"].to_list())
-    if missing_metric:
-        raise ValueError(f"Missing metric rows for clients: {missing_metric}")
+    missing_metrics = selected_clients.join(
+        metrics.select(EvaluationColumn.CLIENT_ID),
+        on=EvaluationColumn.CLIENT_ID,
+        how="anti",
+    )
 
-    threshold_map: dict[str, float] = dict(
-        zip(
-            (str(c) for c in thresholds_filtered["client_id"].to_list()),
-            (float(t) for t in thresholds_filtered["threshold"].to_list()),
-            strict=True,
+    if not missing_metrics.is_empty():
+        raise ValueError(
+            "Missing metric rows: "
+            f"{tuple(missing_metrics.iter_rows(named=False))}"
+        )
+
+    score_groups = (
+        scores.join(
+            selected_clients,
+            on=EvaluationColumn.CLIENT_ID,
+            how="inner",
+            validate="m:1",
+        )
+        .group_by(EvaluationColumn.CLIENT_ID)
+        .agg(
+            pl.col(EvaluationColumn.SCORE)
+            .filter(pl.col(EvaluationColumn.LABEL) == 0)
+            .sort()
+            .alias("_benign_scores"),
+            pl.col(EvaluationColumn.SCORE)
+            .filter(pl.col(EvaluationColumn.LABEL) == 1)
+            .sort()
+            .alias("_attack_scores"),
         )
     )
 
-    result: list[ClientScoreDistribution] = []
-    for client in client_ids:
-        client_scores = scores.filter(pl.col("client_id") == client)
-        benign = (
-            client_scores.filter(pl.col("label") == 0)
-            .select(pl.col("score").sort())
-            .to_series()
-            .to_list()
-        )
-        attack = (
-            client_scores.filter(pl.col("label") == 1)
-            .select(pl.col("score").sort())
-            .to_series()
-            .to_list()
+    missing_scores = selected_clients.join(
+        score_groups.select(EvaluationColumn.CLIENT_ID),
+        on=EvaluationColumn.CLIENT_ID,
+        how="anti",
+    )
+
+    if not missing_scores.is_empty():
+        raise ValueError(
+            "Missing score rows: "
+            f"{tuple(missing_scores.iter_rows(named=False))}"
         )
 
-        metric_row = metrics_filtered.filter(pl.col("client_id") == client).row(0, named=True)
+    assembled = (
+        selected_clients
+        .join(
+            thresholds,
+            on=EvaluationColumn.CLIENT_ID,
+            how="inner",
+            validate="1:1",
+        )
+        .join(
+            metrics,
+            on=EvaluationColumn.CLIENT_ID,
+            how="inner",
+            validate="1:1",
+        )
+        .join(
+            score_groups,
+            on=EvaluationColumn.CLIENT_ID,
+            how="inner",
+            validate="1:1",
+        )
+        .select(
+            EvaluationColumn.CLIENT_ID,
+            EvaluationColumn.THRESHOLD,
+            *_METRIC_COLUMNS,
+            "_benign_scores",
+            "_attack_scores",
+        )
+        .sort(EvaluationColumn.CLIENT_ID)
+    )
+
+    result: list[ClientScoreDistribution] = []
+
+    for row in assembled.iter_rows(named=False):
+        (
+            client_raw,
+            threshold_raw,
+            fpr_raw,
+            fpr_status_raw,
+            tpr_raw,
+            tpr_status_raw,
+            balanced_accuracy_raw,
+            balanced_accuracy_status_raw,
+            macro_f1_raw,
+            macro_f1_status_raw,
+            benign_raw,
+            attack_raw,
+        ) = row
+
+        threshold = float(threshold_raw)
+        benign = tuple(float(value) for value in benign_raw)
+        attack = tuple(float(value) for value in attack_raw)
 
         result.append(
             ClientScoreDistribution(
-                client_id=ClientId(client),
+                client_id=ClientId(str(client_raw)),
                 benign_score_cdf=_empirical_cdf(benign),
                 attack_score_cdf=_empirical_cdf(attack),
                 threshold_position=ThresholdPosition(
-                    threshold=threshold_map[client],
-                    benign_cdf=_cdf_position(benign, threshold_map[client]),
-                    attack_cdf=_cdf_position(attack, threshold_map[client]),
+                    threshold=threshold,
+                    benign_cdf=_cdf_position(
+                        benign,
+                        threshold,
+                    ),
+                    attack_cdf=_cdf_position(
+                        attack,
+                        threshold,
+                    ),
                 ),
-                threshold=threshold_map[client],
-                false_positive_rate=_build_metric_value(
-                    metric_row["false_positive_rate"], str(metric_row["false_positive_rate_status"])
+                threshold=threshold,
+                false_positive_rate=_metric_value(
+                    fpr_raw,
+                    fpr_status_raw,
                 ),
-                true_positive_rate=_build_metric_value(
-                    metric_row["true_positive_rate"], str(metric_row["true_positive_rate_status"])
+                true_positive_rate=_metric_value(
+                    tpr_raw,
+                    tpr_status_raw,
                 ),
-                balanced_accuracy=_build_metric_value(
-                    metric_row["balanced_accuracy"], str(metric_row["balanced_accuracy_status"])
+                balanced_accuracy=_metric_value(
+                    balanced_accuracy_raw,
+                    balanced_accuracy_status_raw,
                 ),
-                macro_f1=_build_metric_value(
-                    metric_row["macro_f1"], str(metric_row["macro_f1_status"])
+                macro_f1=_metric_value(
+                    macro_f1_raw,
+                    macro_f1_status_raw,
                 ),
             )
         )
@@ -149,28 +400,65 @@ def threshold_tradeoff(
     baseline: tuple[ClientScoreDistribution, ...],
     shifted: tuple[ClientScoreDistribution, ...],
 ) -> tuple[ThresholdTradeoff, ...]:
-    baseline_by_id = {d.client_id: d for d in baseline}
-    shifted_by_id = {d.client_id: d for d in shifted}
-    if set(baseline_by_id) != set(shifted_by_id):
-        raise ValueError("Threshold trade-off sources have incompatible client populations")
+    baseline_sorted = tuple(
+        sorted(
+            baseline,
+            key=lambda item: item.client_id,
+        )
+    )
+
+    shifted_sorted = tuple(
+        sorted(
+            shifted,
+            key=lambda item: item.client_id,
+        )
+    )
+
+    baseline_ids = tuple(
+        item.client_id
+        for item in baseline_sorted
+    )
+
+    shifted_ids = tuple(
+        item.client_id
+        for item in shifted_sorted
+    )
+
+    if baseline_ids != shifted_ids:
+        raise ValueError(
+            "Threshold trade-off sources have "
+            "incompatible client populations"
+        )
+
     return tuple(
         ThresholdTradeoff(
-            client_id=client_id,
-            threshold_shift=shifted_by_id[client_id].threshold - baseline_by_id[client_id].threshold,
+            client_id=baseline_item.client_id,
+            threshold_shift=(
+                shifted_item.threshold
+                - baseline_item.threshold
+            ),
             fpr_delta=_metric_delta(
-                baseline_by_id[client_id].false_positive_rate, shifted_by_id[client_id].false_positive_rate
+                baseline_item.false_positive_rate,
+                shifted_item.false_positive_rate,
             ),
             tpr_delta=_metric_delta(
-                baseline_by_id[client_id].true_positive_rate, shifted_by_id[client_id].true_positive_rate
+                baseline_item.true_positive_rate,
+                shifted_item.true_positive_rate,
             ),
         )
-        for client_id in sorted(baseline_by_id)
+        for baseline_item, shifted_item in zip(
+            baseline_sorted,
+            shifted_sorted,
+            strict=True,
+        )
     )
 
 
-def _metric_delta(baseline: MetricValue | None, shifted: MetricValue | None) -> float | None:
-    if baseline is None or shifted is None:
-        return None
+def _metric_delta(
+    baseline: MetricValue,
+    shifted: MetricValue,
+) -> float | None:
     if baseline.value is None or shifted.value is None:
         return None
+
     return shifted.value - baseline.value

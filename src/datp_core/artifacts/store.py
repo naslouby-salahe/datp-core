@@ -8,8 +8,11 @@ file unless it makes the replacement explicit.
 from __future__ import annotations
 
 import os
+from io import BytesIO
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+
+import polars as pl
 
 from datp_core.artifacts.atomic import atomic_copy_file, atomic_write_bytes, fsync_directory
 from datp_core.artifacts.errors import (
@@ -107,6 +110,16 @@ class ArtifactStore:
         if not target.is_file():
             raise ArtifactFileMissingError(f"Artifact file is missing: {relative_path}")
         return compute_file_checksum(target)
+
+    def read_parquet(self, relative_path: str) -> pl.DataFrame:
+        """Read a Parquet artifact into a Polars DataFrame."""
+        return pl.read_parquet(BytesIO(self.read_bytes(relative_path)))
+
+    def write_parquet_atomic(self, relative_path: str, frame: pl.DataFrame, *, replace: bool = False) -> Checksum:
+        """Atomically write a Polars DataFrame as a Parquet artifact."""
+        buf = BytesIO()
+        frame.write_parquet(buf)
+        return self.write_bytes_atomic(relative_path, buf.getvalue(), replace=replace)
 
     def validate_file(self, relative_path: str, expected_checksum: Checksum) -> None:
         actual = self.checksum(relative_path)
