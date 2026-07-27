@@ -8,7 +8,6 @@ from math import isclose, isfinite
 from datp_core.core.identifiers import ClientId
 from datp_core.evaluation.enums import MetricStatus
 
-
 _VALUE_RETAINING_STATUSES = (
     MetricStatus.AVAILABLE,
     MetricStatus.UNDEFINED_NEAR_ZERO_DENOMINATOR,
@@ -57,18 +56,14 @@ class MetricValue:
         status: MetricStatus,
     ) -> MetricValue:
         if status is not MetricStatus.UNDEFINED_NEAR_ZERO_DENOMINATOR:
-            raise ValueError(
-                f"{status.value} is not a value-retaining warning status"
-            )
+            raise ValueError(f"{status.value} is not a value-retaining warning status")
 
         return cls(value=value, status=status)
 
     @classmethod
     def unavailable(cls, status: MetricStatus) -> MetricValue:
         if status in _VALUE_RETAINING_STATUSES:
-            raise ValueError(
-                f"Use available() or warning() for {status.value}"
-            )
+            raise ValueError(f"Use available() or warning() for {status.value}")
 
         return cls(value=None, status=status)
 
@@ -95,9 +90,7 @@ class ClientScoreSeries:
         for score in self.scores:
             _require_finite(score, "client score")
             if score < 0.0:
-                raise ValueError(
-                    f"Client score must be non-negative, got {score}"
-                )
+                raise ValueError(f"Client score must be non-negative, got {score}")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -146,10 +139,7 @@ class ClientScoreDistribution:
             rel_tol=0.0,
             abs_tol=0.0,
         ):
-            raise ValueError(
-                "Distribution threshold and threshold-position threshold "
-                "must match"
-            )
+            raise ValueError("Distribution threshold and threshold-position threshold must match")
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -186,15 +176,11 @@ class QuantileVarianceTerms:
 
         if total == 0.0:
             if self.between_ratio is not None:
-                raise ValueError(
-                    "between_ratio must be None when total variance is zero"
-                )
+                raise ValueError("between_ratio must be None when total variance is zero")
             return
 
         if self.between_ratio is None:
-            raise ValueError(
-                "between_ratio is required when total variance is positive"
-            )
+            raise ValueError("between_ratio is required when total variance is positive")
 
         _require_probability(self.between_ratio, "between ratio")
 
@@ -205,6 +191,4 @@ class QuantileVarianceTerms:
             rel_tol=1e-12,
             abs_tol=1e-15,
         ):
-            raise ValueError(
-                "between_ratio must equal between / (within + between)"
-            )
+            raise ValueError("between_ratio must equal between / (within + between)")

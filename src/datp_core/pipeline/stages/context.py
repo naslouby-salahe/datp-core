@@ -47,14 +47,14 @@ class EvaluationContext(TrainingContext):
     """Context for threshold-construction and operating-point-evaluation stages."""
 
     evaluation_label: str | None = None
-    threshold_policy_id: ThresholdPolicyId | None = None
+    threshold_policy_id: ThresholdPolicyId
     threshold_quantile: float | None = None
     shrinkage_weight: float | None = None
     federated_summary_fixed_k: float | None = None
     fingerprint_features: tuple[str, ...] | None = None
     calibration_sample_count: int | None = None
     calibration_replicate: int | None = None
-    missing_threshold_policy: MissingThresholdPolicy = MissingThresholdPolicy.FAIL
+    missing_threshold_policy: MissingThresholdPolicy
     recalibration_mode: RecalibrationMode | None = None
 
     def __post_init__(self) -> None:
@@ -72,8 +72,6 @@ class AnalysisContext:
 
     def __post_init__(self) -> None:
         _validate_analysis_context(self)
-
-
 
 
 def _validate_data_context(ctx: DataContext) -> None:
@@ -112,8 +110,6 @@ def _validate_evaluation_context(ctx: EvaluationContext) -> None:
 def _validate_analysis_context(ctx: AnalysisContext) -> None:
     if ctx.analysis_label is not None and ctx.analysis_label == "":
         raise ValueError("analysis_label must not be blank")
-
-
 
 
 def score_context(context: TrainingContext | EvaluationContext) -> TrainingContext:

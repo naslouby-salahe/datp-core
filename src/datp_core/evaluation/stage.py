@@ -39,52 +39,33 @@ class OperatingPointEvaluationStageHandler:
             return StageJobOutcome.failed(
                 node_key=job.node_key,
                 stage=job.stage,
-                error_message=(
-                    "Operating-point evaluation requires "
-                    "an EvaluationContext"
-                ),
+                error_message=("Operating-point evaluation requires an EvaluationContext"),
             )
 
         context = job.context
 
         try:
             thresholds = validate_threshold_frame(
-                self._store.read_parquet(
-                    job.input_path(
-                        EvaluationArtifactKey.THRESHOLDS
-                    )
-                )
+                self._store.read_parquet(job.input_path(EvaluationArtifactKey.THRESHOLDS))
             )
 
             scores = validate_test_score_frame(
-                self._store.read_parquet(
-                    job.input_path(
-                        EvaluationArtifactKey.TEST_SCORES
-                    )
-                )
+                self._store.read_parquet(job.input_path(EvaluationArtifactKey.TEST_SCORES))
             )
 
             metrics = evaluate_operating_points(
                 scores,
                 thresholds,
-                missing_threshold_policy=(
-                    context.missing_threshold_policy
-                ),
+                missing_threshold_policy=(context.missing_threshold_policy),
             ).with_columns(
-                pl.lit(
-                    context.threshold_policy_id.value
-                ).alias(EvaluationColumn.POLICY_ID),
-                pl.lit(context.seed).alias(
-                    EvaluationColumn.SEED
-                ),
+                pl.lit(context.threshold_policy_id.value).alias(EvaluationColumn.POLICY_ID),
+                pl.lit(context.seed, dtype=pl.Int64).alias(EvaluationColumn.SEED),
             )
 
             validate_client_metric_frame(metrics)
 
             self._store.write_parquet_atomic(
-                job.output_path(
-                    EvaluationArtifactKey.CLIENT_METRICS
-                ),
+                job.output_path(EvaluationArtifactKey.CLIENT_METRICS),
                 metrics,
             )
 

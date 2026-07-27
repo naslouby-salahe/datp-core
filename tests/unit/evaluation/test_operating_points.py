@@ -74,7 +74,7 @@ class TestEvaluateOperatingPoints:
             {"client_id": ["client_a"], "threshold": [0.5]},
             schema={"client_id": pl.String, "threshold": pl.Float64},
         )
-        with pytest.raises(ValueError, match="does not cover every scored client"):
+        with pytest.raises(ValueError, match="Missing thresholds for clients"):
             evaluate_operating_points(scores, thresholds, missing_threshold_policy=MissingThresholdPolicy.FAIL)
 
     def test_missing_threshold_mark_ineligible(self) -> None:
@@ -93,7 +93,7 @@ class TestEvaluateOperatingPoints:
     def test_empty_scores_raises(self) -> None:
         empty = pl.DataFrame(schema={"client_id": pl.String, "score": pl.Float64, "label": pl.Int64})
         thresholds = _make_thresholds()
-        with pytest.raises(ValueError, match="empty scores DataFrame"):
+        with pytest.raises(ValueError, match="empty score frame"):
             evaluate_operating_points(empty, thresholds, missing_threshold_policy=MissingThresholdPolicy.FAIL)
 
     def test_nan_scores_raises(self) -> None:
@@ -105,7 +105,7 @@ class TestEvaluateOperatingPoints:
             {"client_id": ["c"], "threshold": [0.5]},
             schema={"client_id": pl.String, "threshold": pl.Float64},
         )
-        with pytest.raises(ValueError, match="NaN"):
+        with pytest.raises(ValueError, match="must be finite"):
             evaluate_operating_points(scores, thresholds, missing_threshold_policy=MissingThresholdPolicy.FAIL)
 
     def test_inf_scores_raises(self) -> None:
@@ -117,7 +117,7 @@ class TestEvaluateOperatingPoints:
             {"client_id": ["c"], "threshold": [0.5]},
             schema={"client_id": pl.String, "threshold": pl.Float64},
         )
-        with pytest.raises(ValueError, match="infinite"):
+        with pytest.raises(ValueError, match="must be finite"):
             evaluate_operating_points(scores, thresholds, missing_threshold_policy=MissingThresholdPolicy.FAIL)
 
     def test_auroc_preserved_for_all_clients(self) -> None:

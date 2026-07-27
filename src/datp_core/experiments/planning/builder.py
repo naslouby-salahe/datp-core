@@ -19,6 +19,7 @@ from typing import TYPE_CHECKING
 from datp_core.config.fingerprinting.canonical import compute_fingerprint
 from datp_core.data.contracts.enums import ClientConstructionMethod, SplitMethod
 from datp_core.data.sources.inventory import compute_experiment_source_fingerprint
+from datp_core.evaluation.enums import MissingThresholdPolicy
 from datp_core.experiments.catalogue.evaluations import RecalibrationMode
 from datp_core.experiments.catalogue.models import EvidenceRole
 from datp_core.experiments.catalogue.sweeps import ConditionSweepRecord
@@ -79,7 +80,7 @@ def cell_directory(context: DataContext | TrainingContext | EvaluationContext) -
 def evaluation_directory(context: EvaluationContext) -> str:
     parts = [
         f"evaluation-{_segment(context.evaluation_label, fallback='default')}",
-        f"policy-{_segment(context.threshold_policy_id, fallback='default')}",
+        f"policy-{_segment(context.threshold_policy_id, fallback='unknown_policy')}",
         cell_directory(context),
     ]
     for value in (
@@ -135,7 +136,6 @@ class ExperimentPlanBuilder:
 
     def __init__(self, paths: ExperimentPaths) -> None:
         self._paths = paths
-
 
     def build(
         self,
@@ -373,11 +373,9 @@ class ExperimentPlanBuilder:
         validate_acyclic(graph)
         return graph
 
-
     @staticmethod
     def _value(value: object | None) -> str:
         return "-" if value is None else str(value)
-
 
     @staticmethod
     def _node_key(
@@ -448,7 +446,6 @@ class ExperimentPlanBuilder:
     @staticmethod
     def _score_output(context: DataContext | TrainingContext | EvaluationContext, name: str) -> StageOutput:
         return output(name, f"scores/{cell_directory(context)}/{name.replace('_', '-')}.parquet")
-
 
     def _create_training_cells(
         self,
@@ -523,7 +520,6 @@ class ExperimentPlanBuilder:
                 training_cells.append((seed_ctx, materialization, training))
         return jobs, training_cells
 
-
     def _create_selection_stage(
         self,
         compiled: CompiledExperiment,
@@ -564,7 +560,6 @@ class ExperimentPlanBuilder:
             outputs=(output("checkpoint_selection", f"checkpoint-selection/{role}.json"),),
             dependencies=tuple(training.node_key for _, _, training in training_cells),
         )
-
 
     def _create_scoring_and_calibration_cells(
         self,
@@ -635,6 +630,8 @@ class ExperimentPlanBuilder:
                         ditto_proximal_weight=seed_ctx.ditto_proximal_weight,
                         calibration_sample_count=requested_count,
                         calibration_replicate=replicate,
+                        threshold_policy_id=experiment.evaluations[0].threshold_policy_id,
+                        missing_threshold_policy=MissingThresholdPolicy.FAIL,
                     )
                     subset = self._job(
                         stage=StageKind.CALIBRATION_SUBSAMPLING,
@@ -687,7 +684,6 @@ class ExperimentPlanBuilder:
             score_cells[key] = (seed_ctx, test, calibration, future)
         return jobs, calibration_cells_by_training, score_cells
 
-
     def _create_evaluation_jobs(
         self,
         compiled: CompiledExperiment,
@@ -724,8 +720,12 @@ class ExperimentPlanBuilder:
                             partition_condition=seed_ctx.partition_condition,
                             federated_proximal_mu=seed_ctx.federated_proximal_mu,
                             ditto_proximal_weight=seed_ctx.ditto_proximal_weight,
-                            calibration_sample_count=calibration_ctx.calibration_sample_count if isinstance(calibration_ctx, EvaluationContext) else None,
-                            calibration_replicate=calibration_ctx.calibration_replicate if isinstance(calibration_ctx, EvaluationContext) else None,
+                            calibration_sample_count=calibration_ctx.calibration_sample_count
+                            if isinstance(calibration_ctx, EvaluationContext)
+                            else None,
+                            calibration_replicate=calibration_ctx.calibration_replicate
+                            if isinstance(calibration_ctx, EvaluationContext)
+                            else None,
                             threshold_quantile=quantile,
                             shrinkage_weight=shrinkage,
                             federated_summary_fixed_k=fixed_k,
@@ -734,6 +734,7 @@ class ExperimentPlanBuilder:
                             population_id=population_id,
                             recalibration_mode=evaluation.recalibration_mode,
                             threshold_policy_id=evaluation.threshold_policy_id,
+                            missing_threshold_policy=MissingThresholdPolicy.FAIL,
                         )
                         evaluation_base = evaluation_directory(evaluation_ctx)
                         threshold = self._job(
@@ -763,7 +764,6 @@ class ExperimentPlanBuilder:
                         jobs.extend((threshold, metrics))
                         evaluation_jobs.append(metrics)
         return jobs, evaluation_jobs
-
 
     @staticmethod
     def _shared_upstream_key(

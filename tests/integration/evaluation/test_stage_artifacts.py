@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import tempfile
 from io import BytesIO
+from pathlib import Path
 
 import polars as pl
 
 from datp_core.artifacts.store import ArtifactStore, Checksum
 from datp_core.core.identifiers import ExperimentId, ThresholdPolicyId
+from datp_core.evaluation.enums import MissingThresholdPolicy
 from datp_core.evaluation.stage import OperatingPointEvaluationStageHandler
 from datp_core.pipeline.graph.key import GraphNodeKey
 from datp_core.pipeline.stages.context import EvaluationContext
@@ -61,12 +64,15 @@ def _make_score_parquet() -> bytes:
 
 class _InMemoryStore(ArtifactStore):
     def __init__(self) -> None:
+        super().__init__(root=Path(tempfile.mkdtemp()))
         self._data: dict[str, bytes] = {}
 
     def read_bytes(self, relative_path: str) -> bytes:
         return self._data[relative_path]
 
     def write_bytes_atomic(self, relative_path: str, payload: bytes, *, replace: bool = False) -> Checksum:
+        if not replace and relative_path in self._data:
+            raise FileExistsError(f"Artifact already exists: {relative_path}")
         self._data[relative_path] = payload
         return Checksum("0" * 64)
 
@@ -91,10 +97,12 @@ def _make_job(ctx: EvaluationContext, node_label: str) -> StageJob:
     )
 
 
-def _make_context(*, threshold_policy_id: ThresholdPolicyId | None) -> EvaluationContext:
+def _make_context(*, threshold_policy_id: ThresholdPolicyId) -> EvaluationContext:
     return EvaluationContext(
         experiment_id=ExperimentId("test"),
         threshold_policy_id=threshold_policy_id,
+        missing_threshold_policy=MissingThresholdPolicy.FAIL,
+        seed=0,
         calibration_sample_count=None,
         calibration_replicate=None,
     )
@@ -115,20 +123,6 @@ def test_successful_read_evaluate_write_cycle() -> None:
     assert result.height == 2
     assert "auroc" in result.columns
     assert "policy_id" in result.columns
-
-
-def test_missing_threshold_policy_id_omits_column() -> None:
-    store = _InMemoryStore()
-    handler = OperatingPointEvaluationStageHandler(store)
-
-    store.write_bytes_atomic("thresholds.parquet", _make_threshold_parquet())
-    store.write_bytes_atomic("test_scores.parquet", _make_score_parquet())
-
-    job = _make_job(_make_context(threshold_policy_id=None), "eval_node")
-    outcome = handler.execute(job)
-    assert outcome.status is JobExecutionStatus.SUCCESS
-    result = pl.read_parquet(BytesIO(store.read_bytes("client_metrics.parquet")))
-    assert "policy_id" not in result.columns
 
 
 def test_malformed_threshold_artifact_fails() -> None:

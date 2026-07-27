@@ -18,6 +18,7 @@ from datp_core.config.operational_contracts import CommunicationEstimationContra
 from datp_core.core.identifiers import EvaluationLabel, PartitionConditionId, PopulationId, ThresholdPolicyId
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.core.seeding import Seed
+from datp_core.evaluation.enums import MissingThresholdPolicy
 from datp_core.evaluation.specs import MetricDefinitions
 from datp_core.experiments import EvaluationSpecRecord, ExperimentRecord
 from datp_core.learning.contracts.seeds import SeedCohortRecord
@@ -92,6 +93,8 @@ class AnalysisExecutionContext(BaseModel):
             calibration_sample_count=calibration_sample_count,
             calibration_replicate=calibration_replicate,
             fingerprint_features=fingerprint_features,
+            threshold_policy_id=eval_spec.threshold_policy_id,
+            missing_threshold_policy=MissingThresholdPolicy.FAIL,
         )
 
     def score_context(
@@ -120,6 +123,8 @@ class AnalysisExecutionContext(BaseModel):
             calibration_sample_count=calibration_sample_count,
             calibration_replicate=calibration_replicate,
             fingerprint_features=fingerprint_features,
+            threshold_policy_id=eval_spec.threshold_policy_id,
+            missing_threshold_policy=MissingThresholdPolicy.FAIL,
         )
 
     def model_context(

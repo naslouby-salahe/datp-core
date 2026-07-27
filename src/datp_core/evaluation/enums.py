@@ -13,7 +13,10 @@ class MetricStatus(StrEnum):
     UNAVAILABLE_MISSING_ATTACK_CLASS = "unavailable_missing_attack_class"
     UNAVAILABLE_INELIGIBLE_CLIENT = "unavailable_ineligible_client"
     UNAVAILABLE_SINGLE_CLASS = "unavailable_single_class"
+    UNAVAILABLE_INVALID_ATTACK_ASSIGNMENT = "unavailable_invalid_attack_assignment"
+    UNAVAILABLE_UNSUPPORTED_REGIME = "unavailable_unsupported_regime"
     FAILED_INVALID_ARTIFACT = "failed_invalid_artifact"
+    FAILED_STATISTICAL_PROCEDURE = "failed_statistical_procedure"
 
 
 class MissingThresholdPolicy(StrEnum):

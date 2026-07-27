@@ -71,9 +71,7 @@ class AggregateMetricDefinition(StrictFrozenModel):
         has_quantile = self.quantile is not None
 
         if uses_quantile != has_quantile:
-            raise ValueError(
-                "quantile is required only for quantile aggregation"
-            )
+            raise ValueError("quantile is required only for quantile aggregation")
 
         return self
 
@@ -91,9 +89,7 @@ class CrossClientAggregationSpec(StrictFrozenModel):
         identifiers = tuple(metric.identifier for metric in self.metrics)
 
         if len(set(identifiers)) != len(identifiers):
-            raise ValueError(
-                "Cross-client metric identifiers must be unique"
-            )
+            raise ValueError("Cross-client metric identifiers must be unique")
 
         return self
 
@@ -139,28 +135,15 @@ class MetricDefinitions(StrictFrozenModel):
             MetricId.AUROC,
         )
 
-        missing = tuple(
-            identifier
-            for identifier in required
-            if identifier not in identifiers
-        )
+        missing = tuple(identifier for identifier in required if identifier not in identifiers)
 
         if missing:
-            raise ValueError(
-                "Missing required metric definitions: "
-                f"{[item.value for item in missing]}"
-            )
+            raise ValueError(f"Missing required metric definitions: {[item.value for item in missing]}")
 
-        auroc = next(
-            metric
-            for metric in self.metrics
-            if metric.identifier is MetricId.AUROC
-        )
+        auroc = next(metric for metric in self.metrics if metric.identifier is MetricId.AUROC)
 
         if auroc.role is not MetricRole.MODEL_QUALITY_CONTROL:
-            raise ValueError(
-                "AUROC must be configured as a model-quality control"
-            )
+            raise ValueError("AUROC must be configured as a model-quality control")
 
         if MetricRequirement.BOTH_CLASSES not in auroc.requirements:
             raise ValueError("AUROC must require both classes")
@@ -180,14 +163,10 @@ class MetricBundleSpec(StrictFrozenModel):
     @model_validator(mode="after")
     def validate_bundle_references(self) -> Self:
         if self.primary_dispersion_metric not in self.cross_client_metrics:
-            raise ValueError(
-                "Primary dispersion metric must be a cross-client metric"
-            )
+            raise ValueError("Primary dispersion metric must be a cross-client metric")
 
         if self.model_quality_control not in self.metrics:
-            raise ValueError(
-                "Model-quality control must be included in per-client metrics"
-            )
+            raise ValueError("Model-quality control must be included in per-client metrics")
 
         return self
 
@@ -204,16 +183,9 @@ class EvaluationResultContract(StrictFrozenModel):
             self.per_evaluation_eligibility_result_type,
         )
 
-        missing = tuple(
-            record
-            for record in required
-            if record not in self.required_records
-        )
+        missing = tuple(record for record in required if record not in self.required_records)
 
         if missing:
-            raise ValueError(
-                "Required record types are incomplete: "
-                f"{[item.value for item in missing]}"
-            )
+            raise ValueError(f"Required record types are incomplete: {[item.value for item in missing]}")
 
         return self

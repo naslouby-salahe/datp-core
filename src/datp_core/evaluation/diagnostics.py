@@ -26,13 +26,8 @@ def calculate_fpr_dispersion(
     cv_instability_threshold: float,
     ddof: int,
 ) -> FprDispersion:
-    if (
-        cv_instability_threshold <= 0.0
-        or not isfinite(cv_instability_threshold)
-    ):
-        raise ValueError(
-            "cv_instability_threshold must be finite and positive"
-        )
+    if cv_instability_threshold <= 0.0 or not isfinite(cv_instability_threshold):
+        raise ValueError("cv_instability_threshold must be finite and positive")
 
     if ddof < 0:
         raise ValueError("ddof must be non-negative")
@@ -40,9 +35,7 @@ def calculate_fpr_dispersion(
     fprs = tuple(values)
 
     if not fprs:
-        unavailable = MetricValue.unavailable(
-            MetricStatus.UNDEFINED_ZERO_DENOMINATOR
-        )
+        unavailable = MetricValue.unavailable(MetricStatus.UNDEFINED_ZERO_DENOMINATOR)
         return FprDispersion(
             mean_fpr=unavailable,
             standard_deviation=unavailable,
@@ -53,10 +46,7 @@ def calculate_fpr_dispersion(
         )
 
     if ddof >= len(fprs):
-        raise ValueError(
-            "ddof must be smaller than the client count, "
-            f"got {ddof} for {len(fprs)} clients"
-        )
+        raise ValueError(f"ddof must be smaller than the client count, got {ddof} for {len(fprs)} clients")
 
     if any(not isfinite(value) for value in fprs):
         raise ValueError("FPR values must be finite")
@@ -65,28 +55,21 @@ def calculate_fpr_dispersion(
         raise ValueError("FPR values must be in [0, 1]")
 
     average = mean(fprs)
-    variance = (
-        sum((value - average) ** 2 for value in fprs)
-        / (len(fprs) - ddof)
-    )
+    variance = sum((value - average) ** 2 for value in fprs) / (len(fprs) - ddof)
     standard_deviation = sqrt(variance)
 
     q25 = linear_quantile(fprs, 0.25)
     q75 = linear_quantile(fprs, 0.75)
 
     if average == 0.0:
-        coefficient_of_variation = MetricValue.unavailable(
-            MetricStatus.UNDEFINED_ZERO_DENOMINATOR
-        )
+        coefficient_of_variation = MetricValue.unavailable(MetricStatus.UNDEFINED_ZERO_DENOMINATOR)
     elif average < cv_instability_threshold:
         coefficient_of_variation = MetricValue.warning(
             standard_deviation / average,
             MetricStatus.UNDEFINED_NEAR_ZERO_DENOMINATOR,
         )
     else:
-        coefficient_of_variation = MetricValue.available(
-            standard_deviation / average
-        )
+        coefficient_of_variation = MetricValue.available(standard_deviation / average)
 
     return FprDispersion(
         mean_fpr=MetricValue.available(average),
@@ -108,16 +91,11 @@ def assert_auroc_invariant(
 
     aurocs = tuple(values)
 
-    if any(
-        not isfinite(value) or not 0.0 <= value <= 1.0
-        for value in aurocs
-    ):
+    if any(not isfinite(value) or not 0.0 <= value <= 1.0 for value in aurocs):
         raise ValueError("AUROC values must be finite and in [0, 1]")
 
     if aurocs and max(aurocs) - min(aurocs) > tolerance:
-        raise ValueError(
-            "AUROC must be invariant across fixed-score threshold policies"
-        )
+        raise ValueError("AUROC must be invariant across fixed-score threshold policies")
 
 
 def calculate_pairwise_js_divergence(
@@ -133,16 +111,10 @@ def calculate_pairwise_js_divergence(
         raise ValueError("logarithm_base must be at least 2")
 
     if len(client_scores) < 2:
-        raise ValueError(
-            "Pairwise JS divergence requires at least two clients"
-        )
+        raise ValueError("Pairwise JS divergence requires at least two clients")
 
     pooled = np.fromiter(
-        (
-            score
-            for client in client_scores
-            for score in client.scores
-        ),
+        (score for client in client_scores for score in client.scores),
         dtype=np.float64,
     )
 
@@ -169,10 +141,7 @@ def calculate_pairwise_js_divergence(
         for client in client_scores
     )
 
-    normalized = tuple(
-        distribution / distribution.sum()
-        for distribution in distributions
-    )
+    normalized = tuple(distribution / distribution.sum() for distribution in distributions)
 
     divergences: list[float] = []
 
@@ -187,9 +156,7 @@ def calculate_pairwise_js_divergence(
             )
 
             if not isfinite(distance):
-                raise ValueError(
-                    "Jensen-Shannon distance must be finite"
-                )
+                raise ValueError("Jensen-Shannon distance must be finite")
 
             divergences.append(distance * distance)
 
@@ -209,22 +176,13 @@ def calculate_calibration_variance(
         EvaluationColumn.SCORE,
     )
 
-    missing = tuple(
-        column
-        for column in required
-        if column not in calibration.columns
-    )
+    missing = tuple(column for column in required if column not in calibration.columns)
 
     if missing:
-        raise ValueError(
-            "Calibration frame is missing columns: "
-            f"{[column.value for column in missing]}"
-        )
+        raise ValueError(f"Calibration frame is missing columns: {[column.value for column in missing]}")
 
     if calibration.is_empty():
-        raise ValueError(
-            "Calibration variance requires calibration scores"
-        )
+        raise ValueError("Calibration variance requires calibration scores")
 
     normalized = calibration.select(
         pl.col(EvaluationColumn.CLIENT_ID).cast(
@@ -237,90 +195,49 @@ def calculate_calibration_variance(
         ),
     )
 
-    if normalized.get_column(
-        EvaluationColumn.CLIENT_ID
-    ).is_null().any():
-        raise ValueError(
-            "Calibration client IDs must not be null"
-        )
+    if normalized.get_column(EvaluationColumn.CLIENT_ID).is_null().any():
+        raise ValueError("Calibration client IDs must not be null")
 
     scores = normalized.get_column(EvaluationColumn.SCORE)
 
-    if (
-        scores.is_null().any()
-        or scores.is_nan().any()
-        or scores.is_infinite().any()
-    ):
+    if scores.is_null().any() or scores.is_nan().any() or scores.is_infinite().any():
         raise ValueError("Calibration scores must be finite")
 
-    counts = normalized.group_by(
-        EvaluationColumn.CLIENT_ID
-    ).agg(
-        pl.len().alias("_count")
-    )
+    counts = normalized.group_by(EvaluationColumn.CLIENT_ID).agg(pl.len().alias("_count"))
 
-    insufficient = counts.filter(
-        pl.col("_count") <= ddof
-    )
+    insufficient = counts.filter(pl.col("_count") <= ddof)
 
     if not insufficient.is_empty():
-        offending = tuple(
-            insufficient.iter_rows(named=False)
-        )
-        raise ValueError(
-            f"Every client requires more than ddof={ddof} rows; "
-            f"offending groups: {offending}"
-        )
+        offending = tuple(insufficient.iter_rows(named=False))
+        raise ValueError(f"Every client requires more than ddof={ddof} rows; offending groups: {offending}")
 
-    pooled_mean_raw = scores.mean()
+    pooled_mean_value = scores.mean()
 
-    if pooled_mean_raw is None:
-        raise ValueError(
-            "Calibration pooled mean is unavailable"
-        )
+    if pooled_mean_value is None:
+        raise ValueError("Calibration pooled mean is unavailable")
 
-    pooled_mean = float(pooled_mean_raw)
+    if not isinstance(pooled_mean_value, (int, float)):
+        raise ValueError("Calibration pooled mean must be numeric")
 
-    group_stats = normalized.group_by(
-        EvaluationColumn.CLIENT_ID
-    ).agg(
+    pooled_mean = float(pooled_mean_value)
+
+    group_stats = normalized.group_by(EvaluationColumn.CLIENT_ID).agg(
         pl.len().alias("_count"),
-        pl.col(EvaluationColumn.SCORE)
-        .mean()
-        .alias("_mean"),
-        pl.col(EvaluationColumn.SCORE)
-        .var(ddof=ddof)
-        .alias("_variance"),
+        pl.col(EvaluationColumn.SCORE).mean().alias("_mean"),
+        pl.col(EvaluationColumn.SCORE).var(ddof=ddof).alias("_variance"),
     )
 
-    if group_stats.get_column(
-        "_variance"
-    ).is_null().any():
-        raise ValueError(
-            "Calibration variance produced null group variances"
-        )
+    if group_stats.get_column("_variance").is_null().any():
+        raise ValueError("Calibration variance produced null group variances")
 
-    total_count = float(
-        group_stats.get_column("_count").sum()
+    total_count = float(group_stats.get_column("_count").sum())
+
+    within = float((group_stats.get_column("_count") * group_stats.get_column("_variance")).sum()) / total_count
+
+    between = (
+        float((group_stats.get_column("_count") * (group_stats.get_column("_mean") - pooled_mean) ** 2).sum())
+        / total_count
     )
-
-    within = float(
-        (
-            group_stats.get_column("_count")
-            * group_stats.get_column("_variance")
-        ).sum()
-    ) / total_count
-
-    between = float(
-        (
-            group_stats.get_column("_count")
-            * (
-                group_stats.get_column("_mean")
-                - pooled_mean
-            )
-            ** 2
-        ).sum()
-    ) / total_count
 
     total = within + between
 

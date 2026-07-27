@@ -131,11 +131,11 @@ class ThresholdConstructionStageHandler:
                 stage=job.stage,
                 error_message=f"Expected EvaluationContext, got {type(ctx).__name__}",
             )
-        if ctx.threshold_policy_id is None or ctx.population_id is None or ctx.seed is None:
+        if ctx.population_id is None or ctx.seed is None:
             return StageJobOutcome.failed(
                 node_key=job.node_key,
                 stage=job.stage,
-                error_message=("Threshold construction requires policy, population, and seed"),
+                error_message=("Threshold construction requires population and seed"),
             )
 
         policy = self._config.threshold_policies.get(ctx.threshold_policy_id)
