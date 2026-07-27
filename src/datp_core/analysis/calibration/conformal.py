@@ -6,13 +6,12 @@ from math import ceil
 
 import polars as pl
 
-from datp_core.analysis.contracts import (
+from datp_core.analysis.calibration.contracts import (
     ConformalClientCoverageRecord,
     ConformalCoverageAnalysisResult,
     ConformalSeedCoverageResult,
-    CountRatioObservation,
-    PairedAnalysisCell,
 )
+from datp_core.analysis.contracts import CountRatioObservation, PairedAnalysisCell
 from datp_core.analysis.enums import CoverageDirection, CoverageStatus
 from datp_core.analysis.errors import (
     ArtifactSchemaViolationError,
@@ -21,7 +20,6 @@ from datp_core.analysis.errors import (
     ScientificContractViolationError,
 )
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
-from datp_core.analysis.runtime.runner import run_analysis
 from datp_core.analysis.statistics.descriptive import ratio_of_totals
 from datp_core.artifacts.schemas.columns import MetricColumn, ScoreColumn, ThresholdColumn
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel
@@ -129,13 +127,13 @@ def conformal_seed_coverage(
     # Domain object construction requires Python iteration from Polars
     per_client_records = [
         ConformalClientCoverageRecord(
-            client_id=ClientId(str(row.client_id)),
-            coverage=row.coverage,
-            absolute_coverage_error=row.absolute_coverage_error,
-            coverage_status=CoverageStatus(row.coverage_status),
-            finite_sample_rank=row.finite_sample_rank,
-            attainability_status=ConformalAttainabilityStatus(row.attainability_status),
-            calibration_count=row.calibration_count,
+            client_id=ClientId(str(row.client_id)),  # type: ignore[reportAttributeAccessIssue]
+            coverage=row.coverage,  # type: ignore[reportAttributeAccessIssue]
+            absolute_coverage_error=row.absolute_coverage_error,  # type: ignore[reportAttributeAccessIssue]
+            coverage_status=CoverageStatus(row.coverage_status),  # type: ignore[reportAttributeAccessIssue]
+            finite_sample_rank=row.finite_sample_rank,  # type: ignore[reportAttributeAccessIssue]
+            attainability_status=ConformalAttainabilityStatus(row.attainability_status),  # type: ignore[reportAttributeAccessIssue]
+            calibration_count=row.calibration_count,  # type: ignore[reportAttributeAccessIssue]
         )
         for row in per_client.iter_rows(named=True)
     ]
@@ -147,16 +145,15 @@ def conformal_seed_coverage(
     )
 
 
-@run_analysis.register
 def analyze_conformal_coverage(
     specification: ConformalCoverageAnalysisRecord,
     context: AnalysisExecutionContext,
-    cell: PairedAnalysisCell | None = None,
+    _cell: PairedAnalysisCell | None = None,
 ) -> tuple[ConformalCoverageAnalysisResult, ...]:
     """Execute conformal-coverage analysis across experiment seeds."""
     eval_label = EvaluationLabel(specification.source_evaluation)
     policy_id = context.threshold_policy_id(eval_label)
-    policy = context.config.threshold_policies.get(policy_id)
+    policy = context.threshold_policies.get(policy_id)
     if not isinstance(policy, SplitConformalThresholdPolicyRecord):
         raise InvalidAnalysisConfigurationError(
             f"Conformal analysis '{specification.label}' requires a split-conformal threshold policy"

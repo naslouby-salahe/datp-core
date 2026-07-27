@@ -52,7 +52,6 @@ from datp_core.core.identifiers import (
     ThresholdPolicyId,
     TrainingProfileId,
 )
-from datp_core.core.immutability import FrozenJson, freeze_json
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.contracts import EligibilityPolicyRecord, NormalizationStrategyRecord
 from datp_core.evaluation import (
@@ -105,7 +104,7 @@ class ResolvedProtocols(BaseModel):
     metric_definitions: MetricDefinitionsRecord
     communication_estimation_contract: CommunicationEstimationContractRecord
     operational_inputs: OperationalInputsRecord
-    communication_estimation: FrozenJson | None
+    communication_estimation: dict[str, object] | None
     protocol_determinism: ProtocolDeterminismRecord
     normalization_fit_scopes: NormalizationFitScopes
     normalization_leakage_rule: str
@@ -119,7 +118,7 @@ class ResolvedProtocols(BaseModel):
 def resolve_protocols(authored: AuthoredProtocolsConfig) -> ResolvedProtocols:
     """Resolve the authored protocol document (protocols.yaml) into every immutable protocol record."""
     resolved_communication_estimation = (
-        freeze_json(authored.communication_estimation) if authored.communication_estimation is not None else None
+        dict(authored.communication_estimation) if authored.communication_estimation is not None else None
     )
     return ResolvedProtocols(
         training_profiles=TypedDomainRegistry(_items=resolve_training_profiles(authored)),

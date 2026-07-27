@@ -160,14 +160,14 @@ def _resolve_analysis(a: AnalysisSpecConfig) -> AnalysisRecord:
                 band_interpretation=a.band_interpretation,
                 denominator_materiality_rule=a.denominator_materiality_rule,
                 undefined_denominator_behavior=a.undefined_denominator_behavior,
-                matching_contract=a.matching_contract,
-                outcome_bands=a.outcome_bands,
+                matching_contract=dict(a.matching_contract),
+                outcome_bands=tuple(dict(v) for v in a.outcome_bands),
                 outcome_bands_are_mutually_exclusive_and_exhaustive=(
                     a.outcome_bands_are_mutually_exclusive_and_exhaustive
                 ),
                 reference_analysis=a.reference_analysis,
                 stress_test_analysis=a.stress_test_analysis,
-                alternative_path_rule=a.alternative_path_rule,
+                alternative_path_rule=dict(a.alternative_path_rule) if a.alternative_path_rule is not None else None,
             )
         case AlertBurdenAnalysisConfig():
             return AlertBurdenAnalysisRecord(
@@ -314,7 +314,7 @@ def _resolve_analysis(a: AnalysisSpecConfig) -> AnalysisRecord:
                 recovery_ratio_direction=a.recovery_ratio_direction,
                 meaningful_recovery_threshold=a.meaningful_recovery_threshold,
                 chronology_unverifiable_policy=a.chronology_unverifiable_policy,
-                outcome_bands=a.outcome_bands,
+                outcome_bands=tuple(dict(v) for v in a.outcome_bands),
                 outcome_bands_are_mutually_exclusive_and_exhaustive=(
                     a.outcome_bands_are_mutually_exclusive_and_exhaustive
                 ),
@@ -418,7 +418,7 @@ def _resolve_experiment_evaluations(
                 run_requirement=(
                     RunRequirement(ev.run_requirement) if ev.run_requirement else RunRequirement.MANDATORY
                 ),
-                overrides=ev.overrides,
+                overrides=dict(ev.overrides) if ev.overrides is not None else None,
                 population_id=eval_population_id,
                 recalibration_mode=(
                     RecalibrationMode(ev.recalibration_mode) if ev.recalibration_mode is not None else None
@@ -472,14 +472,16 @@ def _resolve_calibration_subset(exp_cfg: AuthoredExperimentConfig) -> Calibratio
         client_eligibility_per_requested_size=cs.client_eligibility_per_requested_size,
         subminimum_eligibility_policy=cs.subminimum_eligibility_policy,
         subminimum_eligibility_policy_applies_to=cs.subminimum_eligibility_policy_applies_to,
-        effective_eligibility_policy_by_sweep_condition=cs.effective_eligibility_policy_by_sweep_condition,
+        effective_eligibility_policy_by_sweep_condition=tuple(
+            dict(v) for v in cs.effective_eligibility_policy_by_sweep_condition
+        ),
         insufficient_row_policy=cs.insufficient_row_policy,
         replicate_aggregation_within_seed=cs.replicate_aggregation_within_seed,
         seed_level_statistic=cs.seed_level_statistic,
         additional_seed_level_statistic=cs.additional_seed_level_statistic,
         independent_inferential_unit=cs.independent_inferential_unit,
         replicates_counted_as_seeds=cs.replicates_counted_as_seeds,
-        full_calibration_reference_condition=cs.full_calibration_reference_condition,
+        full_calibration_reference_condition=dict(cs.full_calibration_reference_condition),
     )
 
 
@@ -538,9 +540,12 @@ def _resolve_experiment(
         population_equivalence_requirement=exp_cfg.population_equivalence_requirement,
         population_roles=exp_cfg.population_roles,
         scope_constraint=exp_cfg.scope_constraint,
-        temporal_procedure=exp_cfg.temporal_procedure,
-        primary_coefficient_selection=exp_cfg.primary_coefficient_selection,
-        training_overrides=exp_cfg.training_overrides,
+        temporal_procedure=dict(exp_cfg.temporal_procedure) if exp_cfg.temporal_procedure is not None else None,
+        primary_coefficient_selection=(
+            exp_cfg.primary_coefficient_selection
+            if isinstance(exp_cfg.primary_coefficient_selection, str) or exp_cfg.primary_coefficient_selection is None
+            else dict(exp_cfg.primary_coefficient_selection)        ),
+        training_overrides=dict(exp_cfg.training_overrides) if exp_cfg.training_overrides is not None else None,
     )
 
 

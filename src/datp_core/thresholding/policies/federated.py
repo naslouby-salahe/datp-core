@@ -7,7 +7,6 @@ from typing import Annotated, ClassVar, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict
 
-from datp_core.core.immutability import deep_freeze
 from datp_core.thresholding.policies.enums import ThresholdOwnership, ThresholdPolicyKind
 
 
@@ -63,7 +62,7 @@ class FederatedMatchedExceedanceThresholdPolicyRecord(BaseModel):
     mode: Literal["matched_exceedance"]
     quantile: float
     primary_comparator: bool
-    client_message: Annotated[Mapping[str, object], BeforeValidator(deep_freeze)]
+    client_message: Annotated[Mapping[str, object], BeforeValidator(dict)]
     global_mean_formula: str
     within_term_formula: str
     between_term_formula: str
@@ -90,7 +89,7 @@ class FederatedFixedCoefficientThresholdPolicyRecord(BaseModel):
     quantile: float
     primary_comparator: bool
     supplementary_sensitivity_only: bool
-    client_message: Annotated[Mapping[str, object], BeforeValidator(deep_freeze)]
+    client_message: Annotated[Mapping[str, object], BeforeValidator(dict)]
     global_mean_formula: str
     within_term_formula: str
     between_term_formula: str

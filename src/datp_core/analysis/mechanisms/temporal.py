@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datp_core.analysis.comparisons.paired import evaluation_metric
-from datp_core.analysis.contracts import PairedAnalysisCell, TemporalRecoveryAnalysisResult
+from datp_core.analysis.mechanisms.contracts import TemporalRecoveryAnalysisResult
+from datp_core.analysis.contracts import PairedAnalysisCell
 from datp_core.analysis.enums import (
     ChronologyPolicy,
     MetricIdentifier,
@@ -12,12 +13,11 @@ from datp_core.analysis.enums import (
 )
 from datp_core.analysis.errors import InvalidAnalysisConfigurationError, ScientificContractViolationError
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
-from datp_core.analysis.runtime.runner import run_analysis
 from datp_core.core.identifiers import AnalysisLabel, EvaluationLabel, MetricId
 from datp_core.experiments import TemporalRecoveryAnalysisRecord
+from datp_core.experiments.catalogue.evaluations import RecalibrationMode
 
 
-@run_analysis.register
 def analyze_temporal_recovery(
     specification: TemporalRecoveryAnalysisRecord,
     context: AnalysisExecutionContext,
@@ -48,7 +48,7 @@ def analyze_temporal_recovery(
     chron_policy = ChronologyPolicy(specification.chronology_unverifiable_policy)
 
     if chron_policy == ChronologyPolicy.STRICT_VERIFICATION:
-        if not getattr(context.experiment, "has_verifiable_chronology", True):
+        if context.evaluation(recal_eval).recalibration_mode is not RecalibrationMode.ONE_SHOT:
             raise ScientificContractViolationError(
                 f"Temporal analysis '{specification.label}' requires verifiable chronology"
             )
@@ -60,8 +60,6 @@ def analyze_temporal_recovery(
 
     frozen_policy_id = context.threshold_policy_id(frozen_eval)
     static_policy_id = context.threshold_policy_id(static_eval)
-    cohort = context.config.seed_cohorts.get(context.experiment.seed_cohort_id)
-
     record = context.statistical_analysis.analyze_paired_seed_differences(
         frozen,
         static,
@@ -69,7 +67,7 @@ def analyze_temporal_recovery(
         frozen_policy_id,
         static_policy_id,
         specification.statistical_profile,
-        cohort.bootstrap_analysis_seed,
+        context.seed_cohort.bootstrap_analysis_seed,
     )
 
     meaningful = record.confidence_interval.lower_bound > 0.0

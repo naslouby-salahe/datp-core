@@ -8,22 +8,12 @@ from __future__ import annotations
 
 from enum import StrEnum
 
-# ---------------------------------------------------------------------------
-# Metric identifiers
-# ---------------------------------------------------------------------------
-
-
 class MetricIdentifier(StrEnum):
     """Primary metric names recognised across analysis capabilities."""
 
     CV_FPR = "cv_fpr"
     PAIRWISE_JS_DIVERGENCE = "pairwise_js_divergence"
     CV_FPR_DELTA = "cv_fpr_delta"
-
-
-# ---------------------------------------------------------------------------
-# Coverage
-# ---------------------------------------------------------------------------
 
 
 class CoverageStatus(StrEnum):
@@ -41,9 +31,7 @@ class CoverageDirection(StrEnum):
     LOWER = "lower"
 
 
-# ---------------------------------------------------------------------------
 # Hypothesis testing
-# ---------------------------------------------------------------------------
 
 
 class AlternativeHypothesis(StrEnum):
@@ -61,9 +49,7 @@ class HypothesisTestName(StrEnum):
     SPEARMAN_CORRELATION = "spearman_correlation"
 
 
-# ---------------------------------------------------------------------------
 # Confidence interval method
-# ---------------------------------------------------------------------------
 
 
 class ConfidenceIntervalMethod(StrEnum):
@@ -73,9 +59,7 @@ class ConfidenceIntervalMethod(StrEnum):
     PERCENTILE_BOOTSTRAP = "percentile_bootstrap"
 
 
-# ---------------------------------------------------------------------------
 # Dispersion / clustering
-# ---------------------------------------------------------------------------
 
 
 class ClusterDispersionKind(StrEnum):
@@ -96,9 +80,7 @@ class ClusterDispersionStatus(StrEnum):
     UNAVAILABLE_NON_FINITE_INPUT = "unavailable_non_finite_input"
 
 
-# ---------------------------------------------------------------------------
 # Temporal recovery & chronology
-# ---------------------------------------------------------------------------
 
 
 class TemporalOutcomeBand(StrEnum):
@@ -123,9 +105,7 @@ class ChronologyPolicy(StrEnum):
     ALLOW_UNVERIFIABLE = "allow_unverifiable"
 
 
-# ---------------------------------------------------------------------------
 # Operational / resource
-# ---------------------------------------------------------------------------
 
 
 class AlertBurdenStatus(StrEnum):
@@ -142,9 +122,7 @@ class ResourceEstimateBasis(StrEnum):
     EMPIRICAL_MEASUREMENT = "empirical_measurement"
 
 
-# ---------------------------------------------------------------------------
 # Ratio / effect
-# ---------------------------------------------------------------------------
 
 
 class FormulaIdentifier(StrEnum):
@@ -176,9 +154,7 @@ class MaterialityRuleKind(StrEnum):
     CONFIGURED_THRESHOLD = "configured_threshold"
 
 
-# ---------------------------------------------------------------------------
 # Anchor equivalence
-# ---------------------------------------------------------------------------
 
 
 class AnchorComparisonMode(StrEnum):
@@ -198,9 +174,7 @@ class AnchorCheckIdentifier(StrEnum):
     VERIFIED_CONFIGURATION_AND_PROVENANCE = "verified_configuration_and_provenance"
 
 
-# ---------------------------------------------------------------------------
 # Sweep dimensions
-# ---------------------------------------------------------------------------
 
 
 class SweepDimensionKind(StrEnum):
@@ -214,9 +188,7 @@ class SweepDimensionKind(StrEnum):
     PARTITION_CONDITION = "partition_condition"
 
 
-# ---------------------------------------------------------------------------
 # Operational inputs
-# ---------------------------------------------------------------------------
 
 
 class OperationalInputIdentifier(StrEnum):
@@ -253,9 +225,7 @@ class CommunicationFieldIdentifier(StrEnum):
     BENIGN_EXCEEDANCE_COUNT = "benign_exceedance_count_uint64"
 
 
-# ---------------------------------------------------------------------------
 # Units, fields, aggregations
-# ---------------------------------------------------------------------------
 
 
 class ComparisonUnit(StrEnum):
@@ -291,9 +261,7 @@ class InferentialUnit(StrEnum):
     CLIENT = "client"
 
 
-# ---------------------------------------------------------------------------
 # Artifact and result kinds
-# ---------------------------------------------------------------------------
 
 
 class ArtifactKind(StrEnum):

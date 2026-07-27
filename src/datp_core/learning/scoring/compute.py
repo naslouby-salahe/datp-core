@@ -19,7 +19,6 @@ def compute_reconstruction_scores(
     batch_size: int,
     device: str,
 ) -> torch.Tensor:
-    """Compute per-sample mean squared reconstruction error scores."""
     model = model.to(device)
     model.eval()
     dataset = TensorDataset(data)

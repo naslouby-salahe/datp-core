@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datp_core.artifacts.store import ArtifactStore
-from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
@@ -14,8 +13,7 @@ from datp_core.reporting.rendering.package import render_frozen_report
 class ReportGenerationStageHandler:
     stage = StageKind.REPORT_GENERATION
 
-    def __init__(self, config: ResolvedProjectConfiguration, store: ArtifactStore) -> None:
-        self._config = config
+    def __init__(self, store: ArtifactStore) -> None:
         self._store = store
 
     def execute(self, job: StageJob) -> StageJobOutcome:

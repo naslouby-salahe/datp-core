@@ -6,7 +6,6 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import cast
 
 import torch
 from safetensors.torch import save as save_safetensors
@@ -23,7 +22,7 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.numbers import PositiveInt
 from datp_core.core.registry import TypedDomainRegistry
-from datp_core.data.contracts import ResolvedDataset, SplitMethod
+from datp_core.data.contracts import ResolvedDataset, SplitMembership, SplitMethod
 from datp_core.experiments import ExperimentRecord, PopulationRecord
 from datp_core.learning.checkpoints.selection import (
     select_anchor_checkpoint_round,
@@ -87,7 +86,8 @@ class ModelTrainingStageHandler:
         dict[str, torch.Tensor],
     ]:
         if is_ditto:
-            ditto_result = cast(DittoTrainingResult, result)
+            assert isinstance(result, DittoTrainingResult)
+            ditto_result = result
             round_losses = ditto_result.global_round_losses
             personalized_round_losses = ditto_result.personalized_round_losses
             scheduled_rounds = tuple(checkpoint.round_number for checkpoint in ditto_result.scheduled_checkpoints)
@@ -98,7 +98,8 @@ class ModelTrainingStageHandler:
                 for name, tensor in checkpoint.global_state
             }
         else:
-            federated_result = cast(FederatedTrainingResult, result)
+            assert isinstance(result, FederatedTrainingResult)
+            federated_result = result
             round_losses = federated_result.round_losses
             personalized_round_losses = None
             scheduled_rounds = tuple(checkpoint.round_number for checkpoint in federated_result.scheduled_checkpoints)
@@ -117,10 +118,11 @@ class ModelTrainingStageHandler:
         scheduled_rounds: tuple[int, ...],
     ) -> int:
         if checkpoint_profile.convergence is not None:
+            assert checkpoint_profile.total_rounds is not None
             return select_anchor_checkpoint_round(
                 convergence=checkpoint_profile.convergence,
                 recorded_losses=round_losses,
-                round_cap=int(cast(PositiveInt, checkpoint_profile.total_rounds).value),
+                round_cap=int(checkpoint_profile.total_rounds.value),
             )
         return select_lowest_validation_loss_checkpoint(
             scheduled_rounds=tuple(int(value.value) for value in checkpoint_profile.selected_rounds),
@@ -138,7 +140,8 @@ class ModelTrainingStageHandler:
         try:
             self._store.write_bytes_atomic(job.output_path("checkpoint"), save_safetensors(checkpoint_grid))
             if is_ditto:
-                ditto_result = cast(DittoTrainingResult, result)
+                assert isinstance(result, DittoTrainingResult)
+                ditto_result = result
                 personalized_grid = {
                     f"round_{checkpoint.round_number}.client_{client_id}.{name}": tensor
                     for checkpoint in ditto_result.scheduled_checkpoints
@@ -193,13 +196,14 @@ class ModelTrainingStageHandler:
         return None
 
     def execute(self, job: StageJob) -> StageJobOutcome:
-        ctx = cast(TrainingContext, job.context)
+        assert isinstance(job.context, TrainingContext)
+        ctx = job.context
         experiment = self._config.experiments.get(ctx.experiment_id)
         profile = self._config.training_profiles.get(experiment.training_profile_id)
         if (
             profile.kind
             not in {TrainingProfileKind.FEDERATED_AVERAGING_TRAINING, TrainingProfileKind.FEDERATED_PROX_TRAINING}
-            or profile.participation != TrainingParticipation.FULL.value
+            or profile.participation != TrainingParticipation.FULL
         ):
             return StageJobOutcome.failed(
                 node_key=job.node_key,
@@ -244,23 +248,23 @@ class ModelTrainingStageHandler:
                 materialized_path = Path(temporary_directory) / "materialized.parquet"
                 materialized_path.write_bytes(materialization_bytes)
                 training_split = (
-                    "historical_training"
+                    SplitMembership.HISTORICAL_TRAINING.value
                     if materialization_config.split_method == SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL
-                    else "train"
+                    else SplitMembership.TRAIN.value
                 )
                 calibration_split = (
-                    "historical_calibration" if training_split == "historical_training" else "calibration"
+                    SplitMembership.HISTORICAL_CALIBRATION.value if training_split == SplitMembership.HISTORICAL_TRAINING.value else SplitMembership.CALIBRATION.value
                 )
                 feature_columns = (
                     features.order if features is not None else materialized_feature_columns(materialized_path)
                 )
                 training_clients = load_benign_client_tensors(materialized_path, training_split, feature_columns)
                 calibration_clients = load_benign_client_tensors(materialized_path, calibration_split, feature_columns)
-                if self._config.runtime.active_execution_profile.device_policy != DevicePolicy.CUDA_REQUIRED.value:
+                if self._config.runtime.active_execution_profile.device_policy != DevicePolicy.CUDA_REQUIRED:
                     raise ValueError("Model training requires the configured CUDA-required execution profile")
                 initialization_namespace = self._config.protocol_determinism.seed_namespaces["model_initialization"]
                 shuffle_namespace = self._config.protocol_determinism.seed_namespaces["dataloader_shuffle"]
-                digest_bytes = int(self._config.protocol_determinism.derived_seed_algorithm["digest_bytes"])
+                digest_bytes = int(self._config.protocol_determinism.derived_seed_algorithm["digest_bytes"])  # type: ignore[reportArgumentType]
                 initialization_seed = derive_model_initialization_seed(
                     key=initialization_namespace.key,
                     digest_bytes=digest_bytes,
@@ -287,20 +291,21 @@ class ModelTrainingStageHandler:
                     "shuffle_seed_key": shuffle_namespace.key,
                     "shuffle_seed_digest_bytes": digest_bytes,
                 }
-                result = (
-                    ditto_train_autoencoder(
+                if is_ditto:
+                    assert profile.personalized_local_epochs is not None
+                    assert ditto_weight is not None
+                    result = ditto_train_autoencoder(
                         model,
                         training_clients,
                         calibration_clients,
-                        personalized_local_epochs=int(cast(PositiveInt, profile.personalized_local_epochs).value),
-                        proximal_weight=cast(float, ditto_weight),
+                        personalized_local_epochs=int(profile.personalized_local_epochs.value),
+                        proximal_weight=ditto_weight,
                         **training_kwargs,
                     )
-                    if is_ditto
-                    else federated_train_autoencoder(
+                else:
+                    result = federated_train_autoencoder(
                         model, training_clients, calibration_clients, proximal_mu=proximal_mu, **training_kwargs
                     )
-                )
         except (OSError, ValueError) as exc:
             return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message=str(exc))
         round_output = self._unpack_training_result(result, is_ditto)

@@ -8,7 +8,6 @@ does not import pipeline execution, CLI, or infrastructure.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from typing import cast
 
 from datp_core.config.authored.datasets import (
     AuthoredDatasetConfig,
@@ -29,7 +28,6 @@ from datp_core.core.identifiers import (
     EligibilityPolicyId,
     MaterializationId,
 )
-from datp_core.core.immutability import as_optional_frozen_json_mapping, deep_freeze
 from datp_core.core.numbers import PositiveInt, Probability
 from datp_core.core.paths import RelativePath
 from datp_core.core.seeding import Seed
@@ -66,7 +64,7 @@ def _binary_label_column(d_cfg: AuthoredDatasetConfig) -> str | None:
     label_fields = d_cfg.field_schema
     if label_fields is None:
         return None
-    binary_label = getattr(getattr(label_fields, "label_fields", None), "binary_label", None)
+    binary_label = label_fields.label_fields.binary_label
     if binary_label is None:
         return None
     column = binary_label.get("column") if isinstance(binary_label, dict) else None
@@ -75,16 +73,18 @@ def _binary_label_column(d_cfg: AuthoredDatasetConfig) -> str | None:
 
 def resolve_identity_scheme(cfg: IdentitySchemeConfig) -> IdentitySchemeRecord:
     return IdentitySchemeRecord(
-        row_identity=cfg.row_identity,
-        client_identity=cfg.client_identity,
-        benign_group_identity=cfg.benign_group_identity,
+        row_identity=dict(cfg.row_identity),
+        client_identity=dict(cfg.client_identity) if cfg.client_identity is not None else None,
+        benign_group_identity=dict(cfg.benign_group_identity) if cfg.benign_group_identity is not None else None,
         attack_row_group_identity=cfg.attack_row_group_identity,
-        label_identity=cfg.label_identity,
-        attack_family_identity=cfg.attack_family_identity,
-        attack_type_identity=cfg.attack_type_identity,
-        device_identity=cfg.device_identity,
+        label_identity=dict(cfg.label_identity) if cfg.label_identity is not None else None,
+        attack_family_identity=dict(cfg.attack_family_identity) if cfg.attack_family_identity is not None else None,
+        attack_type_identity=dict(cfg.attack_type_identity) if cfg.attack_type_identity is not None else None,
+        device_identity=dict(cfg.device_identity) if cfg.device_identity is not None else None,
         device_mac_ip_field=cfg.device_mac_ip_field,
-        timestamp_field=cfg.timestamp_field,
+        timestamp_field=(
+            cfg.timestamp_field if isinstance(cfg.timestamp_field, str) else dict(cfg.timestamp_field)
+        ),
         chronological_ordering_basis=cfg.chronological_ordering_basis,
         provenance_fields=tuple(cfg.provenance_fields),
     )
@@ -93,17 +93,17 @@ def resolve_identity_scheme(cfg: IdentitySchemeConfig) -> IdentitySchemeRecord:
 def resolve_label_fields(cfg: LabelFieldsConfig) -> LabelFieldsRecord:
     multiclass = cfg.multiclass_label
     return LabelFieldsRecord(
-        binary_label=cfg.binary_label,
+        binary_label=dict(cfg.binary_label),
         multiclass_label=(
             MulticlassLabelRecord(column=multiclass.column, type=multiclass.type, case=multiclass.case)
             if multiclass is not None
             else None
         ),
-        benign_value=cfg.benign_value,
-        attack_class_mapping=cfg.attack_class_mapping,
-        device_family_mapping=cfg.device_family_mapping,
+        benign_value=dict(cfg.benign_value) if cfg.benign_value is not None else None,
+        attack_class_mapping=dict(cfg.attack_class_mapping) if cfg.attack_class_mapping is not None else None,
+        device_family_mapping=dict(cfg.device_family_mapping) if cfg.device_family_mapping is not None else None,
         family_taxonomy=cfg.family_taxonomy,
-        family_map=cfg.family_map,
+        family_map=dict(cfg.family_map) if cfg.family_map is not None else None,
     )
 
 
@@ -114,8 +114,8 @@ def resolve_endpoint_identity(cfg: EndpointIdentityConfig) -> EndpointIdentityRe
         internal_prefix=cfg.internal_prefix,
         subnet_component=cfg.subnet_component,
         subnet_role_source=cfg.subnet_role_source,
-        subnet_to_group=cfg.subnet_to_group,
-        excluded_endpoints=cfg.excluded_endpoints,
+        subnet_to_group={str(k): item for k, item in cfg.subnet_to_group.items()},
+        excluded_endpoints=dict(cfg.excluded_endpoints),
         direction_normalization=cfg.direction_normalization,
         use=cfg.use,
         unresolved_row_policy=cfg.unresolved_row_policy,
@@ -163,7 +163,7 @@ def resolve_field_schema(cfg: DatasetFieldSchemaConfig) -> DatasetFieldSchemaRec
             RetainedNumericFeaturesRecord(
                 role=retained_numeric_features.role,
                 order=tuple(retained_numeric_features.order),
-                numeric_parsing=retained_numeric_features.numeric_parsing,
+                numeric_parsing=dict(retained_numeric_features.numeric_parsing),
                 on_invalid_value=retained_numeric_features.on_invalid_value,
             )
             if retained_numeric_features is not None
@@ -175,7 +175,11 @@ def resolve_field_schema(cfg: DatasetFieldSchemaConfig) -> DatasetFieldSchemaRec
             if isinstance(cfg.categorical_encoding, str)
             else resolve_categorical_encoding(cfg.categorical_encoding)
         ),
-        leakage_exclusions=cfg.leakage_exclusions,
+        leakage_exclusions=(
+            dict(cfg.leakage_exclusions)
+            if isinstance(cfg.leakage_exclusions, Mapping)
+            else tuple(cfg.leakage_exclusions)
+        ),
     )
 
 
@@ -245,9 +249,9 @@ def resolve_source_contract(cfg: SourceContractConfig) -> SourceContractRecord:
         empty_label_row=cfg.empty_label_row,
         reject_unparseable_numeric_model_feature=cfg.reject_unparseable_numeric_model_feature,
         reject_row_with_field_count_other_than_header=cfg.reject_row_with_field_count_other_than_header,
-        column_role_partition=cfg.column_role_partition,
+        column_role_partition=dict(cfg.column_role_partition) if cfg.column_role_partition is not None else None,
         positional_contract=cfg.positional_contract,
-        row_integrity_exclusions=cfg.row_integrity_exclusions,
+        row_integrity_exclusions=dict(cfg.row_integrity_exclusions) if cfg.row_integrity_exclusions is not None else None,
     )
 
 
@@ -332,11 +336,7 @@ def _resolve_materializations(d_cfg: AuthoredDatasetConfig) -> tuple[DatasetMate
             vocabulary_fit_split=materialization.vocabulary_fit_split,
             preprocessing_sequence=tuple(materialization.preprocessing_sequence),
             row_exclusion=materialization.row_exclusion,
-            split_row_semantics=(
-                cast(Mapping[str, "str | bool"], deep_freeze(materialization.split_row_semantics))
-                if materialization.split_row_semantics is not None
-                else None
-            ),
+            split_row_semantics=(dict(materialization.split_row_semantics) if materialization.split_row_semantics is not None else None),  # type: ignore[reportArgumentType]
             infeasibility_policy=materialization.infeasibility_policy,
             split_method=SplitMethod(materialization.split.method),
             split_seed=Seed(materialization.split.split_seed) if materialization.split.split_seed is not None else None,
@@ -472,7 +472,7 @@ def _resolve_inspection_elements(d_cfg: AuthoredDatasetConfig) -> DatasetInspect
 
 
 def resolve_datasets(
-    authored_datasets: Sequence,  # Sequence[AuthoredDatasetConfig]
+    authored_datasets: Sequence[AuthoredDatasetConfig],
     paths: ResolvedProjectPaths,
 ) -> dict[DatasetId, ResolvedDataset]:
     """Resolve all authored dataset documents into immutable domain records."""
@@ -505,9 +505,7 @@ def resolve_datasets(
             field_schema=resolve_field_schema(d_cfg.field_schema),
             source_contract=resolve_source_contract(d_cfg.source_contract),
             client_identity_contract=(
-                as_optional_frozen_json_mapping(d_cfg.client_identity_contract)
-                if d_cfg.client_identity_contract is not None
-                else None
+                dict(d_cfg.client_identity_contract) if d_cfg.client_identity_contract is not None else None
             ),
             inspection_contract=inspection_contract,
             setups=setups,

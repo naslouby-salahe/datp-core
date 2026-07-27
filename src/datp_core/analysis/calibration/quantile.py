@@ -4,24 +4,22 @@ from __future__ import annotations
 
 import polars as pl
 
-from datp_core.analysis.contracts import (
-    PairedAnalysisCell,
+from datp_core.analysis.calibration.contracts import (
     QuantileEstimationAnalysisResult,
     QuantileEstimationClientResult,
     QuantileEstimationEvaluationResult,
     QuantileEstimationSeedResult,
 )
+from datp_core.analysis.contracts import PairedAnalysisCell
 from datp_core.analysis.enums import ProducedField
 from datp_core.analysis.errors import ScientificContractViolationError
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
-from datp_core.analysis.runtime.runner import run_analysis
 from datp_core.artifacts.schemas.columns import ScoreColumn, ThresholdColumn
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel
 from datp_core.evaluation.distributions import calibration_variance_terms
 from datp_core.experiments import QuantileEstimationAnalysisRecord
 
 
-@run_analysis.register
 def analyze_quantile_estimation(
     specification: QuantileEstimationAnalysisRecord,
     context: AnalysisExecutionContext,
@@ -108,14 +106,14 @@ def analyze_quantile_estimation(
                 "signed_attainment_error",
                 "absolute_attainment_error",
             ).iter_rows(named=True):
-                rel_err = float(row.relative_threshold_error) if row.relative_threshold_error is not None else None
-                ach_exc = float(row.achieved_exceedance) if row.achieved_exceedance is not None else None
-                sat_err = float(row.signed_attainment_error) if row.signed_attainment_error is not None else None
-                abs_err = float(row.absolute_attainment_error) if row.absolute_attainment_error is not None else None
+                rel_err = float(row.relative_threshold_error) if row.relative_threshold_error is not None else None  # type: ignore[reportAttributeAccessIssue]
+                ach_exc = float(row.achieved_exceedance) if row.achieved_exceedance is not None else None  # type: ignore[reportAttributeAccessIssue]
+                sat_err = float(row.signed_attainment_error) if row.signed_attainment_error is not None else None  # type: ignore[reportAttributeAccessIssue]
+                abs_err = float(row.absolute_attainment_error) if row.absolute_attainment_error is not None else None  # type: ignore[reportAttributeAccessIssue]
                 client_results.append(
                     QuantileEstimationClientResult(
-                        client_id=ClientId(str(row.client_id)),
-                        absolute_threshold_error=float(row.absolute_threshold_error),
+                        client_id=ClientId(str(row.client_id)),  # type: ignore[reportAttributeAccessIssue]
+                        absolute_threshold_error=float(row.absolute_threshold_error),  # type: ignore[reportAttributeAccessIssue]
                         relative_threshold_error=rel_err,
                         achieved_exceedance=ach_exc,
                         signed_attainment_error=sat_err,

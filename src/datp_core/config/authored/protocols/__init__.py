@@ -3,7 +3,7 @@ per-responsibility protocol submodules."""
 
 from __future__ import annotations
 
-from pydantic import JsonValue, model_validator
+from pydantic import model_validator
 
 from datp_core.config.authored.base import SchemaVersionOneConfigModel, StrictFrozenConfigModel
 from datp_core.config.authored.protocols.evaluation import (
@@ -99,7 +99,7 @@ class AuthoredProtocolsConfig(SchemaVersionOneConfigModel):
     operational_inputs: OperationalInputsConfig
     statistical_profiles: dict[str, StatisticalProfileConfig]
     report_profiles: dict[str, ReportProfileConfig]
-    communication_estimation: dict[str, JsonValue] | None = None
+    communication_estimation: dict[str, object] | None = None
 
     @model_validator(mode="after")
     def reject_retired_policy_identifiers(self) -> AuthoredProtocolsConfig:

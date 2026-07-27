@@ -2,19 +2,17 @@
 
 from __future__ import annotations
 
-from datp_core.analysis.contracts import (
+from datp_core.analysis.comparisons.contracts import (
     AssociationCorrelationResult,
     AssociationObservationRecord,
     AssociationRegressionResult,
     MetricAssociationAnalysisResult,
-    PairedAnalysisCell,
     PairedThresholdAnalysisResult,
-    PrerequisiteAnalysisReference,
 )
+from datp_core.analysis.contracts import PairedAnalysisCell, PrerequisiteAnalysisReference
 from datp_core.analysis.enums import AnalysisResultKind, MetricIdentifier
 from datp_core.analysis.errors import InvalidAnalysisConfigurationError, ScientificContractViolationError
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
-from datp_core.analysis.runtime.runner import run_analysis
 from datp_core.artifacts.schemas.columns import ScoreColumn
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel, PartitionConditionId
 from datp_core.core.seeding import Seed
@@ -22,7 +20,6 @@ from datp_core.evaluation import calculate_pairwise_js_divergence
 from datp_core.experiments import MetricAssociationAnalysisRecord
 
 
-@run_analysis.register
 def analyze_association(
     specification: MetricAssociationAnalysisRecord,
     context: AnalysisExecutionContext,
@@ -115,7 +112,7 @@ def calibration_js(
     score_ctx = context.score_context(evaluation_label, seed, partition_condition=partition_condition)
     frame = context.artifacts.calibration_scores(score_ctx)
 
-    diagnostics = context.config.metric_definitions.heterogeneity_diagnostics.pairwise_js_divergence
+    diagnostics = context.metric_definitions.heterogeneity_diagnostics.pairwise_js_divergence
     # Polars-to-Python bridge: calculate_pairwise_js_divergence does Python histogram math
     return calculate_pairwise_js_divergence(
         tuple(

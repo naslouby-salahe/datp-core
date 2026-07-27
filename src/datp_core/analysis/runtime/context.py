@@ -10,14 +10,19 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
+from datp_core.analysis.contracts import QuantileThresholdPolicy
 from datp_core.analysis.errors import InvalidAnalysisConfigurationError
 from datp_core.analysis.runtime.artifacts import AnalysisArtifactRepository
 from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
-from datp_core.config.project import ResolvedProjectConfiguration
+from datp_core.config.operational_contracts import CommunicationEstimationContractRecord, OperationalInputsRecord
 from datp_core.core.identifiers import EvaluationLabel, PartitionConditionId, PopulationId, ThresholdPolicyId
+from datp_core.core.registry import TypedDomainRegistry
 from datp_core.core.seeding import Seed
+from datp_core.evaluation.definitions.metrics import MetricDefinitionsRecord
 from datp_core.experiments import EvaluationSpecRecord, ExperimentRecord
+from datp_core.learning.contracts.seeds import SeedCohortRecord
 from datp_core.pipeline.stages.context import DataContext, EvaluationContext, TrainingContext
+from datp_core.thresholding.policies.union import ThresholdPolicyRecord
 
 
 class AnalysisExecutionContext(BaseModel):
@@ -25,7 +30,11 @@ class AnalysisExecutionContext(BaseModel):
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
-    config: ResolvedProjectConfiguration
+    threshold_policies: TypedDomainRegistry[ThresholdPolicyId, ThresholdPolicyRecord]
+    seed_cohort: SeedCohortRecord
+    metric_definitions: MetricDefinitionsRecord
+    operational_inputs: OperationalInputsRecord
+    communication_estimation_contract: CommunicationEstimationContractRecord
     artifacts: AnalysisArtifactRepository
     experiment: ExperimentRecord
     seeds: tuple[Seed, ...]
@@ -46,13 +55,12 @@ class AnalysisExecutionContext(BaseModel):
 
     def quantile_for_evaluation(self, evaluation_label: EvaluationLabel) -> float:
         """Return the quantile of the threshold policy bound to *evaluation_label*."""
-        policy = self.config.threshold_policies.get(self.threshold_policy_id(evaluation_label))
-        q_val = getattr(policy, "quantile", None)
-        if q_val is None:
+        policy = self.threshold_policies.get(self.threshold_policy_id(evaluation_label))
+        if not isinstance(policy, QuantileThresholdPolicy):
             raise InvalidAnalysisConfigurationError(
                 f"Evaluation '{evaluation_label.value}' does not bind a quantile threshold policy"
             )
-        return float(q_val)
+        return float(policy.quantile)
 
     def evaluation_context(
         self,

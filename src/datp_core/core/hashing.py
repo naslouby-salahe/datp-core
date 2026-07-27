@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from attrs import asdict, define, field
+from pydantic import BaseModel
 
 from datp_core.core.identifiers import _DomainIdentifier
 from datp_core.core.numbers import NonNegativeFloat, PositiveFloat, PositiveInt, Probability
@@ -93,19 +94,19 @@ def canonicalize_value(obj: object) -> CanonicalProjection:
         return obj
     if hasattr(obj, "__attrs_attrs__"):
         return canonicalize_value(asdict(obj, recurse=False))
-    if hasattr(obj, "model_dump"):
+    if isinstance(obj, BaseModel):
         return canonicalize_value(obj.model_dump())
     raise TypeError(f"Unsupported value in fingerprint projection: {type(obj).__name__}")
 
 
 def compute_payload_checksum(payload: bytes) -> Checksum:
-    """Compute BLAKE2b checksum (256-bit / 64 hex characters) of raw byte payload."""
+    """BLAKE2b checksum of raw byte payload."""
     hex_digest = blake2b(payload, digest_size=32).hexdigest()
     return Checksum(value=hex_digest)
 
 
 def compute_file_checksum(path: Path, chunk_size: int = 1_048_576) -> Checksum:
-    """Compute a BLAKE2b payload checksum without loading an artifact file into memory."""
+    """BLAKE2b checksum of a file, streamed."""
     if chunk_size <= 0:
         raise ValueError("Checksum chunk size must be positive")
     digest = blake2b(digest_size=32)

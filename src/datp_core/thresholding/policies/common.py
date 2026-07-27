@@ -3,54 +3,53 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import cast
 
 from pydantic import BaseModel, ConfigDict
 
 from datp_core.core.identifiers import ClientId, PopulationId
-from datp_core.core.immutability import deep_freeze
 
 
 def _as_tuple_str(value: object) -> tuple[str, ...]:
-    return cast("tuple[str, ...]", deep_freeze(value))
+    return tuple(cast("Iterable[str]", value))
 
 
 def _as_tuple_float(value: object) -> tuple[float, ...]:
-    return cast("tuple[float, ...]", deep_freeze(value))
+    return tuple(cast("Iterable[float]", value))
 
 
 def _as_mapping_str_int(value: object) -> Mapping[str, int]:
-    return cast("Mapping[str, int]", deep_freeze(value))
+    return dict(cast("Iterable[tuple[str, int]]", value))
 
 
 def _as_mapping_str_float(value: object) -> Mapping[str, float]:
-    return cast("Mapping[str, float]", deep_freeze(value))
+    return dict(cast("Iterable[tuple[str, float]]", value))
 
 
 def _as_mapping_str_object(value: object) -> Mapping[str, object]:
-    return cast("Mapping[str, object]", deep_freeze(value))
+    return cast("Mapping[str, object]", dict(value))  # type: ignore[reportArgumentType]
 
 
 def _as_mapping_str_str_or_int(value: object) -> Mapping[str, str | int]:
-    return cast("Mapping[str, str | int]", deep_freeze(value))
+    return dict(cast("Iterable[tuple[str, str | int]]", value))
 
 
 def _as_mapping_str_str_or_int_or_float(value: object) -> Mapping[str, str | int | float]:
-    return cast("Mapping[str, str | int | float]", deep_freeze(value))
+    return dict(cast("Iterable[tuple[str, str | int | float]]", value))
 
 
 def _as_mapping_str_float_or_mapping(value: object) -> Mapping[str, float | Mapping[str, float]]:
-    return cast("Mapping[str, float | Mapping[str, float]]", deep_freeze(value))
+    return cast("Mapping[str, float | Mapping[str, float]]", dict(value))  # type: ignore[reportArgumentType]
 
 
 def _as_mapping_str_str_or_float_or_bool(value: object) -> Mapping[str, str | float | bool]:
-    return cast("Mapping[str, str | float | bool]", deep_freeze(value))
+    return dict(cast("Iterable[tuple[str, str | float | bool]]", value))
 
 
 def _as_mapping_str_tuple_or_str(value: object) -> Mapping[str, tuple[str, ...] | str]:
-    return cast("Mapping[str, tuple[str, ...] | str]", deep_freeze(value))
+    return dict(cast("Iterable[tuple[str, tuple[str, ...] | str]]", value))
 
 
 class ThresholdPolicyDefaultsRecord(BaseModel):

@@ -9,6 +9,7 @@ import pytest
 
 from datp_core.config.project import resolve_project_configuration
 from datp_core.core.identifiers import ThresholdPolicyId
+from datp_core.core.registry import TypedDomainRegistry
 from datp_core.thresholding.policies.clustering import ClusterThresholdPolicyRecord
 from datp_core.thresholding.policies.conformal import SplitConformalThresholdPolicyRecord
 from datp_core.thresholding.policies.federated import (
@@ -27,6 +28,7 @@ from datp_core.thresholding.policies.shrinkage import (
     CalibrationFallbackThresholdPolicyRecord,
     LocalGlobalShrinkageThresholdPolicyRecord,
 )
+from datp_core.thresholding.policies.union import ThresholdPolicyRecord
 
 # Maps every authored identifier in configs/protocols.yaml's threshold_policies block to the
 # domain record type it must resolve into.
@@ -49,7 +51,7 @@ _EXPECTED_RECORD_TYPE_BY_POLICY_ID = {
 
 
 @pytest.fixture(scope="module")
-def resolved_threshold_policies():
+def resolved_threshold_policies() -> TypedDomainRegistry[ThresholdPolicyId, ThresholdPolicyRecord]:
     cfg = resolve_project_configuration()
     return cfg.threshold_policies
 
@@ -73,7 +75,7 @@ def test_resolved_threshold_policy_is_the_expected_pure_domain_record(
 @pytest.mark.parametrize("policy_key", sorted(_EXPECTED_RECORD_TYPE_BY_POLICY_ID))
 def test_resolved_threshold_policy_record_is_frozen(resolved_threshold_policies, policy_key: str) -> None:
     record = resolved_threshold_policies.get(ThresholdPolicyId(policy_key))
-    first_field = next(iter(record.model_fields))
+    first_field = next(iter(type(record).model_fields))
     current_value = getattr(record, first_field)
 
     with pytest.raises(pydantic.ValidationError):

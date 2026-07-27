@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import cast
 
 import polars as pl
 
@@ -11,7 +10,6 @@ from datp_core.artifacts.schemas.metrics import validate_client_metric_frame
 from datp_core.artifacts.schemas.scores import validate_test_score_frame
 from datp_core.artifacts.schemas.thresholds import validate_threshold_frame
 from datp_core.artifacts.store import ArtifactStore
-from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.evaluation.metrics.auroc import compute_client_auroc
 from datp_core.evaluation.metrics.operating_point import compute_operating_point_metrics, ineligible_client_metrics
 from datp_core.pipeline.stages.context import EvaluationContext
@@ -23,12 +21,12 @@ from datp_core.pipeline.stages.outcomes import StageJobOutcome
 class OperatingPointEvaluationStageHandler:
     stage = StageKind.OPERATING_POINT_EVALUATION
 
-    def __init__(self, config: ResolvedProjectConfiguration, store: ArtifactStore) -> None:
-        self._config = config
+    def __init__(self, store: ArtifactStore) -> None:
         self._store = store
 
     def execute(self, job: StageJob) -> StageJobOutcome:
-        ctx = cast(EvaluationContext, job.context)
+        assert isinstance(job.context, EvaluationContext)
+        ctx = job.context
         try:
             thresholds = validate_threshold_frame(
                 pl.read_parquet(BytesIO(self._store.read_bytes(job.input_path("thresholds"))))

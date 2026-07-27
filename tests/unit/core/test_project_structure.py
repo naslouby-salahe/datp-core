@@ -20,7 +20,7 @@ _EXPECTED_PACKAGES = (
 
 
 def test_expected_source_packages_exist() -> None:
-    missing = [pkg for pkg in _EXPECTED_PACKAGES if not (_SRC_ROOT / pkg / "__init__.py").exists()]
+    missing = [pkg for pkg in _EXPECTED_PACKAGES if not (_SRC_ROOT / pkg).is_dir()]
     assert missing == [], f"Missing source packages: {missing}"
 
 

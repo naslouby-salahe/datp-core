@@ -41,7 +41,10 @@ _EXCLUDED_CLASSES = {"RuntimeBootstrapSettings"}
 
 
 def _is_empty_collection_factory(default: object) -> bool:
-    return isinstance(default, attrs.Factory) and default.factory in (tuple, list, dict, frozenset)  # type: ignore[arg-type]
+    if not isinstance(default, attrs.Factory):
+        return False
+    f = default.factory
+    return f is tuple or f is list or f is dict or f is frozenset
 
 
 def test_resolved_records_have_no_hidden_defaults() -> None:

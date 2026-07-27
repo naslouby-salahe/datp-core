@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from datp_core.analysis.contracts import (
+from datp_core.analysis.mechanisms.contracts import (
     AlertBurdenAnalysisResult,
-    PairedAnalysisCell,
     ResourceCostAnalysisResult,
     ResourceCostEvaluationResult,
     ResourceCostSeedResult,
 )
+from datp_core.analysis.contracts import PairedAnalysisCell
 from datp_core.analysis.enums import (
     AlertBurdenStatus,
     CommunicationFieldIdentifier,
@@ -17,7 +17,6 @@ from datp_core.analysis.enums import (
 )
 from datp_core.analysis.errors import InvalidAnalysisConfigurationError
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
-from datp_core.analysis.runtime.runner import run_analysis
 from datp_core.artifacts.schemas.columns import MetricColumn
 from datp_core.config.operational_contracts import CommunicationEstimationContractRecord
 from datp_core.core.identifiers import AnalysisLabel, EvaluationLabel
@@ -32,14 +31,13 @@ from datp_core.thresholding.policies.shared import (
 from datp_core.thresholding.policies.union import ThresholdPolicyRecord
 
 
-@run_analysis.register
 def analyze_alert_burden(
     specification: AlertBurdenAnalysisRecord,
     context: AnalysisExecutionContext,
     cell: PairedAnalysisCell | None = None,
 ) -> tuple[AlertBurdenAnalysisResult, ...]:
     """Execute alert-burden analysis."""
-    rate = context.config.operational_inputs.benign_decision_rate
+    rate = context.operational_inputs.benign_decision_rate
     if not rate.configured or rate.value is None:
         res = AlertBurdenAnalysisResult(
             analysis_label=AnalysisLabel(specification.label),
@@ -112,14 +110,13 @@ def _field_bytes(contract: CommunicationEstimationContractRecord, field: Communi
     return encoding.bytes_per_field
 
 
-@run_analysis.register
 def analyze_resource_cost(
     specification: ResourceCostAnalysisRecord,
     context: AnalysisExecutionContext,
     cell: PairedAnalysisCell | None = None,
 ) -> tuple[ResourceCostAnalysisResult, ...]:
     """Execute resource-cost communication accounting analysis."""
-    contract = context.config.communication_estimation_contract
+    contract = context.communication_estimation_contract
     basis = ResourceEstimateBasis(specification.estimate_basis)
     if basis != ResourceEstimateBasis(contract.estimate_basis):
         raise InvalidAnalysisConfigurationError(
@@ -149,7 +146,7 @@ def analyze_resource_cost(
             calibration = context.artifacts.calibration_scores(score_ctx)
             client_count = calibration[MetricColumn.CLIENT_ID.value].n_unique()
 
-            policy = context.config.threshold_policies.get(eval_spec.threshold_policy_id)
+            policy = context.threshold_policies.get(eval_spec.threshold_policy_id)
             fields, threshold_bytes = threshold_exchange_cost(contract, policy, client_count)
 
             parameters = context.artifacts.checkpoint_parameter_count(model_ctx)

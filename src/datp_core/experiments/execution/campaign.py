@@ -9,15 +9,17 @@ from time import time
 import networkx as nx
 from pydantic import TypeAdapter
 
-from datp_core.analysis.contracts import AnalysisResult, AnchorEquivalenceAnalysisResult
+from datp_core.analysis.comparisons.contracts import AnchorEquivalenceAnalysisResult
+from datp_core.analysis.contracts import AnalysisResult
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.freezing import FrozenResultManifest
 from datp_core.core.identifiers import ExperimentId
 from datp_core.experiments.catalogue.models import EvidenceRole, ExperimentRecord
 from datp_core.experiments.execution.output_manager import ExperimentOutputManager, OutputState
-from datp_core.experiments.execution.report import ExperimentExecutionReport
+from datp_core.experiments.execution import ExperimentExecutionReport
 from datp_core.experiments.execution.runner import (
     ExecuteExperimentUseCase,
+    _ANCHOR_EQUIVALENCE_PASSED,
     _source_fingerprint,
 )
 from datp_core.experiments.planning.builder import ExperimentPlanBuilder
@@ -60,9 +62,7 @@ class CampaignReport:
         return 0 if self.success else 1
 
 
-# ---------------------------------------------------------------------------
 # DAG construction and canonical ordering
-# ---------------------------------------------------------------------------
 
 
 def _build_experiment_dag(config: ResolvedProjectConfiguration) -> nx.DiGraph:
@@ -102,9 +102,7 @@ def _is_anchor(dag: nx.DiGraph, experiment_id: ExperimentId) -> bool:
     return experiment.evidence_role is EvidenceRole.ANCHOR
 
 
-# ---------------------------------------------------------------------------
 # CampaignRunner
-# ---------------------------------------------------------------------------
 
 
 class CampaignRunner:
@@ -212,7 +210,7 @@ class CampaignRunner:
     @staticmethod
     def _requires_anchor(experiment: ExperimentRecord) -> bool:
         return any(
-            prerequisite.required_outcome == "anchor_equivalence_passed" for prerequisite in experiment.prerequisites
+            prerequisite.required_outcome == _ANCHOR_EQUIVALENCE_PASSED for prerequisite in experiment.prerequisites
         )
 
     def _anchor_passed(self, experiment_id: ExperimentId) -> bool:

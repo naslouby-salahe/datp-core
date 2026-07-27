@@ -1,17 +1,4 @@
-"""Statistical-profile configuration schema: how a statistical procedure (BCa/percentile
-bootstrap, Wilcoxon, etc.) and the nested-replicate aggregation policy are authored.
-
-This is scientific *configuration* schema, not an analysis-execution feature, so it lives under
-``datp_core.config`` rather than ``datp_core.analysis`` -- keeping it under ``analysis`` previously
-made every data/learning/thresholding/evaluation handler that transitively imports
-``ResolvedProjectConfiguration`` also transitively import the analysis package, violating this
-repository's own layering contract (`importlinter.ini`'s
-``data-thresholding-evaluation-do-not-import-downstream-features``). Kept as its own leaf module
-(rather than merged into `config.models`) so both `config.models` and `config.resolution.protocols`
-can depend on it without a circular import between them; `analysis.statistics.inference` (the one
-analysis-side consumer) imports it from here, which is an ordinary analysis-depends-on-config
-direction and does not reintroduce the violation.
-"""
+"""Statistical profile configuration schema."""
 
 from __future__ import annotations
 

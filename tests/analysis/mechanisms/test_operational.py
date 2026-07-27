@@ -6,7 +6,6 @@ from unittest.mock import MagicMock
 
 from datp_core.analysis.mechanisms.operational import analyze_resource_cost
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
-from datp_core.analysis.runtime.runner import register_analysis_capabilities
 from datp_core.config.operational_contracts import (
     CheckpointStorageRecord,
     CommunicationEstimationContractRecord,
@@ -76,7 +75,6 @@ def _build_dummy_contract(bytes_per_field: int = 4, direction_count: int = 2) ->
 
 
 def test_resource_cost_respects_encoding_width_and_directions() -> None:
-    register_analysis_capabilities()
 
     contract_4bytes_2dirs = _build_dummy_contract(bytes_per_field=4, direction_count=2)
     contract_8bytes_1dir = _build_dummy_contract(bytes_per_field=8, direction_count=1)
@@ -98,17 +96,14 @@ def test_resource_cost_respects_encoding_width_and_directions() -> None:
     artifacts.calibration_scores.return_value = calibration_frame
     artifacts.checkpoint_parameter_count.return_value = 1000
 
-    config1 = MagicMock()
-    config1.communication_estimation_contract = contract_4bytes_2dirs
     policy_mock = MagicMock(spec=SharedMeanThresholdPolicyRecord)
     policy_mock.policy = "shared_threshold"
-    config1.threshold_policies = {ThresholdPolicyId("pol_1"): policy_mock}
 
     eval_spec = EvaluationSpecRecord(
         label="eval_1",
         population_id=PopulationId("pop_1"),
         recalibration_mode=RecalibrationMode.FROZEN,
-        threshold_policy_id="pol_1",  # type: ignore[arg-type]
+        threshold_policy_id=ThresholdPolicyId("pol_1"),
         run_requirement=RunRequirement.MANDATORY,
         overrides=None,
     )
@@ -118,7 +113,11 @@ def test_resource_cost_respects_encoding_width_and_directions() -> None:
     exp.population_ids = (PopulationId("pop_1"),)
 
     ctx1 = AnalysisExecutionContext.model_construct(
-        config=config1,
+        threshold_policies={ThresholdPolicyId("pol_1"): policy_mock},
+        seed_cohort=MagicMock(),
+        metric_definitions=MagicMock(),
+        operational_inputs=MagicMock(),
+        communication_estimation_contract=contract_4bytes_2dirs,
         artifacts=artifacts,
         experiment=exp,
         seeds=(Seed(1),),
@@ -134,12 +133,12 @@ def test_resource_cost_respects_encoding_width_and_directions() -> None:
     assert eval_res1.estimated_checkpoint_storage_bytes == 4000
 
     # Now change contract to 8 bytes and 1 direction
-    config2 = MagicMock()
-    config2.communication_estimation_contract = contract_8bytes_1dir
-    config2.threshold_policies = {ThresholdPolicyId("pol_1"): policy_mock}
-
     ctx2 = AnalysisExecutionContext.model_construct(
-        config=config2,
+        threshold_policies={ThresholdPolicyId("pol_1"): policy_mock},
+        seed_cohort=MagicMock(),
+        metric_definitions=MagicMock(),
+        operational_inputs=MagicMock(),
+        communication_estimation_contract=contract_8bytes_1dir,
         artifacts=artifacts,
         experiment=exp,
         seeds=(Seed(1),),

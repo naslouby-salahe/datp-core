@@ -2,56 +2,55 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Annotated
+from collections.abc import Iterable, Mapping
+from typing import Annotated, cast
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.functional_validators import BeforeValidator
 
-from datp_core.core.immutability import (
-    FrozenJson,
-    as_frozen_json_mapping,
-    as_int_mapping,
-    as_optional_frozen_json_mapping,
-    as_optional_str_mapping,
-    as_str_mapping,
-)
-
-# ---- Custom conversion helpers ----
-
 
 def _convert_source_column_count(v: object) -> int | Mapping[str, int]:
-    return v if isinstance(v, int) else as_int_mapping(v)
+    return v if isinstance(v, int) else dict(cast("Iterable[tuple[str, int]]", v))
 
 
-def _convert_timestamp_field(v: object) -> str | Mapping[str, FrozenJson]:
-    return v if isinstance(v, str) else as_frozen_json_mapping(v)
+def _convert_timestamp_field(v: object) -> str | Mapping[str, object]:
+    return v if isinstance(v, str) else dict(cast("Iterable[tuple[str, object]]", v))
 
 
 def _convert_leakage_exclusions(
     v: object,
-) -> tuple[str, ...] | Mapping[str, FrozenJson]:
-    return as_frozen_json_mapping(v) if isinstance(v, Mapping) else tuple(v)
+) -> tuple[str, ...] | Mapping[str, object]:
+    if isinstance(v, Mapping):
+        return dict(cast("Iterable[tuple[str, object]]", v))
+    if isinstance(v, Iterable):
+        return tuple(v)
+    raise TypeError(f"Leakage exclusions must be a mapping or iterable, got {type(v).__name__}")
 
 
 def _convert_subnet_to_group(v: object) -> Mapping[str, str]:
-    return as_str_mapping({str(k): item for k, item in v.items()})
+    if not isinstance(v, Mapping):
+        raise TypeError(f"Subnet-to-group mapping requires a mapping, got {type(v).__name__}")
+    return {str(k): item for k, item in v.items()}
 
 
-# ---- Annotated field types with conversion validators ----
-
-_FrozenJsonMappingField = Annotated[Mapping[str, FrozenJson], BeforeValidator(as_frozen_json_mapping)]
-_OptionalFrozenJsonMappingField = Annotated[
-    Mapping[str, FrozenJson] | None,
-    BeforeValidator(as_optional_frozen_json_mapping),
+_JsonMappingField = Annotated[Mapping[str, object], BeforeValidator(dict)]
+_OptionalJsonMappingField = Annotated[
+    Mapping[str, object] | None,
+    BeforeValidator(lambda v: dict(v) if v is not None else None),
 ]
-_OptionalStrMappingField = Annotated[Mapping[str, str] | None, BeforeValidator(as_optional_str_mapping)]
-_StrMappingField = Annotated[Mapping[str, str], BeforeValidator(as_str_mapping)]
-_SourceColumnCountField = Annotated[int | Mapping[str, int], BeforeValidator(_convert_source_column_count)]
-_TimestampField = Annotated[str | Mapping[str, FrozenJson], BeforeValidator(_convert_timestamp_field)]
+_OptionalStrMappingField = Annotated[
+    Mapping[str, str] | None,
+    BeforeValidator(lambda v: dict(v) if v is not None else None),
+]
+_StrMappingField = Annotated[Mapping[str, str], BeforeValidator(dict)]
+_SourceColumnCountField = Annotated[
+    int | Mapping[str, int],
+    BeforeValidator(_convert_source_column_count),
+]
+_TimestampField = Annotated[str | Mapping[str, object], BeforeValidator(_convert_timestamp_field)]
 _SubnetToGroupField = Annotated[Mapping[str, str], BeforeValidator(_convert_subnet_to_group)]
 _LeakageExclusionsField = Annotated[
-    tuple[str, ...] | Mapping[str, FrozenJson],
+    tuple[str, ...] | Mapping[str, object],
     BeforeValidator(_convert_leakage_exclusions),
 ]
 
@@ -67,9 +66,9 @@ class MulticlassLabelRecord(BaseModel):
 class LabelFieldsRecord(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    binary_label: _FrozenJsonMappingField
+    binary_label: _JsonMappingField
     multiclass_label: MulticlassLabelRecord | None
-    benign_value: _OptionalFrozenJsonMappingField
+    benign_value: _OptionalJsonMappingField
     attack_class_mapping: _OptionalStrMappingField
     device_family_mapping: _OptionalStrMappingField
     family_taxonomy: str | None
@@ -79,14 +78,14 @@ class LabelFieldsRecord(BaseModel):
 class IdentitySchemeRecord(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    row_identity: _FrozenJsonMappingField
-    client_identity: _OptionalFrozenJsonMappingField
+    row_identity: _JsonMappingField
+    client_identity: _OptionalJsonMappingField
     benign_group_identity: _OptionalStrMappingField
     attack_row_group_identity: str | None
     label_identity: _OptionalStrMappingField
     attack_family_identity: _OptionalStrMappingField
     attack_type_identity: _OptionalStrMappingField
-    device_identity: _OptionalFrozenJsonMappingField
+    device_identity: _OptionalJsonMappingField
     device_mac_ip_field: str | None
     timestamp_field: _TimestampField
     chronological_ordering_basis: str | None
@@ -102,7 +101,7 @@ class EndpointIdentityRecord(BaseModel):
     subnet_component: str
     subnet_role_source: str
     subnet_to_group: _SubnetToGroupField
-    excluded_endpoints: _FrozenJsonMappingField
+    excluded_endpoints: _JsonMappingField
     direction_normalization: str
     use: str
     unresolved_row_policy: str
@@ -113,7 +112,7 @@ class RetainedNumericFeaturesRecord(BaseModel):
 
     role: str
     order: tuple[str, ...]
-    numeric_parsing: _FrozenJsonMappingField
+    numeric_parsing: _JsonMappingField
     on_invalid_value: str
 
 

@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import cast
 
 from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.project import ResolvedProjectConfiguration
@@ -33,7 +32,8 @@ class DatasetMaterializationStageHandler:
         self._adapter_registry = adapter_registry
 
     def execute(self, job: StageJob) -> StageJobOutcome:
-        ctx = cast(DataContext, job.context)
+        assert isinstance(job.context, DataContext)
+        ctx = job.context
         experiment = self._config.experiments.get(ctx.experiment_id)
         population = self._config.populations.get(ctx.population_id or experiment.population_ids[0])
         dataset = self._config.datasets[DatasetId(population.dataset_id.value)]

@@ -27,7 +27,6 @@ from datp_core.core.identifiers import (
     ThresholdPolicyId,
     TrainingProfileId,
 )
-from datp_core.core.immutability import FrozenJson
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.contracts import EligibilityPolicyRecord, NormalizationStrategyRecord, ResolvedDataset
 from datp_core.evaluation import (
@@ -82,7 +81,7 @@ class ResolvedProjectConfiguration(BaseModel):
     communication_estimation_contract: CommunicationEstimationContractRecord
     operational_inputs: OperationalInputsRecord
     report_profiles: TypedDomainRegistry[str, ReportProfileRecord]
-    communication_estimation: FrozenJson | None
+    communication_estimation: dict[str, object] | None
     protocol_determinism: ProtocolDeterminismRecord
     normalization_fit_scopes: NormalizationFitScopes
     normalization_leakage_rule: str

@@ -24,6 +24,13 @@ class SweepVariableConfig(StrictFrozenConfigModel):
         return self
 
 
+class FullCalibrationReferenceConditionConfig(StrictFrozenConfigModel):
+    label: str
+    requested_sample_count: str
+    eligibility_policy: str
+    included_in_evaluations_analyses_and_reporting: bool
+
+
 class CalibrationSubsetConfig(StrictFrozenConfigModel):
     requested_sample_count: dict[str, str]
     selection_strategy: str
@@ -43,4 +50,4 @@ class CalibrationSubsetConfig(StrictFrozenConfigModel):
     additional_seed_level_statistic: str
     independent_inferential_unit: str
     replicates_counted_as_seeds: bool
-    full_calibration_reference_condition: dict[str, JsonValue]
+    full_calibration_reference_condition: FullCalibrationReferenceConditionConfig

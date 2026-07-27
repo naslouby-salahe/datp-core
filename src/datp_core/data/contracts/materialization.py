@@ -3,19 +3,12 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, cast
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.functional_validators import BeforeValidator
 
 from datp_core.core.identifiers import MaterializationId
-from datp_core.core.immutability import (
-    FrozenJson,
-    as_optional_frozen_json_mapping,
-    as_optional_int_mapping,
-    as_optional_str_mapping,
-    deep_freeze,
-)
 from datp_core.core.numbers import PositiveInt, Probability
 from datp_core.core.seeding import Seed
 from datp_core.data.contracts.enums import (
@@ -26,22 +19,15 @@ from datp_core.data.contracts.enums import (
     SplitMethod,
 )
 
-# ---- Custom conversion helpers ----
 
 
-def _convert_row_exclusion(v: object) -> Mapping[str, str | bool]:
-    return cast("Mapping[str, str | bool]", deep_freeze(v))
-
-
-# ---- Annotated field types with conversion validators ----
-
-_OptionalStrMappingField = Annotated[Mapping[str, str] | None, BeforeValidator(as_optional_str_mapping)]
-_OptionalIntMappingField = Annotated[Mapping[str, int] | None, BeforeValidator(as_optional_int_mapping)]
-_OptionalFrozenJsonMappingField = Annotated[
-    Mapping[str, FrozenJson] | None,
-    BeforeValidator(as_optional_frozen_json_mapping),
+_OptionalStrMappingField = Annotated[Mapping[str, str] | None, BeforeValidator(lambda v: dict(v) if v is not None else None)]
+_OptionalIntMappingField = Annotated[Mapping[str, int] | None, BeforeValidator(lambda v: dict(v) if v is not None else None)]
+_OptionalObjectMappingField = Annotated[
+    Mapping[str, object] | None,
+    BeforeValidator(lambda v: dict(v) if v is not None else None),
 ]
-_RowExclusionField = Annotated[Mapping[str, str | bool], BeforeValidator(_convert_row_exclusion)]
+_RowExclusionField = Annotated[Mapping[str, str | bool], BeforeValidator(lambda v: dict(v))]
 
 
 class SetupClientConstructionRecord(BaseModel):
@@ -63,7 +49,7 @@ class SetupClientConstructionRecord(BaseModel):
     attack_row_assignment: str | None
     attack_labels_used_in_partition_generation: bool | None
     minimum_row_counts: _OptionalIntMappingField
-    retry_policy: _OptionalFrozenJsonMappingField
+    retry_policy: _OptionalObjectMappingField
     feasibility_failure: str | None
     manifest_invariants: tuple[str, ...] | None
     manifest_fields: tuple[str, ...] | None

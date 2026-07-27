@@ -9,6 +9,7 @@ estimator class, replacing the previous isinstance dispatch chain.
 from __future__ import annotations
 
 from datp_core.core.identifiers import ThresholdPolicyId
+from datp_core.core.numbers import Probability
 from datp_core.thresholding.estimation.clustering import estimate_cluster
 from datp_core.thresholding.estimation.conformal import estimate_conformal
 from datp_core.thresholding.estimation.federated import estimate_federated_fixed, estimate_federated_matched
@@ -25,6 +26,7 @@ from datp_core.thresholding.estimation.quantiles import (
 )
 from datp_core.thresholding.estimation.shrinkage import estimate_calibration_fallback, estimate_shrinkage
 from datp_core.thresholding.policies.clustering import ClusterThresholdPolicyRecord
+from datp_core.thresholding.policies.common import BenignCalibrationScores
 from datp_core.thresholding.policies.conformal import SplitConformalThresholdPolicyRecord
 from datp_core.thresholding.policies.enums import ThresholdPolicyKind
 from datp_core.thresholding.policies.federated import (
@@ -45,9 +47,7 @@ from datp_core.thresholding.policies.shrinkage import (
 )
 from datp_core.thresholding.policies.union import ThresholdPolicyRecord
 
-# ---------------------------------------------------------------------------
 # Private base with shared boilerplate
-# ---------------------------------------------------------------------------
 
 
 class _EstimatorBase:
@@ -72,15 +72,13 @@ class _EstimatorBase:
 
     @staticmethod
     def _local_quantiles(
-        calibration: tuple[ThresholdConstructionRequest, ...],
-        target_quantile: object,
+        calibration: tuple[BenignCalibrationScores, ...],
+        target_quantile: Probability,
     ) -> dict[str, float]:
         return {item.client_id.value: quantile(item.values, target_quantile.value) for item in calibration}
 
 
-# ---------------------------------------------------------------------------
 # Per-kind estimator classes
-# ---------------------------------------------------------------------------
 
 
 class SharedMeanEstimator(_EstimatorBase):
@@ -140,6 +138,8 @@ class ClusterEstimator(_EstimatorBase):
         self._validate(request)
         target_quantile = policy_quantile(request.policy)
         local = self._local_quantiles(request.calibration, target_quantile)
+        if not isinstance(request.policy, ClusterThresholdPolicyRecord):
+            raise TypeError("Expected ClusterThresholdPolicyRecord")
         return estimate_cluster(self._policy_id, request.calibration, local, target_quantile, request.policy, quantile)
 
 
@@ -149,6 +149,8 @@ class ConformalEstimator(_EstimatorBase):
     def estimate(self, request: ThresholdConstructionRequest) -> ThresholdSet:
         self._validate(request)
         target_quantile = policy_quantile(request.policy)
+        if not isinstance(request.policy, SplitConformalThresholdPolicyRecord):
+            raise TypeError("Expected SplitConformalThresholdPolicyRecord")
         return estimate_conformal(self._policy_id, request.calibration, target_quantile, request.policy)
 
 
@@ -159,6 +161,8 @@ class ShrinkageEstimator(_EstimatorBase):
         self._validate(request)
         target_quantile = policy_quantile(request.policy)
         local = self._local_quantiles(request.calibration, target_quantile)
+        if not isinstance(request.policy, LocalGlobalShrinkageThresholdPolicyRecord):
+            raise TypeError("Expected LocalGlobalShrinkageThresholdPolicyRecord")
         coefficient = (
             request.policy.shrinkage_weight
             if request.policy.shrinkage_weight is not None
@@ -176,6 +180,8 @@ class CalibrationFallbackEstimator(_EstimatorBase):
         self._validate(request)
         target_quantile = policy_quantile(request.policy)
         local = self._local_quantiles(request.calibration, target_quantile)
+        if not isinstance(request.policy, CalibrationFallbackThresholdPolicyRecord):
+            raise TypeError("Expected CalibrationFallbackThresholdPolicyRecord")
         return estimate_calibration_fallback(
             self._policy_id, request.calibration, local, target_quantile, request.policy
         )
@@ -187,6 +193,8 @@ class FederatedMatchedEstimator(_EstimatorBase):
     def estimate(self, request: ThresholdConstructionRequest) -> ThresholdSet:
         self._validate(request)
         target_quantile = policy_quantile(request.policy)
+        if not isinstance(request.policy, FederatedMatchedExceedanceThresholdPolicyRecord):
+            raise TypeError("Expected FederatedMatchedExceedanceThresholdPolicyRecord")
         return estimate_federated_matched(self._policy_id, request.calibration, target_quantile, request.policy)
 
 
@@ -196,15 +204,15 @@ class FederatedFixedEstimator(_EstimatorBase):
     def estimate(self, request: ThresholdConstructionRequest) -> ThresholdSet:
         self._validate(request)
         target_quantile = policy_quantile(request.policy)
+        if not isinstance(request.policy, FederatedFixedCoefficientThresholdPolicyRecord):
+            raise TypeError("Expected FederatedFixedCoefficientThresholdPolicyRecord")
         coefficient = request.policy.fixed_k if request.policy.fixed_k is not None else request.selected_coefficient
         if coefficient is None:
             raise ValueError("Fixed-k threshold requires an experiment-selected coefficient")
         return estimate_federated_fixed(self._policy_id, request.calibration, target_quantile, coefficient)
 
 
-# ---------------------------------------------------------------------------
 # Type-to-kind mapping
-# ---------------------------------------------------------------------------
 
 _POLICY_TYPE_TO_KIND: dict[type, ThresholdPolicyKind] = {
     SharedMeanThresholdPolicyRecord: ThresholdPolicyKind.SHARED_MEAN,
@@ -222,9 +230,7 @@ _POLICY_TYPE_TO_KIND: dict[type, ThresholdPolicyKind] = {
 }
 
 
-# ---------------------------------------------------------------------------
 # ThresholdEstimatorRegistry
-# ---------------------------------------------------------------------------
 
 
 class ThresholdEstimatorRegistry:

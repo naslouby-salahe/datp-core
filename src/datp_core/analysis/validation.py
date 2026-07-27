@@ -2,23 +2,20 @@
 
 from __future__ import annotations
 
-from datp_core.analysis.contracts import (
+from datp_core.analysis.comparisons.contracts import (
     AnchorEquivalenceAnalysisResult,
     AnchorEquivalenceChecks,
     AnchorHistoricalReference,
-    PairedAnalysisCell,
     PairedThresholdAnalysisResult,
-    PrerequisiteAnalysisReference,
 )
+from datp_core.analysis.contracts import PairedAnalysisCell, PrerequisiteAnalysisReference
 from datp_core.analysis.enums import AnalysisResultKind, AnchorCheckIdentifier, AnchorComparisonMode
 from datp_core.analysis.errors import InvalidAnalysisConfigurationError
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
-from datp_core.analysis.runtime.runner import run_analysis
 from datp_core.core.identifiers import AnalysisLabel, MetricId, ThresholdPolicyId
 from datp_core.experiments import AnchorEquivalenceAnalysisRecord
 
 
-@run_analysis.register
 def analyze_anchor_equivalence(
     specification: AnchorEquivalenceAnalysisRecord,
     context: AnalysisExecutionContext,

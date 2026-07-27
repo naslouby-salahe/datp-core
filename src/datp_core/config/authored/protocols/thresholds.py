@@ -5,9 +5,16 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field, JsonValue, model_validator
+from pydantic import Field, model_validator
 
 from datp_core.config.authored.base import StrictFrozenConfigModel
+
+
+class ClientMessageConfig(StrictFrozenConfigModel):
+    fields: list[str]
+    variance_convention: str
+    raw_scores_transmitted: bool
+    attack_labels_transmitted: bool
 
 
 class QuantileEstimatorConfig(StrictFrozenConfigModel):
@@ -199,7 +206,7 @@ class FederatedMatchedExceedancePolicyConfig(StrictFrozenConfigModel):
     mode: Literal["matched_exceedance"]
     quantile: float = Field(ge=0.0, le=1.0)
     primary_comparator: bool
-    client_message: dict[str, JsonValue]
+    client_message: ClientMessageConfig
     global_mean_formula: str
     within_term_formula: str
     between_term_formula: str
@@ -223,7 +230,7 @@ class FederatedFixedCoefficientPolicyConfig(StrictFrozenConfigModel):
     quantile: float = Field(ge=0.0, le=1.0)
     primary_comparator: bool
     supplementary_sensitivity_only: bool
-    client_message: dict[str, JsonValue]
+    client_message: ClientMessageConfig
     global_mean_formula: str
     within_term_formula: str
     between_term_formula: str

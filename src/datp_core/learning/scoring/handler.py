@@ -7,8 +7,6 @@ from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from typing import cast
-
 import polars as pl
 
 from datp_core.artifacts.schemas.scores import validate_calibration_score_frame, validate_test_score_frame
@@ -43,6 +41,11 @@ from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
+_CALIBRATION_SCORES = "calibration_scores"
+_FUTURE_RECALIBRATION_SCORES = "future_recalibration_scores"
+_TEST_SCORES = "test_scores"
+_CHECKPOINT_SELECTION = "checkpoint_selection"
+
 
 @dataclass(frozen=True, slots=True)
 class ScoreGenerationHandlerConfiguration:
@@ -70,11 +73,11 @@ def _score_split(
     setup = dataset.setup(population.setup_id)
     materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
     temporal = materialization.split_method is SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL
-    if output_name == "calibration_scores":
+    if output_name == _CALIBRATION_SCORES:
         return SplitMembership.HISTORICAL_CALIBRATION.value if temporal else SplitMembership.CALIBRATION.value
-    if output_name == "future_recalibration_scores":
+    if output_name == _FUTURE_RECALIBRATION_SCORES:
         return SplitMembership.FUTURE_RECALIBRATION.value if temporal else None
-    if output_name == "test_scores":
+    if output_name == _TEST_SCORES:
         return SplitMembership.FUTURE_EVALUATION.value if temporal else SplitMembership.TEST.value
     return None
 
@@ -87,7 +90,8 @@ class ScoreGenerationStageHandler:
         self._store = store
 
     def execute(self, job: StageJob) -> StageJobOutcome:
-        ctx = cast(TrainingContext, job.context)
+        assert isinstance(job.context, TrainingContext)
+        ctx = job.context
         output_name = job.outputs[0].name
         split = _score_split(
             output_name, ctx, self._config.experiments, self._config.populations, self._config.datasets
@@ -99,7 +103,7 @@ class ScoreGenerationStageHandler:
         try:
             selection_path = job.input_path("selection_evidence")
             if profile.checkpoint_authorization is CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE and any(
-                item.name == "checkpoint_selection" for item in job.inputs
+                item.name == _CHECKPOINT_SELECTION for item in job.inputs
             ):
                 selection_path = job.input_path("checkpoint_selection")
             selection = json.loads(self._store.read_bytes(selection_path))
@@ -121,7 +125,7 @@ class ScoreGenerationStageHandler:
         architecture = self._config.model_architectures.get(profile.model_architecture_id)
         batching = self._config.batching_profiles.get(profile.batching_profile_id)
         try:
-            if self._config.runtime.active_execution_profile.device_policy != DevicePolicy.CUDA_REQUIRED.value:
+            if self._config.runtime.active_execution_profile.device_policy != DevicePolicy.CUDA_REQUIRED:
                 raise ValueError("Score generation requires the configured CUDA-required execution profile")
             with TemporaryDirectory(prefix="datp_scoring_") as temporary_directory:
                 materialized_path = Path(temporary_directory) / "materialized.parquet"
@@ -175,7 +179,7 @@ class ScoreGenerationStageHandler:
         try:
             validated = (
                 validate_test_score_frame(scores)
-                if output_name == "test_scores"
+                if output_name == _TEST_SCORES
                 else validate_calibration_score_frame(scores)
             )
             payload = BytesIO()

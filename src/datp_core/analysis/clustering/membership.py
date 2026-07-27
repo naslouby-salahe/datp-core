@@ -10,7 +10,7 @@ from datp_core.analysis.clustering.dispersion import (
     cluster_dispersion,
     compute_adjusted_rand_index,
 )
-from datp_core.analysis.contracts import (
+from datp_core.analysis.clustering.contracts import (
     ClientClusterMembership,
     ClusterAblationObservation,
     ClusterAblationStabilityResult,
@@ -18,8 +18,8 @@ from datp_core.analysis.contracts import (
     ClusterSize,
     ClusterStabilityAnalysisResult,
     ClusterStabilitySeedSummary,
-    PairedAnalysisCell,
 )
+from datp_core.analysis.contracts import PairedAnalysisCell
 from datp_core.analysis.enums import ClusterDispersionKind
 from datp_core.analysis.errors import (
     ArtifactMissingError,
@@ -29,7 +29,6 @@ from datp_core.analysis.errors import (
     ScientificContractViolationError,
 )
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
-from datp_core.analysis.runtime.runner import run_analysis
 from datp_core.artifacts.schemas.columns import MetricColumn, ThresholdColumn
 from datp_core.core.identifiers import AnalysisLabel, ClientId, ClusterLabel, EvaluationLabel
 from datp_core.core.seeding import Seed
@@ -38,7 +37,6 @@ from datp_core.experiments import ClusterStabilityAnalysisRecord, ValueSweepReco
 from datp_core.thresholding.policies.clustering import ClusterThresholdPolicyRecord
 
 
-@run_analysis.register
 def analyze_cluster_stability(
     specification: ClusterStabilityAnalysisRecord,
     context: AnalysisExecutionContext,
@@ -107,7 +105,7 @@ def _analyze_cluster_ablation(
             # Verify client populations match
             if ref_aligned.height != abl_aligned.height:
                 raise PopulationAlignmentError("Cluster ablation membership has an incompatible client population")
-            if not ref_aligned[cid_col].series_equal(abl_aligned[cid_col]):
+            if not ref_aligned[cid_col].series_equal(abl_aligned[cid_col]):  # type: ignore[reportAttributeAccessIssue]
                 raise PopulationAlignmentError("Cluster ablation membership has an incompatible client population")
 
             observations.append(
@@ -136,7 +134,7 @@ def _analyze_cluster_membership(
 ) -> ClusterMembershipStabilityResult:
     source_label = EvaluationLabel(analysis.source_evaluation)
     policy_id = context.threshold_policy_id(source_label)
-    policy = context.config.threshold_policies.get(policy_id)
+    policy = context.threshold_policies.get(policy_id)
 
     if not isinstance(policy, ClusterThresholdPolicyRecord):
         raise InvalidAnalysisConfigurationError(
@@ -185,8 +183,8 @@ def _analyze_cluster_membership(
         # Domain object construction requires Python iteration from Polars
         memberships = tuple(
             ClientClusterMembership(
-                client_id=ClientId(str(row.client_id)),
-                cluster_label=ClusterLabel(str(int(row.cluster_label))),
+                client_id=ClientId(str(row.client_id)),  # type: ignore[reportAttributeAccessIssue]
+                cluster_label=ClusterLabel(str(int(row.cluster_label))),  # type: ignore[reportAttributeAccessIssue]
             )
             for row in membership_frame.iter_rows(named=True)
         )
@@ -195,7 +193,7 @@ def _analyze_cluster_membership(
         sizes_df = threshold_frame.group_by(cl_col).agg(pl.len().alias("client_count"))
         counts_map: dict[ClusterLabel, int] = {lbl: 0 for lbl in expected_labels}
         for row in sizes_df.iter_rows(named=True):
-            counts_map[ClusterLabel(str(int(row.cluster_label)))] = row.client_count
+            counts_map[ClusterLabel(str(int(row.cluster_label)))] = row.client_count  # type: ignore[reportAttributeAccessIssue]
 
         cluster_sizes_tuple = tuple(
             ClusterSize(cluster_label=lbl, client_count=counts_map[lbl]) for lbl in expected_labels
@@ -305,7 +303,7 @@ def _analyze_cluster_membership(
                 f"{ref_frame.height} clients, seed {seed.value} has "
                 f"{cur_frame.height} clients"
             )
-        if not cur_frame[cid_col].series_equal(ref_client_ids):
+        if not cur_frame[cid_col].series_equal(ref_client_ids):  # type: ignore[reportAttributeAccessIssue]
             raise PopulationAlignmentError("Incompatible client populations across seeds for ARI computation")
 
     aris: list[float] = []
@@ -348,8 +346,8 @@ def _cluster_membership(
     # Domain object construction requires Python iteration from Polars
     return tuple(
         ClientClusterMembership(
-            client_id=ClientId(str(row.client_id)),
-            cluster_label=ClusterLabel(str(int(row.cluster_label))),
+            client_id=ClientId(str(row.client_id)),  # type: ignore[reportAttributeAccessIssue]
+            cluster_label=ClusterLabel(str(int(row.cluster_label))),  # type: ignore[reportAttributeAccessIssue]
         )
         for row in frame.select(ThresholdColumn.CLIENT_ID.value, ThresholdColumn.CLUSTER_LABEL.value).iter_rows(
             named=True

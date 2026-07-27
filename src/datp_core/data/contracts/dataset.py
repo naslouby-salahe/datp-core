@@ -13,7 +13,6 @@ from datp_core.core.identifiers import (
     EligibilityPolicyId,
     MaterializationId,
 )
-from datp_core.core.immutability import FrozenJson
 from datp_core.core.paths import RelativePath
 from datp_core.data.contracts.enums import AdapterKind
 from datp_core.data.contracts.features import DatasetFieldSchemaRecord
@@ -67,7 +66,7 @@ class ResolvedDataset(BaseModel):
     source_layout_contract: DatasetSourceLayoutContractRecord
     field_schema: DatasetFieldSchemaRecord
     source_contract: SourceContractRecord
-    client_identity_contract: Mapping[str, FrozenJson] | None
+    client_identity_contract: Mapping[str, object] | None
     inspection_contract: DatasetInspectionContract
     setups: tuple[DatasetSetup, ...]
     materializations: tuple[DatasetMaterialization, ...]

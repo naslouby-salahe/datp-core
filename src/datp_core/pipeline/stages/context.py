@@ -53,7 +53,7 @@ class EvaluationContext(TrainingContext):
     fingerprint_features: tuple[str, ...] | None = None
     calibration_sample_count: int | None = None
     calibration_replicate: int | None = None
-    recalibration_mode: RecalibrationMode | None = None  # type: ignore[valid-type]
+    recalibration_mode: RecalibrationMode | None = None
 
     def __post_init__(self) -> None:
         TrainingContext.__post_init__(self)
@@ -72,7 +72,6 @@ class AnalysisContext:
         _validate_analysis_context(self)
 
 
-# -- Validators ----------------------------------------------------------------
 
 
 def _validate_data_context(ctx: DataContext) -> None:
@@ -113,7 +112,6 @@ def _validate_analysis_context(ctx: AnalysisContext) -> None:
         raise ValueError("analysis_label must not be blank")
 
 
-# -- Context transformations ---------------------------------------------------
 
 
 def score_context(context: TrainingContext | EvaluationContext) -> TrainingContext:

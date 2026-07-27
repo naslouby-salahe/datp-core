@@ -15,12 +15,13 @@ from typing import cast
 import pytest
 from pydantic_core import ValidationError
 
+from datp_core.config.models import ResolvedProjectConfiguration
 from datp_core.config.project import resolve_project_configuration
 from datp_core.core.identifiers import DatasetId, TrainingProfileId
 
 
 @pytest.fixture(scope="module")
-def resolved_config():
+def resolved_config() -> ResolvedProjectConfiguration:
     return resolve_project_configuration()
 
 

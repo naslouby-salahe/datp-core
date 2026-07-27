@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 
 import numpy as np
 from scipy.stats import skew
@@ -81,7 +81,7 @@ def estimate_cluster(
     local: dict[str, float],
     target_quantile: Probability,
     policy: ClusterThresholdPolicyRecord,
-    quantile_fn,
+    quantile_fn: Callable[[tuple[float, ...], float], float],
 ) -> ThresholdSet:
     if len(calibration) < policy.cluster_count:
         raise ValueError("Cluster threshold has fewer eligible clients than configured clusters")

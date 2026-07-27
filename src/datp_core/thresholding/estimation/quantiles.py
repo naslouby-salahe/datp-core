@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Callable
 
 import numpy as np
 
@@ -50,7 +51,7 @@ def estimate_pooled(
     calibration: tuple[BenignCalibrationScores, ...],
     local: dict[str, float],
     target_quantile: Probability,
-    quantile_fn,
+    quantile_fn: Callable[[tuple[float, ...], float], float],
 ) -> ThresholdSet:
     pooled = tuple(value for item in calibration for value in item.values)
     threshold = quantile_fn(pooled, target_quantile.value)

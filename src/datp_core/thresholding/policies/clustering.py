@@ -7,7 +7,6 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict
 
-from datp_core.core.immutability import as_str_mapping
 from datp_core.thresholding.policies.common import (
     _as_mapping_str_float_or_mapping,
     _as_tuple_str,
@@ -19,7 +18,7 @@ class ClusterFingerprintConfiguration(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     features: Annotated[tuple[str, ...], BeforeValidator(_as_tuple_str)]
-    estimators: Annotated[Mapping[str, str], BeforeValidator(as_str_mapping)]
+    estimators: Annotated[Mapping[str, str], BeforeValidator(dict)]
     degenerate_client_rules: Annotated[
         Mapping[str, float | Mapping[str, float]], BeforeValidator(_as_mapping_str_float_or_mapping)
     ]

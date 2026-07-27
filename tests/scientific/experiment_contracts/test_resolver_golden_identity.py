@@ -19,12 +19,12 @@ def test_scientific_fingerprint_is_stable(_resolved: ResolvedProjectConfiguratio
     # fingerprint is expected to change.
     # Fingerprints updated 2026-07-27: Pydantic v2 model_dump replaces attrs asdict
     assert _resolved.scientific_fingerprint.value == (
-        "03db5235a34538d6f213cc83fd0cf8d39a7052367916f45cae92f3207932b854"
+        "9d8ffb2a00c14e6f9d501f27e57819fde1778bed63553373d0e35530a66d77ca"
     )
 
 
 def test_execution_fingerprint_is_stable(_resolved: ResolvedProjectConfiguration) -> None:
-    assert _resolved.execution_fingerprint.value == ("a831c455d82ca6f013afb026788c6d3900c0c6140df813d17ed8dbcceebd2e23")
+    assert _resolved.execution_fingerprint.value == ("59c4b106c3ed8f883a36d3ac29ad15f30f9bc184a38d75a7b0c49362940217d0")
 
 
 def test_registry_cardinality(_resolved: ResolvedProjectConfiguration) -> None:

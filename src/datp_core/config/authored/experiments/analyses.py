@@ -9,9 +9,20 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field, JsonValue
+from pydantic import Field
 
 from datp_core.config.authored.base import StrictFrozenConfigModel
+
+
+class MatchingContractConfig(StrictFrozenConfigModel):
+    required_equal: list[str]
+    permitted_to_differ: list[str] | None = None
+    evaluation_label_mapping: dict[str, dict[str, str]] | None = None
+
+
+class AlternativePathRuleConfig(StrictFrozenConfigModel):
+    formula: str
+    reported_independently_of_the_absorption_band: bool
 
 
 class _AnalysisSpecBase(StrictFrozenConfigModel):
@@ -43,12 +54,12 @@ class AbsorptionAnalysisConfig(_AnalysisSpecBase):
     band_interpretation: str
     denominator_materiality_rule: float | str
     undefined_denominator_behavior: str
-    matching_contract: dict[str, JsonValue]
+    matching_contract: MatchingContractConfig
     outcome_bands: list[dict[str, str]]
     outcome_bands_are_mutually_exclusive_and_exhaustive: bool
     reference_analysis: str | dict[str, str]
     stress_test_analysis: str
-    alternative_path_rule: dict[str, JsonValue] | None = None
+    alternative_path_rule: AlternativePathRuleConfig | None = None
 
 
 class AlertBurdenAnalysisConfig(_AnalysisSpecBase):

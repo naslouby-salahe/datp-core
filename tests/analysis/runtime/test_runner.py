@@ -1,27 +1,29 @@
-"""Unit tests for AnalysisRunner single-dispatch dispatching."""
+"""Unit tests for AnalysisHandlerRegistry dispatching."""
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
-from attrs import define
 
-from datp_core.analysis.errors import UnsupportedAnalysisRecordError
-from datp_core.analysis.runtime.runner import register_analysis_capabilities, run_analysis
-
-
-@define(frozen=True, slots=True)
-class UnsupportedRecordSpec:
-    label: str = "unsupported"
+from datp_core.analysis.errors import DuplicateAnalysisRegistrationError, UnsupportedAnalysisRecordError
+from datp_core.analysis.runtime.context import AnalysisExecutionContext
+from datp_core.analysis.runtime.runner import AnalysisHandlerRegistry
+from datp_core.experiments.catalogue.analyses import AnalysisKind
 
 
-def test_runner_capabilities_registration() -> None:
-    register_analysis_capabilities()
-    # Attempting to re-register capabilities is idempotent
-    register_analysis_capabilities()
+def test_registry_rejects_duplicate_kind() -> None:
+    registry = AnalysisHandlerRegistry()
+    registry.register(AnalysisKind.THRESHOLD_STABILITY, lambda *args: ())
+
+    with pytest.raises(DuplicateAnalysisRegistrationError):
+        registry.register(AnalysisKind.THRESHOLD_STABILITY, lambda *args: ())
 
 
-def test_runner_rejects_unregistered_specification(monkeypatch: pytest.MonkeyPatch) -> None:
-    register_analysis_capabilities()
-    spec = UnsupportedRecordSpec()
+def test_registry_rejects_unregistered_kind() -> None:
+    registry = AnalysisHandlerRegistry()
+    spec = MagicMock()  # Union type - no single spec available
+    spec.kind = AnalysisKind.PAIRED_THRESHOLD.value
+
     with pytest.raises(UnsupportedAnalysisRecordError):
-        run_analysis(spec, context=None)  # type: ignore[arg-type]
+        registry.dispatch(spec, context=MagicMock(spec=AnalysisExecutionContext))  # type: ignore[arg-type]

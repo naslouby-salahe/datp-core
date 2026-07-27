@@ -5,12 +5,13 @@ from __future__ import annotations
 import json
 
 from datp_core.reporting.freezing.errors import ResultFreezeError
-from datp_core.reporting.freezing.models import (
+from datp_core.core.freezing import (
     FrozenReportColumn,
     FrozenReportProfile,
     FrozenResultManifest,
     FrozenSourceFile,
 )
+from datp_core.reporting.profiles.enums import ReportArtifactType, ReportFigureType, ReportTableType
 
 
 def decode_manifest(payload: bytes) -> FrozenResultManifest:
@@ -37,9 +38,9 @@ def decode_manifest(payload: bytes) -> FrozenResultManifest:
     profiles = tuple(
         FrozenReportProfile(
             identifier=str(p["identifier"]),
-            artifact_type=str(p["artifact_type"]),
-            table_type=str(p["table_type"]) if p.get("table_type") is not None else None,
-            figure_type=str(p["figure_type"]) if p.get("figure_type") is not None else None,
+            artifact_type=ReportArtifactType(p["artifact_type"]),
+            table_type=ReportTableType(p["table_type"]) if p.get("table_type") is not None else None,
+            figure_type=ReportFigureType(p["figure_type"]) if p.get("figure_type") is not None else None,
             estimate_basis=str(p["estimate_basis"]) if p.get("estimate_basis") is not None else None,
             columns=tuple(
                 FrozenReportColumn(name=str(c["name"]), unit=str(c["unit"]), direction=str(c["direction"]))

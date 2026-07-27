@@ -1,72 +1,50 @@
-"""Typed analysis dispatch via singledispatch registry.
+"""Analysis handler registry keyed by AnalysisKind.
 
-Each analysis capability registers its own implementation by record type.
+Each analysis capability registers its handler by kind. The registry is assembled
+in the composition root and injected into the pipeline stage handler.
 """
 
 from __future__ import annotations
 
-from functools import singledispatch
-from typing import TYPE_CHECKING
-
-from pydantic import BaseModel, ConfigDict
+from collections.abc import Callable
 
 from datp_core.analysis.contracts import AnalysisResult, PairedAnalysisCell
-from datp_core.analysis.errors import UnsupportedAnalysisRecordError
+from datp_core.analysis.errors import DuplicateAnalysisRegistrationError, UnsupportedAnalysisRecordError
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
-
-if TYPE_CHECKING:
-    from datp_core.experiments import AnalysisRecord
-
-_bootstrapped = False
+from datp_core.experiments.catalogue.analyses import AnalysisKind, AnalysisRecord
 
 
-@singledispatch
-def run_analysis(
-    specification: object,
-    context: AnalysisExecutionContext,
-    cell: PairedAnalysisCell | None = None,
-) -> tuple[AnalysisResult, ...]:
-    """Dispatch an analysis specification to its registered implementation."""
-    raise UnsupportedAnalysisRecordError(
-        f"No implementation registered for analysis type: {type(specification).__name__}"
-    )
+class AnalysisHandlerRegistry:
+    """Maps AnalysisKind to analysis handler implementations.
 
+    Assembled in the composition root. Each handler receives the analysis
+    specification record, execution context, and optional sweep cell.
+    """
 
-def register_analysis_capabilities() -> None:
-    """Deterministically import and register all analysis capabilities exactly once."""
-    global _bootstrapped
-    if _bootstrapped:
-        return
-    _bootstrapped = True
+    def __init__(self) -> None:
+        self._handlers: dict[AnalysisKind, Callable[..., tuple[AnalysisResult, ...]]] = {}
 
-    import datp_core.analysis.calibration.conformal  # noqa: F401
-    import datp_core.analysis.calibration.quantile  # noqa: F401
-    import datp_core.analysis.calibration.stability  # noqa: F401
-    import datp_core.analysis.clustering.membership  # noqa: F401
-    import datp_core.analysis.comparisons.association  # noqa: F401
-    import datp_core.analysis.comparisons.effect_ratios  # noqa: F401
-    import datp_core.analysis.comparisons.paired  # noqa: F401
-    import datp_core.analysis.mechanisms.distributions  # noqa: F401
-    import datp_core.analysis.mechanisms.operational  # noqa: F401
-    import datp_core.analysis.mechanisms.temporal  # noqa: F401
-    import datp_core.analysis.selection  # noqa: F401
-    import datp_core.analysis.validation  # noqa: F401
+    def register(
+        self,
+        kind: AnalysisKind,
+        handler: Callable[..., tuple[AnalysisResult, ...]],
+    ) -> None:
+        if kind in self._handlers:
+            raise DuplicateAnalysisRegistrationError(
+                f"Analysis handler already registered for kind: {kind.value}"
+            )
+        self._handlers[kind] = handler
 
-
-class AnalysisRunner(BaseModel):
-    """Resolves and executes the correct analysis implementation for each analysis record type."""
-
-    model_config = ConfigDict(frozen=True)
-
-    context: AnalysisExecutionContext
-
-    def model_post_init(self, __context: object) -> None:
-        register_analysis_capabilities()
-
-    def run(
+    def dispatch(
         self,
         specification: AnalysisRecord,
-        *,
+        context: AnalysisExecutionContext,
         cell: PairedAnalysisCell | None = None,
     ) -> tuple[AnalysisResult, ...]:
-        return run_analysis(specification, self.context, cell)
+        kind = AnalysisKind(specification.kind)
+        handler = self._handlers.get(kind)
+        if handler is None:
+            raise UnsupportedAnalysisRecordError(
+                f"No handler registered for analysis kind: {kind.value}"
+            )
+        return handler(specification, context, cell)

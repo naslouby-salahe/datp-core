@@ -16,17 +16,21 @@ def _sweep_values(experiment: ExperimentRecord, name: str | None) -> tuple[float
     )
 
 
-def _sweep_reference(overrides, name: str) -> str | None:
+def _sweep_reference(overrides: Mapping[str, object] | None, name: str) -> str | None:
     override = None if overrides is None else overrides.get(name)
     reference = override.get("from_sweep") if isinstance(override, Mapping) else None
     return reference if isinstance(reference, str) else None
 
 
-def _evaluation_sweep_values(experiment: ExperimentRecord, overrides, name: str) -> tuple[float | None, ...]:
+def _evaluation_sweep_values(
+    experiment: ExperimentRecord, overrides: Mapping[str, object] | None, name: str
+) -> tuple[float | None, ...]:
     return _sweep_values(experiment, _sweep_reference(overrides, name)) or (None,)
 
 
-def _feature_sweep_values(experiment: ExperimentRecord, overrides) -> tuple[tuple[str, ...] | None, ...]:
+def _feature_sweep_values(
+    experiment: ExperimentRecord, overrides: Mapping[str, object] | None
+) -> tuple[tuple[str, ...] | None, ...]:
     sweep_name = _sweep_reference(overrides, "fingerprint_features")
     values = tuple(
         value

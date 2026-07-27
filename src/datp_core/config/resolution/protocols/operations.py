@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from types import MappingProxyType
-
 from datp_core.config.authored.protocols.operations import (
     CommunicationEstimationContractConfig,
     MetricDefinitionsConfig,
@@ -152,12 +150,10 @@ def resolve_communication_estimation_contract(
     exchange = cfg.threshold_exchange
     return CommunicationEstimationContractRecord(
         estimate_basis=cfg.estimate_basis,
-        field_encodings=MappingProxyType(
-            {
-                key: FieldEncodingRecord(bytes_per_field=v.bytes_per_field, byte_order=v.byte_order)
-                for key, v in cfg.field_encodings.items()
-            }
-        ),
+        field_encodings={
+            key: FieldEncodingRecord(bytes_per_field=v.bytes_per_field, byte_order=v.byte_order)
+            for key, v in cfg.field_encodings.items()
+        },
         threshold_exchange=ThresholdExchangeRecord(
             direction=exchange.direction,
             b1=resolve_threshold_exchange_entry(exchange.b1),

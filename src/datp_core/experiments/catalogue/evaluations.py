@@ -2,16 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from enum import Enum, StrEnum
+from typing import cast
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from datp_core.core.identifiers import PopulationId, ThresholdPolicyId
-from datp_core.core.immutability import (
-    FrozenJson,
-    as_optional_frozen_json_mapping,
-)
 
 
 class RunRequirement(Enum):
@@ -32,11 +29,11 @@ class EvaluationSpecRecord(BaseModel):
     label: str
     threshold_policy_id: ThresholdPolicyId
     run_requirement: RunRequirement
-    overrides: Mapping[str, FrozenJson] | None = None
+    overrides: Mapping[str, object] | None = None
     population_id: PopulationId | None
     recalibration_mode: RecalibrationMode | None
 
     @field_validator("overrides", mode="before")
     @classmethod
-    def _convert_overrides(cls, v):
-        return as_optional_frozen_json_mapping(v)
+    def _convert_overrides(cls, v: object) -> Mapping[str, object] | None:
+        return dict(cast("Iterable[tuple[str, object]]", v)) if v is not None else None

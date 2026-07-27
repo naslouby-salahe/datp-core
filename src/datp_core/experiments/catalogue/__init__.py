@@ -18,9 +18,6 @@ from datp_core.experiments.catalogue.analyses import (
     TemporalRecoveryAnalysisRecord,
     ThresholdStabilityAnalysisRecord,
 )
-from datp_core.experiments.catalogue.eligibility import (
-    CapabilityRequirementRecord as EligibilityCapabilityRequirementRecord,
-)
 from datp_core.experiments.catalogue.evaluations import (
     EvaluationSpecRecord,
     RecalibrationMode,
@@ -44,39 +41,3 @@ from datp_core.experiments.catalogue.sweeps import (
     SweepValue,
     ValueSweepRecord,
 )
-
-__all__ = [
-    "AbsorptionAnalysisRecord",
-    "AlertBurdenAnalysisRecord",
-    "AnalysisKind",
-    "AnalysisRecord",
-    "AnchorEquivalenceAnalysisRecord",
-    "CalibrationSubsetRecord",
-    "CapabilityRequirementRecord",
-    "ClusterStabilityAnalysisRecord",
-    "ConditionSweepRecord",
-    "ConformalCoverageAnalysisRecord",
-    "DistributionMechanismAnalysisRecord",
-    "EligibilityGateRecord",
-    "EvaluationSpecRecord",
-    "EvidenceRole",
-    "ExperimentRecord",
-    "LockedClientDistributionAnalysisRecord",
-    "MetricAssociationAnalysisRecord",
-    "PairedThresholdAnalysisRecord",
-    "PopulationRecord",
-    "PrerequisiteSpecRecord",
-    "QuantileEstimationAnalysisRecord",
-    "RecalibrationMode",
-    "RecoveryFractionAnalysisRecord",
-    "ResourceCostAnalysisRecord",
-    "ResultTypeRecord",
-    "RunRequirement",
-    "SweepConditionAllocation",
-    "SweepConditionRecord",
-    "SweepRecord",
-    "SweepValue",
-    "TemporalRecoveryAnalysisRecord",
-    "ThresholdStabilityAnalysisRecord",
-    "ValueSweepRecord",
-]

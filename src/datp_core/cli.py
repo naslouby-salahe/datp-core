@@ -14,7 +14,7 @@ from rich.table import Table
 from rich.tree import Tree
 
 from datp_core.app import ConfigurationError, build_application, build_config_only_application
-from datp_core.config.project import ResolvedProjectConfiguration, resolve_project_configuration
+from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import DatasetId, ExperimentId
 from datp_core.experiments.execution.runner import ExperimentRunStatus
 
@@ -104,9 +104,7 @@ def config_explain_scientific_drift(
 ) -> None:
     """Explain structured scientific drift between two independently resolved configurations."""
     application = build_config_only_application()
-    current_config = resolve_project_configuration(config_dir=current_config_dir)
-    expected_config = resolve_project_configuration(config_dir=expected_config_dir)
-    drift = application.explain_scientific_drift.execute(current_config=current_config, expected_config=expected_config)
+    drift = application.explain_scientific_drift_between_dirs(current_config_dir, expected_config_dir)
     console.print_json(data=drift.model_dump(mode="json"))
     if drift.has_drift:
         raise typer.Exit(code=1)
@@ -119,9 +117,7 @@ def config_explain_execution_drift(
 ) -> None:
     """Explain structured execution drift between two independently resolved configurations."""
     application = build_config_only_application()
-    current_config = resolve_project_configuration(config_dir=current_config_dir)
-    expected_config = resolve_project_configuration(config_dir=expected_config_dir)
-    drift = application.explain_execution_drift.execute(current_config=current_config, expected_config=expected_config)
+    drift = application.explain_execution_drift_between_dirs(current_config_dir, expected_config_dir)
     console.print_json(data=drift.model_dump(mode="json"))
     if drift.has_drift:
         raise typer.Exit(code=1)
@@ -282,9 +278,10 @@ def diagnostic_experiment(
 
     Output is isolated under .tmp/diagnostics/ — never touches official outputs.
     """
-    from datp_core.orchestration.diagnostics import ExperimentDiagnosticStatus, run_experiment_diagnostic
+    from datp_core.orchestration.diagnostics import ExperimentDiagnosticStatus
 
-    result = run_experiment_diagnostic(experiment, seed_index=seed_index, profile=profile)
+    application = build_application()
+    result = application.run_diagnostic_experiment(experiment, seed_index=seed_index, profile=profile)
     if result.status is ExperimentDiagnosticStatus.DIAGNOSTIC_FAILED:
         console.print(f"[red]Diagnostic failed: {result.error}[/red]")
         raise typer.Exit(code=1)
@@ -301,9 +298,8 @@ def diagnostic_campaign(
 
     Output is isolated under .tmp/diagnostics/ — never touches official outputs.
     """
-    from datp_core.orchestration.diagnostics import run_campaign_diagnostic
-
-    result = run_campaign_diagnostic(profile=profile)
+    application = build_application()
+    result = application.run_diagnostic_campaign(profile=profile)
     console.print("[bold]Campaign diagnostic:[/bold]")
     console.print(f"  Total: {result.total}")
     console.print(f"  Completed/Skipped: {result.completed_or_skipped}")
@@ -320,20 +316,12 @@ def diagnostic_campaign(
 def diagnostic_dagster(
     experiment: str = typer.Option(..., "--config", "-c", help=_EXPERIMENT_SLUG_HELP),
 ) -> None:
-    """Run one experiment through Dagster (canonical orchestrator).
-
-    Uses the same production pipeline; Dagster adds observability.
-    """
-    from datp_core.orchestration.dagster_defs import build_dagster_definitions
-
-    defs = build_dagster_definitions()
-    job_name = f"datp_{experiment}"
-    job = defs.get_job_def(job_name)
-    if job is None:
+    """Run one experiment through Dagster (canonical orchestrator)."""
+    application = build_application()
+    result = application.execute_dagster_experiment(experiment)
+    if result is None:
         console.print(f"[red]No Dagster job found for experiment: {experiment}[/red]")
         raise typer.Exit(code=1)
-
-    result = job.execute_in_process()
     if result.success:
         console.print(f"[green]Dagster experiment {experiment} completed successfully.[/green]")
     else:

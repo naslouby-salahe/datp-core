@@ -30,6 +30,7 @@ from datp_core.thresholding.policies.clustering import (
 )
 from datp_core.thresholding.policies.common import QuantileEstimatorRecord, ThresholdPolicyDefaultsRecord
 from datp_core.thresholding.policies.conformal import SplitConformalThresholdPolicyRecord
+from datp_core.thresholding.policies.enums import ClusterAggregation, ThresholdOwnership
 from datp_core.thresholding.policies.federated import (
     CandidateGrid,
     ExceedanceExchange,
@@ -81,7 +82,7 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             quantile_estimator=cfg.quantile_estimator,
             canonical=cfg.canonical,
             exploratory=cfg.exploratory,
-            aggregation=cfg.aggregation,
+            aggregation=ClusterAggregation(cfg.aggregation),
             cluster_count=cfg.cluster_count,
             aggregated_quantity=cfg.aggregated_quantity,
             aggregation_formula=cfg.aggregation_formula,
@@ -106,7 +107,7 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             insufficient_eligible_clients_behavior=cfg.insufficient_eligible_clients_behavior,
             degenerate_fingerprint_matrix_behavior=cfg.degenerate_fingerprint_matrix_behavior,
             required_diagnostics=tuple(cfg.required_diagnostics),
-            threshold_ownership=cfg.threshold_ownership,
+            threshold_ownership=ThresholdOwnership(cfg.threshold_ownership),
         )
     if isinstance(cfg, (LocalGlobalShrinkagePolicyConfig, CalibrationFallbackPolicyConfig)):
         permitted_weight_range = PermittedWeightRange.from_config(cfg.permitted_weight_range)
@@ -121,7 +122,7 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
                 weight_semantics=cfg.weight_semantics,
                 weight_scope=cfg.weight_scope,
                 permitted_weight_range=permitted_weight_range,
-                threshold_ownership=cfg.threshold_ownership,
+                threshold_ownership=ThresholdOwnership(cfg.threshold_ownership),
                 weight_formula=cfg.weight_formula,
                 weight_formula_constants=WeightFormulaConstants.from_config(cfg.weight_formula_constants),
                 weight_monotone_in_calibration_count=cfg.weight_monotone_in_calibration_count,
@@ -141,7 +142,7 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             weight_semantics=cfg.weight_semantics,
             weight_scope=cfg.weight_scope,
             permitted_weight_range=permitted_weight_range,
-            threshold_ownership=cfg.threshold_ownership,
+            threshold_ownership=ThresholdOwnership(cfg.threshold_ownership),
             shrinkage_weight_grid=tuple(cfg.shrinkage_weight_grid),
             shrinkage_weight=cfg.shrinkage_weight,
             shrinkage_weight_resolution=cfg.shrinkage_weight_resolution,
@@ -154,7 +155,7 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             mode=cfg.mode,
             quantile=cfg.quantile,
             primary_comparator=cfg.primary_comparator,
-            client_message=cfg.client_message,
+            client_message=dict(cfg.client_message),
             global_mean_formula=cfg.global_mean_formula,
             within_term_formula=cfg.within_term_formula,
             between_term_formula=cfg.between_term_formula,
@@ -171,7 +172,7 @@ def resolve_threshold_policy(cfg: TypedThresholdPolicyConfig) -> ThresholdPolicy
             ),
             selection=SelectionRules.from_config(cfg.selection),
             required_diagnostics=tuple(cfg.required_diagnostics),
-            threshold_ownership=cfg.threshold_ownership,
+            threshold_ownership=ThresholdOwnership(cfg.threshold_ownership),
         )
     return record_type(**cfg.model_dump())
 

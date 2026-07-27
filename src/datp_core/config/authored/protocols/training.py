@@ -5,9 +5,45 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import JsonValue, model_validator
+from pydantic import model_validator
 
 from datp_core.config.authored.base import StrictFrozenConfigModel
+
+
+class SelectorInputConfig(StrictFrozenConfigModel):
+    population: str
+    quantity: str
+    client_weighting: str
+    aggregation_over_clients: str
+
+
+class PersonalizationParameterSelectionConfig(StrictFrozenConfigModel):
+    rule: str
+    candidates: str | None = None
+    selector_input: SelectorInputConfig | None = None
+    tie_break: str | None = None
+    selected_before_external_validation: bool | None = None
+    forbidden_selectors: list[str] | None = None
+
+
+class DittoSpecificationConfig(StrictFrozenConfigModel):
+    global_model_state: str
+    persistent_client_personalized_state: str
+    personalized_state_initialization: str
+    global_update_sent_to_server: str | None = None
+    personalized_state_never_aggregated: bool | None = None
+    proximal_personalized_objective: str | None = None
+    personalized_optimizer: str | None = None
+    personalized_optimizer_state_lifecycle: str | None = None
+    evaluation_state: str | None = None
+    artifact_separation: dict[str, str] | None = None
+
+
+class ValidationSplitConfig(StrictFrozenConfigModel):
+    source: str
+    fraction: float
+    selection: str
+    split_seed: int
 
 
 class ModelInputDimensionConfig(StrictFrozenConfigModel):
@@ -179,8 +215,8 @@ class TrainingProfileConfig(StrictFrozenConfigModel):
     personalized_local_epochs: int | None = None
     personalization_proximal_weight: float | None = None
     personalization_parameter_grid: list[float] | None = None
-    personalization_parameter_selection: dict[str, JsonValue] | None = None
-    ditto_specification: dict[str, JsonValue] | None = None
+    personalization_parameter_selection: PersonalizationParameterSelectionConfig | None = None
+    ditto_specification: DittoSpecificationConfig | None = None
     proximal_objective: str | None = None
     mu: float | None = None
     mu_grid: list[float] | None = None
@@ -188,7 +224,7 @@ class TrainingProfileConfig(StrictFrozenConfigModel):
     mu_zero_forbidden_as_a_fedprox_condition: bool | None = None
     training_population: str | None = None
     row_ordering_before_shuffle: str | None = None
-    validation_split: dict[str, JsonValue] | None = None
+    validation_split: ValidationSplitConfig | None = None
     federation: FederationStrategyConfig | None = None
 
 

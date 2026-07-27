@@ -4,13 +4,22 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import Field, JsonValue
+from pydantic import Field
 
 from datp_core.config.authored.base import SchemaVersionOneConfigModel, StrictFrozenConfigModel
 from datp_core.config.authored.experiments.analyses import AnalysisSpecConfig
 from datp_core.config.authored.experiments.evaluations import EvaluationSpecConfig
 from datp_core.config.authored.experiments.sweeps import CalibrationSubsetConfig, SweepVariableConfig
 from datp_core.config.domain_models import AnalysisConventions, PopulationReadinessRule
+
+
+class PrimaryCoefficientSelectionConfig(StrictFrozenConfigModel):
+    rule: str
+    tie_break: str | None = None
+    forbidden_selectors: list[str] | None = None
+    external_dataset_may_select_the_coefficient: bool | None = None
+    complete_grid_reported: bool | None = None
+    post_hoc_coefficient_addition: str | None = None
 
 
 class AuthoredStudyPopulationConfig(StrictFrozenConfigModel):
@@ -67,9 +76,9 @@ class AuthoredExperimentConfig(StrictFrozenConfigModel):
     population_equivalence_requirement: str | None = None
     population_roles: dict[str, str] | None = None
     scope_constraint: str | None = None
-    temporal_procedure: dict[str, JsonValue] | None = None
-    primary_coefficient_selection: str | dict[str, JsonValue] | None = None
-    training_overrides: dict[str, JsonValue] | None = None
+    temporal_procedure: dict[str, object] | None = None
+    primary_coefficient_selection: str | PrimaryCoefficientSelectionConfig | None = None
+    training_overrides: dict[str, object] | None = None
 
 
 class EligibilityGateConfig(StrictFrozenConfigModel):

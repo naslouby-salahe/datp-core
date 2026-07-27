@@ -12,7 +12,7 @@ the sole planning authority for the DATP execution pipeline.
 from __future__ import annotations
 
 import re
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from itertools import product
 from typing import TYPE_CHECKING
 
@@ -51,7 +51,7 @@ _SAFE_SEGMENT = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 
 
 def _segment(value: object | None, *, fallback: str) -> str:
-    text = fallback if value is None else str(getattr(value, "value", value))
+    text = fallback if value is None else str(value)
     if not _SAFE_SEGMENT.fullmatch(text):
         raise ValueError(f"Unsafe semantic output path component: {text!r}")
     return text
@@ -68,8 +68,8 @@ def cell_directory(context: DataContext | TrainingContext | EvaluationContext) -
         f"seed-{_segment(context.seed, fallback='aggregate')}",
     ]
     for value in (
-        _number(getattr(context, "federated_proximal_mu", None), name="mu"),
-        _number(getattr(context, "ditto_proximal_weight", None), name="ditto-weight"),
+        _number(context.federated_proximal_mu if isinstance(context, TrainingContext) else None, name="mu"),
+        _number(context.ditto_proximal_weight if isinstance(context, TrainingContext) else None, name="ditto-weight"),
     ):
         if value is not None:
             parts.append(value)
@@ -136,7 +136,6 @@ class ExperimentPlanBuilder:
     def __init__(self, paths: ExperimentPaths) -> None:
         self._paths = paths
 
-    # -- Public API ---------------------------------------------------------------
 
     def build(
         self,
@@ -180,9 +179,7 @@ class ExperimentPlanBuilder:
         )
 
         # Training cells ----------------------------------------------------------
-        training_jobs, training_cells = self._create_training_cells(
-            compiled, experiment_ctx, preflight, conditions, mus, ditto_weights
-        )
+        training_jobs, training_cells = self._create_training_cells(compiled, preflight, conditions, mus, ditto_weights)
         jobs.extend(training_jobs)
 
         # Checkpoint selection ----------------------------------------------------
@@ -376,15 +373,11 @@ class ExperimentPlanBuilder:
         validate_acyclic(graph)
         return graph
 
-    # -- Private helpers: node keys, inputs, jobs ---------------------------------
 
     @staticmethod
     def _value(value: object | None) -> str:
-        return "-" if value is None else str(getattr(value, "value", value))
+        return "-" if value is None else str(value)
 
-    @staticmethod
-    def _get_ctx_field(context: object, name: str) -> object | None:
-        return getattr(context, name, None)
 
     @staticmethod
     def _node_key(
@@ -394,20 +387,20 @@ class ExperimentPlanBuilder:
     ) -> GraphNodeKey:
         coordinates = (
             context.experiment_id,
-            ExperimentPlanBuilder._get_ctx_field(context, "seed"),
-            ExperimentPlanBuilder._get_ctx_field(context, "population_id"),
-            ExperimentPlanBuilder._get_ctx_field(context, "partition_condition"),
-            ExperimentPlanBuilder._get_ctx_field(context, "federated_proximal_mu"),
-            ExperimentPlanBuilder._get_ctx_field(context, "ditto_proximal_weight"),
-            ExperimentPlanBuilder._get_ctx_field(context, "evaluation_label"),
-            ExperimentPlanBuilder._get_ctx_field(context, "threshold_policy_id"),
-            ExperimentPlanBuilder._get_ctx_field(context, "threshold_quantile"),
-            ExperimentPlanBuilder._get_ctx_field(context, "shrinkage_weight"),
-            ExperimentPlanBuilder._get_ctx_field(context, "federated_summary_fixed_k"),
-            ExperimentPlanBuilder._get_ctx_field(context, "fingerprint_features"),
-            ExperimentPlanBuilder._get_ctx_field(context, "calibration_sample_count"),
-            ExperimentPlanBuilder._get_ctx_field(context, "calibration_replicate"),
-            ExperimentPlanBuilder._get_ctx_field(context, "recalibration_mode"),
+            context.seed if isinstance(context, DataContext) else None,
+            context.population_id if isinstance(context, DataContext) else None,
+            context.partition_condition if isinstance(context, DataContext) else None,
+            context.federated_proximal_mu if isinstance(context, TrainingContext) else None,
+            context.ditto_proximal_weight if isinstance(context, TrainingContext) else None,
+            context.evaluation_label if isinstance(context, EvaluationContext) else None,
+            context.threshold_policy_id if isinstance(context, EvaluationContext) else None,
+            context.threshold_quantile if isinstance(context, EvaluationContext) else None,
+            context.shrinkage_weight if isinstance(context, EvaluationContext) else None,
+            context.federated_summary_fixed_k if isinstance(context, EvaluationContext) else None,
+            context.fingerprint_features if isinstance(context, EvaluationContext) else None,
+            context.calibration_sample_count if isinstance(context, EvaluationContext) else None,
+            context.calibration_replicate if isinstance(context, EvaluationContext) else None,
+            context.recalibration_mode if isinstance(context, EvaluationContext) else None,
         )
         return GraphNodeKey(
             label="|".join((stage.value, role, *(ExperimentPlanBuilder._value(v) for v in coordinates)))
@@ -456,12 +449,10 @@ class ExperimentPlanBuilder:
     def _score_output(context: DataContext | TrainingContext | EvaluationContext, name: str) -> StageOutput:
         return output(name, f"scores/{cell_directory(context)}/{name.replace('_', '-')}.parquet")
 
-    # -- Training cell construction ------------------------------------------------
 
     def _create_training_cells(
         self,
         compiled: CompiledExperiment,
-        experiment_ctx: DataContext,
         preflight: StageJob,
         conditions: tuple[str | None, ...],
         mus: tuple[float | None, ...],
@@ -532,7 +523,6 @@ class ExperimentPlanBuilder:
                 training_cells.append((seed_ctx, materialization, training))
         return jobs, training_cells
 
-    # -- Checkpoint selection ------------------------------------------------------
 
     def _create_selection_stage(
         self,
@@ -575,7 +565,6 @@ class ExperimentPlanBuilder:
             dependencies=tuple(training.node_key for _, _, training in training_cells),
         )
 
-    # -- Scoring and calibration ---------------------------------------------------
 
     def _create_scoring_and_calibration_cells(
         self,
@@ -698,7 +687,6 @@ class ExperimentPlanBuilder:
             score_cells[key] = (seed_ctx, test, calibration, future)
         return jobs, calibration_cells_by_training, score_cells
 
-    # -- Evaluation jobs -----------------------------------------------------------
 
     def _create_evaluation_jobs(
         self,
@@ -711,7 +699,7 @@ class ExperimentPlanBuilder:
         experiment = compiled.record
         jobs: list[StageJob] = []
         evaluation_jobs: list[StageJob] = []
-        for key, (seed_ctx, test, _calibration, future) in score_cells.items():
+        for key, (seed_ctx, test, _, future) in score_cells.items():
             for evaluation in experiment.evaluations:
                 population_id = evaluation.population_id or experiment.population_ids[0]
                 if population_id != seed_ctx.population_id:
@@ -736,8 +724,8 @@ class ExperimentPlanBuilder:
                             partition_condition=seed_ctx.partition_condition,
                             federated_proximal_mu=seed_ctx.federated_proximal_mu,
                             ditto_proximal_weight=seed_ctx.ditto_proximal_weight,
-                            calibration_sample_count=getattr(calibration_ctx, "calibration_sample_count", None),
-                            calibration_replicate=getattr(calibration_ctx, "calibration_replicate", None),
+                            calibration_sample_count=calibration_ctx.calibration_sample_count if isinstance(calibration_ctx, EvaluationContext) else None,
+                            calibration_replicate=calibration_ctx.calibration_replicate if isinstance(calibration_ctx, EvaluationContext) else None,
                             threshold_quantile=quantile,
                             shrinkage_weight=shrinkage,
                             federated_summary_fixed_k=fixed_k,
@@ -776,7 +764,6 @@ class ExperimentPlanBuilder:
                         evaluation_jobs.append(metrics)
         return jobs, evaluation_jobs
 
-    # -- Campaign shared-stage key -------------------------------------------------
 
     @staticmethod
     def _shared_upstream_key(
@@ -786,7 +773,7 @@ class ExperimentPlanBuilder:
     ) -> SharedUpstreamKey:
         """Build a structural key that determines whether two campaign jobs share."""
         experiment = compiled.record
-        population_id = ExperimentPlanBuilder._get_ctx_field(job.context, "population_id")
+        population_id = job.context.population_id if isinstance(job.context, DataContext) else None
         if population_id is None:
             population_id = experiment.population_ids[0]
         population = next((p for p in compiled.populations if p.identifier == population_id), None)
@@ -811,8 +798,8 @@ class ExperimentPlanBuilder:
             dataset_id=dataset.dataset_id,
             population_id=population_id,
             materialization_id=materialization.identifier,
-            partition_condition=ExperimentPlanBuilder._get_ctx_field(job.context, "partition_condition"),
-            seed=ExperimentPlanBuilder._get_ctx_field(job.context, "seed"),
+            partition_condition=(job.context.partition_condition if isinstance(job.context, DataContext) else None),
+            seed=job.context.seed if isinstance(job.context, DataContext) else None,
             seed_cohort_id=experiment.seed_cohort_id,
             training_profile_id=experiment.training_profile_id,
             training_overrides_fingerprint=compute_fingerprint(
@@ -832,56 +819,23 @@ class ExperimentPlanBuilder:
         )
 
 
+@dataclass(frozen=True)
 class SharedUpstreamKey:
-    """Exact in-memory structural coordinates for one active campaign producer.
+    """Exact in-memory structural coordinates for one active campaign producer."""
 
-    Duplicated from ``jobs.py`` for the builder's exclusive use until
-    ``jobs.py`` is retired.
-    """
-
-    def __init__(  # noqa: PLR0913
-        self,
-        *,
-        stage: StageKind,
-        dataset_id: object,
-        population_id: object | None,
-        materialization_id: object,
-        partition_condition: str | None,
-        seed: int | None,
-        seed_cohort_id: object,
-        training_profile_id: object,
-        training_overrides_fingerprint: str,
-        checkpoint_profile_id: object,
-        eligibility_policy_id: object,
-        readiness_gates: tuple[str, ...],
-        score_output_name: str | None,
-        temporal_mode: str,
-        source_fingerprint: str,
-        direct_producers: tuple[tuple[GraphNodeKey, str], ...],
-    ) -> None:
-        self._tuple = (
-            stage,
-            dataset_id,
-            population_id,
-            materialization_id,
-            partition_condition,
-            seed,
-            seed_cohort_id,
-            training_profile_id,
-            training_overrides_fingerprint,
-            checkpoint_profile_id,
-            eligibility_policy_id,
-            readiness_gates,
-            score_output_name,
-            temporal_mode,
-            source_fingerprint,
-            direct_producers,
-        )
-
-    def __hash__(self) -> int:
-        return hash(self._tuple)
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, SharedUpstreamKey):
-            return NotImplemented
-        return self._tuple == other._tuple
+    stage: StageKind
+    dataset_id: object
+    population_id: object | None
+    materialization_id: object
+    partition_condition: str | None
+    seed: int | None
+    seed_cohort_id: object
+    training_profile_id: object
+    training_overrides_fingerprint: str
+    checkpoint_profile_id: object
+    eligibility_policy_id: object
+    readiness_gates: tuple[str, ...]
+    score_output_name: str | None
+    temporal_mode: str
+    source_fingerprint: str
+    direct_producers: tuple[tuple[GraphNodeKey, str], ...]

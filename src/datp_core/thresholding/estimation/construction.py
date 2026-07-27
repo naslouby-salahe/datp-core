@@ -7,13 +7,14 @@ from datp_core.core.identifiers import PopulationId, ThresholdPolicyId
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.thresholding.estimation.models import ThresholdConstructionRequest, ThresholdSet
 from datp_core.thresholding.estimation.ports import ThresholdEstimator
+from datp_core.analysis.contracts import QuantileThresholdPolicy
 from datp_core.thresholding.policies.clustering import ClusterThresholdPolicyRecord
 from datp_core.thresholding.policies.common import BenignCalibrationScores
 from datp_core.thresholding.policies.union import ThresholdPolicyRecord
 
 
 def _has_quantile(policy: ThresholdPolicyRecord) -> bool:
-    return hasattr(policy, "quantile")
+    return isinstance(policy, QuantileThresholdPolicy)
 
 
 class ConstructThresholdsUseCase:

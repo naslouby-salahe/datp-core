@@ -3,34 +3,21 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Annotated, cast
+from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.functional_validators import BeforeValidator
 
-from datp_core.core.immutability import (
-    FrozenJson,
-    as_optional_frozen_json_mapping,
-    as_optional_str_mapping,
-    deep_freeze,
-)
 from datp_core.core.paths import RelativePath
 
 
-def _freeze_positional_contract(value: object | None) -> Mapping[str, bool] | None:
-    if value is None:
-        return None
-    return cast("Mapping[str, bool]", deep_freeze(value))
 
-
-# ---- Annotated field types with conversion validators ----
-
-_OptionalFrozenJsonMappingField = Annotated[
-    Mapping[str, FrozenJson] | None,
-    BeforeValidator(as_optional_frozen_json_mapping),
+_OptionalObjectMappingField = Annotated[
+    Mapping[str, object] | None,
+    BeforeValidator(lambda v: dict(v) if v is not None else None),
 ]
-_OptionalStrMappingField = Annotated[Mapping[str, str] | None, BeforeValidator(as_optional_str_mapping)]
-_PositionalContractField = Annotated[Mapping[str, bool] | None, BeforeValidator(_freeze_positional_contract)]
+_OptionalStrMappingField = Annotated[Mapping[str, str] | None, BeforeValidator(lambda v: dict(v) if v is not None else None)]
+_PositionalContractField = Annotated[Mapping[str, bool] | None, BeforeValidator(lambda v: dict(v) if v is not None else None)]
 
 
 class ConfiguredSourceTree(BaseModel):
@@ -115,11 +102,11 @@ class SourceContractRecord(BaseModel):
     every_model_feature_present_in_merged_header: bool | None
     every_model_feature_present_in_every_file: bool | None
     model_feature_count_equals_source_column_count: bool | None
-    per_class_schema_reference_check: _OptionalFrozenJsonMappingField
+    per_class_schema_reference_check: _OptionalObjectMappingField
     malformed_row: _OptionalStrMappingField
     empty_label_row: _OptionalStrMappingField
     reject_unparseable_numeric_model_feature: bool | None
     reject_row_with_field_count_other_than_header: bool | None
-    column_role_partition: _OptionalFrozenJsonMappingField
+    column_role_partition: _OptionalObjectMappingField
     positional_contract: _PositionalContractField
-    row_integrity_exclusions: _OptionalFrozenJsonMappingField
+    row_integrity_exclusions: _OptionalObjectMappingField

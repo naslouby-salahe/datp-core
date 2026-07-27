@@ -6,10 +6,8 @@ from collections.abc import Mapping
 
 import polars as pl
 
-from datp_core.analysis.contracts import (
-    PairedAnalysisCell,
-    PairedThresholdAnalysisResult,
-)
+from datp_core.analysis.comparisons.contracts import PairedThresholdAnalysisResult
+from datp_core.analysis.contracts import PairedAnalysisCell
 from datp_core.analysis.enums import FormulaIdentifier, MetricIdentifier
 from datp_core.analysis.errors import (
     InvalidAnalysisConfigurationError,
@@ -17,7 +15,6 @@ from datp_core.analysis.errors import (
     StatisticalProcedureError,
 )
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
-from datp_core.analysis.runtime.runner import run_analysis
 from datp_core.artifacts.schemas.columns import MetricColumn
 from datp_core.core.identifiers import AnalysisLabel, EvaluationLabel, MetricId
 from datp_core.core.seeding import Seed
@@ -25,7 +22,6 @@ from datp_core.evaluation import MetricStatus, calculate_fpr_dispersion
 from datp_core.experiments import PairedThresholdAnalysisRecord
 
 
-@run_analysis.register
 def analyze_paired(
     specification: PairedThresholdAnalysisRecord,
     context: AnalysisExecutionContext,
@@ -66,8 +62,6 @@ def analyze_paired(
 
     first_policy_id = context.threshold_policy_id(eval_a)
     second_policy_id = context.threshold_policy_id(eval_b)
-    cohort = context.config.seed_cohorts.get(context.experiment.seed_cohort_id)
-
     if context.statistical_analysis is None:
         raise InvalidAnalysisConfigurationError("Statistical analysis service unavailable in execution context")
 
@@ -78,7 +72,7 @@ def analyze_paired(
         first_policy_id,
         second_policy_id,
         specification.statistical_profile,
-        cohort.bootstrap_analysis_seed,
+        context.seed_cohort.bootstrap_analysis_seed,
     )
     differences = tuple(first - second for first, second in zip(left, right, strict=True))
 
@@ -141,7 +135,7 @@ def evaluation_metric(
 
     quantile = cell_quantile if has_quantile_override else context.quantile_for_evaluation(label)
 
-    definition = context.config.metric_definitions.cross_client_aggregation.cv_fpr
+    definition = context.metric_definitions.cross_client_aggregation.cv_fpr
     if definition.near_zero_mean_threshold_formula != FormulaIdentifier.CV_FPR_NEAR_ZERO_THRESHOLD:
         raise ScientificContractViolationError(
             "CV(FPR) near-zero threshold formula is not the configured roadmap formula"

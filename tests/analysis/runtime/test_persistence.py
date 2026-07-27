@@ -2,21 +2,20 @@
 
 from __future__ import annotations
 
-import json
 from unittest.mock import MagicMock
 
 from datp_core.analysis.contracts import FederatedProximalLossObservation, FederatedProximalSelectionResult
 from datp_core.analysis.enums import AnalysisResultKind
-from datp_core.analysis.runtime.persistence import persist_analysis_results
-from datp_core.analysis.runtime.runner import register_analysis_capabilities
+from datp_core.analysis.runtime.persistence import _adapter, persist_analysis_results
+from datp_core.artifacts.store import ArtifactStore
 from datp_core.core.identifiers import AnalysisLabel
+from datp_core.pipeline.stages.jobs import StageJob
 
 
 def test_persist_analysis_results() -> None:
-    register_analysis_capabilities()
 
-    store = MagicMock()
-    job = MagicMock()
+    store = MagicMock(spec=ArtifactStore)
+    job = MagicMock(spec=StageJob)
     job.output_path.return_value = "results/statistical_result.json"
 
     result = FederatedProximalSelectionResult(
@@ -32,8 +31,8 @@ def test_persist_analysis_results() -> None:
     called_path, called_payload = store.write_bytes_atomic.call_args[0]
     assert called_path == "results/statistical_result.json"
 
-    decoded_envelopes = json.loads(called_payload.decode("utf-8"))
-    assert isinstance(decoded_envelopes, list)
-    assert len(decoded_envelopes) == 1
-    assert decoded_envelopes[0]["result_kind"] == AnalysisResultKind.FEDERATED_PROXIMAL_SELECTION.value
-    assert decoded_envelopes[0]["payload_version"] == 1
+    decoded = _adapter.validate_json(called_payload)
+    assert isinstance(decoded, tuple)
+    assert len(decoded) == 1
+    assert decoded[0].result_kind == AnalysisResultKind.FEDERATED_PROXIMAL_SELECTION
+    assert decoded[0].payload_version == 1

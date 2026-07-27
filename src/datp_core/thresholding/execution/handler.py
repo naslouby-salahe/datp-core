@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from io import BytesIO
-from typing import cast
-
 import polars as pl
 
 from datp_core.artifacts.schemas.scores import validate_calibration_score_frame
@@ -22,6 +20,11 @@ from datp_core.thresholding.execution.frames import (
     empty_threshold_frame,
     threshold_set_to_frame,
 )
+from datp_core.thresholding.policies.clustering import ClusterThresholdPolicyRecord
+from datp_core.thresholding.policies.federated import (
+    FederatedFixedCoefficientThresholdPolicyRecord,
+    FederatedMatchedExceedanceThresholdPolicyRecord,
+)
 
 
 class ThresholdConstructionStageHandler:
@@ -35,7 +38,8 @@ class ThresholdConstructionStageHandler:
         self._thresholds = thresholds
 
     def execute(self, job: StageJob) -> StageJobOutcome:
-        ctx = cast(EvaluationContext, job.context)
+        assert isinstance(job.context, EvaluationContext)
+        ctx = job.context
         if ctx.threshold_policy_id is None or ctx.population_id is None or ctx.seed is None:
             return StageJobOutcome.failed(
                 node_key=job.node_key,
@@ -43,7 +47,18 @@ class ThresholdConstructionStageHandler:
                 error_message="Threshold construction requires policy, population, and seed",
             )
         policy = self._config.threshold_policies.get(ctx.threshold_policy_id)
-        requires_diagnostics = bool(getattr(policy, "required_diagnostics", ()))
+        requires_diagnostics = (
+            policy is not None
+            and isinstance(
+                policy,
+                (
+                    FederatedMatchedExceedanceThresholdPolicyRecord,
+                    FederatedFixedCoefficientThresholdPolicyRecord,
+                    ClusterThresholdPolicyRecord,
+                ),
+            )
+            and bool(policy.required_diagnostics)
+        )
         experiment = self._config.experiments.get(ctx.experiment_id)
         population = self._config.populations.get(ctx.population_id)
         dataset = self._config.datasets[population.dataset_id]

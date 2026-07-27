@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from enum import Enum
+
+from typing import cast
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -17,14 +19,6 @@ from datp_core.core.identifiers import (
     PopulationId,
     SeedCohortId,
     TrainingProfileId,
-)
-from datp_core.core.immutability import (
-    FrozenJson,
-    as_frozen_json_mapping,
-    as_optional_frozen_json_mapping,
-    as_optional_str_mapping,
-    as_str_mapping,
-    as_str_mapping_tuple,
 )
 from datp_core.core.numbers import PositiveInt, Probability
 from datp_core.core.seeding import Seed
@@ -82,22 +76,24 @@ class CalibrationSubsetRecord(BaseModel):
     additional_seed_level_statistic: str
     independent_inferential_unit: str
     replicates_counted_as_seeds: bool
-    full_calibration_reference_condition: Mapping[str, FrozenJson]
+    full_calibration_reference_condition: Mapping[str, object]
 
     @field_validator("requested_sample_count", mode="before")
     @classmethod
-    def _convert_requested_sample_count(cls, v):
-        return as_str_mapping(v)
+    def _convert_requested_sample_count(cls, v: object) -> Mapping[str, str]:
+        return dict(cast("Iterable[tuple[str, str]]", v))
 
     @field_validator("effective_eligibility_policy_by_sweep_condition", mode="before")
     @classmethod
-    def _convert_effective_eligibility_policy_by_sweep_condition(cls, v):
-        return as_str_mapping_tuple(v)
+    def _convert_effective_eligibility_policy_by_sweep_condition(cls, v: object) -> tuple[Mapping[str, str], ...]:
+        if isinstance(v, Iterable):
+            return tuple(dict(cast("Iterable[tuple[str, str]]", x)) for x in v)
+        raise TypeError(f"Expected iterable, got {type(v).__name__}")
 
     @field_validator("full_calibration_reference_condition", mode="before")
     @classmethod
-    def _convert_full_calibration_reference_condition(cls, v):
-        return as_frozen_json_mapping(v)
+    def _convert_full_calibration_reference_condition(cls, v: object) -> Mapping[str, object]:
+        return dict(cast("Iterable[tuple[str, object]]", v))
 
 
 class EligibilityGateRecord(BaseModel):
@@ -158,39 +154,41 @@ class ExperimentRecord(BaseModel):
     population_equivalence_requirement: str | None
     population_roles: Mapping[str, str] | None = None
     scope_constraint: str | None
-    temporal_procedure: Mapping[str, FrozenJson] | None = None
-    primary_coefficient_selection: str | Mapping[str, FrozenJson] | None = None
-    training_overrides: Mapping[str, FrozenJson] | None = None
+    temporal_procedure: Mapping[str, object] | None = None
+    primary_coefficient_selection: str | Mapping[str, object] | None = None
+    training_overrides: Mapping[str, object] | None = None
 
     @field_validator("unavailable_capability_reporting", mode="before")
     @classmethod
-    def _convert_unavailable_capability_reporting(cls, v):
-        return as_str_mapping_tuple(v)
+    def _convert_unavailable_capability_reporting(cls, v: object) -> tuple[Mapping[str, str], ...]:
+        if isinstance(v, Iterable):
+            return tuple(dict(cast("Iterable[tuple[str, str]]", x)) for x in v)
+        raise TypeError(f"Expected iterable, got {type(v).__name__}")
 
     @field_validator("run_condition", mode="before")
     @classmethod
-    def _convert_run_condition(cls, v):
-        return as_optional_str_mapping(v)
+    def _convert_run_condition(cls, v: object) -> Mapping[str, str] | None:
+        return dict(cast("Iterable[tuple[str, str]]", v)) if v is not None else None
 
     @field_validator("population_roles", mode="before")
     @classmethod
-    def _convert_population_roles(cls, v):
-        return as_optional_str_mapping(v)
+    def _convert_population_roles(cls, v: object) -> Mapping[str, str] | None:
+        return dict(cast("Iterable[tuple[str, str]]", v)) if v is not None else None
 
     @field_validator("temporal_procedure", mode="before")
     @classmethod
-    def _convert_temporal_procedure(cls, v):
-        return as_optional_frozen_json_mapping(v)
+    def _convert_temporal_procedure(cls, v: object) -> Mapping[str, object] | None:
+        return dict(cast("Iterable[tuple[str, object]]", v)) if v is not None else None
 
     @field_validator("primary_coefficient_selection", mode="before")
     @classmethod
-    def _convert_primary_coefficient_selection(cls, v):
-        return v if v is None or isinstance(v, str) else as_frozen_json_mapping(v)
+    def _convert_primary_coefficient_selection(cls, v: object) -> str | Mapping[str, object] | None:
+        return v if v is None or isinstance(v, str) else dict(cast("Iterable[tuple[str, object]]", v))
 
     @field_validator("training_overrides", mode="before")
     @classmethod
-    def _convert_training_overrides(cls, v):
-        return as_optional_frozen_json_mapping(v)
+    def _convert_training_overrides(cls, v: object) -> Mapping[str, object] | None:
+        return dict(cast("Iterable[tuple[str, object]]", v)) if v is not None else None
 
 
 class ResultTypeRecord(BaseModel):

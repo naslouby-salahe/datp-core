@@ -100,3 +100,42 @@ class YamlConfigurationReader:
         protocols = cls.read_protocols_document(protocols_path)
         runtime = cls.read_runtime_document(runtime_path)
         return datasets, experiments, protocols, runtime
+
+
+def load_authored_documents(
+    raw: dict[str, object],
+) -> tuple[
+    tuple[AuthoredDatasetConfig, ...],
+    AuthoredExperimentsCatalogueConfig,
+    AuthoredProtocolsConfig,
+    AuthoredRuntimeConfig,
+]:
+    """Extract and validate the four authored document groups from a composed configuration dict.
+
+    The ``raw`` dict is expected to have top-level keys ``datasets`` (a mapping of
+    dataset-name to dataset-config), ``experiments``, ``protocols``, and ``runtime``,
+    matching the structure produced by Hydra or OmegaConf composition.
+
+    Returns a tuple of ``(datasets, experiments, protocols, runtime)`` matching the
+    signature of ``resolve_from_authored_documents`` in ``datp_core.config.project``.
+    """
+    datasets_raw = raw.get("datasets")
+    experiments_raw = raw.get("experiments")
+    protocols_raw = raw.get("protocols")
+    runtime_raw = raw.get("runtime")
+
+    if not isinstance(datasets_raw, dict):
+        raise ConfigurationError("Composed configuration 'datasets' section must be a mapping")
+    if not isinstance(experiments_raw, dict):
+        raise ConfigurationError("Composed configuration 'experiments' section must be a mapping")
+    if not isinstance(protocols_raw, dict):
+        raise ConfigurationError("Composed configuration 'protocols' section must be a mapping")
+    if not isinstance(runtime_raw, dict):
+        raise ConfigurationError("Composed configuration 'runtime' section must be a mapping")
+
+    authored_datasets = tuple(AuthoredDatasetConfig.model_validate(ds_data) for ds_data in datasets_raw.values())
+    authored_experiments = AuthoredExperimentsCatalogueConfig.model_validate(experiments_raw)
+    authored_protocols = AuthoredProtocolsConfig.model_validate(protocols_raw)
+    authored_runtime = AuthoredRuntimeConfig.model_validate(runtime_raw)
+
+    return authored_datasets, authored_experiments, authored_protocols, authored_runtime

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.data.contracts.enums import NormalizationFitScope, NormalizationStrategy
+from datp_core.data.contracts.enums import NormalizationFitScope, NormalizationStrategy, SplitMembership
 from datp_core.data.preprocessing.models import (
     NormalizationEvidence,
     NormalizationFeatureStatistics,
@@ -38,7 +38,7 @@ def normalize_materialized_parquet(
     if missing_columns:
         raise ValueError(f"Materialized payload is missing normalization columns: {', '.join(missing_columns)}")
 
-    train = source.filter((pl.col("split") == "train") & ~pl.col("is_attack"))
+    train = source.filter((pl.col("split") == SplitMembership.TRAIN.value) & ~pl.col("is_attack"))
     statistics = _normalization_statistics(train, feature_columns, strategy, scope)
     if statistics.height == 0:
         raise ValueError("Normalization requires benign training rows")

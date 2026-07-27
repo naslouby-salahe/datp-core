@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from typing import SupportsInt, cast
+
 from io import BytesIO
-from typing import cast
 
 import polars as pl
 
@@ -18,6 +19,10 @@ from datp_core.thresholding.calibration.sampling import subsample_calibration_sc
 from datp_core.thresholding.policies.enums import CalibrationNestingPolicy, CalibrationSelectionStrategy
 
 
+_NEVER_THRESHOLDS_ONLY_RECOMPUTED = "never_thresholds_only_recomputed"
+_DERIVED_SEED_ALGORITHM_CALIBRATION_SUBSAMPLE = "derived_seed_algorithm_with_namespace_calibration_subsample"
+
+
 class CalibrationSubsamplingStageHandler:
     stage = StageKind.CALIBRATION_SUBSAMPLING
 
@@ -26,7 +31,8 @@ class CalibrationSubsamplingStageHandler:
         self._store = store
 
     def execute(self, job: StageJob) -> StageJobOutcome:
-        ctx = cast(EvaluationContext, job.context)
+        assert isinstance(job.context, EvaluationContext)
+        ctx = job.context
         if ctx.seed is None or ctx.calibration_sample_count is None or ctx.calibration_replicate is None:
             return StageJobOutcome.failed(
                 node_key=job.node_key,
@@ -42,10 +48,10 @@ class CalibrationSubsamplingStageHandler:
                 error_message="Calibration subsampling is not configured for this experiment",
             )
         if (
-            subset.selection_strategy != CalibrationSelectionStrategy.DETERMINISTIC_WITHOUT_REPLACEMENT.value
-            or subset.nesting_policy != CalibrationNestingPolicy.NESTED_BY_SIZE.value
-            or subset.model_retraining != "never_thresholds_only_recomputed"
-            or subset.replicate_seed_derivation != "derived_seed_algorithm_with_namespace_calibration_subsample"
+            subset.selection_strategy != CalibrationSelectionStrategy.DETERMINISTIC_WITHOUT_REPLACEMENT
+            or subset.nesting_policy != CalibrationNestingPolicy.NESTED_BY_SIZE
+            or subset.model_retraining != _NEVER_THRESHOLDS_ONLY_RECOMPUTED
+            or subset.replicate_seed_derivation != _DERIVED_SEED_ALGORITHM_CALIBRATION_SUBSAMPLE
         ):
             return StageJobOutcome.failed(
                 node_key=job.node_key,
@@ -54,7 +60,7 @@ class CalibrationSubsamplingStageHandler:
             )
         try:
             namespace = self._config.protocol_determinism.seed_namespaces["calibration_subsample"]
-            digest_bytes = int(self._config.protocol_determinism.derived_seed_algorithm["digest_bytes"])
+            digest_bytes = int(cast("SupportsInt", self._config.protocol_determinism.derived_seed_algorithm["digest_bytes"]))
             scores = validate_calibration_score_frame(
                 pl.read_parquet(BytesIO(self._store.read_bytes(job.input_path("calibration_scores"))))
             )

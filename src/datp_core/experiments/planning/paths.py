@@ -26,7 +26,6 @@ class ExperimentPaths:
     outputs_root: Path
     repository_root: Path
 
-    # -- Experiment lifecycle -------------------------------------------------
 
     def experiment_root(self, experiment_id: ExperimentId) -> Path:
         return self.outputs_root / "experiments" / experiment_id.value
@@ -43,7 +42,6 @@ class ExperimentPaths:
     def failure(self, experiment_id: ExperimentId) -> Path:
         return self.experiment_root(experiment_id) / "failure.json"
 
-    # -- Shared-stage paths ---------------------------------------------------
 
     def shared_materialization(self, ordinal: int, output_name: str) -> Path:
         return self.outputs_root / "shared" / "materializations" / f"{ordinal:04d}" / output_name
@@ -60,7 +58,6 @@ class ExperimentPaths:
     def shared_root(self) -> Path:
         return self.outputs_root / "shared"
 
-    # -- Diagnostics ----------------------------------------------------------
 
     def diagnostic_root(self) -> Path:
         return self.repository_root / ".tmp" / "diagnostics"

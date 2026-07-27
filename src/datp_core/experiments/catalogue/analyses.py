@@ -2,20 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from enum import Enum
 from typing import cast
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
 from datp_core.core.identifiers import StatisticalProfileId
-from datp_core.core.immutability import (
-    FrozenJson,
-    as_frozen_json_mapping,
-    as_optional_frozen_json_mapping,
-    as_str_mapping_tuple,
-    deep_freeze,
-)
 from datp_core.experiments.catalogue.evaluations import RunRequirement
 
 
@@ -39,7 +32,7 @@ class AnalysisKind(Enum):
 def _as_reference_analysis(value: object) -> str | Mapping[str, str]:
     if isinstance(value, str):
         return value
-    return cast("Mapping[str, str]", deep_freeze(value))
+    return dict(cast("Iterable[tuple[str, str]]", value))
 
 
 class PairedThresholdAnalysisRecord(BaseModel):
@@ -73,22 +66,24 @@ class AbsorptionAnalysisRecord(BaseModel):
     band_interpretation: str
     denominator_materiality_rule: float | str
     undefined_denominator_behavior: str
-    matching_contract: Mapping[str, FrozenJson]
+    matching_contract: Mapping[str, object]
     outcome_bands: tuple[Mapping[str, str], ...]
     outcome_bands_are_mutually_exclusive_and_exhaustive: bool
     reference_analysis: str | Mapping[str, str]
     stress_test_analysis: str
-    alternative_path_rule: Mapping[str, FrozenJson] | None
+    alternative_path_rule: Mapping[str, object] | None
 
     @field_validator("matching_contract", mode="before")
     @classmethod
-    def _convert_matching_contract(cls, v: object) -> Mapping[str, FrozenJson]:
-        return as_frozen_json_mapping(v)
+    def _convert_matching_contract(cls, v: object) -> Mapping[str, object]:
+        return dict(cast("Iterable[tuple[str, object]]", v))
 
     @field_validator("outcome_bands", mode="before")
     @classmethod
     def _convert_outcome_bands(cls, v: object) -> tuple[Mapping[str, str], ...]:
-        return as_str_mapping_tuple(v)
+        if isinstance(v, Iterable):
+            return tuple(dict(cast("Iterable[tuple[str, str]]", x)) for x in v)
+        raise TypeError(f"Expected iterable for outcome_bands, got {type(v).__name__}")
 
     @field_validator("reference_analysis", mode="before")
     @classmethod
@@ -97,9 +92,8 @@ class AbsorptionAnalysisRecord(BaseModel):
 
     @field_validator("alternative_path_rule", mode="before")
     @classmethod
-    def _convert_alternative_path_rule(cls, v: object) -> Mapping[str, FrozenJson] | None:
-        return as_optional_frozen_json_mapping(v)
-
+    def _convert_alternative_path_rule(cls, v: object) -> Mapping[str, object] | None:
+        return dict(cast("Iterable[tuple[str, object]]", v)) if v is not None else None
 
 class AlertBurdenAnalysisRecord(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -259,7 +253,9 @@ class TemporalRecoveryAnalysisRecord(BaseModel):
     @field_validator("outcome_bands", mode="before")
     @classmethod
     def _convert_outcome_bands(cls, v: object) -> tuple[Mapping[str, str], ...]:
-        return as_str_mapping_tuple(v)
+        if isinstance(v, Iterable):
+            return tuple(dict(cast("Iterable[tuple[str, str]]", x)) for x in v)
+        raise TypeError(f"Expected iterable for outcome_bands, got {type(v).__name__}")
 
 
 class ThresholdStabilityAnalysisRecord(BaseModel):

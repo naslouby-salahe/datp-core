@@ -13,14 +13,8 @@ import pandas as pd
 import pingouin as pg
 from scipy import stats
 
-from datp_core.analysis.contracts import (
-    AnalysisResult,
-    ConfidenceInterval,
-    HypothesisTestResult,
-    LinearRegressionResult,
-    PairedSeedDifferenceRecord,
-    PairedThresholdAnalysisResult,
-)
+from datp_core.analysis.comparisons.contracts import PairedThresholdAnalysisResult
+from datp_core.analysis.contracts import AnalysisResult, ConfidenceInterval, HypothesisTestResult, LinearRegressionResult, PairedSeedDifferenceRecord
 from datp_core.analysis.enums import AlternativeHypothesis, ConfidenceIntervalMethod, HypothesisTestName
 from datp_core.analysis.errors import StatisticalProcedureError
 from datp_core.analysis.statistics.association import simple_linear_regression, spearman_correlation
@@ -199,7 +193,7 @@ class StatisticalAnalysisUseCase:
                 method="BCa" if method == ConfidenceIntervalMethod.BCA_BOOTSTRAP else "percentile",
                 rng=np.random.default_rng(analysis_seed),
             )
-        except Exception as exc:
+        except (ValueError, RuntimeError) as exc:
             raise StatisticalProcedureError(f"Bootstrap failed: {exc}") from exc
         if not np.isfinite((res.confidence_interval.low, res.confidence_interval.high)).all():
             raise StatisticalProcedureError("Bootstrap produced a non-finite confidence interval")

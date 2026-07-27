@@ -183,7 +183,7 @@ class AnalysisArtifactRepository:
 
         try:
             results = _adapter.validate_json(data)
-        except Exception as exc:
+        except (TypeError, ValueError) as exc:
             raise ArtifactSchemaViolationError(
                 f"Prerequisite frozen artifact at {path} failed Pydantic validation: {exc}"
             ) from exc
@@ -228,7 +228,7 @@ class AnalysisArtifactRepository:
             ) from exc
         try:
             return validator(frame)
-        except Exception as exc:
+        except (TypeError, ValueError) as exc:
             raise ArtifactSchemaViolationError(
                 f"{artifact_kind.capitalize()} artifact at {relative_path} failed schema validation: {exc}"
             ) from exc

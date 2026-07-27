@@ -49,7 +49,11 @@ def _build_context(
     mock_artifacts = MagicMock(spec=AnalysisArtifactRepository)
     mock_artifacts.prerequisite_result.return_value = source
     return AnalysisExecutionContext.model_construct(
-        config=resolved,
+        threshold_policies=resolved.threshold_policies,
+        seed_cohort=MagicMock(),
+        metric_definitions=resolved.metric_definitions,
+        operational_inputs=resolved.operational_inputs,
+        communication_estimation_contract=resolved.communication_estimation_contract,
         artifacts=mock_artifacts,
         experiment=experiment,
         seeds=(),
@@ -178,7 +182,11 @@ def test_missing_paired_source_is_rejected(
     mock_artifacts = MagicMock(spec=AnalysisArtifactRepository)
     mock_artifacts.prerequisite_result.side_effect = ArtifactMissingError("Prerequisite result is unavailable")
     context = AnalysisExecutionContext.model_construct(
-        config=_resolved,
+        threshold_policies=_resolved.threshold_policies,
+        seed_cohort=MagicMock(),
+        metric_definitions=_resolved.metric_definitions,
+        operational_inputs=_resolved.operational_inputs,
+        communication_estimation_contract=_resolved.communication_estimation_contract,
         artifacts=mock_artifacts,
         experiment=_experiment,
         seeds=(),

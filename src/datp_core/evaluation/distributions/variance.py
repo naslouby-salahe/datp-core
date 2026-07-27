@@ -19,11 +19,13 @@ def calibration_variance_terms(calibration: pl.DataFrame) -> QuantileVarianceTer
         pl.col("score").mean().alias("mean"),
         pl.col("score").var(ddof=0).alias("variance"),
     )
-    total = group_stats["count"].sum()
-    within = float((group_stats["count"] * group_stats["variance"]).sum() / total)
-    between = float((group_stats["count"] * (group_stats["mean"] - pooled_mean) ** 2).sum() / total)
+    total = float(group_stats["count"].sum())
+    within = float((group_stats["count"] * group_stats["variance"]).sum()) / total
+    between = float((group_stats["count"] * (group_stats["mean"] - pooled_mean) ** 2).sum()) / total
     return QuantileVarianceTerms(
         within_term=within,
         between_term=between,
-        between_ratio=between / pooled_variance if pooled_variance else None,
+        between_ratio=between / float(pooled_variance)
+        if isinstance(pooled_variance, (float, int)) and pooled_variance
+        else None,
     )

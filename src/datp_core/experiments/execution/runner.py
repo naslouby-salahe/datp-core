@@ -8,11 +8,8 @@ from time import time
 
 from pydantic import TypeAdapter
 
-from datp_core.analysis.contracts import (
-    AnalysisResult,
-    AnchorEquivalenceAnalysisResult,
-    PrerequisiteExperimentResult,
-)
+from datp_core.analysis.comparisons.contracts import AnchorEquivalenceAnalysisResult
+from datp_core.analysis.contracts import AnalysisResult, PrerequisiteExperimentResult
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.freezing import FrozenResultManifest
 from datp_core.core.identifiers import ExperimentId
@@ -23,7 +20,7 @@ from datp_core.experiments.execution.output_manager import (
     ExperimentOutputManager,
     OutputState,
 )
-from datp_core.experiments.execution.report import ExperimentExecutionReport
+from datp_core.experiments.execution import ExperimentExecutionReport
 from datp_core.experiments.planning.builder import ExperimentPlanBuilder
 from datp_core.experiments.planning.compilation import compile_experiment
 from datp_core.experiments.planning.validation import validate_planning_graph
@@ -37,9 +34,7 @@ from datp_core.pipeline.stages.outcomes import StageJobOutcome
 _AnalysisResultsAdapter = TypeAdapter(tuple[AnalysisResult, ...])
 
 
-# ---------------------------------------------------------------------------
 # Runtime-contract validation (pure, no side effects)
-# ---------------------------------------------------------------------------
 
 
 def _validate_capability_requirements(
@@ -113,19 +108,20 @@ def _validate_experiment_runtime_contracts(
     return _validate_prerequisites(experiment, config)
 
 
+_COMPLETED_OUTCOME = "completed"
+_ANCHOR_EQUIVALENCE_PASSED = "anchor_equivalence_passed"
+
 _KNOWN_PREREQUISITE_OUTCOMES: frozenset[str] = frozenset(
     {
-        "completed",
-        "anchor_equivalence_passed",
+        _COMPLETED_OUTCOME,
+        _ANCHOR_EQUIVALENCE_PASSED,
         "faithful_reproduction_claim_forbidden",
         "quantitative_claim_gate_passed",
     }
 )
 
 
-# ---------------------------------------------------------------------------
 # Public result types
-# ---------------------------------------------------------------------------
 
 
 class ExperimentRunStatus(Enum):
@@ -148,9 +144,7 @@ class ExperimentRunResult:
         return self.status in {ExperimentRunStatus.EXECUTED, ExperimentRunStatus.SKIPPED_EXISTING}
 
 
-# ---------------------------------------------------------------------------
 # Prerequisite outcome helpers
-# ---------------------------------------------------------------------------
 
 
 def _prerequisite_outcome_satisfied(
@@ -158,13 +152,13 @@ def _prerequisite_outcome_satisfied(
     required_outcome: str,
 ) -> bool:
     """Check whether validated analysis results satisfy *required_outcome*."""
-    if required_outcome == "completed":
+    if required_outcome == _COMPLETED_OUTCOME:
         return True
     for result in statistical_results:
         if isinstance(result, AnchorEquivalenceAnalysisResult) and result.passed:
             return True
         if (
-            required_outcome not in ("completed", "anchor_equivalence_passed")
+            required_outcome not in (_COMPLETED_OUTCOME, _ANCHOR_EQUIVALENCE_PASSED)
             and result.result_kind.value == required_outcome
         ):
             return True
@@ -210,9 +204,7 @@ def _load_prerequisite_results(
     return tuple(results)
 
 
-# ---------------------------------------------------------------------------
 # ExecuteExperimentUseCase -- graph expansion and execution
-# ---------------------------------------------------------------------------
 
 
 class ExecuteExperimentUseCase:
@@ -268,9 +260,7 @@ class ExecuteExperimentUseCase:
         return run_planning_graph(graph, self._registry)
 
 
-# ---------------------------------------------------------------------------
 # ExperimentRunner -- lifecycle around one experiment
-# ---------------------------------------------------------------------------
 
 
 class ExperimentRunner:
@@ -361,7 +351,7 @@ class ExperimentRunner:
                 prerequisite_result_fingerprints=prerequisite_fingerprints,
                 started_at=started_at,
             )
-        except Exception as exc:
+        except (OSError, ValueError, KeyError) as exc:
             self._output_manager.mark_failed(experiment_id, str(exc))
             return ExperimentRunResult(
                 experiment_id=experiment_id,
@@ -381,6 +371,8 @@ __all__ = [
     "ExperimentRunResult",
     "ExperimentRunStatus",
     "ExperimentRunner",
+    "_ANCHOR_EQUIVALENCE_PASSED",
+    "_COMPLETED_OUTCOME",
     "_KNOWN_PREREQUISITE_OUTCOMES",
     "_prerequisite_outcome_satisfied",
     "_source_fingerprint",

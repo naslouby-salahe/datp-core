@@ -32,7 +32,6 @@ def compute_roc_auc(labels: np.ndarray, scores: np.ndarray) -> ClientAuroc:
 
 
 def _compute_auroc_for_group(group_df: pl.DataFrame) -> pl.DataFrame:
-    """Compute AUROC for a single per-client group, used by map_groups."""
     labels = group_df["label"].to_numpy()
     scores = group_df["score"].to_numpy()
     result = compute_roc_auc(labels, scores)

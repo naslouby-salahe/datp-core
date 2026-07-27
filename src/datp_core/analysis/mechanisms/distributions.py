@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datp_core.analysis.contracts import (
+from datp_core.analysis.mechanisms.contracts import (
     ClientDistributionEntry,
     ClientTradeoffEntry,
     DistributionMechanismAnalysisResult,
@@ -13,12 +13,11 @@ from datp_core.analysis.contracts import (
     EvaluationDistributionResult,
     FieldFormulaContract,
     LockedClientDistributionAnalysisResult,
-    PairedAnalysisCell,
 )
+from datp_core.analysis.contracts import PairedAnalysisCell
 from datp_core.analysis.enums import ProducedField
 from datp_core.analysis.errors import ScientificContractViolationError
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
-from datp_core.analysis.runtime.runner import run_analysis
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel
 from datp_core.core.seeding import Seed
 from datp_core.evaluation.distributions import (
@@ -58,7 +57,6 @@ def distribution_seed_result(
     return DistributionMechanismSeedResult(seed=seed, evaluations=tuple(eval_results))
 
 
-@run_analysis.register
 def analyze_distribution_mechanism(
     specification: DistributionMechanismAnalysisRecord,
     context: AnalysisExecutionContext,
@@ -110,7 +108,6 @@ def analyze_distribution_mechanism(
     return (tradeoff_res,)
 
 
-@run_analysis.register
 def analyze_locked_client_distribution(
     specification: LockedClientDistributionAnalysisRecord,
     context: AnalysisExecutionContext,

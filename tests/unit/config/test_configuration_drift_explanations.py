@@ -135,7 +135,9 @@ def test_removing_a_sweep_value_is_reported_as_a_removal(tmp_path: Path) -> None
 
 
 @pytest.mark.parametrize("use_case_cls", [ExplainResolvedScientificDrift, ExplainExecutionConfigurationDrift])
-def test_no_drift_reports_true_equality_for_resolved_projections(use_case_cls) -> None:
+def test_no_drift_reports_true_equality_for_resolved_projections(
+    use_case_cls: type[ExplainResolvedScientificDrift] | type[ExplainExecutionConfigurationDrift],
+) -> None:
     config = resolve_project_configuration()
     report = use_case_cls().execute(current_config=config, expected_config=config)
     assert report.has_drift is False

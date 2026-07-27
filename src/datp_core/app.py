@@ -9,7 +9,22 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict
 
+from datp_core.analysis.calibration.conformal import analyze_conformal_coverage
+from datp_core.analysis.calibration.quantile import analyze_quantile_estimation
+from datp_core.analysis.calibration.stability import analyze_threshold_stability
+from datp_core.analysis.clustering.membership import analyze_cluster_stability
+from datp_core.analysis.comparisons.association import analyze_association
+from datp_core.analysis.comparisons.effect_ratios import analyze_absorption, analyze_recovery_fraction
+from datp_core.analysis.comparisons.paired import analyze_paired
+from datp_core.analysis.mechanisms.distributions import (
+    analyze_distribution_mechanism,
+    analyze_locked_client_distribution,
+)
+from datp_core.analysis.mechanisms.operational import analyze_alert_burden, analyze_resource_cost
+from datp_core.analysis.mechanisms.temporal import analyze_temporal_recovery
+from datp_core.analysis.runtime.runner import AnalysisHandlerRegistry
 from datp_core.analysis.statistics.inference import StatisticalAnalysisUseCase
+from datp_core.analysis.validation import analyze_anchor_equivalence
 from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.bootstrap import RuntimeBootstrapSettings
 from datp_core.config.loading import ConfigurationError
@@ -35,6 +50,7 @@ from datp_core.data.materialization import (
 )
 from datp_core.data.readiness import AuditDatasetUseCase
 from datp_core.evaluation.execution import OperatingPointEvaluationStageHandler
+from datp_core.experiments.catalogue.analyses import AnalysisKind
 from datp_core.experiments.execution import (
     CampaignRunner,
     ExecuteExperimentUseCase,
@@ -87,6 +103,26 @@ def _build_adapter_registry() -> DatasetAdapterRegistry:
     )
 
 
+def _build_analysis_registry() -> AnalysisHandlerRegistry:
+    """Build the analysis handler registry with all 14 capability handlers."""
+    registry = AnalysisHandlerRegistry()
+    registry.register(AnalysisKind.PAIRED_THRESHOLD, analyze_paired)
+    registry.register(AnalysisKind.ABSORPTION, analyze_absorption)
+    registry.register(AnalysisKind.ALERT_BURDEN, analyze_alert_burden)
+    registry.register(AnalysisKind.ANCHOR_EQUIVALENCE, analyze_anchor_equivalence)
+    registry.register(AnalysisKind.CLUSTER_STABILITY, analyze_cluster_stability)
+    registry.register(AnalysisKind.CONFORMAL_COVERAGE, analyze_conformal_coverage)
+    registry.register(AnalysisKind.DISTRIBUTION_MECHANISM, analyze_distribution_mechanism)
+    registry.register(AnalysisKind.LOCKED_CLIENT_DISTRIBUTION, analyze_locked_client_distribution)
+    registry.register(AnalysisKind.METRIC_ASSOCIATION, analyze_association)
+    registry.register(AnalysisKind.QUANTILE_ESTIMATION, analyze_quantile_estimation)
+    registry.register(AnalysisKind.RECOVERY_FRACTION, analyze_recovery_fraction)
+    registry.register(AnalysisKind.RESOURCE_COST, analyze_resource_cost)
+    registry.register(AnalysisKind.TEMPORAL_RECOVERY, analyze_temporal_recovery)
+    registry.register(AnalysisKind.THRESHOLD_STABILITY, analyze_threshold_stability)
+    return registry
+
+
 class _CommonConfigUseCases(BaseModel):
     """Configuration-layer use cases shared by both application variants."""
 
@@ -118,9 +154,7 @@ class ConfigOnlyApplication(BaseModel):
     """Lightweight composition root for configuration-only operations.
 
     Built from just YAML load + validate + resolve -- no artifact repository, no DuckDB
-    service, no threshold estimators, no statistics adapter, no execution use case. Used by CLI
-    commands that only read or explain configuration, so they never pay for the full
-    application graph.
+    service, no threshold estimators, no statistics adapter, no execution use case.
     """
 
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
@@ -132,6 +166,24 @@ class ConfigOnlyApplication(BaseModel):
     explain_scientific_drift: ExplainResolvedScientificDrift
     explain_execution_drift: ExplainExecutionConfigurationDrift
     fingerprint_config: FingerprintResolvedConfiguration
+
+    def explain_scientific_drift_between_dirs(
+        self,
+        current_config_dir: Path,
+        expected_config_dir: Path,
+    ):
+        current = resolve_project_configuration(config_dir=current_config_dir)
+        expected = resolve_project_configuration(config_dir=expected_config_dir)
+        return self.explain_scientific_drift.execute(current_config=current, expected_config=expected)
+
+    def explain_execution_drift_between_dirs(
+        self,
+        current_config_dir: Path,
+        expected_config_dir: Path,
+    ):
+        current = resolve_project_configuration(config_dir=current_config_dir)
+        expected = resolve_project_configuration(config_dir=expected_config_dir)
+        return self.explain_execution_drift.execute(current_config=current, expected_config=expected)
 
 
 def build_config_only_application(
@@ -173,6 +225,33 @@ class DatpApplication(BaseModel):
     statistical_analysis: StatisticalAnalysisUseCase
     audit_svc: DuckDbAuditService
     plan_builder: ExperimentPlanBuilder
+    paths: ExperimentPaths
+
+    def run_diagnostic_experiment(
+        self,
+        experiment: str,
+        *,
+        seed_index: int = 0,
+        profile: str = "smoke",
+    ):
+        from datp_core.orchestration.diagnostics import run_experiment_diagnostic
+
+        _ = profile
+        return run_experiment_diagnostic(experiment, self, seed_index=seed_index)
+
+    def run_diagnostic_campaign(self, *, profile: str = "smoke"):
+        from datp_core.orchestration.diagnostics import run_campaign_diagnostic
+
+        _ = profile
+        return run_campaign_diagnostic(self)
+
+    def execute_dagster_experiment(self, experiment: str):
+        from datp_core.orchestration.dagster_defs import build_dagster_definitions
+
+        defs = build_dagster_definitions(self)
+        job_name = f"datp_{experiment}"
+        job = defs.get_job_def(job_name)
+        return job.execute_in_process() if job is not None else None
 
     def build_experiment_plan(
         self,
@@ -215,6 +294,7 @@ def build_application(
     statistical_analysis = StatisticalAnalysisUseCase(
         resolved_config.statistical_profiles,
     )
+    analysis_registry = _build_analysis_registry()
     executor = ExecuteExperimentUseCase(
         config=resolved_config,
         plan_builder=plan_builder,
@@ -251,10 +331,10 @@ def build_application(
             ),
             CalibrationSubsamplingStageHandler(resolved_config, output_store),
             ThresholdConstructionStageHandler(resolved_config, output_store, construct_th),
-            OperatingPointEvaluationStageHandler(resolved_config, output_store),
-            StatisticalAnalysisStageHandler(resolved_config, output_store, statistical_analysis),
+            OperatingPointEvaluationStageHandler(output_store),
+            StatisticalAnalysisStageHandler(resolved_config, output_store, statistical_analysis, analysis_registry),
             ResultFreezeStageHandler(resolved_config, output_store),
-            ReportGenerationStageHandler(resolved_config, output_store),
+            ReportGenerationStageHandler(output_store),
         ),
     )
     output_manager = ExperimentOutputManager(resolved_config.paths.outputs)
@@ -288,6 +368,7 @@ def build_application(
         statistical_analysis=statistical_analysis,
         audit_svc=audit_svc,
         plan_builder=plan_builder,
+        paths=experiment_paths,
     )
 
 

@@ -11,7 +11,7 @@ from datp_core.analysis.runtime.context import AnalysisExecutionContext
 from datp_core.core.identifiers import EvaluationLabel, ExperimentId, PopulationId, ThresholdPolicyId
 from datp_core.core.seeding import Seed
 from datp_core.experiments import EvaluationSpecRecord, ExperimentRecord
-from datp_core.experiments.catalogue.evaluations import RunRequirement
+from datp_core.experiments.catalogue.evaluations import RecalibrationMode, RunRequirement
 
 
 @pytest.fixture
@@ -19,7 +19,7 @@ def dummy_experiment() -> ExperimentRecord:
     eval_spec = EvaluationSpecRecord(
         label="eval_main",
         population_id=PopulationId("pop_1"),
-        recalibration_mode="frozen",  # type: ignore[arg-type]
+        recalibration_mode=RecalibrationMode.FROZEN,
         threshold_policy_id=ThresholdPolicyId("pol_1"),
         run_requirement=RunRequirement.MANDATORY,
         overrides=None,
@@ -34,7 +34,11 @@ def dummy_experiment() -> ExperimentRecord:
 
 def test_context_evaluation_lookup(dummy_experiment: ExperimentRecord) -> None:
     ctx = AnalysisExecutionContext.model_construct(
-        config=MagicMock(),
+        threshold_policies=MagicMock(),
+        seed_cohort=MagicMock(),
+        metric_definitions=MagicMock(),
+        operational_inputs=MagicMock(),
+        communication_estimation_contract=MagicMock(),
         artifacts=MagicMock(),
         experiment=dummy_experiment,
         seeds=(Seed(1), Seed(2)),
@@ -49,7 +53,11 @@ def test_context_evaluation_lookup(dummy_experiment: ExperimentRecord) -> None:
 
 def test_context_stage_job_context_factories(dummy_experiment: ExperimentRecord) -> None:
     ctx = AnalysisExecutionContext.model_construct(
-        config=MagicMock(),
+        threshold_policies=MagicMock(),
+        seed_cohort=MagicMock(),
+        metric_definitions=MagicMock(),
+        operational_inputs=MagicMock(),
+        communication_estimation_contract=MagicMock(),
         artifacts=MagicMock(),
         experiment=dummy_experiment,
         seeds=(Seed(1), Seed(2)),

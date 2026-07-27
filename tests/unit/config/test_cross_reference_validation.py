@@ -11,7 +11,6 @@ from __future__ import annotations
 import shutil
 from collections.abc import Callable
 from pathlib import Path
-from typing import Any
 
 import pytest
 import yaml
@@ -22,7 +21,7 @@ from datp_core.config.project import resolve_project_configuration
 _CONFIRMATORY_EXPERIMENT = "confirmatory_threshold_scope_effect"
 
 
-def _mutate_confirmatory_experiment(tmp_path: Path, mutate: Callable[[dict[str, Any]], None]) -> None:
+def _mutate_confirmatory_experiment(tmp_path: Path, mutate: Callable[[dict[str, object]], None]) -> None:
     for name in ("runtime.yaml", "protocols.yaml"):
         shutil.copy(f"configs/{name}", tmp_path / name)
     (tmp_path / "datasets").mkdir()
@@ -70,7 +69,7 @@ def test_dangling_report_profile_is_rejected(tmp_path: Path) -> None:
 
 
 def test_dangling_evaluation_threshold_policy_is_rejected(tmp_path: Path) -> None:
-    def mutate(exp: dict[str, Any]) -> None:
+    def mutate(exp: dict[str, object]) -> None:
         exp["evaluations"][0]["threshold_policy"] = "nonexistent"
 
     _mutate_confirmatory_experiment(tmp_path, mutate)

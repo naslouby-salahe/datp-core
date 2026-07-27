@@ -1,18 +1,4 @@
-"""Operational-cost and communication-estimation configuration schema: how the resource-cost and
-alert-burden analyses' input contracts (field encodings, threshold/model exchange direction,
-checkpoint storage, benign decision rate) are authored.
-
-This is scientific *configuration* schema, not an analysis-execution feature, so it lives under
-``datp_core.config`` rather than ``datp_core.analysis`` -- keeping it under ``analysis`` previously
-made every data/learning/thresholding/evaluation handler that transitively imports
-``ResolvedProjectConfiguration`` also transitively import the analysis package, violating this
-repository's own layering contract (`importlinter.ini`'s
-``data-thresholding-evaluation-do-not-import-downstream-features``). Kept as its own leaf module
-(rather than merged into `config.models`) so both `config.models` and `config.resolution.protocols`
-can depend on it without a circular import between them; `analysis.operations.resource_cost` (the
-one analysis-side consumer) imports it from here, which is an ordinary analysis-depends-on-config
-direction and does not reintroduce the violation.
-"""
+"""Operational-cost and communication-estimation configuration schema."""
 
 from __future__ import annotations
 

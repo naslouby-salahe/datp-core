@@ -14,7 +14,6 @@ from pydantic import BaseModel, ConfigDict
 
 from datp_core.config.resolution.experiments import ResolvedExperimentCatalogue
 from datp_core.config.resolution.protocols import ResolvedProtocols
-from datp_core.core.hashing import CanonicalProjection
 from datp_core.core.identifiers import DatasetId
 from datp_core.data.contracts import ResolvedDataset
 
@@ -25,8 +24,8 @@ class HasItems[K, V](Protocol):
 
 def _project[K, V](
     source: HasItems[K, V],
-    projection_module: Callable[[object], CanonicalProjection],
-) -> dict[str, CanonicalProjection]:
+    projection_module: Callable[[object], object],
+) -> dict[str, object]:
     return {str(k): projection_module(v) for k, v in sorted(source.items(), key=lambda x: str(x[0]))}
 
 
@@ -112,7 +111,7 @@ def build_scientific_projection(
     resolved_datasets: dict[DatasetId, ResolvedDataset],
     catalogue: ResolvedExperimentCatalogue,
     protocols: ResolvedProtocols,
-    projection_module: Callable[[object], CanonicalProjection],
+    projection_module: Callable[[object], object],
 ) -> ScientificProjection:
     from datp_core.config.resolution.experiments import experiment_scientific_projection as _sci_proj
 

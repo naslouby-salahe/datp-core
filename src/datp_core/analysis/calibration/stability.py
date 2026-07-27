@@ -6,23 +6,17 @@ from typing import cast as _cast
 
 import polars as pl
 
-from datp_core.analysis.contracts import (
-    PairedAnalysisCell,
-    QuantileThresholdPolicy,
-    ThresholdStabilityAnalysisResult,
-    ThresholdStabilitySeedResult,
-)
+from datp_core.analysis.calibration.contracts import ThresholdStabilityAnalysisResult, ThresholdStabilitySeedResult
+from datp_core.analysis.contracts import PairedAnalysisCell, QuantileThresholdPolicy
 from datp_core.analysis.enums import ReplicateAggregation, SweepDimensionKind
 from datp_core.analysis.errors import InvalidAnalysisConfigurationError
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
-from datp_core.analysis.runtime.runner import run_analysis
 from datp_core.artifacts.schemas.columns import MetricColumn, ScoreColumn, ThresholdColumn
 from datp_core.core.identifiers import AnalysisLabel, ClientId, EvaluationLabel
 from datp_core.evaluation import MetricStatus
 from datp_core.experiments import ThresholdStabilityAnalysisRecord
 
 
-@run_analysis.register
 def analyze_threshold_stability(
     specification: ThresholdStabilityAnalysisRecord,
     context: AnalysisExecutionContext,
@@ -42,13 +36,13 @@ def analyze_threshold_stability(
 
     eval_label = EvaluationLabel(specification.source_evaluation)
     policy_id = context.threshold_policy_id(eval_label)
-    policy = context.config.threshold_policies.get(policy_id)
-    if not hasattr(policy, "quantile"):
+    policy = context.threshold_policies.get(policy_id)
+    if not isinstance(policy, QuantileThresholdPolicy):
         raise InvalidAnalysisConfigurationError(
             f"Threshold stability requires a quantile-based threshold policy, "
             f"got {type(policy).__name__ if policy is not None else 'None'}"
         )
-    quantile = float(_cast(QuantileThresholdPolicy, policy).quantile)
+    quantile = float(policy.quantile)
 
     seed_results: list[ThresholdStabilitySeedResult] = []
     for seed in context.seeds:

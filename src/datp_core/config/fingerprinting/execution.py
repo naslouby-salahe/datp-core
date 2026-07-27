@@ -7,24 +7,24 @@ from collections.abc import Callable
 from pydantic import BaseModel, ConfigDict
 
 from datp_core.config.resolution.runtime import ResolvedRuntimeConfiguration
-from datp_core.core.hashing import CanonicalProjection, Fingerprint
+from datp_core.core.hashing import Fingerprint
 
 
 class ExecutionProjection(BaseModel):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     scientific_fingerprint: str
-    active_execution_profile: CanonicalProjection
-    determinism: CanonicalProjection
-    device_policy: CanonicalProjection
-    resource_pressure: CanonicalProjection
-    raw_source_policy: CanonicalProjection
+    active_execution_profile: object
+    determinism: object
+    device_policy: object
+    resource_pressure: object
+    raw_source_policy: object
 
 
 def build_execution_projection(
     *,
     scientific_fingerprint: Fingerprint,
     runtime: ResolvedRuntimeConfiguration,
-    projection_module: Callable[[object], CanonicalProjection],
+    projection_module: Callable[[object], object],
 ) -> ExecutionProjection:
     return ExecutionProjection(
         scientific_fingerprint=scientific_fingerprint.value,

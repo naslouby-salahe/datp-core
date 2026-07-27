@@ -3,8 +3,6 @@ training profile, and normalization-strategy records."""
 
 from __future__ import annotations
 
-from types import MappingProxyType
-
 from pydantic import BaseModel, ConfigDict
 
 from datp_core.config.authored.protocols import AuthoredProtocolsConfig
@@ -45,8 +43,8 @@ class ProtocolDeterminismRecord(BaseModel):
     seed_domains: tuple[str, ...]
     partition_seed_independent_of_training_seeds: bool
     checkpoint_selection_uses_no_stochastic_seed: bool
-    derived_seed_algorithm: MappingProxyType
-    seed_namespaces: MappingProxyType
+    derived_seed_algorithm: dict[str, object]
+    seed_namespaces: dict[str, SeedNamespaceRecord]
     resolved_seeds_required_in_manifests: tuple[str, ...]
 
 
@@ -244,12 +242,10 @@ def resolve_protocol_determinism(cfg: DeterminismProfileConfig) -> ProtocolDeter
         seed_domains=tuple(cfg.seed_domains),
         partition_seed_independent_of_training_seeds=cfg.partition_seed_independent_of_training_seeds,
         checkpoint_selection_uses_no_stochastic_seed=cfg.checkpoint_selection_uses_no_stochastic_seed,
-        derived_seed_algorithm=MappingProxyType(dict(cfg.derived_seed_algorithm)),
-        seed_namespaces=MappingProxyType(
-            {
-                key: SeedNamespaceRecord(key=v.key, components=tuple(v.components))
-                for key, v in cfg.seed_namespaces.items()
-            }
-        ),
+        derived_seed_algorithm=dict(cfg.derived_seed_algorithm),
+        seed_namespaces={
+            key: SeedNamespaceRecord(key=v.key, components=tuple(v.components))
+            for key, v in cfg.seed_namespaces.items()
+        },
         resolved_seeds_required_in_manifests=tuple(cfg.resolved_seeds_required_in_manifests),
     )

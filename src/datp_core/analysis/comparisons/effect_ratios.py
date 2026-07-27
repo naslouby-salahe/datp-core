@@ -6,13 +6,12 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from datp_core.analysis.contracts import (
+from datp_core.analysis.comparisons.contracts import (
     AbsorptionAnalysisResult,
-    PairedAnalysisCell,
     PairedThresholdAnalysisResult,
-    PrerequisiteAnalysisReference,
     RecoveryFractionAnalysisResult,
 )
+from datp_core.analysis.contracts import PairedAnalysisCell, PrerequisiteAnalysisReference
 from datp_core.analysis.enums import (
     AnalysisResultKind,
     DenominatorComposition,
@@ -23,7 +22,6 @@ from datp_core.analysis.errors import (
     ScientificContractViolationError,
 )
 from datp_core.analysis.runtime.context import AnalysisExecutionContext
-from datp_core.analysis.runtime.runner import run_analysis
 from datp_core.core.identifiers import AnalysisLabel, ExperimentId
 from datp_core.experiments import (
     AbsorptionAnalysisRecord,
@@ -75,7 +73,6 @@ def _validate_absorption_contract(
         )
 
 
-@run_analysis.register
 def analyze_absorption(
     specification: AbsorptionAnalysisRecord,
     context: AnalysisExecutionContext,
@@ -106,8 +103,9 @@ def analyze_absorption(
         reference_exp_id = context.experiment.identifier
         reference_label = AnalysisLabel(ref_analysis)
     else:
-        reference_exp_id = ExperimentId(str(getattr(ref_analysis, "experiment_id", context.experiment.identifier)))
-        reference_label = AnalysisLabel(str(getattr(ref_analysis, "analysis_label", "")))
+        raise InvalidAnalysisConfigurationError(
+            f"Unsupported reference_analysis type: {type(ref_analysis).__name__}"
+        )
 
     _validate_absorption_contract(specification, context, reference_exp_id)
     ref_paired_ref = PrerequisiteAnalysisReference(
@@ -131,7 +129,6 @@ def analyze_absorption(
     return (res,)
 
 
-@run_analysis.register
 def analyze_recovery_fraction(
     specification: RecoveryFractionAnalysisRecord,
     context: AnalysisExecutionContext,

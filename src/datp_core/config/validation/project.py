@@ -11,11 +11,25 @@ from datp_core.data.contracts import ClientConstructionMethod
 from datp_core.experiments import (
     ConditionSweepRecord,
     ExperimentRecord,
+    MetricAssociationAnalysisRecord,
+    PairedThresholdAnalysisRecord,
     SweepConditionAllocation,
     ValueSweepRecord,
 )
 from datp_core.learning.contracts.enums import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
+from datp_core.thresholding.policies.clustering import ClusterThresholdPolicyRecord
 from datp_core.thresholding.policies.grouped import FamilyMeanThresholdPolicyRecord
+from datp_core.thresholding.policies.shared import (
+    CentralizedPooledThresholdPolicyRecord,
+    LocalQuantileThresholdPolicyRecord,
+    SharedMeanThresholdPolicyRecord,
+    SharedPooledThresholdPolicyRecord,
+    SharedWeightedThresholdPolicyRecord,
+)
+from datp_core.thresholding.policies.shrinkage import (
+    CalibrationFallbackThresholdPolicyRecord,
+    LocalGlobalShrinkageThresholdPolicyRecord,
+)
 
 
 class ProjectConfigurationValidator:
@@ -78,10 +92,21 @@ class ProjectConfigurationValidator:
     @staticmethod
     def _validate_threshold_policy_estimators(config: ResolvedProjectConfiguration, errors: list[str]) -> None:
         for tp_id, policy in config.threshold_policies.items():
-            quantile_estimator = getattr(policy, "quantile_estimator", None)
-            if quantile_estimator is not None and not config.quantile_estimators.contains(quantile_estimator):
+            if not isinstance(policy, (
+                SharedMeanThresholdPolicyRecord,
+                SharedPooledThresholdPolicyRecord,
+                SharedWeightedThresholdPolicyRecord,
+                LocalQuantileThresholdPolicyRecord,
+                CentralizedPooledThresholdPolicyRecord,
+                FamilyMeanThresholdPolicyRecord,
+                ClusterThresholdPolicyRecord,
+                LocalGlobalShrinkageThresholdPolicyRecord,
+                CalibrationFallbackThresholdPolicyRecord,
+            )):
+                continue
+            if not config.quantile_estimators.contains(policy.quantile_estimator):
                 errors.append(
-                    f"Threshold policy '{tp_id}' references unregistered quantile estimator '{quantile_estimator}'"
+                    f"Threshold policy '{tp_id}' references unregistered quantile estimator '{policy.quantile_estimator}'"
                 )
 
     @staticmethod
@@ -207,7 +232,9 @@ class ProjectConfigurationValidator:
                     f"Experiment '{exp_id}' analysis '{analysis.label}' references "
                     f"unregistered statistical profile '{analysis.statistical_profile}'"
                 )
-            secondary_profile = getattr(analysis, "secondary_statistical_profile", None)
+            secondary_profile = None
+            if isinstance(analysis, (PairedThresholdAnalysisRecord, MetricAssociationAnalysisRecord)):
+                secondary_profile = analysis.secondary_statistical_profile
             if secondary_profile is not None and not config.statistical_profiles.contains(secondary_profile):
                 errors.append(
                     f"Experiment '{exp_id}' analysis '{analysis.label}' references "

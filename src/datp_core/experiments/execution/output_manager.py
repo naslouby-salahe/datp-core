@@ -188,18 +188,24 @@ class ExperimentOutputManager:
             return OutputInspection(OutputState.CORRUPT, f"manifest.json is corrupt: {exc}")
         if manifest.experiment_name != experiment_id.value or manifest.final_status != ExperimentStatus.COMPLETED.value:
             return OutputInspection(OutputState.CORRUPT, "manifest does not describe a completed selected experiment")
-        contract = {
-            "scientific_fingerprint": scientific_fingerprint,
-            "execution_fingerprint": execution_fingerprint,
-            "source_data_fingerprint": source_data_fingerprint,
-        }
-        for field_name, expected in contract.items():
-            if expected is not None and getattr(manifest, field_name) != expected:
-                return OutputInspection(
-                    OutputState.INCOMPATIBLE,
-                    f"{field_name} differs from current configuration",
-                    manifest,
-                )
+        if scientific_fingerprint is not None and manifest.scientific_fingerprint != scientific_fingerprint:
+            return OutputInspection(
+                OutputState.INCOMPATIBLE,
+                "scientific_fingerprint differs from current configuration",
+                manifest,
+            )
+        if execution_fingerprint is not None and manifest.execution_fingerprint != execution_fingerprint:
+            return OutputInspection(
+                OutputState.INCOMPATIBLE,
+                "execution_fingerprint differs from current configuration",
+                manifest,
+            )
+        if source_data_fingerprint is not None and manifest.source_data_fingerprint != source_data_fingerprint:
+            return OutputInspection(
+                OutputState.INCOMPATIBLE,
+                "source_data_fingerprint differs from current configuration",
+                manifest,
+            )
         if (
             prerequisite_result_fingerprints is not None
             and manifest.prerequisite_result_fingerprints != prerequisite_result_fingerprints

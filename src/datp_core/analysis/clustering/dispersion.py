@@ -8,7 +8,7 @@ import numpy as np
 import polars as pl
 from sklearn.metrics import adjusted_rand_score
 
-from datp_core.analysis.contracts import ClusterDispersionResult
+from datp_core.analysis.clustering.contracts import ClusterDispersionResult
 from datp_core.analysis.enums import ClusterDispersionKind, ClusterDispersionStatus
 
 

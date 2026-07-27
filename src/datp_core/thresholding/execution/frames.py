@@ -6,7 +6,7 @@ import json
 
 import polars as pl
 
-from datp_core.core.identifiers import ClientId
+from datp_core.core.identifiers import ClientId, PopulationId
 from datp_core.thresholding.estimation.models import (
     MatchedExceedanceDiagnostics,
     ThresholdSet,
@@ -14,7 +14,9 @@ from datp_core.thresholding.estimation.models import (
 from datp_core.thresholding.policies.common import BenignCalibrationScores
 
 
-def calibration_to_benign_scores(scores: pl.DataFrame, population_id) -> tuple[BenignCalibrationScores, ...]:
+def calibration_to_benign_scores(
+    scores: pl.DataFrame, population_id: PopulationId | None
+) -> tuple[BenignCalibrationScores, ...]:
     return tuple(
         BenignCalibrationScores(
             client_id=ClientId(str(client_id[0])),

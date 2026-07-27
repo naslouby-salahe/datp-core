@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from datp_core.config.authored.protocols import (
+    AuthoredProtocolsConfig,
     EvaluationResultContractConfig,
     NestedReplicatePolicyConfig,
     ReportDefaultsConfig,
@@ -15,7 +16,7 @@ from datp_core.config.authored.protocols import (
 from datp_core.config.loading import YamlConfigurationReader
 
 
-def _protocols():
+def _protocols() -> AuthoredProtocolsConfig:
     return YamlConfigurationReader.read_protocols_document(Path("configs/protocols.yaml"))
 
 
