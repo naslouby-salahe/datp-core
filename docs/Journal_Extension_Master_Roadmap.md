@@ -284,7 +284,7 @@ It is available for the N-BaIoT physical-device regime and unavailable in regime
 
 B4 is the taxonomy-free grouped-threshold mechanism.
 
-Each eligible client is represented by the locked benign reconstruction-error fingerprint:
+Each eligible client is represented by its benign reconstruction-error fingerprint:
 
 ```text
 mean(error)
@@ -676,7 +676,7 @@ The journal extension includes bounded mechanism work covering:
 
 - family and cluster granularity;
 - cluster stability;
-- cluster-fingerprint sensitivity;
+
 - per-client benign and attack score geometry;
 - heterogeneity–benefit association;
 - threshold movement versus FPR/TPR trade-off.
@@ -1305,7 +1305,7 @@ B3 is a mechanism baseline, not a confirmatory comparator.
 
 **3.5 Cluster threshold: B4**
 
-B4 creates taxonomy-free groups from a four-scalar benign reconstruction-error fingerprint:
+B4 creates taxonomy-free groups from each client's benign reconstruction-error fingerprint:
 
 ```text
 mean(error)
@@ -1455,7 +1455,6 @@ Regime A supports:
 - shared-threshold construction controls;
 - quantile sensitivity;
 - family/cluster granularity and stability;
-- cluster-fingerprint ablation;
 - score-distribution mechanism analyses;
 - calibration-size ablation;
 - local–global shrinkage;
@@ -1497,7 +1496,7 @@ It must not be used to claim:
 - B0;
 - B1;
 - B2;
-- B4 only when the pseudo-client fingerprints are valid;
+- B4;
 - pairwise benign-distribution Jensen–Shannon divergence;
 - `CV(FPR)`, IQR, and range;
 - descriptive quantile-estimation comparisons.
@@ -1900,7 +1899,7 @@ A smooth monotone curve is not required. Low-alpha conditions may form one broad
 **Population**
 
 - Regime A is mandatory;
-- Regime D may include B4 where its ten sensor-group fingerprints are valid;
+- Regime D may include B4;
 - B3 remains Regime A only.
 
 **Comparison set**
@@ -1952,39 +1951,6 @@ Clusters repeat, but do not improve the operating point.
 
 **No cluster mechanism**
 B4 is unstable and provides little recovery. B4 remains an explored negative mechanism result.
-
-**7.2 B4 fingerprint ablation**
-
-**Scientific role**
-
-**Mechanism and exploratory ablation.**
-
-**Question**
-
-Which components of the four-scalar fingerprint contribute to B4 behavior?
-
-**Ablation design**
-
-Evaluate:
-
-- each single feature;
-- declared feature pairs or leave-one-feature-out subsets;
-- the complete four-feature fingerprint.
-
-The exact subset family must be fixed before results are examined and kept small enough to avoid an unprincipled combinatorial search.
-
-**Required outcomes**
-
-- cluster assignments per subset and seed;
-- `CV(FPR)` and worst-client FPR;
-- ARI relative to the full fingerprint;
-- cluster-size distribution;
-- device-to-cluster contingency;
-- threshold recovery fraction.
-
-**Interpretation**
-
-The ablation identifies sensitivity, not causal importance. A feature subset cannot replace the canonical fingerprint after seeing favorable test outcomes.
 
 **7.3 Per-client score-distribution explanation**
 
@@ -2433,7 +2399,7 @@ When the processed client partitions are near-homogeneous and file-defined, is t
 
 - quantify pairwise benign-distribution divergence;
 - run B1 and B2 on the same scores;
-- include B4 only if the fingerprints and cluster sizes are meaningful;
+- include B4 only if cluster sizes are meaningful;
 - report `CV(FPR)`, IQR, range, and worst pseudo-client FPR;
 - keep all wording specific to the available pseudo-clients.
 
