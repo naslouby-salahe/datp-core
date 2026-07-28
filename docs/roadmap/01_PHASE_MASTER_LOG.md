@@ -32,7 +32,7 @@ Do not add percentages. A phase is binary with respect to its exit criteria.
 
 | Phase | Status | Entry criteria | Exit evidence | Scientific blockers |
 |---|---|---|---|---|
-| 01 — Scientific identity and scope | `NOT_STARTED` | Source tree exists | Identity tests and scope audit | None expected |
+| 01 — Scientific identity and scope | `COMPLETE` | Source tree exists | Identity tests and scope audit | None |
 | 02 — Typed protocols and domain contracts | `NOT_STARTED` | Phase 01 complete | Protocol graph validation and strict typing | Exact seed values and any absent hyperparameters must come from source truth |
 | 03 — Dataset audit and capabilities | `NOT_STARTED` | Phase 02 complete | Schema and capability tests for all datasets | Raw-data discrepancies must be resolved by audit, not guesswork |
 | 04 — Canonical data and reusable preprocessing | `NOT_STARTED` | Phase 03 complete | Deterministic reusable data manifests and reload checks | Exact preprocessing protocol must be present in source truth |
@@ -81,3 +81,16 @@ These are blocking until the source of truth explicitly resolves them:
 7. Population-specific traffic-rate evidence for alert-burden translation.
 
 An unresolved optional experiment does not block unrelated mandatory work. An unresolved confirmatory dependency blocks every downstream claim that depends on it.
+
+## Phase 01 — Scientific identity and scope
+
+- Status: `COMPLETE`.
+- Source files changed: `src/datp_core/domain/enums.py`, `src/datp_core/domain/errors.py`, `src/datp_core/__init__.py`. `src/datp_core/domain/__init__.py` was verified as the required minimal non-re-exporting initializer and needed no final change.
+- Test files added: `tests/architecture/test_source_tree_is_locked.py`, `tests/architecture/test_no_opaque_scientific_identities.py`, `tests/architecture/test_no_compatibility_surfaces.py`, `tests/unit/domain/test_enums.py`, `tests/unit/domain/test_errors.py`, `tests/scientific/test_scope_vocabulary.py`.
+- Scientific-source sections consulted: programme identity; causal and benign-only calibration contracts; evidence architecture; dataset and temporal boundaries; excluded scope; permitted and prohibited claim language; experiment catalogue; evaluation, checkpoint, and temporal-reporting protocols.
+- Unresolved values encountered: none required by Phase 01. Existing global unresolved decisions remain deferred to their dependent phases.
+- Focused commands executed: Phase 01 pytest selection; Ruff format check; Ruff check; Pyright; Pylint for the authorized domain surface.
+- Whole-suite command executed: `python -m pytest -n auto -q`.
+- Results: focused tests passed (`42 passed`); whole suite passed (`42 passed`); Ruff passed; Pyright passed with zero errors; Pylint passed at `10.00/10`.
+- Audit verdict: complete. Scientific vocabulary is descriptive; threshold identities are structurally separate; scope vocabulary blocks prohibited claims; source-file identity set is unchanged; no compatibility surface, opaque identity, `Any`, mutable module-level collection, raw domain dictionary, fingerprint remnant, or package re-export was introduced.
+- No commit or push was performed.
