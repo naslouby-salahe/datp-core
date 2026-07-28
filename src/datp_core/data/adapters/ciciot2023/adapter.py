@@ -1,17 +1,17 @@
-"""CICIoT2023 adapter entry point — orchestration only."""
+"""CICIoT2023 adapter orchestration."""
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from datp_core.data.adapters.ciciot2023.index import write_ciciot2023_materialized_parquet
-from datp_core.data.contracts.dataset import DatasetSetup, ResolvedDataset
-from datp_core.data.contracts.enums import AdapterKind
-from datp_core.data.contracts.materialization import DatasetMaterialization, PartitionSeedContract
-from datp_core.data.materialization.models import MaterializationResult
-from datp_core.data.materialization.ports import SourceInventory
-from datp_core.data.preprocessing.normalization import normalize_materialized_parquet
-from datp_core.experiments import SweepConditionRecord
+from datp_core.data.adapters.ciciot2023.materializer import materialize_ciciot2023
+from datp_core.data.contracts.enums import AdapterKind, DataFailureCode
+from datp_core.data.materialization.database import open_database, require_non_empty_parquet
+from datp_core.data.materialization.errors import DataFailure
+from datp_core.data.materialization.models import (
+    CICIoT2023MaterializationPlan,
+    MaterializationRequest,
+    StandardMaterializationResult,
+)
+from datp_core.data.materialization.normalization import encode_normalization_evidence, normalize_materialized_parquet
 
 
 class CICIoT2023Adapter:
@@ -19,56 +19,32 @@ class CICIoT2023Adapter:
     def adapter_kind(self) -> AdapterKind:
         return AdapterKind.CICIOT2023
 
-    def materialize(
-        self,
-        dataset: ResolvedDataset,
-        setup: DatasetSetup,
-        materialization: DatasetMaterialization,
-        inventory: SourceInventory,
-        staging_root: Path,
-        partition_condition: SweepConditionRecord | None,
-        partition_seed_contract: PartitionSeedContract | None,
-        *,
-        chunk_row_count: int,
-    ) -> MaterializationResult:
-        if partition_condition is not None or partition_seed_contract is not None:
-            raise ValueError("CICIoT2023 does not support partition-condition materialization")
-        inspection = dataset.inspection_contract
-        if inspection.benign_label is None:
-            raise ValueError("CICIoT2023 configured benign label is absent")
-
-        primary_tree = inspection.source_trees[0]
-        feature_headers = primary_tree.required_headers[:-1]
-        label_header = primary_tree.required_headers[-1]
-        merged_root = dataset.paths.raw_data_root / primary_tree.root.value
-
-        source_paths = tuple(entry.source_path for entry in inventory.entries)
-        unprocessed_payload = staging_root / "unprocessed.parquet"
-
-        report = write_ciciot2023_materialized_parquet(
-            source_paths,
-            unprocessed_payload,
-            feature_headers,
-            label_header,
-            merged_root.resolve(),
-            inspection.benign_label,
-            materialization,
-            chunk_row_count,
-        )
-
-        feature_columns = dataset.field_schema.model_features
-        if feature_columns is None:
-            raise ValueError("CICIoT2023 materialization requires configured model features")
-        payload_file = staging_root / "materialized.parquet"
-        normalization = normalize_materialized_parquet(
-            unprocessed_payload,
-            payload_file,
-            feature_columns=feature_columns.order,
-            strategy=materialization.normalization_strategy,
-            scope=materialization.normalization_scope,
-        )
-        return MaterializationResult(
-            staged_path=payload_file,
-            row_count=report.written_rows,
-            preprocessing_evidence=normalization.encode(),
+    def materialize(self, request: MaterializationRequest) -> StandardMaterializationResult:
+        if not isinstance(request.plan, CICIoT2023MaterializationPlan):
+            raise DataFailure(
+                DataFailureCode.CONFIGURATION,
+                "CICIoT2023 adapter received an incompatible materialization plan",
+                source_path=None,
+                source_row_index=None,
+            )
+        plan = request.plan
+        connection = open_database(request.layout.database, request.layout.temporary_directory, plan.runtime)
+        try:
+            evidence = materialize_ciciot2023(connection, plan, request.inventory, request.layout.raw_payload)
+            normalization = normalize_materialized_parquet(
+                connection,
+                request.layout.raw_payload,
+                request.layout.final_payload,
+                evidence.encoded_feature_names,
+                plan.normalization,
+                plan.runtime,
+            )
+        finally:
+            connection.close()
+        require_non_empty_parquet(request.layout.final_payload)
+        return StandardMaterializationResult(
+            staged_path=request.layout.final_payload,
+            row_count=evidence.written_rows,
+            preprocessing_evidence=encode_normalization_evidence(normalization),
+            materialization_evidence=evidence,
         )

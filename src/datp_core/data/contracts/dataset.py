@@ -1,11 +1,11 @@
-"""Resolved dataset and setup records."""
+"""Strict dataset and setup contracts."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
 from pathlib import Path
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import Field, model_validator
 
 from datp_core.core.identifiers import (
     ClientId,
@@ -14,83 +14,96 @@ from datp_core.core.identifiers import (
     EligibilityPolicyId,
     MaterializationId,
 )
-from datp_core.core.paths import RelativePath
-from datp_core.data.contracts.enums import AdapterKind
-from datp_core.data.contracts.features import DatasetFieldSchemaRecord
+from datp_core.data.contracts.base import StrictFrozenModel
+from datp_core.data.contracts.enums import AdapterKind, DatasetCapability
 from datp_core.data.contracts.materialization import (
-    DatasetMaterialization,
-    SetupClientConstructionRecord,
+    ClientConstructionConfig,
+    NormalizationConfig,
+    OneHotEncodingConfig,
+    SplitConfig,
 )
 from datp_core.data.contracts.sources import (
-    DatasetInspectionContract,
-    DatasetSourceLayoutContractRecord,
-    SourceContractRecord,
+    CICIoT2023SourceConfig,
+    EdgeIIoTsetSourceConfig,
+    NBaIoTSourceConfig,
 )
-from datp_core.thresholding.models import FamilyAssignments
+from datp_core.data.contracts.values import SchemaId
 
 
-class ResolvedDatasetPaths(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
+class ResolvedDatasetPaths(StrictFrozenModel):
     raw_data_root: Path
-    raw_root: Path
     processed_root: Path
 
 
-class SourceLayout(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class ClientFamilyAssignment(StrictFrozenModel):
+    client_id: ClientId
+    family: str
 
-    root: RelativePath
-    ignored_suffixes: tuple[str, ...]
-    ignored_subtrees: tuple[str, ...]
+    @model_validator(mode="after")
+    def validate_family(self) -> ClientFamilyAssignment:
+        if not self.family.strip():
+            raise ValueError("family must not be blank")
+        return self
 
 
-class DatasetSetup(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
+class DatasetSetup(StrictFrozenModel):
     identifier: DatasetSetupId
     materialization_id: MaterializationId
-    capabilities: tuple[str, ...]
-    client_construction: SetupClientConstructionRecord
-    validation_scope: str | None
-    eligibility_gate: str | None
-    client_population_must_equal_setup: DatasetSetupId | None
-
-
-class ResolvedDataset(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    dataset_id: DatasetId
-    adapter_kind: AdapterKind
-    display_name: str
-    schema_id: str
-    source_layout: SourceLayout
-    source_layout_contract: DatasetSourceLayoutContractRecord
-    field_schema: DatasetFieldSchemaRecord
-    source_contract: SourceContractRecord
-    client_identity_contract: Mapping[str, object] | None
-    inspection_contract: DatasetInspectionContract
-    setups: tuple[DatasetSetup, ...]
-    materializations: tuple[DatasetMaterialization, ...]
+    capabilities: tuple[DatasetCapability, ...]
+    client_construction: ClientConstructionConfig
     eligibility_policy_id: EligibilityPolicyId
-    capabilities: tuple[str, ...]
+
+
+class MaterializationDefinition(StrictFrozenModel):
+    identifier: MaterializationId
+    split: SplitConfig
+    normalization: NormalizationConfig
+
+
+class EdgeMaterializationDefinition(MaterializationDefinition):
+    categorical_encoding: OneHotEncodingConfig
+
+
+class CICIoT2023Dataset(StrictFrozenModel):
+    adapter: Literal[AdapterKind.CICIOT2023]
+    dataset_id: DatasetId
+    display_name: str
+    schema_id: SchemaId
+    source: CICIoT2023SourceConfig
     paths: ResolvedDatasetPaths
-    fingerprint_source_fields: tuple[str, ...]
-    fingerprint_schema_fields: tuple[str, ...]
-    fingerprint_materialization_fields: tuple[str, ...]
-    fingerprint_client_assignment_fields: tuple[str, ...]
+    capabilities: tuple[DatasetCapability, ...]
+    setups: tuple[DatasetSetup, ...]
+    materializations: tuple[MaterializationDefinition, ...]
+    family_assignments: tuple[ClientFamilyAssignment, ...]
 
-    def setup(self, identifier: DatasetSetupId) -> DatasetSetup:
-        for setup in self.setups:
-            if setup.identifier == identifier:
-                return setup
-        raise KeyError(f"Dataset setup not registered: {identifier}")
 
-    @property
-    def family_assignments(self) -> FamilyAssignments | None:
-        family_map = self.field_schema.label_fields.family_map
-        if not family_map:
-            return None
-        return FamilyAssignments(
-            mapping=tuple((ClientId(k), v) for k, v in family_map.items())
-        )
+class NBaIoTDataset(StrictFrozenModel):
+    adapter: Literal[AdapterKind.NBAIOT]
+    dataset_id: DatasetId
+    display_name: str
+    schema_id: SchemaId
+    source: NBaIoTSourceConfig
+    paths: ResolvedDatasetPaths
+    capabilities: tuple[DatasetCapability, ...]
+    setups: tuple[DatasetSetup, ...]
+    materializations: tuple[MaterializationDefinition, ...]
+    family_assignments: tuple[ClientFamilyAssignment, ...]
+
+
+class EdgeIIoTsetDataset(StrictFrozenModel):
+    adapter: Literal[AdapterKind.EDGE_IIOTSET]
+    dataset_id: DatasetId
+    display_name: str
+    schema_id: SchemaId
+    source: EdgeIIoTsetSourceConfig
+    paths: ResolvedDatasetPaths
+    capabilities: tuple[DatasetCapability, ...]
+    setups: tuple[DatasetSetup, ...]
+    materializations: tuple[EdgeMaterializationDefinition, ...]
+    family_assignments: tuple[ClientFamilyAssignment, ...]
+
+
+type ResolvedDataset = Annotated[
+    CICIoT2023Dataset | NBaIoTDataset | EdgeIIoTsetDataset,
+    Field(discriminator="adapter"),
+]

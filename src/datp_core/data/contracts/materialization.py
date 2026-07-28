@@ -1,112 +1,317 @@
-"""Materialization-related contract records."""
+"""Strict materialization, split, preprocessing, and client-construction contracts."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Annotated
+import math
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict
-from pydantic.functional_validators import BeforeValidator
+from pydantic import Field, NonNegativeInt, PositiveInt, model_validator
 
-from datp_core.core.identifiers import MaterializationId
-from datp_core.core.numbers import PositiveInt, Probability
+from datp_core.core.numbers import Probability
 from datp_core.core.seeding import Seed
+from datp_core.data.contracts.base import StrictFrozenModel
+from datp_core.data.contracts.constants import PROBABILITY_SUM_ABSOLUTE_TOLERANCE
 from datp_core.data.contracts.enums import (
+    AttackAssignment,
+    BoundaryRule,
+    CategoryOrder,
+    CategoricalEncodingStrategy,
+    ChronologyRolloverPolicy,
     ClientConstructionMethod,
+    ConstantFeaturePolicy,
+    DeduplicationPolicy,
+    DeterministicOrdering,
+    EncodedFeatureNaming,
+    GapHandling,
+    HashAlgorithm,
+    MissingCategoryPolicy,
     NormalizationFitScope,
     NormalizationStrategy,
+    OutOfRangePolicy,
+    ParquetCompression,
+    PartitionAllocation,
+    SortDirection,
+    SplitLayout,
     SplitMembership,
     SplitMethod,
+    SyntheticClientNamingPolicy,
+    UnknownCategoryPolicy,
 )
-
-_OptionalStrMappingField = Annotated[Mapping[str, str] | None, BeforeValidator(lambda v: dict(v) if v is not None else None)]
-_OptionalIntMappingField = Annotated[Mapping[str, int] | None, BeforeValidator(lambda v: dict(v) if v is not None else None)]
-_OptionalObjectMappingField = Annotated[
-    Mapping[str, object] | None,
-    BeforeValidator(lambda v: dict(v) if v is not None else None),
-]
-_RowExclusionField = Annotated[Mapping[str, str | bool], BeforeValidator(lambda v: dict(v))]
+from datp_core.data.contracts.values import ClientNamePrefix
 
 
-class SetupClientConstructionRecord(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    method: ClientConstructionMethod
-    client_source: str | tuple[str, ...] | None
-    client_semantics: str | None
-    excluded_client_folders: tuple[str, ...] | None
-    client_count: PositiveInt | None
-    partition_condition: _OptionalStrMappingField
-    source_mixture_components: str | None
-    label_field: str | None
-    partition_seed: Seed | None
-    partition_axes: _OptionalStrMappingField
-    allocation_procedure: _OptionalStrMappingField
-    same_proportions_govern: tuple[str, ...] | None
-    split_role_preservation: str | None
-    attack_row_assignment: str | None
-    attack_labels_used_in_partition_generation: bool | None
-    minimum_row_counts: _OptionalIntMappingField
-    retry_policy: _OptionalObjectMappingField
-    feasibility_failure: str | None
-    manifest_invariants: tuple[str, ...] | None
-    manifest_fields: tuple[str, ...] | None
-
-
-class PartitionSeedContract(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    key: str
+class HashConfig(StrictFrozenModel):
+    algorithm: HashAlgorithm
     digest_bytes: PositiveInt
 
+    @model_validator(mode="after")
+    def validate_digest(self) -> HashConfig:
+        maximum = 64 if self.algorithm is HashAlgorithm.BLAKE2B else 32
+        if self.digest_bytes > maximum:
+            raise ValueError(f"digest_bytes exceeds the limit for {self.algorithm.value}")
+        return self
 
-class DatasetMaterialization(BaseModel):
-    model_config = ConfigDict(frozen=True)
 
-    identifier: MaterializationId
-    role: str | None
-    normalization_strategy: NormalizationStrategy
-    normalization_scope: NormalizationFitScope
-    vocabulary_fit_split: str | None
-    preprocessing_sequence: tuple[str, ...]
-    row_exclusion: _RowExclusionField
-    split_row_semantics: _OptionalStrMappingField
-    infeasibility_policy: str | None
-    split_method: SplitMethod
-    split_seed: Seed | None
-    split_ratios: tuple[tuple[str, Probability], ...]
-    chronological_ratios: tuple[tuple[str, Probability], ...]
-    split_ordering_basis: str | None
-    split_ordering_scope: str | None
-    split_gap_handling: str | None
-    split_attack_rows: str | None
-    split_attack_test_membership: str | None
-    split_attack_ordering: str | None
-    split_benign_attack_deduplication: str | None
-    split_role_order: tuple[str, ...] | None
-    split_excluded_client_folders: tuple[str, ...] | None
-    split_exclusion_reason: str | None
-    split_ordering_field: str | None
-    split_ordering_sort: str | None
-    split_rollover_policy: str | None
-    split_rollover_scope: str | None
-    split_boundary_rule: str | None
-    split_boundary_index_formula: str | None
-    split_future_leakage_check: str | None
-    split_minimum_row_counts: _OptionalIntMappingField
-    split_missing_client_policy: str | None
-    split_chronology_unverifiable_policy: str | None
+class ParquetWriteConfig(StrictFrozenModel):
+    compression: ParquetCompression
+    dictionary_encoding: bool
+    row_group_size: PositiveInt
+    data_page_size: PositiveInt
 
-    def ratio(self, role: str | SplitMembership) -> Probability:
-        role_value = role.value if isinstance(role, SplitMembership) else role
-        for configured_role, configured_ratio in self.split_ratios:
-            if configured_role == role_value:
-                return configured_ratio
-        raise KeyError(f"Materialization '{self.identifier.value}' has no configured ratio for '{role_value}'")
 
-    def chronological_ratio(self, role: str | SplitMembership) -> Probability:
-        role_value = role.value if isinstance(role, SplitMembership) else role
-        for configured_role, configured_ratio in self.chronological_ratios:
-            if configured_role == role_value:
-                return configured_ratio
-        raise KeyError(f"Materialization '{self.identifier.value}' has no chronological ratio for '{role_value}'")
+class DuckDbRuntimeConfig(StrictFrozenModel):
+    threads: PositiveInt
+    memory_limit: str
+    preserve_insertion_order: bool
+
+    @model_validator(mode="after")
+    def validate_memory_limit(self) -> DuckDbRuntimeConfig:
+        if not self.memory_limit.strip():
+            raise ValueError("memory_limit must not be blank")
+        return self
+
+
+class DataLoadingConfig(StrictFrozenModel):
+    chunk_row_count: PositiveInt
+    parquet: ParquetWriteConfig
+    duckdb: DuckDbRuntimeConfig
+    row_digest: HashConfig
+
+
+class StandardRandomRatios(StrictFrozenModel):
+    layout: Literal[SplitLayout.STANDARD]
+    train: Probability
+    calibration: Probability
+    test: Probability
+
+    @model_validator(mode="after")
+    def validate_sum(self) -> StandardRandomRatios:
+        _validate_probability_sum((self.train, self.calibration, self.test))
+        return self
+
+    def ordered(self) -> tuple[tuple[SplitMembership, Probability], ...]:
+        return (
+            (SplitMembership.TRAIN, self.train),
+            (SplitMembership.CALIBRATION, self.calibration),
+            (SplitMembership.TEST, self.test),
+        )
+
+
+class StaticReferenceRandomRatios(StrictFrozenModel):
+    layout: Literal[SplitLayout.STATIC_RECALIBRATION_REFERENCE]
+    train: Probability
+    calibration: Probability
+    recalibration_reference: Probability
+    test: Probability
+
+    @model_validator(mode="after")
+    def validate_sum(self) -> StaticReferenceRandomRatios:
+        _validate_probability_sum((self.train, self.calibration, self.recalibration_reference, self.test))
+        return self
+
+    def ordered(self) -> tuple[tuple[SplitMembership, Probability], ...]:
+        return (
+            (SplitMembership.TRAIN, self.train),
+            (SplitMembership.CALIBRATION, self.calibration),
+            (SplitMembership.RECALIBRATION_REFERENCE, self.recalibration_reference),
+            (SplitMembership.TEST, self.test),
+        )
+
+
+type RandomRatios = Annotated[
+    StandardRandomRatios | StaticReferenceRandomRatios,
+    Field(discriminator="layout"),
+]
+
+
+class RandomFractionalSplitConfig(StrictFrozenModel):
+    method: Literal[SplitMethod.RANDOM_FRACTIONAL]
+    seed: Seed
+    ratios: RandomRatios
+    attack_assignment: AttackAssignment
+    deduplication: DeduplicationPolicy
+    benign_ordering: DeterministicOrdering
+
+
+class ChronologicalGappedRatios(StrictFrozenModel):
+    train: Probability
+    first_gap: Probability
+    calibration: Probability
+    second_gap: Probability
+    test: Probability
+
+    @model_validator(mode="after")
+    def validate_sum(self) -> ChronologicalGappedRatios:
+        _validate_probability_sum((self.train, self.first_gap, self.calibration, self.second_gap, self.test))
+        return self
+
+
+class ChronologicalGappedSplitConfig(StrictFrozenModel):
+    method: Literal[SplitMethod.CHRONOLOGICAL_GAPPED]
+    ratios: ChronologicalGappedRatios
+    attack_assignment: AttackAssignment
+    gap_handling: GapHandling
+    boundary_rule: BoundaryRule
+    sort_direction: SortDirection
+
+
+class TemporalRatios(StrictFrozenModel):
+    historical_training: Probability
+    historical_calibration: Probability
+    future_recalibration: Probability
+    future_evaluation: Probability
+
+    @model_validator(mode="after")
+    def validate_sum(self) -> TemporalRatios:
+        _validate_probability_sum(
+            (
+                self.historical_training,
+                self.historical_calibration,
+                self.future_recalibration,
+                self.future_evaluation,
+            )
+        )
+        return self
+
+
+class TemporalRoleMinimums(StrictFrozenModel):
+    historical_training: PositiveInt
+    historical_calibration: PositiveInt
+    future_recalibration: PositiveInt
+    future_evaluation: PositiveInt
+
+
+class WithinClientChronologicalSplitConfig(StrictFrozenModel):
+    method: Literal[SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL]
+    ratios: TemporalRatios
+    minimums: TemporalRoleMinimums
+    attack_assignment: AttackAssignment
+    sort_direction: SortDirection
+    rollover_policy: ChronologyRolloverPolicy
+    rollover_period_seconds: PositiveInt
+    boundary_rule: BoundaryRule
+
+
+type SplitConfig = Annotated[
+    RandomFractionalSplitConfig | ChronologicalGappedSplitConfig | WithinClientChronologicalSplitConfig,
+    Field(discriminator="method"),
+]
+
+
+class MinMaxNormalizationConfig(StrictFrozenModel):
+    strategy: Literal[NormalizationStrategy.MIN_MAX]
+    fit_scope: NormalizationFitScope
+    constant_feature_policy: ConstantFeaturePolicy
+    out_of_range_policy: OutOfRangePolicy
+
+
+class StandardNormalizationConfig(StrictFrozenModel):
+    strategy: Literal[NormalizationStrategy.STANDARD]
+    fit_scope: NormalizationFitScope
+    standard_deviation_ddof: NonNegativeInt
+    constant_feature_policy: ConstantFeaturePolicy
+    out_of_range_policy: OutOfRangePolicy
+
+    @model_validator(mode="after")
+    def validate_ddof(self) -> StandardNormalizationConfig:
+        if self.standard_deviation_ddof not in (0, 1):
+            raise ValueError("standard_deviation_ddof must be 0 or 1")
+        if self.out_of_range_policy is not OutOfRangePolicy.PRESERVE:
+            raise ValueError("standard normalization requires preserve out-of-range policy")
+        return self
+
+
+type NormalizationConfig = Annotated[
+    MinMaxNormalizationConfig | StandardNormalizationConfig,
+    Field(discriminator="strategy"),
+]
+
+
+class OneHotEncodingConfig(StrictFrozenModel):
+    strategy: Literal[CategoricalEncodingStrategy.ONE_HOT]
+    vocabulary_fit_membership: SplitMembership
+    category_order: CategoryOrder
+    missing_category_policy: MissingCategoryPolicy
+    unknown_category_policy: UnknownCategoryPolicy
+    unknown_indicator_distinct_from_missing_indicator: bool
+    encoded_feature_naming: EncodedFeatureNaming
+
+    @model_validator(mode="after")
+    def validate_indicators(self) -> OneHotEncodingConfig:
+        if not self.unknown_indicator_distinct_from_missing_indicator:
+            raise ValueError("unknown and missing indicators must be distinct")
+        return self
+
+
+class DatasetFileClientConfig(StrictFrozenModel):
+    method: Literal[ClientConstructionMethod.DATASET_FILE_PSEUDO_CLIENTS]
+
+
+class PhysicalDeviceClientConfig(StrictFrozenModel):
+    method: Literal[ClientConstructionMethod.PHYSICAL_DEVICE_CLIENTS]
+
+
+class SensorGroupClientConfig(StrictFrozenModel):
+    method: Literal[ClientConstructionMethod.SENSOR_GROUP_CLIENTS]
+
+
+class StandardRoleMinimums(StrictFrozenModel):
+    train: PositiveInt
+    calibration: PositiveInt
+    test: PositiveInt
+
+    def for_membership(self, membership: SplitMembership) -> int:
+        if membership is SplitMembership.TRAIN:
+            return int(self.train)
+        if membership is SplitMembership.CALIBRATION:
+            return int(self.calibration)
+        if membership is SplitMembership.TEST:
+            return int(self.test)
+        raise ValueError(f"unsupported standard membership: {membership.value}")
+
+
+class SyntheticClientNamingConfig(StrictFrozenModel):
+    policy: SyntheticClientNamingPolicy
+    prefix: ClientNamePrefix
+    first_index: NonNegativeInt
+    width: PositiveInt
+
+
+class DirichletClientConfig(StrictFrozenModel):
+    method: Literal[ClientConstructionMethod.DIRICHLET_PARTITIONED_CLIENTS]
+    client_count: PositiveInt
+    partition_seed: Seed
+    seed_key: str
+    seed_hash: HashConfig
+    maximum_retries: NonNegativeInt
+    minimums: StandardRoleMinimums
+    attack_labels_used_in_partition_generation: Literal[False]
+    naming: SyntheticClientNamingConfig
+
+
+type ClientConstructionConfig = Annotated[
+    DatasetFileClientConfig | PhysicalDeviceClientConfig | SensorGroupClientConfig | DirichletClientConfig,
+    Field(discriminator="method"),
+]
+
+
+class PartitionCondition(StrictFrozenModel):
+    name: str
+    allocation: PartitionAllocation
+    dirichlet_alpha: float | None
+
+    @model_validator(mode="after")
+    def validate_allocation(self) -> PartitionCondition:
+        if not self.name.strip():
+            raise ValueError("partition condition name must not be blank")
+        if self.allocation is PartitionAllocation.DIRICHLET:
+            if self.dirichlet_alpha is None or not math.isfinite(self.dirichlet_alpha) or self.dirichlet_alpha <= 0.0:
+                raise ValueError("Dirichlet allocation requires a finite positive alpha")
+        elif self.dirichlet_alpha is not None:
+            raise ValueError("equal allocation must not define a Dirichlet alpha")
+        return self
+
+
+def _validate_probability_sum(values: tuple[Probability, ...]) -> None:
+    if not math.isclose(sum(float(value) for value in values), 1.0, rel_tol=0.0, abs_tol=PROBABILITY_SUM_ABSOLUTE_TOLERANCE):
+        raise ValueError("split probabilities must sum exactly to one")

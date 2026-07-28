@@ -1,64 +1,62 @@
-"""Source entry, inventory, and CSV validation models."""
+"""Immutable source inventory and streaming-read records."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict
+import msgspec
+import pyarrow as pa
 
-from datp_core.core.hashing import Checksum, compute_file_checksum, compute_payload_checksum
+from datp_core.core.hashing import Checksum
 from datp_core.core.identifiers import DatasetId
+from datp_core.data.contracts.enums import SourceRole, SourceTreeKind
+from datp_core.data.contracts.values import SourceTreeId
 
 
-class ConcreteSourceEntry(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class SourceEntry(msgspec.Struct, frozen=True):
     source_path: Path
     relative_path: Path
-    source_tree_identifier: str
+    source_tree_id: SourceTreeId
+    tree_kind: SourceTreeKind
+    role: SourceRole
 
 
-class ConcreteSourceInventory(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class SourceInventory(msgspec.Struct, frozen=True):
     dataset_id: DatasetId
-    entries: tuple[ConcreteSourceEntry, ...]
+    raw_data_root: Path
+    entries: tuple[SourceEntry, ...]
+    checksum: Checksum
 
     @property
     def file_count(self) -> int:
         return len(self.entries)
 
-    def fingerprint(self) -> Checksum:
-        payload = "\n".join(
-            f"{entry.relative_path.as_posix()}:{compute_file_checksum(entry.source_path).value}"
-            for entry in self.entries
-        ).encode("utf-8")
-        return compute_payload_checksum(payload)
+    @property
+    def executable_entries(self) -> tuple[SourceEntry, ...]:
+        return tuple(entry for entry in self.entries if entry.role is SourceRole.EXECUTABLE)
 
 
-class SourceRow(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    source_path: Path
-    source_row_index: int
-    values: tuple[float, ...]
+class CsvBatch(msgspec.Struct, frozen=True):
+    record_batch: pa.RecordBatch
 
 
-class LabeledSourceRow(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    source_row: SourceRow
-    label: str
+class CsvReadReport(msgspec.Struct, frozen=True):
+    source_rows_seen: int
+    valid_rows: int
+    excluded_rows: int
 
 
-class SourceRowFailure(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    source_path: Path
-    source_row_index: int
-    reason: str
+class MutableCsvReadState:
+    __slots__ = ("source_rows_seen", "valid_rows", "excluded_rows")
 
+    def __init__(self) -> None:
+        self.source_rows_seen = 0
+        self.valid_rows = 0
+        self.excluded_rows = 0
 
-class CsvValidationResult(BaseModel):
-    model_config = ConfigDict(frozen=True)
-    rows: tuple[SourceRow, ...]
-    failures: tuple[SourceRowFailure, ...]
-
-
-type SourceRowValidation = SourceRow | SourceRowFailure
-type LabeledSourceRowValidation = LabeledSourceRow | SourceRowFailure
+    def freeze(self) -> CsvReadReport:
+        return CsvReadReport(
+            source_rows_seen=self.source_rows_seen,
+            valid_rows=self.valid_rows,
+            excluded_rows=self.excluded_rows,
+        )

@@ -1,37 +1,49 @@
-"""Eligibility/readiness gate evaluation."""
+"""Typed readiness-gate evaluation."""
 
 from __future__ import annotations
 
-from datp_core.core.identifiers import ExperimentId
-from datp_core.core.registry import TypedDomainRegistry
-from datp_core.data.manifests.models import SplitManifest
-from datp_core.experiments import EligibilityGateRecord
+from datp_core.data.contracts.eligibility import ReadinessGate
+from datp_core.data.contracts.enums import DatasetCapability, ReadinessGateFailureCode
+from datp_core.data.manifests.summary import MaterializedSplitSummary
+from datp_core.data.readiness.models import ReadinessGateFailure
 
 
 def evaluate_readiness_gates(
-    gate_names: tuple[str, ...],
-    gates: TypedDomainRegistry[str, EligibilityGateRecord],
-    manifest: SplitManifest,
-    experiment_id: ExperimentId,
-) -> list[str]:
-    issues: list[str] = []
-    for gate_name in gate_names:
-        if not gates.contains(gate_name):
-            issues.append(f"unknown readiness gate: {gate_name}")
-            continue
-        gate = gates.get(gate_name)
-        if experiment_id not in gate.applies_to_experiments:
-            continue
-        candidate_count = len(manifest.client_ids)
-        eligible_count = len(manifest.eligible_client_ids)
-        if candidate_count == 0:
-            issues.append(f"{gate_name}: no candidate clients in split manifest")
-            continue
-        proportion = eligible_count / candidate_count
-        if proportion < float(gate.minimum_eligible_client_proportion):
-            issues.append(
-                f"{gate_name}: eligible proportion {proportion:.3f} below minimum "
-                f"{float(gate.minimum_eligible_client_proportion)} "
-                f"({eligible_count}/{candidate_count} clients eligible)"
+    gates: tuple[ReadinessGate, ...],
+    capabilities: tuple[DatasetCapability, ...],
+    summary: MaterializedSplitSummary,
+) -> tuple[ReadinessGateFailure, ...]:
+    failures: list[ReadinessGateFailure] = []
+    eligible_count = len(summary.eligible_client_ids)
+    client_count = len(summary.client_ids)
+    eligible_proportion = 0.0 if client_count == 0 else eligible_count / client_count
+    for gate in gates:
+        if eligible_count < int(gate.minimum_eligible_clients):
+            failures.append(
+                ReadinessGateFailure(
+                    gate_id=gate.identifier.value,
+                    code=ReadinessGateFailureCode.MINIMUM_ELIGIBLE_CLIENTS,
+                    detail=f"observed {eligible_count}; requires {int(gate.minimum_eligible_clients)}",
+                )
             )
-    return issues
+        if eligible_proportion < float(gate.minimum_eligible_proportion):
+            failures.append(
+                ReadinessGateFailure(
+                    gate_id=gate.identifier.value,
+                    code=ReadinessGateFailureCode.MINIMUM_ELIGIBLE_PROPORTION,
+                    detail=(
+                        f"observed eligible proportion {eligible_proportion:.12g}; "
+                        f"requires {float(gate.minimum_eligible_proportion):.12g}"
+                    ),
+                )
+            )
+        for capability in gate.required_capabilities:
+            if capability not in capabilities:
+                failures.append(
+                    ReadinessGateFailure(
+                        gate_id=gate.identifier.value,
+                        code=ReadinessGateFailureCode.REQUIRED_CAPABILITY_MISSING,
+                        detail=f"required capability '{capability.value}' is absent",
+                    )
+                )
+    return tuple(failures)

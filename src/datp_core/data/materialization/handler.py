@@ -1,4 +1,4 @@
-"""Dataset materialization stage handler."""
+"""Dataset-materialization stage coordination."""
 
 from __future__ import annotations
 
@@ -6,15 +6,29 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from datp_core.artifacts.store import ArtifactStore
-from datp_core.config.project import ResolvedProjectConfiguration
-from datp_core.core.identifiers import DatasetId
-from datp_core.data.contracts.enums import ClientConstructionMethod
-from datp_core.data.manifests.codec import encode_split_manifest, read_materialized_split_evidence
+from datp_core.data.contracts.enums import DataFailureCode, MaterializationArtifactKind
+from datp_core.data.manifests.summary import (
+    build_materialized_split_summary,
+    encode_materialized_split_summary,
+)
+from datp_core.data.materialization.errors import DataFailure
+from datp_core.data.materialization.models import (
+    MaterializationArtifactLayout,
+    MaterializationPlanResolver,
+    MaterializationRequest,
+    PartitionedMaterializationResult,
+)
 from datp_core.data.materialization.registry import DatasetAdapterRegistry
+from datp_core.data.materialization.schema import MaterializedSchemaSpec, validate_materialized_parquet
 from datp_core.data.readiness.gates import evaluate_readiness_gates
-from datp_core.data.readiness.source_audit import AuditDatasetUseCase
+from datp_core.data.readiness.materialized import assess_materialized_readiness
+from datp_core.data.readiness.models import (
+    DatasetAuditIssue,
+    build_readiness_report,
+    encode_readiness_report,
+)
+from datp_core.data.readiness.source import assess_source_readiness
 from datp_core.data.sources.inventory import build_source_inventory
-from datp_core.experiments.planning import resolve_partition_contract
 from datp_core.pipeline.stages.context import DataContext
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
@@ -25,90 +39,150 @@ class DatasetMaterializationStageHandler:
     stage = StageKind.DATASET_MATERIALIZATION
 
     def __init__(
-        self, config: ResolvedProjectConfiguration, store: ArtifactStore, adapter_registry: DatasetAdapterRegistry
+        self,
+        store: ArtifactStore,
+        plan_resolver: MaterializationPlanResolver,
+        adapter_registry: DatasetAdapterRegistry,
     ) -> None:
-        self._config = config
         self._store = store
+        self._plan_resolver = plan_resolver
         self._adapter_registry = adapter_registry
 
     def execute(self, job: StageJob) -> StageJobOutcome:
-        assert isinstance(job.context, DataContext)
-        ctx = job.context
-        experiment = self._config.experiments.get(ctx.experiment_id)
-        population = self._config.populations.get(ctx.population_id or experiment.population_ids[0])
-        dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
-        setup = dataset.setup(population.setup_id)
-        materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
-        try:
-            partition_condition, partition_seed_contract = resolve_partition_contract(
-                self._config, experiment.identifier, ctx.partition_condition
+        if not isinstance(job.context, DataContext):
+            return StageJobOutcome.failed(
+                node_key=job.node_key,
+                stage=job.stage,
+                error_message="dataset materialization requires DataContext",
             )
-            has_partition_output = any(item.name == "partition_manifest" for item in job.outputs)
-            expects_partition = (
-                setup.client_construction.method is ClientConstructionMethod.DIRICHLET_PARTITIONED_CLIENTS
-            )
-            if has_partition_output != expects_partition or (partition_condition is None) != (not expects_partition):
-                raise ValueError("Dataset setup and job partition condition are incompatible")
-            adapter = self._adapter_registry.get(dataset.adapter_kind)
-        except (KeyError, ValueError) as exc:
-            return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message=str(exc))
-
-        inventory = build_source_inventory(dataset)
-        source_fingerprint = inventory.fingerprint()
         try:
-            with TemporaryDirectory(prefix=f"datp_{dataset.dataset_id.value}_") as staging_directory:
-                payload = adapter.materialize(
-                    dataset=dataset,
-                    setup=setup,
-                    materialization=materialization,
-                    inventory=inventory,
-                    staging_root=Path(staging_directory),
-                    partition_condition=partition_condition,
-                    partition_seed_contract=partition_seed_contract,
-                    chunk_row_count=self._config.runtime.active_execution_profile.data_loading.chunk_row_count.value,
+            plan = self._plan_resolver.resolve(job.context)
+            inventory = build_source_inventory(plan.identity.dataset_id, plan.raw_data_root, plan.source)
+            source_report = assess_source_readiness(plan.source, inventory)
+            if source_report.blocking_issues:
+                return StageJobOutcome.failed(
+                    node_key=job.node_key,
+                    stage=job.stage,
+                    error_message=_issue_message("source readiness failed", source_report.blocking_issues),
                 )
-                observed_fingerprint = build_source_inventory(dataset).fingerprint()
-                if observed_fingerprint != source_fingerprint:
-                    raise ValueError(
-                        "Source files changed during materialization: expected source-inventory "
-                        f"fingerprint {source_fingerprint.value}, observed {observed_fingerprint.value}"
+            plan.staging_parent.mkdir(parents=True, exist_ok=True)
+            with TemporaryDirectory(
+                prefix=f"datp-{plan.identity.dataset_id.value}-",
+                dir=plan.staging_parent,
+            ) as staging_directory:
+                staging_root = Path(staging_directory)
+                layout = MaterializationArtifactLayout.for_staging_root(staging_root)
+                result = self._adapter_registry.get(plan.adapter).materialize(
+                    MaterializationRequest(
+                        plan=plan,
+                        inventory=inventory,
+                        staging_root=staging_root,
+                        layout=layout,
                     )
-                eligibility = self._config.eligibility_policies.get(dataset.eligibility_policy_id)
-                split_evidence = read_materialized_split_evidence(
-                    str(payload.staged_path), int(eligibility.minimum_benign_calibration_count)
                 )
-                readiness = AuditDatasetUseCase().assess_materialization(
-                    dataset, setup, split_evidence, source_fingerprint
+                observed_inventory = build_source_inventory(
+                    plan.identity.dataset_id,
+                    plan.raw_data_root,
+                    plan.source,
                 )
+                if observed_inventory.checksum != inventory.checksum:
+                    raise DataFailure(
+                        DataFailureCode.SOURCE_CHANGED,
+                        "source inventory changed during materialization",
+                        source_path=None,
+                        source_row_index=None,
+                    )
+                schema_spec = MaterializedSchemaSpec(
+                    shape=plan.artifact_shape,
+                    feature_names=result.materialization_evidence.encoded_feature_names,
+                )
+                schema_validation = validate_materialized_parquet(
+                    result.staged_path,
+                    schema_spec,
+                    int(plan.runtime.chunk_row_count),
+                )
+                summary = build_materialized_split_summary(
+                    result.staged_path,
+                    plan,
+                    inventory.checksum,
+                    schema_spec,
+                    schema_validation,
+                    result.materialization_evidence,
+                    result.preprocessing_evidence,
+                )
+                materialized_report = assess_materialized_readiness(plan, summary)
+                readiness = build_readiness_report(source_report, materialized_report)
                 if not readiness.ready_for_training:
                     return StageJobOutcome.failed(
                         node_key=job.node_key,
                         stage=job.stage,
-                        error_message="Dataset readiness failed: "
-                        + "; ".join(defect.code for defect in readiness.blocking_defects),
+                        error_message=_issue_message("dataset readiness failed", readiness.blocking_issues),
                     )
-                gate_issues = evaluate_readiness_gates(
-                    experiment.readiness_gates,
-                    self._config.eligibility_gates,
-                    split_evidence.manifest,
-                    experiment.identifier,
-                )
-                if gate_issues:
+                gate_failures = evaluate_readiness_gates(plan.readiness_gates, plan.capabilities, summary)
+                if gate_failures:
                     return StageJobOutcome.infeasible(
                         node_key=job.node_key,
                         stage=job.stage,
-                        error_message="Eligibility gate(s) failed: " + "; ".join(gate_issues),
+                        error_message="readiness gates failed: "
+                        + "; ".join(
+                            f"{failure.gate_id}/{failure.code.value}: {failure.detail}"
+                            for failure in gate_failures
+                        ),
                     )
-                self._store.write_file_atomic(job.output_path("dataset"), payload.staged_path)
-                self._store.write_bytes_atomic(
-                    job.output_path("split_manifest"), encode_split_manifest(split_evidence.manifest)
+                _validate_output_contract(job, isinstance(result, PartitionedMaterializationResult))
+                self._store.write_file_atomic(
+                    job.output_path(MaterializationArtifactKind.DATASET.value),
+                    result.staged_path,
                 )
-                self._store.write_bytes_atomic(job.output_path("readiness"), readiness.encode())
-                self._store.write_bytes_atomic(job.output_path("preprocessing"), payload.preprocessing_evidence)
-                if expects_partition:
-                    if payload.partition_evidence is None:
-                        raise ValueError("Dirichlet materialization did not produce partition evidence")
-                    self._store.write_bytes_atomic(job.output_path("partition_manifest"), payload.partition_evidence)
-        except (OSError, ValueError) as exc:
-            return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message=str(exc))
-        return StageJobOutcome.succeeded(node_key=job.node_key, stage=job.stage, produced_outputs=job.outputs)
+                self._store.write_bytes_atomic(
+                    job.output_path(MaterializationArtifactKind.SPLIT_MANIFEST.value),
+                    encode_materialized_split_summary(summary),
+                )
+                self._store.write_bytes_atomic(
+                    job.output_path(MaterializationArtifactKind.READINESS.value),
+                    encode_readiness_report(readiness),
+                )
+                self._store.write_bytes_atomic(
+                    job.output_path(MaterializationArtifactKind.PREPROCESSING.value),
+                    result.preprocessing_evidence,
+                )
+                if isinstance(result, PartitionedMaterializationResult):
+                    self._store.write_bytes_atomic(
+                        job.output_path(MaterializationArtifactKind.PARTITION_MANIFEST.value),
+                        result.partition_evidence,
+                    )
+        except (DataFailure, OSError) as exc:
+            return StageJobOutcome.failed(
+                node_key=job.node_key,
+                stage=job.stage,
+                error_message=str(exc),
+            )
+        return StageJobOutcome.succeeded(
+            node_key=job.node_key,
+            stage=job.stage,
+            produced_outputs=job.outputs,
+        )
+
+
+def _validate_output_contract(job: StageJob, partitioned: bool) -> None:
+    expected = (
+        MaterializationArtifactKind.DATASET.value,
+        MaterializationArtifactKind.PREPROCESSING.value,
+        MaterializationArtifactKind.READINESS.value,
+        MaterializationArtifactKind.SPLIT_MANIFEST.value,
+    ) + ((MaterializationArtifactKind.PARTITION_MANIFEST.value,) if partitioned else ())
+    observed = tuple(sorted(output.name for output in job.outputs))
+    if observed != tuple(sorted(expected)):
+        raise DataFailure(
+            DataFailureCode.ARTIFACT,
+            "stage output contract mismatch; expected "
+            + ", ".join(sorted(expected))
+            + "; observed "
+            + ", ".join(observed),
+            source_path=None,
+            source_row_index=None,
+        )
+
+
+def _issue_message(prefix: str, issues: tuple[DatasetAuditIssue, ...]) -> str:
+    return prefix + ": " + "; ".join(f"{issue.code.value}: {issue.detail}" for issue in issues)

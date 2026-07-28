@@ -1,110 +1,158 @@
-"""Source-related contract records."""
+"""Dataset-specific source contracts."""
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from typing import Annotated
+from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict
-from pydantic.functional_validators import BeforeValidator
+from pydantic import Field, PositiveInt, model_validator
 
+from datp_core.core.identifiers import ClientId
 from datp_core.core.paths import RelativePath
+from datp_core.data.contracts.base import StrictFrozenModel
+from datp_core.data.contracts.enums import (
+    AdapterKind,
+    ClientIdentityMethod,
+    InvalidRowPolicy,
+    LabelCasePolicy,
+    SourceDiscoveryMode,
+    SourceRole,
+    SourceTreeKind,
+)
+from datp_core.data.contracts.values import (
+    AttackFamilyName,
+    CategoryToken,
+    ColumnName,
+    FeatureName,
+    LabelValue,
+    SourceTreeId,
+)
 
-_OptionalObjectMappingField = Annotated[
-    Mapping[str, object] | None,
-    BeforeValidator(lambda v: dict(v) if v is not None else None),
+
+class SourceTreeConfig(StrictFrozenModel):
+    identifier: SourceTreeId
+    kind: SourceTreeKind
+    role: SourceRole
+    root: RelativePath
+    file_pattern: str
+    discovery: SourceDiscoveryMode
+    expected_column_count: PositiveInt
+    required_headers: tuple[ColumnName, ...]
+    headers_must_be_identical: bool
+
+
+class SourceInventoryPolicy(StrictFrozenModel):
+    ignored_suffixes: tuple[str, ...]
+    ignored_subtrees: tuple[RelativePath, ...]
+    ignored_root_entries: tuple[str, ...]
+
+
+class FileNameClientIdentity(StrictFrozenModel):
+    method: Literal[ClientIdentityMethod.FILE_NAME]
+
+
+class RelativePathClientIdentity(StrictFrozenModel):
+    method: Literal[ClientIdentityMethod.RELATIVE_PATH_COMPONENT]
+    component_index: int
+
+    @model_validator(mode="after")
+    def validate_component_index(self) -> RelativePathClientIdentity:
+        if self.component_index < 0:
+            raise ValueError("component_index must be non-negative")
+        return self
+
+
+type ClientIdentityConfig = Annotated[
+    FileNameClientIdentity | RelativePathClientIdentity,
+    Field(discriminator="method"),
 ]
-_OptionalStrMappingField = Annotated[Mapping[str, str] | None, BeforeValidator(lambda v: dict(v) if v is not None else None)]
-_PositionalContractField = Annotated[Mapping[str, bool] | None, BeforeValidator(lambda v: dict(v) if v is not None else None)]
 
 
-class ConfiguredSourceTree(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class CICIoT2023SourceConfig(StrictFrozenModel):
+    adapter: Literal[AdapterKind.CICIOT2023]
+    tree: SourceTreeConfig
+    inventory: SourceInventoryPolicy
+    feature_columns: tuple[FeatureName, ...]
+    multiclass_label_column: ColumnName
+    benign_label: LabelValue
+    label_case_policy: LabelCasePolicy
+    client_identity: FileNameClientIdentity
+    invalid_row_policy: InvalidRowPolicy
 
-    identifier: str
-    root: RelativePath
-    file_pattern: str
-    expected_column_count: int
-    executable: bool
-    required_headers: tuple[str, ...]
+    @model_validator(mode="after")
+    def validate_tree(self) -> CICIoT2023SourceConfig:
+        if self.tree.kind is not SourceTreeKind.MERGED or self.tree.role is not SourceRole.EXECUTABLE:
+            raise ValueError("CICIoT2023 requires one executable merged source tree")
+        expected = tuple(column.value for column in self.feature_columns) + (self.multiclass_label_column.value,)
+        observed = tuple(column.value for column in self.tree.required_headers)
+        if expected != observed:
+            raise ValueError("CICIoT2023 required headers must exactly match features followed by the label column")
+        return self
 
 
-class DatasetInspectionContract(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    source_trees: tuple[ConfiguredSourceTree, ...]
-    require_identical_headers: bool
-    device_directories: tuple[str, ...]
-    benign_filename: str | None
+class NBaIoTSourceConfig(StrictFrozenModel):
+    adapter: Literal[AdapterKind.NBAIOT]
+    tree: SourceTreeConfig
+    inventory: SourceInventoryPolicy
+    feature_columns: tuple[FeatureName, ...]
+    client_identity: RelativePathClientIdentity
+    device_directories: tuple[ClientId, ...]
+    excluded_device_directories: tuple[ClientId, ...]
+    benign_filename: str
     benign_file_required_per_device: bool
-    attack_family_directories: tuple[str, ...]
+    attack_family_directories: tuple[AttackFamilyName, ...]
     attack_family_required_per_device: bool
-    normal_group_directories: tuple[str, ...]
-    attack_filenames: tuple[str, ...]
-    ignored_root_entries: tuple[str, ...]
-    benign_label: str | None
-    normal_traffic_root: RelativePath | None
-    attack_traffic_root: RelativePath | None
-    binary_label_header: str | None
+    invalid_row_policy: InvalidRowPolicy
+
+    @model_validator(mode="after")
+    def validate_tree(self) -> NBaIoTSourceConfig:
+        if self.tree.kind is not SourceTreeKind.DEVICE_HIERARCHY or self.tree.role is not SourceRole.EXECUTABLE:
+            raise ValueError("N-BaIoT requires one executable device-hierarchy tree")
+        if self.invalid_row_policy is not InvalidRowPolicy.FAIL_SOURCE:
+            raise ValueError("N-BaIoT source integrity requires fail_source invalid-row handling")
+        if not self.benign_filename.strip():
+            raise ValueError("benign_filename must not be blank")
+        return self
 
 
-class DatasetSourceRecord(BaseModel):
-    model_config = ConfigDict(frozen=True)
+class EdgeIIoTsetSourceConfig(StrictFrozenModel):
+    adapter: Literal[AdapterKind.EDGE_IIOTSET]
+    benign_trees: tuple[SourceTreeConfig, ...]
+    attack_reference_trees: tuple[SourceTreeConfig, ...]
+    inventory: SourceInventoryPolicy
+    numeric_columns: tuple[FeatureName, ...]
+    categorical_columns: tuple[ColumnName, ...]
+    binary_label_column: ColumnName
+    multiclass_label_column: ColumnName
+    timestamp_column: ColumnName
+    benign_label: LabelValue
+    label_case_policy: LabelCasePolicy
+    client_identity: RelativePathClientIdentity
+    expected_clients: tuple[ClientId, ...]
+    excluded_clients: tuple[ClientId, ...]
+    missing_category_token: CategoryToken
+    unknown_category_token: CategoryToken
+    invalid_row_policy: InvalidRowPolicy
 
-    role: str
-    root: RelativePath
-    file_pattern: str
-    owns: tuple[str, ...] | None
-    permitted_uses: tuple[str, ...] | None
-    contributes_rows_to_executable_materializations: bool | None
-    defines_pseudo_clients: bool | None
-
-
-class CrossSourceRelationshipRecord(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    row_count_equality_required: bool
-    row_level_one_to_one_equivalence_assumed: bool
-    join_by_row_position: str
-    join_by_any_key: str
-
-
-class DatasetSourceLayoutContractRecord(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    root: RelativePath
-    benign_file: str | None
-    benign_file_pattern: str | None
-    normal_file_pattern: str | None
-    attack_file_pattern: str | None
-    device_dirs: tuple[str, ...] | None
-    normal_group_folders: tuple[str, ...] | None
-    executable_group_folders: tuple[str, ...] | None
-    attack_files: tuple[str, ...] | None
-    ignored_source_suffixes: tuple[str, ...]
-    ignored_root_entries: tuple[str, ...]
-    ignored_subtrees: tuple[str, ...]
-    sources: Mapping[str, DatasetSourceRecord] | None
-    executable_source: str | None
-    cross_source_relationship: CrossSourceRelationshipRecord | None
-    normal_traffic_root: RelativePath | None
-    attack_traffic_root: RelativePath | None
-    benign_file_required_per_device: bool | None
-    attack_family_dirs: tuple[str, ...] | None
-    attack_family_required_per_device: bool | None
+    @model_validator(mode="after")
+    def validate_trees(self) -> EdgeIIoTsetSourceConfig:
+        if not self.benign_trees:
+            raise ValueError("Edge-IIoTset requires executable benign source trees")
+        if any(
+            tree.kind is not SourceTreeKind.BENIGN_GROUPS or tree.role is not SourceRole.EXECUTABLE
+            for tree in self.benign_trees
+        ):
+            raise ValueError("Edge-IIoTset benign trees must be executable benign-group trees")
+        if any(
+            tree.kind is not SourceTreeKind.ATTACK_REFERENCE or tree.role is not SourceRole.AUDIT_ONLY
+            for tree in self.attack_reference_trees
+        ):
+            raise ValueError("Edge-IIoTset attack trees must be audit-only references")
+        if self.missing_category_token == self.unknown_category_token:
+            raise ValueError("missing and unknown category tokens must be distinct")
+        return self
 
 
-class SourceContractRecord(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    every_model_feature_present_in_merged_header: bool | None
-    every_model_feature_present_in_every_file: bool | None
-    model_feature_count_equals_source_column_count: bool | None
-    per_class_schema_reference_check: _OptionalObjectMappingField
-    malformed_row: _OptionalStrMappingField
-    empty_label_row: _OptionalStrMappingField
-    reject_unparseable_numeric_model_feature: bool | None
-    reject_row_with_field_count_other_than_header: bool | None
-    column_role_partition: _OptionalObjectMappingField
-    positional_contract: _PositionalContractField
-    row_integrity_exclusions: _OptionalObjectMappingField
+type DatasetSourceConfig = Annotated[
+    CICIoT2023SourceConfig | NBaIoTSourceConfig | EdgeIIoTsetSourceConfig,
+    Field(discriminator="adapter"),
+]

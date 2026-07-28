@@ -1,112 +1,102 @@
-"""Deterministic source inventory discovery — one shared authority."""
+"""Deterministic source discovery and fingerprinting."""
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from datp_core.core.hashing import Checksum, compute_payload_checksum
+from datp_core.core.hashing import compute_file_checksum, compute_payload_checksum
 from datp_core.core.identifiers import DatasetId
-from datp_core.core.registry import TypedDomainRegistry
-from datp_core.data.contracts.dataset import ResolvedDataset
-from datp_core.data.contracts.sources import ConfiguredSourceTree, DatasetInspectionContract
-from datp_core.data.sources.models import ConcreteSourceEntry, ConcreteSourceInventory
+from datp_core.data.contracts.enums import DataFailureCode, SourceDiscoveryMode
+from datp_core.data.contracts.sources import DatasetSourceConfig, SourceInventoryPolicy, SourceTreeConfig
+from datp_core.data.materialization.errors import DataFailure
+from datp_core.data.sources.models import SourceEntry, SourceInventory
 
 
-def build_source_inventory(dataset: ResolvedDataset) -> ConcreteSourceInventory:
-    raw_data_root = dataset.paths.raw_data_root.resolve()
-    inspection = dataset.inspection_contract
-    ignored_suffixes = frozenset(s.lower() for s in dataset.source_layout.ignored_suffixes)
-    ignored_subtrees = tuple(
-        (raw_data_root / relative_path).resolve() for relative_path in dataset.source_layout.ignored_subtrees
-    )
-
-    all_entries: list[ConcreteSourceEntry] = []
-    seen_paths: set[Path] = set()
-
-    for tree in inspection.source_trees:
-        if not tree.executable:
-            continue
-        source_root = (raw_data_root / tree.root.value).resolve()
-        if not source_root.is_dir():
-            continue
-        if not source_root.is_relative_to(raw_data_root):
-            continue
-
-        files = _inventory_source_tree(source_root, tree, ignored_suffixes, ignored_subtrees, inspection)
-        for file_path in files:
-            resolved = file_path.resolve()
-            if resolved in seen_paths:
-                continue
-            seen_paths.add(resolved)
-            all_entries.append(
-                ConcreteSourceEntry(
-                    source_path=resolved,
-                    relative_path=resolved.relative_to(raw_data_root),
-                    source_tree_identifier=tree.identifier,
+def build_source_inventory(
+    dataset_id: DatasetId,
+    raw_data_root: Path,
+    source: DatasetSourceConfig,
+) -> SourceInventory:
+    resolved_root = raw_data_root.resolve()
+    entries: list[SourceEntry] = []
+    for tree in _source_trees(source):
+        tree_root = (resolved_root / tree.root.value).resolve()
+        _require_contained(tree_root, resolved_root)
+        for path in _discover(tree_root, tree, source.inventory):
+            resolved_path = path.resolve()
+            _require_contained(resolved_path, tree_root)
+            entries.append(
+                SourceEntry(
+                    source_path=resolved_path,
+                    relative_path=resolved_path.relative_to(resolved_root),
+                    source_tree_id=tree.identifier,
+                    tree_kind=tree.kind,
+                    role=tree.role,
                 )
             )
-
-    all_entries.sort(key=lambda entry: entry.relative_path.as_posix())
-
-    return ConcreteSourceInventory(
-        dataset_id=dataset.dataset_id,
-        entries=tuple(all_entries),
+    ordered = tuple(sorted(entries, key=lambda entry: (entry.source_tree_id.value, entry.relative_path.as_posix())))
+    payload = "\n".join(
+        f"{entry.source_tree_id.value}:{entry.role.value}:{entry.relative_path.as_posix()}:"
+        f"{compute_file_checksum(entry.source_path).value}"
+        for entry in ordered
+    ).encode("utf-8")
+    return SourceInventory(
+        dataset_id=dataset_id,
+        raw_data_root=resolved_root,
+        entries=ordered,
+        checksum=compute_payload_checksum(payload),
     )
 
 
-def dataset_source_fingerprint(dataset: ResolvedDataset) -> Checksum:
-    """The single authoritative source-provenance fingerprint for one dataset: a BLAKE2b checksum
-    over its sorted, ignore-filtered source inventory. Every source-dependent identity in this
-    codebase -- a materialized artifact's ``source_inventory_fingerprint`` and each per-dataset
-    term inside ``compute_experiment_source_fingerprint`` -- must derive from this one function
-    rather than independently calling ``build_source_inventory(dataset).fingerprint()``, so the
-    two can never silently drift into different formulas over the same underlying files.
-    """
-    return build_source_inventory(dataset).fingerprint()
+def _source_trees(source: DatasetSourceConfig) -> tuple[SourceTreeConfig, ...]:
+    from datp_core.data.contracts.sources import CICIoT2023SourceConfig, EdgeIIoTsetSourceConfig, NBaIoTSourceConfig
+
+    if isinstance(source, CICIoT2023SourceConfig | NBaIoTSourceConfig):
+        return (source.tree,)
+    if isinstance(source, EdgeIIoTsetSourceConfig):
+        return source.benign_trees + source.attack_reference_trees
+    raise DataFailure(
+        DataFailureCode.CONFIGURATION,
+        "unsupported dataset source contract",
+        source_path=None,
+        source_row_index=None,
+    )
 
 
-def compute_experiment_source_fingerprint(
-    *, datasets: TypedDomainRegistry[DatasetId, ResolvedDataset], dataset_ids: tuple[DatasetId, ...]
-) -> Checksum:
-    """Compute a deterministic combined source-provenance fingerprint for an experiment.
-
-    Builds a source inventory for every dataset the experiment depends on and returns
-    a BLAKE2b checksum over the concatenation of all per-dataset inventory fingerprints.
-    This fingerprint changes when any raw source file content, path, or membership changes.
-    """
-    parts: list[str] = []
-    for dataset_id in sorted(dataset_ids, key=lambda d: d.value):
-        dataset = datasets[dataset_id]
-        parts.append(f"{dataset_id.value}:{dataset_source_fingerprint(dataset).value}")
-    payload = "\n".join(parts).encode("utf-8")
-    return compute_payload_checksum(payload)
-
-
-def _inventory_source_tree(
-    source_root: Path,
-    tree: ConfiguredSourceTree,
-    ignored_suffixes: frozenset[str],
-    ignored_subtrees: tuple[Path, ...],
-    inspection: DatasetInspectionContract,
-) -> list[Path]:
-    if inspection.device_directories or inspection.normal_group_directories:
-        candidates = source_root.rglob("*.csv")
-    else:
-        pattern = tree.file_pattern
-        if "**" in pattern:
-            candidates = source_root.rglob(pattern)
-        else:
-            candidates = source_root.glob(pattern)
-
-    filtered: list[Path] = []
-    for path in candidates:
-        if not path.is_file():
+def _discover(
+    tree_root: Path,
+    tree: SourceTreeConfig,
+    policy: SourceInventoryPolicy,
+) -> tuple[Path, ...]:
+    if not tree_root.is_dir():
+        return ()
+    candidates = (
+        tree_root.glob(tree.file_pattern)
+        if tree.discovery is SourceDiscoveryMode.GLOB
+        else tree_root.rglob(tree.file_pattern)
+    )
+    ignored_subtrees = tuple((tree_root / path.value).resolve() for path in policy.ignored_subtrees)
+    ignored_suffixes = tuple(suffix.casefold() for suffix in policy.ignored_suffixes)
+    selected: list[Path] = []
+    for candidate in candidates:
+        if not candidate.is_file():
             continue
-        if path.suffix.lower() in ignored_suffixes:
+        if candidate.suffix.casefold() in ignored_suffixes:
             continue
-        if any(path.is_relative_to(ignored) for ignored in ignored_subtrees):
+        if candidate.name in policy.ignored_root_entries and candidate.parent == tree_root:
             continue
-        filtered.append(path)
+        resolved = candidate.resolve()
+        if any(resolved.is_relative_to(subtree) for subtree in ignored_subtrees):
+            continue
+        selected.append(candidate)
+    return tuple(sorted(selected, key=lambda path: path.relative_to(tree_root).as_posix()))
 
-    filtered.sort(key=lambda p: p.relative_to(source_root).as_posix())
-    return filtered
+
+def _require_contained(path: Path, root: Path) -> None:
+    if not path.is_relative_to(root):
+        raise DataFailure(
+            DataFailureCode.SOURCE_CONTAINMENT,
+            f"path escapes configured root '{root.as_posix()}'",
+            source_path=path,
+            source_row_index=None,
+        )

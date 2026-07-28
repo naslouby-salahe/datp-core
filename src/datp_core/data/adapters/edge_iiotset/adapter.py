@@ -1,35 +1,24 @@
-"""Edge-IIoTset adapter entry point — orchestration only."""
+"""Edge-IIoTset adapter orchestration."""
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+import msgspec
 
-from datp_core.data.adapters.edge_iiotset.models import (
-    EdgeIIoTsetRow,
-    EdgeMaterializationEvidence,
-    EdgeTimestampedRow,
+from datp_core.data.adapters.edge_iiotset.materializer import EdgeVocabularyEvidence, materialize_edge_iiotset
+from datp_core.data.contracts.enums import AdapterKind, DataFailureCode
+from datp_core.data.materialization.database import open_database, require_non_empty_parquet
+from datp_core.data.materialization.errors import DataFailure
+from datp_core.data.materialization.models import (
+    EdgeIIoTsetMaterializationPlan,
+    MaterializationRequest,
+    StandardMaterializationResult,
 )
-from datp_core.data.adapters.edge_iiotset.parquet import (
-    _deduplicated_edge_benign_rows,
-    _read_edge_rows,
-    _require_edge_timestamp,
-    _validate_edge_chronological_minimums,
-    encode_edge_chronological_split_as_parquet,
-    encode_edge_split_as_parquet,
-)
-from datp_core.data.adapters.edge_iiotset.preprocessing import fit_edge_train_normalization, fit_edge_vocabulary
-from datp_core.data.adapters.edge_iiotset.splitting import (
-    split_edge_benign_rows,
-    split_edge_chronological_rows,
-)
-from datp_core.data.contracts.dataset import DatasetSetup, ResolvedDataset
-from datp_core.data.contracts.enums import AdapterKind, SplitMethod
-from datp_core.data.contracts.features import CategoricalEncodingRecord, RetainedNumericFeaturesRecord
-from datp_core.data.contracts.materialization import DatasetMaterialization, PartitionSeedContract
-from datp_core.data.materialization.models import MaterializationResult
-from datp_core.data.materialization.ports import SourceInventory
-from datp_core.experiments import SweepConditionRecord
+from datp_core.data.materialization.normalization import NormalizationEvidence, normalize_materialized_parquet
+
+
+class EdgePreprocessingEvidence(msgspec.Struct, frozen=True):
+    vocabulary: EdgeVocabularyEvidence
+    normalization: NormalizationEvidence
 
 
 class EdgeIIoTsetAdapter:
@@ -37,120 +26,41 @@ class EdgeIIoTsetAdapter:
     def adapter_kind(self) -> AdapterKind:
         return AdapterKind.EDGE_IIOTSET
 
-    def _materialize_random_fractional(
-        self,
-        rows: tuple[EdgeIIoTsetRow, ...],
-        materialization: DatasetMaterialization,
-        categorical: CategoricalEncodingRecord,
-        numeric: RetainedNumericFeaturesRecord,
-        excluded: frozenset,
-    ) -> tuple[bytes, EdgeMaterializationEvidence]:
-        split = split_edge_benign_rows(rows, materialization)
-        vocabulary = fit_edge_vocabulary(split.train, categorical.columns)
-        normalization = fit_edge_train_normalization(split.train)
-        payload = encode_edge_split_as_parquet(split, numeric.order, vocabulary, normalization)
-        evidence = EdgeMaterializationEvidence(
-            split_method=materialization.split_method.value,
-            excluded_clients=tuple(sorted(excluded)),
-        )
-        return payload, evidence
-
-    def _materialize_chronological_split(
-        self,
-        rows: tuple[EdgeIIoTsetRow, ...],
-        materialization: DatasetMaterialization,
-        categorical: CategoricalEncodingRecord,
-        numeric: RetainedNumericFeaturesRecord,
-        excluded: frozenset,
-    ) -> tuple[bytes, EdgeMaterializationEvidence]:
-        chronological = split_edge_chronological_rows(
-            tuple(
-                EdgeTimestampedRow(row=row, time_of_day_seconds=_require_edge_timestamp(row))
-                for row in _deduplicated_edge_benign_rows(rows)
-            ),
-            materialization,
-            (),
-        )
-        _validate_edge_chronological_minimums(chronological, materialization)
-        vocabulary = fit_edge_vocabulary(chronological.historical_train, categorical.columns)
-        normalization = fit_edge_train_normalization(chronological.historical_train)
-        payload = encode_edge_chronological_split_as_parquet(chronological, numeric.order, vocabulary, normalization)
-        evidence = EdgeMaterializationEvidence(
-            split_method=materialization.split_method.value,
-            excluded_clients=tuple(sorted(excluded)),
-            chronology_validation="passed",
-        )
-        return payload, evidence
-
-    def materialize(
-        self,
-        dataset: ResolvedDataset,
-        setup: DatasetSetup,
-        materialization: DatasetMaterialization,
-        inventory: SourceInventory,
-        staging_root: Path,
-        partition_condition: SweepConditionRecord | None,
-        partition_seed_contract: PartitionSeedContract | None,
-        *,
-        chunk_row_count: int,
-    ) -> MaterializationResult:
-        if partition_condition is not None or partition_seed_contract is not None:
-            raise ValueError("Edge-IIoTset does not support partition-condition materialization")
-        numeric = dataset.field_schema.retained_numeric_features
-        categorical = dataset.field_schema.categorical_encoding
-        labels = dataset.field_schema.label_fields
-        inspection = dataset.inspection_contract
-        if (
-            numeric is None
-            or not isinstance(categorical, CategoricalEncodingRecord)
-            or labels.multiclass_label is None
-            or inspection.normal_traffic_root is None
-            or inspection.attack_traffic_root is None
-            or inspection.binary_label_header is None
-        ):
-            raise ValueError("Edge-IIoTset materialization requires its resolved feature, label, and source contracts")
-        timestamp_field = dataset.field_schema.identity_scheme.timestamp_field
-        timestamp_header: str | None
-        match timestamp_field:
-            case str() as col:
-                timestamp_header = col
-            case {"column": str() as col}:
-                timestamp_header = col
-            case _:
-                timestamp_header = None
-        if not isinstance(timestamp_header, str):
-            raise ValueError("Edge-IIoTset timestamp field must resolve to a column name")
-        normal_root = (dataset.paths.raw_data_root / inspection.normal_traffic_root.value).resolve()
-        attack_root = (dataset.paths.raw_data_root / inspection.attack_traffic_root.value).resolve()
-        excluded = frozenset(materialization.split_excluded_client_folders or ())
-        rows = _read_edge_rows(
-            inventory,
-            normal_root,
-            attack_root,
-            numeric.order,
-            categorical.columns,
-            inspection.binary_label_header,
-            labels.multiclass_label.column,
-            timestamp_header if materialization.split_method == SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL else None,
-            excluded,
-        )
-        rows = tuple(row for row in rows if row.client_id not in excluded)
-        payload_file = staging_root / "materialized.parquet"
-        if materialization.split_method == SplitMethod.RANDOM_FRACTIONAL:
-            payload, evidence = self._materialize_random_fractional(
-                rows, materialization, categorical, numeric, excluded
+    def materialize(self, request: MaterializationRequest) -> StandardMaterializationResult:
+        if not isinstance(request.plan, EdgeIIoTsetMaterializationPlan):
+            raise DataFailure(
+                DataFailureCode.CONFIGURATION,
+                "Edge-IIoTset adapter received an incompatible materialization plan",
+                source_path=None,
+                source_row_index=None,
             )
-        elif materialization.split_method == SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL:
-            payload, evidence = self._materialize_chronological_split(
-                rows, materialization, categorical, numeric, excluded
+        plan = request.plan
+        connection = open_database(request.layout.database, request.layout.temporary_directory, plan.runtime)
+        try:
+            output = materialize_edge_iiotset(
+                connection,
+                plan,
+                request.inventory,
+                request.layout.encoded_payload,
             )
-        else:
-            raise ValueError(f"Unsupported Edge-IIoTset split method '{materialization.split_method}'")
-        payload_file.write_bytes(payload)
-        return MaterializationResult(
-            staged_path=payload_file,
-            row_count=len(rows),
-            preprocessing_evidence=json.dumps(
-                evidence.model_dump(mode="json"), sort_keys=True, separators=(",", ":"), allow_nan=False
-            ).encode(),
+            normalization = normalize_materialized_parquet(
+                connection,
+                request.layout.encoded_payload,
+                request.layout.final_payload,
+                output.numeric_feature_names,
+                plan.normalization,
+                plan.runtime,
+            )
+        finally:
+            connection.close()
+        require_non_empty_parquet(request.layout.final_payload)
+        preprocessing = EdgePreprocessingEvidence(
+            vocabulary=output.vocabulary,
+            normalization=normalization,
+        )
+        return StandardMaterializationResult(
+            staged_path=request.layout.final_payload,
+            row_count=output.evidence.written_rows,
+            preprocessing_evidence=msgspec.json.encode(preprocessing),
+            materialization_evidence=output.evidence,
         )

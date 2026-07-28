@@ -1,104 +1,158 @@
-"""Materialized readiness assessment — schema, client, chronology, and attack checks."""
+"""Sole materialized-dataset readiness implementation."""
 
 from __future__ import annotations
 
-from datp_core.core.hashing import Checksum
-from datp_core.data.contracts.dataset import DatasetSetup, ResolvedDataset
-from datp_core.data.contracts.enums import SplitMembership
-from datp_core.data.manifests.models import MaterializedSplitEvidence
-from datp_core.data.readiness.models import DatasetAuditIssue, DatasetReadinessReport
+from datp_core.data.contracts.enums import (
+    AuditIssueCode,
+    AuditSeverity,
+    DatasetCapability,
+    MaterializedArtifactShape,
+    SplitMembership,
+)
+from datp_core.data.contracts.materialization import (
+    ChronologicalGappedSplitConfig,
+    RandomFractionalSplitConfig,
+    WithinClientChronologicalSplitConfig,
+)
+from datp_core.data.manifests.summary import MaterializedSplitSummary
+from datp_core.data.materialization.models import DatasetMaterializationPlan
+from datp_core.data.readiness.models import DatasetAuditIssue, MaterializedAuditReport
 
 
-class _MaterializedReadinessAssessor:
-    """Separated readiness logic for materialized evidence."""
-
-    @staticmethod
-    def assess(
-        dataset: ResolvedDataset,
-        setup: DatasetSetup,
-        evidence: MaterializedSplitEvidence,
-        source_fingerprint: Checksum,
-    ) -> DatasetReadinessReport:
-        columns = dict(evidence.schema_columns)
-        manifest = evidence.manifest
-        defects: list[DatasetAuditIssue] = []
-        required_columns = ("split", "client_id", "is_attack", "source_path", "source_row_index")
-        missing_columns = tuple(column for column in required_columns if column not in columns)
-        if missing_columns:
-            defects.append(
-                DatasetAuditIssue(
-                    code="materialized_schema_missing_required_columns",
-                    message=f"Materialized payload is missing required columns: {', '.join(missing_columns)}",
-                    path=None,
+def assess_materialized_readiness(
+    plan: DatasetMaterializationPlan,
+    summary: MaterializedSplitSummary,
+) -> MaterializedAuditReport:
+    issues: list[DatasetAuditIssue] = []
+    if summary.total_rows == 0:
+        issues.append(_blocking(AuditIssueCode.MATERIALIZED_EMPTY, "materialized dataset is empty"))
+    observed_memberships = tuple(count.membership for count in summary.split_counts)
+    for membership in _required_memberships(plan):
+        if membership.value not in observed_memberships:
+            issues.append(
+                _blocking(
+                    AuditIssueCode.REQUIRED_SPLIT_MISSING,
+                    f"required split membership '{membership.value}' is absent",
                 )
             )
-        if not manifest.eligible_client_ids:
-            defects.append(
-                DatasetAuditIssue(
-                    code="no_eligible_clients",
-                    message="No client has the configured benign calibration support",
-                    path=None,
-                )
+    if len(summary.client_ids) != plan.expected_client_count:
+        issues.append(
+            _blocking(
+                AuditIssueCode.CLIENT_COUNT_MISMATCH,
+                f"observed {len(summary.client_ids)} clients; expected {plan.expected_client_count}",
             )
-        expected_client_count = setup.client_construction.client_count
-        if expected_client_count is not None and len(manifest.client_ids) != int(expected_client_count):
-            defects.append(
-                DatasetAuditIssue(
-                    code="unexpected_client_count",
-                    message=(f"Expected {int(expected_client_count)} clients, observed {len(manifest.client_ids)}"),
-                    path=None,
-                )
-            )
-
-        temporal = any(
-            entry.membership
-            in {
-                SplitMembership.HISTORICAL_TRAINING,
-                SplitMembership.HISTORICAL_CALIBRATION,
-                SplitMembership.FUTURE_RECALIBRATION,
-                SplitMembership.FUTURE_EVALUATION,
-            }
-            for entry in manifest.entries
         )
-        timestamp_valid = all(entry.chronology_key is not None for entry in manifest.entries) if temporal else None
-        if temporal and not timestamp_valid:
-            defects.append(
-                DatasetAuditIssue(
-                    code="invalid_temporal_chronology",
-                    message="Temporal materialization lacks a chronology key for one or more rows",
-                    path=None,
+    if summary.ineligible_client_ids:
+        excluded = plan.eligibility.exclude_ineligible_clients_from_primary_dispersion
+        issues.append(
+            DatasetAuditIssue(
+                code=AuditIssueCode.BENIGN_CALIBRATION_INSUFFICIENT,
+                severity=AuditSeverity.WARNING if excluded else AuditSeverity.BLOCKING,
+                detail=(
+                    "clients below the configured benign calibration minimum"
+                    + (" and excluded from primary dispersion: " if excluded else ": ")
+                    + ", ".join(summary.ineligible_client_ids)
+                ),
+            )
+        )
+    attack_capability = DatasetCapability.ATTACK_EVALUATION in plan.capabilities
+    if attack_capability and summary.attack_rows == 0:
+        issues.append(
+            _blocking(
+                AuditIssueCode.ATTACK_CAPABILITY_MISMATCH,
+                "attack evaluation is declared but the artifact contains no attack rows",
+            )
+        )
+    if not attack_capability and summary.attack_rows != 0:
+        issues.append(
+            _blocking(
+                AuditIssueCode.ATTACK_CAPABILITY_MISMATCH,
+                "artifact contains attack rows although attack evaluation is not declared",
+            )
+        )
+    temporal_capability = DatasetCapability.TEMPORAL_RECALIBRATION in plan.capabilities
+    temporal_shape = summary.artifact_shape == MaterializedArtifactShape.EDGE_BENIGN_TEMPORAL.value
+    if temporal_capability != temporal_shape:
+        issues.append(
+            _blocking(
+                AuditIssueCode.TEMPORAL_CAPABILITY_MISMATCH,
+                "temporal capability and materialized artifact shape disagree",
+            )
+        )
+    if temporal_shape:
+        issues.extend(_chronology_issues(summary))
+    if plan.eligibility.require_non_empty_benign_test:
+        test_membership = (
+            SplitMembership.FUTURE_EVALUATION
+            if temporal_shape
+            else SplitMembership.TEST
+        )
+        for client_id in summary.client_ids:
+            if _benign_count(summary, client_id, test_membership) == 0:
+                issues.append(
+                    _blocking(
+                        AuditIssueCode.REQUIRED_SPLIT_MISSING,
+                        f"client '{client_id}' has no benign rows in '{test_membership.value}'",
+                    )
+                )
+    if not summary.eligible_client_ids and plan.eligibility.zero_eligible_clients_is_blocking:
+        issues.append(
+            _blocking(
+                AuditIssueCode.BENIGN_CALIBRATION_INSUFFICIENT,
+                "no client satisfies the configured eligibility policy",
+            )
+        )
+    return MaterializedAuditReport(issues=tuple(issues))
+
+
+def _required_memberships(plan: DatasetMaterializationPlan) -> tuple[SplitMembership, ...]:
+    split = plan.split
+    if isinstance(split, RandomFractionalSplitConfig):
+        return tuple(membership for membership, _ in split.ratios.ordered())
+    if isinstance(split, ChronologicalGappedSplitConfig):
+        return (
+            SplitMembership.TRAIN,
+            SplitMembership.CALIBRATION,
+            SplitMembership.TEST,
+        )
+    if isinstance(split, WithinClientChronologicalSplitConfig):
+        return (
+            SplitMembership.HISTORICAL_TRAINING,
+            SplitMembership.HISTORICAL_CALIBRATION,
+            SplitMembership.FUTURE_RECALIBRATION,
+            SplitMembership.FUTURE_EVALUATION,
+        )
+    raise TypeError(f"unsupported split contract: {type(split).__name__}")
+
+
+def _chronology_issues(summary: MaterializedSplitSummary) -> tuple[DatasetAuditIssue, ...]:
+    issues: list[DatasetAuditIssue] = []
+    for chronology in summary.chronology_ranges:
+        total = sum(
+            count.row_count
+            for count in summary.client_split_counts
+            if count.client_id == chronology.client_id
+        )
+        if chronology.minimum_key != 0 or chronology.maximum_key != total - 1:
+            issues.append(
+                _blocking(
+                    AuditIssueCode.CHRONOLOGY_ORDER_VIOLATION,
+                    f"client '{chronology.client_id}' chronology keys are not contiguous from zero",
                 )
             )
+    return tuple(issues)
 
-        capabilities = frozenset(setup.capabilities)
-        attack_entries = tuple(entry for entry in manifest.entries if entry.is_attack)
-        attack_evaluable = bool(attack_entries) and all(
-            entry.client_id in manifest.client_ids for entry in attack_entries
-        )
-        if "per_client_attack_detection_metrics" in capabilities and not attack_evaluable:
-            defects.append(
-                DatasetAuditIssue(
-                    code="attack_evaluation_unavailable",
-                    message="Configured per-client attack detection has no client-assigned attack rows",
-                    path=None,
-                )
-            )
 
-        timestamp_field = dataset.field_schema.identity_scheme.timestamp_field
-        return DatasetReadinessReport(
-            dataset_id=dataset.dataset_id,
-            setup_id=setup.identifier,
-            source_fingerprint=source_fingerprint,
-            schema_summary=evidence.schema_columns,
-            client_row_counts=manifest.client_row_counts,
-            class_counts=manifest.class_counts,
-            metadata_availability={
-                "client": "client_id" in columns,
-                "family_taxonomy": dataset.field_schema.label_fields.family_taxonomy is not None,
-                "timestamp": temporal or (isinstance(timestamp_field, str) and timestamp_field != "unavailable"),
-            },
-            projected_eligible_client_ids=manifest.eligible_client_ids,
-            attack_evaluable=attack_evaluable,
-            timestamp_valid=timestamp_valid,
-            blocking_defects=tuple(defects),
-        )
+def _benign_count(
+    summary: MaterializedSplitSummary,
+    client_id: str,
+    membership: SplitMembership,
+) -> int:
+    for count in summary.client_split_counts:
+        if count.client_id == client_id and count.membership == membership.value:
+            return count.benign_count
+    return 0
+
+
+def _blocking(code: AuditIssueCode, detail: str) -> DatasetAuditIssue:
+    return DatasetAuditIssue(code=code, severity=AuditSeverity.BLOCKING, detail=detail)

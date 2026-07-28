@@ -1,98 +1,76 @@
-"""Readiness audit and report models."""
+"""Typed source, materialized, and gate readiness evidence."""
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
+import msgspec
 
-from pydantic import BaseModel, ConfigDict
-
-from datp_core.core.hashing import Checksum
-from datp_core.core.identifiers import DatasetId, DatasetSetupId
-
-
-class DatasetAuditIssue(BaseModel):
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
-
-    code: str
-    message: str
-    path: Path | None
+from datp_core.data.contracts.enums import (
+    ArtifactSchemaVersion,
+    AuditIssueCode,
+    AuditSeverity,
+    ReadinessGateFailureCode,
+)
 
 
-class SourceTreeAudit(BaseModel):
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
-    identifier: str
-    root: Path
-    configured_file_pattern: str
-    expected_column_count: int
+class DatasetAuditIssue(msgspec.Struct, frozen=True):
+    code: AuditIssueCode
+    severity: AuditSeverity
+    detail: str
+
+
+class SourceTreeAudit(msgspec.Struct, frozen=True):
+    source_tree_id: str
     file_count: int
-    header_count: int
-    headers_identical: bool
+    executable: bool
 
 
-class DatasetAuditReport(BaseModel):
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
-    dataset_id: DatasetId
-    display_name: str
-    schema_id: str
-    raw_source_found: bool
-    file_count: int
-    readable: bool
-    resolved_root_path: Path
-    setup_count: int
-    materialization_count: int
-    source_trees: tuple[SourceTreeAudit, ...]
+class SourceAuditReport(msgspec.Struct, frozen=True):
+    tree_audits: tuple[SourceTreeAudit, ...]
     issues: tuple[DatasetAuditIssue, ...]
 
     @property
-    def ready_for_materialization(self) -> bool:
-        return self.raw_source_found and self.readable and not self.issues
+    def blocking_issues(self) -> tuple[DatasetAuditIssue, ...]:
+        return tuple(issue for issue in self.issues if issue.severity is AuditSeverity.BLOCKING)
 
 
-class DatasetReadinessReport(BaseModel):
-    model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
-    dataset_id: DatasetId
-    setup_id: DatasetSetupId
-    source_fingerprint: Checksum
-    schema_summary: tuple[tuple[str, str], ...]
-    client_row_counts: dict[str, int]
-    class_counts: dict[str, int]
-    metadata_availability: dict[str, bool]
-    projected_eligible_client_ids: tuple[str, ...]
-    attack_evaluable: bool
-    timestamp_valid: bool | None
-    blocking_defects: tuple[DatasetAuditIssue, ...]
+class MaterializedAuditReport(msgspec.Struct, frozen=True):
+    issues: tuple[DatasetAuditIssue, ...]
+
+    @property
+    def blocking_issues(self) -> tuple[DatasetAuditIssue, ...]:
+        return tuple(issue for issue in self.issues if issue.severity is AuditSeverity.BLOCKING)
+
+
+class DatasetReadinessReport(msgspec.Struct, frozen=True):
+    schema_version: str
+    source: SourceAuditReport
+    materialized: MaterializedAuditReport
+
+    @property
+    def blocking_issues(self) -> tuple[DatasetAuditIssue, ...]:
+        return self.source.blocking_issues + self.materialized.blocking_issues
 
     @property
     def ready_for_training(self) -> bool:
-        return not self.blocking_defects
+        return not self.blocking_issues
 
-    def encode(self) -> bytes:
-        return json.dumps(
-            {
-                "schema_version": 1,
-                "dataset_id": self.dataset_id.value,
-                "setup_id": self.setup_id.value,
-                "source_fingerprint": self.source_fingerprint.value,
-                "schema_summary": self.schema_summary,
-                "client_row_counts": self.client_row_counts,
-                "class_counts": self.class_counts,
-                "metadata_availability": self.metadata_availability,
-                "projected_eligible_client_ids": self.projected_eligible_client_ids,
-                "attack_evaluable": self.attack_evaluable,
-                "timestamp_valid": self.timestamp_valid,
-                "blocking_defects": [
-                    {
-                        "code": defect.code,
-                        "message": defect.message,
-                        "path": None if defect.path is None else str(defect.path),
-                    }
-                    for defect in self.blocking_defects
-                ],
-                "ready_for_training": self.ready_for_training,
-            },
-            ensure_ascii=False,
-            separators=(",", ":"),
-            sort_keys=True,
-            allow_nan=False,
-        ).encode("utf-8")
+
+class ReadinessGateFailure(msgspec.Struct, frozen=True):
+    gate_id: str
+    code: ReadinessGateFailureCode
+    detail: str
+
+
+def build_readiness_report(
+    source: SourceAuditReport,
+    materialized: MaterializedAuditReport,
+) -> DatasetReadinessReport:
+    return DatasetReadinessReport(
+        schema_version=ArtifactSchemaVersion.READINESS_V1.value,
+        source=source,
+        materialized=materialized,
+    )
+
+
+def encode_readiness_report(report: DatasetReadinessReport) -> bytes:
+    return msgspec.json.encode(report)
