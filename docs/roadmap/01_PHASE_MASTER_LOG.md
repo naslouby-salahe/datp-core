@@ -33,7 +33,7 @@ Do not add percentages. A phase is binary with respect to its exit criteria.
 | Phase | Status | Entry criteria | Exit evidence | Scientific blockers |
 |---|---|---|---|---|
 | 01 — Scientific identity and scope | `COMPLETE` | Source tree exists | Identity tests and scope audit | None |
-| 02 — Typed protocols and domain contracts | `NOT_STARTED` | Phase 01 complete | Protocol graph validation and strict typing | Exact seed values and any absent hyperparameters must come from source truth |
+| 02 — Typed protocols and domain contracts | `BLOCKED_SCIENTIFIC_VALUE` | Phase 01 complete | Protocol graph validation and strict typing | Exact seed values and any absent hyperparameters must come from source truth |
 | 03 — Dataset audit and capabilities | `NOT_STARTED` | Phase 02 complete | Schema and capability tests for all datasets | Raw-data discrepancies must be resolved by audit, not guesswork |
 | 04 — Canonical data and reusable preprocessing | `NOT_STARTED` | Phase 03 complete | Deterministic reusable data manifests and reload checks | Exact preprocessing protocol must be present in source truth |
 | 05 — Populations, splits, and cohorts | `NOT_STARTED` | Phase 04 complete | Deterministic split/cohort manifests | Any unspecified non-temporal split ratios remain blocking |
@@ -93,4 +93,19 @@ An unresolved optional experiment does not block unrelated mandatory work. An un
 - Whole-suite command executed: `python -m pytest -n auto -q`.
 - Results: focused tests passed (`42 passed`); whole suite passed (`42 passed`); Ruff passed; Pyright passed with zero errors; Pylint passed at `10.00/10`.
 - Audit verdict: complete. Scientific vocabulary is descriptive; threshold identities are structurally separate; scope vocabulary blocks prohibited claims; source-file identity set is unchanged; no compatibility surface, opaque identity, `Any`, mutable module-level collection, raw domain dictionary, fingerprint remnant, or package re-export was introduced.
+- No commit or push was performed.
+
+## Phase 02 — Typed protocols and domain contracts
+
+- Status: `BLOCKED_SCIENTIFIC_VALUE`.
+- Source files changed: `src/datp_core/domain/contracts.py`, `src/datp_core/domain/provenance.py`, `src/datp_core/domain/values.py`, and the authorized `src/datp_core/protocols/` declaration and validation modules.
+- Test files added: all seventeen test files prescribed by Phase 02.
+- Source-backed values implemented: temporal split `0.55/0.15/0.10/0.20`; canonical and sensitivity quantiles; calibration support and size grids; shrinkage weights; conformal coverage/significance; summary coefficients; checkpoint rounds; FedProx coefficient grid; local epochs; Dirichlet concentrations; confirmatory confidence level and paired-seed count.
+- Unresolved values: exact seed integers; non-temporal split ratios; architecture, optimizer, learning-rate, batch-size, centralized-training, and Ditto values; bootstrap replicate count; near-zero and temporal cutoffs; anchor tolerances; grouped-threshold assignment input; traffic-rate evidence.
+- Validation rules implemented: immutable scalar/provenance validation; strict frozen declaration models; discriminated training declarations; centralized/federated separation; tuple-based deterministic grids and catalogue; capability and cross-reference checks; explicit unresolved-science failures; project-relative runtime paths.
+- Focused command result: Phase 02 prescribed tests passed (`20 passed`). Whole-suite command result: `python -m pytest -n auto -q` passed (`62 passed`). Ruff formatting and lint passed. Pyright passed with zero errors and warnings. Pylint passed at `10.00/10`.
+- Audit verdict: implementation-complete and scientifically blocked. The known source-absent values are represented only through `UnresolvedScientificValueError`; no placeholder permits graph resolution. No `Any`, mutable declaration collection, protocol dictionary registry, compatibility alias, fingerprint field, environment override, or YAML/config parser was introduced in the Phase 02 declaration surface.
+- Configuration cleanup: removed direct `pydantic-settings`, `pyyaml`, `hydra-core`, and `omegaconf` project dependencies, regenerated `uv.lock`, and added Nox/Make parallel-test automation. `pyyaml` remains only transitively through the pre-existing later-phase `dagster` dependency; no Phase 02 source imports or uses it.
+- Scientific-source re-audit: the source fixes ten paired seeds, but not integers; locks architecture/optimizer/hyperparameters without values; gives no non-temporal ratios, Ditto coefficient, bootstrap replicate count, near-zero cutoff, temporal materiality threshold, anchor tolerance, approved grouped assignment construction, or population-specific rate evidence. It does fix Ditto effect bands `0.75`, `0.25`, and `0.05`, which were added to the training declarations.
+- Research amendment: user-authorized pre-registration fixes confirmatory seeds to `0..9`; non-temporal benign partitions to equal thirds; N-BaIoT autoencoder widths to `115/86/58/38/29/38/58/86/115`; Adam with learning rate `0.001` and batch size `256`; Ditto regularization grid `0.05/0.1/0.2` with primary `0.1`; paired BCa resamples `10,000`; near-zero mean-FPR warning `0.01`; and temporal CV materiality `0.10`. These are amendment constants, not retrospective claims about the original source. Historical anchor tolerances, an approved non-fingerprint grouped-assignment input, and population traffic rates remain blocked pending their required evidence.
 - No commit or push was performed.

@@ -6,8 +6,6 @@ readme = "README.md"
 requires-python = "==3.12.*"
 dependencies = [
     "pydantic>=2.0",
-    "pydantic-settings>=2.0",
-    "pyyaml>=6.0",
     "networkx>=3.0",
     "numpy==2.5.1",
     "pyarrow==25.0.0",
@@ -20,8 +18,6 @@ dependencies = [
     "safetensors>=0.4",
     "scipy==1.18.0",
     "structlog>=24.1",
-    "hydra-core>=1.3",
-    "omegaconf>=2.3",
     "pingouin>=0.5",
     "dagster>=1.7",
     "pandas>=2.0",
