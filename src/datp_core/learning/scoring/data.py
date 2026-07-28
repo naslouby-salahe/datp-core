@@ -1,90 +1,102 @@
-"""Data loading utilities for reconstruction scoring: benign client tensors, input/output frames."""
+"""In-memory materialization validation for training and scoring."""
 
 from __future__ import annotations
 
-from pathlib import Path
+from dataclasses import dataclass
+from io import BytesIO
 
 import numpy as np
 import polars as pl
 import torch
 
 from datp_core.data.contracts.enums import SplitMembership
+from datp_core.learning.contracts.enums import PrecisionKind
+from datp_core.learning.model.runtime import precision_to_dtype
+from datp_core.learning.training.engine import ClientTensor, LearningDataError
 
-_SCORE_IDENTITY_COLUMNS = ("source_path", "source_row_index", "client_id", "split", "is_attack")
+_SCORE_IDENTITY_COLUMNS = (
+    "source_path",
+    "source_row_index",
+    "client_id",
+    "split",
+    "is_attack",
+)
 
 
-def load_benign_client_tensors(
-    path: Path, split: str, feature_columns: tuple[str, ...]
-) -> tuple[tuple[str, torch.Tensor], ...]:
-    """Load configured benign rows for one authorized split, ordered by client."""
+@dataclass(frozen=True, slots=True)
+class MaterializedFrame:
+    frame: pl.DataFrame
+    feature_columns: tuple[str, ...]
+
+
+def read_materialization(payload: bytes, feature_columns: tuple[str, ...]) -> MaterializedFrame:
     if not feature_columns:
-        raise ValueError("Training requires configured model feature columns")
-    frame = pl.read_parquet(path, columns=["split", "client_id", "is_attack", *feature_columns])
-    required = {"split", "client_id", "is_attack", *feature_columns}
-    missing = sorted(required - set(frame.columns))
+        raise LearningDataError("Materialization requires explicit model feature columns")
+    frame = pl.read_parquet(BytesIO(payload))
+    required_columns = (*_SCORE_IDENTITY_COLUMNS, *feature_columns)
+    missing = tuple(column for column in required_columns if column not in frame.columns)
     if missing:
-        raise ValueError(f"Materialized payload lacks training columns: {', '.join(missing)}")
-    selected = frame.filter((pl.col("split") == split) & ~pl.col("is_attack")).select("client_id", *feature_columns)
+        raise LearningDataError(
+            f"Materialization lacks required columns: {', '.join(missing)}"
+        )
+    if frame.select(pl.struct("source_path", "source_row_index").is_duplicated().any()).item():
+        raise LearningDataError("Materialization contains duplicate immutable row identities")
+    if not np.isfinite(frame.select(*feature_columns).to_numpy()).all():
+        raise LearningDataError("Materialization contains non-finite model feature values")
+    return MaterializedFrame(frame=frame, feature_columns=feature_columns)
+
+
+def benign_client_tensors(
+    materialization: MaterializedFrame,
+    split: SplitMembership,
+    precision: PrecisionKind,
+) -> tuple[ClientTensor, ...]:
+    selected = materialization.frame.filter(
+        (pl.col("split") == split.value) & ~pl.col("is_attack")
+    ).select("client_id", *materialization.feature_columns)
     if selected.is_empty():
-        raise ValueError(f"Materialized payload has no benign {split} rows")
-    tensors: list[tuple[str, torch.Tensor]] = []
-    for client_id, client_rows in selected.group_by("client_id", maintain_order=True):
-        values = client_rows.select(*feature_columns).to_numpy()
-        if not np.isfinite(values).all():
-            raise ValueError(f"Benign {split} rows for client '{client_id[0]}' contain non-finite feature values")
-        tensors.append((str(client_id[0]), torch.tensor(values, dtype=torch.float32)))
-    return tuple(sorted(tensors, key=lambda item: item[0]))
+        raise LearningDataError(f"Materialization has no benign rows for split '{split.value}'")
+    clients: list[ClientTensor] = []
+    for key, rows in selected.group_by("client_id", maintain_order=True):
+        client_id = str(key[0])
+        values = rows.select(*materialization.feature_columns).to_numpy()
+        clients.append(
+            ClientTensor(
+                client_id=client_id,
+                tensor=torch.as_tensor(values, dtype=precision_to_dtype(precision), device="cpu"),
+            )
+        )
+    return tuple(sorted(clients, key=lambda client: client.client_id))
 
 
-def materialized_feature_columns(path: Path) -> tuple[str, ...]:
-    """Infer model feature columns from a materialized Parquet file's schema.
-
-    Shared by the training handler (materialization has no configured ``field_schema.model_features``
-    fallback path) and the score-generation stage handler.
-    """
-    metadata_columns = {"split", "client_id", "source_path", "source_row_index", "is_attack", "chronology_key"}
-    columns = tuple(column for column in pl.read_parquet(path, n_rows=0).columns if column not in metadata_columns)
-    if not columns:
-        raise ValueError("Materialized dataset has no model feature columns")
-    return columns
-
-
-def _score_input_frame(path: Path, *, split: str, feature_columns: tuple[str, ...]) -> pl.DataFrame:
-    """Load and validate the input frame for one scoring split."""
-    allowed_splits = {
-        SplitMembership.CALIBRATION.value,
-        SplitMembership.TEST.value,
-        SplitMembership.HISTORICAL_CALIBRATION.value,
-        SplitMembership.FUTURE_RECALIBRATION.value,
-        SplitMembership.FUTURE_EVALUATION.value,
+def scoring_frame(
+    materialization: MaterializedFrame,
+    split: SplitMembership,
+) -> pl.DataFrame:
+    selected = materialization.frame.filter(pl.col("split") == split.value).select(
+        *_SCORE_IDENTITY_COLUMNS,
+        *materialization.feature_columns,
+    )
+    if selected.is_empty():
+        raise LearningDataError(f"Materialization has no rows for scoring split '{split.value}'")
+    calibration_splits = {
+        SplitMembership.CALIBRATION,
+        SplitMembership.HISTORICAL_CALIBRATION,
+        SplitMembership.FUTURE_RECALIBRATION,
     }
-    if split not in allowed_splits:
-        raise ValueError(f"Scoring does not authorize split '{split}'")
-    frame = pl.read_parquet(path, columns=[*_SCORE_IDENTITY_COLUMNS, *feature_columns])
-    selected = frame.filter(pl.col("split") == split)
-    if selected.is_empty():
-        raise ValueError(f"Materialized payload has no {split} rows to score")
-    if split in {"calibration", "historical_calibration", "future_recalibration"} and selected["is_attack"].any():
-        raise ValueError("Calibration scoring must not include attack rows")
-    if selected.select(pl.struct("source_path", "source_row_index").is_duplicated().any()).item():
-        raise ValueError("Score input contains duplicate row identities")
-    if not np.isfinite(selected.select(*feature_columns).to_numpy()).all():
-        raise ValueError("Score input contains non-finite feature values")
+    if split in calibration_splits and selected["is_attack"].any():
+        raise LearningDataError("Calibration scoring must not include attack rows")
     return selected
 
 
-def _score_output_frame(selected: pl.DataFrame, scores: np.ndarray | None) -> pl.DataFrame:
-    """Produce the validated score output frame from an input frame and score array."""
-    if scores is not None:
-        selected = selected.with_columns(pl.Series("score", scores, dtype=pl.Float64))
-    scores = selected["score"].to_numpy()
+def score_output_frame(selected: pl.DataFrame, scores: np.ndarray) -> pl.DataFrame:
+    if len(scores) != selected.height:
+        raise LearningDataError("Score count does not match the selected materialization rows")
     if not np.isfinite(scores).all() or (scores < 0.0).any():
-        raise ValueError("Model produced non-finite or negative reconstruction scores")
+        raise LearningDataError("Reconstruction scoring produced non-finite or negative values")
     return (
-        selected.select(*_SCORE_IDENTITY_COLUMNS, "score")
-        .with_columns(
-            pl.col("score").cast(pl.Float64),
-            pl.col("is_attack").cast(pl.Int64).alias("label"),
-        )
+        selected.with_columns(pl.Series("score", scores, dtype=pl.Float64))
+        .select(*_SCORE_IDENTITY_COLUMNS, "score")
+        .with_columns(pl.col("is_attack").cast(pl.Int64).alias("label"))
         .drop("is_attack")
     )

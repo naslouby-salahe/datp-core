@@ -1,1 +1,1 @@
-"""Model definition, federated/personalization training, checkpoints, and scoring."""
+"""Typed model training, checkpointing, and reconstruction scoring."""

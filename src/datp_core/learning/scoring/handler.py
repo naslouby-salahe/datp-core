@@ -1,188 +1,201 @@
-"""Score one explicitly supplied materialization/checkpoint pair."""
+"""Thin reconstruction-score generation stage adapter."""
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from io import BytesIO
-from pathlib import Path
-from tempfile import TemporaryDirectory
 
 import polars as pl
 
 from datp_core.artifacts.schemas.scores import validate_calibration_score_frame, validate_test_score_frame
 from datp_core.artifacts.store import ArtifactStore
-from datp_core.config.resolution.runtime import ResolvedRuntimeConfiguration
 from datp_core.core.identifiers import DatasetId, ExperimentId, PopulationId, TrainingProfileId
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.contracts.dataset import ResolvedDataset
-from datp_core.data.contracts.enums import SplitMembership, SplitMethod
+from datp_core.data.contracts.enums import SplitMembership
 from datp_core.experiments import ExperimentRecord, PopulationRecord
-from datp_core.learning.contracts.architecture import ModelArchitectureRecord
+from datp_core.learning.contracts.checkpoints import CheckpointSelectionEvidence
 from datp_core.learning.contracts.enums import (
     CheckpointAuthorization,
-    DevicePolicy,
-    PersonalizationStrategy,
+    LearningArtifactKind,
+    ScoreArtifactKind,
     ScoreOrientation,
 )
-from datp_core.learning.contracts.optimization import BatchingRecord
-from datp_core.learning.contracts.training import TrainingProfileRecord
-from datp_core.learning.model.device import require_cuda_training_device
-from datp_core.learning.scoring.checkpoints import (
-    build_model_from_checkpoint_bytes,
-    build_personalized_models_from_bytes,
+from datp_core.learning.contracts.model import (
+    BatchingProfile,
+    DenseAutoencoderProfile,
+    LearningDataSchema,
+    StandardSplitProfile,
+    TemporalSplitProfile,
 )
-from datp_core.learning.scoring.compute import (
-    score_materialized_split,
-    score_personalized_materialized_split,
+from datp_core.learning.contracts.training import DittoTrainingProfile, TrainingProfile
+from datp_core.learning.model.runtime import TorchRuntimeProfile, create_runtime
+from datp_core.learning.scoring.data import read_materialization
+from datp_core.learning.scoring.service import (
+    GlobalScoringRequest,
+    PersonalizedScoringRequest,
+    ReconstructionScoringService,
 )
-from datp_core.learning.scoring.data import materialized_feature_columns
 from datp_core.pipeline.stages.context import TrainingContext
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
 from datp_core.pipeline.stages.outcomes import StageJobOutcome
 
-_CALIBRATION_SCORES = "calibration_scores"
-_FUTURE_RECALIBRATION_SCORES = "future_recalibration_scores"
-_TEST_SCORES = "test_scores"
-_CHECKPOINT_SELECTION = "checkpoint_selection"
-
 
 @dataclass(frozen=True, slots=True)
 class ScoreGenerationHandlerConfiguration:
-    """Narrow configuration for ScoreGenerationStageHandler — only the registries it needs."""
-
     experiments: TypedDomainRegistry[ExperimentId, ExperimentRecord]
-    training_profiles: TypedDomainRegistry[TrainingProfileId, TrainingProfileRecord]
+    training_profiles: TypedDomainRegistry[TrainingProfileId, TrainingProfile]
     populations: TypedDomainRegistry[PopulationId, PopulationRecord]
     datasets: TypedDomainRegistry[DatasetId, ResolvedDataset]
-    model_architectures: TypedDomainRegistry[str, ModelArchitectureRecord]
-    batching_profiles: TypedDomainRegistry[str, BatchingRecord]
-    runtime: ResolvedRuntimeConfiguration
-
-
-def _score_split(
-    output_name: str,
-    context: TrainingContext,
-    experiments: TypedDomainRegistry[ExperimentId, ExperimentRecord],
-    populations: TypedDomainRegistry[PopulationId, PopulationRecord],
-    datasets: TypedDomainRegistry[DatasetId, ResolvedDataset],
-) -> str | None:
-    experiment = experiments.get(context.experiment_id)
-    population = populations.get(context.population_id or experiment.population_ids[0])
-    dataset = datasets.get(population.dataset_id)
-    setup = dataset.setup(population.setup_id)
-    materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
-    temporal = materialization.split.method is SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL
-    if output_name == _CALIBRATION_SCORES:
-        return SplitMembership.HISTORICAL_CALIBRATION.value if temporal else SplitMembership.CALIBRATION.value
-    if output_name == _FUTURE_RECALIBRATION_SCORES:
-        return SplitMembership.FUTURE_RECALIBRATION.value if temporal else None
-    if output_name == _TEST_SCORES:
-        return SplitMembership.FUTURE_EVALUATION.value if temporal else SplitMembership.TEST.value
-    return None
+    model_architectures: TypedDomainRegistry[str, DenseAutoencoderProfile]
+    batching_profiles: TypedDomainRegistry[str, BatchingProfile]
+    learning_data_schemas: TypedDomainRegistry[str, LearningDataSchema]
+    runtime_profile: TorchRuntimeProfile
 
 
 class ScoreGenerationStageHandler:
     stage = StageKind.SCORE_GENERATION
 
-    def __init__(self, config: ScoreGenerationHandlerConfiguration, store: ArtifactStore) -> None:
+    def __init__(
+        self,
+        config: ScoreGenerationHandlerConfiguration,
+        store: ArtifactStore,
+        service: ReconstructionScoringService,
+    ) -> None:
         self._config = config
         self._store = store
+        self._service = service
 
     def execute(self, job: StageJob) -> StageJobOutcome:
-        assert isinstance(job.context, TrainingContext)
-        ctx = job.context
-        output_name = job.outputs[0].name
-        split = _score_split(
-            output_name, ctx, self._config.experiments, self._config.populations, self._config.datasets
-        )
-        if split is None:
-            return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message="Unknown score output")
-        experiment = self._config.experiments.get(ctx.experiment_id)
-        profile = self._config.training_profiles.get(experiment.training_profile_id)
         try:
-            selection_path = job.input_path("selection_evidence")
-            if profile.checkpoint_authorization is CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE and any(
-                item.name == _CHECKPOINT_SELECTION for item in job.inputs
-            ):
-                selection_path = job.input_path("checkpoint_selection")
-            selection = json.loads(self._store.read_bytes(selection_path))
-            selected_round = selection.get("selected_round") if isinstance(selection, dict) else None
-            if not isinstance(selected_round, int):
-                raise ValueError("Selected-checkpoint evidence is malformed")
-            checkpoint = self._store.read_bytes(job.input_path("checkpoint"))
-            materialization = self._store.read_bytes(job.input_path("materialization"))
-            personalized = (
-                self._store.read_bytes(job.input_path("personalized_checkpoint"))
-                if profile.personalization is PersonalizationStrategy.DITTO
-                else None
+            context = self._training_context(job)
+            output_kind = self._output_kind(job)
+            profile, architecture, batching, data_schema = self._resolve(context)
+            split = self._split(output_kind, data_schema)
+            selection = self._selection_evidence(job, profile)
+            materialization = read_materialization(
+                self._store.read_bytes(job.input_path(LearningArtifactKind.MATERIALIZATION.value)),
+                tuple(data_schema.feature_columns),
             )
-        except (KeyError, OSError, ValueError) as exc:
-            return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message=str(exc))
-
-        population = self._config.populations.get(ctx.population_id or experiment.population_ids[0])
-        dataset = self._config.datasets[DatasetId(population.dataset_id.value)]
-        architecture = self._config.model_architectures.get(profile.model_architecture_id)
-        batching = self._config.batching_profiles.get(profile.batching_profile_id)
-        try:
-            if self._config.runtime.active_execution_profile.device_policy != DevicePolicy.CUDA_REQUIRED:
-                raise ValueError("Score generation requires the configured CUDA-required execution profile")
-            with TemporaryDirectory(prefix="datp_scoring_") as temporary_directory:
-                materialized_path = Path(temporary_directory) / "materialized.parquet"
-                materialized_path.write_bytes(materialization)
-                feature_columns = materialized_feature_columns(materialized_path)
-                if personalized is not None:
-                    client_ids = (
-                        pl.read_parquet(materialized_path, columns=["client_id"])["client_id"].unique().sort().to_list()
-                    )
-                    models = build_personalized_models_from_bytes(
-                        personalized,
-                        selected_round,
-                        client_ids,
-                        len(feature_columns),
-                        tuple(int(value.value) for value in architecture.hidden_dims),
-                    )
-                    scores = score_personalized_materialized_split(
-                        models,
-                        materialized_path,
-                        split=split,
-                        feature_columns=feature_columns,
-                        batch_size=int(batching.micro_batch_size.value),
-                        device=require_cuda_training_device(),
-                    )
-                else:
-                    model = build_model_from_checkpoint_bytes(
-                        checkpoint,
-                        selected_round,
-                        len(feature_columns),
-                        tuple(int(value.value) for value in architecture.hidden_dims),
-                    )
-                    scores = score_materialized_split(
-                        model,
-                        materialized_path,
-                        split=split,
-                        feature_columns=feature_columns,
-                        batch_size=int(batching.micro_batch_size.value),
-                        device=require_cuda_training_device(),
-                    )
-        except (OSError, RuntimeError, ValueError) as exc:
-            return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message=str(exc))
-
-        scores = scores.with_columns(
-            pl.lit(job.input_path("checkpoint")).alias("checkpoint_path"),
-            pl.lit(ctx.seed).alias("seed"),
-            pl.lit(ScoreOrientation.HIGHER_MORE_ANOMALOUS.value).alias("score_orientation"),
-        )
-        try:
+            runtime = create_runtime(self._config.runtime_profile, architecture.precision)
+            if isinstance(profile, DittoTrainingProfile):
+                request = PersonalizedScoringRequest(
+                    materialization=materialization,
+                    split=split,
+                    personalized_checkpoint_payload=self._store.read_bytes(
+                        job.input_path(LearningArtifactKind.PERSONALIZED_CHECKPOINT.value)
+                    ),
+                    selected_round=int(selection.selected_round),
+                    architecture=architecture,
+                    batching=batching,
+                    runtime=runtime,
+                    model_initialization_seed=int(selection.model_initialization_seed),
+                )
+            else:
+                request = GlobalScoringRequest(
+                    materialization=materialization,
+                    split=split,
+                    checkpoint_payload=self._store.read_bytes(
+                        job.input_path(LearningArtifactKind.CHECKPOINT.value)
+                    ),
+                    selected_round=int(selection.selected_round),
+                    architecture=architecture,
+                    batching=batching,
+                    runtime=runtime,
+                    model_initialization_seed=int(selection.model_initialization_seed),
+                )
+            scores = self._service.score(request).with_columns(
+                pl.lit(job.input_path(LearningArtifactKind.CHECKPOINT.value)).alias("checkpoint_path"),
+                pl.lit(int(context.seed)).alias("seed"),
+                pl.lit(ScoreOrientation.HIGHER_MORE_ANOMALOUS.value).alias("score_orientation"),
+            )
             validated = (
                 validate_test_score_frame(scores)
-                if output_name == _TEST_SCORES
+                if output_kind is ScoreArtifactKind.TEST_SCORES
                 else validate_calibration_score_frame(scores)
             )
             payload = BytesIO()
             validated.write_parquet(payload)
-            self._store.write_bytes_atomic(job.output_path(output_name), payload.getvalue())
-        except (OSError, ValueError) as exc:
-            return StageJobOutcome.failed(node_key=job.node_key, stage=job.stage, error_message=str(exc))
-        return StageJobOutcome.succeeded(node_key=job.node_key, stage=job.stage, produced_outputs=job.outputs)
+            self._store.write_bytes_atomic(job.output_path(output_kind.value), payload.getvalue())
+        except (KeyError, OSError, RuntimeError, TypeError, ValueError) as exc:
+            return StageJobOutcome.failed(
+                node_key=job.node_key,
+                stage=job.stage,
+                error_message=str(exc),
+            )
+        return StageJobOutcome.succeeded(
+            node_key=job.node_key,
+            stage=job.stage,
+            produced_outputs=job.outputs,
+        )
+
+    def _resolve(
+        self,
+        context: TrainingContext,
+    ) -> tuple[TrainingProfile, DenseAutoencoderProfile, BatchingProfile, LearningDataSchema]:
+        experiment = self._config.experiments.get(context.experiment_id)
+        profile = self._config.training_profiles.get(experiment.training_profile_id)
+        architecture = self._config.model_architectures.get(profile.model_architecture_id)
+        batching = self._config.batching_profiles.get(profile.batching_profile_id)
+        population = self._config.populations.get(context.population_id)
+        dataset = self._config.datasets.get(population.dataset_id)
+        setup = dataset.setup(population.setup_id)
+        materialization = next(
+            item for item in dataset.materializations if item.identifier == setup.materialization_id
+        )
+        data_schema = self._config.learning_data_schemas.get(materialization.learning_schema_id)
+        return profile, architecture, batching, data_schema
+
+    def _selection_evidence(
+        self,
+        job: StageJob,
+        profile: TrainingProfile,
+    ) -> CheckpointSelectionEvidence:
+        input_kind = (
+            LearningArtifactKind.CHECKPOINT_SELECTION
+            if profile.checkpoint_authorization is CheckpointAuthorization.PRIMARY_SELECTION
+            else LearningArtifactKind.SELECTION_EVIDENCE
+        )
+        return CheckpointSelectionEvidence.model_validate_json(
+            self._store.read_bytes(job.input_path(input_kind.value))
+        )
+
+    @staticmethod
+    def _split(output_kind: ScoreArtifactKind, data_schema: LearningDataSchema) -> SplitMembership:
+        profile = data_schema.split_profile
+        match profile:
+            case StandardSplitProfile():
+                match output_kind:
+                    case ScoreArtifactKind.CALIBRATION_SCORES:
+                        return profile.calibration
+                    case ScoreArtifactKind.TEST_SCORES:
+                        return profile.test
+                    case ScoreArtifactKind.FUTURE_RECALIBRATION_SCORES:
+                        raise ValueError("Standard split profile has no future recalibration split")
+            case TemporalSplitProfile():
+                match output_kind:
+                    case ScoreArtifactKind.CALIBRATION_SCORES:
+                        return profile.calibration
+                    case ScoreArtifactKind.FUTURE_RECALIBRATION_SCORES:
+                        return profile.future_recalibration
+                    case ScoreArtifactKind.TEST_SCORES:
+                        return profile.test
+        raise ValueError("Score artifact kind has no split binding")
+
+    @staticmethod
+    def _training_context(job: StageJob) -> TrainingContext:
+        if not isinstance(job.context, TrainingContext):
+            raise TypeError("Score generation requires TrainingContext")
+        if job.context.population_id is None:
+            raise ValueError("Score generation requires an explicitly resolved population identifier")
+        if job.context.seed is None:
+            raise ValueError("Score generation requires an explicitly resolved training seed")
+        return job.context
+
+    @staticmethod
+    def _output_kind(job: StageJob) -> ScoreArtifactKind:
+        if len(job.outputs) != 1:
+            raise ValueError("Score generation requires exactly one declared output")
+        (output,) = job.outputs
+        return ScoreArtifactKind(output.name)
