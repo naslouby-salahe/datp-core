@@ -10,7 +10,12 @@ from datp_core.protocols.calibration import (
     CALIBRATION_SIZES,
     CANONICAL_QUANTILE,
     CLUSTER_THRESHOLD_PROTOCOL,
+    CONFORMAL_PROTOCOL,
+    FEDERATED_STATISTICS_PROTOCOL,
+    FIXED_SHRINKAGE_PROTOCOL,
+    LOCAL_THRESHOLD_PROTOCOL,
     QUANTILE_GRID,
+    SHARED_THRESHOLD_PROTOCOL,
 )
 
 
@@ -18,6 +23,11 @@ def test_calibration_grids_are_locked() -> None:
     assert CANONICAL_QUANTILE.value == 0.95
     assert tuple(item.value for item in QUANTILE_GRID) == (0.9, 0.95, 0.975, 0.99)
     assert tuple(item.value for item in CALIBRATION_SIZES) == (50, 100, 250, 500, 1000, 5000)
+    assert SHARED_THRESHOLD_PROTOCOL.quantile == CANONICAL_QUANTILE
+    assert LOCAL_THRESHOLD_PROTOCOL.quantile == CANONICAL_QUANTILE
+    assert FIXED_SHRINKAGE_PROTOCOL.weights[0].value == 0
+    assert CONFORMAL_PROTOCOL.coverage.value == 0.95
+    assert FEDERATED_STATISTICS_PROTOCOL.coefficients[-1].value == 3
 
 
 def test_grouped_threshold_assignment_matches_the_locked_b4_fingerprint_protocol() -> None:

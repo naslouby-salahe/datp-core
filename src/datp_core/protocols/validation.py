@@ -32,6 +32,8 @@ def validate_protocol_graph(
         population = next(population for population in populations if population.id == experiment.population)
         if experiment.role is EvidenceRole.CONFIRMATORY and not population.confirmatory_eligible:
             raise ProtocolValidationError("Confirmatory experiments require confirmatory-eligible populations")
+        if experiment.role is EvidenceRole.TEMPORAL_BOUNDARY and not population.has_chronology:
+            raise ProtocolValidationError("Temporal experiments require populations with verified chronology")
         if (
             FederatedThresholdMethod.FAMILY_THRESHOLD in experiment.federated_thresholds
             and not population.has_family_taxonomy

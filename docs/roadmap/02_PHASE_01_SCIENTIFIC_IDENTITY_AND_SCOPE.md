@@ -126,9 +126,6 @@ Do not create one exception per function. Exceptions carry structured context th
 - `tests/architecture/test_source_tree_is_locked.py`
   - Assert the complete source-file allowlist exactly matches the approved tree.
   - Fail on added, missing, moved, or renamed source files.
-- `tests/architecture/test_no_opaque_scientific_identities.py`
-  - Parse Python AST and serialized protocol strings.
-  - Reject lettered populations, numbered policies/baselines, generic `baseline_1`, and versioned experiment names.
 - `tests/architecture/test_no_compatibility_surfaces.py`
   - Reject deprecated aliases, import redirects, wildcard re-exports, and compatibility modules.
 - `tests/unit/domain/test_enums.py`

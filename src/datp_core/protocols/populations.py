@@ -22,13 +22,13 @@ POPULATIONS = (
         client_count=ClientCount(20),
         has_attack_assignment=True,
         has_chronology=False,
-        has_family_taxonomy=True,
+        has_family_taxonomy=False,
         confirmatory_eligible=False,
     ),
     PopulationDeclaration(
         id=PopulationId.CICIOT_FILE_CLIENTS,
         dataset=DatasetId.CICIOT2023,
-        client_count=ClientCount(1),
+        client_count=ClientCount(63),
         has_attack_assignment=False,
         has_chronology=False,
         has_family_taxonomy=False,
@@ -37,7 +37,7 @@ POPULATIONS = (
     PopulationDeclaration(
         id=PopulationId.EDGE_SENSOR_GROUPS,
         dataset=DatasetId.EDGE_IIOTSET,
-        client_count=ClientCount(1),
+        client_count=ClientCount(10),
         has_attack_assignment=False,
         has_chronology=False,
         has_family_taxonomy=False,
@@ -46,7 +46,7 @@ POPULATIONS = (
     PopulationDeclaration(
         id=PopulationId.EDGE_TEMPORAL_GROUPS,
         dataset=DatasetId.EDGE_IIOTSET,
-        client_count=ClientCount(1),
+        client_count=ClientCount(9),
         has_attack_assignment=False,
         has_chronology=True,
         has_family_taxonomy=False,

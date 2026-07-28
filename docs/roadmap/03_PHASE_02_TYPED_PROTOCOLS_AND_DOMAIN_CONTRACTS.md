@@ -216,8 +216,6 @@ Validation must reject:
 ## Test files to implement
 
 - `tests/unit/domain/test_values.py`
-- `tests/unit/domain/test_provenance.py`
-- `tests/unit/domain/test_contracts.py`
 - `tests/unit/protocols/test_models.py`
 - `tests/unit/protocols/test_seed_declarations.py`
 - `tests/unit/protocols/test_split_declarations.py`
@@ -225,11 +223,9 @@ Validation must reject:
 - `tests/unit/protocols/test_calibration_declarations.py`
 - `tests/unit/protocols/test_metric_declarations.py`
 - `tests/unit/protocols/test_statistical_declarations.py`
-- `tests/unit/protocols/test_traffic_rate_declarations.py`
 - `tests/unit/protocols/test_anchor_declarations.py`
 - `tests/unit/protocols/test_population_declarations.py`
 - `tests/unit/protocols/test_experiment_declarations.py`
-- `tests/unit/protocols/test_runtime_declarations.py`
 - `tests/unit/protocols/test_protocol_graph_validation.py`
 - `tests/property/test_scientific_value_objects.py`
 

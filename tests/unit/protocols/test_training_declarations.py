@@ -1,14 +1,18 @@
 from datp_core.domain.enums import OptimizerId
 from datp_core.protocols.training import (
     BATCH_SIZE,
+    CENTRALIZED_TRAINING_PROTOCOL,
     CHECKPOINT_PROTOCOL,
     DITTO_ALTERNATIVE_ROUTE_DIFFERENCE,
     DITTO_PARTIAL_EFFECT_MINIMUM,
     DITTO_PRIMARY_REGULARIZATION,
     DITTO_REGULARIZATION_GRID,
     DITTO_RETAINED_EFFECT_MINIMUM,
+    DITTO_TRAINING_PROTOCOLS,
     FEDAVG_LOCAL_EPOCHS,
+    FEDAVG_TRAINING_PROTOCOL,
     FEDPROX_COEFFICIENTS,
+    FEDPROX_TRAINING_PROTOCOLS,
     LEARNING_RATE,
     NBAIOT_AUTOENCODER,
     OPTIMIZER,
@@ -28,3 +32,7 @@ def test_training_grids_are_locked() -> None:
     assert BATCH_SIZE.value == 256
     assert tuple(value.value for value in DITTO_REGULARIZATION_GRID) == (0.05, 0.1, 0.2)
     assert DITTO_PRIMARY_REGULARIZATION.value == 0.1
+    assert CENTRALIZED_TRAINING_PROTOCOL.optimizer == OPTIMIZER
+    assert FEDAVG_TRAINING_PROTOCOL.local_epochs == FEDAVG_LOCAL_EPOCHS
+    assert tuple(item.coefficient for item in FEDPROX_TRAINING_PROTOCOLS) == FEDPROX_COEFFICIENTS
+    assert tuple(item.regularization for item in DITTO_TRAINING_PROTOCOLS) == DITTO_REGULARIZATION_GRID

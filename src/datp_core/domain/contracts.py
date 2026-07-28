@@ -7,70 +7,70 @@ from typing import Protocol, runtime_checkable
 
 
 @runtime_checkable
-class DatasetReader(Protocol):
-    def read(self, path: Path) -> object: ...
+class DatasetReader[DatasetContract](Protocol):
+    def read(self, path: Path) -> DatasetContract: ...
 
 
 @runtime_checkable
-class DatasetMaterializer(Protocol):
-    def materialize(self, source: Path, destination: Path) -> Path: ...
+class DatasetMaterializer[SourceDatasetContract, MaterializedDatasetContract](Protocol):
+    def materialize(self, source: SourceDatasetContract, destination: Path) -> MaterializedDatasetContract: ...
 
 
 @runtime_checkable
-class PopulationBuilder(Protocol):
-    def build(self, dataset: object) -> object: ...
+class PopulationBuilder[DatasetContract, PopulationContract](Protocol):
+    def build(self, dataset: DatasetContract) -> PopulationContract: ...
 
 
 @runtime_checkable
-class Preprocessor(Protocol):
-    def transform(self, dataset: object) -> object: ...
+class Preprocessor[DatasetContract, ProcessedDatasetContract](Protocol):
+    def transform(self, dataset: DatasetContract) -> ProcessedDatasetContract: ...
 
 
 @runtime_checkable
-class Trainer(Protocol):
-    def train(self, dataset: object) -> object: ...
+class Trainer[DatasetContract, ModelContract](Protocol):
+    def train(self, dataset: DatasetContract) -> ModelContract: ...
 
 
 @runtime_checkable
-class CheckpointSelector(Protocol):
-    def select(self, checkpoints: tuple[object, ...]) -> object: ...
+class CheckpointSelector[CheckpointContract](Protocol):
+    def select(self, checkpoints: tuple[CheckpointContract, ...]) -> CheckpointContract: ...
 
 
 @runtime_checkable
-class ScoreGenerator(Protocol):
-    def score(self, model: object, dataset: object) -> object: ...
+class ScoreGenerator[ModelContract, DatasetContract, ScoreSetContract](Protocol):
+    def score(self, model: ModelContract, dataset: DatasetContract) -> ScoreSetContract: ...
 
 
 @runtime_checkable
-class FederatedThresholdEstimator(Protocol):
-    def estimate_federated(self, scores: tuple[object, ...]) -> object: ...
+class FederatedThresholdEstimator[ScoreSetContract, ThresholdContract](Protocol):
+    def estimate_federated(self, scores: tuple[ScoreSetContract, ...]) -> ThresholdContract: ...
 
 
 @runtime_checkable
-class CentralizedThresholdEstimator(Protocol):
-    def estimate_centralized(self, scores: object) -> object: ...
+class CentralizedThresholdEstimator[ScoreSetContract, ThresholdContract](Protocol):
+    def estimate_centralized(self, scores: ScoreSetContract) -> ThresholdContract: ...
 
 
 @runtime_checkable
-class MetricEvaluator(Protocol):
-    def evaluate(self, scores: object, threshold: object) -> object: ...
+class MetricEvaluator[ScoreSetContract, ThresholdContract, MetricResultContract](Protocol):
+    def evaluate(self, scores: ScoreSetContract, threshold: ThresholdContract) -> MetricResultContract: ...
 
 
 @runtime_checkable
-class StageHandler(Protocol):
-    def handle_stage(self, stage: str) -> None: ...
+class StageHandler[StageContract](Protocol):
+    def handle_stage(self, stage: StageContract) -> None: ...
 
 
 @runtime_checkable
-class ArtifactSerializer(Protocol):
-    def serialize(self, value: object, destination: Path) -> Path: ...
+class ArtifactSerializer[ArtifactContract](Protocol):
+    def serialize(self, value: ArtifactContract, destination: Path) -> Path: ...
 
 
 @runtime_checkable
-class ArtifactStore(Protocol):
-    def load(self, path: Path) -> object: ...
+class ArtifactStore[ArtifactContract](Protocol):
+    def load(self, path: Path) -> ArtifactContract: ...
 
 
 @runtime_checkable
-class StageHook(Protocol):
-    def after_stage(self, stage: str) -> None: ...
+class StageHook[StageContract](Protocol):
+    def after_stage(self, stage: StageContract) -> None: ...
