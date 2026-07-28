@@ -223,9 +223,7 @@ class FederatedTrainingEngine:
     ) -> TrainingResult:
         common = request.common
         if common.architecture.normalization is NormalizationKind.BATCH_NORMALIZATION:
-            raise LearningConfigurationError(
-                "Federated dense autoencoder profiles must not aggregate BatchNorm state"
-            )
+            raise LearningConfigurationError("Federated dense autoencoder profiles must not aggregate BatchNorm state")
         initialization_seed = self._initialization_seed(common)
         global_model = build_autoencoder(
             common.architecture,
@@ -303,8 +301,7 @@ class FederatedTrainingEngine:
         )
         initial_state = capture_model_state(global_model)
         personalized_states = tuple(
-            ClientModelState(client_id=client.client_id, state=initial_state)
-            for client in common.training_clients
+            ClientModelState(client_id=client.client_id, state=initial_state) for client in common.training_clients
         )
         metrics: list[RoundMetric] = []
         global_checkpoints: list[CapturedCheckpoint] = []
@@ -449,9 +446,7 @@ class FederatedTrainingEngine:
         return derive_execution_seed(
             common.seed_derivation.model_initialization,
             int(common.seed_derivation.digest_bytes),
-            (
-                SeedComponent("training_seed", int(common.training_seed)),
-            ),
+            (SeedComponent("training_seed", int(common.training_seed)),),
         )
 
     def _seeds(
@@ -513,10 +508,7 @@ class FederatedTrainingEngine:
         for _, state in weighted_states:
             if tuple(parameter.name for parameter in state.parameters) != template_names:
                 raise LearningRuntimeError("Federated client states do not share an identical parameter order")
-        flower_results = [
-            (list(state_to_ndarrays(state)), row_count)
-            for row_count, state in weighted_states
-        ]
+        flower_results = [(list(state_to_ndarrays(state)), row_count) for row_count, state in weighted_states]
         aggregated_arrays = aggregate(flower_results)
         return ndarrays_to_state(template, tuple(aggregated_arrays))
 

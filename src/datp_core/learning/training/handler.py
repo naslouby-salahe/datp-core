@@ -22,9 +22,9 @@ from datp_core.learning.checkpoints.codec import (
 from datp_core.learning.checkpoints.selection import CheckpointSelectionError, select_checkpoint_round
 from datp_core.learning.contracts.checkpoints import (
     AuthorizedLookupSelection,
+    CentralizedAlgorithmEvidence,
     CheckpointProfile,
     CheckpointSelectionEvidence,
-    CentralizedAlgorithmEvidence,
     DittoAlgorithmEvidence,
     FedAvgAlgorithmEvidence,
     FedProxAlgorithmEvidence,
@@ -45,6 +45,7 @@ from datp_core.learning.contracts.training import (
     FedProxTrainingProfile,
     TrainingProfile,
 )
+from datp_core.core.seeding import Seed
 from datp_core.learning.model.runtime import SeedDerivationProfile, TorchRuntimeProfile, create_runtime
 from datp_core.learning.scoring.data import benign_client_tensors, read_materialization
 from datp_core.learning.training.engine import (
@@ -52,8 +53,8 @@ from datp_core.learning.training.engine import (
     CommonExecutionRequest,
     DittoExecutionRequest,
     FedAvgExecutionRequest,
-    FedProxExecutionRequest,
     FederatedTrainingEngine,
+    FedProxExecutionRequest,
     LearningError,
     TrainingResult,
 )
@@ -94,11 +95,10 @@ class ModelTrainingStageHandler:
     def execute(self, job: StageJob) -> StageJobOutcome:
         try:
             context = self._training_context(job)
+            assert context.seed is not None
             profile, checkpoint_profile, architecture, optimizer, batching, data_schema = self._resolve(context)
             self._validate_outputs(job, profile)
-            materialization_payload = self._store.read_bytes(
-                job.input_path(LearningArtifactKind.MATERIALIZATION.value)
-            )
+            materialization_payload = self._store.read_bytes(job.input_path(LearningArtifactKind.MATERIALIZATION.value))
             materialization = read_materialization(
                 materialization_payload,
                 tuple(data_schema.feature_columns),
@@ -120,7 +120,7 @@ class ModelTrainingStageHandler:
                 batching=batching,
                 checkpoint_rounds=tuple(int(value) for value in checkpoint_profile.capture_rounds),
                 total_rounds=int(checkpoint_profile.total_rounds),
-                training_seed=context.seed,
+                training_seed=Seed(context.seed),
                 seed_derivation=self._config.seed_derivation,
                 runtime=runtime,
                 training_clients=training_clients,
@@ -155,6 +155,7 @@ class ModelTrainingStageHandler:
         BatchingProfile,
         LearningDataSchema,
     ]:
+        assert context.population_id is not None
         experiment = self._config.experiments.get(context.experiment_id)
         profile = self._config.training_profiles.get(experiment.training_profile_id)
         checkpoint_profile = self._config.checkpoint_profiles.get(experiment.checkpoint_profile_id)
@@ -164,10 +165,11 @@ class ModelTrainingStageHandler:
         population = self._config.populations.get(context.population_id)
         dataset = self._config.datasets.get(population.dataset_id)
         setup = dataset.setup(population.setup_id)
-        materialization = next(
-            item for item in dataset.materializations if item.identifier == setup.materialization_id
-        )
-        data_schema = self._config.learning_data_schemas.get(materialization.learning_schema_id)
+        materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
+        learning_schema_id = getattr(materialization, "learning_schema_id", None)
+        if learning_schema_id is None:
+            raise TypeError("Materialization definition is missing learning_schema_id")
+        data_schema = self._config.learning_data_schemas.get(learning_schema_id)
         return profile, checkpoint_profile, architecture, optimizer, batching, data_schema
 
     def _execution_request(
@@ -207,9 +209,7 @@ class ModelTrainingStageHandler:
     def _lookup_round(self, job: StageJob, checkpoint_profile: CheckpointProfile) -> int | None:
         if not isinstance(checkpoint_profile.selection, AuthorizedLookupSelection):
             return None
-        payload = self._store.read_bytes(
-            job.input_path(LearningArtifactKind.CHECKPOINT_SELECTION.value)
-        )
+        payload = self._store.read_bytes(job.input_path(LearningArtifactKind.CHECKPOINT_SELECTION.value))
         evidence = CheckpointSelectionEvidence.model_validate_json(payload)
         if evidence.algorithm.algorithm is not checkpoint_profile.selection.required_algorithm:
             raise ValueError("Checkpoint lookup evidence was produced by an unauthorized algorithm")

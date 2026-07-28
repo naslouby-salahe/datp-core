@@ -112,8 +112,7 @@ def _layout_issues(source: DatasetSourceConfig, inventory: SourceInventory) -> t
                                 code=AuditIssueCode.NO_SOURCE_FILES,
                                 severity=AuditSeverity.BLOCKING,
                                 detail=(
-                                    f"N-BaIoT device '{client.value}' lacks attack-family directory "
-                                    f"'{family.value}'"
+                                    f"N-BaIoT device '{client.value}' lacks attack-family directory '{family.value}'"
                                 ),
                             )
                         )

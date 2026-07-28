@@ -10,18 +10,17 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from datp_core.config.domain_models import EligibilityPolicyRecord
 from datp_core.config.models import ResolvedProjectConfiguration
 from datp_core.config.report_profiles import ReportProfileRecord
 from datp_core.core.identifiers import DatasetId, ExperimentId
 from datp_core.data.contracts.dataset import ResolvedDataset
-from datp_core.config.domain_models import EligibilityPolicyRecord
 from datp_core.evaluation.specs import MetricBundleSpec
 from datp_core.experiments.catalogue.analyses import AnalysisRecord
 from datp_core.experiments.catalogue.evaluations import EvaluationSpecRecord
 from datp_core.experiments.catalogue.models import ExperimentRecord, PopulationRecord
-from datp_core.learning.contracts.checkpoints import CheckpointProfileRecord
-from datp_core.learning.contracts.seeds import SeedCohortRecord
-from datp_core.learning.contracts.training import TrainingProfileRecord
+from datp_core.learning.contracts.checkpoints import CheckpointProfile
+from datp_core.learning.contracts.training import SeedCohortProfile, TrainingProfile
 from datp_core.thresholding.policies import ThresholdPolicyRecord
 
 
@@ -50,9 +49,9 @@ class CompiledExperiment:
 
     record: ExperimentRecord
     populations: tuple[PopulationRecord, ...]
-    training_profile: TrainingProfileRecord
-    checkpoint_profile: CheckpointProfileRecord
-    seed_cohort: SeedCohortRecord
+    training_profile: TrainingProfile
+    checkpoint_profile: CheckpointProfile
+    seed_cohort: SeedCohortProfile
     eligibility_policy: EligibilityPolicyRecord
     evaluations: tuple[CompiledEvaluation, ...]
     analyses: tuple[AnalysisRecord, ...]

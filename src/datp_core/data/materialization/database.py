@@ -54,9 +54,7 @@ def write_query_to_parquet(
     target_path.parent.mkdir(parents=True, exist_ok=True)
     reader = connection.execute(query).fetch_record_batch(rows_per_batch=int(runtime.chunk_row_count))
     compression: str | None = (
-        None
-        if runtime.parquet.compression is ParquetCompression.NONE
-        else str(runtime.parquet.compression)
+        None if runtime.parquet.compression is ParquetCompression.NONE else str(runtime.parquet.compression)
     )
     written_rows = 0
     with pq.ParquetWriter(

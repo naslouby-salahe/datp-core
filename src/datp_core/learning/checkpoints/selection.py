@@ -93,6 +93,4 @@ def _first_qualifying_round(
             return round_cap
         case NoQualifyingRoundPolicy.FAIL:
             raise CheckpointSelectionError("No round satisfied the configured convergence rule")
-    raise CheckpointSelectionError(
-        f"Unsupported no-qualifying-round policy '{selection.no_qualifying_round.value}'"
-    )
+    raise CheckpointSelectionError(f"Unsupported no-qualifying-round policy '{selection.no_qualifying_round.value}'")

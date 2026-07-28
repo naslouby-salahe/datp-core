@@ -247,8 +247,7 @@ def _assign_benign_splits(
     ).fetch_record_batch(rows_per_batch=int(plan.runtime.chunk_row_count))
     for batch in reader:
         roles = tuple(
-            split_membership_for_draw(generator.random(), plan.split.ratios).value
-            for _ in range(batch.num_rows)
+            split_membership_for_draw(generator.random(), plan.split.ratios).value for _ in range(batch.num_rows)
         )
         assignment_batch = pa.RecordBatch.from_arrays(
             (batch.column(0), batch.column(1), pa.array(roles, type=pa.string())),

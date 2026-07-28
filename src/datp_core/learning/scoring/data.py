@@ -36,9 +36,7 @@ def read_materialization(payload: bytes, feature_columns: tuple[str, ...]) -> Ma
     required_columns = (*_SCORE_IDENTITY_COLUMNS, *feature_columns)
     missing = tuple(column for column in required_columns if column not in frame.columns)
     if missing:
-        raise LearningDataError(
-            f"Materialization lacks required columns: {', '.join(missing)}"
-        )
+        raise LearningDataError(f"Materialization lacks required columns: {', '.join(missing)}")
     if frame.select(pl.struct("source_path", "source_row_index").is_duplicated().any()).item():
         raise LearningDataError("Materialization contains duplicate immutable row identities")
     if not np.isfinite(frame.select(*feature_columns).to_numpy()).all():
@@ -51,9 +49,9 @@ def benign_client_tensors(
     split: SplitMembership,
     precision: PrecisionKind,
 ) -> tuple[ClientTensor, ...]:
-    selected = materialization.frame.filter(
-        (pl.col("split") == split.value) & ~pl.col("is_attack")
-    ).select("client_id", *materialization.feature_columns)
+    selected = materialization.frame.filter((pl.col("split") == split.value) & ~pl.col("is_attack")).select(
+        "client_id", *materialization.feature_columns
+    )
     if selected.is_empty():
         raise LearningDataError(f"Materialization has no benign rows for split '{split.value}'")
     clients: list[ClientTensor] = []

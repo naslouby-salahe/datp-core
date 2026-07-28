@@ -16,11 +16,9 @@ import datp_core.config.loading as loading
 import datp_core.config.resolution.runtime as runtime_resolution
 import datp_core.data.contracts as datasets
 import datp_core.experiments.catalogue.models as experiments
-import datp_core.learning.contracts.architecture as learning_arch
 import datp_core.learning.contracts.checkpoints as learning_chk
 import datp_core.learning.contracts.enums as learning_enums
-import datp_core.learning.contracts.optimization as learning_opt
-import datp_core.learning.contracts.seeds as learning_seeds
+import datp_core.learning.contracts.model as learning_model
 import datp_core.learning.contracts.training as learning_train
 
 # (class name, field name) pairs permitted to hold an empty-collection factory default.
@@ -49,7 +47,7 @@ def _is_empty_collection_factory(default: object) -> bool:
 
 def test_resolved_records_have_no_hidden_defaults() -> None:
     offenders: list[str] = []
-    learning_modules = (learning_arch, learning_chk, learning_enums, learning_opt, learning_seeds, learning_train)
+    learning_modules = (learning_chk, learning_enums, learning_model, learning_train)
     for module in (experiments, *learning_modules, loading, runtime_resolution, datasets):
         for class_name, cls in inspect.getmembers(module, inspect.isclass):
             if cls.__module__ != module.__name__ or not attrs.has(cls) or class_name in _EXCLUDED_CLASSES:

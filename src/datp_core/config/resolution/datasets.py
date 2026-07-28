@@ -196,11 +196,7 @@ def _build_ciciot2023_source(d_cfg: AuthoredDatasetConfig) -> CICIoT2023SourceCo
         raise ConfigurationError("CICIoT2023 requires a 'merged' source definition")
     merged = source["merged"]
     source_column_count = field.source_column_count
-    expected_count = (
-        source_column_count["merged"]
-        if isinstance(source_column_count, dict)
-        else source_column_count
-    )
+    expected_count = source_column_count["merged"] if isinstance(source_column_count, dict) else source_column_count
 
     tree = SourceTreeConfig(
         identifier=SourceTreeId("merged"),
@@ -254,9 +250,7 @@ def _build_nbaiot_source(d_cfg: AuthoredDatasetConfig) -> NBaIoTSourceConfig:
 
     source_column_count = field.source_column_count
     expected_count = (
-        next(iter(source_column_count.values()))
-        if isinstance(source_column_count, dict)
-        else source_column_count
+        next(iter(source_column_count.values())) if isinstance(source_column_count, dict) else source_column_count
     )
 
     tree = SourceTreeConfig(
@@ -284,9 +278,7 @@ def _build_nbaiot_source(d_cfg: AuthoredDatasetConfig) -> NBaIoTSourceConfig:
         excluded_device_directories=(),
         benign_filename=layout.benign_file or "benign_traffic.csv",
         benign_file_required_per_device=bool(layout.benign_file_required_per_device),
-        attack_family_directories=tuple(
-            AttackFamilyName(d) for d in (layout.attack_family_dirs or ())
-        ),
+        attack_family_directories=tuple(AttackFamilyName(d) for d in (layout.attack_family_dirs or ())),
         attack_family_required_per_device=bool(layout.attack_family_required_per_device),
         invalid_row_policy=InvalidRowPolicy.FAIL_SOURCE,
     )
@@ -299,9 +291,7 @@ def _build_edge_iiotset_source(d_cfg: AuthoredDatasetConfig) -> EdgeIIoTsetSourc
 
     source_column_count = field.source_column_count
     expected_count = (
-        next(iter(source_column_count.values()))
-        if isinstance(source_column_count, dict)
-        else source_column_count
+        next(iter(source_column_count.values())) if isinstance(source_column_count, dict) else source_column_count
     )
 
     headers = _edge_required_headers(d_cfg)
@@ -343,22 +333,14 @@ def _build_edge_iiotset_source(d_cfg: AuthoredDatasetConfig) -> EdgeIIoTsetSourc
 
     binary_label = field.label_fields.binary_label
     binary_label_column = (
-        str(binary_label.get("column", "Attack_label"))
-        if isinstance(binary_label, dict)
-        else "Attack_label"
+        str(binary_label.get("column", "Attack_label")) if isinstance(binary_label, dict) else "Attack_label"
     )
     benign_value_dict = field.label_fields.benign_value or {}
-    benign_label_str = (
-        str(benign_value_dict.get("Attack_label", "0"))
-        if isinstance(benign_value_dict, dict)
-        else "0"
-    )
+    benign_label_str = str(benign_value_dict.get("Attack_label", "0")) if isinstance(benign_value_dict, dict) else "0"
     multiclass_label = field.label_fields.multiclass_label
     timestamp_field = field.identity_scheme.timestamp_field
     timestamp_column = (
-        timestamp_field.get("column", "frame.time")
-        if isinstance(timestamp_field, dict)
-        else timestamp_field
+        timestamp_field.get("column", "frame.time") if isinstance(timestamp_field, dict) else timestamp_field
     )
 
     encoding = field.categorical_encoding
@@ -380,9 +362,7 @@ def _build_edge_iiotset_source(d_cfg: AuthoredDatasetConfig) -> EdgeIIoTsetSourc
         categorical_columns=tuple(ColumnName(name) for name in encoding.columns),
         binary_label_column=ColumnName(binary_label_column),
         multiclass_label_column=(
-            ColumnName(multiclass_label.column)
-            if multiclass_label is not None
-            else ColumnName("Attack_type")
+            ColumnName(multiclass_label.column) if multiclass_label is not None else ColumnName("Attack_type")
         ),
         timestamp_column=ColumnName(str(timestamp_column)),
         benign_label=LabelValue(benign_label_str),
@@ -706,8 +686,7 @@ def _resolve_family_assignments(
     if family_map is None:
         return ()
     return tuple(
-        ClientFamilyAssignment(client_id=ClientId(device), family=str(family))
-        for device, family in family_map.items()
+        ClientFamilyAssignment(client_id=ClientId(device), family=str(family)) for device, family in family_map.items()
     )
 
 
@@ -721,9 +700,7 @@ def _resolve_setups(
             materialization_id=MaterializationId(setup_cfg.materialization),
             capabilities=_resolve_capabilities(setup_cfg),
             client_construction=_build_client_construction_config(setup_cfg.client_construction),
-            eligibility_policy_id=EligibilityPolicyId(
-                setup_cfg.eligibility_gate or d_cfg.eligibility_policy
-            ),
+            eligibility_policy_id=EligibilityPolicyId(setup_cfg.eligibility_gate or d_cfg.eligibility_policy),
         )
         for identifier, setup_cfg in sorted(d_cfg.setups.items())
     )
@@ -895,9 +872,7 @@ def resolve_datasets(
     for d_cfg in authored_datasets:
         d_id = DatasetId(d_cfg.dataset)
         if d_id in resolved:
-            raise ConfigurationError(
-                f"Duplicate dataset identifier across dataset documents: '{d_cfg.dataset}'"
-            )
+            raise ConfigurationError(f"Duplicate dataset identifier across dataset documents: '{d_cfg.dataset}'")
         adapter_kind = resolve_adapter_kind(d_cfg.dataset)
         source = _build_source_config(d_cfg, adapter_kind)
         resolved[d_id] = _build_single_dataset(d_id, d_cfg, adapter_kind, source, paths)

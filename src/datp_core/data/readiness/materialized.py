@@ -82,11 +82,7 @@ def assess_materialized_readiness(
     if temporal_shape:
         issues.extend(_chronology_issues(summary))
     if plan.eligibility.require_non_empty_benign_test:
-        test_membership = (
-            SplitMembership.FUTURE_EVALUATION
-            if temporal_shape
-            else SplitMembership.TEST
-        )
+        test_membership = SplitMembership.FUTURE_EVALUATION if temporal_shape else SplitMembership.TEST
         for client_id in summary.client_ids:
             if _benign_count(summary, client_id, test_membership) == 0:
                 issues.append(
@@ -128,11 +124,7 @@ def _required_memberships(plan: DatasetMaterializationPlan) -> tuple[SplitMember
 def _chronology_issues(summary: MaterializedSplitSummary) -> tuple[DatasetAuditIssue, ...]:
     issues: list[DatasetAuditIssue] = []
     for chronology in summary.chronology_ranges:
-        total = sum(
-            count.row_count
-            for count in summary.client_split_counts
-            if count.client_id == chronology.client_id
-        )
+        total = sum(count.row_count for count in summary.client_split_counts if count.client_id == chronology.client_id)
         if chronology.minimum_key != 0 or chronology.maximum_key != total - 1:
             issues.append(
                 _blocking(

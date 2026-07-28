@@ -82,9 +82,7 @@ def normalize_materialized_parquet(
         )
     statistics_table = "normalization_statistics"
     connection.execute(f"DROP TABLE IF EXISTS {quote_identifier(statistics_table)}")
-    connection.execute(
-        _statistics_query(source_path, statistics_table, feature_names, config, fit_membership)
-    )
+    connection.execute(_statistics_query(source_path, statistics_table, feature_names, config, fit_membership))
     statistics = _read_evidence(connection, statistics_table, feature_names, config.fit_scope)
     _validate_scope_coverage(connection, source_path, statistics_table, config.fit_scope)
     _validate_statistics(connection, statistics_table, feature_names, config, source_path)
@@ -102,7 +100,6 @@ def normalize_materialized_parquet(
 
 def encode_normalization_evidence(evidence: NormalizationEvidence) -> bytes:
     return msgspec.json.encode(evidence)
-
 
 
 def _fetch_scalar(connection, query, source_path):
@@ -138,9 +135,7 @@ def _statistics_query(
     membership: SplitMembership,
 ) -> str:
     aggregations = ", ".join(
-        expression
-        for feature in feature_names
-        for expression in _feature_aggregations(feature, config)
+        expression for feature in feature_names for expression in _feature_aggregations(feature, config)
     )
     client_projection = (
         f"{quote_identifier(MaterializedColumn.CLIENT_ID.value)}, "
@@ -279,8 +274,7 @@ def _validate_out_of_range(
     )
     count = _fetch_count(
         connection,
-        f"SELECT count(*) FROM read_parquet({quote_literal(source_path.as_posix())}) s {join} "
-        f"WHERE {predicate}",
+        f"SELECT count(*) FROM read_parquet({quote_literal(source_path.as_posix())}) s {join} WHERE {predicate}",
     )
     if count:
         raise DataFailure(
@@ -310,9 +304,7 @@ def _transformation_query(
         if config.fit_scope is NormalizationFitScope.PER_CLIENT_TRAIN
         else f"CROSS JOIN {quote_identifier(statistics_table)} n"
     )
-    return (
-        f"SELECT {projections} FROM read_parquet({quote_literal(source_path.as_posix())}) s {join}"
-    )
+    return f"SELECT {projections} FROM read_parquet({quote_literal(source_path.as_posix())}) s {join}"
 
 
 def _normalized_projection(feature: str, config: NormalizationConfig) -> str:
@@ -378,9 +370,7 @@ def _validate_scope_coverage(
         f"FROM read_parquet({quote_literal(source_path.as_posix())}) "
         f"WHERE NOT {quote_identifier(MaterializedColumn.IS_ATTACK.value)}",
     )
-    stats_count = _fetch_scalar(connection, 
-            f"SELECT count(*) FROM {quote_identifier(statistics_table)}"
-        , source_path)
+    stats_count = _fetch_scalar(connection, f"SELECT count(*) FROM {quote_identifier(statistics_table)}", source_path)
     if stats_count != client_count:
         raise DataFailure(
             DataFailureCode.NORMALIZATION,

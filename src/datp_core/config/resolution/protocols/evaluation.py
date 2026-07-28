@@ -23,13 +23,9 @@ def resolve_eligibility_policies(
     return {
         EligibilityPolicyId(k): EligibilityPolicy(
             identifier=EligibilityPolicyId(k),
-            minimum_benign_calibration_count=PositiveInt(v.minimum_benign_calibration_count),
-            require_non_empty_benign_test=(
-                v.fpr_evaluable_requires_non_empty_benign_test_denominator
-            ),
-            required_attack_capabilities=tuple(
-                DatasetCapability(cap) for cap in v.attack_evaluable_requires
-            ),
+            minimum_benign_calibration_count=int(v.minimum_benign_calibration_count),
+            require_non_empty_benign_test=(v.fpr_evaluable_requires_non_empty_benign_test_denominator),
+            required_attack_capabilities=tuple(DatasetCapability(cap) for cap in v.attack_evaluable_requires),
             exclude_ineligible_clients_from_primary_dispersion=v.ineligible_clients_excluded_from_primary_dispersion,
             zero_eligible_clients_is_blocking=bool(v.zero_eligible_clients_behavior),
         )

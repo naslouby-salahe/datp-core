@@ -132,15 +132,11 @@ def _initialize_parameters(model: nn.Module, profile: DenseAutoencoderProfile) -
             case WeightInitializationKind.XAVIER_UNIFORM:
                 nn.init.xavier_uniform_(module.weight)
             case _:
-                raise ValueError(
-                    f"Unsupported weight initialization '{profile.weight_initialization.value}'"
-                )
+                raise ValueError(f"Unsupported weight initialization '{profile.weight_initialization.value}'")
         if module.bias is None:
             continue
         match profile.bias_initialization:
             case BiasInitializationKind.ZERO:
                 nn.init.zeros_(module.bias)
             case _:
-                raise ValueError(
-                    f"Unsupported bias initialization '{profile.bias_initialization.value}'"
-                )
+                raise ValueError(f"Unsupported bias initialization '{profile.bias_initialization.value}'")

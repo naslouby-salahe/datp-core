@@ -9,8 +9,6 @@ from datp_core.config.domain_models import (
     NormalizationFitScopes,
     PopulationReadinessRule,
 )
-from datp_core.data.contracts.eligibility import EligibilityPolicy
-from datp_core.data.contracts.materialization import NormalizationConfig
 from datp_core.config.operational_contracts import (
     CommunicationEstimationContractRecord,
     OperationalInputsRecord,
@@ -35,6 +33,8 @@ from datp_core.core.identifiers import (
 )
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.data.contracts.dataset import ResolvedDataset
+from datp_core.data.contracts.eligibility import EligibilityPolicy
+from datp_core.data.contracts.materialization import NormalizationConfig
 from datp_core.evaluation.specs import (
     EvaluationResultContract,
     MetricBundleSpec,
@@ -47,12 +47,15 @@ from datp_core.experiments import (
     PopulationRecord,
     ResultTypeRecord,
 )
-from datp_core.learning.contracts.architecture import ModelArchitectureRecord
-from datp_core.learning.contracts.checkpoints import CheckpointProfileRecord
-from datp_core.learning.contracts.enums import CheckpointAuthorization, PersonalizationStrategy
-from datp_core.learning.contracts.optimization import BatchingRecord, OptimizerRecord
-from datp_core.learning.contracts.seeds import SeedCohortRecord
-from datp_core.learning.contracts.training import TrainingProfileRecord
+from datp_core.learning.contracts.checkpoints import CheckpointProfile
+from datp_core.learning.contracts.model import (
+    AdamOptimizerProfile,
+    BatchingProfile,
+    DenseAutoencoderProfile,
+    LearningDataSchema,
+)
+from datp_core.learning.contracts.training import SeedCohortProfile, TrainingProfile
+from datp_core.learning.model.runtime import SeedDerivationProfile, TorchRuntimeProfile
 from datp_core.thresholding.policies import ThresholdPolicyRecord
 
 
@@ -70,14 +73,17 @@ class ResolvedProjectConfiguration(BaseModel):
     population_readiness_rule: PopulationReadinessRule
     eligibility_gates: TypedDomainRegistry[str, EligibilityGateRecord]
     analysis_conventions: AnalysisConventions
-    training_profiles: TypedDomainRegistry[TrainingProfileId, TrainingProfileRecord]
-    checkpoint_profiles: TypedDomainRegistry[CheckpointProfileId, CheckpointProfileRecord]
-    seed_cohorts: TypedDomainRegistry[SeedCohortId, SeedCohortRecord]
+    training_profiles: TypedDomainRegistry[TrainingProfileId, TrainingProfile]
+    checkpoint_profiles: TypedDomainRegistry[CheckpointProfileId, CheckpointProfile]
+    seed_cohorts: TypedDomainRegistry[SeedCohortId, SeedCohortProfile]
     statistical_profiles: TypedDomainRegistry[StatisticalProfileId, StatisticalProfileRecord]
     threshold_policies: TypedDomainRegistry[ThresholdPolicyId, ThresholdPolicyRecord]
-    model_architectures: TypedDomainRegistry[str, ModelArchitectureRecord]
-    optimizers: TypedDomainRegistry[str, OptimizerRecord]
-    batching_profiles: TypedDomainRegistry[str, BatchingRecord]
+    model_architectures: TypedDomainRegistry[str, DenseAutoencoderProfile]
+    optimizers: TypedDomainRegistry[str, AdamOptimizerProfile]
+    batching_profiles: TypedDomainRegistry[str, BatchingProfile]
+    learning_data_schemas: TypedDomainRegistry[str, LearningDataSchema]
+    runtime_profile: TorchRuntimeProfile
+    seed_derivation: SeedDerivationProfile
     eligibility_policies: TypedDomainRegistry[EligibilityPolicyId, EligibilityPolicy]
     normalization_strategies: TypedDomainRegistry[NormalizationStrategyId, NormalizationConfig]
     metric_bundles: TypedDomainRegistry[MetricBundleId, MetricBundleSpec]
@@ -102,13 +108,18 @@ class ResolvedProjectConfiguration(BaseModel):
 
     def primary_federated_checkpoint_experiment(self) -> ExperimentRecord:
         """Return the sole confirmatory FedAvg experiment authorized to choose the shared round."""
+        from datp_core.learning.contracts.checkpoints import AuthorizedLookupSelection
+
         candidates = tuple(
             experiment
             for experiment in self.experiments.values()
             if experiment.evidence_role is EvidenceRole.CONFIRMATORY
             and self.training_profiles.contains(experiment.training_profile_id)
-            and self.training_profiles.get(experiment.training_profile_id).checkpoint_authorization
-            == CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE
+            and self.checkpoint_profiles.contains(experiment.checkpoint_profile_id)
+            and isinstance(
+                self.checkpoint_profiles.get(experiment.checkpoint_profile_id).selection,
+                AuthorizedLookupSelection,
+            )
         )
         if len(candidates) != 1:
             raise ValueError("Configuration must define exactly one confirmatory primary FedAvg checkpoint selector")
@@ -116,12 +127,13 @@ class ResolvedProjectConfiguration(BaseModel):
 
     def primary_ditto_selection_experiment(self) -> ExperimentRecord:
         """Return the sole natural-regime Ditto experiment allowed to select its proximal weight."""
+        from datp_core.learning.contracts.training import DittoTrainingProfile
+
         candidates = tuple(
             experiment
             for experiment in self.experiments.values()
             if self.training_profiles.contains(experiment.training_profile_id)
-            and self.training_profiles.get(experiment.training_profile_id).personalization
-            == PersonalizationStrategy.DITTO
+            and isinstance(self.training_profiles.get(experiment.training_profile_id), DittoTrainingProfile)
             and experiment.personalization_parameter_selection_source is None
         )
         if len(candidates) != 1:

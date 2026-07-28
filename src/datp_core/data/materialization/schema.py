@@ -67,9 +67,7 @@ def validate_materialized_parquet(path: Path, spec: MaterializedSchemaSpec, chun
         )
     _validate_types(schema, spec)
     row_count = 0
-    non_nullable = tuple(
-        name for name in spec.column_names if not _expected_field(name, spec).nullable
-    )
+    non_nullable = tuple(name for name in spec.column_names if not _expected_field(name, spec).nullable)
     for batch in parquet_file.iter_batches(batch_size=chunk_row_count):
         row_count += batch.num_rows
         for name in non_nullable:

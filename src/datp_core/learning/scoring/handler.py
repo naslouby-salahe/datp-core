@@ -70,6 +70,7 @@ class ScoreGenerationStageHandler:
     def execute(self, job: StageJob) -> StageJobOutcome:
         try:
             context = self._training_context(job)
+            assert context.seed is not None
             output_kind = self._output_kind(job)
             profile, architecture, batching, data_schema = self._resolve(context)
             split = self._split(output_kind, data_schema)
@@ -96,9 +97,7 @@ class ScoreGenerationStageHandler:
                 request = GlobalScoringRequest(
                     materialization=materialization,
                     split=split,
-                    checkpoint_payload=self._store.read_bytes(
-                        job.input_path(LearningArtifactKind.CHECKPOINT.value)
-                    ),
+                    checkpoint_payload=self._store.read_bytes(job.input_path(LearningArtifactKind.CHECKPOINT.value)),
                     selected_round=int(selection.selected_round),
                     architecture=architecture,
                     batching=batching,
@@ -134,6 +133,7 @@ class ScoreGenerationStageHandler:
         self,
         context: TrainingContext,
     ) -> tuple[TrainingProfile, DenseAutoencoderProfile, BatchingProfile, LearningDataSchema]:
+        assert context.population_id is not None
         experiment = self._config.experiments.get(context.experiment_id)
         profile = self._config.training_profiles.get(experiment.training_profile_id)
         architecture = self._config.model_architectures.get(profile.model_architecture_id)
@@ -141,10 +141,11 @@ class ScoreGenerationStageHandler:
         population = self._config.populations.get(context.population_id)
         dataset = self._config.datasets.get(population.dataset_id)
         setup = dataset.setup(population.setup_id)
-        materialization = next(
-            item for item in dataset.materializations if item.identifier == setup.materialization_id
-        )
-        data_schema = self._config.learning_data_schemas.get(materialization.learning_schema_id)
+        materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
+        learning_schema_id = getattr(materialization, "learning_schema_id", None)
+        if learning_schema_id is None:
+            raise TypeError("Materialization definition is missing learning_schema_id")
+        data_schema = self._config.learning_data_schemas.get(learning_schema_id)
         return profile, architecture, batching, data_schema
 
     def _selection_evidence(
@@ -157,9 +158,7 @@ class ScoreGenerationStageHandler:
             if profile.checkpoint_authorization is CheckpointAuthorization.PRIMARY_SELECTION
             else LearningArtifactKind.SELECTION_EVIDENCE
         )
-        return CheckpointSelectionEvidence.model_validate_json(
-            self._store.read_bytes(job.input_path(input_kind.value))
-        )
+        return CheckpointSelectionEvidence.model_validate_json(self._store.read_bytes(job.input_path(input_kind.value)))
 
     @staticmethod
     def _split(output_kind: ScoreArtifactKind, data_schema: LearningDataSchema) -> SplitMembership:

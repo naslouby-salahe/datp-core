@@ -186,7 +186,7 @@ training_profiles:
     aggregation_formula: "w_global = sum_k(n_k_train * w_k) / sum_k(n_k_train)"
     aggregation_accumulation_order: ascending_client_identifier
     personalization: none
-    checkpoint_authorization: primary_selection_computed_once_on_natural_device_regime
+    checkpoint_authorization: primary_selection
     federation: { fraction_fit: 1.0, fraction_evaluate: 1.0, minimum_fit_clients: 1, minimum_evaluate_clients: 1, minimum_available_clients: 1 }
 
   federated_averaging_anchor:
@@ -202,7 +202,7 @@ training_profiles:
     aggregation_formula: "w_global = sum_k(n_k_train * w_k) / sum_k(n_k_train)"
     aggregation_accumulation_order: ascending_client_identifier
     personalization: none
-    checkpoint_authorization: historical_first_qualifying_round_or_150_round_cap
+    checkpoint_authorization: independent_selection
     federation: { fraction_fit: 1.0, fraction_evaluate: 1.0, minimum_fit_clients: 1, minimum_evaluate_clients: 1, minimum_available_clients: 1 }
 
   federated_averaging_personalized:
@@ -245,7 +245,7 @@ training_profiles:
       artifact_separation:
         global_checkpoint: shared_scientific_checkpoint_artifact_reused_by_core_ladder
         personalized_state: per_client_artifact_never_fused_with_global_checkpoint_or_federated_averaging_artifacts
-    checkpoint_authorization: lookup_of_federated_averaging_primary_selection
+    checkpoint_authorization: fedavg_selection_lookup
     federation: { fraction_fit: 1.0, fraction_evaluate: 1.0, minimum_fit_clients: 1, minimum_evaluate_clients: 1, minimum_available_clients: 1 }
 
   federated_proximal:
@@ -266,7 +266,7 @@ training_profiles:
     mu_resolution: required_from_experiment_sweep
     mu_zero_forbidden_as_a_fedprox_condition: true
     personalization: none
-    checkpoint_authorization: lookup_of_federated_averaging_primary_selection
+    checkpoint_authorization: fedavg_selection_lookup
     federation: { fraction_fit: 1.0, fraction_evaluate: 1.0, minimum_fit_clients: 1, minimum_evaluate_clients: 1, minimum_available_clients: 1 }
 
   centralized_pooled:
@@ -281,7 +281,7 @@ training_profiles:
       fraction: 0.10
       selection: random_without_replacement
       split_seed: 0
-    checkpoint_authorization: independent_selection_own_non_federated_curve_never_fused_with_federated_averaging_artifacts
+    checkpoint_authorization: independent_selection
 
 eligibility_policies:
   primary_analysis:
@@ -290,8 +290,8 @@ eligibility_policies:
     identical_across_policies_in_one_comparison: true
     fpr_evaluable_requires_non_empty_benign_test_denominator: true
     attack_evaluable_requires:
-      - valid_per_client_attack_assignment
-      - at_least_one_held_out_attack_row
+      - attack_evaluation
+      - attack_evaluation
     ineligible_clients_excluded_from_primary_dispersion: true
     ineligible_client_deployment_fallback:
       threshold_source: the_shared_threshold_of_the_evaluated_policys_own_eligible_population
@@ -305,8 +305,8 @@ eligibility_policies:
     identical_across_policies_in_one_comparison: true
     fpr_evaluable_requires_non_empty_benign_test_denominator: true
     attack_evaluable_requires:
-      - valid_per_client_attack_assignment
-      - at_least_one_held_out_attack_row
+      - attack_evaluation
+      - attack_evaluation
     ineligible_clients_excluded_from_primary_dispersion: true
     ineligible_client_deployment_fallback:
       threshold_source: the_shared_threshold_of_the_evaluated_policys_own_eligible_population

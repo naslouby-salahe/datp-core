@@ -26,8 +26,8 @@ def resolve_statistical_profiles(
                 Probability(profile_cfg.confidence_level) if profile_cfg.confidence_level is not None else None
             ),
             resample_count=(
-                PositiveInt(profile_cfg.resample_count) if profile_cfg.resample_count is not None else None
+                int(profile_cfg.resample_count) if profile_cfg.resample_count is not None else None
             ),
-            minimum_units=PositiveInt(minimum_units) if minimum_units is not None else None,
+            minimum_units=int(minimum_units) if minimum_units is not None else None,
         )
     return statistical_dict

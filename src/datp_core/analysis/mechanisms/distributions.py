@@ -46,12 +46,8 @@ def distribution_seed_result(
         metric_frame = context.artifacts.client_metrics(eval_ctx)
         score_frame = context.artifacts.test_scores(score_ctx)
 
-        distributions = client_score_distributions(
-            threshold_frame, metric_frame, score_frame, client_id
-        )
-        entries = tuple(
-            ClientDistributionEntry(client_id=d.client_id, distribution=d) for d in distributions
-        )
+        distributions = client_score_distributions(threshold_frame, metric_frame, score_frame, client_id)
+        entries = tuple(ClientDistributionEntry(client_id=d.client_id, distribution=d) for d in distributions)
         eval_results.append(EvaluationDistributionResult(evaluation_label=label, clients=entries))
 
     return DistributionMechanismSeedResult(seed=seed, evaluations=tuple(eval_results))
@@ -91,9 +87,7 @@ def analyze_distribution_mechanism(
         baseline_dist = tuple(entry.distribution for entry in res.evaluations[0].clients)
         shifted_dist = tuple(entry.distribution for entry in res.evaluations[1].clients)
         tradeoff_map = threshold_tradeoff(baseline_dist, shifted_dist)
-        entries = tuple(
-            ClientTradeoffEntry(client_id=t.client_id, tradeoff=t) for t in tradeoff_map
-        )
+        entries = tuple(ClientTradeoffEntry(client_id=t.client_id, tradeoff=t) for t in tradeoff_map)
         tradeoff_seeds.append(DistributionMechanismTradeoffSeedResult(seed=res.seed, per_client_tradeoff=entries))
 
     tradeoff_res = DistributionMechanismTradeoffResult(

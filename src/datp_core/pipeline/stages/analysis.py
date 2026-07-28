@@ -19,7 +19,8 @@ from datp_core.core.identifiers import ExperimentId, SeedCohortId, TrainingProfi
 from datp_core.core.seeding import Seed
 from datp_core.experiments import PairedThresholdAnalysisRecord
 from datp_core.experiments.catalogue.analyses import AnalysisKind
-from datp_core.learning.contracts.enums import PersonalizationStrategy, TrainingProfileKind
+from datp_core.learning.contracts.enums import TrainingAlgorithm
+from datp_core.learning.contracts.training import DittoTrainingProfile
 from datp_core.pipeline.stages.context import DataContext
 from datp_core.pipeline.stages.enums import StageKind
 from datp_core.pipeline.stages.jobs import StageJob
@@ -77,11 +78,11 @@ class StatisticalAnalysisStageHandler:
                     results_list.extend(self._registry.dispatch(analysis_record, context))
 
             sel_ctx = DataContext(experiment_id=context.experiment.identifier)
-            if training_profile.kind == TrainingProfileKind.FEDERATED_PROX_TRAINING:
+            if training_profile.algorithm == TrainingAlgorithm.FEDPROX:
                 selection_payload = artifacts.checkpoint_selection(sel_ctx)
                 results_list.append(federated_proximal_selection(selection_payload))
 
-            if training_profile.personalization == PersonalizationStrategy.DITTO:
+            if isinstance(training_profile, DittoTrainingProfile):
                 selection_payload = artifacts.checkpoint_selection(sel_ctx)
                 results_list.append(ditto_selection(selection_payload))
 

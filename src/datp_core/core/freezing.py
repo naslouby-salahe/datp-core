@@ -48,5 +48,3 @@ class FrozenResultManifest(BaseModel):
     report_profiles: tuple[FrozenReportProfile, ...] = ()
     source_files: tuple[FrozenSourceFile, ...] = ()
     statistical_results: tuple[dict[str, object], ...] = ()
-
-

@@ -45,8 +45,6 @@ from datp_core.data.adapters.nbaiot.adapter import NBaIoTAdapter
 from datp_core.data.contracts.dataset import ResolvedDataset
 from datp_core.data.materialization.handler import DatasetMaterializationStageHandler
 from datp_core.data.materialization.registry import DatasetAdapterRegistry
-from datp_core.data.readiness.materialized import assess_materialized_readiness
-from datp_core.data.readiness.models import build_readiness_report
 from datp_core.data.readiness.source import assess_source_readiness
 from datp_core.data.sources.inventory import build_source_inventory
 from datp_core.evaluation.stage import OperatingPointEvaluationStageHandler
@@ -60,11 +58,12 @@ from datp_core.experiments.execution import (
 )
 from datp_core.experiments.planning.builder import ExperimentPlanBuilder
 from datp_core.experiments.planning.paths import ExperimentPaths
-from datp_core.learning.checkpoints.handler import CohortCheckpointSelectionStageHandler
 from datp_core.learning.scoring.handler import (
     ScoreGenerationHandlerConfiguration,
     ScoreGenerationStageHandler,
 )
+from datp_core.learning.scoring.service import ReconstructionScoringService
+from datp_core.learning.training.engine import FederatedTrainingEngine
 from datp_core.learning.training.handler import (
     ModelTrainingHandlerConfiguration,
     ModelTrainingStageHandler,
@@ -200,6 +199,7 @@ def build_config_only_application(
 
 class _AuditResult:
     """Minimal result providing raw_source_found / file_count for the CLI audit command."""
+
     __slots__ = ("raw_source_found", "file_count")
 
     def __init__(self, raw_source_found: bool, file_count: int) -> None:
@@ -209,6 +209,7 @@ class _AuditResult:
 
 class AuditDatasetUseCase:
     """Replacement for the deleted readiness use case — wraps standalone readiness functions."""
+
     __slots__ = ("_config",)
 
     def __init__(self, config: ResolvedProjectConfiguration) -> None:
@@ -330,12 +331,13 @@ def build_application(
                     model_architectures=resolved_config.model_architectures,
                     optimizers=resolved_config.optimizers,
                     batching_profiles=resolved_config.batching_profiles,
-                    runtime=resolved_config.runtime,
-                    protocol_determinism=resolved_config.protocol_determinism,
+                    learning_data_schemas=resolved_config.learning_data_schemas,
+                    runtime_profile=resolved_config.runtime_profile,
+                    seed_derivation=resolved_config.seed_derivation,
                 ),
                 output_store,
+                FederatedTrainingEngine(),
             ),
-            CohortCheckpointSelectionStageHandler(resolved_config, output_store),
             ScoreGenerationStageHandler(
                 ScoreGenerationHandlerConfiguration(
                     experiments=resolved_config.experiments,
@@ -344,9 +346,11 @@ def build_application(
                     datasets=resolved_config.datasets,
                     model_architectures=resolved_config.model_architectures,
                     batching_profiles=resolved_config.batching_profiles,
-                    runtime=resolved_config.runtime,
+                    learning_data_schemas=resolved_config.learning_data_schemas,
+                    runtime_profile=resolved_config.runtime_profile,
                 ),
                 output_store,
+                ReconstructionScoringService(),
             ),
             CalibrationSubsamplingStageHandler(resolved_config, output_store),
             ThresholdConstructionStageHandler(resolved_config, output_store, construct_th),

@@ -4,34 +4,23 @@ from datp_core.config.fingerprinting.canonical import compute_fingerprint
 from datp_core.config.fingerprinting.projection import unstructure_projection
 from datp_core.config.project import resolve_project_configuration
 from datp_core.core.numbers import PositiveInt
-from datp_core.learning.contracts.architecture import ModelArchitectureRecord
+from datp_core.learning.contracts.model import DenseAutoencoderProfile
 
 
-def _model(hidden: tuple[int, ...]) -> ModelArchitectureRecord:
-    return ModelArchitectureRecord(
+def _model(hidden: tuple[int, ...]) -> DenseAutoencoderProfile:
+    return DenseAutoencoderProfile(
         identifier="fixed_autoencoder",
         kind="dense_autoencoder",
-        hidden_dims=tuple(PositiveInt(d) for d in hidden),
-        bottleneck_dim="last_hidden_dim",
+        hidden_dimensions=tuple(PositiveInt(d) for d in hidden),
         activation="relu",
-        activation_placement="after_every_linear_layer_except_the_final_decoder_layer",
         output_activation="identity",
-        normalization_layers="none",
-        bias=True,
-        reconstruction_objective="mse",
-        training_loss_reduction="mean_over_all_elements_of_the_batch",
-        precision="fp32",
-        input_dimension_resolution="from_materialized_post_encoding_feature_schema",
-        input_dimension_declared_per_dataset=False,
-        input_dimension_validation="must_equal_materialization_post_encoding_feature_count",
-        decoder_construction="mirrors_encoder_dimensions_in_reverse",
-        decoder_final_layer_output_dim="input_dimension",
-        weight_initialization="kaiming_uniform_fan_in_leaky_relu_negative_slope_sqrt_5",
-        bias_initialization="uniform_symmetric_one_over_sqrt_fan_in",
-        initialization_applied_to="every_linear_layer",
-        initialization_seeded_by="training_seed",
-        anomaly_score_definition="per_row_mean_of_squared_feature_reconstruction_error",
-        anomaly_score_orientation="higher_score_means_more_anomalous",
+        normalization="none",
+        use_bias=True,
+        objective="mean_squared_error",
+        reduction="mean",
+        precision="float32",
+        weight_initialization="kaiming_uniform",
+        bias_initialization="zero",
     )
 
 

@@ -125,8 +125,7 @@ class DatasetMaterializationStageHandler:
                         stage=job.stage,
                         error_message="readiness gates failed: "
                         + "; ".join(
-                            f"{failure.gate_id}/{failure.code.value}: {failure.detail}"
-                            for failure in gate_failures
+                            f"{failure.gate_id}/{failure.code.value}: {failure.detail}" for failure in gate_failures
                         ),
                     )
                 _validate_output_contract(job, isinstance(result, PartitionedMaterializationResult))

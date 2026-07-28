@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+
 import torch
 from torch import nn
 from torch.nn.utils import clip_grad_norm_, parameters_to_vector
@@ -180,7 +181,7 @@ def _build_loader(
     batching: BatchingProfile,
     epoch_seed: int,
     worker_seed: int,
-) -> DataLoader[tuple[torch.Tensor]]:
+) -> DataLoader:
     shuffle = batching.shuffle_policy is ShufflePolicy.EACH_EPOCH
     drop_last = batching.incomplete_batch_policy is IncompleteBatchPolicy.DROP
     return DataLoader(
@@ -242,8 +243,7 @@ def _reference_vector(
     if reference is None:
         return None
     tensors = tuple(
-        reference.parameter(name).to(device=runtime.device, dtype=runtime.dtype)
-        for name, _ in model.named_parameters()
+        reference.parameter(name).to(device=runtime.device, dtype=runtime.dtype) for name, _ in model.named_parameters()
     )
     if not tensors:
         raise ValueError("Proximal training requires trainable model parameters")

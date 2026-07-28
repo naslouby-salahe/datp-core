@@ -95,6 +95,7 @@ class AbsorptionAnalysisRecord(BaseModel):
     def _convert_alternative_path_rule(cls, v: object) -> Mapping[str, object] | None:
         return dict(cast("Iterable[tuple[str, object]]", v)) if v is not None else None
 
+
 class AlertBurdenAnalysisRecord(BaseModel):
     model_config = ConfigDict(frozen=True)
     label: str

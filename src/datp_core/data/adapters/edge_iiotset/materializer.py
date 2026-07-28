@@ -94,8 +94,7 @@ def materialize_edge_iiotset(
                     for column in plan.source.numeric_columns
                 )
                 + tuple(
-                    CsvColumnSpec(column, CsvColumnKind.TEXT, True, True)
-                    for column in plan.source.categorical_columns
+                    CsvColumnSpec(column, CsvColumnKind.TEXT, True, True) for column in plan.source.categorical_columns
                 )
                 + (
                     CsvColumnSpec(plan.source.binary_label_column, CsvColumnKind.TEXT, False, True),
@@ -138,9 +137,7 @@ def materialize_edge_iiotset(
         chronology = True
     vocabulary = _fit_vocabulary(connection, plan, categorical_names)
     all_feature_names = numeric_names + tuple(
-        feature
-        for column in vocabulary.columns
-        for feature in column.encoded_feature_names
+        feature for column in vocabulary.columns for feature in column.encoded_feature_names
     )
     query = _encoded_query(plan, numeric_names, vocabulary, chronology)
     written_rows = write_query_to_parquet(connection, query, target_path, plan.runtime)
@@ -422,8 +419,7 @@ def _assign_random_splits(
         ).fetch_record_batch(rows_per_batch=int(plan.runtime.chunk_row_count))
         for batch in reader:
             memberships = tuple(
-                split_membership_for_draw(generator.random(), split.ratios).value
-                for _ in range(batch.num_rows)
+                split_membership_for_draw(generator.random(), split.ratios).value for _ in range(batch.num_rows)
             )
             assignment = pa.RecordBatch.from_arrays(
                 (batch.column(0), batch.column(1), pa.array(memberships, type=pa.string())),
@@ -635,8 +631,7 @@ def _encoded_query(
     order = (
         f"CASE a.{quote_identifier(MaterializedColumn.SPLIT.value)} "
         + " ".join(
-            f"WHEN {quote_literal(membership.value)} THEN {index}"
-            for index, membership in enumerate(role_order)
+            f"WHEN {quote_literal(membership.value)} THEN {index}" for index, membership in enumerate(role_order)
         )
         + " ELSE 999 END"
     )

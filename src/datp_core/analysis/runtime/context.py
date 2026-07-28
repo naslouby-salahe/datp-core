@@ -21,7 +21,7 @@ from datp_core.core.seeding import Seed
 from datp_core.evaluation.enums import MissingThresholdPolicy
 from datp_core.evaluation.specs import MetricDefinitions
 from datp_core.experiments import EvaluationSpecRecord, ExperimentRecord
-from datp_core.learning.contracts.seeds import SeedCohortRecord
+from datp_core.learning.contracts.training import SeedCohortProfile
 from datp_core.pipeline.stages.context import DataContext, EvaluationContext, TrainingContext
 from datp_core.thresholding.policies import ThresholdPolicyRecord
 
@@ -32,7 +32,7 @@ class AnalysisExecutionContext(BaseModel):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
 
     threshold_policies: TypedDomainRegistry[ThresholdPolicyId, ThresholdPolicyRecord]
-    seed_cohort: SeedCohortRecord
+    seed_cohort: SeedCohortProfile
     metric_definitions: MetricDefinitions
     operational_inputs: OperationalInputsRecord
     communication_estimation_contract: CommunicationEstimationContractRecord
@@ -134,11 +134,14 @@ class AnalysisExecutionContext(BaseModel):
         population_id: PopulationId | None = None,
     ) -> TrainingContext:
         """Construct a ``TrainingContext`` for model training / checkpoint artifacts."""
-        pop_id = (
-            population_id
-            if population_id is not None
-            else (self.experiment.population_ids[0] if self.experiment.population_ids else None)
-        )
+        pop_id = population_id
+        if pop_id is None:
+            if not self.experiment.population_ids:
+                raise InvalidAnalysisConfigurationError(
+                    f"Experiment '{self.experiment.display_name}' has no populations, "
+                    f"but model_context requires a default population"
+                )
+            pop_id = self.experiment.population_ids[0]
         return TrainingContext(
             experiment_id=self.experiment.identifier,
             seed=seed.value,

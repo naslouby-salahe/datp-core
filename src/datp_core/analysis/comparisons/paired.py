@@ -18,8 +18,8 @@ from datp_core.analysis.runtime.context import AnalysisExecutionContext
 from datp_core.artifacts.schemas.columns import MetricColumn
 from datp_core.core.identifiers import AnalysisLabel, EvaluationLabel, MetricId
 from datp_core.core.seeding import Seed
-from datp_core.evaluation.enums import MetricStatus
 from datp_core.evaluation.diagnostics import calculate_fpr_dispersion
+from datp_core.evaluation.enums import MetricStatus
 from datp_core.experiments import PairedThresholdAnalysisRecord
 
 

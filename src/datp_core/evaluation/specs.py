@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import (
     BaseModel,
@@ -25,6 +25,7 @@ from datp_core.evaluation.enums import (
     MetricRole,
     MetricStatus,
     MetricUnit,
+    MissingClassPolicy,
     PairwiseAggregationMode,
     PrecisionComputation,
     PredictionRule,
@@ -32,9 +33,7 @@ from datp_core.evaluation.enums import (
     ResultRecordType,
     RoundingMode,
     WeightingMode,
-
     ZeroDenominatorPolicy,
-    MissingClassPolicy,
 )
 
 
@@ -199,6 +198,7 @@ class ClusterDiagnosticSpec(StrictFrozenModel):
     within_cluster_dispersion: DispersionMetricSpec
     across_cluster_dispersion: DispersionMetricSpec
 
+
 class DispersionMetricSpec(StrictFrozenModel):
     """FPR range, worst-client FPR, worst-client BA — extremal metrics."""
 
@@ -207,8 +207,10 @@ class DispersionMetricSpec(StrictFrozenModel):
     unit: MetricUnit | None = None
     direction: MetricDirection | None = None
 
+
 class HeterogeneityDiagnosticSpec(StrictFrozenModel):
     pairwise_js_divergence: JsDivergenceSpec
+
 
 class InvariantMetricSpec(StrictFrozenModel):
     """AUROC — threshold-independent model-quality control."""
@@ -223,6 +225,7 @@ class InvariantMetricSpec(StrictFrozenModel):
 
 # -- Aggregation and diagnostics specs -------------------------------------
 
+
 class QuantileMetricSpec(StrictFrozenModel):
     """IQR FPR, p10 macro F1 — quantile-based metrics."""
 
@@ -231,6 +234,7 @@ class QuantileMetricSpec(StrictFrozenModel):
     quantile_estimator: QuantileEstimator | None = None
     unit: MetricUnit | None = None
     direction: MetricDirection | None = None
+
 
 class RatioMetricSpec(StrictFrozenModel):
     """CV(FPR), CV(TPR), Jain index, Gini — derived ratio metrics."""
@@ -247,6 +251,7 @@ class RatioMetricSpec(StrictFrozenModel):
     near_zero_mean_behavior: ZeroDenominatorPolicy | None = None
     minimum_client_count: int | None = None
     zero_sum_behavior: ZeroDenominatorPolicy | None = None
+
 
 class ScalarMetricSpec(StrictFrozenModel):
     """FPR, TPR — ratio of counts with denominator behavior."""
@@ -276,3 +281,9 @@ class StrictFrozenModel(BaseModel):
 
 
 # -- Metric specifications (discriminated) ----------------------------------
+
+ScalarMetricSpec.model_rebuild()
+RatioMetricSpec.model_rebuild()
+QuantileMetricSpec.model_rebuild()
+InvariantMetricSpec.model_rebuild()
+DispersionMetricSpec.model_rebuild()

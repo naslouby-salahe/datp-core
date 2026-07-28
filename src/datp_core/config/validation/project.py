@@ -16,7 +16,7 @@ from datp_core.experiments import (
     SweepConditionAllocation,
     ValueSweepRecord,
 )
-from datp_core.learning.contracts.enums import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
+from datp_core.learning.contracts.training import DittoTrainingProfile, FedProxTrainingProfile
 from datp_core.thresholding.enums import ThresholdPolicyKind
 from datp_core.thresholding.policies import (
     QuantilePolicy,
@@ -84,20 +84,14 @@ class ProjectConfigurationValidator:
         exp_id: object, exp_rec: ExperimentRecord, config: ResolvedProjectConfiguration, errors: list[str]
     ) -> None:
         profile = config.training_profiles.get(exp_rec.training_profile_id)
-        if profile.personalization == PersonalizationStrategy.DITTO and (
-            profile.kind != TrainingProfileKind.FEDERATED_AVERAGING_TRAINING
-            or profile.personalized_local_epochs is None
-            or profile.personalization_parameter_grid is None
-            or not profile.personalization_parameter_grid
-            or any(weight <= 0.0 for weight in profile.personalization_parameter_grid)
-            or profile.checkpoint_authorization != CheckpointAuthorization.LOOKUP_OF_FEDERATED_AVERAGING
-        ):
-            errors.append(
-                f"Ditto experiment '{exp_id}' requires positive configured personalization epochs and grid "
-                "with locked FedAvg checkpoint lookup"
-            )
-        if profile.kind == TrainingProfileKind.FEDERATED_PROX_TRAINING:
-            configured_grid = profile.mu_grid
+
+        if isinstance(profile, DittoTrainingProfile):
+            if not profile.personalization_weights or any(weight <= 0.0 for weight in profile.personalization_weights):
+                errors.append(f"Ditto experiment '{exp_id}' requires positive configured personalization weights")
+
+        if isinstance(profile, FedProxTrainingProfile):
+            if not profile.proximal_coefficients or any(mu <= 0.0 for mu in profile.proximal_coefficients):
+                errors.append(f"FedProx experiment '{exp_id}' requires positive configured proximal coefficients")
             override = exp_rec.training_overrides.get("mu") if exp_rec.training_overrides is not None else None
             sweep_name = override.get("from_sweep") if isinstance(override, Mapping) else None
             values = tuple(
@@ -106,15 +100,9 @@ class ProjectConfigurationValidator:
                 if isinstance(sweep, ValueSweepRecord) and sweep.name == sweep_name
                 for value in sweep.values
             )
-            if (
-                configured_grid is None
-                or not configured_grid
-                or any(value <= 0.0 for value in configured_grid)
-                or profile.mu_zero_forbidden_as_a_fedprox_condition is not True
-                or values != configured_grid
-            ):
+            if values != tuple(float(mu) for mu in profile.proximal_coefficients):
                 errors.append(
-                    f"FedProx experiment '{exp_id}' must bind its exact positive configured mu grid "
+                    f"FedProx experiment '{exp_id}' must bind its exact configured proximal coefficients "
                     "through training_overrides"
                 )
 

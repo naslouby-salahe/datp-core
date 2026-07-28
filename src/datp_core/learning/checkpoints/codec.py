@@ -68,17 +68,13 @@ class CheckpointKey:
             return f"round/{self.round_number}/global/{self.parameter_name}"
         if self.client_id is None:
             raise ValueError("Personalized checkpoint key requires a client identifier")
-        return (
-            f"round/{self.round_number}/client/{quote(self.client_id, safe='')}/"
-            f"{self.parameter_name}"
-        )
+        return f"round/{self.round_number}/client/{quote(self.client_id, safe='')}/{self.parameter_name}"
 
 
 def capture_model_state(model: nn.Module) -> ModelState:
     raw_state = model.state_dict()
     parameters = tuple(
-        TensorParameter(name=name, tensor=tensor.detach().cpu().clone())
-        for name, tensor in raw_state.items()
+        TensorParameter(name=name, tensor=tensor.detach().cpu().clone()) for name, tensor in raw_state.items()
     )
     _validate_state(parameters)
     return ModelState(parameters=parameters)
@@ -183,9 +179,7 @@ def decode_personalized_states(
             if name.startswith(prefix)
         )
         if not parameters:
-            raise ValueError(
-                f"Personalized checkpoint round {round_number} is absent for client '{client_id}'"
-            )
+            raise ValueError(f"Personalized checkpoint round {round_number} is absent for client '{client_id}'")
         _validate_state(parameters)
         decoded.append(ClientModelState(client_id=client_id, state=ModelState(parameters=parameters)))
     return tuple(decoded)

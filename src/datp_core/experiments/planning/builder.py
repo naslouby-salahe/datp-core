@@ -31,7 +31,8 @@ from datp_core.experiments.planning.sweeps import (
     _sweep_reference,
     _sweep_values,
 )
-from datp_core.learning.contracts.enums import CheckpointAuthorization, PersonalizationStrategy, TrainingProfileKind
+from datp_core.learning.contracts.enums import TrainingAlgorithm
+from datp_core.learning.contracts.training import DittoTrainingProfile
 from datp_core.pipeline.graph.key import GraphNodeKey
 from datp_core.pipeline.graph.model import PlanningGraph
 from datp_core.pipeline.graph.validation import validate_acyclic
@@ -173,8 +174,8 @@ class ExperimentPlanBuilder:
         mus = _sweep_values(experiment, mu_sweep_name) or (None,)
         training_profile = compiled.training_profile
         ditto_weights = (
-            training_profile.personalization_parameter_grid or (None,)
-            if training_profile.personalization is PersonalizationStrategy.DITTO
+            training_profile.personalization_weights or (None,)
+            if isinstance(training_profile, DittoTrainingProfile)
             else (None,)
         )
 
@@ -512,7 +513,7 @@ class ExperimentPlanBuilder:
                     inputs=(self._input("materialization", materialization, "dataset"),),
                     outputs=self._training_outputs(
                         seed_ctx,
-                        personalized=compiled.training_profile.personalization is PersonalizationStrategy.DITTO,
+                        personalized=isinstance(compiled.training_profile, DittoTrainingProfile),
                     ),
                     dependencies=(materialization.node_key,),
                 )
@@ -531,13 +532,13 @@ class ExperimentPlanBuilder:
         role: str | None
         if (
             experiment.evidence_role is EvidenceRole.CONFIRMATORY
-            and training_profile.checkpoint_authorization is CheckpointAuthorization.PRIMARY_SELECTION_COMPUTED_ONCE
+            and compiled.checkpoint_profile.selection.kind == "authorized_lookup"
         ):
             role = "cohort"
-        elif training_profile.kind is TrainingProfileKind.FEDERATED_PROX_TRAINING:
+        elif training_profile.algorithm is TrainingAlgorithm.FEDPROX:
             role = "fedprox"
         elif (
-            training_profile.personalization is PersonalizationStrategy.DITTO
+            isinstance(training_profile, DittoTrainingProfile)
             and experiment.personalization_parameter_selection_source is None
         ):
             role = "ditto"
@@ -695,9 +696,12 @@ class ExperimentPlanBuilder:
         experiment = compiled.record
         jobs: list[StageJob] = []
         evaluation_jobs: list[StageJob] = []
+        compiled_eval_by_label = {e.record.label: e for e in compiled.evaluations}
         for key, (seed_ctx, test, _, future) in score_cells.items():
             for evaluation in experiment.evaluations:
-                population_id = evaluation.population_id or experiment.population_ids[0]
+                population_id = (
+                    evaluation.population_id or compiled_eval_by_label[evaluation.label].population.identifier
+                )
                 if population_id != seed_ctx.population_id:
                     continue
                 calibration_cells = calibration_cells_by_training[key]
@@ -775,7 +779,9 @@ class ExperimentPlanBuilder:
         experiment = compiled.record
         population_id = job.context.population_id if isinstance(job.context, DataContext) else None
         if population_id is None:
-            population_id = experiment.population_ids[0]
+            if not compiled.populations:
+                raise ValueError(f"Experiment '{experiment.identifier.value}' has no resolved populations")
+            population_id = compiled.populations[0].identifier
         population = next((p for p in compiled.populations if p.identifier == population_id), None)
         if population is None:
             raise ValueError(f"Population '{population_id}' not found in compiled experiment")
@@ -808,7 +814,9 @@ class ExperimentPlanBuilder:
             checkpoint_profile_id=experiment.checkpoint_profile_id,
             eligibility_policy_id=experiment.eligibility_policy_id,
             readiness_gates=experiment.readiness_gates,
-            score_output_name=job.outputs[0].name if job.stage is StageKind.SCORE_GENERATION else None,
+            score_output_name=next((o.name for o in job.outputs), None)
+            if job.stage is StageKind.SCORE_GENERATION
+            else None,
             temporal_mode=materialization.split_method.value,
             source_fingerprint=source_fingerprint,
             direct_producers=(

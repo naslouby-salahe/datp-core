@@ -21,8 +21,8 @@ from datp_core.artifacts.schemas.columns import MetricColumn
 from datp_core.config.operational_contracts import CommunicationEstimationContractRecord
 from datp_core.core.identifiers import AnalysisLabel, EvaluationLabel
 from datp_core.experiments import AlertBurdenAnalysisRecord, ResourceCostAnalysisRecord
-from datp_core.thresholding.policies import ThresholdPolicyRecord
 from datp_core.thresholding.enums import ThresholdPolicyKind
+from datp_core.thresholding.policies import ThresholdPolicyRecord
 
 
 def analyze_alert_burden(

@@ -91,9 +91,7 @@ def materialize_nbaiot(
             source_row_index=None,
         )
     partition = (
-        apply_dirichlet_partition(connection, plan)
-        if isinstance(plan, NBaIoTDirichletMaterializationPlan)
-        else None
+        apply_dirichlet_partition(connection, plan) if isinstance(plan, NBaIoTDirichletMaterializationPlan) else None
     )
     query = _final_query(feature_names, partition is not None)
     written_rows = write_query_to_parquet(connection, query, target_path, plan.runtime)

@@ -15,8 +15,7 @@ from datp_core.experiments import (
     ValueSweepRecord,
 )
 from datp_core.experiments.planning import calibration_sample_counts
-from datp_core.learning.contracts.enums import PersonalizationStrategy
-from datp_core.learning.contracts.training import TrainingProfileRecord
+from datp_core.learning.contracts.training import DittoTrainingProfile, TrainingProfile
 
 
 class SweepDimensions(BaseModel):
@@ -32,7 +31,7 @@ class SweepDimensions(BaseModel):
     calibration_sample_count_values: tuple[int | None, ...]
 
 
-def resolve_sweep_dimensions(experiment: ExperimentRecord, training_profile: TrainingProfileRecord) -> SweepDimensions:
+def resolve_sweep_dimensions(experiment: ExperimentRecord, training_profile: TrainingProfile) -> SweepDimensions:
     """Extract sweep dimensions from experiment and training profile configuration."""
     conditions = tuple(
         PartitionConditionId(condition.name)
@@ -50,8 +49,8 @@ def resolve_sweep_dimensions(experiment: ExperimentRecord, training_profile: Tra
         if isinstance(value, float)
     ) or (None,)
     ditto_weights = (
-        training_profile.personalization_parameter_grid or (None,)
-        if training_profile.personalization == PersonalizationStrategy.DITTO
+        training_profile.personalization_weights or (None,)
+        if isinstance(training_profile, DittoTrainingProfile)
         else (None,)
     )
     threshold_quantiles = tuple(

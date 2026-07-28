@@ -380,7 +380,7 @@ def _resolve_eligibility_gates(
         eligibility_gates_dict[gate_key] = EligibilityGateRecord(
             identifier=gate_key,
             candidate_population=gate_cfg.candidate_population,
-            minimum_benign_calibration_count=PositiveInt(gate_cfg.minimum_benign_calibration_count),
+            minimum_benign_calibration_count=int(gate_cfg.minimum_benign_calibration_count),
             minimum_eligible_client_proportion=Probability(gate_cfg.minimum_eligible_client_proportion),
             evaluation_time=gate_cfg.evaluation_time,
             failure_outcome=gate_cfg.failure_outcome,
@@ -466,7 +466,7 @@ def _resolve_calibration_subset(exp_cfg: AuthoredExperimentConfig) -> Calibratio
         nesting_policy=cs.nesting_policy,
         nesting_rule=cs.nesting_rule,
         selection_seed=Seed(cs.selection_seed),
-        replicate_count=PositiveInt(cs.replicate_count),
+        replicate_count=int(cs.replicate_count),
         replicate_seed_derivation=cs.replicate_seed_derivation,
         model_retraining=cs.model_retraining,
         client_eligibility_per_requested_size=cs.client_eligibility_per_requested_size,
@@ -544,7 +544,8 @@ def _resolve_experiment(
         primary_coefficient_selection=(
             exp_cfg.primary_coefficient_selection
             if isinstance(exp_cfg.primary_coefficient_selection, str) or exp_cfg.primary_coefficient_selection is None
-            else dict(exp_cfg.primary_coefficient_selection)        ),
+            else dict(exp_cfg.primary_coefficient_selection)
+        ),
         training_overrides=dict(exp_cfg.training_overrides) if exp_cfg.training_overrides is not None else None,
     )
 

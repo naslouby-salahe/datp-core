@@ -9,7 +9,6 @@ _STAGE_FILES = {
     "data/materialization/handler.py",
     "pipeline/execution/runner.py",
     "experiments/execution/preflight.py",
-    "learning/checkpoints/handler.py",
     "learning/training/handler.py",
     "learning/scoring/handler.py",
     "thresholding/stages.py",

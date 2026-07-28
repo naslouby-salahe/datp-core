@@ -22,22 +22,70 @@ from datp_core.data.contracts.materialization import (
     NormalizationConfig,
     StandardNormalizationConfig,
 )
-from datp_core.learning.contracts.architecture import ModelArchitectureRecord
 from datp_core.learning.contracts.checkpoints import (
-    CheckpointConvergenceRecord,
-    CheckpointProfileRecord,
-    CheckpointSelectionRecord,
+    CheckpointProfile,
+    CheckpointSelectionProfile,
+    FirstQualifyingConvergenceSelection,
+    FixedRoundSelection,
+    LowestCalibrationLossSelection,
 )
 from datp_core.learning.contracts.enums import (
+    ActivationKind,
+    BiasInitializationKind,
     CheckpointAuthorization,
-    PersonalizationStrategy,
-    TrainingParticipation,
-    TrainingProfileKind,
+    CheckpointSavePolicy,
+    CheckpointSelectionKind,
+    CheckpointTieBreak,
+    ModelArchitectureKind,
+    NoQualifyingRoundPolicy,
+    NormalizationKind,
+    OptimizerKind,
+    OptimizerStateLifecycle,
+    OutputActivationKind,
+    ParticipationPolicy,
+    PrecisionKind,
+    ReconstructionObjective,
+    LossReduction,
+    SeedAnalysisModel,
+    TrainingAlgorithm,
+    WeightInitializationKind,
 )
-from datp_core.learning.contracts.optimization import BatchingRecord, OptimizerRecord
-from datp_core.learning.contracts.seeds import SeedCohortRecord
-from datp_core.learning.contracts.training import FederationProfileRecord, TrainingProfileRecord
+from datp_core.learning.contracts.model import (
+    AdamOptimizerProfile,
+    BatchingProfile,
+    DenseAutoencoderProfile,
+    GlobalNormGradientClippingProfile,
+    LearningDataSchema,
+    NoGradientClippingProfile,
+    NoSchedulerProfile,
+    StepSchedulerProfile,
+)
+from datp_core.learning.contracts.training import (
+    CentralizedTrainingProfile,
+    DittoTrainingProfile,
+    FedAvgTrainingProfile,
+    FedProxTrainingProfile,
+    FullParticipationProfile,
+    SeedCohortProfile,
+)
+from datp_core.learning.model.runtime import SeedDerivationProfile, SeedNamespaceProfile, TorchRuntimeProfile
 
+_OBJECTIVE_MAP = {"mse": "mean_squared_error", "mae": "mean_absolute_error", "huber": "huber"}
+_REDUCTION_MAP = {
+    "mean_over_all_elements_of_the_batch": "mean",
+    "sum_over_all_elements_of_the_batch": "sum",
+}
+_PRECISION_MAP = {"fp32": "float32", "fp64": "float64"}
+_WEIGHT_INIT_MAP = {
+    "kaiming_uniform_fan_in_leaky_relu_negative_slope_sqrt_5": "kaiming_uniform",
+    "xavier_uniform_fan_in_sigmoid_gain_1": "xavier_uniform",
+}
+_BIAS_INIT_MAP = {"uniform_symmetric_one_over_sqrt_fan_in": "zero"}
+_STATE_LIFECYCLE_MAP = {
+    "recreated_at_the_start_of_every_local_fit_never_persisted_across_rounds": "reset_each_local_training",
+}
+_SHUFFLE_MAP = {"true": "each_epoch", "false": "disabled"}
+_INCOMPLETE_BATCH_MAP = {"retained_never_dropped": "keep", "dropped_never_retained": "drop"}
 
 class SeedNamespaceRecord(BaseModel):
     model_config = ConfigDict(frozen=True)
@@ -66,173 +114,222 @@ class ProtocolDeterminismRecord(BaseModel):
         return namespace
 
 
-def resolve_training_profiles(authored: AuthoredProtocolsConfig) -> dict[TrainingProfileId, TrainingProfileRecord]:
-    training_dict: dict[TrainingProfileId, TrainingProfileRecord] = {}
+def resolve_training_profiles(
+    authored: AuthoredProtocolsConfig,
+) -> dict[
+    TrainingProfileId,
+    CentralizedTrainingProfile | FedAvgTrainingProfile | FedProxTrainingProfile | DittoTrainingProfile,
+]:
+    training_dict: dict[
+        TrainingProfileId,
+        CentralizedTrainingProfile | FedAvgTrainingProfile | FedProxTrainingProfile | DittoTrainingProfile,
+    ] = {}
     for tp_key, tp_cfg in authored.training_profiles.items():
         tp_id = TrainingProfileId(tp_key)
-        training_dict[tp_id] = TrainingProfileRecord(
-            identifier=tp_id,
-            kind=TrainingProfileKind(tp_cfg.kind),
-            model_architecture_id=tp_cfg.model_architecture,
-            optimizer_id=tp_cfg.optimizer,
-            batching_profile_id=tp_cfg.batching,
-            local_epochs=(PositiveInt(tp_cfg.local_epochs) if tp_cfg.local_epochs is not None else None),
-            participation=TrainingParticipation(tp_cfg.participation) if tp_cfg.participation else None,
-            checkpoint_authorization=CheckpointAuthorization(tp_cfg.checkpoint_authorization),
-            personalization=PersonalizationStrategy(tp_cfg.personalization) if tp_cfg.personalization else None,
-            personalized_local_epochs=(
-                PositiveInt(tp_cfg.personalized_local_epochs) if tp_cfg.personalized_local_epochs is not None else None
-            ),
-            personalization_parameter_grid=(
-                tuple(tp_cfg.personalization_parameter_grid)
-                if tp_cfg.personalization_parameter_grid is not None
-                else None
-            ),
-            proximal_objective=tp_cfg.proximal_objective,
-            mu_grid=tuple(tp_cfg.mu_grid) if tp_cfg.mu_grid is not None else None,
-            mu_zero_forbidden_as_a_fedprox_condition=tp_cfg.mu_zero_forbidden_as_a_fedprox_condition,
-            federation=(
-                FederationProfileRecord(
-                    fraction_fit=tp_cfg.federation.fraction_fit,
-                    fraction_evaluate=tp_cfg.federation.fraction_evaluate,
-                    minimum_fit_clients=PositiveInt(tp_cfg.federation.minimum_fit_clients),
-                    minimum_evaluate_clients=PositiveInt(tp_cfg.federation.minimum_evaluate_clients),
-                    minimum_available_clients=PositiveInt(tp_cfg.federation.minimum_available_clients),
-                )
-                if tp_cfg.federation is not None
-                else None
-            ),
-        )
+        ckpt_auth = CheckpointAuthorization(tp_cfg.checkpoint_authorization)
+        local_epochs = tp_cfg.local_epochs or 1
+        if tp_cfg.kind == "centralized_pooled_training":
+            profile: (
+                CentralizedTrainingProfile | FedAvgTrainingProfile | FedProxTrainingProfile | DittoTrainingProfile
+            ) = CentralizedTrainingProfile(
+                identifier=tp_id,
+                model_architecture_id=tp_cfg.model_architecture,
+                optimizer_id=tp_cfg.optimizer,
+                batching_profile_id=tp_cfg.batching,
+                checkpoint_authorization=ckpt_auth,
+                algorithm=TrainingAlgorithm.CENTRALIZED,
+                local_epochs=local_epochs,
+            )
+        elif tp_cfg.personalization == "ditto" and tp_cfg.federation is not None:
+            profile = DittoTrainingProfile(
+                identifier=tp_id,
+                model_architecture_id=tp_cfg.model_architecture,
+                optimizer_id=tp_cfg.optimizer,
+                batching_profile_id=tp_cfg.batching,
+                checkpoint_authorization=ckpt_auth,
+                algorithm=TrainingAlgorithm.DITTO,
+                global_local_epochs=local_epochs,
+                personalized_local_epochs=tp_cfg.personalized_local_epochs or 1,
+                participation=FullParticipationProfile(
+                    policy=ParticipationPolicy.FULL,
+                    minimum_available_clients=tp_cfg.federation.minimum_available_clients,
+                ),
+                personalization_weights=tuple(float(w) for w in (tp_cfg.personalization_parameter_grid or [])),
+            )
+        elif tp_cfg.kind == "federated_prox_training" and tp_cfg.federation is not None:
+            profile = FedProxTrainingProfile(
+                identifier=tp_id,
+                model_architecture_id=tp_cfg.model_architecture,
+                optimizer_id=tp_cfg.optimizer,
+                batching_profile_id=tp_cfg.batching,
+                checkpoint_authorization=ckpt_auth,
+                algorithm=TrainingAlgorithm.FEDPROX,
+                local_epochs=local_epochs,
+                participation=FullParticipationProfile(
+                    policy=ParticipationPolicy.FULL,
+                    minimum_available_clients=tp_cfg.federation.minimum_available_clients,
+                ),
+                proximal_coefficients=tuple(float(mu) for mu in (tp_cfg.mu_grid or [])),
+            )
+        elif tp_cfg.federation is not None:
+            profile = FedAvgTrainingProfile(
+                identifier=tp_id,
+                model_architecture_id=tp_cfg.model_architecture,
+                optimizer_id=tp_cfg.optimizer,
+                batching_profile_id=tp_cfg.batching,
+                checkpoint_authorization=ckpt_auth,
+                algorithm=TrainingAlgorithm.FEDAVG,
+                local_epochs=local_epochs,
+                participation=FullParticipationProfile(
+                    policy=ParticipationPolicy.FULL,
+                    minimum_available_clients=tp_cfg.federation.minimum_available_clients,
+                ),
+            )
+        else:
+            raise ConfigurationError(f"Training profile '{tp_key}' lacks federation configuration")
+        training_dict[tp_id] = profile
     return training_dict
 
 
 def resolve_checkpoint_profiles(
     authored: AuthoredProtocolsConfig,
-) -> dict[CheckpointProfileId, CheckpointProfileRecord]:
-    checkpoint_dict: dict[CheckpointProfileId, CheckpointProfileRecord] = {}
+) -> dict[CheckpointProfileId, CheckpointProfile]:
+    checkpoint_dict: dict[CheckpointProfileId, CheckpointProfile] = {}
     for cp_key, cp_cfg in authored.checkpoint_profiles.items():
         cp_id = CheckpointProfileId(cp_key)
         selected_rounds = cp_cfg.rounds if cp_cfg.rounds is not None else cp_cfg.epochs
-        total_rounds = cp_cfg.total_rounds if cp_cfg.total_rounds is not None else cp_cfg.total_epochs
-        if total_rounds is None:
+        capture_rounds = tuple(int(round_number) for round_number in (selected_rounds or ()))
+        total_rounds_val = cp_cfg.total_rounds if cp_cfg.total_rounds is not None else cp_cfg.total_epochs
+        if total_rounds_val is None:
             raise ConfigurationError(f"Checkpoint profile '{cp_key}' has no total rounds or epochs")
-        selection_record = CheckpointSelectionRecord(
-            rule=cp_cfg.selection.rule,
-            tie_break=cp_cfg.selection.tie_break,
-            scope=cp_cfg.selection.scope,
-            aggregation=cp_cfg.selection.aggregation,
-            selected_round_application_scope=cp_cfg.selection.selected_round_application_scope,
-            selection_granularity=cp_cfg.selection.selection_granularity,
-            forbidden_selectors=tuple(cp_cfg.selection.forbidden_selectors or ()),
-        )
-        convergence_record = (
-            CheckpointConvergenceRecord(
-                metric=cp_cfg.convergence.metric,
-                rounds_initial=PositiveInt(cp_cfg.convergence.rounds_initial),
-                rule=cp_cfg.convergence.rule,
-                formula=cp_cfg.convergence.formula,
-                zero_start_loss_behavior=cp_cfg.convergence.zero_start_loss_behavior,
-                tolerance=PositiveFloat(cp_cfg.convergence.tolerance),
-                window_rounds=PositiveInt(cp_cfg.convergence.window_rounds),
-                window=cp_cfg.convergence.window,
-                qualification=cp_cfg.convergence.qualification,
-                no_qualifying_round_behavior=cp_cfg.convergence.no_qualifying_round_behavior,
+        rule = cp_cfg.selection.rule
+        if "lowest" in rule:
+            tie = (
+                CheckpointTieBreak.EARLIEST_ROUND
+                if "earliest" in (cp_cfg.selection.tie_break or "")
+                else CheckpointTieBreak.LATEST_ROUND
             )
-            if cp_cfg.convergence is not None
-            else None
-        )
-        checkpoint_dict[cp_id] = CheckpointProfileRecord(
+            selection: CheckpointSelectionProfile = LowestCalibrationLossSelection(
+                kind=CheckpointSelectionKind.LOWEST_CALIBRATION_LOSS,
+                tie_break=tie,
+            )
+        elif "convergence" in rule or "first_qualifying" in rule or "first_historically" in rule:
+            convergence = cp_cfg.convergence
+            selection = FirstQualifyingConvergenceSelection(
+                kind=CheckpointSelectionKind.FIRST_QUALIFYING_CONVERGENCE,
+                initial_rounds=(
+                    int(convergence.rounds_initial) if convergence is not None else int(50)
+                ),
+                window_rounds=(int(convergence.window_rounds) if convergence is not None else int(10)),
+                relative_loss_tolerance=(
+                    float(convergence.tolerance) if convergence is not None else float(1e-4)
+                ),
+                tie_break=CheckpointTieBreak.EARLIEST_ROUND,
+                no_qualifying_round=NoQualifyingRoundPolicy.FINAL_ROUND,
+            )
+        elif "fixed" in rule:
+            selected = capture_rounds[-1] if capture_rounds else int(1)
+            selection = FixedRoundSelection(
+                kind=CheckpointSelectionKind.FIXED_ROUND,
+                selected_round=selected,
+            )
+        else:
+            raise ConfigurationError(f"Unsupported checkpoint selection rule '{rule}' in profile '{cp_key}'")
+        checkpoint_dict[cp_id] = CheckpointProfile(
             identifier=cp_id,
-            total_rounds=PositiveInt(total_rounds),
-            selected_rounds=tuple(PositiveInt(round_number) for round_number in (selected_rounds or ())),
-            early_stopping=cp_cfg.early_stopping,
-            selection_rule=cp_cfg.selection.rule,
-            selection=selection_record,
-            convergence=convergence_record,
-            checkpoint_save_policy=cp_cfg.checkpoint_save_policy,
+            total_rounds=int(total_rounds_val),
+            capture_rounds=capture_rounds,
+            save_policy=CheckpointSavePolicy.CONFIGURED_ROUNDS,
+            selection=selection,
         )
     return checkpoint_dict
 
 
-def resolve_seed_cohorts(authored: AuthoredProtocolsConfig) -> dict[SeedCohortId, SeedCohortRecord]:
-    seed_dict: dict[SeedCohortId, SeedCohortRecord] = {}
+def resolve_seed_cohorts(authored: AuthoredProtocolsConfig) -> dict[SeedCohortId, SeedCohortProfile]:
+    seed_dict: dict[SeedCohortId, SeedCohortProfile] = {}
     for sc_key, sc_cfg in authored.seed_cohorts.items():
         sc_id = SeedCohortId(sc_key)
         seeds_tuple = tuple(Seed(int(s)) for s in sc_cfg.training_seeds)
-        seed_dict[sc_id] = SeedCohortRecord(
+        seed_dict[sc_id] = SeedCohortProfile(
             identifier=sc_id,
-            paired_seed_count=PositiveInt(len(seeds_tuple)),
+            paired_seed_count=int(len(seeds_tuple)),
             training_seeds=seeds_tuple,
             bootstrap_analysis_seed=Seed(sc_cfg.bootstrap_analysis_seed),
-            analysis_seed_model=sc_cfg.analysis_seed_model,
+            analysis_seed_model=SeedAnalysisModel.PAIRED,
         )
     return seed_dict
 
 
-def resolve_model_architectures(authored: AuthoredProtocolsConfig) -> dict[str, ModelArchitectureRecord]:
+def resolve_model_architectures(authored: AuthoredProtocolsConfig) -> dict[str, DenseAutoencoderProfile]:
     return {
-        key: ModelArchitectureRecord(
+        key: DenseAutoencoderProfile(
             identifier=key,
-            kind=m.kind,
-            hidden_dims=tuple(PositiveInt(dim) for dim in m.hidden_dims),
-            bottleneck_dim=m.bottleneck_dim,
-            activation=m.activation,
-            activation_placement=m.activation_placement,
-            output_activation=m.output_activation,
-            normalization_layers=m.normalization_layers,
-            bias=m.bias,
-            reconstruction_objective=m.reconstruction_objective,
-            training_loss_reduction=m.training_loss_reduction,
-            precision=m.precision,
-            input_dimension_resolution=m.input_dimension.resolution,
-            input_dimension_declared_per_dataset=m.input_dimension.declared_per_dataset,
-            input_dimension_validation=m.input_dimension.validation,
-            decoder_construction=m.decoder.construction,
-            decoder_final_layer_output_dim=m.decoder.final_layer_output_dim,
-            weight_initialization=m.parameter_initialization.weight,
-            bias_initialization=m.parameter_initialization.bias,
-            initialization_applied_to=m.parameter_initialization.applied_to,
-            initialization_seeded_by=m.parameter_initialization.seeded_by,
-            anomaly_score_definition=m.anomaly_score.definition,
-            anomaly_score_orientation=m.anomaly_score.orientation,
+            kind=ModelArchitectureKind.DENSE_AUTOENCODER,
+            hidden_dimensions=tuple(int(dim) for dim in m.hidden_dims),
+            activation=ActivationKind(m.activation),
+            output_activation=OutputActivationKind(m.output_activation),
+            normalization=NormalizationKind(m.normalization_layers),
+            use_bias=m.bias,
+            objective=ReconstructionObjective(_OBJECTIVE_MAP.get(m.reconstruction_objective, m.reconstruction_objective)),
+            reduction=LossReduction(_REDUCTION_MAP.get(m.training_loss_reduction, m.training_loss_reduction)),
+            precision=PrecisionKind(_PRECISION_MAP.get(m.precision, m.precision)),
+            weight_initialization=WeightInitializationKind(
+                _WEIGHT_INIT_MAP.get(m.parameter_initialization.weight, m.parameter_initialization.weight)
+            ),
+            bias_initialization=BiasInitializationKind(
+                _BIAS_INIT_MAP.get(m.parameter_initialization.bias, m.parameter_initialization.bias)
+            ),
         )
         for key, m in authored.model_architectures.items()
     }
 
 
-def resolve_optimizers(authored: AuthoredProtocolsConfig) -> dict[str, OptimizerRecord]:
+def resolve_optimizers(authored: AuthoredProtocolsConfig) -> dict[str, AdamOptimizerProfile]:
     return {
-        key: OptimizerRecord(
+        key: AdamOptimizerProfile(
             identifier=key,
-            optimizer_type=o.optimizer_type,
-            learning_rate=PositiveFloat(o.learning_rate),
+            kind="adam",
+            learning_rate=float(o.learning_rate),
             beta_1=o.beta_1,
             beta_2=o.beta_2,
-            epsilon=PositiveFloat(o.epsilon),
-            weight_decay=NonNegativeFloat(o.weight_decay),
+            epsilon=float(o.epsilon),
+            weight_decay=float(o.weight_decay),
             amsgrad=o.amsgrad,
-            scheduler=o.scheduler,
-            gradient_clipping=o.gradient_clipping,
-            state_lifecycle=o.state_lifecycle,
-            state_aggregated_by_server=o.state_aggregated_by_server,
+            scheduler=(
+                NoSchedulerProfile(kind="none")
+                if o.scheduler == "none"
+                else StepSchedulerProfile(
+                    kind="step",
+                    step_size_epochs=int(1),
+                    gamma=0.9,
+                )
+            ),
+            gradient_clipping=(
+                NoGradientClippingProfile(kind="none")
+                if o.gradient_clipping == "none"
+                else GlobalNormGradientClippingProfile(
+                    kind="global_norm",
+                    maximum_norm=float(1.0),
+                )
+            ),
+            state_lifecycle="reset_each_local_training",
         )
         for key, o in authored.optimizers.items()
     }
 
 
-def resolve_batching_profiles(authored: AuthoredProtocolsConfig) -> dict[str, BatchingRecord]:
+def resolve_batching_profiles(authored: AuthoredProtocolsConfig) -> dict[str, BatchingProfile]:
     return {
-        key: BatchingRecord(
+        key: BatchingProfile(
             identifier=key,
-            micro_batch_size=PositiveInt(b.micro_batch_size),
-            gradient_accumulation_steps=PositiveInt(b.gradient_accumulation_steps),
-            effective_batch_size=PositiveInt(b.effective_batch_size),
-            shuffle_each_epoch=b.shuffle_each_epoch,
-            shuffle_unit=b.shuffle_unit,
-            incomplete_final_batch=b.incomplete_final_batch,
-            row_ordering_before_shuffle=b.row_ordering_before_shuffle,
-            shuffle_seed_namespace=b.shuffle_seed_namespace,
-            worker_seed_namespace=b.worker_seed_namespace,
+            micro_batch_size=int(b.micro_batch_size),
+            gradient_accumulation_steps=int(b.gradient_accumulation_steps),
+            shuffle_policy=_SHUFFLE_MAP.get(str(b.shuffle_each_epoch).lower(), "disabled"),
+            incomplete_batch_policy=_INCOMPLETE_BATCH_MAP.get(b.incomplete_final_batch, "keep"),
+            accumulation_remainder_policy="step_partial",
+            worker_count=0,
+            pin_memory=False,
+            persistent_workers=False,
         )
         for key, b in authored.batching.items()
     }
@@ -273,10 +370,49 @@ def resolve_protocol_determinism(cfg: DeterminismProfileConfig) -> ProtocolDeter
         seed_domains=tuple(cfg.seed_domains),
         partition_seed_independent_of_training_seeds=cfg.partition_seed_independent_of_training_seeds,
         checkpoint_selection_uses_no_stochastic_seed=cfg.checkpoint_selection_uses_no_stochastic_seed,
-        derived_seed_digest_bytes=PositiveInt(cfg.derived_seed_algorithm["digest_bytes"]),
+        derived_seed_digest_bytes=int(cfg.derived_seed_algorithm["digest_bytes"]),
         seed_namespaces={
             key: SeedNamespaceRecord(key=v.key, components=tuple(v.components))
             for key, v in cfg.seed_namespaces.items()
         },
         resolved_seeds_required_in_manifests=tuple(cfg.resolved_seeds_required_in_manifests),
+    )
+
+
+def resolve_learning_data_schemas(
+    authored: AuthoredProtocolsConfig,
+) -> dict[str, LearningDataSchema]:
+    """LearningDataSchema records are resolved from dataset materialization config, not protocols.yaml."""
+    return {}
+
+
+def resolve_runtime_profile(authored: AuthoredProtocolsConfig) -> TorchRuntimeProfile:
+    """TorchRuntimeProfile must be resolved from runtime.yaml and the active execution profile."""
+    raise ConfigurationError(
+        "TorchRuntimeProfile cannot be resolved from AuthoredProtocolsConfig alone; "
+        "resolve it from AuthoredRuntimeConfig instead"
+    )
+
+
+def resolve_seed_derivation_profile(authored: AuthoredProtocolsConfig) -> SeedDerivationProfile:
+    determ = authored.determinism
+    ns = determ.seed_namespaces
+    return SeedDerivationProfile(
+        digest_bytes=int(determ.derived_seed_algorithm["digest_bytes"]),
+        model_initialization=SeedNamespaceProfile(
+            identifier="model_initialization",
+            key=ns["model_initialization"].key,
+        ),
+        global_dataloader_shuffle=SeedNamespaceProfile(
+            identifier="global_dataloader_shuffle",
+            key=ns["global_dataloader_shuffle"].key,
+        ),
+        personalized_dataloader_shuffle=SeedNamespaceProfile(
+            identifier="personalized_dataloader_shuffle",
+            key=ns["personalized_dataloader_shuffle"].key,
+        ),
+        worker_initialization=SeedNamespaceProfile(
+            identifier="worker_initialization",
+            key=ns["worker_initialization"].key,
+        ),
     )

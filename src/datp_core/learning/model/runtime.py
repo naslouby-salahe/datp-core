@@ -115,10 +115,12 @@ def derive_execution_seed(
     digest_bytes: int,
     components: tuple[SeedComponent, ...],
 ) -> Seed:
-    return derive_seed(
-        namespace.key,
-        digest_bytes,
-        tuple((component.name, component.value) for component in components),
+    return Seed(
+        derive_seed(
+            namespace.key,
+            digest_bytes,
+            tuple((component.name, component.value) for component in components),
+        )
     )
 
 
