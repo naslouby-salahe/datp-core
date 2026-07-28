@@ -1,6 +1,9 @@
-from datp_core.protocols.seeds import CONFIRMATORY_PAIRED_SEED_COUNT, CONFIRMATORY_SEED_COHORT
+from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.protocols.statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 
 
 def test_seed_values_are_pre_registered() -> None:
-    assert CONFIRMATORY_PAIRED_SEED_COUNT.value == 10
-    assert CONFIRMATORY_SEED_COHORT.values == tuple(range(10))
+    assert CONFIRMATORY_SEED_COHORT == CONFIRMATORY_INFERENCE_PROTOCOL.seed_cohort
+    assert tuple(seed.value for seed in CONFIRMATORY_SEED_COHORT.values) == tuple(
+        range(CONFIRMATORY_INFERENCE_PROTOCOL.paired_seed_count.value)
+    )

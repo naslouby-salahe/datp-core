@@ -51,13 +51,14 @@ Comparison records include metric identity, population, model, threshold method,
 - Do not retrofit the journal checkpoint protocol to improve reproduction.
 - Reuse canonical and processed data only when their coordinates exactly match the historical protocol.
 - Historical and journal training artifacts remain separate output coordinates.
-- The five-seed historical subset and ten-seed journal extension are distinct evidence objects.
+- The anchor execution uses exactly the declared five-seed historical cohort. Each seed carries the paired shared-scope and local-scope reference comparison required by the historical endpoint.
+- The ten-seed journal confirmatory cohort is a distinct downstream evidence object. Phase 06 must neither substitute it for the anchor cohort nor emit it as an anchor result.
 
 ## Reproduction workflow
 
 1. Resolve the historical protocol from typed declarations.
-2. Validate all mandatory historical values.
-3. Execute or load the exact historical seed subset.
+2. Validate all mandatory historical values and that the resolved cohort is exactly the five-seed anchor cohort.
+3. Execute or load only the exact historical seed subset.
 4. Compute the historical metric set using current metric code only when semantics are identical; otherwise implement the historical semantic explicitly in existing anchor files.
 5. Compare each locked reference value.
 6. Classify each comparison as equivalent, acceptable declared deviation, material discrepancy, or unavailable.
@@ -104,6 +105,7 @@ The gate does not erase diagnostic outputs. It records why the programme is bloc
 - Rounded equality with full-precision failure remains a failure.
 - Missing mandatory metric blocks.
 - Wrong seed subset blocks.
+- Supplying the ten-seed journal cohort to anchor execution blocks rather than producing an anchor comparison.
 - Journal checkpoint selection cannot alter anchor execution.
 - Blocked anchor propagates to experiment and reporting status.
 - Diagnostic artifacts remain available under a blocked gate.
@@ -111,6 +113,7 @@ The gate does not erase diagnostic outputs. It records why the programme is bloc
 ## Exit criteria
 
 - Historical reproduction is a typed experiment, not an ad hoc script.
+- The anchor output records exactly the five historical seeds and never presents the separate ten-seed journal cohort as anchor evidence.
 - Every comparison is traceable and full precision.
 - The gate is impossible to bypass through reporting or campaign code.
 - Missing tolerances remain explicit blockers.
@@ -124,6 +127,7 @@ Before marking this phase complete, the implementing agent must perform and reco
 - [ ] Every scientific statement and numeric value is traceable to the source of truth or marked unresolved.
 - [ ] No attack-labelled record influences training of the benign autoencoder, calibration, threshold construction, checkpoint selection, eligibility, or parameter selection.
 - [ ] The fixed-detector contract is preserved wherever threshold methods are compared.
+- [ ] Anchor execution uses only the declared five-seed historical cohort; the ten-seed journal cohort remains a separate downstream experiment.
 - [ ] Unsupported dataset capabilities produce typed unavailability or infeasibility, never imputation.
 - [ ] Confirmatory, supportive, mechanism, external, stress-test, boundary, exploratory, and operational evidence remain separated.
 

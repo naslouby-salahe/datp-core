@@ -116,6 +116,22 @@ class GroupCount:
 
 
 @dataclass(frozen=True, slots=True)
+class KMeansInitializationCount:
+    value: int
+
+    def __post_init__(self) -> None:
+        _integer(self.value, "k-means initialization count", 1)
+
+
+@dataclass(frozen=True, slots=True)
+class KMeansMaximumIterationCount:
+    value: int
+
+    def __post_init__(self) -> None:
+        _integer(self.value, "k-means maximum iteration count", 1)
+
+
+@dataclass(frozen=True, slots=True)
 class ByteCount:
     value: int
 

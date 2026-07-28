@@ -65,6 +65,10 @@ class TrainingModelId(StrEnum):
     DITTO_PERSONALIZED_AUTOENCODER = "ditto_personalized_autoencoder"
 
 
+class OptimizerId(StrEnum):
+    ADAM = "adam"
+
+
 class CentralizedModelId(StrEnum):
     CENTRALIZED_AUTOENCODER = "centralized_autoencoder"
 
@@ -80,6 +84,45 @@ class FederatedThresholdMethod(StrEnum):
     SIZE_AWARE_SHRINKAGE = "size_aware_shrinkage"
     LOCAL_CONFORMAL_THRESHOLD = "local_conformal_threshold"
     FEDERATED_BENIGN_STATISTICS = "federated_benign_statistics"
+
+
+class ClusterFingerprintFeature(StrEnum):
+    BENIGN_ERROR_MEAN = "benign_error_mean"
+    BENIGN_ERROR_STANDARD_DEVIATION = "benign_error_standard_deviation"
+    BENIGN_ERROR_SKEWNESS = "benign_error_skewness"
+    BENIGN_ERROR_P95 = "benign_error_p95"
+
+
+class ClusterFeatureStandardization(StrEnum):
+    STANDARD_SCALER = "standard_scaler"
+
+
+class ClusterAssignmentAlgorithm(StrEnum):
+    KMEANS = "kmeans"
+
+
+class KMeansInitialization(StrEnum):
+    KMEANS_PLUS_PLUS = "kmeans_plus_plus"
+
+
+class ClusterThresholdAggregation(StrEnum):
+    ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS = "arithmetic_mean_of_eligible_local_thresholds"
+
+
+class IntervalMethod(StrEnum):
+    BCA_PAIRED_ARITHMETIC_MEAN = "bca_paired_arithmetic_mean"
+
+
+class StatisticalTestId(StrEnum):
+    WILCOXON_SIGNED_RANK = "wilcoxon_signed_rank"
+
+
+class EffectSizeId(StrEnum):
+    MATCHED_PAIRS_RANK_BISERIAL = "matched_pairs_rank_biserial"
+
+
+class MultiplicityCorrectionId(StrEnum):
+    HOLM = "holm"
 
 
 class CentralizedThresholdMethod(StrEnum):

@@ -1,11 +1,18 @@
 import pytest
 from pydantic import ValidationError
 
-from datp_core.domain.enums import CentralizedModelId, CentralizedThresholdMethod
-from datp_core.domain.values import Quantile, Ratio
+from datp_core.domain.enums import (
+    CentralizedModelId,
+    CentralizedThresholdMethod,
+    FederatedThresholdMethod,
+    OptimizerId,
+)
+from datp_core.domain.values import CoverageTarget, Quantile, Ratio
 from datp_core.protocols.models import (
     CentralizedQuantileProtocol,
     CentralizedTrainingProtocol,
+    ConformalProtocol,
+    FractionalSplitProtocol,
     OptimizerProtocol,
     TemporalSplitProtocol,
 )
@@ -35,7 +42,7 @@ def test_models_are_frozen_and_reject_extra_fields() -> None:
 def test_centralized_declarations_are_distinct_from_federated_ones() -> None:
     training = CentralizedTrainingProtocol(
         kind=CentralizedModelId.CENTRALIZED_AUTOENCODER,
-        optimizer=OptimizerProtocol(identity="declared"),
+        optimizer=OptimizerProtocol(identity=OptimizerId.ADAM),
     )
     threshold = CentralizedQuantileProtocol(
         method=CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE,
@@ -43,3 +50,18 @@ def test_centralized_declarations_are_distinct_from_federated_ones() -> None:
     )
     assert training.kind is CentralizedModelId.CENTRALIZED_AUTOENCODER
     assert threshold.method is CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE
+
+
+def test_fractional_protocols_reject_totals_outside_the_shared_tolerance() -> None:
+    with pytest.raises(ValidationError):
+        FractionalSplitProtocol(
+            training=Ratio(0.5),
+            calibration=Ratio(0.3),
+            evaluation=Ratio(0.1),
+        )
+    with pytest.raises(ValidationError):
+        ConformalProtocol(
+            method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
+            coverage=CoverageTarget(0.8),
+            significance=Ratio(0.1),
+        )

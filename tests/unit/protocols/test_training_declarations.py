@@ -1,3 +1,4 @@
+from datp_core.domain.enums import OptimizerId
 from datp_core.protocols.training import (
     BATCH_SIZE,
     CHECKPOINT_PROTOCOL,
@@ -22,7 +23,7 @@ def test_training_grids_are_locked() -> None:
     assert DITTO_PARTIAL_EFFECT_MINIMUM.value == 0.25
     assert DITTO_ALTERNATIVE_ROUTE_DIFFERENCE.value == 0.05
     assert NBAIOT_AUTOENCODER.widths == (115, 86, 58, 38, 29, 38, 58, 86, 115)
-    assert OPTIMIZER.identity == "adam"
+    assert OPTIMIZER.identity is OptimizerId.ADAM
     assert LEARNING_RATE.value == 0.001
     assert BATCH_SIZE.value == 256
     assert tuple(value.value for value in DITTO_REGULARIZATION_GRID) == (0.05, 0.1, 0.2)

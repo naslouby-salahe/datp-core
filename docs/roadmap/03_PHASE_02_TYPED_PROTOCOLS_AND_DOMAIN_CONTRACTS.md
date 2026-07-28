@@ -154,6 +154,8 @@ Every model uses `ConfigDict(frozen=True, extra='forbid')`. No scientific field 
 - `RuntimeProtocol`
 - `ResolvedProtocolGraph`
 
+`RuntimeProtocol` declares separate project-relative `data`, `outputs`, and `results` roots. `results` is the dedicated publication-extraction root and cannot be redirected under `outputs`.
+
 Use discriminated unions for model-specific and threshold-specific declarations. An experiment cannot carry irrelevant fields such as a proximal coefficient for FedAvg.
 
 ## Required scientific declarations

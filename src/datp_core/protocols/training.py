@@ -1,5 +1,6 @@
 """Training declarations."""
 
+from datp_core.domain.enums import OptimizerId
 from datp_core.domain.values import (
     BatchSize,
     DittoRegularization,
@@ -22,7 +23,7 @@ DITTO_RETAINED_EFFECT_MINIMUM = Ratio(0.75)
 DITTO_PARTIAL_EFFECT_MINIMUM = Ratio(0.25)
 DITTO_ALTERNATIVE_ROUTE_DIFFERENCE = MetricValue(0.05)
 NBAIOT_AUTOENCODER = AutoencoderProtocol(widths=(115, 86, 58, 38, 29, 38, 58, 86, 115))
-OPTIMIZER = OptimizerProtocol(identity="adam")
+OPTIMIZER = OptimizerProtocol(identity=OptimizerId.ADAM)
 LEARNING_RATE = LearningRate(0.001)
 BATCH_SIZE = BatchSize(256)
 DITTO_REGULARIZATION_GRID = tuple(DittoRegularization(value) for value in (0.05, 0.1, 0.2))

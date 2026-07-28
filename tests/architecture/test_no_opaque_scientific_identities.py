@@ -20,6 +20,7 @@ PROHIBITED_IDENTITIES = frozenset(
     )
 )
 OPAQUE_IDENTIFIER = re.compile(r"^(?:regime_[a-d]|b[0-4]|baseline_[0-9]+|policy_[0-9]+|experiment_v[0-9]+)$")
+HISTORICAL_SHORTHAND = re.compile(r"\b(?:B[0-4]|Regime [A-D])\b")
 
 
 def source_strings_and_identifiers(source_path: Path) -> tuple[frozenset[str], frozenset[str]]:
@@ -39,6 +40,7 @@ def test_source_has_no_opaque_scientific_identity_or_serialized_protocol_value()
         strings, identifiers = source_strings_and_identifiers(source_path)
         assert PROHIBITED_IDENTITIES.isdisjoint(strings), source_path
         assert not any(OPAQUE_IDENTIFIER.fullmatch(identifier.lower()) for identifier in identifiers), source_path
+        assert not any(HISTORICAL_SHORTHAND.search(value) for value in strings), source_path
 
 
 def test_prohibited_identity_detector_rejects_known_legacy_shorthand(tmp_path: Path) -> None:

@@ -33,14 +33,14 @@ Do not add percentages. A phase is binary with respect to its exit criteria.
 | Phase | Status | Entry criteria | Exit evidence | Scientific blockers |
 |---|---|---|---|---|
 | 01 — Scientific identity and scope | `COMPLETE` | Source tree exists | Identity tests and scope audit | None |
-| 02 — Typed protocols and domain contracts | `BLOCKED_SCIENTIFIC_VALUE` | Phase 01 complete | Protocol graph validation and strict typing | Exact seed values and any absent hyperparameters must come from source truth |
+| 02 — Typed protocols and domain contracts | `COMPLETE` | Phase 01 complete | Protocol graph validation and strict typing | None; optional alert-burden translation is explicitly suppressed without rate evidence |
 | 03 — Dataset audit and capabilities | `NOT_STARTED` | Phase 02 complete | Schema and capability tests for all datasets | Raw-data discrepancies must be resolved by audit, not guesswork |
 | 04 — Canonical data and reusable preprocessing | `NOT_STARTED` | Phase 03 complete | Deterministic reusable data manifests and reload checks | Exact preprocessing protocol must be present in source truth |
 | 05 — Populations, splits, and cohorts | `NOT_STARTED` | Phase 04 complete | Deterministic split/cohort manifests | Any unspecified non-temporal split ratios remain blocking |
 | 06 — Anchor reproduction and gate | `NOT_STARTED` | Phase 05 complete | Explicit equivalence/discrepancy decision | Metric-specific tolerances absent from source truth remain blocking |
 | 07 — Centralized reference | `NOT_STARTED` | Phase 05 complete | Independent pooled execution and tests | Centralized training values absent from source truth remain blocking |
 | 08 — Federated training, checkpointing, and scoring | `NOT_STARTED` | Phases 05–06 complete | Frozen scores and checkpoint discipline pass | Exact architecture/optimizer/batch values must be sourced |
-| 09 — Calibration and threshold methods | `NOT_STARTED` | Phase 08 complete | All feasible methods verified | `CLUSTER_THRESHOLD` grouping input remains unresolved until scientifically declared |
+| 09 — Calibration and threshold methods | `NOT_STARTED` | Phase 08 complete | All feasible methods verified | Grouped-threshold execution and artifact validation remain deferred to Phase 09 |
 | 10 — Metrics and inference | `NOT_STARTED` | Phase 09 complete | Metric semantics and paired inference pass | Near-zero mean-FPR warning cutoff and temporal materiality cutoff must be declared |
 | 11 — External and temporal evidence | `NOT_STARTED` | Phases 08–10 complete | Edge static/temporal and CIC boundary tests pass | Temporal source validity is data-dependent |
 | 12 — Experiment planning and campaigns | `NOT_STARTED` | Phases 01–11 complete | Complete feasible plan expansion | Any unresolved protocol makes dependent experiments infeasible |
@@ -68,19 +68,13 @@ When a phase status changes, append one record under that phase containing:
 
 Do not record dates, durations, commit hashes, or subjective completion percentages.
 
-## Global unresolved scientific decisions
+## Scientific decision register
 
-These are blocking until the source of truth explicitly resolves them:
+The source locks the original values where specified. The following user-authorized, prospective research amendments supply the otherwise absent values used by Phase 02: seeds `0..9`; equal non-temporal thirds; N-BaIoT widths `115/86/58/38/29/38/58/86/115`; Adam, learning rate `0.001`, batch size `256`; Ditto grid `0.05/0.1/0.2` with primary `0.1`; paired BCa resamples `10,000`; near-zero mean-FPR warning `0.01`; temporal CV materiality `0.10`; and fixed-score anchor tolerance `1e-12` for the recovered historical shared-scope/local-scope values. These amendments are prospective declarations, not retrospective claims about the original source.
 
-1. Exact integer seed cohorts if the current source specifies only cohort size.
-2. Any training architecture, optimizer, learning-rate, batch-size, initialization, or non-temporal split value not explicitly present.
-3. The scientific source and construction rule for `CLUSTER_THRESHOLD` group assignments.
-4. The warning cutoff for a positive but near-zero mean FPR.
-5. The positive-materiality cutoff required before temporal recovery ratio is defined.
-6. Metric-specific anchor equivalence tolerances beyond explicitly documented historical reference values.
-7. Population-specific traffic-rate evidence for alert-burden translation.
+The anchor stores historically observed shared-scope and local-scope CV(FPR) references. Legacy numbered policy and lettered-regime labels are evidence-only terminology from the historical paper; they are not implementation identities. Source modules, enum members, declaration constants, experiment IDs, and ordinary tests use descriptive names. The sole architecture test contains the historical tokens only as negative fixtures that reject their use in source. These anchor records map only to `SHARED_THRESHOLD` and `LOCAL_THRESHOLD`.
 
-An unresolved optional experiment does not block unrelated mandatory work. An unresolved confirmatory dependency blocks every downstream claim that depends on it.
+Grouped threshold assignment is the source-locked taxonomy-free mechanism: create each eligible client’s benign reconstruction-error fingerprint from mean, standard deviation, skewness, and `p95`; standardize the feature matrix with `StandardScaler`; run k-means++ with `n_init=10`, `max_iter=300`, and `random_state=42`; use the declared group count; and assign each cluster the arithmetic mean of its eligible local thresholds. It never uses attack labels or held-out outcomes. Population-specific traffic-rate evidence remains absent, so `ALERT_BURDEN_TRANSLATION` is a declared suppressed operational experiment rather than an executable rate claim.
 
 ## Phase 01 — Scientific identity and scope
 
@@ -92,20 +86,20 @@ An unresolved optional experiment does not block unrelated mandatory work. An un
 - Focused commands executed: Phase 01 pytest selection; Ruff format check; Ruff check; Pyright; Pylint for the authorized domain surface.
 - Whole-suite command executed: `python -m pytest -n auto -q`.
 - Results: focused tests passed (`42 passed`); whole suite passed (`42 passed`); Ruff passed; Pyright passed with zero errors; Pylint passed at `10.00/10`.
-- Audit verdict: complete. Scientific vocabulary is descriptive; threshold identities are structurally separate; scope vocabulary blocks prohibited claims; source-file identity set is unchanged; no compatibility surface, opaque identity, `Any`, mutable module-level collection, raw domain dictionary, fingerprint remnant, or package re-export was introduced.
+- Audit verdict: complete. Scientific vocabulary is descriptive; threshold identities are structurally separate; scope vocabulary blocks prohibited claims; source-file identity set is unchanged; no compatibility surface, opaque identity, `Any`, mutable module-level collection, raw domain dictionary, or package re-export was introduced.
 - No commit or push was performed.
 
 ## Phase 02 — Typed protocols and domain contracts
 
-- Status: `BLOCKED_SCIENTIFIC_VALUE`.
+- Status: `COMPLETE`.
 - Source files changed: `src/datp_core/domain/contracts.py`, `src/datp_core/domain/provenance.py`, `src/datp_core/domain/values.py`, and the authorized `src/datp_core/protocols/` declaration and validation modules.
 - Test files added: all seventeen test files prescribed by Phase 02.
 - Source-backed values implemented: temporal split `0.55/0.15/0.10/0.20`; canonical and sensitivity quantiles; calibration support and size grids; shrinkage weights; conformal coverage/significance; summary coefficients; checkpoint rounds; FedProx coefficient grid; local epochs; Dirichlet concentrations; confirmatory confidence level and paired-seed count.
-- Unresolved values: exact seed integers; non-temporal split ratios; architecture, optimizer, learning-rate, batch-size, centralized-training, and Ditto values; bootstrap replicate count; near-zero and temporal cutoffs; anchor tolerances; grouped-threshold assignment input; traffic-rate evidence.
-- Validation rules implemented: immutable scalar/provenance validation; strict frozen declaration models; discriminated training declarations; centralized/federated separation; tuple-based deterministic grids and catalogue; capability and cross-reference checks; explicit unresolved-science failures; project-relative runtime paths.
-- Focused command result: Phase 02 prescribed tests passed (`20 passed`). Whole-suite command result: `python -m pytest -n auto -q` passed (`62 passed`). Ruff formatting and lint passed. Pyright passed with zero errors and warnings. Pylint passed at `10.00/10`.
-- Audit verdict: implementation-complete and scientifically blocked. The known source-absent values are represented only through `UnresolvedScientificValueError`; no placeholder permits graph resolution. No `Any`, mutable declaration collection, protocol dictionary registry, compatibility alias, fingerprint field, environment override, or YAML/config parser was introduced in the Phase 02 declaration surface.
+- Seed-cohort boundary: the historical anchor is exactly five seeds, each carrying paired shared-scope and local-scope reference values. The journal confirmatory inference protocol is a separate ten-seed paired cohort. The five-seed cohort is anchor-only and must not reduce or redefine the journal cohort.
+- Resolved values: source-backed temporal split `0.55/0.15/0.10/0.20`; canonical and sensitivity quantiles; calibration support and size grids; shrinkage weights; conformal coverage/significance; summary coefficients; checkpoint rounds; FedProx coefficient grid; local epochs; Dirichlet concentrations; confirmatory confidence level and paired-seed count. Research-amendment values are listed in the scientific decision register, including anchors and grouped assignment.
+- Validation rules implemented: immutable scalar/provenance validation; strict frozen declaration models; discriminated training declarations; centralized/federated separation; tuple-based deterministic grids and catalogue; capability and cross-reference checks; source-locked benign-only grouped-threshold fingerprint/k-means declaration; explicit operational suppression when rate evidence is absent; project-relative `data`, `outputs`, and dedicated `results` runtime roots.
+- Focused command result: Phase 02 protocol/domain and Phase 01 locked-scope selections passed (`74 passed` and `42 passed` respectively). Whole-suite command result: `make test-parallel` passed (`74 passed`). Ruff format check and lint passed; Pyright passed with zero errors, warnings, and information messages; Pylint passed at `10.00/10` for both `src` and `tests`; Nox discovery passed; `git diff --check` passed.
+- Audit verdict: complete. The default graph resolves all mandatory protocols and explicitly reports `ALERT_BURDEN_TRANSLATION` as suppressed rather than fabricating a traffic-rate claim. Static source audit found no removed configuration dependency or unresolved-helper reference. No `Any`, mutable declaration collection, protocol dictionary registry, compatibility alias, environment override, or YAML/config parser was introduced in the Phase 02 declaration surface. The grouped-threshold fingerprint is deliberately typed because it is the source-defined grouping input.
 - Configuration cleanup: removed direct `pydantic-settings`, `pyyaml`, `hydra-core`, and `omegaconf` project dependencies, regenerated `uv.lock`, and added Nox/Make parallel-test automation. `pyyaml` remains only transitively through the pre-existing later-phase `dagster` dependency; no Phase 02 source imports or uses it.
-- Scientific-source re-audit: the source fixes ten paired seeds, but not integers; locks architecture/optimizer/hyperparameters without values; gives no non-temporal ratios, Ditto coefficient, bootstrap replicate count, near-zero cutoff, temporal materiality threshold, anchor tolerance, approved grouped assignment construction, or population-specific rate evidence. It does fix Ditto effect bands `0.75`, `0.25`, and `0.05`, which were added to the training declarations.
-- Research amendment: user-authorized pre-registration fixes confirmatory seeds to `0..9`; non-temporal benign partitions to equal thirds; N-BaIoT autoencoder widths to `115/86/58/38/29/38/58/86/115`; Adam with learning rate `0.001` and batch size `256`; Ditto regularization grid `0.05/0.1/0.2` with primary `0.1`; paired BCa resamples `10,000`; near-zero mean-FPR warning `0.01`; and temporal CV materiality `0.10`. These are amendment constants, not retrospective claims about the original source. Historical anchor tolerances, an approved non-fingerprint grouped-assignment input, and population traffic rates remain blocked pending their required evidence.
+- Historical-anchor re-audit: rendered `paper/DATP.pdf` Table VI and the shared-scope/local-scope seed metrics under `outputs/results/a/` agree with every stored anchor CV(FPR) value. The same PDF and prior implementation lock grouped thresholding to benign-error fingerprints, `StandardScaler`, k-means++, `n_init=10`, `max_iter=300`, `random_state=42`, and a declared three-group setting; this replaces the earlier incorrect threshold-space declaration. The decision register records the prospective amendments and explicit no-rate suppression.
 - No commit or push was performed.

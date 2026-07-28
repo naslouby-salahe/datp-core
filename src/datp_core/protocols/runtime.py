@@ -1,9 +1,12 @@
 """Runtime declaration constants without scientific overrides."""
 
-from pathlib import Path
-
-from .models import RuntimeProtocol
+from .models import DATA_ROOT, OUTPUTS_ROOT, RESULTS_ROOT, RuntimeProtocol
 
 DEFAULT_RUNTIME = RuntimeProtocol(
-    data_root=Path("data"), outputs_root=Path("outputs"), require_cuda=False, worker_count=1, overwrite_outputs=False
+    data_root=DATA_ROOT,
+    outputs_root=OUTPUTS_ROOT,
+    results_root=RESULTS_ROOT,
+    require_cuda=False,
+    worker_count=1,
+    overwrite_outputs=False,
 )
