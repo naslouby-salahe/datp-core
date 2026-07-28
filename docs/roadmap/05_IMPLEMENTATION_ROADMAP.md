@@ -33,13 +33,7 @@ Related files:
 
 DATP-Core is implemented from scratch.
 
-The original DATP project:
-
-```text
-/home/naslouby/Projects/datp
-```
-
-is consulted only to recover scientific behavior:
+The original DATP project is consulted only to recover scientific behavior:
 
 - B0–B4 semantics;
 - calibration and test split meaning;

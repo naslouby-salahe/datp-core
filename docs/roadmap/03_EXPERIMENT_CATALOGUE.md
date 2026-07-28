@@ -488,7 +488,7 @@ The following are not acceptable substitutes:
 
 - assigning clients from row order;
 - assigning clients from merge order;
-- treating filenames as devices without evidence;
+- treating source names as devices without evidence;
 - inferring clients from class labels;
 - creating random pseudo-devices;
 - claiming that the original dataset paper’s 105-device topology is retained in the processed CSV.

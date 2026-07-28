@@ -671,7 +671,7 @@ Forbidden substitutes include:
 - class labels;
 - random pseudo-device assignment;
 - inferred timestamps;
-- undocumented filename assumptions.
+- undocumented source-name assumptions.
 
 The experiment may be reopened only if a verified artifact containing genuine client identity becomes available and passes a new feasibility audit before result inspection.
 
@@ -1186,13 +1186,7 @@ The anchor is used to recover:
 - result interpretation;
 - conference-faithful settings.
 
-The scientific reference project is:
-
-```text
-/home/naslouby/Projects/datp
-```
-
-It is a behavioral reference only.
+The original DATP study is a behavioral reference only.
 
 Its source layout, technical debt, module structure, names, defaults, and compatibility behavior are not inherited.
 

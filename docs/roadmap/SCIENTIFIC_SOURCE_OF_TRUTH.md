@@ -129,7 +129,7 @@ Full narrative context, source publications, and interpretive caveats are owned 
 14. Supported metrics: B0, B1, B2 threshold policies; B4 only when pseudo-client fingerprints are valid; pairwise benign-distribution Jensen–Shannon divergence; `CV(FPR)`, IQR, range; descriptive quantile-estimation comparisons (file 03 §4.2).
 15. Unsupported metrics: none beyond what device-level attribution would require (device-level generalization, physical-client equity, temporal behavior, device-aware threshold performance on the original 105-device topology are prohibited interpretations, not metrics).
 16. Supported claims: applicability-boundary claim only (file 02 §12.1); a null B1-vs-B2 difference is scientifically informative here, indicating personalization may be unnecessary under near-homogeneous pseudo-clients (file 03 §4.2).
-17. Suppressed claims: device-level generalization; physical-client equity; temporal claims; device-aware performance claims on the original topology (file 03 §4.2). Physical-device or MAC-based repartition (Regime B-b) is suppressed outright — row order, merge order, filename-as-device, class-label inference, and random pseudo-devices are explicitly prohibited workarounds (file 03 §4.3).
+17. Suppressed claims: device-level generalization; physical-client equity; temporal claims; device-aware performance claims on the original topology (file 03 §4.2). Physical-device or MAC-based repartition (Regime B-b) is suppressed outright — row order, merge order, source-name-based inference, class-label inference, and random pseudo-devices are explicitly prohibited workarounds (file 03 §4.3).
 18. Split feasibility: benign/attack split feasible at the pseudo-client level only.
 19. Known confounding risks: near-homogeneous file-defined pseudo-clients may mask or dilute a true device-level threshold-scope effect.
 20. Leakage risks: none beyond the global leakage controls in §6 below.
@@ -216,7 +216,7 @@ Full narrative is owned by [03 — Experiment Catalogue](./03_EXPERIMENT_CATALOG
 2. Dataset: CICIoT2023.
 3. Population: not constructed.
 4. Reason for rejection: no trustworthy MAC address, device identifier, source/destination IP suitable for client identity, capture-source field, timestamp, or equivalent provenance field exists in the processed artifact (file 03 §4.3).
-5. Prohibited workarounds: row order, merge order, filename-as-device, class-label inference, random pseudo-devices, or claiming the original study's 105-device topology survives in the processed CSV.
+5. Prohibited workarounds: row order, merge order, source-name-based inference, class-label inference, random pseudo-devices, or claiming the original study's 105-device topology survives in the processed data.
 6. Status: the rejection is itself evidence of an artifact boundary, not a failed implementation, and must be reported as such.
 
 ### 5.4 Regime C — controlled N-BaIoT heterogeneity sweep
@@ -336,13 +336,13 @@ Procedural framing is owned by [05 — Implementation Roadmap](./05_IMPLEMENTATI
 15. **Hardware requirements:** GPU training under the main runtime profile (file 05 §6.2); resource pressure must produce blocked execution, an approved runtime-profile revision, or a formally reviewed scientific configuration change — never a silent reduction of batch size, sample counts, rounds, seeds, or clients (file 05 §6.8).
 16. **Training termination:** anchor — convergence check begins at round 40; compute `abs(loss[r-9] - loss[r]) / abs(loss[r-9])` over the trailing ten FedAvg-weighted benign validation losses (a zero start loss has relative change zero); select the first round with relative change below `0.005`, otherwise select round 150. Journal — trains the full 200 rounds; convergence is logged but does not stop training (file 04 §13.2).
 17. **Checkpoint-saving behavior:** anchor saves exactly one checkpoint, at the selected round (item 16). Journal saves checkpoints at rounds `25, 50, 75, 100, 125, 150, 200`.
-18. **Checkpoint-selection rule:** anchor — the convergence rule in item 16 (deterministic, no stochastic seed: `checkpoint_selection_uses_no_stochastic_seed = true`; first qualifying round at or after 40, otherwise the 150-round cap; tie-break earliest qualifying round). Journal (`datp_core_round_grid`, configs/protocols.yaml) — Regime A selects one primary **round number** using the rule `lowest_federated_averaging_weighted_benign_validation_reconstruction_error`: for each candidate round in `{25, 50, 75, 100, 125, 150, 200}`, compute the benign-calibration-row-weighted arithmetic mean of per-row reconstruction error under that round's global state (population: per-client benign calibration split rows; client accumulation in ascending client-identifier order; aggregated across the locked seed cohort as the cross-seed mean reconstruction error per candidate round), restricted to the natural-device regime, FedAvg-only, benign-validation-only scope; select the round with the lowest value; tie-break by earliest scheduled round. This selection is frozen before journal outcomes are inspected. The selected round number is reused by every profile declaring lookup authorization (e.g., FedProx, Ditto's global-checkpoint lookup) across main regimes and policies where that checkpoint exists; model weights remain regime- and seed-specific. Forbidden selectors (explicit in `datp_core_round_grid.selection.forbidden_selectors`): per-policy selection, per-experiment selection, per-dataset selection, test-driven selection, attack-driven selection, AUROC-driven selection, external-dataset-driven selection — equivalently: test AUROC, test FPR/`CV(FPR)`, Macro-F1, balanced accuracy, attack labels, the B1-vs-B2 effect, external or stress-test results, or policy-specific best performance. Persist the candidates, selector input, selected round, tie-break, and reason.
+18. **Checkpoint-selection rule:** anchor — the convergence rule in item 16 (deterministic and without a stochastic seed; first qualifying round at or after 40, otherwise the 150-round cap; tie-break earliest qualifying round). Journal — Regime A selects one primary **round number** using the pre-registered benign-validation reconstruction-error criterion: for each candidate round in `{25, 50, 75, 100, 125, 150, 200}`, compute the benign-calibration-row-weighted arithmetic mean of per-row reconstruction error under that round's global state (population: per-client benign calibration split rows; client accumulation in ascending client-identifier order; aggregated across the locked seed cohort as the cross-seed mean reconstruction error per candidate round), restricted to the natural-device regime, FedAvg-only, benign-validation-only scope; select the round with the lowest value; tie-break by earliest scheduled round. This selection is frozen before journal outcomes are inspected. The selected round number is reused by authorized profiles across main regimes and policies where that checkpoint exists; model weights remain regime- and seed-specific. Forbidden selectors include per-policy, per-experiment, per-dataset, test-driven, attack-driven, AUROC-driven, and external-dataset-driven selection — equivalently: test AUROC, test FPR/`CV(FPR)`, Macro-F1, balanced accuracy, attack labels, the B1-vs-B2 effect, external or stress-test results, or policy-specific best performance. Persist the candidates, selector input, selected round, tie-break, and reason.
 19. **Conditions requiring fresh execution:** any change to dataset, materialization, client assignment, or split requires a fresh experiment execution.
 20. **Current-run sharing:** a direct DAG dependency may feed multiple consumers only while the active campaign is running; completed experiment outputs are never used as stage inputs for a later command.
 21. **Differences between the anchor and expanded (journal) regimes:** anchor uses a 150-round cap with convergence-triggered single-checkpoint selection and a five-seed cohort; journal uses a fixed 200-round budget with a seven-point checkpoint grid, a frozen non-test primary-round selector, and a ten-seed cohort. The anchor's historical semantics are preserved, not retrofitted with journal selection logic (file 05 §6.3).
 22. **Training-side stress tests and their separation from the main ladder:**
     - **FedProx** requires separate training artifacts from FedAvg; executes the pre-registered coefficient grid `mu in {0.001, 0.01, 0.1, 1.0}` (`mu = 0` is FedAvg-equivalent and is not a FedProx condition); retains every coefficient outcome including non-convergence; the grid is frozen before attack-sensitive or confirmatory outcomes are inspected; scores are kept separate from FedAvg scores (file 03 §3.10, file 05 §6.6).
-    - **Ditto** requires a genuine global model, persistent per-client personalized states never reset across rounds, the correct proximal personalized objective `min_{v_k} L_k(v_k) + (proximal_weight / 2) * ||v_k - w_global||^2`, a personalized optimizer state recreated at the start of every local fit and never persisted across rounds, and separate global/personalized artifact provenance with personalized states never aggregated. If these conditions are not met, the fallback must use its actual implemented method name and must never be called Ditto (file 05 §6.7; `ditto_specification`, configs/protocols.yaml).
+    - **Ditto** requires a genuine global model, persistent per-client personalized states never reset across rounds, the correct proximal personalized objective `min_{v_k} L_k(v_k) + (proximal_weight / 2) * ||v_k - w_global||^2`, a personalized optimizer state recreated at the start of every local fit and never persisted across rounds, and separate global/personalized artifact provenance with personalized states never aggregated. If these conditions are not met, the fallback must use its actual implemented method name and must never be called Ditto (file 05 §6.7).
     - Neither FedProx nor Ditto is ever merged into the B0–B4 threshold-scope causal ladder; both are reported as training-side stress tests only (file 02 §9).
 
 ### Checklist — Model and training protocol
@@ -378,7 +378,7 @@ Narrative role and prohibited interpretations are owned by [01 — Scientific Id
 2. Canonical setting: `q = 0.95`.
 3. Eligible clients: `n_k >= 100` (§6.13; file 01 §4.3).
 4. Aggregation rule: `tau_shared = (1 / |eligible clients|) * sum_k quantile(scores_k, q)`.
-5. Quantile/interpolation convention: linear-interpolated order statistic (`quantile_estimator: linear_interpolated_order_statistic`, configs/protocols.yaml).
+5. Quantile/interpolation convention: linear-interpolated order statistic.
 6. Whether in causal ladder: yes — the shared-scope anchor for the confirmatory comparison.
 7. Prohibited interpretations: none beyond the general prohibition on describing any single policy as universally superior (§8.3 item 5).
 
@@ -400,7 +400,7 @@ Narrative role and prohibited interpretations are owned by [01 — Scientific Id
 ### 8.5 B4 — Cluster threshold
 
 1. Definition: taxonomy-free client groups formed from a four-scalar benign reconstruction-error fingerprint: `mean(error)`, `standard deviation(error)`, `skewness(error)`, `p95(error)`.
-2. Fingerprint estimators (repository config, `configs/protocols.yaml`): `mean_error = arithmetic_mean`; `std_error = standard_deviation_ddof_1`; `skew_error = fisher_pearson_moment_coefficient_of_skewness_uncorrected`; `p95_error = quantile_0_95_linear_interpolated_order_statistic`.
+2. Fingerprint estimators: arithmetic mean, sample standard deviation, uncorrected Fisher–Pearson moment skewness, and the linearly interpolated 95th percentile, respectively.
 3. Degenerate-client fingerprint rules: fewer than two calibration scores → `std_error = 0.0`, `skew_error = 0.0`; non-finite skew value → `0.0`. A non-finite fingerprint value after these substitutions is a typed failure (`typed_failure_non_finite_fingerprint`), never silently zeroed further.
 4. Feature scaling before clustering: zero-mean, unit-variance standardization with `ddof = 0`, fit on the eligible client fingerprint matrix of the current population, seed, and checkpoint (`fit_scope`); a zero-variance dimension uses scale `1` and becomes an all-zero-centered column (`constant_dimension_rule`).
 5. Client ordering before fit: ascending client identifier.
@@ -472,7 +472,7 @@ Full definition and naming lock: §7 item 22. Not a threshold policy; listed her
 
 ## 9. Seed cohorts and determinism
 
-Repository configuration is authoritative for the exact seed values (`configs/protocols.yaml`); this section fixes their scientific roles.
+The approved study specification is authoritative for the exact seed values; this section fixes their scientific roles.
 
 1. **Training seeds:** `datp_core_ten_seed` cohort — 10 paired training seeds `[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]`, the journal ten-seed replication unit. `anchor_five_seed` cohort — 5 paired training seeds `[0, 1, 2, 3, 4]`, the historical anchor replication unit. Training and partition seed domains are independent (`partition_seed_independent_of_training_seeds: true`).
 2. **Analysis seeds:** the historical five-seed percentile bootstrap uses a literal, hardcoded `analysis_seed = 42` (`historical_five_seed_percentile_bootstrap`), independent of the cohort-level `bootstrap_analysis_seed`. The `bootstrap_analysis_seed = 300` recorded on both seed cohorts applies only to statistical profiles that reference `analysis_seed_source` (`analysis_seed_model: one_fixed_bootstrap_seed_per_analysis_not_one_analysis_seed_per_training_seed`) — it is not itself the confirmatory ten-seed BCa seed unless a profile explicitly sources it; the confirmatory BCa profile's own recorded seed is authoritative (§12 item 2).
@@ -483,9 +483,9 @@ Repository configuration is authoritative for the exact seed values (`configs/pr
 7. **Seed pairing rules:** within a paired training seed, B1 and B2 (and B0/B3/B4) share the same trained model and score artifacts; they are never resampled independently in the bootstrap (file 04 §11.1: "B1 and B2 are never resampled independently").
 8. **Seed reuse rules:** a training seed's model/score artifacts may be reused across threshold policies within the same seed and regime (§6 item 10), but never across seeds, regimes, or datasets.
 9. **Seed independence assumptions:** the training seed is the sole independent replication unit (file 04 §1.2); clients, rows, checkpoints, attack categories, calibration subsamples, cluster initializations, and temporal windows are not independent replications.
-10. **Deterministic-library settings:** separate configured seed domains for training, partitioning, calibration subsampling, clustering, bootstrap analysis, and dataloader shuffling (`determinism.seed_domains`, configs/protocols.yaml); derived seeds use a `blake2b` hash (8-byte digest) over an ordered, UTF-8-encoded component key, reduced by `modulo 2^32` to an unsigned big-endian integer.
+10. **Deterministic-library settings:** use separate seed domains for training, partitioning, calibration subsampling, clustering, bootstrap analysis, and data-loader shuffling; derived seeds use a BLAKE2b hash (8-byte digest) over an ordered, UTF-8-encoded component key, reduced modulo 2^32 to an unsigned big-endian integer.
 11. **GPU determinism:** enabled where supported for the ML framework and GPU operations (file 05 §12); recorded per run alongside OS, Python version, framework, CUDA/driver versions, and GPU identity.
-12. **Data-loader determinism:** `dataloader_shuffle` and `dataloader_worker` seed namespaces are derived from `[training_seed, round_index, client_identifier, local_epoch_index]` and `[training_seed, round_index, client_identifier, worker_index]` respectively (configs/protocols.yaml).
+12. **Data-loader determinism:** shuffle and worker seed namespaces are derived from the training seed, round index, client identifier, and local epoch or worker index, respectively.
 13. **Cluster reproducibility:** fixed `random_seed = 42`, fixed initialization count (10), fixed max iterations (300), fixed tolerance (`1.0e-4`) — see §8.5.
 14. **Artifact fingerprinting:** every run records a configuration fingerprint and a dependency-lock fingerprint (§13); reuse is validated against checksum, schema-version, and parent-fingerprint match (§7 item 20).
 15. **Allowed nondeterminism:** when full bitwise determinism is unavailable (e.g., certain GPU reduction orders), the limitation is recorded and quantified rather than a bitwise-reproducibility claim being made (file 05 §12: "record and quantify the limitation rather than claiming bitwise reproducibility").
@@ -579,7 +579,7 @@ Full context is owned by [04 — Evaluation and Reporting Protocol](./04_EVALUAT
 5. **AUROC** — computed from continuous anomaly scores; requires both classes. Within a fixed-score B1–B4 comparison, AUROC must be identical up to numerical serialization tolerance; any policy-dependent difference indicates mismatched artifacts or unintended model variation. Role: model-quality control, explicitly **not** a threshold-policy verdict (file 02 identity boundary, §2 item 7 of this file).
 6. **`mu_FPR`** (mean FPR) — `mu_FPR = (1/K_e) * sum_k FPR_k` over `K_e` eligible FPR-evaluable clients; unweighted by client row count (the primary equity calculation is deliberately unweighted).
 7. **`sigma_FPR`** (population SD of FPR) — `sigma_FPR = sqrt((1/K_e) * sum_k (FPR_k - mu_FPR)^2)`, with `ddof = 0` (population, not sample, variance) — the executed eligible clients are treated as the complete descriptive population for that cell.
-8. **`CV(FPR)`** (primary confirmatory metric) — `CV(FPR) = sigma_FPR / mu_FPR`. No epsilon or denominator stabilizer is permitted. When `mean(FPR) = 0`, `CV(FPR) = undefined`. A positive `cv_instability_threshold` must be explicitly configured before analysis; when the mean is positive but below that threshold, the numerical CV is retained together with a near-zero-denominator warning status (`undefined_near_zero_denominator`), and such cells are interpreted only alongside absolute dispersion (item 9). Direction of improvement: lower. Confirmatory role: sole primary metric (§3 item 3).
+8. **`CV(FPR)`** (primary confirmatory metric) — `CV(FPR) = sigma_FPR / mu_FPR`. No epsilon or denominator stabilizer is permitted. When `mean(FPR) = 0`, `CV(FPR) = undefined`. A positive, pre-specified near-zero warning threshold must be set before analysis; when the mean is positive but below that threshold, the numerical CV is retained together with a near-zero-denominator warning status (`undefined_near_zero_denominator`), and such cells are interpreted only alongside absolute dispersion (item 9). Direction of improvement: lower. Confirmatory role: sole primary metric (§3 item 3).
 9. **Absolute dispersion** — `IQR(FPR) = Q_0.75(FPR) − Q_0.25(FPR)`; `Range(FPR) = max(FPR_k) − min(FPR_k)`; `WorstFPR = max(FPR_k)`. Quantile interpolation must match the anchor convention (linear-interpolated order statistic, §8.2 item 5) — no implicit library default is permitted. Role: required companion reporting, never a substitute for `CV(FPR)`.
 10. **Lower-tail companions** — `CV(TPR) = std(TPR_k, ddof=0) / mean(TPR_k)` (same zero-denominator rules as item 8); `P10(MacroF1) = Q_0.10(MacroF1_k)`; `WorstBA = min(BA_k)`. Report the attack-evaluable client count alongside each.
 11. **Metric status vocabulary** (applies to every metric above): `available`, `undefined_zero_denominator`, `undefined_near_zero_denominator`, `unavailable_missing_benign_class`, `unavailable_missing_attack_class`, `unavailable_invalid_attack_assignment`, `unavailable_ineligible_client`, `unavailable_unsupported_regime`, `failed_invalid_artifact`, `failed_statistical_procedure`. Zero, an empty string, an omitted row, or an unqualified `NaN` is never a substitute for one of these named reasons.
@@ -636,7 +636,7 @@ Full derivation and diagnostic detail are owned by [04 — Evaluation and Report
 
 ## 13. Artifacts, provenance, and reporting
 
-Field-level schema detail is owned by [04 — Evaluation and Reporting Protocol](./04_EVALUATION_AND_REPORTING_PROTOCOL.md) §17–§20 and [05 — Implementation Roadmap](./05_IMPLEMENTATION_ROADMAP.md) §3; `configs/runtime.yaml` and `configs/protocols.yaml` are the configuration authority for the values below.
+Field-level schema detail is owned by [04 — Evaluation and Reporting Protocol](./04_EVALUATION_AND_REPORTING_PROTOCOL.md) §17–§20 and [05 — Implementation Roadmap](./05_IMPLEMENTATION_ROADMAP.md) §3; the approved study specification is authoritative for the values below.
 
 1. **Required artifact types:** resolved-configuration artifact; dataset/source artifact; split manifest; preprocessing state artifact; training-run artifact; checkpoint artifact; score artifact; threshold artifact; per-client metric record; seed-level aggregate record; statistical-result record; report table; report figure.
 2. **Direct artifact location:** every stage output has a semantic relative path declared by the active planning graph; a stage receives only named direct inputs from its immediate producers. No persisted artifact-identity key or lookup cache participates in execution.
@@ -647,17 +647,17 @@ Field-level schema detail is owned by [04 — Evaluation and Reporting Protocol]
 7. **Checkpoint identity:** the selected round number (§7 item 18) plus the checkpoint-selection-rule identifier (anchor convergence rule vs. journal `datp_core_round_grid` rule) that produced it.
 8. **Configuration fingerprint:** a fingerprint of the fully resolved configuration used for an experiment, recorded in its final manifest.
 9. **Scientific fingerprint:** the combination of dataset identity, regime, client-definition rule, split manifest, and model/training protocol version recorded in the final experiment manifest.
-10. **Execution fingerprint:** the recorded environment fields — operating system, Python version, framework version, CUDA version, driver version, GPU identity, dependency-lock fingerprint, deterministic flags, and execution profile (`configs/runtime.yaml: determinism_enforcement.strict.recorded_environment_fields`).
+10. **Execution fingerprint:** the recorded environment fields — operating system, language and framework versions, accelerator and driver versions, hardware identity, dependency-lock fingerprint, deterministic flags, and execution profile.
 11. **Input provenance:** direct DAG dependencies govern current-run stage inputs; prerequisite frozen-result fingerprints protect cross-experiment scientific compatibility.
 12. **Output hashes:** the final experiment manifest inventories content checksums for every required output and detects corruption or partial writes.
 13. **Provenance chain:** `configuration → dataset artifact → split manifest → preprocessing state → training run → checkpoint → score artifact → threshold artifact → per-client metrics → seed-level aggregate → statistical result → table or figure` (identical to file 04 §17); every published value must trace through every link.
-14. **Atomic-write requirements:** every artifact write in every execution profile (`scientific`, `development`, `smoke`, `dataset_audit`, `test_smoke`) is atomic (`configs/runtime.yaml: atomic_write: true` on every profile) — a reader never observes a partially written artifact; a crashed write leaves no artifact rather than a corrupt one.
+14. **Atomic-write requirements:** every artifact write is atomic in every execution profile — a reader never observes a partially written artifact; a crashed write leaves no artifact rather than a corrupt one.
 15. **Completion validation:** a completed experiment requires its final manifest, frozen result, reports, checksum inventory, matching configuration/source fingerprints, and matching prerequisite frozen-result fingerprints.
 16. **Fresh-run rules:** a changed prerequisite frozen result, configuration fingerprint, scientific fingerprint, or source fingerprint makes a completed dependent incompatible; it must be explicitly rerun from preflight.
 17. **Figure-producing artifacts:** every figure declared in file 04 §18–§20 (e.g., CDF mechanism figures, threshold-shift trade-off plots, cluster-stability figures) is produced from a named statistical-result or seed-level-aggregate artifact, never hand-plotted from an intermediate value without a saved artifact.
-18. **Table-producing artifacts:** every `report_profiles` table type in `configs/protocols.yaml` (`interval_table`, `dispersion_ladder_table`, `minimal_dispersion_table`, `sensitivity_grid_table`, `coverage_table`, `cluster_stability_table`, `cluster_contingency_table`, `communication_storage_table`, `alert_burden_table`, and others declared there) is produced from a named statistical-result or seed-level-aggregate artifact with the exact column set, unit, and direction-of-improvement recorded in its profile.
-19. **Report profiles:** each table/figure profile fixes its artifact type (`main_table` / `supplementary_table`), table type, column list (name, unit, direction), and — where applicable — its estimate basis (e.g., `communication_storage_table`'s `estimate_basis: analytical_payload_estimate_never_measured_network_traffic`, consistent with §14.2 item 7).
-20. **Suppressed-output behavior:** a table or figure cell whose underlying metric or statistical result carries a non-`available` status (§11 item 11, §12 item 3) is omitted from that cell, with the suppression reason recorded in the source result manifest — never populated with zero, a dash without a status code, or an interpolated value.
+18. **Table-producing artifacts:** every planned table is produced from a named statistical-result or seed-level-aggregate artifact with its exact column set, unit, and direction of improvement recorded in its profile.
+19. **Report profiles:** each table or figure profile fixes its artifact type, table type, column list (name, unit, direction), and—where applicable—its estimate basis.
+20. **Suppressed-output behavior:** a table or figure cell whose underlying metric or statistical result is unavailable (§11 item 11, §12 item 3) is omitted from that cell, with the suppression reason recorded in the source result manifest — never populated with zero, an unexplained dash, or an interpolated value.
 
 ### Checklist — Artifacts, provenance, and reporting
 
@@ -669,7 +669,7 @@ Field-level schema detail is owned by [04 — Evaluation and Reporting Protocol]
 - [x] A completed output is accepted only after manifest, checksum, configuration, source, and prerequisite-fingerprint validation (items 12, 15–16).
 - [x] Incompatible completed outputs are rerun from preflight rather than patched in place (item 16).
 - [x] Every figure and table is produced from a named artifact, never hand-plotted from an unsaved intermediate value (items 17–18).
-- [x] Every report-table profile's column list, unit, and direction match `configs/protocols.yaml: report_profiles` exactly (item 19).
+- [x] Every report-table profile records its exact column list, unit, and direction (item 19).
 - [x] A suppressed metric or statistical result never appears in a table/figure as a bare zero or unlabeled blank (item 20).
 - [x] Every claim in §3 can be traced to an immutable, versioned artifact rather than a manually copied number.
 
@@ -761,15 +761,15 @@ Any capability named as future work anywhere in files 00-07 (e.g., additional da
 
 ## 15. Suppression and failure rules
 
-1. **A dataset-regime cell is suppressed** when: source-artifact integrity validation fails; a required client-definition rule cannot be reproduced (e.g., Regime B-b's rejected repartition, §5.2); eligibility coverage falls below the configured minimum; or the regime's dataset lacks a capability required by the analysis (e.g., attack-sensitive metrics on Edge-IIoTset Regime D, §4.3 item 6). Machine-enforceable via the `dataset_specific_gates` and readiness-report checks (file 05 §4.2–§4.3).
+1. **A dataset-regime cell is suppressed** when: source-artifact integrity validation fails; a required client-definition rule cannot be reproduced (e.g., Regime B-b's rejected repartition, §5.2); eligibility coverage falls below the configured minimum; or the regime's dataset lacks a capability required by the analysis (e.g., attack-sensitive metrics on Edge-IIoTset Regime D, §4.3 item 6). This is enforced through dataset-specific readiness checks (file 05 §4.2–§4.3).
 2. **A metric is suppressed** when its required denominator, class, or attack assignment is unavailable (§11 item 11's named status vocabulary) — never silently replaced by zero or `NaN`. Machine-enforceable via the fixed metric-status enum.
-3. **An experiment is blocked** when its declared eligibility capabilities (file 03 §2.4, e.g., `benign_test_false_positive_metrics`, `family_taxonomy`, `per_client_attack_detection_metrics`) are unavailable for the target dataset/regime, per each experiment's `when_unavailable: fail_experiment` gate (`configs/experiments.yaml`). Machine-enforceable via the eligibility-capability check at experiment-launch time.
+3. **An experiment is blocked** when its declared eligibility capabilities (file 03 §2.4, e.g., benign-test false-positive metrics, family taxonomy, or per-client attack-detection metrics) are unavailable for the target dataset/regime. This is enforced through the eligibility-capability check before experiment launch.
 4. **A claim is narrowed** when its supporting experiment's evidence role or dataset/regime scope does not extend as far as the claim's original wording — the claim wording is edited to match the achieved evidence rather than the evidence being stretched to match the claim (file 02 §3, §11–§14 scope-limit apparatus).
 5. **A claim cannot be made** when its sole confirmatory or required-comparator experiment fails, is suppressed, or is blocked (items 1–3) and no alternative pre-specified evidence role can support it; the claim is reported as unsupported with the blocking reason named (§3 item 3, degenerate-BCa handling in §12 item 3).
 6. **A completed output cannot be accepted** when completion validation in §13 item 15 fails or its configuration, source, or prerequisite frozen-result fingerprint changes; a fresh execution must be generated instead of patching stale output.
 7. **A statistical result is invalid** when it is computed on fewer than the minimum valid units for its profile (ten paired seeds for the confirmatory BCa, five for the historical bootstrap, §9 item 1), when required pairing is broken (B1/B2 resampled independently, forbidden per §9 item 7), or when the estimand is computed after rather than before resampling where the profile requires the former (§12 items 1–2); it is recorded as `failed_statistical_procedure` (§11 item 11) rather than reported as a normal result.
 8. **A figure or table cell must be omitted** when the metric or statistical result it would display carries a non-`available` status (§13 item 20); the cell is left blank with the suppression reason recorded in the source result manifest, never populated with an interpolated or default value.
-9. **A run must fail rather than fall back** when: a required configuration value is missing (§13 item 5 / file 05 §2.2); a required device policy cannot be satisfied (`cuda_required` with no GPU present — `configs/runtime.yaml: device_policy_rules.cuda_required.missing_device_behavior: fail_execution_never_downgrade`); resource pressure would otherwise silently reduce batch size, round count, seed count, or client count (`configs/runtime.yaml: resource_pressure_policy`, all three forbidden, `on_budget_exceeded: block_execution_and_report`); or a nondeterministic operation would otherwise be silently downgraded (`nondeterministic_operation_policy: raise_never_silently_downgrade`).
+9. **A run must fail rather than fall back** when: a required configuration value is missing (§13 item 5 / file 05 §2.2); a required accelerator is unavailable; resource pressure would otherwise silently reduce batch size, round count, seed count, or client count; or a nondeterministic operation would otherwise be silently downgraded.
 10. **An unresolved scientific decision blocks execution** only for the specific claim or experiment it governs (§1 item 4, §15 [Unresolved items] below); it never blocks unrelated claims or experiments, and it is never given an invented value to unblock execution.
 
 Suppression is explicit and machine-enforceable wherever a repository-level check, named configuration flag, or typed status code already exists (items 1–3, 6–9 above); where no such mechanism yet exists, it is recorded as an implementation-roadmap task (§16 below) rather than left as an undocumented convention.
@@ -793,7 +793,7 @@ Suppression is explicit and machine-enforceable wherever a repository-level chec
 
 Every scientific contract item in §2–§15 above maps to the following eight implementation dimensions. This section states the mapping rule for each dimension; §10's experiment index and file 05's task breakdown are where the mapping is instantiated per experiment.
 
-1. **Configuration section.** Every locked numeric/formula/rule value maps to a named key path in `configs/protocols.yaml`, `configs/experiments.yaml`, or `configs/runtime.yaml` (§16 item 1, prior draft — consolidated here).
+1. **Configuration section.** Every locked numeric, formula, or rule value maps to an approved study-specification setting (§16 item 1, prior draft — consolidated here).
 2. **Domain model.** Every scientific entity (client, regime, threshold policy, seed cohort, checkpoint, score artifact, statistical-result) maps to a named domain type in the implementation, carrying exactly the identity fields defined in §13 items 2–7.
 3. **Validator.** Every eligibility rule, leakage control, forbidden-selector list, and reuse-validation gate maps to an explicit validator function or check, never an unenforced convention.
 4. **Pipeline stage.** Every scientific decision maps onto exactly one link of the canonical provenance chain (§13 item 13).
@@ -806,7 +806,7 @@ No scientific decision in this file exists only in prose without at least the co
 
 ### Checklist — Scientific-to-implementation traceability
 
-- [x] Every locked numeric/formula decision has a named configuration-key mapping (item 1).
+- [x] Every locked numeric/formula decision has a named study-specification mapping (item 1).
 - [x] Every scientific entity has a named domain-model mapping with the correct identity fields (item 2).
 - [x] Every eligibility, leakage, and selection rule has a named validator mapping (item 3).
 - [x] Every scientific decision maps onto exactly one pipeline stage (item 4).
@@ -821,7 +821,7 @@ No scientific decision in this file exists only in prose without at least the co
 
 ## 17. Complete readiness checklist
 
-Every item below was verified against the repaired roadmap files (00–07) and the repository configuration (`configs/protocols.yaml`, `configs/experiments.yaml`, `configs/runtime.yaml`) as of this audit. An unchecked item carries a concise explanation directly below it and corresponds to §15 (Unresolved items).
+Every item below was verified against the repaired roadmap documents and the approved study specification as of this audit. An unchecked item carries a concise explanation directly below it and corresponds to §15 (Unresolved items).
 
 **1. Scientific identity**
 - [x] The research object is threshold-calibration scope on a fixed, frozen FedAvg autoencoder (§2 item 2).
@@ -906,7 +906,7 @@ Every item below was verified against the repaired roadmap files (00–07) and t
 
 **15. Reporting traceability**
 - [x] Every figure and table is produced from a named artifact, never hand-plotted from an unsaved intermediate value (§13 items 17–18).
-- [x] Every report-table profile's column list, unit, and direction match `configs/protocols.yaml: report_profiles` exactly (§13 item 19).
+- [x] Every report-table profile records its exact column list, unit, and direction (§13 item 19).
 - [x] A suppressed metric or statistical result never appears in a table/figure as a bare zero or unlabeled blank (§13 item 20).
 
 **16. Scope boundaries**
@@ -921,7 +921,7 @@ Every item below was verified against the repaired roadmap files (00–07) and t
 - [x] Unresolved items block only their named scope, never the whole roadmap (§15 item 10, §1 item 4).
 
 **18. Implementation traceability**
-- [x] Every locked numeric/formula decision has a named configuration-key mapping (§16 item 1).
+- [x] Every locked numeric/formula decision has a named study-specification mapping (§16 item 1).
 - [x] Every regime, threshold policy, comparator, and statistical procedure appears as a task or task group in file 05 (§16 item 7).
 - [x] No scientific decision exists only in prose with zero implementation-dimension mappings (§16 checklist).
 
@@ -937,8 +937,8 @@ Every item below was verified against the repaired roadmap files (00–07) and t
 - [x] Stage 2 analyses are restricted to reuse of frozen Regime A score artifacts with no retraining (§10, Stage 2).
 - [x] Stage 3 (controlled heterogeneity) requires a valid manifest and comparable eligible-client reporting for every alpha cell before proceeding (§10, Stage 3 gate).
 - [x] Stage 5 (training-side stress tests) requires new training and separate score artifacts that never overwrite FedAvg anchor artifacts (§10, Stage 5).
-- [ ] The `cv_instability_threshold` numeric value required by §11 item 8 is not yet configured in the repository — see §15.1 for the full disclosure. This blocks only the near-zero-denominator warning annotation on `CV(FPR)` cells; it does not block the confirmatory endpoint or any other checklist item above.
+- [ ] The near-zero warning threshold required by §11 item 8 is not yet specified — see §15.1 for the full disclosure. This blocks only the near-zero-denominator warning annotation on `CV(FPR)` cells; it does not block the confirmatory endpoint or any other checklist item above.
 
 ---
 
-**Total checklist items across this file (§2–§17 section checklists plus this comprehensive checklist):** every section's checklist above is exhaustive for its section; the single unresolved item is §15.1 / item 20 above (`cv_instability_threshold`). All other items across all sections were verified `[x]` against the repaired roadmap and repository as of this audit.
+**Total checklist items across this file (§2–§17 section checklists plus this comprehensive checklist):** every section's checklist above is exhaustive for its section; the single unresolved item is §15.1 / item 20 above (the near-zero warning threshold). All other items across all sections were verified `[x]` against the repaired roadmap and study specification as of this audit.
