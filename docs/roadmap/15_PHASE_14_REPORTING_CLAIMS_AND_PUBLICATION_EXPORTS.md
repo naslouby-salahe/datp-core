@@ -1,4 +1,4 @@
-# Phase 13 — Artifacts, Safe Serialization, and Output Layout
+# Phase 14 — Reporting, Claims, and Publication Exports
 
 ## Scientific authority and interpretation rules
 
@@ -16,167 +16,138 @@
 
 ## Objective
 
-Implement deterministic experiment-output coordinates, typed manifests, safe serialization, checksum/schema validation, atomic completion, reload verification, and stale-output cleanup. Keep reusable data under `data/` and experiment-specific artifacts under `outputs/`.
+Generate traceable tables, figures, machine-readable exports, warnings, suppression records, and claim-status decisions without overstating evidence or leaking unavailable outcomes.
 
 ## Entry criteria
 
-- Phases 02–12 are complete.
-- All artifact-bearing result models exist.
-- Scientific coordinate ordering is resolved.
+- Phases 10–13 are complete.
+- Scientific decisions and artifact manifests are available.
+- Anchor gate and capability status are explicit.
 
 ## Source files permitted to change
 
-- `datp_core/artifacts/coordinates.py`
-- `datp_core/artifacts/layout.py`
-- `datp_core/artifacts/manifest.py`
-- `datp_core/artifacts/serialization.py`
-- `datp_core/artifacts/reload_validation.py`
-- `datp_core/artifacts/store.py`
-- `datp_core/artifacts/completion.py`
-- `datp_core/orchestration/stages/finalize.py`
+- `datp_core/reporting/tables.py`
+- `datp_core/reporting/figures.py`
+- `datp_core/reporting/export.py`
+- `datp_core/reporting/validation.py`
+- `datp_core/orchestration/stages/report.py`
 
-## Output root contract
+## Reporting records
 
-```text
-outputs/
-└── experiment=<EXPERIMENT_ID>/
-    └── population=<POPULATION_ID>/
-        └── seed=<SEED>/
-            └── model=<MODEL_ID>/
-                └── [model_parameter=<VALUE>/]
-                    └── checkpoint=<ROUND>/
-                        └── threshold=<THRESHOLD_METHOD>/
-                            └── quantile=<VALUE>/
-                                └── [coverage=<VALUE>/]
-                                    └── calibration_size=<VALUE>/
-                                        └── [shrinkage=<VALUE>/]
-                                            └── [summary_coefficient=<VALUE>/]
-                                                └── [group_count=<VALUE>/]
-                                                    └── replicate=<VALUE>/
-                                                        └── [temporal_state=<VALUE>/]
-```
+Use existing evaluation/analysis models and add report-specific frozen records in these files only when needed:
 
-Dirichlet condition belongs between population and seed when active. Coordinates absent from a cell are omitted. No generic `parameter=value` bag is permitted; every coordinate has a typed field and canonical label.
+- `TableSpecification`
+- `FigureSpecification`
+- `ReportBundle`
+- `ClaimStatusRecord`
+- `ReportingValidationResult`
 
-## Artifact grouping
+No generic template dictionary.
 
-Within the leaf or nearest reusable parent, store:
+## Mandatory tables
 
-- resolved experiment manifest;
-- model/training histories and safe tensor states;
-- checkpoint candidates and decision;
-- immutable scores;
-- eligibility/cohort/subsample manifests;
-- thresholds and diagnostics;
-- metrics and unavailable outcomes;
-- analysis and decisions;
-- reporting outputs;
-- artifact inventory;
-- `COMPLETE` marker.
+Implement descriptive table identities for:
 
-Do not copy canonical or preprocessed data into outputs. Refer to their manifests by checksum and path.
+- protocol and population summary;
+- anchor reproduction comparison;
+- confirmatory paired seed results;
+- per-client natural-device metrics;
+- shared-construction sensitivity;
+- quantile sensitivity;
+- controlled heterogeneity;
+- calibration-size and shrinkage curves;
+- local conformal coverage;
+- federated benign-statistics diagnostics and payload;
+- Edge benign-equity external validation;
+- CIC file-client boundary;
+- FedProx and Ditto stress tests;
+- temporal recalibration;
+- unavailable outcome summary;
+- optional alert burden only when evidence exists.
 
-## Required dataclasses/models
+Every table states population counts and metric availability.
 
-- `ArtifactCoordinate`
-- `ExperimentCoordinate`
-- `ModelCoordinate`
-- `ThresholdCoordinate`
-- `AnalysisCoordinate`
-- `ArtifactManifest`
-- `ExperimentManifest`
-- `ArtifactInventoryEntry`
-- `ArtifactInventory`
-- `ReloadValidationResult`
-- `CompletionState`
+## Mandatory figures
 
-## Safe serialization
+Implement only source-authorized figures:
 
-- SafeTensors: model and checkpoint tensor states.
-- skops: fitted preprocessing estimators, with trusted types explicitly validated.
-- Parquet/PyArrow: tabular data, histories, scores, thresholds, metrics, analyses.
-- Pydantic JSON: protocols, manifests, summaries, decisions, warnings.
-- JSON schema or Arrow schema: feature and table schemas.
-- Unsafe pickle, joblib pickle, arbitrary object serialization, and executable codecs are prohibited.
+- cross-client FPR distributions and paired contrasts;
+- quantile-policy surfaces;
+- heterogeneity versus threshold-scope benefit;
+- calibration-size stability curves;
+- shrinkage curves;
+- conformal target versus achieved coverage;
+- per-client benign/attack score geometry where attack assignment is valid;
+- threshold movement versus FPR/TPR change;
+- external benign-equity comparison;
+- stress-test absorption comparison;
+- temporal static/frozen/recalibrated trajectories.
 
-Optimizer objects are never serialized. Store optimizer identity, configured values, and aggregate summaries only.
+Grouped-threshold figures remain unavailable until group assignments are scientifically resolved.
 
-## Manifest requirements
+## Claim validation
 
-Every manifest records:
+`reporting/validation.py` must block:
 
-- descriptive IDs;
-- all active scientific coordinates;
-- resolved protocol checksum;
-- source/canonical/processed data references;
-- model/checkpoint/score checksums;
-- expected artifacts;
-- capability and anchor-gate status;
-- schema identifiers;
-- completion state.
+- journal claims when anchor gate is blocked;
+- confirmatory language when the BCa rule is not supported;
+- external evidence presented as confirmatory;
+- attack-sensitive Edge results;
+- device-aware CIC language;
+- one-shot recalibration described as continuous adaptation or concept-drift solution;
+- data locality described as formal privacy;
+- payload estimates described as deployment measurements;
+- unavailable or undefined metrics rendered as zero;
+- alert burden without valid rate evidence;
+- alternative quantile, shrinkage value, or stress test promoted to rescue a failed confirmatory result.
 
-No timestamp is part of identity or required manifest semantics.
+## Precision
 
-## Reload validation
+- Calculate and store full precision.
+- Presentation defaults follow the source truth: rates/aggregates, intervals, and effect sizes to three decimals; p-values to three significant digits with `< 0.001` as applicable; counts as integers; thresholds with sufficient reproducibility precision.
+- Never round before comparison or inference.
 
-Reload and validate:
+## Export formats
 
-- model tensor names, shapes, dtypes, architecture identity, and checksum;
-- checkpoint round and model coordinate;
-- preprocessing estimator type, feature order, and transform equivalence;
-- optimizer summary schema;
-- Arrow schemas and table semantic identifiers;
-- protocol and experiment manifests;
-- unavailable/suppression results;
-- artifact inventory completeness.
-
-A successfully written file that fails semantic reload is invalid.
-
-## Completion
-
-- Write into a temporary sibling directory.
-- Validate expected artifacts and reload them.
-- Create artifact inventory.
-- Atomically publish.
-- Write `COMPLETE` last.
-- An output without `COMPLETE` is incomplete and must be deleted before rerun.
+- Tables: CSV and Parquet.
+- Figures: PDF plus a vector-friendly source format only if already supported by the selected plotting library; do not add a new source file.
+- Consolidated results: Parquet.
+- Claim status, warnings, and validation: Pydantic JSON.
 
 ## Test files to implement
 
-- `tests/unit/artifacts/test_coordinates.py`
-- `tests/unit/artifacts/test_layout.py`
-- `tests/unit/artifacts/test_manifest.py`
-- `tests/unit/artifacts/test_serialization.py`
-- `tests/unit/artifacts/test_reload_validation.py`
-- `tests/unit/artifacts/test_store.py`
-- `tests/unit/artifacts/test_completion.py`
-- `tests/unit/orchestration/stages/test_finalize.py`
-- `tests/integration/artifacts/test_model_round_trip.py`
-- `tests/integration/artifacts/test_preprocessing_round_trip.py`
-- `tests/integration/artifacts/test_parquet_schema_round_trip.py`
-- `tests/integration/artifacts/test_atomic_experiment_publication.py`
-- `tests/integration/artifacts/test_deterministic_output_paths.py`
-- `tests/integration/artifacts/test_incomplete_output_cleanup.py`
-- `tests/architecture/test_no_unsafe_serialization.py`
-- `tests/architecture/test_outputs_do_not_duplicate_processed_data.py`
+- `tests/unit/reporting/test_tables.py`
+- `tests/unit/reporting/test_figures.py`
+- `tests/unit/reporting/test_export.py`
+- `tests/unit/reporting/test_validation.py`
+- `tests/unit/orchestration/stages/test_report.py`
+- `tests/integration/reporting/test_report_bundle.py`
+- `tests/integration/reporting/test_machine_readable_exports.py`
+- `tests/scientific/test_blocked_claims_do_not_render.py`
+- `tests/scientific/test_unavailable_metrics_do_not_render_as_zero.py`
+- `tests/scientific/test_alert_burden_suppression.py`
+- `tests/scientific/test_negative_results_remain_reportable.py`
 
-## Required negative tests
+## Required report validation scenarios
 
-- Path collision between two scientific coordinates.
-- Timestamp/run ID/job ID included in path.
-- Pickle or joblib serialization.
-- Wrong model state loaded into a coordinate.
-- Manifest checksum mismatch.
-- Missing expected artifact with `COMPLETE` attempted.
-- Processed data copied under output.
+- Confirmatory support.
+- Directional but inconclusive result.
+- Opposite result.
+- Blocked anchor.
+- External null or opposite boundary.
+- Infeasible grouped threshold.
+- Undefined CV from zero mean FPR.
+- No traffic-rate evidence.
+- Ditto full absorption.
+- Temporal no-drift condition with undefined recovery ratio.
 
 ## Exit criteria
 
-- Every output path is deterministic and collision-tested.
-- Every persisted artifact uses an approved format and passes semantic reload.
-- `COMPLETE` is trustworthy.
-- Data/output separation is enforced.
-- All Phase 13 tests and audits pass.
+- Every displayed result is traceable to a typed artifact and coordinate.
+- Claim status is machine-enforced.
+- Unavailable, undefined, suppressed, and infeasible outcomes are explicit.
+- Publication exports do not alter scientific meaning.
+- All Phase 14 tests and audits pass.
 
 ## Mandatory closing audit
 

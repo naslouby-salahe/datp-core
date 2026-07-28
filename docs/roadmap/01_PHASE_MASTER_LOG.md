@@ -1,4 +1,4 @@
-# DATP-Core Implementation Roadmap
+# Phase Master Log
 
 ## Scientific authority and interpretation rules
 
@@ -14,70 +14,70 @@
 - Do not add comments that restate code. Express intent through names, enums, types, validated records, and small functions.
 - Reusable canonical and preprocessed data belong under `data/`. Experiment-specific trained states, scores, thresholds, evaluations, analyses, and reports belong under `outputs/`.
 
-## Purpose
+## Status vocabulary
 
-This roadmap is the implementation authority for the already-created `datp_core/` source tree. It converts the scientific programme in `/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md` into a phased, testable, source-file-constrained implementation plan. It does not replace the scientific source of truth and must never be used to invent scientific values.
+Use exactly one status per phase:
 
-## Locked implementation principles
+- `NOT_STARTED`
+- `IN_PROGRESS`
+- `BLOCKED_SCIENTIFIC_VALUE`
+- `BLOCKED_DEPENDENCY`
+- `IMPLEMENTED_NOT_AUDITED`
+- `AUDIT_FAILED`
+- `COMPLETE`
 
-1. **One source tree.** The source files listed in the user-approved tree are exhaustive. New behavior must be placed in the existing file whose responsibility matches it.
-2. **Python-native protocols.** Closed identities are enums. Numeric scientific quantities are validated values. Compound declarations are frozen Pydantic models or frozen slotted dataclasses. Experiment declarations are typed objects, never dictionaries.
-3. **Reusable data.** Canonical and transformed datasets are reusable assets under `data/`, keyed by scientific and preprocessing coordinates. They are not duplicated per experiment.
-4. **Independent centralized reference.** Pooled preprocessing, training, checkpointing, scoring, thresholding, and evaluation remain separate from federated execution.
-5. **Deterministic results.** Every output path is derived from descriptive scientific coordinates. No run IDs, job IDs, timestamps, random directory names, or hidden defaults are permitted.
-6. **Capability-driven feasibility.** Dataset and population capability contracts decide which metrics, threshold methods, temporal analyses, and claims are valid.
-7. **Explicit populations.** Confirmatory-eligible, attack-evaluable, unavailable, and deployment-fallback populations are separate typed cohorts. Fallback clients never enter confirmatory cross-client dispersion.
-8. **Safe persistence.** SafeTensors stores model tensors; skops stores fitted scikit-learn state; Parquet/PyArrow stores tables and schemas; Pydantic JSON stores manifests and summaries. Unsafe pickle is prohibited.
-9. **Honest negative evidence.** Null, reversed, unstable, unavailable, and infeasible results are first-class outputs.
-10. **No hidden extension.** Attacks, defenses, dynamic adaptation, and future datasets are supported only through typed boundaries. They are not implemented in DATP-Core.
+Do not add percentages. A phase is binary with respect to its exit criteria.
 
-## Required libraries
+## Current phase ledger
 
-Use only libraries that remove substantial custom code or provide a required scientific/system contract:
+| Phase | Status | Entry criteria | Exit evidence | Scientific blockers |
+|---|---|---|---|---|
+| 01 — Scientific identity and scope | `NOT_STARTED` | Source tree exists | Identity tests and scope audit | None expected |
+| 02 — Typed protocols and domain contracts | `NOT_STARTED` | Phase 01 complete | Protocol graph validation and strict typing | Exact seed values and any absent hyperparameters must come from source truth |
+| 03 — Dataset audit and capabilities | `NOT_STARTED` | Phase 02 complete | Schema and capability tests for all datasets | Raw-data discrepancies must be resolved by audit, not guesswork |
+| 04 — Canonical data and reusable preprocessing | `NOT_STARTED` | Phase 03 complete | Deterministic reusable data manifests and reload checks | Exact preprocessing protocol must be present in source truth |
+| 05 — Populations, splits, and cohorts | `NOT_STARTED` | Phase 04 complete | Deterministic split/cohort manifests | Any unspecified non-temporal split ratios remain blocking |
+| 06 — Anchor reproduction and gate | `NOT_STARTED` | Phase 05 complete | Explicit equivalence/discrepancy decision | Metric-specific tolerances absent from source truth remain blocking |
+| 07 — Centralized reference | `NOT_STARTED` | Phase 05 complete | Independent pooled execution and tests | Centralized training values absent from source truth remain blocking |
+| 08 — Federated training, checkpointing, and scoring | `NOT_STARTED` | Phases 05–06 complete | Frozen scores and checkpoint discipline pass | Exact architecture/optimizer/batch values must be sourced |
+| 09 — Calibration and threshold methods | `NOT_STARTED` | Phase 08 complete | All feasible methods verified | `CLUSTER_THRESHOLD` grouping input remains unresolved until scientifically declared |
+| 10 — Metrics and inference | `NOT_STARTED` | Phase 09 complete | Metric semantics and paired inference pass | Near-zero mean-FPR warning cutoff and temporal materiality cutoff must be declared |
+| 11 — External and temporal evidence | `NOT_STARTED` | Phases 08–10 complete | Edge static/temporal and CIC boundary tests pass | Temporal source validity is data-dependent |
+| 12 — Experiment planning and campaigns | `NOT_STARTED` | Phases 01–11 complete | Complete feasible plan expansion | Any unresolved protocol makes dependent experiments infeasible |
+| 13 — Artifacts and serialization | `NOT_STARTED` | Phases 02–12 complete | Safe reload and deterministic path suite pass | None expected after protocol resolution |
+| 14 — Reporting and claims | `NOT_STARTED` | Phases 10–13 complete | Claim suppression and export validation pass | Traffic-rate evidence may remain absent; output must be suppressed |
+| 15 — Extension readiness | `NOT_STARTED` | Phases 01–14 complete | Hook-boundary tests pass | No future method is implemented |
+| 16 — Final audit | `NOT_STARTED` | All prior phases complete | Full acceptance report | Any unresolved mandatory scientific value blocks release |
 
-- `pydantic>=2` for frozen validated protocol and manifest models.
-- `polars` and `pyarrow` for lazy tabular processing, Parquet, and schema persistence.
-- `pandera` with its Polars backend for executable dataset and transformed-schema validation.
-- `numpy`, `scipy`, `statsmodels`, and `pingouin` for numerical and statistical analysis.
-- `torch` and `safetensors` for autoencoders and safe tensor persistence.
-- `flwr` for FedAvg/FedProx orchestration primitives where it removes custom federated boilerplate.
-- `scikit-learn` and `skops` for preprocessing, clustering utilities only after a grouping rule is scientifically approved, and safe estimator persistence.
-- `dagster` for the explicit stage graph and asset dependencies.
-- `typer`, `rich`, and `structlog` for the CLI and structured execution feedback.
-- `filelock` only around reusable data materialization and atomic cache publication.
-- `pytest`, `hypothesis`, `pytest-xdist`, `pytest-cov`, and `pytest-benchmark` for verification.
+## Required implementation record per phase
 
-Do not add a library merely to wrap a few lines of straightforward typed code.
+When a phase status changes, append one record under that phase containing:
 
-## Phase order
+- status;
+- exact source files changed;
+- exact test files added or changed;
+- scientific-source sections consulted;
+- unresolved values encountered;
+- focused commands executed;
+- whole-suite command executed;
+- Ruff result;
+- Pyright result;
+- Pylint result;
+- audit verdict;
+- reason for any blocker.
 
-| File | Phase | Depends on | Primary completion gate |
-|---|---|---|---|
-| `02_PHASE_01_SCIENTIFIC_IDENTITY_AND_SCOPE.md` | Scientific identity and scope | None | Descriptive identities and scope guards locked |
-| `03_PHASE_02_TYPED_PROTOCOLS_AND_DOMAIN_CONTRACTS.md` | Typed protocols and domain contracts | Phase 01 | Complete immutable protocol graph validates |
-| `04_PHASE_03_DATASET_AUDIT_AND_CAPABILITIES.md` | Dataset audit and capabilities | Phase 02 | Three datasets validate against audited schemas |
-| `05_PHASE_04_CANONICAL_DATA_AND_REUSABLE_PREPROCESSING.md` | Canonical data and reusable preprocessing | Phase 03 | Reusable data can be rebuilt and safely reloaded |
-| `06_PHASE_05_POPULATIONS_SPLITS_AND_EVALUATION_COHORTS.md` | Populations, splits, and cohorts | Phase 04 | Population manifests are deterministic and leak-free |
-| `07_PHASE_06_ANCHOR_REPRODUCTION_AND_JOURNAL_GATE.md` | Anchor reproduction and gate | Phase 05 | Anchor gate returns an explicit scientific decision |
-| `08_PHASE_07_CENTRALIZED_REFERENCE_PIPELINE.md` | Independent centralized reference | Phase 05 | Pooled pipeline executes without federated artifacts |
-| `09_PHASE_08_FEDERATED_TRAINING_CHECKPOINTING_AND_SCORING.md` | Federated models and scores | Phases 05–06 | Frozen detector scores are reusable across thresholds |
-| `10_PHASE_09_CALIBRATION_AND_THRESHOLD_METHODS.md` | Calibration and thresholds | Phase 08 | Threshold methods satisfy benign-only contracts |
-| `11_PHASE_10_EVALUATION_METRICS_AND_STATISTICAL_INFERENCE.md` | Metrics and inference | Phase 09 | Metric semantics and paired inference are verified |
-| `12_PHASE_11_EXTERNAL_VALIDATION_AND_TEMPORAL_RECALIBRATION.md` | External and temporal evidence | Phases 08–10 | Capability-limited external/temporal results execute |
-| `13_PHASE_12_EXPERIMENT_PLANNING_AND_CAMPAIGN_EXECUTION.md` | Planning and campaigns | Phases 01–11 | Catalogue expands to deterministic feasible plans |
-| `14_PHASE_13_ARTIFACTS_SERIALIZATION_AND_OUTPUT_LAYOUT.md` | Artifacts and persistence | Phases 02–12 | All persisted types reload and validate safely |
-| `15_PHASE_14_REPORTING_CLAIMS_AND_PUBLICATION_EXPORTS.md` | Reporting and claims | Phases 10–13 | Blocked or unavailable claims cannot leak into reports |
-| `16_PHASE_15_EXTENSION_READINESS.md` | Future extension boundaries | Phases 01–14 | Extension hooks add no current scientific behavior |
-| `17_PHASE_16_FINAL_SCIENTIFIC_AND_ENGINEERING_AUDIT.md` | Final audit | All phases | Full scientific and engineering acceptance passes |
+Do not record dates, durations, commit hashes, or subjective completion percentages.
 
-## Locked source-file rule
+## Global unresolved scientific decisions
 
-The phase documents name every source file they may modify. When a needed responsibility appears absent, the agent must first determine whether an existing file already owns it. If no existing file can own it without becoming a catch-all, stop and record the conflict. Do not create a source file to make the phase easier.
+These are blocking until the source of truth explicitly resolves them:
 
-## Test-tree rule
+1. Exact integer seed cohorts if the current source specifies only cohort size.
+2. Any training architecture, optimizer, learning-rate, batch-size, initialization, or non-temporal split value not explicitly present.
+3. The scientific source and construction rule for `CLUSTER_THRESHOLD` group assignments.
+4. The warning cutoff for a positive but near-zero mean FPR.
+5. The positive-materiality cutoff required before temporal recovery ratio is defined.
+6. Metric-specific anchor equivalence tolerances beyond explicitly documented historical reference values.
+7. Population-specific traffic-rate evidence for alert-burden translation.
 
-The roadmap may add files only beneath `tests/`. Every permitted test file is named explicitly in the relevant phase. Shared fixtures belong only in `tests/conftest.py`; do not create fixture utility packages or generic test helper modules unless a later revision of this roadmap explicitly approves them.
-
-## Completion discipline
-
-A phase is complete only when its implementation, focused tests, whole-suite tests, static checks, scientific audit, and source-tree audit all pass. “Code exists” is not completion.
+An unresolved optional experiment does not block unrelated mandatory work. An unresolved confirmatory dependency blocks every downstream claim that depends on it.

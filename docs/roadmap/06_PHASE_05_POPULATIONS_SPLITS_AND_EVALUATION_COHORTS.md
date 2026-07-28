@@ -1,4 +1,4 @@
-# Phase 04 — Canonical Data and Reusable Preprocessing
+# Phase 05 — Populations, Splits, and Evaluation Cohorts
 
 ## Scientific authority and interpretation rules
 
@@ -16,179 +16,167 @@
 
 ## Objective
 
-Implement reusable, deterministic canonical and preprocessed data assets under `data/`. Prevent every experiment from repeating data loading, splits, fitting, or transformations when all data and preprocessing coordinates match.
+Construct the five authorized populations, deterministic fractional and chronological splits, integrity manifests, and explicit evaluation cohorts. This phase establishes exactly which clients and rows are valid for each scientific question.
 
 ## Entry criteria
 
-- Phase 03 is complete.
-- Canonical dataset materialization is verified.
-- Exact preprocessing semantics are present in the source of truth or explicitly blocked.
+- Phase 04 is complete.
+- Canonical data and reusable preprocessing coordinate rules exist.
+- All required split values are explicit in the source of truth; unresolved values block the affected population.
 
 ## Source files permitted to change
 
-- `datp_core/preprocessing/models.py`
-- `datp_core/preprocessing/federated.py`
-- `datp_core/preprocessing/validation.py`
-- `datp_core/centralized_reference/preprocessing.py`
-- `datp_core/artifacts/coordinates.py`
-- `datp_core/artifacts/layout.py`
-- `datp_core/artifacts/serialization.py`
-- `datp_core/artifacts/reload_validation.py`
-- `datp_core/artifacts/store.py`
-
-Only data-related path and serialization responsibilities may be implemented in artifact files during this phase. Experiment-output behavior remains Phase 13.
-
-## Data directory contract
-
-```text
-data/
-├── raw/                                  # Read-only source or symlink.
-├── canonical/
-│   └── dataset=<DATASET_ID>/
-│       └── schema=<SCHEMA_CHECKSUM>/
-│           ├── data/                     # Canonical Parquet partitions.
-│           ├── dataset_manifest.json
-│           ├── schema.json
-│           └── COMPLETE
-└── processed/
-    └── dataset=<DATASET_ID>/
-        └── population=<POPULATION_ID>/
-            └── partition_seed=<SEED>/
-                └── split=<SPLIT_PROTOCOL_ID>/
-                    └── preprocessing=<PREPROCESSING_PROTOCOL_ID>/
-                        ├── federated/
-                        │   ├── client=<CLIENT_ID>/
-                        │   │   ├── train.parquet
-                        │   │   ├── calibration.parquet
-                        │   │   ├── evaluation.parquet
-                        │   │   ├── [future_recalibration.parquet]
-                        │   │   └── state.skops
-                        │   ├── schema.json
-                        │   ├── split_manifest.parquet
-                        │   ├── preprocessing_manifest.json
-                        │   └── COMPLETE
-                        └── centralized_reference/
-                            ├── train.parquet
-                            ├── calibration.parquet
-                            ├── evaluation.parquet
-                            ├── [future_recalibration.parquet]
-                            ├── state.skops
-                            ├── schema.json
-                            ├── preprocessing_manifest.json
-                            └── COMPLETE
-```
-
-A coordinate component is present only when it changes the reusable data. Model, threshold, quantile, calibration subsample size, and analysis seed never appear in reusable preprocessing paths.
-
-## Reuse semantics
-
-A processed asset is reusable only when all of these match:
-
-- raw dataset source checksums;
-- canonical schema checksum;
-- dataset identity;
-- population identity and population-construction protocol;
-- partition seed;
-- split protocol;
-- preprocessing protocol;
-- feature order;
-- fitted-state type and safe-serialization format;
-- software protocol manifest checksum for scientifically relevant transformation semantics.
-
-A matching directory without a valid manifest and `COMPLETE` marker is incomplete and must be deleted before rebuilding. Never “repair” partial files in place.
+- `datp_core/populations/models.py`
+- `datp_core/populations/capabilities.py`
+- `datp_core/populations/nbaiot_natural_devices.py`
+- `datp_core/populations/ciciot_file_clients.py`
+- `datp_core/populations/nbaiot_dirichlet_clients.py`
+- `datp_core/populations/edge_sensor_groups.py`
+- `datp_core/populations/edge_temporal_groups.py`
+- `datp_core/populations/splits.py`
+- `datp_core/populations/integrity.py`
+- `datp_core/populations/catalogue.py`
+- `datp_core/evaluation/cohorts.py`
 
 ## Required dataclasses
 
-In `preprocessing/models.py`:
+In `populations/models.py`:
 
-- `PreprocessingProtocolId`
-- `TransformedFeature`
-- `TransformedSchema`
-- `FittedPreprocessingState`
-- `ClientPreprocessingResult`
-- `PooledPreprocessingResult`
-- `PreprocessingManifest`
-- `PreprocessingValidationReport`
-- `ReusableDataCoordinate`
+- `ClientIdentity`
+- `ClientMembership`
+- `PopulationManifest`
+- `PopulationCapabilities`
+- `PartitionAssignment`
+- `SplitAssignment`
+- `SplitManifest`
+- `DirichletPartitionDiagnostics`
+- `ChronologicalPartitionDiagnostics`
+- `PopulationFeasibility`
 
-Use typed tuples for ordered columns. No dict of column-to-type.
+In `evaluation/cohorts.py` or `evaluation/models.py` as assigned in Phase 10:
 
-## Federated preprocessing
+- `ClientEligibilityRecord`
+- `EvaluationCohortMembership`
+- `EvaluationCohortManifest`
+- `ClientExclusionReason`
 
-`preprocessing/federated.py` must:
+All records are frozen, slotted, and use enum identities.
 
-- fit only on the declared client training partition;
-- never fit on calibration, future recalibration, or evaluation rows;
-- preserve one fitted state per client when the locked protocol is client-local;
-- use one shared state only if the source truth explicitly requires it;
-- transform all partitions with the corresponding fitted state;
-- produce consistent output feature order and dimension across clients when required by one federated model;
-- serialize fitted estimators with skops;
-- reject unknown transformers during safe reload.
+## Population implementations
 
-Do not encode a default scaler or imputer. The exact pipeline must come from the source of truth.
+### `NBAIOT_NATURAL_DEVICES`
 
-## Centralized preprocessing
+- Exactly nine audited physical devices.
+- Device identity is stable across seeds and splits.
+- Supports confirmatory FPR evaluation and attack-sensitive metrics when denominators exist.
+- Supports family thresholding only with an audited taxonomy.
+- Every device remains visible in results even if unavailable for a particular metric.
 
-`centralized_reference/preprocessing.py` must:
+### `CICIOT_FILE_CLIENTS`
 
-- pool only the training rows permitted by the centralized reference protocol;
-- fit a distinct pooled state;
-- transform pooled calibration and evaluation data independently of federated fitted states;
-- never reuse a client-fitted state;
-- store its reusable output under the `centralized_reference/` data branch.
+- Construct from the exact audited merged-file boundaries.
+- Treat clients as file-defined pseudo-clients only.
+- Preserve file identity and source provenance.
+- Prohibit physical-device, family, and temporal interpretation.
+- Use only as an applicability boundary.
 
-## Validation
+### `NBAIOT_DIRICHLET_CLIENTS`
 
-`preprocessing/validation.py` and `artifacts/reload_validation.py` must verify:
+- Construct exactly twenty synthetic clients.
+- Use the declared concentration conditions and partition seed.
+- Preserve every generated partition; do not regenerate because balance is inconvenient.
+- Emit client size, benign distribution, attack composition when valid, and divergence diagnostics.
+- IID is a separate construction condition, not a concentration value.
+- Do not claim that synthetic clients preserve physical families unless the construction explicitly does so.
 
-- no source-row overlap across partitions;
-- fit provenance references training rows only;
-- no future rows influence historical fitting;
-- no attack-labelled row enters benign autoencoder training or benign threshold calibration;
-- transformed values are finite;
-- transformed schema and feature order match model input requirements;
-- safe reload returns the expected estimator classes;
-- transform-before-save and transform-after-reload are numerically equivalent within a declared serialization tolerance;
-- reusable data manifests are complete and immutable.
+### `EDGE_SENSOR_GROUPS`
 
-## Atomicity and concurrency
+- Exactly ten audited benign sensor groups for static external validation.
+- Include Modbus in static benign evaluation when its static rows pass schema validation.
+- Do not assign attack rows to these clients.
+- Mark attack-sensitive metrics unavailable.
+- Omit family thresholding.
 
-Use a temporary sibling directory and atomic rename. Use `filelock` only at the final reusable coordinate to prevent duplicate parallel publication. A process finding a completed matching asset revalidates and reuses it.
+### `EDGE_TEMPORAL_GROUPS`
+
+- Exactly the groups with verified genuine chronology; expected count is nine under the source programme, but the implementation validates rather than blindly assumes.
+- Exclude any group whose chronology fails.
+- Use stable ordering for duplicate timestamps.
+- Apply chronological ratios in the declared order: historical training, historical calibration, future recalibration, future evaluation.
+- Build a matched random-fractional static reference over the same included groups.
+
+## Split semantics
+
+`populations/splits.py` must:
+
+- return manifests of source-row identities, never only frames;
+- enforce one assignment per row per split coordinate;
+- be deterministic from declared seed and protocol;
+- separate model-training seeds from partition seeds when the protocol declares them separately;
+- reject a non-temporal split until exact ratios are scientifically declared;
+- never stratify or rebalance unless explicitly required by the source truth;
+- never create pseudo-time.
+
+## Integrity rules
+
+`populations/integrity.py` must verify:
+
+- no row overlap among train/calibration/recalibration/evaluation;
+- client identities and candidate count match population declaration;
+- chronological ordering and partition boundaries;
+- synthetic-client total row conservation;
+- no client silently removed after test inspection;
+- population capability profile agrees with dataset capabilities;
+- evaluation cohorts are identical across compared threshold methods.
+
+## Evaluation cohort rules
+
+- `CONFIRMATORY_ELIGIBLE`: benign calibration count at least 100 and non-empty benign evaluation denominator. Only this cohort enters confirmatory `CV(FPR)`.
+- `ATTACK_EVALUABLE`: valid client-level attack assignment, at least one attack row, and every denominator required by the metric.
+- `UNAVAILABLE`: candidate client for which a method or metric is scientifically unavailable; include a typed reason.
+- `DEPLOYMENT_FALLBACK`: ineligible client receiving an explicitly declared deployment-only threshold. Never include in confirmatory dispersion or silently merge with eligible clients.
+
+Eligibility is decided before evaluating held-out outcomes and reused across all compared threshold methods.
+
+## Catalogue
+
+Use exhaustive `match` on `PopulationId`. Return a typed builder and capability declaration. No registry dictionary.
 
 ## Test files to implement
 
-- `tests/unit/preprocessing/test_models.py`
-- `tests/unit/preprocessing/test_federated_preprocessing.py`
-- `tests/unit/preprocessing/test_preprocessing_validation.py`
-- `tests/unit/centralized_reference/test_preprocessing.py`
-- `tests/unit/artifacts/test_data_coordinates.py`
-- `tests/unit/artifacts/test_data_layout.py`
-- `tests/unit/artifacts/test_preprocessing_serialization.py`
-- `tests/integration/preprocessing/test_reusable_federated_data.py`
-- `tests/integration/preprocessing/test_reusable_centralized_data.py`
-- `tests/integration/preprocessing/test_preprocessing_reload_equivalence.py`
-- `tests/integration/preprocessing/test_preprocessing_cache_invalidation.py`
-- `tests/integration/preprocessing/test_preprocessing_atomic_publication.py`
+- `tests/unit/populations/test_models.py`
+- `tests/unit/populations/test_capabilities.py`
+- `tests/unit/populations/test_nbaiot_natural_devices.py`
+- `tests/unit/populations/test_ciciot_file_clients.py`
+- `tests/unit/populations/test_nbaiot_dirichlet_clients.py`
+- `tests/unit/populations/test_edge_sensor_groups.py`
+- `tests/unit/populations/test_edge_temporal_groups.py`
+- `tests/unit/populations/test_splits.py`
+- `tests/unit/populations/test_integrity.py`
+- `tests/unit/populations/test_catalogue.py`
+- `tests/unit/evaluation/test_cohorts.py`
+- `tests/property/test_split_disjointness.py`
+- `tests/property/test_dirichlet_row_conservation.py`
+- `tests/integration/populations/test_population_manifests.py`
+- `tests/integration/populations/test_temporal_split_no_future_leakage.py`
 
-## Required test cases
+## Required negative tests
 
-- Same coordinates reuse exactly the same completed asset.
-- Changed split seed, schema, population, or preprocessing protocol creates a distinct asset.
-- Changed model or threshold method does not duplicate processed data.
-- Partial asset is deleted and rebuilt.
-- Client-fitted and pooled-fitted states cannot be interchanged.
-- Fitting sees no calibration/test/future rows.
-- Unsafe or unknown skops types are rejected.
-- Reloaded transforms equal pre-save transforms.
+- Fallback client enters confirmatory cohort.
+- Edge attack metric is requested.
+- CIC physical-device population is requested.
+- Temporal population includes invalid chronology.
+- A row appears in two splits.
+- A synthetic partition drops or duplicates rows.
+- Compared threshold methods receive different eligible clients.
 
 ## Exit criteria
 
-- Canonical and preprocessed data are reusable under deterministic `data/` coordinates.
-- Experiment output directories contain no copied canonical or transformed datasets.
-- Federated and centralized preprocessing states are independently fitted and safely stored.
-- Data reuse never bypasses schema, provenance, or leakage validation.
-- All Phase 04 tests and audits pass.
+- Every authorized population has one deterministic builder and capability profile.
+- Split manifests are complete, disjoint, and reusable.
+- Cohorts are explicit and cannot be conflated.
+- Unsupported populations or metrics fail before model training.
+- All Phase 05 tests and audits pass.
 
 ## Mandatory closing audit
 

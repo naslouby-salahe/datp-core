@@ -1,4 +1,4 @@
-# Phase 10 — Evaluation Metrics and Statistical Inference
+# Phase 11 — External Validation and Temporal Recalibration
 
 ## Scientific authority and interpretation rules
 
@@ -16,265 +16,124 @@
 
 ## Objective
 
-Implement exact confusion semantics, client and population metrics, conformal coverage, threshold-estimation diagnostics, communication and operational metrics, descriptive analysis, paired inference, mechanism analysis, temporal quantities, and scientific decision rules.
+Implement capability-limited external benign-equity validation on Edge-IIoTset, the CICIoT2023 file-client applicability boundary, and one-shot threshold recalibration on verified Edge chronology without expanding into continuous adaptation.
 
 ## Entry criteria
 
-- Phase 09 is complete.
-- Metric and statistical protocols are resolved.
-- Near-zero mean-FPR warning cutoff and temporal positive-materiality cutoff are explicitly declared; otherwise affected analyses remain blocked.
+- Phases 08–10 are complete.
+- Edge static and temporal capabilities are verified.
+- CIC file-client population is verified.
+- External and temporal experiment declarations are resolved.
 
 ## Source files permitted to change
 
-- `datp_core/evaluation/models.py`
-- `datp_core/evaluation/confusion.py`
-- `datp_core/evaluation/metric_semantics.py`
-- `datp_core/evaluation/client_metrics.py`
-- `datp_core/evaluation/population_metrics.py`
-- `datp_core/evaluation/conformal_coverage.py`
-- `datp_core/evaluation/threshold_estimation.py`
-- `datp_core/evaluation/communication.py`
-- `datp_core/evaluation/traffic_rates.py`
-- `datp_core/evaluation/operational.py`
-- `datp_core/evaluation/controls.py`
-- `datp_core/analysis/descriptive.py`
-- `datp_core/analysis/inference.py`
-- `datp_core/analysis/divergence.py`
-- `datp_core/analysis/mechanisms.py`
 - `datp_core/analysis/temporal.py`
-- `datp_core/analysis/decision_rules.py`
+- `datp_core/populations/edge_sensor_groups.py`
+- `datp_core/populations/edge_temporal_groups.py`
+- `datp_core/populations/ciciot_file_clients.py`
+- `datp_core/datasets/edge_iiotset/chronology.py`
+- `datp_core/experiments/feasibility.py`
+- `datp_core/orchestration/stages/construct_population.py`
+- `datp_core/orchestration/stages/split.py`
 - `datp_core/orchestration/stages/evaluate_federated.py`
 - `datp_core/orchestration/stages/analyze.py`
 
-## Libraries
+Changes are limited to external/temporal semantics; do not duplicate core metric or threshold implementations.
 
-- NumPy for numerical arrays.
-- SciPy for BCa bootstrap primitives, Wilcoxon, rank statistics, and distribution functions.
-- statsmodels for multiplicity correction and regression diagnostics.
-- Pingouin only where it directly supplies a verified paired effect size or statistical table without duplicating custom calculations.
-- Polars for typed result tables.
+## Edge static external validation
 
-## Required dataclasses
+- Population: `EDGE_SENSOR_GROUPS`.
+- Use ten benign sensor groups when validation confirms them.
+- FedAvg training and supported stress tests use benign training data.
+- Supported threshold methods: shared, local, grouped only if a valid assignment source is later approved, federated benign statistics, quantile sensitivity, calibration-size and shrinkage where feasible.
+- Family threshold unavailable.
+- Per-client FPR and cross-client benign equity metrics available.
+- Per-client TPR, binary Macro-F1, balanced accuracy, AUROC, and attack-sensitive trade-offs unavailable.
+- External seed-level paired contrast and BCa are external evidence only, never a second confirmatory endpoint.
 
-In `evaluation/models.py`:
+Every output must include typed availability records for attack-sensitive metrics rather than empty columns or NaN.
 
-- `ConfusionCounts`
-- `ClientMetricResult`
-- `PopulationMetricResult`
-- `MetricAvailability`
-- `MetricWarning`
-- `CoverageResult`
-- `ThresholdEstimationResult`
-- `CommunicationResult`
-- `AlertBurdenResult`
-- `UnavailableOutcome`
+## CIC file-client boundary
 
-Analysis result records may reside in their existing analysis files:
+- Population: `CICIOT_FILE_CLIENTS`.
+- Quantify benign distribution divergence and shared/local threshold effects over the audited pseudo-clients.
+- Keep all wording specific to file-defined clients.
+- Do not reconstruct physical clients, infer device topology, or create chronology.
+- A null effect is a valid boundary result and cannot be generalized to the original device topology.
 
-- `PairedContrast`
-- `BootstrapInterval`
-- `WilcoxonResult`
-- `RankBiserialResult`
-- `MultiplicityResult`
-- `AssociationResult`
-- `MechanismResult`
-- `TemporalRecoveryResult`
-- `ScientificDecisionResult`
+## Temporal population
 
-## Prediction semantics
+- Population: `EDGE_TEMPORAL_GROUPS`.
+- Include only groups with validated genuine chronology.
+- Preserve stable row order for equal timestamps.
+- Split exactly into 55% historical training, 15% historical calibration, 10% future recalibration, 20% future evaluation.
+- Build a matched random-fractional static reference over the same included groups and rows.
+- Fit preprocessing and model without future leakage.
 
-Attack prediction occurs only when reconstruction error is strictly greater than threshold. The comparison operator is global and immutable.
+## Temporal deployment states
 
-## Client metrics
+- `STATIC_REFERENCE`: matched random-fractional evaluation.
+- `FROZEN_FUTURE`: historical threshold applied unchanged to future evaluation.
+- `RECALIBRATED_FUTURE`: threshold recomputed once from future benign recalibration and applied to the same future evaluation.
 
-Implement exact denominator checks:
+Supported thresholds are source-authorized and capability-feasible. There is no streaming, periodic, triggered, or online behavior.
 
-- FPR from benign rows.
-- TPR from attack rows.
-- balanced accuracy only when both exist.
-- binary Macro-F1 as the arithmetic mean of benign-class and attack-class F1; undefined class metrics remain unavailable, never zero.
-- AUROC from continuous scores only when both classes exist.
+## Temporal quantities
 
-## Population metrics
+Per seed and threshold method:
 
-For the confirmatory eligible cohort:
+- static reference CV;
+- frozen-future CV;
+- recalibrated-future CV;
+- drift excess = frozen future minus static reference;
+- recovered amount = frozen future minus recalibrated future;
+- recovery ratio only when drift excess exceeds the predeclared positive-materiality cutoff.
 
-- unweighted mean FPR;
-- population standard deviation with `ddof=0`;
-- `CV(FPR) = std / mean` with no epsilon;
-- undefined CV when mean is exactly zero;
-- near-zero warning when positive mean is below the locked cutoff;
-- FPR IQR;
-- FPR range;
-- worst-client FPR.
+Undefined recovery ratio is a typed outcome, not zero.
 
-Where attack evaluation is valid:
+## Feasibility rules
 
-- TPR CV with the same denominator rules;
-- P10 binary Macro-F1;
-- worst-client balanced accuracy;
-- mean-client Macro-F1;
-- pooled Macro-F1 as a separately labelled control;
-- mean-client balanced accuracy.
+Reject before execution:
 
-Every aggregate records candidate, eligible, FPR-evaluable, attack-evaluable, fallback, and unavailable client counts.
-
-## Conformal coverage
-
-For each client and seed:
-
-- target held-out benign coverage;
-- achieved held-out benign coverage;
-- signed coverage error;
-- absolute coverage error;
-- finite-sample rank index and effective coverage granularity;
-- calibration count;
-- calibration-size condition;
-- ties and unavailable reason.
-
-Report client-level distribution and seed-level summaries. Do not infer universal conditional validity.
-
-## Threshold estimation
-
-Compute:
-
-- exact pooled benign quantile reference when defined;
-- absolute threshold error;
-- relative error only for nonzero reference;
-- target exceedance;
-- achieved benign exceedance;
-- signed and absolute attainment error;
-- threshold variance across nested calibration replicates;
-- sample-efficiency curves.
-
-## Communication
-
-Calculate exact logical fields, element counts, and serialized byte counts for:
-
-- model transmission;
-- threshold transmission;
-- local quantile transmission;
-- benign summary-statistics comparator.
-
-Label as estimated serialized payload, never network deployment measurement.
-
-## Traffic rates and alert burden
-
-`traffic_rates.py` validates typed evidence:
-
-- measured;
-- dataset-derived;
-- externally cited.
-
-Evidence includes units, source, applicable population, decision granularity, and provenance. `operational.py` generates alerts per client per day only when evidence is applicable. Otherwise return a typed suppression result and do not emit an alert-burden table.
-
-## Fixed-score controls
-
-`controls.py` verifies:
-
-- score and label checksums are identical across threshold methods;
-- AUROC is identical within numerical tolerance;
-- client and cohort identities are unchanged;
-- only thresholds differ.
-
-Any failure is a scientific contract error, not a warning.
-
-## Statistical inference
-
-### Confirmatory contrast
-
-Per seed: shared-threshold `CV(FPR)` minus local-threshold `CV(FPR)`.
-
-- Independent unit: training seed.
-- Point estimate: arithmetic mean of ten valid paired seed contrasts.
-- Interval: two-sided 95% BCa over paired contrasts.
-- Resample paired contrasts only.
-- Report all seed contrasts and positive/zero/negative counts.
-
-If BCa is degenerate or fewer than ten valid pairs exist, report diagnostic intervals only and mark the confirmatory decision blocked/inconclusive according to the source rule. Never silently substitute.
-
-### Secondary evidence
-
-- Two-sided paired Wilcoxon with explicit zero handling.
-- Matched-pairs rank-biserial correlation, not unpaired Cliff’s delta.
-- Holm correction within predeclared secondary families.
-- Nested replicates summarized within seed before across-seed inference.
-- Spearman plus declared descriptive regression for heterogeneity association.
-
-## Mechanism analyses
-
-`mechanisms.py` is limited to source-authorized analyses:
-
-- family/group granularity when group assignments are available;
-- assignment stability only for scientifically supplied grouping assignments/resamples;
-- per-client benign and attack score geometry;
-- heterogeneity-benefit association;
-- threshold movement versus FPR/TPR changes;
-- within-group and across-group threshold/FPR dispersion.
-
-It must not implement a group-construction algorithm or a removed calibration representation.
-
-## Decision rules
-
-Encode source-backed outcomes:
-
-- confirmatory support;
-- directional but inconclusive;
-- no observed advantage;
-- opposite direction;
-- external consistency/boundary;
-- retained/partial/full model absorption;
-- temporal degradation with recovery, without recovery, or no detectable degradation;
-- suppression and infeasibility.
-
-Decisions use full precision and preserve negative results.
+- Edge attack-sensitive metric request;
+- family threshold on Edge or CIC;
+- CIC temporal experiment;
+- temporal execution with invalid chronology;
+- grouped threshold without supplied assignments;
+- temporal recovery ratio without materiality protocol;
+- external claim promoted to confirmatory.
 
 ## Test files to implement
 
-- `tests/unit/evaluation/test_models.py`
-- `tests/unit/evaluation/test_confusion.py`
-- `tests/unit/evaluation/test_metric_semantics.py`
-- `tests/unit/evaluation/test_client_metrics.py`
-- `tests/unit/evaluation/test_population_metrics.py`
-- `tests/unit/evaluation/test_conformal_coverage.py`
-- `tests/unit/evaluation/test_threshold_estimation.py`
-- `tests/unit/evaluation/test_communication.py`
-- `tests/unit/evaluation/test_traffic_rates.py`
-- `tests/unit/evaluation/test_operational.py`
-- `tests/unit/evaluation/test_controls.py`
-- `tests/unit/analysis/test_descriptive.py`
-- `tests/unit/analysis/test_inference.py`
-- `tests/unit/analysis/test_divergence.py`
-- `tests/unit/analysis/test_mechanisms.py`
-- `tests/unit/analysis/test_temporal.py`
-- `tests/unit/analysis/test_decision_rules.py`
-- `tests/property/test_population_metric_invariants.py`
-- `tests/property/test_confusion_metric_bounds.py`
-- `tests/scientific/test_confirmatory_pairing.py`
-- `tests/scientific/test_undefined_metrics_are_not_zero.py`
-- `tests/scientific/test_edge_attack_metrics_are_unavailable.py`
-- `tests/scientific/test_auroc_invariance.py`
+- `tests/unit/experiments/test_external_feasibility.py`
+- `tests/unit/experiments/test_temporal_feasibility.py`
+- `tests/unit/analysis/test_edge_temporal_quantities.py`
+- `tests/integration/external/test_edge_benign_equity_validation.py`
+- `tests/integration/external/test_ciciot_file_client_boundary.py`
+- `tests/integration/temporal/test_edge_one_shot_recalibration.py`
+- `tests/integration/temporal/test_matched_static_reference.py`
+- `tests/scientific/test_external_evidence_is_not_confirmatory.py`
+- `tests/scientific/test_temporal_pipeline_has_no_future_leakage.py`
+- `tests/scientific/test_temporal_claim_scope.py`
 
-## Required edge cases
+## Required outcomes
 
-- All FPR values zero.
-- Positive near-zero mean FPR.
-- One eligible client.
-- Empty benign or attack denominator.
-- Single-class AUROC.
-- Identical paired deltas causing degenerate BCa.
-- Zero differences in Wilcoxon.
-- All comparator variances zero.
-- No traffic-rate evidence.
-- Temporal drift excess not materially positive.
+- Included/excluded client records.
+- Eligibility coverage.
+- Per-client benign counts and FPR.
+- Cross-client absolute and relative dispersion.
+- Typed attack-metric unavailability.
+- Chronology validation.
+- Static/frozen/recalibrated trajectories.
+- Honest null, opposite, or infeasible decisions.
 
 ## Exit criteria
 
-- Every metric has explicit availability semantics.
-- Confirmatory inference is correctly paired and non-substitutable.
-- Fallback and unavailable clients cannot contaminate confirmatory metrics.
-- Operational outputs are evidence-gated.
-- All Phase 10 tests and audits pass.
+- Edge external evidence is limited to supported benign operating-point outcomes.
+- CIC results remain an artifact-specific boundary.
+- Temporal analysis is one-shot, chronological, and leak-free.
+- No unsupported metric or claim is computed.
+- All Phase 11 tests and audits pass.
 
 ## Mandatory closing audit
 

@@ -1,4 +1,4 @@
-# Phase 01 — Scientific Identity and Scope
+# Phase 02 — Typed Protocols and Domain Contracts
 
 ## Scientific authority and interpretation rules
 
@@ -16,145 +16,230 @@
 
 ## Objective
 
-Establish the descriptive scientific vocabulary, evidence hierarchy, scope boundaries, and source-tree guards before any computational implementation. This phase prevents later code from embedding ambiguous shorthand or collapsing distinct scientific objects.
+Implement the immutable Python-native declaration system that replaces YAML, together with validated scalar values, provenance records, cross-package Protocol interfaces, and whole-graph startup validation.
 
 ## Entry criteria
 
-- The user-approved `datp_core/` source tree exists exactly as listed.
-- `/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md` is readable.
-- No implementation behavior is assumed from empty files.
+- Phase 01 is complete.
+- Descriptive enums are stable.
+- Any exact values absent from `/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md` are listed as blockers in the phase master log.
 
 ## Source files permitted to change
 
-- `datp_core/domain/enums.py`
-- `datp_core/domain/errors.py`
-- `datp_core/domain/__init__.py`
-- `datp_core/__init__.py`
+- `datp_core/domain/values.py`
+- `datp_core/domain/provenance.py`
+- `datp_core/domain/contracts.py`
+- `datp_core/protocols/models.py`
+- `datp_core/protocols/seeds.py`
+- `datp_core/protocols/splits.py`
+- `datp_core/protocols/training.py`
+- `datp_core/protocols/calibration.py`
+- `datp_core/protocols/metrics.py`
+- `datp_core/protocols/statistics.py`
+- `datp_core/protocols/traffic_rates.py`
+- `datp_core/protocols/anchor.py`
+- `datp_core/protocols/populations.py`
+- `datp_core/protocols/experiments.py`
+- `datp_core/protocols/runtime.py`
+- `datp_core/protocols/validation.py`
+- `datp_core/protocols/__init__.py`
 
-`__init__.py` files remain minimal and must not re-export identities.
+The package initializer must not collect or re-export all declarations.
 
-## Required enums
+## Libraries
 
-Implement with `enum.StrEnum` unless a non-string enum is scientifically necessary.
+- Pydantic v2 for frozen declaration models, discriminated unions, field constraints, and `TypeAdapter` validation.
+- Standard-library frozen slotted dataclasses for small domain values and records.
+- `pathlib` for project-relative paths.
+- No configuration framework, YAML parser, Hydra, OmegaConf, or environment-variable-driven scientific override.
 
-### Dataset and population identities
+## Scalar value objects
 
-- `DatasetId`: `NBAIOT`, `CICIOT2023`, `EDGE_IIOTSET`.
-- `PopulationId`: `NBAIOT_NATURAL_DEVICES`, `CICIOT_FILE_CLIENTS`, `NBAIOT_DIRICHLET_CLIENTS`, `EDGE_SENSOR_GROUPS`, `EDGE_TEMPORAL_GROUPS`.
+Define frozen slotted dataclasses or validated Pydantic root models in `domain/values.py`. Each type validates its domain once and removes repeated guards elsewhere.
 
-### Evidence and experiment identities
+Required values:
 
-- `EvidenceRole`: `ANCHOR_REPRODUCTION`, `CONFIRMATORY`, `SUPPORTIVE`, `MECHANISM`, `THRESHOLD_VARIANT`, `EXTERNAL_VALIDATION`, `TRAINING_STRESS_TEST`, `APPLICABILITY_BOUNDARY`, `TEMPORAL_BOUNDARY`, `EXPLORATORY`, `OPERATIONAL_TRANSLATION`.
-- `ExperimentId` must contain descriptive members for every experiment authorized by the source of truth:
-  - `HISTORICAL_DATP_REPRODUCTION`
-  - `SHARED_VS_LOCAL_CONFIRMATION`
-  - `SHARED_CONSTRUCTION_SENSITIVITY`
-  - `QUANTILE_SENSITIVITY`
-  - `CONTROLLED_HETEROGENEITY_SWEEP`
-  - `FAMILY_AND_GROUPED_GRANULARITY`
-  - `PER_CLIENT_SCORE_GEOMETRY`
-  - `HETEROGENEITY_BENEFIT_ASSOCIATION`
-  - `THRESHOLD_MOVEMENT_TRADEOFF`
-  - `CALIBRATION_SIZE_ABLATION`
-  - `FIXED_SHRINKAGE_CURVE`
-  - `SIZE_AWARE_SHRINKAGE`
-  - `LOCAL_CONFORMAL_COVERAGE`
-  - `FEDERATED_BENIGN_STATISTICS_COMPARISON`
-  - `FEDERATED_QUANTILE_ESTIMATION`
-  - `FIXED_COEFFICIENT_STATISTICS_SENSITIVITY`
-  - `EDGE_BENIGN_EQUITY_VALIDATION`
-  - `CICIOT_FILE_CLIENT_BOUNDARY`
-  - `FEDPROX_ABSORPTION_STRESS_TEST`
-  - `DITTO_ABSORPTION_STRESS_TEST`
-  - `EDGE_ONE_SHOT_RECALIBRATION`
-  - `ALERT_BURDEN_TRANSLATION`
-  - `GROUP_MEDIAN_SUPPLEMENT`
-  - `OPTIONAL_EQUITY_INDICES`
+- `Seed`
+- `Ratio`
+- `Quantile`
+- `CoverageTarget`
+- `CalibrationSize`
+- `ClientCount`
+- `RoundNumber`
+- `LocalEpochCount`
+- `BatchSize`
+- `LearningRate`
+- `DirichletConcentration`
+- `ProximalCoefficient`
+- `DittoRegularization`
+- `ShrinkageWeight`
+- `SummaryCoefficient`
+- `ConfidenceLevel`
+- `BootstrapReplicateCount`
+- `SubsampleReplicateCount`
+- `GroupCount`
+- `ThresholdValue`
+- `ScoreValue`
+- `MetricValue`
+- `ByteCount`
+- `TrafficRatePerDay`
+- `Checksum`
 
-Do not create numeric, alphabetic, generic, or versioned experiment members.
+Do not wrap plain identifiers already represented by enums. Do not create arithmetic-heavy value classes; validation and unit clarity are their purpose.
 
-### Model and threshold identities
+## Provenance dataclasses
 
-- `TrainingModelId`: `FEDAVG_AUTOENCODER`, `FEDPROX_AUTOENCODER`, `DITTO_GLOBAL_AUTOENCODER`, `DITTO_PERSONALIZED_AUTOENCODER`.
-- `CentralizedModelId`: `CENTRALIZED_AUTOENCODER`.
-- `FederatedThresholdMethod`: `SHARED_THRESHOLD`, `LOCAL_THRESHOLD`, `FAMILY_THRESHOLD`, `CLUSTER_THRESHOLD`, `POOLED_SHARED_QUANTILE`, `SAMPLE_WEIGHTED_SHARED_THRESHOLD`, `LOCAL_GLOBAL_SHRINKAGE`, `SIZE_AWARE_SHRINKAGE`, `LOCAL_CONFORMAL_THRESHOLD`, `FEDERATED_BENIGN_STATISTICS`.
-- `CentralizedThresholdMethod`: `POOLED_BENIGN_QUANTILE`.
+In `domain/provenance.py`, define frozen slotted records:
 
-The two threshold enums must remain structurally distinct. No union or dispatcher may accept `CentralizedThresholdMethod` in a federated threshold path.
+- `SourceFileProvenance(path, size_bytes, checksum, row_count)`
+- `DatasetProvenance(dataset, sources, schema_checksum)`
+- `CodeProvenance(revision, dirty_state)` only when the repository can supply it without using it as execution identity.
+- `ProtocolProvenance(resolved_manifest_checksum)`
+- `CitationProvenance(citation_key, source_title, source_locator)`
+- `TrafficRateProvenance(kind, source, units, applicable_population, citation)`
+- `ArtifactProvenance(path, format, checksum, schema_checksum)`
 
-### Metric, population, and decision identities
+Provenance records contain no timestamps and are serializable without custom codecs.
 
-- `EvaluationCohort`: `CONFIRMATORY_ELIGIBLE`, `ATTACK_EVALUABLE`, `UNAVAILABLE`, `DEPLOYMENT_FALLBACK`.
-- `MetricId` must include all mandatory semantics: `FALSE_POSITIVE_RATE`, `TRUE_POSITIVE_RATE`, `BALANCED_ACCURACY`, `BINARY_MACRO_F1`, `AUROC`, `MEAN_FPR`, `FPR_POPULATION_STANDARD_DEVIATION`, `FPR_COEFFICIENT_OF_VARIATION`, `FPR_IQR`, `FPR_RANGE`, `WORST_CLIENT_FPR`, `TPR_COEFFICIENT_OF_VARIATION`, `P10_BINARY_MACRO_F1`, `WORST_CLIENT_BALANCED_ACCURACY`, `MEAN_CLIENT_MACRO_F1`, `POOLED_MACRO_F1`, `MEAN_CLIENT_BALANCED_ACCURACY`, `ABSOLUTE_THRESHOLD_ERROR`, `RELATIVE_THRESHOLD_ERROR`, `SIGNED_ATTAINMENT_ERROR`, `ABSOLUTE_ATTAINMENT_ERROR`, `TARGET_COVERAGE`, `ACHIEVED_COVERAGE`, `SIGNED_COVERAGE_ERROR`, `ABSOLUTE_COVERAGE_ERROR`, `ALERTS_PER_DAY`, `COMMUNICATION_BYTES`.
-- `AvailabilityStatus`: `AVAILABLE`, `UNAVAILABLE`, `UNDEFINED`, `SUPPRESSED`, `INFEASIBLE`.
-- `ScientificDecision`: `SUPPORTED`, `DIRECTIONAL_INCONCLUSIVE`, `NO_OBSERVED_ADVANTAGE`, `OPPOSITE_DIRECTION`, `PARTIAL_ABSORPTION`, `FULL_ABSORPTION`, `BOUNDARY_RESULT`, `INFEASIBLE`, `BLOCKED`.
-- `ClaimStatus`: `PERMITTED`, `NARROWED`, `BLOCKED`, `UNSUPPORTED`, `SUPPRESSED`.
+## Protocol interfaces
 
-### Execution identities
+In `domain/contracts.py`, define runtime-checkable `typing.Protocol` interfaces only where multiple implementations exist:
 
-Define descriptive enums for stage, split, temporal state, serialization format, warning code, traffic-rate evidence type, checkpoint status, and completion status. Members must correspond exactly to existing stage files and supported semantics.
+- `DatasetReader`
+- `DatasetMaterializer`
+- `PopulationBuilder`
+- `Preprocessor`
+- `Trainer`
+- `CheckpointSelector`
+- `ScoreGenerator`
+- `FederatedThresholdEstimator`
+- `CentralizedThresholdEstimator`
+- `MetricEvaluator`
+- `StageHandler`
+- `ArtifactSerializer`
+- `ArtifactStore`
+- `StageHook`
 
-## Error hierarchy
+Protocols expose typed methods and result objects; they do not use dict payloads. Do not introduce abstract base classes when structural typing suffices.
 
-`datp_core/domain/errors.py` must define a shallow, explicit hierarchy rooted at `DatpCoreError`:
+## Frozen protocol models
 
-- `ScientificContractError`
-- `UnresolvedScientificValueError`
-- `CapabilityError`
-- `InfeasibleExperimentError`
-- `DataIntegrityError`
-- `LeakageError`
-- `AnchorReproductionError`
-- `ProtocolValidationError`
-- `SerializationSafetyError`
-- `ArtifactIntegrityError`
-- `ExecutionStateError`
+Every model uses `ConfigDict(frozen=True, extra='forbid')`. No scientific field has a default. Runtime-only defaults are also avoided unless they are purely representational and cannot affect execution.
 
-Do not create one exception per function. Exceptions carry structured context through attributes, not formatted dictionaries.
+### Core declarations in `protocols/models.py`
 
-## Scope enforcement requirements
+- `SeedCohort`
+- `FractionalSplitProtocol`
+- `TemporalSplitProtocol`
+- `CheckpointProtocol`
+- `AutoencoderProtocol`
+- `OptimizerProtocol`
+- `FedAvgProtocol`
+- `FedProxProtocol`
+- `DittoProtocol`
+- `CalibrationEligibilityProtocol`
+- `QuantileProtocol`
+- `CalibrationSizeProtocol`
+- `FixedShrinkageProtocol`
+- `SizeAwareShrinkageProtocol`
+- `ConformalProtocol`
+- `FederatedStatisticsProtocol`
+- `MetricProtocol`
+- `StatisticalInferenceProtocol`
+- `TrafficRateEvidence`
+- `PopulationDeclaration`
+- `ExperimentDeclaration`
+- `AnchorReference`
+- `AnchorDecisionProtocol`
+- `RuntimeProtocol`
+- `ResolvedProtocolGraph`
 
-- No source identifier may use opaque scientific shorthand.
-- No code path may treat AUROC as a threshold-policy outcome.
-- No code path may describe external Edge evidence as attack-detection equity when per-client attack assignment is unavailable.
-- No code path may describe one-shot recalibration as continuous adaptation or concept-drift handling.
-- No code path may describe data locality as a formal privacy guarantee.
-- No code path may describe message-size estimates as deployment measurements.
+Use discriminated unions for model-specific and threshold-specific declarations. An experiment cannot carry irrelevant fields such as a proximal coefficient for FedAvg.
+
+## Required scientific declarations
+
+Declare only values explicitly supported by the current source of truth:
+
+- Canonical quantile `0.95`.
+- Quantile sensitivity: `0.90`, `0.95`, `0.975`, `0.99`.
+- Minimum benign calibration support: `100`.
+- Calibration sizes: `50`, `100`, `250`, `500`, `1000`, `5000`.
+- Fixed shrinkage weights: `0.00`, `0.25`, `0.50`, `0.75`, `1.00`.
+- Controlled heterogeneity concentrations: `0.1`, `0.3`, `0.5`, `1.0`, `10.0`, plus an explicit IID condition represented by an enum, not a fake infinite concentration.
+- FedProx coefficients: `0.001`, `0.01`, `0.1`, `1.0`; zero remains the FedAvg condition and is not declared as FedProx.
+- Conformal target coverage `0.95` and significance `0.05`.
+- Summary-statistics sensitivity coefficients: `2.0`, `2.5`, `3.0`.
+- Journal checkpoint candidates: rounds `25`, `50`, `75`, `100`, `125`, `150`, `200`; maximum round `200`.
+- Local epochs `1` for the locked FedAvg core.
+- Temporal split: `0.55`, `0.15`, `0.10`, `0.20` in historical train, historical calibration, future recalibration, future evaluation order.
+- Ditto absorption bands: retained at or above `0.75` of the FedAvg threshold-scope effect, partial from `0.25` to below `0.75`, largely absorbed below `0.25`; alternative-route absolute difference `0.05`.
+- Confirmatory confidence level `0.95` and paired seed count `10`.
+
+Do not invent exact seed integers, architecture widths, learning rate, batch size, optimizer details, non-temporal split ratios, bootstrap replicate count, near-zero warning cutoff, temporal materiality cutoff, or anchor tolerances when absent. The declaration type may require them, but the resolved graph must fail with `UnresolvedScientificValueError` until they are scientifically supplied.
+
+## Module responsibilities
+
+- `seeds.py`: immutable seed cohorts only; no random-number generators.
+- `splits.py`: split declarations and sum/order validation.
+- `training.py`: centralized, FedAvg, FedProx, and Ditto declarations with no execution code.
+- `calibration.py`: eligibility, quantiles, sizes, shrinkage, conformal, and federated-statistics declarations.
+- `metrics.py`: required metric sets per cohort and explicit undefined/suppression rules.
+- `statistics.py`: paired inference and multiplicity declarations.
+- `traffic_rates.py`: typed tuple of evidence records; empty tuple is valid and means alert-burden output is suppressed.
+- `anchor.py`: historical reference values and explicit tolerances only when present in source truth.
+- `populations.py`: typed population declarations referencing capabilities, not implementing construction.
+- `experiments.py`: complete experiment catalogue as a tuple of `ExperimentDeclaration`; no registry dictionary.
+- `runtime.py`: paths, CUDA requirement, workers, overwrite behavior, and campaign options that cannot alter science.
+- `validation.py`: validate the complete cross-reference graph and return one `ResolvedProtocolGraph`.
+
+## Graph validation rules
+
+Validation must reject:
+
+- duplicate IDs;
+- missing referenced protocols;
+- unsupported population/method/model combinations;
+- centralized methods in federated experiments;
+- threshold comparisons that use different model or score coordinates;
+- attack-sensitive metrics on populations without attack assignment;
+- temporal experiments on populations without chronology;
+- family thresholding without a family taxonomy;
+- grouped thresholding without an approved assignment input;
+- deployment fallback clients in confirmatory cohorts;
+- alert burden without valid rate evidence;
+- unresolved mandatory scientific values;
+- experiment parameters not belonging to declared grids;
+- mutable declarations or environment-based scientific overrides.
 
 ## Test files to implement
 
-- `tests/architecture/test_source_tree_is_locked.py`
-  - Assert the complete source-file allowlist exactly matches the approved tree.
-  - Fail on added, missing, moved, or renamed source files.
-- `tests/architecture/test_no_opaque_scientific_identities.py`
-  - Parse Python AST and serialized protocol strings.
-  - Reject lettered populations, numbered policies/baselines, generic `baseline_1`, and versioned experiment names.
-- `tests/architecture/test_no_compatibility_surfaces.py`
-  - Reject deprecated aliases, import redirects, wildcard re-exports, and compatibility modules.
-- `tests/unit/domain/test_enums.py`
-  - Assert uniqueness, stable string values, exhaustive expected members, and centralized/federated separation.
-- `tests/unit/domain/test_errors.py`
-  - Assert hierarchy, structured context, and no accidental broad exception swallowing.
-- `tests/scientific/test_scope_vocabulary.py`
-  - Assert only permitted claim vocabulary appears in report-facing enums and protocol declarations.
+- `tests/unit/domain/test_values.py`
+- `tests/unit/domain/test_provenance.py`
+- `tests/unit/domain/test_contracts.py`
+- `tests/unit/protocols/test_models.py`
+- `tests/unit/protocols/test_seed_declarations.py`
+- `tests/unit/protocols/test_split_declarations.py`
+- `tests/unit/protocols/test_training_declarations.py`
+- `tests/unit/protocols/test_calibration_declarations.py`
+- `tests/unit/protocols/test_metric_declarations.py`
+- `tests/unit/protocols/test_statistical_declarations.py`
+- `tests/unit/protocols/test_traffic_rate_declarations.py`
+- `tests/unit/protocols/test_anchor_declarations.py`
+- `tests/unit/protocols/test_population_declarations.py`
+- `tests/unit/protocols/test_experiment_declarations.py`
+- `tests/unit/protocols/test_runtime_declarations.py`
+- `tests/unit/protocols/test_protocol_graph_validation.py`
+- `tests/property/test_scientific_value_objects.py`
 
-## Implementation sequence
-
-1. Read the source-of-truth identity, scope, terminology, claim, and limitation sections.
-2. Define the enum surface before other code imports identities.
-3. Define the minimal error hierarchy.
-4. Keep package initializers empty except package metadata at the root.
-5. Add source-tree and vocabulary tests.
-6. Run focused tests and static checks.
-7. Record unresolved scientific terminology conflicts in the master log rather than adding aliases.
+Required assertions include immutability, extra-field rejection, boundary values, cross-reference failure, unresolved-value failure, and deterministic JSON serialization.
 
 ## Exit criteria
 
-- Every scientific identity required by later phases has one descriptive enum member.
-- Centralized and federated threshold identities cannot be confused by type.
-- The source-tree allowlist test passes.
-- No opaque or compatibility identity remains anywhere under `datp_core/`.
-- All Phase 01 tests and global static checks pass.
+- The entire protocol graph is typed, immutable, and validated in one call.
+- All known source-backed values are declared exactly once.
+- Missing mandatory values fail explicitly; no placeholder, `None`, or default permits execution.
+- No YAML/config parser dependency remains.
+- All tests and global audits pass.
 
 ## Mandatory closing audit
 

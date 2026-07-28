@@ -1,4 +1,4 @@
-# Phase 07 — Independent Centralized Reference Pipeline
+# Phase 08 — Federated Training, Checkpointing, and Scoring
 
 ## Scientific authority and interpretation rules
 
@@ -16,102 +16,166 @@
 
 ## Objective
 
-Implement the privacy-incompatible centralized reference as a completely independent pooled-data pipeline: pooled preprocessing, pooled autoencoder training, independent checkpoint selection, pooled scoring, pooled benign threshold, and pooled evaluation.
+Implement the FedAvg core detector, FedProx training stress test, genuine Ditto model-personalization stress test, common autoencoder architecture, model-specific checkpoint selection, and reusable immutable score artifacts.
 
 ## Entry criteria
 
-- Phase 05 is complete.
-- Centralized training and split declarations are fully resolved.
-- Reusable pooled preprocessed data are available under `data/processed/.../centralized_reference/`.
+- Phases 05 and 06 are complete.
+- Required training values are resolved.
+- Reusable federated preprocessed data exist.
+- Anchor gate behavior is available even when currently blocked.
 
 ## Source files permitted to change
 
-- `datp_core/centralized_reference/preprocessing.py`
-- `datp_core/centralized_reference/training.py`
-- `datp_core/centralized_reference/checkpointing.py`
-- `datp_core/centralized_reference/scoring.py`
-- `datp_core/centralized_reference/thresholding.py`
-- `datp_core/centralized_reference/evaluation.py`
-- `datp_core/orchestration/stages/preprocess_centralized_reference.py`
-- `datp_core/orchestration/stages/train_centralized_reference.py`
-- `datp_core/orchestration/stages/select_centralized_reference_checkpoint.py`
-- `datp_core/orchestration/stages/score_centralized_reference.py`
-- `datp_core/orchestration/stages/construct_centralized_reference_threshold.py`
-- `datp_core/orchestration/stages/evaluate_centralized_reference.py`
+- `datp_core/learning/autoencoder.py`
+- `datp_core/learning/federated/models.py`
+- `datp_core/learning/federated/training.py`
+- `datp_core/learning/federated/fedavg.py`
+- `datp_core/learning/federated/fedprox.py`
+- `datp_core/learning/federated/ditto.py`
+- `datp_core/learning/federated/checkpointing.py`
+- `datp_core/scoring/models.py`
+- `datp_core/scoring/reconstruction.py`
+- `datp_core/scoring/generation.py`
+- `datp_core/runtime/compute.py`
+- `datp_core/runtime/determinism.py`
+- `datp_core/orchestration/stages/train_federated.py`
+- `datp_core/orchestration/stages/select_federated_checkpoint.py`
+- `datp_core/orchestration/stages/score_federated.py`
 
-## Required result records
+## Libraries
 
-Place records in the existing most specific model files; do not create a new source file:
+- PyTorch for model/training.
+- Flower for federated coordination and tested strategy abstractions.
+- SafeTensors for model states.
+- Polars/PyArrow for histories, communication records, and scores.
+- NumPy only at clear library boundaries.
 
-- `CentralizedTrainingResult`
-- `CentralizedCheckpointCandidate`
-- `CentralizedCheckpointDecision`
-- `PooledScoreArtifact`
-- `PooledThresholdResult`
-- `CentralizedEvaluationResult`
+## Required dataclasses
 
-## Pipeline invariants
+In `learning/federated/models.py`:
 
-- Training uses pooled benign training rows only.
-- Pooled preprocessing is fitted independently.
-- Checkpoint selection uses the centralized non-test rule.
-- Pooled calibration scores come only from the centralized checkpoint.
-- The pooled threshold is the exact declared benign quantile.
-- Pooled evaluation uses centralized scores and labels only.
-- No federated model, client threshold, local quantile mean, federated score file, or federated checkpoint may be relabelled as centralized.
-- Centralized results are context for the cost of federation, not part of the confirmatory threshold-scope comparison.
+- `ClientTrainingInput`
+- `ClientTrainingResult`
+- `ClientUpdate`
+- `FederatedRoundResult`
+- `FederatedTrainingHistory`
+- `GlobalModelStateReference`
+- `PersonalizedModelStateReference`
+- `FederatedTrainingResult`
+- `CheckpointCandidate`
+- `CheckpointDecision`
+- `CommunicationRecord`
 
-## Training and checkpointing
+In `scoring/models.py`:
 
-- Reuse the architecture declaration while owning an independent fitted state.
-- Use deterministic PyTorch settings from runtime.
-- Use mandatory batching and CUDA when declared.
-- Persist model tensors with SafeTensors.
-- Persist optimizer summaries as non-executable typed JSON; do not pickle optimizer objects.
-- Evaluate only declared checkpoint rounds.
-- Store every candidate and one decision record.
+- `ScoreRecord`
+- `ScoreArtifactManifest`
+- `FixedScoreInvariant`
+- `ScoreGenerationResult`
 
-## Scoring
+## Autoencoder requirements
 
-- Generate reconstruction errors in deterministic batches.
-- Preserve source-row identity and semantic label.
-- Validate higher score means greater anomaly evidence.
-- Separate pooled calibration and pooled evaluation artifacts.
-- Verify score reload equality.
+- Architecture is protocol-driven and dataset input dimension is explicit.
+- No BatchNorm is introduced.
+- Forward output shape equals input shape.
+- Reconstruction error semantics are centralized in scoring, not embedded differently per trainer.
+- Initialization is deterministic from the declared seed.
+- No model-specific threshold code exists in the model class.
 
-## Thresholding and evaluation
+## FedAvg core
 
-- Use the exact quantile method declared in protocols.
-- Record interpolation/rank semantics.
-- Evaluate pooled confusion counts and pooled metrics.
-- Do not compute cross-client equity metrics for the centralized reference unless a separately declared contextual analysis requires client labels; even then, label it contextual and not a federated threshold policy.
+- One local epoch per round.
+- Full participation.
+- Aggregation weighting and optimizer values come only from source-backed protocols.
+- One global model state per seed/population.
+- Record round-level client participation, local sample counts, losses, communication bytes, and global state reference.
+- Never retrain per threshold method.
+
+## FedProx stress test
+
+- Implement the proximal term relative to the current global parameters.
+- Execute only declared positive coefficients.
+- Coefficient selection follows a predeclared non-test rule.
+- Produce separate models, histories, checkpoints, and scores.
+- Never merge FedProx results into the FedAvg confirmatory ladder.
+
+## Genuine Ditto
+
+- Maintain one global federated state and persistent personalized state per client.
+- Personalized states persist across rounds.
+- Apply the correct personalized proximal objective toward the global state.
+- Never aggregate personalized states as global updates.
+- Generate global-model and personalized-model scores as distinct model coordinates.
+- If genuine semantics cannot be implemented from the locked model contract, mark the experiment infeasible. Do not implement a differently named algorithm under `DITTO`.
+
+## Checkpoint protocol
+
+- Train to the declared maximum round and evaluate only declared candidates.
+- Select one primary round number from the N-BaIoT natural-device FedAvg training using a predeclared non-test rule.
+- Apply the selected round number consistently where the checkpoint exists; model tensors remain seed/population/model specific.
+- Prohibit test AUROC, test FPR, cross-client dispersion, attack labels, threshold effects, external results, or policy-specific outcomes as selectors.
+- Preserve all candidate trajectories as stability evidence.
+
+## Scoring and reuse
+
+Score path coordinates include population, seed, model, model coefficient when applicable, and selected checkpoint. They do not include threshold method, quantile, calibration size, or analysis method.
+
+A score artifact is reusable across all threshold methods when:
+
+- selected model checksum matches;
+- preprocessing manifest matches;
+- split manifest matches;
+- scoring protocol matches;
+- source row identities match.
+
+Generate calibration and evaluation scores once per model coordinate. Preserve labels but prevent calibration code from seeing attack-labelled calibration rows.
+
+## Runtime requirements
+
+- Fail when mandatory CUDA is unavailable.
+- Never reduce batch size silently.
+- Deterministic algorithms, seeds, worker seeding, and device settings are explicit.
+- Any unavoidable nondeterministic operation fails preflight or is recorded as a blocked scientific dependency.
 
 ## Test files to implement
 
-- `tests/unit/centralized_reference/test_training.py`
-- `tests/unit/centralized_reference/test_checkpointing.py`
-- `tests/unit/centralized_reference/test_scoring.py`
-- `tests/unit/centralized_reference/test_thresholding.py`
-- `tests/unit/centralized_reference/test_evaluation.py`
-- `tests/unit/orchestration/stages/test_centralized_reference_stages.py`
-- `tests/integration/centralized_reference/test_centralized_reference_pipeline.py`
-- `tests/scientific/test_centralized_reference_is_independent.py`
-- `tests/scientific/test_centralized_reference_never_enters_federated_dispatch.py`
+- `tests/unit/learning/test_autoencoder.py`
+- `tests/unit/learning/federated/test_models.py`
+- `tests/unit/learning/federated/test_training.py`
+- `tests/unit/learning/federated/test_fedavg.py`
+- `tests/unit/learning/federated/test_fedprox.py`
+- `tests/unit/learning/federated/test_ditto.py`
+- `tests/unit/learning/federated/test_checkpointing.py`
+- `tests/unit/scoring/test_models.py`
+- `tests/unit/scoring/test_reconstruction.py`
+- `tests/unit/scoring/test_generation.py`
+- `tests/unit/runtime/test_compute.py`
+- `tests/unit/runtime/test_determinism.py`
+- `tests/unit/orchestration/stages/test_federated_training_stages.py`
+- `tests/integration/learning/test_fedavg_training.py`
+- `tests/integration/learning/test_fedprox_training.py`
+- `tests/integration/learning/test_ditto_training.py`
+- `tests/integration/scoring/test_score_reuse_across_thresholds.py`
+- `tests/scientific/test_fixed_detector_contract.py`
+- `tests/scientific/test_checkpoint_selection_has_no_test_leakage.py`
 
-## Required negative tests
+## Required scientific tests
 
-- Federated checkpoint passed to centralized scoring.
-- Federated preprocessing state passed to pooled data.
-- Attack row passed to centralized benign training or calibration.
-- Policy dispatcher asked to create centralized threshold.
-- Centralized reference reused as a confirmatory threshold method.
+- All threshold methods for one FedAvg cell reference the same model and score checksums.
+- Policy-specific retraining is impossible through planner types.
+- AUROC over the same score artifact is invariant across threshold methods.
+- Ditto personalized states differ by client and persist across rounds.
+- FedProx zero is not exposed as a stress-test condition.
+- Batch size is never silently altered.
 
 ## Exit criteria
 
-- The pooled pipeline executes end-to-end without importing federated thresholding.
-- Every centralized artifact is independently derived and safely reloadable.
-- Type boundaries prevent accidental score or threshold substitution.
-- All Phase 07 tests and audits pass.
+- FedAvg, FedProx, and genuine Ditto produce independent safe model artifacts.
+- Checkpoint selection is non-test and model-specific.
+- Scores are immutable and reusable across threshold methods.
+- Fixed-detector invariants are machine-verifiable.
+- All Phase 08 tests and audits pass.
 
 ## Mandatory closing audit
 

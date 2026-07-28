@@ -1,4 +1,4 @@
-# Phase 12 — Experiment Planning and Campaign Execution
+# Phase 13 — Artifacts, Safe Serialization, and Output Layout
 
 ## Scientific authority and interpretation rules
 
@@ -16,184 +16,167 @@
 
 ## Objective
 
-Resolve immutable experiment declarations into exact feasible scientific plans, build the Dagster stage graph, execute single experiments and ordered campaigns deterministically, and recover from interruption without run IDs or hidden state.
+Implement deterministic experiment-output coordinates, typed manifests, safe serialization, checksum/schema validation, atomic completion, reload verification, and stale-output cleanup. Keep reusable data under `data/` and experiment-specific artifacts under `outputs/`.
 
 ## Entry criteria
 
-- Phases 01–11 are complete for every experiment being planned.
-- Protocol graph validation is operational.
-- Capability and anchor gates are available.
+- Phases 02–12 are complete.
+- All artifact-bearing result models exist.
+- Scientific coordinate ordering is resolved.
 
 ## Source files permitted to change
 
-- `datp_core/experiments/models.py`
-- `datp_core/experiments/feasibility.py`
-- `datp_core/experiments/planner.py`
-- `datp_core/orchestration/definitions.py`
-- `datp_core/orchestration/resources.py`
-- `datp_core/orchestration/hooks.py`
-- `datp_core/orchestration/campaign.py`
-- all existing files under `datp_core/orchestration/stages/`
-- `datp_core/cli.py`
-- `datp_core/runtime/logging.py`
+- `datp_core/artifacts/coordinates.py`
+- `datp_core/artifacts/layout.py`
+- `datp_core/artifacts/manifest.py`
+- `datp_core/artifacts/serialization.py`
+- `datp_core/artifacts/reload_validation.py`
+- `datp_core/artifacts/store.py`
+- `datp_core/artifacts/completion.py`
+- `datp_core/orchestration/stages/finalize.py`
 
-Stage files may call domain services but must not duplicate scientific calculations.
+## Output root contract
 
-## Required dataclasses and models
+```text
+outputs/
+└── experiment=<EXPERIMENT_ID>/
+    └── population=<POPULATION_ID>/
+        └── seed=<SEED>/
+            └── model=<MODEL_ID>/
+                └── [model_parameter=<VALUE>/]
+                    └── checkpoint=<ROUND>/
+                        └── threshold=<THRESHOLD_METHOD>/
+                            └── quantile=<VALUE>/
+                                └── [coverage=<VALUE>/]
+                                    └── calibration_size=<VALUE>/
+                                        └── [shrinkage=<VALUE>/]
+                                            └── [summary_coefficient=<VALUE>/]
+                                                └── [group_count=<VALUE>/]
+                                                    └── replicate=<VALUE>/
+                                                        └── [temporal_state=<VALUE>/]
+```
 
-In `experiments/models.py`:
+Dirichlet condition belongs between population and seed when active. Coordinates absent from a cell are omitted. No generic `parameter=value` bag is permitted; every coordinate has a typed field and canonical label.
 
-- `ScientificCoordinateSet`
-- `ExperimentDependency`
-- `ExpectedArtifact`
-- `StagePlan`
-- `ExperimentPlan`
-- `FeasibilityDecision`
-- `CampaignPlan`
-- `CampaignProgress`
+## Artifact grouping
 
-In orchestration files:
+Within the leaf or nearest reusable parent, store:
 
-- `StageExecutionContext`
-- `StageResult`
-- `HookContext`
+- resolved experiment manifest;
+- model/training histories and safe tensor states;
+- checkpoint candidates and decision;
+- immutable scores;
+- eligibility/cohort/subsample manifests;
+- thresholds and diagnostics;
+- metrics and unavailable outcomes;
+- analysis and decisions;
+- reporting outputs;
+- artifact inventory;
+- `COMPLETE` marker.
 
-## Experiment planning
+Do not copy canonical or preprocessed data into outputs. Refer to their manifests by checksum and path.
 
-For each `ExperimentDeclaration`, expand only active coordinates:
+## Required dataclasses/models
 
-- experiment;
-- population;
-- partition/model/analysis seed as declared;
-- model and model coefficient;
-- checkpoint round;
-- threshold method;
-- quantile;
-- coverage target;
-- calibration size;
-- shrinkage weight;
-- summary coefficient;
-- group assignment/count only when approved;
-- calibration replicate;
-- temporal state;
-- Dirichlet condition.
+- `ArtifactCoordinate`
+- `ExperimentCoordinate`
+- `ModelCoordinate`
+- `ThresholdCoordinate`
+- `AnalysisCoordinate`
+- `ArtifactManifest`
+- `ExperimentManifest`
+- `ArtifactInventoryEntry`
+- `ArtifactInventory`
+- `ReloadValidationResult`
+- `CompletionState`
 
-Do not materialize irrelevant coordinates. The plan contains typed coordinate values, not a dict.
+## Safe serialization
 
-## Feasibility
+- SafeTensors: model and checkpoint tensor states.
+- skops: fitted preprocessing estimators, with trusted types explicitly validated.
+- Parquet/PyArrow: tabular data, histories, scores, thresholds, metrics, analyses.
+- Pydantic JSON: protocols, manifests, summaries, decisions, warnings.
+- JSON schema or Arrow schema: feature and table schemas.
+- Unsafe pickle, joblib pickle, arbitrary object serialization, and executable codecs are prohibited.
 
-`experiments/feasibility.py` validates:
+Optimizer objects are never serialized. Store optimizer identity, configured values, and aggregate summaries only.
 
-- dataset and population capabilities;
-- resolved scientific values;
-- anchor gate requirements;
-- model/method compatibility;
-- metric availability;
-- temporal support;
-- family/group assignment requirements;
-- traffic-rate evidence;
-- dependencies and reusable data availability.
+## Manifest requirements
 
-Return a typed infeasibility decision. Do not create output directories for infeasible cells.
+Every manifest records:
 
-## Stage graph
+- descriptive IDs;
+- all active scientific coordinates;
+- resolved protocol checksum;
+- source/canonical/processed data references;
+- model/checkpoint/score checksums;
+- expected artifacts;
+- capability and anchor-gate status;
+- schema identifiers;
+- completion state.
 
-The existing stage files define the only stage graph:
+No timestamp is part of identity or required manifest semantics.
 
-1. preflight;
-2. materialize canonical data;
-3. construct population;
-4. split;
-5. federated or centralized preprocessing;
-6. federated or centralized training;
-7. checkpoint selection;
-8. scoring;
-9. calibration;
-10. federated or centralized threshold construction;
-11. federated or centralized evaluation;
-12. anchor verification where applicable;
-13. analysis;
-14. reporting;
-15. finalization.
+## Reload validation
 
-Dagster definitions express dependencies and reusable assets. Stage modules remain thin orchestration adapters.
+Reload and validate:
 
-## Reuse behavior
+- model tensor names, shapes, dtypes, architecture identity, and checksum;
+- checkpoint round and model coordinate;
+- preprocessing estimator type, feature order, and transform equivalence;
+- optimizer summary schema;
+- Arrow schemas and table semantic identifiers;
+- protocol and experiment manifests;
+- unavailable/suppression results;
+- artifact inventory completeness.
 
-- Canonical and processed data are resolved from `data/` coordinates.
-- Model/checkpoint/score artifacts may be reused inside a campaign only when complete manifests and scientific coordinates match.
-- Threshold and downstream artifacts are experiment-specific.
-- A complete experiment is skipped unless explicit overwrite is requested.
-- Overwrite deletes the entire experiment output coordinate before execution.
+A successfully written file that fails semantic reload is invalid.
 
-## Campaign recovery
+## Completion
 
-- The deterministic experiment output directory is the authority.
-- On interruption, find the first incomplete experiment in declared campaign order.
-- Delete that incomplete experiment’s output directory safely.
-- Resume from that experiment using the same command.
-- Never invent a resume ID, run ID, or job ID.
-- Completed earlier experiments remain untouched after manifest validation.
-
-## Hooks
-
-`orchestration/hooks.py` exposes typed no-op stage-boundary hooks for future research. Current hooks may observe typed contexts but cannot change data, scores, thresholds, or results. Phase 15 audits extension readiness.
-
-## CLI
-
-Provide Typer commands:
-
-- `validate-protocols`
-- `inspect-experiment`
-- `inspect-population`
-- `run-experiment`
-- `run-campaign`
-- `status`
-- `clean-experiment`
-- `verify-artifacts`
-
-Commands select declared enum identities. They do not accept arbitrary scientific overrides.
-
-## Structured logging
-
-Log experiment, population, seed, model, threshold, stage, client, and coordinate context through structlog. Do not log raw records, secrets, or huge data structures.
+- Write into a temporary sibling directory.
+- Validate expected artifacts and reload them.
+- Create artifact inventory.
+- Atomically publish.
+- Write `COMPLETE` last.
+- An output without `COMPLETE` is incomplete and must be deleted before rerun.
 
 ## Test files to implement
 
-- `tests/unit/experiments/test_models.py`
-- `tests/unit/experiments/test_feasibility.py`
-- `tests/unit/experiments/test_planner.py`
-- `tests/unit/orchestration/test_definitions.py`
-- `tests/unit/orchestration/test_resources.py`
-- `tests/unit/orchestration/test_hooks.py`
-- `tests/unit/orchestration/test_campaign.py`
-- `tests/unit/orchestration/test_stages.py`
-- `tests/unit/test_cli.py`
-- `tests/unit/runtime/test_logging.py`
-- `tests/integration/orchestration/test_single_experiment_execution.py`
-- `tests/integration/orchestration/test_campaign_execution.py`
-- `tests/integration/orchestration/test_campaign_interruption_recovery.py`
-- `tests/integration/orchestration/test_reusable_data_resolution.py`
-- `tests/scientific/test_infeasible_cells_do_not_execute.py`
-- `tests/scientific/test_scientific_overrides_are_rejected.py`
+- `tests/unit/artifacts/test_coordinates.py`
+- `tests/unit/artifacts/test_layout.py`
+- `tests/unit/artifacts/test_manifest.py`
+- `tests/unit/artifacts/test_serialization.py`
+- `tests/unit/artifacts/test_reload_validation.py`
+- `tests/unit/artifacts/test_store.py`
+- `tests/unit/artifacts/test_completion.py`
+- `tests/unit/orchestration/stages/test_finalize.py`
+- `tests/integration/artifacts/test_model_round_trip.py`
+- `tests/integration/artifacts/test_preprocessing_round_trip.py`
+- `tests/integration/artifacts/test_parquet_schema_round_trip.py`
+- `tests/integration/artifacts/test_atomic_experiment_publication.py`
+- `tests/integration/artifacts/test_deterministic_output_paths.py`
+- `tests/integration/artifacts/test_incomplete_output_cleanup.py`
+- `tests/architecture/test_no_unsafe_serialization.py`
+- `tests/architecture/test_outputs_do_not_duplicate_processed_data.py`
 
 ## Required negative tests
 
-- Arbitrary quantile or seed from CLI.
-- Infeasible experiment creates output.
-- Incomplete experiment is resumed in place instead of deleted.
-- Completed experiment is rerun without overwrite.
-- Reused artifact has mismatched manifest.
-- Hook mutates stage input or result.
-- Threshold comparison trains multiple models.
+- Path collision between two scientific coordinates.
+- Timestamp/run ID/job ID included in path.
+- Pickle or joblib serialization.
+- Wrong model state loaded into a coordinate.
+- Manifest checksum mismatch.
+- Missing expected artifact with `COMPLETE` attempted.
+- Processed data copied under output.
 
 ## Exit criteria
 
-- Every declared experiment expands deterministically or returns typed infeasibility.
-- Campaign execution and recovery require no hidden identifiers.
-- Reusable data are resolved rather than regenerated.
-- Stage graph has no scientific calculations duplicated in orchestration.
-- All Phase 12 tests and audits pass.
+- Every output path is deterministic and collision-tested.
+- Every persisted artifact uses an approved format and passes semantic reload.
+- `COMPLETE` is trustworthy.
+- Data/output separation is enforced.
+- All Phase 13 tests and audits pass.
 
 ## Mandatory closing audit
 

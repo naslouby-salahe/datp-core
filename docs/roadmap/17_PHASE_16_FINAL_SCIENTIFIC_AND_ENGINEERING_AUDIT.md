@@ -1,4 +1,4 @@
-# Phase 15 — Extension Readiness
+# Phase 16 — Final Scientific and Engineering Audit
 
 ## Scientific authority and interpretation rules
 
@@ -16,80 +16,172 @@
 
 ## Objective
 
-Verify that the fixed stage boundaries can later support calibration attacks, defenses, adaptive thresholds, dynamic recalibration, or additional scientifically approved populations without implementing any of those research lines now.
+Perform the final repeated audits proving that the locked source tree implements the scientific programme faithfully, reuses data correctly, separates centralized and federated paths, preserves fixed-detector comparisons, reports honest evidence, and is ready for full experiment execution.
 
 ## Entry criteria
 
-- Phases 01–14 are complete.
-- Current DATP-Core behavior is fully tested.
+- Phases 01–15 are marked complete.
+- No mandatory scientific blocker remains.
+- All exact test files named by prior phases exist.
 
 ## Source files permitted to change
 
-- `datp_core/domain/contracts.py`
-- `datp_core/orchestration/hooks.py`
-- `datp_core/orchestration/resources.py`
-- `datp_core/experiments/models.py`
-- `datp_core/experiments/feasibility.py`
+No production source file may be changed during the initial audit pass. Audit failures return the repository to the owning phase. After fixes, rerun this phase from the beginning.
 
-Changes may strengthen boundaries only. They may not add current attack, defense, online, adaptive, or privacy behavior.
+Only the following test files may be created or changed here:
 
-## Required extension boundaries
+- `tests/conftest.py`
+- the final audit tests named below.
 
-Typed hook points may exist at:
+## Final test files to implement
 
-- after reusable score generation and before calibration sampling;
-- after calibration sampling and before threshold construction;
-- after threshold construction and before evaluation;
-- after evaluation and before analysis.
+- `tests/e2e/test_anchor_reproduction.py`
+- `tests/e2e/test_confirmatory_natural_device_pipeline.py`
+- `tests/e2e/test_centralized_reference_pipeline.py`
+- `tests/e2e/test_edge_external_validation_pipeline.py`
+- `tests/e2e/test_ciciot_boundary_pipeline.py`
+- `tests/e2e/test_controlled_heterogeneity_pipeline.py`
+- `tests/e2e/test_fedprox_stress_pipeline.py`
+- `tests/e2e/test_ditto_stress_pipeline.py`
+- `tests/e2e/test_temporal_recalibration_pipeline.py`
+- `tests/e2e/test_campaign_resume_pipeline.py`
+- `tests/e2e/test_reporting_and_reload_pipeline.py`
+- `tests/architecture/test_complete_source_tree_contract.py`
+- `tests/architecture/test_dependency_direction.py`
+- `tests/architecture/test_no_dict_or_any_leakage.py`
+- `tests/architecture/test_no_legacy_or_opaque_identity.py`
+- `tests/architecture/test_no_unsafe_persistence.py`
+- `tests/architecture/test_no_generated_files_in_source.py`
+- `tests/scientific/test_complete_causal_isolation.py`
+- `tests/scientific/test_complete_benign_only_contract.py`
+- `tests/scientific/test_complete_capability_enforcement.py`
+- `tests/scientific/test_complete_claim_discipline.py`
+- `tests/scientific/test_complete_data_reuse_contract.py`
+- `tests/scientific/test_complete_negative_result_discipline.py`
 
-Hooks receive immutable references and return explicit typed results. Default hooks are identity/no-op and cannot mutate artifacts in place.
+Use tiny deterministic data and minimal rounds for e2e contract tests. Full scientific experiments are not unit tests.
 
-## Future capability principles
+## Audit pass 1 — Scientific identity
 
-- A future calibration attack must operate only through a declared hook and must produce a new experiment/model coordinate, never alter clean artifacts.
-- A future defense must be a new threshold method or hook implementation with an explicit scientific contract.
-- Dynamic recalibration must add temporal states and protocol declarations, not conditional logic hidden in current stages.
-- Additional datasets must implement existing dataset and population capability contracts.
-- No future extension may bypass benign-only current thresholds, anchor gate, cohort separation, or safe serialization for current experiments.
+- [ ] Every implemented experiment exists in the source programme.
+- [ ] No extra dataset, method, metric, attack, defense, privacy mechanism, or deployment claim exists.
+- [ ] Descriptive identities are used in code, paths, manifests, reports, and CLI.
+- [ ] Centralized reference remains outside federated threshold dispatch.
+- [ ] The sole confirmatory endpoint remains shared versus local threshold calibration on N-BaIoT natural devices using FedAvg and `CV(FPR)`.
 
-## Prohibited implementation
+## Audit pass 2 — Data and preprocessing reuse
 
-This phase must not add:
+- [ ] Raw data are read-only.
+- [ ] Canonical and processed data reside under `data/`.
+- [ ] Reuse coordinates include every factor that changes rows or transformations.
+- [ ] Model/threshold factors do not duplicate processed data.
+- [ ] Centralized and federated fitted states are independent.
+- [ ] Every reused asset passes manifest, checksum, schema, and reload validation.
 
-- poisoning algorithms;
-- attack objectives;
-- defense estimators;
-- drift detectors;
-- online loops;
-- privacy mechanisms;
-- new datasets;
-- generic plugin discovery;
-- reflection-based registration;
-- external entry points.
+## Audit pass 3 — Causal isolation and leakage
 
-## Test files to implement
+- [ ] One model/checkpoint/score artifact is reused across core threshold methods per seed.
+- [ ] Calibration and evaluation rows are disjoint.
+- [ ] No attack label influences benign calibration or selection.
+- [ ] No test metric selects checkpoint, model parameter, quantile, shrinkage, comparator coefficient, client, or grouping.
+- [ ] Temporal fitting uses no future rows.
+- [ ] Eligible cohorts are identical across compared methods.
 
-- `tests/unit/orchestration/test_extension_hooks.py`
-- `tests/unit/experiments/test_extension_feasibility_boundaries.py`
-- `tests/architecture/test_hooks_are_immutable.py`
-- `tests/architecture/test_no_future_research_implementation.py`
-- `tests/integration/orchestration/test_noop_hooks_preserve_artifacts.py`
-- `tests/scientific/test_extensions_cannot_modify_clean_coordinates.py`
+## Audit pass 4 — Dataset and capability truth
 
-## Required assertions
+- [ ] N-BaIoT physical devices and attack assignment are validated.
+- [ ] CIC clients are described only as file-defined pseudo-clients.
+- [ ] Edge static clients use benign sensor groups and do not receive fabricated attack assignment.
+- [ ] Edge temporal groups have genuine validated chronology.
+- [ ] Unsupported family, grouped, attack-sensitive, or temporal cells are infeasible or unavailable.
 
-- No-op hooks preserve checksums and semantic identities.
-- Hooks cannot mutate frozen contexts.
-- A future-only experiment identity is rejected because it has no current declaration.
-- Hook failure leaves clean artifacts intact and prevents completion.
-- Current experiment outputs are identical with default hooks enabled or absent.
+## Audit pass 5 — Models and checkpoints
 
-## Exit criteria
+- [ ] FedAvg uses the locked core protocol.
+- [ ] FedProx uses only declared positive coefficients and separate artifacts.
+- [ ] Ditto is genuine and preserves persistent personalized states.
+- [ ] Checkpoint selection is non-test and policy-independent.
+- [ ] Centralized models are separately trained and scored.
+- [ ] Model and checkpoint states use SafeTensors and reload exactly.
 
-- Extension boundaries are explicit and typed.
-- Current code contains no future research implementation.
-- No-op hooks introduce no scientific or artifact differences.
-- All Phase 15 tests and audits pass.
+## Audit pass 6 — Thresholds and metrics
+
+- [ ] Threshold calibration is benign-only.
+- [ ] Shared/local/family formulas match the source truth.
+- [ ] Grouped thresholding cannot execute without a scientifically supplied assignment.
+- [ ] Federated benign statistics include full within and between variance.
+- [ ] CV uses `ddof=0`, no epsilon, undefined at zero mean, and warning at the locked near-zero cutoff.
+- [ ] Fallback clients never enter confirmatory CV.
+- [ ] Binary Macro-F1, P10, pooled/mean-client, coverage, and unavailable semantics are exact.
+- [ ] Conformal coverage includes target, achieved, errors, rank effects, and calibration-size behavior.
+
+## Audit pass 7 — Statistics and decisions
+
+- [ ] Ten paired seed contrasts are the confirmatory independent units.
+- [ ] BCa resamples paired contrasts.
+- [ ] Degenerate BCa is not silently replaced.
+- [ ] Wilcoxon and rank-biserial are secondary.
+- [ ] Nested replicates are summarized within seed.
+- [ ] Holm families are predeclared.
+- [ ] Null, opposite, unstable, and infeasible outcomes remain reportable.
+
+## Audit pass 8 — Outputs and campaigns
+
+- [ ] Output paths contain only deterministic scientific coordinates.
+- [ ] No run ID, job ID, timestamp identity, or hidden resume state exists.
+- [ ] Incomplete experiment outputs are deleted before resume.
+- [ ] `COMPLETE` is written last after full reload validation.
+- [ ] Outputs do not duplicate reusable data.
+- [ ] Campaign ordering and dependencies are deterministic.
+
+## Audit pass 9 — Reporting and claims
+
+- [ ] Blocked anchor blocks dependent claims.
+- [ ] Confirmatory wording follows the BCa decision.
+- [ ] External evidence remains external.
+- [ ] Edge attack metrics and CIC device claims cannot render.
+- [ ] One-shot temporal evidence is not called continuous adaptation.
+- [ ] Message sizes are estimates, not deployment evidence.
+- [ ] Alert burden is suppressed without rate evidence.
+- [ ] Full-precision calculations precede presentation rounding.
+
+## Audit pass 10 — Engineering quality
+
+Run in this order:
+
+1. Ruff format check.
+2. Ruff lint.
+3. Pyright strict.
+4. Pylint.
+5. Focused unit and property tests.
+6. Integration tests.
+7. Architecture tests.
+8. Scientific tests.
+9. E2E tests.
+10. Complete suite with pytest-xdist and coverage.
+
+Then inspect duplication, dead code, import cycles, unhandled branches, and source-tree drift. Do not weaken tests or suppress tools merely to obtain green status.
+
+## Final acceptance verdict
+
+Return exactly one:
+
+- `GO_FOR_FULL_EXPERIMENTS`
+- `NO_GO_SCIENTIFIC_BLOCKER`
+- `NO_GO_IMPLEMENTATION_DEFECT`
+- `NO_GO_REPRODUCIBILITY_DEFECT`
+
+`GO_FOR_FULL_EXPERIMENTS` requires every mandatory checklist item, all static tools, all tests, anchor gate, safe reload validation, and source-tree audit to pass.
+
+## Final acceptance checklist
+
+- [ ] Every phase is `COMPLETE`.
+- [ ] No unresolved mandatory scientific value remains.
+- [ ] Full test suite passes repeatedly without order dependence.
+- [ ] Re-running validation and planning creates no repository changes.
+- [ ] Two identical tiny campaign runs resolve identical scientific manifests and outputs.
+- [ ] All audits above pass without waiver.
+- [ ] Final verdict is recorded in `01_PHASE_MASTER_LOG.md`.
 
 ## Mandatory closing audit
 

@@ -1,4 +1,4 @@
-# Phase 05 — Populations, Splits, and Evaluation Cohorts
+# Phase 06 — Anchor Reproduction and Journal Gate
 
 ## Scientific authority and interpretation rules
 
@@ -16,167 +16,105 @@
 
 ## Objective
 
-Construct the five authorized populations, deterministic fractional and chronological splits, integrity manifests, and explicit evaluation cohorts. This phase establishes exactly which clients and rows are valid for each scientific question.
+Reproduce the historical DATP result under its original endpoint semantics, compare reproduced reference values using locked rules, and block downstream journal claims when the anchor is not reproduced.
 
 ## Entry criteria
 
-- Phase 04 is complete.
-- Canonical data and reusable preprocessing coordinate rules exist.
-- All required split values are explicit in the source of truth; unresolved values block the affected population.
+- Phase 05 is complete.
+- Historical protocol values and reference values are present in `/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md` or an explicitly referenced historical record.
+- Exact anchor tolerances are declared. Missing tolerances block the comparison rather than defaulting to arbitrary numeric closeness.
 
 ## Source files permitted to change
 
-- `datp_core/populations/models.py`
-- `datp_core/populations/capabilities.py`
-- `datp_core/populations/nbaiot_natural_devices.py`
-- `datp_core/populations/ciciot_file_clients.py`
-- `datp_core/populations/nbaiot_dirichlet_clients.py`
-- `datp_core/populations/edge_sensor_groups.py`
-- `datp_core/populations/edge_temporal_groups.py`
-- `datp_core/populations/splits.py`
-- `datp_core/populations/integrity.py`
-- `datp_core/populations/catalogue.py`
-- `datp_core/evaluation/cohorts.py`
+- `datp_core/anchor/models.py`
+- `datp_core/anchor/reproduction.py`
+- `datp_core/anchor/comparison.py`
+- `datp_core/anchor/gate.py`
+- `datp_core/orchestration/stages/verify_anchor.py`
+- `datp_core/protocols/anchor.py` only to add source-backed declarations discovered during implementation.
 
-## Required dataclasses
+## Required dataclasses and models
 
-In `populations/models.py`:
+- `AnchorMetricReference`
+- `AnchorObservedMetric`
+- `AnchorMetricComparison`
+- `AnchorSeedSubsetComparison`
+- `AnchorDiscrepancy`
+- `AnchorReproductionResult`
+- `AnchorGateDecision`
 
-- `ClientIdentity`
-- `ClientMembership`
-- `PopulationManifest`
-- `PopulationCapabilities`
-- `PartitionAssignment`
-- `SplitAssignment`
-- `SplitManifest`
-- `DirichletPartitionDiagnostics`
-- `ChronologicalPartitionDiagnostics`
-- `PopulationFeasibility`
+Comparison records include metric identity, population, model, threshold method, seed subset, expected value, observed value, tolerance rule, signed difference, relative difference where defined, and decision.
 
-In `evaluation/cohorts.py` or `evaluation/models.py` as assigned in Phase 10:
+## Historical isolation
 
-- `ClientEligibilityRecord`
-- `EvaluationCohortMembership`
-- `EvaluationCohortManifest`
-- `ClientExclusionReason`
+- Preserve the historical endpoint and checkpoint semantics exactly.
+- Do not retrofit the journal checkpoint protocol to improve reproduction.
+- Reuse canonical and processed data only when their coordinates exactly match the historical protocol.
+- Historical and journal training artifacts remain separate output coordinates.
+- The five-seed historical subset and ten-seed journal extension are distinct evidence objects.
 
-All records are frozen, slotted, and use enum identities.
+## Reproduction workflow
 
-## Population implementations
+1. Resolve the historical protocol from typed declarations.
+2. Validate all mandatory historical values.
+3. Execute or load the exact historical seed subset.
+4. Compute the historical metric set using current metric code only when semantics are identical; otherwise implement the historical semantic explicitly in existing anchor files.
+5. Compare each locked reference value.
+6. Classify each comparison as equivalent, acceptable declared deviation, material discrepancy, or unavailable.
+7. Produce one gate decision.
 
-### `NBAIOT_NATURAL_DEVICES`
+## Gate rules
 
-- Exactly nine audited physical devices.
-- Device identity is stable across seeds and splits.
-- Supports confirmatory FPR evaluation and attack-sensitive metrics when denominators exist.
-- Supports family thresholding only with an audited taxonomy.
-- Every device remains visible in results even if unavailable for a particular metric.
+- `PASS`: every mandatory anchor comparison satisfies its declared equivalence rule.
+- `PASS_WITH_DECLARED_DISCREPANCY`: only when the source truth explicitly permits a non-blocking discrepancy class.
+- `BLOCKED`: any mandatory value materially disagrees, is missing, or cannot be reproduced.
 
-### `CICIOT_FILE_CLIENTS`
+A blocked gate prevents:
 
-- Construct from the exact audited merged-file boundaries.
-- Treat clients as file-defined pseudo-clients only.
-- Preserve file identity and source provenance.
-- Prohibit physical-device, family, and temporal interpretation.
-- Use only as an applicability boundary.
+- the confirmatory journal experiment from being marked valid;
+- claim status from becoming permitted;
+- finalization of dependent campaigns;
+- reporting of extension results as journal evidence.
 
-### `NBAIOT_DIRICHLET_CLIENTS`
+The gate does not erase diagnostic outputs. It records why the programme is blocked.
 
-- Construct exactly twenty synthetic clients.
-- Use the declared concentration conditions and partition seed.
-- Preserve every generated partition; do not regenerate because balance is inconvenient.
-- Emit client size, benign distribution, attack composition when valid, and divergence diagnostics.
-- IID is a separate construction condition, not a concentration value.
-- Do not claim that synthetic clients preserve physical families unless the construction explicitly does so.
+## Comparison implementation
 
-### `EDGE_SENSOR_GROUPS`
-
-- Exactly ten audited benign sensor groups for static external validation.
-- Include Modbus in static benign evaluation when its static rows pass schema validation.
-- Do not assign attack rows to these clients.
-- Mark attack-sensitive metrics unavailable.
-- Omit family thresholding.
-
-### `EDGE_TEMPORAL_GROUPS`
-
-- Exactly the groups with verified genuine chronology; expected count is nine under the source programme, but the implementation validates rather than blindly assumes.
-- Exclude any group whose chronology fails.
-- Use stable ordering for duplicate timestamps.
-- Apply chronological ratios in the declared order: historical training, historical calibration, future recalibration, future evaluation.
-- Build a matched random-fractional static reference over the same included groups.
-
-## Split semantics
-
-`populations/splits.py` must:
-
-- return manifests of source-row identities, never only frames;
-- enforce one assignment per row per split coordinate;
-- be deterministic from declared seed and protocol;
-- separate model-training seeds from partition seeds when the protocol declares them separately;
-- reject a non-temporal split until exact ratios are scientifically declared;
-- never stratify or rebalance unless explicitly required by the source truth;
-- never create pseudo-time.
-
-## Integrity rules
-
-`populations/integrity.py` must verify:
-
-- no row overlap among train/calibration/recalibration/evaluation;
-- client identities and candidate count match population declaration;
-- chronological ordering and partition boundaries;
-- synthetic-client total row conservation;
-- no client silently removed after test inspection;
-- population capability profile agrees with dataset capabilities;
-- evaluation cohorts are identical across compared threshold methods.
-
-## Evaluation cohort rules
-
-- `CONFIRMATORY_ELIGIBLE`: benign calibration count at least 100 and non-empty benign evaluation denominator. Only this cohort enters confirmatory `CV(FPR)`.
-- `ATTACK_EVALUABLE`: valid client-level attack assignment, at least one attack row, and every denominator required by the metric.
-- `UNAVAILABLE`: candidate client for which a method or metric is scientifically unavailable; include a typed reason.
-- `DEPLOYMENT_FALLBACK`: ineligible client receiving an explicitly declared deployment-only threshold. Never include in confirmatory dispersion or silently merge with eligible clients.
-
-Eligibility is decided before evaluating held-out outcomes and reused across all compared threshold methods.
-
-## Catalogue
-
-Use exhaustive `match` on `PopulationId`. Return a typed builder and capability declaration. No registry dictionary.
+- Use typed tolerance strategies: absolute, relative, interval-overlap, exact count, or source-defined rule.
+- Never apply one global floating-point tolerance to all metrics.
+- Relative comparison is undefined when the reference is zero.
+- Confidence-interval comparisons preserve interval semantics rather than comparing only rounded endpoints.
+- Compare full-precision values; round only in reports.
 
 ## Test files to implement
 
-- `tests/unit/populations/test_models.py`
-- `tests/unit/populations/test_capabilities.py`
-- `tests/unit/populations/test_nbaiot_natural_devices.py`
-- `tests/unit/populations/test_ciciot_file_clients.py`
-- `tests/unit/populations/test_nbaiot_dirichlet_clients.py`
-- `tests/unit/populations/test_edge_sensor_groups.py`
-- `tests/unit/populations/test_edge_temporal_groups.py`
-- `tests/unit/populations/test_splits.py`
-- `tests/unit/populations/test_integrity.py`
-- `tests/unit/populations/test_catalogue.py`
-- `tests/unit/evaluation/test_cohorts.py`
-- `tests/property/test_split_disjointness.py`
-- `tests/property/test_dirichlet_row_conservation.py`
-- `tests/integration/populations/test_population_manifests.py`
-- `tests/integration/populations/test_temporal_split_no_future_leakage.py`
+- `tests/unit/anchor/test_models.py`
+- `tests/unit/anchor/test_reproduction.py`
+- `tests/unit/anchor/test_comparison.py`
+- `tests/unit/anchor/test_gate.py`
+- `tests/unit/orchestration/stages/test_verify_anchor.py`
+- `tests/integration/anchor/test_anchor_reproduction_pipeline.py`
+- `tests/scientific/test_anchor_blocks_journal_claims.py`
+- `tests/scientific/test_anchor_preserves_historical_checkpoint_semantics.py`
 
-## Required negative tests
+## Required test scenarios
 
-- Fallback client enters confirmatory cohort.
-- Edge attack metric is requested.
-- CIC physical-device population is requested.
-- Temporal population includes invalid chronology.
-- A row appears in two splits.
-- A synthetic partition drops or duplicates rows.
-- Compared threshold methods receive different eligible clients.
+- Exact reproduction passes.
+- Within declared absolute or relative tolerance passes.
+- Rounded equality with full-precision failure remains a failure.
+- Missing mandatory metric blocks.
+- Wrong seed subset blocks.
+- Journal checkpoint selection cannot alter anchor execution.
+- Blocked anchor propagates to experiment and reporting status.
+- Diagnostic artifacts remain available under a blocked gate.
 
 ## Exit criteria
 
-- Every authorized population has one deterministic builder and capability profile.
-- Split manifests are complete, disjoint, and reusable.
-- Cohorts are explicit and cannot be conflated.
-- Unsupported populations or metrics fail before model training.
-- All Phase 05 tests and audits pass.
+- Historical reproduction is a typed experiment, not an ad hoc script.
+- Every comparison is traceable and full precision.
+- The gate is impossible to bypass through reporting or campaign code.
+- Missing tolerances remain explicit blockers.
+- All Phase 06 tests and audits pass.
 
 ## Mandatory closing audit
 

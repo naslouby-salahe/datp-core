@@ -1,4 +1,4 @@
-# Phase 14 — Reporting, Claims, and Publication Exports
+# Phase 15 — Extension Readiness
 
 ## Scientific authority and interpretation rules
 
@@ -16,138 +16,80 @@
 
 ## Objective
 
-Generate traceable tables, figures, machine-readable exports, warnings, suppression records, and claim-status decisions without overstating evidence or leaking unavailable outcomes.
+Verify that the fixed stage boundaries can later support calibration attacks, defenses, adaptive thresholds, dynamic recalibration, or additional scientifically approved populations without implementing any of those research lines now.
 
 ## Entry criteria
 
-- Phases 10–13 are complete.
-- Scientific decisions and artifact manifests are available.
-- Anchor gate and capability status are explicit.
+- Phases 01–14 are complete.
+- Current DATP-Core behavior is fully tested.
 
 ## Source files permitted to change
 
-- `datp_core/reporting/tables.py`
-- `datp_core/reporting/figures.py`
-- `datp_core/reporting/export.py`
-- `datp_core/reporting/validation.py`
-- `datp_core/orchestration/stages/report.py`
+- `datp_core/domain/contracts.py`
+- `datp_core/orchestration/hooks.py`
+- `datp_core/orchestration/resources.py`
+- `datp_core/experiments/models.py`
+- `datp_core/experiments/feasibility.py`
 
-## Reporting records
+Changes may strengthen boundaries only. They may not add current attack, defense, online, adaptive, or privacy behavior.
 
-Use existing evaluation/analysis models and add report-specific frozen records in these files only when needed:
+## Required extension boundaries
 
-- `TableSpecification`
-- `FigureSpecification`
-- `ReportBundle`
-- `ClaimStatusRecord`
-- `ReportingValidationResult`
+Typed hook points may exist at:
 
-No generic template dictionary.
+- after reusable score generation and before calibration sampling;
+- after calibration sampling and before threshold construction;
+- after threshold construction and before evaluation;
+- after evaluation and before analysis.
 
-## Mandatory tables
+Hooks receive immutable references and return explicit typed results. Default hooks are identity/no-op and cannot mutate artifacts in place.
 
-Implement descriptive table identities for:
+## Future capability principles
 
-- protocol and population summary;
-- anchor reproduction comparison;
-- confirmatory paired seed results;
-- per-client natural-device metrics;
-- shared-construction sensitivity;
-- quantile sensitivity;
-- controlled heterogeneity;
-- calibration-size and shrinkage curves;
-- local conformal coverage;
-- federated benign-statistics diagnostics and payload;
-- Edge benign-equity external validation;
-- CIC file-client boundary;
-- FedProx and Ditto stress tests;
-- temporal recalibration;
-- unavailable outcome summary;
-- optional alert burden only when evidence exists.
+- A future calibration attack must operate only through a declared hook and must produce a new experiment/model coordinate, never alter clean artifacts.
+- A future defense must be a new threshold method or hook implementation with an explicit scientific contract.
+- Dynamic recalibration must add temporal states and protocol declarations, not conditional logic hidden in current stages.
+- Additional datasets must implement existing dataset and population capability contracts.
+- No future extension may bypass benign-only current thresholds, anchor gate, cohort separation, or safe serialization for current experiments.
 
-Every table states population counts and metric availability.
+## Prohibited implementation
 
-## Mandatory figures
+This phase must not add:
 
-Implement only source-authorized figures:
-
-- cross-client FPR distributions and paired contrasts;
-- quantile-policy surfaces;
-- heterogeneity versus threshold-scope benefit;
-- calibration-size stability curves;
-- shrinkage curves;
-- conformal target versus achieved coverage;
-- per-client benign/attack score geometry where attack assignment is valid;
-- threshold movement versus FPR/TPR change;
-- external benign-equity comparison;
-- stress-test absorption comparison;
-- temporal static/frozen/recalibrated trajectories.
-
-Grouped-threshold figures remain unavailable until group assignments are scientifically resolved.
-
-## Claim validation
-
-`reporting/validation.py` must block:
-
-- journal claims when anchor gate is blocked;
-- confirmatory language when the BCa rule is not supported;
-- external evidence presented as confirmatory;
-- attack-sensitive Edge results;
-- device-aware CIC language;
-- one-shot recalibration described as continuous adaptation or concept-drift solution;
-- data locality described as formal privacy;
-- payload estimates described as deployment measurements;
-- unavailable or undefined metrics rendered as zero;
-- alert burden without valid rate evidence;
-- alternative quantile, shrinkage value, or stress test promoted to rescue a failed confirmatory result.
-
-## Precision
-
-- Calculate and store full precision.
-- Presentation defaults follow the source truth: rates/aggregates, intervals, and effect sizes to three decimals; p-values to three significant digits with `< 0.001` as applicable; counts as integers; thresholds with sufficient reproducibility precision.
-- Never round before comparison or inference.
-
-## Export formats
-
-- Tables: CSV and Parquet.
-- Figures: PDF plus a vector-friendly source format only if already supported by the selected plotting library; do not add a new source file.
-- Consolidated results: Parquet.
-- Claim status, warnings, and validation: Pydantic JSON.
+- poisoning algorithms;
+- attack objectives;
+- defense estimators;
+- drift detectors;
+- online loops;
+- privacy mechanisms;
+- new datasets;
+- generic plugin discovery;
+- reflection-based registration;
+- external entry points.
 
 ## Test files to implement
 
-- `tests/unit/reporting/test_tables.py`
-- `tests/unit/reporting/test_figures.py`
-- `tests/unit/reporting/test_export.py`
-- `tests/unit/reporting/test_validation.py`
-- `tests/unit/orchestration/stages/test_report.py`
-- `tests/integration/reporting/test_report_bundle.py`
-- `tests/integration/reporting/test_machine_readable_exports.py`
-- `tests/scientific/test_blocked_claims_do_not_render.py`
-- `tests/scientific/test_unavailable_metrics_do_not_render_as_zero.py`
-- `tests/scientific/test_alert_burden_suppression.py`
-- `tests/scientific/test_negative_results_remain_reportable.py`
+- `tests/unit/orchestration/test_extension_hooks.py`
+- `tests/unit/experiments/test_extension_feasibility_boundaries.py`
+- `tests/architecture/test_hooks_are_immutable.py`
+- `tests/architecture/test_no_future_research_implementation.py`
+- `tests/integration/orchestration/test_noop_hooks_preserve_artifacts.py`
+- `tests/scientific/test_extensions_cannot_modify_clean_coordinates.py`
 
-## Required report validation scenarios
+## Required assertions
 
-- Confirmatory support.
-- Directional but inconclusive result.
-- Opposite result.
-- Blocked anchor.
-- External null or opposite boundary.
-- Infeasible grouped threshold.
-- Undefined CV from zero mean FPR.
-- No traffic-rate evidence.
-- Ditto full absorption.
-- Temporal no-drift condition with undefined recovery ratio.
+- No-op hooks preserve checksums and semantic identities.
+- Hooks cannot mutate frozen contexts.
+- A future-only experiment identity is rejected because it has no current declaration.
+- Hook failure leaves clean artifacts intact and prevents completion.
+- Current experiment outputs are identical with default hooks enabled or absent.
 
 ## Exit criteria
 
-- Every displayed result is traceable to a typed artifact and coordinate.
-- Claim status is machine-enforced.
-- Unavailable, undefined, suppressed, and infeasible outcomes are explicit.
-- Publication exports do not alter scientific meaning.
-- All Phase 14 tests and audits pass.
+- Extension boundaries are explicit and typed.
+- Current code contains no future research implementation.
+- No-op hooks introduce no scientific or artifact differences.
+- All Phase 15 tests and audits pass.
 
 ## Mandatory closing audit
 

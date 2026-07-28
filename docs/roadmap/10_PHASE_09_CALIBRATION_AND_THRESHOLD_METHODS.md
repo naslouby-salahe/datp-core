@@ -1,4 +1,4 @@
-# Phase 08 — Federated Training, Checkpointing, and Scoring
+# Phase 09 — Calibration and Threshold Methods
 
 ## Scientific authority and interpretation rules
 
@@ -16,166 +16,211 @@
 
 ## Objective
 
-Implement the FedAvg core detector, FedProx training stress test, genuine Ditto model-personalization stress test, common autoencoder architecture, model-specific checkpoint selection, and reusable immutable score artifacts.
+Implement benign-only eligibility, deterministic calibration subsampling, shared/local/family/grouped thresholds, quantile controls, fixed and size-aware shrinkage, finite-sample local conformal calibration, and the benign federated summary-statistics comparator.
 
 ## Entry criteria
 
-- Phases 05 and 06 are complete.
-- Required training values are resolved.
-- Reusable federated preprocessed data exist.
-- Anchor gate behavior is available even when currently blocked.
+- Phase 08 is complete.
+- Reusable score artifacts exist.
+- Calibration values are resolved.
+- Grouped thresholding remains infeasible until an approved grouping assignment source is present.
 
 ## Source files permitted to change
 
-- `datp_core/learning/autoencoder.py`
-- `datp_core/learning/federated/models.py`
-- `datp_core/learning/federated/training.py`
-- `datp_core/learning/federated/fedavg.py`
-- `datp_core/learning/federated/fedprox.py`
-- `datp_core/learning/federated/ditto.py`
-- `datp_core/learning/federated/checkpointing.py`
-- `datp_core/scoring/models.py`
-- `datp_core/scoring/reconstruction.py`
-- `datp_core/scoring/generation.py`
-- `datp_core/runtime/compute.py`
-- `datp_core/runtime/determinism.py`
-- `datp_core/orchestration/stages/train_federated.py`
-- `datp_core/orchestration/stages/select_federated_checkpoint.py`
-- `datp_core/orchestration/stages/score_federated.py`
-
-## Libraries
-
-- PyTorch for model/training.
-- Flower for federated coordination and tested strategy abstractions.
-- SafeTensors for model states.
-- Polars/PyArrow for histories, communication records, and scores.
-- NumPy only at clear library boundaries.
+- `datp_core/calibration/models.py`
+- `datp_core/calibration/eligibility.py`
+- `datp_core/calibration/sampling.py`
+- `datp_core/thresholding/models.py`
+- `datp_core/thresholding/quantiles.py`
+- `datp_core/thresholding/shared.py`
+- `datp_core/thresholding/local.py`
+- `datp_core/thresholding/family.py`
+- `datp_core/thresholding/grouped.py`
+- `datp_core/thresholding/shrinkage.py`
+- `datp_core/thresholding/conformal.py`
+- `datp_core/thresholding/federated_benign_statistics.py`
+- `datp_core/thresholding/dispatch.py`
+- `datp_core/orchestration/stages/calibrate.py`
+- `datp_core/orchestration/stages/construct_federated_thresholds.py`
 
 ## Required dataclasses
 
-In `learning/federated/models.py`:
+In `calibration/models.py`:
 
-- `ClientTrainingInput`
-- `ClientTrainingResult`
-- `ClientUpdate`
-- `FederatedRoundResult`
-- `FederatedTrainingHistory`
-- `GlobalModelStateReference`
-- `PersonalizedModelStateReference`
-- `FederatedTrainingResult`
-- `CheckpointCandidate`
-- `CheckpointDecision`
-- `CommunicationRecord`
+- `CalibrationSupport`
+- `EligibilityDecision`
+- `CalibrationSampleReference`
+- `CalibrationSubsample`
+- `CalibrationReplicateManifest`
+- `CalibrationUnavailableReason`
 
-In `scoring/models.py`:
+In `thresholding/models.py`:
 
-- `ScoreRecord`
-- `ScoreArtifactManifest`
-- `FixedScoreInvariant`
-- `ScoreGenerationResult`
+- `LocalQuantile`
+- `ThresholdAssignment`
+- `SharedThresholdResult`
+- `LocalThresholdResult`
+- `FamilyThresholdResult`
+- `GroupedThresholdResult`
+- `ShrinkageThresholdResult`
+- `ConformalThresholdResult`
+- `ClientBenignSummary`
+- `PooledVarianceDecomposition`
+- `FederatedStatisticsThresholdResult`
+- `ThresholdDiagnostic`
+- `CommunicationPayload`
+- `ThresholdUnavailableResult`
 
-## Autoencoder requirements
+Use discriminated result types rather than one record with many optional fields.
 
-- Architecture is protocol-driven and dataset input dimension is explicit.
-- No BatchNorm is introduced.
-- Forward output shape equals input shape.
-- Reconstruction error semantics are centralized in scoring, not embedded differently per trainer.
-- Initialization is deterministic from the declared seed.
-- No model-specific threshold code exists in the model class.
+## Eligibility
 
-## FedAvg core
+- Use benign calibration count only.
+- Canonical support is at least 100.
+- Decide eligibility before held-out evaluation.
+- Preserve the same eligible cohort across compared threshold methods.
+- Never assign fallback implicitly.
+- Record unavailable calibration sizes per client.
 
-- One local epoch per round.
-- Full participation.
-- Aggregation weighting and optimizer values come only from source-backed protocols.
-- One global model state per seed/population.
-- Record round-level client participation, local sample counts, losses, communication bytes, and global state reference.
-- Never retrain per threshold method.
+## Calibration sampling
 
-## FedProx stress test
+- Sizes: 50, 100, 250, 500, 1000, 5000 when supported.
+- Sample without replacement.
+- Use deterministic nested sampling: a smaller size is a prefix/subset of the same replicate ordering where the protocol requires nested curves.
+- Multiple replicates are nested within training seed and never treated as independent seeds.
+- Never use test outcomes to choose a replicate.
 
-- Implement the proximal term relative to the current global parameters.
-- Execute only declared positive coefficients.
-- Coefficient selection follows a predeclared non-test rule.
-- Produce separate models, histories, checkpoints, and scores.
-- Never merge FedProx results into the FedAvg confirmatory ladder.
+## Quantile semantics
 
-## Genuine Ditto
+`quantiles.py` owns every quantile computation:
 
-- Maintain one global federated state and persistent personalized state per client.
-- Personalized states persist across rounds.
-- Apply the correct personalized proximal objective toward the global state.
-- Never aggregate personalized states as global updates.
-- Generate global-model and personalized-model scores as distinct model coordinates.
-- If genuine semantics cannot be implemented from the locked model contract, mark the experiment infeasible. Do not implement a differently named algorithm under `DITTO`.
+- exact empirical local quantile;
+- pooled quantile;
+- weighted shared construction;
+- finite-sample conformal rank;
+- achieved exceedance calculation.
 
-## Checkpoint protocol
+One declared interpolation/rank method is used consistently. Record it in threshold results.
 
-- Train to the declared maximum round and evaluate only declared candidates.
-- Select one primary round number from the N-BaIoT natural-device FedAvg training using a predeclared non-test rule.
-- Apply the selected round number consistently where the checkpoint exists; model tensors remain seed/population/model specific.
-- Prohibit test AUROC, test FPR, cross-client dispersion, attack labels, threshold effects, external results, or policy-specific outcomes as selectors.
-- Preserve all candidate trajectories as stability evidence.
+## Threshold methods
 
-## Scoring and reuse
+### `SHARED_THRESHOLD`
 
-Score path coordinates include population, seed, model, model coefficient when applicable, and selected checkpoint. They do not include threshold method, quantile, calibration size, or analysis method.
+Arithmetic mean of eligible local benign quantiles. Every eligible client receives the same value. It is not the exact pooled quantile.
 
-A score artifact is reusable across all threshold methods when:
+### `LOCAL_THRESHOLD`
 
-- selected model checksum matches;
-- preprocessing manifest matches;
-- split manifest matches;
-- scoring protocol matches;
-- source row identities match.
+Each eligible client receives its own benign quantile.
 
-Generate calibration and evaluation scores once per model coordinate. Preserve labels but prevent calibration code from seeing attack-labelled calibration rows.
+### `FAMILY_THRESHOLD`
 
-## Runtime requirements
+Mean of eligible local thresholds within the audited physical-device family. Reject populations without taxonomy. Record family membership and unavailable families.
 
-- Fail when mandatory CUDA is unavailable.
-- Never reduce batch size silently.
-- Deterministic algorithms, seeds, worker seeding, and device settings are explicit.
-- Any unavoidable nondeterministic operation fails preflight or is recorded as a blocked scientific dependency.
+### `CLUSTER_THRESHOLD`
+
+`grouped.py` accepts a typed, prevalidated client-to-group assignment and computes one group-level threshold from member local thresholds. It must not derive groups, select group count, inspect held-out outcomes, or invent an assignment. Until the scientific source supplies a valid assignment-construction rule, feasibility validation blocks this method.
+
+### Shared construction controls
+
+- Exact pooled benign quantile.
+- Sample-weighted shared threshold using declared weighting semantics.
+
+They remain supportive controls and cannot redefine the confirmatory shared threshold.
+
+## Shrinkage
+
+Fixed curve:
+
+`tau_client = lambda * local + (1 - lambda) * shared`
+
+- Evaluate the complete declared curve.
+- Zero and one reproduce shared and local endpoints exactly.
+- No test-selected preferred value.
+
+Size-aware shrinkage:
+
+- Use one predeclared function of benign calibration count.
+- Bound output in `[0, 1]`.
+- Apply identical function to all clients.
+- Reject execution until the exact function is source-backed.
+
+## Local conformal threshold
+
+- Treat benign reconstruction errors as nonconformity scores.
+- Use target coverage 0.95/significance 0.05.
+- Apply the exact finite-sample rank rule.
+- Record rank index, effective quantile, calibration count, ties, and unavailable conditions.
+- Make no universal conditional-coverage claim.
+
+## `FEDERATED_BENIGN_STATISTICS`
+
+Each eligible client may communicate only the predeclared benign summaries:
+
+- count;
+- mean;
+- variance under explicitly declared denominator semantics;
+- permitted benign exceedance counts when required for matched attainment.
+
+Compute:
+
+- sample-count-weighted global mean;
+- pooled within-client variance;
+- between-client mean-shift term;
+- full pooled variance as within plus between;
+- between ratio when denominator is positive;
+- matched-exceedance coefficient/threshold using only benign information;
+- achieved exceedance;
+- signed and absolute attainment error;
+- absolute and relative threshold error versus the exact pooled benign quantile;
+- exact communicated fields and serialized byte counts;
+- supplementary fixed-coefficient curve for 2.0, 2.5, 3.0.
+
+The between-client term is mandatory. The comparator remains a shared threshold. It must not claim faithful reproduction of an anomaly-informed method.
+
+## Dispatch
+
+Use exhaustive pattern matching over `FederatedThresholdMethod`. Reject `CentralizedThresholdMethod` by type and runtime guard. No registry dictionary, fallback estimator, or plugin discovery.
 
 ## Test files to implement
 
-- `tests/unit/learning/test_autoencoder.py`
-- `tests/unit/learning/federated/test_models.py`
-- `tests/unit/learning/federated/test_training.py`
-- `tests/unit/learning/federated/test_fedavg.py`
-- `tests/unit/learning/federated/test_fedprox.py`
-- `tests/unit/learning/federated/test_ditto.py`
-- `tests/unit/learning/federated/test_checkpointing.py`
-- `tests/unit/scoring/test_models.py`
-- `tests/unit/scoring/test_reconstruction.py`
-- `tests/unit/scoring/test_generation.py`
-- `tests/unit/runtime/test_compute.py`
-- `tests/unit/runtime/test_determinism.py`
-- `tests/unit/orchestration/stages/test_federated_training_stages.py`
-- `tests/integration/learning/test_fedavg_training.py`
-- `tests/integration/learning/test_fedprox_training.py`
-- `tests/integration/learning/test_ditto_training.py`
-- `tests/integration/scoring/test_score_reuse_across_thresholds.py`
-- `tests/scientific/test_fixed_detector_contract.py`
-- `tests/scientific/test_checkpoint_selection_has_no_test_leakage.py`
+- `tests/unit/calibration/test_models.py`
+- `tests/unit/calibration/test_eligibility.py`
+- `tests/unit/calibration/test_sampling.py`
+- `tests/unit/thresholding/test_models.py`
+- `tests/unit/thresholding/test_quantiles.py`
+- `tests/unit/thresholding/test_shared.py`
+- `tests/unit/thresholding/test_local.py`
+- `tests/unit/thresholding/test_family.py`
+- `tests/unit/thresholding/test_grouped.py`
+- `tests/unit/thresholding/test_shrinkage.py`
+- `tests/unit/thresholding/test_conformal.py`
+- `tests/unit/thresholding/test_federated_benign_statistics.py`
+- `tests/unit/thresholding/test_dispatch.py`
+- `tests/unit/orchestration/stages/test_calibration_and_threshold_stages.py`
+- `tests/property/test_quantile_monotonicity.py`
+- `tests/property/test_shrinkage_endpoints.py`
+- `tests/property/test_pooled_variance_decomposition.py`
+- `tests/integration/thresholding/test_threshold_methods_reuse_scores.py`
+- `tests/scientific/test_benign_only_threshold_construction.py`
 
-## Required scientific tests
+## Required negative tests
 
-- All threshold methods for one FedAvg cell reference the same model and score checksums.
-- Policy-specific retraining is impossible through planner types.
-- AUROC over the same score artifact is invariant across threshold methods.
-- Ditto personalized states differ by client and persist across rounds.
-- FedProx zero is not exposed as a stress-test condition.
-- Batch size is never silently altered.
+- Attack-labelled calibration record.
+- Different eligible populations across methods.
+- Family threshold without taxonomy.
+- Grouped threshold without supplied assignment.
+- Size-aware shrinkage without locked function.
+- Comparator omitting between-client variance.
+- Fixed coefficient promoted to primary matched comparator.
+- Centralized method passed to federated dispatcher.
 
 ## Exit criteria
 
-- FedAvg, FedProx, and genuine Ditto produce independent safe model artifacts.
-- Checkpoint selection is non-test and model-specific.
-- Scores are immutable and reusable across threshold methods.
-- Fixed-detector invariants are machine-verifiable.
-- All Phase 08 tests and audits pass.
+- All feasible threshold methods are deterministic, benign-only, and typed.
+- Full comparator diagnostics and payload accounting exist.
+- Unresolved grouped or size-aware methods fail as infeasible, not through placeholders.
+- Scores are reused rather than regenerated.
+- All Phase 09 tests and audits pass.
 
 ## Mandatory closing audit
 

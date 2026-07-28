@@ -1,4 +1,4 @@
-# Phase 11 — External Validation and Temporal Recalibration
+# Phase 12 — Experiment Planning and Campaign Execution
 
 ## Scientific authority and interpretation rules
 
@@ -16,124 +16,184 @@
 
 ## Objective
 
-Implement capability-limited external benign-equity validation on Edge-IIoTset, the CICIoT2023 file-client applicability boundary, and one-shot threshold recalibration on verified Edge chronology without expanding into continuous adaptation.
+Resolve immutable experiment declarations into exact feasible scientific plans, build the Dagster stage graph, execute single experiments and ordered campaigns deterministically, and recover from interruption without run IDs or hidden state.
 
 ## Entry criteria
 
-- Phases 08–10 are complete.
-- Edge static and temporal capabilities are verified.
-- CIC file-client population is verified.
-- External and temporal experiment declarations are resolved.
+- Phases 01–11 are complete for every experiment being planned.
+- Protocol graph validation is operational.
+- Capability and anchor gates are available.
 
 ## Source files permitted to change
 
-- `datp_core/analysis/temporal.py`
-- `datp_core/populations/edge_sensor_groups.py`
-- `datp_core/populations/edge_temporal_groups.py`
-- `datp_core/populations/ciciot_file_clients.py`
-- `datp_core/datasets/edge_iiotset/chronology.py`
+- `datp_core/experiments/models.py`
 - `datp_core/experiments/feasibility.py`
-- `datp_core/orchestration/stages/construct_population.py`
-- `datp_core/orchestration/stages/split.py`
-- `datp_core/orchestration/stages/evaluate_federated.py`
-- `datp_core/orchestration/stages/analyze.py`
+- `datp_core/experiments/planner.py`
+- `datp_core/orchestration/definitions.py`
+- `datp_core/orchestration/resources.py`
+- `datp_core/orchestration/hooks.py`
+- `datp_core/orchestration/campaign.py`
+- all existing files under `datp_core/orchestration/stages/`
+- `datp_core/cli.py`
+- `datp_core/runtime/logging.py`
 
-Changes are limited to external/temporal semantics; do not duplicate core metric or threshold implementations.
+Stage files may call domain services but must not duplicate scientific calculations.
 
-## Edge static external validation
+## Required dataclasses and models
 
-- Population: `EDGE_SENSOR_GROUPS`.
-- Use ten benign sensor groups when validation confirms them.
-- FedAvg training and supported stress tests use benign training data.
-- Supported threshold methods: shared, local, grouped only if a valid assignment source is later approved, federated benign statistics, quantile sensitivity, calibration-size and shrinkage where feasible.
-- Family threshold unavailable.
-- Per-client FPR and cross-client benign equity metrics available.
-- Per-client TPR, binary Macro-F1, balanced accuracy, AUROC, and attack-sensitive trade-offs unavailable.
-- External seed-level paired contrast and BCa are external evidence only, never a second confirmatory endpoint.
+In `experiments/models.py`:
 
-Every output must include typed availability records for attack-sensitive metrics rather than empty columns or NaN.
+- `ScientificCoordinateSet`
+- `ExperimentDependency`
+- `ExpectedArtifact`
+- `StagePlan`
+- `ExperimentPlan`
+- `FeasibilityDecision`
+- `CampaignPlan`
+- `CampaignProgress`
 
-## CIC file-client boundary
+In orchestration files:
 
-- Population: `CICIOT_FILE_CLIENTS`.
-- Quantify benign distribution divergence and shared/local threshold effects over the audited pseudo-clients.
-- Keep all wording specific to file-defined clients.
-- Do not reconstruct physical clients, infer device topology, or create chronology.
-- A null effect is a valid boundary result and cannot be generalized to the original device topology.
+- `StageExecutionContext`
+- `StageResult`
+- `HookContext`
 
-## Temporal population
+## Experiment planning
 
-- Population: `EDGE_TEMPORAL_GROUPS`.
-- Include only groups with validated genuine chronology.
-- Preserve stable row order for equal timestamps.
-- Split exactly into 55% historical training, 15% historical calibration, 10% future recalibration, 20% future evaluation.
-- Build a matched random-fractional static reference over the same included groups and rows.
-- Fit preprocessing and model without future leakage.
+For each `ExperimentDeclaration`, expand only active coordinates:
 
-## Temporal deployment states
+- experiment;
+- population;
+- partition/model/analysis seed as declared;
+- model and model coefficient;
+- checkpoint round;
+- threshold method;
+- quantile;
+- coverage target;
+- calibration size;
+- shrinkage weight;
+- summary coefficient;
+- group assignment/count only when approved;
+- calibration replicate;
+- temporal state;
+- Dirichlet condition.
 
-- `STATIC_REFERENCE`: matched random-fractional evaluation.
-- `FROZEN_FUTURE`: historical threshold applied unchanged to future evaluation.
-- `RECALIBRATED_FUTURE`: threshold recomputed once from future benign recalibration and applied to the same future evaluation.
+Do not materialize irrelevant coordinates. The plan contains typed coordinate values, not a dict.
 
-Supported thresholds are source-authorized and capability-feasible. There is no streaming, periodic, triggered, or online behavior.
+## Feasibility
 
-## Temporal quantities
+`experiments/feasibility.py` validates:
 
-Per seed and threshold method:
+- dataset and population capabilities;
+- resolved scientific values;
+- anchor gate requirements;
+- model/method compatibility;
+- metric availability;
+- temporal support;
+- family/group assignment requirements;
+- traffic-rate evidence;
+- dependencies and reusable data availability.
 
-- static reference CV;
-- frozen-future CV;
-- recalibrated-future CV;
-- drift excess = frozen future minus static reference;
-- recovered amount = frozen future minus recalibrated future;
-- recovery ratio only when drift excess exceeds the predeclared positive-materiality cutoff.
+Return a typed infeasibility decision. Do not create output directories for infeasible cells.
 
-Undefined recovery ratio is a typed outcome, not zero.
+## Stage graph
 
-## Feasibility rules
+The existing stage files define the only stage graph:
 
-Reject before execution:
+1. preflight;
+2. materialize canonical data;
+3. construct population;
+4. split;
+5. federated or centralized preprocessing;
+6. federated or centralized training;
+7. checkpoint selection;
+8. scoring;
+9. calibration;
+10. federated or centralized threshold construction;
+11. federated or centralized evaluation;
+12. anchor verification where applicable;
+13. analysis;
+14. reporting;
+15. finalization.
 
-- Edge attack-sensitive metric request;
-- family threshold on Edge or CIC;
-- CIC temporal experiment;
-- temporal execution with invalid chronology;
-- grouped threshold without supplied assignments;
-- temporal recovery ratio without materiality protocol;
-- external claim promoted to confirmatory.
+Dagster definitions express dependencies and reusable assets. Stage modules remain thin orchestration adapters.
+
+## Reuse behavior
+
+- Canonical and processed data are resolved from `data/` coordinates.
+- Model/checkpoint/score artifacts may be reused inside a campaign only when complete manifests and scientific coordinates match.
+- Threshold and downstream artifacts are experiment-specific.
+- A complete experiment is skipped unless explicit overwrite is requested.
+- Overwrite deletes the entire experiment output coordinate before execution.
+
+## Campaign recovery
+
+- The deterministic experiment output directory is the authority.
+- On interruption, find the first incomplete experiment in declared campaign order.
+- Delete that incomplete experiment’s output directory safely.
+- Resume from that experiment using the same command.
+- Never invent a resume ID, run ID, or job ID.
+- Completed earlier experiments remain untouched after manifest validation.
+
+## Hooks
+
+`orchestration/hooks.py` exposes typed no-op stage-boundary hooks for future research. Current hooks may observe typed contexts but cannot change data, scores, thresholds, or results. Phase 15 audits extension readiness.
+
+## CLI
+
+Provide Typer commands:
+
+- `validate-protocols`
+- `inspect-experiment`
+- `inspect-population`
+- `run-experiment`
+- `run-campaign`
+- `status`
+- `clean-experiment`
+- `verify-artifacts`
+
+Commands select declared enum identities. They do not accept arbitrary scientific overrides.
+
+## Structured logging
+
+Log experiment, population, seed, model, threshold, stage, client, and coordinate context through structlog. Do not log raw records, secrets, or huge data structures.
 
 ## Test files to implement
 
-- `tests/unit/experiments/test_external_feasibility.py`
-- `tests/unit/experiments/test_temporal_feasibility.py`
-- `tests/unit/analysis/test_edge_temporal_quantities.py`
-- `tests/integration/external/test_edge_benign_equity_validation.py`
-- `tests/integration/external/test_ciciot_file_client_boundary.py`
-- `tests/integration/temporal/test_edge_one_shot_recalibration.py`
-- `tests/integration/temporal/test_matched_static_reference.py`
-- `tests/scientific/test_external_evidence_is_not_confirmatory.py`
-- `tests/scientific/test_temporal_pipeline_has_no_future_leakage.py`
-- `tests/scientific/test_temporal_claim_scope.py`
+- `tests/unit/experiments/test_models.py`
+- `tests/unit/experiments/test_feasibility.py`
+- `tests/unit/experiments/test_planner.py`
+- `tests/unit/orchestration/test_definitions.py`
+- `tests/unit/orchestration/test_resources.py`
+- `tests/unit/orchestration/test_hooks.py`
+- `tests/unit/orchestration/test_campaign.py`
+- `tests/unit/orchestration/test_stages.py`
+- `tests/unit/test_cli.py`
+- `tests/unit/runtime/test_logging.py`
+- `tests/integration/orchestration/test_single_experiment_execution.py`
+- `tests/integration/orchestration/test_campaign_execution.py`
+- `tests/integration/orchestration/test_campaign_interruption_recovery.py`
+- `tests/integration/orchestration/test_reusable_data_resolution.py`
+- `tests/scientific/test_infeasible_cells_do_not_execute.py`
+- `tests/scientific/test_scientific_overrides_are_rejected.py`
 
-## Required outcomes
+## Required negative tests
 
-- Included/excluded client records.
-- Eligibility coverage.
-- Per-client benign counts and FPR.
-- Cross-client absolute and relative dispersion.
-- Typed attack-metric unavailability.
-- Chronology validation.
-- Static/frozen/recalibrated trajectories.
-- Honest null, opposite, or infeasible decisions.
+- Arbitrary quantile or seed from CLI.
+- Infeasible experiment creates output.
+- Incomplete experiment is resumed in place instead of deleted.
+- Completed experiment is rerun without overwrite.
+- Reused artifact has mismatched manifest.
+- Hook mutates stage input or result.
+- Threshold comparison trains multiple models.
 
 ## Exit criteria
 
-- Edge external evidence is limited to supported benign operating-point outcomes.
-- CIC results remain an artifact-specific boundary.
-- Temporal analysis is one-shot, chronological, and leak-free.
-- No unsupported metric or claim is computed.
-- All Phase 11 tests and audits pass.
+- Every declared experiment expands deterministically or returns typed infeasibility.
+- Campaign execution and recovery require no hidden identifiers.
+- Reusable data are resolved rather than regenerated.
+- Stage graph has no scientific calculations duplicated in orchestration.
+- All Phase 12 tests and audits pass.
 
 ## Mandatory closing audit
 

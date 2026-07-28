@@ -1,4 +1,4 @@
-# Phase 09 — Calibration and Threshold Methods
+# Phase 10 — Evaluation Metrics and Statistical Inference
 
 ## Scientific authority and interpretation rules
 
@@ -16,211 +16,265 @@
 
 ## Objective
 
-Implement benign-only eligibility, deterministic calibration subsampling, shared/local/family/grouped thresholds, quantile controls, fixed and size-aware shrinkage, finite-sample local conformal calibration, and the benign federated summary-statistics comparator.
+Implement exact confusion semantics, client and population metrics, conformal coverage, threshold-estimation diagnostics, communication and operational metrics, descriptive analysis, paired inference, mechanism analysis, temporal quantities, and scientific decision rules.
 
 ## Entry criteria
 
-- Phase 08 is complete.
-- Reusable score artifacts exist.
-- Calibration values are resolved.
-- Grouped thresholding remains infeasible until an approved grouping assignment source is present.
+- Phase 09 is complete.
+- Metric and statistical protocols are resolved.
+- Near-zero mean-FPR warning cutoff and temporal positive-materiality cutoff are explicitly declared; otherwise affected analyses remain blocked.
 
 ## Source files permitted to change
 
-- `datp_core/calibration/models.py`
-- `datp_core/calibration/eligibility.py`
-- `datp_core/calibration/sampling.py`
-- `datp_core/thresholding/models.py`
-- `datp_core/thresholding/quantiles.py`
-- `datp_core/thresholding/shared.py`
-- `datp_core/thresholding/local.py`
-- `datp_core/thresholding/family.py`
-- `datp_core/thresholding/grouped.py`
-- `datp_core/thresholding/shrinkage.py`
-- `datp_core/thresholding/conformal.py`
-- `datp_core/thresholding/federated_benign_statistics.py`
-- `datp_core/thresholding/dispatch.py`
-- `datp_core/orchestration/stages/calibrate.py`
-- `datp_core/orchestration/stages/construct_federated_thresholds.py`
+- `datp_core/evaluation/models.py`
+- `datp_core/evaluation/confusion.py`
+- `datp_core/evaluation/metric_semantics.py`
+- `datp_core/evaluation/client_metrics.py`
+- `datp_core/evaluation/population_metrics.py`
+- `datp_core/evaluation/conformal_coverage.py`
+- `datp_core/evaluation/threshold_estimation.py`
+- `datp_core/evaluation/communication.py`
+- `datp_core/evaluation/traffic_rates.py`
+- `datp_core/evaluation/operational.py`
+- `datp_core/evaluation/controls.py`
+- `datp_core/analysis/descriptive.py`
+- `datp_core/analysis/inference.py`
+- `datp_core/analysis/divergence.py`
+- `datp_core/analysis/mechanisms.py`
+- `datp_core/analysis/temporal.py`
+- `datp_core/analysis/decision_rules.py`
+- `datp_core/orchestration/stages/evaluate_federated.py`
+- `datp_core/orchestration/stages/analyze.py`
+
+## Libraries
+
+- NumPy for numerical arrays.
+- SciPy for BCa bootstrap primitives, Wilcoxon, rank statistics, and distribution functions.
+- statsmodels for multiplicity correction and regression diagnostics.
+- Pingouin only where it directly supplies a verified paired effect size or statistical table without duplicating custom calculations.
+- Polars for typed result tables.
 
 ## Required dataclasses
 
-In `calibration/models.py`:
+In `evaluation/models.py`:
 
-- `CalibrationSupport`
-- `EligibilityDecision`
-- `CalibrationSampleReference`
-- `CalibrationSubsample`
-- `CalibrationReplicateManifest`
-- `CalibrationUnavailableReason`
+- `ConfusionCounts`
+- `ClientMetricResult`
+- `PopulationMetricResult`
+- `MetricAvailability`
+- `MetricWarning`
+- `CoverageResult`
+- `ThresholdEstimationResult`
+- `CommunicationResult`
+- `AlertBurdenResult`
+- `UnavailableOutcome`
 
-In `thresholding/models.py`:
+Analysis result records may reside in their existing analysis files:
 
-- `LocalQuantile`
-- `ThresholdAssignment`
-- `SharedThresholdResult`
-- `LocalThresholdResult`
-- `FamilyThresholdResult`
-- `GroupedThresholdResult`
-- `ShrinkageThresholdResult`
-- `ConformalThresholdResult`
-- `ClientBenignSummary`
-- `PooledVarianceDecomposition`
-- `FederatedStatisticsThresholdResult`
-- `ThresholdDiagnostic`
-- `CommunicationPayload`
-- `ThresholdUnavailableResult`
+- `PairedContrast`
+- `BootstrapInterval`
+- `WilcoxonResult`
+- `RankBiserialResult`
+- `MultiplicityResult`
+- `AssociationResult`
+- `MechanismResult`
+- `TemporalRecoveryResult`
+- `ScientificDecisionResult`
 
-Use discriminated result types rather than one record with many optional fields.
+## Prediction semantics
 
-## Eligibility
+Attack prediction occurs only when reconstruction error is strictly greater than threshold. The comparison operator is global and immutable.
 
-- Use benign calibration count only.
-- Canonical support is at least 100.
-- Decide eligibility before held-out evaluation.
-- Preserve the same eligible cohort across compared threshold methods.
-- Never assign fallback implicitly.
-- Record unavailable calibration sizes per client.
+## Client metrics
 
-## Calibration sampling
+Implement exact denominator checks:
 
-- Sizes: 50, 100, 250, 500, 1000, 5000 when supported.
-- Sample without replacement.
-- Use deterministic nested sampling: a smaller size is a prefix/subset of the same replicate ordering where the protocol requires nested curves.
-- Multiple replicates are nested within training seed and never treated as independent seeds.
-- Never use test outcomes to choose a replicate.
+- FPR from benign rows.
+- TPR from attack rows.
+- balanced accuracy only when both exist.
+- binary Macro-F1 as the arithmetic mean of benign-class and attack-class F1; undefined class metrics remain unavailable, never zero.
+- AUROC from continuous scores only when both classes exist.
 
-## Quantile semantics
+## Population metrics
 
-`quantiles.py` owns every quantile computation:
+For the confirmatory eligible cohort:
 
-- exact empirical local quantile;
-- pooled quantile;
-- weighted shared construction;
-- finite-sample conformal rank;
-- achieved exceedance calculation.
+- unweighted mean FPR;
+- population standard deviation with `ddof=0`;
+- `CV(FPR) = std / mean` with no epsilon;
+- undefined CV when mean is exactly zero;
+- near-zero warning when positive mean is below the locked cutoff;
+- FPR IQR;
+- FPR range;
+- worst-client FPR.
 
-One declared interpolation/rank method is used consistently. Record it in threshold results.
+Where attack evaluation is valid:
 
-## Threshold methods
+- TPR CV with the same denominator rules;
+- P10 binary Macro-F1;
+- worst-client balanced accuracy;
+- mean-client Macro-F1;
+- pooled Macro-F1 as a separately labelled control;
+- mean-client balanced accuracy.
 
-### `SHARED_THRESHOLD`
+Every aggregate records candidate, eligible, FPR-evaluable, attack-evaluable, fallback, and unavailable client counts.
 
-Arithmetic mean of eligible local benign quantiles. Every eligible client receives the same value. It is not the exact pooled quantile.
+## Conformal coverage
 
-### `LOCAL_THRESHOLD`
+For each client and seed:
 
-Each eligible client receives its own benign quantile.
+- target held-out benign coverage;
+- achieved held-out benign coverage;
+- signed coverage error;
+- absolute coverage error;
+- finite-sample rank index and effective coverage granularity;
+- calibration count;
+- calibration-size condition;
+- ties and unavailable reason.
 
-### `FAMILY_THRESHOLD`
+Report client-level distribution and seed-level summaries. Do not infer universal conditional validity.
 
-Mean of eligible local thresholds within the audited physical-device family. Reject populations without taxonomy. Record family membership and unavailable families.
-
-### `CLUSTER_THRESHOLD`
-
-`grouped.py` accepts a typed, prevalidated client-to-group assignment and computes one group-level threshold from member local thresholds. It must not derive groups, select group count, inspect held-out outcomes, or invent an assignment. Until the scientific source supplies a valid assignment-construction rule, feasibility validation blocks this method.
-
-### Shared construction controls
-
-- Exact pooled benign quantile.
-- Sample-weighted shared threshold using declared weighting semantics.
-
-They remain supportive controls and cannot redefine the confirmatory shared threshold.
-
-## Shrinkage
-
-Fixed curve:
-
-`tau_client = lambda * local + (1 - lambda) * shared`
-
-- Evaluate the complete declared curve.
-- Zero and one reproduce shared and local endpoints exactly.
-- No test-selected preferred value.
-
-Size-aware shrinkage:
-
-- Use one predeclared function of benign calibration count.
-- Bound output in `[0, 1]`.
-- Apply identical function to all clients.
-- Reject execution until the exact function is source-backed.
-
-## Local conformal threshold
-
-- Treat benign reconstruction errors as nonconformity scores.
-- Use target coverage 0.95/significance 0.05.
-- Apply the exact finite-sample rank rule.
-- Record rank index, effective quantile, calibration count, ties, and unavailable conditions.
-- Make no universal conditional-coverage claim.
-
-## `FEDERATED_BENIGN_STATISTICS`
-
-Each eligible client may communicate only the predeclared benign summaries:
-
-- count;
-- mean;
-- variance under explicitly declared denominator semantics;
-- permitted benign exceedance counts when required for matched attainment.
+## Threshold estimation
 
 Compute:
 
-- sample-count-weighted global mean;
-- pooled within-client variance;
-- between-client mean-shift term;
-- full pooled variance as within plus between;
-- between ratio when denominator is positive;
-- matched-exceedance coefficient/threshold using only benign information;
-- achieved exceedance;
+- exact pooled benign quantile reference when defined;
+- absolute threshold error;
+- relative error only for nonzero reference;
+- target exceedance;
+- achieved benign exceedance;
 - signed and absolute attainment error;
-- absolute and relative threshold error versus the exact pooled benign quantile;
-- exact communicated fields and serialized byte counts;
-- supplementary fixed-coefficient curve for 2.0, 2.5, 3.0.
+- threshold variance across nested calibration replicates;
+- sample-efficiency curves.
 
-The between-client term is mandatory. The comparator remains a shared threshold. It must not claim faithful reproduction of an anomaly-informed method.
+## Communication
 
-## Dispatch
+Calculate exact logical fields, element counts, and serialized byte counts for:
 
-Use exhaustive pattern matching over `FederatedThresholdMethod`. Reject `CentralizedThresholdMethod` by type and runtime guard. No registry dictionary, fallback estimator, or plugin discovery.
+- model transmission;
+- threshold transmission;
+- local quantile transmission;
+- benign summary-statistics comparator.
+
+Label as estimated serialized payload, never network deployment measurement.
+
+## Traffic rates and alert burden
+
+`traffic_rates.py` validates typed evidence:
+
+- measured;
+- dataset-derived;
+- externally cited.
+
+Evidence includes units, source, applicable population, decision granularity, and provenance. `operational.py` generates alerts per client per day only when evidence is applicable. Otherwise return a typed suppression result and do not emit an alert-burden table.
+
+## Fixed-score controls
+
+`controls.py` verifies:
+
+- score and label checksums are identical across threshold methods;
+- AUROC is identical within numerical tolerance;
+- client and cohort identities are unchanged;
+- only thresholds differ.
+
+Any failure is a scientific contract error, not a warning.
+
+## Statistical inference
+
+### Confirmatory contrast
+
+Per seed: shared-threshold `CV(FPR)` minus local-threshold `CV(FPR)`.
+
+- Independent unit: training seed.
+- Point estimate: arithmetic mean of ten valid paired seed contrasts.
+- Interval: two-sided 95% BCa over paired contrasts.
+- Resample paired contrasts only.
+- Report all seed contrasts and positive/zero/negative counts.
+
+If BCa is degenerate or fewer than ten valid pairs exist, report diagnostic intervals only and mark the confirmatory decision blocked/inconclusive according to the source rule. Never silently substitute.
+
+### Secondary evidence
+
+- Two-sided paired Wilcoxon with explicit zero handling.
+- Matched-pairs rank-biserial correlation, not unpaired Cliff’s delta.
+- Holm correction within predeclared secondary families.
+- Nested replicates summarized within seed before across-seed inference.
+- Spearman plus declared descriptive regression for heterogeneity association.
+
+## Mechanism analyses
+
+`mechanisms.py` is limited to source-authorized analyses:
+
+- family/group granularity when group assignments are available;
+- assignment stability only for scientifically supplied grouping assignments/resamples;
+- per-client benign and attack score geometry;
+- heterogeneity-benefit association;
+- threshold movement versus FPR/TPR changes;
+- within-group and across-group threshold/FPR dispersion.
+
+It must not implement a group-construction algorithm or a removed calibration representation.
+
+## Decision rules
+
+Encode source-backed outcomes:
+
+- confirmatory support;
+- directional but inconclusive;
+- no observed advantage;
+- opposite direction;
+- external consistency/boundary;
+- retained/partial/full model absorption;
+- temporal degradation with recovery, without recovery, or no detectable degradation;
+- suppression and infeasibility.
+
+Decisions use full precision and preserve negative results.
 
 ## Test files to implement
 
-- `tests/unit/calibration/test_models.py`
-- `tests/unit/calibration/test_eligibility.py`
-- `tests/unit/calibration/test_sampling.py`
-- `tests/unit/thresholding/test_models.py`
-- `tests/unit/thresholding/test_quantiles.py`
-- `tests/unit/thresholding/test_shared.py`
-- `tests/unit/thresholding/test_local.py`
-- `tests/unit/thresholding/test_family.py`
-- `tests/unit/thresholding/test_grouped.py`
-- `tests/unit/thresholding/test_shrinkage.py`
-- `tests/unit/thresholding/test_conformal.py`
-- `tests/unit/thresholding/test_federated_benign_statistics.py`
-- `tests/unit/thresholding/test_dispatch.py`
-- `tests/unit/orchestration/stages/test_calibration_and_threshold_stages.py`
-- `tests/property/test_quantile_monotonicity.py`
-- `tests/property/test_shrinkage_endpoints.py`
-- `tests/property/test_pooled_variance_decomposition.py`
-- `tests/integration/thresholding/test_threshold_methods_reuse_scores.py`
-- `tests/scientific/test_benign_only_threshold_construction.py`
+- `tests/unit/evaluation/test_models.py`
+- `tests/unit/evaluation/test_confusion.py`
+- `tests/unit/evaluation/test_metric_semantics.py`
+- `tests/unit/evaluation/test_client_metrics.py`
+- `tests/unit/evaluation/test_population_metrics.py`
+- `tests/unit/evaluation/test_conformal_coverage.py`
+- `tests/unit/evaluation/test_threshold_estimation.py`
+- `tests/unit/evaluation/test_communication.py`
+- `tests/unit/evaluation/test_traffic_rates.py`
+- `tests/unit/evaluation/test_operational.py`
+- `tests/unit/evaluation/test_controls.py`
+- `tests/unit/analysis/test_descriptive.py`
+- `tests/unit/analysis/test_inference.py`
+- `tests/unit/analysis/test_divergence.py`
+- `tests/unit/analysis/test_mechanisms.py`
+- `tests/unit/analysis/test_temporal.py`
+- `tests/unit/analysis/test_decision_rules.py`
+- `tests/property/test_population_metric_invariants.py`
+- `tests/property/test_confusion_metric_bounds.py`
+- `tests/scientific/test_confirmatory_pairing.py`
+- `tests/scientific/test_undefined_metrics_are_not_zero.py`
+- `tests/scientific/test_edge_attack_metrics_are_unavailable.py`
+- `tests/scientific/test_auroc_invariance.py`
 
-## Required negative tests
+## Required edge cases
 
-- Attack-labelled calibration record.
-- Different eligible populations across methods.
-- Family threshold without taxonomy.
-- Grouped threshold without supplied assignment.
-- Size-aware shrinkage without locked function.
-- Comparator omitting between-client variance.
-- Fixed coefficient promoted to primary matched comparator.
-- Centralized method passed to federated dispatcher.
+- All FPR values zero.
+- Positive near-zero mean FPR.
+- One eligible client.
+- Empty benign or attack denominator.
+- Single-class AUROC.
+- Identical paired deltas causing degenerate BCa.
+- Zero differences in Wilcoxon.
+- All comparator variances zero.
+- No traffic-rate evidence.
+- Temporal drift excess not materially positive.
 
 ## Exit criteria
 
-- All feasible threshold methods are deterministic, benign-only, and typed.
-- Full comparator diagnostics and payload accounting exist.
-- Unresolved grouped or size-aware methods fail as infeasible, not through placeholders.
-- Scores are reused rather than regenerated.
-- All Phase 09 tests and audits pass.
+- Every metric has explicit availability semantics.
+- Confirmatory inference is correctly paired and non-substitutable.
+- Fallback and unavailable clients cannot contaminate confirmatory metrics.
+- Operational outputs are evidence-gated.
+- All Phase 10 tests and audits pass.
 
 ## Mandatory closing audit
 

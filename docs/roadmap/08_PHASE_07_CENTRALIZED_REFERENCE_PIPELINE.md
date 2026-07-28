@@ -1,4 +1,4 @@
-# Phase 06 — Anchor Reproduction and Journal Gate
+# Phase 07 — Independent Centralized Reference Pipeline
 
 ## Scientific authority and interpretation rules
 
@@ -16,105 +16,102 @@
 
 ## Objective
 
-Reproduce the historical DATP result under its original endpoint semantics, compare reproduced reference values using locked rules, and block downstream journal claims when the anchor is not reproduced.
+Implement the privacy-incompatible centralized reference as a completely independent pooled-data pipeline: pooled preprocessing, pooled autoencoder training, independent checkpoint selection, pooled scoring, pooled benign threshold, and pooled evaluation.
 
 ## Entry criteria
 
 - Phase 05 is complete.
-- Historical protocol values and reference values are present in `/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md` or an explicitly referenced historical record.
-- Exact anchor tolerances are declared. Missing tolerances block the comparison rather than defaulting to arbitrary numeric closeness.
+- Centralized training and split declarations are fully resolved.
+- Reusable pooled preprocessed data are available under `data/processed/.../centralized_reference/`.
 
 ## Source files permitted to change
 
-- `datp_core/anchor/models.py`
-- `datp_core/anchor/reproduction.py`
-- `datp_core/anchor/comparison.py`
-- `datp_core/anchor/gate.py`
-- `datp_core/orchestration/stages/verify_anchor.py`
-- `datp_core/protocols/anchor.py` only to add source-backed declarations discovered during implementation.
+- `datp_core/centralized_reference/preprocessing.py`
+- `datp_core/centralized_reference/training.py`
+- `datp_core/centralized_reference/checkpointing.py`
+- `datp_core/centralized_reference/scoring.py`
+- `datp_core/centralized_reference/thresholding.py`
+- `datp_core/centralized_reference/evaluation.py`
+- `datp_core/orchestration/stages/preprocess_centralized_reference.py`
+- `datp_core/orchestration/stages/train_centralized_reference.py`
+- `datp_core/orchestration/stages/select_centralized_reference_checkpoint.py`
+- `datp_core/orchestration/stages/score_centralized_reference.py`
+- `datp_core/orchestration/stages/construct_centralized_reference_threshold.py`
+- `datp_core/orchestration/stages/evaluate_centralized_reference.py`
 
-## Required dataclasses and models
+## Required result records
 
-- `AnchorMetricReference`
-- `AnchorObservedMetric`
-- `AnchorMetricComparison`
-- `AnchorSeedSubsetComparison`
-- `AnchorDiscrepancy`
-- `AnchorReproductionResult`
-- `AnchorGateDecision`
+Place records in the existing most specific model files; do not create a new source file:
 
-Comparison records include metric identity, population, model, threshold method, seed subset, expected value, observed value, tolerance rule, signed difference, relative difference where defined, and decision.
+- `CentralizedTrainingResult`
+- `CentralizedCheckpointCandidate`
+- `CentralizedCheckpointDecision`
+- `PooledScoreArtifact`
+- `PooledThresholdResult`
+- `CentralizedEvaluationResult`
 
-## Historical isolation
+## Pipeline invariants
 
-- Preserve the historical endpoint and checkpoint semantics exactly.
-- Do not retrofit the journal checkpoint protocol to improve reproduction.
-- Reuse canonical and processed data only when their coordinates exactly match the historical protocol.
-- Historical and journal training artifacts remain separate output coordinates.
-- The five-seed historical subset and ten-seed journal extension are distinct evidence objects.
+- Training uses pooled benign training rows only.
+- Pooled preprocessing is fitted independently.
+- Checkpoint selection uses the centralized non-test rule.
+- Pooled calibration scores come only from the centralized checkpoint.
+- The pooled threshold is the exact declared benign quantile.
+- Pooled evaluation uses centralized scores and labels only.
+- No federated model, client threshold, local quantile mean, federated score file, or federated checkpoint may be relabelled as centralized.
+- Centralized results are context for the cost of federation, not part of the confirmatory threshold-scope comparison.
 
-## Reproduction workflow
+## Training and checkpointing
 
-1. Resolve the historical protocol from typed declarations.
-2. Validate all mandatory historical values.
-3. Execute or load the exact historical seed subset.
-4. Compute the historical metric set using current metric code only when semantics are identical; otherwise implement the historical semantic explicitly in existing anchor files.
-5. Compare each locked reference value.
-6. Classify each comparison as equivalent, acceptable declared deviation, material discrepancy, or unavailable.
-7. Produce one gate decision.
+- Reuse the architecture declaration while owning an independent fitted state.
+- Use deterministic PyTorch settings from runtime.
+- Use mandatory batching and CUDA when declared.
+- Persist model tensors with SafeTensors.
+- Persist optimizer summaries as non-executable typed JSON; do not pickle optimizer objects.
+- Evaluate only declared checkpoint rounds.
+- Store every candidate and one decision record.
 
-## Gate rules
+## Scoring
 
-- `PASS`: every mandatory anchor comparison satisfies its declared equivalence rule.
-- `PASS_WITH_DECLARED_DISCREPANCY`: only when the source truth explicitly permits a non-blocking discrepancy class.
-- `BLOCKED`: any mandatory value materially disagrees, is missing, or cannot be reproduced.
+- Generate reconstruction errors in deterministic batches.
+- Preserve source-row identity and semantic label.
+- Validate higher score means greater anomaly evidence.
+- Separate pooled calibration and pooled evaluation artifacts.
+- Verify score reload equality.
 
-A blocked gate prevents:
+## Thresholding and evaluation
 
-- the confirmatory journal experiment from being marked valid;
-- claim status from becoming permitted;
-- finalization of dependent campaigns;
-- reporting of extension results as journal evidence.
-
-The gate does not erase diagnostic outputs. It records why the programme is blocked.
-
-## Comparison implementation
-
-- Use typed tolerance strategies: absolute, relative, interval-overlap, exact count, or source-defined rule.
-- Never apply one global floating-point tolerance to all metrics.
-- Relative comparison is undefined when the reference is zero.
-- Confidence-interval comparisons preserve interval semantics rather than comparing only rounded endpoints.
-- Compare full-precision values; round only in reports.
+- Use the exact quantile method declared in protocols.
+- Record interpolation/rank semantics.
+- Evaluate pooled confusion counts and pooled metrics.
+- Do not compute cross-client equity metrics for the centralized reference unless a separately declared contextual analysis requires client labels; even then, label it contextual and not a federated threshold policy.
 
 ## Test files to implement
 
-- `tests/unit/anchor/test_models.py`
-- `tests/unit/anchor/test_reproduction.py`
-- `tests/unit/anchor/test_comparison.py`
-- `tests/unit/anchor/test_gate.py`
-- `tests/unit/orchestration/stages/test_verify_anchor.py`
-- `tests/integration/anchor/test_anchor_reproduction_pipeline.py`
-- `tests/scientific/test_anchor_blocks_journal_claims.py`
-- `tests/scientific/test_anchor_preserves_historical_checkpoint_semantics.py`
+- `tests/unit/centralized_reference/test_training.py`
+- `tests/unit/centralized_reference/test_checkpointing.py`
+- `tests/unit/centralized_reference/test_scoring.py`
+- `tests/unit/centralized_reference/test_thresholding.py`
+- `tests/unit/centralized_reference/test_evaluation.py`
+- `tests/unit/orchestration/stages/test_centralized_reference_stages.py`
+- `tests/integration/centralized_reference/test_centralized_reference_pipeline.py`
+- `tests/scientific/test_centralized_reference_is_independent.py`
+- `tests/scientific/test_centralized_reference_never_enters_federated_dispatch.py`
 
-## Required test scenarios
+## Required negative tests
 
-- Exact reproduction passes.
-- Within declared absolute or relative tolerance passes.
-- Rounded equality with full-precision failure remains a failure.
-- Missing mandatory metric blocks.
-- Wrong seed subset blocks.
-- Journal checkpoint selection cannot alter anchor execution.
-- Blocked anchor propagates to experiment and reporting status.
-- Diagnostic artifacts remain available under a blocked gate.
+- Federated checkpoint passed to centralized scoring.
+- Federated preprocessing state passed to pooled data.
+- Attack row passed to centralized benign training or calibration.
+- Policy dispatcher asked to create centralized threshold.
+- Centralized reference reused as a confirmatory threshold method.
 
 ## Exit criteria
 
-- Historical reproduction is a typed experiment, not an ad hoc script.
-- Every comparison is traceable and full precision.
-- The gate is impossible to bypass through reporting or campaign code.
-- Missing tolerances remain explicit blockers.
-- All Phase 06 tests and audits pass.
+- The pooled pipeline executes end-to-end without importing federated thresholding.
+- Every centralized artifact is independently derived and safely reloadable.
+- Type boundaries prevent accidental score or threshold substitution.
+- All Phase 07 tests and audits pass.
 
 ## Mandatory closing audit
 

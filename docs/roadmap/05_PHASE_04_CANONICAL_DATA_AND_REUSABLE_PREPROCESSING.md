@@ -1,4 +1,4 @@
-# Phase 03 — Dataset Audit and Capability Contracts
+# Phase 04 — Canonical Data and Reusable Preprocessing
 
 ## Scientific authority and interpretation rules
 
@@ -16,240 +16,179 @@
 
 ## Objective
 
-Implement exact dataset schemas, readers, provenance, materialization contracts, and typed capabilities for N-BaIoT, CICIoT2023, and Edge-IIoTset. Dataset facts are verified from the raw files; scientific use and interpretation remain governed by `/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md`.
+Implement reusable, deterministic canonical and preprocessed data assets under `data/`. Prevent every experiment from repeating data loading, splits, fitting, or transformations when all data and preprocessing coordinates match.
 
 ## Entry criteria
 
-- Phase 02 is complete.
-- Dataset roots are reachable through the project’s read-only raw-data path.
-- The agent has inspected the current raw inventory before encoding schemas.
+- Phase 03 is complete.
+- Canonical dataset materialization is verified.
+- Exact preprocessing semantics are present in the source of truth or explicitly blocked.
 
 ## Source files permitted to change
 
-- `datp_core/datasets/models.py`
-- `datp_core/datasets/capabilities.py`
-- `datp_core/datasets/catalogue.py`
-- `datp_core/datasets/nbaiot/schema.py`
-- `datp_core/datasets/nbaiot/capabilities.py`
-- `datp_core/datasets/nbaiot/reader.py`
-- `datp_core/datasets/nbaiot/materialize.py`
-- `datp_core/datasets/ciciot2023/schema.py`
-- `datp_core/datasets/ciciot2023/capabilities.py`
-- `datp_core/datasets/ciciot2023/reader.py`
-- `datp_core/datasets/ciciot2023/materialize.py`
-- `datp_core/datasets/edge_iiotset/schema.py`
-- `datp_core/datasets/edge_iiotset/capabilities.py`
-- `datp_core/datasets/edge_iiotset/reader.py`
-- `datp_core/datasets/edge_iiotset/chronology.py`
-- `datp_core/datasets/edge_iiotset/materialize.py`
-- dataset package `__init__.py` files only to keep them empty.
+- `datp_core/preprocessing/models.py`
+- `datp_core/preprocessing/federated.py`
+- `datp_core/preprocessing/validation.py`
+- `datp_core/centralized_reference/preprocessing.py`
+- `datp_core/artifacts/coordinates.py`
+- `datp_core/artifacts/layout.py`
+- `datp_core/artifacts/serialization.py`
+- `datp_core/artifacts/reload_validation.py`
+- `datp_core/artifacts/store.py`
 
-## Libraries
+Only data-related path and serialization responsibilities may be implemented in artifact files during this phase. Experiment-output behavior remains Phase 13.
 
-- Polars lazy scans for CSV ingestion and transformation.
-- PyArrow for canonical schemas and Parquet metadata.
-- Pandera Polars models for executable validation.
-- Standard library `pathlib`, `hashlib`, and dataclasses.
+## Data directory contract
 
-Do not use pandas in ingestion code unless a third-party function strictly requires it at a later stage.
+```text
+data/
+├── raw/                                  # Read-only source or symlink.
+├── canonical/
+│   └── dataset=<DATASET_ID>/
+│       └── schema=<SCHEMA_CHECKSUM>/
+│           ├── data/                     # Canonical Parquet partitions.
+│           ├── dataset_manifest.json
+│           ├── schema.json
+│           └── COMPLETE
+└── processed/
+    └── dataset=<DATASET_ID>/
+        └── population=<POPULATION_ID>/
+            └── partition_seed=<SEED>/
+                └── split=<SPLIT_PROTOCOL_ID>/
+                    └── preprocessing=<PREPROCESSING_PROTOCOL_ID>/
+                        ├── federated/
+                        │   ├── client=<CLIENT_ID>/
+                        │   │   ├── train.parquet
+                        │   │   ├── calibration.parquet
+                        │   │   ├── evaluation.parquet
+                        │   │   ├── [future_recalibration.parquet]
+                        │   │   └── state.skops
+                        │   ├── schema.json
+                        │   ├── split_manifest.parquet
+                        │   ├── preprocessing_manifest.json
+                        │   └── COMPLETE
+                        └── centralized_reference/
+                            ├── train.parquet
+                            ├── calibration.parquet
+                            ├── evaluation.parquet
+                            ├── [future_recalibration.parquet]
+                            ├── state.skops
+                            ├── schema.json
+                            ├── preprocessing_manifest.json
+                            └── COMPLETE
+```
+
+A coordinate component is present only when it changes the reusable data. Model, threshold, quantile, calibration subsample size, and analysis seed never appear in reusable preprocessing paths.
+
+## Reuse semantics
+
+A processed asset is reusable only when all of these match:
+
+- raw dataset source checksums;
+- canonical schema checksum;
+- dataset identity;
+- population identity and population-construction protocol;
+- partition seed;
+- split protocol;
+- preprocessing protocol;
+- feature order;
+- fitted-state type and safe-serialization format;
+- software protocol manifest checksum for scientifically relevant transformation semantics.
+
+A matching directory without a valid manifest and `COMPLETE` marker is incomplete and must be deleted before rebuilding. Never “repair” partial files in place.
 
 ## Required dataclasses
 
-In `datasets/models.py`, define frozen slotted records:
+In `preprocessing/models.py`:
 
-- `RawSourceFile`
-- `RawDatasetInventory`
-- `CanonicalColumn`
-- `CanonicalSchema`
-- `SourceRowReference`
-- `DatasetRowIdentity`
-- `DatasetExclusion`
-- `DatasetValidationIssue`
-- `DatasetValidationReport`
-- `MaterializedDataset`
-- `ChronologyValidation`
-- `AttackAssignmentCapability`
+- `PreprocessingProtocolId`
+- `TransformedFeature`
+- `TransformedSchema`
+- `FittedPreprocessingState`
+- `ClientPreprocessingResult`
+- `PooledPreprocessingResult`
+- `PreprocessingManifest`
+- `PreprocessingValidationReport`
+- `ReusableDataCoordinate`
 
-Avoid a generic `DatasetRecord` with optional fields. Dataset-specific rows remain Polars frames validated by schema.
+Use typed tuples for ordered columns. No dict of column-to-type.
 
-## Capability models
+## Federated preprocessing
 
-In `datasets/capabilities.py`, implement frozen typed contracts:
+`preprocessing/federated.py` must:
 
-- `PhysicalClientCapability`
-- `FamilyTaxonomyCapability`
-- `ChronologyCapability`
-- `AttackAssignmentCapability`
-- `MetricCapability`
-- `TemporalCapability`
-- `ExternalValidationCapability`
-- `DatasetCapabilities`
+- fit only on the declared client training partition;
+- never fit on calibration, future recalibration, or evaluation rows;
+- preserve one fitted state per client when the locked protocol is client-local;
+- use one shared state only if the source truth explicitly requires it;
+- transform all partitions with the corresponding fitted state;
+- produce consistent output feature order and dimension across clients when required by one federated model;
+- serialize fitted estimators with skops;
+- reject unknown transformers during safe reload.
 
-Every capability has a status, evidence, and reason. A boolean alone is insufficient for conditional or unavailable behavior.
+Do not encode a default scaler or imputer. The exact pipeline must come from the source of truth.
 
-## N-BaIoT requirements
+## Centralized preprocessing
 
-### `schema.py`
+`centralized_reference/preprocessing.py` must:
 
-- Encode the exact audited 115 numeric feature columns in source order.
-- Encode the nine physical-device identities derived from paths.
-- Encode benign file identity and attack family/subtype identities derived from paths.
-- Encode the physical-device family taxonomy only when the source truth or audited project documentation defines it unambiguously.
-- Reject archives, documentation files, and non-extracted inputs.
+- pool only the training rows permitted by the centralized reference protocol;
+- fit a distinct pooled state;
+- transform pooled calibration and evaluation data independently of federated fitted states;
+- never reuse a client-fitted state;
+- store its reusable output under the `centralized_reference/` data branch.
 
-### `capabilities.py`
+## Validation
 
-Declare:
+`preprocessing/validation.py` and `artifacts/reload_validation.py` must verify:
 
-- physical client identity supported;
-- family taxonomy supported only if fully verified;
-- chronology unavailable;
-- per-client attack assignment supported;
-- confirmatory FPR and attack-sensitive metrics supported subject to denominators;
-- natural-device and controlled-heterogeneity populations supported;
-- external-validation role not applicable because this is the anchor dataset.
+- no source-row overlap across partitions;
+- fit provenance references training rows only;
+- no future rows influence historical fitting;
+- no attack-labelled row enters benign autoencoder training or benign threshold calibration;
+- transformed values are finite;
+- transformed schema and feature order match model input requirements;
+- safe reload returns the expected estimator classes;
+- transform-before-save and transform-after-reload are numerically equivalent within a declared serialization tolerance;
+- reusable data manifests are complete and immutable.
 
-### `reader.py`
+## Atomicity and concurrency
 
-- Use lazy scans and explicit dtypes.
-- Derive labels and identities from audited path components.
-- Reject non-finite values according to an explicit data-quality rule; never silently fill.
-- Preserve source file and source row provenance.
-- Never derive chronology from file order.
-
-### `materialize.py`
-
-- Produce canonical Parquet partitions under `data/canonical/dataset=NBAIOT/`.
-- Publish atomically after schema and count validation.
-- Include a manifest and schema checksum.
-- Reuse an existing matching canonical asset only after full manifest validation.
-
-## CICIoT2023 requirements
-
-### `schema.py`
-
-- Encode the exact 39 numeric features plus canonical label field from merged files.
-- Preserve mixed case and spaces only at raw-read boundary; canonical names are normalized once and recorded in a raw-to-canonical mapping.
-- Encode all audited label values.
-- Treat `Protocol Type` as a feature, never a label.
-- Preserve sparse protocol indicators.
-
-### `capabilities.py`
-
-Declare:
-
-- physical client identity unavailable in the processed artifact;
-- family taxonomy unavailable;
-- chronology unavailable;
-- file-defined pseudo-clients supported as an applicability boundary only;
-- attack assignment supported at file-row level but not as original physical-device assignment;
-- device-aware and temporal claims prohibited.
-
-### `reader.py`
-
-- Read only the audited merged labelled files used by the project population.
-- Normalize labels deterministically.
-- Handle the audited infinite/empty `Rate` anomalies explicitly and report counts.
-- Do not globally drop informative sparse columns.
-- Preserve source file and row provenance.
-
-### `materialize.py`
-
-- Publish canonical Parquet under `data/canonical/dataset=CICIOT2023/`.
-- Preserve file identity for later pseudo-client construction.
-- Record that the original 105-device topology cannot be reconstructed from the available artifact.
-
-## Edge-IIoTset requirements
-
-### `schema.py`
-
-- Encode the exact audited feature and label columns from the selected CSV representation.
-- Normalize mixed numeric, string, hexadecimal, IP, MQTT, protocol, and label fields through explicit typed transformations.
-- Preserve raw timestamp text separately from parsed chronology during audit.
-- Encode the ten benign sensor-group identities from source folders.
-
-### `capabilities.py`
-
-Declare:
-
-- static sensor-group identity supported for benign data;
-- per-client attack assignment unavailable under the audited artifact;
-- attack-sensitive cross-client metrics unavailable;
-- family taxonomy unavailable;
-- chronology conditional and valid only for audited groups;
-- static external benign-equity and one-shot temporal populations supported within these boundaries.
-
-### `reader.py`
-
-- Read normal and attack sources separately.
-- Never attach attack rows to sensor clients without verified evidence.
-- Preserve source folder, file, row, and raw timestamp provenance.
-
-### `chronology.py`
-
-- Parse only genuine capture times.
-- Reject address literals or malformed values as chronology.
-- Preserve stable source-row order for equal timestamps.
-- Return a typed validation result per group.
-- Exclude invalid groups only from temporal populations, not automatically from static benign analysis.
-
-### `materialize.py`
-
-Publish separate canonical assets:
-
-- static benign sensor-group data;
-- valid temporal benign group data;
-- unassigned attack data;
-- chronology validation report.
-
-## Catalogue requirements
-
-`datasets/catalogue.py` uses exhaustive `match` on `DatasetId`. It returns typed reader/materializer/capability objects. No mutable registry or plugin dictionary.
+Use a temporary sibling directory and atomic rename. Use `filelock` only at the final reusable coordinate to prevent duplicate parallel publication. A process finding a completed matching asset revalidates and reuses it.
 
 ## Test files to implement
 
-### Unit schema and capability tests
+- `tests/unit/preprocessing/test_models.py`
+- `tests/unit/preprocessing/test_federated_preprocessing.py`
+- `tests/unit/preprocessing/test_preprocessing_validation.py`
+- `tests/unit/centralized_reference/test_preprocessing.py`
+- `tests/unit/artifacts/test_data_coordinates.py`
+- `tests/unit/artifacts/test_data_layout.py`
+- `tests/unit/artifacts/test_preprocessing_serialization.py`
+- `tests/integration/preprocessing/test_reusable_federated_data.py`
+- `tests/integration/preprocessing/test_reusable_centralized_data.py`
+- `tests/integration/preprocessing/test_preprocessing_reload_equivalence.py`
+- `tests/integration/preprocessing/test_preprocessing_cache_invalidation.py`
+- `tests/integration/preprocessing/test_preprocessing_atomic_publication.py`
 
-- `tests/unit/datasets/test_dataset_models.py`
-- `tests/unit/datasets/test_dataset_capabilities.py`
-- `tests/unit/datasets/test_dataset_catalogue.py`
-- `tests/unit/datasets/nbaiot/test_schema.py`
-- `tests/unit/datasets/nbaiot/test_capabilities.py`
-- `tests/unit/datasets/nbaiot/test_reader.py`
-- `tests/unit/datasets/ciciot2023/test_schema.py`
-- `tests/unit/datasets/ciciot2023/test_capabilities.py`
-- `tests/unit/datasets/ciciot2023/test_reader.py`
-- `tests/unit/datasets/edge_iiotset/test_schema.py`
-- `tests/unit/datasets/edge_iiotset/test_capabilities.py`
-- `tests/unit/datasets/edge_iiotset/test_reader.py`
-- `tests/unit/datasets/edge_iiotset/test_chronology.py`
+## Required test cases
 
-### Integration materialization tests
-
-- `tests/integration/datasets/test_nbaiot_materialization.py`
-- `tests/integration/datasets/test_ciciot2023_materialization.py`
-- `tests/integration/datasets/test_edge_iiotset_materialization.py`
-- `tests/integration/datasets/test_canonical_data_reuse.py`
-
-Use small audited fixtures generated in-memory or from minimal fixture CSVs under `tests/fixtures/`; do not copy full datasets into the repository. `tests/fixtures/` may contain only the exact miniature files used by these named tests.
-
-## Required negative tests
-
-- Wrong column order or missing feature.
-- Unknown label or path-derived identity.
-- Non-finite numeric value not covered by an explicit rule.
-- Attempt to claim chronology from file order.
-- Attempt to assign Edge attack rows to sensor clients.
-- Attempt to construct physical CICIoT clients.
-- Reuse of a canonical asset with mismatched checksum or schema.
+- Same coordinates reuse exactly the same completed asset.
+- Changed split seed, schema, population, or preprocessing protocol creates a distinct asset.
+- Changed model or threshold method does not duplicate processed data.
+- Partial asset is deleted and rebuilt.
+- Client-fitted and pooled-fitted states cannot be interchanged.
+- Fitting sees no calibration/test/future rows.
+- Unsafe or unknown skops types are rejected.
+- Reloaded transforms equal pre-save transforms.
 
 ## Exit criteria
 
-- All three datasets have executable exact schemas and evidence-backed capability contracts.
-- Canonical materialization is deterministic and atomic.
-- Invalid scientific uses fail before population or experiment construction.
-- No raw-data fact was invented from the scientific roadmap alone.
-- All Phase 03 tests and audits pass.
+- Canonical and preprocessed data are reusable under deterministic `data/` coordinates.
+- Experiment output directories contain no copied canonical or transformed datasets.
+- Federated and centralized preprocessing states are independently fitted and safely stored.
+- Data reuse never bypasses schema, provenance, or leakage validation.
+- All Phase 04 tests and audits pass.
 
 ## Mandatory closing audit
 

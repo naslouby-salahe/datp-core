@@ -1,4 +1,4 @@
-# Phase 02 — Typed Protocols and Domain Contracts
+# Phase 03 — Dataset Audit and Capability Contracts
 
 ## Scientific authority and interpretation rules
 
@@ -16,230 +16,240 @@
 
 ## Objective
 
-Implement the immutable Python-native declaration system that replaces YAML, together with validated scalar values, provenance records, cross-package Protocol interfaces, and whole-graph startup validation.
+Implement exact dataset schemas, readers, provenance, materialization contracts, and typed capabilities for N-BaIoT, CICIoT2023, and Edge-IIoTset. Dataset facts are verified from the raw files; scientific use and interpretation remain governed by `/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md`.
 
 ## Entry criteria
 
-- Phase 01 is complete.
-- Descriptive enums are stable.
-- Any exact values absent from `/home/naslouby/Projects/datp-core/docs/Journal_Extension_Master_Roadmap.md` are listed as blockers in the phase master log.
+- Phase 02 is complete.
+- Dataset roots are reachable through the project’s read-only raw-data path.
+- The agent has inspected the current raw inventory before encoding schemas.
 
 ## Source files permitted to change
 
-- `datp_core/domain/values.py`
-- `datp_core/domain/provenance.py`
-- `datp_core/domain/contracts.py`
-- `datp_core/protocols/models.py`
-- `datp_core/protocols/seeds.py`
-- `datp_core/protocols/splits.py`
-- `datp_core/protocols/training.py`
-- `datp_core/protocols/calibration.py`
-- `datp_core/protocols/metrics.py`
-- `datp_core/protocols/statistics.py`
-- `datp_core/protocols/traffic_rates.py`
-- `datp_core/protocols/anchor.py`
-- `datp_core/protocols/populations.py`
-- `datp_core/protocols/experiments.py`
-- `datp_core/protocols/runtime.py`
-- `datp_core/protocols/validation.py`
-- `datp_core/protocols/__init__.py`
-
-The package initializer must not collect or re-export all declarations.
+- `datp_core/datasets/models.py`
+- `datp_core/datasets/capabilities.py`
+- `datp_core/datasets/catalogue.py`
+- `datp_core/datasets/nbaiot/schema.py`
+- `datp_core/datasets/nbaiot/capabilities.py`
+- `datp_core/datasets/nbaiot/reader.py`
+- `datp_core/datasets/nbaiot/materialize.py`
+- `datp_core/datasets/ciciot2023/schema.py`
+- `datp_core/datasets/ciciot2023/capabilities.py`
+- `datp_core/datasets/ciciot2023/reader.py`
+- `datp_core/datasets/ciciot2023/materialize.py`
+- `datp_core/datasets/edge_iiotset/schema.py`
+- `datp_core/datasets/edge_iiotset/capabilities.py`
+- `datp_core/datasets/edge_iiotset/reader.py`
+- `datp_core/datasets/edge_iiotset/chronology.py`
+- `datp_core/datasets/edge_iiotset/materialize.py`
+- dataset package `__init__.py` files only to keep them empty.
 
 ## Libraries
 
-- Pydantic v2 for frozen declaration models, discriminated unions, field constraints, and `TypeAdapter` validation.
-- Standard-library frozen slotted dataclasses for small domain values and records.
-- `pathlib` for project-relative paths.
-- No configuration framework, YAML parser, Hydra, OmegaConf, or environment-variable-driven scientific override.
+- Polars lazy scans for CSV ingestion and transformation.
+- PyArrow for canonical schemas and Parquet metadata.
+- Pandera Polars models for executable validation.
+- Standard library `pathlib`, `hashlib`, and dataclasses.
 
-## Scalar value objects
+Do not use pandas in ingestion code unless a third-party function strictly requires it at a later stage.
 
-Define frozen slotted dataclasses or validated Pydantic root models in `domain/values.py`. Each type validates its domain once and removes repeated guards elsewhere.
+## Required dataclasses
 
-Required values:
+In `datasets/models.py`, define frozen slotted records:
 
-- `Seed`
-- `Ratio`
-- `Quantile`
-- `CoverageTarget`
-- `CalibrationSize`
-- `ClientCount`
-- `RoundNumber`
-- `LocalEpochCount`
-- `BatchSize`
-- `LearningRate`
-- `DirichletConcentration`
-- `ProximalCoefficient`
-- `DittoRegularization`
-- `ShrinkageWeight`
-- `SummaryCoefficient`
-- `ConfidenceLevel`
-- `BootstrapReplicateCount`
-- `SubsampleReplicateCount`
-- `GroupCount`
-- `ThresholdValue`
-- `ScoreValue`
-- `MetricValue`
-- `ByteCount`
-- `TrafficRatePerDay`
-- `Checksum`
+- `RawSourceFile`
+- `RawDatasetInventory`
+- `CanonicalColumn`
+- `CanonicalSchema`
+- `SourceRowReference`
+- `DatasetRowIdentity`
+- `DatasetExclusion`
+- `DatasetValidationIssue`
+- `DatasetValidationReport`
+- `MaterializedDataset`
+- `ChronologyValidation`
+- `AttackAssignmentCapability`
 
-Do not wrap plain identifiers already represented by enums. Do not create arithmetic-heavy value classes; validation and unit clarity are their purpose.
+Avoid a generic `DatasetRecord` with optional fields. Dataset-specific rows remain Polars frames validated by schema.
 
-## Provenance dataclasses
+## Capability models
 
-In `domain/provenance.py`, define frozen slotted records:
+In `datasets/capabilities.py`, implement frozen typed contracts:
 
-- `SourceFileProvenance(path, size_bytes, checksum, row_count)`
-- `DatasetProvenance(dataset, sources, schema_checksum)`
-- `CodeProvenance(revision, dirty_state)` only when the repository can supply it without using it as execution identity.
-- `ProtocolProvenance(resolved_manifest_checksum)`
-- `CitationProvenance(citation_key, source_title, source_locator)`
-- `TrafficRateProvenance(kind, source, units, applicable_population, citation)`
-- `ArtifactProvenance(path, format, checksum, schema_checksum)`
+- `PhysicalClientCapability`
+- `FamilyTaxonomyCapability`
+- `ChronologyCapability`
+- `AttackAssignmentCapability`
+- `MetricCapability`
+- `TemporalCapability`
+- `ExternalValidationCapability`
+- `DatasetCapabilities`
 
-Provenance records contain no timestamps and are serializable without custom codecs.
+Every capability has a status, evidence, and reason. A boolean alone is insufficient for conditional or unavailable behavior.
 
-## Protocol interfaces
+## N-BaIoT requirements
 
-In `domain/contracts.py`, define runtime-checkable `typing.Protocol` interfaces only where multiple implementations exist:
+### `schema.py`
 
-- `DatasetReader`
-- `DatasetMaterializer`
-- `PopulationBuilder`
-- `Preprocessor`
-- `Trainer`
-- `CheckpointSelector`
-- `ScoreGenerator`
-- `FederatedThresholdEstimator`
-- `CentralizedThresholdEstimator`
-- `MetricEvaluator`
-- `StageHandler`
-- `ArtifactSerializer`
-- `ArtifactStore`
-- `StageHook`
+- Encode the exact audited 115 numeric feature columns in source order.
+- Encode the nine physical-device identities derived from paths.
+- Encode benign file identity and attack family/subtype identities derived from paths.
+- Encode the physical-device family taxonomy only when the source truth or audited project documentation defines it unambiguously.
+- Reject archives, documentation files, and non-extracted inputs.
 
-Protocols expose typed methods and result objects; they do not use dict payloads. Do not introduce abstract base classes when structural typing suffices.
+### `capabilities.py`
 
-## Frozen protocol models
+Declare:
 
-Every model uses `ConfigDict(frozen=True, extra='forbid')`. No scientific field has a default. Runtime-only defaults are also avoided unless they are purely representational and cannot affect execution.
+- physical client identity supported;
+- family taxonomy supported only if fully verified;
+- chronology unavailable;
+- per-client attack assignment supported;
+- confirmatory FPR and attack-sensitive metrics supported subject to denominators;
+- natural-device and controlled-heterogeneity populations supported;
+- external-validation role not applicable because this is the anchor dataset.
 
-### Core declarations in `protocols/models.py`
+### `reader.py`
 
-- `SeedCohort`
-- `FractionalSplitProtocol`
-- `TemporalSplitProtocol`
-- `CheckpointProtocol`
-- `AutoencoderProtocol`
-- `OptimizerProtocol`
-- `FedAvgProtocol`
-- `FedProxProtocol`
-- `DittoProtocol`
-- `CalibrationEligibilityProtocol`
-- `QuantileProtocol`
-- `CalibrationSizeProtocol`
-- `FixedShrinkageProtocol`
-- `SizeAwareShrinkageProtocol`
-- `ConformalProtocol`
-- `FederatedStatisticsProtocol`
-- `MetricProtocol`
-- `StatisticalInferenceProtocol`
-- `TrafficRateEvidence`
-- `PopulationDeclaration`
-- `ExperimentDeclaration`
-- `AnchorReference`
-- `AnchorDecisionProtocol`
-- `RuntimeProtocol`
-- `ResolvedProtocolGraph`
+- Use lazy scans and explicit dtypes.
+- Derive labels and identities from audited path components.
+- Reject non-finite values according to an explicit data-quality rule; never silently fill.
+- Preserve source file and source row provenance.
+- Never derive chronology from file order.
 
-Use discriminated unions for model-specific and threshold-specific declarations. An experiment cannot carry irrelevant fields such as a proximal coefficient for FedAvg.
+### `materialize.py`
 
-## Required scientific declarations
+- Produce canonical Parquet partitions under `data/canonical/dataset=NBAIOT/`.
+- Publish atomically after schema and count validation.
+- Include a manifest and schema checksum.
+- Reuse an existing matching canonical asset only after full manifest validation.
 
-Declare only values explicitly supported by the current source of truth:
+## CICIoT2023 requirements
 
-- Canonical quantile `0.95`.
-- Quantile sensitivity: `0.90`, `0.95`, `0.975`, `0.99`.
-- Minimum benign calibration support: `100`.
-- Calibration sizes: `50`, `100`, `250`, `500`, `1000`, `5000`.
-- Fixed shrinkage weights: `0.00`, `0.25`, `0.50`, `0.75`, `1.00`.
-- Controlled heterogeneity concentrations: `0.1`, `0.3`, `0.5`, `1.0`, `10.0`, plus an explicit IID condition represented by an enum, not a fake infinite concentration.
-- FedProx coefficients: `0.001`, `0.01`, `0.1`, `1.0`; zero remains the FedAvg condition and is not declared as FedProx.
-- Conformal target coverage `0.95` and significance `0.05`.
-- Summary-statistics sensitivity coefficients: `2.0`, `2.5`, `3.0`.
-- Journal checkpoint candidates: rounds `25`, `50`, `75`, `100`, `125`, `150`, `200`; maximum round `200`.
-- Local epochs `1` for the locked FedAvg core.
-- Temporal split: `0.55`, `0.15`, `0.10`, `0.20` in historical train, historical calibration, future recalibration, future evaluation order.
-- Ditto absorption bands: retained at or above `0.75` of the FedAvg threshold-scope effect, partial from `0.25` to below `0.75`, largely absorbed below `0.25`; alternative-route absolute difference `0.05`.
-- Confirmatory confidence level `0.95` and paired seed count `10`.
+### `schema.py`
 
-Do not invent exact seed integers, architecture widths, learning rate, batch size, optimizer details, non-temporal split ratios, bootstrap replicate count, near-zero warning cutoff, temporal materiality cutoff, or anchor tolerances when absent. The declaration type may require them, but the resolved graph must fail with `UnresolvedScientificValueError` until they are scientifically supplied.
+- Encode the exact 39 numeric features plus canonical label field from merged files.
+- Preserve mixed case and spaces only at raw-read boundary; canonical names are normalized once and recorded in a raw-to-canonical mapping.
+- Encode all audited label values.
+- Treat `Protocol Type` as a feature, never a label.
+- Preserve sparse protocol indicators.
 
-## Module responsibilities
+### `capabilities.py`
 
-- `seeds.py`: immutable seed cohorts only; no random-number generators.
-- `splits.py`: split declarations and sum/order validation.
-- `training.py`: centralized, FedAvg, FedProx, and Ditto declarations with no execution code.
-- `calibration.py`: eligibility, quantiles, sizes, shrinkage, conformal, and federated-statistics declarations.
-- `metrics.py`: required metric sets per cohort and explicit undefined/suppression rules.
-- `statistics.py`: paired inference and multiplicity declarations.
-- `traffic_rates.py`: typed tuple of evidence records; empty tuple is valid and means alert-burden output is suppressed.
-- `anchor.py`: historical reference values and explicit tolerances only when present in source truth.
-- `populations.py`: typed population declarations referencing capabilities, not implementing construction.
-- `experiments.py`: complete experiment catalogue as a tuple of `ExperimentDeclaration`; no registry dictionary.
-- `runtime.py`: paths, CUDA requirement, workers, overwrite behavior, and campaign options that cannot alter science.
-- `validation.py`: validate the complete cross-reference graph and return one `ResolvedProtocolGraph`.
+Declare:
 
-## Graph validation rules
+- physical client identity unavailable in the processed artifact;
+- family taxonomy unavailable;
+- chronology unavailable;
+- file-defined pseudo-clients supported as an applicability boundary only;
+- attack assignment supported at file-row level but not as original physical-device assignment;
+- device-aware and temporal claims prohibited.
 
-Validation must reject:
+### `reader.py`
 
-- duplicate IDs;
-- missing referenced protocols;
-- unsupported population/method/model combinations;
-- centralized methods in federated experiments;
-- threshold comparisons that use different model or score coordinates;
-- attack-sensitive metrics on populations without attack assignment;
-- temporal experiments on populations without chronology;
-- family thresholding without a family taxonomy;
-- grouped thresholding without an approved assignment input;
-- deployment fallback clients in confirmatory cohorts;
-- alert burden without valid rate evidence;
-- unresolved mandatory scientific values;
-- experiment parameters not belonging to declared grids;
-- mutable declarations or environment-based scientific overrides.
+- Read only the audited merged labelled files used by the project population.
+- Normalize labels deterministically.
+- Handle the audited infinite/empty `Rate` anomalies explicitly and report counts.
+- Do not globally drop informative sparse columns.
+- Preserve source file and row provenance.
+
+### `materialize.py`
+
+- Publish canonical Parquet under `data/canonical/dataset=CICIOT2023/`.
+- Preserve file identity for later pseudo-client construction.
+- Record that the original 105-device topology cannot be reconstructed from the available artifact.
+
+## Edge-IIoTset requirements
+
+### `schema.py`
+
+- Encode the exact audited feature and label columns from the selected CSV representation.
+- Normalize mixed numeric, string, hexadecimal, IP, MQTT, protocol, and label fields through explicit typed transformations.
+- Preserve raw timestamp text separately from parsed chronology during audit.
+- Encode the ten benign sensor-group identities from source folders.
+
+### `capabilities.py`
+
+Declare:
+
+- static sensor-group identity supported for benign data;
+- per-client attack assignment unavailable under the audited artifact;
+- attack-sensitive cross-client metrics unavailable;
+- family taxonomy unavailable;
+- chronology conditional and valid only for audited groups;
+- static external benign-equity and one-shot temporal populations supported within these boundaries.
+
+### `reader.py`
+
+- Read normal and attack sources separately.
+- Never attach attack rows to sensor clients without verified evidence.
+- Preserve source folder, file, row, and raw timestamp provenance.
+
+### `chronology.py`
+
+- Parse only genuine capture times.
+- Reject address literals or malformed values as chronology.
+- Preserve stable source-row order for equal timestamps.
+- Return a typed validation result per group.
+- Exclude invalid groups only from temporal populations, not automatically from static benign analysis.
+
+### `materialize.py`
+
+Publish separate canonical assets:
+
+- static benign sensor-group data;
+- valid temporal benign group data;
+- unassigned attack data;
+- chronology validation report.
+
+## Catalogue requirements
+
+`datasets/catalogue.py` uses exhaustive `match` on `DatasetId`. It returns typed reader/materializer/capability objects. No mutable registry or plugin dictionary.
 
 ## Test files to implement
 
-- `tests/unit/domain/test_values.py`
-- `tests/unit/domain/test_provenance.py`
-- `tests/unit/domain/test_contracts.py`
-- `tests/unit/protocols/test_models.py`
-- `tests/unit/protocols/test_seed_declarations.py`
-- `tests/unit/protocols/test_split_declarations.py`
-- `tests/unit/protocols/test_training_declarations.py`
-- `tests/unit/protocols/test_calibration_declarations.py`
-- `tests/unit/protocols/test_metric_declarations.py`
-- `tests/unit/protocols/test_statistical_declarations.py`
-- `tests/unit/protocols/test_traffic_rate_declarations.py`
-- `tests/unit/protocols/test_anchor_declarations.py`
-- `tests/unit/protocols/test_population_declarations.py`
-- `tests/unit/protocols/test_experiment_declarations.py`
-- `tests/unit/protocols/test_runtime_declarations.py`
-- `tests/unit/protocols/test_protocol_graph_validation.py`
-- `tests/property/test_scientific_value_objects.py`
+### Unit schema and capability tests
 
-Required assertions include immutability, extra-field rejection, boundary values, cross-reference failure, unresolved-value failure, and deterministic JSON serialization.
+- `tests/unit/datasets/test_dataset_models.py`
+- `tests/unit/datasets/test_dataset_capabilities.py`
+- `tests/unit/datasets/test_dataset_catalogue.py`
+- `tests/unit/datasets/nbaiot/test_schema.py`
+- `tests/unit/datasets/nbaiot/test_capabilities.py`
+- `tests/unit/datasets/nbaiot/test_reader.py`
+- `tests/unit/datasets/ciciot2023/test_schema.py`
+- `tests/unit/datasets/ciciot2023/test_capabilities.py`
+- `tests/unit/datasets/ciciot2023/test_reader.py`
+- `tests/unit/datasets/edge_iiotset/test_schema.py`
+- `tests/unit/datasets/edge_iiotset/test_capabilities.py`
+- `tests/unit/datasets/edge_iiotset/test_reader.py`
+- `tests/unit/datasets/edge_iiotset/test_chronology.py`
+
+### Integration materialization tests
+
+- `tests/integration/datasets/test_nbaiot_materialization.py`
+- `tests/integration/datasets/test_ciciot2023_materialization.py`
+- `tests/integration/datasets/test_edge_iiotset_materialization.py`
+- `tests/integration/datasets/test_canonical_data_reuse.py`
+
+Use small audited fixtures generated in-memory or from minimal fixture CSVs under `tests/fixtures/`; do not copy full datasets into the repository. `tests/fixtures/` may contain only the exact miniature files used by these named tests.
+
+## Required negative tests
+
+- Wrong column order or missing feature.
+- Unknown label or path-derived identity.
+- Non-finite numeric value not covered by an explicit rule.
+- Attempt to claim chronology from file order.
+- Attempt to assign Edge attack rows to sensor clients.
+- Attempt to construct physical CICIoT clients.
+- Reuse of a canonical asset with mismatched checksum or schema.
 
 ## Exit criteria
 
-- The entire protocol graph is typed, immutable, and validated in one call.
-- All known source-backed values are declared exactly once.
-- Missing mandatory values fail explicitly; no placeholder, `None`, or default permits execution.
-- No YAML/config parser dependency remains.
-- All tests and global audits pass.
+- All three datasets have executable exact schemas and evidence-backed capability contracts.
+- Canonical materialization is deterministic and atomic.
+- Invalid scientific uses fail before population or experiment construction.
+- No raw-data fact was invented from the scientific roadmap alone.
+- All Phase 03 tests and audits pass.
 
 ## Mandatory closing audit
 
