@@ -1,6 +1,6 @@
 # Raw Data Structure Report
 
-Generated 2026-07-28. All facts verified by direct file inspection. No files modified.
+Generated 2026-07-28. All facts verified by direct file inspection followed by independent cross-check agents. No files modified.
 
 ---
 
@@ -12,7 +12,7 @@ Generated 2026-07-28. All facts verified by direct file inspection. No files mod
 | Edge-IIoTset | 9.0 GB | 26 | 0 | 24 |
 | N-BaIoT | 8.1 GB | 90 | 16 | 0 |
 
-All CSVs use comma delimiter, UTF-8 encoding, no BOM. Headers present on every file. No quoting of field values detected.
+All CSVs use comma delimiter, UTF-8 encoding, no BOM. Headers present on every file. No quoting of field values.
 
 ---
 
@@ -23,8 +23,7 @@ All CSVs use comma delimiter, UTF-8 encoding, no BOM. Headers present on every f
 ```
 CIC_IOT_Dataset2023/CSV/
 ├── README.pdf
-├── CSV/                              # Per-attack files (309 CSVs)
-│   ├── README_CSV.pdf
+├── CSV/                              # Per-attack files (309 CSVs, 34 subdirectories)
 │   ├── Benign_Final/                 (4 files)
 │   ├── Backdoor_Malware/             (1 file)
 │   ├── BrowserHijacking/             (1 file)
@@ -63,13 +62,13 @@ CIC_IOT_Dataset2023/CSV/
     ├── Merged01.csv ... Merged63.csv
 ```
 
-34 classes total: 32 attack types + BENIGN + Benign_Final.
+34 classes total: 33 attack subdirectories + Benign_Final. The MERGED_CSV files contain 34 distinct `Label` values (33 attack classes + `BENIGN`).
 
 ### 2.2 Schema: Per-Attack Files (all 309 files — identical)
 
 39 columns. No label column. Attack class encoded in directory name.
 
-**All columns are numeric.**
+**All columns are numeric.** Column names contain spaces and mixed case.
 
 | # | Column | Inferred Type | Category |
 |---|---|---|---|
@@ -88,33 +87,19 @@ CIC_IOT_Dataset2023/CSV/
 | 12 | `syn_count` | int64 | SYN count |
 | 13 | `fin_count` | int64 | FIN count |
 | 14 | `rst_count` | int64 | RST count |
-| 15 | `HTTP` | float64 | HTTP indicator |
-| 16 | `HTTPS` | float64 | HTTPS indicator |
-| 17 | `DNS` | float64 | DNS indicator |
-| 18 | `Telnet` | float64 | Telnet indicator (always 0) |
-| 19 | `SMTP` | float64 | SMTP indicator (always 0) |
-| 20 | `SSH` | float64 | SSH indicator |
-| 21 | `IRC` | float64 | IRC indicator (always 0) |
-| 22 | `TCP` | float64 | TCP indicator |
-| 23 | `UDP` | float64 | UDP indicator |
-| 24 | `DHCP` | float64 | DHCP indicator |
-| 25 | `ARP` | float64 | ARP indicator |
-| 26 | `ICMP` | float64 | ICMP indicator |
-| 27 | `IGMP` | float64 | IGMP indicator |
-| 28 | `IPv` | float64 | IP version indicator |
-| 29 | `LLC` | float64 | LLC indicator |
-| 30 | `Tot sum` | int64 | Total sum |
-| 31 | `Min` | int64 | Minimum |
-| 32 | `Max` | int64 | Maximum |
-| 33 | `AVG` | float64 | Average |
-| 34 | `Std` | float64 | Standard deviation |
+| 15–29 | `HTTP`, `HTTPS`, `DNS`, `Telnet`, `SMTP`, `SSH`, `IRC`, `TCP`, `UDP`, `DHCP`, `ARP`, `ICMP`, `IGMP`, `IPv`, `LLC` | float64 | Protocol indicators |
+| 30 | `Tot sum` | int64 | Flow aggregate total |
+| 31 | `Min` | int64 | Flow aggregate min |
+| 32 | `Max` | int64 | Flow aggregate max |
+| 33 | `AVG` | float64 | Flow aggregate average |
+| 34 | `Std` | float64 | Flow aggregate stddev |
 | 35 | `Tot size` | float64 | Total size |
 | 36 | `IAT` | float64 | Inter-arrival time (seconds) |
-| 37 | `Number` | int64 | Aggregation window size |
+| 37 | `Number` | int64 | Aggregation window size (10=benign, 100=high-volume DDoS) |
 | 38 | `Variance` | float64 | Variance |
 
 **Integer columns (6):** `Protocol Type`, `ack_count`, `syn_count`, `fin_count`, `rst_count`, `Number`.
-**Float columns (33):** All others.
+**Float columns (33):** All remaining.
 
 ### 2.3 Schema: Merged Files (all 63 files — identical)
 
@@ -122,9 +107,9 @@ CIC_IOT_Dataset2023/CSV/
 
 | # | Column | Type | Notes |
 |---|---|---|---|
-| 39 | `Label` | string (object) | Attack class in UPPERCASE |
+| 39 | `Label` | string | Attack class in UPPERCASE |
 
-Label values (33 distinct, verified across Merged01.csv): `BACKDOOR_MALWARE`, `BENIGN`, `BROWSERHIJACKING`, `COMMANDINJECTION`, `DDOS-ACK_FRAGMENTATION`, `DDOS-HTTP_FLOOD`, `DDOS-ICMP_FLOOD`, `DDOS-ICMP_FRAGMENTATION`, `DDOS-PSHACK_FLOOD`, `DDOS-RSTFINFLOOD`, `DDOS-SLOWLORIS`, `DDOS-SYNONYMOUSIP_FLOOD`, `DDOS-SYN_FLOOD`, `DDOS-TCP_FLOOD`, `DDOS-UDP_FLOOD`, `DDOS-UDP_FRAGMENTATION`, `DICTIONARYBRUTEFORCE`, `DNS_SPOOFING`, `DOS-HTTP_FLOOD`, `DOS-SYN_FLOOD`, `DOS-TCP_FLOOD`, `DOS-UDP_FLOOD`, `MIRAI-GREETH_FLOOD`, `MIRAI-GREIP_FLOOD`, `MIRAI-UDPPLAIN`, `MITM-ARPSPOOFING`, `RECON-HOSTDISCOVERY`, `RECON-OSSCAN`, `RECON-PINGSWEEP`, `RECON-PORTSCAN`, `SQLINJECTION`, `VULNERABILITYSCAN`, `XSS`.
+Label values (34 distinct, verified): `BACKDOOR_MALWARE`, `BENIGN`, `BROWSERHIJACKING`, `COMMANDINJECTION`, `DDOS-ACK_FRAGMENTATION`, `DDOS-HTTP_FLOOD`, `DDOS-ICMP_FLOOD`, `DDOS-ICMP_FRAGMENTATION`, `DDOS-PSHACK_FLOOD`, `DDOS-RSTFINFLOOD`, `DDOS-SLOWLORIS`, `DDOS-SYNONYMOUSIP_FLOOD`, `DDOS-SYN_FLOOD`, `DDOS-TCP_FLOOD`, `DDOS-UDP_FLOOD`, `DDOS-UDP_FRAGMENTATION`, `DICTIONARYBRUTEFORCE`, `DNS_SPOOFING`, `DOS-HTTP_FLOOD`, `DOS-SYN_FLOOD`, `DOS-TCP_FLOOD`, `DOS-UDP_FLOOD`, `MIRAI-GREETH_FLOOD`, `MIRAI-GREIP_FLOOD`, `MIRAI-UDPPLAIN`, `MITM-ARPSPOOFING`, `RECON-HOSTDISCOVERY`, `RECON-OSSCAN`, `RECON-PINGSWEEP`, `RECON-PORTSCAN`, `SQLINJECTION`, `UPLOADING_ATTACK`, `VULNERABILITYSCAN`, `XSS`.
 
 Each Merged file is multi-class — contains samples from many attack types, not one per file.
 
@@ -132,29 +117,27 @@ Each Merged file is multi-class — contains samples from many attack types, not
 
 | Category | Range | Notes |
 |---|---|---|
-| Per-attack files | 1,253 – 374,000 | Single-attack-type files vary by attack class |
-| Merged files | 65,724 – 920,544 | Merged52.csv is anomalously small (final chunk) |
-| Total per-attack | 46.8M rows | |
-| Total merged | 45.0M rows | |
+| Per-attack files | 1,253 – 374,000 | Single-attack-type; varies by class |
+| Merged files | 65,724 – 920,544 | Merged52.csv anomalously small (final chunk) |
+| Per-attack total | ~46.8M rows | |
+| Merged total | ~45.0M rows | |
 
 ### 2.5 Anomalies
 
-1. **`inf` value in `Rate`:** One occurrence in `DDoS-UDP_Fragmentation/DDoS-UDP_Fragmentation.pcap.csv`, row 982. Division-by-zero in rate calculation.
-2. **Empty cells:** 2 empty cells in same DDoS-UDP_Fragmentation file (out of 78K sampled).
-3. **Perpetually constant columns:** `Telnet` (18), `SMTP` (19), `IRC` (21) are always 0.0 in all inspected files. These are protocol indicators with no traffic in the dataset.
-4. **`Number` column semantics:** 10 for benign flows, 100 for high-volume DDoS flows — encodes aggregation window size.
-5. **No missing headers, no BOM, no encoding issues.**
-6. **No empty files** — all 372 files have at least 1 data row.
+1. **`inf` in `Rate`:** One occurrence in `DDoS-UDP_Fragmentation/DDoS-UDP_Fragmentation.pcap.csv`, row 982. Division by zero in rate calculation.
+2. **Empty cells:** 2 empty cells in same DDoS-UDP_Fragmentation file.
+3. **Sparsely populated protocol columns:** `Telnet` (18), `SMTP` (19), `IRC` (21) are 0.0 in most attack types but have non-zero values in some (e.g., VulnerabilityScan has `Telnet` up to 0.5, `SMTP` up to 0.8, `IRC` up to 0.2; DoS-SYN_Flood has non-zero values for all three). These columns are informative for certain attacks — do not drop globally.
+4. **`Number` semantics:** 10 for benign flows, 100 for high-volume DDoS — encodes aggregation window size.
+5. **No missing headers, no BOM, no encoding issues, no empty files.**
 
 ### 2.6 Key Facts for Loader Configuration
 
 - 34 classes. Label format: UPPERCASE with underscores/hyphens.
-- Per-attack files: label = directory basename (e.g., `DDoS-ICMP_Flood`, `Benign_Final`). Need mapping to canonical enum.
-- Merged files: label = column `Label`.
-- `Protocol Type` column is **not** a label — it is IP protocol number.
-- No timestamp, no IP, no port, no device, no flow-ID columns.
-- Column names contain spaces and mixed case. Keep as-is or normalize consistently.
-- 6 int columns, 33 float columns, 1 string (Label in merged only).
+- Per-attack files: label derived from directory basename (e.g., `DDoS-ICMP_Flood`, `Benign_Final`).
+- Merged files: label from column `Label`.
+- `Protocol Type` column is IP protocol number, NOT a label.
+- No timestamp, IP, port, device, or flow-ID columns exist.
+- 6 int + 33 float + 1 string (Label, merged only).
 
 ---
 
@@ -198,11 +181,11 @@ Edge-IIoTset/
         └── ML-EdgeIIoT-dataset.csv
 ```
 
-PCAP files exist alongside CSVs in `Attack traffic/` and `Normal traffic/*/` — they are the raw packet captures, not processed data. Ignore for CSV loaders.
+PCAP files exist alongside CSVs. They are raw packet captures — not processed data.
 
 ### 3.2 Schema (all 26 CSV files — identical)
 
-63 columns. Two label columns, no device identifier.
+63 columns. Two label columns (61, 62). No device identifier column.
 
 **Label columns:**
 
@@ -211,43 +194,75 @@ PCAP files exist alongside CSVs in `Attack traffic/` and `Normal traffic/*/` —
 | 61 | `Attack_label` | int64 | 0 = Normal, 1 = Attack |
 | 62 | `Attack_type` | string | `Normal` or one of 14 attack type strings |
 
-**14 Attack_type values:** `Backdoor`, `DDoS_HTTP`, `DDoS_ICMP`, `DDoS_TCP`, `DDoS_UDP`, `MITM`, `OS_Fingerprinting`, `Password`, `Port_Scanning`, `Ransomware`, `SQL_injection`, `Uploading`, `Vulnerability_scanner`, `XSS`.
+**14 attack type strings:** `Backdoor`, `DDoS_HTTP`, `DDoS_ICMP`, `DDoS_TCP`, `DDoS_UDP`, `MITM`, `OS_Fingerprinting`, `Password`, `Port_Scanning`, `Ransomware`, `SQL_injection`, `Uploading`, `Vulnerability_scanner`, `XSS`.
 
-**Feature columns (61):** Mix of numeric types. Key categories:
+**Label encoding difference in DNN/ML datasets:** `OS_Fingerprinting` is renamed to `Fingerprinting` in both `DNN-EdgeIIoT-dataset.csv` and `ML-EdgeIIoT-dataset.csv`. This is the only label mismatch between raw and processed datasets.
 
-| Category | Columns | Examples |
+**Feature columns (61 columns, 0–60):** Protocol-level packet fields. Categorized by protocol layer:
+
+| Category | Count | Example columns |
 |---|---|---|
-| Network identity (mixed-type string/numeric) | `frame.time`, `ip.src_host`, `ip.dst_host` | IPs stored as hex strings or integers depending on file |
-| ARP | `arp.dst.proto_ipv4`, `arp.opcode`, `arp.hw.size`, `arp.src.proto_ipv4` | |
-| ICMP | `icmp.checksum`, `icmp.seq_le`, `icmp.transmit_timestamp`, `icmp.unused` | |
-| HTTP | `http.file_data`, `http.content_length`, `http.request.uri.query`, `http.request.method`, `http.referer`, `http.request.full_uri`, `http.request.version`, `http.response`, `http.tls_port` | |
-| TCP | `tcp.ack`, `tcp.ack_raw`, `tcp.checksum`, `tcp.connection.fin`, `tcp.connection.rst`, `tcp.connection.syn`, `tcp.connection.synack`, `tcp.dstport`, `tcp.flags`, `tcp.flags.ack`, `tcp.len`, `tcp.options`, `tcp.payload`, `tcp.seq`, `tcp.srcport` | |
-| UDP | `udp.port`, `udp.stream`, `udp.time_delta` | |
-| DNS | `dns.qry.name`, `dns.qry.name.len`, `dns.qry.qu`, `dns.qry.type`, `dns.retransmission`, `dns.retransmit_request`, `dns.retransmit_request_in` | |
-| MQTT | `mqtt.conack.flags`, `mqtt.conflag.cleansess`, `mqtt.conflags`, `mqtt.hdrflags`, `mqtt.len`, `mqtt.msg_decoded_as`, `mqtt.msg`, `mqtt.msgtype`, `mqtt.proto_len`, `mqtt.protoname`, `mqtt.topic`, `mqtt.topic_len`, `mqtt.ver` | |
-| Modbus | `mbtcp.len`, `mbtcp.trans_id`, `mbtcp.unit_id` | |
+| Frame | 1 | `frame.time` (mixed quality — see anomalies) |
+| Network identity | 2 | `ip.src_host`, `ip.dst_host` (dotted-decimal IP strings, mixed type) |
+| ARP | 4 | `arp.dst.proto_ipv4`, `arp.opcode`, `arp.hw.size`, `arp.src.proto_ipv4` |
+| ICMP | 4 | `icmp.checksum`, `icmp.seq_le`, `icmp.transmit_timestamp`, `icmp.unused` |
+| HTTP | 9 | `http.file_data`, `http.content_length`, `http.request.uri.query`, etc. |
+| TCP | 15 | `tcp.ack`, `tcp.checksum`, `tcp.dstport`, `tcp.flags`, `tcp.payload`, `tcp.srcport`, etc. |
+| UDP | 3 | `udp.port`, `udp.stream`, `udp.time_delta` |
+| DNS | 6 | `dns.qry.name`, `dns.qry.name.len`, `dns.retransmission`, etc. |
+| MQTT | 13 | `mqtt.conack.flags`, `mqtt.hdrflags`, `mqtt.topic`, `mqtt.protoname`, etc. |
+| Modbus | 3 | `mbtcp.len`, `mbtcp.trans_id`, `mbtcp.unit_id` |
 
-**Column dtype is inconsistent across files.** `frame.time` is `object` (string) in some files, `float64` in others. `ip.src_host` and `ip.dst_host` store IP addresses as hex strings (e.g., `0x0a000002`) or as `float64` values depending on the file. `tcp.checksum`, `tcp.flags`, `tcp.options`, `tcp.payload`, `mqtt.hdrflags`, `mqtt.msg`, `mqtt.protoname`, `mqtt.topic` also vary between `object` and numeric types. A typed loader must handle these with `low_memory=False` or explicit dtype mapping.
+**Column dtype is inconsistent across files.** `frame.time` is `object` (string) in most files but `float64` in ML dataset and MITM_attack.csv. `ip.src_host` is consistently `object` (dotted-decimal IP strings). `ip.dst_host` varies: `object` in most files, `int64` in DDoS_UDP_Flood, `float64` in MITM and ML datasets. `tcp.checksum`, `tcp.flags`, `tcp.options`, `tcp.payload`, `mqtt.hdrflags`, `mqtt.msg`, `mqtt.protoname`, `mqtt.topic` also vary between `object` and numeric. Load with `low_memory=False` or explicit dtype mapping.
 
-### 3.3 Row Counts
+### 3.3 Device Identity
+
+No device-ID column. Device identity encoded three ways:
+
+1. **File path:** `Normal traffic/{DeviceName}/{DeviceName}.csv` — 10 device names.
+2. **IP subnet:** Each normal device uses distinct 192.168.x.x /24 subnet (observed via `ip.src_host`):
+   - 192.168.0.x: Temperature_and_Humidity, Modbus
+   - 192.168.1.x: Distance, 192.168.2.x: phValue
+   - 192.168.3.x: Heart_Rate, 192.168.4.x: Water_Level
+   - 192.168.5.x: IR_Receiver, 192.168.6.x: Sound_Sensor
+   - 192.168.7.x: Flame_Sensor, 192.168.8.x: Soil_Moisture
+3. **MQTT topic** (column `mqtt.topic`): Contains device name for 9/10 normal devices. Modbus is the exception — it uses DNS, not MQTT.
+
+Attack traffic files have no device identity.
+
+### 3.4 Row Counts
 
 | File Category | Files | Row Range |
 |---|---|---|
-| Attack traffic | 14 | 1,002 – 3,201,627 |
-| Normal traffic (per device) | 10 | 165,320 – 2,295,289 |
+| Attack traffic | 14 | 1,001 – 3,201,627 |
+| Normal traffic (per device) | 10 | 159,502 – 2,295,289 |
 | DNN dataset | 1 | 2,219,202 |
 | ML dataset | 1 | 157,801 |
 
-Largest file: `DDoS_UDP_Flood_attack.csv` (3.2M rows). Smallest: `OS_Fingerprinting_attack.csv` (1,002 rows).
+Largest: `DDoS_UDP_Flood_attack.csv` (3.2M rows). Smallest: `OS_Fingerprinting_attack.csv` (1,001 rows).
 
-### 3.4 Key Facts for Loader Configuration
+DNN dataset: heavily normal-weighted (~72.8% Normal rows). ML dataset: attack-heavy (~15.4% Normal).
 
-- Device identity is only in the file path (e.g., `Normal traffic/Flame_Sensor/`). No column carries device ID.
-- Attack traffic files have no device identity at all — one file = one attack type, collector device unknown.
-- DNN and ML datasets are pre-split, multi-class, shuffled variants. They share the same 63-column schema.
-- `ip.src_host` and `ip.dst_host` are stored as hex strings, not dotted-decimal — need decoding if used as flow identifiers.
-- Protocol-specific columns are sparse: ICMP columns are NaN/0 in TCP attacks, HTTP columns are NaN/0 in ICMP floods.
-- All files schema-identical. No parsing anomalies found in sampled data.
+### 3.5 Anomalies
+
+1. **`frame.time` corruption in 3 raw files:**
+   - `DDoS_UDP_Flood_attack.csv`: ~95% of rows have IP addresses instead of timestamps. ~5% have proper timestamps. Column alignment is correct — this is a data capture issue.
+   - `Modbus.csv`: 100% of rows have IP addresses in `frame.time` (e.g., `192.168.0.128`).
+   - `MITM_attack.csv`: 100% of rows have `0.0` in `frame.time`.
+2. **`frame.time` in ML dataset:** All values are small numeric (e.g., `6.0`) — preprocessing dropped the timestamp.
+3. **Leading/trailing whitespace:** Proper `frame.time` values have format `" YYYY HH:MM:SS.fffffffff "` with leading and trailing spaces.
+4. **`OS_Fingerprinting` → `Fingerprinting`:** Renamed in DNN and ML datasets. Only label encoding difference between raw and processed files.
+5. **Protocol sparsity:** Protocol-specific columns contain meaningful values only when that protocol is used in the packet. ICMP attacks populate ICMP columns and leave TCP/HTTP/MQTT at 0.0. TCP attacks populate TCP columns and leave ICMP at 0.0. Which columns are constant varies per file.
+6. **Column misalignment in MITM_attack.csv:** Row 0 shows DNS service names in port columns (`tcp.srcport = '_ipps._tcp.local'`, `udp.port = '_ipp._tcp.local'`), indicating column-shift issues in this file.
+7. **Mixed hex/decimal:** `tcp.flags`, `mqtt.hdrflags`, `tcp.checksum` mix hex (`0x...`) and decimal values.
+
+### 3.6 Key Facts for Loader Configuration
+
+- Device identity only in file path, IP subnet, or MQTT topic — must be parsed from path.
+- Attack traffic files: one attack type per file, device unknown.
+- DNN and ML datasets are pre-split, multi-class, shuffled. Share the same 63-column schema.
+- `frame.time` is unreliable in 4/26 files — do not depend on it as a primary feature.
+- All files schema-identical. No missing values or encoding issues found.
 
 ---
 
@@ -258,7 +273,7 @@ Largest file: `DDoS_UDP_Flood_attack.csv` (3.2M rows). Smallest: `OS_Fingerprint
 ```
 N-BaIoT/
 ├── N_BaIoT_dataset_description_v1.txt
-├── demonstrate_structure.csv           (1-row example, 115 cols)
+├── demonstrate_structure.csv           (1-row documentation example, 115 cols)
 └── <device>/                           (9 devices)
     ├── benign_traffic.csv
     ├── gafgyt_attacks/
@@ -293,37 +308,49 @@ N-BaIoT/
 
 Samsung and Ennio have gafgyt attacks only (no mirai). All others have both botnet families.
 
-16 RAR files remain alongside extracted CSVs. They contain the original compressed data — loaders should use the extracted CSVs.
-
 ### 4.2 Schema (all 89 data CSVs — identical headers)
 
-115 columns. No label column. No device identifier column. All numeric (mostly float64, some int64 per device).
+115 columns. No label column. No device identifier column. All numeric (float64/int64).
 
-**Benign/malicious separation is by FILE, not by column.** Benign rows live in `benign_traffic.csv`. Attack rows live in `gafgyt_attacks/*.csv` and `mirai_attacks/*.csv`. No file mixes benign and attack rows.
+**Benign/malicious separation is by FILE, not by column.** Benign rows in `benign_traffic.csv`. Attack rows in `gafgyt_attacks/*.csv` and `mirai_attacks/*.csv`. No file mixes benign and attack.
 
-**Attack sub-type** (e.g., combo, junk, scan, tcp, udp, ack, syn, udpplain) encoded in filename.
+**Attack sub-type** (combo, junk, scan, tcp, udp, ack, syn, udpplain) encoded in filename.
 
-**Botnet family** encoded in directory structure (`gafgyt_attacks/` vs `mirai_attacks/`).
+**Botnet family** encoded in parent directory (`gafgyt_attacks/` vs `mirai_attacks/`).
 
 ### 4.3 Column Categories (115 total)
 
-Columns are statistical features of network traffic extracted over time windows at 5 decay factors (L5, L3, L1, L0.1, L0.01):
+Statistical features extracted over time windows at 5 decay factors (L5, L3, L1, L0.1, L0.01):
 
-| Prefix | Count per decay | Total | Description |
+| Prefix | Stats per decay | Total columns | Description |
 |---|---|---|---|
 | `MI_dir_*` | weight, mean, variance (3) | 15 | Marginal distribution of packet directions |
 | `H_*` | weight, mean, variance (3) | 15 | Host entropy |
-| `HH_*` | weight, mean, std, magnitude, radius, covariance, pcc (7) | 35 | Host-to-host joint entropy statistics |
+| `HH_*` | weight, mean, std, magnitude, radius, covariance, pcc (7) | 35 | Host-to-host joint entropy |
 | `HH_jit_*` | weight, mean, variance (3) | 15 | Host-to-host jitter |
-| `HpHp_*` | weight, mean, std, magnitude, radius, covariance, pcc (7) | 35 | Host-to-host (port-based) joint entropy statistics |
+| `HpHp_*` | weight, mean, std, magnitude, radius, covariance, pcc (7) | 35 | Host-to-host port-based joint entropy |
 
-Total: 15 + 15 + 35 + 15 + 35 = 115.
+Total: 15 + 15 + 35 + 15 + 35 = 115. All columns accounted for. No extra or missing columns.
 
 ### 4.4 Constant / All-Zero Columns
 
-Varies by attack type. Benign traffic: 0 constant columns. Mirai attacks: 20–35 constant columns (mostly HH/HpHp covariance/pcc/weight/std/radius). Gafgyt attacks: 0–3 constant columns (only in udp/tcp/junk, not in combo/scan).
+Varies by attack type, not by device. Verified on Danmini_Doorbell (representative):
 
-Constant columns are attack-type-specific, not device-specific. A loader should NOT drop columns globally — different attack sub-types have different informative columns.
+| File | Constant cols | All-zero cols | Notes |
+|---|---|---|---|
+| benign_traffic.csv | 0 | 0 | All columns informative |
+| gafgyt/combo.csv | 0 | 0 | |
+| gafgyt/junk.csv | 1 | 1 | |
+| gafgyt/scan.csv | 0 | 0 | |
+| gafgyt/tcp.csv | 3 | 3 | HpHp covariance/pcc |
+| gafgyt/udp.csv | 3 | 3 | HpHp_L5_pcc, HpHp_L0.01_covariance, HpHp_L0.01_pcc |
+| mirai/ack.csv | 24 | 24 | All HH_*_covariance/pcc + many HpHp_* columns |
+| mirai/scan.csv | 20 | 20 | |
+| mirai/syn.csv | 26 | 24 | All HH_*_covariance/pcc + many HpHp_* |
+| mirai/udp.csv | 35 | 30 | |
+| mirai/udpplain.csv | 20 | 20 | |
+
+Constant columns are attack-type-specific. Do not drop columns globally — different attack sub-types have different informative subsets.
 
 ### 4.5 Row Counts
 
@@ -333,16 +360,18 @@ Constant columns are attack-type-specific, not device-specific. A loader should 
 | Gafgyt attack per file | 29,068 – 105,874 |
 | Mirai attack per file | 61,852 – 237,665 |
 
+Largest: Danmini mirai/udp.csv (237,665 rows). Smallest: Ecobee benign_traffic.csv (13,114 rows).
+
 ### 4.6 Key Facts for Loader Configuration
 
-- Device identity is only in the path (9 device names). Must be parsed from directory.
-- Label construction: `(botnet_family, attack_sub_type)` for attacks, `BENIGN` for benign. Examples: `(gafgyt, combo)`, `(mirai, udpplain)`, `(mirai, udp)`. Note: both gafgyt and mirai have `scan` and `udp` — disambiguation requires the parent directory.
-- All files have headers. All columns are numeric.
+- Device identity only in path (9 device names). Parse from directory.
+- Label construction: `(botnet_family, attack_sub_type)` for attacks, `BENIGN` for benign. Example: `(gafgyt, combo)`, `(mirai, udpplain)`. Both botnet families have `scan` and `udp` — disambiguate via parent directory.
+- All files have headers. All columns numeric.
 - No IP, timestamp, MAC, or flow-ID columns.
+- 16 RAR archives are original compressed files — use extracted CSVs.
 - `demonstrate_structure.csv` is documentation only, not data.
-- 16 RAR archives are original compressed files — loaders use extracted CSVs.
-- Column dtype varies per device/per-file (some columns are int64 in benign, float64 in attack). Load with consistent float64 casting.
-- No missing values found in sampled data. No encoding issues.
+- Column dtype varies per file (int64 in benign, float64 in attack for some columns). Cast consistently.
+- No missing values found. No encoding issues.
 
 ---
 
@@ -351,26 +380,28 @@ Constant columns are attack-type-specific, not device-specific. A loader should 
 | Property | CIC_IOT_Dataset2023 | Edge-IIoTset | N-BaIoT |
 |---|---|---|---|
 | Feature columns | 39 | 61 | 115 |
-| Label column | `Label` (merged only) | `Attack_label` + `Attack_type` | None (file-separated) |
+| Label in data | `Label` (merged only) | `Attack_label` + `Attack_type` | None (file-separated) |
 | Label encoding | String (UPPERCASE) | int (0/1) + string | Path-derived |
-| Device identity in data | No | No | No |
-| Timestamp in data | No | `frame.time` (mixed type) | No |
-| IP/port/flow ID | No | `ip.src_host`, `ip.dst_host`, port cols | No |
+| Device identity in data | No | Via path/IP/MQTT | No |
+| Timestamp | No | `frame.time` (corrupted in 4/26 files) | No |
+| IP/port/flow ID | No | `ip.src_host`, `ip.dst_host`, port cols (dotted-decimal strings) | No |
 | Schema uniformity | 100% | 100% | 100% |
-| No. classes (benign + attack) | 34 | 15 | 1 benign + 2×5 gafgyt + 2×5 mirai = 21 |
+| Number of classes | 34 | 15 | 1 benign + 10 gafgyt + 10 mirai = 21 |
 | Missing values | Rare (<0.01%) | None found | None found |
 | Inf values | 1 occurrence | None found | None found |
-| Constant columns | 3 (Telnet, SMTP, IRC) | Varies by protocol | 0–35 per attack type |
+| Constant columns | 3 (sparse, varies by attack) | Per-protocol sparsity (varies per file) | 0–35 per attack type |
 
 ---
 
 ## 6. Loader Design Recommendations
 
-1. **One loader per dataset** — schemas differ too much for a unified loader.
-2. **Parse device/label from path** for CIC per-attack, N-BaIoT all files, and Edge-IIoTset normal traffic.
-3. **Cast all numeric columns to float64** on load to handle mixed int/float across files.
-4. **Handle `inf` explicitly** in CIC `Rate` column (replace with NaN or drop row).
-5. **Do not drop constant columns globally** — their informativeness depends on attack type.
-6. **Edge-IIoTset IP columns** (`ip.src_host`, `ip.dst_host`): hex-encoded strings, may need decoding if used as identifiers.
-7. **N-BaIoT RAR files**: 16 archives still present alongside CSVs. Do not attempt to load them.
-8. **Edge-IIoTset PCAP files**: 24 raw captures. Not data for CSV loaders.
+1. **One loader per dataset** — schemas differ too much for unification.
+2. **Parse device/label from path** for CIC per-attack, all N-BaIoT, and Edge-IIoTset normal traffic.
+3. **Cast all numeric columns to float64** on load for consistency across mixed int/float files.
+4. **Handle `inf` explicitly** in CIC `Rate` column.
+5. **Do not drop constant columns globally** — informativeness depends on attack type.
+6. **Edge-IIoTset `frame.time` is unreliable** — do not use as primary feature. Has IP addresses, `0.0`, or numeric junk in 4/26 files.
+7. **Edge-IIoTset label rename:** `OS_Fingerprinting` → `Fingerprinting` in DNN/ML datasets. Normalize to canonical name.
+8. **Edge-IIoTset IP columns:** `ip.src_host` and `ip.dst_host` store IPs as dotted-decimal strings. `ip.dst_host` has mixed dtype across files.
+9. **N-BaIoT RAR files:** 16 archives still present. Do not load them.
+10. **Edge-IIoTset PCAP files:** 24 raw captures alongside CSVs. Not for CSV loaders.
