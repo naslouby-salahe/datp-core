@@ -225,7 +225,7 @@ __marimo__/
 # (trailing-slash) gitignore pattern does not match a symlink, only a real directory.
 data/raw
 data/manifests/
-checkpoints/
+/checkpoints/
 outputs/
 .runtime/
 .import_linter_cache/
