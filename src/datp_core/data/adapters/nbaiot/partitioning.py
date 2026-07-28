@@ -20,7 +20,7 @@ from datp_core.data.contracts.enums import (
     SplitMembership,
     SyntheticClientNamingPolicy,
 )
-from datp_core.data.materialization.database import insert_record_batch, quote_identifier
+from datp_core.data.materialization.database import fetch_scalar, insert_record_batch, quote_identifier
 from datp_core.data.materialization.errors import DataFailure
 from datp_core.data.materialization.models import NBaIoTDirichletMaterializationPlan
 
@@ -215,12 +215,11 @@ def _allocate(
     digest = _new_digest(plan)
     assignment_count = 0
     for membership_index, membership in enumerate(memberships):
-        role_count = int(
-            connection.execute(
-                f"SELECT count(*) FROM materialized_rows WHERE "
-                f"{quote_identifier(MaterializedColumn.SPLIT.value)} = ?",
-                (membership.value,),
-            ).fetchone()[0]
+        role_count = fetch_scalar(
+            connection,
+            f"SELECT count(*) FROM materialized_rows WHERE "
+            f"{quote_identifier(MaterializedColumn.SPLIT.value)} = ?",
+            (membership.value,),
         )
         remaining = [
             role_count // len(client_ids) + int(index < role_count % len(client_ids))
@@ -258,7 +257,7 @@ def _allocate(
                 source_indices.append(source_row_index)
                 assigned_clients.append(client_id)
                 digest.update(
-                    f"{source_path}\0{source_row_index}\0{client_id}\0{membership.value}\n".encode("utf-8")
+                    f"{source_path}\0{source_row_index}\0{client_id}\0{membership.value}\n".encode()
                 )
                 assignment_count += 1
             assignment_batch = pa.RecordBatch.from_arrays(

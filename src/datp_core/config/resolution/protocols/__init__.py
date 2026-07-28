@@ -49,7 +49,8 @@ from datp_core.core.identifiers import (
     TrainingProfileId,
 )
 from datp_core.core.registry import TypedDomainRegistry
-from datp_core.data.contracts import EligibilityPolicyRecord, NormalizationStrategyRecord
+from datp_core.data.contracts.eligibility import EligibilityPolicy
+from datp_core.data.contracts.materialization import NormalizationConfig
 from datp_core.evaluation.specs import (
     EvaluationResultContract,
     MetricBundleSpec,
@@ -91,8 +92,8 @@ class ResolvedProtocols(BaseModel):
     model_architectures: TypedDomainRegistry[str, ModelArchitectureRecord]
     optimizers: TypedDomainRegistry[str, OptimizerRecord]
     batching_profiles: TypedDomainRegistry[str, BatchingRecord]
-    eligibility_policies: TypedDomainRegistry[EligibilityPolicyId, EligibilityPolicyRecord]
-    normalization_strategies: TypedDomainRegistry[NormalizationStrategyId, NormalizationStrategyRecord]
+    eligibility_policies: TypedDomainRegistry[EligibilityPolicyId, EligibilityPolicy]
+    normalization_strategies: TypedDomainRegistry[NormalizationStrategyId, NormalizationConfig]
     metric_bundles: TypedDomainRegistry[MetricBundleId, MetricBundleSpec]
     report_profiles: TypedDomainRegistry[str, ReportProfileRecord]
     metric_definitions: MetricDefinitions

@@ -5,8 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal, Protocol
 
-from datp_core.pipeline.stages.context import DataContext
-
 import msgspec
 
 from datp_core.core.hashing import Checksum
@@ -37,6 +35,7 @@ from datp_core.data.contracts.sources import (
     NBaIoTSourceConfig,
 )
 from datp_core.data.sources.models import SourceInventory
+from datp_core.pipeline.stages.context import DataContext
 
 
 class MaterializationArtifactLayout(msgspec.Struct, frozen=True):

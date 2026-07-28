@@ -21,7 +21,8 @@ from datp_core.core.identifiers import (
     TrainingProfileId,
 )
 from datp_core.core.registry import TypedDomainRegistry
-from datp_core.data.contracts import ResolvedDataset, SplitMembership, SplitMethod
+from datp_core.data.contracts.dataset import ResolvedDataset
+from datp_core.data.contracts.enums import SplitMembership, SplitMethod
 from datp_core.experiments import ExperimentRecord, PopulationRecord
 from datp_core.learning.checkpoints.selection import (
     select_anchor_checkpoint_round,
@@ -227,7 +228,6 @@ class ModelTrainingStageHandler:
         materialization_config = next(
             item for item in dataset.materializations if item.identifier == setup.materialization_id
         )
-        features = dataset.field_schema.model_features
         checkpoint_profile = self._config.checkpoint_profiles.get(experiment.checkpoint_profile_id)
         if checkpoint_profile.total_rounds is None:
             return StageJobOutcome.failed(
@@ -248,15 +248,13 @@ class ModelTrainingStageHandler:
                 materialized_path.write_bytes(materialization_bytes)
                 training_split = (
                     SplitMembership.HISTORICAL_TRAINING.value
-                    if materialization_config.split_method == SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL
+                    if materialization_config.split.method == SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL
                     else SplitMembership.TRAIN.value
                 )
                 calibration_split = (
                     SplitMembership.HISTORICAL_CALIBRATION.value if training_split == SplitMembership.HISTORICAL_TRAINING.value else SplitMembership.CALIBRATION.value
                 )
-                feature_columns = (
-                    features.order if features is not None else materialized_feature_columns(materialized_path)
-                )
+                feature_columns = materialized_feature_columns(materialized_path)
                 training_clients = load_benign_client_tensors(materialized_path, training_split, feature_columns)
                 calibration_clients = load_benign_client_tensors(materialized_path, calibration_split, feature_columns)
                 if self._config.runtime.active_execution_profile.device_policy != DevicePolicy.CUDA_REQUIRED:
@@ -266,7 +264,7 @@ class ModelTrainingStageHandler:
                 digest_bytes = self._config.protocol_determinism.derived_seed_digest_bytes
                 initialization_seed = derive_model_initialization_seed(
                     key=initialization_namespace.key,
-                    digest_bytes=digest_bytes,
+                    digest_bytes=int(digest_bytes),
                     training_seed=ctx.seed,
                 )
                 set_deterministic_seeds(initialization_seed)

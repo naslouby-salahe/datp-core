@@ -14,8 +14,8 @@ from datp_core.data.contracts.constants import PROBABILITY_SUM_ABSOLUTE_TOLERANC
 from datp_core.data.contracts.enums import (
     AttackAssignment,
     BoundaryRule,
-    CategoryOrder,
     CategoricalEncodingStrategy,
+    CategoryOrder,
     ChronologyRolloverPolicy,
     ClientConstructionMethod,
     ConstantFeaturePolicy,
@@ -313,5 +313,10 @@ class PartitionCondition(StrictFrozenModel):
 
 
 def _validate_probability_sum(values: tuple[Probability, ...]) -> None:
-    if not math.isclose(sum(float(value) for value in values), 1.0, rel_tol=0.0, abs_tol=PROBABILITY_SUM_ABSOLUTE_TOLERANCE):
+    if not math.isclose(
+        sum(float(value) for value in values),
+        1.0,
+        rel_tol=0.0,
+        abs_tol=PROBABILITY_SUM_ABSOLUTE_TOLERANCE,
+    ):
         raise ValueError("split probabilities must sum exactly to one")

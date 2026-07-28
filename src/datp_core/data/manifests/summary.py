@@ -14,9 +14,9 @@ from datp_core.data.contracts.enums import (
     MaterializedColumn,
     SplitMembership,
 )
+from datp_core.data.contracts.materialization import WithinClientChronologicalSplitConfig
 from datp_core.data.materialization.database import quote_identifier, quote_literal
 from datp_core.data.materialization.models import DatasetMaterializationPlan, MaterializationEvidence
-from datp_core.data.contracts.materialization import WithinClientChronologicalSplitConfig
 from datp_core.data.materialization.schema import MaterializedSchemaSpec, SchemaValidation
 
 

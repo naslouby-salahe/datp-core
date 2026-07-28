@@ -18,10 +18,11 @@ from datp_core.data.contracts.enums import (
     DeterministicOrdering,
     MaterializedColumn,
     SortDirection,
-    SplitMembership,
     SplitLayout,
+    SplitMembership,
 )
 from datp_core.data.contracts.materialization import ChronologicalGappedSplitConfig, RandomFractionalSplitConfig
+from datp_core.data.contracts.values import ColumnName
 from datp_core.data.materialization.database import insert_record_batch, quote_identifier, write_query_to_parquet
 from datp_core.data.materialization.errors import DataFailure
 from datp_core.data.materialization.models import (
@@ -32,7 +33,6 @@ from datp_core.data.materialization.models import (
 from datp_core.data.materialization.semantics import row_digest
 from datp_core.data.sources.csv import CsvBatchStream, CsvColumnSpec, CsvReadPlan
 from datp_core.data.sources.models import SourceInventory
-
 
 type NBaIoTPlan = NBaIoTPhysicalMaterializationPlan | NBaIoTDirichletMaterializationPlan
 
@@ -54,7 +54,7 @@ def materialize_nbaiot(
                 source_path=entry.source_path,
                 columns=tuple(
                     CsvColumnSpec(
-                        name=feature,
+                        name=ColumnName(feature.value),
                         kind=CsvColumnKind.FLOAT64,
                         nullable=False,
                         strip_text=False,
@@ -90,7 +90,11 @@ def materialize_nbaiot(
             source_path=None,
             source_row_index=None,
         )
-    partition = apply_dirichlet_partition(connection, plan) if isinstance(plan, NBaIoTDirichletMaterializationPlan) else None
+    partition = (
+        apply_dirichlet_partition(connection, plan)
+        if isinstance(plan, NBaIoTDirichletMaterializationPlan)
+        else None
+    )
     query = _final_query(feature_names, partition is not None)
     written_rows = write_query_to_parquet(connection, query, target_path, plan.runtime)
     evidence = MaterializationEvidence(
@@ -137,7 +141,10 @@ def _validate_split(plan: NBaIoTPlan) -> None:
                 source_row_index=None,
             )
     elif isinstance(plan.split, ChronologicalGappedSplitConfig):
-        if plan.split.boundary_rule is not BoundaryRule.FLOOR or plan.split.sort_direction is not SortDirection.ASCENDING:
+        if (
+            plan.split.boundary_rule is not BoundaryRule.FLOOR
+            or plan.split.sort_direction is not SortDirection.ASCENDING
+        ):
             raise DataFailure(
                 DataFailureCode.CONFIGURATION,
                 "N-BaIoT chronological materialization requires floor boundaries and ascending source order",
@@ -284,9 +291,11 @@ def _assign_benign_source_split(
             "FROM (SELECT "
             f"{quote_identifier(MaterializedColumn.SOURCE_ROW_INDEX.value)} AS row_index, "
             "CASE "
-            f"WHEN row_number() OVER (ORDER BY split_digest, {quote_identifier(MaterializedColumn.SOURCE_ROW_INDEX.value)}) <= {train_count} "
+            f"WHEN row_number() OVER (ORDER BY split_digest, "
+            f"{quote_identifier(MaterializedColumn.SOURCE_ROW_INDEX.value)}) <= {train_count} "
             f"THEN {repr(SplitMembership.TRAIN.value)} "
-            f"WHEN row_number() OVER (ORDER BY split_digest, {quote_identifier(MaterializedColumn.SOURCE_ROW_INDEX.value)}) <= {train_count + calibration_count} "
+            f"WHEN row_number() OVER (ORDER BY split_digest, "
+            f"{quote_identifier(MaterializedColumn.SOURCE_ROW_INDEX.value)}) <= {train_count + calibration_count} "
             f"THEN {repr(SplitMembership.CALIBRATION.value)} ELSE {repr(SplitMembership.TEST.value)} END AS membership "
             "FROM materialized_rows WHERE "
             f"{quote_identifier(MaterializedColumn.SOURCE_PATH.value)} = ? AND NOT "

@@ -1,8 +1,7 @@
 """Scientific fingerprint projection assembly and the scientific fingerprint builder.
 
-Absolute filesystem paths are deliberately excluded from the scientific projection;
-datasets are projected via their schema id and fingerprint field lists rather than their
-resolved (absolute-path-bearing) record.
+Datasets are projected via their schema id, adapter, source config, paths, setups,
+materializations, and capabilities through the provided projection module.
 """
 
 from __future__ import annotations
@@ -15,7 +14,7 @@ from pydantic import BaseModel, ConfigDict
 from datp_core.config.resolution.experiments import ResolvedExperimentCatalogue
 from datp_core.config.resolution.protocols import ResolvedProtocols
 from datp_core.core.identifiers import DatasetId
-from datp_core.data.contracts import ResolvedDataset
+from datp_core.data.contracts.dataset import ResolvedDataset
 
 
 class HasItems[K, V](Protocol):
@@ -36,17 +35,12 @@ def _sorted_items[K, V](source: HasItems[K, V]) -> dict[str, V]:
 class DatasetProjection(BaseModel):
     model_config = ConfigDict(frozen=True, arbitrary_types_allowed=True)
     schema_id: str
-    source_layout_contract: object
-    field_schema: object
-    source_contract: object
-    client_identity_contract: object
+    adapter: str
+    source: object
+    paths: object
     setups: object
     materializations: object
     capabilities: Sequence[str]
-    fingerprint_source_fields: Sequence[str]
-    fingerprint_schema_fields: Sequence[str]
-    fingerprint_materialization_fields: Sequence[str]
-    fingerprint_client_assignment_fields: Sequence[str]
 
 
 def _build_dataset_projection(
@@ -54,18 +48,13 @@ def _build_dataset_projection(
     projection_module: Callable[[object], object],
 ) -> DatasetProjection:
     return DatasetProjection(
-        schema_id=dataset.schema_id,
-        source_layout_contract=projection_module(dataset.source_layout_contract),
-        field_schema=projection_module(dataset.field_schema),
-        source_contract=projection_module(dataset.source_contract),
-        client_identity_contract=projection_module(dataset.client_identity_contract),
+        schema_id=str(dataset.schema_id),
+        adapter=str(dataset.adapter),
+        source=projection_module(dataset.source),
+        paths=projection_module(dataset.paths),
         setups=projection_module(dataset.setups),
         materializations=projection_module(dataset.materializations),
-        capabilities=tuple(dataset.capabilities),
-        fingerprint_source_fields=tuple(dataset.fingerprint_source_fields),
-        fingerprint_schema_fields=tuple(dataset.fingerprint_schema_fields),
-        fingerprint_materialization_fields=tuple(dataset.fingerprint_materialization_fields),
-        fingerprint_client_assignment_fields=tuple(dataset.fingerprint_client_assignment_fields),
+        capabilities=tuple(str(c) for c in dataset.capabilities),
     )
 
 

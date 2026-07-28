@@ -1,95 +1,248 @@
-"""`evaluate_readiness_gates` is the actual domain-level decision logic that prevents a
-configured-but-ineligible experiment from ever executing: `data/materialization.py` fails the
-materialization stage (`StageJobOutcome.infeasible`) whenever this function returns issues.
-Prior coverage only exercised a different mechanism (a missing stage handler); this file drives
-the real `suppression_behaviors`/`eligibility_gates` decision rule end to end.
+"""Unit tests for readiness-gate evaluation against the new data-package API.
+
+Tests ``evaluate_readiness_gates`` with typed ``ReadinessGate`` contracts and
+``MaterializedSplitSummary`` fixtures constructed directly -- no Parquet required.
 """
 
-from datp_core.core.identifiers import ExperimentId
-from datp_core.core.numbers import PositiveInt, Probability
-from datp_core.core.registry import TypedDomainRegistry
-from datp_core.data.contracts import SplitMembership
-from datp_core.data.manifests import SplitManifest, SplitManifestEntry
-from datp_core.data.readiness import evaluate_readiness_gates
-from datp_core.experiments import EligibilityGateRecord
+from datp_core.core.numbers import Probability
+from datp_core.data.contracts.eligibility import ReadinessGate
+from datp_core.data.contracts.enums import DatasetCapability, ReadinessGateFailureCode
+from datp_core.data.contracts.values import GateId
+from datp_core.data.manifests.summary import MaterializedSplitSummary
+from datp_core.data.materialization.models import MaterializationEvidence
+from datp_core.data.readiness.gates import evaluate_readiness_gates
+
+_MATERIALIZATION_EVIDENCE = MaterializationEvidence(
+    schema_version="materialized.v1",
+    source_rows_seen=0,
+    excluded_rows=0,
+    canonical_rows=0,
+    duplicate_rows_removed=0,
+    conflicting_label_feature_group_count=0,
+    written_rows=0,
+    encoded_feature_names=(),
+)
 
 
-def _entry(row: int, membership: SplitMembership, *, client: str, attack: bool = False) -> SplitManifestEntry:
-    return SplitManifestEntry(
-        source_path="source.csv", source_row_index=row, client_id=client, membership=membership, is_attack=attack
+def _summary(
+    *,
+    client_ids: tuple[str, ...],
+    eligible_ids: tuple[str, ...],
+) -> MaterializedSplitSummary:
+    """Build a minimal summary with the given client and eligible sets."""
+    ineligible_ids = tuple(c for c in client_ids if c not in eligible_ids)
+    return MaterializedSplitSummary(
+        schema_version="split-summary.v1",
+        dataset_id="test",
+        setup_id="test",
+        materialization_id="test",
+        source_checksum="0" * 64,
+        configuration_checksum="0" * 64,
+        artifact_checksum="0" * 64,
+        schema_checksum="0" * 64,
+        preprocessing_checksum="0" * 64,
+        artifact_shape="test",
+        total_rows=0,
+        split_counts=(),
+        client_split_counts=(),
+        class_counts=(),
+        client_ids=client_ids,
+        eligible_client_ids=eligible_ids,
+        ineligible_client_ids=ineligible_ids,
+        attack_rows=0,
+        chronology_ranges=(),
+        materialization=_MATERIALIZATION_EVIDENCE,
     )
 
 
 def _gate(
-    *, minimum_eligible_client_proportion: float, applies_to_experiments: tuple[ExperimentId, ...]
-) -> EligibilityGateRecord:
-    return EligibilityGateRecord(
-        identifier="gate",
-        candidate_population="all_clients",
-        minimum_benign_calibration_count=PositiveInt(2),
-        minimum_eligible_client_proportion=Probability(minimum_eligible_client_proportion),
-        evaluation_time="before_training",
-        failure_outcome="typed_infeasibility_outcome",
-        population_reduction_without_explicit_roadmap_authorization="forbidden",
-        applies_to_experiments=applies_to_experiments,
+    *,
+    gate_id: str = "gate",
+    min_clients: int = 1,
+    min_proportion: float = 0.0,
+    capabilities: tuple[DatasetCapability, ...] = (),
+) -> ReadinessGate:
+    """Build a readiness gate with the given thresholds."""
+    return ReadinessGate(
+        identifier=GateId(gate_id),
+        minimum_eligible_clients=min_clients,
+        minimum_eligible_proportion=Probability(min_proportion),
+        required_capabilities=capabilities,
     )
 
 
-def _gates(gate: EligibilityGateRecord) -> TypedDomainRegistry[str, EligibilityGateRecord]:
-    return TypedDomainRegistry({"gate": gate})
+class TestEligibleProportionThreshold:
+    """Gate with ``minimum_eligible_proportion`` above the observed proportion."""
+
+    def test_below_threshold_returns_failure(self) -> None:
+        gate = _gate(min_proportion=0.75)
+        summary = _summary(
+            client_ids=("c1", "c2", "c3", "c4"),
+            eligible_ids=("c1", "c2"),
+        )
+
+        failures = evaluate_readiness_gates(
+            gates=(gate,),
+            capabilities=(),
+            summary=summary,
+        )
+
+        assert len(failures) == 1
+        f = failures[0]
+        assert f.gate_id == "gate"
+        assert f.code is ReadinessGateFailureCode.MINIMUM_ELIGIBLE_PROPORTION
+        assert "0.75" in f.detail
+
+    def test_at_threshold_passes(self) -> None:
+        gate = _gate(min_proportion=0.5)
+        summary = _summary(
+            client_ids=("c1", "c2", "c3", "c4"),
+            eligible_ids=("c1", "c2"),
+        )
+
+        failures = evaluate_readiness_gates(
+            gates=(gate,),
+            capabilities=(),
+            summary=summary,
+        )
+
+        assert failures == ()
 
 
-def _two_client_manifest() -> SplitManifest:
-    """One eligible client (c1, 2 benign calibration rows) and one ineligible (c2, 1 row) -> 50%."""
-    return SplitManifest(
-        entries=(
-            _entry(1, SplitMembership.TRAIN, client="c1"),
-            _entry(2, SplitMembership.CALIBRATION, client="c1"),
-            _entry(3, SplitMembership.CALIBRATION, client="c1"),
-            _entry(4, SplitMembership.TEST, client="c1"),
-            _entry(5, SplitMembership.TRAIN, client="c2"),
-            _entry(6, SplitMembership.CALIBRATION, client="c2"),
-            _entry(7, SplitMembership.TEST, client="c2"),
-        ),
-        minimum_benign_calibration_count=2,
-    )
+class TestRequiredCapability:
+    """Gate with a capability the dataset does not advertise."""
+
+    def test_missing_required_capability_returns_failure(self) -> None:
+        gate = _gate(capabilities=(DatasetCapability.BENIGN_CALIBRATION,))
+        summary = _summary(client_ids=("c1",), eligible_ids=("c1",))
+
+        failures = evaluate_readiness_gates(
+            gates=(gate,),
+            capabilities=(DatasetCapability.ATTACK_EVALUATION,),
+            summary=summary,
+        )
+
+        assert len(failures) == 1
+        f = failures[0]
+        assert f.gate_id == "gate"
+        assert f.code is ReadinessGateFailureCode.REQUIRED_CAPABILITY_MISSING
+        assert "benign_calibration" in f.detail
+
+    def test_present_capability_passes(self) -> None:
+        gate = _gate(capabilities=(DatasetCapability.BENIGN_CALIBRATION,))
+        summary = _summary(client_ids=("c1",), eligible_ids=("c1",))
+
+        failures = evaluate_readiness_gates(
+            gates=(gate,),
+            capabilities=(DatasetCapability.BENIGN_CALIBRATION,),
+            summary=summary,
+        )
+
+        assert failures == ()
 
 
-def test_experiment_below_the_configured_eligible_proportion_is_suppressed() -> None:
-    experiment_id = ExperimentId("ineligible_experiment")
-    gate = _gate(minimum_eligible_client_proportion=0.75, applies_to_experiments=(experiment_id,))
+class TestMinimumEligibleClients:
+    """Gate with ``minimum_eligible_clients`` above the observed count."""
 
-    issues = evaluate_readiness_gates(("gate",), _gates(gate), _two_client_manifest(), experiment_id)
+    def test_below_minimum_returns_failure(self) -> None:
+        gate = _gate(min_clients=2)
+        summary = _summary(
+            client_ids=("c1", "c2", "c3"),
+            eligible_ids=("c1",),
+        )
 
-    assert len(issues) == 1
-    assert "eligible proportion 0.500 below minimum 0.75" in issues[0]
+        failures = evaluate_readiness_gates(
+            gates=(gate,),
+            capabilities=(),
+            summary=summary,
+        )
+
+        assert len(failures) == 1
+        f = failures[0]
+        assert f.gate_id == "gate"
+        assert f.code is ReadinessGateFailureCode.MINIMUM_ELIGIBLE_CLIENTS
+        assert "requires 2" in f.detail
+        assert "1" in f.detail
+
+    def test_at_minimum_passes(self) -> None:
+        gate = _gate(min_clients=2)
+        summary = _summary(
+            client_ids=("c1", "c2", "c3"),
+            eligible_ids=("c1", "c2"),
+        )
+
+        failures = evaluate_readiness_gates(
+            gates=(gate,),
+            capabilities=(),
+            summary=summary,
+        )
+
+        assert failures == ()
 
 
-def test_experiment_meeting_the_configured_eligible_proportion_is_not_suppressed() -> None:
-    experiment_id = ExperimentId("eligible_experiment")
-    gate = _gate(minimum_eligible_client_proportion=0.5, applies_to_experiments=(experiment_id,))
+class TestAllGatesPassing:
+    """Multiple gates all satisfied."""
 
-    issues = evaluate_readiness_gates(("gate",), _gates(gate), _two_client_manifest(), experiment_id)
+    def test_multiple_satisfied_gates_return_empty(self) -> None:
+        gate1 = ReadinessGate(
+            identifier=GateId("proportion_gate"),
+            minimum_eligible_clients=1,
+            minimum_eligible_proportion=Probability(0.0),
+            required_capabilities=(),
+        )
+        gate2 = ReadinessGate(
+            identifier=GateId("capability_gate"),
+            minimum_eligible_clients=1,
+            minimum_eligible_proportion=Probability(0.0),
+            required_capabilities=(
+                DatasetCapability.BENIGN_CALIBRATION,
+                DatasetCapability.ATTACK_EVALUATION,
+            ),
+        )
+        summary = _summary(
+            client_ids=("c1", "c2"),
+            eligible_ids=("c1", "c2"),
+        )
 
-    assert issues == []
+        failures = evaluate_readiness_gates(
+            gates=(gate1, gate2),
+            capabilities=(
+                DatasetCapability.BENIGN_CALIBRATION,
+                DatasetCapability.ATTACK_EVALUATION,
+            ),
+            summary=summary,
+        )
+
+        assert failures == ()
 
 
-def test_gate_not_bound_to_the_experiment_never_suppresses_it() -> None:
-    """A gate configured for a different experiment must never block this one, even if this
-    experiment's manifest would fail the gate's threshold."""
-    experiment_id = ExperimentId("unaffected_experiment")
-    gate = _gate(minimum_eligible_client_proportion=1.0, applies_to_experiments=(ExperimentId("other_experiment"),))
+class TestMultipleFailures:
+    """A single gate that triggers all three failure codes."""
 
-    issues = evaluate_readiness_gates(("gate",), _gates(gate), _two_client_manifest(), experiment_id)
+    def test_aggregates_all_failure_codes(self) -> None:
+        gate = ReadinessGate(
+            identifier=GateId("strict_gate"),
+            minimum_eligible_clients=5,
+            minimum_eligible_proportion=Probability(0.9),
+            required_capabilities=(DatasetCapability.TEMPORAL_RECALIBRATION,),
+        )
+        summary = _summary(
+            client_ids=("c1", "c2"),
+            eligible_ids=("c1",),
+        )
 
-    assert issues == []
+        failures = evaluate_readiness_gates(
+            gates=(gate,),
+            capabilities=(),
+            summary=summary,
+        )
 
-
-def test_unknown_gate_name_is_reported_rather_than_silently_ignored() -> None:
-    experiment_id = ExperimentId("any_experiment")
-
-    issues = evaluate_readiness_gates(
-        ("nonexistent_gate",), TypedDomainRegistry({}), _two_client_manifest(), experiment_id
-    )
-
-    assert issues == ["unknown readiness gate: nonexistent_gate"]
+        assert len(failures) == 3
+        codes = {f.code for f in failures}
+        assert codes == {
+            ReadinessGateFailureCode.MINIMUM_ELIGIBLE_CLIENTS,
+            ReadinessGateFailureCode.MINIMUM_ELIGIBLE_PROPORTION,
+            ReadinessGateFailureCode.REQUIRED_CAPABILITY_MISSING,
+        }
+        for f in failures:
+            assert f.gate_id == "strict_gate"

@@ -14,7 +14,7 @@ from datp_core.config.models import ResolvedProjectConfiguration
 from datp_core.config.report_profiles import ReportProfileRecord
 from datp_core.core.identifiers import DatasetId, ExperimentId
 from datp_core.data.contracts.dataset import ResolvedDataset
-from datp_core.data.contracts.eligibility import EligibilityPolicyRecord
+from datp_core.config.domain_models import EligibilityPolicyRecord
 from datp_core.evaluation.specs import MetricBundleSpec
 from datp_core.experiments.catalogue.analyses import AnalysisRecord
 from datp_core.experiments.catalogue.evaluations import EvaluationSpecRecord

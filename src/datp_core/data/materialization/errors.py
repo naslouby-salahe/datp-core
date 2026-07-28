@@ -7,7 +7,7 @@ from pathlib import Path
 from datp_core.data.contracts.enums import DataFailureCode
 
 
-class DataFailure(RuntimeError):
+class DataFailure(RuntimeError):  # noqa: N818
     def __init__(
         self,
         code: DataFailureCode,

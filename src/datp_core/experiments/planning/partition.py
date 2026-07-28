@@ -2,10 +2,18 @@
 
 from __future__ import annotations
 
+from pydantic import BaseModel, ConfigDict, PositiveInt
+
 from datp_core.config.project import ResolvedProjectConfiguration
 from datp_core.core.identifiers import ExperimentId
-from datp_core.data.contracts.materialization import PartitionSeedContract
 from datp_core.experiments.catalogue.sweeps import ConditionSweepRecord, SweepConditionRecord
+
+
+class PartitionSeedContract(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    key: str
+    digest_bytes: PositiveInt
 
 
 def resolve_partition_contract(
@@ -28,4 +36,4 @@ def resolve_partition_contract(
         digest_bytes = config.protocol_determinism.derived_seed_digest_bytes
     except (KeyError, TypeError, ValueError) as exc:
         raise ValueError("Protocol determinism lacks a valid partition seed namespace") from exc
-    return (matches[0], PartitionSeedContract(key=namespace.key, digest_bytes=digest_bytes))
+    return (matches[0], PartitionSeedContract(key=namespace.key, digest_bytes=int(digest_bytes)))

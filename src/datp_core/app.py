@@ -39,15 +39,16 @@ from datp_core.config.project import (
     resolve_project_configuration,
 )
 from datp_core.core.identifiers import ExperimentId
-from datp_core.data.adapters.ciciot2023 import CICIoT2023Adapter
-from datp_core.data.adapters.edge_iiotset import EdgeIIoTsetAdapter
-from datp_core.data.adapters.nbaiot import NBaIoTAdapter
-from datp_core.data.contracts import AdapterKind
-from datp_core.data.materialization import (
-    DatasetAdapterRegistry,
-    DatasetMaterializationStageHandler,
-)
-from datp_core.data.readiness import AuditDatasetUseCase
+from datp_core.data.adapters.ciciot2023.adapter import CICIoT2023Adapter
+from datp_core.data.adapters.edge_iiotset.adapter import EdgeIIoTsetAdapter
+from datp_core.data.adapters.nbaiot.adapter import NBaIoTAdapter
+from datp_core.data.contracts.dataset import ResolvedDataset
+from datp_core.data.materialization.handler import DatasetMaterializationStageHandler
+from datp_core.data.materialization.registry import DatasetAdapterRegistry
+from datp_core.data.readiness.materialized import assess_materialized_readiness
+from datp_core.data.readiness.models import build_readiness_report
+from datp_core.data.readiness.source import assess_source_readiness
+from datp_core.data.sources.inventory import build_source_inventory
 from datp_core.evaluation.stage import OperatingPointEvaluationStageHandler
 from datp_core.experiments.catalogue.analyses import AnalysisKind
 from datp_core.experiments.execution import (
@@ -88,11 +89,11 @@ def _build_threshold_engine() -> ThresholdEngine:
 def _build_adapter_registry() -> DatasetAdapterRegistry:
     """Build the adapter registry with one adapter per supported AdapterKind."""
     return DatasetAdapterRegistry(
-        adapters={
-            AdapterKind.NBAIOT: NBaIoTAdapter(),
-            AdapterKind.CICIOT2023: CICIoT2023Adapter(),
-            AdapterKind.EDGE_IIOTSET: EdgeIIoTsetAdapter(),
-        }
+        adapters=(
+            NBaIoTAdapter(),
+            CICIoT2023Adapter(),
+            EdgeIIoTsetAdapter(),
+        )
     )
 
 
@@ -197,6 +198,33 @@ def build_config_only_application(
     )
 
 
+class _AuditResult:
+    """Minimal result providing raw_source_found / file_count for the CLI audit command."""
+    __slots__ = ("raw_source_found", "file_count")
+
+    def __init__(self, raw_source_found: bool, file_count: int) -> None:
+        self.raw_source_found = raw_source_found
+        self.file_count = file_count
+
+
+class AuditDatasetUseCase:
+    """Replacement for the deleted readiness use case — wraps standalone readiness functions."""
+    __slots__ = ("_config",)
+
+    def __init__(self, config: ResolvedProjectConfiguration) -> None:
+        self._config = config
+
+    def execute(self, dataset: ResolvedDataset) -> _AuditResult:
+        inventory = build_source_inventory(
+            dataset_id=dataset.dataset_id,
+            raw_data_root=dataset.paths.raw_data_root,
+            source=dataset.source,
+        )
+        report = assess_source_readiness(dataset.source, inventory)
+        total = sum(audit.file_count for audit in report.tree_audits)
+        return _AuditResult(raw_source_found=total > 0, file_count=total)
+
+
 class DatpApplication(BaseModel):
     """Composition root holding resolved configuration and injected use cases."""
 
@@ -271,7 +299,7 @@ def build_application(
 
     cc = _build_common_config_use_cases(resolved_config)
 
-    audit_ds = AuditDatasetUseCase()
+    audit_ds = AuditDatasetUseCase(config=resolved_config)
     output_store = ArtifactStore(resolved_config.paths.outputs)
     adapter_registry = _build_adapter_registry()
 

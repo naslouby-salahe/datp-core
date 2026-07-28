@@ -11,34 +11,27 @@ from datp_core.config.authored.protocols.evaluation import (
 from datp_core.config.statistical_profiles import NestedReplicatePolicyRecord
 from datp_core.core.identifiers import EligibilityPolicyId
 from datp_core.core.numbers import PositiveInt
-from datp_core.data.contracts import EligibilityFallbackRecord, EligibilityPolicyRecord
+from datp_core.data.contracts.eligibility import EligibilityPolicy
+from datp_core.data.contracts.enums import DatasetCapability
 from datp_core.evaluation.specs import EvaluationResultContract
 from datp_core.experiments import ResultTypeRecord
 
 
 def resolve_eligibility_policies(
     authored: AuthoredProtocolsConfig,
-) -> dict[EligibilityPolicyId, EligibilityPolicyRecord]:
+) -> dict[EligibilityPolicyId, EligibilityPolicy]:
     return {
-        EligibilityPolicyId(k): EligibilityPolicyRecord(
+        EligibilityPolicyId(k): EligibilityPolicy(
             identifier=EligibilityPolicyId(k),
             minimum_benign_calibration_count=PositiveInt(v.minimum_benign_calibration_count),
-            determined_before_test_evaluation=v.determined_before_test_evaluation,
-            identical_across_policies_in_one_comparison=v.identical_across_policies_in_one_comparison,
-            fpr_evaluable_requires_non_empty_benign_test_denominator=(
+            require_non_empty_benign_test=(
                 v.fpr_evaluable_requires_non_empty_benign_test_denominator
             ),
-            attack_evaluable_requires=tuple(v.attack_evaluable_requires),
-            ineligible_clients_excluded_from_primary_dispersion=v.ineligible_clients_excluded_from_primary_dispersion,
-            ineligible_client_deployment_fallback=EligibilityFallbackRecord(
-                threshold_source=v.ineligible_client_deployment_fallback.threshold_source,
-                shared_construction=v.ineligible_client_deployment_fallback.shared_construction,
-                reported_status=v.ineligible_client_deployment_fallback.reported_status,
-                enters_primary_dispersion=v.ineligible_client_deployment_fallback.enters_primary_dispersion,
+            required_attack_capabilities=tuple(
+                DatasetCapability(cap) for cap in v.attack_evaluable_requires
             ),
-            zero_eligible_clients_behavior=v.zero_eligible_clients_behavior,
-            affects_standard_eligibility_minimum=v.affects_standard_eligibility_minimum,
-            permitted_use=v.permitted_use,
+            exclude_ineligible_clients_from_primary_dispersion=v.ineligible_clients_excluded_from_primary_dispersion,
+            zero_eligible_clients_is_blocking=bool(v.zero_eligible_clients_behavior),
         )
         for k, v in authored.eligibility_policies.items()
     }

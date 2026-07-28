@@ -32,6 +32,9 @@ from datp_core.evaluation.enums import (
     ResultRecordType,
     RoundingMode,
     WeightingMode,
+
+    ZeroDenominatorPolicy,
+    MissingClassPolicy,
 )
 
 
@@ -189,3 +192,87 @@ class EvaluationResultContract(StrictFrozenModel):
             raise ValueError(f"Required record types are incomplete: {[item.value for item in missing]}")
 
         return self
+
+
+class ClusterDiagnosticSpec(StrictFrozenModel):
+    adjusted_rand_index: ScalarMetricSpec
+    within_cluster_dispersion: DispersionMetricSpec
+    across_cluster_dispersion: DispersionMetricSpec
+
+class DispersionMetricSpec(StrictFrozenModel):
+    """FPR range, worst-client FPR, worst-client BA — extremal metrics."""
+
+    kind: Literal["dispersion"] = "dispersion"
+    formula: str | None = None
+    unit: MetricUnit | None = None
+    direction: MetricDirection | None = None
+
+class HeterogeneityDiagnosticSpec(StrictFrozenModel):
+    pairwise_js_divergence: JsDivergenceSpec
+
+class InvariantMetricSpec(StrictFrozenModel):
+    """AUROC — threshold-independent model-quality control."""
+
+    kind: Literal["invariant"] = "invariant"
+    unit: MetricUnit | None = None
+    direction: MetricDirection | None = None
+    requires_both_classes: bool | None = None
+    role: MetricRole | None = None
+    invariance_check: str | None = None
+
+
+# -- Aggregation and diagnostics specs -------------------------------------
+
+class QuantileMetricSpec(StrictFrozenModel):
+    """IQR FPR, p10 macro F1 — quantile-based metrics."""
+
+    kind: Literal["quantile"] = "quantile"
+    formula: str | None = None
+    quantile_estimator: QuantileEstimator | None = None
+    unit: MetricUnit | None = None
+    direction: MetricDirection | None = None
+
+class RatioMetricSpec(StrictFrozenModel):
+    """CV(FPR), CV(TPR), Jain index, Gini — derived ratio metrics."""
+
+    kind: Literal["ratio"] = "ratio"
+    formula: str | None = None
+    unit: MetricUnit | None = None
+    direction: MetricDirection | None = None
+    weighting: WeightingMode | None = None
+    denominator_stabilizer: str | None = None
+    zero_mean_behavior: ZeroDenominatorPolicy | None = None
+    near_zero_mean_threshold_formula: str | None = None
+    near_zero_mean_threshold_factor: float | None = None
+    near_zero_mean_behavior: ZeroDenominatorPolicy | None = None
+    minimum_client_count: int | None = None
+    zero_sum_behavior: ZeroDenominatorPolicy | None = None
+
+class ScalarMetricSpec(StrictFrozenModel):
+    """FPR, TPR — ratio of counts with denominator behavior."""
+
+    kind: Literal["scalar"] = "scalar"
+    formula: str | None = None
+    unit: MetricUnit | None = None
+    direction: MetricDirection | None = None
+    zero_denominator: ZeroDenominatorPolicy | None = None
+    requires: tuple[str, ...] | None = None
+    missing_class_behavior: MissingClassPolicy | None = None
+
+
+class ThresholdEstimationSpec(StrictFrozenModel):
+    absolute_threshold_error: ScalarMetricSpec
+    relative_threshold_error: RatioMetricSpec
+    oracle_definition: str
+    target_exceedance: ScalarMetricSpec
+    signed_attainment_error: ScalarMetricSpec
+    absolute_attainment_error: ScalarMetricSpec
+    threshold_dispersion: RatioMetricSpec
+    threshold_variance_across_replicates: RatioMetricSpec
+
+
+class StrictFrozenModel(BaseModel):
+    model_config = ConfigDict(frozen=True, strict=True, extra="forbid")
+
+
+# -- Metric specifications (discriminated) ----------------------------------

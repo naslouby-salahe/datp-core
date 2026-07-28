@@ -49,7 +49,7 @@ from datp_core.core.identifiers import (
 from datp_core.core.numbers import PositiveInt, Probability
 from datp_core.core.registry import TypedDomainRegistry
 from datp_core.core.seeding import Seed
-from datp_core.data.contracts import ResolvedDataset
+from datp_core.data.contracts.dataset import ResolvedDataset
 from datp_core.experiments import (
     AbsorptionAnalysisRecord,
     AlertBurdenAnalysisRecord,

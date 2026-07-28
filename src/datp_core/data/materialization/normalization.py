@@ -19,7 +19,12 @@ from datp_core.data.contracts.enums import (
     SplitMembership,
 )
 from datp_core.data.contracts.materialization import DataLoadingConfig, NormalizationConfig, StandardNormalizationConfig
-from datp_core.data.materialization.database import quote_identifier, quote_literal, write_query_to_parquet
+from datp_core.data.materialization.database import (
+    fetch_scalar,
+    quote_identifier,
+    quote_literal,
+    write_query_to_parquet,
+)
 from datp_core.data.materialization.errors import DataFailure
 
 
@@ -99,6 +104,19 @@ def encode_normalization_evidence(evidence: NormalizationEvidence) -> bytes:
     return msgspec.json.encode(evidence)
 
 
+
+def _fetch_scalar(connection, query, source_path):
+    result = connection.execute(query).fetchone()
+    if result is None:
+        raise DataFailure(
+            DataFailureCode.NORMALIZATION,
+            "expected a scalar result but query returned no rows",
+            source_path=source_path,
+            source_row_index=None,
+        )
+    return int(result[0])
+
+
 def _fit_membership(scope: NormalizationFitScope) -> SplitMembership:
     if scope in (NormalizationFitScope.GLOBAL_TRAIN, NormalizationFitScope.PER_CLIENT_TRAIN):
         return SplitMembership.TRAIN
@@ -150,7 +168,11 @@ def _feature_aggregations(feature: str, config: NormalizationConfig) -> tuple[st
     scale_alias = quote_identifier(_scale_column(feature))
     if config.strategy is NormalizationStrategy.MIN_MAX:
         return (f"min({column}) AS {location_alias}", f"max({column}) AS {scale_alias}")
-    deviation = "stddev_pop" if isinstance(config, StandardNormalizationConfig) and config.standard_deviation_ddof == 0 else "stddev_samp"
+    deviation = (
+        "stddev_pop"
+        if isinstance(config, StandardNormalizationConfig) and config.standard_deviation_ddof == 0
+        else "stddev_samp"
+    )
     return (f"avg({column}) AS {location_alias}", f"{deviation}({column}) AS {scale_alias}")
 
 
@@ -204,6 +226,12 @@ def _read_evidence(
     return tuple(result)
 
 
+def _fetch_count(connection: duckdb.DuckDBPyConnection, sql: str) -> int:
+    row = connection.execute(sql).fetchone()
+    assert row is not None
+    return int(row[0])
+
+
 def _validate_statistics(
     connection: duckdb.DuckDBPyConnection,
     table_name: str,
@@ -219,10 +247,9 @@ def _validate_statistics(
         )
         for feature in feature_names
     )
-    constant_count = int(
-        connection.execute(
-            f"SELECT count(*) FROM {quote_identifier(table_name)} WHERE {constant_predicates}"
-        ).fetchone()[0]
+    constant_count = _fetch_count(
+        connection,
+        f"SELECT count(*) FROM {quote_identifier(table_name)} WHERE {constant_predicates}",
     )
     if constant_count and config.constant_feature_policy is ConstantFeaturePolicy.ERROR:
         raise DataFailure(
@@ -250,11 +277,10 @@ def _validate_out_of_range(
         if config.fit_scope is NormalizationFitScope.PER_CLIENT_TRAIN
         else f"CROSS JOIN {quote_identifier(statistics_table)} n"
     )
-    count = int(
-        connection.execute(
-            f"SELECT count(*) FROM read_parquet({quote_literal(source_path.as_posix())}) s {join} "
-            f"WHERE {predicate}"
-        ).fetchone()[0]
+    count = _fetch_count(
+        connection,
+        f"SELECT count(*) FROM read_parquet({quote_literal(source_path.as_posix())}) s {join} "
+        f"WHERE {predicate}",
     )
     if count:
         raise DataFailure(
@@ -299,9 +325,10 @@ def _normalized_projection(feature: str, config: NormalizationConfig) -> str:
         normalized = f"({numerator} / {denominator})"
         if config.out_of_range_policy is OutOfRangePolicy.CLIP:
             normalized = f"greatest(0.0, least(1.0, {normalized}))"
+        constant = f"({denominator} = 0.0)"
     else:
         normalized = f"(({source} - {location}) / {scale})"
-    constant = f"({denominator} = 0.0)" if config.strategy is NormalizationStrategy.MIN_MAX else f"({scale} = 0.0)"
+        constant = f"({scale} = 0.0)"
     expression = f"CASE WHEN {constant} THEN 0.0 ELSE {normalized} END"
     return f"CAST({expression} AS DOUBLE) AS {quote_identifier(feature)}"
 
@@ -322,3 +349,42 @@ def _location_column(feature: str) -> str:
 
 def _scale_column(feature: str) -> str:
     return f"__scale__{feature}"
+
+
+def _fit_population_count(
+    connection: duckdb.DuckDBPyConnection,
+    source_path: Path,
+    membership: SplitMembership,
+) -> int:
+    return _fetch_count(
+        connection,
+        f"SELECT count(*) FROM read_parquet({quote_literal(source_path.as_posix())}) "
+        f"WHERE {quote_identifier(MaterializedColumn.SPLIT.value)} = {quote_literal(membership.value)} "
+        f"AND NOT {quote_identifier(MaterializedColumn.IS_ATTACK.value)}",
+    )
+
+
+def _validate_scope_coverage(
+    connection: duckdb.DuckDBPyConnection,
+    source_path: Path,
+    statistics_table: str,
+    scope: NormalizationFitScope,
+) -> None:
+    if scope is not NormalizationFitScope.PER_CLIENT_TRAIN:
+        return
+    client_count = fetch_scalar(
+        connection,
+        f"SELECT count(DISTINCT {quote_identifier(MaterializedColumn.CLIENT_ID.value)}) "
+        f"FROM read_parquet({quote_literal(source_path.as_posix())}) "
+        f"WHERE NOT {quote_identifier(MaterializedColumn.IS_ATTACK.value)}",
+    )
+    stats_count = _fetch_scalar(connection, 
+            f"SELECT count(*) FROM {quote_identifier(statistics_table)}"
+        , source_path)
+    if stats_count != client_count:
+        raise DataFailure(
+            DataFailureCode.NORMALIZATION,
+            f"per-client normalization statistics cover {stats_count} clients; expected {client_count}",
+            source_path=source_path,
+            source_row_index=None,
+        )

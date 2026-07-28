@@ -7,7 +7,7 @@ from collections.abc import Mapping
 
 from datp_core.config.models import ResolvedProjectConfiguration, ValidationReport
 from datp_core.core.identifiers import NormalizationStrategyId
-from datp_core.data.contracts import ClientConstructionMethod
+from datp_core.data.contracts.enums import ClientConstructionMethod
 from datp_core.experiments import (
     ConditionSweepRecord,
     ExperimentRecord,

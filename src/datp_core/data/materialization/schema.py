@@ -6,7 +6,7 @@ from pathlib import Path
 
 import msgspec
 import pyarrow as pa
-import pyarrow.compute as pc
+import pyarrow.compute as pc  # type: ignore[import-untyped]
 import pyarrow.parquet as pq
 
 from datp_core.core.hashing import Checksum, compute_payload_checksum
@@ -82,7 +82,7 @@ def validate_materialized_parquet(path: Path, spec: MaterializedSchemaSpec, chun
                 )
         for name in spec.feature_names:
             column = batch.column(batch.schema.get_field_index(name))
-            finite = pc.all(pc.is_finite(column)).as_py()
+            finite = pc.all(pc.is_finite(column)).as_py()  # type: ignore[attr-defined]
             if finite is not True:
                 raise DataFailure(
                     DataFailureCode.SCHEMA,

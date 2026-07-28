@@ -10,6 +10,7 @@ import duckdb
 import msgspec
 import pyarrow as pa
 
+from datp_core.data.contracts.constants import SECONDS_PER_DAY
 from datp_core.data.contracts.enums import (
     ArtifactSchemaVersion,
     AttackAssignment,
@@ -25,10 +26,16 @@ from datp_core.data.contracts.enums import (
     SortDirection,
     SplitMembership,
 )
-from datp_core.data.contracts.constants import SECONDS_PER_DAY
 from datp_core.data.contracts.materialization import RandomFractionalSplitConfig, WithinClientChronologicalSplitConfig
 from datp_core.data.contracts.sources import SourceTreeConfig
-from datp_core.data.materialization.database import insert_record_batch, quote_identifier, quote_literal, write_query_to_parquet
+from datp_core.data.contracts.values import ColumnName
+from datp_core.data.materialization.database import (
+    fetch_scalar,
+    insert_record_batch,
+    quote_identifier,
+    quote_literal,
+    write_query_to_parquet,
+)
 from datp_core.data.materialization.errors import DataFailure
 from datp_core.data.materialization.models import EdgeIIoTsetMaterializationPlan, MaterializationEvidence
 from datp_core.data.materialization.semantics import (
@@ -83,7 +90,7 @@ def materialize_edge_iiotset(
             CsvReadPlan(
                 source_path=entry.source_path,
                 columns=tuple(
-                    CsvColumnSpec(column, CsvColumnKind.FLOAT64, False, False)
+                    CsvColumnSpec(ColumnName(column.value), CsvColumnKind.FLOAT64, False, False)
                     for column in plan.source.numeric_columns
                 )
                 + tuple(
@@ -122,7 +129,7 @@ def materialize_edge_iiotset(
             source_row_index=None,
         )
     _create_canonical_table(connection, numeric_names, categorical_names)
-    canonical_rows = int(connection.execute("SELECT count(*) FROM canonical_rows").fetchone()[0])
+    canonical_rows = fetch_scalar(connection, "SELECT count(*) FROM canonical_rows")
     if isinstance(plan.split, RandomFractionalSplitConfig):
         _assign_random_splits(connection, plan)
         chronology = False
@@ -172,7 +179,10 @@ def _validate_plan(plan: EdgeIIoTsetMaterializationPlan) -> None:
                 source_row_index=None,
             )
     elif isinstance(plan.split, WithinClientChronologicalSplitConfig):
-        if plan.split.sort_direction is not SortDirection.ASCENDING or plan.split.boundary_rule is not BoundaryRule.FLOOR:
+        if (
+            plan.split.sort_direction is not SortDirection.ASCENDING
+            or plan.split.boundary_rule is not BoundaryRule.FLOOR
+        ):
             raise DataFailure(
                 DataFailureCode.CONFIGURATION,
                 "Edge-IIoTset temporal materialization requires ascending chronology and floor boundaries",
@@ -304,7 +314,10 @@ def _expand_batch(
     timestamps: list[float] = []
     digests: list[bytes] = []
     for row_index in range(batch.num_rows):
-        binary_label = normalize_label(str(batch.column(binary_index)[row_index].as_py()), plan.source.label_case_policy)
+        binary_label = normalize_label(
+            str(batch.column(binary_index)[row_index].as_py()),
+            plan.source.label_case_policy,
+        )
         if binary_label != benign_label:
             raise DataFailure(
                 DataFailureCode.SOURCE_ROW,
@@ -314,7 +327,11 @@ def _expand_batch(
             )
         numeric = tuple(float(batch.column(index)[row_index].as_py()) for index in range(numeric_count))
         categorical = tuple(
-            None if batch.column(numeric_count + index)[row_index].as_py() is None else str(batch.column(numeric_count + index)[row_index].as_py())
+            (
+                None
+                if batch.column(numeric_count + index)[row_index].as_py() is None
+                else str(batch.column(numeric_count + index)[row_index].as_py())
+            )
             for index in range(categorical_count)
         )
         clients.append(client_id)
@@ -433,17 +450,21 @@ def _assign_temporal_splits(
 ) -> None:
     split = plan.split
     if not isinstance(split, WithinClientChronologicalSplitConfig):
-        raise DataFailure(DataFailureCode.SPLIT, "temporal split plan required", source_path=None, source_row_index=None)
+        raise DataFailure(
+            DataFailureCode.SPLIT,
+            "temporal split plan required",
+            source_path=None,
+            source_row_index=None,
+        )
     if split.rollover_policy is ChronologyRolloverPolicy.FORBID_DECREASE:
-        decreases = int(
-            connection.execute(
-                "WITH ordered AS (SELECT time_of_day_seconds, lag(time_of_day_seconds) OVER ("
-                f"PARTITION BY {quote_identifier(MaterializedColumn.CLIENT_ID.value)} ORDER BY "
-                f"{quote_identifier(MaterializedColumn.SOURCE_PATH.value)}, "
-                f"{quote_identifier(MaterializedColumn.SOURCE_ROW_INDEX.value)}) AS previous "
-                "FROM canonical_rows) SELECT count(*) FROM ordered WHERE previous IS NOT NULL "
-                "AND time_of_day_seconds < previous"
-            ).fetchone()[0]
+        decreases = fetch_scalar(
+            connection,
+            "WITH ordered AS (SELECT time_of_day_seconds, lag(time_of_day_seconds) OVER ("
+            f"PARTITION BY {quote_identifier(MaterializedColumn.CLIENT_ID.value)} ORDER BY "
+            f"{quote_identifier(MaterializedColumn.SOURCE_PATH.value)}, "
+            f"{quote_identifier(MaterializedColumn.SOURCE_ROW_INDEX.value)}) AS previous "
+            "FROM canonical_rows) SELECT count(*) FROM ordered WHERE previous IS NOT NULL "
+            "AND time_of_day_seconds < previous",
         )
         if decreases:
             raise DataFailure(
@@ -453,7 +474,7 @@ def _assign_temporal_splits(
                 source_row_index=None,
             )
     rollover_increment = (
-        f"CASE WHEN previous_time IS NOT NULL AND time_of_day_seconds < previous_time THEN 1 ELSE 0 END"
+        "CASE WHEN previous_time IS NOT NULL AND time_of_day_seconds < previous_time THEN 1 ELSE 0 END"
         if split.rollover_policy is ChronologyRolloverPolicy.ADD_FIXED_PERIOD_ON_DECREASE
         else "0"
     )
@@ -514,13 +535,12 @@ def _validate_temporal_minimums(
     )
     for client_id in clients:
         for membership, minimum in requirements:
-            observed = int(
-                connection.execute(
-                    "SELECT count(*) FROM assigned_rows WHERE "
-                    f"{quote_identifier(MaterializedColumn.CLIENT_ID.value)} = ? AND "
-                    f"{quote_identifier(MaterializedColumn.SPLIT.value)} = ?",
-                    (client_id, membership.value),
-                ).fetchone()[0]
+            observed = fetch_scalar(
+                connection,
+                "SELECT count(*) FROM assigned_rows WHERE "
+                f"{quote_identifier(MaterializedColumn.CLIENT_ID.value)} = ? AND "
+                f"{quote_identifier(MaterializedColumn.SPLIT.value)} = ?",
+                (client_id, membership.value),
             )
             if observed < minimum:
                 raise DataFailure(

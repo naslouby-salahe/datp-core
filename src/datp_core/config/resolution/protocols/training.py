@@ -11,7 +11,17 @@ from datp_core.config.errors import ConfigurationError
 from datp_core.core.identifiers import CheckpointProfileId, NormalizationStrategyId, SeedCohortId, TrainingProfileId
 from datp_core.core.numbers import NonNegativeFloat, PositiveFloat, PositiveInt
 from datp_core.core.seeding import Seed
-from datp_core.data.contracts import NormalizationStrategyRecord
+from datp_core.data.contracts.enums import (
+    ConstantFeaturePolicy,
+    NormalizationFitScope,
+    NormalizationStrategy,
+    OutOfRangePolicy,
+)
+from datp_core.data.contracts.materialization import (
+    MinMaxNormalizationConfig,
+    NormalizationConfig,
+    StandardNormalizationConfig,
+)
 from datp_core.learning.contracts.architecture import ModelArchitectureRecord
 from datp_core.learning.contracts.checkpoints import (
     CheckpointConvergenceRecord,
@@ -230,19 +240,32 @@ def resolve_batching_profiles(authored: AuthoredProtocolsConfig) -> dict[str, Ba
 
 def resolve_normalization_strategies(
     authored: AuthoredProtocolsConfig,
-) -> dict[NormalizationStrategyId, NormalizationStrategyRecord]:
-    return {
-        NormalizationStrategyId(k): NormalizationStrategyRecord(
-            identifier=NormalizationStrategyId(k),
-            formula=v.formula,
-            fitted_statistics=tuple(v.fitted_statistics),
-            constant_feature_rule=v.constant_feature_rule,
-            out_of_range_transform_values=v.out_of_range_transform_values,
-            fit_population=v.fit_population,
-            standard_deviation_ddof=v.standard_deviation_ddof,
-        )
-        for k, v in authored.normalization_strategies.items()
-    }
+) -> dict[NormalizationStrategyId, NormalizationConfig]:
+    result: dict[NormalizationStrategyId, NormalizationConfig] = {}
+    for k, v in authored.normalization_strategies.items():
+        nid = NormalizationStrategyId(k)
+        if "per_client" in v.fit_population:
+            fit_scope = NormalizationFitScope.PER_CLIENT_TRAIN
+        elif "historical" in v.fit_population:
+            fit_scope = NormalizationFitScope.HISTORICAL_TRAIN
+        else:
+            fit_scope = NormalizationFitScope.GLOBAL_TRAIN
+        if "min_max" in k:
+            result[nid] = MinMaxNormalizationConfig(
+                strategy=NormalizationStrategy.MIN_MAX,
+                fit_scope=fit_scope,
+                constant_feature_policy=ConstantFeaturePolicy.ZERO,
+                out_of_range_policy=OutOfRangePolicy.PRESERVE,
+            )
+        else:
+            result[nid] = StandardNormalizationConfig(
+                strategy=NormalizationStrategy.STANDARD,
+                fit_scope=fit_scope,
+                standard_deviation_ddof=int(v.standard_deviation_ddof or 0),
+                constant_feature_policy=ConstantFeaturePolicy.ERROR,
+                out_of_range_policy=OutOfRangePolicy.PRESERVE,
+            )
+    return result
 
 
 def resolve_protocol_determinism(cfg: DeterminismProfileConfig) -> ProtocolDeterminismRecord:

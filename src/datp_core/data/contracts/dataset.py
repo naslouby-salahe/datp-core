@@ -30,6 +30,10 @@ from datp_core.data.contracts.sources import (
 from datp_core.data.contracts.values import SchemaId
 
 
+class DatasetSetupError(ValueError):
+    pass
+
+
 class ResolvedDatasetPaths(StrictFrozenModel):
     raw_data_root: Path
     processed_root: Path
@@ -64,7 +68,21 @@ class EdgeMaterializationDefinition(MaterializationDefinition):
     categorical_encoding: OneHotEncodingConfig
 
 
-class CICIoT2023Dataset(StrictFrozenModel):
+class _DatasetBase(StrictFrozenModel):
+    def setup(self, setup_id: DatasetSetupId) -> DatasetSetup:
+        for item in self.setups:  # type: ignore[attr-defined]
+            if item.identifier == setup_id:
+                return item
+        raise DatasetSetupError(f"setup '{setup_id.value}' not found")
+
+    def materialization(self, materialization_id: MaterializationId) -> MaterializationDefinition:
+        for item in self.materializations:  # type: ignore[attr-defined]
+            if item.identifier == materialization_id:
+                return item
+        raise DatasetSetupError(f"materialization '{materialization_id.value}' not found")
+
+
+class CICIoT2023Dataset(_DatasetBase):
     adapter: Literal[AdapterKind.CICIOT2023]
     dataset_id: DatasetId
     display_name: str
@@ -77,7 +95,7 @@ class CICIoT2023Dataset(StrictFrozenModel):
     family_assignments: tuple[ClientFamilyAssignment, ...]
 
 
-class NBaIoTDataset(StrictFrozenModel):
+class NBaIoTDataset(_DatasetBase):
     adapter: Literal[AdapterKind.NBAIOT]
     dataset_id: DatasetId
     display_name: str
@@ -90,7 +108,7 @@ class NBaIoTDataset(StrictFrozenModel):
     family_assignments: tuple[ClientFamilyAssignment, ...]
 
 
-class EdgeIIoTsetDataset(StrictFrozenModel):
+class EdgeIIoTsetDataset(_DatasetBase):
     adapter: Literal[AdapterKind.EDGE_IIOTSET]
     dataset_id: DatasetId
     display_name: str

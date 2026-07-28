@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from datp_core.core.hashing import compute_file_checksum, compute_payload_checksum
+from datp_core.core.hashing import Checksum, compute_file_checksum, compute_payload_checksum
 from datp_core.core.identifiers import DatasetId
+from datp_core.data.contracts.dataset import ResolvedDataset
 from datp_core.data.contracts.enums import DataFailureCode, SourceDiscoveryMode
 from datp_core.data.contracts.sources import DatasetSourceConfig, SourceInventoryPolicy, SourceTreeConfig
 from datp_core.data.materialization.errors import DataFailure
@@ -100,3 +101,17 @@ def _require_contained(path: Path, root: Path) -> None:
             source_path=path,
             source_row_index=None,
         )
+
+
+def compute_experiment_source_fingerprint(
+    *,
+    datasets: dict[DatasetId, ResolvedDataset],
+    dataset_ids: tuple[DatasetId, ...],
+) -> Checksum:
+    parts: list[str] = []
+    for dataset_id in sorted(dataset_ids, key=lambda d: d.value):
+        dataset = datasets[dataset_id]
+        inventory = build_source_inventory(dataset_id, dataset.paths.raw_data_root, dataset.source)
+        parts.append(f"{dataset_id.value}:{inventory.checksum.value}")
+    payload = "\n".join(parts).encode("utf-8")
+    return compute_payload_checksum(payload)

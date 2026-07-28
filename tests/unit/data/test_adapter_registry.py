@@ -5,8 +5,9 @@ from __future__ import annotations
 import pytest
 
 from datp_core.app import _build_adapter_registry
-from datp_core.data.contracts import AdapterKind
-from datp_core.data.materialization import DatasetAdapterRegistry
+from datp_core.data.contracts.enums import AdapterKind
+from datp_core.data.materialization.errors import DataFailure
+from datp_core.data.materialization.registry import DatasetAdapterRegistry
 
 
 def test_adapter_registry_contains_every_configured_dataset_adapter() -> None:
@@ -26,9 +27,9 @@ def test_adapter_registry_returns_correct_adapter_kind() -> None:
         assert adapter.adapter_kind == kind
 
 
-def test_adapter_registry_raises_keyerror_for_missing_kind() -> None:
-    """Requesting an unregistered AdapterKind must raise KeyError with a descriptive message."""
-    registry = DatasetAdapterRegistry(adapters={})
+def test_adapter_registry_raises_for_missing_kind() -> None:
+    """Requesting an unregistered AdapterKind must raise DataFailure."""
+    registry = DatasetAdapterRegistry(adapters=())
 
-    with pytest.raises(KeyError, match="No dataset materializer registered for adapter kind"):
+    with pytest.raises(DataFailure, match="no materializer registered for adapter"):
         registry.get(AdapterKind.EDGE_IIOTSET)

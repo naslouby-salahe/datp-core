@@ -15,7 +15,7 @@ from datp_core.artifacts.store import ArtifactStore
 from datp_core.config.resolution.runtime import ResolvedRuntimeConfiguration
 from datp_core.core.identifiers import DatasetId, ExperimentId, PopulationId, TrainingProfileId
 from datp_core.core.registry import TypedDomainRegistry
-from datp_core.data.contracts import ResolvedDataset
+from datp_core.data.contracts.dataset import ResolvedDataset
 from datp_core.data.contracts.enums import SplitMembership, SplitMethod
 from datp_core.experiments import ExperimentRecord, PopulationRecord
 from datp_core.learning.contracts.architecture import ModelArchitectureRecord
@@ -73,7 +73,7 @@ def _score_split(
     dataset = datasets.get(population.dataset_id)
     setup = dataset.setup(population.setup_id)
     materialization = next(item for item in dataset.materializations if item.identifier == setup.materialization_id)
-    temporal = materialization.split_method is SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL
+    temporal = materialization.split.method is SplitMethod.WITHIN_CLIENT_CHRONOLOGICAL
     if output_name == _CALIBRATION_SCORES:
         return SplitMembership.HISTORICAL_CALIBRATION.value if temporal else SplitMembership.CALIBRATION.value
     if output_name == _FUTURE_RECALIBRATION_SCORES:
@@ -131,10 +131,7 @@ class ScoreGenerationStageHandler:
             with TemporaryDirectory(prefix="datp_scoring_") as temporary_directory:
                 materialized_path = Path(temporary_directory) / "materialized.parquet"
                 materialized_path.write_bytes(materialization)
-                features = dataset.field_schema.model_features
-                feature_columns = (
-                    features.order if features is not None else materialized_feature_columns(materialized_path)
-                )
+                feature_columns = materialized_feature_columns(materialized_path)
                 if personalized is not None:
                     client_ids = (
                         pl.read_parquet(materialized_path, columns=["client_id"])["client_id"].unique().sort().to_list()

@@ -9,12 +9,16 @@ import duckdb
 import pyarrow as pa
 import pyarrow.parquet as pq
 
+from datp_core.data.contracts.enums import DataFailureCode, ParquetCompression
 from datp_core.data.contracts.materialization import DataLoadingConfig
 from datp_core.data.materialization.errors import DataFailure
-from datp_core.data.contracts.enums import DataFailureCode, ParquetCompression
 
 
-def open_database(database_path: Path, temporary_directory: Path, runtime: DataLoadingConfig) -> duckdb.DuckDBPyConnection:
+def open_database(
+    database_path: Path,
+    temporary_directory: Path,
+    runtime: DataLoadingConfig,
+) -> duckdb.DuckDBPyConnection:
     temporary_directory.mkdir(parents=True, exist_ok=True)
     connection = duckdb.connect(database_path.as_posix())
     connection.execute(f"SET threads = {int(runtime.duckdb.threads)}")
@@ -49,12 +53,16 @@ def write_query_to_parquet(
 ) -> int:
     target_path.parent.mkdir(parents=True, exist_ok=True)
     reader = connection.execute(query).fetch_record_batch(rows_per_batch=int(runtime.chunk_row_count))
-    compression = None if runtime.parquet.compression is ParquetCompression.NONE else runtime.parquet.compression.value
+    compression: str | None = (
+        None
+        if runtime.parquet.compression is ParquetCompression.NONE
+        else str(runtime.parquet.compression)
+    )
     written_rows = 0
     with pq.ParquetWriter(
         target_path,
         reader.schema,
-        compression=compression,
+        compression=compression,  # type: ignore[arg-type]
         use_dictionary=runtime.parquet.dictionary_encoding,
         data_page_size=int(runtime.parquet.data_page_size),
     ) as writer:
@@ -97,3 +105,21 @@ def require_non_empty_parquet(path: Path) -> None:
             source_path=path,
             source_row_index=None,
         )
+
+
+def fetch_scalar(
+    connection: duckdb.DuckDBPyConnection,
+    query: str,
+    parameters: tuple[str | int | bool | None, ...] = (),
+    *,
+    source_path: Path | None = None,
+) -> int:
+    row = connection.execute(query, parameters).fetchone()
+    if row is None:
+        raise DataFailure(
+            DataFailureCode.SOURCE_EMPTY,
+            "scalar query returned no rows",
+            source_path=source_path,
+            source_row_index=None,
+        )
+    return int(row[0])

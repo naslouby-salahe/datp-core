@@ -17,7 +17,13 @@ from datp_core.data.contracts.enums import (
     MaterializedColumn,
     SplitMembership,
 )
-from datp_core.data.materialization.database import insert_record_batch, quote_identifier, write_query_to_parquet
+from datp_core.data.contracts.values import ColumnName
+from datp_core.data.materialization.database import (
+    fetch_scalar,
+    insert_record_batch,
+    quote_identifier,
+    write_query_to_parquet,
+)
 from datp_core.data.materialization.errors import DataFailure
 from datp_core.data.materialization.models import (
     CICIoT2023MaterializationPlan,
@@ -62,7 +68,7 @@ def materialize_ciciot2023(
                 source_path=entry.source_path,
                 columns=tuple(
                     CsvColumnSpec(
-                        name=feature,
+                        name=ColumnName(feature.value),
                         kind=CsvColumnKind.FLOAT64,
                         nullable=False,
                         strip_text=False,
@@ -108,7 +114,7 @@ def materialize_ciciot2023(
             source_row_index=None,
         )
     _create_canonical_table(connection, feature_names)
-    canonical_rows = int(connection.execute("SELECT count(*) FROM canonical_rows").fetchone()[0])
+    canonical_rows = fetch_scalar(connection, "SELECT count(*) FROM canonical_rows")
     conflicting_groups = _conflicting_group_count(connection, feature_names)
     _create_split_assignments(connection)
     _assign_benign_splits(connection, plan)
@@ -205,12 +211,11 @@ def _create_canonical_table(connection: duckdb.DuckDBPyConnection, feature_names
 
 def _conflicting_group_count(connection: duckdb.DuckDBPyConnection, feature_names: tuple[str, ...]) -> int:
     features = ", ".join(quote_identifier(name) for name in feature_names)
-    return int(
-        connection.execute(
-            "SELECT count(*) FROM ("
-            f"SELECT {features} FROM canonical_rows GROUP BY {features} "
-            f"HAVING count(DISTINCT {quote_identifier(MaterializedColumn.IS_ATTACK.value)}) > 1)"
-        ).fetchone()[0]
+    return fetch_scalar(
+        connection,
+        "SELECT count(*) FROM ("
+        f"SELECT {features} FROM canonical_rows GROUP BY {features} "
+        f"HAVING count(DISTINCT {quote_identifier(MaterializedColumn.IS_ATTACK.value)}) > 1)",
     )
 
 
@@ -241,7 +246,10 @@ def _assign_benign_splits(
         f"{quote_identifier(MaterializedColumn.SOURCE_ROW_INDEX.value)}"
     ).fetch_record_batch(rows_per_batch=int(plan.runtime.chunk_row_count))
     for batch in reader:
-        roles = tuple(split_membership_for_draw(generator.random(), plan.split.ratios).value for _ in range(batch.num_rows))
+        roles = tuple(
+            split_membership_for_draw(generator.random(), plan.split.ratios).value
+            for _ in range(batch.num_rows)
+        )
         assignment_batch = pa.RecordBatch.from_arrays(
             (batch.column(0), batch.column(1), pa.array(roles, type=pa.string())),
             (
