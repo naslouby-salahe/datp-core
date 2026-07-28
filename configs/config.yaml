@@ -1,7 +1,0 @@
-defaults:
-  - runtime@runtime
-  - experiments@experiments
-  - protocols@protocols
-  - datasets@datasets.nbaiot: nbaiot
-  - datasets@datasets.ciciot2023: ciciot2023
-  - datasets@datasets.edge_iiotset: edge_iiotset
