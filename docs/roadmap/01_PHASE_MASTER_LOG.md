@@ -35,8 +35,8 @@ Do not add percentages. A phase is binary with respect to its exit criteria.
 | 01 — Scientific identity and scope | `COMPLETE` | Source tree exists | Identity tests and scope audit | None |
 | 02 — Typed protocols and domain contracts | `COMPLETE` | Phase 01 complete | Protocol graph validation and strict typing | None; optional alert-burden translation is explicitly suppressed without rate evidence |
 | 03 — Dataset audit and capabilities | `COMPLETE` | Phase 02 complete | Audited schemas, capability contracts, streaming canonical materialization, COMPLETE markers, full static/test gates | None for Phase 03 handoff |
-| 04 — Canonical data and reusable preprocessing | `COMPLETE` | Phase 03 complete | Method locks, coordinates, reuse, skops, CLI, focused/full gates | None; end-to-end processed publication consumes Phase 05 populations by design |
-| 05 — Populations, splits, and cohorts | `NOT_STARTED` | Phase 04 complete | Deterministic split/cohort manifests | Non-temporal split ratios are research-amendment equal thirds; remaining work is builders and leak-free cohorts |
+| 04 — Canonical data and reusable preprocessing | `COMPLETE` | Phase 03 complete | Method locks, coordinates, reuse, skops, materialize CLI, runtime CUDA/workers, package-cycle cleanup, full gates | None; end-to-end processed publication consumes Phase 05 populations by design |
+| 05 — Populations, splits, and cohorts | `NOT_STARTED` | Phase 04 complete and Phase 4 cleanup gate clear | Deterministic split/cohort manifests | Non-temporal split ratios are research-amendment equal thirds; remaining work is builders and leak-free cohorts |
 | 06 — Anchor reproduction and gate | `NOT_STARTED` | Phase 05 complete | Explicit equivalence/discrepancy decision | Metric-specific tolerances absent from source truth remain blocking |
 | 07 — Centralized reference | `NOT_STARTED` | Phase 05 complete | Independent pooled execution and tests | Centralized training values absent from source truth remain blocking |
 | 08 — Federated training, checkpointing, and scoring | `NOT_STARTED` | Phases 05–06 complete | Frozen scores and checkpoint discipline pass | Exact architecture/optimizer/batch values must be sourced |
@@ -126,11 +126,11 @@ Grouped threshold assignment is the source-locked taxonomy-free mechanism: creat
 
 ## Phase 04 — Canonical data and reusable preprocessing
 
-- Status: `COMPLETE`.
+- Status: `COMPLETE` (including post-implementation architectural cleanup).
 - Upstream corrections applied before Phase 04 entry (Phase 1–3 contracts remain COMPLETE; these are corrections, not restarts):
   - Added `SeedCount`; `SeedCohort.member_count` and `StatisticalInferenceProtocol.paired_seed_count` return `SeedCount` rather than `ClientCount`.
   - Renamed `DEFAULT_RUNTIME` to `CANONICAL_RUNTIME`.
-  - Expanded `ResolvedProtocolGraph` with confirmatory endpoint, inference, anchor, runtime, splits, cluster threshold, FedAvg training, and traffic-rate evidence; `validate_protocol_graph()` constructs the one canonical graph.
+  - Expanded `ResolvedProtocolGraph` with confirmatory endpoint, inference, anchor, runtime, splits, cluster threshold, FedAvg training, and traffic-rate evidence.
   - Added `ConfirmatoryEndpoint` locking `SHARED_VS_LOCAL_CONFIRMATION` / `NBAIOT_NATURAL_DEVICES` / `FEDAVG_AUTOENCODER` / `SHARED_THRESHOLD` vs `LOCAL_THRESHOLD` / `FPR_COEFFICIENT_OF_VARIATION` / ten-seed journal cohort / shared-minus-local / paired BCa.
   - Added `ExperimentReadiness` (`DECLARED`/`EXECUTABLE`/`SUPPRESSED`/`INFEASIBLE`/`BLOCKED`); catalogue members are declared or suppressed, never executable before implementation phases complete.
   - Added `PopulationIdentityKind` and identity validation; Edge sensor groups and CIC files are not physical devices.
@@ -139,19 +139,25 @@ Grouped threshold assignment is the source-locked taxonomy-free mechanism: creat
 - Processed layout locked to:
   `data/processed/<DATASET_ID>/<POPULATION_ID>/<PARTITION_SEED>/<SPLIT_PROTOCOL_ID>/<PREPROCESSING_PROTOCOL_ID>/{federated/<CLIENT_ID>|centralized_reference}/…`
   without `seed_` prefixes or nested `client/` directory segments.
-- CLI/Make: `datp-core preprocess-dataset`, `datp-core preprocess-all-datasets`, `--overwrite` (rebuild only; no path override); `make preprocess-dataset DATASET=… OVERWRITE=0|1`, `make preprocess-all-datasets`.
-- Enums reused/extended for path/partition/protocol identities: `PartitionRole`, `SplitProtocolId`, `PreprocessingProtocolId`, `ReusableDataCoordinateKind`, `TrustedEstimator*`, `PreprocessExecutionStatus`.
-- Fixed Edge attack-source glob to `*{_attack.csv}` (previous exact-suffix glob discovered zero attack CSVs).
-- Scientific method lock (Journal §2.2.1): confirmatory `SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD` = client-local StandardScaler (paper+anchor); supportive `SCIENTIFIC_FEDERATED_POOLED_MIN_MAX_METHOD` = pooled MinMax (FL-AE literature); centralized pooled MinMax; via existing enums + `build_preprocessing_protocol`; transform tolerance reuses `FIXED_SCORE_ABSOLUTE_TOLERANCE.value`.
-- Phase 04 implementation in existing files only (no new `src/` files):
-  - `preprocessing/models.py`, `federated.py`, `validation.py`
-  - `centralized_reference/preprocessing.py`
-  - `artifacts/coordinates.py`, `layout.py`, `serialization.py`, `manifest.py`, `completion.py`, `reload_validation.py`, `store.py`
-  - `cli.py`, `domain/enums.py`, dataset/protocol upstream corrections
-- Behaviour implemented: descriptive processed-data paths; independent federated/centralized fit branches; train-only fit guards; attack-label rejection; skops trusted-type serialization; transform reload equivalence; atomic publish with `filelock`, temporary sibling, COMPLETE digest; reuse and partial-rebuild semantics.
-- Intentionally deferred to Phase 05 (not a Phase 04 scientific hole): population construction, split materialization, and therefore end-to-end processed-asset publication. CLI correctly exits `blocked_population_construction` until Phase 05 supplies partitions.
-- Tests: unit preprocessing/artifacts/centralized_reference; integration reuse, reload, cache invalidation, atomic publication; protocol/domain updates.
-- Final gates for Phase 04 closure recorded under validation commands in the closing audit of this task.
-- Phase 5+ scientific algorithms were not implemented.
+- Scientific method lock (Journal §2.2.1): confirmatory client-local StandardScaler; supportive federated pooled MinMax; centralized pooled MinMax; skops; transform absolute tolerance `1e-12`.
+- Phase 04 implementation in existing files only (no new `src/` files): preprocessing, centralized_reference preprocessing, artifacts, datasets, CLI, domain/protocol surfaces.
+- Behaviour implemented: descriptive processed-data paths; independent federated/centralized fit branches; train-only fit guards; attack-label rejection; skops trusted-type serialization; transform reload equivalence; atomic publish with `filelock`, temporary sibling, COMPLETE digest; reuse semantics.
+- Intentionally deferred to Phase 05: population construction, split materialization, and end-to-end processed-asset publication. Phase 04 does not fabricate client partitions.
+
+### Phase 04 cleanup and readiness gate (post-implementation)
+
+- Runtime: `CANONICAL_RUNTIME` locks `require_cuda=True` and `worker_count=6`. `runtime/compute.py` and `runtime/determinism.py` own CUDA validation, device resolution, provenance, deterministic seeding, and worker-seed derivation. No silent CPU fallback for GPU-appropriate work.
+- Protocol graph: explicit `CANONICAL_PROTOCOL_GRAPH = ProtocolGraphInputs(...)` with no field defaults; `validate_protocol_graph(inputs)` requires that object (no hidden default construction).
+- Dataset materialization debloat: `materialization.py` reduced from ~1186 lines to publication/streaming responsibilities; `canonical_cache.py` owns source-state comparison, completed-publication validation, reuse decisions, and manifest serialization.
+- Artifacts/preprocessing cycle removed: artifacts no longer import preprocessing models. `ReusableDataCoordinate` lives in `artifacts/coordinates.py`. Artifact serialization/store/manifest APIs are generic over Pydantic models and `TrustedEstimatorClassName`.
+- Speculative `domain/contracts.py` Protocol surfaces removed until real multi-implementation substitution exists.
+- Stage hierarchy: `StageId` is the eleven high-level pipeline stages; `StageOperationId` covers fine-grained stage-file operations under centralized/federated branches.
+- CLI: only `materialize-canonical-datasets` remains as a working Phase 4 command. Misleading `preprocess-dataset` / `preprocess-all-datasets` commands and Makefile targets were removed (they only returned Phase 5 blocked status).
+- Configuration: typed Python protocol modules remain the sole scientific configuration source; no YAML/TOML/Hydra scientific configuration layer.
+- Tests: unit/integration/architecture/scientific plus CUDA smoke tests in `tests/unit/runtime/`; full suite `152 passed`.
+- Static gates: Ruff format/check pass; Pyright 0 errors; Pylint ~9.94/10 (pre-existing duplicate-code similarity notices only).
+- SonarQube CLI: `totalIssues=0`; Vortex agentic analysis returned organization-side 403 for changed files (service limitation, not authentication failure).
+- CodeScene delta: materialization Code Health improved `8.03 -> 9.68`; JSON new-issue report empty after argument-bundling cleanup.
+- Phase 5 was not started. Populations package remains empty/unimplemented.
 - No branch, commit, or push was performed.
 

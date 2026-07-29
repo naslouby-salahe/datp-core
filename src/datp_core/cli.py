@@ -1,8 +1,5 @@
 """Command-line entry points for reproducible DATP-Core operations."""
 
-from dataclasses import dataclass
-from enum import StrEnum
-
 import typer
 
 from datp_core.artifacts.coordinates import raw_dataset_root
@@ -12,24 +9,10 @@ from datp_core.datasets.edge_iiotset.materialize import EdgeIIoTsetMaterializer
 from datp_core.datasets.edge_iiotset.schema import EdgeArtifactName, EdgeArtifactSuffix
 from datp_core.datasets.nbaiot.materialize import NBaIoTMaterializer
 from datp_core.datasets.nbaiot.schema import NBaIoTArtifactName
-from datp_core.domain.enums import DatasetId, PreprocessExecutionStatus, ReusableDataCoordinateKind
-from datp_core.preprocessing.models import scientific_preprocessing_method
+from datp_core.domain.enums import DatasetId, ReusableDataCoordinateKind
 from datp_core.protocols.models import DATA_ROOT
 
 app = typer.Typer(no_args_is_help=True)
-
-
-class DatasetCliName(StrEnum):
-    NBAIOT = DatasetId.NBAIOT.value
-    CICIOT2023 = DatasetId.CICIOT2023.value
-    EDGE_IIOTSET = DatasetId.EDGE_IIOTSET.value
-
-
-@dataclass(frozen=True, slots=True)
-class PreprocessCommandResult:
-    dataset: DatasetId
-    status: PreprocessExecutionStatus
-    detail: str
 
 
 @app.callback()
@@ -46,45 +29,6 @@ def materialize_canonical_datasets() -> None:
             f"{result.dataset.value} {result.publication_status.value} "
             f"rows={result.row_count} assets={len(result.assets)}"
         )
-
-
-@app.command("preprocess-dataset")
-def preprocess_dataset_command(
-    dataset: DatasetCliName = typer.Argument(..., help="Dataset identity to preprocess."),
-    overwrite: bool = typer.Option(
-        False,
-        "--overwrite",
-        help="Rebuild matching processed coordinates when preprocessing is scientifically executable.",
-    ),
-) -> None:
-    """Ensure canonical assets and run scientific preprocessing for one dataset."""
-    result = preprocess_dataset(DatasetId(dataset.value), overwrite=overwrite)
-    typer.echo(f"{result.dataset.value} {result.status.value} {result.detail}")
-    if result.status is PreprocessExecutionStatus.BLOCKED_POPULATION_CONSTRUCTION:
-        raise typer.Exit(code=3)
-    if result.status is PreprocessExecutionStatus.BLOCKED_SCIENTIFIC_VALUE:
-        raise typer.Exit(code=2)
-
-
-@app.command("preprocess-all-datasets")
-def preprocess_all_datasets_command(
-    overwrite: bool = typer.Option(
-        False,
-        "--overwrite",
-        help="Rebuild matching processed coordinates when preprocessing is scientifically executable.",
-    ),
-) -> None:
-    """Ensure canonical assets and run scientific preprocessing for every dataset."""
-    exit_code = 0
-    for dataset in DatasetId:
-        result = preprocess_dataset(dataset, overwrite=overwrite)
-        typer.echo(f"{result.dataset.value} {result.status.value} {result.detail}")
-        if result.status is PreprocessExecutionStatus.BLOCKED_POPULATION_CONSTRUCTION:
-            exit_code = max(exit_code, 3)
-        elif result.status is PreprocessExecutionStatus.BLOCKED_SCIENTIFIC_VALUE:
-            exit_code = max(exit_code, 2)
-    if exit_code:
-        raise typer.Exit(code=exit_code)
 
 
 def main() -> None:
@@ -119,27 +63,6 @@ def materialize_canonical_dataset(dataset: DatasetId):
                 )
             )
             return EdgeIIoTsetMaterializer().materialize(benign_paths, attack_paths, canonical_root)
-
-
-def preprocess_dataset(dataset: DatasetId, *, overwrite: bool) -> PreprocessCommandResult:
-    """Materialize/reuse canonical data, then attempt scientific preprocessing.
-
-    Path roots are fixed by the canonical runtime declaration. ``overwrite`` only
-    controls rebuild-vs-reuse of matching processed coordinates once populations and
-    splits exist; it never redirects roots.
-    """
-    canonical = materialize_canonical_dataset(dataset)
-    method = scientific_preprocessing_method()
-    detail = (
-        f"scientific method {method.identity.value} resolved for {canonical.dataset.value}; "
-        "population and split construction remain Phase 05 before processed publication "
-        f"(overwrite={overwrite})"
-    )
-    return PreprocessCommandResult(
-        dataset=dataset,
-        status=PreprocessExecutionStatus.BLOCKED_POPULATION_CONSTRUCTION,
-        detail=detail,
-    )
 
 
 if __name__ == "__main__":

@@ -1,4 +1,4 @@
-"""Safe serialization for fitted preprocessing estimators and manifests."""
+"""Generic safe serialization for trusted estimators and Pydantic models."""
 
 from hashlib import sha256
 from pathlib import Path
@@ -13,15 +13,23 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 from datp_core.domain.enums import TrustedEstimatorClassName
 from datp_core.domain.errors import SerializationSafetyError
 from datp_core.domain.values import Checksum
-from datp_core.preprocessing.models import PreprocessingProtocol, TransformedSchema
 
 TrustedScaler = StandardScaler | MinMaxScaler
-_TRUSTED_ESTIMATOR_TYPES: Final[dict[TrustedEstimatorClassName, type[TrustedScaler]]] = {
-    TrustedEstimatorClassName.STANDARD_SCALER: StandardScaler,
-    TrustedEstimatorClassName.MIN_MAX_SCALER: MinMaxScaler,
-}
+
+
+def _trusted_estimator_type(class_name: TrustedEstimatorClassName) -> type[TrustedScaler]:
+    match class_name:
+        case TrustedEstimatorClassName.STANDARD_SCALER:
+            return StandardScaler
+        case TrustedEstimatorClassName.MIN_MAX_SCALER:
+            return MinMaxScaler
+
+
 _TRUSTED_TYPE_NAMES: Final[frozenset[str]] = frozenset(
-    f"{estimator_type.__module__}.{estimator_type.__name__}" for estimator_type in _TRUSTED_ESTIMATOR_TYPES.values()
+    (
+        f"{StandardScaler.__module__}.{StandardScaler.__name__}",
+        f"{MinMaxScaler.__module__}.{MinMaxScaler.__name__}",
+    )
 )
 
 
@@ -29,14 +37,8 @@ def trusted_estimator_type_names() -> frozenset[str]:
     return _TRUSTED_TYPE_NAMES
 
 
-def resolve_trusted_estimator_type(protocol: PreprocessingProtocol) -> type[TrustedScaler]:
-    try:
-        return _TRUSTED_ESTIMATOR_TYPES[protocol.estimator_class_name]
-    except KeyError as error:
-        raise SerializationSafetyError(
-            f"protocol estimator {protocol.qualified_estimator_name} is not an approved trusted type",
-            subject="preprocessing estimator",
-        ) from error
+def resolve_trusted_estimator_type(class_name: TrustedEstimatorClassName) -> type[TrustedScaler]:
+    return _trusted_estimator_type(class_name)
 
 
 def construct_trusted_estimator(class_name: TrustedEstimatorClassName) -> TrustedScaler:
@@ -48,10 +50,10 @@ def construct_trusted_estimator(class_name: TrustedEstimatorClassName) -> Truste
             return MinMaxScaler(feature_range=(0, 1), clip=False)
 
 
-def clone_trusted_scaler(estimator: TrustedScaler, protocol: PreprocessingProtocol) -> TrustedScaler:
-    if type(estimator) is not resolve_trusted_estimator_type(protocol):
+def clone_trusted_scaler(estimator: TrustedScaler, class_name: TrustedEstimatorClassName) -> TrustedScaler:
+    if type(estimator) is not resolve_trusted_estimator_type(class_name):
         raise SerializationSafetyError(
-            "estimator class does not match the preprocessing protocol",
+            "estimator class does not match the trusted estimator identity",
             subject="estimator",
         )
     return cast(TrustedScaler, clone(estimator))
@@ -59,7 +61,7 @@ def clone_trusted_scaler(estimator: TrustedScaler, protocol: PreprocessingProtoc
 
 def serialize_estimator(estimator: BaseEstimator, destination: Path) -> Checksum:
     estimator_type = type(estimator)
-    if estimator_type not in _TRUSTED_ESTIMATOR_TYPES.values():
+    if estimator_type not in (StandardScaler, MinMaxScaler):
         raise SerializationSafetyError(
             f"untrusted preprocessing estimator type {estimator_type.__module__}.{estimator_type.__name__}",
             subject="preprocessing estimator",
@@ -69,12 +71,12 @@ def serialize_estimator(estimator: BaseEstimator, destination: Path) -> Checksum
     return file_checksum(destination)
 
 
-def load_estimator(path: Path, protocol: PreprocessingProtocol) -> TrustedScaler:
-    expected_type = resolve_trusted_estimator_type(protocol)
+def load_estimator(path: Path, class_name: TrustedEstimatorClassName) -> TrustedScaler:
+    expected_type = resolve_trusted_estimator_type(class_name)
     loaded = skops_io.loads(path.read_bytes(), trusted=list(_TRUSTED_TYPE_NAMES))
     if type(loaded) is not expected_type:
         raise SerializationSafetyError(
-            "reloaded estimator class does not match the preprocessing protocol",
+            "reloaded estimator class does not match the trusted estimator identity",
             subject="preprocessing estimator",
         )
     if not isinstance(loaded, (StandardScaler, MinMaxScaler)):
@@ -110,9 +112,9 @@ def transforms_are_equivalent(
     return bool(np.allclose(left, right, rtol=0.0, atol=absolute_tolerance, equal_nan=False))
 
 
-def schema_feature_matrix(schema: TransformedSchema, values: np.ndarray) -> np.ndarray:
+def feature_matrix_width_matches(values: np.ndarray, expected_width: int) -> np.ndarray:
     if values.ndim != 2:
         raise ValueError("transformed feature matrices must be two-dimensional")
-    if values.shape[1] != len(schema.features):
+    if values.shape[1] != expected_width:
         raise ValueError("transformed matrix width must match the transformed schema")
     return values

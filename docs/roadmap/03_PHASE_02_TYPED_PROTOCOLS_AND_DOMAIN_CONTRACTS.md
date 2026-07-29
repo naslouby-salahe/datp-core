@@ -103,22 +103,9 @@ Provenance records contain no timestamps and are serializable without custom cod
 
 ## Protocol interfaces
 
-In `domain/contracts.py`, define runtime-checkable `typing.Protocol` interfaces only where multiple implementations exist:
+In `domain/contracts.py`, define runtime-checkable `typing.Protocol` interfaces only when multiple real implementations and a tested substitution boundary exist in the implemented phases.
 
-- `DatasetReader`
-- `DatasetMaterializer`
-- `PopulationBuilder`
-- `Preprocessor`
-- `Trainer`
-- `CheckpointSelector`
-- `ScoreGenerator`
-- `FederatedThresholdEstimator`
-- `CentralizedThresholdEstimator`
-- `MetricEvaluator`
-- `StageHandler`
-- `ArtifactSerializer`
-- `ArtifactStore`
-- `StageHook`
+Phase 4 cleanup removed speculative Phase 02 Protocol placeholders that had no consumers or implementations. The reserved file remains for later phases that introduce genuine multi-implementation boundaries. Do not reintroduce unused abstractions.
 
 Protocols expose typed methods and result objects; they do not use dict payloads. Do not introduce abstract base classes when structural typing suffices.
 
@@ -193,8 +180,8 @@ Do not invent exact seed integers, architecture widths, learning rate, batch siz
 - `anchor.py`: historical reference values and explicit tolerances only when present in source truth.
 - `populations.py`: typed population declarations referencing capabilities, not implementing construction.
 - `experiments.py`: complete experiment catalogue as a tuple of `ExperimentDeclaration`; no registry dictionary.
-- `runtime.py`: paths, CUDA requirement, workers, overwrite behavior, and campaign options that cannot alter science.
-- `validation.py`: validate the complete cross-reference graph and return one `ResolvedProtocolGraph`.
+- `runtime.py`: paths, CUDA requirement (`require_cuda=True` in `CANONICAL_RUNTIME`), workers (`worker_count=6`), overwrite behavior, and campaign options that cannot alter science.
+- `validation.py`: define the explicit `CANONICAL_PROTOCOL_GRAPH` object and validate that exact object via `validate_protocol_graph(inputs)`; do not silently construct a default graph inside validation.
 
 ## Graph validation rules
 

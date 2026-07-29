@@ -42,6 +42,7 @@ from datp_core.domain.enums import (
     SplitId,
     SplitProtocolId,
     StageId,
+    StageOperationId,
     StatisticalTestId,
     TemporalState,
     TrafficRateEvidenceType,
@@ -271,6 +272,24 @@ EXPECTED_MEMBERS = (
         StageId,
         frozenset(
             (
+                "PREFLIGHT",
+                "DATASET_MATERIALIZATION",
+                "MODEL_TRAINING",
+                "CHECKPOINT_SELECTION",
+                "SCORE_GENERATION",
+                "CALIBRATION_SUBSAMPLING",
+                "THRESHOLD_CONSTRUCTION",
+                "EVALUATION",
+                "STATISTICAL_ANALYSIS",
+                "REPORTING",
+                "FINALIZATION",
+            )
+        ),
+    ),
+    (
+        StageOperationId,
+        frozenset(
+            (
                 "ANALYZE",
                 "CALIBRATE",
                 "CONSTRUCT_CENTRALIZED_REFERENCE_THRESHOLD",
@@ -362,7 +381,11 @@ def test_centralized_and_federated_threshold_methods_are_structurally_separate()
     assert not isinstance(CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE, FederatedThresholdMethod)
 
 
-def test_stage_id_exhaustively_covers_existing_stage_files() -> None:
+def test_stage_operation_id_exhaustively_covers_existing_stage_files() -> None:
     stages_root = Path(__file__).parents[3] / "src" / "datp_core" / "orchestration" / "stages"
     stage_files = frozenset(path.stem for path in stages_root.glob("*.py") if path.stem != "__init__")
-    assert {stage.value for stage in StageId} == stage_files
+    assert {stage.value for stage in StageOperationId} == stage_files
+
+
+def test_stage_id_has_eleven_high_level_stages() -> None:
+    assert len(StageId) == 11

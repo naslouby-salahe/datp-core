@@ -18,6 +18,8 @@
 
 Implement deterministic experiment-output coordinates, typed manifests, safe serialization, checksum/schema validation, atomic completion, reload verification, and stale-output cleanup. Keep reusable data under `data/` and experiment-specific artifacts under `outputs/`.
 
+Phase 4 established the artifact package as generic infrastructure: atomic publication, integrity, checksums, locking, and safe estimator persistence without importing preprocessing-specific scientific models. Preprocessing constructs and validates its own models and passes validated Pydantic objects into generic artifact APIs. Phase 13 extends this pattern to experiment outputs under `outputs/`.
+
 ## Entry criteria
 
 - Phases 02–12 are complete.

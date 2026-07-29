@@ -1,42 +1,50 @@
-"""Manifest helpers for reusable processed-data publications."""
+"""Generic JSON manifest helpers for reusable processed-data publications."""
 
 from pathlib import Path
+from typing import TypeVar
+
+from pydantic import BaseModel
 
 from datp_core.artifacts.layout import ProcessedAssetName
 from datp_core.artifacts.serialization import serialize_json_model
 from datp_core.domain.errors import ArtifactIntegrityError
 from datp_core.domain.values import Checksum
-from datp_core.preprocessing.models import PreprocessingManifest, PreprocessingValidationReport, TransformedSchema
+
+ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
-def write_preprocessing_manifest(directory: Path, manifest: PreprocessingManifest) -> Checksum:
-    return serialize_json_model(manifest, directory / ProcessedAssetName.PREPROCESSING_MANIFEST)
+def write_json_model(directory: Path, asset_name: ProcessedAssetName, model: BaseModel) -> Checksum:
+    return serialize_json_model(model, directory / asset_name)
 
 
-def write_transformed_schema(directory: Path, schema: TransformedSchema) -> Checksum:
-    return serialize_json_model(schema, directory / ProcessedAssetName.SCHEMA)
-
-
-def write_validation_report(directory: Path, report: PreprocessingValidationReport) -> Checksum:
-    return serialize_json_model(report, directory / ProcessedAssetName.VALIDATION_REPORT)
-
-
-def read_preprocessing_manifest(directory: Path) -> PreprocessingManifest:
-    path = directory / ProcessedAssetName.PREPROCESSING_MANIFEST
+def read_json_model[ModelT: BaseModel](
+    directory: Path, asset_name: ProcessedAssetName, model_type: type[ModelT]
+) -> ModelT:
+    path = directory / asset_name
     if not path.is_file():
-        raise ArtifactIntegrityError("missing preprocessing manifest", subject=str(directory))
-    return PreprocessingManifest.model_validate_json(path.read_text(encoding="utf-8"))
+        raise ArtifactIntegrityError(f"missing {asset_name.value}", subject=str(directory))
+    return model_type.model_validate_json(path.read_text(encoding="utf-8"))
 
 
-def read_transformed_schema(directory: Path) -> TransformedSchema:
-    path = directory / ProcessedAssetName.SCHEMA
-    if not path.is_file():
-        raise ArtifactIntegrityError("missing transformed schema", subject=str(directory))
-    return TransformedSchema.model_validate_json(path.read_text(encoding="utf-8"))
+def write_preprocessing_manifest(directory: Path, manifest: BaseModel) -> Checksum:
+    return write_json_model(directory, ProcessedAssetName.PREPROCESSING_MANIFEST, manifest)
 
 
-def read_validation_report(directory: Path) -> PreprocessingValidationReport:
-    path = directory / ProcessedAssetName.VALIDATION_REPORT
-    if not path.is_file():
-        raise ArtifactIntegrityError("missing preprocessing validation report", subject=str(directory))
-    return PreprocessingValidationReport.model_validate_json(path.read_text(encoding="utf-8"))
+def write_transformed_schema(directory: Path, schema: BaseModel) -> Checksum:
+    return write_json_model(directory, ProcessedAssetName.SCHEMA, schema)
+
+
+def write_validation_report(directory: Path, report: BaseModel) -> Checksum:
+    return write_json_model(directory, ProcessedAssetName.VALIDATION_REPORT, report)
+
+
+def read_preprocessing_manifest[ModelT: BaseModel](directory: Path, model_type: type[ModelT]) -> ModelT:
+    return read_json_model(directory, ProcessedAssetName.PREPROCESSING_MANIFEST, model_type)
+
+
+def read_transformed_schema[ModelT: BaseModel](directory: Path, model_type: type[ModelT]) -> ModelT:
+    return read_json_model(directory, ProcessedAssetName.SCHEMA, model_type)
+
+
+def read_validation_report[ModelT: BaseModel](directory: Path, model_type: type[ModelT]) -> ModelT:
+    return read_json_model(directory, ProcessedAssetName.VALIDATION_REPORT, model_type)

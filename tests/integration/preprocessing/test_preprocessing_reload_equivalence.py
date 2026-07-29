@@ -3,7 +3,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from datp_core.artifacts.reload_validation import reload_and_compare_transform
+from datp_core.artifacts.reload_validation import TransformReloadCheck, reload_and_compare_transform
 from datp_core.artifacts.serialization import construct_trusted_estimator
 from datp_core.domain.enums import (
     DatasetId,
@@ -78,5 +78,13 @@ def test_reload_transform_matches_pre_save_transform(tmp_path: Path) -> None:
             row_ids=row_ids,
         )
     )
-    reloaded = reload_and_compare_transform(result.fitted_state.estimator_path, protocol, matrix, expected)
+    reloaded = reload_and_compare_transform(
+        TransformReloadCheck(
+            state_path=result.fitted_state.estimator_path,
+            class_name=protocol.estimator_class_name,
+            absolute_tolerance=protocol.numerical_equivalence_absolute_tolerance,
+            source_matrix=matrix,
+            expected_transformed=expected,
+        )
+    )
     assert np.allclose(np.asarray(reloaded.transform(matrix), dtype=float), expected)

@@ -1,3 +1,4 @@
+from datp_core.artifacts.coordinates import ReusableDataCoordinate
 from datp_core.artifacts.layout import (
     ProcessedAssetName,
     centralized_branch_directory,
@@ -13,7 +14,6 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.values import Seed
-from datp_core.preprocessing.models import ReusableDataCoordinate
 
 
 def _coordinate(branch: ProcessedDataBranch, client: str | None = None) -> ReusableDataCoordinate:

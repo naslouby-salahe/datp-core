@@ -24,9 +24,16 @@ After population and split construction, Phase 05 (or the preprocess stage that 
 
 ## Entry criteria
 
-- Phase 04 is complete.
+- Phase 04 is complete, including the architectural cleanup gate:
+  - `CANONICAL_RUNTIME` with `require_cuda=True` and `worker_count=6`;
+  - explicit `CANONICAL_PROTOCOL_GRAPH` validation without hidden defaults;
+  - coherent dataset materialization/cache ownership;
+  - artifacts package free of preprocessing model imports;
+  - no misleading preprocess CLI that only reports Phase 05 blockage;
+  - eleven high-level `StageId` identities separated from branch operation identities.
 - Canonical data and reusable preprocessing coordinate rules exist. Population and split construction must consume Phase 04 reusable coordinates and must not refit preprocessing.
 - All required split values are explicit in the source of truth; unresolved values block the affected population.
+- Phase 05 has not been started: population modules remain empty until this phase begins.
 
 ## Source files permitted to change
 

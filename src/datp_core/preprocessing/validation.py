@@ -189,7 +189,7 @@ def fit_trusted_batch(
             f"{subject} width must match protocol input features",
             subject="features",
         )
-    fitted = clone_trusted_scaler(estimator, protocol)
+    fitted = clone_trusted_scaler(estimator, protocol.estimator_class_name)
     fitted.fit(matrix)
     validate_finite_matrix(np.asarray(fitted.transform(matrix), dtype=float), PartitionRole.TRAIN)
     return fitted
@@ -206,7 +206,7 @@ def write_fitted_transformed_partitions(
     fitted_estimator: TrustedScaler,
     partitions: Mapping[PartitionRole, pl.DataFrame],
 ) -> None:
-    fitted_clone = clone_trusted_scaler(fitted_estimator, protocol)
+    fitted_clone = clone_trusted_scaler(fitted_estimator, protocol.estimator_class_name)
     feature_names = protocol.input_feature_names
     transformed_names = protocol.transformed_schema.feature_names
     train_matrix = partitions[PartitionRole.TRAIN].select(feature_names).to_numpy()

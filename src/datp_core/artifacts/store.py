@@ -5,8 +5,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
+from typing import TypeVar
 
 from filelock import FileLock
+from pydantic import BaseModel
 
 from datp_core.artifacts.completion import (
     assert_complete_digest,
@@ -24,34 +26,46 @@ from datp_core.artifacts.manifest import (
     write_validation_report,
 )
 from datp_core.domain.errors import ArtifactIntegrityError
-from datp_core.preprocessing.models import PreprocessingManifest, PreprocessingValidationReport, TransformedSchema
+
+ManifestT = TypeVar("ManifestT", bound=BaseModel)
+SchemaT = TypeVar("SchemaT", bound=BaseModel)
+ReportT = TypeVar("ReportT", bound=BaseModel)
 
 
 @dataclass(frozen=True, slots=True)
-class ProcessedPublication:
+class ProcessedPublication[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel]:
     coordinate_directory: Path
-    manifest: PreprocessingManifest
-    schema: TransformedSchema
-    validation_report: PreprocessingValidationReport
+    manifest: ManifestT
+    schema: SchemaT
+    validation_report: ReportT
     writer: Callable[[Path], None]
     required_assets: tuple[str, ...]
     overwrite: bool
+    manifest_type: type[ManifestT]
+    schema_type: type[SchemaT]
+    report_type: type[ReportT]
 
 
 @dataclass(frozen=True, slots=True)
-class ProcessedPublicationResult:
+class ProcessedPublicationResult[ManifestT: BaseModel]:
     coordinate_directory: Path
     reused: bool
-    manifest: PreprocessingManifest
+    manifest: ManifestT
 
 
-def publish_processed(publication: ProcessedPublication) -> ProcessedPublicationResult:
+def publish_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
+    publication: ProcessedPublication[ManifestT, SchemaT, ReportT],
+) -> ProcessedPublicationResult[ManifestT]:
     target = publication.coordinate_directory
     lock_path = f"{target}.lock"
     with FileLock(lock_path):
         _remove_stale_temporary_directories(target)
         if not publication.overwrite and _is_reusable(target, publication):
-            return ProcessedPublicationResult(target, True, read_preprocessing_manifest(target))
+            return ProcessedPublicationResult(
+                target,
+                True,
+                read_preprocessing_manifest(target, publication.manifest_type),
+            )
         if target.exists():
             rmtree(target)
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -78,11 +92,13 @@ def publish_processed(publication: ProcessedPublication) -> ProcessedPublication
     return ProcessedPublicationResult(target, False, publication.manifest)
 
 
-def _is_reusable(target: Path, publication: ProcessedPublication) -> bool:
+def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
+    target: Path, publication: ProcessedPublication[ManifestT, SchemaT, ReportT]
+) -> bool:
     try:
-        manifest = read_preprocessing_manifest(target)
-        schema = read_transformed_schema(target)
-        report = read_validation_report(target)
+        manifest = read_preprocessing_manifest(target, publication.manifest_type)
+        schema = read_transformed_schema(target, publication.schema_type)
+        report = read_validation_report(target, publication.report_type)
         digest = read_complete_marker(target)
     except (OSError, ArtifactIntegrityError, ValueError):
         return False

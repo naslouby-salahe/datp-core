@@ -93,7 +93,7 @@ The two threshold enums must remain structurally distinct. No union or dispatche
 
 ### Execution identities
 
-Define descriptive enums for stage, split, temporal state, serialization format, warning code, traffic-rate evidence type, checkpoint status, and completion status. Members must correspond exactly to existing stage files and supported semantics.
+Define descriptive enums for stage, split, temporal state, serialization format, warning code, traffic-rate evidence type, checkpoint status, and completion status. `StageId` names the eleven high-level pipeline stages. Fine-grained centralized/federated branch operations use `StageOperationId` and must exhaustively match existing stage files.
 
 ## Error hierarchy
 

@@ -72,58 +72,74 @@ _ATTACK_SENSITIVE_METRICS = (
 
 @dataclass(frozen=True, slots=True)
 class ProtocolGraphInputs:
-    populations: tuple[PopulationDeclaration, ...] = POPULATIONS
-    experiments: tuple[ExperimentDeclaration, ...] = EXPERIMENTS
-    temporal_split: TemporalSplitProtocol = TEMPORAL_SPLIT
-    non_temporal_split: FractionalSplitProtocol = NON_TEMPORAL_SPLIT
-    checkpoint: CheckpointProtocol = CHECKPOINT_PROTOCOL
-    minimum_support: CalibrationSize = MINIMUM_BENIGN_SUPPORT
-    traffic_rate_evidence: tuple[TrafficRateEvidence, ...] = TRAFFIC_RATE_EVIDENCE
-    confirmatory_endpoint: ConfirmatoryEndpoint = CONFIRMATORY_ENDPOINT
-    confirmatory_inference: StatisticalInferenceProtocol = CONFIRMATORY_INFERENCE_PROTOCOL
-    anchor: AnchorDecisionProtocol = ANCHOR_DECISION_PROTOCOL
-    runtime: RuntimeProtocol = CANONICAL_RUNTIME
-    cluster_threshold: ClusterThresholdProtocol = CLUSTER_THRESHOLD_PROTOCOL
-    fedavg_training: FedAvgProtocol = FEDAVG_TRAINING_PROTOCOL
+    populations: tuple[PopulationDeclaration, ...]
+    experiments: tuple[ExperimentDeclaration, ...]
+    temporal_split: TemporalSplitProtocol
+    non_temporal_split: FractionalSplitProtocol
+    checkpoint: CheckpointProtocol
+    minimum_support: CalibrationSize
+    traffic_rate_evidence: tuple[TrafficRateEvidence, ...]
+    confirmatory_endpoint: ConfirmatoryEndpoint
+    confirmatory_inference: StatisticalInferenceProtocol
+    anchor: AnchorDecisionProtocol
+    runtime: RuntimeProtocol
+    cluster_threshold: ClusterThresholdProtocol
+    fedavg_training: FedAvgProtocol
 
 
-def validate_protocol_graph(inputs: ProtocolGraphInputs | None = None) -> ResolvedProtocolGraph:
-    graph = inputs if inputs is not None else ProtocolGraphInputs()
-    _require_unique_declaration_ids(graph.populations, graph.experiments)
+CANONICAL_PROTOCOL_GRAPH = ProtocolGraphInputs(
+    populations=POPULATIONS,
+    experiments=EXPERIMENTS,
+    temporal_split=TEMPORAL_SPLIT,
+    non_temporal_split=NON_TEMPORAL_SPLIT,
+    checkpoint=CHECKPOINT_PROTOCOL,
+    minimum_support=MINIMUM_BENIGN_SUPPORT,
+    traffic_rate_evidence=TRAFFIC_RATE_EVIDENCE,
+    confirmatory_endpoint=CONFIRMATORY_ENDPOINT,
+    confirmatory_inference=CONFIRMATORY_INFERENCE_PROTOCOL,
+    anchor=ANCHOR_DECISION_PROTOCOL,
+    runtime=CANONICAL_RUNTIME,
+    cluster_threshold=CLUSTER_THRESHOLD_PROTOCOL,
+    fedavg_training=FEDAVG_TRAINING_PROTOCOL,
+)
+
+
+def validate_protocol_graph(inputs: ProtocolGraphInputs) -> ResolvedProtocolGraph:
+    _require_unique_declaration_ids(inputs.populations, inputs.experiments)
     suppressed_experiment_ids: list[ExperimentId] = []
     _validate_confirmatory_endpoint(
-        graph.confirmatory_endpoint,
-        graph.confirmatory_inference,
-        graph.experiments,
-        graph.populations,
+        inputs.confirmatory_endpoint,
+        inputs.confirmatory_inference,
+        inputs.experiments,
+        inputs.populations,
     )
-    population_ids = tuple(population.id for population in graph.populations)
-    for experiment in graph.experiments:
-        population = _population(experiment.population, graph.populations, population_ids)
+    population_ids = tuple(population.id for population in inputs.populations)
+    for experiment in inputs.experiments:
+        population = _population(experiment.population, inputs.populations, population_ids)
         _validate_experiment_population_pair(experiment, population)
-        _validate_experiment_thresholds(experiment, population, graph.cluster_threshold)
+        _validate_experiment_thresholds(experiment, population, inputs.cluster_threshold)
         _validate_experiment_metrics(
             experiment,
             population,
-            graph.traffic_rate_evidence,
+            inputs.traffic_rate_evidence,
             suppressed_experiment_ids,
         )
         _validate_experiment_readiness(experiment, suppressed_experiment_ids)
     return ResolvedProtocolGraph(
-        populations=graph.populations,
-        experiments=graph.experiments,
+        populations=inputs.populations,
+        experiments=inputs.experiments,
         suppressed_experiment_ids=tuple(suppressed_experiment_ids),
-        temporal_split=graph.temporal_split,
-        non_temporal_split=graph.non_temporal_split,
-        checkpoint=graph.checkpoint,
-        calibration=CalibrationEligibilityProtocol(minimum_support=graph.minimum_support),
-        confirmatory_endpoint=graph.confirmatory_endpoint,
-        confirmatory_inference=graph.confirmatory_inference,
-        anchor=graph.anchor,
-        runtime=graph.runtime,
-        traffic_rate_evidence=graph.traffic_rate_evidence,
-        cluster_threshold=graph.cluster_threshold,
-        fedavg_training=graph.fedavg_training,
+        temporal_split=inputs.temporal_split,
+        non_temporal_split=inputs.non_temporal_split,
+        checkpoint=inputs.checkpoint,
+        calibration=CalibrationEligibilityProtocol(minimum_support=inputs.minimum_support),
+        confirmatory_endpoint=inputs.confirmatory_endpoint,
+        confirmatory_inference=inputs.confirmatory_inference,
+        anchor=inputs.anchor,
+        runtime=inputs.runtime,
+        traffic_rate_evidence=inputs.traffic_rate_evidence,
+        cluster_threshold=inputs.cluster_threshold,
+        fedavg_training=inputs.fedavg_training,
     )
 
 

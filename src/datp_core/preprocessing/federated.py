@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import numpy as np
 import polars as pl
 
+from datp_core.artifacts.coordinates import ReusableDataCoordinate
 from datp_core.artifacts.layout import (
     ProcessedAssetName,
     client_asset_path,
@@ -20,9 +21,11 @@ from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     FittedStatePublishSpec,
     PreprocessingFitBatch,
+    PreprocessingManifest,
     PreprocessingProtocol,
     PreprocessingPublishContext,
-    ReusableDataCoordinate,
+    PreprocessingValidationReport,
+    TransformedSchema,
 )
 from datp_core.preprocessing.validation import (
     build_preprocessing_manifest,
@@ -104,6 +107,9 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
             ),
             required_assets=asset_values,
             overwrite=False,
+            manifest_type=PreprocessingManifest,
+            schema_type=TransformedSchema,
+            report_type=PreprocessingValidationReport,
         )
     )
     state = fitted_state_after_publish(

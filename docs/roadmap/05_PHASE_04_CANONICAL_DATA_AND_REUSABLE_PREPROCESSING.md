@@ -184,12 +184,12 @@ Use a temporary sibling directory and atomic rename. Use `filelock` only at the 
 
 ## CLI and Make entry points
 
-- `datp-core preprocess-dataset <DATASET_ID> [--overwrite]`
-- `datp-core preprocess-all-datasets [--overwrite]`
-- `make preprocess-dataset DATASET=<id> OVERWRITE=0|1`
-- `make preprocess-all-datasets OVERWRITE=0|1`
+Phase 4 operational CLI exposes only commands that genuinely execute:
 
-Roots are fixed by the canonical runtime declaration (`data/`). `--overwrite` rebuilds matching processed coordinates when populations/splits exist; it never redirects paths. Scientific preprocessing methods are locked; CLI exit `blocked_population_construction` until Phase 05 supplies populations and splits.
+- `datp-core materialize-canonical-datasets`
+- `make materialize-canonical`
+
+Roots are fixed by the canonical runtime declaration (`data/`, with `require_cuda=True` and `worker_count=6`). Scientific preprocessing methods and fit/transform/publish machinery are implemented and unit-tested with miniature partitions. End-to-end processed-asset publication is not CLI-exposed until Phase 05 supplies populations and splits. Misleading preprocess CLI commands that only returned a blocked status were removed during Phase 4 cleanup.
 
 ## Scientific method lock
 
@@ -201,9 +201,17 @@ Locked scientific methods (see Journal §2.2.1 and the Phase Master Log decision
 - Missing/non-finite policy: no imputation; dataset eligibility or validation exclusion only; no empty-train zero-row recovery.
 - Typed constructors: `ScientificPreprocessingMethod`, `build_preprocessing_protocol(method, feature_names)` bind method locks to each dataset’s ordered model-input features.
 
+## Package responsibilities after Phase 4 cleanup
+
+- `datasets/materialization.py`: common publication coordination, streaming Parquet write, inventory, provenance helpers.
+- `datasets/canonical_cache.py`: source-state comparison, manifest/schema/eligibility/completed-publication validation, reuse decisions, serialization documents.
+- `artifacts/*`: generic atomic publication, checksums, locking, trusted-estimator persistence, coordinate paths. Does not import preprocessing scientific models.
+- `preprocessing/*`: constructs and validates preprocessing models, then passes validated objects into generic artifact infrastructure.
+- Protocol configuration remains Python-native immutable declarations (`CANONICAL_PROTOCOL_GRAPH`, `CANONICAL_RUNTIME`).
+
 ## Phase 05 dependency (by design)
 
-Phase 04 completes method locks, coordinates, fit/transform/publish machinery, and CLI. End-to-end processed-asset publication consumes Phase 05 population and split partitions. Phase 04 must not fabricate client partitions to claim publication completeness.
+Phase 04 completes method locks, coordinates, fit/transform/publish machinery, and truthful materialization CLI. End-to-end processed-asset publication consumes Phase 05 population and split partitions. Phase 04 must not fabricate client partitions to claim publication completeness.
 
 ## Exit criteria
 

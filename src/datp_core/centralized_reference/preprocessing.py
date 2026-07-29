@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 import polars as pl
 
+from datp_core.artifacts.coordinates import ReusableDataCoordinate
 from datp_core.artifacts.layout import ProcessedAssetName, branch_asset_path, centralized_branch_directory
 from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.artifacts.store import ProcessedPublication, publish_processed
@@ -15,9 +16,11 @@ from datp_core.preprocessing.models import (
     FittedStatePublishSpec,
     PooledPreprocessingResult,
     PreprocessingFitBatch,
+    PreprocessingManifest,
     PreprocessingProtocol,
     PreprocessingPublishContext,
-    ReusableDataCoordinate,
+    PreprocessingValidationReport,
+    TransformedSchema,
 )
 from datp_core.preprocessing.validation import (
     build_preprocessing_manifest,
@@ -93,6 +96,9 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
             ),
             required_assets=asset_values,
             overwrite=False,
+            manifest_type=PreprocessingManifest,
+            schema_type=TransformedSchema,
+            report_type=PreprocessingValidationReport,
         )
     )
     state = fitted_state_after_publish(

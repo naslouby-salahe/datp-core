@@ -223,6 +223,24 @@ class ClaimStatus(StrEnum):
 
 
 class StageId(StrEnum):
+    """Eleven high-level pipeline stages. Branch-specific operations use StageOperationId."""
+
+    PREFLIGHT = "preflight"
+    DATASET_MATERIALIZATION = "dataset_materialization"
+    MODEL_TRAINING = "model_training"
+    CHECKPOINT_SELECTION = "checkpoint_selection"
+    SCORE_GENERATION = "score_generation"
+    CALIBRATION_SUBSAMPLING = "calibration_subsampling"
+    THRESHOLD_CONSTRUCTION = "threshold_construction"
+    EVALUATION = "evaluation"
+    STATISTICAL_ANALYSIS = "statistical_analysis"
+    REPORTING = "reporting"
+    FINALIZATION = "finalization"
+
+
+class StageOperationId(StrEnum):
+    """Fine-grained stage-file operations under centralized/federated branches."""
+
     ANALYZE = "analyze"
     CALIBRATE = "calibrate"
     CONSTRUCT_CENTRALIZED_REFERENCE_THRESHOLD = "construct_centralized_reference_threshold"

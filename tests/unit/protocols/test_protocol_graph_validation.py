@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from datp_core.domain.enums import (
@@ -13,17 +15,25 @@ from datp_core.domain.errors import ProtocolValidationError, UnresolvedScientifi
 from datp_core.domain.values import SeedCount
 from datp_core.protocols.models import ExperimentDeclaration
 from datp_core.protocols.populations import POPULATIONS
-from datp_core.protocols.validation import CONFIRMATORY_ENDPOINT, ProtocolGraphInputs, validate_protocol_graph
+from datp_core.protocols.runtime import CANONICAL_RUNTIME
+from datp_core.protocols.validation import (
+    CANONICAL_PROTOCOL_GRAPH,
+    CONFIRMATORY_ENDPOINT,
+    validate_protocol_graph,
+)
 
 
-def test_default_graph_is_fully_resolved() -> None:
-    graph = validate_protocol_graph()
+def test_canonical_graph_is_fully_resolved() -> None:
+    graph = validate_protocol_graph(CANONICAL_PROTOCOL_GRAPH)
 
     assert graph.populations == POPULATIONS
     assert graph.experiments
     assert graph.suppressed_experiment_ids == (ExperimentId.ALERT_BURDEN_TRANSLATION,)
     assert graph.confirmatory_endpoint == CONFIRMATORY_ENDPOINT
     assert graph.confirmatory_inference.paired_seed_count == SeedCount(10)
+    assert graph.runtime == CANONICAL_RUNTIME
+    assert graph.runtime.require_cuda is True
+    assert graph.runtime.worker_count == 6
     assert all(experiment.readiness is not ExperimentReadiness.EXECUTABLE for experiment in graph.experiments)
 
 
@@ -49,7 +59,7 @@ def test_graph_rejects_attack_metric_without_attack_assignment() -> None:
         readiness=ExperimentReadiness.DECLARED,
     )
     with pytest.raises(ProtocolValidationError, match="attack assignment"):
-        validate_protocol_graph(ProtocolGraphInputs(experiments=(experiment,), populations=POPULATIONS))
+        validate_protocol_graph(replace(CANONICAL_PROTOCOL_GRAPH, experiments=(experiment,)))
 
 
 def test_graph_rejects_alert_burden_without_evidence_outside_suppressed_operational_scope() -> None:
@@ -63,7 +73,7 @@ def test_graph_rejects_alert_burden_without_evidence_outside_suppressed_operatio
         readiness=ExperimentReadiness.DECLARED,
     )
     with pytest.raises(UnresolvedScientificValueError, match="Alert burden"):
-        validate_protocol_graph(ProtocolGraphInputs(experiments=(experiment,), populations=POPULATIONS))
+        validate_protocol_graph(replace(CANONICAL_PROTOCOL_GRAPH, experiments=(experiment,)))
 
 
 def test_graph_rejects_temporal_experiment_without_verified_chronology() -> None:
@@ -77,7 +87,7 @@ def test_graph_rejects_temporal_experiment_without_verified_chronology() -> None
         readiness=ExperimentReadiness.DECLARED,
     )
     with pytest.raises(ProtocolValidationError, match="verified chronology"):
-        validate_protocol_graph(ProtocolGraphInputs(experiments=(experiment,), populations=POPULATIONS))
+        validate_protocol_graph(replace(CANONICAL_PROTOCOL_GRAPH, experiments=(experiment,)))
 
 
 def test_graph_rejects_premature_executable_readiness() -> None:
@@ -94,4 +104,4 @@ def test_graph_rejects_premature_executable_readiness() -> None:
         readiness=ExperimentReadiness.EXECUTABLE,
     )
     with pytest.raises(ProtocolValidationError, match="executable"):
-        validate_protocol_graph(ProtocolGraphInputs(experiments=(experiment,), populations=POPULATIONS))
+        validate_protocol_graph(replace(CANONICAL_PROTOCOL_GRAPH, experiments=(experiment,)))

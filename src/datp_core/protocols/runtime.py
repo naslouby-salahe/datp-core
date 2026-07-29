@@ -6,7 +6,7 @@ CANONICAL_RUNTIME = RuntimeProtocol(
     data_root=DATA_ROOT,
     outputs_root=OUTPUTS_ROOT,
     results_root=RESULTS_ROOT,
-    require_cuda=False,
-    worker_count=1,
+    require_cuda=True,
+    worker_count=6,
     overwrite_outputs=False,
 )

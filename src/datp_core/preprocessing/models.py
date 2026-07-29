@@ -205,13 +205,6 @@ class PreprocessingValidationReport(BaseModel):
         return self
 
 
-def _reject_invalid_client_token(client_identity: str | None) -> None:
-    if client_identity is None:
-        return
-    if not client_identity or any(separator in client_identity for separator in ("=", "/", "\\")):
-        raise ValueError("client identity must be a non-empty path token without key=value syntax")
-
-
 def _require_train_partition(partition: PartitionRole, subject: str) -> None:
     if partition is not PartitionRole.TRAIN:
         raise ValueError(f"{subject} may fit only on the train partition")
@@ -232,22 +225,6 @@ def _require_ordered_unique_features(feature_names: tuple[str, ...], subject: st
         raise ValueError(f"{subject} requires ordered input features")
     if len(feature_names) != len(frozenset(feature_names)):
         raise ValueError(f"{subject} input features must be unique")
-
-
-@dataclass(frozen=True, slots=True)
-class ReusableDataCoordinate:
-    dataset: DatasetId
-    population: PopulationId
-    partition_seed: Seed
-    split_protocol_identity: SplitProtocolId
-    preprocessing_identity: PreprocessingProtocolId
-    branch: ProcessedDataBranch
-    client_identity: str | None
-
-    def __post_init__(self) -> None:
-        _reject_invalid_client_token(self.client_identity)
-        if self.branch is ProcessedDataBranch.CENTRALIZED_REFERENCE and self.client_identity is not None:
-            raise ValueError("centralized reusable coordinates cannot include client identity")
 
 
 @dataclass(frozen=True, slots=True)

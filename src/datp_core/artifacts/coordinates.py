@@ -1,10 +1,42 @@
 """Deterministic reusable-data coordinates without key=value path segments."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.domain.enums import DatasetId, ProcessedDataBranch, RawDatasetDirectory, ReusableDataCoordinateKind
-from datp_core.preprocessing.models import ReusableDataCoordinate
+from datp_core.domain.enums import (
+    DatasetId,
+    PopulationId,
+    PreprocessingProtocolId,
+    ProcessedDataBranch,
+    RawDatasetDirectory,
+    ReusableDataCoordinateKind,
+    SplitProtocolId,
+)
+from datp_core.domain.values import Seed
 from datp_core.protocols.models import DATA_ROOT
+
+
+@dataclass(frozen=True, slots=True)
+class ReusableDataCoordinate:
+    dataset: DatasetId
+    population: PopulationId
+    partition_seed: Seed
+    split_protocol_identity: SplitProtocolId
+    preprocessing_identity: PreprocessingProtocolId
+    branch: ProcessedDataBranch
+    client_identity: str | None
+
+    def __post_init__(self) -> None:
+        _reject_invalid_client_token(self.client_identity)
+        if self.branch is ProcessedDataBranch.CENTRALIZED_REFERENCE and self.client_identity is not None:
+            raise ValueError("centralized reusable coordinates cannot include client identity")
+
+
+def _reject_invalid_client_token(client_identity: str | None) -> None:
+    if client_identity is None:
+        return
+    if not client_identity or any(separator in client_identity for separator in ("=", "/", "\\")):
+        raise ValueError("client identity must be a non-empty path token without key=value syntax")
 
 
 def assert_descriptive_segment(segment: str, subject: str) -> str:

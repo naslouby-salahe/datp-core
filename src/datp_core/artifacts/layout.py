@@ -4,12 +4,12 @@ from enum import StrEnum
 from pathlib import Path
 
 from datp_core.artifacts.coordinates import (
+    ReusableDataCoordinate,
     federated_client_coordinate,
     path_contains_key_value_segment,
     processed_branch_coordinate,
 )
 from datp_core.domain.enums import PartitionRole, ProcessedDataBranch
-from datp_core.preprocessing.models import ReusableDataCoordinate
 
 
 class ProcessedAssetName(StrEnum):

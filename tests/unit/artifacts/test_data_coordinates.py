@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 
 from datp_core.artifacts.coordinates import (
+    ReusableDataCoordinate,
     federated_client_coordinate,
     path_contains_key_value_segment,
     processed_branch_coordinate,
@@ -19,7 +20,6 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.values import Seed
-from datp_core.preprocessing.models import ReusableDataCoordinate
 
 
 def _base_coordinate() -> ReusableDataCoordinate:
