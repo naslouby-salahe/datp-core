@@ -1,6 +1,6 @@
 """Frozen, typed scientific declarations."""
 
-from math import fsum, isclose
+from math import fsum
 from pathlib import Path
 from typing import Annotated, Literal
 
@@ -48,6 +48,7 @@ from datp_core.domain.values import (
     ShrinkageWeight,
     SummaryCoefficient,
     TrafficRatePerDay,
+    floats_absolutely_close,
 )
 
 REQUIRED_CLUSTER_FINGERPRINT_FEATURES = (
@@ -63,14 +64,11 @@ LOCKED_CLUSTER_GROUP_COUNT = 3
 
 UNIT_FRACTION_TOTAL = 1.0
 FRACTION_TOTAL_ABSOLUTE_TOLERANCE = 1e-12
+
+
 def _sums_to_unit_fraction(*values: float) -> bool:
     """Compare declared fractional quantities with one shared tolerance."""
-    return isclose(
-        fsum(values),
-        UNIT_FRACTION_TOTAL,
-        rel_tol=0.0,
-        abs_tol=FRACTION_TOTAL_ABSOLUTE_TOLERANCE,
-    )
+    return floats_absolutely_close(fsum(values), UNIT_FRACTION_TOTAL, FRACTION_TOTAL_ABSOLUTE_TOLERANCE)
 
 
 class Declaration(StrictModel):

@@ -2,19 +2,41 @@
 
 from dataclasses import dataclass
 from hashlib import file_digest, sha256
-from math import isfinite
+from math import isclose, isfinite
 from pathlib import Path
 from typing import ClassVar
 
+# Shared math.isclose controls for absolute-only floating comparisons.
+NUMERIC_ZERO: float = 0.0
+NO_RELATIVE_TOLERANCE: float = 0.0
 
-def _integer(value: object, name: str, minimum: int) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < minimum:
+
+def floats_absolutely_close(left: float, right: float, absolute_tolerance: float) -> bool:
+    """Compare floats with an explicit absolute tolerance and zero relative tolerance."""
+    if absolute_tolerance < NUMERIC_ZERO:
+        raise ValueError("absolute tolerance must be non-negative")
+    return isclose(left, right, rel_tol=NO_RELATIVE_TOLERANCE, abs_tol=absolute_tolerance)
+
+
+def floats_exactly_equal(left: float, right: float) -> bool:
+    """Full-precision equality with no absolute or relative tolerance band."""
+    return isclose(left, right, rel_tol=NO_RELATIVE_TOLERANCE, abs_tol=NUMERIC_ZERO)
+
+
+def is_numeric_zero(value: float) -> bool:
+    return floats_exactly_equal(value, NUMERIC_ZERO)
+
+
+def _integer(value: int, name: str, minimum: int) -> int:
+    # bool is a subclass of int; reject it explicitly.
+    if isinstance(value, bool) or value < minimum:
         raise ValueError(f"{name} must be an integer greater than or equal to {minimum}")
     return value
 
 
-def _number(value: object, name: str) -> float:
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
+def _number(value: int | float, name: str) -> float:
+    # bool is a subclass of int; reject it explicitly.
+    if isinstance(value, bool) or not isfinite(float(value)):
         raise ValueError(f"{name} must be a finite number")
     return float(value)
 
@@ -81,117 +103,117 @@ class ClosedUnitIntervalValue:
 
 @dataclass(frozen=True, slots=True)
 class Seed(NonNegativeIntegerValue):
-    validation_name = "seed"
+    validation_name: ClassVar[str] = "seed"
 
 
 @dataclass(frozen=True, slots=True)
 class Ratio(ClosedUnitIntervalValue):
-    validation_name = "ratio"
+    validation_name: ClassVar[str] = "ratio"
 
 
 @dataclass(frozen=True, slots=True)
 class Quantile(OpenUnitIntervalValue):
-    validation_name = "quantile"
+    validation_name: ClassVar[str] = "quantile"
 
 
 @dataclass(frozen=True, slots=True)
 class CoverageTarget(OpenUnitIntervalValue):
-    validation_name = "coverage target"
+    validation_name: ClassVar[str] = "coverage target"
 
 
 @dataclass(frozen=True, slots=True)
 class CalibrationSize(PositiveIntegerValue):
-    validation_name = "calibration size"
+    validation_name: ClassVar[str] = "calibration size"
 
 
 @dataclass(frozen=True, slots=True)
 class ClientCount(PositiveIntegerValue):
-    validation_name = "client count"
+    validation_name: ClassVar[str] = "client count"
 
 
 @dataclass(frozen=True, slots=True)
 class SeedCount(PositiveIntegerValue):
-    validation_name = "seed count"
+    validation_name: ClassVar[str] = "seed count"
 
 
 @dataclass(frozen=True, slots=True)
 class RoundNumber(PositiveIntegerValue):
-    validation_name = "round number"
+    validation_name: ClassVar[str] = "round number"
 
 
 @dataclass(frozen=True, slots=True)
 class LocalEpochCount(PositiveIntegerValue):
-    validation_name = "local epoch count"
+    validation_name: ClassVar[str] = "local epoch count"
 
 
 @dataclass(frozen=True, slots=True)
 class BatchSize(PositiveIntegerValue):
-    validation_name = "batch size"
+    validation_name: ClassVar[str] = "batch size"
 
 
 @dataclass(frozen=True, slots=True)
 class BootstrapReplicateCount(PositiveIntegerValue):
-    validation_name = "bootstrap replicate count"
+    validation_name: ClassVar[str] = "bootstrap replicate count"
 
 
 @dataclass(frozen=True, slots=True)
 class SubsampleReplicateCount(PositiveIntegerValue):
-    validation_name = "subsample replicate count"
+    validation_name: ClassVar[str] = "subsample replicate count"
 
 
 @dataclass(frozen=True, slots=True)
 class GroupCount(PositiveIntegerValue):
-    validation_name = "group count"
+    validation_name: ClassVar[str] = "group count"
 
 
 @dataclass(frozen=True, slots=True)
 class KMeansInitializationCount(PositiveIntegerValue):
-    validation_name = "k-means initialization count"
+    validation_name: ClassVar[str] = "k-means initialization count"
 
 
 @dataclass(frozen=True, slots=True)
 class KMeansMaximumIterationCount(PositiveIntegerValue):
-    validation_name = "k-means maximum iteration count"
+    validation_name: ClassVar[str] = "k-means maximum iteration count"
 
 
 @dataclass(frozen=True, slots=True)
 class ByteCount(NonNegativeIntegerValue):
-    validation_name = "byte count"
+    validation_name: ClassVar[str] = "byte count"
 
 
 @dataclass(frozen=True, slots=True)
 class LearningRate(PositiveFiniteFloatValue):
-    validation_name = "learning rate"
+    validation_name: ClassVar[str] = "learning rate"
 
 
 @dataclass(frozen=True, slots=True)
 class DirichletConcentration(PositiveFiniteFloatValue):
-    validation_name = "Dirichlet concentration"
+    validation_name: ClassVar[str] = "Dirichlet concentration"
 
 
 @dataclass(frozen=True, slots=True)
 class ProximalCoefficient(PositiveFiniteFloatValue):
-    validation_name = "proximal coefficient"
+    validation_name: ClassVar[str] = "proximal coefficient"
 
 
 @dataclass(frozen=True, slots=True)
 class DittoRegularization(NonNegativeFiniteFloatValue):
-    validation_name = "Ditto regularization"
+    validation_name: ClassVar[str] = "Ditto regularization"
 
 
 @dataclass(frozen=True, slots=True)
 class ShrinkageWeight(ClosedUnitIntervalValue):
-    validation_name = "shrinkage weight"
+    validation_name: ClassVar[str] = "shrinkage weight"
 
 
 @dataclass(frozen=True, slots=True)
 class SummaryCoefficient(PositiveFiniteFloatValue):
-    validation_name = "summary coefficient"
+    validation_name: ClassVar[str] = "summary coefficient"
 
 
 @dataclass(frozen=True, slots=True)
 class ConfidenceLevel(OpenUnitIntervalValue):
-    validation_name = "confidence level"
+    validation_name: ClassVar[str] = "confidence level"
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,7 +242,7 @@ class MetricValue:
 
 @dataclass(frozen=True, slots=True)
 class TrafficRatePerDay(NonNegativeFiniteFloatValue):
-    validation_name = "traffic rate"
+    validation_name: ClassVar[str] = "traffic rate"
 
 
 @dataclass(frozen=True, slots=True)

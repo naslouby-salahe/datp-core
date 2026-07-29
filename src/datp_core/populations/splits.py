@@ -40,17 +40,11 @@ def temporal_split_protocol() -> TemporalSplitProtocol:
 
 
 def split_membership(request: SplitConstructionRequest) -> tuple[pl.DataFrame, SplitManifest]:
-    frame = _membership_frame(request.membership)
+    frame = request.membership
     _require_membership_schema(frame)
     assignments = _assignments_for_protocol(frame, request)
     _assert_split_invariants(assignments, frame)
     return assignments, _split_manifest(assignments, request)
-
-
-def _membership_frame(membership: object) -> pl.DataFrame:
-    if not isinstance(membership, pl.DataFrame):
-        raise TypeError("split construction requires a Polars membership DataFrame")
-    return membership
 
 
 def _assignments_for_protocol(membership: pl.DataFrame, request: SplitConstructionRequest) -> pl.DataFrame:
@@ -122,7 +116,7 @@ def _temporal_assignments(membership: pl.DataFrame, capture_timestamp_column: st
         )
     pieces = [
         _sequential_role_frame(
-            _require_sorted_client_rows(membership, client_id, capture_timestamp_column),
+            _require_sorted_client_rows(membership, str(client_id), capture_timestamp_column),
             ratios,
             roles,
         )
@@ -140,7 +134,7 @@ def _temporal_assignments(membership: pl.DataFrame, capture_timestamp_column: st
 
 def _require_sorted_client_rows(
     membership: pl.DataFrame,
-    client_id: object,
+    client_id: str,
     capture_timestamp_column: str,
 ) -> pl.DataFrame:
     client_rows = membership.filter(pl.col(CLIENT_ID_COLUMN) == client_id).sort(
@@ -149,7 +143,7 @@ def _require_sorted_client_rows(
     if client_rows.get_column(capture_timestamp_column).null_count() > 0:
         raise ScientificContractError(
             "temporal split encountered null capture timestamps",
-            subject=str(client_id),
+            subject=client_id,
             reason="chronology-eligible groups must retain verified timestamps",
         )
     return client_rows

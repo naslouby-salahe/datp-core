@@ -31,7 +31,7 @@ def nbaiot_canonical_root(tmp_path: Path) -> Path:
     root = tmp_path / "nbaiot"
     data = root / "data"
     data.mkdir(parents=True)
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, str | int | float | bool | None]] = []
     index = 0
     for device in NBAIOT_DEVICE_IDENTITIES:
         for label, count in (("benign", 30), ("attack", 12)):
@@ -59,7 +59,7 @@ def ciciot_canonical_root(tmp_path: Path) -> Path:
     root = tmp_path / "ciciot2023"
     data = root / "data"
     data.mkdir(parents=True)
-    rows: list[dict[str, object]] = []
+    rows: list[dict[str, str | int | float | bool | None]] = []
     for file_index in range(1, 64):
         client = f"Merged{file_index:02d}"
         source = f"MERGED_CSV/{client}.csv"

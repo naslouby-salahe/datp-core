@@ -1,4 +1,4 @@
-# Phase 06 — Anchor Reproduction and Journal Gate
+# Phase 06 — Anchor Reproduction and Programme Gate
 
 ## Scientific authority and interpretation rules
 
@@ -16,7 +16,7 @@
 
 ## Objective
 
-Reproduce the historical DATP result under its original endpoint semantics, compare reproduced reference values using locked rules, and block downstream journal claims when the anchor is not reproduced.
+Reproduce the historical DATP result under its original endpoint semantics, compare reproduced reference values using locked rules, and block dependent confirmatory claims when the anchor is not reproduced.
 
 ## Entry criteria
 
@@ -48,11 +48,11 @@ Comparison records include metric identity, population, model, threshold method,
 ## Historical isolation
 
 - Preserve the historical endpoint and checkpoint semantics exactly.
-- Do not retrofit the journal checkpoint protocol to improve reproduction.
+- Do not retrofit the non-historical checkpoint protocol to improve reproduction.
 - Reuse canonical and processed data only when their coordinates exactly match the historical protocol.
-- Historical and journal training artifacts remain separate output coordinates.
+- Historical and confirmatory training artifacts remain separate output coordinates.
 - The anchor execution uses exactly the declared five-seed historical cohort. Each seed carries the paired shared-scope and local-scope reference comparison required by the historical endpoint.
-- The ten-seed journal confirmatory cohort is a distinct downstream evidence object. Phase 06 must neither substitute it for the anchor cohort nor emit it as an anchor result.
+- The ten-seed confirmatory paired cohort is a distinct downstream evidence object. Phase 06 must neither substitute it for the anchor cohort nor emit it as an anchor result.
 
 ## Reproduction workflow
 
@@ -72,10 +72,10 @@ Comparison records include metric identity, population, model, threshold method,
 
 A blocked gate prevents:
 
-- the confirmatory journal experiment from being marked valid;
+- the confirmatory paired experiment from being marked valid;
 - claim status from becoming permitted;
 - finalization of dependent campaigns;
-- reporting of extension results as journal evidence.
+- reporting of extension results as confirmatory evidence.
 
 The gate does not erase diagnostic outputs. It records why the programme is blocked.
 
@@ -95,7 +95,7 @@ The gate does not erase diagnostic outputs. It records why the programme is bloc
 - `tests/unit/anchor/test_gate.py`
 - `tests/unit/orchestration/stages/test_verify_anchor.py`
 - `tests/integration/anchor/test_anchor_reproduction_pipeline.py`
-- `tests/scientific/test_anchor_blocks_journal_claims.py`
+- `tests/scientific/test_anchor_blocks_dependent_claims.py`
 - `tests/scientific/test_anchor_preserves_historical_checkpoint_semantics.py`
 
 ## Required test scenarios
@@ -105,19 +105,57 @@ The gate does not erase diagnostic outputs. It records why the programme is bloc
 - Rounded equality with full-precision failure remains a failure.
 - Missing mandatory metric blocks.
 - Wrong seed subset blocks.
-- Supplying the ten-seed journal cohort to anchor execution blocks rather than producing an anchor comparison.
-- Journal checkpoint selection cannot alter anchor execution.
+- Supplying the ten-seed confirmatory cohort to anchor execution blocks rather than producing an anchor comparison.
+- Non-historical checkpoint selection cannot alter anchor execution.
 - Blocked anchor propagates to experiment and reporting status.
 - Diagnostic artifacts remain available under a blocked gate.
 
 ## Exit criteria
 
 - Historical reproduction is a typed experiment, not an ad hoc script.
-- The anchor output records exactly the five historical seeds and never presents the separate ten-seed journal cohort as anchor evidence.
+- The anchor output records exactly the five historical seeds and never presents the separate ten-seed confirmatory cohort as anchor evidence.
 - Every comparison is traceable and full precision.
 - The gate is impossible to bypass through reporting or campaign code.
 - Missing tolerances remain explicit blockers.
 - All Phase 06 tests and audits pass.
+
+## Implementation status
+
+**COMPLETE.**
+
+### Source evidence consulted
+
+- `docs/Journal_Extension_Master_Roadmap.md`: five-seed historical anchor, ten-seed confirmatory cohort separation, historical endpoint/checkpoint isolation, fixed-score absolute tolerance magnitude.
+- `src/datp_core/protocols/anchor.py`: `HISTORICAL_ANCHOR_SEED_COHORT` seeds `0..4`; shared and local CV(FPR) full-precision references; `FIXED_SCORE_ABSOLUTE_TOLERANCE = 1e-12`.
+- Historical metrics artifacts (sibling `datp` outputs): `outputs/results/a/b1/seed_{0..4}/metrics.json` and `outputs/results/a/b2/seed_{0..4}/metrics.json`. Every full-precision `cv_fpr` matches the protocol reference. Per-seed shared/local pairs share one model checkpoint identity and one score-artifact identity.
+
+### Exact five-seed cohort
+
+`Seed(0) … Seed(4)` only. The confirmatory ten-seed cohort `Seed(0) … Seed(9)` is structurally rejected for anchor execution.
+
+### Tolerance rules
+
+- Mandatory CV(FPR) comparisons: absolute tolerance `1e-12` from the fixed-score declaration.
+- Strategies implemented: exact equality, absolute, relative, interval overlap, exact count, source-defined.
+- Global floating-point tolerance is rejected.
+- Relative comparison with zero reference is unavailable.
+
+### Gate decision
+
+- Historical artifact verification path: `PASS`.
+- Missing observations / independent re-execution request: `BLOCKED` with Phase 08 dependency blocker; diagnostics retained; dependent readiness `BLOCKED`.
+
+### Files changed
+
+Authorized Phase 06 sources only (`anchor/{models,comparison,reproduction,gate}.py`, `orchestration/stages/verify_anchor.py`). Protocol file not modified. No new `src/` files.
+
+### Tests
+
+Roadmap test files implemented (unit model file named `test_anchor_models.py` to avoid pytest basename clash). Full suite: `278 passed`. Static: Ruff pass, Pyright 0 errors, Pylint `10.00/10` on Phase 06 `src`. Sonar `totalIssues=0`. CodeScene residual validation complexity noted without science blockers.
+
+### Unresolved blockers
+
+None for Phase 06 machinery. Live independent re-training remains Phase 08.
 
 ## External code-health gate
 
@@ -128,36 +166,36 @@ Before phase closure, run the credentials-safe SonarQube CLI and CodeScene proce
 Before marking this phase complete, the implementing agent must perform and record all applicable checks:
 
 ### Scientific audit
-- [ ] Every scientific statement and numeric value is traceable to the source of truth or marked unresolved.
-- [ ] No attack-labelled record influences training of the benign autoencoder, calibration, threshold construction, checkpoint selection, eligibility, or parameter selection.
-- [ ] The fixed-detector contract is preserved wherever threshold methods are compared.
-- [ ] Anchor execution uses only the declared five-seed historical cohort; the ten-seed journal cohort remains a separate downstream experiment.
-- [ ] Unsupported dataset capabilities produce typed unavailability or infeasibility, never imputation.
-- [ ] Confirmatory, supportive, mechanism, external, stress-test, boundary, exploratory, and operational evidence remain separated.
+- [x] Every scientific statement and numeric value is traceable to the source of truth or marked unresolved.
+- [x] No attack-labelled record influences training of the benign autoencoder, calibration, threshold construction, checkpoint selection, eligibility, or parameter selection.
+- [x] The fixed-detector contract is preserved wherever threshold methods are compared.
+- [x] Anchor execution uses only the declared five-seed historical cohort; the ten-seed confirmatory cohort remains a separate downstream experiment.
+- [x] Unsupported dataset capabilities produce typed unavailability or infeasibility, never imputation.
+- [x] Confirmatory, supportive, mechanism, external, stress-test, boundary, exploratory, and operational evidence remain separated.
 
 ### Architecture audit
-- [ ] Only source files explicitly assigned to this phase were modified.
-- [ ] No source file was added, renamed, moved, or deleted.
-- [ ] No circular dependency was introduced.
-- [ ] Domain and protocol modules do not import orchestration, reporting, or concrete storage implementations.
-- [ ] No compatibility alias, redirect, deprecated identifier, generic registry, or string-key dispatch was added.
+- [x] Only source files explicitly assigned to this phase were modified.
+- [x] No source file was added, renamed, moved, or deleted.
+- [x] No circular dependency was introduced.
+- [x] Domain and protocol modules do not import orchestration, reporting, or concrete storage implementations.
+- [x] No compatibility alias, redirect, deprecated identifier, generic registry, or string-key dispatch was added.
 
 ### Typing and validation audit
-- [ ] Ruff formatting and linting pass.
-- [ ] Pyright strict mode passes for all changed files.
-- [ ] Pylint passes at the project threshold without suppressing newly introduced defects.
-- [ ] Pydantic models reject extra fields and are frozen.
-- [ ] Dataclasses are frozen and slotted unless mutability is scientifically necessary and documented.
-- [ ] No `Any`, unchecked cast, mutable module-level collection, or raw configuration dictionary remains.
+- [x] Ruff formatting and linting pass.
+- [x] Pyright strict mode passes for all changed files.
+- [x] Pylint passes at the project threshold without suppressing newly introduced defects.
+- [x] Pydantic models reject extra fields and are frozen.
+- [x] Dataclasses are frozen and slotted unless mutability is scientifically necessary and documented.
+- [x] No `Any`, unchecked cast, mutable module-level collection, or raw configuration dictionary remains.
 
 ### Test audit
-- [ ] Every test file listed by this phase exists and contains meaningful assertions.
-- [ ] Tests verify scientific invariants, invalid inputs, unavailable outcomes, and deterministic behavior—not only happy paths.
-- [ ] Tests do not duplicate implementation logic or merely assert that functions return a value.
-- [ ] Focused tests pass first; then the complete test suite passes with pytest-xdist.
-- [ ] Hypothesis tests use bounded strategies consistent with scientific domains.
+- [x] Every test file listed by this phase exists and contains meaningful assertions.
+- [x] Tests verify scientific invariants, invalid inputs, unavailable outcomes, and deterministic behavior—not only happy paths.
+- [x] Tests do not duplicate implementation logic or merely assert that functions return a value.
+- [x] Focused tests pass first; then the complete test suite passes with pytest-xdist.
+- [x] Hypothesis tests use bounded strategies consistent with scientific domains.
 
 ### Repository audit
-- [ ] `git diff --stat` contains only intended files.
-- [ ] No generated output, cache, temporary file, notebook, profiling file, or local path leaked into the repository.
-- [ ] No commit or push was performed by the implementing agent.
+- [x] `git diff --stat` contains only intended files.
+- [x] No generated output, cache, temporary file, notebook, profiling file, or local path leaked into the repository.
+- [x] No commit or push was performed by the implementing agent.

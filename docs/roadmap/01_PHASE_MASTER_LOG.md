@@ -37,7 +37,7 @@ Do not add percentages. A phase is binary with respect to its exit criteria.
 | 03 — Dataset audit and capabilities | `COMPLETE` | Phase 02 complete | Audited schemas, capability contracts, streaming canonical materialization, COMPLETE markers, full static/test gates | None for Phase 03 handoff |
 | 04 — Canonical data and reusable preprocessing | `COMPLETE` | Phase 03 complete | Method locks, coordinates, reuse, skops, materialize CLI, runtime CUDA/workers, package-cycle cleanup, full gates | None; end-to-end processed publication consumes Phase 05 populations by design |
 | 05 — Populations, splits, and cohorts | `COMPLETE` | Phase 04 complete and Phase 4 cleanup gate clear | Deterministic builders, splits, cohorts, handoff, full gates; Edge temporal forensic audit | None; Edge nine-group temporal population verified after chronology eligibility fix |
-| 06 — Anchor reproduction and gate | `NOT_STARTED` | Phase 05 complete | Explicit equivalence/discrepancy decision | Metric-specific tolerances absent from source truth remain blocking |
+| 06 — Anchor reproduction and gate | `COMPLETE` | Phase 05 complete | Typed five-seed reproduction, full-precision comparisons, programme gate, diagnostics under block, full gates | Independent re-execution remains Phase 08; historical artifact evidence verifies the declared anchor |
 | 07 — Centralized reference | `NOT_STARTED` | Phase 05 complete | Independent pooled execution and tests | Centralized training values absent from source truth remain blocking |
 | 08 — Federated training, checkpointing, and scoring | `NOT_STARTED` | Phases 05–06 complete | Frozen scores and checkpoint discipline pass | Exact architecture/optimizer/batch values must be sourced |
 | 09 — Calibration and threshold methods | `NOT_STARTED` | Phase 08 complete | All feasible methods verified | Grouped-threshold execution and artifact validation remain deferred to Phase 09 |
@@ -133,7 +133,7 @@ Grouped threshold assignment is the source-locked taxonomy-free mechanism: creat
   - Added `SeedCount`; `SeedCohort.member_count` and `StatisticalInferenceProtocol.paired_seed_count` return `SeedCount` rather than `ClientCount`.
   - Renamed `DEFAULT_RUNTIME` to `CANONICAL_RUNTIME`.
   - Expanded `ResolvedProtocolGraph` with confirmatory endpoint, inference, anchor, runtime, splits, cluster threshold, FedAvg training, and traffic-rate evidence.
-  - Added `ConfirmatoryEndpoint` locking `SHARED_VS_LOCAL_CONFIRMATION` / `NBAIOT_NATURAL_DEVICES` / `FEDAVG_AUTOENCODER` / `SHARED_THRESHOLD` vs `LOCAL_THRESHOLD` / `FPR_COEFFICIENT_OF_VARIATION` / ten-seed journal cohort / shared-minus-local / paired BCa.
+  - Added `ConfirmatoryEndpoint` locking `SHARED_VS_LOCAL_CONFIRMATION` / `NBAIOT_NATURAL_DEVICES` / `FEDAVG_AUTOENCODER` / `SHARED_THRESHOLD` vs `LOCAL_THRESHOLD` / `FPR_COEFFICIENT_OF_VARIATION` / ten-seed confirmatory cohort / shared-minus-local / paired BCa.
   - Added `ExperimentReadiness` (`DECLARED`/`EXECUTABLE`/`SUPPRESSED`/`INFEASIBLE`/`BLOCKED`); catalogue members are declared or suppressed, never executable before implementation phases complete.
   - Added `PopulationIdentityKind` and identity validation; Edge sensor groups and CIC files are not physical devices.
   - Strengthened `ClusterThresholdProtocol` to require the locked four-feature fingerprint, StandardScaler, k-means++, `n_init=10`, `max_iter=300`, `random_state=42`, `K=3`, and arithmetic-mean aggregation.
@@ -200,4 +200,40 @@ Grouped threshold assignment is the source-locked taxonomy-free mechanism: creat
 - Phase 05 cleanup: removed scientific default split-protocol arguments; removed split re-exports; typed `SplitAssignment.partition_role` as `PartitionRole`; typed catalogue diagnostics union; removed dead fingerprint/helper; removed silent temporal→static asset fallback; removed private `_sums_to_unit_fraction` import; removed residual Edge candidate-count special case; required explicit `dirichlet_condition` on construction requests.
 - Real-data smoke (all five populations): N-BaIoT 9/9, 7_062_606 rows, attack train/cal = 0; CIC 63/63, 45_018_243 eligible rows; Dirichlet IID 20 clients, conserved; Edge static 10/10 incl. Modbus; Edge temporal 9/9, 11_050_411 rows, split 6_077_725 / 1_657_561 / 1_105_042 / 2_210_083, no future leakage; Edge materialize second run `reused`.
 - Gates: full suite `222 passed`; Ruff pass; Pyright 0 errors; Pylint ~9.91/10; architecture pass. No Phase 06. No commit or push. Temporary audit artifacts removed.
+
+## Phase 06 — Anchor reproduction and programme gate
+
+- Status: `COMPLETE`.
+- Implementation vocabulary: source identifiers use historical / confirmatory / dependent terms only; code does not use `journal` or `conference` tokens. Gate field is `dependent_readiness`. Float comparisons use `FIXED_SCORE_ABSOLUTE_TOLERANCE` / explicit absolute tolerances via `isclose`, never bare `==`. Historical metrics documents use `Seed`, `MetricValue`, `ClientCount`, and enum tokens; artifact filenames use `AnchorArtifactFileName`.
+- Source files changed (Phase 06 authorized surface only):
+  - `src/datp_core/anchor/models.py`
+  - `src/datp_core/anchor/comparison.py`
+  - `src/datp_core/anchor/reproduction.py`
+  - `src/datp_core/anchor/gate.py`
+  - `src/datp_core/orchestration/stages/verify_anchor.py`
+  - `protocols/anchor.py` unchanged; existing fixed-score absolute tolerance `1e-12` and five-seed CV(FPR) references remain source of truth.
+- Test files added:
+  - `tests/unit/anchor/test_anchor_models.py` (basename `test_models.py` renamed to avoid pytest import clash with `tests/unit/protocols/test_models.py`)
+  - `tests/unit/anchor/test_comparison.py`
+  - `tests/unit/anchor/test_reproduction.py`
+  - `tests/unit/anchor/test_gate.py`
+  - `tests/unit/anchor/helpers.py`
+  - `tests/unit/orchestration/stages/test_verify_anchor.py`
+  - `tests/integration/anchor/test_anchor_reproduction_pipeline.py`
+  - `tests/scientific/test_anchor_blocks_dependent_claims.py`
+  - `tests/scientific/test_anchor_preserves_historical_checkpoint_semantics.py`
+- Scientific-source sections consulted: Journal confirmatory five-seed reproduction gate; fixed-score absolute tolerance research amendment; historical endpoint/checkpoint isolation; shared-versus-local CV(FPR) references; seed-cohort boundary versus ten-seed confirmatory cohort.
+- Evidence inspected and accepted:
+  - Protocol references: seeds `0..4`, shared CV(FPR) and local CV(FPR) full-precision values with absolute tolerance `1e-12`.
+  - Historical metrics artifacts under sibling project `datp/outputs/results/a/{b1,b2}/seed_{0..4}/metrics.json`: every `cv_fpr` equals the stored protocol reference at full precision; shared and local scopes per seed share identical `model_checkpoint_identity` and `score_artifact_identity` (fixed detector); `threshold_scope` tokens `eligible_client_arithmetic_mean` / `per_client_percentile` map only to `SHARED_THRESHOLD` / `LOCAL_THRESHOLD`; dataset `nbaiot`, regime physical-device anchor, nine eligible clients.
+  - Historical artifacts rejected when schema-incomplete, seed-mismatched, wrong scope token, wrong population counts, non-historical checkpoint status, or ten-seed cohort supplied.
+- Tolerance rules used: metric-specific `AbsoluteToleranceRule` with declared `FIXED_SCORE_ABSOLUTE_TOLERANCE=1e-12` for all mandatory CV(FPR) anchor references; exact, relative, interval-overlap, exact-count, and source-defined strategies implemented and tested; global floating-point tolerance explicitly rejected; relative comparison against zero is unavailable.
+- Gate decision on verified historical observations: `PASS` (zero discrepancies). Without observations or independent re-execution: `BLOCKED` with typed Phase 08 dependency blocker; diagnostics preserved. Dependent readiness becomes `DECLARED` only on pass paths and `BLOCKED` on failures; never `EXECUTABLE`.
+- Focused commands: Phase 06 unit/integration/scientific selections.
+- Whole-suite command: `.venv/bin/python -m pytest -n 6 -q` → `278 passed`.
+- Ruff format/check on Phase 06 surface: pass. Pyright on changed sources: 0 errors. Pylint on `src/datp_core/anchor` and `verify_anchor.py`: `10.00/10`. Architecture tests pass. No `Any`, no raw domain dictionaries in the Phase 06 surface.
+- SonarQube CLI: `totalIssues=0`; Vortex agentic analysis returned organization-side 403 for changed files (service limitation, not authentication failure).
+- CodeScene delta: residual complexity/argument findings on validation-heavy helpers after cleanup; no unresolved actionable defect requiring further science change. Scores improved after extraction of document validation and comparison outcome records.
+- Unresolved values: none for Phase 06 gate machinery. Independent training/checkpoint/score re-execution remains Phase 08 by design; Phase 06 loads typed historical observations or records the dependency blocker.
+- No Phase 07 or Phase 08 implementation. No new `src/` files. No commit or push.
 

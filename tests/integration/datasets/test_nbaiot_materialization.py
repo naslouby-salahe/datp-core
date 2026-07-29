@@ -21,7 +21,7 @@ def test_nbaio_materialization_streams_complete_reusable_partitions(tmp_path, mo
     _write_source(benign, "1")
     _write_source(attack, "2")
 
-    def reject_arrow_conversion(*_: object) -> None:
+    def reject_arrow_conversion(_frame: pl.DataFrame) -> None:
         raise AssertionError("canonical materialization must not convert a whole frame to Arrow")
 
     monkeypatch.setattr(pl.DataFrame, "to_arrow", reject_arrow_conversion)

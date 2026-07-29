@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
-from math import floor, fsum, isclose
+from math import floor, fsum
 from pathlib import Path
 
 import polars as pl
@@ -21,7 +21,14 @@ from datp_core.domain.enums import (
     PopulationIdentityKind,
     SplitProtocolId,
 )
-from datp_core.domain.values import Checksum, ClientCount, DirichletConcentration, Seed, checksum_text
+from datp_core.domain.values import (
+    Checksum,
+    ClientCount,
+    DirichletConcentration,
+    Seed,
+    checksum_text,
+    floats_absolutely_close,
+)
 from datp_core.protocols.models import FRACTION_TOTAL_ABSOLUTE_TOLERANCE, UNIT_FRACTION_TOTAL
 from datp_core.protocols.runtime import DATA_ROOT
 
@@ -102,10 +109,8 @@ def assignment_column_names() -> tuple[str, ...]:
     return tuple(column.value for column in ASSIGNMENT_COLUMNS)
 
 
-def select_membership_frame(frame: object) -> pl.DataFrame:
+def select_membership_frame(frame: pl.DataFrame) -> pl.DataFrame:
     """Select the locked membership schema from a Polars DataFrame."""
-    if not isinstance(frame, pl.DataFrame):
-        raise TypeError("membership selection requires a Polars DataFrame")
     return frame.select(membership_column_names())
 
 
@@ -132,7 +137,6 @@ class PopulationFeasibilityReason(StrEnum):
 
 
 class PopulationManifestDocument(StrictModel):
-
     population: PopulationId
     dataset: DatasetId
     identity_kind: PopulationIdentityKind
@@ -168,7 +172,6 @@ class PopulationManifestDocument(StrictModel):
 
 
 class SplitManifestDocument(StrictModel):
-
     population: PopulationId
     dataset: DatasetId
     partition_seed: Seed
@@ -197,7 +200,6 @@ class SplitManifestDocument(StrictModel):
 
 
 class DirichletPartitionDiagnosticsDocument(StrictModel):
-
     population: PopulationId
     partition_seed: Seed
     partition_kind: ControlledPartitionKind
@@ -221,7 +223,6 @@ class DirichletPartitionDiagnosticsDocument(StrictModel):
 
 
 class ChronologicalPartitionDiagnosticsDocument(StrictModel):
-
     population: PopulationId
     expected_group_count: ClientCount
     observed_eligible_group_count: int
@@ -398,7 +399,7 @@ class PopulationManifestSpec:
 class SplitConstructionRequest:
     """Typed request boundary for residual and chronological splits."""
 
-    membership: object
+    membership: pl.DataFrame
     population: PopulationId
     dataset: DatasetId
     partition_seed: Seed
@@ -487,7 +488,7 @@ def _require_hamilton_inputs(total: int, ratios: tuple[float, ...]) -> None:
         raise ValueError("Hamilton allocation requires a non-negative total")
     if not ratios or any(ratio < 0 for ratio in ratios):
         raise ValueError("Hamilton allocation requires non-negative ratios that sum to one")
-    if not isclose(fsum(ratios), UNIT_FRACTION_TOTAL, rel_tol=0.0, abs_tol=FRACTION_TOTAL_ABSOLUTE_TOLERANCE):
+    if not floats_absolutely_close(fsum(ratios), UNIT_FRACTION_TOTAL, FRACTION_TOTAL_ABSOLUTE_TOLERANCE):
         raise ValueError("Hamilton allocation requires non-negative ratios that sum to one")
 
 
