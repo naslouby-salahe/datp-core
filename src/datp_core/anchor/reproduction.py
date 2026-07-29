@@ -191,7 +191,7 @@ def independent_reproduction_dependency_blocker() -> AnchorDependencyBlocker:
 def load_historical_observation(source: HistoricalMetricArtifactSource) -> AnchorObservedMetric:
     path = source.path
     document = _read_historical_metrics_document(path)
-    _validate_historical_document(document, source, path)
+    _validate_historical_document(document, source)
     return AnchorObservedMetric(
         seed=source.seed,
         population=ANCHOR_POPULATION,
@@ -228,7 +228,6 @@ def _read_historical_metrics_document(path: Path) -> HistoricalMetricsDocument:
 def _validate_historical_document(
     document: HistoricalMetricsDocument,
     source: HistoricalMetricArtifactSource,
-    path: Path,
 ) -> None:
     checks: tuple[tuple[bool, str, AnchorDiscrepancyReason], ...] = (
         (
@@ -485,8 +484,6 @@ def _collect_discrepancies(
         )
     for comparison in comparisons:
         if comparison.decision is AnchorComparisonDecision.EQUIVALENT:
-            continue
-        if comparison.decision is AnchorComparisonDecision.ACCEPTABLE_DECLARED_DEVIATION:
             continue
         observation = comparison.observation
         discrepancies.append(

@@ -3,8 +3,8 @@
 from dataclasses import dataclass
 
 from datp_core.domain.enums import (
-    ContractSubject,
     ConfirmatoryDeltaDirection,
+    ContractSubject,
     EvidenceRole,
     ExperimentId,
     ExperimentReadiness,
@@ -20,6 +20,7 @@ from datp_core.domain.values import CalibrationSize, ConfidenceLevel
 from .anchor import ANCHOR_DECISION_PROTOCOL
 from .calibration import CLUSTER_THRESHOLD_PROTOCOL, MINIMUM_BENIGN_SUPPORT
 from .experiments import EXPERIMENTS
+from .metrics import SUPPRESSED_OPERATIONAL_METRICS
 from .models import (
     AnchorDecisionProtocol,
     CalibrationEligibilityProtocol,
@@ -258,7 +259,7 @@ def _validate_experiment_metrics(
     uses_attack_metric = any(metric in experiment.metrics for metric in _ATTACK_SENSITIVE_METRICS)
     if uses_attack_metric and not population.requires_client_attack_assignment:
         raise ProtocolValidationError("Attack-sensitive metrics require attack assignment")
-    if MetricId.ALERTS_PER_DAY not in experiment.metrics:
+    if not any(metric in experiment.metrics for metric in SUPPRESSED_OPERATIONAL_METRICS):
         return
     has_rate_evidence = any(evidence.population is experiment.population for evidence in traffic_rate_evidence)
     if has_rate_evidence:

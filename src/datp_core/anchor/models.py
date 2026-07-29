@@ -16,7 +16,10 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.values import Checksum, ClientCount, MetricValue, Seed, SeedCount
+from datp_core.protocols.anchor import HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.protocols.models import SeedCohort
+from datp_core.protocols.populations import NBAIOT_NATURAL_DEVICES
+from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
 
 
 class AnchorComparisonStrategy(StrEnum):
@@ -108,9 +111,9 @@ ANCHOR_TRAINING_MODEL: TrainingModelId = TrainingModelId.FEDAVG_AUTOENCODER
 ANCHOR_METRIC: MetricId = MetricId.FPR_COEFFICIENT_OF_VARIATION
 ANCHOR_CHECKPOINT_STATUS: CheckpointStatus = CheckpointStatus.HISTORICAL_ENDPOINT
 ANCHOR_EVIDENCE_ROLE: EvidenceRole = EvidenceRole.ANCHOR_REPRODUCTION
-ANCHOR_HISTORICAL_SEED_COUNT: SeedCount = SeedCount(5)
-CONFIRMATORY_PAIRED_SEED_COUNT: SeedCount = SeedCount(10)
-HISTORICAL_ELIGIBLE_CLIENT_COUNT: ClientCount = ClientCount(9)
+ANCHOR_HISTORICAL_SEED_COUNT: SeedCount = HISTORICAL_ANCHOR_SEED_COHORT.member_count
+CONFIRMATORY_PAIRED_SEED_COUNT: SeedCount = CONFIRMATORY_SEED_COHORT.member_count
+HISTORICAL_ELIGIBLE_CLIENT_COUNT: ClientCount = NBAIOT_NATURAL_DEVICES.client_count
 
 # No non-blocking discrepancy reasons are currently declared in the scientific source.
 DECLARED_NON_BLOCKING_DISCREPANCY_REASONS: frozenset[AnchorDiscrepancyReason] = frozenset()

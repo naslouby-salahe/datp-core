@@ -12,7 +12,6 @@ from pydantic import BaseModel
 from datp_core.artifacts.completion import (
     assert_complete_digest,
     complete_digest,
-    read_complete_marker,
     write_complete_marker,
 )
 from datp_core.artifacts.layout import ProcessedAssetName
@@ -110,7 +109,9 @@ def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseMode
     write_complete_marker(temporary, digest)
     _assert_required_assets(temporary, publication.required_assets)
     if not _is_reusable(temporary, publication):
-        raise ArtifactIntegrityError("processed publication failed complete-asset validation", subject=ContractSubject.ARTIFACT_PATH)
+        raise ArtifactIntegrityError(
+            "processed publication failed complete-asset validation", subject=ContractSubject.ARTIFACT_PATH
+        )
 
 
 def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
@@ -120,7 +121,6 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
         manifest = read_preprocessing_manifest(target, publication.manifest_type)
         schema = read_transformed_schema(target, publication.schema_type)
         report = read_validation_report(target, publication.report_type)
-        digest = read_complete_marker(target)
     except (OSError, ArtifactIntegrityError, ValueError):
         return False
     expected = complete_digest(
@@ -130,8 +130,6 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     try:
         assert_complete_digest(target, expected)
     except ArtifactIntegrityError:
-        return False
-    if digest != expected:
         return False
     if manifest != publication.manifest:
         return False

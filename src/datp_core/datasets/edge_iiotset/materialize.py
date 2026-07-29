@@ -23,6 +23,7 @@ from datp_core.datasets.materialization import (
     stream_parquet,
 )
 from datp_core.datasets.models import (
+    CanonicalProvenanceColumn,
     ChronologyValidation,
     DatasetValidationCode,
     DatasetValidationIssue,
@@ -36,7 +37,14 @@ from datp_core.domain.enums import AvailabilityStatus, DatasetId
 
 from .chronology import PcapChronology, paired_capture_path, validate_chronology, write_capture_timeline
 from .reader import EdgeIIoTsetReader
-from .schema import EDGE_ARROW_SCHEMA, EDGE_SCHEMA, EdgeAssetRole, benign_sensor_group, source_relative_path
+from .schema import (
+    EDGE_ARROW_SCHEMA,
+    EDGE_SCHEMA,
+    EdgeAssetRole,
+    EdgeCanonicalColumn,
+    benign_sensor_group,
+    source_relative_path,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -251,8 +259,8 @@ def _with_capture_timeline(
         raise ValueError("verified Edge chronology must retain its display offset")
     write_capture_timeline(csv_path, evidence.pcap_path, timeline_path, offset)
     return (
-        frame.drop("capture_timestamp")
-        .join(pl.scan_parquet(timeline_path), on="source_row_index", how="left")
+        frame.drop(EdgeCanonicalColumn.CAPTURE_TIMESTAMP)
+        .join(pl.scan_parquet(timeline_path), on=CanonicalProvenanceColumn.SOURCE_ROW_INDEX, how="left")
         .select(tuple(column.name for column in EDGE_SCHEMA.columns))
     )
 

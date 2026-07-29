@@ -1,11 +1,25 @@
 """Historical anchor declarations."""
 
+from dataclasses import dataclass
+from typing import ClassVar
+
 from datp_core.domain.enums import FederatedThresholdMethod, MetricId
-from datp_core.domain.values import MetricValue, Seed
+from datp_core.domain.values import MetricValue, PositiveIntegerValue, Seed
 
 from .models import AnchorDecisionProtocol, AnchorReference, SeedCohort
 
 FIXED_SCORE_ABSOLUTE_TOLERANCE = MetricValue(1e-12)
+
+# Additive feature shift used only to verify reconstruction-error polarity (higher = more anomalous).
+ANOMALY_POLARITY_FEATURE_PERTURBATION = MetricValue(5.0)
+
+
+@dataclass(frozen=True, slots=True)
+class PolarityVerificationSampleLimit(PositiveIntegerValue):
+    validation_name: ClassVar[str] = "polarity verification sample limit"
+
+
+POLARITY_VERIFICATION_SAMPLE_LIMIT = PolarityVerificationSampleLimit(8)
 HISTORICAL_SHARED_THRESHOLD_CV_FPR = (
     MetricValue(1.0448312675151203),
     MetricValue(1.016550264110769),

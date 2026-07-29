@@ -41,6 +41,7 @@ LEARNING_RATE = LearningRate(0.001)
 BATCH_SIZE = BatchSize(256)
 # CUDA-resident TensorDataset loaders cannot fork worker processes.
 CENTRALIZED_DATALOADER_WORKER_COUNT = DataLoaderWorkerCount(0)
+FEDERATED_DATALOADER_WORKER_COUNT = DataLoaderWorkerCount(0)
 DITTO_REGULARIZATION_GRID = tuple(DittoRegularization(value) for value in (0.05, 0.1, 0.2))
 DITTO_PRIMARY_REGULARIZATION = DittoRegularization(0.1)
 CENTRALIZED_TRAINING_PROTOCOL = CentralizedTrainingProtocol(

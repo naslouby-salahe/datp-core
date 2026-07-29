@@ -49,6 +49,7 @@ from datp_core.domain.values import (
     SummaryCoefficient,
     TrafficRatePerDay,
     WeightDecay,
+    WorkerCount,
     floats_absolutely_close,
 )
 
@@ -288,10 +289,6 @@ class ClusterThresholdProtocol(Declaration):
         return self
 
 
-class MetricProtocol(Declaration):
-    metrics: tuple[MetricId, ...]
-
-
 class StatisticalInferenceProtocol(Declaration):
     confidence_level: ConfidenceLevel
     seed_cohort: SeedCohort
@@ -436,7 +433,7 @@ class RuntimeProtocol(Declaration):
     outputs_root: Path
     results_root: Path
     require_cuda: bool
-    worker_count: int
+    worker_count: WorkerCount
     overwrite_outputs: bool
 
     @model_validator(mode="after")
@@ -445,8 +442,6 @@ class RuntimeProtocol(Declaration):
             raise ValueError("runtime paths must be project-relative")
         if not self.data_root.parts or not self.outputs_root.parts:
             raise ValueError("runtime data and outputs paths must be non-empty")
-        if isinstance(self.worker_count, bool) or self.worker_count < 1:
-            raise ValueError("worker count must be positive")
         return self
 
 

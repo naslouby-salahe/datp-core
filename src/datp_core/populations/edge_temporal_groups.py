@@ -31,6 +31,7 @@ from datp_core.populations.models import (
     PopulationManifest,
     PopulationOutcomeLabel,
     SplitConstructionRequest,
+    SplitManifest,
     canonical_branch_directory,
     select_membership_frame,
 )
@@ -231,7 +232,7 @@ def split_temporal_membership(
     *,
     partition_seed: Seed,
     population_manifest_checksum: Checksum,
-):
+) -> tuple[pl.DataFrame, SplitManifest]:
     return split_membership(
         SplitConstructionRequest(
             membership=membership.select(

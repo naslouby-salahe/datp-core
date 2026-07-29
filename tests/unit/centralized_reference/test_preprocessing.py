@@ -16,6 +16,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import Checksum, ClientIdentity, OutcomeLabelSequence
+from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     PreprocessingFitBatch,
@@ -51,7 +52,7 @@ def test_pooled_fit_is_independent_of_federated_state() -> None:
             training_matrix=matrix,
             training_row_ids=("a", "b"),
             training_labels=OutcomeLabelSequence(("benign", "benign")),
-            benign_label="benign",
+            benign_label=PopulationOutcomeLabel.BENIGN,
         ),
     )
     assert np.asarray(fitted.transform(matrix), dtype=float).shape == matrix.shape

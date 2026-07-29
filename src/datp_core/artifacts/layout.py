@@ -49,20 +49,20 @@ def core_processed_asset_names() -> tuple[ProcessedAssetName, ...]:
     )
 
 
-def federated_branch_directory(coordinate: ReusableDataCoordinate) -> Path:
+def federated_branch_directory(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
     if coordinate.branch is not ProcessedDataBranch.FEDERATED:
         raise ValueError("federated branch directory requires the federated branch")
-    return processed_branch_coordinate(coordinate)
+    return processed_branch_coordinate(data_root, coordinate)
 
 
-def centralized_branch_directory(coordinate: ReusableDataCoordinate) -> Path:
+def centralized_branch_directory(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
     if coordinate.branch is not ProcessedDataBranch.CENTRALIZED_REFERENCE:
         raise ValueError("centralized branch directory requires the centralized-reference branch")
-    return processed_branch_coordinate(coordinate)
+    return processed_branch_coordinate(data_root, coordinate)
 
 
-def federated_client_directory(coordinate: ReusableDataCoordinate) -> Path:
-    return federated_client_coordinate(coordinate)
+def federated_client_directory(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
+    return federated_client_coordinate(data_root, coordinate)
 
 
 def client_asset_path(client_directory: Path, asset: ProcessedAssetName) -> Path:

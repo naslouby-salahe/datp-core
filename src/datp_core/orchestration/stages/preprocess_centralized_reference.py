@@ -15,9 +15,7 @@ from datp_core.centralized_reference.preprocessing import (
     reject_federated_state_for_pooled,
 )
 from datp_core.datasets.catalogue import dataset_binding
-from datp_core.datasets.models import CanonicalPublicationArtifact
 from datp_core.domain.enums import (
-    ContractSubject,
     DatasetId,
     PartitionRole,
     PopulationId,
@@ -27,8 +25,8 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     StageOperationId,
 )
-from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, FeatureNameSequence, OutcomeLabelSequence, Seed
+from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.values import FeatureNameSequence, OutcomeLabelSequence, Seed
 from datp_core.populations.catalogue import (
     PopulationConstructionRequest,
     PreprocessingHandoffRequest,
@@ -37,15 +35,8 @@ from datp_core.populations.catalogue import (
     join_handoff_with_canonical_features,
     resolve_population,
 )
-from datp_core.populations.models import (
-    OUTCOME_LABEL_COLUMN,
-    PARTITION_ROLE_COLUMN,
-    STABLE_ROW_ID_COLUMN,
-    ControlledPartitionCondition,
-    PopulationOutcomeLabel,
-)
+from datp_core.populations.models import ControlledPartitionCondition, PopulationOutcomeLabel
 from datp_core.preprocessing.models import (
-    FittedPreprocessingState,
     PooledPreprocessingResult,
     PreprocessingFitBatch,
     PreprocessingProtocol,
@@ -53,7 +44,11 @@ from datp_core.preprocessing.models import (
     build_preprocessing_protocol,
     scientific_centralized_preprocessing_method,
 )
-from datp_core.preprocessing.validation import core_partition_roles, validate_no_attack_labels_in_fit
+from datp_core.preprocessing.validation import (
+    extract_core_partitions,
+    require_canonical_publication_complete,
+    validate_no_attack_labels_in_fit,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,7 +57,7 @@ class PreprocessCentralizedReferenceRequest:
     partitions: Mapping[PartitionRole, pl.DataFrame]
     row_ids: Mapping[PartitionRole, Sequence[str]]
     training_labels: OutcomeLabelSequence
-    benign_label: str
+    benign_label: PopulationOutcomeLabel
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,11 +141,7 @@ def preprocess_centralized_reference_population_stage(
     binding = resolve_population(request.population)
     dataset = binding.declaration.dataset
     canonical_root = canonical_root_under(request.data_root, dataset)
-    if not (canonical_root / CanonicalPublicationArtifact.COMPLETE).is_file():
-        raise ScientificContractError(
-            "canonical COMPLETE marker is required before centralized preprocessing",
-            subject=dataset,
-        )
+    require_canonical_publication_complete(canonical_root, dataset, "centralized preprocessing")
     construction = construct_population(
         PopulationConstructionRequest(
             population_id=request.population,
@@ -172,7 +163,12 @@ def preprocess_centralized_reference_population_stage(
     schema = dataset_binding(dataset).schema
     protocol = build_centralized_preprocessing_protocol(FeatureNameSequence(schema.feature_columns))
     joined = join_handoff_with_canonical_features(canonical_root, handoff, schema.feature_columns)
-    partitions, row_ids, training_labels = _pooled_partitions(joined, schema.feature_columns)
+    partitions, row_ids, training_labels = extract_core_partitions(
+        joined,
+        schema.feature_columns,
+        branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
+        deterministic_sort=True,
+    )
     context = PreprocessingPublishContext(
         dataset=dataset,
         population=request.population,
@@ -188,53 +184,10 @@ def preprocess_centralized_reference_population_stage(
             partitions=partitions,
             row_ids=row_ids,
             training_labels=training_labels,
-            benign_label=PopulationOutcomeLabel.BENIGN.value,
+            benign_label=PopulationOutcomeLabel.BENIGN,
         )
     )
 
 
 def build_centralized_preprocessing_protocol(feature_names: FeatureNameSequence) -> PreprocessingProtocol:
     return build_preprocessing_protocol(scientific_centralized_preprocessing_method(), feature_names.names)
-
-
-def require_completed_centralized_preprocessing(state: FittedPreprocessingState) -> Checksum:
-    if state.branch is not ProcessedDataBranch.CENTRALIZED_REFERENCE:
-        raise LeakageError("expected centralized preprocessing completion", subject=state.branch)
-    if not state.estimator_path.is_file():
-        raise ArtifactIntegrityError(
-            "centralized preprocessing state file is missing", subject=ContractSubject.ARTIFACT_PATH
-        )
-    return state.estimator_checksum
-
-
-def rebuild_incomplete_centralized_preprocessing(directory: Path) -> None:
-    if directory.exists():
-        for path in sorted(directory.rglob("*"), reverse=True):
-            if path.is_file():
-                path.unlink()
-            elif path.is_dir():
-                path.rmdir()
-
-
-def _pooled_partitions(
-    joined: pl.DataFrame,
-    feature_names: tuple[str, ...],
-) -> tuple[Mapping[PartitionRole, pl.DataFrame], Mapping[PartitionRole, tuple[str, ...]], OutcomeLabelSequence]:
-    partitions: dict[PartitionRole, pl.DataFrame] = {}
-    row_ids: dict[PartitionRole, tuple[str, ...]] = {}
-    keep = [STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names]
-    for role in core_partition_roles():
-        role_frame = (
-            joined.filter(pl.col(PARTITION_ROLE_COLUMN) == role.value).select(keep).sort([STABLE_ROW_ID_COLUMN])
-        )
-        if role_frame.height == 0:
-            raise ScientificContractError(
-                f"pooled partition {role.value} is empty",
-                subject=role,
-            )
-        partitions[role] = role_frame
-        row_ids[role] = tuple(str(value) for value in role_frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
-    training_labels = OutcomeLabelSequence(
-        tuple(str(value) for value in partitions[PartitionRole.TRAIN].get_column(OUTCOME_LABEL_COLUMN).to_list())
-    )
-    return partitions, row_ids, training_labels

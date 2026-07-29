@@ -10,13 +10,13 @@ import polars as pl
 from datp_core.artifacts.coordinates import canonical_root_under
 from datp_core.artifacts.serialization import TrustedScaler, construct_trusted_estimator
 from datp_core.datasets.catalogue import dataset_binding
-from datp_core.datasets.models import CanonicalPublicationArtifact
 from datp_core.domain.enums import (
     DatasetId,
     PartitionRole,
     PopulationId,
     PreprocessingFitScope,
     PreprocessingProtocolId,
+    ProcessedDataBranch,
     PublicationStatus,
     SplitProtocolId,
     StageOperationId,
@@ -31,14 +31,7 @@ from datp_core.populations.catalogue import (
     join_handoff_with_canonical_features,
     resolve_population,
 )
-from datp_core.populations.models import (
-    CLIENT_ID_COLUMN,
-    OUTCOME_LABEL_COLUMN,
-    PARTITION_ROLE_COLUMN,
-    STABLE_ROW_ID_COLUMN,
-    ControlledPartitionCondition,
-    PopulationOutcomeLabel,
-)
+from datp_core.populations.models import CLIENT_ID_COLUMN, ControlledPartitionCondition, PopulationOutcomeLabel
 from datp_core.preprocessing.federated import (
     ClientPublishRequest,
     fit_federated_preprocessing,
@@ -53,7 +46,7 @@ from datp_core.preprocessing.models import (
     scientific_federated_pooled_min_max_method,
     scientific_preprocessing_method,
 )
-from datp_core.preprocessing.validation import core_partition_roles
+from datp_core.preprocessing.validation import extract_core_partitions, require_canonical_publication_complete
 
 _FEDERATED_METHODS = frozenset(
     {
@@ -108,11 +101,7 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
     binding = resolve_population(request.population)
     dataset = binding.declaration.dataset
     canonical_root = canonical_root_under(request.data_root, dataset)
-    if not (canonical_root / CanonicalPublicationArtifact.COMPLETE).is_file():
-        raise ScientificContractError(
-            "canonical COMPLETE marker is required before federated preprocessing",
-            subject=dataset,
-        )
+    require_canonical_publication_complete(canonical_root, dataset, "federated preprocessing")
 
     construction = construct_population(
         PopulationConstructionRequest(
@@ -147,9 +136,11 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
 
     client_ids = tuple(sorted(str(value) for value in joined.get_column(CLIENT_ID_COLUMN).unique().to_list()))
     client_partitions: dict[str, ClientPartitionBundle] = {
-        client_id: _partitions_for_client(
+        client_id: extract_core_partitions(
             joined.filter(pl.col(CLIENT_ID_COLUMN) == client_id),
             schema.feature_columns,
+            branch=ProcessedDataBranch.FEDERATED,
+            deterministic_sort=False,
         )
         for client_id in client_ids
     }
@@ -216,7 +207,7 @@ def _fit_estimators(
                         training_matrix=partitions[PartitionRole.TRAIN].select(feature_names).to_numpy(),
                         training_row_ids=row_ids[PartitionRole.TRAIN],
                         training_labels=train_labels,
-                        benign_label=PopulationOutcomeLabel.BENIGN.value,
+                        benign_label=PopulationOutcomeLabel.BENIGN,
                     ),
                 )
             return fitted
@@ -238,7 +229,7 @@ def _fit_estimators(
                     training_matrix=np.vstack(matrices),
                     training_row_ids=row_ids,
                     training_labels=labels,
-                    benign_label=PopulationOutcomeLabel.BENIGN.value,
+                    benign_label=PopulationOutcomeLabel.BENIGN,
                 ),
             )
             return {client_id: pooled for client_id in client_ids}
@@ -277,25 +268,3 @@ def _federated_protocol(
                 subject=identity,
             )
     return build_preprocessing_protocol(method, feature_names)
-
-
-def _partitions_for_client(
-    client_frame: pl.DataFrame,
-    feature_names: tuple[str, ...],
-) -> ClientPartitionBundle:
-    partitions: dict[PartitionRole, pl.DataFrame] = {}
-    row_ids: dict[PartitionRole, tuple[str, ...]] = {}
-    for role in core_partition_roles():
-        role_frame = client_frame.filter(pl.col(PARTITION_ROLE_COLUMN) == role.value)
-        if role_frame.height == 0:
-            raise ScientificContractError(
-                f"client partition {role.value} is empty",
-                subject=role,
-            )
-        keep = [STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names]
-        partitions[role] = role_frame.select(keep)
-        row_ids[role] = tuple(str(value) for value in role_frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
-    train_labels = OutcomeLabelSequence(
-        tuple(str(value) for value in partitions[PartitionRole.TRAIN].get_column(OUTCOME_LABEL_COLUMN).to_list())
-    )
-    return partitions, row_ids, train_labels

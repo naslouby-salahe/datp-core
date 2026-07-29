@@ -34,14 +34,15 @@ def _base_coordinate() -> ReusableDataCoordinate:
 
 
 def test_processed_coordinates_match_approved_layout() -> None:
-    path = processed_branch_coordinate(_base_coordinate())
+    data_root = Path("data")
+    path = processed_branch_coordinate(data_root, _base_coordinate())
     assert path == Path(
         "data/processed/nbaiot/nbaiot_natural_devices/0/"
         f"{SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS.value}/"
         f"{PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION.value}/federated"
     )
     coordinate = replace(_base_coordinate(), client_identity=ClientIdentity("danmini_doorbell"))
-    client = federated_client_coordinate(coordinate)
+    client = federated_client_coordinate(data_root, coordinate)
     assert client.parts[-1] == "danmini_doorbell"
     assert "client" not in client.parts
     with pytest.raises(ValueError):

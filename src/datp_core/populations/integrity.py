@@ -391,8 +391,8 @@ def _reject_client_future_history_leakage(
     )
     if boundary.filter(pl.col(_MAX_HIST) > pl.col(_MIN_FUT)).height > 0:
         raise LeakageError(
-            "future rows precede historical rows for a client",
-            subject=client_id,
+            f"future rows precede historical rows for client {client_id!r}",
+            subject=StageOperationId.SPLIT,
             reason="chronological splits forbid future-to-history leakage",
         )
 

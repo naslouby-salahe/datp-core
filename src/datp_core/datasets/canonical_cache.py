@@ -419,9 +419,10 @@ def _documents_match_publication(
     schema_file: Path, complete_file: Path, serialized_manifest: str, schema: CanonicalSchema
 ) -> bool:
     serialized_schema = schema_content(schema)
-    return schema_file.read_text(encoding="utf-8") == serialized_schema and complete_file.read_text(
-        encoding="utf-8"
-    ) == complete_digest(serialized_manifest, serialized_schema).value
+    return (
+        schema_file.read_text(encoding="utf-8") == serialized_schema
+        and complete_file.read_text(encoding="utf-8") == complete_digest(serialized_manifest, serialized_schema).value
+    )
 
 
 def _manifest_matches_publication[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](

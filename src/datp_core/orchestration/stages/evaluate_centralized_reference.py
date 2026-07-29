@@ -1,6 +1,7 @@
 """Stage: evaluate the independent centralized reference on held-out pooled scores."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from shutil import rmtree
 
@@ -9,7 +10,6 @@ from datp_core.centralized_reference.evaluation import (
     CentralizedEvaluationResult,
     evaluate_centralized_reference,
     evaluation_result_checksum,
-    reject_centralized_result_in_confirmatory_ladder,
 )
 from datp_core.centralized_reference.scoring import PooledScoreArtifact
 from datp_core.centralized_reference.thresholding import PooledThresholdResult
@@ -18,7 +18,7 @@ from datp_core.domain.enums import PublicationStatus, StageOperationId
 from datp_core.domain.values import Checksum, checksum_file
 
 
-class CentralizedEvaluationAssetName:
+class CentralizedEvaluationAssetName(StrEnum):
     EVALUATION = "centralized_evaluation.json"
     COMPLETE = "COMPLETE"
 
@@ -51,8 +51,6 @@ def evaluate_centralized_reference_stage(
             evaluation_scores=request.evaluation_scores,
             threshold_result=request.threshold,
         )
-        if evaluation.is_confirmatory_ladder_member:
-            reject_centralized_result_in_confirmatory_ladder(evaluation)
         _write_evaluation_document(evaluation, temporary)
         digest = evaluation_result_checksum(evaluation)
         (temporary / CentralizedEvaluationAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")

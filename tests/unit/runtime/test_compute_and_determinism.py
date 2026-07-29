@@ -1,7 +1,7 @@
 import pytest
 import torch
 
-from datp_core.domain.values import Seed
+from datp_core.domain.values import Seed, WorkerCount
 from datp_core.protocols.runtime import CANONICAL_RUNTIME
 from datp_core.runtime.compute import (
     canonical_worker_count,
@@ -18,8 +18,8 @@ from datp_core.runtime.determinism import (
 
 def test_canonical_runtime_requires_cuda_and_six_workers() -> None:
     assert CANONICAL_RUNTIME.require_cuda is True
-    assert CANONICAL_RUNTIME.worker_count == 6
-    assert canonical_worker_count() == 6
+    assert CANONICAL_RUNTIME.worker_count == WorkerCount(6)
+    assert canonical_worker_count() == WorkerCount(6)
 
 
 def test_cuda_device_resolution_never_falls_back_to_cpu() -> None:

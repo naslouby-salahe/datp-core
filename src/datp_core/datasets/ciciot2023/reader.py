@@ -115,10 +115,6 @@ class CICIoT2023Reader:
             raise ValueError("CICIoT2023 contains empty or unrecognized labels")
         return total_rows
 
-    def rate_anomaly_count(self, frame: pl.LazyFrame) -> tuple[int, int]:
-        _, _, infinite_rates, empty_rates = self.validation_summary(frame)
-        return infinite_rates, empty_rates
-
     @staticmethod
     def model_input_eligibility_audit(frame: pl.LazyFrame) -> pl.LazyFrame:
         missing_label = CICIoT2023Reader._missing_or_unrecognized_label_expression()

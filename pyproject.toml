@@ -88,6 +88,7 @@ pythonVersion = "3.12"
 typeCheckingMode = "standard"
 venvPath = "."
 venv = ".venv"
-# Mirrors pytest's rootdir-relative "prepend" import mode (pyproject.toml [tool.pytest.ini_options]):
-# test files import same-directory helper modules directly, without package __init__.py files.
-executionEnvironments = [{ root = "tests", extraPaths = ["tests/unit/learning"] }]
+# Mirrors pytest's rootdir-relative "prepend" import mode (pyproject.toml [tool.pytest.ini_options]
+# pythonpath = ["src", "."]): test files import sibling helper modules via the fully qualified
+# "tests.unit...." path, which requires the repository root on the search path.
+executionEnvironments = [{ root = "tests", extraPaths = ["."] }]

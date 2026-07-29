@@ -3,7 +3,6 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-import numpy as np
 import polars as pl
 
 from datp_core.artifacts.coordinates import ReusableDataCoordinate
@@ -29,7 +28,6 @@ from datp_core.preprocessing.validation import (
     fit_trusted_batch,
     fitted_state_after_publish,
     publish_preprocessed_partitions,
-    transform_feature_matrix,
     validate_branch_isolation,
 )
 
@@ -64,13 +62,10 @@ def fit_federated_preprocessing(
     return fit_trusted_batch(protocol, estimator, batch, subject=protocol.fit_scope)
 
 
-def transform_partition(fitted_estimator: TrustedScaler, matrix: np.ndarray, subject: PartitionRole) -> np.ndarray:
-    return transform_feature_matrix(fitted_estimator, matrix, subject)
-
-
 def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreprocessingResult:
     context = request.context
-    relative_client = federated_client_directory(
+    client_coordinate_directory = federated_client_directory(
+        context.data_root,
         ReusableDataCoordinate(
             dataset=context.dataset,
             population=context.population,
@@ -79,13 +74,13 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
             preprocessing_identity=context.protocol.identity,
             branch=ProcessedDataBranch.FEDERATED,
             client_identity=request.client_identity,
-        )
+        ),
     )
     assets = core_processed_assets()
     result = publish_preprocessed_partitions(
         context=context,
         branch=ProcessedDataBranch.FEDERATED,
-        relative_coordinate=relative_client,
+        coordinate_directory=client_coordinate_directory,
         fitted_estimator=request.fitted_estimator,
         partitions=request.partitions,
         row_ids=request.row_ids,

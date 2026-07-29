@@ -1,7 +1,6 @@
 """Stage: select the centralized primary checkpoint under FIXED_TERMINAL_MAXIMUM_ROUND."""
 
 from dataclasses import dataclass
-from pathlib import Path
 
 from datp_core.centralized_reference.checkpointing import (
     CentralizedCheckpointCandidate,
@@ -26,7 +25,6 @@ class SelectCentralizedCheckpointRequest:
     training_seed_value: int
     held_out_metrics: tuple[MetricValue, ...] | None = None
     attack_labels_present: bool = False
-    output_directory: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)

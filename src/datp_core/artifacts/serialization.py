@@ -110,11 +110,3 @@ def transforms_are_equivalent(
     if left.shape != right.shape:
         return False
     return bool(np.allclose(left, right, rtol=0.0, atol=absolute_tolerance, equal_nan=False))
-
-
-def feature_matrix_width_matches(values: np.ndarray, expected_width: int) -> np.ndarray:
-    if values.ndim != 2:
-        raise ValueError("transformed feature matrices must be two-dimensional")
-    if values.shape[1] != expected_width:
-        raise ValueError("transformed matrix width must match the transformed schema")
-    return values

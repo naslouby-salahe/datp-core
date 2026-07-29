@@ -6,6 +6,7 @@ import torch
 
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ExecutionStateError
+from datp_core.domain.values import WorkerCount
 from datp_core.protocols.runtime import CANONICAL_RUNTIME
 
 
@@ -37,7 +38,7 @@ def resolve_cuda_device() -> torch.device:
     return torch.device("cuda")
 
 
-def canonical_worker_count() -> int:
+def canonical_worker_count() -> WorkerCount:
     """Maximum concurrency for suitable CPU-side independent work."""
     return CANONICAL_RUNTIME.worker_count
 

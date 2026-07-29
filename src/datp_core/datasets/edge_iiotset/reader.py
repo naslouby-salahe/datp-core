@@ -54,6 +54,3 @@ class EdgeIIoTsetReader:
             )
             .select(tuple(column.name for column in EDGE_SCHEMA.columns))
         )
-
-    def assign_attack_to_sensor(self, _: pl.LazyFrame, __: str) -> None:
-        raise ValueError("Edge attack rows have no verified benign sensor-group assignment")

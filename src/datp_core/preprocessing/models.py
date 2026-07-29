@@ -21,6 +21,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorModule,
 )
 from datp_core.domain.values import Checksum, ClientIdentity, OutcomeLabelSequence, Seed
+from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
 
 SCIENTIFIC_TRANSFORM_ABSOLUTE_TOLERANCE = FIXED_SCORE_ABSOLUTE_TOLERANCE.value
@@ -238,7 +239,7 @@ class PreprocessingFitBatch:
     training_matrix: np.ndarray
     training_row_ids: tuple[str, ...]
     training_labels: OutcomeLabelSequence
-    benign_label: str
+    benign_label: PopulationOutcomeLabel
 
 
 @dataclass(frozen=True, slots=True)

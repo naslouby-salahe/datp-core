@@ -32,7 +32,6 @@ class ClientExclusionReason(StrEnum):
 
 
 class ClientEligibilityRecord(StrictModel):
-
     client_id: str
     population: PopulationId
     benign_calibration_count: int
@@ -60,7 +59,6 @@ class ClientEligibilityRecord(StrictModel):
 
 
 class EvaluationCohortMembership(StrictModel):
-
     client_id: str
     cohort: EvaluationCohort
     reasons: tuple[ClientExclusionReason, ...]
@@ -77,7 +75,6 @@ class EvaluationCohortMembership(StrictModel):
 
 
 class EvaluationCohortManifest(StrictModel):
-
     population: PopulationId
     partition_seed: Seed
     minimum_benign_calibration_support: CalibrationSize
@@ -288,9 +285,7 @@ def _cohort_memberships(
             )
         )
     if not confirmatory and not attack_evaluable:
-        unavailable = tuple(dict.fromkeys((*reasons, *attack_reasons))) or (
-            ClientExclusionReason.CLIENT_NOT_ACCEPTED,
-        )
+        unavailable = tuple(dict.fromkeys((*reasons, *attack_reasons))) or (ClientExclusionReason.CLIENT_NOT_ACCEPTED,)
         memberships.append(
             EvaluationCohortMembership(
                 client_id=counts.client_id,

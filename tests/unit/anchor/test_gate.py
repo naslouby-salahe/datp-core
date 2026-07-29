@@ -85,7 +85,7 @@ def test_no_manual_override_api_on_gate_decision() -> None:
     assert not hasattr(decision, "override")
     assert not hasattr(decision, "force_pass")
     with pytest.raises(AttributeError):
-        decision.status = AnchorGateStatus.BLOCKED
+        decision.__setattr__("status", AnchorGateStatus.BLOCKED)
 
 
 def test_observation_source_kind_remains_explicit() -> None:

@@ -3,7 +3,6 @@
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import ClassVar
 
 import numpy as np
 import polars as pl
@@ -22,15 +21,17 @@ from datp_core.domain.values import (
     Checksum,
     FeatureCount,
     FeatureNameSequence,
-    MetricValue,
-    PositiveIntegerValue,
     RoundNumber,
     RowCount,
     checksum_file,
     checksum_text,
 )
 from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationFrameColumn
-from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
+from datp_core.protocols.anchor import (
+    ANOMALY_POLARITY_FEATURE_PERTURBATION,
+    FIXED_SCORE_ABSOLUTE_TOLERANCE,
+    POLARITY_VERIFICATION_SAMPLE_LIMIT,
+)
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 
@@ -40,18 +41,6 @@ class CentralizedScoreAssetName(StrEnum):
     EVALUATION_SCORES = "evaluation_scores.parquet"
     SCORE_MANIFEST = "score_manifest.json"
     COMPLETE = "COMPLETE"
-
-
-# Additive feature shift used only to verify reconstruction-error polarity (higher = more anomalous).
-ANOMALY_POLARITY_FEATURE_PERTURBATION = MetricValue(5.0)
-
-
-@dataclass(frozen=True, slots=True)
-class PolarityVerificationSampleLimit(PositiveIntegerValue):
-    validation_name: ClassVar[str] = "polarity verification sample limit"
-
-
-POLARITY_VERIFICATION_SAMPLE_LIMIT = PolarityVerificationSampleLimit(8)
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,8 +123,6 @@ def score_centralized_reference(request: CentralizedScoringRequest) -> Centraliz
         destination=request.output_directory / CentralizedScoreAssetName.EVALUATION_SCORES,
     )
     _assert_higher_score_is_anomaly_evidence(model, request)
-    _assert_reload_equality(calibration)
-    _assert_reload_equality(evaluation)
     return CentralizedScoringResult(
         calibration_scores=calibration,
         evaluation_scores=evaluation,
@@ -218,7 +205,7 @@ def _score_partition(
     )
     destination.parent.mkdir(parents=True, exist_ok=True)
     output.write_parquet(destination)
-    return PooledScoreArtifact(
+    artifact = PooledScoreArtifact(
         coordinate=request.coordinate,
         partition_role=partition_role,
         checkpoint_round=request.checkpoint.round_number,
@@ -229,6 +216,8 @@ def _score_partition(
         feature_count=FeatureCount(len(request.feature_names)),
         serialization_format=SerializationFormat.PARQUET,
     )
+    _assert_reload_equality(output, artifact)
+    return artifact
 
 
 def _assert_higher_score_is_anomaly_evidence(model, request: CentralizedScoringRequest) -> None:
@@ -263,12 +252,11 @@ def _polarity_sample_matrix(frame: pl.DataFrame, feature_names: FeatureNameSeque
     return frame.select(feature_names.as_list()).head(limit).to_numpy().astype(np.float32, copy=False)
 
 
-def _assert_reload_equality(artifact: PooledScoreArtifact) -> None:
-    original = pl.read_parquet(artifact.path)
+def _assert_reload_equality(output: pl.DataFrame, artifact: PooledScoreArtifact) -> None:
     reloaded = pl.read_parquet(artifact.path)
-    if original.shape != reloaded.shape:
+    if output.shape != reloaded.shape:
         raise ArtifactIntegrityError("score reload shape mismatch", subject=ContractSubject.ARTIFACT_PATH)
-    if not original.equals(reloaded):
+    if not output.equals(reloaded):
         raise ArtifactIntegrityError("score reload equality failed", subject=ContractSubject.ARTIFACT_PATH)
     if checksum_file(artifact.path) != artifact.checksum:
         raise ArtifactIntegrityError("score checksum changed after write", subject=ContractSubject.ARTIFACT_PATH)

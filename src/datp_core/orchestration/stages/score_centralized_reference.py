@@ -12,11 +12,18 @@ from datp_core.centralized_reference.scoring import (
     CentralizedScoreAssetName,
     CentralizedScoringRequest,
     CentralizedScoringResult,
+    PooledScoreArtifact,
     score_artifact_set_checksum,
     score_centralized_reference,
 )
 from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
-from datp_core.domain.enums import ContractSubject, PublicationStatus, StageOperationId
+from datp_core.domain.enums import (
+    ContractSubject,
+    PartitionRole,
+    PublicationStatus,
+    SerializationFormat,
+    StageOperationId,
+)
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.values import (
     BatchSize,
@@ -118,14 +125,14 @@ def _is_reusable(directory: Path, request: ScoreCentralizedReferenceRequest) -> 
         return False
 
 
-def _load_reused_scores(request: ScoreCentralizedReferenceRequest) -> CentralizedScoringResult:
-    from datp_core.centralized_reference.scoring import PooledScoreArtifact
-    from datp_core.domain.enums import PartitionRole, SerializationFormat
-
+def _score_artifact_pair(
+    request: ScoreCentralizedReferenceRequest,
+    *,
+    calibration_row_count: RowCount,
+    evaluation_row_count: RowCount,
+) -> tuple[PooledScoreArtifact, PooledScoreArtifact]:
     calibration_path = request.output_directory / CentralizedScoreAssetName.CALIBRATION_SCORES
     evaluation_path = request.output_directory / CentralizedScoreAssetName.EVALUATION_SCORES
-    calibration_frame = pl.read_parquet(calibration_path)
-    evaluation_frame = pl.read_parquet(evaluation_path)
     calibration = PooledScoreArtifact(
         coordinate=request.coordinate,
         partition_role=PartitionRole.CALIBRATION,
@@ -133,7 +140,7 @@ def _load_reused_scores(request: ScoreCentralizedReferenceRequest) -> Centralize
         checkpoint_checksum=request.checkpoint.tensor_checksum,
         path=calibration_path,
         checksum=checksum_file(calibration_path),
-        row_count=RowCount(calibration_frame.height),
+        row_count=calibration_row_count,
         feature_count=FeatureCount(len(request.feature_names)),
         serialization_format=SerializationFormat.PARQUET,
     )
@@ -144,9 +151,20 @@ def _load_reused_scores(request: ScoreCentralizedReferenceRequest) -> Centralize
         checkpoint_checksum=request.checkpoint.tensor_checksum,
         path=evaluation_path,
         checksum=checksum_file(evaluation_path),
-        row_count=RowCount(evaluation_frame.height),
+        row_count=evaluation_row_count,
         feature_count=FeatureCount(len(request.feature_names)),
         serialization_format=SerializationFormat.PARQUET,
+    )
+    return calibration, evaluation
+
+
+def _load_reused_scores(request: ScoreCentralizedReferenceRequest) -> CentralizedScoringResult:
+    calibration_frame = pl.read_parquet(request.output_directory / CentralizedScoreAssetName.CALIBRATION_SCORES)
+    evaluation_frame = pl.read_parquet(request.output_directory / CentralizedScoreAssetName.EVALUATION_SCORES)
+    calibration, evaluation = _score_artifact_pair(
+        request,
+        calibration_row_count=RowCount(calibration_frame.height),
+        evaluation_row_count=RowCount(evaluation_frame.height),
     )
     return CentralizedScoringResult(
         calibration_scores=calibration,
@@ -161,36 +179,16 @@ def _rebase_scoring(
     scoring: CentralizedScoringResult,
     request: ScoreCentralizedReferenceRequest,
 ) -> CentralizedScoringResult:
-    from datp_core.centralized_reference.scoring import PooledScoreArtifact
-    from datp_core.domain.enums import PartitionRole, SerializationFormat
-
     calibration_path = request.output_directory / CentralizedScoreAssetName.CALIBRATION_SCORES
     evaluation_path = request.output_directory / CentralizedScoreAssetName.EVALUATION_SCORES
     if not calibration_path.is_file() or not evaluation_path.is_file():
         raise ArtifactIntegrityError(
             "published score partitions missing after atomic replace", subject=ContractSubject.SCORES
         )
-    calibration = PooledScoreArtifact(
-        coordinate=request.coordinate,
-        partition_role=PartitionRole.CALIBRATION,
-        checkpoint_round=request.checkpoint.round_number,
-        checkpoint_checksum=request.checkpoint.tensor_checksum,
-        path=calibration_path,
-        checksum=checksum_file(calibration_path),
-        row_count=scoring.calibration_scores.row_count,
-        feature_count=scoring.calibration_scores.feature_count,
-        serialization_format=SerializationFormat.PARQUET,
-    )
-    evaluation = PooledScoreArtifact(
-        coordinate=request.coordinate,
-        partition_role=PartitionRole.EVALUATION,
-        checkpoint_round=request.checkpoint.round_number,
-        checkpoint_checksum=request.checkpoint.tensor_checksum,
-        path=evaluation_path,
-        checksum=checksum_file(evaluation_path),
-        row_count=scoring.evaluation_scores.row_count,
-        feature_count=scoring.evaluation_scores.feature_count,
-        serialization_format=SerializationFormat.PARQUET,
+    calibration, evaluation = _score_artifact_pair(
+        request,
+        calibration_row_count=scoring.calibration_scores.row_count,
+        evaluation_row_count=scoring.evaluation_scores.row_count,
     )
     return CentralizedScoringResult(
         calibration_scores=calibration,

@@ -2,7 +2,12 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.datasets.nbaiot.schema import NBAIOT_DEVICE_IDENTITIES, NBAIOT_FEATURE_COLUMNS, parse_source_identity
+from datp_core.datasets.nbaiot.schema import (
+    NBAIOT_DEVICE_IDENTITIES,
+    NBAIOT_FEATURE_COLUMNS,
+    NBaIoTDevice,
+    parse_source_identity,
+)
 
 
 def test_audited_feature_and_device_counts() -> None:
@@ -17,7 +22,7 @@ def test_unknown_nbaio_path_is_rejected() -> None:
 
 def test_audited_attack_directory_is_interpreted_without_filename_inference() -> None:
     assert parse_source_identity(Path("Danmini_Doorbell/gafgyt_attacks/udp.csv")) == (
-        "Danmini_Doorbell",
+        NBaIoTDevice.DANMINI_DOORBELL.value,
         "attack",
         "gafgyt",
         "udp",

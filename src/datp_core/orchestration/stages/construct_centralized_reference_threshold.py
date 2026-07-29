@@ -16,7 +16,8 @@ from datp_core.centralized_reference.thresholding import (
     write_threshold_document,
 )
 from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
-from datp_core.domain.enums import PublicationStatus, StageOperationId
+from datp_core.domain.enums import ContractSubject, PublicationStatus, StageOperationId
+from datp_core.domain.errors import ArtifactIntegrityError
 from datp_core.domain.values import Checksum, checksum_file
 from datp_core.protocols.models import CentralizedQuantileProtocol
 
@@ -38,10 +39,17 @@ class ConstructCentralizedThresholdResult:
     complete_digest: Checksum
 
 
+@dataclass
+class _ThresholdBox:
+    """A single-slot mutable box for an `AtomicPublication.write` closure to populate."""
+
+    threshold: PooledThresholdResult | None = None
+
+
 def construct_centralized_reference_threshold_stage(
     request: ConstructCentralizedThresholdRequest,
 ) -> ConstructCentralizedThresholdResult:
-    holder: dict[str, PooledThresholdResult] = {}
+    box = _ThresholdBox()
 
     def write(temporary: Path) -> None:
         threshold = construct_pooled_benign_quantile(
@@ -52,7 +60,7 @@ def construct_centralized_reference_threshold_stage(
         write_threshold_document(threshold, temporary)
         digest = threshold_result_checksum(threshold)
         (temporary / CentralizedThresholdAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
-        holder["threshold"] = threshold
+        box.threshold = threshold
 
     reused = publish_atomically(
         AtomicPublication(
@@ -71,7 +79,11 @@ def construct_centralized_reference_threshold_stage(
         )
         status = PublicationStatus.REUSED
     else:
-        threshold = holder["threshold"]
+        if box.threshold is None:
+            raise ArtifactIntegrityError(
+                "centralized threshold write did not populate a result", subject=ContractSubject.THRESHOLD
+            )
+        threshold = box.threshold
         status = PublicationStatus.PUBLISHED
     return ConstructCentralizedThresholdResult(
         stage=StageOperationId.CONSTRUCT_CENTRALIZED_REFERENCE_THRESHOLD,

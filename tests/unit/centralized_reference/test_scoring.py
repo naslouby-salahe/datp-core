@@ -15,9 +15,9 @@ from tests.unit.centralized_reference.helpers import (
 
 from datp_core.centralized_reference.checkpointing import (
     FederatedCheckpointMarker,
+    reject_federated_checkpoint,
     retain_centralized_checkpoint_candidates,
 )
-from datp_core.centralized_reference.checkpointing import reject_federated_checkpoint
 from datp_core.centralized_reference.scoring import (
     CentralizedScoringRequest,
     load_score_frame,

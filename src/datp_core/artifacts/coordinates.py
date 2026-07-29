@@ -43,10 +43,6 @@ def canonical_root_under(data_root: Path, dataset: DatasetId) -> Path:
     return data_root / ReusableDataCoordinateKind.CANONICAL / dataset.value
 
 
-def canonical_dataset_coordinate(dataset: DatasetId) -> Path:
-    return canonical_root_under(DATA_ROOT, dataset)
-
-
 def processed_root_under(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
     return (
         data_root
@@ -59,23 +55,13 @@ def processed_root_under(data_root: Path, coordinate: ReusableDataCoordinate) ->
     )
 
 
-def processed_root_coordinate(coordinate: ReusableDataCoordinate) -> Path:
-    return processed_root_under(DATA_ROOT, coordinate)
+def processed_branch_coordinate(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
+    return processed_root_under(data_root, coordinate) / coordinate.branch.value
 
 
-def processed_branch_coordinate(coordinate: ReusableDataCoordinate) -> Path:
-    return processed_root_coordinate(coordinate) / coordinate.branch.value
-
-
-def federated_client_coordinate(coordinate: ReusableDataCoordinate) -> Path:
+def federated_client_coordinate(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
     if coordinate.branch is not ProcessedDataBranch.FEDERATED:
         raise ValueError("only federated coordinates may include client identity")
     if coordinate.client_identity is None:
         raise ValueError("federated client coordinates require a client identity")
-    return processed_branch_coordinate(coordinate) / coordinate.client_identity.value
-
-
-def reusable_coordinate_path(coordinate: ReusableDataCoordinate) -> Path:
-    if coordinate.client_identity is None:
-        return processed_branch_coordinate(coordinate)
-    return federated_client_coordinate(coordinate)
+    return processed_branch_coordinate(data_root, coordinate) / coordinate.client_identity.value

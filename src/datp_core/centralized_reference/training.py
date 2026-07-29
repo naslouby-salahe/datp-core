@@ -332,11 +332,15 @@ def declared_centralized_training_values() -> tuple[
     return CENTRALIZED_TRAINING_PROTOCOL, NBAIOT_AUTOENCODER, LEARNING_RATE, BATCH_SIZE, WEIGHT_DECAY
 
 
-def persist_model_tensors(model: CentralizedAutoencoder, path: Path) -> Checksum:
+def persist_state_dict_tensors(state_dict: dict[str, torch.Tensor], path: Path) -> Checksum:
     path.parent.mkdir(parents=True, exist_ok=True)
-    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in model.state_dict().items()}
+    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
     save_file(cpu_state, str(path))
     return checksum_file(path)
+
+
+def persist_model_tensors(model: CentralizedAutoencoder, path: Path) -> Checksum:
+    return persist_state_dict_tensors(model.state_dict(), path)
 
 
 def assert_safetensors_reload(

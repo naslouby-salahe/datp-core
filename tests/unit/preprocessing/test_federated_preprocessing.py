@@ -15,6 +15,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import Checksum, OutcomeLabelSequence
+from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.federated import fit_client_preprocessing, reject_centralized_state_for_client
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
@@ -50,7 +51,7 @@ def test_fit_client_preprocessing_rejects_attack_labels() -> None:
             training_matrix=matrix,
             training_row_ids=("r0", "r1"),
             training_labels=OutcomeLabelSequence(("benign", "benign")),
-            benign_label="benign",
+            benign_label=PopulationOutcomeLabel.BENIGN,
         ),
     )
     assert fitted.get_params()["with_mean"] is True
@@ -65,7 +66,7 @@ def test_fit_client_preprocessing_rejects_attack_labels() -> None:
                 training_matrix=matrix,
                 training_row_ids=("r0", "r1"),
                 training_labels=OutcomeLabelSequence(("benign", "attack")),
-                benign_label="benign",
+                benign_label=PopulationOutcomeLabel.BENIGN,
             ),
         )
 

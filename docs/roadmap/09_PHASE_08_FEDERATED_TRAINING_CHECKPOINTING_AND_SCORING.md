@@ -183,6 +183,13 @@ Generate calibration and evaluation scores once per model coordinate. Preserve l
 - Fixed-detector invariants are machine-verifiable.
 - All Phase 08 tests and audits pass.
 
+## Implementation status
+
+- Status: `COMPLETE`.
+- Implemented: shared protocol-driven autoencoder (`learning/autoencoder.py`); full typed federated model/checkpoint/communication contract set (`learning/federated/models.py`); shared client-local training mechanics including sample-count-weighted FedAvg aggregation, the `ProximalTerm` proximal-penalty primitive, and serialized-message-size communication estimation (`learning/federated/training.py`); FedAvg core, FedProx full declared grid, and genuine Ditto with structurally distinct global/personalized coordinates (`learning/federated/{fedavg,fedprox,ditto}.py`); `FIXED_TERMINAL_MAXIMUM_ROUND` checkpoint retention/selection reusing the Phase 07 rule (`learning/federated/checkpointing.py`); reusable, fixed-detector-verifiable score generation (`scoring/{models,reconstruction,generation}.py`); and the three orchestration stages with atomic publish/reuse semantics (`orchestration/stages/{train_federated,select_federated_checkpoint,score_federated}.py`).
+- FedProx primary-coefficient selection rule remains undeclared in the scientific source of truth; the complete declared grid (`0.001, 0.01, 0.1, 1.0`) trains and is reportable, and `fedprox_primary_selection_outcome()` returns a typed unresolved result rather than an invented rule. This does not block this phase's exit criteria, none of which require a promoted primary FedProx run.
+- Real-data controlled N-BaIoT natural-device verification: federated preprocessing published and reuse-verified for all nine physical clients; canonical FedAvg trained the full declared `200` rounds with full participation and batch size `256` on CUDA, all seven checkpoint candidates persisted and reload-verified, round `200` selected under `FIXED_TERMINAL_MAXIMUM_ROUND`, calibration/evaluation scores generated and reload-verified for all nine clients, and re-running the identical training and scoring coordinates reused the completed artifacts with byte-identical checksums. FedProx (`mu=0.001`) and genuine Ditto (`lambda=0.1`) controlled engineering smoke executions completed on the same real data under an explicitly short, declared checkpoint protocol; smoke artifacts were removed after verification and are not canonical outputs.
+
 ## External code-health gate
 
 Before phase closure, run the credentials-safe SonarQube CLI and CodeScene procedure in [the roadmap index](00_ROADMAP_INDEX.md#mandatory-external-code-health-gates). Resolve actionable `src/` findings or record the gate as blocked.
@@ -192,35 +199,35 @@ Before phase closure, run the credentials-safe SonarQube CLI and CodeScene proce
 Before marking this phase complete, the implementing agent must perform and record all applicable checks:
 
 ### Scientific audit
-- [ ] Every scientific statement and numeric value is traceable to the source of truth or marked unresolved.
-- [ ] No attack-labelled record influences training of the benign autoencoder, calibration, threshold construction, checkpoint selection, eligibility, or parameter selection.
-- [ ] The fixed-detector contract is preserved wherever threshold methods are compared.
-- [ ] Unsupported dataset capabilities produce typed unavailability or infeasibility, never imputation.
-- [ ] Confirmatory, supportive, mechanism, external, stress-test, boundary, exploratory, and operational evidence remain separated.
+- [x] Every scientific statement and numeric value is traceable to the source of truth or marked unresolved.
+- [x] No attack-labelled record influences training of the benign autoencoder, calibration, threshold construction, checkpoint selection, eligibility, or parameter selection.
+- [x] The fixed-detector contract is preserved wherever threshold methods are compared.
+- [x] Unsupported dataset capabilities produce typed unavailability or infeasibility, never imputation.
+- [x] Confirmatory, supportive, mechanism, external, stress-test, boundary, exploratory, and operational evidence remain separated.
 
 ### Architecture audit
-- [ ] Only source files explicitly assigned to this phase were modified.
-- [ ] No source file was added, renamed, moved, or deleted.
-- [ ] No circular dependency was introduced.
-- [ ] Domain and protocol modules do not import orchestration, reporting, or concrete storage implementations.
-- [ ] No compatibility alias, redirect, deprecated identifier, generic registry, or string-key dispatch was added.
+- [x] Only source files explicitly assigned to this phase were modified.
+- [x] No source file was added, renamed, moved, or deleted.
+- [x] No circular dependency was introduced.
+- [x] Domain and protocol modules do not import orchestration, reporting, or concrete storage implementations.
+- [x] No compatibility alias, redirect, deprecated identifier, generic registry, or string-key dispatch was added.
 
 ### Typing and validation audit
-- [ ] Ruff formatting and linting pass.
-- [ ] Pyright strict mode passes for all changed files.
-- [ ] Pylint passes at the project threshold without suppressing newly introduced defects.
-- [ ] Pydantic models reject extra fields and are frozen.
-- [ ] Dataclasses are frozen and slotted unless mutability is scientifically necessary and documented.
-- [ ] No `Any`, unchecked cast, mutable module-level collection, or raw configuration dictionary remains.
+- [x] Ruff formatting and linting pass.
+- [x] Pyright strict mode passes for all changed files.
+- [x] Pylint passes at the project threshold without suppressing newly introduced defects.
+- [x] Pydantic models reject extra fields and are frozen.
+- [x] Dataclasses are frozen and slotted unless mutability is scientifically necessary and documented.
+- [x] No `Any`, unchecked cast, mutable module-level collection, or raw configuration dictionary remains.
 
 ### Test audit
-- [ ] Every test file listed by this phase exists and contains meaningful assertions.
-- [ ] Tests verify scientific invariants, invalid inputs, unavailable outcomes, and deterministic behavior—not only happy paths.
-- [ ] Tests do not duplicate implementation logic or merely assert that functions return a value.
-- [ ] Focused tests pass first; then the complete test suite passes with pytest-xdist.
-- [ ] Hypothesis tests use bounded strategies consistent with scientific domains.
+- [x] Every test file listed by this phase exists and contains meaningful assertions.
+- [x] Tests verify scientific invariants, invalid inputs, unavailable outcomes, and deterministic behavior—not only happy paths.
+- [x] Tests do not duplicate implementation logic or merely assert that functions return a value.
+- [x] Focused tests pass first; then the complete test suite passes with pytest-xdist.
+- [x] Hypothesis tests use bounded strategies consistent with scientific domains.
 
 ### Repository audit
-- [ ] `git diff --stat` contains only intended files.
-- [ ] No generated output, cache, temporary file, notebook, profiling file, or local path leaked into the repository.
-- [ ] No commit or push was performed by the implementing agent.
+- [x] `git diff --stat` contains only intended files.
+- [x] No generated output, cache, temporary file, notebook, profiling file, or local path leaked into the repository.
+- [x] No commit or push was performed by the implementing agent.

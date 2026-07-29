@@ -11,7 +11,6 @@ from .schema import (
     NBAIOT_FEATURE_COLUMNS,
     NBAIOT_SCHEMA,
     NBaIoTCanonicalColumn,
-    NBaIoTDevice,
     device_family,
     parse_source_identity,
     source_relative_path,
@@ -23,7 +22,6 @@ class NBaIoTReader:
 
     def read(self, path: Path) -> pl.LazyFrame:
         device, label, family, subtype = parse_source_identity(path)
-        physical_client_id = NBaIoTDevice(device.lower()).value
         frame = pl.scan_csv(
             path,
             schema=pl.Schema(tuple((column, pl.Float64) for column in NBAIOT_FEATURE_COLUMNS)),
@@ -36,7 +34,7 @@ class NBaIoTReader:
             frame.with_row_index(CanonicalProvenanceColumn.SOURCE_ROW_INDEX)
             .with_columns(
                 pl.col(CanonicalProvenanceColumn.SOURCE_ROW_INDEX).cast(pl.UInt64),
-                pl.lit(physical_client_id, dtype=pl.String).alias(NBaIoTCanonicalColumn.PHYSICAL_CLIENT_ID),
+                pl.lit(device, dtype=pl.String).alias(NBaIoTCanonicalColumn.PHYSICAL_CLIENT_ID),
                 pl.lit(device_family(device).value, dtype=pl.String).alias(
                     NBaIoTCanonicalColumn.PHYSICAL_DEVICE_FAMILY
                 ),

@@ -45,7 +45,8 @@ def fit_pooled_preprocessing(
 
 def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreprocessingResult:
     context = request.context
-    relative_branch = centralized_branch_directory(
+    branch_coordinate_directory = centralized_branch_directory(
+        context.data_root,
         ReusableDataCoordinate(
             dataset=context.dataset,
             population=context.population,
@@ -54,13 +55,13 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
             preprocessing_identity=context.protocol.identity,
             branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
             client_identity=None,
-        )
+        ),
     )
     assets = core_processed_assets()
     result = publish_preprocessed_partitions(
         context=context,
         branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
-        relative_coordinate=relative_branch,
+        coordinate_directory=branch_coordinate_directory,
         fitted_estimator=request.fitted_estimator,
         partitions=request.partitions,
         row_ids=request.row_ids,

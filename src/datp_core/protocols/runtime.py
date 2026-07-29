@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from datp_core.domain.values import WorkerCount
+
 from .models import RuntimeProtocol
 
 DATA_ROOT = Path("data")
@@ -13,6 +15,6 @@ CANONICAL_RUNTIME = RuntimeProtocol(
     outputs_root=OUTPUTS_ROOT,
     results_root=RESULTS_ROOT,
     require_cuda=True,
-    worker_count=6,
+    worker_count=WorkerCount(6),
     overwrite_outputs=False,
 )

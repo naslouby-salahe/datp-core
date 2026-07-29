@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from datp_core.artifacts.coordinates import ReusableDataCoordinate
 from datp_core.artifacts.layout import (
     ProcessedAssetName,
@@ -29,9 +31,12 @@ def _coordinate(branch: ProcessedDataBranch, client: ClientIdentity | None = Non
 
 
 def test_layout_separates_federated_and_centralized_branches() -> None:
-    federated = federated_branch_directory(_coordinate(ProcessedDataBranch.FEDERATED))
-    centralized = centralized_branch_directory(_coordinate(ProcessedDataBranch.CENTRALIZED_REFERENCE))
-    client = federated_client_directory(_coordinate(ProcessedDataBranch.FEDERATED, ClientIdentity("device_a")))
+    data_root = Path("data")
+    federated = federated_branch_directory(data_root, _coordinate(ProcessedDataBranch.FEDERATED))
+    centralized = centralized_branch_directory(data_root, _coordinate(ProcessedDataBranch.CENTRALIZED_REFERENCE))
+    client = federated_client_directory(
+        data_root, _coordinate(ProcessedDataBranch.FEDERATED, ClientIdentity("device_a"))
+    )
     assert federated.name == ProcessedDataBranch.FEDERATED.value
     assert centralized.name == ProcessedDataBranch.CENTRALIZED_REFERENCE.value
     assert client.name == "device_a"

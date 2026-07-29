@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .enums import DatasetId, PopulationId, SerializationFormat, TrafficRateEvidenceType
-from .values import ByteCount, Checksum
+from .values import ByteCount, Checksum, RowCount
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,11 +12,7 @@ class SourceFileProvenance:
     path: Path
     size_bytes: ByteCount
     checksum: Checksum
-    row_count: int
-
-    def __post_init__(self) -> None:
-        if isinstance(self.row_count, bool) or not isinstance(self.row_count, int) or self.row_count < 0:
-            raise ValueError("row count must be a non-negative integer")
+    row_count: RowCount
 
 
 @dataclass(frozen=True, slots=True)

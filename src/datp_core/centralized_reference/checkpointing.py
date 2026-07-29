@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from safetensors.torch import load_file, save_file
-
 from datp_core.centralized_reference.training import (
     CentralizedModelSnapshot,
     CentralizedTrainingCoordinate,
     CentralizedTrainingResult,
-    build_centralized_autoencoder,
+    assert_safetensors_reload,
+    model_from_snapshot,
+    persist_state_dict_tensors,
 )
 from datp_core.domain.enums import (
     CheckpointSelectionRule,
@@ -26,7 +26,7 @@ from datp_core.domain.errors import (
 )
 from datp_core.domain.values import Checksum, MetricValue, RoundNumber, checksum_file, checksum_text
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
-from datp_core.runtime.compute import require_cuda_available, resolve_cuda_device
+from datp_core.runtime.compute import resolve_cuda_device
 
 
 class CentralizedCheckpointAssetName(StrEnum):
@@ -137,8 +137,8 @@ def retain_centralized_checkpoint_candidates(
     candidates: list[CentralizedCheckpointCandidate] = []
     for snapshot in snapshots:
         path = training_result.model_directory / candidate_tensor_name(snapshot.round_number)
-        checksum = _persist_snapshot(snapshot, path)
-        _verify_candidate_reload(path, autoencoder)
+        checksum = persist_state_dict_tensors(snapshot.state_dict, path)
+        _verify_candidate_reload(snapshot, path, autoencoder)
         candidates.append(
             CentralizedCheckpointCandidate(
                 coordinate=training_result.coordinate,
@@ -297,13 +297,6 @@ def candidate_set_checksum(candidates: Sequence[CentralizedCheckpointCandidate])
     return checksum_text(payload)
 
 
-def _persist_snapshot(snapshot: CentralizedModelSnapshot, path: Path) -> Checksum:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in snapshot.state_dict.items()}
-    save_file(cpu_state, str(path))
-    return checksum_file(path)
-
-
 def _reject_duplicate_or_missing_candidates(
     candidates: Sequence[CentralizedCheckpointCandidate],
     protocol: CheckpointProtocol,
@@ -345,9 +338,11 @@ def _verify_candidate_file(candidate: CentralizedCheckpointCandidate) -> None:
         )
 
 
-def _verify_candidate_reload(path: Path, autoencoder: AutoencoderProtocol) -> None:
-    require_cuda_available()
+def _verify_candidate_reload(
+    snapshot: CentralizedModelSnapshot,
+    path: Path,
+    autoencoder: AutoencoderProtocol,
+) -> None:
     device = resolve_cuda_device()
-    model = build_centralized_autoencoder(autoencoder).to(device)
-    state = load_file(str(path), device=str(device))
-    model.load_state_dict(state, strict=True)
+    model = model_from_snapshot(snapshot, autoencoder, device)
+    assert_safetensors_reload(model, path, device)

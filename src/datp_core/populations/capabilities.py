@@ -41,7 +41,7 @@ def build_population_capabilities(
         family_taxonomy=_family_status(declaration, dataset_capabilities),
         chronology=_chronology_status(declaration, dataset_capabilities),
         client_level_attack_assignment=_attack_status(declaration, dataset_capabilities),
-        fpr_evaluation=_fpr_status(declaration, dataset_capabilities),
+        fpr_evaluation=_fpr_status(dataset_capabilities),
         attack_sensitive_evaluation=_attack_metric_status(declaration, dataset_capabilities),
         temporal_support=_temporal_status(declaration, dataset_capabilities),
         valid_threshold_methods=_threshold_methods(declaration, dataset_capabilities),
@@ -93,7 +93,7 @@ def _attack_status(declaration: PopulationDeclaration, capabilities: DatasetCapa
     return capabilities.attack_assignment.status
 
 
-def _fpr_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
+def _fpr_status(capabilities: DatasetCapabilities) -> CapabilityStatus:
     return capabilities.metrics.status_for(MetricId.FALSE_POSITIVE_RATE)
 
 

@@ -261,12 +261,7 @@ def partition_assets[AssetRoleT: StrEnum](
 
 
 def canonical_data_partition_assets(partition_count: int) -> tuple[CanonicalAssetLayout[CanonicalAssetRole], ...]:
-    if partition_count < 1:
-        raise ValueError("canonical partition publication requires at least one partition")
-    return tuple(
-        CanonicalAssetLayout(DATA_ROOT / f"part-{index:05d}.parquet", CanonicalAssetRole.CANONICAL_DATA)
-        for index in range(partition_count)
-    )
+    return partition_assets(partition_count, Path("."), CanonicalAssetRole.CANONICAL_DATA)
 
 
 def named_assets[AssetRoleT: StrEnum](

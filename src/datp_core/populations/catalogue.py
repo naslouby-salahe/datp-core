@@ -233,6 +233,7 @@ def build_preprocessing_handoff(request: PreprocessingHandoffRequest) -> Preproc
             population=construction.population,
             partition_seed=partition_seed,
             client_counts=tuple(
+                # deployment_fallback signal is not yet wired; membership belongs to Phase 12 campaign scope.
                 ClientPartitionCounts(client_id, 0, 0, 0, False, False)
                 for client_id in construction.manifest.document.candidate_clients
             ),
@@ -323,6 +324,7 @@ def _client_partition_counts(
             benign_evaluation_count=int(row[2]),
             attack_evaluation_count=int(row[3]),
             accepted=str(row[0]) in accepted,
+            # deployment_fallback signal is not yet wired; membership belongs to Phase 12 campaign scope.
             deployment_fallback=False,
         )
         for row in joined.iter_rows()

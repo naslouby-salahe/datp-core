@@ -199,14 +199,12 @@ def source_relative_path(path: Path) -> Path:
 
 
 def _benign_source_identity(parts: tuple[str, ...]) -> tuple[str, str, None, None]:
-    device = parts[-2]
-    _device(device)
+    device = _device(parts[-2]).value
     return device, NBaIoTSourceLabel.BENIGN.value, None, None
 
 
 def _attack_source_identity(parts: tuple[str, ...], subtype: str) -> tuple[str, str, str, str]:
-    device = parts[-3]
-    _device(device)
+    device = _device(parts[-3]).value
     attack_directory = parts[-2]
     if not attack_directory.endswith(NBaIoTArtifactName.ATTACK_DIRECTORY_SUFFIX):
         raise ValueError("unrecognized N-BaIoT attack path")

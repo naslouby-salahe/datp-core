@@ -1,12 +1,14 @@
 """Scientific leakage and schema validation for preprocessing."""
 
 from collections.abc import Mapping, Sequence
+from itertools import combinations
 from pathlib import Path
 
 import numpy as np
 import polars as pl
 
 from datp_core.artifacts.layout import ProcessedAssetName, asset_for_partition, core_processed_asset_names
+from datp_core.artifacts.reload_validation import TransformReloadCheck, reload_and_compare_transform
 from datp_core.artifacts.serialization import (
     TrustedScaler,
     clone_trusted_scaler,
@@ -14,14 +16,22 @@ from datp_core.artifacts.serialization import (
     serialize_estimator,
 )
 from datp_core.artifacts.store import ProcessedPublication, ProcessedPublicationResult, publish_processed
+from datp_core.datasets.models import CanonicalPublicationArtifact
 from datp_core.domain.enums import (
     ContractSubject,
+    DatasetId,
     PartitionRole,
     PreprocessingFitScope,
     ProcessedDataBranch,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, ClientIdentity, OutcomeLabelSequence, checksum_file, checksum_text
+from datp_core.populations.models import (
+    OUTCOME_LABEL_COLUMN,
+    PARTITION_ROLE_COLUMN,
+    STABLE_ROW_ID_COLUMN,
+    PopulationOutcomeLabel,
+)
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     FittedStatePublishSpec,
@@ -58,6 +68,33 @@ def require_core_partitions(
             )
 
 
+def extract_core_partitions(
+    frame: pl.DataFrame,
+    feature_names: tuple[str, ...],
+    *,
+    branch: ProcessedDataBranch,
+    deterministic_sort: bool,
+) -> tuple[Mapping[PartitionRole, pl.DataFrame], Mapping[PartitionRole, tuple[str, ...]], OutcomeLabelSequence]:
+    partitions: dict[PartitionRole, pl.DataFrame] = {}
+    row_ids: dict[PartitionRole, tuple[str, ...]] = {}
+    keep = [STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names]
+    for role in _CORE_PARTITION_ROLES:
+        role_frame = frame.filter(pl.col(PARTITION_ROLE_COLUMN) == role.value).select(keep)
+        if deterministic_sort:
+            role_frame = role_frame.sort([STABLE_ROW_ID_COLUMN])
+        if role_frame.height == 0:
+            raise ScientificContractError(
+                f"{branch.value} partition {role.value} is empty",
+                subject=role,
+            )
+        partitions[role] = role_frame
+        row_ids[role] = tuple(str(value) for value in role_frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
+    training_labels = OutcomeLabelSequence(
+        tuple(str(value) for value in partitions[PartitionRole.TRAIN].get_column(OUTCOME_LABEL_COLUMN).to_list())
+    )
+    return partitions, row_ids, training_labels
+
+
 def validate_train_only_fit(fit_partition: PartitionRole) -> None:
     if fit_partition is not PartitionRole.TRAIN:
         raise LeakageError("preprocessing may fit only on training rows", subject=fit_partition)
@@ -75,17 +112,13 @@ def validate_no_partition_overlap(
         (PartitionRole.EVALUATION, frozenset(evaluation_ids)),
         (PartitionRole.FUTURE_RECALIBRATION, frozenset(future_ids)),
     )
-    for left_role, left_ids in groups:
-        for right_role, right_ids in groups:
-            if left_role.value >= right_role.value:
-                continue
-            overlap = left_ids & right_ids
-            if overlap:
-                raise LeakageError(
-                    f"source-row overlap between {left_role.value} and {right_role.value}: "
-                    f"{next(iter(sorted(overlap)))}",
-                    subject=left_role,
-                )
+    for (left_role, left_ids), (right_role, right_ids) in combinations(groups, 2):
+        overlap = left_ids & right_ids
+        if overlap:
+            raise LeakageError(
+                f"source-row overlap between {left_role.value} and {right_role.value}: {next(iter(sorted(overlap)))}",
+                subject=left_role,
+            )
 
 
 def validate_finite_matrix(matrix: np.ndarray, subject: PartitionRole | ContractSubject) -> None:
@@ -129,9 +162,17 @@ def validate_branch_isolation(
         )
 
 
-def validate_no_attack_labels_in_fit(labels: OutcomeLabelSequence, benign_label: str) -> None:
-    if any(label != benign_label for label in labels):
+def validate_no_attack_labels_in_fit(labels: OutcomeLabelSequence, benign_label: PopulationOutcomeLabel) -> None:
+    if any(label != benign_label.value for label in labels):
         raise LeakageError("attack-labelled rows cannot enter benign preprocessing fit", subject=ContractSubject.LABEL)
+
+
+def require_canonical_publication_complete(canonical_root: Path, dataset: DatasetId, stage_description: str) -> None:
+    if not (canonical_root / CanonicalPublicationArtifact.COMPLETE).is_file():
+        raise ScientificContractError(
+            f"canonical COMPLETE marker is required before {stage_description}",
+            subject=dataset,
+        )
 
 
 def successful_preprocessing_validation_report() -> PreprocessingValidationReport:
@@ -212,15 +253,11 @@ def fit_trusted_batch(
     return fitted
 
 
-def publication_target(data_root: Path, relative_coordinate: Path) -> Path:
-    return data_root.joinpath(*relative_coordinate.parts[1:])
-
-
 def publish_preprocessed_partitions(
     *,
     context: PreprocessingPublishContext,
     branch: ProcessedDataBranch,
-    relative_coordinate: Path,
+    coordinate_directory: Path,
     fitted_estimator: TrustedScaler,
     partitions: Mapping[PartitionRole, pl.DataFrame],
     row_ids: Mapping[PartitionRole, Sequence[str]],
@@ -237,7 +274,7 @@ def publish_preprocessed_partitions(
     validate_transformed_schema(context.protocol, context.protocol.transformed_schema)
     return publish_processed(
         ProcessedPublication(
-            coordinate_directory=publication_target(context.data_root, relative_coordinate),
+            coordinate_directory=coordinate_directory,
             manifest=build_preprocessing_manifest(context, branch=branch, asset_paths=asset_paths),
             schema=context.protocol.transformed_schema,
             validation_report=successful_preprocessing_validation_report(),
@@ -271,11 +308,18 @@ def write_fitted_transformed_partitions(
     feature_names = protocol.input_feature_names
     transformed_names = protocol.transformed_schema.feature_names
     train_matrix = partitions[PartitionRole.TRAIN].select(feature_names).to_numpy()
-    validate_finite_matrix(
-        transform_feature_matrix(fitted_estimator, train_matrix, PartitionRole.TRAIN),
-        PartitionRole.TRAIN,
+    train_transformed = transform_feature_matrix(fitted_estimator, train_matrix, PartitionRole.TRAIN)
+    state_path = temporary / ProcessedAssetName.STATE
+    serialize_estimator(fitted_estimator, state_path)
+    reload_and_compare_transform(
+        TransformReloadCheck(
+            state_path=state_path,
+            class_name=protocol.estimator_class_name,
+            absolute_tolerance=protocol.numerical_equivalence_absolute_tolerance,
+            source_matrix=train_matrix,
+            expected_transformed=train_transformed,
+        )
     )
-    serialize_estimator(fitted_estimator, temporary / ProcessedAssetName.STATE)
     for role in _CORE_PARTITION_ROLES:
         matrix = partitions[role].select(feature_names).to_numpy()
         transformed = transform_feature_matrix(fitted_estimator, matrix, role)

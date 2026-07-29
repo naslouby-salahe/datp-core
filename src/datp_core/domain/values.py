@@ -197,6 +197,11 @@ class DataLoaderWorkerCount(NonNegativeIntegerValue):
 
 
 @dataclass(frozen=True, slots=True)
+class WorkerCount(PositiveIntegerValue):
+    validation_name: ClassVar[str] = "worker count"
+
+
+@dataclass(frozen=True, slots=True)
 class FeatureCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "feature count"
 

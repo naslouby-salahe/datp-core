@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from datp_core.anchor.models import (
     AbsoluteToleranceRule,
     AnchorComparisonDecision,
-    AnchorComparisonStrategy,
     AnchorDiscrepancyReason,
     AnchorMetricComparison,
     AnchorMetricReference,
@@ -17,7 +16,6 @@ from datp_core.anchor.models import (
     RelativeToleranceRule,
     SourceDefinedRule,
 )
-from datp_core.domain.enums import CheckpointStatus, FederatedThresholdMethod, MetricId, PopulationId, TrainingModelId
 from datp_core.domain.values import (
     MetricValue,
     floats_absolutely_close,
@@ -115,14 +113,6 @@ def full_precision_failure_stands_despite_rounded_equality(
     if full_precision_decision is AnchorComparisonDecision.EQUIVALENT:
         return False
     return floats_exactly_equal(round(expected, presentation_decimals), round(observed, presentation_decimals))
-
-
-def values_within_absolute_tolerance(expected: float, observed: float, absolute_tolerance: MetricValue) -> bool:
-    return floats_match(expected, observed, absolute_tolerance=absolute_tolerance)
-
-
-def strategy_of(rule: AnchorToleranceRule) -> AnchorComparisonStrategy:
-    return rule.strategy
 
 
 def _compare_with_rule(
@@ -265,30 +255,6 @@ def _coordinate_mismatch_reason(
         (
             observation.checkpoint_status is not reference.checkpoint_status,
             AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS,
-        ),
-        (
-            observation.checkpoint_status is not CheckpointStatus.HISTORICAL_ENDPOINT,
-            AnchorDiscrepancyReason.WRONG_CHECKPOINT_SEMANTICS,
-        ),
-        (
-            observation.population is not PopulationId.NBAIOT_NATURAL_DEVICES,
-            AnchorDiscrepancyReason.WRONG_POPULATION,
-        ),
-        (
-            observation.training_model is not TrainingModelId.FEDAVG_AUTOENCODER,
-            AnchorDiscrepancyReason.WRONG_TRAINING_MODEL,
-        ),
-        (
-            observation.threshold_method
-            not in {
-                FederatedThresholdMethod.SHARED_THRESHOLD,
-                FederatedThresholdMethod.LOCAL_THRESHOLD,
-            },
-            AnchorDiscrepancyReason.WRONG_THRESHOLD_METHOD,
-        ),
-        (
-            observation.metric is not MetricId.FPR_COEFFICIENT_OF_VARIATION,
-            AnchorDiscrepancyReason.WRONG_METRIC,
         ),
     )
     for failed, reason in checks:

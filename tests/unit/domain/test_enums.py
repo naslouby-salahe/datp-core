@@ -17,6 +17,7 @@ from datp_core.domain.enums import (
     ClusterThresholdAggregation,
     CompletionStatus,
     ConfirmatoryDeltaDirection,
+    ContractSubject,
     DatasetId,
     EffectSizeId,
     EvaluationCohort,
@@ -47,12 +48,11 @@ from datp_core.domain.enums import (
     StatisticalTestId,
     TemporalState,
     TrafficRateEvidenceType,
+    TrainingHistoryColumn,
     TrainingModelId,
     TrustedEstimatorClassName,
     TrustedEstimatorModule,
     WarningCode,
-    ContractSubject,
-    TrainingHistoryColumn,
 )
 
 EXPECTED_MEMBERS = (

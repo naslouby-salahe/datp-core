@@ -147,7 +147,7 @@ def validate_chronology(group_identity: str, csv_path: Path, pcap_path: Path) ->
     try:
         aligner = _PcapAligner(csv_path, pcap_path)
         aligner.align_all()
-    except (OSError, ValueError, csv.Error, struct.error) as error:
+    except (ValueError, csv.Error) as error:
         return PcapChronology(
             pcap_path,
             _unavailable_validation(group_identity, csv_path, f"PCAP alignment could not be verified: {error}"),
