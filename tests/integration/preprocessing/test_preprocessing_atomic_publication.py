@@ -48,6 +48,9 @@ def test_partial_asset_is_rebuilt_after_cleanup(tmp_path: Path) -> None:
         PartitionRole.CALIBRATION: ("c0",),
         PartitionRole.EVALUATION: ("e0",),
     }
+    fitted = construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER).fit(
+        partitions[PartitionRole.TRAIN].select(list(protocol.input_feature_names)).to_numpy()
+    )
     first = publish_client_preprocessing(
         ClientPublishRequest(
             context=PreprocessingPublishContext(
@@ -60,7 +63,7 @@ def test_partial_asset_is_rebuilt_after_cleanup(tmp_path: Path) -> None:
                 data_root=tmp_path / "data",
             ),
             client_identity=ClientIdentity("device_a"),
-            fitted_estimator=construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER),
+            fitted_estimator=fitted,
             partitions=partitions,
             row_ids=row_ids,
         )
@@ -78,7 +81,7 @@ def test_partial_asset_is_rebuilt_after_cleanup(tmp_path: Path) -> None:
                 data_root=tmp_path / "data",
             ),
             client_identity=ClientIdentity("device_a"),
-            fitted_estimator=construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER),
+            fitted_estimator=fitted,
             partitions=partitions,
             row_ids=row_ids,
         )

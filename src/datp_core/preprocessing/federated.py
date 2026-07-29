@@ -14,7 +14,7 @@ from datp_core.artifacts.layout import (
 )
 from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.domain.enums import PartitionRole, PreprocessingFitScope, ProcessedDataBranch
-from datp_core.domain.errors import LeakageError
+from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import ClientIdentity
 from datp_core.preprocessing.models import (
     ClientPreprocessingResult,
@@ -48,7 +48,20 @@ def fit_client_preprocessing(
     estimator: TrustedScaler,
     batch: PreprocessingFitBatch,
 ) -> TrustedScaler:
+    if protocol.fit_scope is not PreprocessingFitScope.CLIENT_LOCAL_TRAINING:
+        raise ScientificContractError(
+            "fit_client_preprocessing requires CLIENT_LOCAL_TRAINING fit scope",
+            subject=protocol.fit_scope,
+        )
     return fit_trusted_batch(protocol, estimator, batch, subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING)
+
+
+def fit_federated_preprocessing(
+    protocol: PreprocessingProtocol,
+    estimator: TrustedScaler,
+    batch: PreprocessingFitBatch,
+) -> TrustedScaler:
+    return fit_trusted_batch(protocol, estimator, batch, subject=protocol.fit_scope)
 
 
 def transform_partition(fitted_estimator: TrustedScaler, matrix: np.ndarray, subject: PartitionRole) -> np.ndarray:
@@ -76,7 +89,7 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
         fitted_estimator=request.fitted_estimator,
         partitions=request.partitions,
         row_ids=request.row_ids,
-        fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
+        fit_scope=context.protocol.fit_scope,
         asset_paths=tuple(f"{request.client_identity.value}/{asset.value}" for asset in assets),
     )
     state = fitted_state_after_publish(
@@ -96,6 +109,7 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
         evaluation_path=client_asset_path(result.coordinate_directory, ProcessedAssetName.EVALUATION),
         fitted_state=state,
         transformed_schema=context.protocol.transformed_schema,
+        publication_status=result.publication_status,
     )
 
 

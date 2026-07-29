@@ -67,6 +67,9 @@ def _publish(tmp_path: Path, seed: int, identity: PreprocessingProtocolId) -> Pa
         numerical_equivalence_absolute_tolerance=1e-12,
     )
     partitions, row_ids = _partitions()
+    fitted = construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER).fit(
+        partitions[PartitionRole.TRAIN].select(list(protocol.input_feature_names)).to_numpy()
+    )
     result = publish_client_preprocessing(
         ClientPublishRequest(
             context=PreprocessingPublishContext(
@@ -79,7 +82,7 @@ def _publish(tmp_path: Path, seed: int, identity: PreprocessingProtocolId) -> Pa
                 data_root=tmp_path / "data",
             ),
             client_identity=ClientIdentity("device_a"),
-            fitted_estimator=construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER),
+            fitted_estimator=fitted,
             partitions=partitions,
             row_ids=row_ids,
         )

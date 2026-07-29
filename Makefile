@@ -1,4 +1,4 @@
-.PHONY: format format-check lint pylint typecheck test test-parallel nox materialize-canonical sonar-analyze codescene-delta code-health
+.PHONY: format format-check lint pylint typecheck test test-parallel nox materialize-canonical preprocess-federated preprocess-centralized-reference sonar-analyze codescene-delta code-health
 
 UV ?= uv
 SONAR ?= $(HOME)/.local/share/sonarqube-cli/bin/sonar
@@ -35,6 +35,31 @@ nox:
 
 materialize-canonical:
 	$(UV) run datp-core materialize-canonical-datasets
+
+# Explicit scientific coordinates are required; no Makefile defaults for seed or population.
+preprocess-federated:
+	@test -n "$(POPULATION)" || (echo "POPULATION is required" >&2; exit 1)
+	@test -n "$(PARTITION_SEED)" || (echo "PARTITION_SEED is required" >&2; exit 1)
+	@test -n "$(SPLIT_PROTOCOL)" || (echo "SPLIT_PROTOCOL is required" >&2; exit 1)
+	@test -n "$(PREPROCESSING_IDENTITY)" || (echo "PREPROCESSING_IDENTITY is required" >&2; exit 1)
+	$(UV) run datp-core preprocess-federated \
+		--population "$(POPULATION)" \
+		--partition-seed "$(PARTITION_SEED)" \
+		--split-protocol "$(SPLIT_PROTOCOL)" \
+		--preprocessing-identity "$(PREPROCESSING_IDENTITY)" \
+		$(if $(PARTITION_KIND),--partition-kind "$(PARTITION_KIND)",) \
+		$(if $(CONCENTRATION),--concentration "$(CONCENTRATION)",)
+
+preprocess-centralized-reference:
+	@test -n "$(POPULATION)" || (echo "POPULATION is required" >&2; exit 1)
+	@test -n "$(PARTITION_SEED)" || (echo "PARTITION_SEED is required" >&2; exit 1)
+	@test -n "$(SPLIT_PROTOCOL)" || (echo "SPLIT_PROTOCOL is required" >&2; exit 1)
+	$(UV) run datp-core preprocess-centralized-reference \
+		--population "$(POPULATION)" \
+		--partition-seed "$(PARTITION_SEED)" \
+		--split-protocol "$(SPLIT_PROTOCOL)" \
+		$(if $(PARTITION_KIND),--partition-kind "$(PARTITION_KIND)",) \
+		$(if $(CONCENTRATION),--concentration "$(CONCENTRATION)",)
 
 # Loads untracked .env into the recipe environment without printing secrets.
 define load-local-env

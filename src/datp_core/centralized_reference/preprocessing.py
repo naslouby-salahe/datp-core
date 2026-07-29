@@ -82,6 +82,7 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
         evaluation_path=branch_asset_path(result.coordinate_directory, ProcessedAssetName.EVALUATION),
         fitted_state=state,
         transformed_schema=context.protocol.transformed_schema,
+        publication_status=result.publication_status,
     )
 
 

@@ -26,6 +26,9 @@ from datp_core.populations.ciciot_file_clients import build_ciciot_file_clients
 from datp_core.populations.edge_sensor_groups import build_edge_sensor_groups
 from datp_core.populations.edge_temporal_groups import build_edge_temporal_groups
 from datp_core.populations.models import (
+    CLIENT_ID_COLUMN,
+    PARTITION_ROLE_COLUMN,
+    STABLE_ROW_ID_COLUMN,
     ChronologicalPartitionDiagnostics,
     CohortAggregationColumn,
     ControlledPartitionCondition,
@@ -35,6 +38,7 @@ from datp_core.populations.models import (
     PopulationManifest,
     PopulationOutcomeLabel,
     SplitConstructionRequest,
+    canonical_data_glob,
 )
 from datp_core.populations.nbaiot_dirichlet_clients import build_nbaiot_dirichlet_clients
 from datp_core.populations.nbaiot_natural_devices import build_nbaiot_natural_devices
@@ -253,6 +257,33 @@ def build_preprocessing_handoff(request: PreprocessingHandoffRequest) -> Preproc
         client_counts=counts,
     )
     return PreprocessingHandoff(construction.manifest, membership, assignments, cohort)
+
+
+def join_handoff_with_canonical_features(
+    canonical_root: Path,
+    handoff: PreprocessingHandoff,
+    feature_names: tuple[str, ...],
+) -> pl.DataFrame:
+    """Join split assignments to canonical feature columns for preprocess publication."""
+    assignments = handoff.assignments
+    if assignments.height == 0:
+        raise ScientificContractError(
+            "preprocessing handoff produced empty split assignments",
+            subject=handoff.population_manifest.document.population,
+        )
+    feature_scan = pl.scan_parquet(canonical_data_glob(canonical_root)).select([STABLE_ROW_ID_COLUMN, *feature_names])
+    joined = (
+        assignments.lazy()
+        .join(feature_scan, on=STABLE_ROW_ID_COLUMN, how="inner")
+        .collect()
+        .sort([CLIENT_ID_COLUMN, PARTITION_ROLE_COLUMN, STABLE_ROW_ID_COLUMN])
+    )
+    if joined.height != assignments.height:
+        raise ScientificContractError(
+            "canonical feature join lost assignment rows",
+            subject=handoff.population_manifest.document.dataset,
+        )
+    return joined
 
 
 def _client_partition_counts(

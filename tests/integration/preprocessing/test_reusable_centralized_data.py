@@ -48,6 +48,9 @@ def test_centralized_publication_is_independent_and_reusable(tmp_path: Path) -> 
         PartitionRole.EVALUATION: ("e0",),
     }
     data_root = tmp_path / "data"
+    fitted = construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER).fit(
+        partitions[PartitionRole.TRAIN].select(list(protocol.input_feature_names)).to_numpy()
+    )
     first = publish_pooled_preprocessing(
         PooledPublishRequest(
             context=PreprocessingPublishContext(
@@ -59,7 +62,7 @@ def test_centralized_publication_is_independent_and_reusable(tmp_path: Path) -> 
                 canonical_schema_checksum=Checksum("d" * 64),
                 data_root=data_root,
             ),
-            fitted_estimator=construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER),
+            fitted_estimator=fitted,
             partitions=partitions,
             row_ids=row_ids,
         )
@@ -75,7 +78,7 @@ def test_centralized_publication_is_independent_and_reusable(tmp_path: Path) -> 
                 canonical_schema_checksum=Checksum("d" * 64),
                 data_root=data_root,
             ),
-            fitted_estimator=construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER),
+            fitted_estimator=fitted,
             partitions=partitions,
             row_ids=row_ids,
         )

@@ -14,7 +14,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorModule,
 )
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import OutcomeLabelSequence, Checksum
+from datp_core.domain.values import Checksum, OutcomeLabelSequence
 from datp_core.preprocessing.federated import fit_client_preprocessing, reject_centralized_state_for_client
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,

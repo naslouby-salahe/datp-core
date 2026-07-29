@@ -14,6 +14,7 @@ from datp_core.domain.enums import (
     PreprocessingFitScope,
     PreprocessingProtocolId,
     ProcessedDataBranch,
+    PublicationStatus,
     SerializationFormat,
     SplitProtocolId,
     TrustedEstimatorClassName,
@@ -137,6 +138,7 @@ class ClientPreprocessingResult:
     evaluation_path: Path
     fitted_state: FittedPreprocessingState
     transformed_schema: TransformedSchema
+    publication_status: PublicationStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -146,6 +148,7 @@ class PooledPreprocessingResult:
     evaluation_path: Path
     fitted_state: FittedPreprocessingState
     transformed_schema: TransformedSchema
+    publication_status: PublicationStatus
 
 
 class PreprocessingManifest(StrictModel):

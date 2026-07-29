@@ -39,13 +39,17 @@ def raw_dataset_root(dataset: DatasetId) -> Path:
     return DATA_ROOT / ReusableDataCoordinateKind.RAW / raw_dataset_directory(dataset).value
 
 
+def canonical_root_under(data_root: Path, dataset: DatasetId) -> Path:
+    return data_root / ReusableDataCoordinateKind.CANONICAL / dataset.value
+
+
 def canonical_dataset_coordinate(dataset: DatasetId) -> Path:
-    return DATA_ROOT / ReusableDataCoordinateKind.CANONICAL / dataset.value
+    return canonical_root_under(DATA_ROOT, dataset)
 
 
-def processed_root_coordinate(coordinate: ReusableDataCoordinate) -> Path:
+def processed_root_under(data_root: Path, coordinate: ReusableDataCoordinate) -> Path:
     return (
-        DATA_ROOT
+        data_root
         / ReusableDataCoordinateKind.PROCESSED
         / coordinate.dataset.value
         / coordinate.population.value
@@ -53,6 +57,10 @@ def processed_root_coordinate(coordinate: ReusableDataCoordinate) -> Path:
         / coordinate.split_protocol_identity.value
         / coordinate.preprocessing_identity.value
     )
+
+
+def processed_root_coordinate(coordinate: ReusableDataCoordinate) -> Path:
+    return processed_root_under(DATA_ROOT, coordinate)
 
 
 def processed_branch_coordinate(coordinate: ReusableDataCoordinate) -> Path:

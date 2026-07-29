@@ -9,6 +9,7 @@ from datp_core.domain.enums import (
     PopulationId,
     PreprocessingFitScope,
     PreprocessingProtocolId,
+    PublicationStatus,
     SerializationFormat,
     SplitProtocolId,
     TrustedEstimatorClassName,
@@ -53,10 +54,16 @@ def _partitions() -> tuple[dict[PartitionRole, pl.DataFrame], dict[PartitionRole
     return partitions, row_ids
 
 
+def _fitted_estimator(partitions: dict[PartitionRole, pl.DataFrame], feature_names: tuple[str, ...]):
+    matrix = partitions[PartitionRole.TRAIN].select(list(feature_names)).to_numpy()
+    return construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER).fit(matrix)
+
+
 def test_identical_coordinates_reuse_completed_federated_asset(tmp_path: Path) -> None:
     data_root = tmp_path / "data"
     protocol = _protocol()
     partitions, row_ids = _partitions()
+    fitted = _fitted_estimator(partitions, protocol.input_feature_names)
     first = publish_client_preprocessing(
         ClientPublishRequest(
             context=PreprocessingPublishContext(
@@ -69,7 +76,7 @@ def test_identical_coordinates_reuse_completed_federated_asset(tmp_path: Path) -
                 data_root=data_root,
             ),
             client_identity=ClientIdentity("device_a"),
-            fitted_estimator=construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER),
+            fitted_estimator=fitted,
             partitions=partitions,
             row_ids=row_ids,
         )
@@ -86,13 +93,15 @@ def test_identical_coordinates_reuse_completed_federated_asset(tmp_path: Path) -
                 data_root=data_root,
             ),
             client_identity=ClientIdentity("device_a"),
-            fitted_estimator=construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER),
+            fitted_estimator=fitted,
             partitions=partitions,
             row_ids=row_ids,
         )
     )
     assert first.train_path == second.train_path
     assert first.train_path.is_file()
+    assert first.publication_status is PublicationStatus.PUBLISHED
+    assert second.publication_status is PublicationStatus.REUSED
     assert (first.train_path.parent / "COMPLETE").is_file()
     assert "=" not in str(first.train_path)
     assert "client" not in first.train_path.parts

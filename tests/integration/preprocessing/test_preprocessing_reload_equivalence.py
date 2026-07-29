@@ -73,7 +73,7 @@ def test_reload_transform_matches_pre_save_transform(tmp_path: Path) -> None:
                 data_root=tmp_path / "data",
             ),
             client_identity=ClientIdentity("device_a"),
-            fitted_estimator=construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER),
+            fitted_estimator=estimator,
             partitions=partitions,
             row_ids=row_ids,
         )

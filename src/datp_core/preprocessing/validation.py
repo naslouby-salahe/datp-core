@@ -7,7 +7,12 @@ import numpy as np
 import polars as pl
 
 from datp_core.artifacts.layout import ProcessedAssetName, asset_for_partition, core_processed_asset_names
-from datp_core.artifacts.serialization import TrustedScaler, clone_trusted_scaler, serialize_estimator
+from datp_core.artifacts.serialization import (
+    TrustedScaler,
+    clone_trusted_scaler,
+    resolve_trusted_estimator_type,
+    serialize_estimator,
+)
 from datp_core.artifacts.store import ProcessedPublication, ProcessedPublicationResult, publish_processed
 from datp_core.domain.enums import (
     ContractSubject,
@@ -258,15 +263,22 @@ def write_fitted_transformed_partitions(
     fitted_estimator: TrustedScaler,
     partitions: Mapping[PartitionRole, pl.DataFrame],
 ) -> None:
-    fitted_clone = clone_trusted_scaler(fitted_estimator, protocol.estimator_class_name)
+    if type(fitted_estimator) is not resolve_trusted_estimator_type(protocol.estimator_class_name):
+        raise ScientificContractError(
+            "fitted estimator type does not match the preprocessing protocol",
+            subject=ContractSubject.FEATURES,
+        )
     feature_names = protocol.input_feature_names
     transformed_names = protocol.transformed_schema.feature_names
     train_matrix = partitions[PartitionRole.TRAIN].select(feature_names).to_numpy()
-    fitted_clone.fit(train_matrix)
-    serialize_estimator(fitted_clone, temporary / ProcessedAssetName.STATE)
+    validate_finite_matrix(
+        transform_feature_matrix(fitted_estimator, train_matrix, PartitionRole.TRAIN),
+        PartitionRole.TRAIN,
+    )
+    serialize_estimator(fitted_estimator, temporary / ProcessedAssetName.STATE)
     for role in _CORE_PARTITION_ROLES:
         matrix = partitions[role].select(feature_names).to_numpy()
-        transformed = transform_feature_matrix(fitted_clone, matrix, role)
+        transformed = transform_feature_matrix(fitted_estimator, matrix, role)
         retained = partitions[role].select(
             [column for column in partitions[role].columns if column not in feature_names]
         )
