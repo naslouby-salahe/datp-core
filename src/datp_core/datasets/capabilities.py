@@ -50,7 +50,39 @@ class MetricCapability:
     evidence: str
     reason: str
     available_metrics: tuple[MetricId, ...]
+    conditional_metrics: tuple[MetricId, ...]
     unavailable_metrics: tuple[MetricId, ...]
+
+    def __post_init__(self) -> None:
+        groups = (self.available_metrics, self.conditional_metrics, self.unavailable_metrics)
+        declared = tuple(metric for group in groups for metric in group)
+        if not declared or len(declared) != len(frozenset(declared)):
+            raise ValueError("metric capabilities must declare non-overlapping metrics")
+        statuses = frozenset(
+            status
+            for metrics, status in (
+                (self.available_metrics, CapabilityStatus.SUPPORTED),
+                (self.conditional_metrics, CapabilityStatus.CONDITIONAL),
+                (self.unavailable_metrics, CapabilityStatus.UNAVAILABLE),
+            )
+            if metrics
+        )
+        aggregate = (
+            CapabilityStatus.SUPPORTED if statuses == {CapabilityStatus.SUPPORTED} else CapabilityStatus.UNAVAILABLE
+        )
+        if len(statuses) > 1 or CapabilityStatus.CONDITIONAL in statuses:
+            aggregate = CapabilityStatus.CONDITIONAL
+        if self.status is not aggregate:
+            raise ValueError("metric capability status must match its explicit metric declarations")
+
+    def status_for(self, metric: MetricId) -> CapabilityStatus:
+        if metric in self.available_metrics:
+            return CapabilityStatus.SUPPORTED
+        if metric in self.conditional_metrics:
+            return CapabilityStatus.CONDITIONAL
+        if metric in self.unavailable_metrics:
+            return CapabilityStatus.UNAVAILABLE
+        return CapabilityStatus.UNAVAILABLE
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,6 +122,10 @@ class DatasetCapabilities:
     threshold_methods: tuple[ThresholdMethodCapability, ...]
 
     def __post_init__(self) -> None:
+        if not self.valid_populations:
+            raise ValueError("dataset capabilities require valid populations")
+        if len(self.valid_populations) != len(frozenset(self.valid_populations)):
+            raise ValueError("dataset capability populations must be unique")
         methods = tuple(capability.method for capability in self.threshold_methods)
         if len(methods) != len(frozenset(methods)):
             raise ValueError("threshold method capabilities must be unique")

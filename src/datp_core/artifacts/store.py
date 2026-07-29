@@ -24,6 +24,7 @@ from datp_core.artifacts.manifest import (
     write_transformed_schema,
     write_validation_report,
 )
+from datp_core.domain.enums import PublicationStatus
 from datp_core.domain.errors import ArtifactIntegrityError
 
 
@@ -34,7 +35,7 @@ class ProcessedPublication[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: Ba
     schema: SchemaT
     validation_report: ReportT
     writer: Callable[[Path], None]
-    required_assets: tuple[str, ...]
+    required_assets: tuple[ProcessedAssetName, ...]
     overwrite: bool
     manifest_type: type[ManifestT]
     schema_type: type[SchemaT]
@@ -44,47 +45,72 @@ class ProcessedPublication[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: Ba
 @dataclass(frozen=True, slots=True)
 class ProcessedPublicationResult[ManifestT: BaseModel]:
     coordinate_directory: Path
-    reused: bool
+    publication_status: PublicationStatus
     manifest: ManifestT
+
+
+@dataclass(frozen=True, slots=True)
+class AtomicPublication:
+    target: Path
+    overwrite: bool
+    is_reusable: Callable[[Path], bool]
+    write: Callable[[Path], None]
+    remove_target: Callable[[Path], None]
+
+
+def publish_atomically(publication: AtomicPublication) -> bool:
+    """Run the common lock, temporary-directory, and atomic-replacement lifecycle."""
+    target = publication.target
+    with FileLock(f"{target}.lock"):
+        _remove_stale_temporary_directories(target)
+        if not publication.overwrite and publication.is_reusable(target):
+            return True
+        if target.exists():
+            publication.remove_target(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        temporary = Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
+        try:
+            publication.write(temporary)
+            temporary.replace(target)
+        except Exception:
+            rmtree(temporary, ignore_errors=True)
+            raise
+    return False
 
 
 def publish_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     publication: ProcessedPublication[ManifestT, SchemaT, ReportT],
 ) -> ProcessedPublicationResult[ManifestT]:
     target = publication.coordinate_directory
-    lock_path = f"{target}.lock"
-    with FileLock(lock_path):
-        _remove_stale_temporary_directories(target)
-        if not publication.overwrite and _is_reusable(target, publication):
-            return ProcessedPublicationResult(
-                target,
-                True,
-                read_preprocessing_manifest(target, publication.manifest_type),
-            )
-        if target.exists():
-            rmtree(target)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        temporary = Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
-        try:
-            publication.writer(temporary)
-            write_preprocessing_manifest(temporary, publication.manifest)
-            write_transformed_schema(temporary, publication.schema)
-            write_validation_report(temporary, publication.validation_report)
-            manifest_payload = (temporary / ProcessedAssetName.PREPROCESSING_MANIFEST).read_text(encoding="utf-8")
-            schema_payload = (temporary / ProcessedAssetName.SCHEMA).read_text(encoding="utf-8")
-            digest = complete_digest(manifest_payload, schema_payload)
-            write_complete_marker(temporary, digest)
-            _assert_required_assets(temporary, publication.required_assets)
-            if not _is_reusable(temporary, publication):
-                raise ArtifactIntegrityError(
-                    "processed publication failed complete-asset validation",
-                    subject=str(target),
-                )
-            temporary.replace(target)
-        except Exception:
-            rmtree(temporary, ignore_errors=True)
-            raise
-    return ProcessedPublicationResult(target, False, publication.manifest)
+    reused = publish_atomically(
+        AtomicPublication(
+            target=target,
+            overwrite=publication.overwrite,
+            is_reusable=lambda directory: _is_reusable(directory, publication),
+            write=lambda temporary: _write_processed(temporary, publication),
+            remove_target=lambda directory: rmtree(directory),
+        )
+    )
+    manifest = read_preprocessing_manifest(target, publication.manifest_type) if reused else publication.manifest
+    status = PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED
+    return ProcessedPublicationResult(target, status, manifest)
+
+
+def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
+    temporary: Path, publication: ProcessedPublication[ManifestT, SchemaT, ReportT]
+) -> None:
+    publication.writer(temporary)
+    write_preprocessing_manifest(temporary, publication.manifest)
+    write_transformed_schema(temporary, publication.schema)
+    write_validation_report(temporary, publication.validation_report)
+    digest = complete_digest(
+        (temporary / ProcessedAssetName.PREPROCESSING_MANIFEST).read_text(encoding="utf-8"),
+        (temporary / ProcessedAssetName.SCHEMA).read_text(encoding="utf-8"),
+    )
+    write_complete_marker(temporary, digest)
+    _assert_required_assets(temporary, publication.required_assets)
+    if not _is_reusable(temporary, publication):
+        raise ArtifactIntegrityError("processed publication failed complete-asset validation", subject=str(temporary))
 
 
 def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
@@ -116,15 +142,15 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     return _assets_exist(target, publication.required_assets)
 
 
-def _assets_exist(directory: Path, required_assets: tuple[str, ...]) -> bool:
+def _assets_exist(directory: Path, required_assets: tuple[ProcessedAssetName, ...]) -> bool:
     return all((directory / asset).is_file() for asset in required_assets)
 
 
-def _assert_required_assets(directory: Path, required_assets: tuple[str, ...]) -> None:
+def _assert_required_assets(directory: Path, required_assets: tuple[ProcessedAssetName, ...]) -> None:
     missing = tuple(asset for asset in required_assets if not (directory / asset).is_file())
     if missing:
         raise ArtifactIntegrityError(
-            f"processed publication missing assets: {', '.join(missing)}",
+            f"processed publication missing assets: {', '.join(asset.value for asset in missing)}",
             subject=str(directory),
         )
 

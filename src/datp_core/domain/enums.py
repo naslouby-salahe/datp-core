@@ -212,6 +212,11 @@ class CapabilityStatus(StrEnum):
     NOT_APPLICABLE = "not_applicable"
 
 
+class PublicationStatus(StrEnum):
+    PUBLISHED = "published"
+    REUSED = "reused"
+
+
 class ScientificDecision(StrEnum):
     SUPPORTED = "supported"
     DIRECTIONAL_INCONCLUSIVE = "directional_inconclusive"

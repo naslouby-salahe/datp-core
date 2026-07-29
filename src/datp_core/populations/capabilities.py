@@ -6,28 +6,30 @@ from datp_core.domain.enums import (
     CapabilityStatus,
     EvidenceRole,
     FederatedThresholdMethod,
+    MetricId,
     PopulationId,
     PopulationIdentityKind,
 )
 from datp_core.domain.errors import CapabilityError
 from datp_core.populations.models import PopulationCapabilities
 from datp_core.protocols.models import PopulationDeclaration
-from datp_core.protocols.populations import POPULATIONS
 
 
 def population_declaration(population_id: PopulationId) -> PopulationDeclaration:
-    for declaration in POPULATIONS:
-        if declaration.id is population_id:
-            return declaration
-    raise CapabilityError(
-        "unknown population identity",
-        subject=population_id,
-        reason="population is absent from the locked protocol catalogue",
-    )
+    from datp_core.populations.catalogue import resolve_population
+
+    return resolve_population(population_id).declaration
 
 
 def population_capabilities(population_id: PopulationId) -> PopulationCapabilities:
-    declaration = population_declaration(population_id)
+    from datp_core.populations.catalogue import resolve_population
+
+    return resolve_population(population_id).capabilities
+
+
+def build_population_capabilities(
+    declaration: PopulationDeclaration, evidentiary_role: EvidenceRole
+) -> PopulationCapabilities:
     dataset_capabilities = dataset_binding(declaration.dataset).capabilities
     _require_population_allowed(declaration, dataset_capabilities)
     return PopulationCapabilities(
@@ -43,7 +45,7 @@ def population_capabilities(population_id: PopulationId) -> PopulationCapabiliti
         attack_sensitive_evaluation=_attack_metric_status(declaration, dataset_capabilities),
         temporal_support=_temporal_status(declaration, dataset_capabilities),
         valid_threshold_methods=_threshold_methods(declaration, dataset_capabilities),
-        evidentiary_role=_evidentiary_role(declaration.identity_kind),
+        evidentiary_role=evidentiary_role,
         confirmatory_eligible=declaration.is_confirmatory_population,
     )
 
@@ -92,9 +94,7 @@ def _attack_status(declaration: PopulationDeclaration, capabilities: DatasetCapa
 
 
 def _fpr_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
-    if declaration.identity_kind is PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS:
-        return CapabilityStatus.CONDITIONAL
-    return capabilities.metrics.status
+    return capabilities.metrics.status_for(MetricId.FALSE_POSITIVE_RATE)
 
 
 def _attack_metric_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
@@ -102,7 +102,20 @@ def _attack_metric_status(declaration: PopulationDeclaration, capabilities: Data
         return CapabilityStatus.UNAVAILABLE
     if not capabilities.attack_assignment.client_level_assignment_available:
         return CapabilityStatus.UNAVAILABLE
-    return CapabilityStatus.SUPPORTED
+    statuses = frozenset(
+        capabilities.metrics.status_for(metric)
+        for metric in (
+            MetricId.TRUE_POSITIVE_RATE,
+            MetricId.BALANCED_ACCURACY,
+            MetricId.BINARY_MACRO_F1,
+            MetricId.AUROC,
+        )
+    )
+    if statuses == {CapabilityStatus.SUPPORTED}:
+        return CapabilityStatus.SUPPORTED
+    if CapabilityStatus.CONDITIONAL in statuses:
+        return CapabilityStatus.CONDITIONAL
+    return CapabilityStatus.UNAVAILABLE
 
 
 def _temporal_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
@@ -125,17 +138,3 @@ def _threshold_methods(
     if not declaration.requires_family_taxonomy:
         return tuple(method for method in supported if method is not FederatedThresholdMethod.FAMILY_THRESHOLD)
     return supported
-
-
-def _evidentiary_role(identity_kind: PopulationIdentityKind) -> EvidenceRole:
-    match identity_kind:
-        case PopulationIdentityKind.PHYSICAL_DEVICES:
-            return EvidenceRole.CONFIRMATORY
-        case PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS:
-            return EvidenceRole.MECHANISM
-        case PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS:
-            return EvidenceRole.APPLICABILITY_BOUNDARY
-        case PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS:
-            return EvidenceRole.EXTERNAL_VALIDATION
-        case PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS:
-            return EvidenceRole.TEMPORAL_BOUNDARY

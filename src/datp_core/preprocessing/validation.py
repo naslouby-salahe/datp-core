@@ -15,7 +15,7 @@ from datp_core.domain.enums import (
     ProcessedDataBranch,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, checksum_file, checksum_text
+from datp_core.domain.values import Checksum, ClientIdentity, checksum_file, checksum_text
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     FittedStatePublishSpec,
@@ -105,7 +105,7 @@ def validate_transformed_schema(protocol: PreprocessingProtocol, schema: Transfo
 def validate_branch_isolation(
     fitted_state: FittedPreprocessingState,
     expected_branch: ProcessedDataBranch,
-    client_identity: str | None,
+    client_identity: ClientIdentity | None,
 ) -> None:
     if fitted_state.branch is not expected_branch:
         raise ScientificContractError("fitted-state branch mismatch", subject=fitted_state.branch.value)
@@ -234,7 +234,7 @@ def publish_preprocessed_partitions(
                 fitted_estimator=fitted_estimator,
                 partitions=partitions,
             ),
-            required_assets=required_core_asset_values(),
+            required_assets=core_processed_assets(),
             overwrite=False,
             manifest_type=PreprocessingManifest,
             schema_type=TransformedSchema,
@@ -270,5 +270,5 @@ def write_fitted_transformed_partitions(
         output.write_parquet(temporary / asset_for_partition(role))
 
 
-def required_core_asset_values() -> tuple[str, ...]:
-    return tuple(asset.value for asset in core_processed_asset_names())
+def core_processed_assets() -> tuple[ProcessedAssetName, ...]:
+    return core_processed_asset_names()

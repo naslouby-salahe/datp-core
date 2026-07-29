@@ -6,7 +6,14 @@ from pathlib import Path
 
 import polars as pl
 
-from datp_core.domain.enums import ControlledPartitionKind, DatasetId, PartitionRole, PopulationId, SplitProtocolId
+from datp_core.domain.enums import (
+    ControlledPartitionKind,
+    DatasetId,
+    EvidenceRole,
+    PartitionRole,
+    PopulationId,
+    SplitProtocolId,
+)
 from datp_core.domain.errors import CapabilityError, ScientificContractError
 from datp_core.domain.values import Seed
 from datp_core.evaluation.cohorts import (
@@ -14,7 +21,7 @@ from datp_core.evaluation.cohorts import (
     EvaluationCohortManifest,
     build_evaluation_cohort_manifest,
 )
-from datp_core.populations.capabilities import population_capabilities, population_declaration
+from datp_core.populations.capabilities import build_population_capabilities
 from datp_core.populations.ciciot_file_clients import build_ciciot_file_clients
 from datp_core.populations.edge_sensor_groups import build_edge_sensor_groups
 from datp_core.populations.edge_temporal_groups import build_edge_temporal_groups
@@ -33,11 +40,19 @@ from datp_core.populations.nbaiot_dirichlet_clients import build_nbaiot_dirichle
 from datp_core.populations.nbaiot_natural_devices import build_nbaiot_natural_devices
 from datp_core.populations.splits import split_membership
 from datp_core.protocols.models import PopulationDeclaration
+from datp_core.protocols.populations import (
+    CICIOT_FILE_CLIENTS,
+    EDGE_SENSOR_GROUPS,
+    EDGE_TEMPORAL_GROUPS,
+    NBAIOT_DIRICHLET_CLIENTS,
+    NBAIOT_NATURAL_DEVICES,
+)
 
 
 @dataclass(frozen=True, slots=True)
 class PopulationBinding:
     declaration: PopulationDeclaration
+    evidentiary_role: EvidenceRole
     capabilities: PopulationCapabilities
     supported_partition_kinds: frozenset[ControlledPartitionKind]
     construct: Callable[["PopulationConstructionRequest"], "PopulationConstructionResult"]
@@ -163,32 +178,37 @@ def _construct_edge_temporal_groups(request: PopulationConstructionRequest) -> P
 
 _POPULATION_BINDINGS: dict[PopulationId, PopulationBinding] = {
     PopulationId.NBAIOT_NATURAL_DEVICES: PopulationBinding(
-        population_declaration(PopulationId.NBAIOT_NATURAL_DEVICES),
-        population_capabilities(PopulationId.NBAIOT_NATURAL_DEVICES),
+        NBAIOT_NATURAL_DEVICES,
+        EvidenceRole.CONFIRMATORY,
+        build_population_capabilities(NBAIOT_NATURAL_DEVICES, EvidenceRole.CONFIRMATORY),
         frozenset(),
         _construct_nbaiot_natural,
     ),
     PopulationId.NBAIOT_DIRICHLET_CLIENTS: PopulationBinding(
-        population_declaration(PopulationId.NBAIOT_DIRICHLET_CLIENTS),
-        population_capabilities(PopulationId.NBAIOT_DIRICHLET_CLIENTS),
+        NBAIOT_DIRICHLET_CLIENTS,
+        EvidenceRole.MECHANISM,
+        build_population_capabilities(NBAIOT_DIRICHLET_CLIENTS, EvidenceRole.MECHANISM),
         frozenset(ControlledPartitionKind),
         _construct_nbaiot_dirichlet,
     ),
     PopulationId.CICIOT_FILE_CLIENTS: PopulationBinding(
-        population_declaration(PopulationId.CICIOT_FILE_CLIENTS),
-        population_capabilities(PopulationId.CICIOT_FILE_CLIENTS),
+        CICIOT_FILE_CLIENTS,
+        EvidenceRole.APPLICABILITY_BOUNDARY,
+        build_population_capabilities(CICIOT_FILE_CLIENTS, EvidenceRole.APPLICABILITY_BOUNDARY),
         frozenset(),
         _construct_ciciot_file_clients,
     ),
     PopulationId.EDGE_SENSOR_GROUPS: PopulationBinding(
-        population_declaration(PopulationId.EDGE_SENSOR_GROUPS),
-        population_capabilities(PopulationId.EDGE_SENSOR_GROUPS),
+        EDGE_SENSOR_GROUPS,
+        EvidenceRole.EXTERNAL_VALIDATION,
+        build_population_capabilities(EDGE_SENSOR_GROUPS, EvidenceRole.EXTERNAL_VALIDATION),
         frozenset(),
         _construct_edge_sensor_groups,
     ),
     PopulationId.EDGE_TEMPORAL_GROUPS: PopulationBinding(
-        population_declaration(PopulationId.EDGE_TEMPORAL_GROUPS),
-        population_capabilities(PopulationId.EDGE_TEMPORAL_GROUPS),
+        EDGE_TEMPORAL_GROUPS,
+        EvidenceRole.TEMPORAL_BOUNDARY,
+        build_population_capabilities(EDGE_TEMPORAL_GROUPS, EvidenceRole.TEMPORAL_BOUNDARY),
         frozenset(),
         _construct_edge_temporal_groups,
     ),

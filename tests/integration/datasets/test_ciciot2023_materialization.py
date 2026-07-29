@@ -8,8 +8,7 @@ from datp_core.datasets.ciciot2023.schema import (
     CICIOT2023_MODEL_INPUT_EVIDENCE_COLUMNS,
     CICIOT2023_RAW_COLUMNS,
 )
-from datp_core.datasets.models import PublicationStatus
-from datp_core.domain.enums import AvailabilityStatus
+from datp_core.domain.enums import AvailabilityStatus, PublicationStatus
 
 
 def _write_merged(path, rate: str, label: str) -> None:

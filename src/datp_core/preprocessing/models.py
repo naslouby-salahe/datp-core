@@ -19,7 +19,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorClassName,
     TrustedEstimatorModule,
 )
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.values import Checksum, ClientIdentity, Seed
 from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
 
 SCIENTIFIC_TRANSFORM_ABSOLUTE_TOLERANCE = FIXED_SCORE_ABSOLUTE_TOLERANCE.value
@@ -105,7 +105,7 @@ def _estimator_class_name(class_name: TrustedEstimatorClassName) -> str:
             return "MinMaxScaler"
 
 
-def _require_branch_client_pairing(branch: ProcessedDataBranch, client_identity: str | None) -> None:
+def _require_branch_client_pairing(branch: ProcessedDataBranch, client_identity: ClientIdentity | None) -> None:
     if branch is ProcessedDataBranch.FEDERATED:
         if not client_identity:
             raise ValueError("federated fitted state requires a client identity")
@@ -118,7 +118,7 @@ def _require_branch_client_pairing(branch: ProcessedDataBranch, client_identity:
 class FittedPreprocessingState:
     protocol: PreprocessingProtocol
     branch: ProcessedDataBranch
-    client_identity: str | None
+    client_identity: ClientIdentity | None
     estimator_path: Path
     estimator_checksum: Checksum
     transformed_schema: TransformedSchema
@@ -134,7 +134,7 @@ class FittedPreprocessingState:
 
 @dataclass(frozen=True, slots=True)
 class ClientPreprocessingResult:
-    client_identity: str
+    client_identity: ClientIdentity
     train_path: Path
     calibration_path: Path
     evaluation_path: Path
@@ -249,7 +249,7 @@ class FittedStatePublishSpec:
     branch: ProcessedDataBranch
     estimator_path: Path
     fit_row_count: int
-    client_identity: str | None = None
+    client_identity: ClientIdentity | None = None
 
 
 @dataclass(frozen=True, slots=True)

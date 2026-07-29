@@ -15,6 +15,7 @@ from datp_core.artifacts.layout import (
 from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.domain.enums import PartitionRole, PreprocessingFitScope, ProcessedDataBranch
 from datp_core.domain.errors import LeakageError
+from datp_core.domain.values import ClientIdentity
 from datp_core.preprocessing.models import (
     ClientPreprocessingResult,
     FittedPreprocessingState,
@@ -24,10 +25,10 @@ from datp_core.preprocessing.models import (
     PreprocessingPublishContext,
 )
 from datp_core.preprocessing.validation import (
+    core_processed_assets,
     fit_trusted_batch,
     fitted_state_after_publish,
     publish_preprocessed_partitions,
-    required_core_asset_values,
     transform_feature_matrix,
     validate_branch_isolation,
 )
@@ -36,7 +37,7 @@ from datp_core.preprocessing.validation import (
 @dataclass(frozen=True, slots=True)
 class ClientPublishRequest:
     context: PreprocessingPublishContext
-    client_identity: str
+    client_identity: ClientIdentity
     fitted_estimator: TrustedScaler
     partitions: Mapping[PartitionRole, pl.DataFrame]
     row_ids: Mapping[PartitionRole, Sequence[str]]
@@ -67,7 +68,7 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
             client_identity=request.client_identity,
         )
     )
-    asset_values = required_core_asset_values()
+    assets = core_processed_assets()
     result = publish_preprocessed_partitions(
         context=context,
         branch=ProcessedDataBranch.FEDERATED,
@@ -76,7 +77,7 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
         partitions=request.partitions,
         row_ids=request.row_ids,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        asset_paths=tuple(f"{request.client_identity}/{asset}" for asset in asset_values),
+        asset_paths=tuple(f"{request.client_identity.value}/{asset.value}" for asset in assets),
     )
     state = fitted_state_after_publish(
         FittedStatePublishSpec(

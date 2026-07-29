@@ -12,7 +12,7 @@ from datp_core.domain.enums import (
     ReusableDataCoordinateKind,
     SplitProtocolId,
 )
-from datp_core.domain.values import Seed
+from datp_core.domain.values import ClientIdentity, Seed
 from datp_core.protocols.runtime import DATA_ROOT
 
 
@@ -24,38 +24,11 @@ class ReusableDataCoordinate:
     split_protocol_identity: SplitProtocolId
     preprocessing_identity: PreprocessingProtocolId
     branch: ProcessedDataBranch
-    client_identity: str | None
+    client_identity: ClientIdentity | None
 
     def __post_init__(self) -> None:
-        _reject_invalid_client_token(self.client_identity)
         if self.branch is ProcessedDataBranch.CENTRALIZED_REFERENCE and self.client_identity is not None:
             raise ValueError("centralized reusable coordinates cannot include client identity")
-
-
-def _reject_invalid_client_token(client_identity: str | None) -> None:
-    if client_identity is None:
-        return
-    if not client_identity or any(separator in client_identity for separator in ("=", "/", "\\")):
-        raise ValueError("client identity must be a non-empty path token without key=value syntax")
-
-
-def assert_descriptive_segment(segment: str, subject: str) -> str:
-    invalid_reason = _descriptive_segment_failure(segment)
-    if invalid_reason is not None:
-        raise ValueError(f"{subject} {invalid_reason}")
-    return segment
-
-
-def _descriptive_segment_failure(segment: str) -> str | None:
-    if not segment:
-        return "must be a non-empty path segment"
-    if segment in {".", ".."}:
-        return "must not be a relative path token"
-    if "=" in segment:
-        return "must not use key=value path syntax"
-    if "/" in segment or "\\" in segment:
-        return "must be a single path segment"
-    return None
 
 
 def raw_dataset_directory(dataset: DatasetId) -> RawDatasetDirectory:
@@ -77,8 +50,8 @@ def processed_root_coordinate(coordinate: ReusableDataCoordinate) -> Path:
         / coordinate.dataset.value
         / coordinate.population.value
         / str(coordinate.partition_seed.value)
-        / assert_descriptive_segment(coordinate.split_protocol_identity.value, "split_protocol_identity")
-        / assert_descriptive_segment(coordinate.preprocessing_identity.value, "preprocessing_identity")
+        / coordinate.split_protocol_identity.value
+        / coordinate.preprocessing_identity.value
     )
 
 
@@ -91,16 +64,10 @@ def federated_client_coordinate(coordinate: ReusableDataCoordinate) -> Path:
         raise ValueError("only federated coordinates may include client identity")
     if coordinate.client_identity is None:
         raise ValueError("federated client coordinates require a client identity")
-    return processed_branch_coordinate(coordinate) / assert_descriptive_segment(
-        coordinate.client_identity, "client_identity"
-    )
+    return processed_branch_coordinate(coordinate) / coordinate.client_identity.value
 
 
 def reusable_coordinate_path(coordinate: ReusableDataCoordinate) -> Path:
     if coordinate.client_identity is None:
         return processed_branch_coordinate(coordinate)
     return federated_client_coordinate(coordinate)
-
-
-def path_contains_key_value_segment(path: Path) -> bool:
-    return any("=" in part for part in path.parts)

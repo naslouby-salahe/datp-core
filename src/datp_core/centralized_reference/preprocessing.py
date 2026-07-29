@@ -19,10 +19,10 @@ from datp_core.preprocessing.models import (
     PreprocessingPublishContext,
 )
 from datp_core.preprocessing.validation import (
+    core_processed_assets,
     fit_trusted_batch,
     fitted_state_after_publish,
     publish_preprocessed_partitions,
-    required_core_asset_values,
     validate_branch_isolation,
 )
 
@@ -56,7 +56,7 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
             client_identity=None,
         )
     )
-    asset_values = required_core_asset_values()
+    assets = core_processed_assets()
     result = publish_preprocessed_partitions(
         context=context,
         branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
@@ -65,7 +65,7 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
         partitions=request.partitions,
         row_ids=request.row_ids,
         fit_scope=PreprocessingFitScope.POOLED_TRAINING,
-        asset_paths=asset_values,
+        asset_paths=tuple(asset.value for asset in assets),
     )
     state = fitted_state_after_publish(
         FittedStatePublishSpec(

@@ -15,7 +15,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorClassName,
     TrustedEstimatorModule,
 )
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.values import Checksum, ClientIdentity, Seed
 from datp_core.preprocessing.federated import ClientPublishRequest, publish_client_preprocessing
 from datp_core.preprocessing.models import (
     PreprocessingProtocol,
@@ -59,7 +59,7 @@ def test_partial_asset_is_rebuilt_after_cleanup(tmp_path: Path) -> None:
                 canonical_schema_checksum=Checksum("a" * 64),
                 data_root=tmp_path / "data",
             ),
-            client_identity="device_a",
+            client_identity=ClientIdentity("device_a"),
             fitted_estimator=construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER),
             partitions=partitions,
             row_ids=row_ids,
@@ -77,7 +77,7 @@ def test_partial_asset_is_rebuilt_after_cleanup(tmp_path: Path) -> None:
                 canonical_schema_checksum=Checksum("a" * 64),
                 data_root=tmp_path / "data",
             ),
-            client_identity="device_a",
+            client_identity=ClientIdentity("device_a"),
             fitted_estimator=construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER),
             partitions=partitions,
             row_ids=row_ids,

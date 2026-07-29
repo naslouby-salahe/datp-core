@@ -4,8 +4,10 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 
+import datp_core.domain.enums as domain_enums
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
 from datp_core.domain.values import ByteCount, Checksum, checksum_text
 
@@ -75,11 +77,6 @@ class ExclusionReason(StrEnum):
     INVALID_SCHEMA = "invalid_schema"
     INVALID_VALUE = "invalid_value"
     INVALID_CHRONOLOGY = "invalid_chronology"
-
-
-class PublicationStatus(StrEnum):
-    PUBLISHED = "published"
-    REUSED = "reused"
 
 
 class CanonicalAssetRole(StrEnum):
@@ -331,7 +328,7 @@ class MaterializedDataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     schema: CanonicalSchema
     row_count: int
     source_inventory_checksum: Checksum
-    publication_status: PublicationStatus
+    publication_status: domain_enums.PublicationStatus
     inventory: RawDatasetInventory
     validation_report: DatasetValidationReport
     chronology: tuple["ChronologyValidation", ...] = ()
@@ -425,8 +422,8 @@ def _validate_chronology_counts(validation: ChronologyValidation) -> None:
         raise ValueError("parseable and invalid chronology rows must total all rows")
 
 
-class PublicationDocument(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+class PublicationDocument(StrictModel):
+    """Strict serialized dataset publication document."""
 
 
 class CanonicalColumnDocument(PublicationDocument):

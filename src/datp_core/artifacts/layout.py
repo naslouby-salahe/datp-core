@@ -6,7 +6,6 @@ from pathlib import Path
 from datp_core.artifacts.coordinates import (
     ReusableDataCoordinate,
     federated_client_coordinate,
-    path_contains_key_value_segment,
     processed_branch_coordinate,
 )
 from datp_core.domain.enums import PartitionRole, ProcessedDataBranch
@@ -53,37 +52,22 @@ def core_processed_asset_names() -> tuple[ProcessedAssetName, ...]:
 def federated_branch_directory(coordinate: ReusableDataCoordinate) -> Path:
     if coordinate.branch is not ProcessedDataBranch.FEDERATED:
         raise ValueError("federated branch directory requires the federated branch")
-    path = processed_branch_coordinate(coordinate)
-    _reject_key_value(path)
-    return path
+    return processed_branch_coordinate(coordinate)
 
 
 def centralized_branch_directory(coordinate: ReusableDataCoordinate) -> Path:
     if coordinate.branch is not ProcessedDataBranch.CENTRALIZED_REFERENCE:
         raise ValueError("centralized branch directory requires the centralized-reference branch")
-    path = processed_branch_coordinate(coordinate)
-    _reject_key_value(path)
-    return path
+    return processed_branch_coordinate(coordinate)
 
 
 def federated_client_directory(coordinate: ReusableDataCoordinate) -> Path:
-    path = federated_client_coordinate(coordinate)
-    _reject_key_value(path)
-    return path
+    return federated_client_coordinate(coordinate)
 
 
 def client_asset_path(client_directory: Path, asset: ProcessedAssetName) -> Path:
-    path = client_directory / asset.value
-    _reject_key_value(path)
-    return path
+    return client_directory / asset.value
 
 
 def branch_asset_path(branch_directory: Path, asset: ProcessedAssetName) -> Path:
-    path = branch_directory / asset.value
-    _reject_key_value(path)
-    return path
-
-
-def _reject_key_value(path: Path) -> None:
-    if path_contains_key_value_segment(path):
-        raise ValueError("reusable data layout must not contain key=value path segments")
+    return branch_directory / asset.value

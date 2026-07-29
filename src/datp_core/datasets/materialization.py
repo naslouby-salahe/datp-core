@@ -6,13 +6,13 @@ from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
 from shutil import rmtree
-from tempfile import mkdtemp
 
 import polars as pl
 import pyarrow as pa
 import pyarrow.parquet as pq
-from filelock import FileLock
 
+from datp_core.artifacts.completion import complete_digest
+from datp_core.artifacts.store import AtomicPublication, publish_atomically
 from datp_core.datasets.canonical_cache import (
     CanonicalAsset,
     CanonicalAssetLayout,
@@ -21,7 +21,6 @@ from datp_core.datasets.canonical_cache import (
     SourcePathResolver,
     canonical_asset_path,
     canonical_directory,
-    complete_content,
     completed_publication_is_reusable,
     publication_artifact_names,
     schema_checksum_document_json,
@@ -41,12 +40,11 @@ from datp_core.datasets.models import (
     MaterializedCanonicalAsset,
     MaterializedDataset,
     ModelInputEligibilityPolicy,
-    PublicationStatus,
     RawDatasetInventory,
     RawSourceFile,
     SourceFileRole,
 )
-from datp_core.domain.enums import DatasetId
+from datp_core.domain.enums import DatasetId, PublicationStatus
 from datp_core.domain.values import ByteCount, Checksum, checksum_file, checksum_text
 from datp_core.protocols.runtime import DATA_ROOT
 
@@ -313,52 +311,56 @@ def publish_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     publication: CanonicalPublication[AssetRoleT, EligibilityReasonT],
 ) -> MaterializedDataset[AssetRoleT, EligibilityReasonT]:
     target = canonical_directory(publication.canonical_root, publication.schema)
-    with FileLock(f"{target}.lock"):
-        _remove_stale_temporary_directories(target)
-        if completed_publication_is_reusable(target, publication.match_request()):
-            write_source_state(
-                target,
-                publication.schema.dataset,
-                publication.source_paths,
-                publication.source_path_resolver,
-            )
-            return _materialized_dataset(target, publication, PublicationStatus.REUSED)
-        if target.exists():
-            _remove_target(target, publication.canonical_root)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        temporary = Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
-        try:
-            assets = publication.writer(temporary)
-            _validate_written_assets(temporary, assets, publication.expected_assets, publication.schema.physical_schema)
-            serialized_schema = schema_content(publication.schema)
-            (temporary / _SCHEMA_NAME).write_text(serialized_schema, encoding="utf-8")
-            serialized_manifest = CanonicalManifest(
-                publication.schema.dataset,
-                publication.canonicalization_contract,
-                publication.schema.checksum,
-                publication.inventory,
-                publication.validation_report,
-                assets,
-                publication.chronology,
-                publication.eligibility_policy,
-            ).content()
-            (temporary / _MANIFEST_NAME).write_text(serialized_manifest, encoding="utf-8")
-            write_source_state(
-                temporary,
-                publication.schema.dataset,
-                publication.source_paths,
-                publication.source_path_resolver,
-            )
-            (temporary / _COMPLETE_NAME).write_text(
-                complete_content(serialized_manifest, serialized_schema), encoding="utf-8"
-            )
-            if not completed_publication_is_reusable(temporary, publication.match_request()):
-                raise ValueError("canonical publication did not pass complete-asset validation")
-            temporary.replace(target)
-        except Exception:
-            rmtree(temporary, ignore_errors=True)
-            raise
-    return _materialized_dataset(target, publication, PublicationStatus.PUBLISHED)
+    reused = publish_atomically(
+        AtomicPublication(
+            target=target,
+            overwrite=False,
+            is_reusable=lambda directory: completed_publication_is_reusable(directory, publication.match_request()),
+            write=lambda temporary: _write_canonical(temporary, publication),
+            remove_target=lambda directory: _remove_target(directory, publication.canonical_root),
+        )
+    )
+    if reused:
+        write_source_state(
+            target,
+            publication.schema.dataset,
+            publication.source_paths,
+            publication.source_path_resolver,
+        )
+    status = PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED
+    return _materialized_dataset(target, publication, status)
+
+
+def _write_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
+    temporary: Path, publication: CanonicalPublication[AssetRoleT, EligibilityReasonT]
+) -> None:
+    assets = publication.writer(temporary)
+    _validate_written_assets(temporary, assets, publication.expected_assets, publication.schema.physical_schema)
+    serialized_schema = schema_content(publication.schema)
+    (temporary / _SCHEMA_NAME).write_text(serialized_schema, encoding="utf-8")
+    serialized_manifest = CanonicalManifest(
+        publication.schema.dataset,
+        publication.canonicalization_contract,
+        publication.schema.checksum,
+        publication.inventory,
+        publication.validation_report,
+        assets,
+        publication.chronology,
+        publication.eligibility_policy,
+    ).content()
+    (temporary / _MANIFEST_NAME).write_text(serialized_manifest, encoding="utf-8")
+    write_source_state(
+        temporary,
+        publication.schema.dataset,
+        publication.source_paths,
+        publication.source_path_resolver,
+    )
+    (temporary / _COMPLETE_NAME).write_text(
+        complete_digest(serialized_manifest, serialized_schema).value,
+        encoding="utf-8",
+    )
+    if not completed_publication_is_reusable(temporary, publication.match_request()):
+        raise ValueError("canonical publication did not pass complete-asset validation")
 
 
 def _validate_written_assets[AssetRoleT: StrEnum](
@@ -438,15 +440,3 @@ def _remove_target(target: Path, canonical_root: Path) -> None:
     if not resolved_target.is_relative_to(resolved_root):
         raise ValueError("canonical publication target escapes the canonical root")
     rmtree(resolved_target)
-
-
-def _remove_stale_temporary_directories(target: Path) -> None:
-    parent = target.parent.resolve()
-    prefix = f".{target.name}."
-    for candidate in target.parent.iterdir():
-        if not candidate.is_dir():
-            continue
-        if not candidate.name.startswith(prefix):
-            continue
-        if candidate.resolve().is_relative_to(parent):
-            rmtree(candidate)

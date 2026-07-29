@@ -9,6 +9,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 from filelock import FileLock
 
+from datp_core.artifacts.completion import complete_digest
 from datp_core.datasets.models import (
     CanonicalAssetDocument,
     CanonicalAssetRole,
@@ -27,7 +28,6 @@ from datp_core.datasets.models import (
     MaterializedCanonicalAsset,
     MaterializedDataset,
     ModelInputEligibilityPolicy,
-    PublicationStatus,
     RawDatasetInventory,
     RawInventoryDocument,
     RawSourceFile,
@@ -37,7 +37,7 @@ from datp_core.datasets.models import (
     SourceStateEntryDocument,
     ValidationReportDocument,
 )
-from datp_core.domain.enums import DatasetId
+from datp_core.domain.enums import DatasetId, PublicationStatus
 from datp_core.domain.values import Checksum, checksum_file, checksum_text
 from datp_core.protocols.runtime import DATA_ROOT
 
@@ -119,10 +119,6 @@ def schema_checksum_document_json(
         dataset=dataset,
         physical_schema=physical_schema.to_string(show_field_metadata=True, show_schema_metadata=True),
     ).model_dump_json()
-
-
-def complete_content(manifest: str, schema: str) -> str:
-    return checksum_text(f"{manifest}\n{schema}").value
 
 
 def canonical_publication_contract() -> str:
@@ -425,7 +421,7 @@ def _documents_match_publication(
     serialized_schema = schema_content(schema)
     return schema_file.read_text(encoding="utf-8") == serialized_schema and complete_file.read_text(
         encoding="utf-8"
-    ) == complete_content(serialized_manifest, serialized_schema)
+    ) == complete_digest(serialized_manifest, serialized_schema).value
 
 
 def _manifest_matches_publication[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](

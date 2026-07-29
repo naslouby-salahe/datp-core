@@ -60,6 +60,7 @@ NBAIOT_CAPABILITIES = DatasetCapabilities(
             MetricId.FPR_COEFFICIENT_OF_VARIATION,
         ),
         (),
+        (),
     ),
     temporal=TemporalCapability(
         CapabilityStatus.UNAVAILABLE,

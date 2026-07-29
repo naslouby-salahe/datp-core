@@ -44,7 +44,8 @@ CICIOT2023_CAPABILITIES = DatasetCapabilities(
         "The full merged-file audit found nine null labels and 991 infinite Rate values.",
         "Model inputs require the declared exclusion-only gate; raw canonical rows remain lossless and unmodified.",
         (),
-        (MetricId.TRUE_POSITIVE_RATE, MetricId.BALANCED_ACCURACY, MetricId.BINARY_MACRO_F1, MetricId.AUROC),
+        tuple(MetricId),
+        (),
     ),
     temporal=TemporalCapability(
         CapabilityStatus.UNAVAILABLE,

@@ -13,10 +13,10 @@ from datp_core.domain.enums import (
     ProcessedDataBranch,
     SplitProtocolId,
 )
-from datp_core.domain.values import Seed
+from datp_core.domain.values import ClientIdentity, Seed
 
 
-def _coordinate(branch: ProcessedDataBranch, client: str | None = None) -> ReusableDataCoordinate:
+def _coordinate(branch: ProcessedDataBranch, client: ClientIdentity | None = None) -> ReusableDataCoordinate:
     return ReusableDataCoordinate(
         dataset=DatasetId.NBAIOT,
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
@@ -31,7 +31,7 @@ def _coordinate(branch: ProcessedDataBranch, client: str | None = None) -> Reusa
 def test_layout_separates_federated_and_centralized_branches() -> None:
     federated = federated_branch_directory(_coordinate(ProcessedDataBranch.FEDERATED))
     centralized = centralized_branch_directory(_coordinate(ProcessedDataBranch.CENTRALIZED_REFERENCE))
-    client = federated_client_directory(_coordinate(ProcessedDataBranch.FEDERATED, "device_a"))
+    client = federated_client_directory(_coordinate(ProcessedDataBranch.FEDERATED, ClientIdentity("device_a")))
     assert federated.name == ProcessedDataBranch.FEDERATED.value
     assert centralized.name == ProcessedDataBranch.CENTRALIZED_REFERENCE.value
     assert client.name == "device_a"
