@@ -186,7 +186,7 @@ Declare:
 - Read normal and attack sources separately.
 - Never attach attack rows to sensor clients without verified evidence.
 - Preserve source folder, file, row, and raw timestamp provenance.
-- Treat the paired PCAP as the only calendar authority. Revalidate each CSV as an ordered PCAP subsequence, persist the evidence checksum and alignment record, and expose a temporal asset only when those matched PCAP timestamps are already monotonic in verified source order. Do not reorder a non-monotonic source into a synthetic time series.
+- Treat the paired PCAP as the only calendar authority. Revalidate each CSV as an ordered PCAP subsequence and persist the evidence checksum and alignment record. Temporal eligibility requires complete verified alignment and genuine absolute capture timestamps for every admitted CSV row. Source-order micro-inversions in matched timestamps are retained as diagnostics (`is_monotonic=false`); they do not revoke eligibility. Temporal splits stably sort by capture timestamp (Journal Regime D-temporal). Do not invent timestamps from file order, and do not treat sorting by verified PCAP times as fabricated chronology.
 
 ### `chronology.py`
 

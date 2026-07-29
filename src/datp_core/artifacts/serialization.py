@@ -1,5 +1,6 @@
 """Generic safe serialization for trusted estimators and Pydantic models."""
 
+from enum import StrEnum
 from hashlib import sha256
 from pathlib import Path
 from typing import Final, cast
@@ -15,6 +16,11 @@ from datp_core.domain.errors import SerializationSafetyError
 from datp_core.domain.values import Checksum
 
 TrustedScaler = StandardScaler | MinMaxScaler
+
+
+class SerializationSubject(StrEnum):
+    ESTIMATOR = "estimator"
+    PREPROCESSING_ESTIMATOR = "preprocessing estimator"
 
 
 def _trusted_estimator_type(class_name: TrustedEstimatorClassName) -> type[TrustedScaler]:
@@ -54,7 +60,7 @@ def clone_trusted_scaler(estimator: TrustedScaler, class_name: TrustedEstimatorC
     if type(estimator) is not resolve_trusted_estimator_type(class_name):
         raise SerializationSafetyError(
             "estimator class does not match the trusted estimator identity",
-            subject="estimator",
+            subject=SerializationSubject.ESTIMATOR,
         )
     return cast(TrustedScaler, clone(estimator))
 
@@ -64,7 +70,7 @@ def serialize_estimator(estimator: BaseEstimator, destination: Path) -> Checksum
     if estimator_type not in (StandardScaler, MinMaxScaler):
         raise SerializationSafetyError(
             f"untrusted preprocessing estimator type {estimator_type.__module__}.{estimator_type.__name__}",
-            subject="preprocessing estimator",
+            subject=SerializationSubject.PREPROCESSING_ESTIMATOR,
         )
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(skops_io.dumps(estimator))
@@ -77,12 +83,12 @@ def load_estimator(path: Path, class_name: TrustedEstimatorClassName) -> Trusted
     if type(loaded) is not expected_type:
         raise SerializationSafetyError(
             "reloaded estimator class does not match the trusted estimator identity",
-            subject="preprocessing estimator",
+            subject=SerializationSubject.PREPROCESSING_ESTIMATOR,
         )
     if not isinstance(loaded, (StandardScaler, MinMaxScaler)):
         raise SerializationSafetyError(
             "reloaded estimator is not an approved trusted type",
-            subject="preprocessing estimator",
+            subject=SerializationSubject.PREPROCESSING_ESTIMATOR,
         )
     return loaded
 

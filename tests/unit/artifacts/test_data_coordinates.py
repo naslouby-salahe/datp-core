@@ -46,7 +46,7 @@ def test_processed_coordinates_match_approved_layout() -> None:
     assert client.parts[-1] == "danmini_doorbell"
     assert "client" not in client.parts
     with pytest.raises(ValueError):
-        federated_client_coordinate(replace(_base_coordinate(), client_identity="client=bad"))
+        replace(_base_coordinate(), client_identity="client=bad")
 
 
 def test_raw_dataset_directories_are_enum_backed() -> None:

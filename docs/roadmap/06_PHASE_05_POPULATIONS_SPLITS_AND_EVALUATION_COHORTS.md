@@ -128,6 +128,31 @@ All records are frozen, slotted, and use enum identities.
 - never stratify or rebalance unless explicitly required by the source truth;
 - never create pseudo-time.
 
+### Integer residual allocation (research amendment)
+
+Fractional ratios do not yield integer row counts for every client size. Phase 05 locks the **Hamilton / largest-remainder** rule:
+
+1. for total row count \(n\) and ratios \(r_i\) that sum to one, compute raw shares \(n \cdot r_i\);
+2. assign each role \(\lfloor n \cdot r_i \rfloor\);
+3. distribute the residual \(n - \sum \lfloor n \cdot r_i \rfloor\) by descending fractional part;
+4. break fractional ties by ascending role index (train before calibration before evaluation, and historical training before historical calibration before future recalibration before future evaluation).
+
+This rule conserves every row exactly once, is independent of library defaults, and applies to both non-temporal equal thirds and temporal \(0.55/0.15/0.10/0.20\) splits. Non-temporal benign rows are ordered by `stable_row_id` then deterministically permuted with a seed derived from `(partition_seed, client_id)` before Hamilton allocation. Temporal rows are stably sorted by capture timestamp, then `source_row_index`, then `stable_row_id` with no permutation.
+
+### Controlled synthetic partition construction (research amendment)
+
+Regime C constructs exactly twenty synthetic clients from eligible N-BaIoT rows.
+
+- **Dirichlet conditions** use the locked concentrations `0.1, 0.3, 0.5, 1.0, 10.0`.
+- **IID** is a separate `ControlledPartitionKind.IID` construction, never an infinite concentration.
+- Class-conditional construction: benign and attack strata are partitioned independently.
+- Within each stratum, rows are sorted by `stable_row_id`, permuted with `numpy.random.Generator(PCG64(partition_seed))`, proportions are drawn (`dirichlet(alpha * ones(K))` or equal IID proportions), and integer client counts use the Hamilton residual rule above.
+- Empty or insufficient-support clients are retained and reported in diagnostics; partitions are never regenerated for convenience.
+
+### Edge temporal feasibility (evidence-driven)
+
+`EDGE_TEMPORAL_GROUPS` validates chronology from the persisted Phase 03 canonical manifest rather than assuming nine eligible groups. Groups with `temporal_eligible=False` are excluded only from the temporal population (and remain in the static sensor-group population when applicable). When zero groups remain eligible, the temporal population is `INFEASIBLE` with typed chronology diagnostics. Forensic raw-data audit (2026-07-29) proved complete CSV↔PCAP alignment for all nine non-Modbus groups with a one-hour display offset; source-order micro-inversions are present in the raw PCAP stream itself and are diagnostics only. Temporal eligibility follows complete alignment; temporal splits stably sort by capture timestamp. Modbus remains excluded (`frame.time` holds address literals).
+
 ## Integrity rules
 
 `populations/integrity.py` must verify:

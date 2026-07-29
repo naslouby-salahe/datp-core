@@ -56,9 +56,9 @@ class _EdgePublication:
     validations: tuple[ChronologyValidation, ...]
 
 
-_STATIC_BENIGN_BRANCH = Path("static_benign")
-_TEMPORAL_BENIGN_BRANCH = Path("temporal_benign")
-_UNASSIGNED_ATTACK_BRANCH = Path("unassigned_attack")
+_STATIC_BENIGN_BRANCH = Path(EdgeAssetRole.STATIC_BENIGN.value)
+_TEMPORAL_BENIGN_BRANCH = Path(EdgeAssetRole.TEMPORAL_BENIGN.value)
+_UNASSIGNED_ATTACK_BRANCH = Path(EdgeAssetRole.UNASSIGNED_ATTACK.value)
 _EDGE_CANONICALIZATION_CONTRACT = "pcap_verified_source_order_and_typed_asset_roles"
 
 

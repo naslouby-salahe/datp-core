@@ -38,7 +38,8 @@ class Quantile:
     value: float
 
     def __post_init__(self) -> None:
-        if not 0 < _number(self.value, "quantile") < 1:
+        value = _number(self.value, "quantile")
+        if value <= 0.0 or value >= 1.0:
             raise ValueError("quantile must be in (0, 1)")
 
 
@@ -47,7 +48,8 @@ class CoverageTarget:
     value: float
 
     def __post_init__(self) -> None:
-        if not 0 < _number(self.value, "coverage target") < 1:
+        value = _number(self.value, "coverage target")
+        if value <= 0.0 or value >= 1.0:
             raise ValueError("coverage target must be in (0, 1)")
 
 
@@ -206,7 +208,8 @@ class ConfidenceLevel:
     value: float
 
     def __post_init__(self) -> None:
-        if not 0 < _number(self.value, "confidence level") < 1:
+        value = _number(self.value, "confidence level")
+        if value <= 0.0 or value >= 1.0:
             raise ValueError("confidence level must be in (0, 1)")
 
 

@@ -60,6 +60,12 @@ class NBaIoTSourceLabel(StrEnum):
     ATTACK = "attack"
 
 
+class NBaIoTColumnSource(StrEnum):
+    AUDITED_DEVICE_PATH = "audited device path"
+    TABLE_III_DEVICE_TYPE = "N-BaIoT Table III device type"
+    AUDITED_SOURCE_PATH = "audited source path"
+
+
 _WINDOWS: tuple[str, ...] = ("L5", "L3", "L1", "L0.1", "L0.01")
 _BASIC_STATISTICS: tuple[str, ...] = ("weight", "mean", "variance")
 _CHANNEL_STATISTICS: tuple[str, ...] = ("weight", "mean", "std", "magnitude", "radius", "covariance", "pcc")
@@ -102,7 +108,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     evidence_columns = (
         CanonicalColumn(
             NBaIoTCanonicalColumn.PHYSICAL_CLIENT_ID,
-            "audited device path",
+            NBaIoTColumnSource.AUDITED_DEVICE_PATH,
             ColumnLogicalType.STRING,
             CanonicalColumnRole.IDENTITY,
             True,
@@ -110,7 +116,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
         ),
         CanonicalColumn(
             NBaIoTCanonicalColumn.PHYSICAL_DEVICE_FAMILY,
-            "N-BaIoT Table III device type",
+            NBaIoTColumnSource.TABLE_III_DEVICE_TYPE,
             ColumnLogicalType.STRING,
             CanonicalColumnRole.IDENTITY,
             True,
@@ -118,7 +124,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
         ),
         CanonicalColumn(
             NBaIoTCanonicalColumn.RAW_LABEL,
-            "audited source path",
+            NBaIoTColumnSource.AUDITED_SOURCE_PATH,
             ColumnLogicalType.STRING,
             CanonicalColumnRole.LABEL,
             True,
@@ -126,7 +132,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
         ),
         CanonicalColumn(
             NBaIoTCanonicalColumn.ATTACK_FAMILY,
-            "audited source path",
+            NBaIoTColumnSource.AUDITED_SOURCE_PATH,
             ColumnLogicalType.STRING,
             CanonicalColumnRole.RAW_EVIDENCE,
             True,
@@ -134,7 +140,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
         ),
         CanonicalColumn(
             NBaIoTCanonicalColumn.ATTACK_SUBTYPE,
-            "audited source path",
+            NBaIoTColumnSource.AUDITED_SOURCE_PATH,
             ColumnLogicalType.STRING,
             CanonicalColumnRole.RAW_EVIDENCE,
             True,

@@ -63,14 +63,22 @@ class _PcapAligner:
         yield from self._remaining_matches(clocks, records, previous_timestamp)
         self.trailing_evidence_rows = sum(1 for _ in records)
 
+    def align_all(self) -> int:
+        """Exhaust the verified CSV↔PCAP alignment and return the matched row count."""
+        return sum(1 for _ in self.matches())
+
     def validation(self, group_identity: str) -> ChronologyValidation:
         if self.alignment_offset_microseconds is None:
             raise ValueError("verified chronology must retain its PCAP display offset")
-        temporal_eligible = self.out_of_order_rows == 0
+        is_monotonic = self.out_of_order_rows == 0
         reason = (
             "Every CSV row is an ordered PCAP subsequence match after its verified display offset."
-            if temporal_eligible
-            else "PCAP alignment is verified, but matched capture timestamps are not monotonic."
+            if is_monotonic
+            else (
+                "Every CSV row is an ordered PCAP subsequence match after its verified display offset. "
+                f"Matched absolute timestamps have {self.out_of_order_rows} source-order inversion(s); "
+                "temporal analysis must stably sort by capture timestamp."
+            )
         )
         return ChronologyValidation(
             group_identity=group_identity,
@@ -79,9 +87,9 @@ class _PcapAligner:
             parseable_rows=self.total_rows,
             invalid_rows=0,
             duplicate_timestamp_count=self.duplicate_timestamp_count,
-            is_monotonic=temporal_eligible,
+            is_monotonic=is_monotonic,
             reason=reason,
-            temporal_eligible=temporal_eligible,
+            temporal_eligible=True,
             evidence_source_path=source_relative_path(self.pcap_path),
             evidence_row_count=self.total_rows + self.skipped_evidence_rows + self.trailing_evidence_rows,
             alignment_verified=True,
@@ -138,8 +146,7 @@ def validate_chronology(group_identity: str, csv_path: Path, pcap_path: Path) ->
         return PcapChronology(pcap_path, _unavailable_validation(group_identity, csv_path, "Paired PCAP is missing."))
     try:
         aligner = _PcapAligner(csv_path, pcap_path)
-        for _ in aligner.matches():
-            pass
+        aligner.align_all()
     except (OSError, ValueError, csv.Error, struct.error) as error:
         return PcapChronology(
             pcap_path,

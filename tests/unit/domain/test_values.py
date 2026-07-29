@@ -14,7 +14,9 @@ def test_value_boundaries_and_immutability() -> None:
         Quantile(1)
     with pytest.raises(ValueError):
         Seed(True)
-    assert hash(Ratio(0.5)) == hash(Ratio(0.5))
+    left = Ratio(0.5)
+    right = Ratio(0.5)
+    assert hash(left) == hash(right)
 
 
 def test_seed_count_is_not_client_count() -> None:

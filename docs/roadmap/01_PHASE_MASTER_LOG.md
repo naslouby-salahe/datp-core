@@ -36,7 +36,7 @@ Do not add percentages. A phase is binary with respect to its exit criteria.
 | 02 — Typed protocols and domain contracts | `COMPLETE` | Phase 01 complete | Protocol graph validation and strict typing | None; optional alert-burden translation is explicitly suppressed without rate evidence |
 | 03 — Dataset audit and capabilities | `COMPLETE` | Phase 02 complete | Audited schemas, capability contracts, streaming canonical materialization, COMPLETE markers, full static/test gates | None for Phase 03 handoff |
 | 04 — Canonical data and reusable preprocessing | `COMPLETE` | Phase 03 complete | Method locks, coordinates, reuse, skops, materialize CLI, runtime CUDA/workers, package-cycle cleanup, full gates | None; end-to-end processed publication consumes Phase 05 populations by design |
-| 05 — Populations, splits, and cohorts | `NOT_STARTED` | Phase 04 complete and Phase 4 cleanup gate clear | Deterministic split/cohort manifests | Non-temporal split ratios are research-amendment equal thirds; remaining work is builders and leak-free cohorts |
+| 05 — Populations, splits, and cohorts | `COMPLETE` | Phase 04 complete and Phase 4 cleanup gate clear | Deterministic builders, splits, cohorts, handoff, full gates; Edge temporal forensic audit | None; Edge nine-group temporal population verified after chronology eligibility fix |
 | 06 — Anchor reproduction and gate | `NOT_STARTED` | Phase 05 complete | Explicit equivalence/discrepancy decision | Metric-specific tolerances absent from source truth remain blocking |
 | 07 — Centralized reference | `NOT_STARTED` | Phase 05 complete | Independent pooled execution and tests | Centralized training values absent from source truth remain blocking |
 | 08 — Federated training, checkpointing, and scoring | `NOT_STARTED` | Phases 05–06 complete | Frozen scores and checkpoint discipline pass | Exact architecture/optimizer/batch values must be sourced |
@@ -77,6 +77,8 @@ The source locks the original values where specified. The following user-authori
 The anchor stores historically observed shared-scope and local-scope CV(FPR) references. Legacy numbered policy and lettered-regime labels are evidence-only terminology from the historical paper; they are not implementation identities. Source modules, enum members, declaration constants, experiment IDs, and ordinary tests use descriptive names. The sole architecture test contains the historical tokens only as negative fixtures that reject their use in source. These anchor records map only to `SHARED_THRESHOLD` and `LOCAL_THRESHOLD`.
 
 Scientific preprocessing methods are locked as research amendments (Journal §2.2.1), resolving paper vs successor-literature tension explicitly: confirmatory federated `FEDERATED_CLIENT_LOCAL_STANDARD` is **client-local `StandardScaler`** on benign training only (conference reproducibility table + recovered anchor per-device scaler artifacts); supportive `FEDERATED_POOLED_MIN_MAX` is pooled `MinMaxScaler` from successor FL-AE practice and is **not** confirmatory; centralized-reference `CENTRALIZED_POOLED_MIN_MAX` is independent pooled `MinMaxScaler`. All scientific methods persist with skops, use transform absolute tolerance `1e-12` (engineering amendment reusing the fixed-score tolerance magnitude), retain unclipped out-of-range transforms, and forbid imputation/zero-fill/clipping/empty-train zero-row recovery. Missing/non-finite handling remains exclusion-or-validation-failure via dataset eligibility contracts. Phase 04 owns method-bound reusable preprocessing infrastructure; end-to-end processed publication consumes Phase 05 populations and splits.
+
+Phase 05 research amendments (prospective): Hamilton/largest-remainder integer residual allocation for fractional and temporal splits; controlled synthetic partition construction with class-conditional Dirichlet concentrations plus a separate typed IID condition (`ControlledPartitionKind`); Edge temporal eligibility is always evidence-driven from persisted chronology rather than assumed nine groups.
 
 Grouped threshold assignment is the source-locked taxonomy-free mechanism: create each eligible client’s benign reconstruction-error fingerprint from mean, standard deviation, skewness, and `p95`; standardize the feature matrix with `StandardScaler`; run k-means++ with `n_init=10`, `max_iter=300`, and `random_state=42`; use the declared group count; and assign each cluster the arithmetic mean of its eligible local thresholds. It never uses attack labels or held-out outcomes. Population-specific traffic-rate evidence remains absent, so `ALERT_BURDEN_TRANSLATION` is a declared suppressed operational experiment rather than an executable rate claim.
 
@@ -160,4 +162,42 @@ Grouped threshold assignment is the source-locked taxonomy-free mechanism: creat
 - CodeScene delta: materialization Code Health improved `8.03 -> 9.68`; JSON new-issue report empty after argument-bundling cleanup.
 - Phase 5 was not started. Populations package remains empty/unimplemented.
 - No branch, commit, or push was performed.
+
+## Phase 05 — Populations, splits, and evaluation cohorts
+
+- Status: `COMPLETE`.
+- Source files changed (Phase 05 authorized surface):
+  - `src/datp_core/populations/models.py`
+  - `src/datp_core/populations/capabilities.py`
+  - `src/datp_core/populations/nbaiot_natural_devices.py`
+  - `src/datp_core/populations/ciciot_file_clients.py`
+  - `src/datp_core/populations/nbaiot_dirichlet_clients.py`
+  - `src/datp_core/populations/edge_sensor_groups.py`
+  - `src/datp_core/populations/edge_temporal_groups.py`
+  - `src/datp_core/populations/splits.py`
+  - `src/datp_core/populations/integrity.py`
+  - `src/datp_core/populations/catalogue.py`
+  - `src/datp_core/evaluation/cohorts.py`
+- Upstream blocking corrections (Phase 1–4 defects, smallest fix):
+  - `src/datp_core/domain/enums.py`: added `ControlledPartitionKind` (`DIRICHLET`, `IID`) so IID is not a fake infinite concentration.
+  - `src/datp_core/datasets/edge_iiotset/capabilities.py`: `valid_populations` now includes `EDGE_TEMPORAL_GROUPS` as well as `EDGE_SENSOR_GROUPS`.
+- Test files added: all Phase 05 unit/property/integration files listed in `06_PHASE_05_POPULATIONS_SPLITS_AND_EVALUATION_COHORTS.md`, plus `tests/conftest.py` miniature fixtures (module rename `test_population_models.py` avoids basename clash with protocol tests).
+- Scientific-source sections consulted: Regime A/C/D/D-temporal populations; equal-thirds and temporal split ratios; minimum benign calibration support 100; benign-only train/calibration; cohort rules; fixed-detector handoff boundary.
+- Research amendments documented in Phase 05 roadmap before implementation: Hamilton residual allocation; class-conditional Dirichlet/IID synthetic construction; evidence-driven Edge temporal feasibility.
+- Real-data verification (read-only construction, no training):
+  - N-BaIoT natural: 9/9 clients, 7,062,606 rows, attack-in-train/cal = 0, unique rows conserved.
+  - CICIoT file clients: 63/63 clients, 45,018,243 eligible model-input rows.
+  - N-BaIoT Dirichlet IID: 20 clients, full row conservation.
+  - Edge static: 10/10 including Modbus, attack rows = 0.
+  - Edge temporal: expected 9, observed eligible 0, feasibility `infeasible` (persisted chronology).
+- Focused/full gates: Phase 05 selection and full suite `222 passed` with `.venv/bin/python -m pytest -n 6 -q`; Ruff format/check pass; Pyright 0 errors; Pylint ~9.86/10 (pre-existing similarity notices only).
+- No Phase 06 behavior implemented. No new `src/` files. No commit or push.
+
+### Edge temporal forensic audit and Phase 05 closure cleanup
+
+- Independent raw CSV/PCAP audit proved complete alignment for all nine non-Modbus groups (matched == CSV rows; display offset exactly 3_600_000_000 µs = 1 h). Source-order micro-inversions exist in the raw PCAP streams; after stable sort by capture timestamp, inversion count is zero.
+- Root cause of prior zero temporal eligibility: `temporal_eligible = (out_of_order_rows == 0)` was stricter than Journal Regime D-temporal (“stably sorted by genuine capture time”). Fix: complete verified alignment grants eligibility; `is_monotonic` remains diagnostic. Edge canonical rebuilt with nine temporal assets; Modbus remains excluded.
+- Phase 05 cleanup: removed scientific default split-protocol arguments; removed split re-exports; typed `SplitAssignment.partition_role` as `PartitionRole`; typed catalogue diagnostics union; removed dead fingerprint/helper; removed silent temporal→static asset fallback; removed private `_sums_to_unit_fraction` import; removed residual Edge candidate-count special case; required explicit `dirichlet_condition` on construction requests.
+- Real-data smoke (all five populations): N-BaIoT 9/9, 7_062_606 rows, attack train/cal = 0; CIC 63/63, 45_018_243 eligible rows; Dirichlet IID 20 clients, conserved; Edge static 10/10 incl. Modbus; Edge temporal 9/9, 11_050_411 rows, split 6_077_725 / 1_657_561 / 1_105_042 / 2_210_083, no future leakage; Edge materialize second run `reused`.
+- Gates: full suite `222 passed`; Ruff pass; Pyright 0 errors; Pylint ~9.91/10; architecture pass. No Phase 06. No commit or push. Temporary audit artifacts removed.
 

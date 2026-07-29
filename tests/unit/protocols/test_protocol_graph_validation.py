@@ -58,8 +58,9 @@ def test_graph_rejects_attack_metric_without_attack_assignment() -> None:
         metrics=(MetricId.TRUE_POSITIVE_RATE,),
         readiness=ExperimentReadiness.DECLARED,
     )
+    graph = replace(CANONICAL_PROTOCOL_GRAPH, experiments=(experiment,))
     with pytest.raises(ProtocolValidationError, match="attack assignment"):
-        validate_protocol_graph(replace(CANONICAL_PROTOCOL_GRAPH, experiments=(experiment,)))
+        validate_protocol_graph(graph)
 
 
 def test_graph_rejects_alert_burden_without_evidence_outside_suppressed_operational_scope() -> None:
@@ -72,8 +73,9 @@ def test_graph_rejects_alert_burden_without_evidence_outside_suppressed_operatio
         metrics=(MetricId.ALERTS_PER_DAY,),
         readiness=ExperimentReadiness.DECLARED,
     )
+    graph = replace(CANONICAL_PROTOCOL_GRAPH, experiments=(experiment,))
     with pytest.raises(UnresolvedScientificValueError, match="Alert burden"):
-        validate_protocol_graph(replace(CANONICAL_PROTOCOL_GRAPH, experiments=(experiment,)))
+        validate_protocol_graph(graph)
 
 
 def test_graph_rejects_temporal_experiment_without_verified_chronology() -> None:
@@ -86,8 +88,9 @@ def test_graph_rejects_temporal_experiment_without_verified_chronology() -> None
         metrics=(MetricId.FALSE_POSITIVE_RATE,),
         readiness=ExperimentReadiness.DECLARED,
     )
+    graph = replace(CANONICAL_PROTOCOL_GRAPH, experiments=(experiment,))
     with pytest.raises(ProtocolValidationError, match="verified chronology"):
-        validate_protocol_graph(replace(CANONICAL_PROTOCOL_GRAPH, experiments=(experiment,)))
+        validate_protocol_graph(graph)
 
 
 def test_graph_rejects_premature_executable_readiness() -> None:
@@ -103,5 +106,6 @@ def test_graph_rejects_premature_executable_readiness() -> None:
         metrics=(MetricId.FPR_COEFFICIENT_OF_VARIATION,),
         readiness=ExperimentReadiness.EXECUTABLE,
     )
+    graph = replace(CANONICAL_PROTOCOL_GRAPH, experiments=(experiment,))
     with pytest.raises(ProtocolValidationError, match="executable"):
-        validate_protocol_graph(replace(CANONICAL_PROTOCOL_GRAPH, experiments=(experiment,)))
+        validate_protocol_graph(graph)

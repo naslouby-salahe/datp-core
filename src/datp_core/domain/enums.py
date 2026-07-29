@@ -25,6 +25,16 @@ class PopulationIdentityKind(StrEnum):
     VERIFIED_TEMPORAL_GROUPS = "verified_temporal_groups"
 
 
+class ControlledPartitionKind(StrEnum):
+    """Construction kind for controlled synthetic client partitions.
+
+    IID is a separate typed construction condition, never an infinite Dirichlet concentration.
+    """
+
+    DIRICHLET = "dirichlet"
+    IID = "iid"
+
+
 class ExperimentReadiness(StrEnum):
     DECLARED = "declared"
     EXECUTABLE = "executable"
