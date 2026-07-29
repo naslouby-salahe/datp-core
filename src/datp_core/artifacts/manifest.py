@@ -1,7 +1,6 @@
 """Generic JSON manifest helpers for reusable processed-data publications."""
 
 from pathlib import Path
-from typing import TypeVar
 
 from pydantic import BaseModel
 
@@ -9,8 +8,6 @@ from datp_core.artifacts.layout import ProcessedAssetName
 from datp_core.artifacts.serialization import serialize_json_model
 from datp_core.domain.errors import ArtifactIntegrityError
 from datp_core.domain.values import Checksum
-
-ModelT = TypeVar("ModelT", bound=BaseModel)
 
 
 def write_json_model(directory: Path, asset_name: ProcessedAssetName, model: BaseModel) -> Checksum:

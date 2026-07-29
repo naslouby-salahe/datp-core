@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
 from tempfile import mkdtemp
-from typing import TypeVar
 
 from filelock import FileLock
 from pydantic import BaseModel
@@ -26,10 +25,6 @@ from datp_core.artifacts.manifest import (
     write_validation_report,
 )
 from datp_core.domain.errors import ArtifactIntegrityError
-
-ManifestT = TypeVar("ManifestT", bound=BaseModel)
-SchemaT = TypeVar("SchemaT", bound=BaseModel)
-ReportT = TypeVar("ReportT", bound=BaseModel)
 
 
 @dataclass(frozen=True, slots=True)

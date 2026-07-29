@@ -14,7 +14,7 @@ from datp_core.artifacts.layout import (
 )
 from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.artifacts.store import ProcessedPublication, publish_processed
-from datp_core.domain.enums import PartitionRole, ProcessedDataBranch
+from datp_core.domain.enums import PartitionRole, PreprocessingFitScope, ProcessedDataBranch
 from datp_core.domain.errors import LeakageError
 from datp_core.preprocessing.models import (
     ClientPreprocessingResult,
@@ -58,7 +58,7 @@ def fit_client_preprocessing(
     estimator: TrustedScaler,
     batch: PreprocessingFitBatch,
 ) -> TrustedScaler:
-    return fit_trusted_batch(protocol, estimator, batch, subject="training")
+    return fit_trusted_batch(protocol, estimator, batch, subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING)
 
 
 def transform_partition(fitted_estimator: TrustedScaler, matrix: np.ndarray, subject: PartitionRole) -> np.ndarray:
@@ -68,7 +68,11 @@ def transform_partition(fitted_estimator: TrustedScaler, matrix: np.ndarray, sub
 def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreprocessingResult:
     context = request.context
     validate_train_only_fit(PartitionRole.TRAIN)
-    require_core_partitions(request.partitions, request.row_ids, subject="federated")
+    require_core_partitions(
+        request.partitions,
+        request.row_ids,
+        subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
+    )
     validate_no_partition_overlap(
         request.row_ids[PartitionRole.TRAIN],
         request.row_ids[PartitionRole.CALIBRATION],

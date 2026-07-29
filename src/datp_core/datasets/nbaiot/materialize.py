@@ -2,12 +2,15 @@
 
 from pathlib import Path
 
-from datp_core.datasets.canonical_cache import CanonicalReuseRequest, reuse_published_canonical
-from datp_core.datasets.materialization import (
+from datp_core.datasets.canonical_cache import (
     CanonicalAsset,
+    CanonicalReuseRequest,
+    canonical_directory,
+    reuse_published_canonical,
+)
+from datp_core.datasets.materialization import (
     CanonicalPublication,
     canonical_data_partition_assets,
-    canonical_directory,
     publish_canonical,
     raw_inventory,
     raw_source_file,

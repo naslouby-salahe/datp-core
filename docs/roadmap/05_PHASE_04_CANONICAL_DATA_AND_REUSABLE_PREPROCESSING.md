@@ -203,8 +203,9 @@ Locked scientific methods (see Journal §2.2.1 and the Phase Master Log decision
 
 ## Package responsibilities after Phase 4 cleanup
 
-- `datasets/materialization.py`: common publication coordination, streaming Parquet write, inventory, provenance helpers.
-- `datasets/canonical_cache.py`: source-state comparison, manifest/schema/eligibility/completed-publication validation, reuse decisions, serialization documents.
+- `datasets/materialization.py`: common publication coordination, streaming Parquet write, inventory, provenance helpers (no re-export surface).
+- `datasets/models.py`: domain records plus enum-typed Pydantic publication documents used for wire manifests.
+- `datasets/canonical_cache.py`: source-state comparison, manifest/schema/eligibility/completed-publication validation, reuse decisions, using models from `datasets/models.py`.
 - `artifacts/*`: generic atomic publication, checksums, locking, trusted-estimator persistence, coordinate paths. Does not import preprocessing scientific models.
 - `preprocessing/*`: constructs and validates preprocessing models, then passes validated objects into generic artifact infrastructure.
 - Protocol configuration remains Python-native immutable declarations (`CANONICAL_PROTOCOL_GRAPH`, `CANONICAL_RUNTIME`).

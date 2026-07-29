@@ -6,12 +6,15 @@ from shutil import rmtree
 
 import polars as pl
 
-from datp_core.datasets.canonical_cache import CanonicalReuseRequest, reuse_published_canonical
-from datp_core.datasets.materialization import (
+from datp_core.datasets.canonical_cache import (
     CanonicalAsset,
     CanonicalAssetLayout,
-    CanonicalPublication,
+    CanonicalReuseRequest,
     canonical_directory,
+    reuse_published_canonical,
+)
+from datp_core.datasets.materialization import (
+    CanonicalPublication,
     empty_asset,
     named_assets,
     publish_canonical,

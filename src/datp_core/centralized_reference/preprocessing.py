@@ -9,7 +9,7 @@ from datp_core.artifacts.coordinates import ReusableDataCoordinate
 from datp_core.artifacts.layout import ProcessedAssetName, branch_asset_path, centralized_branch_directory
 from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.artifacts.store import ProcessedPublication, publish_processed
-from datp_core.domain.enums import PartitionRole, ProcessedDataBranch
+from datp_core.domain.enums import PartitionRole, PreprocessingFitScope, ProcessedDataBranch
 from datp_core.domain.errors import LeakageError
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
@@ -51,13 +51,17 @@ def fit_pooled_preprocessing(
     estimator: TrustedScaler,
     batch: PreprocessingFitBatch,
 ) -> TrustedScaler:
-    return fit_trusted_batch(protocol, estimator, batch, subject="pooled training")
+    return fit_trusted_batch(protocol, estimator, batch, subject=PreprocessingFitScope.POOLED_TRAINING)
 
 
 def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreprocessingResult:
     context = request.context
     validate_train_only_fit(PartitionRole.TRAIN)
-    require_core_partitions(request.partitions, request.row_ids, subject="centralized")
+    require_core_partitions(
+        request.partitions,
+        request.row_ids,
+        subject=PreprocessingFitScope.POOLED_TRAINING,
+    )
     validate_no_partition_overlap(
         request.row_ids[PartitionRole.TRAIN],
         request.row_ids[PartitionRole.CALIBRATION],

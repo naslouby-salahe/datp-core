@@ -11,6 +11,7 @@ from datp_core.artifacts.layout import ProcessedAssetName, asset_for_partition, 
 from datp_core.artifacts.serialization import TrustedScaler, clone_trusted_scaler, serialize_estimator
 from datp_core.domain.enums import (
     PartitionRole,
+    PreprocessingFitScope,
     ProcessedDataBranch,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
@@ -41,11 +42,14 @@ def require_core_partitions(
     partitions: Mapping[PartitionRole, pl.DataFrame],
     row_ids: Mapping[PartitionRole, Sequence[str]],
     *,
-    subject: str,
+    subject: PreprocessingFitScope,
 ) -> None:
     for role in _CORE_PARTITION_ROLES:
         if role not in partitions or role not in row_ids:
-            raise ScientificContractError(f"{subject} missing preprocessing partition {role.value}", subject=role.value)
+            raise ScientificContractError(
+                f"{subject.value} missing preprocessing partition {role.value}",
+                subject=role.value,
+            )
 
 
 def validate_train_only_fit(fit_partition: PartitionRole) -> None:
@@ -174,19 +178,19 @@ def fit_trusted_batch(
     estimator: TrustedScaler,
     batch: PreprocessingFitBatch,
     *,
-    subject: str,
+    subject: PreprocessingFitScope,
 ) -> TrustedScaler:
     validate_train_only_fit(PartitionRole.TRAIN)
     validate_no_attack_labels_in_fit(batch.training_labels, batch.benign_label)
     matrix = np.asarray(batch.training_matrix, dtype=float)
     if matrix.shape[0] != len(batch.training_row_ids):
         raise ScientificContractError(
-            f"{subject} matrix and row identities must align",
+            f"{subject.value} matrix and row identities must align",
             subject=PartitionRole.TRAIN.value,
         )
     if matrix.shape[1] != len(protocol.input_feature_names):
         raise ScientificContractError(
-            f"{subject} width must match protocol input features",
+            f"{subject.value} width must match protocol input features",
             subject="features",
         )
     fitted = clone_trusted_scaler(estimator, protocol.estimator_class_name)

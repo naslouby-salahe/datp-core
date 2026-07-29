@@ -451,28 +451,3 @@ def _remove_stale_temporary_directories(target: Path) -> None:
             continue
         if candidate.resolve().is_relative_to(parent):
             rmtree(candidate)
-
-
-# Re-exports for dataset materializers and schema modules that import path helpers from this package.
-__all__ = (
-    "CanonicalAsset",
-    "CanonicalAssetLayout",
-    "CanonicalManifest",
-    "CanonicalPublication",
-    "SourcePathResolver",
-    "canonical_asset_path",
-    "canonical_data_partition_assets",
-    "canonical_directory",
-    "canonical_provenance_arrow_field",
-    "canonical_provenance_column",
-    "canonical_schema_checksum",
-    "empty_asset",
-    "named_assets",
-    "partition_assets",
-    "provenance_expressions",
-    "publish_canonical",
-    "raw_inventory",
-    "raw_source_file",
-    "schema_content",
-    "stream_parquet",
-)

@@ -26,7 +26,6 @@ def derive_worker_seed(base_seed: Seed, worker_id: int) -> Seed:
     """Derive a stable per-worker seed from a base scientific seed."""
     if worker_id < 0:
         raise ValueError("worker_id must be non-negative")
-    # Distinct, deterministic derivation; keeps values in a stable positive int range.
     derived = (base_seed.value * 1_000_003 + worker_id * 97 + 17) % (2**31 - 1)
     return Seed(derived)
 

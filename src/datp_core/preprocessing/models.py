@@ -21,7 +21,6 @@ from datp_core.domain.enums import (
 from datp_core.domain.values import Checksum, Seed
 from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
 
-# Research-amendment magnitude shared with the fixed-score anchor absolute tolerance.
 SCIENTIFIC_TRANSFORM_ABSOLUTE_TOLERANCE = FIXED_SCORE_ABSOLUTE_TOLERANCE.value
 
 
@@ -91,19 +90,21 @@ class PreprocessingProtocol(BaseModel):
 
     @property
     def qualified_estimator_name(self) -> str:
-        module = _ESTIMATOR_MODULE_PATHS[self.estimator_module]
-        class_name = _ESTIMATOR_CLASS_NAMES[self.estimator_class_name]
-        return f"{module}.{class_name}"
+        return f"{_estimator_module_path(self.estimator_module)}.{_estimator_class_name(self.estimator_class_name)}"
 
 
-# Library import boundary only: enum keys map to sklearn module/class import names.
-_ESTIMATOR_MODULE_PATHS = {
-    TrustedEstimatorModule.SKLEARN_PREPROCESSING: "sklearn.preprocessing",
-}
-_ESTIMATOR_CLASS_NAMES = {
-    TrustedEstimatorClassName.STANDARD_SCALER: "StandardScaler",
-    TrustedEstimatorClassName.MIN_MAX_SCALER: "MinMaxScaler",
-}
+def _estimator_module_path(module: TrustedEstimatorModule) -> str:
+    match module:
+        case TrustedEstimatorModule.SKLEARN_PREPROCESSING:
+            return "sklearn.preprocessing"
+
+
+def _estimator_class_name(class_name: TrustedEstimatorClassName) -> str:
+    match class_name:
+        case TrustedEstimatorClassName.STANDARD_SCALER:
+            return "StandardScaler"
+        case TrustedEstimatorClassName.MIN_MAX_SCALER:
+            return "MinMaxScaler"
 
 
 def _require_branch_client_pairing(branch: ProcessedDataBranch, client_identity: str | None) -> None:
