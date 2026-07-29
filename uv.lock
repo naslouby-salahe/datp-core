@@ -285,6 +285,7 @@ source = { editable = "." }
 dependencies = [
     { name = "dagster" },
     { name = "duckdb" },
+    { name = "filelock" },
     { name = "matplotlib" },
     { name = "networkx" },
     { name = "numpy" },
@@ -332,6 +333,7 @@ dev = [
 requires-dist = [
     { name = "dagster", specifier = ">=1.7" },
     { name = "duckdb", specifier = ">=0.10" },
+    { name = "filelock", specifier = ">=3.0" },
     { name = "matplotlib", specifier = ">=3.10" },
     { name = "networkx", specifier = ">=3.0" },
     { name = "numpy", specifier = "==2.5.1" },

@@ -5,6 +5,7 @@ import pytest
 
 from datp_core.domain.enums import (
     AvailabilityStatus,
+    CapabilityStatus,
     CentralizedModelId,
     CentralizedThresholdMethod,
     CheckpointStatus,
@@ -189,6 +190,7 @@ EXPECTED_MEMBERS = (
         ),
     ),
     (AvailabilityStatus, frozenset(("AVAILABLE", "UNAVAILABLE", "UNDEFINED", "SUPPRESSED", "INFEASIBLE"))),
+    (CapabilityStatus, frozenset(("SUPPORTED", "UNSUPPORTED", "CONDITIONAL", "UNAVAILABLE", "NOT_APPLICABLE"))),
     (
         ScientificDecision,
         frozenset(

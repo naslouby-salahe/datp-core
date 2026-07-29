@@ -583,6 +583,8 @@ Therefore:
 
 Without verified physical-device identities, CICIoT2023 cannot be repartitioned as physical devices. Artificial groupings and inferred chronology are not valid substitutes.
 
+The lossless canonical artifact remains the raw-fidelity record. Before any file-defined client construction, split, fitting, calibration, or evaluation, a CICIoT2023 row is eligible for model input if and only if its normalized label is recognized and every declared model-input feature is finite. The gate records the missing-or-unrecognized-label and non-finite-feature signals independently, preserves stable row identity and source provenance, and applies identically to every compared method. It never imputes, zero-fills, caps, clips, replaces infinities, or infers labels.
+
 **9.3 Controlled heterogeneity regime**
 
 The Dirichlet N-BaIoT regime is a controlled sensitivity experiment.

@@ -113,6 +113,10 @@ Place records in the existing most specific model files; do not create a new sou
 - Type boundaries prevent accidental score or threshold substitution.
 - All Phase 07 tests and audits pass.
 
+## External code-health gate
+
+Before phase closure, run the credentials-safe SonarQube CLI and CodeScene procedure in [the roadmap index](00_ROADMAP_INDEX.md#mandatory-external-code-health-gates). Resolve actionable `src/` findings or record the gate as blocked.
+
 ## Mandatory closing audit
 
 Before marking this phase complete, the implementing agent must perform and record all applicable checks:

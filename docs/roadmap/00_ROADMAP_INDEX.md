@@ -49,6 +49,26 @@ Use only libraries that remove substantial custom code or provide a required sci
 
 Do not add a library merely to wrap a few lines of straightforward typed code.
 
+## Mandatory external code-health gates
+
+Every phase must run the following WSL commands before completion, after its local tests and static checks pass:
+
+```bash
+set -a
+. ./.env
+set +a
+test -n "${SONARQUBE_CLI_TOKEN:-}"
+SONARQUBE_CLI_SERVER="https://sonarcloud.io" \
+SONARQUBE_CLI_ORG="naslouby-salahe" \
+  "$HOME/.local/share/sonarqube-cli/bin/sonar" analyze \
+  --project "naslouby-salahe_datp-core" --base origin/main --depth DEEP --format json
+
+test -n "${CS_ACCESS_TOKEN:-}"
+/usr/local/bin/cs delta --output-format json --pretty
+```
+
+`.env` is the local credential loader and must remain untracked. Sonar and CodeScene receive tokens only through their child-process environment. Never print tokens, put them in command-line arguments, persist them in the repository, or include them in audit output. Resolve actionable `src/` findings. Record service-side analysis unavailability separately from authentication failure. Do not push solely to produce an analysis.
+
 ## Phase order
 
 | File | Phase | Depends on | Primary completion gate |
@@ -70,13 +90,13 @@ Do not add a library merely to wrap a few lines of straightforward typed code.
 | `16_PHASE_15_EXTENSION_READINESS.md` | Future extension boundaries | Phases 01–14 | Extension hooks add no current scientific behavior |
 | `17_PHASE_16_FINAL_SCIENTIFIC_AND_ENGINEERING_AUDIT.md` | Final audit | All phases | Full scientific and engineering acceptance passes |
 
-## Locked source-file rule
+## Source-addition rule
 
-The phase documents name every source file they may modify. When a needed responsibility appears absent, the agent must first determine whether an existing file already owns it. If no existing file can own it without becoming a catch-all, stop and record the conflict. Do not create a source file to make the phase easier.
+Phase documents restrict additions under `src/`; they do not prohibit necessary edits to existing source files. A new source file requires explicit user approval, a focused responsibility, and an update to the locked-source architecture test. Existing source files may be corrected when a later phase discovers an upstream contract omission.
 
 ## Test-tree rule
 
-The roadmap may add files only beneath `tests/`. Every permitted test file is named explicitly in the relevant phase. Shared fixtures belong only in `tests/conftest.py`; do not create fixture utility packages or generic test helper modules unless a later revision of this roadmap explicitly approves them.
+The roadmap may add focused tests beneath `tests/`. Test package markers and small local fixtures are permitted when required for deterministic collection or a clear miniature-data assertion. Shared fixture utility packages remain disallowed unless explicitly approved.
 
 ## Completion discipline
 

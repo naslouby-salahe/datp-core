@@ -51,7 +51,9 @@ datasets/edge_iiotset/chronology.py
 datasets/edge_iiotset/materialize.py
 datasets/edge_iiotset/reader.py
 datasets/edge_iiotset/schema.py
+datasets/canonical_cache.py
 datasets/models.py
+datasets/materialization.py
 datasets/nbaiot/__init__.py
 datasets/nbaiot/capabilities.py
 datasets/nbaiot/materialize.py

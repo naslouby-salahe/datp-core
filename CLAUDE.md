@@ -760,6 +760,28 @@ Do not modify quality configuration simply to make new violations disappear.
 
 ---
 
+### 18.1 External code-health analysis
+
+Before declaring a phase or repository-wide change complete, run both WSL tools from the repository root after local tests pass:
+
+```bash
+set -a
+. ./.env
+set +a
+test -n "${SONARQUBE_CLI_TOKEN:-}"
+SONARQUBE_CLI_SERVER="https://sonarcloud.io" \
+SONARQUBE_CLI_ORG="naslouby-salahe" \
+  "$HOME/.local/share/sonarqube-cli/bin/sonar" analyze \
+  --project "naslouby-salahe_datp-core" --base origin/main --depth DEEP --format json
+
+test -n "${CS_ACCESS_TOKEN:-}"
+/usr/local/bin/cs delta --output-format json --pretty
+```
+
+`.env` is the local credential loader and must remain untracked. `SONARQUBE_CLI_TOKEN` and `CS_ACCESS_TOKEN` are read only from the inherited child-process environment. Never print either value, pass either on a command line, write either into a repository file, or add either to a report. Resolve every actionable `src/` finding before completion. Record service-side analysis unavailability separately from authentication failure. Do not trigger remote analysis for an uncommitted revision or push merely to satisfy this gate.
+
+---
+
 ## 19. Comments and Documentation
 
 Do not add AI-style comments.

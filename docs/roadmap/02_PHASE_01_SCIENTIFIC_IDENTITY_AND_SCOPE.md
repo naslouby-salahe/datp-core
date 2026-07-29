@@ -41,6 +41,7 @@ Implement with `enum.StrEnum` unless a non-string enum is scientifically necessa
 
 - `DatasetId`: `NBAIOT`, `CICIOT2023`, `EDGE_IIOTSET`.
 - `PopulationId`: `NBAIOT_NATURAL_DEVICES`, `CICIOT_FILE_CLIENTS`, `NBAIOT_DIRICHLET_CLIENTS`, `EDGE_SENSOR_GROUPS`, `EDGE_TEMPORAL_GROUPS`.
+- `CapabilityStatus`: `SUPPORTED`, `UNSUPPORTED`, `CONDITIONAL`, `UNAVAILABLE`, `NOT_APPLICABLE`.
 
 ### Evidence and experiment identities
 
@@ -152,6 +153,10 @@ Do not create one exception per function. Exceptions carry structured context th
 - The source-tree allowlist test passes.
 - No opaque or compatibility identity remains anywhere under `datp_core/`.
 - All Phase 01 tests and global static checks pass.
+
+## External code-health gate
+
+Before phase closure, run the credentials-safe SonarQube CLI and CodeScene procedure in [the roadmap index](00_ROADMAP_INDEX.md#mandatory-external-code-health-gates). Resolve actionable `src/` findings or record the gate as blocked.
 
 ## Mandatory closing audit
 

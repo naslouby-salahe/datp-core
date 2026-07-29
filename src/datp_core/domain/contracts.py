@@ -1,5 +1,6 @@
 """Structural contracts for later execution phases."""
 
+# Pylint's class-size heuristic does not model one-operation structural protocols.
 # pylint: disable=too-few-public-methods
 
 from pathlib import Path

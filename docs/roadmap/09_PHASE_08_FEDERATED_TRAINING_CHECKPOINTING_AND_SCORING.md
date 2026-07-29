@@ -177,6 +177,10 @@ Generate calibration and evaluation scores once per model coordinate. Preserve l
 - Fixed-detector invariants are machine-verifiable.
 - All Phase 08 tests and audits pass.
 
+## External code-health gate
+
+Before phase closure, run the credentials-safe SonarQube CLI and CodeScene procedure in [the roadmap index](00_ROADMAP_INDEX.md#mandatory-external-code-health-gates). Resolve actionable `src/` findings or record the gate as blocked.
+
 ## Mandatory closing audit
 
 Before marking this phase complete, the implementing agent must perform and record all applicable checks:

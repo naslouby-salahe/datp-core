@@ -29,6 +29,7 @@ Implement exact dataset schemas, readers, provenance, materialization contracts,
 - `datp_core/datasets/models.py`
 - `datp_core/datasets/capabilities.py`
 - `datp_core/datasets/catalogue.py`
+- `datp_core/datasets/materialization.py`
 - `datp_core/datasets/nbaiot/schema.py`
 - `datp_core/datasets/nbaiot/capabilities.py`
 - `datp_core/datasets/nbaiot/reader.py`
@@ -85,7 +86,7 @@ In `datasets/capabilities.py`, implement frozen typed contracts:
 - `ExternalValidationCapability`
 - `DatasetCapabilities`
 
-Every capability has a status, evidence, and reason. A boolean alone is insufficient for conditional or unavailable behavior.
+Every capability has a `CapabilityStatus`, evidence, and reason. A boolean alone is insufficient for conditional or unavailable behavior.
 
 ## N-BaIoT requirements
 
@@ -119,7 +120,7 @@ Declare:
 
 ### `materialize.py`
 
-- Produce canonical Parquet partitions under `data/canonical/dataset=NBAIOT/`.
+- Produce canonical Parquet partitions under `data/canonical/nbaiot/`.
 - Publish atomically after schema and count validation.
 - Include a manifest and schema checksum.
 - Reuse an existing matching canonical asset only after full manifest validation.
@@ -155,9 +156,10 @@ Declare:
 
 ### `materialize.py`
 
-- Publish canonical Parquet under `data/canonical/dataset=CICIOT2023/`.
+- Publish canonical Parquet under `data/canonical/ciciot2023/`.
 - Preserve file identity for later pseudo-client construction.
 - Record that the original 105-device topology cannot be reconstructed from the available artifact.
+- Preserve invalid labels and non-finite values losslessly with an unavailable raw-fidelity eligibility report. The approved outcome-blind model-input gate excludes a row if and only if its normalized label is missing or unrecognized, or any declared feature is non-finite. It records both signals with source-row provenance and runs before client construction, split, fitting, calibration, and evaluation; it never imputes, zero-fills, caps, clips, replaces infinities, or infers labels.
 
 ## Edge-IIoTset requirements
 
@@ -184,6 +186,7 @@ Declare:
 - Read normal and attack sources separately.
 - Never attach attack rows to sensor clients without verified evidence.
 - Preserve source folder, file, row, and raw timestamp provenance.
+- Treat the paired PCAP as the only calendar authority. Revalidate each CSV as an ordered PCAP subsequence, persist the evidence checksum and alignment record, and expose a temporal asset only when those matched PCAP timestamps are already monotonic in verified source order. Do not reorder a non-monotonic source into a synthetic time series.
 
 ### `chronology.py`
 
@@ -250,6 +253,10 @@ Use small audited fixtures generated in-memory or from minimal fixture CSVs unde
 - Invalid scientific uses fail before population or experiment construction.
 - No raw-data fact was invented from the scientific roadmap alone.
 - All Phase 03 tests and audits pass.
+
+## External code-health gate
+
+Before phase closure, run the credentials-safe SonarQube CLI and CodeScene procedure in [the roadmap index](00_ROADMAP_INDEX.md#mandatory-external-code-health-gates). Resolve actionable `src/` findings or record the gate as blocked.
 
 ## Mandatory closing audit
 

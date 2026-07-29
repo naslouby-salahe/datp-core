@@ -119,6 +119,10 @@ The gate does not erase diagnostic outputs. It records why the programme is bloc
 - Missing tolerances remain explicit blockers.
 - All Phase 06 tests and audits pass.
 
+## External code-health gate
+
+Before phase closure, run the credentials-safe SonarQube CLI and CodeScene procedure in [the roadmap index](00_ROADMAP_INDEX.md#mandatory-external-code-health-gates). Resolve actionable `src/` findings or record the gate as blocked.
+
 ## Mandatory closing audit
 
 Before marking this phase complete, the implementing agent must perform and record all applicable checks:

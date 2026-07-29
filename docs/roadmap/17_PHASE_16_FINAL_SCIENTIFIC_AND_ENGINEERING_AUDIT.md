@@ -183,6 +183,10 @@ Return exactly one:
 - [ ] All audits above pass without waiver.
 - [ ] Final verdict is recorded in `01_PHASE_MASTER_LOG.md`.
 
+## External code-health gate
+
+Before phase closure, run the credentials-safe SonarQube CLI and CodeScene procedure in [the roadmap index](00_ROADMAP_INDEX.md#mandatory-external-code-health-gates). Resolve actionable `src/` findings or record the gate as blocked.
+
 ## Mandatory closing audit
 
 Before marking this phase complete, the implementing agent must perform and record all applicable checks:

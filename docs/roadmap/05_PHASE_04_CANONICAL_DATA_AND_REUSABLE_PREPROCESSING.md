@@ -7,6 +7,7 @@
 - The centralized reference is an independent pooled-data pipeline. It is never a federated threshold method and never consumes scores produced by a federated model.
 - The confirmatory comparison reuses one selected FedAvg detector, one preprocessing state, one client population, one calibration set, and one held-out score set per seed. Only threshold-calibration scope changes.
 - Calibration is benign-only. Attack labels and held-out outcomes cannot select models, checkpoints, quantiles, shrinkage values, statistical coefficients, clients, or group assignments.
+- CICIoT2023 model input must first apply its declared outcome-blind eligibility gate: retain only recognized normalized labels with finite declared features, persist both exclusion signals with stable source provenance, and apply the same gate before every client construction, split, fitted-state operation, calibration, and evaluation. Canonical rows remain lossless; no imputation, zero-fill, clipping, capping, infinity replacement, or label inference is permitted.
 - The implementation source tree is locked to the files already created under `datp_core/`. Do not create, rename, move, delete, or replace source files. Test files may be created only when explicitly named in this roadmap.
 - Scientific values absent from the source of truth must remain unresolved. Do not infer them from memory, historical repositories, convenient defaults, or common practice. Record the blocker in `01_PHASE_MASTER_LOG.md`.
 - Python protocol declarations replace YAML. Protocol objects are immutable, fully typed, explicitly constructed, validated as one graph at startup, and serialized into every resolved experiment manifest.
@@ -44,14 +45,13 @@ Only data-related path and serialization responsibilities may be implemented in 
 data/
 ├── raw/                                  # Read-only source or symlink.
 ├── canonical/
-│   └── dataset=<DATASET_ID>/
-│       └── schema=<SCHEMA_CHECKSUM>/
-│           ├── data/                     # Canonical Parquet partitions.
-│           ├── dataset_manifest.json
-│           ├── schema.json
-│           └── COMPLETE
+│   └── <DATASET_ID>/
+│       ├── data/                         # Canonical Parquet partitions.
+│       ├── dataset_manifest.json
+│       ├── schema.json
+│       └── COMPLETE
 └── processed/
-    └── dataset=<DATASET_ID>/
+    └── <DATASET_ID>/
         └── population=<POPULATION_ID>/
             └── partition_seed=<SEED>/
                 └── split=<SPLIT_PROTOCOL_ID>/
@@ -189,6 +189,10 @@ Use a temporary sibling directory and atomic rename. Use `filelock` only at the 
 - Federated and centralized preprocessing states are independently fitted and safely stored.
 - Data reuse never bypasses schema, provenance, or leakage validation.
 - All Phase 04 tests and audits pass.
+
+## External code-health gate
+
+Before phase closure, run the credentials-safe SonarQube CLI and CodeScene procedure in [the roadmap index](00_ROADMAP_INDEX.md#mandatory-external-code-health-gates). Resolve actionable `src/` findings or record the gate as blocked.
 
 ## Mandatory closing audit
 

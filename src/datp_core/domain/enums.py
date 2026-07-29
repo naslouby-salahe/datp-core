@@ -174,6 +174,14 @@ class AvailabilityStatus(StrEnum):
     INFEASIBLE = "infeasible"
 
 
+class CapabilityStatus(StrEnum):
+    SUPPORTED = "supported"
+    UNSUPPORTED = "unsupported"
+    CONDITIONAL = "conditional"
+    UNAVAILABLE = "unavailable"
+    NOT_APPLICABLE = "not_applicable"
+
+
 class ScientificDecision(StrEnum):
     SUPPORTED = "supported"
     DIRECTIONAL_INCONCLUSIVE = "directional_inconclusive"
