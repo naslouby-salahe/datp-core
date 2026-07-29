@@ -48,6 +48,7 @@ from datp_core.domain.values import (
     ShrinkageWeight,
     SummaryCoefficient,
     TrafficRatePerDay,
+    WeightDecay,
     floats_absolutely_close,
 )
 
@@ -151,6 +152,7 @@ class AutoencoderProtocol(Declaration):
 
 class OptimizerProtocol(Declaration):
     identity: OptimizerId
+    weight_decay: WeightDecay
 
 
 class FedAvgProtocol(Declaration):

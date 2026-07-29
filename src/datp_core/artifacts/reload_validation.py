@@ -7,7 +7,7 @@ import numpy as np
 
 from datp_core.artifacts.layout import ProcessedAssetName
 from datp_core.artifacts.serialization import TrustedScaler, load_estimator, transforms_are_equivalent
-from datp_core.domain.enums import TrustedEstimatorClassName
+from datp_core.domain.enums import ContractSubject, TrustedEstimatorClassName
 from datp_core.domain.errors import ArtifactIntegrityError, SerializationSafetyError
 
 
@@ -24,7 +24,7 @@ def reload_and_compare_transform(check: TransformReloadCheck) -> TrustedScaler:
     if check.state_path.name != ProcessedAssetName.STATE.value:
         raise ArtifactIntegrityError(
             "fitted state path must use the skops state asset name",
-            subject=str(check.state_path),
+            subject=ContractSubject.ARTIFACT_PATH,
         )
     estimator = load_estimator(check.state_path, check.class_name)
     reloaded = np.asarray(estimator.transform(check.source_matrix), dtype=float)
@@ -35,7 +35,7 @@ def reload_and_compare_transform(check: TransformReloadCheck) -> TrustedScaler:
     ):
         raise ArtifactIntegrityError(
             "transform-after-reload is not numerically equivalent to transform-before-save",
-            subject=str(check.state_path),
+            subject=ContractSubject.ARTIFACT_PATH,
         )
     return estimator
 
@@ -45,4 +45,4 @@ def reject_untrusted_state(state_path: Path, class_name: TrustedEstimatorClassNa
         load_estimator(state_path, class_name)
     except SerializationSafetyError:
         return
-    raise SerializationSafetyError("expected untrusted estimator rejection", subject=str(state_path))
+    raise SerializationSafetyError("expected untrusted estimator rejection", subject=ContractSubject.ARTIFACT_PATH)

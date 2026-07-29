@@ -187,6 +187,65 @@ class LearningRate(PositiveFiniteFloatValue):
 
 
 @dataclass(frozen=True, slots=True)
+class WeightDecay(NonNegativeFiniteFloatValue):
+    validation_name: ClassVar[str] = "weight decay"
+
+
+@dataclass(frozen=True, slots=True)
+class DataLoaderWorkerCount(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "data loader worker count"
+
+
+@dataclass(frozen=True, slots=True)
+class FeatureCount(PositiveIntegerValue):
+    validation_name: ClassVar[str] = "feature count"
+
+
+@dataclass(frozen=True, slots=True)
+class RowCount(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "row count"
+
+
+@dataclass(frozen=True, slots=True)
+class FeatureNameSequence:
+    names: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.names, tuple) or not self.names:
+            raise ValueError("feature name sequence requires a non-empty tuple")
+        if any(not isinstance(name, str) or not name for name in self.names):
+            raise ValueError("feature names must be non-empty strings")
+        if len(frozenset(self.names)) != len(self.names):
+            raise ValueError("feature names must be unique")
+
+    def __len__(self) -> int:
+        return len(self.names)
+
+    def __iter__(self):
+        return iter(self.names)
+
+    def as_list(self) -> list[str]:
+        return list(self.names)
+
+
+@dataclass(frozen=True, slots=True)
+class OutcomeLabelSequence:
+    labels: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.labels, tuple):
+            raise TypeError("outcome labels must be an immutable tuple")
+        if any(not isinstance(label, str) or not label for label in self.labels):
+            raise ValueError("outcome labels must be non-empty strings")
+
+    def __len__(self) -> int:
+        return len(self.labels)
+
+    def __iter__(self):
+        return iter(self.labels)
+
+
+@dataclass(frozen=True, slots=True)
 class DirichletConcentration(PositiveFiniteFloatValue):
     validation_name: ClassVar[str] = "Dirichlet concentration"
 

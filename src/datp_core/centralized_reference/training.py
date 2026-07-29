@@ -1,0 +1,572 @@
+"""Independent centralized autoencoder training for the privacy-incompatible reference."""
+
+from collections.abc import Sequence
+from dataclasses import dataclass
+from enum import StrEnum
+from pathlib import Path
+
+import numpy as np
+import polars as pl
+import torch
+from safetensors.torch import load_file, save_file
+from torch import nn
+from torch.utils.data import DataLoader, TensorDataset
+
+from datp_core.domain.enums import (
+    CentralizedModelId,
+    ContractSubject,
+    OptimizerId,
+    PopulationId,
+    PreprocessingProtocolId,
+    ProcessedDataBranch,
+    SplitProtocolId,
+    TrainingHistoryColumn,
+)
+from datp_core.domain.errors import (
+    ArtifactIntegrityError,
+    ExecutionStateError,
+    LeakageError,
+    ScientificContractError,
+    UnresolvedScientificValueError,
+)
+from datp_core.domain.values import (
+    BatchSize,
+    Checksum,
+    FeatureCount,
+    FeatureNameSequence,
+    LearningRate,
+    MetricValue,
+    OutcomeLabelSequence,
+    RoundNumber,
+    RowCount,
+    Seed,
+    WeightDecay,
+    checksum_file,
+    checksum_text,
+)
+from datp_core.populations.models import (
+    OUTCOME_LABEL_COLUMN,
+    STABLE_ROW_ID_COLUMN,
+    PopulationFrameColumn,
+    PopulationOutcomeLabel,
+)
+from datp_core.preprocessing.models import FittedPreprocessingState
+from datp_core.protocols.models import (
+    AutoencoderProtocol,
+    CentralizedTrainingProtocol,
+    CheckpointProtocol,
+    OptimizerProtocol,
+)
+from datp_core.protocols.training import (
+    BATCH_SIZE,
+    CENTRALIZED_DATALOADER_WORKER_COUNT,
+    CENTRALIZED_TRAINING_PROTOCOL,
+    LEARNING_RATE,
+    NBAIOT_AUTOENCODER,
+    WEIGHT_DECAY,
+)
+from datp_core.runtime.compute import require_cuda_available, resolve_cuda_device
+from datp_core.runtime.determinism import configure_deterministic_execution
+
+
+class CentralizedArtifactName(StrEnum):
+    MODEL_TENSORS = "model.safetensors"
+    TRAINING_HISTORY = "training_history.parquet"
+    COMPLETE = "COMPLETE"
+
+
+class CentralizedScoreColumn(StrEnum):
+    STABLE_ROW_ID = STABLE_ROW_ID_COLUMN
+    OUTCOME_LABEL = OUTCOME_LABEL_COLUMN
+    RECONSTRUCTION_ERROR = "reconstruction_error"
+
+
+@dataclass(frozen=True, slots=True)
+class CentralizedTrainingCoordinate:
+    population: PopulationId
+    training_seed: Seed
+    split_protocol: SplitProtocolId
+    preprocessing_identity: PreprocessingProtocolId
+    model: CentralizedModelId
+
+    def __post_init__(self) -> None:
+        if self.model is not CentralizedModelId.CENTRALIZED_AUTOENCODER:
+            raise ScientificContractError(
+                "centralized training requires CENTRALIZED_AUTOENCODER",
+                subject=self.model,
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class CentralizedOptimizerSummary:
+    identity: OptimizerId
+    learning_rate: LearningRate
+    weight_decay: WeightDecay
+    batch_size: BatchSize
+
+
+@dataclass(frozen=True, slots=True)
+class CentralizedEpochLoss:
+    epoch: RoundNumber
+    mean_training_loss: MetricValue
+
+
+@dataclass(frozen=True, slots=True)
+class CentralizedModelSnapshot:
+    round_number: RoundNumber
+    state_dict: dict[str, torch.Tensor]
+    mean_training_loss: MetricValue
+
+
+@dataclass(frozen=True, slots=True)
+class CentralizedTrainingResult:
+    coordinate: CentralizedTrainingCoordinate
+    autoencoder_widths: tuple[int, ...]
+    optimizer: CentralizedOptimizerSummary
+    checkpoint_protocol: CheckpointProtocol
+    training_protocol: CentralizedTrainingProtocol
+    training_seed: Seed
+    train_row_count: RowCount
+    feature_count: FeatureCount
+    epoch_losses: tuple[CentralizedEpochLoss, ...]
+    candidate_snapshots: tuple[CentralizedModelSnapshot, ...]
+    model_directory: Path
+    model_tensor_path: Path
+    model_tensor_checksum: Checksum
+    preprocessing_state_checksum: Checksum
+    split_manifest_checksum: Checksum
+    device_name: str
+    batch_size_used: BatchSize
+    final_epoch: RoundNumber
+
+    def __post_init__(self) -> None:
+        if self.train_row_count.value < 1:
+            raise ValueError("centralized training requires at least one benign training row")
+        if self.batch_size_used != self.optimizer.batch_size:
+            raise ScientificContractError(
+                "recorded batch size must equal the declared optimizer batch size",
+                subject=ContractSubject.BATCH_SIZE,
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class CentralizedTrainingRequest:
+    coordinate: CentralizedTrainingCoordinate
+    training_features: pl.DataFrame
+    feature_names: FeatureNameSequence
+    preprocessing_state: FittedPreprocessingState
+    split_manifest_checksum: Checksum
+    output_directory: Path
+    training_seed: Seed
+    autoencoder: AutoencoderProtocol
+    training_protocol: CentralizedTrainingProtocol
+    checkpoint_protocol: CheckpointProtocol
+    learning_rate: LearningRate
+    batch_size: BatchSize
+    benign_label: str = PopulationOutcomeLabel.BENIGN.value
+
+
+class CentralizedAutoencoder(nn.Module):
+    """Symmetric autoencoder constructed only from the declared width tuple."""
+
+    def __init__(self, widths: Sequence[int]) -> None:
+        super().__init__()
+        if len(widths) < 2:
+            raise ScientificContractError(
+                "autoencoder widths require at least input and output layers",
+                subject=ContractSubject.WIDTHS,
+            )
+        if widths[0] != widths[-1]:
+            raise ScientificContractError(
+                "autoencoder input and output widths must match",
+                subject=ContractSubject.WIDTHS,
+            )
+        layers: list[nn.Module] = []
+        for left, right in zip(widths[:-1], widths[1:], strict=True):
+            layers.append(nn.Linear(left, right))
+            if right != widths[-1]:
+                layers.append(nn.ReLU())
+        self._network = nn.Sequential(*layers)
+        self._input_width = int(widths[0])
+        self._widths = tuple(int(width) for width in widths)
+
+    @property
+    def input_width(self) -> int:
+        return self._input_width
+
+    @property
+    def widths(self) -> tuple[int, ...]:
+        return self._widths
+
+    def forward(self, features: torch.Tensor) -> torch.Tensor:
+        return self._network(features)
+
+
+def reject_federated_preprocessing_for_training(state: FittedPreprocessingState) -> None:
+    if state.branch is not ProcessedDataBranch.CENTRALIZED_REFERENCE:
+        raise LeakageError(
+            "federated preprocessing state cannot enter centralized training",
+            subject=state.branch,
+        )
+    if state.client_identity is not None:
+        raise LeakageError(
+            "centralized training rejects client-scoped preprocessing state",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+
+
+def reject_attack_rows_in_centralized_training(labels: OutcomeLabelSequence, benign_label: str) -> None:
+    if any(label != benign_label for label in labels):
+        raise LeakageError(
+            "attack-labelled rows cannot enter centralized benign training",
+            subject=ContractSubject.LABEL,
+        )
+
+
+def build_centralized_autoencoder(protocol: AutoencoderProtocol) -> CentralizedAutoencoder:
+    return CentralizedAutoencoder(protocol.widths)
+
+
+def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> CentralizedTrainingResult:
+    """Train the independent pooled autoencoder on CUDA with declared hyperparameters."""
+    _validate_training_request(request)
+    reject_federated_preprocessing_for_training(request.preprocessing_state)
+    configure_deterministic_execution(request.training_seed)
+    device = resolve_cuda_device()
+    feature_matrix, labels, _row_ids = _extract_training_arrays(request)
+    reject_attack_rows_in_centralized_training(labels, request.benign_label)
+    if feature_matrix.shape[1] != request.autoencoder.widths[0]:
+        raise ScientificContractError(
+            "feature width must match the declared autoencoder input width",
+            subject=ContractSubject.FEATURES,
+        )
+    if feature_matrix.shape[0] < request.batch_size.value:
+        raise ScientificContractError(
+            "centralized training requires at least one full declared batch",
+            subject=ContractSubject.BATCH_SIZE,
+        )
+
+    model = build_centralized_autoencoder(request.autoencoder).to(device)
+    optimizer = _build_optimizer(model, request.training_protocol.optimizer, request.learning_rate)
+    loader = _build_loader(
+        feature_matrix,
+        batch_size=request.batch_size,
+        seed=request.training_seed,
+        device=device,
+    )
+    epoch_losses, snapshots = _run_training_epochs(
+        model=model,
+        optimizer=optimizer,
+        loader=loader,
+        checkpoint_protocol=request.checkpoint_protocol,
+        device=device,
+    )
+    request.output_directory.mkdir(parents=True, exist_ok=True)
+    tensor_path = request.output_directory / CentralizedArtifactName.MODEL_TENSORS
+    tensor_checksum = persist_model_tensors(model, tensor_path)
+    assert_safetensors_reload(model, tensor_path, device)
+    device_name = torch.cuda.get_device_name(device)
+    return CentralizedTrainingResult(
+        coordinate=request.coordinate,
+        autoencoder_widths=tuple(request.autoencoder.widths),
+        optimizer=CentralizedOptimizerSummary(
+            identity=request.training_protocol.optimizer.identity,
+            learning_rate=request.learning_rate,
+            weight_decay=request.training_protocol.optimizer.weight_decay,
+            batch_size=request.batch_size,
+        ),
+        checkpoint_protocol=request.checkpoint_protocol,
+        training_protocol=request.training_protocol,
+        training_seed=request.training_seed,
+        train_row_count=RowCount(int(feature_matrix.shape[0])),
+        feature_count=FeatureCount(int(feature_matrix.shape[1])),
+        epoch_losses=epoch_losses,
+        candidate_snapshots=snapshots,
+        model_directory=request.output_directory,
+        model_tensor_path=tensor_path,
+        model_tensor_checksum=tensor_checksum,
+        preprocessing_state_checksum=request.preprocessing_state.estimator_checksum,
+        split_manifest_checksum=request.split_manifest_checksum,
+        device_name=device_name,
+        batch_size_used=request.batch_size,
+        final_epoch=request.checkpoint_protocol.maximum_round,
+    )
+
+
+def load_centralized_model_tensors(
+    path: Path,
+    autoencoder: AutoencoderProtocol,
+    device: torch.device | None = None,
+) -> CentralizedAutoencoder:
+    require_cuda_available()
+    resolved = resolve_cuda_device() if device is None else device
+    if resolved.type != "cuda":
+        raise ExecutionStateError("centralized model reload requires CUDA", subject=ContractSubject.CUDA)
+    model = build_centralized_autoencoder(autoencoder).to(resolved)
+    state = load_file(str(path), device=str(resolved))
+    model.load_state_dict(state, strict=True)
+    model.eval()
+    return model
+
+
+def model_from_snapshot(
+    snapshot: CentralizedModelSnapshot,
+    autoencoder: AutoencoderProtocol,
+    device: torch.device | None = None,
+) -> CentralizedAutoencoder:
+    require_cuda_available()
+    resolved = resolve_cuda_device() if device is None else device
+    model = build_centralized_autoencoder(autoencoder).to(resolved)
+    model.load_state_dict(snapshot.state_dict, strict=True)
+    model.eval()
+    return model
+
+
+def declared_centralized_training_values() -> tuple[
+    CentralizedTrainingProtocol,
+    AutoencoderProtocol,
+    LearningRate,
+    BatchSize,
+    WeightDecay,
+]:
+    return CENTRALIZED_TRAINING_PROTOCOL, NBAIOT_AUTOENCODER, LEARNING_RATE, BATCH_SIZE, WEIGHT_DECAY
+
+
+def persist_model_tensors(model: CentralizedAutoencoder, path: Path) -> Checksum:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in model.state_dict().items()}
+    save_file(cpu_state, str(path))
+    return checksum_file(path)
+
+
+def assert_safetensors_reload(
+    model: CentralizedAutoencoder,
+    path: Path,
+    device: torch.device,
+) -> None:
+    reloaded = build_centralized_autoencoder(AutoencoderProtocol(widths=model.widths)).to(device)
+    state = load_file(str(path), device=str(device))
+    reloaded.load_state_dict(state, strict=True)
+    for left, right in zip(model.state_dict().values(), reloaded.state_dict().values(), strict=True):
+        if not torch.equal(left, right):
+            raise ArtifactIntegrityError(
+                "SafeTensors reload does not match saved centralized weights",
+                subject=ContractSubject.ARTIFACT_PATH,
+            )
+
+
+def training_history_frame(result: CentralizedTrainingResult) -> pl.DataFrame:
+    return pl.DataFrame(
+        {
+            TrainingHistoryColumn.EPOCH.value: [item.epoch.value for item in result.epoch_losses],
+            TrainingHistoryColumn.MEAN_TRAINING_LOSS.value: [
+                item.mean_training_loss.value for item in result.epoch_losses
+            ],
+        }
+    )
+
+
+def training_result_checksum(result: CentralizedTrainingResult) -> Checksum:
+    payload = (
+        f"{result.coordinate.population.value}|{result.coordinate.training_seed.value}|"
+        f"{result.model_tensor_checksum.value}|{result.final_epoch.value}|{result.batch_size_used.value}"
+    )
+    return checksum_text(payload)
+
+
+def require_no_hidden_scientific_defaults() -> None:
+    """Fail if mandatory centralized training values are absent from declarations."""
+    if CENTRALIZED_TRAINING_PROTOCOL.optimizer.identity is not OptimizerId.ADAM:
+        raise UnresolvedScientificValueError(
+            "centralized optimizer identity is not the declared Adam protocol",
+            subject=ContractSubject.OPTIMIZER,
+        )
+    if LEARNING_RATE.value <= 0 or BATCH_SIZE.value <= 0:
+        raise UnresolvedScientificValueError(
+            "centralized learning rate or batch size is unresolved",
+            subject=ContractSubject.TRAINING_HYPERPARAMETERS,
+        )
+    if WEIGHT_DECAY.value < 0:
+        raise UnresolvedScientificValueError(
+            "centralized Adam weight decay is unresolved",
+            subject=ContractSubject.TRAINING_HYPERPARAMETERS,
+        )
+    if not NBAIOT_AUTOENCODER.widths:
+        raise UnresolvedScientificValueError(
+            "centralized autoencoder widths are unresolved",
+            subject=ContractSubject.AUTOENCODER,
+        )
+
+
+def reconstruction_errors(
+    model: CentralizedAutoencoder,
+    features: np.ndarray,
+    *,
+    batch_size: BatchSize,
+    device: torch.device,
+) -> np.ndarray:
+    """Mean per-row squared reconstruction error; higher means greater anomaly evidence."""
+    require_cuda_available()
+    if features.ndim != 2:
+        raise ScientificContractError(
+            "reconstruction scoring requires a 2-D feature matrix",
+            subject=ContractSubject.FEATURES,
+        )
+    if features.shape[1] != model.input_width:
+        raise ScientificContractError("feature width mismatch during scoring", subject=ContractSubject.FEATURES)
+    if not np.isfinite(features).all():
+        raise ScientificContractError("scoring features must be finite", subject=ContractSubject.FEATURES)
+    model.eval()
+    tensor = torch.as_tensor(features, dtype=torch.float32, device=device)
+    scores: list[np.ndarray] = []
+    with torch.inference_mode():
+        for start in range(0, tensor.shape[0], batch_size.value):
+            batch = tensor[start : start + batch_size.value]
+            reconstructed = model(batch)
+            per_row = torch.mean((reconstructed - batch) ** 2, dim=1)
+            scores.append(per_row.detach().cpu().numpy())
+    if not scores:
+        return np.asarray([], dtype=np.float64)
+    return np.concatenate(scores).astype(np.float64, copy=False)
+
+
+def _validate_training_request(request: CentralizedTrainingRequest) -> None:
+    _require_centralized_model_identities(request)
+    _require_training_frame_schema(request)
+
+
+def _require_centralized_model_identities(request: CentralizedTrainingRequest) -> None:
+    if request.training_protocol.kind is not CentralizedModelId.CENTRALIZED_AUTOENCODER:
+        raise ScientificContractError(
+            "training protocol must declare CENTRALIZED_AUTOENCODER",
+            subject=request.training_protocol.kind,
+        )
+    if request.coordinate.model is not CentralizedModelId.CENTRALIZED_AUTOENCODER:
+        raise ScientificContractError(
+            "training coordinate model identity is invalid",
+            subject=request.coordinate.model,
+        )
+    if request.batch_size.value < 1:
+        raise ScientificContractError(
+            "batch size must remain the declared positive value",
+            subject=ContractSubject.BATCH_SIZE,
+        )
+    if request.preprocessing_state.protocol.identity is not request.coordinate.preprocessing_identity:
+        raise ScientificContractError(
+            "preprocessing identity mismatch between coordinate and fitted state",
+            subject=ContractSubject.PREPROCESSING,
+        )
+
+
+def _require_training_frame_schema(request: CentralizedTrainingRequest) -> None:
+    missing = [name for name in request.feature_names if name not in request.training_features.columns]
+    if missing:
+        raise ScientificContractError(
+            f"training frame missing declared features: {', '.join(missing)}",
+            subject=ContractSubject.FEATURES,
+        )
+    for column in (PopulationFrameColumn.STABLE_ROW_ID, PopulationFrameColumn.OUTCOME_LABEL):
+        if column.value not in request.training_features.columns:
+            raise ScientificContractError(
+                f"training frame missing required column {column.value}",
+                subject=column,
+            )
+
+
+def _extract_training_arrays(
+    request: CentralizedTrainingRequest,
+) -> tuple[np.ndarray, OutcomeLabelSequence, tuple[str, ...]]:
+    frame = request.training_features
+    labels = OutcomeLabelSequence(tuple(str(value) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list()))
+    row_ids = tuple(str(value) for value in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
+    matrix = frame.select(request.feature_names.as_list()).to_numpy().astype(np.float32, copy=False)
+    if not np.isfinite(matrix).all():
+        raise ScientificContractError("centralized training features must be finite", subject=ContractSubject.FEATURES)
+    if len(labels) != matrix.shape[0] or len(row_ids) != matrix.shape[0]:
+        raise ScientificContractError("training arrays must align by row", subject=ContractSubject.ROWS)
+    return matrix, labels, row_ids
+
+
+def _build_optimizer(
+    model: CentralizedAutoencoder,
+    optimizer_protocol: OptimizerProtocol,
+    learning_rate: LearningRate,
+) -> torch.optim.Optimizer:
+    match optimizer_protocol.identity:
+        case OptimizerId.ADAM:
+            return torch.optim.Adam(
+                model.parameters(),
+                lr=learning_rate.value,
+                weight_decay=optimizer_protocol.weight_decay.value,
+            )
+
+
+def _build_loader(
+    matrix: np.ndarray,
+    *,
+    batch_size: BatchSize,
+    seed: Seed,
+    device: torch.device,
+) -> DataLoader:
+    # DataLoader shuffle generators must live on CPU; model tensors remain on CUDA.
+    require_cuda_available()
+    tensor = torch.tensor(np.asarray(matrix, dtype=np.float32), dtype=torch.float32, device=device)
+    dataset = TensorDataset(tensor)
+    generator = torch.Generator(device="cpu")
+    generator.manual_seed(seed.value)
+    return DataLoader(
+        dataset,
+        batch_size=batch_size.value,
+        shuffle=True,
+        drop_last=True,
+        generator=generator,
+        num_workers=CENTRALIZED_DATALOADER_WORKER_COUNT.value,
+    )
+
+
+def _run_training_epochs(
+    *,
+    model: CentralizedAutoencoder,
+    optimizer: torch.optim.Optimizer,
+    loader: DataLoader,
+    checkpoint_protocol: CheckpointProtocol,
+    device: torch.device,
+) -> tuple[tuple[CentralizedEpochLoss, ...], tuple[CentralizedModelSnapshot, ...]]:
+    losses: list[CentralizedEpochLoss] = []
+    snapshots: list[CentralizedModelSnapshot] = []
+    candidate_rounds = {candidate.value for candidate in checkpoint_protocol.candidates}
+    model.train()
+    for epoch_index in range(1, checkpoint_protocol.maximum_round.value + 1):
+        batch_losses: list[float] = []
+        for (batch,) in loader:
+            batch = batch.to(device, non_blocking=False)
+            optimizer.zero_grad(set_to_none=True)
+            reconstruction = model(batch)
+            loss = nn.functional.mse_loss(reconstruction, batch)
+            loss.backward()
+            optimizer.step()
+            batch_losses.append(float(loss.detach().cpu().item()))
+        if not batch_losses:
+            raise ScientificContractError(
+                "centralized training produced no batches; declared batch size cannot be relaxed",
+                subject=ContractSubject.BATCH_SIZE,
+            )
+        mean_loss = MetricValue(float(np.mean(np.asarray(batch_losses, dtype=float))))
+        epoch = RoundNumber(epoch_index)
+        losses.append(CentralizedEpochLoss(epoch=epoch, mean_training_loss=mean_loss))
+        if epoch_index in candidate_rounds:
+            snapshots.append(
+                CentralizedModelSnapshot(
+                    round_number=epoch,
+                    state_dict={name: tensor.detach().cpu().clone() for name, tensor in model.state_dict().items()},
+                    mean_training_loss=mean_loss,
+                )
+            )
+    expected = tuple(candidate.value for candidate in checkpoint_protocol.candidates)
+    observed = tuple(item.round_number.value for item in snapshots)
+    if observed != expected:
+        raise ScientificContractError(
+            "training failed to capture every declared checkpoint candidate",
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    return tuple(losses), tuple(snapshots)

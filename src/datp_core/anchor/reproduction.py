@@ -36,7 +36,7 @@ from datp_core.anchor.models import (
     HistoricalRegimeToken,
     HistoricalThresholdScopeToken,
 )
-from datp_core.domain.enums import FederatedThresholdMethod, MetricId
+from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod, MetricId
 from datp_core.domain.errors import AnchorReproductionError
 from datp_core.domain.values import Checksum, ClientCount, MetricValue, Seed, checksum_file
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
@@ -150,30 +150,29 @@ def references_from_protocol(
 
 def validate_historical_seed_cohort(seed_cohort: SeedCohort) -> SeedCohort:
     values = seed_cohort.values
-    cohort_subject = ",".join(str(seed.value) for seed in values)
     member_count = seed_cohort.member_count
     if member_count == CONFIRMATORY_PAIRED_SEED_COUNT or seed_cohort == CONFIRMATORY_SEED_COHORT:
         raise AnchorReproductionError(
             "confirmatory ten-seed paired cohort cannot enter anchor reproduction",
-            subject=cohort_subject,
+            subject=ContractSubject.SEED,
             reason=AnchorDiscrepancyReason.CONFIRMATORY_TEN_SEED_COHORT_REJECTED.value,
         )
     if member_count != ANCHOR_HISTORICAL_SEED_COUNT:
         raise AnchorReproductionError(
             "anchor reproduction requires exactly the historical five-seed cohort",
-            subject=cohort_subject,
+            subject=ContractSubject.SEED,
             reason=AnchorDiscrepancyReason.WRONG_SEED_SUBSET.value,
         )
     if len(set(values)) != len(values):
         raise AnchorReproductionError(
             "anchor seed cohort contains duplicate seeds",
-            subject=cohort_subject,
+            subject=ContractSubject.SEED,
             reason=AnchorDiscrepancyReason.DUPLICATE_SEED.value,
         )
     if seed_cohort != HISTORICAL_ANCHOR_SEED_COHORT:
         raise AnchorReproductionError(
             "anchor seed cohort must match the declared historical five-seed cohort",
-            subject=cohort_subject,
+            subject=ContractSubject.SEED,
             reason=AnchorDiscrepancyReason.WRONG_SEED_SUBSET.value,
         )
     return seed_cohort
@@ -213,7 +212,7 @@ def _read_historical_metrics_document(path: Path) -> HistoricalMetricsDocument:
     if not path.is_file():
         raise AnchorReproductionError(
             "historical metrics artifact is missing",
-            subject=path.as_posix(),
+            subject=ContractSubject.ARTIFACT_PATH,
             reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION.value,
         )
     try:
@@ -221,7 +220,7 @@ def _read_historical_metrics_document(path: Path) -> HistoricalMetricsDocument:
     except (OSError, ValueError, ValidationError, TypeError) as error:
         raise AnchorReproductionError(
             "historical metrics artifact failed schema validation",
-            subject=path.as_posix(),
+            subject=ContractSubject.ARTIFACT_PATH,
             reason=AnchorDiscrepancyReason.STALE_OR_MISMATCHED_ARTIFACT.value,
         ) from error
 
@@ -231,7 +230,6 @@ def _validate_historical_document(
     source: HistoricalMetricArtifactSource,
     path: Path,
 ) -> None:
-    subject = path.as_posix()
     checks: tuple[tuple[bool, str, AnchorDiscrepancyReason], ...] = (
         (
             document.seed != source.seed,
@@ -266,7 +264,7 @@ def _validate_historical_document(
     )
     for failed, message, reason in checks:
         if failed:
-            raise AnchorReproductionError(message, subject=subject, reason=reason.value)
+            raise AnchorReproductionError(message, subject=ContractSubject.ARTIFACT_PATH, reason=reason.value)
 
 
 def load_historical_observations(
@@ -329,7 +327,7 @@ def threshold_method_from_historical_scope(
         case _:
             raise AnchorReproductionError(
                 "unrecognized historical threshold scope token",
-                subject=token.value,
+                subject=token,
                 reason=AnchorDiscrepancyReason.WRONG_THRESHOLD_METHOD.value,
             )
 

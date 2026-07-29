@@ -1,3 +1,4 @@
+from datp_core.domain.enums import ContractSubject
 """Generic JSON manifest helpers for reusable processed-data publications."""
 
 from pathlib import Path
@@ -19,7 +20,7 @@ def read_json_model[ModelT: BaseModel](
 ) -> ModelT:
     path = directory / asset_name
     if not path.is_file():
-        raise ArtifactIntegrityError(f"missing {asset_name.value}", subject=str(directory))
+        raise ArtifactIntegrityError(f"missing {asset_name.value}", subject=ContractSubject.ARTIFACT_PATH)
     return model_type.model_validate_json(path.read_text(encoding="utf-8"))
 
 

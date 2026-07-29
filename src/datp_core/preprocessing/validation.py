@@ -10,12 +10,13 @@ from datp_core.artifacts.layout import ProcessedAssetName, asset_for_partition, 
 from datp_core.artifacts.serialization import TrustedScaler, clone_trusted_scaler, serialize_estimator
 from datp_core.artifacts.store import ProcessedPublication, ProcessedPublicationResult, publish_processed
 from datp_core.domain.enums import (
+    ContractSubject,
     PartitionRole,
     PreprocessingFitScope,
     ProcessedDataBranch,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientIdentity, checksum_file, checksum_text
+from datp_core.domain.values import Checksum, ClientIdentity, OutcomeLabelSequence, checksum_file, checksum_text
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     FittedStatePublishSpec,
@@ -48,13 +49,13 @@ def require_core_partitions(
         if role not in partitions or role not in row_ids:
             raise ScientificContractError(
                 f"{subject.value} missing preprocessing partition {role.value}",
-                subject=role.value,
+                subject=role,
             )
 
 
 def validate_train_only_fit(fit_partition: PartitionRole) -> None:
     if fit_partition is not PartitionRole.TRAIN:
-        raise LeakageError("preprocessing may fit only on training rows", subject=fit_partition.value)
+        raise LeakageError("preprocessing may fit only on training rows", subject=fit_partition)
 
 
 def validate_no_partition_overlap(
@@ -76,15 +77,15 @@ def validate_no_partition_overlap(
             overlap = left_ids & right_ids
             if overlap:
                 raise LeakageError(
-                    f"source-row overlap between {left_role.value} and {right_role.value}",
-                    subject=next(iter(sorted(overlap))),
+                    f"source-row overlap between {left_role.value} and {right_role.value}: "
+                    f"{next(iter(sorted(overlap)))}",
+                    subject=left_role,
                 )
 
 
-def validate_finite_matrix(matrix: np.ndarray, subject: PartitionRole | str) -> None:
-    label = subject.value if isinstance(subject, PartitionRole) else subject
+def validate_finite_matrix(matrix: np.ndarray, subject: PartitionRole | ContractSubject) -> None:
     if not np.isfinite(matrix).all():
-        raise ScientificContractError("transformed values must be finite", subject=label)
+        raise ScientificContractError("transformed values must be finite", subject=subject)
 
 
 def transform_feature_matrix(
@@ -99,7 +100,9 @@ def transform_feature_matrix(
 
 def validate_transformed_schema(protocol: PreprocessingProtocol, schema: TransformedSchema) -> None:
     if schema != protocol.transformed_schema:
-        raise ScientificContractError("transformed schema does not match the preprocessing protocol", subject="schema")
+        raise ScientificContractError(
+            "transformed schema does not match the preprocessing protocol", subject=ContractSubject.SCHEMA
+        )
 
 
 def validate_branch_isolation(
@@ -108,17 +111,22 @@ def validate_branch_isolation(
     client_identity: ClientIdentity | None,
 ) -> None:
     if fitted_state.branch is not expected_branch:
-        raise ScientificContractError("fitted-state branch mismatch", subject=fitted_state.branch.value)
+        raise ScientificContractError("fitted-state branch mismatch", subject=fitted_state.branch)
     if expected_branch is ProcessedDataBranch.FEDERATED:
         if fitted_state.client_identity != client_identity:
-            raise ScientificContractError("federated fitted state client mismatch", subject=str(client_identity))
+            raise ScientificContractError(
+                "federated fitted state client mismatch",
+                subject=ContractSubject.CLIENT_IDENTITY,
+            )
     elif fitted_state.client_identity is not None:
-        raise ScientificContractError("centralized fitted state must not carry a client identity", subject="client")
+        raise ScientificContractError(
+            "centralized fitted state must not carry a client identity", subject=ContractSubject.CLIENT
+        )
 
 
-def validate_no_attack_labels_in_fit(labels: Sequence[str], benign_label: str) -> None:
+def validate_no_attack_labels_in_fit(labels: OutcomeLabelSequence, benign_label: str) -> None:
     if any(label != benign_label for label in labels):
-        raise LeakageError("attack-labelled rows cannot enter benign preprocessing fit", subject="label")
+        raise LeakageError("attack-labelled rows cannot enter benign preprocessing fit", subject=ContractSubject.LABEL)
 
 
 def successful_preprocessing_validation_report() -> PreprocessingValidationReport:
@@ -186,12 +194,12 @@ def fit_trusted_batch(
     if matrix.shape[0] != len(batch.training_row_ids):
         raise ScientificContractError(
             f"{subject.value} matrix and row identities must align",
-            subject=PartitionRole.TRAIN.value,
+            subject=PartitionRole.TRAIN,
         )
     if matrix.shape[1] != len(protocol.input_feature_names):
         raise ScientificContractError(
             f"{subject.value} width must match protocol input features",
-            subject="features",
+            subject=ContractSubject.FEATURES,
         )
     fitted = clone_trusted_scaler(estimator, protocol.estimator_class_name)
     fitted.fit(matrix)

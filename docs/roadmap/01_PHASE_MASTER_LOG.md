@@ -38,8 +38,8 @@ Do not add percentages. A phase is binary with respect to its exit criteria.
 | 04 — Canonical data and reusable preprocessing | `COMPLETE` | Phase 03 complete | Method locks, coordinates, reuse, skops, materialize CLI, runtime CUDA/workers, package-cycle cleanup, full gates | None; end-to-end processed publication consumes Phase 05 populations by design |
 | 05 — Populations, splits, and cohorts | `COMPLETE` | Phase 04 complete and Phase 4 cleanup gate clear | Deterministic builders, splits, cohorts, handoff, full gates; Edge temporal forensic audit | None; Edge nine-group temporal population verified after chronology eligibility fix |
 | 06 — Anchor reproduction and gate | `COMPLETE` | Phase 05 complete | Typed five-seed reproduction, full-precision comparisons, programme gate, diagnostics under block, full gates | Independent re-execution remains Phase 08; historical artifact evidence verifies the declared anchor |
-| 07 — Centralized reference | `NOT_STARTED` | Phase 05 complete | Independent pooled execution and tests | Centralized training values absent from source truth remain blocking |
-| 08 — Federated training, checkpointing, and scoring | `NOT_STARTED` | Phases 05–06 complete | Frozen scores and checkpoint discipline pass | Exact architecture/optimizer/batch values must be sourced |
+| 07 — Centralized reference | `COMPLETE` | Phase 05–06 complete | Independent pooled pipeline, fixed-terminal selection, independence tests, full gates | None; `FIXED_TERMINAL_MAXIMUM_ROUND` locked |
+| 08 — Federated training, checkpointing, and scoring | `NOT_STARTED` | Phases 05–06 complete (verified) | Frozen scores and checkpoint discipline pass | No scientific entry blocker for starting implementation; on-disk `data/processed/.../federated/` not yet published (builders exist); FedProx primary `μ` selection rule still undeclared for stress-test primary |
 | 09 — Calibration and threshold methods | `NOT_STARTED` | Phase 08 complete | All feasible methods verified | Grouped-threshold execution and artifact validation remain deferred to Phase 09 |
 | 10 — Metrics and inference | `NOT_STARTED` | Phase 09 complete | Metric semantics and paired inference pass | Near-zero mean-FPR warning cutoff and temporal materiality cutoff must be declared |
 | 11 — External and temporal evidence | `NOT_STARTED` | Phases 08–10 complete | Edge static/temporal and CIC boundary tests pass | Temporal source validity is data-dependent |
@@ -79,6 +79,8 @@ The anchor stores historically observed shared-scope and local-scope CV(FPR) ref
 Scientific preprocessing methods are locked as research amendments (Journal §2.2.1), resolving paper vs successor-literature tension explicitly: confirmatory federated `FEDERATED_CLIENT_LOCAL_STANDARD` is **client-local `StandardScaler`** on benign training only (conference reproducibility table + recovered anchor per-device scaler artifacts); supportive `FEDERATED_POOLED_MIN_MAX` is pooled `MinMaxScaler` from successor FL-AE practice and is **not** confirmatory; centralized-reference `CENTRALIZED_POOLED_MIN_MAX` is independent pooled `MinMaxScaler`. All scientific methods persist with skops, use transform absolute tolerance `1e-12` (engineering amendment reusing the fixed-score tolerance magnitude), retain unclipped out-of-range transforms, and forbid imputation/zero-fill/clipping/empty-train zero-row recovery. Missing/non-finite handling remains exclusion-or-validation-failure via dataset eligibility contracts. Phase 04 owns method-bound reusable preprocessing infrastructure; end-to-end processed publication consumes Phase 05 populations and splits.
 
 Phase 05 research amendments (prospective): Hamilton/largest-remainder integer residual allocation for fractional and temporal splits; controlled synthetic partition construction with class-conditional Dirichlet concentrations plus a separate typed IID condition (`ControlledPartitionKind`); Edge temporal eligibility is always evidence-driven from persisted chronology rather than assumed nine groups.
+
+Checkpoint selection research amendment (prospective; unlocks Phase 07–08): The journal locks candidates `{25,50,75,100,125,150,200}` and `maximum_round=200`, requires a non-test primary rule specified before journal outcomes are inspected, and forbids test AUROC/FPR/`CV(FPR)`, Macro-F1, balanced accuracy, attack labels, B1–B2 effects, external/stress outcomes, and policy-specific best performance as selectors (Journal §2.5, §13.2–13.3). The exact algorithm was previously absent from the source. Authorized primary rule: `FIXED_TERMINAL_MAXIMUM_ROUND`. Among declared candidates, the primary checkpoint is always the candidate at `CheckpointProtocol.maximum_round` (`200`). No metric, label, score, threshold outcome, or cross-policy contrast may enter selection. All non-terminal retained candidates are stability evidence only. Application: centralized B0 applies the rule independently to its own candidate set per centralized training coordinate and never consumes federated checkpoints; federated journal training uses the same primary round number (`R*=200`) consistently across main regimes and policies where the candidate exists, with model weights remaining seed-, population-, and model-specific; conference anchor reproduction retains `HISTORICAL_ENDPOINT` semantics only and is never retrofitted with this rule. Historical early stopping (B0 train-internal validation fraction; FedAvg benign-validation relative-change convergence) is superseded by this fixed-budget protocol and must not be reintroduced. Mean training losses at candidates may be recorded for trajectory reporting but are not selection inputs under this rule.
 
 Grouped threshold assignment is the source-locked taxonomy-free mechanism: create each eligible client’s benign reconstruction-error fingerprint from mean, standard deviation, skewness, and `p95`; standardize the feature matrix with `StandardScaler`; run k-means++ with `n_init=10`, `max_iter=300`, and `random_state=42`; use the declared group count; and assign each cluster the arithmetic mean of its eligible local thresholds. It never uses attack labels or held-out outcomes. Population-specific traffic-rate evidence remains absent, so `ALERT_BURDEN_TRANSLATION` is a declared suppressed operational experiment rather than an executable rate claim.
 
@@ -236,4 +238,66 @@ Grouped threshold assignment is the source-locked taxonomy-free mechanism: creat
 - CodeScene delta: residual complexity/argument findings on validation-heavy helpers after cleanup; no unresolved actionable defect requiring further science change. Scores improved after extraction of document validation and comparison outcome records.
 - Unresolved values: none for Phase 06 gate machinery. Independent training/checkpoint/score re-execution remains Phase 08 by design; Phase 06 loads typed historical observations or records the dependency blocker.
 - No Phase 07 or Phase 08 implementation. No new `src/` files. No commit or push.
+
+## Phase 07 — Independent centralized reference pipeline
+
+- Status: `COMPLETE`.
+- Entry-criteria findings:
+  - Phase 05 `COMPLETE`; Phase 06 `COMPLETE`.
+  - Centralized training hyperparameter declarations resolve from `CANONICAL_PROTOCOL_GRAPH` / training protocols: Adam, learning rate `0.001`, weight decay `0.0`, batch size `256`, N-BaIoT widths `(115, 86, 58, 38, 29, 38, 58, 86, 115)`, checkpoint candidates `25..200`, selection rule `FIXED_TERMINAL_MAXIMUM_ROUND`, centralized model `CENTRALIZED_AUTOENCODER`, quantile `CANONICAL_QUANTILE=0.95` via `CENTRALIZED_POOLED_QUANTILE_PROTOCOL`.
+  - CUDA required by `CANONICAL_RUNTIME`; no silent CPU fallback.
+  - No Phase 08 federated training/scoring/threshold surface was implemented beyond documenting the shared selection rule for Phase 08 to consume.
+  - Locked source tree preserved: only existing authorized files were modified; no new `src/` files.
+- Source files changed (Phase 07 authorized surface only):
+  - `src/datp_core/centralized_reference/preprocessing.py` (existing Phase 04 pooled path retained)
+  - `src/datp_core/centralized_reference/training.py`
+  - `src/datp_core/centralized_reference/checkpointing.py`
+  - `src/datp_core/centralized_reference/scoring.py`
+  - `src/datp_core/centralized_reference/thresholding.py`
+  - `src/datp_core/centralized_reference/evaluation.py`
+  - `src/datp_core/orchestration/stages/preprocess_centralized_reference.py`
+  - `src/datp_core/orchestration/stages/train_centralized_reference.py`
+  - `src/datp_core/orchestration/stages/select_centralized_reference_checkpoint.py`
+  - `src/datp_core/orchestration/stages/score_centralized_reference.py`
+  - `src/datp_core/orchestration/stages/construct_centralized_reference_threshold.py`
+  - `src/datp_core/orchestration/stages/evaluate_centralized_reference.py`
+- Test files added:
+  - `tests/unit/centralized_reference/helpers.py`
+  - `tests/unit/centralized_reference/test_training.py`
+  - `tests/unit/centralized_reference/test_checkpointing.py`
+  - `tests/unit/centralized_reference/test_scoring.py`
+  - `tests/unit/centralized_reference/test_thresholding.py`
+  - `tests/unit/centralized_reference/test_evaluation.py`
+  - `tests/unit/orchestration/stages/test_centralized_reference_stages.py`
+  - `tests/integration/centralized_reference/test_centralized_reference_pipeline.py`
+  - `tests/scientific/test_centralized_reference_is_independent.py`
+  - `tests/scientific/test_centralized_reference_never_enters_federated_dispatch.py`
+- Scientific-source sections consulted: Journal §2.2.1 centralized pooled MinMax; B0 centralized reference identity; checkpoint candidates and non-test selection requirement; decision rule `score > threshold`; pooled benign quantile; benign-only train/calibration; confirmatory ladder separation; fixed-detector and independence boundaries; Phase 04–08 roadmap boundary documents.
+- Protocol values used: `CENTRALIZED_TRAINING_PROTOCOL`, `NBAIOT_AUTOENCODER`, `OPTIMIZER=ADAM`, `LEARNING_RATE=0.001`, `WEIGHT_DECAY=0.0`, `BATCH_SIZE=256`, `CHECKPOINT_PROTOCOL` candidates, `CHECKPOINT_SELECTION_RULE=FIXED_TERMINAL_MAXIMUM_ROUND`, `CANONICAL_QUANTILE=0.95`, `CENTRALIZED_POOLED_MIN_MAX`, `CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE`, `CANONICAL_RUNTIME.require_cuda=True`.
+- Unresolved values:
+  - Quantile interpolation is operationalized as NumPy linear (`numpy.quantile(..., method="linear")`) and recorded as `QuantileInterpolationSemantics.NUMPY_QUANTILE_LINEAR`; the journal locks the level; this operationalization is the declared engineering completion of that level.
+- Implementation completed:
+  - Independent pooled MinMax preprocessing path with federated-state rejection.
+  - Deterministic CUDA centralized autoencoder training with SafeTensors persistence and declared batch size and Adam weight decay.
+  - Declared checkpoint candidate retention and SafeTensors reload.
+  - `FIXED_TERMINAL_MAXIMUM_ROUND` selection; held-out metrics and attack labels rejected; non-terminal candidates marked `STABILITY_EVIDENCE`.
+  - Deterministic pooled calibration/evaluation scoring with polarity check and reload equality.
+  - Pooled benign quantile threshold from protocol quantile (not hardcoded `0.95` in execution).
+  - Pooled evaluation with confusion counts, unavailable/undefined metric statuses, supportive evidence role only.
+  - Stage orchestration chain with atomic publish/reuse and federated-artifact rejection guards.
+- Centralized/federated independence evidence:
+  - Structural rejection of federated preprocessing, checkpoints, scores, local-quantile means, and federated dispatch insertion.
+  - Scientific AST tests forbid centralized imports of `thresholding`, `learning.federated`, and `scoring`.
+  - Evaluation cannot enter confirmatory B1–B2 ladder or claim confirmatory role.
+- Real-data smoke (controlled N-BaIoT natural-device pooled branch):
+  - Full split conservation: 7_062_606 assignment rows; train 185_314 / calibration 185_309 / evaluation 6_691_983; disjoint partitions.
+  - Smoke subsample: train 2048 benign, calibration 1024 benign, evaluation 1024; independent MinMax skops reload at tolerance `1e-12`.
+  - CUDA device used (`NVIDIA GeForce RTX 5060 Ti`); batch size 256; widths match 115-feature AE; candidates retained for controlled short protocol rounds `(2, 4)`.
+  - Selection under `FIXED_TERMINAL_MAXIMUM_ROUND` chooses the maximum declared candidate.
+  - Scoring/threshold/evaluation on the selected terminal candidate: calibration 1024, evaluation 1024, quantile 0.95, threshold computed, confirmatory ladder membership false; no federated artifacts read or written.
+- Focused Phase 07 selections pass after selection unlock; whole-suite command re-run for completion.
+- Ruff format/check on Phase 07 surface: pass.
+- Pyright on Phase 07 sources: 0 errors.
+- Audit verdict: complete. Independent centralized pipeline verified; non-test checkpoint rule locked as `FIXED_TERMINAL_MAXIMUM_ROUND`; Phase 08 remains clear to start on Phases 05–06 entry criteria with the shared selection rule already declared.
+- No Phase 08 federated trainer implementation. No new `src/` files. No commit or push.
 

@@ -3,6 +3,7 @@ import pytest
 
 from datp_core.domain.enums import PartitionRole
 from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.values import OutcomeLabelSequence
 from datp_core.preprocessing.validation import (
     validate_finite_matrix,
     validate_no_attack_labels_in_fit,
@@ -21,9 +22,9 @@ def test_train_only_and_overlap_guards() -> None:
 
 
 def test_attack_and_nonfinite_guards() -> None:
-    validate_no_attack_labels_in_fit(("benign", "benign"), "benign")
+    validate_no_attack_labels_in_fit(OutcomeLabelSequence(("benign", "benign")), "benign")
     with pytest.raises(LeakageError):
-        validate_no_attack_labels_in_fit(("benign", "attack"), "benign")
+        validate_no_attack_labels_in_fit(OutcomeLabelSequence(("benign", "attack")), "benign")
     validate_finite_matrix(np.asarray([[1.0, 2.0]]), PartitionRole.TRAIN)
     with pytest.raises(ScientificContractError):
         validate_finite_matrix(np.asarray([[1.0, np.nan]]), PartitionRole.TRAIN)

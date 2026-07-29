@@ -325,6 +325,12 @@ class CheckpointStatus(StrEnum):
     STABILITY_EVIDENCE = "stability_evidence"
 
 
+class CheckpointSelectionRule(StrEnum):
+    """Locked non-test checkpoint selection algorithms."""
+
+    FIXED_TERMINAL_MAXIMUM_ROUND = "fixed_terminal_maximum_round"
+
+
 class CompletionStatus(StrEnum):
     NOT_STARTED = "not_started"
     IN_PROGRESS = "in_progress"
@@ -392,3 +398,47 @@ class PreprocessExecutionStatus(StrEnum):
     BLOCKED_POPULATION_CONSTRUCTION = "blocked_population_construction"
     PUBLISHED = "published"
     REUSED = "reused"
+
+
+class ContractSubject(StrEnum):
+    """Closed error-subject vocabulary for DatpCoreError.subject."""
+
+    ARTIFACT_PATH = "artifact_path"
+    ATTACK_LABELS = "attack_labels"
+    AUTOENCODER = "autoencoder"
+    BATCH_SIZE = "batch_size"
+    CALIBRATION = "calibration"
+    CANDIDATES = "candidates"
+    CHECKPOINT_CANDIDATES = "checkpoint_candidates"
+    CHECKPOINT_SELECTION_RULE = "checkpoint_selection_rule"
+    CLIENT = "client"
+    CLIENT_IDENTITY = "client_identity"
+    CONFIRMATORY_LADDER = "confirmatory_ladder"
+    COORDINATE = "coordinate"
+    CUDA = "cuda"
+    FEATURES = "features"
+    HELD_OUT_METRICS = "held_out_metrics"
+    LABEL = "label"
+    LOCAL_QUANTILE_MEAN = "local_quantile_mean"
+    OPTIMIZER = "optimizer"
+    PREPROCESSING = "preprocessing"
+    QUANTILE = "quantile"
+    RECONSTRUCTION_ERROR = "reconstruction_error"
+    ROWS = "rows"
+    RUNTIME = "runtime"
+    SCHEMA = "schema"
+    SCORES = "scores"
+    SEED = "seed"
+    SPLIT = "split"
+    THRESHOLD = "threshold"
+    THRESHOLD_IDENTITY = "threshold_identity"
+    THRESHOLD_METHOD = "threshold_method"
+    TRAFFIC_RATE = "traffic_rate"
+    TRAINING = "training"
+    TRAINING_HYPERPARAMETERS = "training_hyperparameters"
+    WIDTHS = "widths"
+
+
+class TrainingHistoryColumn(StrEnum):
+    EPOCH = "epoch"
+    MEAN_TRAINING_LOSS = "mean_training_loss"

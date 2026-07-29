@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import torch
 
+from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ExecutionStateError
 from datp_core.protocols.runtime import CANONICAL_RUNTIME
 
@@ -21,12 +22,12 @@ def require_cuda_available() -> None:
     if not CANONICAL_RUNTIME.require_cuda:
         raise ExecutionStateError(
             "canonical runtime requires CUDA but require_cuda is false",
-            subject="runtime",
+            subject=ContractSubject.RUNTIME,
         )
     if not torch.cuda.is_available():
         raise ExecutionStateError(
             "CUDA is mandatory for GPU-appropriate operations and is unavailable",
-            subject="cuda",
+            subject=ContractSubject.CUDA,
         )
 
 

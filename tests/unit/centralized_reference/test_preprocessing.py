@@ -15,7 +15,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorModule,
 )
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import Checksum, ClientIdentity
+from datp_core.domain.values import Checksum, ClientIdentity, OutcomeLabelSequence
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     PreprocessingFitBatch,
@@ -23,6 +23,7 @@ from datp_core.preprocessing.models import (
     TransformedFeature,
     TransformedSchema,
 )
+from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
 
 
 def _protocol() -> PreprocessingProtocol:
@@ -36,7 +37,7 @@ def _protocol() -> PreprocessingProtocol:
         serialization_format=SerializationFormat.SKOPS,
         estimator_module=TrustedEstimatorModule.SKLEARN_PREPROCESSING,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
-        numerical_equivalence_absolute_tolerance=1e-12,
+        numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE.value,
     )
 
 
@@ -49,7 +50,7 @@ def test_pooled_fit_is_independent_of_federated_state() -> None:
         PreprocessingFitBatch(
             training_matrix=matrix,
             training_row_ids=("a", "b"),
-            training_labels=("benign", "benign"),
+            training_labels=OutcomeLabelSequence(("benign", "benign")),
             benign_label="benign",
         ),
     )

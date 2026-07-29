@@ -24,7 +24,7 @@ from datp_core.artifacts.manifest import (
     write_transformed_schema,
     write_validation_report,
 )
-from datp_core.domain.enums import PublicationStatus
+from datp_core.domain.enums import ContractSubject, PublicationStatus
 from datp_core.domain.errors import ArtifactIntegrityError
 
 
@@ -110,7 +110,7 @@ def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseMode
     write_complete_marker(temporary, digest)
     _assert_required_assets(temporary, publication.required_assets)
     if not _is_reusable(temporary, publication):
-        raise ArtifactIntegrityError("processed publication failed complete-asset validation", subject=str(temporary))
+        raise ArtifactIntegrityError("processed publication failed complete-asset validation", subject=ContractSubject.ARTIFACT_PATH)
 
 
 def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
@@ -151,7 +151,7 @@ def _assert_required_assets(directory: Path, required_assets: tuple[ProcessedAss
     if missing:
         raise ArtifactIntegrityError(
             f"processed publication missing assets: {', '.join(asset.value for asset in missing)}",
-            subject=str(directory),
+            subject=ContractSubject.ARTIFACT_PATH,
         )
 
 

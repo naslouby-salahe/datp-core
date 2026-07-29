@@ -3,6 +3,7 @@ import inspect
 from collections.abc import Mapping
 from pathlib import Path
 
+from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import (
     AnchorReproductionError,
     ArtifactIntegrityError,
@@ -39,10 +40,14 @@ def test_error_hierarchy_is_shallow_and_explicit() -> None:
 
 
 def test_errors_preserve_stable_message_and_named_context() -> None:
-    error = UnresolvedScientificValueError("missing quantile", subject="quantile", reason="not source-backed")
+    error = UnresolvedScientificValueError(
+        "missing quantile",
+        subject=ContractSubject.QUANTILE,
+        reason="not source-backed",
+    )
     assert str(error) == "missing quantile"
     assert error.message == "missing quantile"
-    assert error.subject == "quantile"
+    assert error.subject == ContractSubject.QUANTILE.value
     assert error.reason == "not source-backed"
     assert not isinstance(error.subject, Mapping)
 

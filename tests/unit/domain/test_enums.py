@@ -8,6 +8,7 @@ from datp_core.domain.enums import (
     CapabilityStatus,
     CentralizedModelId,
     CentralizedThresholdMethod,
+    CheckpointSelectionRule,
     CheckpointStatus,
     ClaimStatus,
     ClusterAssignmentAlgorithm,
@@ -50,6 +51,8 @@ from datp_core.domain.enums import (
     TrustedEstimatorClassName,
     TrustedEstimatorModule,
     WarningCode,
+    ContractSubject,
+    TrainingHistoryColumn,
 )
 
 EXPECTED_MEMBERS = (
@@ -348,7 +351,50 @@ EXPECTED_MEMBERS = (
         CheckpointStatus,
         frozenset(("HISTORICAL_ENDPOINT", "CANDIDATE", "SELECTED_BY_NON_TEST_RULE", "STABILITY_EVIDENCE")),
     ),
+    (CheckpointSelectionRule, frozenset(("FIXED_TERMINAL_MAXIMUM_ROUND",))),
     (CompletionStatus, frozenset(("NOT_STARTED", "IN_PROGRESS", "COMPLETE", "FAILED", "BLOCKED"))),
+    (
+        ContractSubject,
+        frozenset(
+            (
+                "ARTIFACT_PATH",
+                "ATTACK_LABELS",
+                "AUTOENCODER",
+                "BATCH_SIZE",
+                "CALIBRATION",
+                "CANDIDATES",
+                "CHECKPOINT_CANDIDATES",
+                "CHECKPOINT_SELECTION_RULE",
+                "CLIENT",
+                "CLIENT_IDENTITY",
+                "CONFIRMATORY_LADDER",
+                "COORDINATE",
+                "CUDA",
+                "FEATURES",
+                "HELD_OUT_METRICS",
+                "LABEL",
+                "LOCAL_QUANTILE_MEAN",
+                "OPTIMIZER",
+                "PREPROCESSING",
+                "QUANTILE",
+                "RECONSTRUCTION_ERROR",
+                "ROWS",
+                "RUNTIME",
+                "SCHEMA",
+                "SCORES",
+                "SEED",
+                "SPLIT",
+                "THRESHOLD",
+                "THRESHOLD_IDENTITY",
+                "THRESHOLD_METHOD",
+                "TRAFFIC_RATE",
+                "TRAINING",
+                "TRAINING_HYPERPARAMETERS",
+                "WIDTHS",
+            )
+        ),
+    ),
+    (TrainingHistoryColumn, frozenset(("EPOCH", "MEAN_TRAINING_LOSS"))),
 )
 
 

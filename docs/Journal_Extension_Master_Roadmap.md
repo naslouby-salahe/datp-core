@@ -3440,7 +3440,7 @@ The conference anchor preserves its historical endpoint and checkpoint semantics
 
 Regime A selects one primary **round number** using a non-test rule specified before journal outcomes are inspected.
 
-The selected round number is applied consistently across main regimes and policies where the checkpoint exists. Model weights remain regime- and seed-specific.
+**Locked non-test rule (`FIXED_TERMINAL_MAXIMUM_ROUND`, prospective research amendment).** Among the declared candidates, the primary checkpoint is the candidate at the declared maximum round (`200`). No metric, label, score artifact, threshold outcome, or cross-policy contrast may enter selection. Non-terminal retained candidates are stability evidence only. The same primary **round number** is applied consistently across main regimes and policies where the checkpoint exists; model weights remain seed-, population-, and model-specific. The independent centralized reference (B0) applies the same rule to its own candidate set and never consumes federated checkpoints. Historical early-stopping practice is superseded by this fixed-budget protocol.
 
 **13.3 Forbidden selectors**
 

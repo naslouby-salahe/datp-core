@@ -101,4 +101,4 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
 
 def reject_centralized_state_for_client(state: FittedPreprocessingState) -> None:
     if state.branch is not ProcessedDataBranch.FEDERATED:
-        raise LeakageError("centralized fitted state cannot be used for federated clients", subject=state.branch.value)
+        raise LeakageError("centralized fitted state cannot be used for federated clients", subject=state.branch)

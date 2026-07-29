@@ -19,14 +19,13 @@ from datp_core.domain.enums import (
     TrustedEstimatorClassName,
     TrustedEstimatorModule,
 )
-from datp_core.domain.values import Checksum, ClientIdentity, Seed
+from datp_core.domain.values import Checksum, ClientIdentity, OutcomeLabelSequence, Seed
 from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
 
 SCIENTIFIC_TRANSFORM_ABSOLUTE_TOLERANCE = FIXED_SCORE_ABSOLUTE_TOLERANCE.value
 
 
 class TransformedFeature(StrictModel):
-
     name: str
     position: int
 
@@ -49,7 +48,6 @@ def _require_contiguous_positions(features: tuple[TransformedFeature, ...]) -> N
 
 
 class TransformedSchema(StrictModel):
-
     features: tuple[TransformedFeature, ...]
 
     @model_validator(mode="after")
@@ -66,7 +64,6 @@ class TransformedSchema(StrictModel):
 
 
 class PreprocessingProtocol(StrictModel):
-
     identity: PreprocessingProtocolId
     fit_scope: PreprocessingFitScope
     input_feature_names: tuple[str, ...]
@@ -152,7 +149,6 @@ class PooledPreprocessingResult:
 
 
 class PreprocessingManifest(StrictModel):
-
     dataset: DatasetId
     population: PopulationId
     partition_seed: Seed
@@ -180,7 +176,6 @@ class PreprocessingManifest(StrictModel):
 
 
 class PreprocessingValidationReport(StrictModel):
-
     finite_transformed_values: bool
     train_only_fit: bool
     no_partition_overlap: bool
@@ -239,7 +234,7 @@ class PreprocessingPublishContext:
 class PreprocessingFitBatch:
     training_matrix: np.ndarray
     training_row_ids: tuple[str, ...]
-    training_labels: tuple[str, ...]
+    training_labels: OutcomeLabelSequence
     benign_label: str
 
 

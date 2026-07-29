@@ -89,5 +89,5 @@ def reject_federated_state_for_pooled(state: FittedPreprocessingState) -> None:
     if state.branch is not ProcessedDataBranch.CENTRALIZED_REFERENCE:
         raise LeakageError(
             "federated client fitted state cannot be reused by the centralized reference",
-            subject=state.branch.value,
+            subject=state.branch,
         )

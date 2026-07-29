@@ -116,10 +116,12 @@ In `scoring/models.py`:
 ## Checkpoint protocol
 
 - Train to the declared maximum round and evaluate only declared candidates.
-- Select one primary round number from the N-BaIoT natural-device FedAvg training using a predeclared non-test rule.
-- Apply the selected round number consistently where the checkpoint exists; model tensors remain seed/population/model specific.
+- Primary journal round number \(R^\* = \texttt{CheckpointProtocol.maximum\_round}\) (`200`) under research amendment `FIXED_TERMINAL_MAXIMUM_ROUND` (same locked rule as Phase 07 / Journal §13.2).
+- \(R^\*\) is applied consistently wherever the candidate exists; tensors remain seed/population/model-specific.
+- Model-specific checkpoint handling means distinct model tensors at \(R^\*\), not independent data-dependent round searches per training algorithm.
 - Prohibit test AUROC, test FPR, cross-client dispersion, attack labels, threshold effects, external results, or policy-specific outcomes as selectors.
-- Preserve all candidate trajectories as stability evidence.
+- Preserve all candidate trajectories as stability evidence only.
+- Conference anchor historical endpoints remain isolated from this rule.
 
 ## Scoring and reuse
 

@@ -1,3 +1,4 @@
+from datp_core.domain.enums import ContractSubject
 """Completion markers for reusable processed-data publications."""
 
 from pathlib import Path
@@ -20,14 +21,14 @@ def write_complete_marker(directory: Path, digest: Checksum) -> Path:
 def read_complete_marker(directory: Path) -> Checksum:
     path = directory / ProcessedAssetName.COMPLETE
     if not path.is_file():
-        raise ArtifactIntegrityError("processed asset is missing COMPLETE marker", subject=str(directory))
+        raise ArtifactIntegrityError("processed asset is missing COMPLETE marker", subject=ContractSubject.ARTIFACT_PATH)
     value = path.read_text(encoding="utf-8").strip()
     if not value:
-        raise ArtifactIntegrityError("processed COMPLETE marker is empty", subject=str(directory))
+        raise ArtifactIntegrityError("processed COMPLETE marker is empty", subject=ContractSubject.ARTIFACT_PATH)
     return Checksum(value)
 
 
 def assert_complete_digest(directory: Path, expected: Checksum) -> None:
     actual = read_complete_marker(directory)
     if actual != expected:
-        raise ArtifactIntegrityError("processed COMPLETE digest mismatch", subject=str(directory))
+        raise ArtifactIntegrityError("processed COMPLETE digest mismatch", subject=ContractSubject.ARTIFACT_PATH)

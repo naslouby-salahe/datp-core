@@ -5,7 +5,7 @@ from hashlib import sha256
 import numpy as np
 import polars as pl
 
-from datp_core.domain.enums import PartitionRole, SplitProtocolId, StageOperationId
+from datp_core.domain.enums import ContractSubject, PartitionRole, SplitProtocolId, StageOperationId
 from datp_core.domain.errors import DataIntegrityError, LeakageError, ScientificContractError
 from datp_core.domain.values import Seed, checksum_text
 from datp_core.populations.models import (
@@ -142,8 +142,8 @@ def _require_sorted_client_rows(
     )
     if client_rows.get_column(capture_timestamp_column).null_count() > 0:
         raise ScientificContractError(
-            "temporal split encountered null capture timestamps",
-            subject=client_id,
+            f"temporal split encountered null capture timestamps for client {client_id}",
+            subject=ContractSubject.CLIENT_IDENTITY,
             reason="chronology-eligible groups must retain verified timestamps",
         )
     return client_rows

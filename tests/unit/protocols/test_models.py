@@ -7,7 +7,7 @@ from datp_core.domain.enums import (
     FederatedThresholdMethod,
     OptimizerId,
 )
-from datp_core.domain.values import CoverageTarget, Quantile, Ratio
+from datp_core.domain.values import CoverageTarget, Quantile, Ratio, WeightDecay
 from datp_core.protocols.models import (
     CentralizedQuantileProtocol,
     CentralizedTrainingProtocol,
@@ -42,7 +42,7 @@ def test_models_are_frozen_and_reject_extra_fields() -> None:
 def test_centralized_declarations_are_distinct_from_federated_ones() -> None:
     training = CentralizedTrainingProtocol(
         kind=CentralizedModelId.CENTRALIZED_AUTOENCODER,
-        optimizer=OptimizerProtocol(identity=OptimizerId.ADAM),
+        optimizer=OptimizerProtocol(identity=OptimizerId.ADAM, weight_decay=WeightDecay(0.0)),
     )
     threshold = CentralizedQuantileProtocol(
         method=CentralizedThresholdMethod.POOLED_BENIGN_QUANTILE,

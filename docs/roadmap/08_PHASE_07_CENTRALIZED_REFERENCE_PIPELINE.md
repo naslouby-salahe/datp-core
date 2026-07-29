@@ -74,6 +74,10 @@ Place records in the existing most specific model files; do not create a new sou
 - Persist optimizer summaries as non-executable typed JSON; do not pickle optimizer objects.
 - Evaluate only declared checkpoint rounds.
 - Store every candidate and one decision record.
+- Non-test selection rule (research amendment `FIXED_TERMINAL_MAXIMUM_ROUND`): select the retained candidate whose round equals `CheckpointProtocol.maximum_round`.
+- Do not use training loss, calibration scores, attack labels, or held-out metrics to rank candidates for the primary decision.
+- Persist every candidate; mark non-selected candidates `STABILITY_EVIDENCE` and the terminal candidate `SELECTED_BY_NON_TEST_RULE`.
+- B0 selection is independent of federated checkpoint decisions.
 
 ## Scoring
 
@@ -117,6 +121,13 @@ Place records in the existing most specific model files; do not create a new sou
 - Type boundaries prevent accidental score or threshold substitution.
 - All Phase 07 tests and audits pass.
 
+## Implementation status
+
+- Status: `COMPLETE`.
+- Non-test checkpoint rule locked as research amendment `FIXED_TERMINAL_MAXIMUM_ROUND` (Journal §13.2; decision register).
+- Implemented: independent preprocessing, CUDA training, candidate retention, fixed-terminal selection, scoring, pooled benign quantile, pooled evaluation, stage chain, independence guards, and named tests.
+- Real-data controlled N-BaIoT smoke verified population/split conservation, independent MinMax, CUDA batch-256 training, candidate retention, selection at maximum round, score/threshold/evaluation mechanics, and zero federated artifact coupling.
+
 ## External code-health gate
 
 Before phase closure, run the credentials-safe SonarQube CLI and CodeScene procedure in [the roadmap index](00_ROADMAP_INDEX.md#mandatory-external-code-health-gates). Resolve actionable `src/` findings or record the gate as blocked.
@@ -126,35 +137,35 @@ Before phase closure, run the credentials-safe SonarQube CLI and CodeScene proce
 Before marking this phase complete, the implementing agent must perform and record all applicable checks:
 
 ### Scientific audit
-- [ ] Every scientific statement and numeric value is traceable to the source of truth or marked unresolved.
-- [ ] No attack-labelled record influences training of the benign autoencoder, calibration, threshold construction, checkpoint selection, eligibility, or parameter selection.
-- [ ] The fixed-detector contract is preserved wherever threshold methods are compared.
-- [ ] Unsupported dataset capabilities produce typed unavailability or infeasibility, never imputation.
-- [ ] Confirmatory, supportive, mechanism, external, stress-test, boundary, exploratory, and operational evidence remain separated.
+- [x] Every scientific statement and numeric value is traceable to the source of truth or marked unresolved.
+- [x] No attack-labelled record influences training of the benign autoencoder, calibration, threshold construction, checkpoint selection, eligibility, or parameter selection.
+- [x] The fixed-detector contract is preserved wherever threshold methods are compared.
+- [x] Unsupported dataset capabilities produce typed unavailability or infeasibility, never imputation.
+- [x] Confirmatory, supportive, mechanism, external, stress-test, boundary, exploratory, and operational evidence remain separated.
 
 ### Architecture audit
-- [ ] Only source files explicitly assigned to this phase were modified.
-- [ ] No source file was added, renamed, moved, or deleted.
-- [ ] No circular dependency was introduced.
-- [ ] Domain and protocol modules do not import orchestration, reporting, or concrete storage implementations.
-- [ ] No compatibility alias, redirect, deprecated identifier, generic registry, or string-key dispatch was added.
+- [x] Only source files explicitly assigned to this phase were modified.
+- [x] No source file was added, renamed, moved, or deleted.
+- [x] No circular dependency was introduced.
+- [x] Domain and protocol modules do not import orchestration, reporting, or concrete storage implementations.
+- [x] No compatibility alias, redirect, deprecated identifier, generic registry, or string-key dispatch was added.
 
 ### Typing and validation audit
-- [ ] Ruff formatting and linting pass.
-- [ ] Pyright strict mode passes for all changed files.
-- [ ] Pylint passes at the project threshold without suppressing newly introduced defects.
-- [ ] Pydantic models reject extra fields and are frozen.
-- [ ] Dataclasses are frozen and slotted unless mutability is scientifically necessary and documented.
-- [ ] No `Any`, unchecked cast, mutable module-level collection, or raw configuration dictionary remains.
+- [x] Ruff formatting and linting pass.
+- [x] Pyright strict mode passes for all changed files.
+- [x] Pylint passes at the project threshold without suppressing newly introduced defects.
+- [x] Pydantic models reject extra fields and are frozen.
+- [x] Dataclasses are frozen and slotted unless mutability is scientifically necessary and documented.
+- [x] No `Any`, unchecked cast, mutable module-level collection, or raw configuration dictionary remains.
 
 ### Test audit
-- [ ] Every test file listed by this phase exists and contains meaningful assertions.
-- [ ] Tests verify scientific invariants, invalid inputs, unavailable outcomes, and deterministic behavior—not only happy paths.
-- [ ] Tests do not duplicate implementation logic or merely assert that functions return a value.
-- [ ] Focused tests pass first; then the complete test suite passes with pytest-xdist.
-- [ ] Hypothesis tests use bounded strategies consistent with scientific domains.
+- [x] Every test file listed by this phase exists and contains meaningful assertions.
+- [x] Tests verify scientific invariants, invalid inputs, unavailable outcomes, and deterministic behavior—not only happy paths.
+- [x] Tests do not duplicate implementation logic or merely assert that functions return a value.
+- [x] Focused tests pass first; then the complete test suite passes with pytest-xdist.
+- [x] Hypothesis tests use bounded strategies consistent with scientific domains.
 
 ### Repository audit
-- [ ] `git diff --stat` contains only intended files.
-- [ ] No generated output, cache, temporary file, notebook, profiling file, or local path leaked into the repository.
-- [ ] No commit or push was performed by the implementing agent.
+- [x] `git diff --stat` contains only intended files.
+- [x] No generated output, cache, temporary file, notebook, profiling file, or local path leaked into the repository.
+- [x] No commit or push was performed by the implementing agent.

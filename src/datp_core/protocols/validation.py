@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from datp_core.domain.enums import (
+    ContractSubject,
     ConfirmatoryDeltaDirection,
     EvidenceRole,
     ExperimentId,
@@ -265,7 +266,7 @@ def _validate_experiment_metrics(
     if experiment.role is not EvidenceRole.OPERATIONAL_TRANSLATION:
         raise UnresolvedScientificValueError(
             "Alert burden requires population-specific traffic-rate evidence",
-            subject="traffic rate",
+            subject=ContractSubject.TRAFFIC_RATE,
         )
     suppressed_experiment_ids.append(experiment.id)
 
