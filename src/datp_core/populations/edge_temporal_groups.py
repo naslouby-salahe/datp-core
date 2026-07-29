@@ -17,9 +17,8 @@ from datp_core.domain.errors import DataIntegrityError, ScientificContractError
 from datp_core.domain.values import Checksum, Seed
 from datp_core.populations.capabilities import population_declaration
 from datp_core.populations.integrity import (
-    assess_declared_feasibility,
-    membership_frame_checksum,
-    validate_population_manifest,
+    PopulationFinalizationRequest,
+    finalize_population,
 )
 from datp_core.populations.models import (
     CLIENT_ID_COLUMN,
@@ -29,12 +28,9 @@ from datp_core.populations.models import (
     STABLE_ROW_ID_COLUMN,
     ChronologicalPartitionDiagnostics,
     ChronologicalPartitionDiagnosticsDocument,
-    PopulationFeasibility,
     PopulationManifest,
-    PopulationManifestSpec,
     PopulationOutcomeLabel,
     SplitConstructionRequest,
-    build_population_manifest,
     canonical_branch_directory,
     select_membership_frame,
 )
@@ -67,7 +63,7 @@ def build_edge_temporal_groups(
         )
     declaration = population_declaration(_POPULATION)
     eligible_ids, excluded_ids, exclusion_reasons, duplicate_timestamps = _chronology_eligibility(canonical_root)
-    programme_candidates = tuple(EDGE_TEMPORAL_SENSOR_GROUPS)
+    programme_candidates = tuple(group.value for group in sorted(EDGE_TEMPORAL_SENSOR_GROUPS))
     membership = _load_temporal_membership(canonical_root, eligible_ids) if eligible_ids else _empty_membership()
     diagnostics = ChronologicalPartitionDiagnostics(
         ChronologicalPartitionDiagnosticsDocument(
@@ -81,13 +77,6 @@ def build_edge_temporal_groups(
             total_temporal_rows=membership.height,
         )
     )
-    feasibility = assess_declared_feasibility(
-        expected_count=declaration.client_count.value,
-        candidate_ids=programme_candidates,
-        accepted_ids=eligible_ids,
-        expected_identities=programme_candidates,
-        chronology_required=True,
-    )
     temporal_manifest = _assemble_manifest(
         partition_seed=partition_seed,
         split_protocol=split_protocol,
@@ -95,16 +84,12 @@ def build_edge_temporal_groups(
         accepted_ids=eligible_ids,
         excluded_ids=excluded_ids,
         membership=membership,
-        feasibility=feasibility,
     )
-    if membership.height > 0:
-        validate_population_manifest(temporal_manifest, select_membership_frame(membership))
     static_reference_manifest, static_reference_membership = _matched_static_reference(
         membership,
         partition_seed=partition_seed,
         eligible_ids=eligible_ids,
         programme_candidates=programme_candidates,
-        feasibility=feasibility,
     )
     return temporal_manifest, membership, diagnostics, static_reference_manifest, static_reference_membership
 
@@ -117,25 +102,22 @@ def _assemble_manifest(
     accepted_ids: tuple[str, ...],
     excluded_ids: tuple[str, ...],
     membership: pl.DataFrame,
-    feasibility: PopulationFeasibility,
 ) -> PopulationManifest:
     selected = select_membership_frame(membership)
-    return build_population_manifest(
-        PopulationManifestSpec(
+    return finalize_population(
+        PopulationFinalizationRequest(
             population=_POPULATION,
             dataset=DatasetId.EDGE_IIOTSET,
             identity_kind=_IDENTITY,
             partition_seed=partition_seed,
             split_protocol=split_protocol,
-            candidate_clients=programme_candidates,
-            accepted_clients=accepted_ids,
-            excluded_client_ids=excluded_ids,
-            total_membership_rows=selected.height,
-            benign_row_count=selected.height,
-            attack_row_count=0,
-            membership_checksum=membership_frame_checksum(selected),
+            candidate_ids=programme_candidates,
+            accepted_ids=accepted_ids,
+            excluded_ids=excluded_ids,
+            expected_identities=programme_candidates,
+            chronology_required=True,
+            membership=selected,
             canonical_schema_checksum=EDGE_SCHEMA.checksum,
-            feasibility=feasibility,
         )
     )
 
@@ -155,7 +137,8 @@ def _chronology_eligibility(
     excluded: list[str] = []
     reasons: list[str] = []
     duplicate_total = 0
-    for group_id in EDGE_TEMPORAL_SENSOR_GROUPS:
+    for group in sorted(EDGE_TEMPORAL_SENSOR_GROUPS):
+        group_id = group.value
         evidence = _chronology_for_group(group_id, document.chronology)
         if evidence is None:
             excluded.append(group_id)
@@ -228,7 +211,6 @@ def _matched_static_reference(
     partition_seed: Seed,
     eligible_ids: tuple[str, ...],
     programme_candidates: tuple[str, ...],
-    feasibility: PopulationFeasibility,
 ) -> tuple[PopulationManifest, pl.DataFrame]:
     membership = select_membership_frame(temporal_membership)
     accepted = frozenset(eligible_ids)
@@ -240,7 +222,6 @@ def _matched_static_reference(
         accepted_ids=eligible_ids,
         excluded_ids=excluded,
         membership=membership,
-        feasibility=feasibility,
     )
     return manifest, membership
 

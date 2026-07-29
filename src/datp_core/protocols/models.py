@@ -4,8 +4,9 @@ from math import fsum, isclose
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import Field, model_validator
 
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     CentralizedModelId,
     CentralizedThresholdMethod,
@@ -62,11 +63,6 @@ LOCKED_CLUSTER_GROUP_COUNT = 3
 
 UNIT_FRACTION_TOTAL = 1.0
 FRACTION_TOTAL_ABSOLUTE_TOLERANCE = 1e-12
-DATA_ROOT = Path("data")
-OUTPUTS_ROOT = Path("outputs")
-RESULTS_ROOT = Path("results")
-
-
 def _sums_to_unit_fraction(*values: float) -> bool:
     """Compare declared fractional quantities with one shared tolerance."""
     return isclose(
@@ -77,10 +73,8 @@ def _sums_to_unit_fraction(*values: float) -> bool:
     )
 
 
-class Declaration(BaseModel):
-    """Common immutable Pydantic configuration."""
-
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+class Declaration(StrictModel):
+    """Common immutable protocol declaration."""
 
 
 class SeedCohort(Declaration):
@@ -324,30 +318,45 @@ class PopulationDeclaration(Declaration):
     dataset: DatasetId
     identity_kind: PopulationIdentityKind
     client_count: ClientCount
-    has_attack_assignment: bool
-    has_chronology: bool
-    has_family_taxonomy: bool
-    confirmatory_eligible: bool
 
     @model_validator(mode="after")
     def validate_identity_kind(self) -> "PopulationDeclaration":
         match self.identity_kind:
             case PopulationIdentityKind.PHYSICAL_DEVICES:
-                if self.dataset is not DatasetId.NBAIOT or not self.confirmatory_eligible:
+                if self.dataset is not DatasetId.NBAIOT:
                     raise ValueError("physical-device populations must be confirmatory N-BaIoT devices")
             case PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS:
-                if self.dataset is not DatasetId.CICIOT2023 or self.confirmatory_eligible:
+                if self.dataset is not DatasetId.CICIOT2023:
                     raise ValueError("file-defined pseudo-clients cannot be confirmatory physical devices")
             case PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS:
-                if self.dataset is not DatasetId.EDGE_IIOTSET or self.has_attack_assignment:
+                if self.dataset is not DatasetId.EDGE_IIOTSET:
                     raise ValueError("source-defined sensor groups are not physical attack-assigned devices")
             case PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS:
-                if self.dataset is not DatasetId.NBAIOT or self.confirmatory_eligible:
+                if self.dataset is not DatasetId.NBAIOT:
                     raise ValueError("synthetic Dirichlet clients are not confirmatory physical devices")
             case PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS:
-                if self.dataset is not DatasetId.EDGE_IIOTSET or not self.has_chronology:
+                if self.dataset is not DatasetId.EDGE_IIOTSET:
                     raise ValueError("verified temporal groups require Edge chronology")
         return self
+
+    @property
+    def is_confirmatory_population(self) -> bool:
+        return self.identity_kind is PopulationIdentityKind.PHYSICAL_DEVICES
+
+    @property
+    def requires_family_taxonomy(self) -> bool:
+        return self.identity_kind is PopulationIdentityKind.PHYSICAL_DEVICES
+
+    @property
+    def requires_verified_chronology(self) -> bool:
+        return self.identity_kind is PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS
+
+    @property
+    def requires_client_attack_assignment(self) -> bool:
+        return self.identity_kind in {
+            PopulationIdentityKind.PHYSICAL_DEVICES,
+            PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS,
+        }
 
 
 class ExperimentDeclaration(Declaration):
@@ -436,10 +445,6 @@ class RuntimeProtocol(Declaration):
             raise ValueError("runtime paths must be project-relative")
         if not self.data_root.parts or not self.outputs_root.parts:
             raise ValueError("runtime data and outputs paths must be non-empty")
-        if self.data_root.parts[0] != DATA_ROOT.parts[0] or self.outputs_root.parts[0] != OUTPUTS_ROOT.parts[0]:
-            raise ValueError("runtime paths must remain under data and outputs")
-        if self.results_root != RESULTS_ROOT:
-            raise ValueError("results root must be the dedicated project-level results directory")
         if isinstance(self.worker_count, bool) or self.worker_count < 1:
             raise ValueError("worker count must be positive")
         return self

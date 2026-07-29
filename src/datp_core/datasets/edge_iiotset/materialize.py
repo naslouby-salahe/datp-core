@@ -118,7 +118,12 @@ class EdgeIIoTsetMaterializer:
         benign_frames = tuple(reader.read_benign(path) for path in ordered_benign)
         attack_frames = tuple(reader.read_attack(path) for path in ordered_attack)
         chronology = tuple(
-            validate_chronology(benign_sensor_group(path), path, paired_capture_path(path)) for path in ordered_benign
+            validate_chronology(
+                benign_sensor_group(path).value,
+                path,
+                paired_capture_path(path),
+            )
+            for path in ordered_benign
         )
         validations = tuple(evidence.validation for evidence in chronology)
         attack_counts = tuple(self._row_count(frame) for frame in attack_frames)
@@ -216,7 +221,7 @@ class EdgeIIoTsetMaterializer:
 def _expected_assets(
     benign_paths: tuple[Path, ...], attack_paths: tuple[Path, ...], validations: tuple[ChronologyValidation, ...]
 ) -> tuple[CanonicalAssetLayout, ...]:
-    benign_identities = tuple(benign_sensor_group(path) for path in benign_paths)
+    benign_identities = tuple(benign_sensor_group(path).value for path in benign_paths)
     static_assets = named_assets(_STATIC_BENIGN_BRANCH, EdgeAssetRole.STATIC_BENIGN, benign_identities)
     temporal_identities = tuple(
         identity

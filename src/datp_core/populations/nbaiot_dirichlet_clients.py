@@ -1,6 +1,5 @@
 """Controlled N-BaIoT Dirichlet and IID synthetic-client construction."""
 
-from hashlib import sha256
 from pathlib import Path
 
 import numpy as np
@@ -16,13 +15,12 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.errors import DataIntegrityError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount, Seed
+from datp_core.domain.values import Checksum, ClientCount, Seed, checksum_text
 from datp_core.populations.capabilities import population_declaration
 from datp_core.populations.integrity import (
-    assess_declared_feasibility,
-    membership_frame_checksum,
+    PopulationFinalizationRequest,
+    finalize_population,
     validate_dirichlet_conservation,
-    validate_population_manifest,
 )
 from datp_core.populations.models import (
     CLIENT_ID_COLUMN,
@@ -36,9 +34,7 @@ from datp_core.populations.models import (
     DirichletPartitionDiagnostics,
     DirichletPartitionDiagnosticsDocument,
     PopulationManifest,
-    PopulationManifestSpec,
     PopulationOutcomeLabel,
-    build_population_manifest,
     canonical_data_glob,
     hamilton_integer_counts,
     membership_column_names,
@@ -78,32 +74,22 @@ def build_nbaiot_dirichlet_clients(
         condition=condition,
         partition_seed=partition_seed,
     )
-    feasibility = assess_declared_feasibility(
-        expected_count=declaration.client_count.value,
-        candidate_ids=client_ids,
-        accepted_ids=client_ids,
-        expected_identities=client_ids,
-        chronology_required=False,
-    )
-    manifest = build_population_manifest(
-        PopulationManifestSpec(
+    manifest = finalize_population(
+        PopulationFinalizationRequest(
             population=_POPULATION,
             dataset=DatasetId.NBAIOT,
             identity_kind=_IDENTITY,
             partition_seed=partition_seed,
             split_protocol=split_protocol,
-            candidate_clients=client_ids,
-            accepted_clients=client_ids,
-            excluded_client_ids=(),
-            total_membership_rows=membership.height,
-            benign_row_count=sum(benign_counts),
-            attack_row_count=sum(attack_counts),
-            membership_checksum=membership_frame_checksum(membership),
+            candidate_ids=client_ids,
+            accepted_ids=client_ids,
+            excluded_ids=(),
+            expected_identities=client_ids,
+            chronology_required=False,
+            membership=membership,
             canonical_schema_checksum=NBAIOT_SCHEMA.checksum,
-            feasibility=feasibility,
         )
     )
-    validate_population_manifest(manifest, membership)
     return manifest, membership, diagnostics
 
 
@@ -273,4 +259,4 @@ def _allocation_checksum(
             *(str(count) for count in counts),
         )
     )
-    return Checksum(sha256(payload.encode()).hexdigest())
+    return checksum_text(payload)

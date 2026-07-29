@@ -3,8 +3,9 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import model_validator
 
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     CapabilityStatus,
     EvaluationCohort,
@@ -30,8 +31,7 @@ class ClientExclusionReason(StrEnum):
     CLIENT_NOT_ACCEPTED = "client_not_accepted"
 
 
-class ClientEligibilityRecord(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+class ClientEligibilityRecord(StrictModel):
 
     client_id: str
     population: PopulationId
@@ -59,8 +59,7 @@ class ClientEligibilityRecord(BaseModel):
         return self
 
 
-class EvaluationCohortMembership(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+class EvaluationCohortMembership(StrictModel):
 
     client_id: str
     cohort: EvaluationCohort
@@ -77,8 +76,7 @@ class EvaluationCohortMembership(BaseModel):
         return self
 
 
-class EvaluationCohortManifest(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+class EvaluationCohortManifest(StrictModel):
 
     population: PopulationId
     partition_seed: Seed

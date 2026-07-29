@@ -106,6 +106,8 @@ CANONICAL_PROTOCOL_GRAPH = ProtocolGraphInputs(
 
 def validate_protocol_graph(inputs: ProtocolGraphInputs) -> ResolvedProtocolGraph:
     _require_unique_declaration_ids(inputs.populations, inputs.experiments)
+    if inputs.runtime != CANONICAL_RUNTIME:
+        raise ProtocolValidationError("runtime values must match the canonical runtime declaration")
     suppressed_experiment_ids: list[ExperimentId] = []
     _validate_confirmatory_endpoint(
         inputs.confirmatory_endpoint,
@@ -177,7 +179,7 @@ def _validate_confirmatory_endpoint(
         raise ProtocolValidationError("Exactly one confirmatory experiment must be declared")
     _require_endpoint_matches_experiment(endpoint, confirmatory[0])
     population = next(item for item in populations if item.id is endpoint.population)
-    if not population.confirmatory_eligible:
+    if not population.is_confirmatory_population:
         raise ProtocolValidationError("Confirmatory endpoint requires a confirmatory-eligible population")
 
 
@@ -215,9 +217,9 @@ def _validate_experiment_population_pair(
     experiment: ExperimentDeclaration,
     population: PopulationDeclaration,
 ) -> None:
-    if experiment.role is EvidenceRole.CONFIRMATORY and not population.confirmatory_eligible:
+    if experiment.role is EvidenceRole.CONFIRMATORY and not population.is_confirmatory_population:
         raise ProtocolValidationError("Confirmatory experiments require confirmatory-eligible populations")
-    if experiment.role is EvidenceRole.TEMPORAL_BOUNDARY and not population.has_chronology:
+    if experiment.role is EvidenceRole.TEMPORAL_BOUNDARY and not population.requires_verified_chronology:
         raise ProtocolValidationError("Temporal experiments require populations with verified chronology")
     if (
         experiment.role is EvidenceRole.CONFIRMATORY
@@ -238,7 +240,7 @@ def _validate_experiment_thresholds(
 ) -> None:
     if (
         FederatedThresholdMethod.FAMILY_THRESHOLD in experiment.federated_thresholds
-        and not population.has_family_taxonomy
+        and not population.requires_family_taxonomy
     ):
         raise ProtocolValidationError("Family thresholding requires a family taxonomy")
     if FederatedThresholdMethod.CLUSTER_THRESHOLD in experiment.federated_thresholds:
@@ -253,7 +255,7 @@ def _validate_experiment_metrics(
     suppressed_experiment_ids: list[ExperimentId],
 ) -> None:
     uses_attack_metric = any(metric in experiment.metrics for metric in _ATTACK_SENSITIVE_METRICS)
-    if uses_attack_metric and not population.has_attack_assignment:
+    if uses_attack_metric and not population.requires_client_attack_assignment:
         raise ProtocolValidationError("Attack-sensitive metrics require attack assignment")
     if MetricId.ALERTS_PER_DAY not in experiment.metrics:
         return

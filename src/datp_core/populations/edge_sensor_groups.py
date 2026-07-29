@@ -14,11 +14,9 @@ from datp_core.datasets.models import CanonicalProvenanceColumn
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import CapabilityError, DataIntegrityError
 from datp_core.domain.values import Seed
-from datp_core.populations.capabilities import population_declaration
 from datp_core.populations.integrity import (
-    assess_declared_feasibility,
-    membership_frame_checksum,
-    validate_population_manifest,
+    PopulationFinalizationRequest,
+    finalize_population,
 )
 from datp_core.populations.models import (
     CLIENT_ID_COLUMN,
@@ -28,9 +26,7 @@ from datp_core.populations.models import (
     SOURCE_ROW_INDEX_COLUMN,
     STABLE_ROW_ID_COLUMN,
     PopulationManifest,
-    PopulationManifestSpec,
     PopulationOutcomeLabel,
-    build_population_manifest,
     canonical_branch_directory,
     select_membership_frame,
 )
@@ -52,8 +48,7 @@ def build_edge_sensor_groups(
             subject=_POPULATION,
             reason="temporal analysis uses EDGE_TEMPORAL_GROUPS exclusively",
         )
-    declaration = population_declaration(_POPULATION)
-    candidates = tuple(EDGE_BENIGN_SENSOR_GROUPS)
+    candidates = tuple(group.value for group in EDGE_BENIGN_SENSOR_GROUPS)
     membership = _load_static_membership(canonical_root)
     observed = tuple(membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
     expected = tuple(sorted(candidates))
@@ -69,32 +64,22 @@ def build_edge_sensor_groups(
             subject=_POPULATION,
             reason="attack traffic remains unassigned to sensor identities",
         )
-    feasibility = assess_declared_feasibility(
-        expected_count=declaration.client_count.value,
-        candidate_ids=expected,
-        accepted_ids=expected,
-        expected_identities=expected,
-        chronology_required=False,
-    )
-    manifest = build_population_manifest(
-        PopulationManifestSpec(
+    manifest = finalize_population(
+        PopulationFinalizationRequest(
             population=_POPULATION,
             dataset=DatasetId.EDGE_IIOTSET,
             identity_kind=_IDENTITY,
             partition_seed=partition_seed,
             split_protocol=split_protocol,
-            candidate_clients=expected,
-            accepted_clients=expected,
-            excluded_client_ids=(),
-            total_membership_rows=membership.height,
-            benign_row_count=membership.height,
-            attack_row_count=0,
-            membership_checksum=membership_frame_checksum(membership),
+            candidate_ids=expected,
+            accepted_ids=expected,
+            excluded_ids=(),
+            expected_identities=expected,
+            chronology_required=False,
+            membership=membership,
             canonical_schema_checksum=EDGE_SCHEMA.checksum,
-            feasibility=feasibility,
         )
     )
-    validate_population_manifest(manifest, membership)
     return manifest, membership
 
 

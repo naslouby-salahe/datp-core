@@ -2,13 +2,12 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
-from hashlib import sha256
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import ByteCount, Checksum
+from datp_core.domain.values import ByteCount, Checksum, checksum_text
 
 
 class SourceFileRole(StrEnum):
@@ -693,7 +692,7 @@ class EligibilityPolicyDocument(PublicationDocument):
             )
         )
         return cls(
-            checksum=sha256(semantic_content.encode()).hexdigest(),
+            checksum=checksum_text(semantic_content).value,
             feature_columns=policy.feature_columns,
             label_column=policy.label_column,
             reasons=tuple(reason.value for reason in policy.exclusion_reasons),

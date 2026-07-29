@@ -1,6 +1,9 @@
-"""Structural contracts reserved for phases that introduce real substitution boundaries.
+"""Shared domain contracts."""
 
-Phases 1–4 use concrete typed call sites rather than speculative Protocol abstractions.
-Later phases may add runtime-checkable protocols here only when multiple implementations
-and tested substitution exist.
-"""
+from pydantic import BaseModel, ConfigDict
+
+
+class StrictModel(BaseModel):
+    """Immutable, strict document model used at every serialized-domain boundary."""
+
+    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)

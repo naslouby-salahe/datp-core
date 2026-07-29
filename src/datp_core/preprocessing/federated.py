@@ -13,7 +13,6 @@ from datp_core.artifacts.layout import (
     federated_client_directory,
 )
 from datp_core.artifacts.serialization import TrustedScaler
-from datp_core.artifacts.store import ProcessedPublication, publish_processed
 from datp_core.domain.enums import PartitionRole, PreprocessingFitScope, ProcessedDataBranch
 from datp_core.domain.errors import LeakageError
 from datp_core.preprocessing.models import (
@@ -21,26 +20,16 @@ from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     FittedStatePublishSpec,
     PreprocessingFitBatch,
-    PreprocessingManifest,
     PreprocessingProtocol,
     PreprocessingPublishContext,
-    PreprocessingValidationReport,
-    TransformedSchema,
 )
 from datp_core.preprocessing.validation import (
-    build_preprocessing_manifest,
     fit_trusted_batch,
     fitted_state_after_publish,
-    publication_target,
-    require_core_partitions,
+    publish_preprocessed_partitions,
     required_core_asset_values,
-    successful_preprocessing_validation_report,
     transform_feature_matrix,
     validate_branch_isolation,
-    validate_no_partition_overlap,
-    validate_train_only_fit,
-    validate_transformed_schema,
-    write_fitted_transformed_partitions,
 )
 
 
@@ -67,18 +56,6 @@ def transform_partition(fitted_estimator: TrustedScaler, matrix: np.ndarray, sub
 
 def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreprocessingResult:
     context = request.context
-    validate_train_only_fit(PartitionRole.TRAIN)
-    require_core_partitions(
-        request.partitions,
-        request.row_ids,
-        subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-    )
-    validate_no_partition_overlap(
-        request.row_ids[PartitionRole.TRAIN],
-        request.row_ids[PartitionRole.CALIBRATION],
-        request.row_ids[PartitionRole.EVALUATION],
-    )
-    validate_transformed_schema(context.protocol, context.protocol.transformed_schema)
     relative_client = federated_client_directory(
         ReusableDataCoordinate(
             dataset=context.dataset,
@@ -90,31 +67,16 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
             client_identity=request.client_identity,
         )
     )
-    target = publication_target(context.data_root, relative_client)
     asset_values = required_core_asset_values()
-    manifest = build_preprocessing_manifest(
-        context,
+    result = publish_preprocessed_partitions(
+        context=context,
         branch=ProcessedDataBranch.FEDERATED,
+        relative_coordinate=relative_client,
+        fitted_estimator=request.fitted_estimator,
+        partitions=request.partitions,
+        row_ids=request.row_ids,
+        fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         asset_paths=tuple(f"{request.client_identity}/{asset}" for asset in asset_values),
-    )
-    result = publish_processed(
-        ProcessedPublication(
-            coordinate_directory=target,
-            manifest=manifest,
-            schema=context.protocol.transformed_schema,
-            validation_report=successful_preprocessing_validation_report(),
-            writer=lambda temporary: write_fitted_transformed_partitions(
-                temporary,
-                protocol=context.protocol,
-                fitted_estimator=request.fitted_estimator,
-                partitions=request.partitions,
-            ),
-            required_assets=asset_values,
-            overwrite=False,
-            manifest_type=PreprocessingManifest,
-            schema_type=TransformedSchema,
-            report_type=PreprocessingValidationReport,
-        )
     )
     state = fitted_state_after_publish(
         FittedStatePublishSpec(

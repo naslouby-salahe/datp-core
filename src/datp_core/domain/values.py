@@ -1,7 +1,10 @@
 """Validated scalar scientific values."""
 
 from dataclasses import dataclass
+from hashlib import file_digest, sha256
 from math import isfinite
+from pathlib import Path
+from typing import ClassVar
 
 
 def _integer(value: object, name: str, minimum: int) -> int:
@@ -17,200 +20,178 @@ def _number(value: object, name: str) -> float:
 
 
 @dataclass(frozen=True, slots=True)
-class Seed:
+class PositiveIntegerValue:
     value: int
+    validation_name: ClassVar[str] = "value"
 
     def __post_init__(self) -> None:
-        _integer(self.value, "seed", 0)
+        _integer(self.value, self.validation_name, 1)
 
 
 @dataclass(frozen=True, slots=True)
-class Ratio:
+class NonNegativeIntegerValue:
+    value: int
+    validation_name: ClassVar[str] = "value"
+
+    def __post_init__(self) -> None:
+        _integer(self.value, self.validation_name, 0)
+
+
+@dataclass(frozen=True, slots=True)
+class PositiveFiniteFloatValue:
     value: float
+    validation_name: ClassVar[str] = "value"
 
     def __post_init__(self) -> None:
-        if not 0 <= _number(self.value, "ratio") <= 1:
-            raise ValueError("ratio must be in [0, 1]")
+        if _number(self.value, self.validation_name) <= 0:
+            raise ValueError(f"{self.validation_name} must be positive")
 
 
 @dataclass(frozen=True, slots=True)
-class Quantile:
+class NonNegativeFiniteFloatValue:
     value: float
+    validation_name: ClassVar[str] = "value"
 
     def __post_init__(self) -> None:
-        value = _number(self.value, "quantile")
-        if value <= 0.0 or value >= 1.0:
-            raise ValueError("quantile must be in (0, 1)")
+        if _number(self.value, self.validation_name) < 0:
+            raise ValueError(f"{self.validation_name} must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
-class CoverageTarget:
+class OpenUnitIntervalValue:
     value: float
+    validation_name: ClassVar[str] = "value"
 
     def __post_init__(self) -> None:
-        value = _number(self.value, "coverage target")
-        if value <= 0.0 or value >= 1.0:
-            raise ValueError("coverage target must be in (0, 1)")
+        value = _number(self.value, self.validation_name)
+        if not 0 < value < 1:
+            raise ValueError(f"{self.validation_name} must be in (0, 1)")
 
 
 @dataclass(frozen=True, slots=True)
-class CalibrationSize:
-    value: int
-
-    def __post_init__(self) -> None:
-        _integer(self.value, "calibration size", 1)
-
-
-@dataclass(frozen=True, slots=True)
-class ClientCount:
-    value: int
-
-    def __post_init__(self) -> None:
-        _integer(self.value, "client count", 1)
-
-
-@dataclass(frozen=True, slots=True)
-class SeedCount:
-    value: int
-
-    def __post_init__(self) -> None:
-        _integer(self.value, "seed count", 1)
-
-
-@dataclass(frozen=True, slots=True)
-class RoundNumber:
-    value: int
-
-    def __post_init__(self) -> None:
-        _integer(self.value, "round number", 1)
-
-
-@dataclass(frozen=True, slots=True)
-class LocalEpochCount:
-    value: int
-
-    def __post_init__(self) -> None:
-        _integer(self.value, "local epoch count", 1)
-
-
-@dataclass(frozen=True, slots=True)
-class BatchSize:
-    value: int
-
-    def __post_init__(self) -> None:
-        _integer(self.value, "batch size", 1)
-
-
-@dataclass(frozen=True, slots=True)
-class BootstrapReplicateCount:
-    value: int
-
-    def __post_init__(self) -> None:
-        _integer(self.value, "bootstrap replicate count", 1)
-
-
-@dataclass(frozen=True, slots=True)
-class SubsampleReplicateCount:
-    value: int
-
-    def __post_init__(self) -> None:
-        _integer(self.value, "subsample replicate count", 1)
-
-
-@dataclass(frozen=True, slots=True)
-class GroupCount:
-    value: int
-
-    def __post_init__(self) -> None:
-        _integer(self.value, "group count", 1)
-
-
-@dataclass(frozen=True, slots=True)
-class KMeansInitializationCount:
-    value: int
-
-    def __post_init__(self) -> None:
-        _integer(self.value, "k-means initialization count", 1)
-
-
-@dataclass(frozen=True, slots=True)
-class KMeansMaximumIterationCount:
-    value: int
-
-    def __post_init__(self) -> None:
-        _integer(self.value, "k-means maximum iteration count", 1)
-
-
-@dataclass(frozen=True, slots=True)
-class ByteCount:
-    value: int
-
-    def __post_init__(self) -> None:
-        _integer(self.value, "byte count", 0)
-
-
-@dataclass(frozen=True, slots=True)
-class LearningRate:
+class ClosedUnitIntervalValue:
     value: float
+    validation_name: ClassVar[str] = "value"
 
     def __post_init__(self) -> None:
-        if _number(self.value, "learning rate") <= 0:
-            raise ValueError("learning rate must be positive")
+        value = _number(self.value, self.validation_name)
+        if not 0 <= value <= 1:
+            raise ValueError(f"{self.validation_name} must be in [0, 1]")
 
 
 @dataclass(frozen=True, slots=True)
-class DirichletConcentration:
-    value: float
-
-    def __post_init__(self) -> None:
-        if _number(self.value, "Dirichlet concentration") <= 0:
-            raise ValueError("Dirichlet concentration must be positive")
+class Seed(NonNegativeIntegerValue):
+    validation_name = "seed"
 
 
 @dataclass(frozen=True, slots=True)
-class ProximalCoefficient:
-    value: float
-
-    def __post_init__(self) -> None:
-        if _number(self.value, "proximal coefficient") <= 0:
-            raise ValueError("proximal coefficient must be positive")
+class Ratio(ClosedUnitIntervalValue):
+    validation_name = "ratio"
 
 
 @dataclass(frozen=True, slots=True)
-class DittoRegularization:
-    value: float
-
-    def __post_init__(self) -> None:
-        if _number(self.value, "Ditto regularization") < 0:
-            raise ValueError("Ditto regularization must be non-negative")
+class Quantile(OpenUnitIntervalValue):
+    validation_name = "quantile"
 
 
 @dataclass(frozen=True, slots=True)
-class ShrinkageWeight:
-    value: float
-
-    def __post_init__(self) -> None:
-        if not 0 <= _number(self.value, "shrinkage weight") <= 1:
-            raise ValueError("shrinkage weight must be in [0, 1]")
+class CoverageTarget(OpenUnitIntervalValue):
+    validation_name = "coverage target"
 
 
 @dataclass(frozen=True, slots=True)
-class SummaryCoefficient:
-    value: float
-
-    def __post_init__(self) -> None:
-        if _number(self.value, "summary coefficient") <= 0:
-            raise ValueError("summary coefficient must be positive")
+class CalibrationSize(PositiveIntegerValue):
+    validation_name = "calibration size"
 
 
 @dataclass(frozen=True, slots=True)
-class ConfidenceLevel:
-    value: float
+class ClientCount(PositiveIntegerValue):
+    validation_name = "client count"
 
-    def __post_init__(self) -> None:
-        value = _number(self.value, "confidence level")
-        if value <= 0.0 or value >= 1.0:
-            raise ValueError("confidence level must be in (0, 1)")
+
+@dataclass(frozen=True, slots=True)
+class SeedCount(PositiveIntegerValue):
+    validation_name = "seed count"
+
+
+@dataclass(frozen=True, slots=True)
+class RoundNumber(PositiveIntegerValue):
+    validation_name = "round number"
+
+
+@dataclass(frozen=True, slots=True)
+class LocalEpochCount(PositiveIntegerValue):
+    validation_name = "local epoch count"
+
+
+@dataclass(frozen=True, slots=True)
+class BatchSize(PositiveIntegerValue):
+    validation_name = "batch size"
+
+
+@dataclass(frozen=True, slots=True)
+class BootstrapReplicateCount(PositiveIntegerValue):
+    validation_name = "bootstrap replicate count"
+
+
+@dataclass(frozen=True, slots=True)
+class SubsampleReplicateCount(PositiveIntegerValue):
+    validation_name = "subsample replicate count"
+
+
+@dataclass(frozen=True, slots=True)
+class GroupCount(PositiveIntegerValue):
+    validation_name = "group count"
+
+
+@dataclass(frozen=True, slots=True)
+class KMeansInitializationCount(PositiveIntegerValue):
+    validation_name = "k-means initialization count"
+
+
+@dataclass(frozen=True, slots=True)
+class KMeansMaximumIterationCount(PositiveIntegerValue):
+    validation_name = "k-means maximum iteration count"
+
+
+@dataclass(frozen=True, slots=True)
+class ByteCount(NonNegativeIntegerValue):
+    validation_name = "byte count"
+
+
+@dataclass(frozen=True, slots=True)
+class LearningRate(PositiveFiniteFloatValue):
+    validation_name = "learning rate"
+
+
+@dataclass(frozen=True, slots=True)
+class DirichletConcentration(PositiveFiniteFloatValue):
+    validation_name = "Dirichlet concentration"
+
+
+@dataclass(frozen=True, slots=True)
+class ProximalCoefficient(PositiveFiniteFloatValue):
+    validation_name = "proximal coefficient"
+
+
+@dataclass(frozen=True, slots=True)
+class DittoRegularization(NonNegativeFiniteFloatValue):
+    validation_name = "Ditto regularization"
+
+
+@dataclass(frozen=True, slots=True)
+class ShrinkageWeight(ClosedUnitIntervalValue):
+    validation_name = "shrinkage weight"
+
+
+@dataclass(frozen=True, slots=True)
+class SummaryCoefficient(PositiveFiniteFloatValue):
+    validation_name = "summary coefficient"
+
+
+@dataclass(frozen=True, slots=True)
+class ConfidenceLevel(OpenUnitIntervalValue):
+    validation_name = "confidence level"
 
 
 @dataclass(frozen=True, slots=True)
@@ -238,12 +219,8 @@ class MetricValue:
 
 
 @dataclass(frozen=True, slots=True)
-class TrafficRatePerDay:
-    value: float
-
-    def __post_init__(self) -> None:
-        if _number(self.value, "traffic rate") < 0:
-            raise ValueError("traffic rate must be non-negative")
+class TrafficRatePerDay(NonNegativeFiniteFloatValue):
+    validation_name = "traffic rate"
 
 
 @dataclass(frozen=True, slots=True)
@@ -254,3 +231,12 @@ class Checksum:
         if not isinstance(self.value, str) or not self.value.strip():
             raise ValueError("checksum must be non-empty")
         object.__setattr__(self, "value", self.value.strip().lower())
+
+
+def checksum_text(payload: str) -> Checksum:
+    return Checksum(sha256(payload.encode()).hexdigest())
+
+
+def checksum_file(path: Path) -> Checksum:
+    with path.open("rb") as source:
+        return Checksum(file_digest(source, "sha256").hexdigest())

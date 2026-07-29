@@ -43,8 +43,8 @@ def population_capabilities(population_id: PopulationId) -> PopulationCapabiliti
         attack_sensitive_evaluation=_attack_metric_status(declaration, dataset_capabilities),
         temporal_support=_temporal_status(declaration, dataset_capabilities),
         valid_threshold_methods=_threshold_methods(declaration, dataset_capabilities),
-        evidentiary_role=_evidentiary_role(declaration),
-        confirmatory_eligible=declaration.confirmatory_eligible,
+        evidentiary_role=_evidentiary_role(declaration.identity_kind),
+        confirmatory_eligible=declaration.is_confirmatory_population,
     )
 
 
@@ -72,19 +72,19 @@ def _physical_validity(declaration: PopulationDeclaration, capabilities: Dataset
 
 
 def _family_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
-    if not declaration.has_family_taxonomy:
+    if not declaration.requires_family_taxonomy:
         return CapabilityStatus.UNAVAILABLE
     return capabilities.family_taxonomy.status
 
 
 def _chronology_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
-    if not declaration.has_chronology:
+    if not declaration.requires_verified_chronology:
         return CapabilityStatus.UNAVAILABLE
     return capabilities.chronology.status
 
 
 def _attack_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
-    if not declaration.has_attack_assignment:
+    if not declaration.requires_client_attack_assignment:
         return CapabilityStatus.UNAVAILABLE
     if not capabilities.attack_assignment.client_level_assignment_available:
         return CapabilityStatus.UNAVAILABLE
@@ -98,7 +98,7 @@ def _fpr_status(declaration: PopulationDeclaration, capabilities: DatasetCapabil
 
 
 def _attack_metric_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
-    if not declaration.has_attack_assignment:
+    if not declaration.requires_client_attack_assignment:
         return CapabilityStatus.UNAVAILABLE
     if not capabilities.attack_assignment.client_level_assignment_available:
         return CapabilityStatus.UNAVAILABLE
@@ -106,7 +106,7 @@ def _attack_metric_status(declaration: PopulationDeclaration, capabilities: Data
 
 
 def _temporal_status(declaration: PopulationDeclaration, capabilities: DatasetCapabilities) -> CapabilityStatus:
-    if not declaration.has_chronology:
+    if not declaration.requires_verified_chronology:
         return CapabilityStatus.UNAVAILABLE
     return capabilities.temporal.status
 
@@ -119,23 +119,23 @@ def _threshold_methods(
         for item in capabilities.threshold_methods
         if item.status in {CapabilityStatus.SUPPORTED, CapabilityStatus.CONDITIONAL}
     )
-    if declaration.has_family_taxonomy and FederatedThresholdMethod.FAMILY_THRESHOLD not in supported:
+    if declaration.requires_family_taxonomy and FederatedThresholdMethod.FAMILY_THRESHOLD not in supported:
         if capabilities.family_taxonomy.status is CapabilityStatus.SUPPORTED:
             return supported + (FederatedThresholdMethod.FAMILY_THRESHOLD,)
-    if not declaration.has_family_taxonomy:
+    if not declaration.requires_family_taxonomy:
         return tuple(method for method in supported if method is not FederatedThresholdMethod.FAMILY_THRESHOLD)
     return supported
 
 
-def _evidentiary_role(declaration: PopulationDeclaration) -> EvidenceRole:
-    match declaration.id:
-        case PopulationId.NBAIOT_NATURAL_DEVICES:
+def _evidentiary_role(identity_kind: PopulationIdentityKind) -> EvidenceRole:
+    match identity_kind:
+        case PopulationIdentityKind.PHYSICAL_DEVICES:
             return EvidenceRole.CONFIRMATORY
-        case PopulationId.NBAIOT_DIRICHLET_CLIENTS:
+        case PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS:
             return EvidenceRole.MECHANISM
-        case PopulationId.CICIOT_FILE_CLIENTS:
+        case PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS:
             return EvidenceRole.APPLICABILITY_BOUNDARY
-        case PopulationId.EDGE_SENSOR_GROUPS:
+        case PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS:
             return EvidenceRole.EXTERNAL_VALIDATION
-        case PopulationId.EDGE_TEMPORAL_GROUPS:
+        case PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS:
             return EvidenceRole.TEMPORAL_BOUNDARY

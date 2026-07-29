@@ -13,7 +13,7 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.values import Seed
-from datp_core.protocols.models import DATA_ROOT
+from datp_core.protocols.runtime import DATA_ROOT
 
 
 @dataclass(frozen=True, slots=True)

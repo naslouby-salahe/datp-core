@@ -4,8 +4,8 @@ import polars as pl
 
 from datp_core.domain.enums import DatasetId, PartitionRole, PopulationId, SplitProtocolId
 from datp_core.domain.values import Seed
-from datp_core.populations.nbaiot_natural_devices import build_nbaiot_natural_devices
 from datp_core.populations.models import SplitConstructionRequest
+from datp_core.populations.nbaiot_natural_devices import build_nbaiot_natural_devices
 from datp_core.populations.splits import split_membership
 
 

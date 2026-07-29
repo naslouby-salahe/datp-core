@@ -3,7 +3,6 @@
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
-from hashlib import sha256
 from pathlib import Path
 
 import pyarrow as pa
@@ -39,8 +38,8 @@ from datp_core.datasets.models import (
     ValidationReportDocument,
 )
 from datp_core.domain.enums import DatasetId
-from datp_core.domain.values import Checksum
-from datp_core.protocols.models import DATA_ROOT
+from datp_core.domain.values import Checksum, checksum_file, checksum_text
+from datp_core.protocols.runtime import DATA_ROOT
 
 _CANONICAL_PUBLICATION_CONTRACT = "canonical_publication_contract"
 _COMPLETE_NAME = CanonicalPublicationArtifact.COMPLETE
@@ -122,16 +121,8 @@ def schema_checksum_document_json(
     ).model_dump_json()
 
 
-def file_checksum(path: Path) -> Checksum:
-    digest = sha256()
-    with path.open("rb") as source:
-        while chunk := source.read(1_048_576):
-            digest.update(chunk)
-    return Checksum(digest.hexdigest())
-
-
 def complete_content(manifest: str, schema: str) -> str:
-    return Checksum(sha256(f"{manifest}\n{schema}".encode()).hexdigest()).value
+    return checksum_text(f"{manifest}\n{schema}").value
 
 
 def canonical_publication_contract() -> str:
@@ -384,7 +375,7 @@ def _source_state(
     return SourceStateDocument(
         content_checksum_verified=True,
         dataset=dataset,
-        manifest_checksum=sha256(manifest.encode()).hexdigest(),
+        manifest_checksum=checksum_text(manifest).value,
         sources=sources,
     )
 
@@ -474,7 +465,7 @@ def asset_is_valid(root: Path, asset: CanonicalAssetDocument, expected_physical_
         path = canonical_asset_path(root, Path(asset.path))
     except ValueError:
         return False
-    if not path.is_file() or file_checksum(path).value != asset.checksum:
+    if not path.is_file() or checksum_file(path).value != asset.checksum:
         return False
     try:
         parquet = pq.ParquetFile(path)

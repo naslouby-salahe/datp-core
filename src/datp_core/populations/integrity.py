@@ -4,9 +4,16 @@ from dataclasses import dataclass
 
 import polars as pl
 
-from datp_core.domain.enums import PartitionRole, PopulationId, StageOperationId
+from datp_core.domain.enums import (
+    DatasetId,
+    PartitionRole,
+    PopulationId,
+    PopulationIdentityKind,
+    SplitProtocolId,
+    StageOperationId,
+)
 from datp_core.domain.errors import DataIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount
+from datp_core.domain.values import Checksum, ClientCount, Seed
 from datp_core.populations.capabilities import population_capabilities, population_declaration
 from datp_core.populations.models import (
     CLIENT_ID_COLUMN,
@@ -18,13 +25,16 @@ from datp_core.populations.models import (
     PopulationFeasibilityStatus,
     PopulationFrameColumn,
     PopulationManifest,
+    PopulationManifestSpec,
     PopulationOutcomeLabel,
     SplitManifest,
     SplitManifestDocument,
     WorkingFrameColumn,
     assignment_column_names,
+    build_population_manifest,
     membership_checksum,
     membership_column_names,
+    select_membership_frame,
 )
 
 _BENIGN = PopulationOutcomeLabel.BENIGN
@@ -137,6 +147,23 @@ class FeasibilityAssessmentRequest:
     chronology_required: bool
 
 
+@dataclass(frozen=True, slots=True)
+class PopulationFinalizationRequest:
+    population: PopulationId
+    dataset: DatasetId
+    identity_kind: PopulationIdentityKind
+    partition_seed: Seed
+    split_protocol: SplitProtocolId
+    candidate_ids: tuple[str, ...]
+    accepted_ids: tuple[str, ...]
+    excluded_ids: tuple[str, ...]
+    expected_identities: tuple[str, ...] | None
+    chronology_required: bool
+    membership: pl.DataFrame
+    canonical_schema_checksum: Checksum
+    family_by_client: tuple[tuple[str, str], ...] = ()
+
+
 def assess_declared_feasibility(
     *,
     expected_count: int,
@@ -155,6 +182,47 @@ def assess_declared_feasibility(
             chronology_required=chronology_required,
         )
     )
+
+
+def finalize_population(request: PopulationFinalizationRequest) -> PopulationManifest:
+    """Build and validate a complete immutable population result from one typed request."""
+    declaration = population_declaration(request.population)
+    if declaration.dataset is not request.dataset or declaration.identity_kind is not request.identity_kind:
+        raise ScientificContractError(
+            "population finalization disagrees with its declaration",
+            subject=request.population,
+            reason="dataset and identity kind must come from the authoritative population binding",
+        )
+    membership = select_membership_frame(request.membership)
+    benign, attack = outcome_row_counts(membership)
+    feasibility = assess_declared_feasibility(
+        expected_count=declaration.client_count.value,
+        candidate_ids=request.candidate_ids,
+        accepted_ids=request.accepted_ids,
+        expected_identities=request.expected_identities,
+        chronology_required=request.chronology_required,
+    )
+    manifest = build_population_manifest(
+        PopulationManifestSpec(
+            population=request.population,
+            dataset=request.dataset,
+            identity_kind=request.identity_kind,
+            partition_seed=request.partition_seed,
+            split_protocol=request.split_protocol,
+            candidate_clients=request.candidate_ids,
+            accepted_clients=request.accepted_ids,
+            excluded_client_ids=request.excluded_ids,
+            total_membership_rows=membership.height,
+            benign_row_count=benign,
+            attack_row_count=attack,
+            membership_checksum=membership_frame_checksum(membership),
+            canonical_schema_checksum=request.canonical_schema_checksum,
+            feasibility=feasibility,
+            family_by_client=request.family_by_client,
+        )
+    )
+    validate_population_manifest(manifest, membership)
+    return manifest
 
 
 def feasibility_from_candidates(request: FeasibilityAssessmentRequest) -> PopulationFeasibility:

@@ -23,7 +23,6 @@ from datp_core.datasets.canonical_cache import (
     canonical_directory,
     complete_content,
     completed_publication_is_reusable,
-    file_checksum,
     publication_artifact_names,
     schema_checksum_document_json,
     schema_content,
@@ -48,8 +47,8 @@ from datp_core.datasets.models import (
     SourceFileRole,
 )
 from datp_core.domain.enums import DatasetId
-from datp_core.domain.values import ByteCount, Checksum
-from datp_core.protocols.models import DATA_ROOT
+from datp_core.domain.values import ByteCount, Checksum, checksum_file, checksum_text
+from datp_core.protocols.runtime import DATA_ROOT
 
 _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_artifact_names()
 
@@ -162,7 +161,7 @@ def raw_source_file(
         dataset=dataset,
         relative_path=source_path_resolver(path),
         size_bytes=ByteCount(path.stat().st_size),
-        checksum=file_checksum(path),
+        checksum=checksum_file(path),
         role=role,
         observed_row_count=observed_row_count,
     )
@@ -218,7 +217,7 @@ def canonical_schema_checksum(
     if tuple(column.nullable for column in columns) != tuple(field.nullable for field in physical_schema):
         raise ValueError("canonical column nullability must match the physical schema")
     content = schema_checksum_document_json(dataset, columns, physical_schema)
-    return Checksum(sha256(content.encode()).hexdigest())
+    return checksum_text(content)
 
 
 def canonical_provenance_column(column: CanonicalProvenanceColumn, position: int) -> CanonicalColumn:
@@ -302,7 +301,7 @@ def stream_parquet[AssetRoleT: StrEnum](
         raise ValueError("written Parquet schema differs from the declared canonical schema")
     return CanonicalAsset(
         relative_path=layout.relative_path,
-        checksum=file_checksum(destination),
+        checksum=checksum_file(destination),
         row_count=parquet.metadata.num_rows,
         columns=tuple(actual_schema.names),
         role=layout.role,

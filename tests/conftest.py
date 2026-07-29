@@ -6,7 +6,7 @@ from pathlib import Path
 import polars as pl
 import pytest
 
-from datp_core.datasets.edge_iiotset.schema import EDGE_BENIGN_SENSOR_GROUPS
+from datp_core.datasets.edge_iiotset.schema import EDGE_BENIGN_SENSOR_GROUPS, EdgeSensorGroup
 from datp_core.datasets.nbaiot.schema import NBAIOT_DEVICE_FAMILIES, NBAIOT_DEVICE_IDENTITIES, NBaIoTDeviceFamily
 from datp_core.domain.values import Checksum
 
@@ -108,7 +108,7 @@ def edge_canonical_root(tmp_path: Path) -> Path:
                 }
             )
         pl.DataFrame(rows).write_parquet(static / f"{group}.parquet")
-        eligible = group != "Modbus"
+        eligible = group is not EdgeSensorGroup.MODBUS
         chronology.append(
             {
                 "alignment_offset_microseconds": 0 if eligible else None,
@@ -172,7 +172,7 @@ def edge_temporal_eligible_root(tmp_path: Path) -> Path:
     from datetime import datetime
 
     for group in EDGE_BENIGN_SENSOR_GROUPS:
-        eligible = group != "Modbus"
+        eligible = group is not EdgeSensorGroup.MODBUS
         rows = []
         for local in range(20):
             ts = datetime(2021, 1, 1, 0, 0, local, tzinfo=UTC) if eligible else None

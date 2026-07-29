@@ -12,6 +12,7 @@ from .schema import (
     EDGE_SCHEMA,
     EdgeCanonicalColumn,
     EdgeRawColumn,
+    EdgeSensorGroup,
     benign_sensor_group,
     is_attack_source,
     source_relative_path,
@@ -30,7 +31,7 @@ class EdgeIIoTsetReader:
             raise ValueError("unrecognized Edge attack source")
         return self._read(path, None)
 
-    def _read(self, path: Path, sensor_group: str | None) -> pl.LazyFrame:
+    def _read(self, path: Path, sensor_group: EdgeSensorGroup | None) -> pl.LazyFrame:
         source = pl.scan_csv(
             path,
             schema=pl.Schema(tuple((column, pl.String) for column in EDGE_RAW_COLUMNS)),

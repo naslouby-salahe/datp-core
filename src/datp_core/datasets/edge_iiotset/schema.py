@@ -38,6 +38,19 @@ class EdgeAssetRole(StrEnum):
     UNASSIGNED_ATTACK = "unassigned_attack"
 
 
+class EdgeSensorGroup(StrEnum):
+    DISTANCE = "Distance"
+    FLAME_SENSOR = "Flame_Sensor"
+    HEART_RATE = "Heart_Rate"
+    IR_RECEIVER = "IR_Receiver"
+    MODBUS = "Modbus"
+    SOIL_MOISTURE = "Soil_Moisture"
+    SOUND_SENSOR = "Sound_Sensor"
+    TEMPERATURE_AND_HUMIDITY = "Temperature_and_Humidity"
+    WATER_LEVEL = "Water_Level"
+    PH_VALUE = "phValue"
+
+
 class EdgeCanonicalColumn(StrEnum):
     RAW_TIMESTAMP = "raw_timestamp"
     ATTACK_LABEL = "attack_label"
@@ -68,17 +81,17 @@ EDGE_RAW_COLUMNS: tuple[str, ...] = tuple(
     ).split(",")
 )
 EDGE_FEATURE_COLUMNS: tuple[str, ...] = EDGE_RAW_COLUMNS[:-2]
-EDGE_BENIGN_SENSOR_GROUPS: tuple[str, ...] = (
-    "Distance",
-    "Flame_Sensor",
-    "Heart_Rate",
-    "IR_Receiver",
-    "Modbus",
-    "Soil_Moisture",
-    "Sound_Sensor",
-    "Temperature_and_Humidity",
-    "Water_Level",
-    "phValue",
+EDGE_BENIGN_SENSOR_GROUPS: tuple[EdgeSensorGroup, ...] = (
+    EdgeSensorGroup.DISTANCE,
+    EdgeSensorGroup.FLAME_SENSOR,
+    EdgeSensorGroup.HEART_RATE,
+    EdgeSensorGroup.IR_RECEIVER,
+    EdgeSensorGroup.MODBUS,
+    EdgeSensorGroup.SOIL_MOISTURE,
+    EdgeSensorGroup.SOUND_SENSOR,
+    EdgeSensorGroup.TEMPERATURE_AND_HUMIDITY,
+    EdgeSensorGroup.WATER_LEVEL,
+    EdgeSensorGroup.PH_VALUE,
 )
 
 EDGE_CANONICAL_FEATURE_COLUMNS: tuple[str, ...] = (EdgeCanonicalColumn.RAW_TIMESTAMP,) + EDGE_FEATURE_COLUMNS[1:]
@@ -171,12 +184,16 @@ EDGE_SCHEMA = CanonicalSchema(
 )
 
 
-def benign_sensor_group(path: Path) -> str:
-    if path.suffix != EdgeArtifactSuffix.CSV or path.parent.name not in EDGE_BENIGN_SENSOR_GROUPS:
+def benign_sensor_group(path: Path) -> EdgeSensorGroup:
+    if path.suffix != EdgeArtifactSuffix.CSV:
         raise ValueError("unrecognized Edge benign sensor source")
-    if path.stem != path.parent.name:
+    try:
+        group = EdgeSensorGroup(path.parent.name)
+    except ValueError as error:
+        raise ValueError("unrecognized Edge benign sensor source") from error
+    if path.stem != group.value:
         raise ValueError("Edge benign source filename must match its sensor-group folder")
-    return path.parent.name
+    return group
 
 
 def is_attack_source(path: Path) -> bool:

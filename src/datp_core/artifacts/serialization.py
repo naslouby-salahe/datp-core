@@ -1,7 +1,6 @@
 """Generic safe serialization for trusted estimators and Pydantic models."""
 
 from enum import StrEnum
-from hashlib import sha256
 from pathlib import Path
 from typing import Final, cast
 
@@ -13,7 +12,7 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from datp_core.domain.enums import TrustedEstimatorClassName
 from datp_core.domain.errors import SerializationSafetyError
-from datp_core.domain.values import Checksum
+from datp_core.domain.values import Checksum, checksum_file, checksum_text
 
 TrustedScaler = StandardScaler | MinMaxScaler
 
@@ -74,7 +73,7 @@ def serialize_estimator(estimator: BaseEstimator, destination: Path) -> Checksum
         )
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_bytes(skops_io.dumps(estimator))
-    return file_checksum(destination)
+    return checksum_file(destination)
 
 
 def load_estimator(path: Path, class_name: TrustedEstimatorClassName) -> TrustedScaler:
@@ -97,15 +96,7 @@ def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = model.model_dump_json()
     destination.write_text(payload, encoding="utf-8")
-    return Checksum(sha256(payload.encode()).hexdigest())
-
-
-def file_checksum(path: Path) -> Checksum:
-    digest = sha256()
-    with path.open("rb") as handle:
-        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return Checksum(digest.hexdigest())
+    return checksum_text(payload)
 
 
 def transforms_are_equivalent(

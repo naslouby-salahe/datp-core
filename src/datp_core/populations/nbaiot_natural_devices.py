@@ -14,12 +14,9 @@ from datp_core.datasets.nbaiot.schema import (
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import DataIntegrityError
 from datp_core.domain.values import Seed
-from datp_core.populations.capabilities import population_declaration
 from datp_core.populations.integrity import (
-    assess_declared_feasibility,
-    membership_frame_checksum,
-    outcome_row_counts,
-    validate_population_manifest,
+    PopulationFinalizationRequest,
+    finalize_population,
 )
 from datp_core.populations.models import (
     CLIENT_ID_COLUMN,
@@ -28,9 +25,7 @@ from datp_core.populations.models import (
     STABLE_ROW_ID_COLUMN,
     PopulationFrameColumn,
     PopulationManifest,
-    PopulationManifestSpec,
     PopulationOutcomeLabel,
-    build_population_manifest,
     canonical_data_glob,
     select_membership_frame,
 )
@@ -48,7 +43,6 @@ def build_nbaiot_natural_devices(
     partition_seed: Seed,
     split_protocol: SplitProtocolId,
 ) -> tuple[PopulationManifest, pl.DataFrame]:
-    declaration = population_declaration(_POPULATION)
     frame = _load_identity_frame(canonical_root)
     candidates = tuple(sorted(NBAIOT_DEVICE_IDENTITIES))
     observed = tuple(frame.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
@@ -66,34 +60,23 @@ def build_nbaiot_natural_devices(
         .sort(CLIENT_ID_COLUMN)
         .iter_rows()
     )
-    benign, attack = outcome_row_counts(membership)
-    feasibility = assess_declared_feasibility(
-        expected_count=declaration.client_count.value,
-        candidate_ids=candidates,
-        accepted_ids=candidates,
-        expected_identities=candidates,
-        chronology_required=False,
-    )
-    manifest = build_population_manifest(
-        PopulationManifestSpec(
+    manifest = finalize_population(
+        PopulationFinalizationRequest(
             population=_POPULATION,
             dataset=DatasetId.NBAIOT,
             identity_kind=_IDENTITY,
             partition_seed=partition_seed,
             split_protocol=split_protocol,
-            candidate_clients=candidates,
-            accepted_clients=candidates,
-            excluded_client_ids=(),
-            total_membership_rows=membership.height,
-            benign_row_count=benign,
-            attack_row_count=attack,
-            membership_checksum=membership_frame_checksum(membership),
+            candidate_ids=candidates,
+            accepted_ids=candidates,
+            excluded_ids=(),
+            expected_identities=candidates,
+            chronology_required=False,
+            membership=membership,
             canonical_schema_checksum=NBAIOT_SCHEMA.checksum,
-            feasibility=feasibility,
             family_by_client=family_by_client,
         )
     )
-    validate_population_manifest(manifest, membership)
     return manifest, membership
 
 

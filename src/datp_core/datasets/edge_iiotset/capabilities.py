@@ -13,16 +13,16 @@ from datp_core.datasets.capabilities import (
 )
 from datp_core.domain.enums import CapabilityStatus, EvidenceRole, FederatedThresholdMethod, MetricId, PopulationId
 
-from .schema import EDGE_BENIGN_SENSOR_GROUPS
+from .schema import EDGE_BENIGN_SENSOR_GROUPS, EdgeSensorGroup
 
-EDGE_TEMPORAL_SENSOR_GROUPS = tuple(group for group in EDGE_BENIGN_SENSOR_GROUPS if group != "Modbus")
+EDGE_TEMPORAL_SENSOR_GROUPS = frozenset(EDGE_BENIGN_SENSOR_GROUPS) - frozenset((EdgeSensorGroup.MODBUS,))
 
 EDGE_IIOTSET_CAPABILITIES = DatasetCapabilities(
     physical_clients=PhysicalClientCapability(
         CapabilityStatus.SUPPORTED,
         "Ten audited normal-traffic sensor folders provide static benign sensor-group identities.",
         "Identities apply only to benign source folders.",
-        EDGE_BENIGN_SENSOR_GROUPS,
+        tuple(group.value for group in EDGE_BENIGN_SENSOR_GROUPS),
     ),
     family_taxonomy=FamilyTaxonomyCapability(
         CapabilityStatus.UNAVAILABLE,
@@ -34,7 +34,7 @@ EDGE_IIOTSET_CAPABILITIES = DatasetCapabilities(
         CapabilityStatus.CONDITIONAL,
         "Nine normal-traffic CSVs align one-to-one with their paired PCAP capture records.",
         "PCAP calendar timestamps are admitted only after a complete per-row alignment check; Modbus remains excluded.",
-        EDGE_TEMPORAL_SENSOR_GROUPS,
+        tuple(group.value for group in sorted(EDGE_TEMPORAL_SENSOR_GROUPS)),
     ),
     attack_assignment=AttackAssignmentCapability(
         CapabilityStatus.UNAVAILABLE,

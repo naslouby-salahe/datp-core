@@ -19,6 +19,7 @@ from datp_core.datasets.models import (
     ModelInputEligibilityPolicy,
 )
 from datp_core.domain.enums import DatasetId
+from datp_core.domain.values import ClientCount
 
 
 class CICIoT2023Column(StrEnum):
@@ -89,6 +90,9 @@ class CICIoT2023ArtifactName(StrEnum):
     MERGED_CSV_DIRECTORY = "MERGED_CSV"
     MERGED_FILE_PREFIX = "Merged"
     CSV_SUFFIX = ".csv"
+
+
+CICIOT2023_AUDITED_FILE_CLIENT_COUNT = ClientCount(63)
 
 
 CICIOT2023_RAW_COLUMNS: tuple[str, ...] = tuple(

@@ -1,6 +1,12 @@
 """Canonical runtime declaration without scientific overrides."""
 
-from .models import DATA_ROOT, OUTPUTS_ROOT, RESULTS_ROOT, RuntimeProtocol
+from pathlib import Path
+
+from .models import RuntimeProtocol
+
+DATA_ROOT = Path("data")
+OUTPUTS_ROOT = Path("outputs")
+RESULTS_ROOT = Path("results")
 
 CANONICAL_RUNTIME = RuntimeProtocol(
     data_root=DATA_ROOT,

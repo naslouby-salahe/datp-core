@@ -7,7 +7,7 @@ import polars as pl
 
 from datp_core.domain.enums import PartitionRole, SplitProtocolId, StageOperationId
 from datp_core.domain.errors import DataIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.values import Seed, checksum_text
 from datp_core.populations.models import (
     CLIENT_ID_COLUMN,
     ORDER_COLUMN,
@@ -262,7 +262,7 @@ def _split_manifest(assignments: pl.DataFrame, request: SplitConstructionRequest
         calibration_row_count=count(PartitionRole.CALIBRATION),
         evaluation_row_count=count(PartitionRole.EVALUATION),
         future_recalibration_row_count=count(PartitionRole.FUTURE_RECALIBRATION),
-        assignment_checksum=Checksum(sha256(payload.encode()).hexdigest()),
+        assignment_checksum=checksum_text(payload),
         population_manifest_checksum=request.population_manifest_checksum,
     )
     return SplitManifest(document)

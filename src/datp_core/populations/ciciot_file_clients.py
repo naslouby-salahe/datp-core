@@ -12,14 +12,11 @@ from datp_core.datasets.ciciot2023.schema import (
 )
 from datp_core.datasets.models import CanonicalProvenanceColumn
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
-from datp_core.domain.errors import CapabilityError, DataIntegrityError, ScientificContractError
+from datp_core.domain.errors import CapabilityError, ScientificContractError
 from datp_core.domain.values import Seed
-from datp_core.populations.capabilities import population_declaration
 from datp_core.populations.integrity import (
-    assess_declared_feasibility,
-    membership_frame_checksum,
-    outcome_row_counts,
-    validate_population_manifest,
+    PopulationFinalizationRequest,
+    finalize_population,
 )
 from datp_core.populations.models import (
     CLIENT_ID_COLUMN,
@@ -28,9 +25,7 @@ from datp_core.populations.models import (
     SOURCE_ROW_INDEX_COLUMN,
     STABLE_ROW_ID_COLUMN,
     PopulationManifest,
-    PopulationManifestSpec,
     PopulationOutcomeLabel,
-    build_population_manifest,
     canonical_data_glob,
     select_membership_frame,
 )
@@ -53,43 +48,25 @@ def build_ciciot_file_clients(
             subject=_POPULATION,
             reason="merged files retain no audited capture chronology",
         )
-    declaration = population_declaration(_POPULATION)
     eligible = _load_eligible_membership(canonical_root)
     candidates = tuple(eligible.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
-    if len(candidates) != declaration.client_count.value:
-        raise DataIntegrityError(
-            "CICIoT2023 file-client count disagrees with the audited merged-file catalogue",
-            subject=_POPULATION,
-            reason="file-defined clients must equal the locked merged-file count",
-        )
     membership = select_membership_frame(eligible).sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
-    benign, attack = outcome_row_counts(membership)
-    feasibility = assess_declared_feasibility(
-        expected_count=declaration.client_count.value,
-        candidate_ids=candidates,
-        accepted_ids=candidates,
-        expected_identities=None,
-        chronology_required=False,
-    )
-    manifest = build_population_manifest(
-        PopulationManifestSpec(
+    manifest = finalize_population(
+        PopulationFinalizationRequest(
             population=_POPULATION,
             dataset=DatasetId.CICIOT2023,
             identity_kind=_IDENTITY,
             partition_seed=partition_seed,
             split_protocol=split_protocol,
-            candidate_clients=candidates,
-            accepted_clients=candidates,
-            excluded_client_ids=(),
-            total_membership_rows=membership.height,
-            benign_row_count=benign,
-            attack_row_count=attack,
-            membership_checksum=membership_frame_checksum(membership),
+            candidate_ids=candidates,
+            accepted_ids=candidates,
+            excluded_ids=(),
+            expected_identities=None,
+            chronology_required=False,
+            membership=membership,
             canonical_schema_checksum=CICIOT2023_SCHEMA.checksum,
-            feasibility=feasibility,
         )
     )
-    validate_population_manifest(manifest, membership)
     return manifest, membership
 
 

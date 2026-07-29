@@ -1,19 +1,14 @@
 """Completion markers for reusable processed-data publications."""
 
-from hashlib import sha256
 from pathlib import Path
 
 from datp_core.artifacts.layout import ProcessedAssetName
 from datp_core.domain.errors import ArtifactIntegrityError
-from datp_core.domain.values import Checksum
+from datp_core.domain.values import Checksum, checksum_text
 
 
 def complete_digest(manifest_payload: str, schema_payload: str) -> Checksum:
-    digest = sha256()
-    digest.update(manifest_payload.encode())
-    digest.update(b"\n")
-    digest.update(schema_payload.encode())
-    return Checksum(digest.hexdigest())
+    return checksum_text(f"{manifest_payload}\n{schema_payload}")
 
 
 def write_complete_marker(directory: Path, digest: Checksum) -> Path:

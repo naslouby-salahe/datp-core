@@ -11,7 +11,7 @@ def test_population_capabilities_and_dirichlet_grid() -> None:
         (PopulationId.EDGE_SENSOR_GROUPS, 10),
         (PopulationId.EDGE_TEMPORAL_GROUPS, 9),
     )
-    assert not POPULATIONS[1].has_family_taxonomy
+    assert not POPULATIONS[1].requires_family_taxonomy
     assert tuple(item.value for item in DIRICHLET_CONCENTRATIONS) == (0.1, 0.3, 0.5, 1, 10)
     by_id = {population.id: population for population in POPULATIONS}
     assert by_id[PopulationId.NBAIOT_NATURAL_DEVICES].identity_kind is PopulationIdentityKind.PHYSICAL_DEVICES

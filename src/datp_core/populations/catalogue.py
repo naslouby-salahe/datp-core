@@ -1,11 +1,12 @@
 """Exhaustive typed population catalogue dispatch."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
 
-from datp_core.domain.enums import DatasetId, PartitionRole, PopulationId, SplitProtocolId
+from datp_core.domain.enums import ControlledPartitionKind, DatasetId, PartitionRole, PopulationId, SplitProtocolId
 from datp_core.domain.errors import CapabilityError, ScientificContractError
 from datp_core.domain.values import Seed
 from datp_core.evaluation.cohorts import (
@@ -38,6 +39,8 @@ from datp_core.protocols.models import PopulationDeclaration
 class PopulationBinding:
     declaration: PopulationDeclaration
     capabilities: PopulationCapabilities
+    supported_partition_kinds: frozenset[ControlledPartitionKind]
+    construct: Callable[["PopulationConstructionRequest"], "PopulationConstructionResult"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -77,93 +80,119 @@ class PreprocessingHandoff:
 
 
 def resolve_population(population_id: PopulationId) -> PopulationBinding:
-    match population_id:
-        case (
-            PopulationId.NBAIOT_NATURAL_DEVICES
-            | PopulationId.CICIOT_FILE_CLIENTS
-            | PopulationId.NBAIOT_DIRICHLET_CLIENTS
-            | PopulationId.EDGE_SENSOR_GROUPS
-            | PopulationId.EDGE_TEMPORAL_GROUPS
-        ):
-            return PopulationBinding(population_declaration(population_id), population_capabilities(population_id))
-        case _:
-            raise CapabilityError(
-                "unsupported population identity",
-                subject=population_id,
-                reason="population is outside the locked five-population catalogue",
-            )
+    try:
+        return _POPULATION_BINDINGS[population_id]
+    except KeyError as error:
+        raise CapabilityError(
+            "unsupported population identity",
+            subject=population_id,
+            reason="population is outside the locked five-population catalogue",
+        ) from error
 
 
 def construct_population(request: PopulationConstructionRequest) -> PopulationConstructionResult:
-    population_id = request.population_id
-    canonical_root = request.canonical_root
-    partition_seed = request.partition_seed
-    split_protocol = request.split_protocol
-    match population_id:
-        case PopulationId.NBAIOT_NATURAL_DEVICES:
-            if request.dirichlet_condition is not None:
-                raise ScientificContractError(
-                    "natural-device construction does not accept a synthetic partition condition",
-                    subject=population_id,
-                    reason="Dirichlet and IID conditions apply only to NBAIOT_DIRICHLET_CLIENTS",
-                )
-            manifest, membership = build_nbaiot_natural_devices(
-                canonical_root, partition_seed=partition_seed, split_protocol=split_protocol
+    binding = resolve_population(request.population_id)
+    _require_partition_condition(request, binding)
+    return binding.construct(request)
+
+
+def _require_partition_condition(request: PopulationConstructionRequest, binding: PopulationBinding) -> None:
+    condition = request.dirichlet_condition
+    if not binding.supported_partition_kinds:
+        if condition is not None:
+            raise ScientificContractError(
+                "population construction does not accept a controlled partition condition",
+                subject=request.population_id,
+                reason="only populations with declared controlled partition capability accept one",
             )
-            return PopulationConstructionResult(population_id, manifest, membership, None)
-        case PopulationId.CICIOT_FILE_CLIENTS:
-            if request.dirichlet_condition is not None:
-                raise ScientificContractError(
-                    "CIC file-client construction does not accept a synthetic partition condition",
-                    subject=population_id,
-                    reason="Dirichlet and IID conditions apply only to NBAIOT_DIRICHLET_CLIENTS",
-                )
-            manifest, membership = build_ciciot_file_clients(
-                canonical_root, partition_seed=partition_seed, split_protocol=split_protocol
-            )
-            return PopulationConstructionResult(population_id, manifest, membership, None)
-        case PopulationId.NBAIOT_DIRICHLET_CLIENTS:
-            if request.dirichlet_condition is None:
-                raise ScientificContractError(
-                    "controlled N-BaIoT construction requires an explicit partition condition",
-                    subject=population_id,
-                    reason="Dirichlet concentration or IID must be declared, never defaulted",
-                )
-            manifest, membership, diagnostics = build_nbaiot_dirichlet_clients(
-                canonical_root,
-                partition_seed=partition_seed,
-                condition=request.dirichlet_condition,
-                split_protocol=split_protocol,
-            )
-            return PopulationConstructionResult(population_id, manifest, membership, diagnostics)
-        case PopulationId.EDGE_SENSOR_GROUPS:
-            if request.dirichlet_condition is not None:
-                raise ScientificContractError(
-                    "Edge sensor-group construction does not accept a synthetic partition condition",
-                    subject=population_id,
-                    reason="Dirichlet and IID conditions apply only to NBAIOT_DIRICHLET_CLIENTS",
-                )
-            manifest, membership = build_edge_sensor_groups(
-                canonical_root, partition_seed=partition_seed, split_protocol=split_protocol
-            )
-            return PopulationConstructionResult(population_id, manifest, membership, None)
-        case PopulationId.EDGE_TEMPORAL_GROUPS:
-            if request.dirichlet_condition is not None:
-                raise ScientificContractError(
-                    "Edge temporal construction does not accept a synthetic partition condition",
-                    subject=population_id,
-                    reason="Dirichlet and IID conditions apply only to NBAIOT_DIRICHLET_CLIENTS",
-                )
-            temporal_manifest, membership, diagnostics, _, _ = build_edge_temporal_groups(
-                canonical_root, partition_seed=partition_seed, split_protocol=split_protocol
-            )
-            return PopulationConstructionResult(population_id, temporal_manifest, membership, diagnostics)
-        case _:
-            raise CapabilityError(
-                "unsupported population identity",
-                subject=population_id,
-                reason="population is outside the locked five-population catalogue",
-            )
+        return
+    if condition is None:
+        raise ScientificContractError(
+            "controlled population construction requires an explicit partition condition",
+            subject=request.population_id,
+            reason="a controlled partition is never defaulted",
+        )
+    if condition.kind not in binding.supported_partition_kinds:
+        raise ScientificContractError(
+            "population construction received an unsupported controlled partition kind",
+            subject=request.population_id,
+            reason="the partition kind is absent from the population binding",
+        )
+
+
+def _construct_nbaiot_natural(request: PopulationConstructionRequest) -> PopulationConstructionResult:
+    manifest, membership = build_nbaiot_natural_devices(
+        request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
+    )
+    return PopulationConstructionResult(request.population_id, manifest, membership, None)
+
+
+def _construct_ciciot_file_clients(request: PopulationConstructionRequest) -> PopulationConstructionResult:
+    manifest, membership = build_ciciot_file_clients(
+        request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
+    )
+    return PopulationConstructionResult(request.population_id, manifest, membership, None)
+
+
+def _construct_nbaiot_dirichlet(request: PopulationConstructionRequest) -> PopulationConstructionResult:
+    condition = request.dirichlet_condition
+    if condition is None:
+        raise AssertionError("partition condition was validated before binding dispatch")
+    manifest, membership, diagnostics = build_nbaiot_dirichlet_clients(
+        request.canonical_root,
+        partition_seed=request.partition_seed,
+        condition=condition,
+        split_protocol=request.split_protocol,
+    )
+    return PopulationConstructionResult(request.population_id, manifest, membership, diagnostics)
+
+
+def _construct_edge_sensor_groups(request: PopulationConstructionRequest) -> PopulationConstructionResult:
+    manifest, membership = build_edge_sensor_groups(
+        request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
+    )
+    return PopulationConstructionResult(request.population_id, manifest, membership, None)
+
+
+def _construct_edge_temporal_groups(request: PopulationConstructionRequest) -> PopulationConstructionResult:
+    manifest, membership, diagnostics, _, _ = build_edge_temporal_groups(
+        request.canonical_root, partition_seed=request.partition_seed, split_protocol=request.split_protocol
+    )
+    return PopulationConstructionResult(request.population_id, manifest, membership, diagnostics)
+
+
+_POPULATION_BINDINGS: dict[PopulationId, PopulationBinding] = {
+    PopulationId.NBAIOT_NATURAL_DEVICES: PopulationBinding(
+        population_declaration(PopulationId.NBAIOT_NATURAL_DEVICES),
+        population_capabilities(PopulationId.NBAIOT_NATURAL_DEVICES),
+        frozenset(),
+        _construct_nbaiot_natural,
+    ),
+    PopulationId.NBAIOT_DIRICHLET_CLIENTS: PopulationBinding(
+        population_declaration(PopulationId.NBAIOT_DIRICHLET_CLIENTS),
+        population_capabilities(PopulationId.NBAIOT_DIRICHLET_CLIENTS),
+        frozenset(ControlledPartitionKind),
+        _construct_nbaiot_dirichlet,
+    ),
+    PopulationId.CICIOT_FILE_CLIENTS: PopulationBinding(
+        population_declaration(PopulationId.CICIOT_FILE_CLIENTS),
+        population_capabilities(PopulationId.CICIOT_FILE_CLIENTS),
+        frozenset(),
+        _construct_ciciot_file_clients,
+    ),
+    PopulationId.EDGE_SENSOR_GROUPS: PopulationBinding(
+        population_declaration(PopulationId.EDGE_SENSOR_GROUPS),
+        population_capabilities(PopulationId.EDGE_SENSOR_GROUPS),
+        frozenset(),
+        _construct_edge_sensor_groups,
+    ),
+    PopulationId.EDGE_TEMPORAL_GROUPS: PopulationBinding(
+        population_declaration(PopulationId.EDGE_TEMPORAL_GROUPS),
+        population_capabilities(PopulationId.EDGE_TEMPORAL_GROUPS),
+        frozenset(),
+        _construct_edge_temporal_groups,
+    ),
+}
 
 
 def build_preprocessing_handoff(request: PreprocessingHandoffRequest) -> PreprocessingHandoff:

@@ -3,8 +3,8 @@ from pathlib import Path
 import pytest
 
 from datp_core.datasets.edge_iiotset.schema import EDGE_BENIGN_SENSOR_GROUPS
-from datp_core.domain.errors import CapabilityError
 from datp_core.domain.enums import SplitProtocolId
+from datp_core.domain.errors import CapabilityError
 from datp_core.domain.values import Seed
 from datp_core.populations.edge_sensor_groups import (
     build_edge_sensor_groups,

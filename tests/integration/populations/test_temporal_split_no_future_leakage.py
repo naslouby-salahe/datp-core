@@ -1,3 +1,4 @@
+from datetime import datetime
 from pathlib import Path
 
 import polars as pl
@@ -31,5 +32,6 @@ def test_temporal_split_preserves_history_before_future(edge_temporal_eligible_r
     for client_id in membership.get_column("client_id").unique().to_list():
         hist_max = historical.filter(pl.col("client_id") == client_id).get_column("capture_timestamp").max()
         fut_min = future.filter(pl.col("client_id") == client_id).get_column("capture_timestamp").min()
-        assert hist_max is not None and fut_min is not None
+        assert isinstance(hist_max, datetime)
+        assert isinstance(fut_min, datetime)
         assert hist_max <= fut_min

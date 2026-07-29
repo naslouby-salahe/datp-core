@@ -1,7 +1,6 @@
 """Scientific leakage and schema validation for preprocessing."""
 
 from collections.abc import Mapping, Sequence
-from hashlib import sha256
 from pathlib import Path
 
 import numpy as np
@@ -9,13 +8,14 @@ import polars as pl
 
 from datp_core.artifacts.layout import ProcessedAssetName, asset_for_partition, core_processed_asset_names
 from datp_core.artifacts.serialization import TrustedScaler, clone_trusted_scaler, serialize_estimator
+from datp_core.artifacts.store import ProcessedPublication, ProcessedPublicationResult, publish_processed
 from datp_core.domain.enums import (
     PartitionRole,
     PreprocessingFitScope,
     ProcessedDataBranch,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum
+from datp_core.domain.values import Checksum, checksum_file, checksum_text
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     FittedStatePublishSpec,
@@ -132,7 +132,7 @@ def successful_preprocessing_validation_report() -> PreprocessingValidationRepor
 
 
 def protocol_content_checksum(protocol: PreprocessingProtocol) -> Checksum:
-    return Checksum(sha256(protocol.model_dump_json().encode()).hexdigest())
+    return checksum_text(protocol.model_dump_json())
 
 
 def build_preprocessing_manifest(
@@ -166,7 +166,7 @@ def fitted_state_after_publish(spec: FittedStatePublishSpec) -> FittedPreprocess
         branch=spec.branch,
         client_identity=spec.client_identity,
         estimator_path=spec.estimator_path,
-        estimator_checksum=Checksum(sha256(spec.estimator_path.read_bytes()).hexdigest()),
+        estimator_checksum=checksum_file(spec.estimator_path),
         transformed_schema=spec.protocol.transformed_schema,
         fit_row_count=spec.fit_row_count,
         fit_partition=PartitionRole.TRAIN,
@@ -201,6 +201,46 @@ def fit_trusted_batch(
 
 def publication_target(data_root: Path, relative_coordinate: Path) -> Path:
     return data_root.joinpath(*relative_coordinate.parts[1:])
+
+
+def publish_preprocessed_partitions(
+    *,
+    context: PreprocessingPublishContext,
+    branch: ProcessedDataBranch,
+    relative_coordinate: Path,
+    fitted_estimator: TrustedScaler,
+    partitions: Mapping[PartitionRole, pl.DataFrame],
+    row_ids: Mapping[PartitionRole, Sequence[str]],
+    fit_scope: PreprocessingFitScope,
+    asset_paths: tuple[str, ...],
+) -> ProcessedPublicationResult[PreprocessingManifest]:
+    validate_train_only_fit(PartitionRole.TRAIN)
+    require_core_partitions(partitions, row_ids, subject=fit_scope)
+    validate_no_partition_overlap(
+        row_ids[PartitionRole.TRAIN],
+        row_ids[PartitionRole.CALIBRATION],
+        row_ids[PartitionRole.EVALUATION],
+    )
+    validate_transformed_schema(context.protocol, context.protocol.transformed_schema)
+    return publish_processed(
+        ProcessedPublication(
+            coordinate_directory=publication_target(context.data_root, relative_coordinate),
+            manifest=build_preprocessing_manifest(context, branch=branch, asset_paths=asset_paths),
+            schema=context.protocol.transformed_schema,
+            validation_report=successful_preprocessing_validation_report(),
+            writer=lambda temporary: write_fitted_transformed_partitions(
+                temporary,
+                protocol=context.protocol,
+                fitted_estimator=fitted_estimator,
+                partitions=partitions,
+            ),
+            required_assets=required_core_asset_values(),
+            overwrite=False,
+            manifest_type=PreprocessingManifest,
+            schema_type=TransformedSchema,
+            report_type=PreprocessingValidationReport,
+        )
+    )
 
 
 def write_fitted_transformed_partitions(

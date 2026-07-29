@@ -7,9 +7,8 @@ from datp_core.domain.enums import DatasetId, PartitionRole, PopulationId, Split
 from datp_core.domain.errors import DataIntegrityError, LeakageError
 from datp_core.domain.values import Checksum, Seed
 from datp_core.populations.integrity import validate_population_manifest, validate_split_manifest
-from datp_core.populations.models import SplitManifest, SplitManifestDocument
+from datp_core.populations.models import SplitConstructionRequest, SplitManifest, SplitManifestDocument
 from datp_core.populations.nbaiot_natural_devices import build_nbaiot_natural_devices
-from datp_core.populations.models import SplitConstructionRequest
 from datp_core.populations.splits import split_membership
 
 

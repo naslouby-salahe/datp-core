@@ -4,8 +4,9 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import model_validator
 
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     DatasetId,
     PartitionRole,
@@ -24,8 +25,7 @@ from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
 SCIENTIFIC_TRANSFORM_ABSOLUTE_TOLERANCE = FIXED_SCORE_ABSOLUTE_TOLERANCE.value
 
 
-class TransformedFeature(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+class TransformedFeature(StrictModel):
 
     name: str
     position: int
@@ -48,8 +48,7 @@ def _require_contiguous_positions(features: tuple[TransformedFeature, ...]) -> N
         raise ValueError("transformed feature positions must be contiguous and ordered")
 
 
-class TransformedSchema(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+class TransformedSchema(StrictModel):
 
     features: tuple[TransformedFeature, ...]
 
@@ -66,8 +65,7 @@ class TransformedSchema(BaseModel):
         return tuple(feature.name for feature in self.features)
 
 
-class PreprocessingProtocol(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+class PreprocessingProtocol(StrictModel):
 
     identity: PreprocessingProtocolId
     fit_scope: PreprocessingFitScope
@@ -153,8 +151,7 @@ class PooledPreprocessingResult:
     transformed_schema: TransformedSchema
 
 
-class PreprocessingManifest(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+class PreprocessingManifest(StrictModel):
 
     dataset: DatasetId
     population: PopulationId
@@ -182,8 +179,7 @@ class PreprocessingManifest(BaseModel):
         return self
 
 
-class PreprocessingValidationReport(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+class PreprocessingValidationReport(StrictModel):
 
     finite_transformed_values: bool
     train_only_fit: bool

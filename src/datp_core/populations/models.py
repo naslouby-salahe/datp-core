@@ -2,14 +2,14 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
-from hashlib import sha256
 from math import floor, fsum, isclose
 from pathlib import Path
 
 import polars as pl
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import model_validator
 
 from datp_core.datasets.models import CanonicalProvenanceColumn
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     CapabilityStatus,
     ControlledPartitionKind,
@@ -21,8 +21,9 @@ from datp_core.domain.enums import (
     PopulationIdentityKind,
     SplitProtocolId,
 )
-from datp_core.domain.values import Checksum, ClientCount, DirichletConcentration, Seed
-from datp_core.protocols.models import DATA_ROOT, FRACTION_TOTAL_ABSOLUTE_TOLERANCE, UNIT_FRACTION_TOTAL
+from datp_core.domain.values import Checksum, ClientCount, DirichletConcentration, Seed, checksum_text
+from datp_core.protocols.models import FRACTION_TOTAL_ABSOLUTE_TOLERANCE, UNIT_FRACTION_TOTAL
+from datp_core.protocols.runtime import DATA_ROOT
 
 
 class PopulationOutcomeLabel(StrEnum):
@@ -130,8 +131,7 @@ class PopulationFeasibilityReason(StrEnum):
     EMPTY_ACCEPTED_CLIENTS = "empty_accepted_clients"
 
 
-class PopulationManifestDocument(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+class PopulationManifestDocument(StrictModel):
 
     population: PopulationId
     dataset: DatasetId
@@ -167,8 +167,7 @@ class PopulationManifestDocument(BaseModel):
         return self
 
 
-class SplitManifestDocument(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+class SplitManifestDocument(StrictModel):
 
     population: PopulationId
     dataset: DatasetId
@@ -197,8 +196,7 @@ class SplitManifestDocument(BaseModel):
         return self
 
 
-class DirichletPartitionDiagnosticsDocument(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+class DirichletPartitionDiagnosticsDocument(StrictModel):
 
     population: PopulationId
     partition_seed: Seed
@@ -222,8 +220,7 @@ class DirichletPartitionDiagnosticsDocument(BaseModel):
         return self
 
 
-class ChronologicalPartitionDiagnosticsDocument(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid", strict=True)
+class ChronologicalPartitionDiagnosticsDocument(StrictModel):
 
     population: PopulationId
     expected_group_count: ClientCount
@@ -482,7 +479,7 @@ def synthetic_client_ids(client_count: ClientCount) -> tuple[str, ...]:
 
 def membership_checksum(client_ids: tuple[str, ...], stable_row_ids: tuple[str, ...]) -> Checksum:
     payload = "\n".join((*client_ids, *stable_row_ids))
-    return Checksum(sha256(payload.encode()).hexdigest())
+    return checksum_text(payload)
 
 
 def _require_hamilton_inputs(total: int, ratios: tuple[float, ...]) -> None:
