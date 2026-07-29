@@ -25,6 +25,7 @@ dependencies = [
     "statsmodels>=0.14",
     "typer>=0.20.1",
     "shellingham>=1.5.4",
+    "skops>=0.14.0",
 ]
 
 [project.optional-dependencies]

@@ -3,6 +3,7 @@
 from datp_core.domain.enums import (
     EvidenceRole,
     ExperimentId,
+    ExperimentReadiness,
     FederatedThresholdMethod,
     MetricId,
     PopulationId,
@@ -235,14 +236,25 @@ _EXPERIMENT_COORDINATES = (
         OPERATING_POINT_METRICS,
     ),
 )
+
+
+def _declared_readiness(experiment_id: ExperimentId, role: EvidenceRole) -> ExperimentReadiness:
+    if experiment_id is ExperimentId.ALERT_BURDEN_TRANSLATION:
+        return ExperimentReadiness.SUPPRESSED
+    if role is EvidenceRole.OPERATIONAL_TRANSLATION:
+        return ExperimentReadiness.SUPPRESSED
+    return ExperimentReadiness.DECLARED
+
+
 EXPERIMENTS = tuple(
     ExperimentDeclaration(
-        id=id,
+        id=experiment_id,
         role=role,
         population=population,
         training_model=training_model,
         federated_thresholds=thresholds,
         metrics=metrics,
+        readiness=_declared_readiness(experiment_id, role),
     )
-    for id, role, population, training_model, thresholds, metrics in _EXPERIMENT_COORDINATES
+    for experiment_id, role, population, training_model, thresholds, metrics in _EXPERIMENT_COORDINATES
 )

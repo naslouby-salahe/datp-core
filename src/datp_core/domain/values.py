@@ -68,6 +68,14 @@ class ClientCount:
 
 
 @dataclass(frozen=True, slots=True)
+class SeedCount:
+    value: int
+
+    def __post_init__(self) -> None:
+        _integer(self.value, "seed count", 1)
+
+
+@dataclass(frozen=True, slots=True)
 class RoundNumber:
     value: int
 

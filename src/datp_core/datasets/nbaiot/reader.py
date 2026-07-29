@@ -5,7 +5,7 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.datasets.materialization import provenance_expressions
-from datp_core.datasets.models import CanonicalProvenanceColumn
+from datp_core.datasets.models import AggregateCountColumn, CanonicalProvenanceColumn
 
 from .schema import (
     NBAIOT_FEATURE_COLUMNS,
@@ -52,15 +52,20 @@ class NBaIoTReader:
         summary = (
             frame.select(NBAIOT_FEATURE_COLUMNS)
             .select(
-                pl.len().alias("total_rows"),
+                pl.len().alias(AggregateCountColumn.TOTAL_ROWS),
                 pl.any_horizontal(tuple(~pl.col(column).is_finite() for column in NBAIOT_FEATURE_COLUMNS)).alias(
-                    "invalid"
+                    AggregateCountColumn.INVALID
                 ),
             )
-            .select(pl.len().alias("total_rows"), pl.col("invalid").sum().alias("invalid_rows"))
+            .select(
+                pl.len().alias(AggregateCountColumn.TOTAL_ROWS),
+                pl.col(AggregateCountColumn.INVALID).sum().alias(AggregateCountColumn.INVALID_ROWS),
+            )
             .collect(engine="streaming")
         )
-        return int(summary.item(0, "total_rows")), int(summary.item(0, "invalid_rows"))
+        return int(summary.item(0, AggregateCountColumn.TOTAL_ROWS)), int(
+            summary.item(0, AggregateCountColumn.INVALID_ROWS)
+        )
 
     def validate_finite_values(self, frame: pl.LazyFrame) -> int:
         total_rows, invalid = self.finite_value_summary(frame)

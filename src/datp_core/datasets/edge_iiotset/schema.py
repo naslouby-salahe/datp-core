@@ -10,7 +10,13 @@ from datp_core.datasets.materialization import (
     canonical_provenance_column,
     canonical_schema_checksum,
 )
-from datp_core.datasets.models import CanonicalColumn, CanonicalColumnRole, CanonicalProvenanceColumn, CanonicalSchema
+from datp_core.datasets.models import (
+    CanonicalColumn,
+    CanonicalColumnRole,
+    CanonicalProvenanceColumn,
+    CanonicalSchema,
+    ColumnLogicalType,
+)
 from datp_core.domain.enums import DatasetId
 
 
@@ -20,6 +26,7 @@ class EdgeArtifactSuffix(StrEnum):
 
 
 class EdgeArtifactName(StrEnum):
+    DATASET_BUNDLE_DIRECTORY = "Edge-IIoTset dataset"
     NORMAL_TRAFFIC_DIRECTORY = "Normal traffic"
     ATTACK_TRAFFIC_DIRECTORY = "Attack traffic"
     ATTACK_FILE_SUFFIX = "_attack.csv"
@@ -85,7 +92,7 @@ EDGE_PROVENANCE_COLUMNS: tuple[str, ...] = (
 
 def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     feature_columns = tuple(
-        CanonicalColumn(column, source, "string", CanonicalColumnRole.FEATURE, True, position)
+        CanonicalColumn(column, source, ColumnLogicalType.STRING, CanonicalColumnRole.FEATURE, True, position)
         for position, (column, source) in enumerate(
             zip(EDGE_CANONICAL_FEATURE_COLUMNS, EDGE_FEATURE_COLUMNS, strict=True)
         )
@@ -95,7 +102,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
         CanonicalColumn(
             EdgeCanonicalColumn.ATTACK_LABEL,
             EdgeRawColumn.ATTACK_LABEL,
-            "string",
+            ColumnLogicalType.STRING,
             CanonicalColumnRole.LABEL,
             True,
             trailing_start,
@@ -103,7 +110,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
         CanonicalColumn(
             EdgeCanonicalColumn.ATTACK_TYPE,
             EdgeRawColumn.ATTACK_TYPE,
-            "string",
+            ColumnLogicalType.STRING,
             CanonicalColumnRole.LABEL,
             True,
             trailing_start + 1,
@@ -112,7 +119,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
         CanonicalColumn(
             EdgeCanonicalColumn.CAPTURE_TIMESTAMP,
             "paired raw PCAP capture timestamp",
-            "timestamp[ns, tz=UTC]",
+            ColumnLogicalType.TIMESTAMP_NS_UTC,
             CanonicalColumnRole.PROVENANCE,
             True,
             trailing_start + 3,
@@ -120,7 +127,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
         CanonicalColumn(
             EdgeCanonicalColumn.SOURCE_FOLDER,
             "raw source folder",
-            "string",
+            ColumnLogicalType.STRING,
             CanonicalColumnRole.IDENTITY,
             True,
             trailing_start + 4,
@@ -128,7 +135,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
         CanonicalColumn(
             EdgeCanonicalColumn.BENIGN_SENSOR_GROUP,
             "audited benign source folder",
-            "string",
+            ColumnLogicalType.STRING,
             CanonicalColumnRole.IDENTITY,
             True,
             trailing_start + 5,

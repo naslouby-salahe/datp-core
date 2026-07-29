@@ -43,21 +43,21 @@ Only data-related path and serialization responsibilities may be implemented in 
 
 ```text
 data/
-├── raw/                                  # Read-only source or symlink.
+├── raw/
 ├── canonical/
 │   └── <DATASET_ID>/
-│       ├── data/                         # Canonical Parquet partitions.
+│       ├── data/
 │       ├── dataset_manifest.json
 │       ├── schema.json
 │       └── COMPLETE
 └── processed/
     └── <DATASET_ID>/
-        └── population=<POPULATION_ID>/
-            └── partition_seed=<SEED>/
-                └── split=<SPLIT_PROTOCOL_ID>/
-                    └── preprocessing=<PREPROCESSING_PROTOCOL_ID>/
+        └── <POPULATION_ID>/
+            └── <PARTITION_SEED>/
+                └── <SPLIT_PROTOCOL_ID>/
+                    └── <PREPROCESSING_PROTOCOL_ID>/
                         ├── federated/
-                        │   ├── client=<CLIENT_ID>/
+                        │   ├── <CLIENT_ID>/
                         │   │   ├── train.parquet
                         │   │   ├── calibration.parquet
                         │   │   ├── evaluation.parquet
@@ -182,13 +182,37 @@ Use a temporary sibling directory and atomic rename. Use `filelock` only at the 
 - Unsafe or unknown skops types are rejected.
 - Reloaded transforms equal pre-save transforms.
 
+## CLI and Make entry points
+
+- `datp-core preprocess-dataset <DATASET_ID> [--overwrite]`
+- `datp-core preprocess-all-datasets [--overwrite]`
+- `make preprocess-dataset DATASET=<id> OVERWRITE=0|1`
+- `make preprocess-all-datasets OVERWRITE=0|1`
+
+Roots are fixed by the canonical runtime declaration (`data/`). `--overwrite` rebuilds matching processed coordinates when populations/splits exist; it never redirects paths. Scientific preprocessing methods are locked; CLI exit `blocked_population_construction` until Phase 05 supplies populations and splits.
+
+## Scientific method lock
+
+Locked scientific methods (see Journal §2.2.1 and the Phase Master Log decision register):
+
+- Confirmatory federated: `FEDERATED_CLIENT_LOCAL_STANDARD` — `StandardScaler`, `CLIENT_LOCAL_TRAINING`, train-only fit, skops, transform absolute tolerance `1e-12` (paper + anchor).
+- Supportive federated: `FEDERATED_POOLED_MIN_MAX` — `MinMaxScaler`, `POOLED_TRAINING` (FL-AE literature; not confirmatory).
+- Centralized reference: `CENTRALIZED_POOLED_MIN_MAX` — independent pooled `MinMaxScaler`.
+- Missing/non-finite policy: no imputation; dataset eligibility or validation exclusion only; no empty-train zero-row recovery.
+- Typed constructors: `ScientificPreprocessingMethod`, `build_preprocessing_protocol(method, feature_names)` bind method locks to each dataset’s ordered model-input features.
+
+## Phase 05 dependency (by design)
+
+Phase 04 completes method locks, coordinates, fit/transform/publish machinery, and CLI. End-to-end processed-asset publication consumes Phase 05 population and split partitions. Phase 04 must not fabricate client partitions to claim publication completeness.
+
 ## Exit criteria
 
-- Canonical and preprocessed data are reusable under deterministic `data/` coordinates.
-- Experiment output directories contain no copied canonical or transformed datasets.
-- Federated and centralized preprocessing states are independently fitted and safely stored.
+- Canonical data remain reusable under deterministic `data/canonical/<DATASET_ID>/` coordinates.
+- Processed-data coordinates use descriptive path segments without `key=value` syntax.
+- Federated and centralized scientific methods are declared with existing enums and reusable models.
+- Fit/transform/publish machinery is tested with miniature partitions; production partitions come from Phase 05.
 - Data reuse never bypasses schema, provenance, or leakage validation.
-- All Phase 04 tests and audits pass.
+- All Phase 04 tests and audits pass for infrastructure and locked scientific methods.
 
 ## External code-health gate
 

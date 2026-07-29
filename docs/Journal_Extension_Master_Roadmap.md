@@ -77,6 +77,54 @@ Within a core dataset ladder, the following remain fixed:
 
 The fixed-detector rule applies **within each regime and training baseline**. It does not mean that the same numerical model parameters are reused across different datasets with incompatible feature spaces.
 
+### 2.2.1 Preprocessing and normalization lock
+
+Preprocessing is part of the fixed detector state. Within a seed, population, training baseline, and **named preprocessing protocol identity**, every compared threshold policy reuses one fitted preprocessing state. Threshold methods never select, refit, or alter preprocessing. Distinct protocol identities must never be mixed silently within one confirmatory ladder.
+
+**Primary confirmatory federated method** (`FEDERATED_CLIENT_LOCAL_STANDARD`):
+
+- transformer family: zero-mean unit-variance standardization (`StandardScaler`, `with_mean=True`, `with_std=True`);
+- fit scope: **client-local**, fit only on each client’s benign training partition;
+- fit partition: train only; calibration, evaluation, and future recalibration rows are transformed only;
+- constant-feature rule: zero training scale uses unit scale and yields a zero-centered column (sklearn standard-scaler behaviour);
+- out-of-range transformed values after fit: retained unclipped;
+- fitted-state persistence: skops with trusted estimator classes only;
+- transform serialization equivalence absolute tolerance: `1e-12` (engineering research amendment reusing the fixed-score absolute-tolerance magnitude; skops defines no scientific tolerance).
+
+**Rationale.** The conference DATP reproducibility specification locks **per-client StandardScaler** for model-input normalization. The recovered anchor implementation stores one scaler per device fitted on benign train only. Meidan et al. leave scaling unspecified; the paper’s reproducibility table and the historical DATP artifact path supply the confirmatory lock for the N-BaIoT natural-device ladder. Cluster-threshold **fingerprint** standardization remains a separate score-side `StandardScaler` contract and is not model-input preprocessing.
+
+**Supportive federated method** (`FEDERATED_POOLED_MIN_MAX`) — **not confirmatory:**
+
+- transformer family: feature-wise min–max (`MinMaxScaler`);
+- fit scope: pooled benign training rows of the federated population;
+- same train-only, skops, unclipped, and tolerance rules.
+
+Successor N-BaIoT federated-AE work often uses global/collaborative min–max for a shared detector. That geometry may be used only under its own protocol identity and claim tier (supportive / mechanism). It must not replace the confirmatory client-local StandardScaler ladder without an explicit claim-tier change.
+
+**Centralized-reference scientific method** (`CENTRALIZED_POOLED_MIN_MAX`):
+
+- independent of federated fitted states (never reuse federated client-local or pooled federated states);
+- transformer family: min–max (`MinMaxScaler`);
+- fit scope: pooled benign training rows of the centralized reference population;
+- fit partition: train only;
+- constant-feature rule: zero training range maps to zero;
+- unclipped, skops, and tolerance rules as above.
+
+**Missing-value and non-finite policy (all datasets):**
+
+- no imputation, zero-fill, clipping, capping, infinity replacement, or label inference in the fitted pipeline;
+- N-BaIoT non-finite declared features fail validation rather than being filled;
+- CICIoT2023 model-input eligibility remains the outcome-blind finite-feature and recognized-label gate (canonical rows stay lossless; ineligible rows never enter client construction, split, fit, calibration, or evaluation);
+- Edge-IIoTset model-input rows with non-finite retained numeric fields are excluded from model input with explicit provenance, never filled;
+- attack labels never influence preprocessing fit;
+- empty-train or missing-support recovery by fabricating zero-filled rows is forbidden.
+
+**Excluded for multi-feature confirmatory AE input:** identity (no scaling) transforms.
+
+These locks are prospective research amendments that complete the fixed-detector contract. Confirmatory client-local StandardScaler is paper-and-anchor backed; pooled MinMax is a declared supportive alternative from successor FL literature, not the confirmatory default.
+
+
+
 **2.3 Sole manipulated variable**
 
 For the B1–B4 ladder, the manipulated variable is:

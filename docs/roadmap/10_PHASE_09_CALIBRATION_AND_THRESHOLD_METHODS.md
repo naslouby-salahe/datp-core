@@ -23,7 +23,7 @@ Implement benign-only eligibility, deterministic calibration subsampling, shared
 - Phase 08 is complete.
 - Reusable score artifacts exist.
 - Calibration values are resolved.
-- Grouped thresholding remains infeasible until an approved grouping assignment source is present.
+- Grouped thresholding uses the Phase 02 locked benign-error fingerprint contract; construction and k-means assignment are implemented in this phase, not supplied externally.
 
 ## Source files permitted to change
 
@@ -118,7 +118,7 @@ Mean of eligible local thresholds within the audited physical-device family. Rej
 
 ### `CLUSTER_THRESHOLD`
 
-`grouped.py` accepts a typed, prevalidated client-to-group assignment and computes one group-level threshold from member local thresholds. It must not derive groups, select group count, inspect held-out outcomes, or invent an assignment. Until the scientific source supplies a valid assignment-construction rule, feasibility validation blocks this method.
+`grouped.py` constructs the source-locked benign reconstruction-error fingerprint for each eligible client from mean, standard deviation, skewness, and `p95`; standardizes those four features with `StandardScaler`; runs k-means++ with `n_init=10`, `max_iter=300`, and `random_state=42` at the locked group count `3`; and assigns each cluster the arithmetic mean of its eligible local thresholds. It must not use attack labels, held-out outcomes, or post-hoc group-count selection. The fingerprint protocol is declared and validated in Phase 02; this phase owns construction and assignment.
 
 ### Shared construction controls
 

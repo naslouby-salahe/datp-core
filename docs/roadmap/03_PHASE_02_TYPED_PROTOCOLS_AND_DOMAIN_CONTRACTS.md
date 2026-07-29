@@ -160,6 +160,8 @@ Use discriminated unions for model-specific and threshold-specific declarations.
 
 ## Required scientific declarations
 
+Preprocessing method locks (confirmatory federated client-local `StandardScaler`; supportive federated pooled `MinMaxScaler`; centralized pooled `MinMaxScaler`; train-only fit; no imputation; skops; transform absolute tolerance `1e-12`) are declared as scientific methods bound later to dataset feature order. They are not profile catalogues.
+
 Declare only values explicitly supported by the current source of truth:
 
 - Canonical quantile `0.95`.

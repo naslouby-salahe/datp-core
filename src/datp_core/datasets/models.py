@@ -26,6 +26,30 @@ class CanonicalColumnRole(StrEnum):
     RAW_EVIDENCE = "raw_evidence"
 
 
+class ColumnLogicalType(StrEnum):
+    FLOAT64 = "float64"
+    UINT64 = "uint64"
+    STRING = "string"
+    BOOL = "bool"
+    TIMESTAMP_NS_UTC = "timestamp[ns, tz=UTC]"
+
+
+class DatasetValidationCode(StrEnum):
+    UNRECOGNIZED_OR_EMPTY_LABEL = "unrecognized_or_empty_label"
+    INFINITE_RATE = "infinite_rate"
+    NONFINITE_MODEL_INPUT_FEATURE = "nonfinite_model_input_feature"
+    EMPTY_RATE = "empty_rate"
+    INVALID_CHRONOLOGY = "invalid_chronology"
+    NONFINITE_FEATURE_VALUES = "nonfinite_feature_values"
+    TEMPORAL_CHRONOLOGY_UNAVAILABLE = "temporal_chronology_unavailable"
+
+
+class AggregateCountColumn(StrEnum):
+    TOTAL_ROWS = "total_rows"
+    INVALID_ROWS = "invalid_rows"
+    INVALID = "invalid"
+
+
 class CanonicalProvenanceColumn(StrEnum):
     SOURCE_ROW_INDEX = "source_row_index"
     SOURCE_PATH = "source_path"
@@ -94,14 +118,16 @@ class RawDatasetInventory:
 class CanonicalColumn:
     name: str
     source_name: str
-    dtype: str
+    dtype: ColumnLogicalType
     role: CanonicalColumnRole
     nullable: bool
     position: int
 
     def __post_init__(self) -> None:
-        if not self.name or not self.source_name or not self.dtype:
-            raise ValueError("canonical columns require non-empty names and dtype")
+        if not self.name or not self.source_name:
+            raise ValueError("canonical columns require non-empty names")
+        if not isinstance(self.dtype, ColumnLogicalType):
+            raise ValueError("canonical columns require a ColumnLogicalType dtype")
         if self.position < 0:
             raise ValueError("canonical column positions must be non-negative")
 
@@ -163,15 +189,16 @@ class DatasetExclusion:
 @dataclass(frozen=True, slots=True)
 class DatasetValidationIssue:
     severity: ValidationSeverity
-    #TODO: This should be an enum
-    code: str
+    code: DatasetValidationCode
     dataset: DatasetId
     source_context: str
     reason: str
     affected_count: int
 
     def __post_init__(self) -> None:
-        if not self.code or not self.source_context or not self.reason or self.affected_count < 1:
+        if not isinstance(self.code, DatasetValidationCode):
+            raise ValueError("validation issues require a DatasetValidationCode")
+        if not self.source_context or not self.reason or self.affected_count < 1:
             raise ValueError("validation issues require complete source evidence")
 
 

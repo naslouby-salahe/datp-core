@@ -23,7 +23,9 @@ from datp_core.datasets.models import (
     CanonicalPublicationArtifact,
     CanonicalSchema,
     ChronologyValidation,
+    ColumnLogicalType,
     DatasetExclusion,
+    DatasetValidationCode,
     DatasetValidationIssue,
     DatasetValidationReport,
     ExclusionReason,
@@ -460,14 +462,14 @@ def canonical_provenance_arrow_field(column: CanonicalProvenanceColumn) -> pa.Fi
             return pa.field(column, pa.large_string())
 
 
-def _provenance_column_details(column: CanonicalProvenanceColumn) -> tuple[str, str]:
+def _provenance_column_details(column: CanonicalProvenanceColumn) -> tuple[str, ColumnLogicalType]:
     match column:
         case CanonicalProvenanceColumn.SOURCE_ROW_INDEX:
-            return "source row index", "uint64"
+            return "source row index", ColumnLogicalType.UINT64
         case CanonicalProvenanceColumn.SOURCE_PATH:
-            return "raw-root-relative source path", "string"
+            return "raw-root-relative source path", ColumnLogicalType.STRING
         case CanonicalProvenanceColumn.STABLE_ROW_ID:
-            return "source path and zero-based row index", "string"
+            return "source path and zero-based row index", ColumnLogicalType.STRING
 
 
 def canonical_directory(canonical_root: Path, schema: CanonicalSchema) -> Path:
@@ -612,7 +614,7 @@ def _reused_validation_report(
     issues = tuple(
         DatasetValidationIssue(
             ValidationSeverity(issue.severity),
-            issue.code,
+            DatasetValidationCode(issue.code),
             dataset,
             issue.source_context,
             issue.reason,
@@ -1055,16 +1057,6 @@ def _remove_stale_temporary_directories(target: Path) -> None:
             rmtree(candidate)
 
 
-def _dataset_anchor(dataset: DatasetId) -> str:
-    match dataset:
-        case DatasetId.NBAIOT:
-            return "N-BaIoT"
-        case DatasetId.CICIOT2023:
-            return "CIC_IOT_Dataset2023"
-        case DatasetId.EDGE_IIOTSET:
-            return "Edge-IIoTset"
-
-
 def _file_checksum(path: Path) -> Checksum:
     digest = sha256()
     with path.open("rb") as source:
@@ -1079,7 +1071,7 @@ def _complete_content(manifest: str, schema: str) -> str:
 
 def _serialized_column(column: CanonicalColumn) -> _SerializedColumn:
     return _SerializedColumn(
-        dtype=column.dtype,
+        dtype=column.dtype.value,
         name=column.name,
         nullable=column.nullable,
         position=column.position,
@@ -1111,7 +1103,7 @@ def _serialized_inventory(inventory: RawDatasetInventory) -> _SerializedInventor
 def _serialized_issue(issue: DatasetValidationIssue) -> _SerializedIssue:
     return _SerializedIssue(
         affected_count=issue.affected_count,
-        code=issue.code,
+        code=issue.code.value,
         reason=issue.reason,
         severity=issue.severity.value,
         source_context=issue.source_context,

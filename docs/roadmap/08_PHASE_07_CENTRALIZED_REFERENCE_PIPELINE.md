@@ -18,6 +18,10 @@
 
 Implement the privacy-incompatible centralized reference as a completely independent pooled-data pipeline: pooled preprocessing, pooled autoencoder training, independent checkpoint selection, pooled scoring, pooled benign threshold, and pooled evaluation.
 
+## Preprocessing ownership
+
+Centralized-reference preprocessing uses the locked scientific method `CENTRALIZED_POOLED_MIN_MAX` (pooled `MinMaxScaler` on benign training only). It must never reuse federated fitted states (neither pooled MinMax nor client-local StandardScaler). See Journal §2.2.1.
+
 ## Entry criteria
 
 - Phase 05 is complete.

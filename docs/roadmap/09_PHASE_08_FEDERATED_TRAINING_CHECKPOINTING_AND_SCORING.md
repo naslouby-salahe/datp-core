@@ -18,6 +18,10 @@
 
 Implement the FedAvg core detector, FedProx training stress test, genuine Ditto model-personalization stress test, common autoencoder architecture, model-specific checkpoint selection, and reusable immutable score artifacts.
 
+## Preprocessing ownership
+
+Federated training for the confirmatory ladder consumes processed features produced under `FEDERATED_CLIENT_LOCAL_STANDARD` (client-local `StandardScaler` on benign training). Supportive pooled-MinMax runs use `FEDERATED_POOLED_MIN_MAX` only under that protocol identity. Training must not refit or replace the selected preprocessing method. See Journal §2.2.1.
+
 ## Entry criteria
 
 - Phases 05 and 06 are complete.

@@ -15,26 +15,39 @@ from datp_core.domain.enums import (
     ClusterFingerprintFeature,
     ClusterThresholdAggregation,
     CompletionStatus,
+    ConfirmatoryDeltaDirection,
     DatasetId,
     EffectSizeId,
     EvaluationCohort,
     EvidenceRole,
     ExperimentId,
+    ExperimentReadiness,
     FederatedThresholdMethod,
     IntervalMethod,
     KMeansInitialization,
     MetricId,
     MultiplicityCorrectionId,
     OptimizerId,
+    PartitionRole,
     PopulationId,
+    PopulationIdentityKind,
+    PreprocessExecutionStatus,
+    PreprocessingFitScope,
+    PreprocessingProtocolId,
+    ProcessedDataBranch,
+    RawDatasetDirectory,
+    ReusableDataCoordinateKind,
     ScientificDecision,
     SerializationFormat,
     SplitId,
+    SplitProtocolId,
     StageId,
     StatisticalTestId,
     TemporalState,
     TrafficRateEvidenceType,
     TrainingModelId,
+    TrustedEstimatorClassName,
+    TrustedEstimatorModule,
     WarningCode,
 )
 
@@ -51,6 +64,52 @@ EXPECTED_MEMBERS = (
                 "EDGE_TEMPORAL_GROUPS",
             )
         ),
+    ),
+    (
+        PopulationIdentityKind,
+        frozenset(
+            (
+                "PHYSICAL_DEVICES",
+                "FILE_DEFINED_PSEUDO_CLIENTS",
+                "SOURCE_DEFINED_SENSOR_GROUPS",
+                "SYNTHETIC_DIRICHLET_CLIENTS",
+                "VERIFIED_TEMPORAL_GROUPS",
+            )
+        ),
+    ),
+    (
+        ExperimentReadiness,
+        frozenset(("DECLARED", "EXECUTABLE", "SUPPRESSED", "INFEASIBLE", "BLOCKED")),
+    ),
+    (ConfirmatoryDeltaDirection, frozenset(("SHARED_MINUS_LOCAL",))),
+    (
+        PreprocessingFitScope,
+        frozenset(("CLIENT_LOCAL_TRAINING", "POOLED_TRAINING")),
+    ),
+    (ProcessedDataBranch, frozenset(("FEDERATED", "CENTRALIZED_REFERENCE"))),
+    (ReusableDataCoordinateKind, frozenset(("CANONICAL", "PROCESSED", "RAW"))),
+    (RawDatasetDirectory, frozenset(("NBAIOT", "CICIOT2023", "EDGE_IIOTSET"))),
+    (PartitionRole, frozenset(("TRAIN", "CALIBRATION", "EVALUATION", "FUTURE_RECALIBRATION"))),
+    (
+        SplitProtocolId,
+        frozenset(("NON_TEMPORAL_EQUAL_THIRDS", "TEMPORAL_HISTORICAL_FUTURE")),
+    ),
+    (
+        PreprocessingProtocolId,
+        frozenset(
+            (
+                "FEDERATED_POOLED_MIN_MAX",
+                "FEDERATED_CLIENT_LOCAL_STANDARD",
+                "CENTRALIZED_POOLED_MIN_MAX",
+                "TEST_COLUMN_ORDER_PROJECTION",
+            )
+        ),
+    ),
+    (TrustedEstimatorClassName, frozenset(("STANDARD_SCALER", "MIN_MAX_SCALER"))),
+    (TrustedEstimatorModule, frozenset(("SKLEARN_PREPROCESSING",))),  # value: sklearn_preprocessing
+    (
+        PreprocessExecutionStatus,
+        frozenset(("BLOCKED_SCIENTIFIC_VALUE", "BLOCKED_POPULATION_CONSTRUCTION", "PUBLISHED", "REUSED")),
     ),
     (
         EvidenceRole,
@@ -274,13 +333,27 @@ EXPECTED_MEMBERS = (
 )
 
 
+# External vendor corpus directories preserve audited on-disk case; all other domain enums stay lowercase.
+_EXTERNAL_CORPUS_PATH_ENUMS = frozenset({RawDatasetDirectory})
+
+
+def _values_are_unique(values: tuple[str, ...]) -> bool:
+    return len(values) == len(set(values))
+
+
+def _values_match_domain_style(enum_type: type[StrEnum], values: tuple[str, ...]) -> bool:
+    if enum_type in _EXTERNAL_CORPUS_PATH_ENUMS:
+        return all(value and "=" not in value and "/" not in value for value in values)
+    return all(value.islower() and " " not in value for value in values)
+
+
 @pytest.mark.parametrize(("enum_type", "expected_members"), EXPECTED_MEMBERS)
 def test_enum_member_sets_are_exact_and_unique(enum_type: type[StrEnum], expected_members: frozenset[str]) -> None:
     assert set(enum_type.__members__) == expected_members
     assert len(enum_type.__members__) == len(enum_type)
     values = tuple(member.value for member in enum_type)
-    assert len(values) == len(set(values))
-    assert all(value.islower() and " " not in value for value in values)
+    assert _values_are_unique(values)
+    assert _values_match_domain_style(enum_type, values)
 
 
 def test_centralized_and_federated_threshold_methods_are_structurally_separate() -> None:

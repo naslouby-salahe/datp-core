@@ -21,6 +21,7 @@ from datp_core.datasets.materialization import (
 )
 from datp_core.datasets.models import (
     ChronologyValidation,
+    DatasetValidationCode,
     DatasetValidationIssue,
     DatasetValidationReport,
     MaterializedDataset,
@@ -189,7 +190,7 @@ class EdgeIIoTsetMaterializer:
         issues = tuple(
             DatasetValidationIssue(
                 ValidationSeverity.WARNING,
-                "temporal_chronology_unavailable",
+                DatasetValidationCode.TEMPORAL_CHRONOLOGY_UNAVAILABLE,
                 DatasetId.EDGE_IIOTSET,
                 source_relative_path(path).as_posix(),
                 validation.reason,

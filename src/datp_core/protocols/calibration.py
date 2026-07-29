@@ -3,7 +3,6 @@
 from datp_core.domain.enums import (
     ClusterAssignmentAlgorithm,
     ClusterFeatureStandardization,
-    ClusterFingerprintFeature,
     ClusterThresholdAggregation,
     FederatedThresholdMethod,
     KMeansInitialization,
@@ -22,6 +21,11 @@ from datp_core.domain.values import (
 )
 
 from .models import (
+    LOCKED_CLUSTER_GROUP_COUNT,
+    LOCKED_CLUSTER_INITIALIZATION_COUNT,
+    LOCKED_CLUSTER_MAXIMUM_ITERATIONS,
+    LOCKED_CLUSTER_RANDOM_STATE,
+    REQUIRED_CLUSTER_FINGERPRINT_FEATURES,
     CalibrationEligibilityProtocol,
     CalibrationSizeProtocol,
     ClusterThresholdProtocol,
@@ -78,13 +82,13 @@ FEDERATED_STATISTICS_PROTOCOL = FederatedStatisticsProtocol(
 CLUSTER_THRESHOLD_PROTOCOL = ClusterThresholdProtocol(
     method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
     quantile=CANONICAL_QUANTILE,
-    fingerprint_features=tuple(ClusterFingerprintFeature),
+    fingerprint_features=REQUIRED_CLUSTER_FINGERPRINT_FEATURES,
     feature_standardization=ClusterFeatureStandardization.STANDARD_SCALER,
     assignment_algorithm=ClusterAssignmentAlgorithm.KMEANS,
     initialization=KMeansInitialization.KMEANS_PLUS_PLUS,
-    initialization_count=KMeansInitializationCount(10),
-    maximum_iterations=KMeansMaximumIterationCount(300),
-    random_state=Seed(42),
-    group_count=GroupCount(3),
+    initialization_count=KMeansInitializationCount(LOCKED_CLUSTER_INITIALIZATION_COUNT),
+    maximum_iterations=KMeansMaximumIterationCount(LOCKED_CLUSTER_MAXIMUM_ITERATIONS),
+    random_state=Seed(LOCKED_CLUSTER_RANDOM_STATE),
+    group_count=GroupCount(LOCKED_CLUSTER_GROUP_COUNT),
     threshold_aggregation=ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS,
 )

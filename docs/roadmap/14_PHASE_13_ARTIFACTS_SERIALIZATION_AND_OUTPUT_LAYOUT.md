@@ -39,21 +39,21 @@ Implement deterministic experiment-output coordinates, typed manifests, safe ser
 
 ```text
 outputs/
-└── experiment=<EXPERIMENT_ID>/
-    └── population=<POPULATION_ID>/
-        └── seed=<SEED>/
-            └── model=<MODEL_ID>/
-                └── [model_parameter=<VALUE>/]
-                    └── checkpoint=<ROUND>/
-                        └── threshold=<THRESHOLD_METHOD>/
-                            └── quantile=<VALUE>/
-                                └── [coverage=<VALUE>/]
-                                    └── calibration_size=<VALUE>/
-                                        └── [shrinkage=<VALUE>/]
-                                            └── [summary_coefficient=<VALUE>/]
-                                                └── [group_count=<VALUE>/]
-                                                    └── replicate=<VALUE>/
-                                                        └── [temporal_state=<VALUE>/]
+└── <EXPERIMENT_ID>/
+    └── <POPULATION_ID>/
+        └── seed_<SEED>/
+            └── <MODEL_ID>/
+                └── [model_parameter_<VALUE>/]
+                    └── checkpoint_<ROUND>/
+                        └── <THRESHOLD_METHOD>/
+                            └── quantile_<VALUE>/
+                                └── [coverage_<VALUE>/]
+                                    └── calibration_size_<VALUE>/
+                                        └── [shrinkage_<VALUE>/]
+                                            └── [summary_coefficient_<VALUE>/]
+                                                └── [group_count_<VALUE>/]
+                                                    └── replicate_<VALUE>/
+                                                        └── [temporal_state_<VALUE>/]
 ```
 
 Dirichlet condition belongs between population and seed when active. Coordinates absent from a cell are omitted. No generic `parameter=value` bag is permitted; every coordinate has a typed field and canonical label.

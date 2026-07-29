@@ -17,6 +17,26 @@ class PopulationId(StrEnum):
     EDGE_TEMPORAL_GROUPS = "edge_temporal_groups"
 
 
+class PopulationIdentityKind(StrEnum):
+    PHYSICAL_DEVICES = "physical_devices"
+    FILE_DEFINED_PSEUDO_CLIENTS = "file_defined_pseudo_clients"
+    SOURCE_DEFINED_SENSOR_GROUPS = "source_defined_sensor_groups"
+    SYNTHETIC_DIRICHLET_CLIENTS = "synthetic_dirichlet_clients"
+    VERIFIED_TEMPORAL_GROUPS = "verified_temporal_groups"
+
+
+class ExperimentReadiness(StrEnum):
+    DECLARED = "declared"
+    EXECUTABLE = "executable"
+    SUPPRESSED = "suppressed"
+    INFEASIBLE = "infeasible"
+    BLOCKED = "blocked"
+
+
+class ConfirmatoryDeltaDirection(StrEnum):
+    SHARED_MINUS_LOCAL = "shared_minus_local"
+
+
 class EvidenceRole(StrEnum):
     ANCHOR_REPRODUCTION = "anchor_reproduction"
     CONFIRMATORY = "confirmatory"
@@ -278,3 +298,64 @@ class CompletionStatus(StrEnum):
     COMPLETE = "complete"
     FAILED = "failed"
     BLOCKED = "blocked"
+
+
+class PreprocessingFitScope(StrEnum):
+    CLIENT_LOCAL_TRAINING = "client_local_training"
+    POOLED_TRAINING = "pooled_training"
+
+
+class ProcessedDataBranch(StrEnum):
+    FEDERATED = "federated"
+    CENTRALIZED_REFERENCE = "centralized_reference"
+
+
+class ReusableDataCoordinateKind(StrEnum):
+    CANONICAL = "canonical"
+    PROCESSED = "processed"
+    RAW = "raw"
+
+
+class RawDatasetDirectory(StrEnum):
+    """On-disk directory names under data/raw/ for each audited corpus."""
+
+    NBAIOT = "N-BaIoT"
+    CICIOT2023 = "CIC_IOT_Dataset2023"
+    EDGE_IIOTSET = "Edge-IIoTset"
+
+
+class PartitionRole(StrEnum):
+    TRAIN = "train"
+    CALIBRATION = "calibration"
+    EVALUATION = "evaluation"
+    FUTURE_RECALIBRATION = "future_recalibration"
+
+
+class SplitProtocolId(StrEnum):
+    NON_TEMPORAL_EQUAL_THIRDS = "non_temporal_equal_thirds"
+    TEMPORAL_HISTORICAL_FUTURE = "temporal_historical_future"
+
+
+class PreprocessingProtocolId(StrEnum):
+    """Descriptive preprocessing protocol path identities."""
+
+    FEDERATED_POOLED_MIN_MAX = "federated_pooled_min_max"
+    FEDERATED_CLIENT_LOCAL_STANDARD = "federated_client_local_standard"
+    CENTRALIZED_POOLED_MIN_MAX = "centralized_pooled_min_max"
+    TEST_COLUMN_ORDER_PROJECTION = "test_column_order_projection"
+
+
+class TrustedEstimatorClassName(StrEnum):
+    STANDARD_SCALER = "standard_scaler"
+    MIN_MAX_SCALER = "min_max_scaler"
+
+
+class TrustedEstimatorModule(StrEnum):
+    SKLEARN_PREPROCESSING = "sklearn_preprocessing"
+
+
+class PreprocessExecutionStatus(StrEnum):
+    BLOCKED_SCIENTIFIC_VALUE = "blocked_scientific_value"
+    BLOCKED_POPULATION_CONSTRUCTION = "blocked_population_construction"
+    PUBLISHED = "published"
+    REUSED = "reused"

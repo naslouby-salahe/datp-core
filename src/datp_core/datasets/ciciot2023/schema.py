@@ -15,6 +15,7 @@ from datp_core.datasets.models import (
     CanonicalColumnRole,
     CanonicalProvenanceColumn,
     CanonicalSchema,
+    ColumnLogicalType,
     ModelInputEligibilityPolicy,
 )
 from datp_core.domain.enums import DatasetId
@@ -127,7 +128,9 @@ CICIOT2023_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(CanonicalProvenanceColumn
 
 def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     feature_columns = tuple(
-        CanonicalColumn(canonical_name(column), column, "float64", CanonicalColumnRole.FEATURE, True, position)
+        CanonicalColumn(
+            canonical_name(column), column, ColumnLogicalType.FLOAT64, CanonicalColumnRole.FEATURE, True, position
+        )
         for position, column in enumerate(CICIOT2023_FEATURE_COLUMNS)
     )
     label_position = len(feature_columns)
@@ -135,7 +138,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
         CanonicalColumn(
             CICIoT2023Column.RAW_LABEL,
             CICIOT2023_LABEL_COLUMN,
-            "string",
+            ColumnLogicalType.STRING,
             CanonicalColumnRole.LABEL,
             True,
             label_position,
@@ -143,7 +146,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
         CanonicalColumn(
             CICIoT2023Column.LABEL,
             CICIOT2023_LABEL_COLUMN,
-            "string",
+            ColumnLogicalType.STRING,
             CanonicalColumnRole.LABEL,
             True,
             label_position + 1,
@@ -154,7 +157,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
         CanonicalColumn(
             column,
             "declared model-input eligibility policy",
-            "bool",
+            ColumnLogicalType.BOOL,
             CanonicalColumnRole.RAW_EVIDENCE,
             True,
             evidence_position + index,

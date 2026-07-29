@@ -17,6 +17,7 @@ from datp_core.datasets.materialization import (
 )
 from datp_core.datasets.models import (
     CanonicalAssetRole,
+    DatasetValidationCode,
     DatasetValidationIssue,
     DatasetValidationReport,
     MaterializedDataset,
@@ -148,7 +149,7 @@ def _validation_issues(
 def _label_issue(affected_count: int) -> DatasetValidationIssue | None:
     return _validation_issue(
         affected_count,
-        "unrecognized_or_empty_label", #TODO: This should be an enum
+        DatasetValidationCode.UNRECOGNIZED_OR_EMPTY_LABEL,
         "Merged rows contain empty or unrecognized labels.",
     )
 
@@ -156,7 +157,7 @@ def _label_issue(affected_count: int) -> DatasetValidationIssue | None:
 def _infinite_rate_issue(affected_count: int) -> DatasetValidationIssue | None:
     return _validation_issue(
         affected_count,
-        "infinite_rate", #TODO: This should be an enum
+        DatasetValidationCode.INFINITE_RATE,
         "Lossless canonical data retain infinite Rate values; model-input eligibility excludes non-finite features.",
     )
 
@@ -164,7 +165,7 @@ def _infinite_rate_issue(affected_count: int) -> DatasetValidationIssue | None:
 def _nonfinite_feature_issue(affected_count: int) -> DatasetValidationIssue | None:
     return _validation_issue(
         affected_count,
-        "nonfinite_model_input_feature", #TODO: This should be an enum
+        DatasetValidationCode.NONFINITE_MODEL_INPUT_FEATURE,
         "Lossless canonical data retain non-finite features; model-input eligibility excludes affected rows.",
     )
 
@@ -172,12 +173,12 @@ def _nonfinite_feature_issue(affected_count: int) -> DatasetValidationIssue | No
 def _empty_rate_issue(affected_count: int) -> DatasetValidationIssue | None:
     return _validation_issue(
         affected_count,
-        "empty_rate", #TODO: This should be an enum
+        DatasetValidationCode.EMPTY_RATE,
         "Lossless canonical data retain empty Rate values; model-input eligibility excludes non-finite features.",
     )
 
 
-def _validation_issue(affected_count: int, code: str, reason: str) -> DatasetValidationIssue | None:
+def _validation_issue(affected_count: int, code: DatasetValidationCode, reason: str) -> DatasetValidationIssue | None:
     if affected_count == 0:
         return None
     return DatasetValidationIssue(

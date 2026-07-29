@@ -1,6 +1,9 @@
-.PHONY: format format-check lint pylint typecheck test test-parallel nox
+.PHONY: format format-check lint pylint typecheck test test-parallel nox \
+	materialize-canonical preprocess-dataset preprocess-all-datasets
 
 UV ?= uv
+DATASET ?= nbaiot
+OVERWRITE ?= 0
 
 format:
 	$(UV) run ruff format src tests noxfile.py
@@ -27,3 +30,20 @@ test-parallel:
 
 nox:
 	$(UV) run nox
+
+materialize-canonical:
+	$(UV) run datp-core materialize-canonical-datasets
+
+preprocess-dataset:
+	@if [ "$(OVERWRITE)" = "1" ]; then \
+		$(UV) run datp-core preprocess-dataset $(DATASET) --overwrite; \
+	else \
+		$(UV) run datp-core preprocess-dataset $(DATASET); \
+	fi
+
+preprocess-all-datasets:
+	@if [ "$(OVERWRITE)" = "1" ]; then \
+		$(UV) run datp-core preprocess-all-datasets --overwrite; \
+	else \
+		$(UV) run datp-core preprocess-all-datasets; \
+	fi

@@ -13,14 +13,18 @@ from datp_core.domain.enums import (
     ClusterFeatureStandardization,
     ClusterFingerprintFeature,
     ClusterThresholdAggregation,
+    ConfirmatoryDeltaDirection,
     DatasetId,
     EvidenceRole,
     ExperimentId,
+    ExperimentReadiness,
     FederatedThresholdMethod,
+    IntervalMethod,
     KMeansInitialization,
     MetricId,
     OptimizerId,
     PopulationId,
+    PopulationIdentityKind,
     TrainingModelId,
 )
 from datp_core.domain.values import (
@@ -39,10 +43,22 @@ from datp_core.domain.values import (
     Ratio,
     RoundNumber,
     Seed,
+    SeedCount,
     ShrinkageWeight,
     SummaryCoefficient,
     TrafficRatePerDay,
 )
+
+REQUIRED_CLUSTER_FINGERPRINT_FEATURES = (
+    ClusterFingerprintFeature.BENIGN_ERROR_MEAN,
+    ClusterFingerprintFeature.BENIGN_ERROR_STANDARD_DEVIATION,
+    ClusterFingerprintFeature.BENIGN_ERROR_SKEWNESS,
+    ClusterFingerprintFeature.BENIGN_ERROR_P95,
+)
+LOCKED_CLUSTER_INITIALIZATION_COUNT = 10
+LOCKED_CLUSTER_MAXIMUM_ITERATIONS = 300
+LOCKED_CLUSTER_RANDOM_STATE = 42
+LOCKED_CLUSTER_GROUP_COUNT = 3
 
 UNIT_FRACTION_TOTAL = 1.0
 FRACTION_TOTAL_ABSOLUTE_TOLERANCE = 1e-12
@@ -79,8 +95,8 @@ class SeedCohort(Declaration):
         return self
 
     @property
-    def member_count(self) -> ClientCount:
-        return ClientCount(len(self.values))
+    def member_count(self) -> SeedCount:
+        return SeedCount(len(self.values))
 
 
 class FractionalSplitProtocol(Declaration):
@@ -236,8 +252,45 @@ class ClusterThresholdProtocol(Declaration):
 
     @model_validator(mode="after")
     def validate_fingerprint_features(self) -> "ClusterThresholdProtocol":
-        if len(set(self.fingerprint_features)) != len(self.fingerprint_features):
-            raise ValueError("cluster fingerprint features must be unique")
+        requirements = (
+            (
+                self.fingerprint_features == REQUIRED_CLUSTER_FINGERPRINT_FEATURES,
+                "cluster fingerprint must contain mean, standard deviation, skewness, "
+                "and p95 exactly once in locked order",
+            ),
+            (
+                self.feature_standardization is ClusterFeatureStandardization.STANDARD_SCALER,
+                "cluster fingerprint standardization must be StandardScaler",
+            ),
+            (self.assignment_algorithm is ClusterAssignmentAlgorithm.KMEANS, "cluster assignment must be k-means"),
+            (
+                self.initialization is KMeansInitialization.KMEANS_PLUS_PLUS,
+                "cluster initialization must be k-means++",
+            ),
+            (
+                self.initialization_count.value == LOCKED_CLUSTER_INITIALIZATION_COUNT,
+                "cluster n_init must match the locked initialization count",
+            ),
+            (
+                self.maximum_iterations.value == LOCKED_CLUSTER_MAXIMUM_ITERATIONS,
+                "cluster max_iter must match the locked maximum iteration count",
+            ),
+            (
+                self.random_state.value == LOCKED_CLUSTER_RANDOM_STATE,
+                "cluster random_state must match the locked seed",
+            ),
+            (
+                self.group_count.value == LOCKED_CLUSTER_GROUP_COUNT,
+                "cluster group count must match the locked group count",
+            ),
+            (
+                self.threshold_aggregation is ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS,
+                "cluster thresholds must average eligible local thresholds",
+            ),
+        )
+        for satisfied, message in requirements:
+            if not satisfied:
+                raise ValueError(message)
         return self
 
 
@@ -250,7 +303,7 @@ class StatisticalInferenceProtocol(Declaration):
     seed_cohort: SeedCohort
 
     @property
-    def paired_seed_count(self) -> ClientCount:
+    def paired_seed_count(self) -> SeedCount:
         return self.seed_cohort.member_count
 
 
@@ -269,11 +322,32 @@ class TrafficRateEvidence(Declaration):
 class PopulationDeclaration(Declaration):
     id: PopulationId
     dataset: DatasetId
+    identity_kind: PopulationIdentityKind
     client_count: ClientCount
     has_attack_assignment: bool
     has_chronology: bool
     has_family_taxonomy: bool
     confirmatory_eligible: bool
+
+    @model_validator(mode="after")
+    def validate_identity_kind(self) -> "PopulationDeclaration":
+        match self.identity_kind:
+            case PopulationIdentityKind.PHYSICAL_DEVICES:
+                if self.dataset is not DatasetId.NBAIOT or not self.confirmatory_eligible:
+                    raise ValueError("physical-device populations must be confirmatory N-BaIoT devices")
+            case PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS:
+                if self.dataset is not DatasetId.CICIOT2023 or self.confirmatory_eligible:
+                    raise ValueError("file-defined pseudo-clients cannot be confirmatory physical devices")
+            case PopulationIdentityKind.SOURCE_DEFINED_SENSOR_GROUPS:
+                if self.dataset is not DatasetId.EDGE_IIOTSET or self.has_attack_assignment:
+                    raise ValueError("source-defined sensor groups are not physical attack-assigned devices")
+            case PopulationIdentityKind.SYNTHETIC_DIRICHLET_CLIENTS:
+                if self.dataset is not DatasetId.NBAIOT or self.confirmatory_eligible:
+                    raise ValueError("synthetic Dirichlet clients are not confirmatory physical devices")
+            case PopulationIdentityKind.VERIFIED_TEMPORAL_GROUPS:
+                if self.dataset is not DatasetId.EDGE_IIOTSET or not self.has_chronology:
+                    raise ValueError("verified temporal groups require Edge chronology")
+        return self
 
 
 class ExperimentDeclaration(Declaration):
@@ -283,6 +357,7 @@ class ExperimentDeclaration(Declaration):
     training_model: TrainingModelId
     federated_thresholds: tuple[FederatedThresholdMethod, ...]
     metrics: tuple[MetricId, ...]
+    readiness: ExperimentReadiness
 
     @model_validator(mode="after")
     def validate_contents(self) -> "ExperimentDeclaration":
@@ -292,6 +367,29 @@ class ExperimentDeclaration(Declaration):
             raise ValueError("experiment threshold methods must be unique")
         if len(set(self.metrics)) != len(self.metrics):
             raise ValueError("experiment metrics must be unique")
+        if self.readiness is ExperimentReadiness.EXECUTABLE and self.role is EvidenceRole.OPERATIONAL_TRANSLATION:
+            raise ValueError("operational translation experiments cannot be marked executable without rate evidence")
+        return self
+
+
+class ConfirmatoryEndpoint(Declaration):
+    experiment: Literal[ExperimentId.SHARED_VS_LOCAL_CONFIRMATION]
+    population: Literal[PopulationId.NBAIOT_NATURAL_DEVICES]
+    training_model: Literal[TrainingModelId.FEDAVG_AUTOENCODER]
+    shared_threshold: Literal[FederatedThresholdMethod.SHARED_THRESHOLD]
+    local_threshold: Literal[FederatedThresholdMethod.LOCAL_THRESHOLD]
+    metric: Literal[MetricId.FPR_COEFFICIENT_OF_VARIATION]
+    seed_cohort: SeedCohort
+    positive_direction: Literal[ConfirmatoryDeltaDirection.SHARED_MINUS_LOCAL]
+    interval_method: Literal[IntervalMethod.BCA_PAIRED_ARITHMETIC_MEAN]
+    confidence_level: ConfidenceLevel
+
+    @model_validator(mode="after")
+    def validate_endpoint(self) -> "ConfirmatoryEndpoint":
+        if self.seed_cohort.member_count.value != 10:
+            raise ValueError("confirmatory endpoint requires the paired ten-seed journal cohort")
+        if MetricId.AUROC is self.metric:
+            raise ValueError("AUROC is a model-quality control, not the confirmatory endpoint")
         return self
 
 
@@ -352,5 +450,13 @@ class ResolvedProtocolGraph(Declaration):
     experiments: tuple[ExperimentDeclaration, ...]
     suppressed_experiment_ids: tuple[ExperimentId, ...]
     temporal_split: TemporalSplitProtocol
+    non_temporal_split: FractionalSplitProtocol
     checkpoint: CheckpointProtocol
     calibration: CalibrationEligibilityProtocol
+    confirmatory_endpoint: ConfirmatoryEndpoint
+    confirmatory_inference: StatisticalInferenceProtocol
+    anchor: AnchorDecisionProtocol
+    runtime: RuntimeProtocol
+    traffic_rate_evidence: tuple[TrafficRateEvidence, ...]
+    cluster_threshold: ClusterThresholdProtocol
+    fedavg_training: FedAvgProtocol

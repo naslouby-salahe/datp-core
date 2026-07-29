@@ -205,8 +205,8 @@ If BCa is degenerate or fewer than ten valid pairs exist, report diagnostic inte
 
 `mechanisms.py` is limited to source-authorized analyses:
 
-- family/group granularity when group assignments are available;
-- assignment stability only for scientifically supplied grouping assignments/resamples;
+- family/group granularity when the Phase 09 fingerprint-based cluster assignments exist;
+- assignment stability analysis for the Phase 09 fingerprint/k-means assignments (analysis only; construction remains Phase 09);
 - per-client benign and attack score geometry;
 - heterogeneity-benefit association;
 - threshold movement versus FPR/TPR changes;

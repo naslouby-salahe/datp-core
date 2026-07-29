@@ -18,10 +18,14 @@
 
 Construct the five authorized populations, deterministic fractional and chronological splits, integrity manifests, and explicit evaluation cohorts. This phase establishes exactly which clients and rows are valid for each scientific question.
 
+## Preprocessing handoff
+
+After population and split construction, Phase 05 (or the preprocess stage that consumes its manifests) binds each dataset’s ordered model-input features to the locked scientific methods via `build_preprocessing_protocol`. Population builders must not invent alternate scalers or imputation.
+
 ## Entry criteria
 
 - Phase 04 is complete.
-- Canonical data and reusable preprocessing coordinate rules exist.
+- Canonical data and reusable preprocessing coordinate rules exist. Population and split construction must consume Phase 04 reusable coordinates and must not refit preprocessing.
 - All required split values are explicit in the source of truth; unresolved values block the affected population.
 
 ## Source files permitted to change

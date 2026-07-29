@@ -10,7 +10,13 @@ from datp_core.datasets.materialization import (
     canonical_provenance_column,
     canonical_schema_checksum,
 )
-from datp_core.datasets.models import CanonicalColumn, CanonicalColumnRole, CanonicalProvenanceColumn, CanonicalSchema
+from datp_core.datasets.models import (
+    CanonicalColumn,
+    CanonicalColumnRole,
+    CanonicalProvenanceColumn,
+    CanonicalSchema,
+    ColumnLogicalType,
+)
 from datp_core.domain.enums import DatasetId
 
 
@@ -85,36 +91,55 @@ NBAIOT_PROVENANCE_COLUMNS: tuple[str, ...] = tuple(CanonicalProvenanceColumn)
 
 def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     feature_columns = tuple(
-        CanonicalColumn(column, column, "float64", CanonicalColumnRole.FEATURE, True, position)
+        CanonicalColumn(column, column, ColumnLogicalType.FLOAT64, CanonicalColumnRole.FEATURE, True, position)
         for position, column in enumerate(NBAIOT_FEATURE_COLUMNS)
     )
     provenance_columns = tuple(
         canonical_provenance_column(column, len(feature_columns) + index)
         for index, column in enumerate(tuple(CanonicalProvenanceColumn)[:-1])
     )
-    trailing_columns = (
-        (
+    evidence_start = len(feature_columns) + len(provenance_columns)
+    evidence_columns = (
+        CanonicalColumn(
             NBaIoTCanonicalColumn.PHYSICAL_CLIENT_ID,
             "audited device path",
-            "string",
+            ColumnLogicalType.STRING,
             CanonicalColumnRole.IDENTITY,
             True,
+            evidence_start,
         ),
-        (
+        CanonicalColumn(
             NBaIoTCanonicalColumn.PHYSICAL_DEVICE_FAMILY,
             "N-BaIoT Table III device type",
-            "string",
+            ColumnLogicalType.STRING,
             CanonicalColumnRole.IDENTITY,
             True,
+            evidence_start + 1,
         ),
-        (NBaIoTCanonicalColumn.RAW_LABEL, "audited source path", "string", CanonicalColumnRole.LABEL, True),
-        (NBaIoTCanonicalColumn.ATTACK_FAMILY, "audited source path", "string", CanonicalColumnRole.RAW_EVIDENCE, True),
-        (NBaIoTCanonicalColumn.ATTACK_SUBTYPE, "audited source path", "string", CanonicalColumnRole.RAW_EVIDENCE, True),
-    )
-    evidence_start = len(feature_columns) + len(provenance_columns)
-    evidence_columns = tuple(
-        CanonicalColumn(name, source_name, dtype, role, nullable, evidence_start + index)
-        for index, (name, source_name, dtype, role, nullable) in enumerate(trailing_columns)
+        CanonicalColumn(
+            NBaIoTCanonicalColumn.RAW_LABEL,
+            "audited source path",
+            ColumnLogicalType.STRING,
+            CanonicalColumnRole.LABEL,
+            True,
+            evidence_start + 2,
+        ),
+        CanonicalColumn(
+            NBaIoTCanonicalColumn.ATTACK_FAMILY,
+            "audited source path",
+            ColumnLogicalType.STRING,
+            CanonicalColumnRole.RAW_EVIDENCE,
+            True,
+            evidence_start + 3,
+        ),
+        CanonicalColumn(
+            NBaIoTCanonicalColumn.ATTACK_SUBTYPE,
+            "audited source path",
+            ColumnLogicalType.STRING,
+            CanonicalColumnRole.RAW_EVIDENCE,
+            True,
+            evidence_start + 4,
+        ),
     )
     stable_identity = canonical_provenance_column(
         CanonicalProvenanceColumn.STABLE_ROW_ID,
@@ -170,7 +195,7 @@ def source_relative_path(path: Path) -> Path:
 def _benign_source_identity(parts: tuple[str, ...]) -> tuple[str, str, None, None]:
     device = parts[-2]
     _device(device)
-    return device, "benign", None, None
+    return device, NBaIoTSourceLabel.BENIGN.value, None, None
 
 
 def _attack_source_identity(parts: tuple[str, ...], subtype: str) -> tuple[str, str, str, str]:
@@ -182,7 +207,7 @@ def _attack_source_identity(parts: tuple[str, ...], subtype: str) -> tuple[str, 
     family = attack_directory.removesuffix(NBaIoTArtifactName.ATTACK_DIRECTORY_SUFFIX)
     if family not in NBAIOT_ATTACK_FAMILIES or subtype not in NBAIOT_ATTACK_SUBTYPES:
         raise ValueError("unrecognized N-BaIoT attack path")
-    return device, "attack", family, subtype
+    return device, NBaIoTSourceLabel.ATTACK.value, family, subtype
 
 
 def device_family(device_identity: str) -> NBaIoTDeviceFamily:
