@@ -450,3 +450,9 @@ class ScoreFrameColumn(StrEnum):
     STABLE_ROW_ID = "stable_row_id"
     OUTCOME_LABEL = "outcome_label"
     RECONSTRUCTION_ERROR = "reconstruction_error"
+
+
+class QuantileInterpolationSemantics(StrEnum):
+    """Operationalization of the exact empirical quantile via NumPy linear interpolation."""
+
+    NUMPY_QUANTILE_LINEAR = "numpy_quantile_linear"

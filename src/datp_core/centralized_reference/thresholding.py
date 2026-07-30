@@ -17,6 +17,7 @@ from datp_core.domain.enums import (
     ContractSubject,
     FederatedThresholdMethod,
     PartitionRole,
+    QuantileInterpolationSemantics,
     ScoreFrameColumn,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
@@ -31,17 +32,6 @@ from datp_core.domain.values import (
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.models import CentralizedQuantileProtocol
-
-
-class QuantileInterpolationSemantics(StrEnum):
-    """Operationalization of the exact pooled quantile via NumPy linear interpolation.
-
-    The journal locks the quantile level but does not name a distinct interpolation
-    algorithm. Linear interpolation of the empirical distribution matches the
-    historical `numpy.percentile` operationalization used for the conference pipeline.
-    """
-
-    NUMPY_QUANTILE_LINEAR = "numpy_quantile_linear"
 
 
 class CentralizedThresholdAssetName(StrEnum):
@@ -79,8 +69,10 @@ class PooledThresholdResult:
 
 @dataclass(frozen=True, slots=True)
 class FederatedScoreMarker:
+    """Structural marker used only to reject federated artifacts at the centralized boundary."""
+
     identity: str
-    method: FederatedThresholdMethod | str
+    method: FederatedThresholdMethod
 
 
 def construct_pooled_benign_quantile(
@@ -88,7 +80,7 @@ def construct_pooled_benign_quantile(
     coordinate: CentralizedTrainingCoordinate,
     calibration_scores: PooledScoreArtifact,
     protocol: CentralizedQuantileProtocol,
-    benign_label: str = PopulationOutcomeLabel.BENIGN.value,
+    benign_label: PopulationOutcomeLabel = PopulationOutcomeLabel.BENIGN,
 ) -> PooledThresholdResult:
     """Construct the exact pooled benign calibration quantile threshold."""
     _validate_threshold_inputs(coordinate, calibration_scores, protocol)
@@ -132,7 +124,9 @@ def _validate_threshold_inputs(
         )
 
 
-def _benign_calibration_scores(calibration_scores: PooledScoreArtifact, benign_label: str) -> np.ndarray:
+def _benign_calibration_scores(
+    calibration_scores: PooledScoreArtifact, benign_label: PopulationOutcomeLabel
+) -> np.ndarray:
     frame = load_score_frame(calibration_scores)
     labels = OutcomeLabelSequence(
         tuple(str(value) for value in frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list())
@@ -161,8 +155,10 @@ def exact_pooled_quantile(scores: np.ndarray, quantile: Quantile) -> ThresholdVa
     return ThresholdValue(value)
 
 
-def reject_attack_rows_in_benign_calibration(labels: OutcomeLabelSequence, benign_label: str) -> None:
-    if any(label != benign_label for label in labels):
+def reject_attack_rows_in_benign_calibration(
+    labels: OutcomeLabelSequence, benign_label: PopulationOutcomeLabel
+) -> None:
+    if any(label != benign_label.value for label in labels):
         raise LeakageError(
             "attack-labelled rows cannot enter centralized benign calibration",
             subject=ContractSubject.LABEL,
@@ -171,14 +167,16 @@ def reject_attack_rows_in_benign_calibration(labels: OutcomeLabelSequence, benig
 
 def reject_federated_scores_for_centralized_threshold(marker: FederatedScoreMarker) -> None:
     raise LeakageError(
-        "federated score artifacts cannot enter centralized threshold construction",
+        f"federated score artifact '{marker.identity}' (method={marker.method.value}) "
+        "cannot enter centralized threshold construction",
         subject=ContractSubject.ARTIFACT_PATH,
     )
 
 
 def reject_local_quantile_mean_as_centralized(local_quantiles: Sequence[float]) -> None:
     raise LeakageError(
-        "arithmetic mean of local quantiles is the shared federated construction, not the centralized pooled quantile",
+        "arithmetic mean of local quantiles is the shared federated construction, not the centralized pooled "
+        f"quantile (received {len(local_quantiles)} local quantile values)",
         subject=ContractSubject.LOCAL_QUANTILE_MEAN,
     )
 

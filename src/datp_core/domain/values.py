@@ -167,6 +167,16 @@ class GroupCount(PositiveIntegerValue):
 
 
 @dataclass(frozen=True, slots=True)
+class ReplicateIndex(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "replicate index"
+
+
+@dataclass(frozen=True, slots=True)
+class ClusterIndex(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "cluster index"
+
+
+@dataclass(frozen=True, slots=True)
 class KMeansInitializationCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "k-means initialization count"
 
@@ -328,6 +338,15 @@ class ClientPathToken:
             raise ValueError("client path token must be non-empty")
         if self.value in {".", ".."} or any(token in self.value for token in ("=", "/", "\\")):
             raise ValueError("client path token must be a single non-relative path segment without key=value syntax")
+
+
+@dataclass(frozen=True, slots=True)
+class FamilyIdentity:
+    value: str
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.value, str) or not self.value:
+            raise ValueError("family identity must be non-empty")
 
 
 def checksum_text(payload: str) -> Checksum:

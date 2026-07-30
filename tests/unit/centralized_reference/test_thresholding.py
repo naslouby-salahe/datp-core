@@ -79,7 +79,7 @@ def test_rejects_attack_rows_in_calibration() -> None:
     with pytest.raises(LeakageError, match="attack-labelled"):
         reject_attack_rows_in_benign_calibration(
             OutcomeLabelSequence((PopulationOutcomeLabel.BENIGN.value, PopulationOutcomeLabel.ATTACK.value)),
-            PopulationOutcomeLabel.BENIGN.value,
+            PopulationOutcomeLabel.BENIGN,
         )
 
 
