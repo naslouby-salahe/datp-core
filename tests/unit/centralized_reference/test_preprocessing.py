@@ -15,7 +15,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorModule,
 )
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import Checksum, ClientIdentity, OutcomeLabelSequence
+from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabelSequence
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
@@ -59,7 +59,7 @@ def test_pooled_fit_is_independent_of_federated_state() -> None:
     federated_state = FittedPreprocessingState(
         protocol=protocol,
         branch=ProcessedDataBranch.FEDERATED,
-        client_identity=ClientIdentity("device_a"),
+        client_identity=ClientPathToken("device_a"),
         estimator_path=Path("state.skops"),
         estimator_checksum=Checksum("b" * 64),
         transformed_schema=protocol.transformed_schema,

@@ -15,7 +15,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorClassName,
     TrustedEstimatorModule,
 )
-from datp_core.domain.values import Checksum, ClientIdentity, Seed
+from datp_core.domain.values import Checksum, ClientPathToken, Seed
 from datp_core.preprocessing.federated import ClientPublishRequest, publish_client_preprocessing
 from datp_core.preprocessing.models import (
     PreprocessingProtocol,
@@ -75,7 +75,7 @@ def test_identical_coordinates_reuse_completed_federated_asset(tmp_path: Path) -
                 canonical_schema_checksum=Checksum("c" * 64),
                 data_root=data_root,
             ),
-            client_identity=ClientIdentity("device_a"),
+            client_identity=ClientPathToken("device_a"),
             fitted_estimator=fitted,
             partitions=partitions,
             row_ids=row_ids,
@@ -92,7 +92,7 @@ def test_identical_coordinates_reuse_completed_federated_asset(tmp_path: Path) -
                 canonical_schema_checksum=Checksum("c" * 64),
                 data_root=data_root,
             ),
-            client_identity=ClientIdentity("device_a"),
+            client_identity=ClientPathToken("device_a"),
             fitted_estimator=fitted,
             partitions=partitions,
             row_ids=row_ids,

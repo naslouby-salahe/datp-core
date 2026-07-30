@@ -21,7 +21,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorModule,
 )
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import Checksum, ClientIdentity
+from datp_core.domain.values import Checksum, ClientPathToken
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     PreprocessingProtocol,
@@ -46,7 +46,7 @@ def _federated_state(path: Path) -> FittedPreprocessingState:
     return FittedPreprocessingState(
         protocol=protocol,
         branch=ProcessedDataBranch.FEDERATED,
-        client_identity=ClientIdentity("device_a"),
+        client_identity=ClientPathToken("device_a"),
         estimator_path=path,
         estimator_checksum=Checksum("1" * 64),
         transformed_schema=protocol.transformed_schema,

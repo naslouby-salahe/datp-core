@@ -157,6 +157,7 @@ def preprocess_centralized_reference_population_stage(
             partition_seed=request.partition_seed,
             split_protocol=request.split_protocol,
             dataset=dataset,
+            deployment_fallback_client_ids=frozenset(),
             capture_timestamp_column=request.capture_timestamp_column,
         )
     )

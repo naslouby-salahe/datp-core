@@ -12,7 +12,7 @@ from datp_core.domain.enums import (
     ReusableDataCoordinateKind,
     SplitProtocolId,
 )
-from datp_core.domain.values import ClientIdentity, Seed
+from datp_core.domain.values import ClientPathToken, Seed
 from datp_core.protocols.runtime import DATA_ROOT
 
 
@@ -24,7 +24,7 @@ class ReusableDataCoordinate:
     split_protocol_identity: SplitProtocolId
     preprocessing_identity: PreprocessingProtocolId
     branch: ProcessedDataBranch
-    client_identity: ClientIdentity | None
+    client_identity: ClientPathToken | None
 
     def __post_init__(self) -> None:
         if self.branch is ProcessedDataBranch.CENTRALIZED_REFERENCE and self.client_identity is not None:

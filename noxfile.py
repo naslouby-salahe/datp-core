@@ -2,7 +2,7 @@
 
 import nox
 
-nox.options.sessions = ("tests", "format", "lint", "types")
+nox.options.sessions = ("tests", "format", "lint", "types", "imports")
 
 
 def install_dev_tools(session: nox.Session) -> None:
@@ -43,3 +43,11 @@ def types(session: nox.Session) -> None:
     """Run static type checks."""
     session.install("pyright>=1.1.390")
     session.run("pyright")
+
+
+@nox.session(python=["3.12"])
+def imports(session: nox.Session) -> None:
+    """Enforce package import contracts."""
+    session.install("import-linter>=2.0")
+    session.install(".")
+    session.run("lint-imports")

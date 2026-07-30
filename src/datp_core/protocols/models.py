@@ -63,6 +63,7 @@ LOCKED_CLUSTER_INITIALIZATION_COUNT = 10
 LOCKED_CLUSTER_MAXIMUM_ITERATIONS = 300
 LOCKED_CLUSTER_RANDOM_STATE = 42
 LOCKED_CLUSTER_GROUP_COUNT = 3
+CONFIRMATORY_PAIRED_SEED_COUNT = SeedCount(10)
 
 UNIT_FRACTION_TOTAL = 1.0
 FRACTION_TOTAL_ABSOLUTE_TOLERANCE = 1e-12
@@ -392,7 +393,7 @@ class ConfirmatoryEndpoint(Declaration):
 
     @model_validator(mode="after")
     def validate_endpoint(self) -> "ConfirmatoryEndpoint":
-        if self.seed_cohort.member_count.value != 10:
+        if self.seed_cohort.member_count != CONFIRMATORY_PAIRED_SEED_COUNT:
             raise ValueError("confirmatory endpoint requires the paired ten-seed journal cohort")
         if MetricId.AUROC is self.metric:
             raise ValueError("AUROC is a model-quality control, not the confirmatory endpoint")

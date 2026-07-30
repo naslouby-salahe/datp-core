@@ -18,7 +18,7 @@ from datp_core.domain.enums import (
     RawDatasetDirectory,
     SplitProtocolId,
 )
-from datp_core.domain.values import ClientIdentity, Seed
+from datp_core.domain.values import ClientPathToken, Seed
 
 
 def _base_coordinate() -> ReusableDataCoordinate:
@@ -41,12 +41,12 @@ def test_processed_coordinates_match_approved_layout() -> None:
         f"{SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS.value}/"
         f"{PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION.value}/federated"
     )
-    coordinate = replace(_base_coordinate(), client_identity=ClientIdentity("danmini_doorbell"))
+    coordinate = replace(_base_coordinate(), client_identity=ClientPathToken("danmini_doorbell"))
     client = federated_client_coordinate(data_root, coordinate)
     assert client.parts[-1] == "danmini_doorbell"
     assert "client" not in client.parts
     with pytest.raises(ValueError):
-        ClientIdentity("client=bad")
+        ClientPathToken("client=bad")
 
 
 def test_raw_dataset_directories_are_enum_backed() -> None:

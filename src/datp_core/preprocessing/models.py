@@ -20,7 +20,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorClassName,
     TrustedEstimatorModule,
 )
-from datp_core.domain.values import Checksum, ClientIdentity, OutcomeLabelSequence, Seed
+from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabelSequence, Seed
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
 
@@ -104,7 +104,7 @@ def _estimator_class_name(class_name: TrustedEstimatorClassName) -> str:
             return "MinMaxScaler"
 
 
-def _require_branch_client_pairing(branch: ProcessedDataBranch, client_identity: ClientIdentity | None) -> None:
+def _require_branch_client_pairing(branch: ProcessedDataBranch, client_identity: ClientPathToken | None) -> None:
     if branch is ProcessedDataBranch.FEDERATED:
         if not client_identity:
             raise ValueError("federated fitted state requires a client identity")
@@ -117,7 +117,7 @@ def _require_branch_client_pairing(branch: ProcessedDataBranch, client_identity:
 class FittedPreprocessingState:
     protocol: PreprocessingProtocol
     branch: ProcessedDataBranch
-    client_identity: ClientIdentity | None
+    client_identity: ClientPathToken | None
     estimator_path: Path
     estimator_checksum: Checksum
     transformed_schema: TransformedSchema
@@ -133,13 +133,25 @@ class FittedPreprocessingState:
 
 @dataclass(frozen=True, slots=True)
 class ClientPreprocessingResult:
-    client_identity: ClientIdentity
+    client_identity: ClientPathToken
     train_path: Path
     calibration_path: Path
     evaluation_path: Path
     fitted_state: FittedPreprocessingState
     transformed_schema: TransformedSchema
     publication_status: PublicationStatus
+
+
+@dataclass(frozen=True, slots=True)
+class ClientPreprocessPublication:
+    """Published federated client preprocessing artifact with partition row counts."""
+
+    client_identity: ClientPathToken
+    result: ClientPreprocessingResult
+    publication_status: PublicationStatus
+    train_row_count: int
+    calibration_row_count: int
+    evaluation_row_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -248,7 +260,7 @@ class FittedStatePublishSpec:
     branch: ProcessedDataBranch
     estimator_path: Path
     fit_row_count: int
-    client_identity: ClientIdentity | None = None
+    client_identity: ClientPathToken | None = None
 
 
 @dataclass(frozen=True, slots=True)

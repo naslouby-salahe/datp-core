@@ -2,18 +2,19 @@
 
 import typer
 
-from datp_core.artifacts.coordinates import raw_dataset_root
-from datp_core.datasets.catalogue import DatasetPublication, dataset_binding
 from datp_core.domain.enums import (
     ControlledPartitionKind,
     DatasetId,
     PopulationId,
     PreprocessingProtocolId,
-    ReusableDataCoordinateKind,
     SplitProtocolId,
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import DirichletConcentration, Seed
+from datp_core.orchestration.stages.materialize import (
+    MaterializeCanonicalDatasetsRequest,
+    materialize_canonical_datasets_stage,
+)
 from datp_core.orchestration.stages.preprocess_centralized_reference import (
     PreprocessCentralizedPopulationRequest,
     preprocess_centralized_reference_population_stage,
@@ -49,11 +50,16 @@ def command_group() -> None:
 @app.command("materialize-canonical-datasets")
 def materialize_canonical_datasets() -> None:
     """Publish or reuse every audited dataset under the fixed data root."""
-    for dataset in DatasetId:
-        result = materialize_canonical_dataset(dataset)
+    result = materialize_canonical_datasets_stage(
+        MaterializeCanonicalDatasetsRequest(
+            data_root=DATA_ROOT,
+            datasets=tuple(DatasetId),
+        )
+    )
+    for publication in result.publications:
         typer.echo(
-            f"{result.dataset.value} {result.publication_status.value} "
-            f"rows={result.row_count} assets={len(result.assets)}"
+            f"{publication.dataset.value} {publication.publication_status.value} "
+            f"rows={publication.row_count} assets={len(publication.assets)}"
         )
 
 
@@ -149,11 +155,6 @@ def preprocess_centralized_reference(
 
 def main() -> None:
     app()
-
-
-def materialize_canonical_dataset(dataset: DatasetId) -> DatasetPublication:
-    canonical_root = DATA_ROOT / ReusableDataCoordinateKind.CANONICAL
-    return dataset_binding(dataset).publish(raw_dataset_root(dataset), canonical_root)
 
 
 def _controlled_partition_condition(

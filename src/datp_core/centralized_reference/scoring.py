@@ -9,12 +9,10 @@ import polars as pl
 
 from datp_core.centralized_reference.checkpointing import CentralizedCheckpointCandidate
 from datp_core.centralized_reference.training import (
-    CentralizedScoreColumn,
     CentralizedTrainingCoordinate,
     load_centralized_model_tensors,
-    reconstruction_errors,
 )
-from datp_core.domain.enums import ContractSubject, PartitionRole, SerializationFormat
+from datp_core.domain.enums import ContractSubject, PartitionRole, ScoreFrameColumn, SerializationFormat
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
 from datp_core.domain.values import (
     BatchSize,
@@ -26,6 +24,7 @@ from datp_core.domain.values import (
     checksum_file,
     checksum_text,
 )
+from datp_core.learning.autoencoder import reconstruction_errors
 from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationFrameColumn
 from datp_core.protocols.anchor import (
     ANOMALY_POLARITY_FEATURE_PERTURBATION,
@@ -139,9 +138,9 @@ def load_score_frame(artifact: PooledScoreArtifact) -> pl.DataFrame:
     if frame.height != artifact.row_count.value:
         raise ArtifactIntegrityError("score artifact row count mismatch", subject=ContractSubject.ARTIFACT_PATH)
     required = {
-        CentralizedScoreColumn.STABLE_ROW_ID.value,
-        CentralizedScoreColumn.OUTCOME_LABEL.value,
-        CentralizedScoreColumn.RECONSTRUCTION_ERROR.value,
+        ScoreFrameColumn.STABLE_ROW_ID.value,
+        ScoreFrameColumn.OUTCOME_LABEL.value,
+        ScoreFrameColumn.RECONSTRUCTION_ERROR.value,
     }
     if not required.issubset(set(frame.columns)):
         raise ArtifactIntegrityError("score artifact schema mismatch", subject=ContractSubject.ARTIFACT_PATH)
@@ -198,9 +197,9 @@ def _score_partition(
         raise ScientificContractError("score count must equal partition row count", subject=partition_role)
     output = pl.DataFrame(
         {
-            CentralizedScoreColumn.STABLE_ROW_ID.value: list(row_ids),
-            CentralizedScoreColumn.OUTCOME_LABEL.value: list(labels),
-            CentralizedScoreColumn.RECONSTRUCTION_ERROR.value: scores.tolist(),
+            ScoreFrameColumn.STABLE_ROW_ID.value: list(row_ids),
+            ScoreFrameColumn.OUTCOME_LABEL.value: list(labels),
+            ScoreFrameColumn.RECONSTRUCTION_ERROR.value: scores.tolist(),
         }
     )
     destination.parent.mkdir(parents=True, exist_ok=True)

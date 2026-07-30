@@ -8,10 +8,8 @@ from datp_core.artifacts.store import AtomicPublication, publish_atomically
 from datp_core.centralized_reference.scoring import PooledScoreArtifact
 from datp_core.centralized_reference.thresholding import (
     CentralizedThresholdAssetName,
-    FederatedScoreMarker,
     PooledThresholdResult,
     construct_pooled_benign_quantile,
-    reject_federated_scores_for_centralized_threshold,
     threshold_result_checksum,
     write_threshold_document,
 )
@@ -91,10 +89,6 @@ def construct_centralized_reference_threshold_stage(
         threshold=threshold,
         complete_digest=checksum_file(request.output_directory / CentralizedThresholdAssetName.COMPLETE),
     )
-
-
-def reject_federated_scores_stage(marker: FederatedScoreMarker) -> None:
-    reject_federated_scores_for_centralized_threshold(marker)
 
 
 def _is_reusable(directory: Path, request: ConstructCentralizedThresholdRequest) -> bool:

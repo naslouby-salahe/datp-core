@@ -18,15 +18,14 @@ from tests.unit.learning.federated.helpers import (
 
 from datp_core.domain.enums import PublicationStatus
 from datp_core.domain.values import Checksum, Seed
-from datp_core.domain.values import ClientIdentity as PreprocessingClientIdentity
-from datp_core.orchestration.stages.preprocess_federated import ClientPreprocessPublication
+from datp_core.domain.values import ClientPathToken as PreprocessingClientPathToken
 from datp_core.orchestration.stages.score_federated import ScoreFederatedRequest, score_federated_stage
 from datp_core.orchestration.stages.select_federated_checkpoint import (
     SelectFederatedCheckpointRequest,
     select_federated_checkpoint_stage,
 )
 from datp_core.orchestration.stages.train_federated import TrainFedAvgRequest, train_fedavg_stage
-from datp_core.preprocessing.models import ClientPreprocessingResult
+from datp_core.preprocessing.models import ClientPreprocessingResult, ClientPreprocessPublication
 from datp_core.scoring.generation import ClientScoringInput
 
 
@@ -47,7 +46,7 @@ def _client_publication(client_id: str, directory: Path) -> ClientPreprocessPubl
     fitted_state = FittedPreprocessingState(
         protocol=protocol,
         branch=ProcessedDataBranch.FEDERATED,
-        client_identity=PreprocessingClientIdentity(client_id),
+        client_identity=PreprocessingClientPathToken(client_id),
         estimator_path=estimator_path,
         estimator_checksum=Checksum(f"{client_id[-1]}" * 64),
         transformed_schema=protocol.transformed_schema,
@@ -55,7 +54,7 @@ def _client_publication(client_id: str, directory: Path) -> ClientPreprocessPubl
         fit_partition=PartitionRole.TRAIN,
     )
     result = ClientPreprocessingResult(
-        client_identity=PreprocessingClientIdentity(client_id),
+        client_identity=PreprocessingClientPathToken(client_id),
         train_path=train_path,
         calibration_path=calibration_path,
         evaluation_path=evaluation_path,
@@ -64,7 +63,7 @@ def _client_publication(client_id: str, directory: Path) -> ClientPreprocessPubl
         publication_status=PublicationStatus.PUBLISHED,
     )
     return ClientPreprocessPublication(
-        client_identity=PreprocessingClientIdentity(client_id),
+        client_identity=PreprocessingClientPathToken(client_id),
         result=result,
         publication_status=PublicationStatus.PUBLISHED,
         train_row_count=16,
@@ -129,6 +128,8 @@ def test_select_and_score_federated_stages(tmp_path: Path) -> None:
             checkpoint_protocol=CHECKPOINT,
             preprocessing_state_set_checksum=training.candidates[0].preprocessing_state_set_checksum,
             split_manifest_checksum=training.candidates[0].split_manifest_checksum,
+            held_out_metrics=None,
+            attack_labels_present=False,
         )
     )
     assert selection.decision.selected.round_number == CHECKPOINT.maximum_round

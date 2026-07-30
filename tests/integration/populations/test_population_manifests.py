@@ -27,6 +27,7 @@ def test_end_to_end_manifest_handoff_for_natural_and_dirichlet(nbaiot_canonical_
             Seed(0),
             SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
             DatasetId.NBAIOT,
+            deployment_fallback_client_ids=frozenset(),
         )
     )
     assert handoff.population_manifest.document.accepted_clients == natural.manifest.document.accepted_clients

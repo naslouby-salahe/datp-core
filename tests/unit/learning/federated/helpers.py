@@ -30,7 +30,7 @@ from datp_core.domain.values import (
     ProximalCoefficient,
     RoundNumber,
 )
-from datp_core.domain.values import ClientIdentity as PreprocessingClientIdentity
+from datp_core.domain.values import ClientPathToken as PreprocessingClientIdentity
 from datp_core.learning.federated.fedavg import FedAvgClientDataset
 from datp_core.learning.federated.models import ClientTrainingInput, FederatedTrainingCoordinate
 from datp_core.populations.models import (

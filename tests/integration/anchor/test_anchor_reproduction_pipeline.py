@@ -90,7 +90,9 @@ def test_pipeline_loads_historical_artifacts_and_passes_gate(tmp_path: Path) -> 
         assert shared.model_checkpoint_identity == local.model_checkpoint_identity
 
     result = verify_anchor_stage(
-        VerifyAnchorStageRequest(historical_sources=sources, diagnostics_directory=tmp_path / "diag")
+        VerifyAnchorStageRequest(
+            protocol=ANCHOR_DECISION_PROTOCOL, historical_sources=sources, diagnostics_directory=tmp_path / "diag"
+        )
     )
     assert result.status.gate_status is AnchorGateStatus.PASS
     assert result.status.dependent_readiness is ExperimentReadiness.DECLARED
@@ -109,7 +111,9 @@ def test_pipeline_blocks_stale_mismatched_value(tmp_path: Path) -> None:
     stale.write_text(payload, encoding="utf-8")
     sources = historical_sources_for_seed_directories(shared_root, local_root)
     result = verify_anchor_stage(
-        VerifyAnchorStageRequest(historical_sources=sources, diagnostics_directory=tmp_path / "diag")
+        VerifyAnchorStageRequest(
+            protocol=ANCHOR_DECISION_PROTOCOL, historical_sources=sources, diagnostics_directory=tmp_path / "diag"
+        )
     )
     assert result.status.gate_status is AnchorGateStatus.BLOCKED
     assert result.gate.reproduction.discrepancies

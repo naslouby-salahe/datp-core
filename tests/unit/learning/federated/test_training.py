@@ -11,7 +11,7 @@ from tests.unit.learning.federated.helpers import (
 
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import BatchSize, Checksum, OutcomeLabelSequence, RowCount, Seed
-from datp_core.learning.autoencoder import FederatedAutoencoder
+from datp_core.learning.autoencoder import ReconstructionAutoencoder
 from datp_core.learning.federated.models import ClientUpdate
 from datp_core.learning.federated.training import (
     ProximalTerm,
@@ -77,7 +77,7 @@ def test_build_client_loader_is_deterministic_given_the_same_seed() -> None:
 
 def test_run_local_epoch_requires_at_least_one_full_batch() -> None:
     device = require_cuda()
-    model = FederatedAutoencoder(AUTOENCODER.widths).to(device)
+    model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     short_matrix = benign_frame(2).select(FEATURE_NAMES.as_list()).to_numpy()
     loader = build_client_loader(short_matrix, batch_size=BatchSize(4), seed=Seed(1), device=device)
@@ -87,7 +87,7 @@ def test_run_local_epoch_requires_at_least_one_full_batch() -> None:
 
 def test_run_local_epoch_returns_full_state_and_positive_sample_count() -> None:
     device = require_cuda()
-    model = FederatedAutoencoder(AUTOENCODER.widths).to(device)
+    model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
     matrix = benign_frame(8).select(FEATURE_NAMES.as_list()).to_numpy()
     loader = build_client_loader(matrix, batch_size=BatchSize(4), seed=Seed(1), device=device)
@@ -104,11 +104,11 @@ def test_run_local_epoch_with_larger_proximal_coefficient_stays_closer_to_refere
     # trajectory closer to the reference rather than causing single-step overshoot.
     device = require_cuda()
     matrix = benign_frame(64).select(FEATURE_NAMES.as_list()).to_numpy()
-    seed_model = FederatedAutoencoder(AUTOENCODER.widths).to(device)
+    seed_model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     reference_state = {name: tensor.detach().clone() for name, tensor in seed_model.state_dict().items()}
 
     def run_with_coefficient(coefficient: float) -> dict[str, torch.Tensor]:
-        model = FederatedAutoencoder(AUTOENCODER.widths).to(device)
+        model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
         model.load_state_dict({name: tensor.clone() for name, tensor in reference_state.items()})
         optimizer = torch.optim.SGD(model.parameters(), lr=0.001)
         loader = build_client_loader(matrix, batch_size=BatchSize(4), seed=Seed(1), device=device)

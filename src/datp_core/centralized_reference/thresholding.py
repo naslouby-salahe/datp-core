@@ -8,12 +8,17 @@ from pathlib import Path
 import numpy as np
 
 from datp_core.centralized_reference.scoring import (
-    CentralizedScoreColumn,
     PooledScoreArtifact,
     load_score_frame,
 )
 from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
-from datp_core.domain.enums import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod, PartitionRole
+from datp_core.domain.enums import (
+    CentralizedThresholdMethod,
+    ContractSubject,
+    FederatedThresholdMethod,
+    PartitionRole,
+    ScoreFrameColumn,
+)
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import (
     Checksum,
@@ -130,11 +135,11 @@ def _validate_threshold_inputs(
 def _benign_calibration_scores(calibration_scores: PooledScoreArtifact, benign_label: str) -> np.ndarray:
     frame = load_score_frame(calibration_scores)
     labels = OutcomeLabelSequence(
-        tuple(str(value) for value in frame.get_column(CentralizedScoreColumn.OUTCOME_LABEL.value).to_list())
+        tuple(str(value) for value in frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list())
     )
     reject_attack_rows_in_benign_calibration(labels, benign_label)
     scores = np.asarray(
-        frame.get_column(CentralizedScoreColumn.RECONSTRUCTION_ERROR.value).to_list(),
+        frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list(),
         dtype=np.float64,
     )
     if scores.size == 0:

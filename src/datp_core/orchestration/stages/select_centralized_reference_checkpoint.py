@@ -23,8 +23,8 @@ class SelectCentralizedCheckpointRequest:
     preprocessing_checksum: Checksum
     split_checksum: Checksum
     training_seed_value: int
-    held_out_metrics: tuple[MetricValue, ...] | None = None
-    attack_labels_present: bool = False
+    held_out_metrics: tuple[MetricValue, ...] | None
+    attack_labels_present: bool
 
 
 @dataclass(frozen=True, slots=True)

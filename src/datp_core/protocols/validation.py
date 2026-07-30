@@ -15,12 +15,12 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.errors import ProtocolValidationError, UnresolvedScientificValueError
-from datp_core.domain.values import CalibrationSize, ConfidenceLevel
+from datp_core.domain.values import CalibrationSize
 
 from .anchor import ANCHOR_DECISION_PROTOCOL
 from .calibration import CLUSTER_THRESHOLD_PROTOCOL, MINIMUM_BENIGN_SUPPORT
 from .experiments import EXPERIMENTS
-from .metrics import SUPPRESSED_OPERATIONAL_METRICS
+from .metrics import ATTACK_SENSITIVE_METRICS, SUPPRESSED_OPERATIONAL_METRICS
 from .models import (
     AnchorDecisionProtocol,
     CalibrationEligibilityProtocol,
@@ -55,20 +55,7 @@ CONFIRMATORY_ENDPOINT = ConfirmatoryEndpoint(
     seed_cohort=CONFIRMATORY_SEED_COHORT,
     positive_direction=ConfirmatoryDeltaDirection.SHARED_MINUS_LOCAL,
     interval_method=IntervalMethod.BCA_PAIRED_ARITHMETIC_MEAN,
-    confidence_level=ConfidenceLevel(0.95),
-)
-
-_ATTACK_SENSITIVE_METRICS = (
-    MetricId.TRUE_POSITIVE_RATE,
-    MetricId.BALANCED_ACCURACY,
-    MetricId.BINARY_MACRO_F1,
-    MetricId.AUROC,
-    MetricId.P10_BINARY_MACRO_F1,
-    MetricId.WORST_CLIENT_BALANCED_ACCURACY,
-    MetricId.TPR_COEFFICIENT_OF_VARIATION,
-    MetricId.MEAN_CLIENT_MACRO_F1,
-    MetricId.POOLED_MACRO_F1,
-    MetricId.MEAN_CLIENT_BALANCED_ACCURACY,
+    confidence_level=CONFIRMATORY_INFERENCE_PROTOCOL.confidence_level,
 )
 
 
@@ -256,7 +243,7 @@ def _validate_experiment_metrics(
     traffic_rate_evidence: tuple[TrafficRateEvidence, ...],
     suppressed_experiment_ids: list[ExperimentId],
 ) -> None:
-    uses_attack_metric = any(metric in experiment.metrics for metric in _ATTACK_SENSITIVE_METRICS)
+    uses_attack_metric = any(metric in experiment.metrics for metric in ATTACK_SENSITIVE_METRICS)
     if uses_attack_metric and not population.requires_client_attack_assignment:
         raise ProtocolValidationError("Attack-sensitive metrics require attack assignment")
     if not any(metric in experiment.metrics for metric in SUPPRESSED_OPERATIONAL_METRICS):

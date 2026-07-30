@@ -13,11 +13,11 @@ from datp_core.runtime.compute import resolve_cuda_device
 
 
 def _candidates_with_favorable_non_terminal_loss(tmp_path: Path):
-    from datp_core.learning.autoencoder import FederatedAutoencoder
+    from datp_core.learning.autoencoder import ReconstructionAutoencoder
 
     coordinate = fedavg_coordinate(Seed(0))
     device = resolve_cuda_device()
-    model = FederatedAutoencoder(AUTOENCODER.widths).to(device)
+    model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
     # The non-terminal candidate is given a dramatically better ("lower") loss than the
     # terminal candidate. If any test-adjacent signal ever entered selection, this would

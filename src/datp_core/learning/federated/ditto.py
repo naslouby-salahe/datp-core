@@ -23,7 +23,7 @@ from datp_core.domain.values import (
     RoundNumber,
     Seed,
 )
-from datp_core.learning.autoencoder import FederatedAutoencoder, load_autoencoder_state
+from datp_core.learning.autoencoder import ReconstructionAutoencoder, load_autoencoder_state
 from datp_core.learning.federated.checkpointing import RoundSnapshot, retain_checkpoint_candidates
 from datp_core.learning.federated.fedavg import FedAvgClientDataset
 from datp_core.learning.federated.models import (
@@ -95,7 +95,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
         reject_centralized_preprocessing_for_federated_training(client_dataset.preprocessing_state)
 
     regularization = request.training_protocol.regularization.value
-    global_model = FederatedAutoencoder(request.autoencoder.widths).to(device)
+    global_model = ReconstructionAutoencoder(request.autoencoder.widths).to(device)
     global_state = {name: tensor.detach().clone() for name, tensor in global_model.state_dict().items()}
     personalized_states: dict[str, dict[str, torch.Tensor]] = {
         client.training_input.client.client_id: {name: tensor.detach().clone() for name, tensor in global_state.items()}
@@ -125,7 +125,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
             reject_attack_rows_in_federated_training(labels, request.benign_label.value)
             client_seed = client_round_seed(request.training_seed, client_index)
 
-            global_local_model = FederatedAutoencoder(request.autoencoder.widths).to(device)
+            global_local_model = ReconstructionAutoencoder(request.autoencoder.widths).to(device)
             load_autoencoder_state(
                 global_local_model, {name: tensor.clone() for name, tensor in reference_state.items()}
             )
@@ -146,7 +146,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 ClientTrainingResult(client=client, sample_count=sample_count, local_loss=global_local_loss)
             )
 
-            personalized_model = FederatedAutoencoder(request.autoencoder.widths).to(device)
+            personalized_model = ReconstructionAutoencoder(request.autoencoder.widths).to(device)
             load_autoencoder_state(
                 personalized_model,
                 {name: tensor.to(device) for name, tensor in personalized_states[client.client_id].items()},

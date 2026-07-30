@@ -8,11 +8,13 @@ from datp_core.domain.enums import ExperimentReadiness, FederatedThresholdMethod
 from datp_core.domain.errors import AnchorReproductionError
 from datp_core.domain.values import MetricValue, Seed
 from datp_core.orchestration.stages.verify_anchor import VerifyAnchorStageRequest, verify_anchor_stage
+from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL
 
 
 def test_stage_passes_with_typed_observations(tmp_path: Path) -> None:
     result = verify_anchor_stage(
         VerifyAnchorStageRequest(
+            protocol=ANCHOR_DECISION_PROTOCOL,
             observations=matching_anchor_observations(),
             diagnostics_directory=tmp_path,
         )
@@ -29,7 +31,7 @@ def test_stage_passes_with_typed_observations(tmp_path: Path) -> None:
 
 
 def test_stage_blocks_without_observations_and_preserves_dependency_blocker() -> None:
-    result = verify_anchor_stage()
+    result = verify_anchor_stage(VerifyAnchorStageRequest(protocol=ANCHOR_DECISION_PROTOCOL))
     assert result.status.gate_status is AnchorGateStatus.BLOCKED
     assert result.status.dependent_readiness is ExperimentReadiness.BLOCKED
     assert result.status.dependency_blocker is not None
@@ -39,13 +41,19 @@ def test_stage_blocks_without_observations_and_preserves_dependency_blocker() ->
 
 def test_stage_rejects_independent_reproduction_request() -> None:
     with pytest.raises(AnchorReproductionError, match="Phase 08"):
-        verify_anchor_stage(VerifyAnchorStageRequest(request_independent_reproduction=True))
+        verify_anchor_stage(
+            VerifyAnchorStageRequest(
+                protocol=ANCHOR_DECISION_PROTOCOL,
+                request_independent_reproduction=True,
+            )
+        )
 
 
 def test_stage_rejects_mixed_observation_inputs() -> None:
     with pytest.raises(AnchorReproductionError, match="either typed observations or historical sources"):
         verify_anchor_stage(
             VerifyAnchorStageRequest(
+                protocol=ANCHOR_DECISION_PROTOCOL,
                 observations=matching_anchor_observations(),
                 historical_sources=(
                     HistoricalMetricArtifactSource(
@@ -77,6 +85,7 @@ def test_stage_diagnostics_survive_material_failure(tmp_path: Path) -> None:
     )
     result = verify_anchor_stage(
         VerifyAnchorStageRequest(
+            protocol=ANCHOR_DECISION_PROTOCOL,
             observations=tuple(observations),
             diagnostics_directory=tmp_path,
         )

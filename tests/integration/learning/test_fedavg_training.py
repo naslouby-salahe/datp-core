@@ -81,10 +81,9 @@ def test_fedavg_end_to_end_train_select_and_score(tmp_path: Path) -> None:
 def test_fedavg_reruns_the_identical_coordinate_and_reuses_the_published_training(tmp_path: Path) -> None:
     from tests.unit.learning.federated.helpers import CLIENT_IDS, feature_protocol
 
-    from datp_core.domain.values import ClientIdentity as PreprocessingClientIdentity
-    from datp_core.orchestration.stages.preprocess_federated import ClientPreprocessPublication
+    from datp_core.domain.values import ClientPathToken as PreprocessingClientPathToken
     from datp_core.orchestration.stages.train_federated import TrainFedAvgRequest, train_fedavg_stage
-    from datp_core.preprocessing.models import ClientPreprocessingResult
+    from datp_core.preprocessing.models import ClientPreprocessingResult, ClientPreprocessPublication
 
     def publication(client_id: str, directory: Path) -> ClientPreprocessPublication:
         directory.mkdir(parents=True, exist_ok=True)
@@ -103,7 +102,7 @@ def test_fedavg_reruns_the_identical_coordinate_and_reuses_the_published_trainin
         fitted_state = FittedPreprocessingState(
             protocol=protocol,
             branch=ProcessedDataBranch.FEDERATED,
-            client_identity=PreprocessingClientIdentity(client_id),
+            client_identity=PreprocessingClientPathToken(client_id),
             estimator_path=estimator_path,
             estimator_checksum=Checksum(f"{client_id[-1]}" * 64),
             transformed_schema=protocol.transformed_schema,
@@ -111,7 +110,7 @@ def test_fedavg_reruns_the_identical_coordinate_and_reuses_the_published_trainin
             fit_partition=PartitionRole.TRAIN,
         )
         result = ClientPreprocessingResult(
-            client_identity=PreprocessingClientIdentity(client_id),
+            client_identity=PreprocessingClientPathToken(client_id),
             train_path=train_path,
             calibration_path=calibration_path,
             evaluation_path=evaluation_path,
@@ -120,7 +119,7 @@ def test_fedavg_reruns_the_identical_coordinate_and_reuses_the_published_trainin
             publication_status=PublicationStatus.PUBLISHED,
         )
         return ClientPreprocessPublication(
-            client_identity=PreprocessingClientIdentity(client_id),
+            client_identity=PreprocessingClientPathToken(client_id),
             result=result,
             publication_status=PublicationStatus.PUBLISHED,
             train_row_count=16,

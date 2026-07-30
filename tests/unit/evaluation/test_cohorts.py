@@ -5,10 +5,10 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Seed
 from datp_core.evaluation.cohorts import (
     ClientExclusionReason,
-    ClientPartitionCounts,
     assert_cohort_invariant_to_threshold_methods,
     build_evaluation_cohort_manifest,
 )
+from datp_core.populations.models import ClientPartitionCounts
 
 
 def test_confirmatory_eligible_requires_support_and_benign_eval() -> None:

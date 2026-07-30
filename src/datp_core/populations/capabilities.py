@@ -13,18 +13,35 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import CapabilityError
 from datp_core.populations.models import PopulationCapabilities
 from datp_core.protocols.models import PopulationDeclaration
+from datp_core.protocols.populations import POPULATIONS
+
+# Evidence roles are locked with population identity (catalogue reuses this map).
+POPULATION_EVIDENCE_ROLES: dict[PopulationId, EvidenceRole] = {
+    PopulationId.NBAIOT_NATURAL_DEVICES: EvidenceRole.CONFIRMATORY,
+    PopulationId.NBAIOT_DIRICHLET_CLIENTS: EvidenceRole.MECHANISM,
+    PopulationId.CICIOT_FILE_CLIENTS: EvidenceRole.APPLICABILITY_BOUNDARY,
+    PopulationId.EDGE_SENSOR_GROUPS: EvidenceRole.EXTERNAL_VALIDATION,
+    PopulationId.EDGE_TEMPORAL_GROUPS: EvidenceRole.TEMPORAL_BOUNDARY,
+}
+
+_POPULATION_DECLARATIONS: dict[PopulationId, PopulationDeclaration] = {
+    declaration.id: declaration for declaration in POPULATIONS
+}
 
 
 def population_declaration(population_id: PopulationId) -> PopulationDeclaration:
-    from datp_core.populations.catalogue import resolve_population
-
-    return resolve_population(population_id).declaration
+    try:
+        return _POPULATION_DECLARATIONS[population_id]
+    except KeyError as error:
+        raise CapabilityError(
+            f"unknown population identity {population_id.value}",
+            subject=population_id,
+        ) from error
 
 
 def population_capabilities(population_id: PopulationId) -> PopulationCapabilities:
-    from datp_core.populations.catalogue import resolve_population
-
-    return resolve_population(population_id).capabilities
+    declaration = population_declaration(population_id)
+    return build_population_capabilities(declaration, POPULATION_EVIDENCE_ROLES[population_id])
 
 
 def build_population_capabilities(

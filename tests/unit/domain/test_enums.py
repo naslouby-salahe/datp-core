@@ -18,6 +18,7 @@ from datp_core.domain.enums import (
     CompletionStatus,
     ConfirmatoryDeltaDirection,
     ContractSubject,
+    ControlledPartitionKind,
     DatasetId,
     EffectSizeId,
     EvaluationCohort,
@@ -37,9 +38,11 @@ from datp_core.domain.enums import (
     PreprocessingFitScope,
     PreprocessingProtocolId,
     ProcessedDataBranch,
+    PublicationStatus,
     RawDatasetDirectory,
     ReusableDataCoordinateKind,
     ScientificDecision,
+    ScoreFrameColumn,
     SerializationFormat,
     SplitId,
     SplitProtocolId,
@@ -395,6 +398,9 @@ EXPECTED_MEMBERS = (
         ),
     ),
     (TrainingHistoryColumn, frozenset(("EPOCH", "MEAN_TRAINING_LOSS"))),
+    (ControlledPartitionKind, frozenset(("DIRICHLET", "IID"))),
+    (PublicationStatus, frozenset(("PUBLISHED", "REUSED"))),
+    (ScoreFrameColumn, frozenset(("STABLE_ROW_ID", "OUTCOME_LABEL", "RECONSTRUCTION_ERROR"))),
 )
 
 

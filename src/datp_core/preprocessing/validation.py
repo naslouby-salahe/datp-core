@@ -25,7 +25,7 @@ from datp_core.domain.enums import (
     ProcessedDataBranch,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientIdentity, OutcomeLabelSequence, checksum_file, checksum_text
+from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabelSequence, checksum_file, checksum_text
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
     PARTITION_ROLE_COLUMN,
@@ -146,7 +146,7 @@ def validate_transformed_schema(protocol: PreprocessingProtocol, schema: Transfo
 def validate_branch_isolation(
     fitted_state: FittedPreprocessingState,
     expected_branch: ProcessedDataBranch,
-    client_identity: ClientIdentity | None,
+    client_identity: ClientPathToken | None,
 ) -> None:
     if fitted_state.branch is not expected_branch:
         raise ScientificContractError("fitted-state branch mismatch", subject=fitted_state.branch)

@@ -3,6 +3,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+import numpy as np
 import polars as pl
 
 from datp_core.artifacts.coordinates import ReusableDataCoordinate
@@ -11,10 +12,11 @@ from datp_core.artifacts.layout import (
     client_asset_path,
     federated_client_directory,
 )
-from datp_core.artifacts.serialization import TrustedScaler
+from datp_core.artifacts.serialization import TrustedScaler, construct_trusted_estimator
 from datp_core.domain.enums import PartitionRole, PreprocessingFitScope, ProcessedDataBranch
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import ClientIdentity
+from datp_core.domain.values import ClientPathToken, OutcomeLabelSequence
+from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.models import (
     ClientPreprocessingResult,
     FittedPreprocessingState,
@@ -31,11 +33,17 @@ from datp_core.preprocessing.validation import (
     validate_branch_isolation,
 )
 
+type ClientPartitionBundle = tuple[
+    Mapping[PartitionRole, pl.DataFrame],
+    Mapping[PartitionRole, tuple[str, ...]],
+    OutcomeLabelSequence,
+]
+
 
 @dataclass(frozen=True, slots=True)
 class ClientPublishRequest:
     context: PreprocessingPublishContext
-    client_identity: ClientIdentity
+    client_identity: ClientPathToken
     fitted_estimator: TrustedScaler
     partitions: Mapping[PartitionRole, pl.DataFrame]
     row_ids: Mapping[PartitionRole, Sequence[str]]
@@ -60,6 +68,76 @@ def fit_federated_preprocessing(
     batch: PreprocessingFitBatch,
 ) -> TrustedScaler:
     return fit_trusted_batch(protocol, estimator, batch, subject=protocol.fit_scope)
+
+
+def fit_estimators_for_federated_clients(
+    protocol: PreprocessingProtocol,
+    client_ids: tuple[str, ...],
+    client_partitions: Mapping[str, ClientPartitionBundle],
+) -> dict[str, TrustedScaler]:
+    """Fit client-local or pooled federated estimators from extracted partition bundles."""
+    estimator_template = construct_trusted_estimator(protocol.estimator_class_name)
+    match protocol.fit_scope:
+        case PreprocessingFitScope.CLIENT_LOCAL_TRAINING:
+            return _fit_client_local_estimators(protocol, estimator_template, client_ids, client_partitions)
+        case PreprocessingFitScope.POOLED_TRAINING:
+            return _fit_pooled_estimators(protocol, estimator_template, client_ids, client_partitions)
+        case _:
+            raise ScientificContractError(
+                "unsupported federated preprocessing fit scope",
+                subject=protocol.fit_scope,
+            )
+
+
+def _fit_client_local_estimators(
+    protocol: PreprocessingProtocol,
+    estimator_template: TrustedScaler,
+    client_ids: tuple[str, ...],
+    client_partitions: Mapping[str, ClientPartitionBundle],
+) -> dict[str, TrustedScaler]:
+    feature_names = list(protocol.input_feature_names)
+    fitted: dict[str, TrustedScaler] = {}
+    for client_id in client_ids:
+        partitions, row_ids, train_labels = client_partitions[client_id]
+        fitted[client_id] = fit_federated_preprocessing(
+            protocol,
+            estimator_template,
+            PreprocessingFitBatch(
+                training_matrix=partitions[PartitionRole.TRAIN].select(feature_names).to_numpy(),
+                training_row_ids=row_ids[PartitionRole.TRAIN],
+                training_labels=train_labels,
+                benign_label=PopulationOutcomeLabel.BENIGN,
+            ),
+        )
+    return fitted
+
+
+def _fit_pooled_estimators(
+    protocol: PreprocessingProtocol,
+    estimator_template: TrustedScaler,
+    client_ids: tuple[str, ...],
+    client_partitions: Mapping[str, ClientPartitionBundle],
+) -> dict[str, TrustedScaler]:
+    feature_names = list(protocol.input_feature_names)
+    matrices = [
+        client_partitions[client_id][0][PartitionRole.TRAIN].select(feature_names).to_numpy()
+        for client_id in client_ids
+    ]
+    row_ids = tuple(
+        row_id for client_id in client_ids for row_id in client_partitions[client_id][1][PartitionRole.TRAIN]
+    )
+    labels = OutcomeLabelSequence(tuple(label for client_id in client_ids for label in client_partitions[client_id][2]))
+    pooled = fit_federated_preprocessing(
+        protocol,
+        estimator_template,
+        PreprocessingFitBatch(
+            training_matrix=np.vstack(matrices),
+            training_row_ids=row_ids,
+            training_labels=labels,
+            benign_label=PopulationOutcomeLabel.BENIGN,
+        ),
+    )
+    return {client_id: pooled for client_id in client_ids}
 
 
 def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreprocessingResult:

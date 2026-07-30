@@ -1,20 +1,16 @@
 """Stage: federated preprocessing publication under processed coordinates."""
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-import numpy as np
 import polars as pl
 
 from datp_core.artifacts.coordinates import canonical_root_under
-from datp_core.artifacts.serialization import TrustedScaler, construct_trusted_estimator
 from datp_core.datasets.catalogue import dataset_binding
 from datp_core.domain.enums import (
     DatasetId,
     PartitionRole,
     PopulationId,
-    PreprocessingFitScope,
     PreprocessingProtocolId,
     ProcessedDataBranch,
     PublicationStatus,
@@ -22,7 +18,7 @@ from datp_core.domain.enums import (
     StageOperationId,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import ClientIdentity, OutcomeLabelSequence, Seed
+from datp_core.domain.values import ClientPathToken, Seed
 from datp_core.populations.catalogue import (
     PopulationConstructionRequest,
     PreprocessingHandoffRequest,
@@ -31,15 +27,15 @@ from datp_core.populations.catalogue import (
     join_handoff_with_canonical_features,
     resolve_population,
 )
-from datp_core.populations.models import CLIENT_ID_COLUMN, ControlledPartitionCondition, PopulationOutcomeLabel
+from datp_core.populations.models import CLIENT_ID_COLUMN, ControlledPartitionCondition
 from datp_core.preprocessing.federated import (
+    ClientPartitionBundle,
     ClientPublishRequest,
-    fit_federated_preprocessing,
+    fit_estimators_for_federated_clients,
     publish_client_preprocessing,
 )
 from datp_core.preprocessing.models import (
-    ClientPreprocessingResult,
-    PreprocessingFitBatch,
+    ClientPreprocessPublication,
     PreprocessingProtocol,
     PreprocessingPublishContext,
     build_preprocessing_protocol,
@@ -54,11 +50,6 @@ _FEDERATED_METHODS = frozenset(
         PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX,
     }
 )
-type ClientPartitionBundle = tuple[
-    Mapping[PartitionRole, pl.DataFrame],
-    Mapping[PartitionRole, tuple[str, ...]],
-    OutcomeLabelSequence,
-]
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,16 +61,6 @@ class PreprocessFederatedRequest:
     data_root: Path
     dirichlet_condition: ControlledPartitionCondition | None
     capture_timestamp_column: str | None
-
-
-@dataclass(frozen=True, slots=True)
-class ClientPreprocessPublication:
-    client_identity: ClientIdentity
-    result: ClientPreprocessingResult
-    publication_status: PublicationStatus
-    train_row_count: int
-    calibration_row_count: int
-    evaluation_row_count: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +99,7 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
             partition_seed=request.partition_seed,
             split_protocol=request.split_protocol,
             dataset=dataset,
+            deployment_fallback_client_ids=frozenset(),
             capture_timestamp_column=request.capture_timestamp_column,
         )
     )
@@ -144,7 +126,7 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
         )
         for client_id in client_ids
     }
-    fitted_by_client = _fit_estimators(protocol, client_ids, client_partitions)
+    fitted_by_client = fit_estimators_for_federated_clients(protocol, client_ids, client_partitions)
 
     publications: list[ClientPreprocessPublication] = []
     published_count = 0
@@ -154,7 +136,7 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
         result = publish_client_preprocessing(
             ClientPublishRequest(
                 context=context,
-                client_identity=ClientIdentity(client_id),
+                client_identity=ClientPathToken(client_id),
                 fitted_estimator=fitted_by_client[client_id],
                 partitions=partitions,
                 row_ids=row_ids,
@@ -186,58 +168,6 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
         published_count=published_count,
         reused_count=reused_count,
     )
-
-
-def _fit_estimators(
-    protocol: PreprocessingProtocol,
-    client_ids: tuple[str, ...],
-    client_partitions: Mapping[str, ClientPartitionBundle],
-) -> dict[str, TrustedScaler]:
-    estimator_template = construct_trusted_estimator(protocol.estimator_class_name)
-    feature_names = list(protocol.input_feature_names)
-    match protocol.fit_scope:
-        case PreprocessingFitScope.CLIENT_LOCAL_TRAINING:
-            fitted: dict[str, TrustedScaler] = {}
-            for client_id in client_ids:
-                partitions, row_ids, train_labels = client_partitions[client_id]
-                fitted[client_id] = fit_federated_preprocessing(
-                    protocol,
-                    estimator_template,
-                    PreprocessingFitBatch(
-                        training_matrix=partitions[PartitionRole.TRAIN].select(feature_names).to_numpy(),
-                        training_row_ids=row_ids[PartitionRole.TRAIN],
-                        training_labels=train_labels,
-                        benign_label=PopulationOutcomeLabel.BENIGN,
-                    ),
-                )
-            return fitted
-        case PreprocessingFitScope.POOLED_TRAINING:
-            matrices = [
-                client_partitions[client_id][0][PartitionRole.TRAIN].select(feature_names).to_numpy()
-                for client_id in client_ids
-            ]
-            row_ids = tuple(
-                row_id for client_id in client_ids for row_id in client_partitions[client_id][1][PartitionRole.TRAIN]
-            )
-            labels = OutcomeLabelSequence(
-                tuple(label for client_id in client_ids for label in client_partitions[client_id][2])
-            )
-            pooled = fit_federated_preprocessing(
-                protocol,
-                estimator_template,
-                PreprocessingFitBatch(
-                    training_matrix=np.vstack(matrices),
-                    training_row_ids=row_ids,
-                    training_labels=labels,
-                    benign_label=PopulationOutcomeLabel.BENIGN,
-                ),
-            )
-            return {client_id: pooled for client_id in client_ids}
-        case _:
-            raise ScientificContractError(
-                "unsupported federated preprocessing fit scope",
-                subject=protocol.fit_scope,
-            )
 
 
 def _validate_federated_request(request: PreprocessFederatedRequest) -> None:

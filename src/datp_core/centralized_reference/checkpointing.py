@@ -26,6 +26,7 @@ from datp_core.domain.errors import (
 )
 from datp_core.domain.values import Checksum, MetricValue, RoundNumber, checksum_file, checksum_text
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
+from datp_core.protocols.training import fixed_terminal_checkpoint_status, require_non_test_checkpoint_selection_inputs
 from datp_core.runtime.compute import resolve_cuda_device
 
 
@@ -170,21 +171,12 @@ def select_centralized_checkpoint(
     Among declared candidates, the primary is always the candidate at
     CheckpointProtocol.maximum_round. Training losses are stability evidence only.
     """
-    if held_out_metrics is not None:
-        raise LeakageError(
-            "held-out evaluation outcomes cannot influence centralized checkpoint selection",
-            subject=ContractSubject.HELD_OUT_METRICS,
-        )
-    if attack_labels_present:
-        raise LeakageError(
-            "attack labels cannot influence centralized checkpoint selection",
-            subject=ContractSubject.ATTACK_LABELS,
-        )
-    if selection_rule is not CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND:
-        raise ScientificContractError(
-            "unsupported centralized checkpoint selection rule",
-            subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
-        )
+    require_non_test_checkpoint_selection_inputs(
+        selection_rule=selection_rule,
+        held_out_metrics=held_out_metrics,
+        attack_labels_present=attack_labels_present,
+        branch_label="centralized",
+    )
     ordered = tuple(candidates)
     _reject_duplicate_or_missing_candidates(ordered, protocol)
     for candidate in ordered:
@@ -205,52 +197,46 @@ def select_centralized_checkpoint(
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
 
+    statused, selected = _statused_candidates(ordered, protocol.maximum_round)
+    return CentralizedCheckpointDecision(
+        coordinate=selected.coordinate,
+        selected=selected,
+        candidates=statused,
+        checkpoint_protocol=protocol,
+        selection_rule=selection_rule,
+        status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
+    )
+
+
+def _statused_candidates(
+    ordered: tuple[CentralizedCheckpointCandidate, ...],
+    maximum_round: RoundNumber,
+) -> tuple[tuple[CentralizedCheckpointCandidate, ...], CentralizedCheckpointCandidate]:
     statused: list[CentralizedCheckpointCandidate] = []
     selected: CentralizedCheckpointCandidate | None = None
     for item in ordered:
-        if item.round_number == protocol.maximum_round:
-            chosen = CentralizedCheckpointCandidate(
-                coordinate=item.coordinate,
-                round_number=item.round_number,
-                tensor_path=item.tensor_path,
-                tensor_checksum=item.tensor_checksum,
-                mean_training_loss=item.mean_training_loss,
-                status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
-                preprocessing_state_checksum=item.preprocessing_state_checksum,
-                split_manifest_checksum=item.split_manifest_checksum,
-                training_seed_value=item.training_seed_value,
-                autoencoder_widths=item.autoencoder_widths,
-            )
-            selected = chosen
-            statused.append(chosen)
-        else:
-            statused.append(
-                CentralizedCheckpointCandidate(
-                    coordinate=item.coordinate,
-                    round_number=item.round_number,
-                    tensor_path=item.tensor_path,
-                    tensor_checksum=item.tensor_checksum,
-                    mean_training_loss=item.mean_training_loss,
-                    status=CheckpointStatus.STABILITY_EVIDENCE,
-                    preprocessing_state_checksum=item.preprocessing_state_checksum,
-                    split_manifest_checksum=item.split_manifest_checksum,
-                    training_seed_value=item.training_seed_value,
-                    autoencoder_widths=item.autoencoder_widths,
-                )
-            )
+        status = fixed_terminal_checkpoint_status(item.round_number, maximum_round)
+        rebuilt = CentralizedCheckpointCandidate(
+            coordinate=item.coordinate,
+            round_number=item.round_number,
+            tensor_path=item.tensor_path,
+            tensor_checksum=item.tensor_checksum,
+            mean_training_loss=item.mean_training_loss,
+            status=status,
+            preprocessing_state_checksum=item.preprocessing_state_checksum,
+            split_manifest_checksum=item.split_manifest_checksum,
+            training_seed_value=item.training_seed_value,
+            autoencoder_widths=item.autoencoder_widths,
+        )
+        statused.append(rebuilt)
+        if status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
+            selected = rebuilt
     if selected is None:
         raise ArtifactIntegrityError(
             "fixed-terminal selection failed to mark the maximum-round candidate",
             subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
         )
-    return CentralizedCheckpointDecision(
-        coordinate=selected.coordinate,
-        selected=selected,
-        candidates=tuple(statused),
-        checkpoint_protocol=protocol,
-        selection_rule=selection_rule,
-        status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
-    )
+    return tuple(statused), selected
 
 
 def reject_federated_checkpoint(marker: FederatedCheckpointMarker) -> None:

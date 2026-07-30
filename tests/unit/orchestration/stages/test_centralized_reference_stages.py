@@ -71,6 +71,8 @@ def test_train_score_threshold_evaluate_stage_chain(tmp_path: Path) -> None:
             preprocessing_checksum=state.estimator_checksum,
             split_checksum=Checksum("e" * 64),
             training_seed_value=SEED.value,
+            held_out_metrics=None,
+            attack_labels_present=False,
         )
     )
     assert selection.decision.selected.round_number == CHECKPOINT.maximum_round

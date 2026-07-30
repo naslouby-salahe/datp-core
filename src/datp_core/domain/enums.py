@@ -442,3 +442,11 @@ class ContractSubject(StrEnum):
 class TrainingHistoryColumn(StrEnum):
     EPOCH = "epoch"
     MEAN_TRAINING_LOSS = "mean_training_loss"
+
+
+class ScoreFrameColumn(StrEnum):
+    """Closed column identities for reconstruction-score frames (federated and centralized)."""
+
+    STABLE_ROW_ID = "stable_row_id"
+    OUTCOME_LABEL = "outcome_label"
+    RECONSTRUCTION_ERROR = "reconstruction_error"

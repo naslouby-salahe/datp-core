@@ -1,7 +1,6 @@
 """Federated checkpoint candidate persistence and FIXED_TERMINAL_MAXIMUM_ROUND selection."""
 
 from collections.abc import Sequence
-from enum import StrEnum
 from pathlib import Path
 
 import torch
@@ -10,18 +9,18 @@ from safetensors.torch import load_file, save_file
 from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus, ContractSubject
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, RoundNumber, checksum_file, checksum_text
-from datp_core.learning.autoencoder import FederatedAutoencoder
-from datp_core.learning.federated.models import CheckpointCandidate, CheckpointDecision, FederatedTrainingCoordinate
+from datp_core.learning.autoencoder import ReconstructionAutoencoder
+from datp_core.learning.federated.models import (
+    CheckpointCandidate,
+    CheckpointDecision,
+    FederatedCheckpointAssetName,
+    FederatedTrainingCoordinate,
+    candidate_tensor_name,
+)
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
+from datp_core.protocols.training import fixed_terminal_checkpoint_status, require_non_test_checkpoint_selection_inputs
 from datp_core.runtime.compute import require_cuda_available
-
-
-class FederatedCheckpointAssetName(StrEnum):
-    CANDIDATE_PREFIX = "checkpoint_round_"
-    CANDIDATE_SUFFIX = ".safetensors"
-    PERSONALIZED_INFIX = "_client_"
-    COMPLETE = "COMPLETE"
 
 
 class RoundSnapshot:
@@ -40,13 +39,6 @@ class RoundSnapshot:
         self.mean_training_loss = mean_training_loss
 
 
-def candidate_tensor_name(round_number: RoundNumber, client: ClientIdentity | None = None) -> str:
-    base = f"{FederatedCheckpointAssetName.CANDIDATE_PREFIX}{round_number.value}"
-    if client is not None:
-        base = f"{base}{FederatedCheckpointAssetName.PERSONALIZED_INFIX}{client.client_id}"
-    return f"{base}{FederatedCheckpointAssetName.CANDIDATE_SUFFIX}"
-
-
 def persist_checkpoint_tensor(state_dict: dict[str, torch.Tensor], path: Path) -> Checksum:
     path.parent.mkdir(parents=True, exist_ok=True)
     cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
@@ -61,7 +53,7 @@ def assert_checkpoint_reload_equality(
     device: torch.device,
 ) -> None:
     require_cuda_available()
-    reloaded_model = FederatedAutoencoder(autoencoder.widths).to(device)
+    reloaded_model = ReconstructionAutoencoder(autoencoder.widths).to(device)
     loaded_state = load_file(str(path), device=str(device))
     reloaded_model.load_state_dict(loaded_state, strict=True)
     for name, tensor in state_dict.items():
@@ -130,21 +122,12 @@ def select_checkpoint(
     Among declared candidates, the primary is always the candidate at
     CheckpointProtocol.maximum_round. Training losses are stability evidence only.
     """
-    if held_out_metrics is not None:
-        raise LeakageError(
-            "held-out evaluation outcomes cannot influence federated checkpoint selection",
-            subject=ContractSubject.HELD_OUT_METRICS,
-        )
-    if attack_labels_present:
-        raise LeakageError(
-            "attack labels cannot influence federated checkpoint selection",
-            subject=ContractSubject.ATTACK_LABELS,
-        )
-    if selection_rule is not CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND:
-        raise ScientificContractError(
-            "unsupported federated checkpoint selection rule",
-            subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
-        )
+    require_non_test_checkpoint_selection_inputs(
+        selection_rule=selection_rule,
+        held_out_metrics=held_out_metrics,
+        attack_labels_present=attack_labels_present,
+        branch_label="federated",
+    )
     ordered = tuple(candidates)
     _reject_duplicate_or_missing_candidates(ordered, protocol)
     for candidate in ordered:
@@ -162,14 +145,25 @@ def select_checkpoint(
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
 
+    statused, selected = _statused_candidates(ordered, protocol.maximum_round)
+    return CheckpointDecision(
+        coordinate=coordinate,
+        client=client,
+        selected=selected,
+        candidates=statused,
+        checkpoint_protocol=protocol,
+        status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
+    )
+
+
+def _statused_candidates(
+    ordered: tuple[CheckpointCandidate, ...],
+    maximum_round: RoundNumber,
+) -> tuple[tuple[CheckpointCandidate, ...], CheckpointCandidate]:
     statused: list[CheckpointCandidate] = []
     selected: CheckpointCandidate | None = None
     for item in ordered:
-        status = (
-            CheckpointStatus.SELECTED_BY_NON_TEST_RULE
-            if item.round_number == protocol.maximum_round
-            else CheckpointStatus.STABILITY_EVIDENCE
-        )
+        status = fixed_terminal_checkpoint_status(item.round_number, maximum_round)
         rebuilt = CheckpointCandidate(
             coordinate=item.coordinate,
             round_number=item.round_number,
@@ -189,14 +183,7 @@ def select_checkpoint(
             "fixed-terminal selection failed to mark the maximum-round candidate",
             subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
         )
-    return CheckpointDecision(
-        coordinate=coordinate,
-        client=client,
-        selected=selected,
-        candidates=tuple(statused),
-        checkpoint_protocol=protocol,
-        status=CheckpointStatus.SELECTED_BY_NON_TEST_RULE,
-    )
+    return tuple(statused), selected
 
 
 def reject_centralized_checkpoint(marker_identity: str) -> None:

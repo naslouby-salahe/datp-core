@@ -10,11 +10,13 @@ from datp_core.centralized_reference.evaluation import (
     CentralizedEvaluationResult,
     evaluate_centralized_reference,
     evaluation_result_checksum,
+    write_evaluation_document,
 )
 from datp_core.centralized_reference.scoring import PooledScoreArtifact
 from datp_core.centralized_reference.thresholding import PooledThresholdResult
 from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
-from datp_core.domain.enums import PublicationStatus, StageOperationId
+from datp_core.domain.enums import ContractSubject, PublicationStatus, StageOperationId
+from datp_core.domain.errors import ArtifactIntegrityError
 from datp_core.domain.values import Checksum, checksum_file
 
 
@@ -40,10 +42,15 @@ class EvaluateCentralizedReferenceResult:
     complete_digest: Checksum
 
 
+@dataclass
+class _EvaluationBox:
+    evaluation: CentralizedEvaluationResult | None = None
+
+
 def evaluate_centralized_reference_stage(
     request: EvaluateCentralizedReferenceRequest,
 ) -> EvaluateCentralizedReferenceResult:
-    holder: dict[str, CentralizedEvaluationResult] = {}
+    box = _EvaluationBox()
 
     def write(temporary: Path) -> None:
         evaluation = evaluate_centralized_reference(
@@ -51,10 +58,10 @@ def evaluate_centralized_reference_stage(
             evaluation_scores=request.evaluation_scores,
             threshold_result=request.threshold,
         )
-        _write_evaluation_document(evaluation, temporary)
+        write_evaluation_document(evaluation, temporary)
         digest = evaluation_result_checksum(evaluation)
         (temporary / CentralizedEvaluationAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
-        holder["evaluation"] = evaluation
+        box.evaluation = evaluation
 
     reused = publish_atomically(
         AtomicPublication(
@@ -73,7 +80,12 @@ def evaluate_centralized_reference_stage(
         )
         status = PublicationStatus.REUSED
     else:
-        evaluation = holder["evaluation"]
+        if box.evaluation is None:
+            raise ArtifactIntegrityError(
+                "centralized evaluation write did not populate a result",
+                subject=ContractSubject.THRESHOLD,
+            )
+        evaluation = box.evaluation
         status = PublicationStatus.PUBLISHED
     return EvaluateCentralizedReferenceResult(
         stage=StageOperationId.EVALUATE_CENTRALIZED_REFERENCE,
@@ -81,38 +93,6 @@ def evaluate_centralized_reference_stage(
         evaluation=evaluation,
         complete_digest=checksum_file(request.output_directory / CentralizedEvaluationAssetName.COMPLETE),
     )
-
-
-def _write_evaluation_document(evaluation: CentralizedEvaluationResult, directory: Path) -> Path:
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / CentralizedEvaluationAssetName.EVALUATION
-    metrics = ",\n".join(
-        (
-            "    {"
-            f'"metric": "{item.metric.value}", '
-            f'"status": "{item.status.value}", '
-            f'"value": {("null" if item.value is None else item.value.value)}'
-            "}"
-        )
-        for item in evaluation.metrics
-    )
-    payload = (
-        "{\n"
-        f'  "threshold_method": "{evaluation.threshold_method.value}",\n'
-        f'  "decision_rule": "{evaluation.decision_rule.value}",\n'
-        f'  "threshold": {evaluation.threshold.value},\n'
-        f'  "true_negative": {evaluation.confusion.true_negative},\n'
-        f'  "false_positive": {evaluation.confusion.false_positive},\n'
-        f'  "true_positive": {evaluation.confusion.true_positive},\n'
-        f'  "false_negative": {evaluation.confusion.false_negative},\n'
-        f'  "evaluation_row_count": {evaluation.evaluation_row_count},\n'
-        f'  "evidence_role": "{evaluation.evidence_role.value}",\n'
-        f'  "is_confirmatory_ladder_member": false,\n'
-        f'  "metrics": [\n{metrics}\n  ]\n'
-        "}\n"
-    )
-    path.write_text(payload, encoding="utf-8")
-    return path
 
 
 def _is_reusable(directory: Path, request: EvaluateCentralizedReferenceRequest) -> bool:

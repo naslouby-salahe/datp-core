@@ -17,6 +17,10 @@ lint:
 	$(UV) run ruff check src tests noxfile.py
 	$(UV) run pylint src
 	$(UV) run pylint --disable=missing-module-docstring,too-few-public-methods,use-implicit-booleaness-not-comparison tests
+	$(UV) run lint-imports
+
+lint-imports:
+	$(UV) run lint-imports
 
 pylint:
 	$(UV) run pylint src

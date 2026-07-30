@@ -28,7 +28,7 @@ from datp_core.centralized_reference.training import (
 )
 from datp_core.domain.enums import PartitionRole, ProcessedDataBranch
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientIdentity, OutcomeLabelSequence
+from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabelSequence
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.models import FittedPreprocessingState
 
@@ -38,7 +38,7 @@ def test_rejects_federated_preprocessing_state(tmp_path: Path) -> None:
     state = FittedPreprocessingState(
         protocol=protocol,
         branch=ProcessedDataBranch.FEDERATED,
-        client_identity=ClientIdentity("device_a"),
+        client_identity=ClientPathToken("device_a"),
         estimator_path=tmp_path / "state.skops",
         estimator_checksum=Checksum("c" * 64),
         transformed_schema=protocol.transformed_schema,

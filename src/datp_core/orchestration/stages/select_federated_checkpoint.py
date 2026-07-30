@@ -24,8 +24,8 @@ class SelectFederatedCheckpointRequest:
     checkpoint_protocol: CheckpointProtocol
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
-    held_out_metrics: tuple[MetricValue, ...] | None = None
-    attack_labels_present: bool = False
+    held_out_metrics: tuple[MetricValue, ...] | None
+    attack_labels_present: bool
 
 
 @dataclass(frozen=True, slots=True)

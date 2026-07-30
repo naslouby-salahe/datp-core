@@ -1,6 +1,5 @@
 """Independent centralized autoencoder training for the privacy-incompatible reference."""
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -44,6 +43,7 @@ from datp_core.domain.values import (
     checksum_file,
     checksum_text,
 )
+from datp_core.learning.autoencoder import ReconstructionAutoencoder
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
     STABLE_ROW_ID_COLUMN,
@@ -73,12 +73,6 @@ class CentralizedArtifactName(StrEnum):
     MODEL_TENSORS = "model.safetensors"
     TRAINING_HISTORY = "training_history.parquet"
     COMPLETE = "COMPLETE"
-
-
-class CentralizedScoreColumn(StrEnum):
-    STABLE_ROW_ID = STABLE_ROW_ID_COLUMN
-    OUTCOME_LABEL = OUTCOME_LABEL_COLUMN
-    RECONSTRUCTION_ERROR = "reconstruction_error"
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,42 +160,6 @@ class CentralizedTrainingRequest:
     benign_label: str = PopulationOutcomeLabel.BENIGN.value
 
 
-class CentralizedAutoencoder(nn.Module):
-    """Symmetric autoencoder constructed only from the declared width tuple."""
-
-    def __init__(self, widths: Sequence[int]) -> None:
-        super().__init__()
-        if len(widths) < 2:
-            raise ScientificContractError(
-                "autoencoder widths require at least input and output layers",
-                subject=ContractSubject.WIDTHS,
-            )
-        if widths[0] != widths[-1]:
-            raise ScientificContractError(
-                "autoencoder input and output widths must match",
-                subject=ContractSubject.WIDTHS,
-            )
-        layers: list[nn.Module] = []
-        for left, right in zip(widths[:-1], widths[1:], strict=True):
-            layers.append(nn.Linear(left, right))
-            if right != widths[-1]:
-                layers.append(nn.ReLU())
-        self._network = nn.Sequential(*layers)
-        self._input_width = int(widths[0])
-        self._widths = tuple(int(width) for width in widths)
-
-    @property
-    def input_width(self) -> int:
-        return self._input_width
-
-    @property
-    def widths(self) -> tuple[int, ...]:
-        return self._widths
-
-    def forward(self, features: torch.Tensor) -> torch.Tensor:
-        return self._network(features)
-
-
 def reject_federated_preprocessing_for_training(state: FittedPreprocessingState) -> None:
     if state.branch is not ProcessedDataBranch.CENTRALIZED_REFERENCE:
         raise LeakageError(
@@ -223,8 +181,9 @@ def reject_attack_rows_in_centralized_training(labels: OutcomeLabelSequence, ben
         )
 
 
-def build_centralized_autoencoder(protocol: AutoencoderProtocol) -> CentralizedAutoencoder:
-    return CentralizedAutoencoder(protocol.widths)
+def build_centralized_autoencoder(protocol: AutoencoderProtocol) -> ReconstructionAutoencoder:
+    """Construct the centralized AE shell; training applies the declared training seed via runtime determinism."""
+    return ReconstructionAutoencoder(protocol.widths)
 
 
 def train_centralized_autoencoder(request: CentralizedTrainingRequest) -> CentralizedTrainingResult:
@@ -297,7 +256,7 @@ def load_centralized_model_tensors(
     path: Path,
     autoencoder: AutoencoderProtocol,
     device: torch.device | None = None,
-) -> CentralizedAutoencoder:
+) -> ReconstructionAutoencoder:
     require_cuda_available()
     resolved = resolve_cuda_device() if device is None else device
     if resolved.type != "cuda":
@@ -313,7 +272,7 @@ def model_from_snapshot(
     snapshot: CentralizedModelSnapshot,
     autoencoder: AutoencoderProtocol,
     device: torch.device | None = None,
-) -> CentralizedAutoencoder:
+) -> ReconstructionAutoencoder:
     require_cuda_available()
     resolved = resolve_cuda_device() if device is None else device
     model = build_centralized_autoencoder(autoencoder).to(resolved)
@@ -339,12 +298,12 @@ def persist_state_dict_tensors(state_dict: dict[str, torch.Tensor], path: Path) 
     return checksum_file(path)
 
 
-def persist_model_tensors(model: CentralizedAutoencoder, path: Path) -> Checksum:
+def persist_model_tensors(model: ReconstructionAutoencoder, path: Path) -> Checksum:
     return persist_state_dict_tensors(model.state_dict(), path)
 
 
 def assert_safetensors_reload(
-    model: CentralizedAutoencoder,
+    model: ReconstructionAutoencoder,
     path: Path,
     device: torch.device,
 ) -> None:
@@ -400,38 +359,6 @@ def require_no_hidden_scientific_defaults() -> None:
             "centralized autoencoder widths are unresolved",
             subject=ContractSubject.AUTOENCODER,
         )
-
-
-def reconstruction_errors(
-    model: CentralizedAutoencoder,
-    features: np.ndarray,
-    *,
-    batch_size: BatchSize,
-    device: torch.device,
-) -> np.ndarray:
-    """Mean per-row squared reconstruction error; higher means greater anomaly evidence."""
-    require_cuda_available()
-    if features.ndim != 2:
-        raise ScientificContractError(
-            "reconstruction scoring requires a 2-D feature matrix",
-            subject=ContractSubject.FEATURES,
-        )
-    if features.shape[1] != model.input_width:
-        raise ScientificContractError("feature width mismatch during scoring", subject=ContractSubject.FEATURES)
-    if not np.isfinite(features).all():
-        raise ScientificContractError("scoring features must be finite", subject=ContractSubject.FEATURES)
-    model.eval()
-    tensor = torch.as_tensor(features, dtype=torch.float32, device=device)
-    scores: list[np.ndarray] = []
-    with torch.inference_mode():
-        for start in range(0, tensor.shape[0], batch_size.value):
-            batch = tensor[start : start + batch_size.value]
-            reconstructed = model(batch)
-            per_row = torch.mean((reconstructed - batch) ** 2, dim=1)
-            scores.append(per_row.detach().cpu().numpy())
-    if not scores:
-        return np.asarray([], dtype=np.float64)
-    return np.concatenate(scores).astype(np.float64, copy=False)
 
 
 def _validate_training_request(request: CentralizedTrainingRequest) -> None:
@@ -492,7 +419,7 @@ def _extract_training_arrays(
 
 
 def _build_optimizer(
-    model: CentralizedAutoencoder,
+    model: ReconstructionAutoencoder,
     optimizer_protocol: OptimizerProtocol,
     learning_rate: LearningRate,
 ) -> torch.optim.Optimizer:
@@ -530,7 +457,7 @@ def _build_loader(
 
 def _run_training_epochs(
     *,
-    model: CentralizedAutoencoder,
+    model: ReconstructionAutoencoder,
     optimizer: torch.optim.Optimizer,
     loader: DataLoader,
     checkpoint_protocol: CheckpointProtocol,

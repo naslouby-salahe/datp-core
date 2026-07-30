@@ -1,6 +1,5 @@
 """Threshold-independent evaluation cohort construction."""
 
-from dataclasses import dataclass
 from enum import StrEnum
 
 from pydantic import model_validator
@@ -15,7 +14,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import CalibrationSize, Seed
 from datp_core.populations.capabilities import population_capabilities
-from datp_core.populations.models import PopulationCapabilities
+from datp_core.populations.models import ClientPartitionCounts, PopulationCapabilities
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
 
 
@@ -97,16 +96,6 @@ class EvaluationCohortManifest(StrictModel):
         if confirmatory & fallback:
             raise ValueError("deployment-fallback clients cannot enter the confirmatory cohort")
         return self
-
-
-@dataclass(frozen=True, slots=True)
-class ClientPartitionCounts:
-    client_id: str
-    benign_calibration_count: int
-    benign_evaluation_count: int
-    attack_evaluation_count: int
-    accepted: bool
-    deployment_fallback: bool
 
 
 def build_evaluation_cohort_manifest(

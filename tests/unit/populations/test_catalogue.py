@@ -38,10 +38,15 @@ def test_catalogue_constructs_and_hands_off(nbaiot_canonical_root: Path) -> None
             Seed(0),
             SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
             DatasetId.NBAIOT,
+            deployment_fallback_client_ids=frozenset(),
         )
     )
     assert handoff.assignments.height == construction.membership.height
-    assert handoff.cohort_manifest.population is PopulationId.NBAIOT_NATURAL_DEVICES
+    assert handoff.client_partition_counts
+    assert {item.client_id for item in handoff.client_partition_counts} == set(
+        construction.manifest.document.candidate_clients
+    )
+    assert all(not item.deployment_fallback for item in handoff.client_partition_counts)
 
 
 def test_dirichlet_construction_requires_explicit_condition(nbaiot_canonical_root: Path) -> None:

@@ -26,7 +26,7 @@ from datp_core.domain.values import (
     RoundNumber,
     Seed,
 )
-from datp_core.learning.autoencoder import FederatedAutoencoder, load_autoencoder_state
+from datp_core.learning.autoencoder import ReconstructionAutoencoder, load_autoencoder_state
 from datp_core.learning.federated.checkpointing import RoundSnapshot, retain_checkpoint_candidates
 from datp_core.learning.federated.fedavg import FedAvgClientDataset, FedAvgTrainingOutcome
 from datp_core.learning.federated.models import (
@@ -112,7 +112,7 @@ def train_fedprox(request: FedProxTrainingRequest) -> FedAvgTrainingOutcome:
         reject_centralized_preprocessing_for_federated_training(client_dataset.preprocessing_state)
 
     coefficient = request.training_protocol.coefficient.value
-    global_model = FederatedAutoencoder(request.autoencoder.widths).to(device)
+    global_model = ReconstructionAutoencoder(request.autoencoder.widths).to(device)
     global_state = {name: tensor.detach().clone() for name, tensor in global_model.state_dict().items()}
 
     candidate_rounds = {candidate.value for candidate in request.checkpoint_protocol.candidates}
@@ -132,7 +132,7 @@ def train_fedprox(request: FedProxTrainingRequest) -> FedAvgTrainingOutcome:
             )
             reject_attack_rows_in_federated_training(labels, request.benign_label.value)
             client_seed = client_round_seed(request.training_seed, client_index)
-            local_model = FederatedAutoencoder(request.autoencoder.widths).to(device)
+            local_model = ReconstructionAutoencoder(request.autoencoder.widths).to(device)
             load_autoencoder_state(local_model, {name: tensor.clone() for name, tensor in reference_state.items()})
             optimizer = build_optimizer(local_model, request.training_protocol.optimizer, request.learning_rate.value)
             loader = build_client_loader(matrix, batch_size=request.batch_size, seed=client_seed, device=device)

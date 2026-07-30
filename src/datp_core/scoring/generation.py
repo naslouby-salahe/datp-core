@@ -8,7 +8,13 @@ import polars as pl
 import torch
 from safetensors.torch import load_file
 
-from datp_core.domain.enums import CheckpointStatus, ContractSubject, PartitionRole, SerializationFormat
+from datp_core.domain.enums import (
+    CheckpointStatus,
+    ContractSubject,
+    PartitionRole,
+    ScoreFrameColumn,
+    SerializationFormat,
+)
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
 from datp_core.domain.values import (
     BatchSize,
@@ -18,10 +24,10 @@ from datp_core.domain.values import (
     RowCount,
     checksum_file,
 )
-from datp_core.learning.autoencoder import FederatedAutoencoder
+from datp_core.learning.autoencoder import ReconstructionAutoencoder, reconstruction_errors
 from datp_core.learning.federated.checkpointing import CheckpointCandidate
 from datp_core.learning.federated.training import extract_feature_arrays
-from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, ClientIdentity
+from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import require_cuda_available
 from datp_core.scoring.models import (
@@ -30,13 +36,7 @@ from datp_core.scoring.models import (
     ScoreGenerationResult,
     ScoreRecord,
 )
-from datp_core.scoring.reconstruction import assert_higher_score_is_anomaly_evidence, reconstruction_errors
-
-
-class FederatedScoreColumn(StrEnum):
-    STABLE_ROW_ID = STABLE_ROW_ID_COLUMN
-    OUTCOME_LABEL = OUTCOME_LABEL_COLUMN
-    RECONSTRUCTION_ERROR = "reconstruction_error"
+from datp_core.scoring.reconstruction import assert_higher_score_is_anomaly_evidence
 
 
 class FederatedScoreAssetName(StrEnum):
@@ -68,9 +68,9 @@ def load_checkpoint_model(
     checkpoint: CheckpointCandidate,
     autoencoder: AutoencoderProtocol,
     device: torch.device,
-) -> FederatedAutoencoder:
+) -> ReconstructionAutoencoder:
     require_cuda_available()
-    model = FederatedAutoencoder(autoencoder.widths).to(device)
+    model = ReconstructionAutoencoder(autoencoder.widths).to(device)
     state = load_file(str(checkpoint.tensor_path), device=str(device))
     model.load_state_dict(state, strict=True)
     model.eval()
@@ -186,7 +186,7 @@ def _score_partition(
     client: ClientIdentity,
     partition_role: PartitionRole,
     request: ScoreGenerationRequest,
-    model: FederatedAutoencoder,
+    model: ReconstructionAutoencoder,
     device: torch.device,
     destination: Path,
 ) -> ScoreRecord:
@@ -196,9 +196,9 @@ def _score_partition(
         raise ScientificContractError("score count must equal partition row count", subject=partition_role)
     output = pl.DataFrame(
         {
-            FederatedScoreColumn.STABLE_ROW_ID.value: list(row_ids),
-            FederatedScoreColumn.OUTCOME_LABEL.value: list(labels),
-            FederatedScoreColumn.RECONSTRUCTION_ERROR.value: scores.tolist(),
+            ScoreFrameColumn.STABLE_ROW_ID.value: list(row_ids),
+            ScoreFrameColumn.OUTCOME_LABEL.value: list(labels),
+            ScoreFrameColumn.RECONSTRUCTION_ERROR.value: scores.tolist(),
         }
     )
     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -217,7 +217,7 @@ def _score_partition(
     )
 
 
-def _assert_polarity(model: FederatedAutoencoder, request: ScoreGenerationRequest, device: torch.device) -> None:
+def _assert_polarity(model: ReconstructionAutoencoder, request: ScoreGenerationRequest, device: torch.device) -> None:
     for client_input in request.clients:
         matrix, _labels, _row_ids = extract_feature_arrays(client_input.calibration_features, request.feature_names)
         if matrix.shape[0] == 0:

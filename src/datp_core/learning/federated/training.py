@@ -22,7 +22,7 @@ from datp_core.domain.values import (
     RowCount,
     Seed,
 )
-from datp_core.learning.autoencoder import FederatedAutoencoder
+from datp_core.learning.autoencoder import ReconstructionAutoencoder
 from datp_core.learning.federated.models import ClientUpdate
 from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN
 from datp_core.preprocessing.models import FittedPreprocessingState
@@ -108,7 +108,7 @@ def proximal_penalty(
 
 
 def build_optimizer(
-    model: FederatedAutoencoder,
+    model: ReconstructionAutoencoder,
     optimizer_protocol: OptimizerProtocol,
     learning_rate: float,
 ) -> torch.optim.Optimizer:
@@ -132,7 +132,7 @@ class ProximalTerm:
 
 
 def run_local_epoch(
-    model: FederatedAutoencoder,
+    model: ReconstructionAutoencoder,
     optimizer: torch.optim.Optimizer,
     loader: DataLoader,
     device: torch.device,
@@ -160,7 +160,7 @@ def run_local_epoch(
 
 
 def _resolve_reference_parameters(
-    model: FederatedAutoencoder,
+    model: ReconstructionAutoencoder,
     proximal_term: ProximalTerm | None,
     device: torch.device,
 ) -> tuple[torch.Tensor, ...] | None:
@@ -170,7 +170,7 @@ def _resolve_reference_parameters(
 
 
 def _train_one_batch(
-    model: FederatedAutoencoder,
+    model: ReconstructionAutoencoder,
     optimizer: torch.optim.Optimizer,
     batch: torch.Tensor,
     reference_parameters: tuple[torch.Tensor, ...] | None,

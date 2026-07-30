@@ -1,21 +1,23 @@
-"""Shared protocol-driven autoencoder architecture for federated training."""
+"""Shared protocol-driven reconstruction autoencoder architecture."""
 
 from collections.abc import Sequence
 
+import numpy as np
 import torch
 from torch import nn
 
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Seed
+from datp_core.domain.values import BatchSize, Seed
 from datp_core.protocols.models import AutoencoderProtocol
+from datp_core.runtime.compute import require_cuda_available
 
 
-class FederatedAutoencoder(nn.Module):
+class ReconstructionAutoencoder(nn.Module):
     """Symmetric autoencoder constructed only from the declared width tuple.
 
-    No BatchNorm, dropout, or architecture addition is introduced. Reconstruction-error
-    semantics belong to scoring, never to this class.
+    No BatchNorm, dropout, or architecture addition is introduced. Per-row reconstruction-error
+    aggregation is provided by reconstruction_errors; trainers must not invent alternate score semantics.
     """
 
     def __init__(self, widths: Sequence[int]) -> None:
@@ -51,15 +53,15 @@ class FederatedAutoencoder(nn.Module):
         return self._network(features)
 
 
-def build_federated_autoencoder(
+def build_reconstruction_autoencoder(
     protocol: AutoencoderProtocol,
     *,
     initialization_seed: Seed,
-) -> FederatedAutoencoder:
+) -> ReconstructionAutoencoder:
     """Construct a fresh autoencoder with initialization deterministic from the seed."""
     generator = torch.Generator(device="cpu")
     generator.manual_seed(initialization_seed.value)
-    model = FederatedAutoencoder(protocol.widths)
+    model = ReconstructionAutoencoder(protocol.widths)
     with torch.no_grad():
         for parameter in model.parameters():
             if parameter.dim() >= 2:
@@ -71,9 +73,45 @@ def build_federated_autoencoder(
     return model
 
 
-def clone_autoencoder_state(model: FederatedAutoencoder) -> dict[str, torch.Tensor]:
+def clone_autoencoder_state(model: ReconstructionAutoencoder) -> dict[str, torch.Tensor]:
     return {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
 
 
-def load_autoencoder_state(model: FederatedAutoencoder, state: dict[str, torch.Tensor]) -> None:
+def load_autoencoder_state(model: ReconstructionAutoencoder, state: dict[str, torch.Tensor]) -> None:
     model.load_state_dict(state, strict=True)
+
+
+def _require_scoreable_feature_matrix(model: ReconstructionAutoencoder, features: np.ndarray) -> None:
+    if features.ndim != 2:
+        raise ScientificContractError(
+            "reconstruction scoring requires a 2-D feature matrix",
+            subject=ContractSubject.FEATURES,
+        )
+    if features.shape[1] != model.input_width:
+        raise ScientificContractError("feature width mismatch during scoring", subject=ContractSubject.FEATURES)
+    if not np.isfinite(features).all():
+        raise ScientificContractError("scoring features must be finite", subject=ContractSubject.FEATURES)
+
+
+def reconstruction_errors(
+    model: ReconstructionAutoencoder,
+    features: np.ndarray,
+    *,
+    batch_size: BatchSize,
+    device: torch.device,
+) -> np.ndarray:
+    """Mean per-row squared reconstruction error; higher means greater anomaly evidence."""
+    require_cuda_available()
+    _require_scoreable_feature_matrix(model, features)
+    model.eval()
+    tensor = torch.as_tensor(np.array(features, dtype=np.float32), device=device)
+    scores: list[np.ndarray] = []
+    with torch.inference_mode():
+        for start in range(0, tensor.shape[0], batch_size.value):
+            batch = tensor[start : start + batch_size.value]
+            reconstructed = model(batch)
+            per_row = torch.mean((reconstructed - batch) ** 2, dim=1)
+            scores.append(per_row.detach().cpu().numpy())
+    if not scores:
+        return np.asarray([], dtype=np.float64)
+    return np.concatenate(scores).astype(np.float64, copy=False)

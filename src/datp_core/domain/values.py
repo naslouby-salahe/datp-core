@@ -320,14 +320,14 @@ class Checksum:
 
 
 @dataclass(frozen=True, slots=True)
-class ClientIdentity:
+class ClientPathToken:
     value: str
 
     def __post_init__(self) -> None:
         if not isinstance(self.value, str) or not self.value:
-            raise ValueError("client identity must be non-empty")
+            raise ValueError("client path token must be non-empty")
         if self.value in {".", ".."} or any(token in self.value for token in ("=", "/", "\\")):
-            raise ValueError("client identity must be a single non-relative path segment without key=value syntax")
+            raise ValueError("client path token must be a single non-relative path segment without key=value syntax")
 
 
 def checksum_text(payload: str) -> Checksum:

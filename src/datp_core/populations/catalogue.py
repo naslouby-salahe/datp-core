@@ -7,6 +7,7 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.domain.enums import (
+    ContractSubject,
     ControlledPartitionKind,
     DatasetId,
     EvidenceRole,
@@ -16,12 +17,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import CapabilityError, ScientificContractError
 from datp_core.domain.values import Seed
-from datp_core.evaluation.cohorts import (
-    ClientPartitionCounts,
-    EvaluationCohortManifest,
-    build_evaluation_cohort_manifest,
-)
-from datp_core.populations.capabilities import build_population_capabilities
+from datp_core.populations.capabilities import POPULATION_EVIDENCE_ROLES, population_capabilities
 from datp_core.populations.ciciot_file_clients import build_ciciot_file_clients
 from datp_core.populations.edge_sensor_groups import build_edge_sensor_groups
 from datp_core.populations.edge_temporal_groups import build_edge_temporal_groups
@@ -30,6 +26,7 @@ from datp_core.populations.models import (
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
     ChronologicalPartitionDiagnostics,
+    ClientPartitionCounts,
     CohortAggregationColumn,
     ControlledPartitionCondition,
     DirichletPartitionDiagnostics,
@@ -85,17 +82,18 @@ class PreprocessingHandoffRequest:
     partition_seed: Seed
     split_protocol: SplitProtocolId
     dataset: DatasetId
+    deployment_fallback_client_ids: frozenset[str]
     capture_timestamp_column: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class PreprocessingHandoff:
-    """Typed boundary from populations/splits/cohorts into Phase 04 preprocessing."""
+    """Typed boundary from populations/splits into preprocessing."""
 
     population_manifest: PopulationManifest
     membership: pl.DataFrame
     assignments: pl.DataFrame
-    cohort_manifest: EvaluationCohortManifest
+    client_partition_counts: tuple[ClientPartitionCounts, ...]
 
 
 def resolve_population(population_id: PopulationId) -> PopulationBinding:
@@ -183,36 +181,36 @@ def _construct_edge_temporal_groups(request: PopulationConstructionRequest) -> P
 _POPULATION_BINDINGS: dict[PopulationId, PopulationBinding] = {
     PopulationId.NBAIOT_NATURAL_DEVICES: PopulationBinding(
         NBAIOT_NATURAL_DEVICES,
-        EvidenceRole.CONFIRMATORY,
-        build_population_capabilities(NBAIOT_NATURAL_DEVICES, EvidenceRole.CONFIRMATORY),
+        POPULATION_EVIDENCE_ROLES[PopulationId.NBAIOT_NATURAL_DEVICES],
+        population_capabilities(PopulationId.NBAIOT_NATURAL_DEVICES),
         frozenset(),
         _construct_nbaiot_natural,
     ),
     PopulationId.NBAIOT_DIRICHLET_CLIENTS: PopulationBinding(
         NBAIOT_DIRICHLET_CLIENTS,
-        EvidenceRole.MECHANISM,
-        build_population_capabilities(NBAIOT_DIRICHLET_CLIENTS, EvidenceRole.MECHANISM),
+        POPULATION_EVIDENCE_ROLES[PopulationId.NBAIOT_DIRICHLET_CLIENTS],
+        population_capabilities(PopulationId.NBAIOT_DIRICHLET_CLIENTS),
         frozenset(ControlledPartitionKind),
         _construct_nbaiot_dirichlet,
     ),
     PopulationId.CICIOT_FILE_CLIENTS: PopulationBinding(
         CICIOT_FILE_CLIENTS,
-        EvidenceRole.APPLICABILITY_BOUNDARY,
-        build_population_capabilities(CICIOT_FILE_CLIENTS, EvidenceRole.APPLICABILITY_BOUNDARY),
+        POPULATION_EVIDENCE_ROLES[PopulationId.CICIOT_FILE_CLIENTS],
+        population_capabilities(PopulationId.CICIOT_FILE_CLIENTS),
         frozenset(),
         _construct_ciciot_file_clients,
     ),
     PopulationId.EDGE_SENSOR_GROUPS: PopulationBinding(
         EDGE_SENSOR_GROUPS,
-        EvidenceRole.EXTERNAL_VALIDATION,
-        build_population_capabilities(EDGE_SENSOR_GROUPS, EvidenceRole.EXTERNAL_VALIDATION),
+        POPULATION_EVIDENCE_ROLES[PopulationId.EDGE_SENSOR_GROUPS],
+        population_capabilities(PopulationId.EDGE_SENSOR_GROUPS),
         frozenset(),
         _construct_edge_sensor_groups,
     ),
     PopulationId.EDGE_TEMPORAL_GROUPS: PopulationBinding(
         EDGE_TEMPORAL_GROUPS,
-        EvidenceRole.TEMPORAL_BOUNDARY,
-        build_population_capabilities(EDGE_TEMPORAL_GROUPS, EvidenceRole.TEMPORAL_BOUNDARY),
+        POPULATION_EVIDENCE_ROLES[PopulationId.EDGE_TEMPORAL_GROUPS],
+        population_capabilities(PopulationId.EDGE_TEMPORAL_GROUPS),
         frozenset(),
         _construct_edge_temporal_groups,
     ),
@@ -226,19 +224,23 @@ def build_preprocessing_handoff(request: PreprocessingHandoffRequest) -> Preproc
     dataset = request.dataset
     capture_timestamp_column = request.capture_timestamp_column
     membership = construction.membership
+    candidate_clients = construction.manifest.document.candidate_clients
+    _validate_deployment_fallback_clients(candidate_clients, request.deployment_fallback_client_ids)
     role_col = PopulationFrameColumn.PARTITION_ROLE
     if membership.height == 0:
         empty_assignments = membership.clear().with_columns(pl.lit(None, dtype=pl.String).alias(role_col))
-        cohort = build_evaluation_cohort_manifest(
-            population=construction.population,
-            partition_seed=partition_seed,
-            client_counts=tuple(
-                # deployment_fallback signal is not yet wired; membership belongs to Phase 12 campaign scope.
-                ClientPartitionCounts(client_id, 0, 0, 0, False, False)
-                for client_id in construction.manifest.document.candidate_clients
-            ),
+        counts = tuple(
+            ClientPartitionCounts(
+                client_id=client_id,
+                benign_calibration_count=0,
+                benign_evaluation_count=0,
+                attack_evaluation_count=0,
+                accepted=False,
+                deployment_fallback=client_id in request.deployment_fallback_client_ids,
+            )
+            for client_id in candidate_clients
         )
-        return PreprocessingHandoff(construction.manifest, membership, empty_assignments, cohort)
+        return PreprocessingHandoff(construction.manifest, membership, empty_assignments, counts)
 
     assignments, _split_manifest = split_membership(
         SplitConstructionRequest(
@@ -251,13 +253,12 @@ def build_preprocessing_handoff(request: PreprocessingHandoffRequest) -> Preproc
             capture_timestamp_column=capture_timestamp_column,
         )
     )
-    counts = _client_partition_counts(assignments, construction.manifest.document.candidate_clients)
-    cohort = build_evaluation_cohort_manifest(
-        population=construction.population,
-        partition_seed=partition_seed,
-        client_counts=counts,
+    counts = _client_partition_counts(
+        assignments,
+        candidate_clients,
+        deployment_fallback_client_ids=request.deployment_fallback_client_ids,
     )
-    return PreprocessingHandoff(construction.manifest, membership, assignments, cohort)
+    return PreprocessingHandoff(construction.manifest, membership, assignments, counts)
 
 
 def join_handoff_with_canonical_features(
@@ -287,8 +288,24 @@ def join_handoff_with_canonical_features(
     return joined
 
 
+def _validate_deployment_fallback_clients(
+    candidate_clients: tuple[str, ...],
+    deployment_fallback_client_ids: frozenset[str],
+) -> None:
+    candidates = frozenset(candidate_clients)
+    unknown = deployment_fallback_client_ids - candidates
+    if unknown:
+        raise ScientificContractError(
+            "deployment-fallback client ids must be subset of population candidate clients",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+
+
 def _client_partition_counts(
-    assignments: pl.DataFrame, candidate_clients: tuple[str, ...]
+    assignments: pl.DataFrame,
+    candidate_clients: tuple[str, ...],
+    *,
+    deployment_fallback_client_ids: frozenset[str],
 ) -> tuple[ClientPartitionCounts, ...]:
     client_col = PopulationFrameColumn.CLIENT_ID
     role_col = PopulationFrameColumn.PARTITION_ROLE
@@ -324,8 +341,7 @@ def _client_partition_counts(
             benign_evaluation_count=int(row[2]),
             attack_evaluation_count=int(row[3]),
             accepted=str(row[0]) in accepted,
-            # deployment_fallback signal is not yet wired; membership belongs to Phase 12 campaign scope.
-            deployment_fallback=False,
+            deployment_fallback=str(row[0]) in deployment_fallback_client_ids,
         )
         for row in joined.iter_rows()
     )

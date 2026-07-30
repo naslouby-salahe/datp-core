@@ -3,16 +3,17 @@
 from dataclasses import dataclass
 from enum import StrEnum
 from math import isfinite
+from pathlib import Path
 
 import numpy as np
 
 from datp_core.centralized_reference.scoring import (
-    CentralizedScoreColumn,
     PooledScoreArtifact,
     load_score_frame,
 )
 from datp_core.centralized_reference.thresholding import PooledThresholdResult
 from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     AvailabilityStatus,
     CentralizedThresholdMethod,
@@ -21,6 +22,7 @@ from datp_core.domain.enums import (
     FederatedThresholdMethod,
     MetricId,
     PartitionRole,
+    ScoreFrameColumn,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, ThresholdValue, checksum_text
@@ -29,12 +31,6 @@ from datp_core.populations.models import PopulationOutcomeLabel
 
 class CentralizedDecisionRule(StrEnum):
     SCORE_STRICTLY_GREATER_THAN_THRESHOLD = "score_strictly_greater_than_threshold"
-
-
-class CentralizedMetricAvailability(StrEnum):
-    AVAILABLE = AvailabilityStatus.AVAILABLE.value
-    UNAVAILABLE = AvailabilityStatus.UNAVAILABLE.value
-    UNDEFINED = AvailabilityStatus.UNDEFINED.value
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,11 +54,11 @@ class ConfusionCounts:
 @dataclass(frozen=True, slots=True)
 class CentralizedMetricRecord:
     metric: MetricId
-    status: CentralizedMetricAvailability
+    status: AvailabilityStatus
     value: MetricValue | None
 
     def __post_init__(self) -> None:
-        if self.status is CentralizedMetricAvailability.AVAILABLE:
+        if self.status is AvailabilityStatus.AVAILABLE:
             if self.value is None:
                 raise ValueError("available metrics require a numeric value")
         elif self.value is not None:
@@ -167,9 +163,9 @@ def _validate_evaluation_inputs(
 
 def _evaluation_arrays(evaluation_scores: PooledScoreArtifact) -> tuple[np.ndarray, np.ndarray]:
     frame = load_score_frame(evaluation_scores)
-    labels = np.asarray(frame.get_column(CentralizedScoreColumn.OUTCOME_LABEL.value).to_list(), dtype=object)
+    labels = np.asarray(frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list(), dtype=object)
     scores = np.asarray(
-        frame.get_column(CentralizedScoreColumn.RECONSTRUCTION_ERROR.value).to_list(),
+        frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list(),
         dtype=np.float64,
     )
     if scores.shape[0] != labels.shape[0]:
@@ -205,6 +201,54 @@ def reject_b1_b4_insertion(method: FederatedThresholdMethod) -> None:
         "centralized reference cannot be inserted into B1-B4 federated comparisons",
         subject=method,
     )
+
+
+class CentralizedMetricDocument(StrictModel):
+    metric: MetricId
+    status: AvailabilityStatus
+    value: float | None
+
+
+class CentralizedEvaluationDocument(StrictModel):
+    threshold_method: CentralizedThresholdMethod
+    decision_rule: CentralizedDecisionRule
+    threshold: float
+    true_negative: int
+    false_positive: int
+    true_positive: int
+    false_negative: int
+    evaluation_row_count: int
+    evidence_role: EvidenceRole
+    is_confirmatory_ladder_member: bool
+    metrics: tuple[CentralizedMetricDocument, ...]
+
+
+def write_evaluation_document(evaluation: CentralizedEvaluationResult, directory: Path) -> Path:
+    """Persist centralized evaluation as a typed JSON document under directory."""
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / "centralized_evaluation.json"
+    document = CentralizedEvaluationDocument(
+        threshold_method=evaluation.threshold_method,
+        decision_rule=evaluation.decision_rule,
+        threshold=evaluation.threshold.value,
+        true_negative=evaluation.confusion.true_negative,
+        false_positive=evaluation.confusion.false_positive,
+        true_positive=evaluation.confusion.true_positive,
+        false_negative=evaluation.confusion.false_negative,
+        evaluation_row_count=evaluation.evaluation_row_count,
+        evidence_role=evaluation.evidence_role,
+        is_confirmatory_ladder_member=evaluation.is_confirmatory_ladder_member,
+        metrics=tuple(
+            CentralizedMetricDocument(
+                metric=item.metric,
+                status=item.status,
+                value=None if item.value is None else item.value.value,
+            )
+            for item in evaluation.metrics
+        ),
+    )
+    path.write_text(document.model_dump_json(indent=2) + "\n", encoding="utf-8")
+    return path
 
 
 def evaluation_result_checksum(result: CentralizedEvaluationResult) -> Checksum:
@@ -286,10 +330,10 @@ def _pooled_metrics(
 
 def _rate_metric(metric: MetricId, numerator: int, denominator: int) -> CentralizedMetricRecord:
     if denominator == 0:
-        return CentralizedMetricRecord(metric=metric, status=CentralizedMetricAvailability.UNAVAILABLE, value=None)
+        return CentralizedMetricRecord(metric=metric, status=AvailabilityStatus.UNAVAILABLE, value=None)
     return CentralizedMetricRecord(
         metric=metric,
-        status=CentralizedMetricAvailability.AVAILABLE,
+        status=AvailabilityStatus.AVAILABLE,
         value=MetricValue(numerator / denominator),
     )
 
@@ -298,25 +342,22 @@ def _balanced_accuracy(
     fpr: CentralizedMetricRecord,
     tpr: CentralizedMetricRecord,
 ) -> CentralizedMetricRecord:
-    if (
-        fpr.status is not CentralizedMetricAvailability.AVAILABLE
-        or tpr.status is not CentralizedMetricAvailability.AVAILABLE
-    ):
+    if fpr.status is not AvailabilityStatus.AVAILABLE or tpr.status is not AvailabilityStatus.AVAILABLE:
         return CentralizedMetricRecord(
             metric=MetricId.BALANCED_ACCURACY,
-            status=CentralizedMetricAvailability.UNAVAILABLE,
+            status=AvailabilityStatus.UNAVAILABLE,
             value=None,
         )
     if fpr.value is None or tpr.value is None:
         return CentralizedMetricRecord(
             metric=MetricId.BALANCED_ACCURACY,
-            status=CentralizedMetricAvailability.UNAVAILABLE,
+            status=AvailabilityStatus.UNAVAILABLE,
             value=None,
         )
     specificity = 1.0 - fpr.value.value
     return CentralizedMetricRecord(
         metric=MetricId.BALANCED_ACCURACY,
-        status=CentralizedMetricAvailability.AVAILABLE,
+        status=AvailabilityStatus.AVAILABLE,
         value=MetricValue(0.5 * (tpr.value.value + specificity)),
     )
 
@@ -335,7 +376,7 @@ def _macro_f1_record(metric: MetricId, confusion: ConfusionCounts) -> Centralize
     benign_precision_den = confusion.true_negative + confusion.false_negative
     benign_recall_den = confusion.true_negative + confusion.false_positive
     if min(attack_precision_den, attack_recall_den, benign_precision_den, benign_recall_den) == 0:
-        return CentralizedMetricRecord(metric=metric, status=CentralizedMetricAvailability.UNAVAILABLE, value=None)
+        return CentralizedMetricRecord(metric=metric, status=AvailabilityStatus.UNAVAILABLE, value=None)
     attack_precision = confusion.true_positive / attack_precision_den
     attack_recall = confusion.true_positive / attack_recall_den
     benign_precision = confusion.true_negative / benign_precision_den
@@ -343,10 +384,10 @@ def _macro_f1_record(metric: MetricId, confusion: ConfusionCounts) -> Centralize
     attack_f1 = _f1(attack_precision, attack_recall)
     benign_f1 = _f1(benign_precision, benign_recall)
     if attack_f1 is None or benign_f1 is None:
-        return CentralizedMetricRecord(metric=metric, status=CentralizedMetricAvailability.UNDEFINED, value=None)
+        return CentralizedMetricRecord(metric=metric, status=AvailabilityStatus.UNDEFINED, value=None)
     return CentralizedMetricRecord(
         metric=metric,
-        status=CentralizedMetricAvailability.AVAILABLE,
+        status=AvailabilityStatus.AVAILABLE,
         value=MetricValue(0.5 * (attack_f1 + benign_f1)),
     )
 
@@ -372,7 +413,7 @@ def _auroc(
     if binary.min() == binary.max():
         return CentralizedMetricRecord(
             metric=MetricId.AUROC,
-            status=CentralizedMetricAvailability.UNAVAILABLE,
+            status=AvailabilityStatus.UNAVAILABLE,
             value=None,
         )
     order = np.argsort(scores, kind="mergesort")
@@ -383,7 +424,7 @@ def _auroc(
     if n_pos == 0.0 or n_neg == 0.0:
         return CentralizedMetricRecord(
             metric=MetricId.AUROC,
-            status=CentralizedMetricAvailability.UNAVAILABLE,
+            status=AvailabilityStatus.UNAVAILABLE,
             value=None,
         )
     ranks = _average_ranks(sorted_scores)
@@ -392,12 +433,12 @@ def _auroc(
     if not isfinite(auc):
         return CentralizedMetricRecord(
             metric=MetricId.AUROC,
-            status=CentralizedMetricAvailability.UNDEFINED,
+            status=AvailabilityStatus.UNDEFINED,
             value=None,
         )
     return CentralizedMetricRecord(
         metric=MetricId.AUROC,
-        status=CentralizedMetricAvailability.AVAILABLE,
+        status=AvailabilityStatus.AVAILABLE,
         value=MetricValue(auc),
     )
 

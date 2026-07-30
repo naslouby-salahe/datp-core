@@ -244,6 +244,24 @@ class ChronologicalPartitionDiagnosticsDocument(StrictModel):
 
 
 @dataclass(frozen=True, slots=True)
+class ClientPartitionCounts:
+    """Per-client partition support counts used to construct evaluation cohorts."""
+
+    client_id: str
+    benign_calibration_count: int
+    benign_evaluation_count: int
+    attack_evaluation_count: int
+    accepted: bool
+    deployment_fallback: bool
+
+    def __post_init__(self) -> None:
+        if not self.client_id:
+            raise ValueError("client partition counts require a client identity")
+        if min(self.benign_calibration_count, self.benign_evaluation_count, self.attack_evaluation_count) < 0:
+            raise ValueError("partition support counts must be non-negative")
+
+
+@dataclass(frozen=True, slots=True)
 class ClientIdentity:
     population: PopulationId
     client_id: str
