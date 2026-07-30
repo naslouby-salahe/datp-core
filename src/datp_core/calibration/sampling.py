@@ -22,10 +22,10 @@ from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 
 
-def replicate_seed(training_seed: Seed, client: ClientIdentity, replicate_index: ReplicateIndex) -> int:
+def replicate_seed(training_seed: Seed, client: ClientIdentity, replicate_index: ReplicateIndex) -> Seed:
     """Derive one deterministic permutation seed for a (seed, client, replicate) triple."""
     payload = f"{training_seed.value}|{client.population.value}|{client.client_id}|{replicate_index.value}"
-    return int(checksum_text(payload).value, 16)
+    return Seed(int(checksum_text(payload).value, 16))
 
 
 def build_calibration_replicate(
@@ -49,7 +49,7 @@ def build_calibration_replicate(
             subject=ContractSubject.CALIBRATION,
         )
     ordered = tuple(sorted(references, key=lambda reference: reference.stable_row_id))
-    generator = default_rng(replicate_seed(training_seed, client, replicate_index))
+    generator = default_rng(replicate_seed(training_seed, client, replicate_index).value)
     permutation = generator.permutation(len(ordered))
     permuted = tuple(ordered[index] for index in permutation)
 

@@ -24,11 +24,14 @@ from datp_core.domain.values import (
     BatchSize,
     Checksum,
     ClientCount,
+    DittoRegularization,
     FeatureNameSequence,
     LearningRate,
     LocalEpochCount,
     ProximalCoefficient,
+    RowCount,
     RoundNumber,
+    Seed,
 )
 from datp_core.domain.values import ClientPathToken as PreprocessingClientIdentity
 from datp_core.learning.federated.fedavg import FedAvgClientDataset
@@ -74,7 +77,7 @@ FEDAVG_PROTOCOL = FedAvgProtocol(
 )
 
 
-def fedavg_coordinate(seed) -> FederatedTrainingCoordinate:
+def fedavg_coordinate(seed: Seed) -> FederatedTrainingCoordinate:
     return FederatedTrainingCoordinate(
         population=POPULATION,
         training_seed=seed,
@@ -85,7 +88,7 @@ def fedavg_coordinate(seed) -> FederatedTrainingCoordinate:
     )
 
 
-def fedprox_coordinate(seed, coefficient: ProximalCoefficient) -> FederatedTrainingCoordinate:
+def fedprox_coordinate(seed: Seed, coefficient: ProximalCoefficient) -> FederatedTrainingCoordinate:
     return FederatedTrainingCoordinate(
         population=POPULATION,
         training_seed=seed,
@@ -105,7 +108,7 @@ def fedprox_protocol(coefficient: ProximalCoefficient) -> FedProxProtocol:
     )
 
 
-def ditto_coordinates(seed):
+def ditto_coordinates(seed: Seed) -> tuple[FederatedTrainingCoordinate, FederatedTrainingCoordinate, DittoRegularization]:
     regularization = DITTO_REGULARIZATION_GRID[1]
     global_coordinate = FederatedTrainingCoordinate(
         population=POPULATION,
@@ -126,7 +129,7 @@ def ditto_coordinates(seed):
     return global_coordinate, personalized_coordinate, regularization
 
 
-def ditto_protocol(regularization) -> DittoProtocol:
+def ditto_protocol(regularization: DittoRegularization) -> DittoProtocol:
     return DittoProtocol(kind=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER, regularization=regularization)
 
 
@@ -167,20 +170,20 @@ def fitted_state(path: Path, client_id: str, *, checksum_suffix: str = "a") -> F
     )
 
 
-def benign_frame(row_count: int, *, seed: int = 0, label: str = PopulationOutcomeLabel.BENIGN.value) -> pl.DataFrame:
-    generator = np.random.default_rng(seed)
-    matrix = generator.normal(size=(row_count, len(FEATURE_NAMES))).astype(np.float32)
+def benign_frame(row_count: RowCount, *, seed: Seed = Seed(0), label: str = PopulationOutcomeLabel.BENIGN.value) -> pl.DataFrame:
+    generator = np.random.default_rng(seed.value)
+    matrix = generator.normal(size=(row_count.value, len(FEATURE_NAMES))).astype(np.float32)
     return pl.DataFrame(
         {
-            STABLE_ROW_ID_COLUMN: [f"row-{seed}-{index}" for index in range(row_count)],
-            OUTCOME_LABEL_COLUMN: [label] * row_count,
+            STABLE_ROW_ID_COLUMN: [f"row-{seed.value}-{index}" for index in range(row_count.value)],
+            OUTCOME_LABEL_COLUMN: [label] * row_count.value,
             **{name: matrix[:, index] for index, name in enumerate(FEATURE_NAMES.names)},
         }
     )
 
 
 def build_client_dataset(
-    client_id: str, output_directory: Path, *, row_count: int = 16, seed: int = 0
+    client_id: str, output_directory: Path, *, row_count: RowCount = RowCount(16), seed: Seed = Seed(0)
 ) -> FedAvgClientDataset:
     training_input = ClientTrainingInput(
         client=client_identity(client_id),
@@ -193,7 +196,7 @@ def build_client_dataset(
 
 def build_all_client_datasets(output_directory: Path) -> tuple[FedAvgClientDataset, ...]:
     return tuple(
-        build_client_dataset(client_id, output_directory, seed=index) for index, client_id in enumerate(CLIENT_IDS)
+        build_client_dataset(client_id, output_directory, seed=Seed(index)) for index, client_id in enumerate(CLIENT_IDS)
     )
 
 

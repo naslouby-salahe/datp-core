@@ -36,7 +36,7 @@ from scipy.stats import norm
 from datp_core.calibration.models import CalibrationSampleReference
 from datp_core.domain.enums import AvailabilityStatus, ContractSubject, QuantileInterpolationSemantics
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, CoverageTarget, Quantile, RowCount, ThresholdValue, checksum_text
+from datp_core.domain.values import Checksum, CoverageTarget, Quantile, RowCount, SummaryCoefficient, ThresholdValue, checksum_text
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 from datp_core.thresholding.models import LocalQuantile, ThresholdDiagnostic
@@ -189,7 +189,7 @@ def gaussian_matched_exceedance_threshold(mean: float, variance: float, quantile
     return ThresholdValue(value)
 
 
-def fixed_coefficient_threshold(mean: float, variance: float, coefficient: float) -> ThresholdValue:
+def fixed_coefficient_threshold(mean: float, variance: float, coefficient: SummaryCoefficient) -> ThresholdValue:
     if variance < 0:
         raise ScientificContractError("variance must be non-negative", subject=ContractSubject.THRESHOLD)
-    return ThresholdValue(mean + coefficient * sqrt(variance))
+    return ThresholdValue(mean + coefficient.value * sqrt(variance))

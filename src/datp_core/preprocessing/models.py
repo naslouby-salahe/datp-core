@@ -175,7 +175,7 @@ class PreprocessingManifest(StrictModel):
     canonical_schema_checksum: Checksum
     input_feature_names: tuple[str, ...]
     transformed_feature_names: tuple[str, ...]
-    estimator_class: str
+    estimator_class_name: TrustedEstimatorClassName
     serialization_format: SerializationFormat
     asset_paths: tuple[str, ...]
     fit_partition: PartitionRole

@@ -13,6 +13,7 @@ import pyarrow.parquet as pq
 from datp_core.datasets.materialization import canonical_provenance_arrow_field
 from datp_core.datasets.models import CanonicalProvenanceColumn, ChronologyValidation
 from datp_core.domain.enums import AvailabilityStatus
+from datp_core.domain.values import RowCount
 
 from .schema import EdgeArtifactSuffix, EdgeCanonicalColumn, source_relative_path
 
@@ -83,19 +84,19 @@ class _PcapAligner:
         return ChronologyValidation(
             group_identity=group_identity,
             status=AvailabilityStatus.AVAILABLE,
-            total_rows=self.total_rows,
-            parseable_rows=self.total_rows,
-            invalid_rows=0,
+            total_rows=RowCount(self.total_rows),
+            parseable_rows=RowCount(self.total_rows),
+            invalid_rows=RowCount(0),
             duplicate_timestamp_count=self.duplicate_timestamp_count,
             is_monotonic=is_monotonic,
             reason=reason,
             temporal_eligible=True,
             evidence_source_path=source_relative_path(self.pcap_path),
-            evidence_row_count=self.total_rows + self.skipped_evidence_rows + self.trailing_evidence_rows,
+            evidence_row_count=RowCount(self.total_rows + self.skipped_evidence_rows + self.trailing_evidence_rows),
             alignment_verified=True,
             alignment_offset_microseconds=self.alignment_offset_microseconds,
-            skipped_evidence_rows=self.skipped_evidence_rows,
-            trailing_evidence_rows=self.trailing_evidence_rows,
+            skipped_evidence_rows=RowCount(self.skipped_evidence_rows),
+            trailing_evidence_rows=RowCount(self.trailing_evidence_rows),
         )
 
     def _first_match(self, clocks: Iterator[int], records: Iterator[_PcapRecord]) -> _PcapRecord:
@@ -177,9 +178,9 @@ def _unavailable_validation(group_identity: str, csv_path: Path, reason: str) ->
     return ChronologyValidation(
         group_identity=group_identity,
         status=AvailabilityStatus.UNAVAILABLE,
-        total_rows=total_rows,
-        parseable_rows=0,
-        invalid_rows=total_rows,
+        total_rows=RowCount(total_rows),
+        parseable_rows=RowCount(0),
+        invalid_rows=RowCount(total_rows),
         duplicate_timestamp_count=0,
         is_monotonic=False,
         reason=reason,

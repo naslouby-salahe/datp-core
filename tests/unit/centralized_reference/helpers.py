@@ -31,6 +31,7 @@ from datp_core.domain.values import (
     FeatureNameSequence,
     LearningRate,
     OutcomeLabelSequence,
+    RowCount,
     RoundNumber,
     Seed,
     WeightDecay,
@@ -105,22 +106,22 @@ def fitted_state(path: Path) -> FittedPreprocessingState:
     )
 
 
-def benign_frame(row_count: int, *, seed: int = 0, label: str = PopulationOutcomeLabel.BENIGN.value) -> pl.DataFrame:
-    generator = np.random.default_rng(seed)
-    matrix = generator.normal(size=(row_count, len(FEATURE_NAMES))).astype(np.float32)
+def benign_frame(row_count: RowCount, *, seed: Seed = Seed(0), label: str = PopulationOutcomeLabel.BENIGN.value) -> pl.DataFrame:
+    generator = np.random.default_rng(seed.value)
+    matrix = generator.normal(size=(row_count.value, len(FEATURE_NAMES))).astype(np.float32)
     return pl.DataFrame(
         {
-            STABLE_ROW_ID_COLUMN: [f"row-{seed}-{index}" for index in range(row_count)],
-            OUTCOME_LABEL_COLUMN: [label] * row_count,
+            STABLE_ROW_ID_COLUMN: [f"row-{seed.value}-{index}" for index in range(row_count.value)],
+            OUTCOME_LABEL_COLUMN: [label] * row_count.value,
             **{name: matrix[:, index] for index, name in enumerate(FEATURE_NAMES.names)},
         }
     )
 
 
-def mixed_evaluation_frame(row_count: int = 64, *, seed: int = 1) -> pl.DataFrame:
-    half = row_count // 2
+def mixed_evaluation_frame(row_count: RowCount = RowCount(64), *, seed: Seed = Seed(1)) -> pl.DataFrame:
+    half = RowCount(row_count.value // 2)
     benign = benign_frame(half, seed=seed, label=PopulationOutcomeLabel.BENIGN.value)
-    attack = benign_frame(row_count - half, seed=seed + 1, label=PopulationOutcomeLabel.ATTACK.value)
+    attack = benign_frame(RowCount(row_count.value - half.value), seed=Seed(seed.value + 1), label=PopulationOutcomeLabel.ATTACK.value)
     attack = attack.with_columns((pl.col("f0") + 4.0).alias("f0"))
     return pl.concat([benign, attack], how="vertical")
 
@@ -130,7 +131,7 @@ def run_miniature_training(output_directory: Path) -> CentralizedTrainingResult:
     return train_centralized_autoencoder(
         CentralizedTrainingRequest(
             coordinate=training_coordinate(),
-            training_features=benign_frame(64, seed=0),
+            training_features=benign_frame(RowCount(64), seed=Seed(0)),
             feature_names=FEATURE_NAMES,
             preprocessing_state=state,
             split_manifest_checksum=Checksum("b" * 64),

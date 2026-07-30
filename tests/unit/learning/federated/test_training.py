@@ -10,7 +10,7 @@ from tests.unit.learning.federated.helpers import (
 )
 
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import BatchSize, Checksum, OutcomeLabelSequence, RowCount, Seed
+from datp_core.domain.values import BatchSize, Checksum, OutcomeLabelSequence, ProximalCoefficient, RowCount, Seed
 from datp_core.learning.autoencoder import ReconstructionAutoencoder
 from datp_core.learning.federated.models import ClientUpdate
 from datp_core.learning.federated.training import (
@@ -38,7 +38,7 @@ def test_client_round_seed_is_deterministic_and_client_specific() -> None:
 
 
 def test_extract_feature_arrays_rejects_row_misalignment() -> None:
-    frame = benign_frame(8)
+    frame = benign_frame(RowCount(8))
     matrix, labels, row_ids = extract_feature_arrays(frame, FEATURE_NAMES)
     assert matrix.shape == (8, 4)
     assert len(labels) == 8
@@ -67,7 +67,7 @@ def test_reject_centralized_preprocessing_for_federated_training(tmp_path) -> No
 
 def test_build_client_loader_is_deterministic_given_the_same_seed() -> None:
     device = require_cuda()
-    matrix = benign_frame(8).select(FEATURE_NAMES.as_list()).to_numpy()
+    matrix = benign_frame(RowCount(8)).select(FEATURE_NAMES.as_list()).to_numpy()
     first = build_client_loader(matrix, batch_size=BatchSize(4), seed=Seed(1), device=device)
     second = build_client_loader(matrix, batch_size=BatchSize(4), seed=Seed(1), device=device)
     first_batches = [batch[0].cpu().tolist() for batch in first]
@@ -79,7 +79,7 @@ def test_run_local_epoch_requires_at_least_one_full_batch() -> None:
     device = require_cuda()
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    short_matrix = benign_frame(2).select(FEATURE_NAMES.as_list()).to_numpy()
+    short_matrix = benign_frame(RowCount(2)).select(FEATURE_NAMES.as_list()).to_numpy()
     loader = build_client_loader(short_matrix, batch_size=BatchSize(4), seed=Seed(1), device=device)
     with pytest.raises(ScientificContractError, match="no batches"):
         run_local_epoch(model, optimizer, loader, device)
@@ -89,7 +89,7 @@ def test_run_local_epoch_returns_full_state_and_positive_sample_count() -> None:
     device = require_cuda()
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    matrix = benign_frame(8).select(FEATURE_NAMES.as_list()).to_numpy()
+    matrix = benign_frame(RowCount(8)).select(FEATURE_NAMES.as_list()).to_numpy()
     loader = build_client_loader(matrix, batch_size=BatchSize(4), seed=Seed(1), device=device)
     state, loss, sample_count = run_local_epoch(model, optimizer, loader, device)
     assert set(state.keys()) == set(model.state_dict().keys())
@@ -103,7 +103,7 @@ def test_run_local_epoch_with_larger_proximal_coefficient_stays_closer_to_refere
     # steps, to stay in the regime where a bigger quadratic penalty reliably pulls the
     # trajectory closer to the reference rather than causing single-step overshoot.
     device = require_cuda()
-    matrix = benign_frame(64).select(FEATURE_NAMES.as_list()).to_numpy()
+    matrix = benign_frame(RowCount(64)).select(FEATURE_NAMES.as_list()).to_numpy()
     seed_model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     reference_state = {name: tensor.detach().clone() for name, tensor in seed_model.state_dict().items()}
 
@@ -117,11 +117,11 @@ def test_run_local_epoch_with_larger_proximal_coefficient_stays_closer_to_refere
             optimizer,
             loader,
             device,
-            proximal_term=ProximalTerm(reference_state=reference_state, coefficient=coefficient),
+            proximal_term=ProximalTerm(reference_state=reference_state, coefficient=ProximalCoefficient(coefficient)),
         )
         return {name: torch.sum((tensor.cpu() - reference_state[name].cpu()) ** 2) for name, tensor in state.items()}
 
-    small_coefficient_drift = run_with_coefficient(0.0)
+    small_coefficient_drift = run_with_coefficient(1e-6)
     large_coefficient_drift = run_with_coefficient(100.0)
     total_small = sum(float(value) for value in small_coefficient_drift.values())
     total_large = sum(float(value) for value in large_coefficient_drift.values())

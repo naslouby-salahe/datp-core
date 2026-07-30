@@ -9,6 +9,7 @@ from datp_core.datasets.ciciot2023.schema import (
     CICIOT2023_RAW_COLUMNS,
 )
 from datp_core.domain.enums import AvailabilityStatus, PublicationStatus
+from datp_core.domain.values import RowCount
 
 
 def _write_merged(path, rate: str, label: str) -> None:
@@ -45,11 +46,11 @@ def test_ciciot_rate_anomalies_are_preserved_with_an_unavailable_report(tmp_path
     _, _, report = materializer.audit((source,))
 
     assert report.status is AvailabilityStatus.UNAVAILABLE
-    assert report.invalid_rows == 1
+    assert report.invalid_rows == RowCount(1)
     published = materializer.materialize((source,), tmp_path / "canonical")
     assert published.validation_report is not None
     assert published.validation_report.status is AvailabilityStatus.UNAVAILABLE
-    assert published.validation_report.invalid_rows == 1
+    assert published.validation_report.invalid_rows == RowCount(1)
 
 
 def test_ciciot_rebuilds_when_the_persisted_eligibility_policy_changes(tmp_path) -> None:

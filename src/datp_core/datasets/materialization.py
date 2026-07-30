@@ -45,7 +45,7 @@ from datp_core.datasets.models import (
     SourceFileRole,
 )
 from datp_core.domain.enums import DatasetId, PublicationStatus
-from datp_core.domain.values import ByteCount, Checksum, checksum_file, checksum_text
+from datp_core.domain.values import ByteCount, Checksum, RowCount, checksum_file, checksum_text
 from datp_core.protocols.runtime import DATA_ROOT
 
 _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_artifact_names()
@@ -152,7 +152,7 @@ def raw_source_file(
     dataset: DatasetId,
     path: Path,
     role: SourceFileRole,
-    observed_row_count: int | None,
+    observed_row_count: RowCount | None,
     source_path_resolver: SourcePathResolver,
 ) -> RawSourceFile:
     return RawSourceFile(
@@ -182,13 +182,15 @@ def raw_inventory(dataset: DatasetId, sources: tuple[RawSourceFile, ...]) -> Raw
     )
 
 
-def _inventory_row_count(sources: tuple[RawSourceFile, ...]) -> int | None:
+def _inventory_row_count(sources: tuple[RawSourceFile, ...]) -> RowCount | None:
     representation_sources = tuple(
         source for source in sources if source.role is not SourceFileRole.CHRONOLOGY_EVIDENCE
     )
     if not all(source.observed_row_count is not None for source in representation_sources):
         return None
-    return sum(source.observed_row_count for source in representation_sources if source.observed_row_count is not None)
+    return RowCount(
+        sum(source.observed_row_count.value for source in representation_sources if source.observed_row_count is not None)
+    )
 
 
 def _inventory_checksum(sources: tuple[RawSourceFile, ...]) -> Checksum:
@@ -295,7 +297,7 @@ def stream_parquet[AssetRoleT: StrEnum](
     return CanonicalAsset(
         relative_path=layout.relative_path,
         checksum=checksum_file(destination),
-        row_count=parquet.metadata.num_rows,
+        row_count=RowCount(parquet.metadata.num_rows),
         columns=tuple(actual_schema.names),
         role=layout.role,
         source_identity=layout.source_identity,
@@ -416,17 +418,17 @@ def _materialized_dataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     )
 
 
-def _asset_row_count[AssetRoleT: StrEnum](target: Path, layout: CanonicalAssetLayout[AssetRoleT]) -> int:
-    return pq.ParquetFile(canonical_asset_path(target, layout.relative_path)).metadata.num_rows
+def _asset_row_count[AssetRoleT: StrEnum](target: Path, layout: CanonicalAssetLayout[AssetRoleT]) -> RowCount:
+    return RowCount(pq.ParquetFile(canonical_asset_path(target, layout.relative_path)).metadata.num_rows)
 
 
 def _logical_row_count[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     publication: CanonicalPublication[AssetRoleT, EligibilityReasonT],
     assets: tuple[MaterializedCanonicalAsset[AssetRoleT], ...],
-) -> int:
+) -> RowCount:
     if publication.inventory.accepted_row_count is not None:
         return publication.inventory.accepted_row_count
-    return sum(asset.row_count for asset in assets if asset.role is CanonicalAssetRole.CANONICAL_DATA)
+    return RowCount(sum(asset.row_count.value for asset in assets if asset.role is CanonicalAssetRole.CANONICAL_DATA))
 
 
 def _remove_target(target: Path, canonical_root: Path) -> None:

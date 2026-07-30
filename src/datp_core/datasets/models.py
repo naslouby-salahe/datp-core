@@ -9,7 +9,7 @@ from pydantic import Field
 import datp_core.domain.enums as domain_enums
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import ByteCount, Checksum, checksum_text
+from datp_core.domain.values import ByteCount, Checksum, RowCount, checksum_text
 
 
 class SourceFileRole(StrEnum):
@@ -90,13 +90,11 @@ class RawSourceFile:
     size_bytes: ByteCount
     checksum: Checksum
     role: SourceFileRole
-    observed_row_count: int | None
+    observed_row_count: RowCount | None
 
     def __post_init__(self) -> None:
         if self.relative_path.is_absolute():
             raise ValueError("raw source paths must be relative")
-        if self.observed_row_count is not None and self.observed_row_count < 0:
-            raise ValueError("observed row count must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,7 +103,7 @@ class RawDatasetInventory:
     sources: tuple[RawSourceFile, ...]
     accepted_source_count: int
     excluded_source_count: int
-    accepted_row_count: int | None
+    accepted_row_count: RowCount | None
     checksum: Checksum
 
     def __post_init__(self) -> None:
@@ -206,15 +204,14 @@ class DatasetValidationReport:
     dataset: DatasetId
     issues: tuple[DatasetValidationIssue, ...]
     exclusions: tuple[DatasetExclusion, ...]
-    accepted_rows: int
-    excluded_rows: int
-    invalid_rows: int
+    accepted_rows: RowCount
+    excluded_rows: RowCount
+    invalid_rows: RowCount
     warning_count: int
     status: AvailabilityStatus
 
     def __post_init__(self) -> None:
         _validate_report_collections(self.issues, self.exclusions)
-        _validate_non_negative_counts(self.accepted_rows, self.excluded_rows, self.invalid_rows, self.warning_count)
         if self.warning_count != _warning_count(self.issues):
             raise ValueError("warning count must match warning issues")
         if self.excluded_rows != _excluded_row_count(self.exclusions):
@@ -278,11 +275,9 @@ def _validate_inventory_sources(sources: tuple[RawSourceFile, ...], accepted_sou
         raise ValueError("raw inventory source paths must be unique")
 
 
-def _validate_inventory_counts(excluded_source_count: int, accepted_row_count: int | None) -> None:
+def _validate_inventory_counts(excluded_source_count: int, accepted_row_count: RowCount | None) -> None:
     if excluded_source_count < 0:
         raise ValueError("excluded source count must be non-negative")
-    if accepted_row_count is not None and accepted_row_count < 0:
-        raise ValueError("accepted row count must be non-negative")
 
 
 def _validate_report_collections(
@@ -303,20 +298,20 @@ def _warning_count(issues: tuple[DatasetValidationIssue, ...]) -> int:
     return sum(issue.severity is ValidationSeverity.WARNING for issue in issues)
 
 
-def _excluded_row_count(exclusions: tuple[DatasetExclusion, ...]) -> int:
-    return sum(exclusion.affected_count for exclusion in exclusions)
+def _excluded_row_count(exclusions: tuple[DatasetExclusion, ...]) -> RowCount:
+    return RowCount(sum(exclusion.affected_count for exclusion in exclusions))
 
 
 @dataclass(frozen=True, slots=True)
 class MaterializedCanonicalAsset[AssetRoleT: StrEnum]:
     path: Path
     role: AssetRoleT
-    row_count: int
+    row_count: RowCount
     source_identity: str | None = None
 
     def __post_init__(self) -> None:
-        if not self.path.is_absolute() or self.row_count < 0:
-            raise ValueError("materialized canonical assets require an absolute path and non-negative row count")
+        if not self.path.is_absolute():
+            raise ValueError("materialized canonical assets require an absolute path")
 
 
 @dataclass(frozen=True, slots=True)
@@ -326,7 +321,7 @@ class MaterializedDataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     assets: tuple[MaterializedCanonicalAsset[AssetRoleT], ...]
     manifest_path: Path
     schema: CanonicalSchema
-    row_count: int
+    row_count: RowCount
     source_inventory_checksum: Checksum
     publication_status: domain_enums.PublicationStatus
     inventory: RawDatasetInventory
@@ -337,27 +332,25 @@ class MaterializedDataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum]:
     def __post_init__(self) -> None:
         if not isinstance(self.assets, tuple) or not self.assets:
             raise ValueError("materialized datasets require immutable canonical assets")
-        if self.row_count < 0:
-            raise ValueError("materialized row count must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
 class ChronologyValidation:
     group_identity: str
     status: AvailabilityStatus
-    total_rows: int
-    parseable_rows: int
-    invalid_rows: int
+    total_rows: RowCount
+    parseable_rows: RowCount
+    invalid_rows: RowCount
     duplicate_timestamp_count: int
     is_monotonic: bool
     reason: str
     temporal_eligible: bool
     evidence_source_path: Path | None = None
-    evidence_row_count: int | None = None
+    evidence_row_count: RowCount | None = None
     alignment_verified: bool = False
     alignment_offset_microseconds: int | None = None
-    skipped_evidence_rows: int = 0
-    trailing_evidence_rows: int = 0
+    skipped_evidence_rows: RowCount = RowCount(0)
+    trailing_evidence_rows: RowCount = RowCount(0)
 
     def __post_init__(self) -> None:
         _validate_chronology_identity(self)
@@ -377,11 +370,14 @@ def _validate_chronology_evidence(validation: ChronologyValidation) -> None:
 
 
 def _validate_evidence_counts(validation: ChronologyValidation) -> None:
-    _validate_optional_non_negative(validation.evidence_row_count, "chronology evidence row counts")
+    _validate_optional_non_negative(
+        validation.evidence_row_count.value if validation.evidence_row_count is not None else None,
+        "chronology evidence row counts",
+    )
     _validate_optional_non_negative(validation.alignment_offset_microseconds, "chronology alignment offsets")
     _validate_non_negative_pair(
-        validation.skipped_evidence_rows,
-        validation.trailing_evidence_rows,
+        validation.skipped_evidence_rows.value,
+        validation.trailing_evidence_rows.value,
         "skipped and trailing chronology evidence rows",
     )
 
@@ -408,17 +404,14 @@ def _validate_evidence_path(validation: ChronologyValidation) -> None:
 
 
 def _validate_chronology_counts(validation: ChronologyValidation) -> None:
-    if (
-        min(
-            validation.total_rows,
-            validation.parseable_rows,
-            validation.invalid_rows,
-            validation.duplicate_timestamp_count,
-        )
-        < 0
-    ):
+    if min(
+        validation.total_rows.value,
+        validation.parseable_rows.value,
+        validation.invalid_rows.value,
+        validation.duplicate_timestamp_count,
+    ) < 0:
         raise ValueError("chronology counts must be non-negative")
-    if validation.parseable_rows + validation.invalid_rows != validation.total_rows:
+    if validation.parseable_rows.value + validation.invalid_rows.value != validation.total_rows.value:
         raise ValueError("parseable and invalid chronology rows must total all rows")
 
 
@@ -488,7 +481,7 @@ class RawSourceDocument(PublicationDocument):
             checksum=source.checksum.value,
             path=source.relative_path.as_posix(),
             role=source.role,
-            row_count=source.observed_row_count,
+            row_count=source.observed_row_count.value if source.observed_row_count is not None else None,
             size_bytes=source.size_bytes.value,
         )
 
@@ -499,7 +492,7 @@ class RawSourceDocument(PublicationDocument):
             ByteCount(self.size_bytes),
             Checksum(self.checksum),
             self.role,
-            self.row_count,
+            RowCount(self.row_count) if self.row_count is not None else None,
         )
 
 
@@ -513,7 +506,7 @@ class RawInventoryDocument(PublicationDocument):
     @classmethod
     def from_inventory(cls, inventory: RawDatasetInventory) -> "RawInventoryDocument":
         return cls(
-            accepted_row_count=inventory.accepted_row_count,
+            accepted_row_count=inventory.accepted_row_count.value if inventory.accepted_row_count is not None else None,
             accepted_source_count=inventory.accepted_source_count,
             checksum=inventory.checksum.value,
             excluded_source_count=inventory.excluded_source_count,
@@ -527,7 +520,7 @@ class RawInventoryDocument(PublicationDocument):
             sources,
             self.accepted_source_count,
             self.excluded_source_count,
-            self.accepted_row_count,
+            RowCount(self.accepted_row_count) if self.accepted_row_count is not None else None,
             Checksum(self.checksum),
         )
 
@@ -590,10 +583,10 @@ class ValidationReportDocument(PublicationDocument):
     @classmethod
     def from_report(cls, report: DatasetValidationReport) -> "ValidationReportDocument":
         return cls(
-            accepted_rows=report.accepted_rows,
-            excluded_rows=report.excluded_rows,
+            accepted_rows=report.accepted_rows.value,
+            excluded_rows=report.excluded_rows.value,
             exclusions=tuple(ExclusionDocument.from_exclusion(item) for item in report.exclusions),
-            invalid_rows=report.invalid_rows,
+            invalid_rows=report.invalid_rows.value,
             issues=tuple(ValidationIssueDocument.from_issue(item) for item in report.issues),
             status=report.status,
             warning_count=report.warning_count,
@@ -632,39 +625,41 @@ class ChronologyDocument(PublicationDocument):
             alignment_offset_microseconds=validation.alignment_offset_microseconds,
             alignment_verified=validation.alignment_verified,
             duplicate_timestamp_count=validation.duplicate_timestamp_count,
-            evidence_row_count=validation.evidence_row_count,
+            evidence_row_count=(
+                validation.evidence_row_count.value if validation.evidence_row_count is not None else None
+            ),
             evidence_source_path=(
                 None if validation.evidence_source_path is None else validation.evidence_source_path.as_posix()
             ),
             group_identity=validation.group_identity,
-            invalid_rows=validation.invalid_rows,
+            invalid_rows=validation.invalid_rows.value,
             is_monotonic=validation.is_monotonic,
-            parseable_rows=validation.parseable_rows,
+            parseable_rows=validation.parseable_rows.value,
             reason=validation.reason,
-            skipped_evidence_rows=validation.skipped_evidence_rows,
+            skipped_evidence_rows=validation.skipped_evidence_rows.value,
             status=validation.status,
             temporal_eligible=validation.temporal_eligible,
-            total_rows=validation.total_rows,
-            trailing_evidence_rows=validation.trailing_evidence_rows,
+            total_rows=validation.total_rows.value,
+            trailing_evidence_rows=validation.trailing_evidence_rows.value,
         )
 
     def to_validation(self) -> ChronologyValidation:
         return ChronologyValidation(
             self.group_identity,
             self.status,
-            self.total_rows,
-            self.parseable_rows,
-            self.invalid_rows,
+            RowCount(self.total_rows),
+            RowCount(self.parseable_rows),
+            RowCount(self.invalid_rows),
             self.duplicate_timestamp_count,
             self.is_monotonic,
             self.reason,
             self.temporal_eligible,
             None if self.evidence_source_path is None else Path(self.evidence_source_path),
-            self.evidence_row_count,
+            RowCount(self.evidence_row_count) if self.evidence_row_count is not None else None,
             self.alignment_verified,
             self.alignment_offset_microseconds,
-            self.skipped_evidence_rows,
-            self.trailing_evidence_rows,
+            RowCount(self.skipped_evidence_rows),
+            RowCount(self.trailing_evidence_rows),
         )
 
 

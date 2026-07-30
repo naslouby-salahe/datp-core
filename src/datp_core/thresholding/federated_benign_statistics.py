@@ -119,7 +119,7 @@ def construct_federated_benign_statistics(
         FixedCoefficientResult(
             coefficient=coefficient,
             threshold=fixed_coefficient_threshold(
-                decomposition.global_mean, decomposition.full_pooled_variance, coefficient.value
+                decomposition.global_mean, decomposition.full_pooled_variance, coefficient
             ),
         )
         for coefficient in protocol.coefficients

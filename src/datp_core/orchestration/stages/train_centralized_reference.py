@@ -228,7 +228,7 @@ def _load_reused_training(
                 status=CheckpointStatus.CANDIDATE,
                 preprocessing_state_checksum=request.preprocessing_state.estimator_checksum,
                 split_manifest_checksum=request.split_manifest_checksum,
-                training_seed_value=request.training_seed.value,
+                training_seed=request.training_seed,
                 autoencoder_widths=tuple(request.autoencoder.widths),
             )
         )
@@ -301,7 +301,7 @@ def _rebase_candidates(
                 status=candidate.status,
                 preprocessing_state_checksum=candidate.preprocessing_state_checksum,
                 split_manifest_checksum=candidate.split_manifest_checksum,
-                training_seed_value=candidate.training_seed_value,
+                training_seed=candidate.training_seed,
                 autoencoder_widths=candidate.autoencoder_widths,
             )
         )

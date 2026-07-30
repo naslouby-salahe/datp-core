@@ -17,7 +17,7 @@ from datp_core.centralized_reference.checkpointing import FederatedCheckpointMar
 from datp_core.centralized_reference.thresholding import CENTRALIZED_POOLED_QUANTILE_PROTOCOL
 from datp_core.domain.enums import PublicationStatus, StageOperationId
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import Checksum
+from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.orchestration.stages.construct_centralized_reference_threshold import (
     ConstructCentralizedThresholdRequest,
     construct_centralized_reference_threshold_stage,
@@ -48,7 +48,7 @@ def test_train_score_threshold_evaluate_stage_chain(tmp_path: Path) -> None:
     train_result = train_centralized_reference_stage(
         TrainCentralizedReferenceRequest(
             coordinate=coordinate,
-            training_features=benign_frame(320, seed=0),
+            training_features=benign_frame(RowCount(320), seed=Seed(0)),
             feature_names=FEATURE_NAMES,
             preprocessing_state=state,
             split_manifest_checksum=Checksum("e" * 64),
@@ -70,7 +70,7 @@ def test_train_score_threshold_evaluate_stage_chain(tmp_path: Path) -> None:
             checkpoint_protocol=CHECKPOINT,
             preprocessing_checksum=state.estimator_checksum,
             split_checksum=Checksum("e" * 64),
-            training_seed_value=SEED.value,
+            training_seed=SEED,
             held_out_metrics=None,
             attack_labels_present=False,
         )
@@ -84,8 +84,8 @@ def test_train_score_threshold_evaluate_stage_chain(tmp_path: Path) -> None:
             checkpoint=selection.decision.selected,
             autoencoder=AUTOENCODER,
             feature_names=FEATURE_NAMES,
-            calibration_features=benign_frame(48, seed=20),
-            evaluation_features=mixed_evaluation_frame(40, seed=21),
+            calibration_features=benign_frame(RowCount(48), seed=Seed(20)),
+            evaluation_features=mixed_evaluation_frame(RowCount(40), seed=Seed(21)),
             batch_size=DECLARED_BATCH_SIZE,
             output_directory=tmp_path / "scores",
             preprocessing_state_checksum=state.estimator_checksum,
@@ -120,7 +120,7 @@ def test_train_score_threshold_evaluate_stage_chain(tmp_path: Path) -> None:
     reused = train_centralized_reference_stage(
         TrainCentralizedReferenceRequest(
             coordinate=coordinate,
-            training_features=benign_frame(320, seed=0),
+            training_features=benign_frame(RowCount(320), seed=Seed(0)),
             feature_names=FEATURE_NAMES,
             preprocessing_state=state,
             split_manifest_checksum=Checksum("e" * 64),

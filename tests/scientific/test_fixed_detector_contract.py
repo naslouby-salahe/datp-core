@@ -6,6 +6,7 @@ import polars as pl
 from tests.unit.learning.federated.helpers import AUTOENCODER, BATCH_SIZE, FEATURE_NAMES, benign_frame, client_identity
 from tests.unit.scoring.helpers import selected_checkpoint
 
+from datp_core.domain.values import RowCount, Seed
 from datp_core.learning.federated.checkpointing import CheckpointDecision
 from datp_core.learning.federated.models import CheckpointCandidate, FederatedTrainingCoordinate
 from datp_core.runtime.compute import resolve_cuda_device
@@ -45,8 +46,8 @@ def _scored_result(tmp_path):
     clients = (
         ClientScoringInput(
             client=client_identity("client_a"),
-            calibration_features=benign_frame(8, seed=1),
-            evaluation_features=benign_frame(8, seed=2),
+            calibration_features=benign_frame(RowCount(8), seed=Seed(1)),
+            evaluation_features=benign_frame(RowCount(8), seed=Seed(2)),
         ),
     )
     result = generate_federated_scores(

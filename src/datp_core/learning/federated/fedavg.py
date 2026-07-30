@@ -116,7 +116,7 @@ def train_fedavg(request: FedAvgTrainingRequest) -> FedAvgTrainingOutcome:
             client_seed = client_round_seed(request.training_seed, client_index)
             local_model = ReconstructionAutoencoder(request.autoencoder.widths).to(device)
             load_autoencoder_state(local_model, {name: tensor.to(device) for name, tensor in global_state.items()})
-            optimizer = build_optimizer(local_model, request.training_protocol.optimizer, request.learning_rate.value)
+            optimizer = build_optimizer(local_model, request.training_protocol.optimizer, request.learning_rate)
             loader = build_client_loader(matrix, batch_size=request.batch_size, seed=client_seed, device=device)
             local_state, local_loss, sample_count = run_local_epoch(local_model, optimizer, loader, device)
             client = client_dataset.training_input.client

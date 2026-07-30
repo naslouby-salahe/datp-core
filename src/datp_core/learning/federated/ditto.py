@@ -20,6 +20,7 @@ from datp_core.domain.values import (
     ClientCount,
     LearningRate,
     MetricValue,
+    ProximalCoefficient,
     RoundNumber,
     Seed,
 )
@@ -129,7 +130,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
             load_autoencoder_state(
                 global_local_model, {name: tensor.clone() for name, tensor in reference_state.items()}
             )
-            global_optimizer = build_optimizer(global_local_model, OPTIMIZER, request.learning_rate.value)
+            global_optimizer = build_optimizer(global_local_model, OPTIMIZER, request.learning_rate)
             global_loader = build_client_loader(matrix, batch_size=request.batch_size, seed=client_seed, device=device)
             global_local_state, global_local_loss, sample_count = run_local_epoch(
                 global_local_model, global_optimizer, global_loader, device
@@ -151,7 +152,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 personalized_model,
                 {name: tensor.to(device) for name, tensor in personalized_states[client.client_id].items()},
             )
-            personalized_optimizer = build_optimizer(personalized_model, OPTIMIZER, request.learning_rate.value)
+            personalized_optimizer = build_optimizer(personalized_model, OPTIMIZER, request.learning_rate)
             personalized_loader = build_client_loader(
                 matrix, batch_size=request.batch_size, seed=client_seed, device=device
             )
@@ -160,7 +161,9 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 personalized_optimizer,
                 personalized_loader,
                 device,
-                proximal_term=ProximalTerm(reference_state=reference_state, coefficient=regularization),
+                proximal_term=ProximalTerm(
+                    reference_state=reference_state, coefficient=ProximalCoefficient(regularization)
+                ),
             )
             personalized_states[client.client_id] = personalized_state
             if round_index in candidate_rounds:

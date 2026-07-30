@@ -27,7 +27,8 @@ def test_paired_pcap_supplies_genuine_chronology(tmp_path) -> None:
 
     assert chronology.validation.temporal_eligible is True
     assert chronology.validation.alignment_verified is True
-    assert chronology.validation.evidence_row_count == 2
+    assert chronology.validation.evidence_row_count is not None
+    assert chronology.validation.evidence_row_count.value == 2
 
 
 def test_unmatched_pcap_is_not_chronology(tmp_path) -> None:

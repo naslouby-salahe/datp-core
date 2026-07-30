@@ -17,7 +17,7 @@ from tests.unit.learning.federated.helpers import (
 )
 
 from datp_core.domain.enums import PublicationStatus
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.domain.values import ClientPathToken as PreprocessingClientPathToken
 from datp_core.orchestration.stages.score_federated import ScoreFederatedRequest, score_federated_stage
 from datp_core.orchestration.stages.select_federated_checkpoint import (
@@ -34,9 +34,9 @@ def _client_publication(client_id: str, directory: Path) -> ClientPreprocessPubl
     train_path = directory / "train.parquet"
     calibration_path = directory / "calibration.parquet"
     evaluation_path = directory / "evaluation.parquet"
-    benign_frame(16, seed=hash(client_id) % 1000).write_parquet(train_path)
-    benign_frame(8, seed=(hash(client_id) + 1) % 1000).write_parquet(calibration_path)
-    benign_frame(8, seed=(hash(client_id) + 2) % 1000).write_parquet(evaluation_path)
+    benign_frame(RowCount(16), seed=Seed(hash(client_id) % 1000)).write_parquet(train_path)
+    benign_frame(RowCount(8), seed=Seed((hash(client_id) + 1) % 1000)).write_parquet(calibration_path)
+    benign_frame(RowCount(8), seed=Seed((hash(client_id) + 2) % 1000)).write_parquet(evaluation_path)
     estimator_path = directory / "state.skops"
     estimator_path.write_bytes(b"placeholder")
     protocol = feature_protocol()

@@ -13,7 +13,7 @@ from datp_core.domain.enums import (
     StageOperationId,
 )
 from datp_core.domain.errors import DataIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount, Seed
+from datp_core.domain.values import Checksum, ClientCount, RowCount, Seed
 from datp_core.populations.capabilities import population_capabilities, population_declaration
 from datp_core.populations.models import (
     CLIENT_ID_COLUMN,
@@ -114,11 +114,11 @@ def validate_no_future_history_leakage(assignments: pl.DataFrame, capture_timest
 
 def validate_dirichlet_conservation(
     membership: pl.DataFrame,
-    source_row_count: int,
-    client_count: int,
+    source_row_count: RowCount,
+    client_count: ClientCount,
 ) -> None:
     population = PopulationId.NBAIOT_DIRICHLET_CLIENTS
-    if membership.height != source_row_count:
+    if membership.height != source_row_count.value:
         raise DataIntegrityError(
             "Dirichlet partition does not conserve source rows",
             subject=population,
@@ -130,7 +130,7 @@ def validate_dirichlet_conservation(
             subject=population,
             reason="synthetic partitions must never duplicate rows",
         )
-    if membership.get_column(CLIENT_ID_COLUMN).n_unique() > client_count:
+    if membership.get_column(CLIENT_ID_COLUMN).n_unique() > client_count.value:
         raise DataIntegrityError(
             "Dirichlet partition created more clients than declared",
             subject=population,

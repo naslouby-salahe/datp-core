@@ -15,7 +15,7 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.errors import DataIntegrityError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount, Seed, checksum_text
+from datp_core.domain.values import Checksum, ClientCount, RowCount, Seed, checksum_text
 from datp_core.populations.capabilities import population_declaration
 from datp_core.populations.integrity import (
     PopulationFinalizationRequest,
@@ -60,15 +60,15 @@ def build_nbaiot_dirichlet_clients(
     membership, benign_counts, attack_counts = _partition_source(
         source,
         client_ids=client_ids,
-        client_count=declaration.client_count.value,
+        client_count=declaration.client_count,
         condition=condition,
         partition_seed=partition_seed,
     )
-    validate_dirichlet_conservation(membership, source.height, declaration.client_count.value)
+    validate_dirichlet_conservation(membership, RowCount(source.height), declaration.client_count)
     diagnostics = _build_diagnostics(
         client_ids=client_ids,
         client_count=declaration.client_count,
-        membership_height=membership.height,
+        membership_height=source.height,
         benign_counts=benign_counts,
         attack_counts=attack_counts,
         condition=condition,
@@ -97,21 +97,21 @@ def _partition_source(
     source: pl.DataFrame,
     *,
     client_ids: tuple[str, ...],
-    client_count: int,
+    client_count: ClientCount,
     condition: ControlledPartitionCondition,
     partition_seed: Seed,
 ) -> tuple[pl.DataFrame, tuple[int, ...], tuple[int, ...]]:
     generator = np.random.Generator(np.random.PCG64(partition_seed.value))
     membership_parts: list[pl.DataFrame] = []
-    benign_counts = [0] * client_count
-    attack_counts = [0] * client_count
+    benign_counts = [0] * client_count.value
+    attack_counts = [0] * client_count.value
     for label, outcome in (
         (NBaIoTSourceLabel.BENIGN, PopulationOutcomeLabel.BENIGN),
         (NBaIoTSourceLabel.ATTACK, PopulationOutcomeLabel.ATTACK),
     ):
         stratum = source.filter(pl.col(_SOURCE_LABEL) == label).sort(STABLE_ROW_ID_COLUMN)
         stratum = _permute_stratum(stratum, generator)
-        counts = _allocate_stratum(stratum.height, client_count, condition, generator)
+        counts = _allocate_stratum(RowCount(stratum.height), client_count, condition, generator)
         membership_parts.append(_assign_stratum(stratum, client_ids, counts, outcome))
         target = benign_counts if outcome is PopulationOutcomeLabel.BENIGN else attack_counts
         for index, count in enumerate(counts):
@@ -142,7 +142,7 @@ def _build_diagnostics(
             population=_POPULATION,
             partition_seed=partition_seed,
             partition_kind=condition.kind,
-            concentration=None if condition.concentration is None else condition.concentration.value,
+            concentration=condition.concentration,
             client_count=client_count,
             client_ids=client_ids,
             total_rows=membership_height,
@@ -157,16 +157,16 @@ def _build_diagnostics(
 
 
 def _allocate_stratum(
-    row_count: int,
-    client_count: int,
+    row_count: RowCount,
+    client_count: ClientCount,
     condition: ControlledPartitionCondition,
     generator: np.random.Generator,
 ) -> tuple[int, ...]:
-    if row_count == 0:
-        return tuple(0 for _ in range(client_count))
+    if row_count.value == 0:
+        return tuple(0 for _ in range(client_count.value))
     match condition.kind:
         case ControlledPartitionKind.IID:
-            proportions = tuple(1.0 / client_count for _ in range(client_count))
+            proportions = tuple(1.0 / client_count.value for _ in range(client_count.value))
         case ControlledPartitionKind.DIRICHLET:
             if condition.concentration is None:
                 raise ScientificContractError(
@@ -174,7 +174,7 @@ def _allocate_stratum(
                     subject=_POPULATION,
                     reason="concentration cannot be invented",
                 )
-            alpha = np.full(client_count, condition.concentration.value, dtype=np.float64)
+            alpha = np.full(client_count.value, condition.concentration.value, dtype=np.float64)
             proportions = tuple(float(value) for value in generator.dirichlet(alpha))
         case _:
             raise ScientificContractError(
@@ -182,8 +182,8 @@ def _allocate_stratum(
                 subject=condition.kind,
                 reason="only Dirichlet and IID constructions are authorized",
             )
-    counts = hamilton_integer_counts(row_count, proportions)
-    if sum(counts) != row_count:
+    counts = hamilton_integer_counts(row_count.value, proportions)
+    if sum(counts) != row_count.value:
         raise DataIntegrityError(
             "controlled partition allocation failed to conserve stratum rows",
             subject=_POPULATION,

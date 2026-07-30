@@ -59,10 +59,10 @@ REQUIRED_CLUSTER_FINGERPRINT_FEATURES = (
     ClusterFingerprintFeature.BENIGN_ERROR_SKEWNESS,
     ClusterFingerprintFeature.BENIGN_ERROR_P95,
 )
-LOCKED_CLUSTER_INITIALIZATION_COUNT = 10
-LOCKED_CLUSTER_MAXIMUM_ITERATIONS = 300
-LOCKED_CLUSTER_RANDOM_STATE = 42
-LOCKED_CLUSTER_GROUP_COUNT = 3
+LOCKED_CLUSTER_INITIALIZATION_COUNT = KMeansInitializationCount(10)
+LOCKED_CLUSTER_MAXIMUM_ITERATIONS = KMeansMaximumIterationCount(300)
+LOCKED_CLUSTER_RANDOM_STATE = Seed(42)
+LOCKED_CLUSTER_GROUP_COUNT = GroupCount(3)
 CONFIRMATORY_PAIRED_SEED_COUNT = SeedCount(10)
 
 UNIT_FRACTION_TOTAL = 1.0
@@ -264,19 +264,19 @@ class ClusterThresholdProtocol(Declaration):
                 "cluster initialization must be k-means++",
             ),
             (
-                self.initialization_count.value == LOCKED_CLUSTER_INITIALIZATION_COUNT,
+                self.initialization_count.value == LOCKED_CLUSTER_INITIALIZATION_COUNT.value,
                 "cluster n_init must match the locked initialization count",
             ),
             (
-                self.maximum_iterations.value == LOCKED_CLUSTER_MAXIMUM_ITERATIONS,
+                self.maximum_iterations.value == LOCKED_CLUSTER_MAXIMUM_ITERATIONS.value,
                 "cluster max_iter must match the locked maximum iteration count",
             ),
             (
-                self.random_state.value == LOCKED_CLUSTER_RANDOM_STATE,
+                self.random_state.value == LOCKED_CLUSTER_RANDOM_STATE.value,
                 "cluster random_state must match the locked seed",
             ),
             (
-                self.group_count.value == LOCKED_CLUSTER_GROUP_COUNT,
+                self.group_count.value == LOCKED_CLUSTER_GROUP_COUNT.value,
                 "cluster group count must match the locked group count",
             ),
             (

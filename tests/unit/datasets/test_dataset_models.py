@@ -13,7 +13,7 @@ from datp_core.datasets.materialization import canonical_schema_checksum
 from datp_core.datasets.models import ChronologyValidation, RawSourceFile, SourceFileRole
 from datp_core.datasets.nbaiot.schema import NBAIOT_ARROW_SCHEMA, NBAIOT_CANONICAL_COLUMNS, NBAIOT_SCHEMA
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import ByteCount, Checksum
+from datp_core.domain.values import ByteCount, Checksum, RowCount
 
 
 def test_raw_source_is_immutable_and_relative() -> None:
@@ -23,18 +23,18 @@ def test_raw_source_is_immutable_and_relative() -> None:
         ByteCount(1),
         Checksum("a"),
         SourceFileRole.BENIGN,
-        1,
+        RowCount(1),
     )
     with pytest.raises(FrozenInstanceError):
         source.__setattr__("relative_path", Path("other.csv"))
     with pytest.raises(ValueError):
-        RawSourceFile(DatasetId.NBAIOT, Path("/absolute.csv"), ByteCount(1), Checksum("a"), SourceFileRole.BENIGN, 1)
+        RawSourceFile(DatasetId.NBAIOT, Path("/absolute.csv"), ByteCount(1), Checksum("a"), SourceFileRole.BENIGN, RowCount(1))
 
 
 def test_chronology_preserves_static_and_temporal_status() -> None:
-    result = ChronologyValidation("Modbus", AvailabilityStatus.UNAVAILABLE, 1, 0, 1, 0, True, "address literal", False)
+    result = ChronologyValidation("Modbus", AvailabilityStatus.UNAVAILABLE, RowCount(1), RowCount(0), RowCount(1), 0, True, "address literal", False)
     assert result.temporal_eligible is False
-    assert result.total_rows == result.parseable_rows + result.invalid_rows
+    assert result.total_rows.value == result.parseable_rows.value + result.invalid_rows.value
 
 
 def test_canonical_coordinate_is_a_stable_human_readable_dataset_root(tmp_path) -> None:

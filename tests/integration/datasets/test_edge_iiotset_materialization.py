@@ -34,7 +34,7 @@ def test_edge_materialization_separates_static_temporal_and_unassigned_attack(tm
     assert published.canonical_root == tmp_path / "canonical" / "edge_iiotset"
     assert (published.canonical_root / "COMPLETE").is_file()
     assert len(published.assets) == 3
-    assert published.row_count == 2
+    assert published.row_count.value == 2
     assert all(pq.ParquetFile(asset.path).schema_arrow.equals(EDGE_ARROW_SCHEMA) for asset in published.assets)
     assert tuple(asset.role for asset in published.assets) == (
         EdgeAssetRole.STATIC_BENIGN,
@@ -55,7 +55,7 @@ def test_edge_keeps_invalid_chronology_static_and_excludes_it_from_temporal(tmp_
     published = EdgeIIoTsetMaterializer().materialize((modbus,), (attack,), tmp_path / "canonical")
 
     assert published.validation_report is not None
-    assert published.validation_report.excluded_rows == 0
+    assert published.validation_report.excluded_rows.value == 0
     assert len(published.validation_report.issues) == 1
     assert any(asset.path.name == "empty.parquet" for asset in published.assets)
     assert any(asset.role is EdgeAssetRole.STATIC_BENIGN for asset in published.assets)

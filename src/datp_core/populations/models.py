@@ -25,6 +25,7 @@ from datp_core.domain.values import (
     Checksum,
     ClientCount,
     DirichletConcentration,
+    RowCount,
     Seed,
     checksum_text,
     floats_absolutely_close,
@@ -203,7 +204,7 @@ class DirichletPartitionDiagnosticsDocument(StrictModel):
     population: PopulationId
     partition_seed: Seed
     partition_kind: ControlledPartitionKind
-    concentration: float | None
+    concentration: DirichletConcentration | None
     client_count: ClientCount
     client_ids: tuple[str, ...]
     total_rows: int
@@ -229,8 +230,8 @@ class ChronologicalPartitionDiagnosticsDocument(StrictModel):
     eligible_group_ids: tuple[str, ...]
     excluded_group_ids: tuple[str, ...]
     exclusion_reasons: tuple[str, ...]
-    duplicate_timestamp_rows: int
-    total_temporal_rows: int
+    duplicate_timestamp_rows: RowCount
+    total_temporal_rows: RowCount
 
     @model_validator(mode="after")
     def validate_diagnostics(self) -> "ChronologicalPartitionDiagnosticsDocument":
@@ -238,7 +239,7 @@ class ChronologicalPartitionDiagnosticsDocument(StrictModel):
             raise ValueError("observed eligible count must match eligible identities")
         if len(self.excluded_group_ids) != len(self.exclusion_reasons):
             raise ValueError("each excluded group requires one typed reason")
-        if min(self.duplicate_timestamp_rows, self.total_temporal_rows, self.observed_eligible_group_count) < 0:
+        if min(self.duplicate_timestamp_rows.value, self.total_temporal_rows.value, self.observed_eligible_group_count) < 0:
             raise ValueError("chronology diagnostic counts must be non-negative")
         return self
 
@@ -553,7 +554,7 @@ def _require_row_conservation(document: DirichletPartitionDiagnosticsDocument) -
 def _require_partition_kind_fields(document: DirichletPartitionDiagnosticsDocument) -> None:
     match document.partition_kind:
         case ControlledPartitionKind.DIRICHLET:
-            if document.concentration is None or document.concentration <= 0:
+            if document.concentration is None or document.concentration.value <= 0:
                 raise ValueError("Dirichlet diagnostics require a positive concentration")
         case ControlledPartitionKind.IID:
             if document.concentration is not None:

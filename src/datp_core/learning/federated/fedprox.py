@@ -111,7 +111,7 @@ def train_fedprox(request: FedProxTrainingRequest) -> FedAvgTrainingOutcome:
     for client_dataset in ordered_clients:
         reject_centralized_preprocessing_for_federated_training(client_dataset.preprocessing_state)
 
-    coefficient = request.training_protocol.coefficient.value
+    coefficient = request.training_protocol.coefficient
     global_model = ReconstructionAutoencoder(request.autoencoder.widths).to(device)
     global_state = {name: tensor.detach().clone() for name, tensor in global_model.state_dict().items()}
 
@@ -134,7 +134,7 @@ def train_fedprox(request: FedProxTrainingRequest) -> FedAvgTrainingOutcome:
             client_seed = client_round_seed(request.training_seed, client_index)
             local_model = ReconstructionAutoencoder(request.autoencoder.widths).to(device)
             load_autoencoder_state(local_model, {name: tensor.clone() for name, tensor in reference_state.items()})
-            optimizer = build_optimizer(local_model, request.training_protocol.optimizer, request.learning_rate.value)
+            optimizer = build_optimizer(local_model, request.training_protocol.optimizer, request.learning_rate)
             loader = build_client_loader(matrix, batch_size=request.batch_size, seed=client_seed, device=device)
             local_state, local_loss, sample_count = run_local_epoch(
                 local_model,

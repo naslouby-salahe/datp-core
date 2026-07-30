@@ -10,12 +10,8 @@ from datp_core.domain.enums import (
 from datp_core.domain.values import (
     CalibrationSize,
     CoverageTarget,
-    GroupCount,
-    KMeansInitializationCount,
-    KMeansMaximumIterationCount,
     Quantile,
     Ratio,
-    Seed,
     ShrinkageWeight,
     SummaryCoefficient,
 )
@@ -86,9 +82,9 @@ CLUSTER_THRESHOLD_PROTOCOL = ClusterThresholdProtocol(
     feature_standardization=ClusterFeatureStandardization.STANDARD_SCALER,
     assignment_algorithm=ClusterAssignmentAlgorithm.KMEANS,
     initialization=KMeansInitialization.KMEANS_PLUS_PLUS,
-    initialization_count=KMeansInitializationCount(LOCKED_CLUSTER_INITIALIZATION_COUNT),
-    maximum_iterations=KMeansMaximumIterationCount(LOCKED_CLUSTER_MAXIMUM_ITERATIONS),
-    random_state=Seed(LOCKED_CLUSTER_RANDOM_STATE),
-    group_count=GroupCount(LOCKED_CLUSTER_GROUP_COUNT),
+    initialization_count=LOCKED_CLUSTER_INITIALIZATION_COUNT,
+    maximum_iterations=LOCKED_CLUSTER_MAXIMUM_ITERATIONS,
+    random_state=LOCKED_CLUSTER_RANDOM_STATE,
+    group_count=LOCKED_CLUSTER_GROUP_COUNT,
     threshold_aggregation=ClusterThresholdAggregation.ARITHMETIC_MEAN_OF_ELIGIBLE_LOCAL_THRESHOLDS,
 )

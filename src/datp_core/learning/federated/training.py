@@ -17,8 +17,10 @@ from datp_core.domain.values import (
     BatchSize,
     Checksum,
     FeatureNameSequence,
+    LearningRate,
     MetricValue,
     OutcomeLabelSequence,
+    ProximalCoefficient,
     RowCount,
     Seed,
 )
@@ -110,7 +112,7 @@ def proximal_penalty(
 def build_optimizer(
     model: ReconstructionAutoencoder,
     optimizer_protocol: OptimizerProtocol,
-    learning_rate: float,
+    learning_rate: LearningRate,
 ) -> torch.optim.Optimizer:
     from datp_core.domain.enums import OptimizerId
 
@@ -118,7 +120,7 @@ def build_optimizer(
         case OptimizerId.ADAM:
             return torch.optim.Adam(
                 model.parameters(),
-                lr=learning_rate,
+                lr=learning_rate.value,
                 weight_decay=optimizer_protocol.weight_decay.value,
             )
 
@@ -128,7 +130,7 @@ class ProximalTerm:
     """A fixed reference state and coefficient for a proximal penalty toward that state."""
 
     reference_state: Mapping[str, torch.Tensor]
-    coefficient: float
+    coefficient: ProximalCoefficient  # WAS: float
 
 
 def run_local_epoch(
@@ -181,7 +183,7 @@ def _train_one_batch(
     loss = nn.functional.mse_loss(reconstruction, batch)
     if reference_parameters is not None and proximal_term is not None:
         local_parameters = tuple(parameter for _, parameter in model.named_parameters())
-        loss = loss + proximal_penalty(local_parameters, reference_parameters, proximal_term.coefficient)
+        loss = loss + proximal_penalty(local_parameters, reference_parameters, proximal_term.coefficient.value)
     loss.backward()
     optimizer.step()
     return float(loss.detach().cpu().item())

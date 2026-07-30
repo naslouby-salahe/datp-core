@@ -25,6 +25,7 @@ from datp_core.centralized_reference.scoring import (
     score_centralized_reference,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.values import RowCount, Seed
 
 
 def test_deterministic_scoring_and_reload(tmp_path: Path) -> None:
@@ -36,8 +37,8 @@ def test_deterministic_scoring_and_reload(tmp_path: Path) -> None:
         checkpoint=candidates[0],
         autoencoder=AUTOENCODER,
         feature_names=FEATURE_NAMES,
-        calibration_features=benign_frame(32, seed=3),
-        evaluation_features=mixed_evaluation_frame(32, seed=4),
+        calibration_features=benign_frame(RowCount(32), seed=Seed(3)),
+        evaluation_features=mixed_evaluation_frame(RowCount(32), seed=Seed(4)),
         batch_size=BATCH_SIZE,
         output_directory=tmp_path / "scores",
         preprocessing_state_checksum=training.preprocessing_state_checksum,
@@ -72,8 +73,8 @@ def test_score_polarity_higher_is_more_anomalous(tmp_path: Path) -> None:
             checkpoint=candidates[0],
             autoencoder=AUTOENCODER,
             feature_names=FEATURE_NAMES,
-            calibration_features=benign_frame(32, seed=5),
-            evaluation_features=mixed_evaluation_frame(32, seed=6),
+            calibration_features=benign_frame(RowCount(32), seed=Seed(5)),
+            evaluation_features=mixed_evaluation_frame(RowCount(32), seed=Seed(6)),
             batch_size=BATCH_SIZE,
             output_directory=tmp_path / "scores",
             preprocessing_state_checksum=training.preprocessing_state_checksum,

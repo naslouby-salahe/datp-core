@@ -10,17 +10,17 @@ from datp_core.populations.nbaiot_natural_devices import build_nbaiot_natural_de
 from datp_core.populations.splits import split_membership
 
 
-@pytest.mark.parametrize("seed", range(8))
-def test_non_temporal_splits_are_disjoint_for_any_seed(seed: int, nbaiot_canonical_root: Path) -> None:
+@pytest.mark.parametrize("seed", [Seed(0), Seed(1), Seed(2), Seed(3), Seed(4), Seed(5), Seed(6), Seed(7)])
+def test_non_temporal_splits_are_disjoint_for_any_seed(seed: Seed, nbaiot_canonical_root: Path) -> None:
     manifest, membership = build_nbaiot_natural_devices(
-        nbaiot_canonical_root, partition_seed=Seed(seed), split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
+        nbaiot_canonical_root, partition_seed=seed, split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
     )
     assignments, _ = split_membership(
         SplitConstructionRequest(
             membership=membership,
             population=PopulationId.NBAIOT_NATURAL_DEVICES,
             dataset=DatasetId.NBAIOT,
-            partition_seed=Seed(seed),
+            partition_seed=seed,
             split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
             population_manifest_checksum=manifest.document.membership_checksum,
         )

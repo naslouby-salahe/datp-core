@@ -145,7 +145,7 @@ def edge_canonical_root(tmp_path: Path) -> Path:
             "excluded_source_count": 0,
             "sources": [],
         },
-        "schema_checksum": EDGE_SCHEMA_CHECKSUM,
+        "schema_checksum": EDGE_SCHEMA_CHECKSUM.value,
         "validation_report": {
             "accepted_rows": 0,
             "excluded_rows": 0,
@@ -228,7 +228,7 @@ def edge_temporal_eligible_root(tmp_path: Path) -> Path:
             "excluded_source_count": 0,
             "sources": [],
         },
-        "schema_checksum": EDGE_SCHEMA_CHECKSUM,
+        "schema_checksum": EDGE_SCHEMA_CHECKSUM.value,
         "validation_report": {
             "accepted_rows": 0,
             "excluded_rows": 0,
@@ -244,5 +244,5 @@ def edge_temporal_eligible_root(tmp_path: Path) -> Path:
 
 
 # Schema checksum is validated only as opaque string in population manifests for Edge tests.
-EDGE_SCHEMA_CHECKSUM = Checksum("a" * 64).value
+EDGE_SCHEMA_CHECKSUM = Checksum("a" * 64)
 _ = NBAIOT_DEVICE_FAMILIES

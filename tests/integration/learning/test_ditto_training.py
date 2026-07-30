@@ -13,7 +13,7 @@ from tests.unit.learning.federated.helpers import (
     ditto_protocol,
 )
 
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.learning.federated.checkpointing import select_checkpoint
 from datp_core.learning.federated.ditto import DittoTrainingRequest, train_ditto
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
@@ -55,8 +55,8 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
     scoring_clients = tuple(
         ClientScoringInput(
             client=client_dataset.training_input.client,
-            calibration_features=benign_frame(8, seed=index),
-            evaluation_features=benign_frame(8, seed=index + 50),
+            calibration_features=benign_frame(RowCount(8), seed=Seed(index)),
+            evaluation_features=benign_frame(RowCount(8), seed=Seed(index + 50)),
         )
         for index, client_dataset in enumerate(clients)
     )
@@ -93,8 +93,8 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
                 clients=(
                     ClientScoringInput(
                         client=client,
-                        calibration_features=benign_frame(8, seed=1),
-                        evaluation_features=benign_frame(8, seed=2),
+                        calibration_features=benign_frame(RowCount(8), seed=Seed(1)),
+                        evaluation_features=benign_frame(RowCount(8), seed=Seed(2)),
                     ),
                 ),
                 batch_size=BATCH_SIZE,

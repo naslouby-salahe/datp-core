@@ -23,7 +23,7 @@ from datp_core.centralized_reference.thresholding import (
     construct_pooled_benign_quantile,
 )
 from datp_core.centralized_reference.training import CentralizedTrainingRequest, train_centralized_autoencoder
-from datp_core.domain.values import Checksum
+from datp_core.domain.values import Checksum, RowCount, Seed
 
 
 def test_end_to_end_centralized_pipeline_without_federated_artifacts(tmp_path: Path) -> None:
@@ -33,7 +33,7 @@ def test_end_to_end_centralized_pipeline_without_federated_artifacts(tmp_path: P
     training = train_centralized_autoencoder(
         CentralizedTrainingRequest(
             coordinate=coordinate,
-            training_features=benign_frame(64, seed=0),
+            training_features=benign_frame(RowCount(64), seed=Seed(0)),
             feature_names=FEATURE_NAMES,
             preprocessing_state=state,
             split_manifest_checksum=Checksum("f" * 64),
@@ -53,8 +53,8 @@ def test_end_to_end_centralized_pipeline_without_federated_artifacts(tmp_path: P
             checkpoint=candidates[0],
             autoencoder=AUTOENCODER,
             feature_names=FEATURE_NAMES,
-            calibration_features=benign_frame(48, seed=30),
-            evaluation_features=mixed_evaluation_frame(40, seed=31),
+            calibration_features=benign_frame(RowCount(48), seed=Seed(30)),
+            evaluation_features=mixed_evaluation_frame(RowCount(40), seed=Seed(31)),
             batch_size=BATCH_SIZE,
             output_directory=tmp_path / "scores",
             preprocessing_state_checksum=state.estimator_checksum,

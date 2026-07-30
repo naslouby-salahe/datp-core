@@ -27,7 +27,7 @@ from datp_core.centralized_reference.thresholding import (
 )
 from datp_core.domain.enums import CentralizedThresholdMethod, FederatedThresholdMethod
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import Quantile, ThresholdValue
+from datp_core.domain.values import Quantile, RowCount, Seed, ThresholdValue
 from datp_core.populations.models import PopulationOutcomeLabel
 
 
@@ -41,8 +41,8 @@ def test_pooled_benign_quantile_matches_numpy_linear(tmp_path: Path) -> None:
             checkpoint=candidates[0],
             autoencoder=AUTOENCODER,
             feature_names=FEATURE_NAMES,
-            calibration_features=benign_frame(48, seed=7),
-            evaluation_features=mixed_evaluation_frame(32, seed=8),
+            calibration_features=benign_frame(RowCount(48), seed=Seed(7)),
+            evaluation_features=mixed_evaluation_frame(RowCount(32), seed=Seed(8)),
             batch_size=BATCH_SIZE,
             output_directory=tmp_path / "scores",
             preprocessing_state_checksum=training.preprocessing_state_checksum,

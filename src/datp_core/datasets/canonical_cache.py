@@ -38,7 +38,7 @@ from datp_core.datasets.models import (
     ValidationReportDocument,
 )
 from datp_core.domain.enums import DatasetId, PublicationStatus
-from datp_core.domain.values import Checksum, checksum_file, checksum_text
+from datp_core.domain.values import Checksum, RowCount, checksum_file, checksum_text
 from datp_core.protocols.runtime import DATA_ROOT
 
 _CANONICAL_PUBLICATION_CONTRACT = "canonical_publication_contract"
@@ -65,25 +65,23 @@ class CanonicalAssetLayout[AssetRoleT: StrEnum]:
 class CanonicalAsset[AssetRoleT: StrEnum]:
     relative_path: Path
     checksum: Checksum
-    row_count: int
+    row_count: RowCount
     columns: tuple[str, ...]
     role: AssetRoleT
     source_identity: str | None = None
 
     def __post_init__(self) -> None:
         if not _is_canonical_relative_path(self.relative_path):
-            raise ValueError("canonical assets require a relative path, columns, and a non-negative row count")
+            raise ValueError("canonical assets require a relative path and columns")
         if not self.columns:
-            raise ValueError("canonical assets require a relative path, columns, and a non-negative row count")
-        if self.row_count < 0:
-            raise ValueError("canonical assets require a relative path, columns, and a non-negative row count")
+            raise ValueError("canonical assets require a relative path and columns")
 
     def to_document(self) -> CanonicalAssetDocument:
         return CanonicalAssetDocument(
             checksum=self.checksum.value,
             columns=self.columns,
             path=self.relative_path.as_posix(),
-            row_count=self.row_count,
+            row_count=self.row_count.value,
             role=self.role.value,
             source_identity=self.source_identity,
         )
@@ -255,7 +253,7 @@ def _reused_materialized_dataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnu
         MaterializedCanonicalAsset(
             canonical_asset_path(target, Path(asset.path)).resolve(),
             request.asset_role_type(asset.role),
-            asset.row_count,
+            RowCount(asset.row_count),
             asset.source_identity,
         )
         for asset in manifest.assets
@@ -269,7 +267,7 @@ def _reused_materialized_dataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnu
         row_count=(
             inventory.accepted_row_count
             if inventory.accepted_row_count is not None
-            else sum(asset.row_count for asset in assets if asset.role is CanonicalAssetRole.CANONICAL_DATA)
+            else RowCount(sum(asset.row_count.value for asset in assets if asset.role is CanonicalAssetRole.CANONICAL_DATA))
         ),
         source_inventory_checksum=inventory.checksum,
         publication_status=PublicationStatus.REUSED,
@@ -291,9 +289,9 @@ def _reused_validation_report(
         dataset,
         issues,
         exclusions,
-        report.accepted_rows,
-        report.excluded_rows,
-        report.invalid_rows,
+        RowCount(report.accepted_rows),
+        RowCount(report.excluded_rows),
+        RowCount(report.invalid_rows),
         report.warning_count,
         report.status,
     )

@@ -25,7 +25,7 @@ from datp_core.domain.enums import (
     ScoreFrameColumn,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, MetricValue, ThresholdValue, checksum_text
+from datp_core.domain.values import Checksum, MetricValue, RowCount, ThresholdValue, checksum_text
 from datp_core.populations.models import PopulationOutcomeLabel
 
 
@@ -206,18 +206,18 @@ def reject_b1_b4_insertion(method: FederatedThresholdMethod) -> None:
 class CentralizedMetricDocument(StrictModel):
     metric: MetricId
     status: AvailabilityStatus
-    value: float | None
+    value: MetricValue | None
 
 
 class CentralizedEvaluationDocument(StrictModel):
     threshold_method: CentralizedThresholdMethod
     decision_rule: CentralizedDecisionRule
-    threshold: float
+    threshold: ThresholdValue
     true_negative: int
     false_positive: int
     true_positive: int
     false_negative: int
-    evaluation_row_count: int
+    evaluation_row_count: RowCount
     evidence_role: EvidenceRole
     is_confirmatory_ladder_member: bool
     metrics: tuple[CentralizedMetricDocument, ...]
@@ -230,19 +230,19 @@ def write_evaluation_document(evaluation: CentralizedEvaluationResult, directory
     document = CentralizedEvaluationDocument(
         threshold_method=evaluation.threshold_method,
         decision_rule=evaluation.decision_rule,
-        threshold=evaluation.threshold.value,
+        threshold=evaluation.threshold,
         true_negative=evaluation.confusion.true_negative,
         false_positive=evaluation.confusion.false_positive,
         true_positive=evaluation.confusion.true_positive,
         false_negative=evaluation.confusion.false_negative,
-        evaluation_row_count=evaluation.evaluation_row_count,
+        evaluation_row_count=RowCount(evaluation.evaluation_row_count),
         evidence_role=evaluation.evidence_role,
         is_confirmatory_ladder_member=evaluation.is_confirmatory_ladder_member,
         metrics=tuple(
             CentralizedMetricDocument(
                 metric=item.metric,
                 status=item.status,
-                value=None if item.value is None else item.value.value,
+                value=item.value,
             )
             for item in evaluation.metrics
         ),

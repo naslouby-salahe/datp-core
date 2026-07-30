@@ -34,6 +34,7 @@ from datp_core.datasets.models import (
     ValidationSeverity,
 )
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
+from datp_core.domain.values import RowCount
 
 from .chronology import PcapChronology, paired_capture_path, validate_chronology, write_capture_timeline
 from .reader import EdgeIIoTsetReader
@@ -170,7 +171,7 @@ class EdgeIIoTsetMaterializer:
             if evidence.pcap_path.is_file()
         )
         attack_sources = tuple(
-            raw_source_file(DatasetId.EDGE_IIOTSET, path, SourceFileRole.ATTACK, row_count, source_relative_path)
+            raw_source_file(DatasetId.EDGE_IIOTSET, path, SourceFileRole.ATTACK, RowCount(row_count), source_relative_path)
             for path, row_count in zip(attack_paths, attack_counts, strict=True)
         )
         return raw_inventory(DatasetId.EDGE_IIOTSET, benign_sources + evidence_sources + attack_sources)
@@ -210,7 +211,7 @@ class EdgeIIoTsetMaterializer:
                 DatasetId.EDGE_IIOTSET,
                 source_relative_path(path).as_posix(),
                 validation.reason,
-                validation.total_rows,
+                validation.total_rows.value,
             )
             for path, validation in invalid
         )
@@ -218,9 +219,9 @@ class EdgeIIoTsetMaterializer:
             DatasetId.EDGE_IIOTSET,
             issues,
             (),
-            sum(validation.total_rows for validation in validations) + sum(attack_counts),
-            0,
-            0,
+            RowCount(sum(validation.total_rows.value for validation in validations) + sum(attack_counts)),
+            RowCount(0),
+            RowCount(0),
             len(issues),
             AvailabilityStatus.AVAILABLE,
         )

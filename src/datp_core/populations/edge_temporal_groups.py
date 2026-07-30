@@ -14,7 +14,7 @@ from datp_core.datasets.models import (
 )
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import DataIntegrityError, ScientificContractError
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.populations.capabilities import population_declaration
 from datp_core.populations.integrity import (
     PopulationFinalizationRequest,
@@ -74,8 +74,8 @@ def build_edge_temporal_groups(
             eligible_group_ids=eligible_ids,
             excluded_group_ids=excluded_ids,
             exclusion_reasons=exclusion_reasons,
-            duplicate_timestamp_rows=duplicate_timestamps,
-            total_temporal_rows=membership.height,
+            duplicate_timestamp_rows=RowCount(duplicate_timestamps),
+            total_temporal_rows=RowCount(membership.height),
         )
     )
     temporal_manifest = _assemble_manifest(

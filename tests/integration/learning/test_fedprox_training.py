@@ -13,7 +13,7 @@ from tests.unit.learning.federated.helpers import (
     fedprox_protocol,
 )
 
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.learning.federated.checkpointing import select_checkpoint
 from datp_core.learning.federated.fedprox import FedProxTrainingRequest, train_fedprox
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE, FEDPROX_COEFFICIENTS
@@ -53,8 +53,8 @@ def test_fedprox_end_to_end_train_select_and_score_for_one_declared_coefficient(
     scoring_clients = tuple(
         ClientScoringInput(
             client=client_dataset.training_input.client,
-            calibration_features=benign_frame(8, seed=index),
-            evaluation_features=benign_frame(8, seed=index + 50),
+            calibration_features=benign_frame(RowCount(8), seed=Seed(index)),
+            evaluation_features=benign_frame(RowCount(8), seed=Seed(index + 50)),
         )
         for index, client_dataset in enumerate(clients)
     )

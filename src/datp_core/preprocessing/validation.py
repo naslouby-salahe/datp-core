@@ -207,7 +207,7 @@ def build_preprocessing_manifest(
         canonical_schema_checksum=context.canonical_schema_checksum,
         input_feature_names=protocol.input_feature_names,
         transformed_feature_names=protocol.transformed_schema.feature_names,
-        estimator_class=protocol.qualified_estimator_name,
+        estimator_class_name=protocol.estimator_class_name,
         serialization_format=protocol.serialization_format,
         asset_paths=asset_paths,
         fit_partition=PartitionRole.TRAIN,

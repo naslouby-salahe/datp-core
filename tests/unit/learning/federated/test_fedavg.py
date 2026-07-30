@@ -110,12 +110,13 @@ def test_train_fedavg_rejects_a_fedprox_coordinate(tmp_path: Path) -> None:
 def test_train_fedavg_never_trains_on_attack_labelled_rows(tmp_path: Path) -> None:
     from tests.unit.learning.federated.helpers import FEATURE_NAMES, benign_frame, build_client_dataset, client_identity
 
+    from datp_core.domain.values import RowCount, Seed
     from datp_core.learning.federated.models import ClientTrainingInput
     from datp_core.populations.models import PopulationOutcomeLabel
 
     clients = list(build_all_client_datasets(tmp_path))
-    attack_frame = benign_frame(16, seed=99, label=PopulationOutcomeLabel.ATTACK.value)
-    poisoned = build_client_dataset("client_a", tmp_path, row_count=16)
+    attack_frame = benign_frame(RowCount(16), seed=Seed(99), label=PopulationOutcomeLabel.ATTACK.value)
+    poisoned = build_client_dataset("client_a", tmp_path, row_count=RowCount(16))
     poisoned = poisoned.__class__(
         training_input=ClientTrainingInput(
             client=client_identity("client_a"), training_features=attack_frame, feature_names=FEATURE_NAMES

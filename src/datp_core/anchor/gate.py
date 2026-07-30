@@ -6,8 +6,11 @@ from datp_core.anchor.models import (
     DECLARED_NON_BLOCKING_DISCREPANCY_REASONS,
     AnchorArtifactFileName,
     AnchorComparisonDecision,
+    AnchorComparisonStrategy,
     AnchorDependencyBlocker,
+    AnchorDependencyKind,
     AnchorDiscrepancy,
+    AnchorDiscrepancyReason,
     AnchorGateDecision,
     AnchorGateStatus,
     AnchorMetricComparison,
@@ -15,10 +18,15 @@ from datp_core.anchor.models import (
     AnchorSeedSubsetComparison,
 )
 from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import ExperimentReadiness
+from datp_core.domain.enums import (
+    EvidenceRole,
+    ExperimentId,
+    ExperimentReadiness,
+    FederatedThresholdMethod,
+    MetricId,
+)
 from datp_core.domain.errors import AnchorReproductionError
-from datp_core.domain.values import Checksum, checksum_text
-from datp_core.protocols.models import SeedCohort
+from datp_core.domain.values import Checksum, MetricValue, Seed, checksum_text
 
 
 def decide_anchor_gate(reproduction: AnchorReproductionResult) -> AnchorGateDecision:
@@ -110,49 +118,49 @@ def _partition_discrepancies(
 
 
 class DependencyBlockerDocument(StrictModel):
-    kind: str
+    kind: AnchorDependencyKind
     detail: str
 
 
 class SeedSubsetComparisonDocument(StrictModel):
-    expected_seeds: tuple[int, ...]
-    observed_seeds: tuple[int, ...]
-    decision: str
-    reason: str | None
+    expected_seeds: tuple[Seed, ...]
+    observed_seeds: tuple[Seed, ...]
+    decision: AnchorComparisonDecision
+    reason: AnchorDiscrepancyReason | None
 
 
 class MetricComparisonDocument(StrictModel):
-    seed: int
-    threshold_method: str
-    metric: str
-    expected: float
-    observed: float | None
-    decision: str
+    seed: Seed
+    threshold_method: FederatedThresholdMethod
+    metric: MetricId
+    expected: MetricValue
+    observed: MetricValue | None
+    decision: AnchorComparisonDecision
     signed_difference: float | None
     relative_difference: float | None
-    tolerance_strategy: str
-    reason: str | None
+    tolerance_strategy: AnchorComparisonStrategy
+    reason: AnchorDiscrepancyReason | None
 
 
 class DiscrepancyDocument(StrictModel):
-    reason: str
-    seed: int | None
-    threshold_method: str | None
-    metric: str | None
-    expected_value: float | None
-    observed_value: float | None
+    reason: AnchorDiscrepancyReason
+    seed: Seed | None
+    threshold_method: FederatedThresholdMethod | None
+    metric: MetricId | None
+    expected_value: MetricValue | None
+    observed_value: MetricValue | None
     signed_difference: float | None
     relative_difference: float | None
-    tolerance_strategy: str | None
+    tolerance_strategy: AnchorComparisonStrategy | None
     artifact_path: str | None
-    artifact_checksum: str | None
+    artifact_checksum: Checksum | None
     detail: str
 
 
 class ReproductionDocument(StrictModel):
-    experiment: str
-    evidence_role: str
-    seed_cohort: tuple[int, ...]
+    experiment: ExperimentId
+    evidence_role: EvidenceRole
+    seed_cohort: tuple[Seed, ...]
     reference_count: int
     observation_count: int
     seed_subset: SeedSubsetComparisonDocument
@@ -162,8 +170,8 @@ class ReproductionDocument(StrictModel):
 
 
 class GateDecisionDocument(StrictModel):
-    status: str
-    dependent_readiness: str
+    status: AnchorGateStatus
+    dependent_readiness: ExperimentReadiness
     blocking_discrepancies: tuple[DiscrepancyDocument, ...]
     declared_discrepancies: tuple[DiscrepancyDocument, ...]
     reproduction: ReproductionDocument
@@ -192,8 +200,8 @@ def _encode_discrepancies(discrepancies: tuple[DiscrepancyDocument, ...]) -> str
 
 def gate_decision_document(decision: AnchorGateDecision) -> GateDecisionDocument:
     return GateDecisionDocument(
-        status=decision.status.value,
-        dependent_readiness=decision.dependent_readiness.value,
+        status=decision.status,
+        dependent_readiness=decision.dependent_readiness,
         blocking_discrepancies=tuple(discrepancy_document(item) for item in decision.blocking_discrepancies),
         declared_discrepancies=tuple(discrepancy_document(item) for item in decision.declared_discrepancies),
         reproduction=reproduction_document(decision.reproduction),
@@ -202,9 +210,9 @@ def gate_decision_document(decision: AnchorGateDecision) -> GateDecisionDocument
 
 def reproduction_document(reproduction: AnchorReproductionResult) -> ReproductionDocument:
     return ReproductionDocument(
-        experiment=reproduction.experiment.value,
-        evidence_role=reproduction.evidence_role.value,
-        seed_cohort=_seed_cohort_values(reproduction.seed_cohort),
+        experiment=reproduction.experiment,
+        evidence_role=reproduction.evidence_role,
+        seed_cohort=reproduction.seed_cohort.values,
         reference_count=len(reproduction.references),
         observation_count=len(reproduction.observations),
         seed_subset=seed_subset_document(reproduction.seed_subset_comparison),
@@ -214,56 +222,48 @@ def reproduction_document(reproduction: AnchorReproductionResult) -> Reproductio
     )
 
 
-def _seed_cohort_values(cohort: SeedCohort) -> tuple[int, ...]:
-    return tuple(seed.value for seed in cohort.values)
-
-
 def seed_subset_document(comparison: AnchorSeedSubsetComparison) -> SeedSubsetComparisonDocument:
     return SeedSubsetComparisonDocument(
-        expected_seeds=tuple(seed.value for seed in comparison.expected_seeds),
-        observed_seeds=tuple(seed.value for seed in comparison.observed_seeds),
-        decision=comparison.decision.value,
-        reason=_optional_enum_value(comparison.reason),
+        expected_seeds=comparison.expected_seeds,
+        observed_seeds=comparison.observed_seeds,
+        decision=comparison.decision,
+        reason=comparison.reason,
     )
 
 
 def dependency_blocker_document(blocker: AnchorDependencyBlocker | None) -> DependencyBlockerDocument | None:
     if blocker is None:
         return None
-    return DependencyBlockerDocument(kind=blocker.kind.value, detail=blocker.detail)
+    return DependencyBlockerDocument(kind=blocker.kind, detail=blocker.detail)
 
 
 def comparison_document(comparison: AnchorMetricComparison) -> MetricComparisonDocument:
     return MetricComparisonDocument(
-        seed=comparison.reference.seed.value,
-        threshold_method=comparison.reference.threshold_method.value,
-        metric=comparison.reference.metric.value,
-        expected=comparison.reference.value.value,
-        observed=None if comparison.observation is None else comparison.observation.value.value,
-        decision=comparison.decision.value,
+        seed=comparison.reference.seed,
+        threshold_method=comparison.reference.threshold_method,
+        metric=comparison.reference.metric,
+        expected=comparison.reference.value,
+        observed=None if comparison.observation is None else comparison.observation.value,
+        decision=comparison.decision,
         signed_difference=comparison.signed_difference,
         relative_difference=comparison.relative_difference,
-        tolerance_strategy=comparison.tolerance_rule.strategy.value,
-        reason=_optional_enum_value(comparison.reason),
+        tolerance_strategy=comparison.tolerance_rule.strategy,
+        reason=comparison.reason,
     )
 
 
 def discrepancy_document(discrepancy: AnchorDiscrepancy) -> DiscrepancyDocument:
     return DiscrepancyDocument(
-        reason=discrepancy.reason.value,
-        seed=None if discrepancy.seed is None else discrepancy.seed.value,
-        threshold_method=_optional_enum_value(discrepancy.threshold_method),
-        metric=_optional_enum_value(discrepancy.metric),
-        expected_value=None if discrepancy.expected_value is None else discrepancy.expected_value.value,
-        observed_value=None if discrepancy.observed_value is None else discrepancy.observed_value.value,
+        reason=discrepancy.reason,
+        seed=discrepancy.seed,
+        threshold_method=discrepancy.threshold_method,
+        metric=discrepancy.metric,
+        expected_value=discrepancy.expected_value,
+        observed_value=discrepancy.observed_value,
         signed_difference=discrepancy.signed_difference,
         relative_difference=discrepancy.relative_difference,
-        tolerance_strategy=(None if discrepancy.tolerance_rule is None else discrepancy.tolerance_rule.strategy.value),
+        tolerance_strategy=(None if discrepancy.tolerance_rule is None else discrepancy.tolerance_rule.strategy),
         artifact_path=None if discrepancy.artifact_path is None else discrepancy.artifact_path.as_posix(),
-        artifact_checksum=None if discrepancy.artifact_checksum is None else discrepancy.artifact_checksum.value,
+        artifact_checksum=discrepancy.artifact_checksum,
         detail=discrepancy.detail,
     )
-
-
-def _optional_enum_value(value) -> str | None:
-    return None if value is None else value.value

@@ -27,6 +27,7 @@ from datp_core.centralized_reference.thresholding import (
 )
 from datp_core.domain.enums import CentralizedThresholdMethod, EvidenceRole, FederatedThresholdMethod, MetricId
 from datp_core.domain.errors import LeakageError
+from datp_core.domain.values import RowCount, Seed
 
 
 def test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:
@@ -39,8 +40,8 @@ def test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:
             checkpoint=candidates[0],
             autoencoder=AUTOENCODER,
             feature_names=FEATURE_NAMES,
-            calibration_features=benign_frame(48, seed=9),
-            evaluation_features=mixed_evaluation_frame(40, seed=10),
+            calibration_features=benign_frame(RowCount(48), seed=Seed(9)),
+            evaluation_features=mixed_evaluation_frame(RowCount(40), seed=Seed(10)),
             batch_size=BATCH_SIZE,
             output_directory=tmp_path / "scores",
             preprocessing_state_checksum=training.preprocessing_state_checksum,
@@ -86,8 +87,8 @@ def test_rejects_confirmatory_ladder_and_federated_policy_use(tmp_path: Path) ->
             checkpoint=candidates[0],
             autoencoder=AUTOENCODER,
             feature_names=FEATURE_NAMES,
-            calibration_features=benign_frame(48, seed=11),
-            evaluation_features=mixed_evaluation_frame(40, seed=12),
+            calibration_features=benign_frame(RowCount(48), seed=Seed(11)),
+            evaluation_features=mixed_evaluation_frame(RowCount(40), seed=Seed(12)),
             batch_size=BATCH_SIZE,
             output_directory=tmp_path / "scores",
             preprocessing_state_checksum=training.preprocessing_state_checksum,

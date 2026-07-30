@@ -29,6 +29,7 @@ from datp_core.datasets.models import (
     ValidationSeverity,
 )
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
+from datp_core.domain.values import RowCount
 
 from .reader import CICIoT2023AuditSummary, CICIoT2023Reader
 from .schema import (
@@ -109,7 +110,7 @@ def _audited_sources(
 
 def _source_inventory(paths: tuple[Path, ...], summaries: tuple[CICIoT2023AuditSummary, ...]) -> RawDatasetInventory:
     sources = tuple(
-        raw_source_file(DatasetId.CICIOT2023, path, SourceFileRole.MERGED, summary.total_rows, source_relative_path)
+        raw_source_file(DatasetId.CICIOT2023, path, SourceFileRole.MERGED, RowCount(summary.total_rows), source_relative_path)
         for path, summary in zip(paths, summaries, strict=True)
     )
     return raw_inventory(DatasetId.CICIOT2023, sources)
@@ -126,10 +127,10 @@ def _validation_report(summaries: tuple[CICIoT2023AuditSummary, ...]) -> Dataset
         DatasetId.CICIOT2023,
         issues,
         (),
-        sum(summary.total_rows for summary in summaries),
-        0,
-        ineligible_rows,
-        0,
+        RowCount(sum(summary.total_rows for summary in summaries)),
+        RowCount(0),
+        RowCount(ineligible_rows),
+        sum(issue.severity is ValidationSeverity.WARNING for issue in issues),
         AvailabilityStatus.AVAILABLE if not issues else AvailabilityStatus.UNAVAILABLE,
     )
 

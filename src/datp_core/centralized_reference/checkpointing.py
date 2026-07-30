@@ -24,7 +24,7 @@ from datp_core.domain.errors import (
     LeakageError,
     ScientificContractError,
 )
-from datp_core.domain.values import Checksum, MetricValue, RoundNumber, checksum_file, checksum_text
+from datp_core.domain.values import Checksum, MetricValue, RoundNumber, Seed, checksum_file, checksum_text
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
 from datp_core.protocols.training import fixed_terminal_checkpoint_status, require_non_test_checkpoint_selection_inputs
 from datp_core.runtime.compute import resolve_cuda_device
@@ -48,7 +48,7 @@ class CentralizedCheckpointCandidate:
     status: CheckpointStatus
     preprocessing_state_checksum: Checksum
     split_manifest_checksum: Checksum
-    training_seed_value: int
+    training_seed: Seed
     autoencoder_widths: tuple[int, ...]
 
     def __post_init__(self) -> None:
@@ -61,8 +61,6 @@ class CentralizedCheckpointCandidate:
                 "centralized checkpoint candidate has an invalid status",
                 subject=self.status,
             )
-        if self.training_seed_value < 0:
-            raise ValueError("training seed value must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,7 +148,7 @@ def retain_centralized_checkpoint_candidates(
                 status=CheckpointStatus.CANDIDATE,
                 preprocessing_state_checksum=training_result.preprocessing_state_checksum,
                 split_manifest_checksum=training_result.split_manifest_checksum,
-                training_seed_value=training_result.training_seed.value,
+                training_seed=training_result.training_seed,
                 autoencoder_widths=tuple(autoencoder.widths),
             )
         )
@@ -225,7 +223,7 @@ def _statused_candidates(
             status=status,
             preprocessing_state_checksum=item.preprocessing_state_checksum,
             split_manifest_checksum=item.split_manifest_checksum,
-            training_seed_value=item.training_seed_value,
+            training_seed=item.training_seed,
             autoencoder_widths=item.autoencoder_widths,
         )
         statused.append(rebuilt)
@@ -252,7 +250,7 @@ def validate_candidate_coordinates(
     *,
     preprocessing_checksum: Checksum,
     split_checksum: Checksum,
-    training_seed_value: int,
+    training_seed: Seed,
 ) -> None:
     for candidate in candidates:
         if candidate.coordinate != coordinate:
@@ -269,7 +267,7 @@ def validate_candidate_coordinates(
                 "checkpoint candidate split checksum mismatch",
                 subject=ContractSubject.SPLIT,
             )
-        if candidate.training_seed_value != training_seed_value:
+        if candidate.training_seed != training_seed:
             raise ScientificContractError(
                 "checkpoint candidate training seed mismatch",
                 subject=ContractSubject.SEED,

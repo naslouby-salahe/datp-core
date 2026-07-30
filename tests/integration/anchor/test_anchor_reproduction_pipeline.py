@@ -13,6 +13,7 @@ from datp_core.anchor.reproduction import (
 )
 from datp_core.domain.enums import ExperimentReadiness, FederatedThresholdMethod
 from datp_core.domain.errors import AnchorReproductionError
+from datp_core.domain.values import Seed
 from datp_core.orchestration.stages.verify_anchor import VerifyAnchorStageRequest, verify_anchor_stage
 from datp_core.protocols.anchor import (
     ANCHOR_DECISION_PROTOCOL,
@@ -24,14 +25,14 @@ from datp_core.protocols.anchor import (
 def _write_metrics(
     path: Path,
     *,
-    seed: int,
+    seed: Seed,
     cv_fpr: float,
     threshold_scope: str,
     checkpoint_identity: str,
 ) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "seed": seed,
+        "seed": seed.value,
         "dataset": "nbaiot",
         "regime": "a",
         "threshold_scope": threshold_scope,
@@ -66,14 +67,14 @@ def _fixture_roots(tmp_path: Path) -> tuple[Path, Path]:
         identity = f"{seed:064d}"
         _write_metrics(
             shared_root / f"seed_{seed}" / "metrics.json",
-            seed=seed,
+            seed=Seed(seed),
             cv_fpr=shared_value.value,
             threshold_scope="eligible_client_arithmetic_mean",
             checkpoint_identity=identity,
         )
         _write_metrics(
             local_root / f"seed_{seed}" / "metrics.json",
-            seed=seed,
+            seed=Seed(seed),
             cv_fpr=local_value.value,
             threshold_scope="per_client_percentile",
             checkpoint_identity=identity,

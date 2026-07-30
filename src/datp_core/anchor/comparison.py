@@ -25,7 +25,7 @@ from datp_core.domain.values import (
 from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
 
 
-def floats_match(
+def floats_match( # TODO: this is a temporary shim to avoid breaking existing code; eventually, we should remove this and use floats_absolutely_close directly
     left: float,
     right: float,
     *,

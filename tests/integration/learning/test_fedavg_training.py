@@ -14,7 +14,7 @@ from tests.unit.learning.federated.helpers import (
 )
 
 from datp_core.domain.enums import PublicationStatus
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.learning.federated.checkpointing import select_checkpoint
 from datp_core.learning.federated.fedavg import FedAvgTrainingRequest, train_fedavg
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
@@ -55,8 +55,8 @@ def test_fedavg_end_to_end_train_select_and_score(tmp_path: Path) -> None:
     scoring_clients = tuple(
         ClientScoringInput(
             client=client_dataset.training_input.client,
-            calibration_features=benign_frame(8, seed=index),
-            evaluation_features=benign_frame(8, seed=index + 50),
+            calibration_features=benign_frame(RowCount(8), seed=Seed(index)),
+            evaluation_features=benign_frame(RowCount(8), seed=Seed(index + 50)),
         )
         for index, client_dataset in enumerate(clients)
     )
@@ -90,9 +90,9 @@ def test_fedavg_reruns_the_identical_coordinate_and_reuses_the_published_trainin
         train_path = directory / "train.parquet"
         calibration_path = directory / "calibration.parquet"
         evaluation_path = directory / "evaluation.parquet"
-        benign_frame(16, seed=hash(client_id) % 1000).write_parquet(train_path)
-        benign_frame(8, seed=(hash(client_id) + 1) % 1000).write_parquet(calibration_path)
-        benign_frame(8, seed=(hash(client_id) + 2) % 1000).write_parquet(evaluation_path)
+        benign_frame(RowCount(16), seed=Seed(hash(client_id) % 1000)).write_parquet(train_path)
+        benign_frame(RowCount(8), seed=Seed((hash(client_id) + 1) % 1000)).write_parquet(calibration_path)
+        benign_frame(RowCount(8), seed=Seed((hash(client_id) + 2) % 1000)).write_parquet(evaluation_path)
         estimator_path = directory / "state.skops"
         estimator_path.write_bytes(b"placeholder")
         protocol = feature_protocol()

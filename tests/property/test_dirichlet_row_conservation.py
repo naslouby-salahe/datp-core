@@ -11,12 +11,12 @@ from datp_core.populations.nbaiot_dirichlet_clients import build_nbaiot_dirichle
 _CONCENTRATIONS = (0.1, 0.3, 0.5, 1.0, 10.0)
 
 
-@pytest.mark.parametrize("seed", range(5))
+@pytest.mark.parametrize("seed", [Seed(0), Seed(1), Seed(2), Seed(3), Seed(4)])
 @pytest.mark.parametrize("alpha", _CONCENTRATIONS)
-def test_dirichlet_never_drops_or_duplicates_rows(seed: int, alpha: float, nbaiot_canonical_root: Path) -> None:
+def test_dirichlet_never_drops_or_duplicates_rows(seed: Seed, alpha: float, nbaiot_canonical_root: Path) -> None:
     _, membership, diagnostics = build_nbaiot_dirichlet_clients(
         nbaiot_canonical_root,
-        partition_seed=Seed(seed),
+        partition_seed=seed,
         condition=dirichlet_condition(DirichletConcentration(alpha)),
         split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
     )

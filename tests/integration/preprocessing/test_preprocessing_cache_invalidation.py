@@ -53,7 +53,7 @@ def _partitions():
     return partitions, row_ids
 
 
-def _publish(tmp_path: Path, seed: int, identity: PreprocessingProtocolId) -> Path:
+def _publish(tmp_path: Path, seed: Seed, identity: PreprocessingProtocolId) -> Path:
     protocol = PreprocessingProtocol(
         identity=identity,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
@@ -75,7 +75,7 @@ def _publish(tmp_path: Path, seed: int, identity: PreprocessingProtocolId) -> Pa
             context=PreprocessingPublishContext(
                 dataset=DatasetId.NBAIOT,
                 population=PopulationId.NBAIOT_NATURAL_DEVICES,
-                partition_seed=Seed(seed),
+                partition_seed=seed,
                 split_protocol_identity=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
                 protocol=protocol,
                 canonical_schema_checksum=Checksum("f" * 64),
@@ -91,8 +91,8 @@ def _publish(tmp_path: Path, seed: int, identity: PreprocessingProtocolId) -> Pa
 
 
 def test_changed_seed_or_protocol_creates_distinct_asset(tmp_path: Path) -> None:
-    first = _publish(tmp_path, seed=0, identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION)
-    second = _publish(tmp_path, seed=1, identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION)
+    first = _publish(tmp_path, seed=Seed(0), identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION)
+    second = _publish(tmp_path, seed=Seed(1), identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION)
     # only one scientific-test protocol id exists; distinct seed is enough
     assert first != second
     assert first.is_file() and second.is_file()

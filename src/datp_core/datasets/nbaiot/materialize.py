@@ -18,6 +18,7 @@ from datp_core.datasets.materialization import (
 )
 from datp_core.datasets.models import CanonicalAssetRole, DatasetValidationReport, MaterializedDataset, SourceFileRole
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
+from datp_core.domain.values import RowCount
 
 from .reader import NBaIoTReader
 from .schema import NBAIOT_ARROW_SCHEMA, NBAIOT_SCHEMA, NBaIoTSourceLabel, parse_source_identity, source_relative_path
@@ -59,7 +60,7 @@ class NBaIoTMaterializer:
                     SourceFileRole.BENIGN
                     if parse_source_identity(path)[1] == NBaIoTSourceLabel.BENIGN
                     else SourceFileRole.ATTACK,
-                    row_count,
+                    RowCount(row_count),
                     source_relative_path,
                 )
                 for path, row_count in zip(ordered_paths, row_counts, strict=True)
@@ -69,9 +70,9 @@ class NBaIoTMaterializer:
             DatasetId.NBAIOT,
             (),
             (),
-            sum(row_counts),
-            0,
-            0,
+            RowCount(sum(row_counts)),
+            RowCount(0),
+            RowCount(0),
             0,
             AvailabilityStatus.AVAILABLE,
         )

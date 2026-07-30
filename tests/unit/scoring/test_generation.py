@@ -6,7 +6,7 @@ from tests.unit.scoring.helpers import selected_checkpoint
 
 from datp_core.domain.enums import CheckpointStatus
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum
+from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.scoring.generation import (
     ClientScoringInput,
@@ -22,13 +22,13 @@ def _clients() -> tuple[ClientScoringInput, ...]:
     return (
         ClientScoringInput(
             client=client_identity("client_a"),
-            calibration_features=benign_frame(6, seed=1),
-            evaluation_features=benign_frame(6, seed=2),
+            calibration_features=benign_frame(RowCount(6), seed=Seed(1)),
+            evaluation_features=benign_frame(RowCount(6), seed=Seed(2)),
         ),
         ClientScoringInput(
             client=client_identity("client_b"),
-            calibration_features=benign_frame(6, seed=3),
-            evaluation_features=benign_frame(6, seed=4),
+            calibration_features=benign_frame(RowCount(6), seed=Seed(3)),
+            evaluation_features=benign_frame(RowCount(6), seed=Seed(4)),
         ),
     )
 

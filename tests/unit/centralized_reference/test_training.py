@@ -28,7 +28,7 @@ from datp_core.centralized_reference.training import (
 )
 from datp_core.domain.enums import PartitionRole, ProcessedDataBranch
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabelSequence
+from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabelSequence, RowCount, Seed
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.models import FittedPreprocessingState
 
@@ -81,7 +81,7 @@ def test_training_rejects_undersized_batch(tmp_path: Path) -> None:
         train_centralized_autoencoder(
             CentralizedTrainingRequest(
                 coordinate=training_coordinate(),
-                training_features=benign_frame(8, seed=0),
+                training_features=benign_frame(RowCount(8), seed=Seed(0)),
                 feature_names=FEATURE_NAMES,
                 preprocessing_state=state,
                 split_manifest_checksum=Checksum("d" * 64),

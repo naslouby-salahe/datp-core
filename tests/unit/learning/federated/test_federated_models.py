@@ -19,6 +19,7 @@ from datp_core.domain.values import (
     ProximalCoefficient,
     RoundNumber,
     RowCount,
+    Seed,
 )
 from datp_core.learning.federated.models import (
     CheckpointCandidate,
@@ -33,7 +34,7 @@ from datp_core.learning.federated.models import (
 )
 from datp_core.protocols.models import CheckpointProtocol
 
-SEED = 0
+SEED = Seed(0)
 
 
 def _communication(round_number: RoundNumber) -> CommunicationRecord:
@@ -45,59 +46,51 @@ def _communication(round_number: RoundNumber) -> CommunicationRecord:
     )
 
 
-def _round_result(coordinate, round_number: int) -> FederatedRoundResult:
-    number = RoundNumber(round_number)
+def _round_result(coordinate, round_number: RoundNumber) -> FederatedRoundResult:
     return FederatedRoundResult(
-        round_number=number,
+        round_number=round_number,
         client_results=(
             ClientTrainingResult(
                 client=client_identity("client_a"), sample_count=RowCount(8), local_loss=MetricValue(0.1)
             ),
         ),
         aggregate_loss=MetricValue(0.1),
-        communication=_communication(number),
+        communication=_communication(round_number),
         global_state_reference=GlobalModelStateReference(
-            coordinate=coordinate, round_number=number, state_checksum=Checksum("a" * 64), tensor_path=None
+            coordinate=coordinate, round_number=round_number, state_checksum=Checksum("a" * 64), tensor_path=None
         ),
         personalized_state_references=(),
     )
 
 
 def test_coordinate_rejects_coefficient_for_fedavg() -> None:
-    from datp_core.domain.values import Seed
     from datp_core.learning.federated.models import FederatedTrainingCoordinate
 
     with pytest.raises(ScientificContractError, match="no model coefficient"):
         FederatedTrainingCoordinate(
-            population=fedavg_coordinate(Seed(SEED)).population,
-            training_seed=Seed(SEED),
-            split_protocol=fedavg_coordinate(Seed(SEED)).split_protocol,
-            preprocessing_identity=fedavg_coordinate(Seed(SEED)).preprocessing_identity,
+            population=fedavg_coordinate(SEED).population,
+            training_seed=SEED,
+            split_protocol=fedavg_coordinate(SEED).split_protocol,
+            preprocessing_identity=fedavg_coordinate(SEED).preprocessing_identity,
             model=TrainingModelId.FEDAVG_AUTOENCODER,
             model_coefficient=ProximalCoefficient(0.1),
         )
 
 
 def test_coordinate_requires_coefficient_for_fedprox() -> None:
-    from datp_core.domain.values import Seed
-
     with pytest.raises(ScientificContractError, match="proximal coefficient"):
-        fedprox_coordinate(Seed(SEED), None)  # type: ignore[arg-type]
+        fedprox_coordinate(SEED, None)  # type: ignore[arg-type]
 
 
 def test_ditto_global_and_personalized_coordinates_are_structurally_distinct() -> None:
-    from datp_core.domain.values import Seed
-
-    global_coordinate, personalized_coordinate, _regularization = ditto_coordinates(Seed(SEED))
+    global_coordinate, personalized_coordinate, _regularization = ditto_coordinates(SEED)
     assert global_coordinate.model is TrainingModelId.DITTO_GLOBAL_AUTOENCODER
     assert personalized_coordinate.model is TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER
     assert global_coordinate != personalized_coordinate
 
 
 def test_global_state_reference_rejects_personalized_coordinate() -> None:
-    from datp_core.domain.values import Seed
-
-    _global, personalized, _regularization = ditto_coordinates(Seed(SEED))
+    _global, personalized, _regularization = ditto_coordinates(SEED)
     with pytest.raises(ScientificContractError, match="personalized-model coordinate"):
         GlobalModelStateReference(
             coordinate=personalized, round_number=RoundNumber(1), state_checksum=Checksum("a" * 64), tensor_path=None
@@ -105,11 +98,9 @@ def test_global_state_reference_rejects_personalized_coordinate() -> None:
 
 
 def test_personalized_state_reference_requires_personalized_coordinate() -> None:
-    from datp_core.domain.values import Seed
-
     with pytest.raises(ScientificContractError, match="Ditto personalized coordinate"):
         PersonalizedModelStateReference(
-            coordinate=fedavg_coordinate(Seed(SEED)),
+            coordinate=fedavg_coordinate(SEED),
             client=client_identity("client_a"),
             round_number=RoundNumber(1),
             state_checksum=Checksum("a" * 64),
@@ -128,9 +119,7 @@ def test_communication_record_requires_serialized_message_size_basis() -> None:
 
 
 def test_round_result_rejects_duplicate_client_results() -> None:
-    from datp_core.domain.values import Seed
-
-    coordinate = fedavg_coordinate(Seed(SEED))
+    coordinate = fedavg_coordinate(SEED)
     number = RoundNumber(1)
     duplicate_client_result = ClientTrainingResult(
         client=client_identity("client_a"), sample_count=RowCount(8), local_loss=MetricValue(0.1)
@@ -149,27 +138,21 @@ def test_round_result_rejects_duplicate_client_results() -> None:
 
 
 def test_history_requires_consecutive_rounds_starting_at_one() -> None:
-    from datp_core.domain.values import Seed
-
-    coordinate = fedavg_coordinate(Seed(SEED))
+    coordinate = fedavg_coordinate(SEED)
     with pytest.raises(ScientificContractError, match="consecutive rounds"):
-        FederatedTrainingHistory(coordinate=coordinate, rounds=(_round_result(coordinate, 2),))
+        FederatedTrainingHistory(coordinate=coordinate, rounds=(_round_result(coordinate, RoundNumber(2)),))
 
 
 def test_history_accepts_consecutive_rounds() -> None:
-    from datp_core.domain.values import Seed
-
-    coordinate = fedavg_coordinate(Seed(SEED))
+    coordinate = fedavg_coordinate(SEED)
     history = FederatedTrainingHistory(
-        coordinate=coordinate, rounds=(_round_result(coordinate, 1), _round_result(coordinate, 2))
+        coordinate=coordinate, rounds=(_round_result(coordinate, RoundNumber(1)), _round_result(coordinate, RoundNumber(2)))
     )
     assert len(history.rounds) == 2
 
 
 def test_checkpoint_candidate_requires_client_only_for_ditto_personalized() -> None:
-    from datp_core.domain.values import Seed
-
-    coordinate = fedavg_coordinate(Seed(SEED))
+    coordinate = fedavg_coordinate(SEED)
     with pytest.raises(ScientificContractError, match="only Ditto personalized checkpoints"):
         CheckpointCandidate(
             coordinate=coordinate,
@@ -185,9 +168,7 @@ def test_checkpoint_candidate_requires_client_only_for_ditto_personalized() -> N
 
 
 def test_checkpoint_decision_requires_selected_round_equal_maximum_round() -> None:
-    from datp_core.domain.values import Seed
-
-    coordinate = fedavg_coordinate(Seed(SEED))
+    coordinate = fedavg_coordinate(SEED)
     candidate_one = CheckpointCandidate(
         coordinate=coordinate,
         round_number=RoundNumber(1),
@@ -213,11 +194,9 @@ def test_checkpoint_decision_requires_selected_round_equal_maximum_round() -> No
 
 
 def test_training_result_requires_matching_history_coordinate() -> None:
-    from datp_core.domain.values import Seed
-
-    coordinate = fedavg_coordinate(Seed(SEED))
-    other_coordinate = fedavg_coordinate(Seed(SEED + 1))
-    history = FederatedTrainingHistory(coordinate=other_coordinate, rounds=(_round_result(other_coordinate, 1),))
+    coordinate = fedavg_coordinate(SEED)
+    other_coordinate = fedavg_coordinate(Seed(SEED.value + 1))
+    history = FederatedTrainingHistory(coordinate=other_coordinate, rounds=(_round_result(other_coordinate, RoundNumber(1)),))
     with pytest.raises(ScientificContractError, match="own history coordinate"):
         FederatedTrainingResult(
             coordinate=coordinate,

@@ -6,7 +6,7 @@ from tests.unit.thresholding.helpers import client_scores
 
 from datp_core.domain.enums import QuantileInterpolationSemantics
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CoverageTarget, Quantile, ThresholdValue
+from datp_core.domain.values import CoverageTarget, Quantile, SummaryCoefficient, ThresholdValue
 from datp_core.thresholding.quantiles import (
     achieved_benign_exceedance,
     conformal_rank_index,
@@ -86,7 +86,7 @@ def test_gaussian_matched_exceedance_threshold_at_the_median_returns_the_mean() 
 
 
 def test_fixed_coefficient_threshold_matches_mean_plus_k_std() -> None:
-    result = fixed_coefficient_threshold(mean=10.0, variance=4.0, coefficient=2.0)
+    result = fixed_coefficient_threshold(mean=10.0, variance=4.0, coefficient=SummaryCoefficient(2.0))
     assert result.value == 10.0 + 2.0 * 2.0
 
 

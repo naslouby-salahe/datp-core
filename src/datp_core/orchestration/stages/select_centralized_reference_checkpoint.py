@@ -10,7 +10,7 @@ from datp_core.centralized_reference.checkpointing import (
 )
 from datp_core.centralized_reference.training import CentralizedTrainingCoordinate
 from datp_core.domain.enums import StageOperationId
-from datp_core.domain.values import Checksum, MetricValue
+from datp_core.domain.values import Checksum, MetricValue, Seed
 from datp_core.protocols.models import CheckpointProtocol
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
 
@@ -22,7 +22,7 @@ class SelectCentralizedCheckpointRequest:
     checkpoint_protocol: CheckpointProtocol
     preprocessing_checksum: Checksum
     split_checksum: Checksum
-    training_seed_value: int
+    training_seed: Seed
     held_out_metrics: tuple[MetricValue, ...] | None
     attack_labels_present: bool
 
@@ -41,7 +41,7 @@ def select_centralized_reference_checkpoint_stage(
         request.coordinate,
         preprocessing_checksum=request.preprocessing_checksum,
         split_checksum=request.split_checksum,
-        training_seed_value=request.training_seed_value,
+        training_seed=request.training_seed,
     )
     decision = select_centralized_checkpoint(
         request.candidates,

@@ -6,6 +6,7 @@ from tests.unit.learning.federated.helpers import AUTOENCODER, BATCH_SIZE, FEATU
 from tests.unit.scoring.helpers import selected_checkpoint
 
 from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.values import RowCount, Seed
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.scoring.generation import (
     ClientScoringInput,
@@ -31,8 +32,8 @@ def test_one_score_artifact_is_reusable_across_every_simulated_threshold_method(
     clients = (
         ClientScoringInput(
             client=client_identity("client_a"),
-            calibration_features=benign_frame(8, seed=1),
-            evaluation_features=benign_frame(8, seed=2),
+            calibration_features=benign_frame(RowCount(8), seed=Seed(1)),
+            evaluation_features=benign_frame(RowCount(8), seed=Seed(2)),
         ),
     )
     request = ScoreGenerationRequest(
@@ -76,8 +77,8 @@ def test_auroc_style_separability_over_the_same_score_artifact_is_invariant_acro
     clients = (
         ClientScoringInput(
             client=client_identity("client_a"),
-            calibration_features=benign_frame(8, seed=1),
-            evaluation_features=benign_frame(8, seed=2),
+            calibration_features=benign_frame(RowCount(8), seed=Seed(1)),
+            evaluation_features=benign_frame(RowCount(8), seed=Seed(2)),
         ),
     )
     request = ScoreGenerationRequest(
