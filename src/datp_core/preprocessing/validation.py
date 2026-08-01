@@ -205,6 +205,7 @@ def build_preprocessing_manifest(
         serialization_format=protocol.serialization_format,
         asset_paths=asset_paths,
         fit_partition=PartitionRole.TRAIN,
+        execution_identity=context.execution_identity,
     )
 
 

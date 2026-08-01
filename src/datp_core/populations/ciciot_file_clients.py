@@ -8,6 +8,7 @@ from datp_core.datasets.ciciot2023.schema import (
     CICIOT2023_SCHEMA,
     CICIoT2023ArtifactName,
     CICIoT2023Column,
+    CICIoT2023EligibilityReason,
     CICIoT2023NormalizedLabel,
 )
 from datp_core.datasets.models import CanonicalProvenanceColumn
@@ -35,6 +36,60 @@ _ELIGIBLE = CICIoT2023Column.MODEL_INPUT_ELIGIBLE
 _LABEL = CICIoT2023Column.LABEL
 _POPULATION = PopulationId.CICIOT_FILE_CLIENTS
 _IDENTITY = PopulationIdentityKind.FILE_DEFINED_PSEUDO_CLIENTS
+
+
+def ciciot_excluded_row_evidence(canonical_root: Path) -> pl.DataFrame:
+    """Return canonical rows rejected by the immutable model-input eligibility policy."""
+    csv_suffix = CICIoT2023ArtifactName.CSV_SUFFIX.value.replace(".", r"\.")
+    return (
+        pl.scan_parquet(canonical_data_glob(canonical_root))
+        .select(
+            pl.col(CanonicalProvenanceColumn.SOURCE_PATH).alias(SOURCE_PATH_COLUMN),
+            pl.col(CanonicalProvenanceColumn.STABLE_ROW_ID).alias(STABLE_ROW_ID_COLUMN),
+            pl.col(CanonicalProvenanceColumn.SOURCE_ROW_INDEX).alias(SOURCE_ROW_INDEX_COLUMN),
+            pl.col(CICIoT2023EligibilityReason.MISSING_OR_UNRECOGNIZED_LABEL),
+            pl.col(CICIoT2023EligibilityReason.NONFINITE_FEATURE),
+            pl.col(_ELIGIBLE),
+        )
+        .filter(~pl.col(_ELIGIBLE))
+        .with_columns(
+            pl.col(SOURCE_PATH_COLUMN)
+            .str.split("/")
+            .list.last()
+            .str.replace_all(csv_suffix, "")
+            .alias(CLIENT_ID_COLUMN)
+        )
+        .drop(_ELIGIBLE)
+        .select(
+            CLIENT_ID_COLUMN,
+            STABLE_ROW_ID_COLUMN,
+            SOURCE_PATH_COLUMN,
+            SOURCE_ROW_INDEX_COLUMN,
+            CICIoT2023EligibilityReason.MISSING_OR_UNRECOGNIZED_LABEL,
+            CICIoT2023EligibilityReason.NONFINITE_FEATURE,
+        )
+        .collect(engine="streaming")
+        .sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
+    )
+
+
+def ciciot_client_eligibility_evidence(excluded_rows: pl.DataFrame) -> pl.DataFrame:
+    """Aggregate typed canonical exclusion reasons by audited file-defined client."""
+    return (
+        excluded_rows.group_by(CLIENT_ID_COLUMN)
+        .agg(
+            pl.len().alias("excluded_row_count"),
+            pl.col(CICIoT2023EligibilityReason.MISSING_OR_UNRECOGNIZED_LABEL)
+            .sum()
+            .cast(pl.UInt64)
+            .alias(CICIoT2023EligibilityReason.MISSING_OR_UNRECOGNIZED_LABEL),
+            pl.col(CICIoT2023EligibilityReason.NONFINITE_FEATURE)
+            .sum()
+            .cast(pl.UInt64)
+            .alias(CICIoT2023EligibilityReason.NONFINITE_FEATURE),
+        )
+        .sort(CLIENT_ID_COLUMN)
+    )
 
 
 def build_ciciot_file_clients(

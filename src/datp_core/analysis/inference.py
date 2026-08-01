@@ -120,8 +120,12 @@ class ExternalPairedAnalysisPlan:
     confidence_level: ConfidenceLevel
 
     def __post_init__(self) -> None:
-        if self.evidence_role not in {EvidenceRole.EXTERNAL_VALIDATION, EvidenceRole.TEMPORAL_BOUNDARY}:
-            raise ValueError("external paired analysis requires external or temporal evidence")
+        if self.evidence_role not in {
+            EvidenceRole.EXTERNAL_VALIDATION,
+            EvidenceRole.APPLICABILITY_BOUNDARY,
+            EvidenceRole.TEMPORAL_BOUNDARY,
+        }:
+            raise ValueError("supplementary paired analysis requires external, applicability, or temporal evidence")
         if not self.seed_cohort or len(set(self.seed_cohort)) != len(self.seed_cohort):
             raise ValueError("external paired analysis requires a unique predeclared seed cohort")
         if self.left_method is self.right_method:
@@ -143,7 +147,11 @@ class ExternalPairedContrast:
     delta: MetricValue
 
     def __post_init__(self) -> None:
-        if self.evidence_role not in {EvidenceRole.EXTERNAL_VALIDATION, EvidenceRole.TEMPORAL_BOUNDARY}:
+        if self.evidence_role not in {
+            EvidenceRole.EXTERNAL_VALIDATION,
+            EvidenceRole.APPLICABILITY_BOUNDARY,
+            EvidenceRole.TEMPORAL_BOUNDARY,
+        }:
             raise ValueError("external paired contrasts cannot carry confirmatory evidence")
         if self.seed != self.coordinate.training_seed:
             raise ValueError("external paired contrast seed must equal its coordinate seed")
@@ -333,6 +341,14 @@ def external_paired_bca_interval(
     analysis_seed: Seed,
 ) -> BootstrapInterval:
     """Supplementary paired BCa interval without a confirmatory decision pathway."""
+    if replicate_count != BOOTSTRAP_REPLICATE_COUNT:
+        return _blocked_interval(
+            _point_estimate_or_none(contrasts),
+            plan.confidence_level,
+            replicate_count,
+            analysis_seed,
+            BcaReason.BOOTSTRAP_REPLICATE_COUNT_MISMATCH,
+        )
     try:
         validated = validate_external_contrasts(contrasts, plan)
     except _ConfirmatoryContractError as error:
@@ -478,7 +494,7 @@ def _jackknife_acceleration(deltas: np.ndarray) -> float | None:
     return float(np.sum(centered**3) / denominator)
 
 
-def paired_wilcoxon(contrasts: tuple[PairedContrast, ...]) -> WilcoxonResult:
+def paired_wilcoxon(contrasts: tuple[PairedContrast, ...] | tuple[ExternalPairedContrast, ...]) -> WilcoxonResult:
     deltas = _deltas(contrasts)
     nonzero = int(np.count_nonzero(deltas))
     if not deltas.size or not nonzero:
@@ -519,7 +535,9 @@ def paired_wilcoxon(contrasts: tuple[PairedContrast, ...]) -> WilcoxonResult:
     )
 
 
-def matched_pairs_rank_biserial(contrasts: tuple[PairedContrast, ...]) -> RankBiserialResult:
+def matched_pairs_rank_biserial(
+    contrasts: tuple[PairedContrast, ...] | tuple[ExternalPairedContrast, ...],
+) -> RankBiserialResult:
     deltas = _deltas(contrasts)
     nonzero = deltas[deltas != 0]
     if not nonzero.size:
@@ -563,7 +581,9 @@ def holm_adjust(raw_p_values: tuple[float, ...], *, family_name: str, alpha: Rat
     )
 
 
-def sign_consistency(contrasts: tuple[PairedContrast, ...]) -> PairedDifferenceCounts:
+def sign_consistency(
+    contrasts: tuple[PairedContrast, ...] | tuple[ExternalPairedContrast, ...],
+) -> PairedDifferenceCounts:
     return count_paired_differences(tuple(item.delta.value for item in contrasts))
 
 

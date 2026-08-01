@@ -73,7 +73,9 @@ from datp_core.evaluation.threshold_estimation import (
     evaluate_threshold_estimate,
 )
 from datp_core.evaluation.traffic_rates import ValidatedTrafficRateEvidence
+from datp_core.experiments.models import ExternalTemporalExecutionIdentity, require_execution_identity
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.populations.capabilities import population_capabilities
 from datp_core.populations.models import ClientIdentity, ClientPartitionCounts, PopulationOutcomeLabel
 from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
 from datp_core.scoring.models import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
@@ -207,6 +209,8 @@ class EvaluateFederatedRequest:
     output_directory: Path
     overwrite: bool
     temporal_provenance: TemporalDeploymentProvenance | None = None
+    temporal_threshold_provenance: TemporalDeploymentProvenance | None = None
+    execution_identity: ExternalTemporalExecutionIdentity | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -221,14 +225,31 @@ class FederatedEvaluationResult:
 
 def _validate_temporal_provenance(request: EvaluateFederatedRequest) -> None:
     provenance = request.temporal_provenance
-    if provenance is None:
-        return
-    if request.evidence_role is not EvidenceRole.TEMPORAL_BOUNDARY:
+    temporal = request.evidence_role is EvidenceRole.TEMPORAL_BOUNDARY
+    if not temporal and (provenance is not None or request.temporal_threshold_provenance is not None):
         raise ScientificContractError(
-            "temporal deployment provenance requires temporal-boundary evidence",
+            "temporal provenance is valid only for temporal-boundary evaluation",
+            subject=request.evidence_role,
+        )
+    if not temporal:
+        return
+    if provenance is None or request.temporal_threshold_provenance is None:
+        raise ScientificContractError(
+            "temporal evaluation requires score and threshold provenance",
+            subject=request.evidence_role,
+        )
+    if provenance != request.temporal_threshold_provenance:
+        raise ScientificContractError(
+            "temporal threshold provenance must bind the evaluated score state",
             subject=request.evidence_role,
         )
     provenance.validate_score_manifest(request.score_manifest)
+    identity = require_execution_identity(request.execution_identity, request.score_manifest.coordinate.population)
+    if identity is None or identity.temporal_state is not provenance.state:
+        raise ScientificContractError(
+            "temporal evaluation provenance must match the execution identity state",
+            subject=request.score_manifest.coordinate.population,
+        )
 
 
 def evaluate_federated_stage(request: EvaluateFederatedRequest) -> FederatedEvaluationResult:
@@ -287,6 +308,15 @@ def _validate_evaluation_request(request: EvaluateFederatedRequest) -> None:
         raise ScientificContractError("threshold and score coordinates must match")
     if request.cohort.population is not request.score_manifest.coordinate.population:
         raise ScientificContractError("evaluation cohort must match score population")
+    capabilities = population_capabilities(request.score_manifest.coordinate.population)
+    if request.evidence_role is not capabilities.evidentiary_role:
+        raise ScientificContractError(
+            "evaluation evidence role must match the population capability contract",
+            subject=request.evidence_role,
+        )
+    identity = require_execution_identity(request.execution_identity, request.score_manifest.coordinate.population)
+    if identity is not None:
+        identity.require_evidence_role(request.evidence_role)
 
 
 def _evaluate_score_record(
@@ -434,7 +464,12 @@ def _client_aurocs(
     if tuple(item.client_id for item in eligibility) != tuple(record.scored_client.client_id for record in records):
         raise ScientificContractError("evaluation inputs require cohort coverage for every score client")
     return tuple(
-        _client_auroc_evidence(manifest.coordinate, record, eligibility_record)
+        _client_auroc_evidence(
+            manifest.coordinate,
+            record,
+            eligibility_record,
+            population_capabilities(manifest.coordinate.population).evidentiary_role,
+        )
         for record, eligibility_record in zip(records, eligibility, strict=True)
     )
 
@@ -443,6 +478,7 @@ def _client_auroc_evidence(
     coordinate: FederatedTrainingCoordinate,
     record: ScoreRecord,
     eligibility: ClientEligibilityRecord,
+    evidence_role: EvidenceRole,
 ) -> ClientAurocEvidence:
     scores, labels, rows = _score_arrays(pl.read_parquet(record.path))
     confusion = calculate_confusion_counts(
@@ -463,7 +499,7 @@ def _client_auroc_evidence(
             confusion=confusion,
             metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),
             warnings=(),
-            evidence_role=EvidenceRole.CONFIRMATORY,
+            evidence_role=evidence_role,
             evaluation_score_checksum=record.checksum,
             evaluation_label_checksum=checksum_text("|".join(label.value for label in labels)),
             source_row_checksum=checksum_text("|".join(rows)),

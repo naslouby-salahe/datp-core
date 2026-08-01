@@ -15,7 +15,7 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values import BootstrapReplicateCount, ConfidenceLevel, MetricValue, Seed
+from datp_core.domain.values import ConfidenceLevel, MetricValue, Seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.statistics import BOOTSTRAP_REPLICATE_COUNT, CONFIRMATORY_INFERENCE_PROTOCOL
 
@@ -65,7 +65,7 @@ def test_external_interval_is_explicitly_supplementary_and_not_confirmatory() ->
     result = external_paired_bca_interval(
         tuple(_external_contrast(seed) for seed in range(1, 5)),
         plan=plan,
-        replicate_count=BootstrapReplicateCount(1000),
+        replicate_count=BOOTSTRAP_REPLICATE_COUNT,
         analysis_seed=Seed(73),
     )
 

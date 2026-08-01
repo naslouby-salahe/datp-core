@@ -5,7 +5,13 @@ from pathlib import Path
 import polars as pl
 
 from datp_core.datasets.edge_iiotset.capabilities import EDGE_TEMPORAL_SENSOR_GROUPS
-from datp_core.datasets.edge_iiotset.schema import EDGE_SCHEMA, EdgeAssetRole, EdgeCanonicalColumn
+from datp_core.datasets.edge_iiotset.schema import (
+    EDGE_BENIGN_SENSOR_GROUPS,
+    EDGE_SCHEMA,
+    EdgeAssetRole,
+    EdgeCanonicalColumn,
+    EdgeSensorGroup,
+)
 from datp_core.datasets.models import (
     CanonicalManifestDocument,
     CanonicalProvenanceColumn,
@@ -28,6 +34,7 @@ from datp_core.populations.models import (
     STABLE_ROW_ID_COLUMN,
     ChronologicalPartitionDiagnostics,
     ChronologicalPartitionDiagnosticsDocument,
+    ChronologyExclusionReason,
     PopulationManifest,
     PopulationOutcomeLabel,
     SplitConstructionRequest,
@@ -83,7 +90,7 @@ def build_edge_temporal_groups(
         split_protocol=split_protocol,
         programme_candidates=programme_candidates,
         accepted_ids=eligible_ids,
-        excluded_ids=excluded_ids,
+        excluded_ids=tuple(group_id for group_id in excluded_ids if group_id in programme_candidates),
         membership=membership,
     )
     static_reference_manifest, static_reference_membership = _matched_static_reference(
@@ -125,7 +132,7 @@ def _assemble_manifest(
 
 def _chronology_eligibility(
     canonical_root: Path,
-) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], int]:
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[ChronologyExclusionReason, ...], int]:
     manifest_path = Path(canonical_root) / CanonicalPublicationArtifact.MANIFEST
     if not manifest_path.is_file():
         raise DataIntegrityError(
@@ -136,21 +143,25 @@ def _chronology_eligibility(
     document = CanonicalManifestDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
     eligible: list[str] = []
     excluded: list[str] = []
-    reasons: list[str] = []
+    reasons: list[ChronologyExclusionReason] = []
     duplicate_total = 0
-    for group in sorted(EDGE_TEMPORAL_SENSOR_GROUPS):
+    for group in sorted(EDGE_BENIGN_SENSOR_GROUPS):
         group_id = group.value
+        if group is EdgeSensorGroup.MODBUS:
+            excluded.append(group_id)
+            reasons.append(ChronologyExclusionReason.MODBUS_ADDRESS_LITERAL)
+            continue
         evidence = _chronology_for_group(group_id, document.chronology)
         if evidence is None:
             excluded.append(group_id)
-            reasons.append("chronology evidence absent from the canonical manifest")
+            reasons.append(ChronologyExclusionReason.CANONICAL_CHRONOLOGY_MISSING)
             continue
         duplicate_total += evidence.duplicate_timestamp_count
         if evidence.temporal_eligible:
             eligible.append(group_id)
         else:
             excluded.append(group_id)
-            reasons.append(evidence.reason)
+            reasons.append(ChronologyExclusionReason.CANONICAL_CHRONOLOGY_INELIGIBLE)
     return tuple(eligible), tuple(excluded), tuple(reasons), duplicate_total
 
 

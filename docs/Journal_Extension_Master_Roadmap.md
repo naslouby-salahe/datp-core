@@ -1608,6 +1608,26 @@ Ten benign sensor-group folders form the static external client population. The 
 
 Eligible-benign coverage is 1.0 under the locked `n_k >= 100` rule.
 
+**Model-input representation and architecture**
+
+The canonical Edge rows retain their original lexical values for provenance, but the external detector has a separate, immutable numeric model-input schema. A complete canonical-data audit identified 33 columns for which every non-null value in all 11,209,913 static benign rows parses strictly as a finite numeric value. Those columns, in canonical order, are:
+
+```text
+icmp.seq_le, icmp.unused, http.file_data, http.content_length,
+http.request.uri.query, http.request.method, http.referer,
+http.request.full_uri, http.request.version, http.response, http.tls_port,
+tcp.ack, tcp.connection.fin, tcp.connection.rst, tcp.connection.syn,
+tcp.connection.synack, tcp.flags.ack, tcp.seq, tcp.srcport, udp.port,
+udp.stream, udp.time_delta, dns.qry.type, dns.retransmission,
+dns.retransmit_request, dns.retransmit_request_in,
+mqtt.conflag.cleansess, mqtt.msg_decoded_as, mqtt.msgtype, mqtt.topic_len,
+mqtt.ver, mbtcp.trans_id, mbtcp.unit_id
+```
+
+This is a prospective, versioned numeric-projection amendment. It uses strict numeric parsing only; it does not fill, coerce, hash, ordinal-encode, one-hot encode, or fit a vocabulary for mixed lexical fields. `raw_timestamp`, labels, source folders, and client identity remain provenance or outcome fields and never enter the model. A row whose retained numeric value is null or non-finite is excluded with provenance; no missing value is manufactured. The input feature order is part of the preprocessing protocol checksum and is identical for every client.
+
+The external autoencoder is therefore a 33-dimensional symmetric model with widths `(33, 25, 17, 11, 8, 11, 17, 25, 33)`. It preserves the locked N-BaIoT model's encoder depth, symmetry, and rounded relative compression ratios while matching the declared schema exactly. Padding the vector to 115 dimensions, truncating an existing model, or silently reusing 115-input weights is prohibited. The Edge-IIoTset source establishes the 61 extracted features and the independent testbed; it does not prescribe a categorical encoder, so no unvalidated categorical transformation is represented as source-locked.[^edge-iiotset]
+
 **Available outcomes**
 
 Regime D supports:

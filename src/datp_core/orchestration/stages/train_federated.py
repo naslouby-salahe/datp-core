@@ -128,6 +128,7 @@ class TrainDittoStageResult:
 
 
 def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult:
+    _require_autoencoder_matches_preprocessing(request.autoencoder, request.client_publications)
     clients = _client_datasets(request.coordinate, request.client_publications)
     preprocessing_checksum = preprocessing_state_set_checksum(
         tuple(client.preprocessing_state.estimator_checksum for client in clients)
@@ -181,6 +182,7 @@ def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult
 
 
 def train_fedprox_stage(request: TrainFedProxRequest) -> TrainFederatedStageResult:
+    _require_autoencoder_matches_preprocessing(request.autoencoder, request.client_publications)
     clients = _client_datasets(request.coordinate, request.client_publications)
     preprocessing_checksum = preprocessing_state_set_checksum(
         tuple(client.preprocessing_state.estimator_checksum for client in clients)
@@ -234,6 +236,7 @@ def train_fedprox_stage(request: TrainFedProxRequest) -> TrainFederatedStageResu
 
 
 def train_ditto_stage(request: TrainDittoRequest) -> TrainDittoStageResult:
+    _require_autoencoder_matches_preprocessing(request.autoencoder, request.client_publications)
     clients = _client_datasets(request.global_coordinate, request.client_publications)
     preprocessing_checksum = preprocessing_state_set_checksum(
         tuple(client.preprocessing_state.estimator_checksum for client in clients)
@@ -407,3 +410,28 @@ def _client_datasets(
             FedAvgClientDataset(training_input=training_input, preprocessing_state=publication.result.fitted_state)
         )
     return tuple(datasets)
+
+
+def _require_autoencoder_matches_preprocessing(
+    autoencoder: AutoencoderProtocol,
+    client_publications: tuple[ClientPreprocessPublication, ...],
+) -> None:
+    """Fail before training when a declared model cannot reconstruct its published feature space."""
+    if not client_publications:
+        raise ScientificContractError(
+            "federated training requires published client preprocessing", subject=ContractSubject.TRAINING
+        )
+    expected_names = client_publications[0].result.transformed_schema.feature_names
+    expected_width = len(expected_names)
+    if autoencoder.widths[0] != expected_width or autoencoder.widths[-1] != expected_width:
+        raise ScientificContractError(
+            "autoencoder input and reconstruction widths must match the published transformed schema",
+            subject=ContractSubject.WIDTHS,
+        )
+    if any(
+        publication.result.transformed_schema.feature_names != expected_names for publication in client_publications
+    ):
+        raise ScientificContractError(
+            "federated clients must publish one identical transformed feature schema",
+            subject=ContractSubject.SCHEMA,
+        )

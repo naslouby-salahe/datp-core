@@ -9,6 +9,7 @@ from datp_core.protocols.training import (
     DITTO_REGULARIZATION_GRID,
     DITTO_RETAINED_EFFECT_MINIMUM,
     DITTO_TRAINING_PROTOCOLS,
+    EDGE_IIOTSET_NUMERIC_AUTOENCODER,
     FEDAVG_LOCAL_EPOCHS,
     FEDAVG_TRAINING_PROTOCOL,
     FEDPROX_COEFFICIENTS,
@@ -27,6 +28,7 @@ def test_training_grids_are_locked() -> None:
     assert DITTO_PARTIAL_EFFECT_MINIMUM.value == 0.25
     assert DITTO_ALTERNATIVE_ROUTE_DIFFERENCE.value == 0.05
     assert NBAIOT_AUTOENCODER.widths == (115, 86, 58, 38, 29, 38, 58, 86, 115)
+    assert EDGE_IIOTSET_NUMERIC_AUTOENCODER.widths == (33, 25, 17, 11, 8, 11, 17, 25, 33)
     assert OPTIMIZER.identity is OptimizerId.ADAM
     assert LEARNING_RATE.value == 0.001
     assert BATCH_SIZE.value == 256

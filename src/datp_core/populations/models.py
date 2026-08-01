@@ -137,6 +137,14 @@ class PopulationFeasibilityReason(StrEnum):
     EMPTY_ACCEPTED_CLIENTS = "empty_accepted_clients"
 
 
+class ChronologyExclusionReason(StrEnum):
+    """Auditable reasons a static sensor group is inadmissible for temporal execution."""
+
+    CANONICAL_CHRONOLOGY_MISSING = "canonical_chronology_missing"
+    CANONICAL_CHRONOLOGY_INELIGIBLE = "canonical_chronology_ineligible"
+    MODBUS_ADDRESS_LITERAL = "modbus_address_literal"
+
+
 class PopulationManifestDocument(StrictModel):
     population: PopulationId
     dataset: DatasetId
@@ -231,7 +239,7 @@ class ChronologicalPartitionDiagnosticsDocument(StrictModel):
     observed_eligible_group_count: int
     eligible_group_ids: tuple[str, ...]
     excluded_group_ids: tuple[str, ...]
-    exclusion_reasons: tuple[str, ...]
+    exclusion_reasons: tuple[ChronologyExclusionReason, ...]
     duplicate_timestamp_rows: RowCount
     total_temporal_rows: RowCount
 

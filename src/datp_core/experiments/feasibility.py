@@ -33,6 +33,15 @@ class FeasibilityReason(StrEnum):
     FUTURE_LEAKAGE = "future_leakage"
     DIVERGENCE_SEMANTICS_UNRESOLVED = "divergence_semantics_unresolved"
     ATTACK_ASSIGNMENT_MISREPRESENTED = "attack_assignment_misrepresented"
+    UNSUPPORTED_TEMPORAL_EXECUTION_MODE = "unsupported_temporal_execution_mode"
+
+
+class TemporalExecutionMode(StrEnum):
+    ONE_SHOT = "one_shot"
+    STREAMING = "streaming"
+    PERIODIC = "periodic"
+    TRIGGERED = "triggered"
+    ONLINE = "online"
 
 
 _ATTACK_SENSITIVE_METRICS = frozenset(
@@ -70,6 +79,7 @@ class ExternalTemporalFeasibilityRequest:
     divergence_required: bool = False
     divergence_semantics_resolved: bool = True
     temporal_state: TemporalState | None = None
+    temporal_execution_mode: TemporalExecutionMode = TemporalExecutionMode.ONE_SHOT
     recovery_ratio_requested: bool = False
 
 
@@ -106,7 +116,7 @@ def assess_external_temporal_feasibility(request: ExternalTemporalFeasibilityReq
         return _temporal_decision(request)
     return _infeasible(
         FeasibilityReason.INVALID_EXPERIMENT_IDENTITY,
-        "Phase 11 permits only Edge static, CIC file-client, and Edge temporal populations",
+        "external and temporal execution permits only Edge static, CIC file-client, and Edge temporal populations",
     )
 
 
@@ -133,7 +143,7 @@ def _validate_identity(request: ExternalTemporalFeasibilityRequest) -> Feasibili
         case _:
             return _infeasible(
                 FeasibilityReason.INVALID_EXPERIMENT_IDENTITY,
-                "experiment, population, and evidence role must be the declared Phase 11 tuple",
+                "experiment, population, and evidence role must match one declared external or temporal tuple",
             )
 
 
@@ -172,6 +182,11 @@ def _ciciot_decision(request: ExternalTemporalFeasibilityRequest) -> Feasibility
 
 
 def _temporal_decision(request: ExternalTemporalFeasibilityRequest) -> FeasibilityDecision:
+    if request.temporal_execution_mode is not TemporalExecutionMode.ONE_SHOT:
+        return _infeasible(
+            FeasibilityReason.UNSUPPORTED_TEMPORAL_EXECUTION_MODE,
+            "temporal recalibration permits one-shot execution only",
+        )
     if request.temporal_state is None:
         return _infeasible(
             FeasibilityReason.INVALID_EXPERIMENT_IDENTITY, "temporal execution requires a declared deployment state"
@@ -214,7 +229,7 @@ def _temporal_decision(request: ExternalTemporalFeasibilityRequest) -> Feasibili
 def _threshold_and_artifact_decision(request: ExternalTemporalFeasibilityRequest) -> FeasibilityDecision:
     if request.threshold_method is FederatedThresholdMethod.FAMILY_THRESHOLD:
         return _infeasible(
-            FeasibilityReason.FAMILY_THRESHOLD_UNAVAILABLE, "Phase 11 populations have no audited family taxonomy"
+            FeasibilityReason.FAMILY_THRESHOLD_UNAVAILABLE, "these populations have no audited family taxonomy"
         )
     if (
         request.threshold_method is FederatedThresholdMethod.CLUSTER_THRESHOLD
@@ -222,7 +237,7 @@ def _threshold_and_artifact_decision(request: ExternalTemporalFeasibilityRequest
     ):
         return _infeasible(
             FeasibilityReason.GROUP_ASSIGNMENT_UNAVAILABLE,
-            "grouped thresholds require a completed Phase 09 assignment artifact",
+            "grouped thresholds require a completed assignment artifact",
         )
     capabilities = population_capabilities(request.population)
     if request.threshold_method not in capabilities.valid_threshold_methods:

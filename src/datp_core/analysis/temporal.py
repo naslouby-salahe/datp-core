@@ -7,7 +7,7 @@ from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, PartitionRo
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, Seed, checksum_text
 from datp_core.protocols.metrics import TEMPORAL_CV_MATERIALITY_CUTOFF
-from datp_core.scoring.models import ScoreArtifactManifest
+from datp_core.scoring.models import ScoreArtifactManifest, ScoreRecord
 
 
 class TemporalInterpretation(StrEnum):
@@ -135,11 +135,8 @@ def _expected_partition_roles(state: TemporalState) -> tuple[PartitionRole, Part
             return PartitionRole.FUTURE_RECALIBRATION, PartitionRole.EVALUATION
 
 
-def _score_set_checksum(records: tuple[object, ...]) -> Checksum:
-    entries = sorted(
-        f"{record.scored_client.client_id}:{record.checksum.value}"  # type: ignore[attr-defined]
-        for record in records
-    )
+def _score_set_checksum(records: tuple[ScoreRecord, ...]) -> Checksum:
+    entries = sorted(f"{record.scored_client.client_id}:{record.checksum.value}" for record in records)
     return checksum_text("|".join(entries))
 
 

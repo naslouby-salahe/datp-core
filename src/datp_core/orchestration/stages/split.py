@@ -11,15 +11,26 @@ from datp_core.datasets.edge_iiotset.schema import EdgeCanonicalColumn
 from datp_core.domain.enums import PopulationId, PublicationStatus, SplitProtocolId, StageOperationId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, Seed, checksum_file, checksum_text
+from datp_core.experiments.models import (
+    ExecutionIdentityDocument,
+    ExternalTemporalExecutionIdentity,
+    require_execution_identity,
+)
 from datp_core.populations.edge_temporal_groups import split_temporal_membership
 from datp_core.populations.integrity import validate_no_future_history_leakage, validate_split_manifest
-from datp_core.populations.models import PopulationManifest, SplitConstructionRequest, SplitManifest
+from datp_core.populations.models import (
+    PopulationManifest,
+    SplitConstructionRequest,
+    SplitManifest,
+    SplitManifestDocument,
+)
 from datp_core.populations.splits import split_membership
 
 
 @dataclass(frozen=True, slots=True)
 class SplitRequest:
     population: PopulationId
+    execution_identity: ExternalTemporalExecutionIdentity
     population_manifest: PopulationManifest
     membership: pl.DataFrame
     partition_seed: Seed
@@ -27,6 +38,9 @@ class SplitRequest:
     overwrite: bool
     matched_static_reference_manifest: PopulationManifest | None = None
     matched_static_reference_membership: pl.DataFrame | None = None
+
+    def __post_init__(self) -> None:
+        require_execution_identity(self.execution_identity, self.population)
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,14 +55,20 @@ class SplitResult:
 
 
 def split_stage(request: SplitRequest) -> SplitResult:
-    """Split a Phase 11 population and, for temporal inputs, its row-matched static reference."""
+    """Split an external or temporal population and its row-matched static reference when required."""
     result = _split(request)
-    payload = _manifest_payload(result)
+    payload = _manifest_payload(result, request.execution_identity)
     digest = checksum_text(payload)
 
     def write(temporary: Path) -> None:
+        (temporary / "execution_identity.json").write_text(
+            request.execution_identity.document.model_dump_json(indent=2) + "\n", encoding="utf-8"
+        )
         result.assignments.write_parquet(temporary / "split_assignments.parquet")
-        (temporary / "split_manifest.json").write_text(payload, encoding="utf-8")
+        (temporary / "split_manifest.json").write_text(
+            result.manifest.document.model_dump_json(indent=2) + "\n",
+            encoding="utf-8",
+        )
         if (
             result.matched_static_reference_assignments is not None
             and result.matched_static_reference_manifest is not None
@@ -65,7 +85,7 @@ def split_stage(request: SplitRequest) -> SplitResult:
         AtomicPublication(
             request.output_directory,
             request.overwrite,
-            lambda directory: _is_reusable(directory, digest),
+            lambda directory: _is_reusable(directory, request, result, digest),
             write,
             rmtree,
         )
@@ -149,14 +169,52 @@ def _require_matching_reference_rows(temporal: pl.DataFrame, static: pl.DataFram
         )
 
 
-def _manifest_payload(result: SplitResult) -> str:
-    payload = result.manifest.document.model_dump_json(indent=2)
+def _manifest_payload(result: SplitResult, identity: ExternalTemporalExecutionIdentity) -> str:
+    payload = "\n".join(
+        (identity.document.model_dump_json(indent=2), result.manifest.document.model_dump_json(indent=2))
+    )
     if result.matched_static_reference_manifest is not None:
         payload += "\n" + result.matched_static_reference_manifest.document.model_dump_json(indent=2)
     return payload + "\n"
 
 
-def _is_reusable(directory: Path, digest: Checksum) -> bool:
+def _is_reusable(directory: Path, request: SplitRequest, expected: SplitResult, digest: Checksum) -> bool:
     complete = directory / "COMPLETE"
+    identity_path = directory / "execution_identity.json"
     manifest = directory / "split_manifest.json"
-    return complete.is_file() and manifest.is_file() and complete.read_text(encoding="utf-8").strip() == digest.value
+    assignments = directory / "split_assignments.parquet"
+    if not (
+        complete.is_file()
+        and identity_path.is_file()
+        and manifest.is_file()
+        and assignments.is_file()
+        and complete.read_text(encoding="utf-8").strip() == digest.value
+    ):
+        return False
+    try:
+        if (
+            ExecutionIdentityDocument.model_validate_json(identity_path.read_text(encoding="utf-8"))
+            != request.execution_identity.document
+        ):
+            return False
+        persisted = SplitManifestDocument.model_validate_json(manifest.read_text(encoding="utf-8"))
+        if persisted != expected.manifest.document:
+            return False
+        validate_split_manifest(request.membership, pl.read_parquet(assignments), SplitManifest(persisted))
+        if expected.matched_static_reference_manifest is not None:
+            static_manifest = SplitManifestDocument.model_validate_json(
+                (directory / "matched_static_reference_split_manifest.json").read_text(encoding="utf-8")
+            )
+            if static_manifest != expected.matched_static_reference_manifest.document:
+                return False
+            static_assignments = directory / "matched_static_reference_assignments.parquet"
+            if not static_assignments.is_file() or request.matched_static_reference_membership is None:
+                return False
+            validate_split_manifest(
+                request.matched_static_reference_membership,
+                pl.read_parquet(static_assignments),
+                SplitManifest(static_manifest),
+            )
+    except (OSError, ValueError):
+        return False
+    return True

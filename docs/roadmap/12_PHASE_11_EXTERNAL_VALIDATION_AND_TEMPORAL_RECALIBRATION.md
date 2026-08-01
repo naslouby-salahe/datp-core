@@ -45,6 +45,9 @@ The user authorized clean corrections in the owning modules where the original P
 - `datp_core/populations/ciciot_file_clients.py`
 - `datp_core/datasets/edge_iiotset/chronology.py`
 - `datp_core/experiments/feasibility.py`
+- `datp_core/experiments/models.py`
+- `datp_core/datasets/edge_iiotset/schema.py`
+- `datp_core/protocols/training.py`
 - `datp_core/orchestration/stages/construct_population.py`
 - `datp_core/orchestration/stages/split.py`
 - `datp_core/orchestration/stages/evaluate_federated.py`
@@ -151,14 +154,22 @@ Reject before execution:
 ## Implementation record — owner-contract repair in progress
 
 - Entry audit verified Phases 08–10 as complete, the ten static Edge groups, the nine PCAP-backed temporal Edge groups with Modbus excluded, and the 63 CIC source-file pseudo-clients.
-- Repaired the actual blockers in their owners: FPR-evaluable external cohorts no longer inherit confirmatory eligibility; unavailable Edge AUROC is compared as typed availability rather than fabricated numeric evidence; the supplementary external BCa path cannot yield a confirmatory decision; temporal preprocessing/scoring persist all required partitions; and thresholds/evaluations carry an immutable temporal calibration/evaluation provenance binding.
+- Repaired the identified owner boundaries: FPR-evaluable external cohorts no longer inherit confirmatory eligibility; unavailable Edge AUROC is compared as typed availability rather than fabricated numeric evidence; supplementary external BCa has a separately published path with no confirmatory decision; temporal evaluation requires matched score/threshold provenance; and frozen/recalibrated analysis binds a shared future evaluation provenance.
 - The matched static reference is now a distinct randomized 55/15/10/20 protocol. Its 10% reserve is an auditable, deliberately unused allocation, not an equal-thirds artifact and not a mislabeled future window.
-- The full local suite passes after the repair. Phase closure still requires a real-data external/temporal campaign from the new contracts and the mandatory SonarQube and CodeScene gate; no external or temporal result has been represented as completed before that execution.
-- The explicit `construct-phase11-population` command was exercised against all three canonical corpora at seed 0. It published the 10-group Edge static membership (11,209,913 rows), the 9-group chronology-eligible Edge temporal membership (11,050,411 rows) with its matched static reference, and the 63 CIC file-client membership (45,018,243 rows). It is a verified population-publication boundary, not a substitute for a trained Phase 11 campaign.
+- Modbus is recorded explicitly in temporal diagnostics as excluded because its `frame.time` values are address literals; feasibility rejects streaming, periodic, triggered, and online modes before execution. Reuse requires every companion manifest and persisted row artifact.
+- The locked `uv` environment passes the full xdist suite (`635 passed`), repository Ruff and Pyright, and `git diff --check`. Project-wide Pylint remains at its pre-existing `9.91/10`, with no score regression and no newly suppressed warning.
+- Canonical execution rebuilt the ten-group static Edge, nine-group temporal Edge, and 63-file CIC population publications. Temporal chronology records Modbus as `modbus_address_literal`; CIC persists canonical rejected rows and per-client reason counts. Static and temporal split publications are complete.
+- Execution identities now bind construction, splitting, preprocessing, evaluation, and analysis for every bounded population. CIC split publication and artifact-driven external preprocessing are implemented. The remaining scientific execution work is the full real-data detector/training, scoring, threshold construction, evaluation, and analysis campaign for the static, CIC, and three temporal states. SonarQube and CodeScene are intentionally skipped by explicit user direction. No external or temporal result is represented as completed.
+- Edge model-input repair: a full static canonical-data audit established a fixed 33-column strict numeric projection. No categorical values are imputed, vocabulary-fitted, ordinal-encoded, hashed, or silently coerced. The Edge detector now has an exact 33-dimensional symmetric architecture `(33, 25, 17, 11, 8, 11, 17, 25, 33)` derived by preserving the declared N-BaIoT architecture's depth, symmetry, and rounded compression ratios. Training rejects any mismatch between published preprocessing width and the declared input/output widths.
+- Execution verification: identity documents are persisted and checksummed with population and split publications, then verified before artifact-driven preprocessing. The real ten-client Edge publication was rebuilt and its ten strict 33-feature client-local preprocessing artifacts completed. The real CIC population and split were rebuilt under the same contract, and all 63 client-local preprocessing artifacts completed with a 39-feature schema. The CIC path now performs source-file-client-at-a-time joins, eliminating the unsafe federation-wide 45-million-row materialization. The full suite now passes with `639 passed`; repository Ruff, Pyright, and `git diff --check` pass. SonarQube and CodeScene remain intentionally skipped.
 
 ## External code-health gate
 
 Before phase closure, run the credentials-safe SonarQube CLI and CodeScene procedure in [the roadmap index](00_ROADMAP_INDEX.md#mandatory-external-code-health-gates). Resolve actionable `src/` findings or record the gate as blocked.
+
+### User-directed exception
+
+The user explicitly directed this audit to skip SonarQube and CodeScene. They must remain skipped for this completion attempt.
 
 ## Mandatory closing audit
 

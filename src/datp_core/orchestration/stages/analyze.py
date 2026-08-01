@@ -1,4 +1,4 @@
-"""Seed-paired analysis publication; no external or temporal execution."""
+"""Seed-paired confirmatory, external, and temporal-boundary analysis publication."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -11,10 +11,13 @@ from datp_core.analysis.inference import (
     BcaOutcome,
     BcaReason,
     BootstrapInterval,
+    ExternalPairedAnalysisPlan,
+    ExternalPairedContrast,
     MultiplicityResult,
     PairedContrast,
     RankBiserialResult,
     WilcoxonResult,
+    external_paired_bca_interval,
     holm_adjust,
     matched_pairs_rank_biserial,
     paired_bca_interval,
@@ -22,6 +25,11 @@ from datp_core.analysis.inference import (
     sign_consistency,
 )
 from datp_core.analysis.mechanisms import MechanismResult
+from datp_core.analysis.temporal import (
+    TemporalDeploymentProvenance,
+    TemporalRecoveryResult,
+    validate_frozen_recalibrated_pair,
+)
 from datp_core.artifacts.store import AtomicPublication, publish_atomically
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
@@ -30,11 +38,14 @@ from datp_core.domain.enums import (
     EvidenceRole,
     IntervalMethod,
     MultiplicityCorrectionId,
+    PopulationId,
     PublicationStatus,
     ScientificDecision,
     StageOperationId,
     StatisticalTestId,
+    TemporalState,
 )
+from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
     BootstrapReplicateCount,
     Checksum,
@@ -45,12 +56,15 @@ from datp_core.domain.values import (
     checksum_file,
     checksum_text,
 )
+from datp_core.experiments.models import ExternalTemporalExecutionIdentity, require_execution_identity
 from datp_core.protocols.models import StatisticalInferenceProtocol
 
 
 class AnalysisAssetName(StrEnum):
     DOCUMENT = "analysis.json"
     COMPLETE = "COMPLETE"
+    EXTERNAL_DOCUMENT = "external_analysis.json"
+    TEMPORAL_DOCUMENT = "temporal_analysis.json"
 
 
 class AnalysisDocument(StrictModel):
@@ -75,6 +89,32 @@ class AnalysisDocument(StrictModel):
     rank_biserial: "RankBiserialDocument"
     multiplicity: "MultiplicityDocument"
     mechanisms: tuple["MechanismDocument", ...]
+
+
+class ExternalAnalysisDocument(StrictModel):
+    evidence_role: EvidenceRole
+    interval_method: IntervalMethod
+    confidence_level: ConfidenceLevel
+    replicate_count: BootstrapReplicateCount
+    analysis_seed: Seed
+    point_estimate: MetricValue | None
+    lower_bound: MetricValue | None
+    upper_bound: MetricValue | None
+    interval_availability: AvailabilityStatus
+    outcome: BcaOutcome
+    reason: BcaReason
+    descriptive: "DescriptiveDocument"
+    sign_consistency: "PairedDifferenceCountsDocument"
+    wilcoxon: "WilcoxonDocument"
+    rank_biserial: "RankBiserialDocument"
+
+
+class TemporalAnalysisDocument(StrictModel):
+    evidence_role: EvidenceRole
+    static_reference_provenance: TemporalDeploymentProvenance
+    frozen_provenance: TemporalDeploymentProvenance
+    recalibrated_provenance: TemporalDeploymentProvenance
+    records: tuple[TemporalRecoveryResult, ...]
 
 
 class DescriptiveDocument(StrictModel):
@@ -188,6 +228,50 @@ class AnalyzeResult:
     complete_digest: Checksum
 
 
+@dataclass(frozen=True, slots=True)
+class ExternalAnalyzeRequest:
+    execution_identity: ExternalTemporalExecutionIdentity
+    contrasts: tuple[ExternalPairedContrast, ...]
+    plan: ExternalPairedAnalysisPlan
+    bootstrap_replicates: BootstrapReplicateCount
+    analysis_seed: Seed
+    output_directory: Path
+    overwrite: bool
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalAnalyzeResult:
+    stage: StageOperationId
+    publication_status: PublicationStatus
+    interval: BootstrapInterval
+    descriptive: DescriptiveSummary
+    sign_consistency: PairedDifferenceCounts
+    wilcoxon: WilcoxonResult
+    rank_biserial: RankBiserialResult
+    complete_digest: Checksum
+
+
+@dataclass(frozen=True, slots=True)
+class TemporalAnalyzeRequest:
+    static_reference_identity: ExternalTemporalExecutionIdentity
+    frozen_identity: ExternalTemporalExecutionIdentity
+    recalibrated_identity: ExternalTemporalExecutionIdentity
+    static_reference_provenance: TemporalDeploymentProvenance
+    frozen_provenance: TemporalDeploymentProvenance
+    recalibrated_provenance: TemporalDeploymentProvenance
+    records: tuple[TemporalRecoveryResult, ...]
+    output_directory: Path
+    overwrite: bool
+
+
+@dataclass(frozen=True, slots=True)
+class TemporalAnalyzeResult:
+    stage: StageOperationId
+    publication_status: PublicationStatus
+    records: tuple[TemporalRecoveryResult, ...]
+    complete_digest: Checksum
+
+
 def analyze_stage(request: AnalyzeRequest) -> AnalyzeResult:
     """Run only declared seed-paired inference and preserve degenerate outcomes."""
     interval = paired_bca_interval(
@@ -217,6 +301,97 @@ def analyze_stage(request: AnalyzeRequest) -> AnalyzeResult:
     persisted = _read_document(request.output_directory) if reused else document
     return _result_from_document(
         persisted, PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED, request.output_directory
+    )
+
+
+def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeResult:
+    """Publish supplementary external evidence without a confirmatory decision."""
+    identity = require_execution_identity(request.execution_identity, request.plan.population)
+    if identity is None:
+        raise RuntimeError("external analysis requires an execution identity")
+    identity.require_evidence_role(request.plan.evidence_role)
+    interval = external_paired_bca_interval(
+        request.contrasts,
+        plan=request.plan,
+        replicate_count=request.bootstrap_replicates,
+        analysis_seed=request.analysis_seed,
+    )
+    deltas = tuple(contrast.delta.value for contrast in request.contrasts)
+    descriptive = summarize_values(deltas, evidence_role=request.plan.evidence_role)
+    signs = sign_consistency(request.contrasts)
+    wilcoxon = paired_wilcoxon(request.contrasts)
+    rank_biserial = matched_pairs_rank_biserial(request.contrasts)
+    document = ExternalAnalysisDocument(
+        evidence_role=request.plan.evidence_role,
+        interval_method=interval.method,
+        confidence_level=interval.confidence_level,
+        replicate_count=interval.replicate_count,
+        analysis_seed=interval.analysis_seed,
+        point_estimate=interval.point_estimate,
+        lower_bound=interval.lower_bound,
+        upper_bound=interval.upper_bound,
+        interval_availability=interval.availability,
+        outcome=interval.outcome,
+        reason=interval.reason,
+        descriptive=_descriptive_document(descriptive),
+        sign_consistency=PairedDifferenceCountsDocument(
+            positive=signs.positive,
+            zero=signs.zero,
+            negative=signs.negative,
+        ),
+        wilcoxon=_wilcoxon_document(wilcoxon),
+        rank_biserial=_rank_biserial_document(rank_biserial),
+    )
+    payload = document.model_dump_json(indent=2) + "\n"
+    digest = checksum_text(payload)
+    reused = publish_atomically(
+        AtomicPublication(
+            request.output_directory,
+            request.overwrite,
+            lambda directory: _is_external_reusable(directory, digest),
+            lambda temporary: _write_external_analysis(temporary, payload, digest),
+            rmtree,
+        )
+    )
+    return ExternalAnalyzeResult(
+        StageOperationId.ANALYZE,
+        PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED,
+        interval,
+        descriptive,
+        signs,
+        wilcoxon,
+        rank_biserial,
+        checksum_file(request.output_directory / AnalysisAssetName.COMPLETE),
+    )
+
+
+def analyze_temporal_stage(request: TemporalAnalyzeRequest) -> TemporalAnalyzeResult:
+    """Publish one-shot temporal trajectories after enforcing the shared future evaluation binding."""
+    _validate_temporal_identities(request)
+    _validate_temporal_provenance(request)
+    document = TemporalAnalysisDocument(
+        evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
+        static_reference_provenance=request.static_reference_provenance,
+        frozen_provenance=request.frozen_provenance,
+        recalibrated_provenance=request.recalibrated_provenance,
+        records=request.records,
+    )
+    payload = document.model_dump_json(indent=2) + "\n"
+    digest = checksum_text(payload)
+    reused = publish_atomically(
+        AtomicPublication(
+            request.output_directory,
+            request.overwrite,
+            lambda directory: _is_temporal_reusable(directory, digest),
+            lambda temporary: _write_temporal_analysis(temporary, payload, digest),
+            rmtree,
+        )
+    )
+    return TemporalAnalyzeResult(
+        stage=StageOperationId.ANALYZE,
+        publication_status=PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED,
+        records=request.records,
+        complete_digest=checksum_file(request.output_directory / AnalysisAssetName.COMPLETE),
     )
 
 
@@ -444,3 +619,59 @@ def _is_reusable(directory: Path, expected_document: AnalysisDocument, digest: C
     except ValueError:
         return False
     return persisted == expected_document
+
+
+def _is_external_reusable(directory: Path, digest: Checksum) -> bool:
+    return _is_matching_document(directory, AnalysisAssetName.EXTERNAL_DOCUMENT, ExternalAnalysisDocument, digest)
+
+
+def _is_temporal_reusable(directory: Path, digest: Checksum) -> bool:
+    return _is_matching_document(directory, AnalysisAssetName.TEMPORAL_DOCUMENT, TemporalAnalysisDocument, digest)
+
+
+def _is_matching_document(
+    directory: Path,
+    asset_name: AnalysisAssetName,
+    document_type: type[ExternalAnalysisDocument] | type[TemporalAnalysisDocument],
+    digest: Checksum,
+) -> bool:
+    complete = directory / AnalysisAssetName.COMPLETE
+    document = directory / asset_name
+    if not complete.is_file() or not document.is_file() or complete.read_text(encoding="utf-8").strip() != digest.value:
+        return False
+    try:
+        document_type.model_validate_json(document.read_text(encoding="utf-8"))
+    except ValueError:
+        return False
+    return checksum_text(document.read_text(encoding="utf-8")) == digest
+
+
+def _write_external_analysis(temporary: Path, payload: str, digest: Checksum) -> None:
+    (temporary / AnalysisAssetName.EXTERNAL_DOCUMENT).write_text(payload, encoding="utf-8")
+    (temporary / AnalysisAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
+
+
+def _write_temporal_analysis(temporary: Path, payload: str, digest: Checksum) -> None:
+    (temporary / AnalysisAssetName.TEMPORAL_DOCUMENT).write_text(payload, encoding="utf-8")
+    (temporary / AnalysisAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
+
+
+def _validate_temporal_provenance(request: TemporalAnalyzeRequest) -> None:
+    static = request.static_reference_provenance
+    if static.state is not TemporalState.STATIC_REFERENCE:
+        raise ValueError("temporal analysis requires static-reference provenance")
+    validate_frozen_recalibrated_pair(request.frozen_provenance, request.recalibrated_provenance)
+    if static.checkpoint_checksum != request.frozen_provenance.checkpoint_checksum:
+        raise ValueError("all temporal states must share one fitted detector")
+
+
+def _validate_temporal_identities(request: TemporalAnalyzeRequest) -> None:
+    bindings = (
+        (request.static_reference_identity, TemporalState.STATIC_REFERENCE),
+        (request.frozen_identity, TemporalState.FROZEN_FUTURE),
+        (request.recalibrated_identity, TemporalState.RECALIBRATED_FUTURE),
+    )
+    for identity, expected_state in bindings:
+        bound = require_execution_identity(identity, PopulationId.EDGE_TEMPORAL_GROUPS)
+        if bound is None or bound.temporal_state is not expected_state:
+            raise ScientificContractError("temporal analysis identity must match its deployment state")

@@ -1,4 +1,5 @@
 from pathlib import Path
+from shutil import copytree
 
 import polars as pl
 import pytest
@@ -6,22 +7,33 @@ import pytest
 from datp_core.datasets.models import CanonicalPublicationArtifact
 from datp_core.datasets.nbaiot.schema import NBAIOT_DEVICE_IDENTITIES, NBAIOT_FEATURE_COLUMNS, NBaIoTDeviceFamily
 from datp_core.domain.enums import (
+    EvidenceRole,
+    ExperimentId,
     PopulationId,
     PreprocessingProtocolId,
     PublicationStatus,
     SplitProtocolId,
     StageOperationId,
+    TemporalState,
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Seed
+from datp_core.experiments.models import ExternalTemporalExecutionIdentity
+from datp_core.orchestration.stages.construct_population import (
+    ConstructPopulationRequest,
+    construct_population_stage,
+)
 from datp_core.orchestration.stages.preprocess_centralized_reference import (
     PreprocessCentralizedPopulationRequest,
     preprocess_centralized_reference_population_stage,
 )
 from datp_core.orchestration.stages.preprocess_federated import (
+    PreprocessFederatedArtifactsRequest,
     PreprocessFederatedRequest,
+    _load_published_population_split,
     preprocess_federated_stage,
 )
+from datp_core.orchestration.stages.split import SplitRequest, split_stage
 
 
 def _family_for(device: str) -> str:
@@ -116,6 +128,61 @@ def test_federated_preprocess_rejects_centralized_identity(tmp_path: Path) -> No
                 capture_timestamp_column=None,
             )
         )
+
+
+def test_artifact_preprocess_selects_matched_static_reference(
+    tmp_path: Path,
+    edge_temporal_eligible_root: Path,
+) -> None:
+    data_root = tmp_path / "data"
+    canonical_root = data_root / "canonical" / "edge_iiotset"
+    copytree(edge_temporal_eligible_root, canonical_root)
+    (canonical_root / CanonicalPublicationArtifact.COMPLETE.value).write_text("complete\n", encoding="utf-8")
+    identity = ExternalTemporalExecutionIdentity(
+        experiment=ExperimentId.EDGE_ONE_SHOT_RECALIBRATION,
+        population=PopulationId.EDGE_TEMPORAL_GROUPS,
+        evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
+        temporal_state=TemporalState.STATIC_REFERENCE,
+    )
+    construction = construct_population_stage(
+        ConstructPopulationRequest(
+            canonical_root=canonical_root,
+            population=PopulationId.EDGE_TEMPORAL_GROUPS,
+            execution_identity=identity,
+            partition_seed=Seed(0),
+            split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
+            output_directory=tmp_path / "population",
+            overwrite=False,
+        )
+    )
+    split_stage(
+        SplitRequest(
+            population=PopulationId.EDGE_TEMPORAL_GROUPS,
+            execution_identity=identity,
+            population_manifest=construction.population_manifest,
+            membership=construction.membership,
+            partition_seed=Seed(0),
+            output_directory=tmp_path / "split",
+            overwrite=False,
+            matched_static_reference_manifest=construction.matched_static_reference_manifest,
+            matched_static_reference_membership=construction.matched_static_reference_membership,
+        )
+    )
+
+    published = _load_published_population_split(
+        PreprocessFederatedArtifactsRequest(
+            execution_identity=identity,
+            population_directory=tmp_path / "population",
+            split_directory=tmp_path / "split",
+            preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+            data_root=data_root,
+        ),
+        identity,
+    )
+
+    assert published.split_manifest.document.split_protocol is SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
+    assert construction.matched_static_reference_membership is not None
+    assert published.membership.equals(construction.matched_static_reference_membership)
 
 
 def test_centralized_preprocess_publishes_pooled_assets(tmp_path: Path) -> None:
