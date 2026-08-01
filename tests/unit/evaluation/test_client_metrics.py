@@ -1,0 +1,20 @@
+from datp_core.domain.enums import MetricId
+from datp_core.domain.values import ScoreValue
+from datp_core.evaluation.client_metrics import calculate_client_metrics
+from datp_core.evaluation.models import ConfusionCounts, MetricStatus
+from datp_core.populations.models import PopulationOutcomeLabel
+
+
+def test_client_metrics_preserve_undefined_attack_metrics() -> None:
+    result = calculate_client_metrics(
+        confusion=ConfusionCounts(3, 0, 0, 0, False),
+        scores=(ScoreValue(0.1), ScoreValue(0.2), ScoreValue(0.3)),
+        labels=(PopulationOutcomeLabel.BENIGN,) * 3,
+    )
+    values = {item.metric: item for item in result}
+
+    assert values[MetricId.FALSE_POSITIVE_RATE].value is not None
+    assert values[MetricId.TRUE_POSITIVE_RATE].status is MetricStatus.UNAVAILABLE
+    assert values[MetricId.BALANCED_ACCURACY].value is None
+    assert values[MetricId.BINARY_MACRO_F1].value is None
+    assert values[MetricId.AUROC].value is None

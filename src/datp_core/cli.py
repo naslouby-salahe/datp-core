@@ -1,16 +1,52 @@
 """Command-line entry points for reproducible DATP-Core operations."""
 
+from dataclasses import dataclass
+from pathlib import Path
+
+import polars as pl
 import typer
 
+from datp_core.analysis.inference import PairedContrast
+from datp_core.artifacts.coordinates import canonical_root_under
+from datp_core.datasets.catalogue import dataset_binding
 from datp_core.domain.enums import (
     ControlledPartitionKind,
     DatasetId,
+    EvidenceRole,
+    FederatedThresholdMethod,
+    MetricId,
     PopulationId,
     PreprocessingProtocolId,
     SplitProtocolId,
+    TrainingModelId,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import DirichletConcentration, Seed
+from datp_core.domain.values import (
+    Checksum,
+    ClientCount,
+    DirichletConcentration,
+    FamilyIdentity,
+    FeatureNameSequence,
+    MetricValue,
+    Seed,
+    checksum_file,
+)
+from datp_core.evaluation.controls import FixedScoreEvidence
+from datp_core.evaluation.models import MetricStatus
+from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.learning.federated.training import preprocessing_state_set_checksum
+from datp_core.orchestration.stages.analyze import AnalyzeRequest, analyze_stage
+from datp_core.orchestration.stages.construct_federated_thresholds import (
+    ConstructFederatedThresholdsRequest,
+    construct_federated_thresholds_stage,
+)
+from datp_core.orchestration.stages.evaluate_federated import (
+    EvaluateFederatedRequest,
+    FederatedEvaluationAssetName,
+    FederatedEvaluationDocument,
+    build_federated_evaluation_inputs,
+    evaluate_federated_stage,
+)
 from datp_core.orchestration.stages.materialize import (
     MaterializeCanonicalDatasetsRequest,
     materialize_canonical_datasets_stage,
@@ -21,15 +57,47 @@ from datp_core.orchestration.stages.preprocess_centralized_reference import (
 )
 from datp_core.orchestration.stages.preprocess_federated import (
     PreprocessFederatedRequest,
+    PreprocessFederatedResult,
     preprocess_federated_stage,
 )
+from datp_core.orchestration.stages.score_federated import ScoreFederatedRequest, score_federated_stage
+from datp_core.orchestration.stages.select_federated_checkpoint import (
+    SelectFederatedCheckpointRequest,
+    select_federated_checkpoint_stage,
+)
+from datp_core.orchestration.stages.train_federated import TrainFedAvgRequest, train_fedavg_stage
+from datp_core.populations.capabilities import population_capabilities
+from datp_core.populations.catalogue import (
+    PopulationConstructionRequest,
+    PopulationConstructionResult,
+    construct_population,
+)
 from datp_core.populations.models import (
+    ClientIdentity,
     ControlledPartitionCondition,
+    SplitConstructionRequest,
+    SplitManifest,
     dirichlet_condition,
     iid_condition,
 )
+from datp_core.populations.splits import split_membership
+from datp_core.preprocessing.models import ClientPreprocessPublication
+from datp_core.protocols.calibration import CANONICAL_QUANTILE
 from datp_core.protocols.populations import DIRICHLET_CONCENTRATIONS
-from datp_core.protocols.runtime import DATA_ROOT
+from datp_core.protocols.runtime import DATA_ROOT, OUTPUTS_ROOT
+from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
+from datp_core.protocols.statistics import BOOTSTRAP_REPLICATE_COUNT, CONFIRMATORY_INFERENCE_PROTOCOL
+from datp_core.protocols.training import (
+    BATCH_SIZE,
+    CHECKPOINT_PROTOCOL,
+    FEDAVG_TRAINING_PROTOCOL,
+    LEARNING_RATE,
+    NBAIOT_AUTOENCODER,
+)
+from datp_core.scoring.generation import ClientScoringInput
+from datp_core.scoring.models import FixedScoreInvariant, ScoreArtifactManifest
+from datp_core.thresholding.dispatch import ThresholdConstructionRequest
+from datp_core.thresholding.quantiles import ClientBenignCalibrationScores
 
 app = typer.Typer(no_args_is_help=True)
 
@@ -40,6 +108,28 @@ _FEDERATED_PREPROCESSING_IDENTITIES = frozenset(
         PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX,
     }
 )
+
+
+@dataclass(frozen=True, slots=True)
+class ConfirmatorySeedContext:
+    """Immutable inputs that must stay aligned for one confirmatory seed."""
+
+    coordinate: FederatedTrainingCoordinate
+    construction: PopulationConstructionResult
+    preprocessing: PreprocessFederatedResult
+    split_manifest: SplitManifest
+    state_set_checksum: Checksum
+    training_directory: Path
+
+
+@dataclass(frozen=True, slots=True)
+class ConfirmatoryThresholdInputs:
+    """Fixed score and calibration inputs shared by threshold scopes in one seed."""
+
+    scores: ScoreArtifactManifest
+    eligible: tuple[ClientBenignCalibrationScores, ...]
+    family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...]
+    previous_evidence: FixedScoreEvidence | None
 
 
 @app.callback()
@@ -64,6 +154,8 @@ def materialize_canonical_datasets() -> None:
 
 
 @app.command("preprocess-federated")
+# Typer exposes each independent scientific protocol field as an explicit option.
+# pylint: disable=too-many-positional-arguments
 def preprocess_federated(
     population: PopulationId = typer.Option(..., help="Locked population identity."),
     partition_seed: int = typer.Option(..., help="Non-negative partition seed value."),
@@ -88,6 +180,7 @@ def preprocess_federated(
             f"preprocessing-identity must be one of: {allowed}",
             param_hint="--preprocessing-identity",
         )
+
     condition = _controlled_partition_condition(partition_kind, concentration)
     result = preprocess_federated_stage(
         PreprocessFederatedRequest(
@@ -116,6 +209,7 @@ def preprocess_federated(
         )
 
 
+# pylint: enable=too-many-positional-arguments
 @app.command("preprocess-centralized-reference")
 def preprocess_centralized_reference(
     population: PopulationId = typer.Option(..., help="Locked population identity."),
@@ -151,6 +245,306 @@ def preprocess_centralized_reference(
         f"calibration={result.result.calibration_path} "
         f"evaluation={result.result.evaluation_path}"
     )
+
+
+@app.command("run-confirmatory-seed")
+def run_confirmatory_seed(
+    training_seed: int = typer.Option(..., min=0, help="One declared non-negative training seed."),
+) -> None:
+    """Run the canonical N-BaIoT FedAvg path for one seed."""
+    _run_confirmatory_seed(Seed(training_seed))
+
+
+@app.command("run-confirmatory-grid")
+def run_confirmatory_grid() -> None:
+    """Run the declared ten-seed confirmatory grid without expanding its protocol."""
+    for training_seed in CONFIRMATORY_SEED_COHORT.values:
+        _run_confirmatory_seed(training_seed)
+
+
+@app.command("analyze-confirmatory-grid")
+def analyze_confirmatory_grid() -> None:
+    """Publish the declared paired inference from completed seed evaluations."""
+    result = analyze_stage(
+        AnalyzeRequest(
+            contrasts=tuple(_confirmatory_contrast(seed) for seed in CONFIRMATORY_SEED_COHORT.values),
+            inference_protocol=CONFIRMATORY_INFERENCE_PROTOCOL,
+            bootstrap_replicates=BOOTSTRAP_REPLICATE_COUNT,
+            analysis_seed=Seed(31),
+            output_directory=OUTPUTS_ROOT / "confirmatory" / "nbaiot_natural_devices" / "analysis",
+            overwrite=False,
+        )
+    )
+    typer.echo(
+        f"analysis={result.publication_status.value} decision={result.decision.decision.value} "
+        f"estimate={result.interval.point_estimate.value if result.interval.point_estimate else 'unavailable'}"
+    )
+
+
+def _run_confirmatory_seed(training_seed: Seed) -> None:
+    context = _prepare_confirmatory_seed(training_seed)
+    _evaluate_confirmatory_threshold_methods(context, _score_confirmatory_seed(context))
+
+
+def _prepare_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedContext:
+    population = PopulationId.NBAIOT_NATURAL_DEVICES
+    split_protocol = SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
+    preprocessing_identity = PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
+    coordinate = FederatedTrainingCoordinate(
+        population=population,
+        training_seed=training_seed,
+        split_protocol=split_protocol,
+        preprocessing_identity=preprocessing_identity,
+        model=TrainingModelId.FEDAVG_AUTOENCODER,
+        model_coefficient=None,
+    )
+    construction = construct_population(
+        PopulationConstructionRequest(
+            population,
+            canonical_root_under(DATA_ROOT, DatasetId.NBAIOT),
+            training_seed,
+            split_protocol,
+            None,
+        )
+    )
+    _, split_manifest = split_membership(
+        SplitConstructionRequest(
+            construction.membership,
+            population,
+            DatasetId.NBAIOT,
+            training_seed,
+            split_protocol,
+            construction.manifest.document.membership_checksum,
+        )
+    )
+    preprocessing = preprocess_federated_stage(
+        PreprocessFederatedRequest(
+            population,
+            training_seed,
+            split_protocol,
+            preprocessing_identity,
+            DATA_ROOT,
+            None,
+            None,
+        )
+    )
+    state_set_checksum = preprocessing_state_set_checksum(
+        tuple(item.result.fitted_state.estimator_checksum for item in preprocessing.client_publications)
+    )
+    return ConfirmatorySeedContext(
+        coordinate=coordinate,
+        construction=construction,
+        preprocessing=preprocessing,
+        split_manifest=split_manifest,
+        state_set_checksum=state_set_checksum,
+        training_directory=_federated_training_directory(coordinate),
+    )
+
+
+def _score_confirmatory_seed(context: ConfirmatorySeedContext) -> ScoreArtifactManifest:
+    training = train_fedavg_stage(
+        TrainFedAvgRequest(
+            context.coordinate,
+            context.preprocessing.client_publications,
+            ClientCount(len(context.construction.manifest.document.accepted_clients)),
+            NBAIOT_AUTOENCODER,
+            FEDAVG_TRAINING_PROTOCOL,
+            CHECKPOINT_PROTOCOL,
+            context.coordinate.training_seed,
+            BATCH_SIZE,
+            LEARNING_RATE,
+            context.split_manifest.document.assignment_checksum,
+            context.training_directory,
+            False,
+        )
+    )
+    selected = select_federated_checkpoint_stage(
+        SelectFederatedCheckpointRequest(
+            context.coordinate,
+            None,
+            training.candidates,
+            CHECKPOINT_PROTOCOL,
+            context.state_set_checksum,
+            context.split_manifest.document.assignment_checksum,
+            None,
+            False,
+        )
+    ).decision.selected
+    return score_federated_stage(
+        ScoreFederatedRequest(
+            selected,
+            NBAIOT_AUTOENCODER,
+            FeatureNameSequence(dataset_binding(DatasetId.NBAIOT).schema.feature_columns),
+            _client_scoring_inputs(context.preprocessing.client_publications, context.construction.manifest.clients),
+            BATCH_SIZE,
+            context.training_directory / "scores",
+            context.state_set_checksum,
+            context.split_manifest.document.assignment_checksum,
+            False,
+        )
+    ).result.manifest
+
+
+def _evaluate_confirmatory_threshold_methods(context: ConfirmatorySeedContext, scores: ScoreArtifactManifest) -> None:
+    inputs = ConfirmatoryThresholdInputs(
+        scores=scores,
+        eligible=_eligible_calibration_scores(scores),
+        family_by_client=_family_identities(
+            context.construction.manifest.clients, context.construction.manifest.family_by_client
+        ),
+        previous_evidence=None,
+    )
+    for method in population_capabilities(context.coordinate.population).valid_threshold_methods:
+        inputs = _evaluate_confirmatory_threshold_method(context, inputs, method)
+
+
+def _evaluate_confirmatory_threshold_method(
+    context: ConfirmatorySeedContext,
+    inputs: ConfirmatoryThresholdInputs,
+    method: FederatedThresholdMethod,
+) -> ConfirmatoryThresholdInputs:
+    threshold = construct_federated_thresholds_stage(
+        ConstructFederatedThresholdsRequest(
+            ThresholdConstructionRequest(
+                method,
+                context.coordinate,
+                CANONICAL_QUANTILE,
+                population_capabilities(context.coordinate.population),
+                inputs.eligible,
+                inputs.family_by_client,
+            ),
+            _confirmatory_seed_directory(context.coordinate.training_seed) / "thresholds" / method.value,
+            False,
+        )
+    ).result
+    if threshold.__class__.__name__ == "ThresholdUnavailableResult":
+        typer.echo(f"seed={context.coordinate.training_seed.value} {method.value}=unavailable")
+        return inputs
+    evaluation_inputs = build_federated_evaluation_inputs(inputs.scores, method)
+    evaluation = evaluate_federated_stage(
+        EvaluateFederatedRequest(
+            inputs.scores,
+            threshold,
+            evaluation_inputs.cohort,
+            evaluation_inputs.fixed_score_evidence,
+            inputs.previous_evidence,
+            EvidenceRole.CONFIRMATORY,
+            (),
+            (),
+            (),
+            None,
+            _confirmatory_seed_directory(context.coordinate.training_seed) / "evaluations" / method.value,
+            False,
+        )
+    )
+    typer.echo(f"seed={context.coordinate.training_seed.value} {method.value}={evaluation.publication_status.value}")
+    return ConfirmatoryThresholdInputs(
+        scores=inputs.scores,
+        eligible=inputs.eligible,
+        family_by_client=inputs.family_by_client,
+        previous_evidence=evaluation_inputs.fixed_score_evidence,
+    )
+
+
+def _eligible_calibration_scores(score_manifest: ScoreArtifactManifest) -> tuple[ClientBenignCalibrationScores, ...]:
+    invariant = FixedScoreInvariant.from_manifest(score_manifest)
+    return tuple(
+        ClientBenignCalibrationScores(
+            record.scored_client,
+            score_manifest.coordinate,
+            tuple(float(value) for value in pl.read_parquet(record.path)["reconstruction_error"].to_list()),
+            checksum_file(record.path),
+            invariant.calibration_score_set_checksum,
+        )
+        for record in sorted(score_manifest.calibration_records, key=lambda item: item.scored_client.client_id)
+    )
+
+
+def _client_scoring_inputs(
+    publications: tuple[ClientPreprocessPublication, ...], clients: tuple[ClientIdentity, ...]
+) -> tuple[ClientScoringInput, ...]:
+    return tuple(
+        ClientScoringInput(
+            _client_with_id(clients, publication.client_identity.value),
+            pl.read_parquet(publication.result.calibration_path),
+            pl.read_parquet(publication.result.evaluation_path),
+        )
+        for publication in publications
+    )
+
+
+def _family_identities(
+    clients: tuple[ClientIdentity, ...], family_by_client: tuple[tuple[str, str], ...]
+) -> tuple[tuple[ClientIdentity, FamilyIdentity], ...]:
+    return tuple(
+        (_client_with_id(clients, client_id), FamilyIdentity(family)) for client_id, family in family_by_client
+    )
+
+
+def _client_with_id(clients: tuple[ClientIdentity, ...], client_id: str) -> ClientIdentity:
+    client = next((candidate for candidate in clients if candidate.client_id == client_id), None)
+    if client is None:
+        raise ScientificContractError(f"population manifest is missing client {client_id}")
+    return client
+
+
+def _confirmatory_contrast(training_seed: Seed) -> PairedContrast:
+    shared = _evaluation_document(training_seed, FederatedThresholdMethod.SHARED_THRESHOLD)
+    local = _evaluation_document(training_seed, FederatedThresholdMethod.LOCAL_THRESHOLD)
+    if shared.score_coordinate != local.score_coordinate:
+        raise ScientificContractError("paired evaluation documents use different training coordinates")
+    shared_value = _population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+    local_value = _population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
+    return PairedContrast(
+        coordinate=shared.score_coordinate,
+        evidence_role=EvidenceRole.CONFIRMATORY,
+        seed=training_seed,
+        metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+        shared_method=FederatedThresholdMethod.SHARED_THRESHOLD,
+        local_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+        shared_value=shared_value,
+        local_value=local_value,
+        delta=MetricValue(shared_value.value - local_value.value),
+    )
+
+
+def _evaluation_document(training_seed: Seed, method: FederatedThresholdMethod) -> FederatedEvaluationDocument:
+    path = (
+        _confirmatory_seed_directory(training_seed)
+        / "evaluations"
+        / method.value
+        / FederatedEvaluationAssetName.DOCUMENT
+    )
+    if not path.is_file():
+        raise ScientificContractError(f"missing completed evaluation document: {path}")
+    return FederatedEvaluationDocument.model_validate_json(path.read_text(encoding="utf-8"))
+
+
+def _population_metric(document: FederatedEvaluationDocument, metric: MetricId) -> MetricValue:
+    result = next((item for item in document.population.metrics if item.metric is metric), None)
+    if result is None:
+        raise ScientificContractError(f"required confirmatory metric is missing: {metric.value}")
+    if result.status is not MetricStatus.AVAILABLE:
+        raise ScientificContractError(f"required confirmatory metric is unavailable: {metric.value}")
+    if result.value is None:
+        raise ScientificContractError(f"required confirmatory metric is unavailable: {metric.value}")
+    return result.value
+
+
+def _federated_training_directory(coordinate: FederatedTrainingCoordinate) -> Path:
+    return (
+        OUTPUTS_ROOT
+        / "federated"
+        / coordinate.population.value
+        / str(coordinate.training_seed.value)
+        / coordinate.split_protocol.value
+        / coordinate.preprocessing_identity.value
+        / coordinate.model.value
+    )
+
+
+def _confirmatory_seed_directory(training_seed: Seed) -> Path:
+    return OUTPUTS_ROOT / "confirmatory" / "nbaiot_natural_devices" / str(training_seed.value)
 
 
 def main() -> None:

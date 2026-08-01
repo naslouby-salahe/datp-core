@@ -28,11 +28,23 @@ def test_raw_source_is_immutable_and_relative() -> None:
     with pytest.raises(FrozenInstanceError):
         source.__setattr__("relative_path", Path("other.csv"))
     with pytest.raises(ValueError):
-        RawSourceFile(DatasetId.NBAIOT, Path("/absolute.csv"), ByteCount(1), Checksum("a"), SourceFileRole.BENIGN, RowCount(1))
+        RawSourceFile(
+            DatasetId.NBAIOT, Path("/absolute.csv"), ByteCount(1), Checksum("a"), SourceFileRole.BENIGN, RowCount(1)
+        )
 
 
 def test_chronology_preserves_static_and_temporal_status() -> None:
-    result = ChronologyValidation("Modbus", AvailabilityStatus.UNAVAILABLE, RowCount(1), RowCount(0), RowCount(1), 0, True, "address literal", False)
+    result = ChronologyValidation(
+        "Modbus",
+        AvailabilityStatus.UNAVAILABLE,
+        RowCount(1),
+        RowCount(0),
+        RowCount(1),
+        0,
+        True,
+        "address literal",
+        False,
+    )
     assert result.temporal_eligible is False
     assert result.total_rows.value == result.parseable_rows.value + result.invalid_rows.value
 

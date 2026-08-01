@@ -97,7 +97,7 @@ NBAIOT_CAPABILITIES = DatasetCapabilities(
         ThresholdMethodCapability(
             FederatedThresholdMethod.CLUSTER_THRESHOLD,
             CapabilityStatus.CONDITIONAL,
-            "The scientific roadmap defines taxonomy-free clustering from benign reconstruction-error summaries.",
+            "Taxonomy-free clustering may use benign reconstruction-error summaries.",
             "Execution requires the declared outcome-blind cluster-feasibility criterion.",
         ),
     ),

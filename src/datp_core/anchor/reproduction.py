@@ -183,7 +183,7 @@ def independent_reproduction_dependency_blocker() -> AnchorDependencyBlocker:
         kind=AnchorDependencyKind.FEDERATED_TRAINING_CHECKPOINTING_AND_SCORING,
         detail=(
             "Independent re-execution of historical training, checkpointing, and scoring "
-            "belongs to Phase 08 and is unavailable in Phase 06"
+            "requires the federated training and scoring workflow"
         ),
     )
 

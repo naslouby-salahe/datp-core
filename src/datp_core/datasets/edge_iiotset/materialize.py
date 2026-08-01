@@ -171,7 +171,9 @@ class EdgeIIoTsetMaterializer:
             if evidence.pcap_path.is_file()
         )
         attack_sources = tuple(
-            raw_source_file(DatasetId.EDGE_IIOTSET, path, SourceFileRole.ATTACK, RowCount(row_count), source_relative_path)
+            raw_source_file(
+                DatasetId.EDGE_IIOTSET, path, SourceFileRole.ATTACK, RowCount(row_count), source_relative_path
+            )
             for path, row_count in zip(attack_paths, attack_counts, strict=True)
         )
         return raw_inventory(DatasetId.EDGE_IIOTSET, benign_sources + evidence_sources + attack_sources)

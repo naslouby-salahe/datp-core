@@ -267,7 +267,9 @@ def _reused_materialized_dataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnu
         row_count=(
             inventory.accepted_row_count
             if inventory.accepted_row_count is not None
-            else RowCount(sum(asset.row_count.value for asset in assets if asset.role is CanonicalAssetRole.CANONICAL_DATA))
+            else RowCount(
+                sum(asset.row_count.value for asset in assets if asset.role is CanonicalAssetRole.CANONICAL_DATA)
+            )
         ),
         source_inventory_checksum=inventory.checksum,
         publication_status=PublicationStatus.REUSED,

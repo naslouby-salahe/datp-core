@@ -76,7 +76,7 @@ CICIOT2023_CAPABILITIES = DatasetCapabilities(
         ThresholdMethodCapability(
             FederatedThresholdMethod.CLUSTER_THRESHOLD,
             CapabilityStatus.CONDITIONAL,
-            "The scientific roadmap permits taxonomy-free clustering from benign reconstruction-error summaries.",
+            "Taxonomy-free clustering may use benign reconstruction-error summaries.",
             "Execution requires a separately declared, outcome-blind cluster-feasibility criterion after eligibility.",
         ),
     ),

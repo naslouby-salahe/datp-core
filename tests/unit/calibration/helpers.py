@@ -1,4 +1,4 @@
-"""Shared miniature fixtures for Phase 09 calibration unit tests."""
+"""Shared miniature fixtures for calibration unit tests."""
 
 from pathlib import Path
 

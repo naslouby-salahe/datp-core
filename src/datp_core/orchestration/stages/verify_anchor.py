@@ -58,13 +58,12 @@ class VerifyAnchorStageResult:
 def verify_anchor_stage(request: VerifyAnchorStageRequest) -> VerifyAnchorStageResult:
     """Validate the historical cohort, compare observations, and lock the programme gate.
 
-    Independent re-training is Phase 08. When neither observations nor historical
-    sources are supplied, the stage records a typed dependency blocker rather than
-    executing federated training.
+    When neither observations nor historical sources are supplied, the stage records
+    a typed dependency blocker rather than executing federated training.
     """
     if request.request_independent_reproduction:
         raise AnchorReproductionError(
-            "independent anchor re-execution requires Phase 08 training and scoring",
+            "independent anchor re-execution requires federated training and scoring",
             subject=StageOperationId.VERIFY_ANCHOR,
             reason="dependency_blocker",
         )

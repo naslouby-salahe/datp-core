@@ -1,9 +1,8 @@
 """FedProx aggregation-side heterogeneity stress test: proximal term toward the global state.
 
-The primary FedProx coefficient selection rule is not declared anywhere in the scientific
-source of truth (docs/roadmap/01_PHASE_MASTER_LOG.md records it as an open item). Every
-declared positive coefficient is trained independently and reported; no coefficient is
-promoted to "primary" without an invented rule.
+The primary FedProx coefficient selection rule is unresolved. Every declared positive
+coefficient is trained independently and reported; no coefficient is promoted to
+"primary" without a declared rule.
 """
 
 from dataclasses import dataclass

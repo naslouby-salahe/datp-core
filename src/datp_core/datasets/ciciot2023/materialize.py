@@ -110,7 +110,9 @@ def _audited_sources(
 
 def _source_inventory(paths: tuple[Path, ...], summaries: tuple[CICIoT2023AuditSummary, ...]) -> RawDatasetInventory:
     sources = tuple(
-        raw_source_file(DatasetId.CICIOT2023, path, SourceFileRole.MERGED, RowCount(summary.total_rows), source_relative_path)
+        raw_source_file(
+            DatasetId.CICIOT2023, path, SourceFileRole.MERGED, RowCount(summary.total_rows), source_relative_path
+        )
         for path, summary in zip(paths, summaries, strict=True)
     )
     return raw_inventory(DatasetId.CICIOT2023, sources)

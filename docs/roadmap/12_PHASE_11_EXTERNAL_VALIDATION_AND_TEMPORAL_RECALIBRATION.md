@@ -21,6 +21,7 @@ Implement capability-limited external benign-equity validation on Edge-IIoTset, 
 ## Entry criteria
 
 - Phases 08–10 are complete.
+- The Phase 10 confirmatory CLI artifacts are reusable inputs only; Phase 11 must add explicit external or temporal commands rather than extending `run-confirmatory-grid`.
 - Edge static and temporal capabilities are verified.
 - CIC file-client population is verified.
 - External and temporal experiment declarations are resolved.

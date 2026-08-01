@@ -1,4 +1,4 @@
-"""Miniature deterministic population fixtures for Phase 05."""
+"""Miniature deterministic population fixtures."""
 
 from datetime import UTC
 from pathlib import Path

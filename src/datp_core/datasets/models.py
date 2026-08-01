@@ -404,12 +404,15 @@ def _validate_evidence_path(validation: ChronologyValidation) -> None:
 
 
 def _validate_chronology_counts(validation: ChronologyValidation) -> None:
-    if min(
-        validation.total_rows.value,
-        validation.parseable_rows.value,
-        validation.invalid_rows.value,
-        validation.duplicate_timestamp_count,
-    ) < 0:
+    if (
+        min(
+            validation.total_rows.value,
+            validation.parseable_rows.value,
+            validation.invalid_rows.value,
+            validation.duplicate_timestamp_count,
+        )
+        < 0
+    ):
         raise ValueError("chronology counts must be non-negative")
     if validation.parseable_rows.value + validation.invalid_rows.value != validation.total_rows.value:
         raise ValueError("parseable and invalid chronology rows must total all rows")

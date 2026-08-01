@@ -35,12 +35,12 @@ def test_stage_blocks_without_observations_and_preserves_dependency_blocker() ->
     assert result.status.gate_status is AnchorGateStatus.BLOCKED
     assert result.status.dependent_readiness is ExperimentReadiness.BLOCKED
     assert result.status.dependency_blocker is not None
-    assert "Phase 08" in result.status.dependency_blocker
+    assert "federated training and scoring" in result.status.dependency_blocker
     assert result.gate.reproduction.discrepancies
 
 
 def test_stage_rejects_independent_reproduction_request() -> None:
-    with pytest.raises(AnchorReproductionError, match="Phase 08"):
+    with pytest.raises(AnchorReproductionError, match="federated training and scoring"):
         verify_anchor_stage(
             VerifyAnchorStageRequest(
                 protocol=ANCHOR_DECISION_PROTOCOL,

@@ -1,4 +1,4 @@
-"""Shared miniature fixtures for Phase 09 thresholding unit tests."""
+"""Shared miniature fixtures for thresholding unit tests."""
 
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 

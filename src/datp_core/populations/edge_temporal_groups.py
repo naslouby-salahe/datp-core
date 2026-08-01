@@ -131,7 +131,7 @@ def _chronology_eligibility(
         raise DataIntegrityError(
             "Edge canonical manifest is required for temporal eligibility",
             subject=_POPULATION,
-            reason="chronology must be read from persisted Phase 03 evidence",
+            reason="chronology must be read from persisted evidence",
         )
     document = CanonicalManifestDocument.model_validate_json(manifest_path.read_text(encoding="utf-8"))
     eligible: list[str] = []

@@ -267,7 +267,7 @@ def _validate_experiment_readiness(
         raise ProtocolValidationError("Suppressed experiments must declare SUPPRESSED readiness")
     if experiment.readiness is ExperimentReadiness.EXECUTABLE:
         raise ProtocolValidationError(
-            "Future experiments cannot be marked executable before their implementation phase is complete"
+            "Future experiments cannot be marked executable before their implementation is complete"
         )
     if experiment.readiness is ExperimentReadiness.SUPPRESSED and experiment.id not in suppressed_experiment_ids:
         if experiment.role is not EvidenceRole.OPERATIONAL_TRANSLATION:

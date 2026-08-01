@@ -1,4 +1,4 @@
-"""Shared miniature fixtures for Phase 08 federated learning unit tests."""
+"""Shared miniature fixtures for federated learning unit tests."""
 
 from pathlib import Path
 
@@ -29,8 +29,8 @@ from datp_core.domain.values import (
     LearningRate,
     LocalEpochCount,
     ProximalCoefficient,
-    RowCount,
     RoundNumber,
+    RowCount,
     Seed,
 )
 from datp_core.domain.values import ClientPathToken as PreprocessingClientIdentity
@@ -69,6 +69,8 @@ SPLIT_PROTOCOL = SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
 PREPROCESSING_IDENTITY = PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
 CLIENT_IDS = ("client_a", "client_b")
 POPULATION_CLIENT_COUNT = ClientCount(len(CLIENT_IDS))
+DEFAULT_CLIENT_ROW_COUNT = RowCount(16)
+DEFAULT_FRAME_SEED = Seed(0)
 
 OPTIMIZER = OptimizerProtocol(identity=OptimizerId.ADAM, weight_decay=WEIGHT_DECAY)
 LOCAL_EPOCHS = LocalEpochCount(1)
@@ -108,7 +110,9 @@ def fedprox_protocol(coefficient: ProximalCoefficient) -> FedProxProtocol:
     )
 
 
-def ditto_coordinates(seed: Seed) -> tuple[FederatedTrainingCoordinate, FederatedTrainingCoordinate, DittoRegularization]:
+def ditto_coordinates(
+    seed: Seed,
+) -> tuple[FederatedTrainingCoordinate, FederatedTrainingCoordinate, DittoRegularization]:
     regularization = DITTO_REGULARIZATION_GRID[1]
     global_coordinate = FederatedTrainingCoordinate(
         population=POPULATION,
@@ -170,7 +174,12 @@ def fitted_state(path: Path, client_id: str, *, checksum_suffix: str = "a") -> F
     )
 
 
-def benign_frame(row_count: RowCount, *, seed: Seed = Seed(0), label: str = PopulationOutcomeLabel.BENIGN.value) -> pl.DataFrame:
+def benign_frame(
+    row_count: RowCount,
+    *,
+    seed: Seed = DEFAULT_FRAME_SEED,
+    label: str = PopulationOutcomeLabel.BENIGN.value,
+) -> pl.DataFrame:
     generator = np.random.default_rng(seed.value)
     matrix = generator.normal(size=(row_count.value, len(FEATURE_NAMES))).astype(np.float32)
     return pl.DataFrame(
@@ -183,7 +192,11 @@ def benign_frame(row_count: RowCount, *, seed: Seed = Seed(0), label: str = Popu
 
 
 def build_client_dataset(
-    client_id: str, output_directory: Path, *, row_count: RowCount = RowCount(16), seed: Seed = Seed(0)
+    client_id: str,
+    output_directory: Path,
+    *,
+    row_count: RowCount = DEFAULT_CLIENT_ROW_COUNT,
+    seed: Seed = DEFAULT_FRAME_SEED,
 ) -> FedAvgClientDataset:
     training_input = ClientTrainingInput(
         client=client_identity(client_id),
@@ -196,11 +209,12 @@ def build_client_dataset(
 
 def build_all_client_datasets(output_directory: Path) -> tuple[FedAvgClientDataset, ...]:
     return tuple(
-        build_client_dataset(client_id, output_directory, seed=Seed(index)) for index, client_id in enumerate(CLIENT_IDS)
+        build_client_dataset(client_id, output_directory, seed=Seed(index))
+        for index, client_id in enumerate(CLIENT_IDS)
     )
 
 
 def require_cuda() -> torch.device:
     if not torch.cuda.is_available():
-        raise RuntimeError("Phase 08 federated tests require CUDA")
+        raise RuntimeError("federated tests require CUDA")
     return torch.device("cuda")

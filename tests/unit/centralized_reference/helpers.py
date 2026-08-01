@@ -31,8 +31,8 @@ from datp_core.domain.values import (
     FeatureNameSequence,
     LearningRate,
     OutcomeLabelSequence,
-    RowCount,
     RoundNumber,
+    RowCount,
     Seed,
     WeightDecay,
 )
@@ -61,6 +61,8 @@ TRAINING_PROTOCOL = CentralizedTrainingProtocol(
 LEARNING_RATE = LearningRate(0.001)
 BATCH_SIZE = BatchSize(16)
 SEED = Seed(0)
+DEFAULT_EVALUATION_ROW_COUNT = RowCount(64)
+DEFAULT_EVALUATION_SEED = Seed(1)
 
 
 def feature_protocol() -> PreprocessingProtocol:
@@ -106,7 +108,12 @@ def fitted_state(path: Path) -> FittedPreprocessingState:
     )
 
 
-def benign_frame(row_count: RowCount, *, seed: Seed = Seed(0), label: str = PopulationOutcomeLabel.BENIGN.value) -> pl.DataFrame:
+def benign_frame(
+    row_count: RowCount,
+    *,
+    seed: Seed = SEED,
+    label: str = PopulationOutcomeLabel.BENIGN.value,
+) -> pl.DataFrame:
     generator = np.random.default_rng(seed.value)
     matrix = generator.normal(size=(row_count.value, len(FEATURE_NAMES))).astype(np.float32)
     return pl.DataFrame(
@@ -118,10 +125,18 @@ def benign_frame(row_count: RowCount, *, seed: Seed = Seed(0), label: str = Popu
     )
 
 
-def mixed_evaluation_frame(row_count: RowCount = RowCount(64), *, seed: Seed = Seed(1)) -> pl.DataFrame:
+def mixed_evaluation_frame(
+    row_count: RowCount = DEFAULT_EVALUATION_ROW_COUNT,
+    *,
+    seed: Seed = DEFAULT_EVALUATION_SEED,
+) -> pl.DataFrame:
     half = RowCount(row_count.value // 2)
     benign = benign_frame(half, seed=seed, label=PopulationOutcomeLabel.BENIGN.value)
-    attack = benign_frame(RowCount(row_count.value - half.value), seed=Seed(seed.value + 1), label=PopulationOutcomeLabel.ATTACK.value)
+    attack = benign_frame(
+        RowCount(row_count.value - half.value),
+        seed=Seed(seed.value + 1),
+        label=PopulationOutcomeLabel.ATTACK.value,
+    )
     attack = attack.with_columns((pl.col("f0") + 4.0).alias("f0"))
     return pl.concat([benign, attack], how="vertical")
 
@@ -148,7 +163,7 @@ def run_miniature_training(output_directory: Path) -> CentralizedTrainingResult:
 
 def require_cuda() -> torch.device:
     if not torch.cuda.is_available():
-        raise RuntimeError("Phase 07 centralized tests require CUDA")
+        raise RuntimeError("centralized tests require CUDA")
     return torch.device("cuda")
 
 

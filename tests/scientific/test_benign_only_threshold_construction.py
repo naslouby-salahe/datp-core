@@ -1,6 +1,6 @@
-"""Scientific contract: Phase 09 threshold construction is benign-only and leak-free.
+"""Scientific contract: threshold construction is benign-only and leak-free.
 
-Covers the required negative coverage for Phase 09: attack-label leakage, calibration/
+Covers required negative coverage for attack-label leakage, calibration/
 evaluation conflation, cohort inconsistency, silent client loss, taxonomy/grouping
 misuse, unresolved-method fabrication, comparator omission, and cross-branch
 contamination between the federated and centralized threshold ladders.

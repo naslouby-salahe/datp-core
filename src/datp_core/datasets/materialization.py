@@ -189,7 +189,11 @@ def _inventory_row_count(sources: tuple[RawSourceFile, ...]) -> RowCount | None:
     if not all(source.observed_row_count is not None for source in representation_sources):
         return None
     return RowCount(
-        sum(source.observed_row_count.value for source in representation_sources if source.observed_row_count is not None)
+        sum(
+            source.observed_row_count.value
+            for source in representation_sources
+            if source.observed_row_count is not None
+        )
     )
 
 

@@ -16,23 +16,7 @@ from datp_core.anchor.models import (
     RelativeToleranceRule,
     SourceDefinedRule,
 )
-from datp_core.domain.values import (
-    MetricValue,
-    floats_absolutely_close,
-    floats_exactly_equal,
-    is_numeric_zero,
-)
-from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
-
-
-def floats_match( # TODO: this is a temporary shim to avoid breaking existing code; eventually, we should remove this and use floats_absolutely_close directly
-    left: float,
-    right: float,
-    *,
-    absolute_tolerance: MetricValue = FIXED_SCORE_ABSOLUTE_TOLERANCE,
-) -> bool:
-    """Compare floats with declared MetricValue absolute tolerance. Never use bare float equality."""
-    return floats_absolutely_close(left, right, absolute_tolerance.value)
+from datp_core.domain.values import floats_absolutely_close, floats_exactly_equal, is_numeric_zero
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,7 +109,7 @@ def _compare_with_rule(
         case ExactEqualityRule() | SourceDefinedRule():
             return _equality_result(reference, observation, rule, delta)
         case AbsoluteToleranceRule(absolute_tolerance=tolerance):
-            if floats_match(delta.expected, delta.observed, absolute_tolerance=tolerance):
+            if floats_absolutely_close(delta.expected, delta.observed, tolerance.value):
                 return _pass(reference, observation, rule, delta)
             return _fail(
                 reference,

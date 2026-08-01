@@ -21,6 +21,7 @@ Resolve immutable experiment declarations into exact feasible scientific plans, 
 ## Entry criteria
 
 - Phases 01–11 are complete for every experiment being planned.
+- Existing Phase 10 CLI commands are single-seed and fixed-grid execution boundaries; Phase 12 owns any generalized campaign CLI or orchestration interface.
 - Protocol graph validation is operational.
 - Capability and anchor gates are available.
 

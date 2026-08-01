@@ -146,7 +146,8 @@ def test_history_requires_consecutive_rounds_starting_at_one() -> None:
 def test_history_accepts_consecutive_rounds() -> None:
     coordinate = fedavg_coordinate(SEED)
     history = FederatedTrainingHistory(
-        coordinate=coordinate, rounds=(_round_result(coordinate, RoundNumber(1)), _round_result(coordinate, RoundNumber(2)))
+        coordinate=coordinate,
+        rounds=(_round_result(coordinate, RoundNumber(1)), _round_result(coordinate, RoundNumber(2))),
     )
     assert len(history.rounds) == 2
 
@@ -196,7 +197,9 @@ def test_checkpoint_decision_requires_selected_round_equal_maximum_round() -> No
 def test_training_result_requires_matching_history_coordinate() -> None:
     coordinate = fedavg_coordinate(SEED)
     other_coordinate = fedavg_coordinate(Seed(SEED.value + 1))
-    history = FederatedTrainingHistory(coordinate=other_coordinate, rounds=(_round_result(other_coordinate, RoundNumber(1)),))
+    history = FederatedTrainingHistory(
+        coordinate=other_coordinate, rounds=(_round_result(other_coordinate, RoundNumber(1)),)
+    )
     with pytest.raises(ScientificContractError, match="own history coordinate"):
         FederatedTrainingResult(
             coordinate=coordinate,
