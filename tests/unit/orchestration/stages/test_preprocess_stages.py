@@ -118,21 +118,6 @@ def test_federated_preprocess_rejects_centralized_identity(tmp_path: Path) -> No
         )
 
 
-def test_federated_preprocess_rejects_temporal_split(tmp_path: Path) -> None:
-    with pytest.raises(ScientificContractError, match="future_recalibration"):
-        preprocess_federated_stage(
-            PreprocessFederatedRequest(
-                population=PopulationId.NBAIOT_NATURAL_DEVICES,
-                partition_seed=Seed(0),
-                split_protocol=SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
-                preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
-                data_root=tmp_path,
-                dirichlet_condition=None,
-                capture_timestamp_column=None,
-            )
-        )
-
-
 def test_centralized_preprocess_publishes_pooled_assets(tmp_path: Path) -> None:
     data_root = _nbaiot_data_root(tmp_path)
     result = preprocess_centralized_reference_population_stage(

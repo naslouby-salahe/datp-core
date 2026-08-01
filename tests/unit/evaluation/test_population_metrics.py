@@ -8,8 +8,8 @@ from datp_core.evaluation.population_metrics import calculate_population_metrics
 from datp_core.populations.models import PopulationOutcomeLabel
 
 
-def test_population_metrics_exclude_fallback_attack_values_from_confirmatory_aggregate() -> None:
-    confirmatory = _client_result("confirmatory", EvaluationCohort.CONFIRMATORY_ELIGIBLE, 1, 1)
+def test_population_metrics_exclude_fallback_attack_values_from_fpr_aggregate() -> None:
+    confirmatory = _client_result("confirmatory", EvaluationCohort.FPR_EVALUABLE, 1, 1)
     fallback = _client_result("fallback", EvaluationCohort.DEPLOYMENT_FALLBACK, 0, 1)
 
     result = calculate_population_metrics((confirmatory, fallback))

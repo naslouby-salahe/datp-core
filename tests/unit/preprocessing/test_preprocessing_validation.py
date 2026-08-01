@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from datp_core.domain.enums import PartitionRole
+from datp_core.domain.enums import PartitionRole, SplitProtocolId
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import OutcomeLabelSequence
 from datp_core.populations.models import PopulationOutcomeLabel
@@ -17,9 +17,23 @@ def test_train_only_and_overlap_guards() -> None:
     validate_train_only_fit(PartitionRole.TRAIN)
     with pytest.raises(LeakageError):
         validate_train_only_fit(PartitionRole.CALIBRATION)
-    validate_no_partition_overlap(("a", "b"), ("c",), ("d",))
+    validate_no_partition_overlap(
+        {
+            PartitionRole.TRAIN: ("a", "b"),
+            PartitionRole.CALIBRATION: ("c",),
+            PartitionRole.EVALUATION: ("d",),
+        },
+        split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+    )
     with pytest.raises(LeakageError, match="overlap"):
-        validate_no_partition_overlap(("a", "b"), ("b",), ("c",))
+        validate_no_partition_overlap(
+            {
+                PartitionRole.TRAIN: ("a", "b"),
+                PartitionRole.CALIBRATION: ("b",),
+                PartitionRole.EVALUATION: ("c",),
+            },
+            split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        )
 
 
 def test_attack_and_nonfinite_guards() -> None:

@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from datp_core.domain.enums import ContractSubject, PartitionRole, SerializationFormat
+from datp_core.domain.enums import ContractSubject, PartitionRole, SerializationFormat, SplitProtocolId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, FeatureCount, RoundNumber, RowCount, checksum_text
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
@@ -24,9 +24,13 @@ class ScoreRecord:
     serialization_format: SerializationFormat
 
     def __post_init__(self) -> None:
-        if self.partition_role not in {PartitionRole.CALIBRATION, PartitionRole.EVALUATION}:
+        if self.partition_role not in {
+            PartitionRole.CALIBRATION,
+            PartitionRole.FUTURE_RECALIBRATION,
+            PartitionRole.EVALUATION,
+        }:
             raise ScientificContractError(
-                "federated score records are only defined for calibration and evaluation",
+                "federated score records are only defined for post-training partitions",
                 subject=self.partition_role,
             )
         if self.serialization_format is not SerializationFormat.PARQUET:
@@ -46,6 +50,7 @@ class ScoreArtifactManifest:
     calibration_records: tuple[ScoreRecord, ...]
     evaluation_records: tuple[ScoreRecord, ...]
     higher_score_means_greater_anomaly: bool
+    future_recalibration_records: tuple[ScoreRecord, ...] = ()
 
     def __post_init__(self) -> None:
         if not self.calibration_records or not self.evaluation_records:
@@ -60,6 +65,33 @@ class ScoreArtifactManifest:
             )
         _require_consistent_partition_records(self, self.calibration_records, PartitionRole.CALIBRATION)
         _require_consistent_partition_records(self, self.evaluation_records, PartitionRole.EVALUATION)
+        expected_future = self.coordinate.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+        if expected_future != bool(self.future_recalibration_records):
+            raise ScientificContractError(
+                "score manifest future-recalibration inventory must match its split protocol",
+                subject=ContractSubject.SCORES,
+            )
+        if expected_future:
+            _require_consistent_partition_records(
+                self,
+                self.future_recalibration_records,
+                PartitionRole.FUTURE_RECALIBRATION,
+            )
+            _require_matching_client_inventory(self.calibration_records, self.future_recalibration_records)
+        _require_matching_client_inventory(self.calibration_records, self.evaluation_records)
+
+    def records_for(self, role: PartitionRole) -> tuple[ScoreRecord, ...]:
+        match role:
+            case PartitionRole.CALIBRATION:
+                return self.calibration_records
+            case PartitionRole.FUTURE_RECALIBRATION:
+                return self.future_recalibration_records
+            case PartitionRole.EVALUATION:
+                return self.evaluation_records
+            case PartitionRole.TRAIN:
+                raise ScientificContractError("training records are not score artifacts", subject=role)
+            case PartitionRole.STATIC_REFERENCE_RESERVE:
+                raise ScientificContractError("static-reference reserve is not a score artifact", subject=role)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +103,7 @@ class FixedScoreInvariant:
     evaluation_score_set_checksum: Checksum
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
+    future_recalibration_score_set_checksum: Checksum | None = None
 
     @staticmethod
     def from_manifest(manifest: ScoreArtifactManifest) -> "FixedScoreInvariant":
@@ -80,6 +113,11 @@ class FixedScoreInvariant:
             evaluation_score_set_checksum=_record_set_checksum(manifest.evaluation_records),
             preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,
             split_manifest_checksum=manifest.split_manifest_checksum,
+            future_recalibration_score_set_checksum=(
+                _record_set_checksum(manifest.future_recalibration_records)
+                if manifest.future_recalibration_records
+                else None
+            ),
         )
 
 
@@ -126,6 +164,14 @@ def _require_record_matches_manifest(manifest: "ScoreArtifactManifest", record: 
         raise ScientificContractError(
             "score record checkpoint round must match the manifest checkpoint round",
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+
+
+def _require_matching_client_inventory(left: tuple[ScoreRecord, ...], right: tuple[ScoreRecord, ...]) -> None:
+    if {record.scored_client for record in left} != {record.scored_client for record in right}:
+        raise ScientificContractError(
+            "every scored partition must cover the same client inventory",
+            subject=ContractSubject.CLIENT_IDENTITY,
         )
 
 

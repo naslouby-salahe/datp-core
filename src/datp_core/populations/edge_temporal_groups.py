@@ -218,7 +218,7 @@ def _matched_static_reference(
     excluded = tuple(client for client in programme_candidates if client not in accepted)
     manifest = _assemble_manifest(
         partition_seed=partition_seed,
-        split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+        split_protocol=SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE,
         programme_candidates=programme_candidates,
         accepted_ids=eligible_ids,
         excluded_ids=excluded,

@@ -44,7 +44,7 @@ def _client_result(index: int, false_positive: int) -> ClientMetricResult:
         coordinate=coordinate,
         threshold_method=FederatedThresholdMethod.SHARED_THRESHOLD,
         client=client,
-        cohort=EvaluationCohort.CONFIRMATORY_ELIGIBLE,
+        cohort=EvaluationCohort.FPR_EVALUABLE,
         threshold=ThresholdValue(0.5),
         confusion=confusion,
         metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),

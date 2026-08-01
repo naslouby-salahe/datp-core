@@ -160,7 +160,7 @@ class CentralizedThresholdMethod(StrEnum):
 
 
 class EvaluationCohort(StrEnum):
-    CONFIRMATORY_ELIGIBLE = "confirmatory_eligible"
+    FPR_EVALUABLE = "fpr_evaluable"
     ATTACK_EVALUABLE = "attack_evaluable"
     UNAVAILABLE = "unavailable"
     DEPLOYMENT_FALLBACK = "deployment_fallback"
@@ -291,7 +291,7 @@ class SplitId(StrEnum):
 class TemporalState(StrEnum):
     STATIC_REFERENCE = "static_reference"
     FROZEN_FUTURE = "frozen_future"
-    ONE_SHOT_RECALIBRATED_FUTURE = "one_shot_recalibrated_future"
+    RECALIBRATED_FUTURE = "recalibrated_future"
 
 
 class SerializationFormat(StrEnum):
@@ -368,11 +368,13 @@ class PartitionRole(StrEnum):
     CALIBRATION = "calibration"
     EVALUATION = "evaluation"
     FUTURE_RECALIBRATION = "future_recalibration"
+    STATIC_REFERENCE_RESERVE = "static_reference_reserve"
 
 
 class SplitProtocolId(StrEnum):
     NON_TEMPORAL_EQUAL_THIRDS = "non_temporal_equal_thirds"
     TEMPORAL_HISTORICAL_FUTURE = "temporal_historical_future"
+    RANDOM_FRACTIONAL_STATIC_REFERENCE = "random_fractional_static_reference"
 
 
 class PreprocessingProtocolId(StrEnum):

@@ -128,6 +128,31 @@ class TemporalSplitProtocol(Declaration):
         return self
 
 
+class StaticReferenceSplitProtocol(Declaration):
+    """Randomized counterpart to the temporal 55/15/10/20 row inventory.
+
+    The reserve is retained and checksummed but never fitted, calibrated, scored,
+    or evaluated.  This keeps the static comparison on the same row budget without
+    assigning a false temporal meaning to the 10 percent allocation.
+    """
+
+    training: Ratio
+    calibration: Ratio
+    reserve: Ratio
+    evaluation: Ratio
+
+    @model_validator(mode="after")
+    def validate_total(self) -> "StaticReferenceSplitProtocol":
+        if not _sums_to_unit_fraction(
+            self.training.value,
+            self.calibration.value,
+            self.reserve.value,
+            self.evaluation.value,
+        ):
+            raise ValueError("static-reference split must sum to one")
+        return self
+
+
 class CheckpointProtocol(Declaration):
     candidates: tuple[RoundNumber, ...]
     maximum_round: RoundNumber
@@ -451,6 +476,7 @@ class ResolvedProtocolGraph(Declaration):
     experiments: tuple[ExperimentDeclaration, ...]
     suppressed_experiment_ids: tuple[ExperimentId, ...]
     temporal_split: TemporalSplitProtocol
+    static_reference_split: StaticReferenceSplitProtocol
     non_temporal_split: FractionalSplitProtocol
     checkpoint: CheckpointProtocol
     calibration: CalibrationEligibilityProtocol

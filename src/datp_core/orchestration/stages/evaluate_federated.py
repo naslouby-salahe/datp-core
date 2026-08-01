@@ -7,6 +7,7 @@ from shutil import rmtree
 
 import polars as pl
 
+from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.store import AtomicPublication, publish_atomically
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
@@ -159,6 +160,7 @@ class FederatedEvaluationDocument(StrictModel):
     threshold_estimation: tuple[ThresholdEstimationDiagnostic, ...]
     communication: CommunicationDiagnostic | None
     alert_burden: tuple[AlertBurdenDiagnostic, ...]
+    temporal_provenance: TemporalDeploymentProvenance | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +206,7 @@ class EvaluateFederatedRequest:
     traffic_rate_evidence: ValidatedTrafficRateEvidence | None
     output_directory: Path
     overwrite: bool
+    temporal_provenance: TemporalDeploymentProvenance | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,8 +219,21 @@ class FederatedEvaluationResult:
     complete_digest: Checksum
 
 
+def _validate_temporal_provenance(request: EvaluateFederatedRequest) -> None:
+    provenance = request.temporal_provenance
+    if provenance is None:
+        return
+    if request.evidence_role is not EvidenceRole.TEMPORAL_BOUNDARY:
+        raise ScientificContractError(
+            "temporal deployment provenance requires temporal-boundary evidence",
+            subject=request.evidence_role,
+        )
+    provenance.validate_score_manifest(request.score_manifest)
+
+
 def evaluate_federated_stage(request: EvaluateFederatedRequest) -> FederatedEvaluationResult:
     """Evaluate pre-existing scores only; this stage cannot train, rescore, or calibrate."""
+    _validate_temporal_provenance(request)
     clients, population = _evaluate(request)
     diagnostics = _evaluate_diagnostics(request, clients)
     _validate_evaluation_evidence(request.fixed_score_evidence, request.score_manifest, request.cohort, clients)
@@ -310,8 +326,8 @@ def _evaluate_score_record(
 
 
 def _evaluation_cohort(record: ClientEligibilityRecord) -> EvaluationCohort:
-    if record.confirmatory_eligible:
-        return EvaluationCohort.CONFIRMATORY_ELIGIBLE
+    if record.fpr_evaluable:
+        return EvaluationCohort.FPR_EVALUABLE
     if record.deployment_fallback:
         return EvaluationCohort.DEPLOYMENT_FALLBACK
     return EvaluationCohort.UNAVAILABLE
@@ -377,7 +393,8 @@ def _client_population_checksum(manifest: ScoreArtifactManifest) -> Checksum:
 def _cohort_checksum(cohort: EvaluationCohortManifest) -> Checksum:
     return checksum_text(
         "|".join(
-            f"{record.client_id}:{record.confirmatory_eligible}:{record.attack_evaluable}:{record.deployment_fallback}"
+            f"{record.client_id}:{record.calibration_eligible}:{record.fpr_evaluable}:"
+            f"{record.attack_evaluable}:{record.deployment_fallback}"
             for record in sorted(cohort.records, key=lambda item: item.client_id)
         )
     )
@@ -436,12 +453,12 @@ def _client_auroc_evidence(
         partition_role=PartitionRole.EVALUATION,
         attack_assignment_valid=eligibility.attack_evaluable,
     )
-    auroc = _metric_value(
+    auroc = _metric_availability(
         ClientMetricResult(
             coordinate=coordinate,
             threshold_method=FederatedThresholdMethod.SHARED_THRESHOLD,
             client=record.scored_client,
-            cohort=EvaluationCohort.CONFIRMATORY_ELIGIBLE,
+            cohort=EvaluationCohort.FPR_EVALUABLE,
             threshold=ThresholdValue(0.0),
             confusion=confusion,
             metrics=calculate_client_metrics(confusion=confusion, scores=scores, labels=labels),
@@ -453,8 +470,6 @@ def _client_auroc_evidence(
         ),
         MetricId.AUROC,
     )
-    if auroc is None:
-        raise ScientificContractError("fixed-score controls require available AUROC for every score client")
     return ClientAurocEvidence(record.scored_client, auroc)
 
 
@@ -544,6 +559,7 @@ def _evaluation_document(
         threshold_estimation=diagnostics.threshold_estimation,
         communication=diagnostics.communication,
         alert_burden=diagnostics.alert_burden,
+        temporal_provenance=request.temporal_provenance,
     )
 
 
@@ -644,7 +660,8 @@ def _validate_evidence_cohort_binding(
         raise ScientificContractError("fixed-score evidence client population checksum does not match evaluation")
     expected_cohort = checksum_text(
         "|".join(
-            f"{record.client_id}:{record.confirmatory_eligible}:{record.attack_evaluable}:{record.deployment_fallback}"
+            f"{record.client_id}:{record.calibration_eligible}:{record.fpr_evaluable}:"
+            f"{record.attack_evaluable}:{record.deployment_fallback}"
             for record in sorted(cohort.records, key=lambda item: item.client_id)
         )
     )
@@ -669,36 +686,44 @@ def _validate_evidence_aurocs(
     evidence: FixedScoreEvidence,
     clients: tuple[ClientMetricResult, ...],
 ) -> None:
-    observed_aurocs = tuple((client.client, _metric_value(client, MetricId.AUROC)) for client in clients)
-    _require_available_aurocs(observed_aurocs)
+    observed_aurocs = tuple((client.client, _metric_availability(client, MetricId.AUROC)) for client in clients)
     _require_auroc_client_order(evidence.aurocs, observed_aurocs)
     _require_matching_aurocs(evidence.aurocs, observed_aurocs)
 
 
-def _require_available_aurocs(observed: tuple[tuple[ClientIdentity, MetricValue | None], ...]) -> None:
-    if any(value is None for _, value in observed):
-        raise ScientificContractError("fixed-score controls require available AUROC for every compared client")
-
-
 def _require_auroc_client_order(
-    expected: tuple[ClientAurocEvidence, ...], observed: tuple[tuple[ClientIdentity, MetricValue | None], ...]
+    expected: tuple[ClientAurocEvidence, ...], observed: tuple[tuple[ClientIdentity, MetricAvailability], ...]
 ) -> None:
     if tuple(item.client for item in expected) != tuple(client for client, _ in observed):
         raise ScientificContractError("fixed-score AUROC evidence client order does not match evaluation")
 
 
 def _require_matching_aurocs(
-    expected: tuple[ClientAurocEvidence, ...], observed: tuple[tuple[ClientIdentity, MetricValue | None], ...]
+    expected: tuple[ClientAurocEvidence, ...], observed: tuple[tuple[ClientIdentity, MetricAvailability], ...]
 ) -> None:
-    for expected_item, (_, observed_value) in zip(expected, observed, strict=True):
-        if observed_value is None:
-            raise ScientificContractError("fixed-score controls require available AUROC for every compared client")
-        if not floats_absolutely_close(
-            expected_item.value.value,
-            observed_value.value,
-            FIXED_SCORE_ABSOLUTE_TOLERANCE.value,
-        ):
-            raise ScientificContractError("fixed-score AUROC evidence does not match held-out evaluation")
+    for expected_item, (_, observed_outcome) in zip(expected, observed, strict=True):
+        _require_matching_auroc(expected_item.outcome, observed_outcome)
+
+
+def _require_matching_auroc(expected: MetricAvailability, observed: MetricAvailability) -> None:
+    if expected.status is not observed.status:
+        raise ScientificContractError("fixed-score AUROC availability does not match held-out evaluation")
+    if expected.status is MetricStatus.AVAILABLE:
+        _require_matching_available_auroc(expected, observed)
+        return
+    if expected != observed:
+        raise ScientificContractError("fixed-score AUROC unavailable outcome does not match held-out evaluation")
+
+
+def _require_matching_available_auroc(expected: MetricAvailability, observed: MetricAvailability) -> None:
+    if expected.value is None or observed.value is None:
+        raise RuntimeError("available AUROC evidence must contain values")
+    if not floats_absolutely_close(
+        expected.value.value,
+        observed.value.value,
+        FIXED_SCORE_ABSOLUTE_TOLERANCE.value,
+    ):
+        raise ScientificContractError("fixed-score AUROC evidence does not match held-out evaluation")
 
 
 def _aggregate_client_checksum(clients: tuple[ClientMetricResult, ...], field: str) -> Checksum:
@@ -716,6 +741,13 @@ def _metric_value(result: ClientMetricResult, metric_id: MetricId) -> MetricValu
     for metric in result.metrics:
         if metric.metric is metric_id:
             return metric.value
+    raise ScientificContractError("client result is missing a required metric")
+
+
+def _metric_availability(result: ClientMetricResult, metric_id: MetricId) -> MetricAvailability:
+    for metric in result.metrics:
+        if metric.metric is metric_id:
+            return metric
     raise ScientificContractError("client result is missing a required metric")
 
 

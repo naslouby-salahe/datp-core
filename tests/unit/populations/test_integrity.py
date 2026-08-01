@@ -70,6 +70,7 @@ def test_integrity_detects_attack_in_calibration() -> None:
         calibration_row_count=2,
         evaluation_row_count=0,
         future_recalibration_row_count=0,
+        static_reference_reserve_row_count=0,
         assignment_checksum=Checksum("b" * 64),
         population_manifest_checksum=Checksum("c" * 64),
     )

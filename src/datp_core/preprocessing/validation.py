@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import polars as pl
 
-from datp_core.artifacts.layout import ProcessedAssetName, asset_for_partition, core_processed_asset_names
+from datp_core.artifacts.layout import ProcessedAssetName, asset_for_partition, partition_roles, processed_asset_names
 from datp_core.artifacts.reload_validation import TransformReloadCheck, reload_and_compare_transform
 from datp_core.artifacts.serialization import (
     TrustedScaler,
@@ -23,6 +23,7 @@ from datp_core.domain.enums import (
     PartitionRole,
     PreprocessingFitScope,
     ProcessedDataBranch,
+    SplitProtocolId,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabelSequence, checksum_file, checksum_text
@@ -43,24 +44,21 @@ from datp_core.preprocessing.models import (
     TransformedSchema,
 )
 
-_CORE_PARTITION_ROLES = (
-    PartitionRole.TRAIN,
-    PartitionRole.CALIBRATION,
-    PartitionRole.EVALUATION,
-)
 
-
-def core_partition_roles() -> tuple[PartitionRole, ...]:
-    return _CORE_PARTITION_ROLES
-
-
-def require_core_partitions(
+def require_partitions(
     partitions: Mapping[PartitionRole, pl.DataFrame],
     row_ids: Mapping[PartitionRole, Sequence[str]],
     *,
+    split_protocol: SplitProtocolId,
     subject: PreprocessingFitScope,
 ) -> None:
-    for role in _CORE_PARTITION_ROLES:
+    required = partition_roles(split_protocol)
+    if frozenset(partitions) != frozenset(required) or frozenset(row_ids) != frozenset(required):
+        raise ScientificContractError(
+            f"{subject.value} partition inventory does not match {split_protocol.value}",
+            subject=split_protocol,
+        )
+    for role in required:
         if role not in partitions or role not in row_ids:
             raise ScientificContractError(
                 f"{subject.value} missing preprocessing partition {role.value}",
@@ -68,17 +66,18 @@ def require_core_partitions(
             )
 
 
-def extract_core_partitions(
+def extract_partitions(
     frame: pl.DataFrame,
     feature_names: tuple[str, ...],
     *,
+    split_protocol: SplitProtocolId,
     branch: ProcessedDataBranch,
     deterministic_sort: bool,
 ) -> tuple[Mapping[PartitionRole, pl.DataFrame], Mapping[PartitionRole, tuple[str, ...]], OutcomeLabelSequence]:
     partitions: dict[PartitionRole, pl.DataFrame] = {}
     row_ids: dict[PartitionRole, tuple[str, ...]] = {}
     keep = [STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names]
-    for role in _CORE_PARTITION_ROLES:
+    for role in partition_roles(split_protocol):
         role_frame = frame.filter(pl.col(PARTITION_ROLE_COLUMN) == role.value).select(keep)
         if deterministic_sort:
             role_frame = role_frame.sort([STABLE_ROW_ID_COLUMN])
@@ -101,17 +100,12 @@ def validate_train_only_fit(fit_partition: PartitionRole) -> None:
 
 
 def validate_no_partition_overlap(
-    train_ids: Sequence[str],
-    calibration_ids: Sequence[str],
-    evaluation_ids: Sequence[str],
-    future_ids: Sequence[str] = (),
+    row_ids: Mapping[PartitionRole, Sequence[str]],
+    *,
+    split_protocol: SplitProtocolId,
 ) -> None:
-    groups = (
-        (PartitionRole.TRAIN, frozenset(train_ids)),
-        (PartitionRole.CALIBRATION, frozenset(calibration_ids)),
-        (PartitionRole.EVALUATION, frozenset(evaluation_ids)),
-        (PartitionRole.FUTURE_RECALIBRATION, frozenset(future_ids)),
-    )
+    required = partition_roles(split_protocol)
+    groups = tuple((role, frozenset(row_ids[role])) for role in required)
     for (left_role, left_ids), (right_role, right_ids) in combinations(groups, 2):
         overlap = left_ids & right_ids
         if overlap:
@@ -265,12 +259,13 @@ def publish_preprocessed_partitions(
     asset_paths: tuple[str, ...],
 ) -> ProcessedPublicationResult[PreprocessingManifest]:
     validate_train_only_fit(PartitionRole.TRAIN)
-    require_core_partitions(partitions, row_ids, subject=fit_scope)
-    validate_no_partition_overlap(
-        row_ids[PartitionRole.TRAIN],
-        row_ids[PartitionRole.CALIBRATION],
-        row_ids[PartitionRole.EVALUATION],
+    require_partitions(
+        partitions,
+        row_ids,
+        split_protocol=context.split_protocol_identity,
+        subject=fit_scope,
     )
+    validate_no_partition_overlap(row_ids, split_protocol=context.split_protocol_identity)
     validate_transformed_schema(context.protocol, context.protocol.transformed_schema)
     return publish_processed(
         ProcessedPublication(
@@ -283,8 +278,9 @@ def publish_preprocessed_partitions(
                 protocol=context.protocol,
                 fitted_estimator=fitted_estimator,
                 partitions=partitions,
+                split_protocol=context.split_protocol_identity,
             ),
-            required_assets=core_processed_assets(),
+            required_assets=processed_assets(context.split_protocol_identity),
             overwrite=False,
             manifest_type=PreprocessingManifest,
             schema_type=TransformedSchema,
@@ -299,6 +295,7 @@ def write_fitted_transformed_partitions(
     protocol: PreprocessingProtocol,
     fitted_estimator: TrustedScaler,
     partitions: Mapping[PartitionRole, pl.DataFrame],
+    split_protocol: SplitProtocolId,
 ) -> None:
     if type(fitted_estimator) is not resolve_trusted_estimator_type(protocol.estimator_class_name):
         raise ScientificContractError(
@@ -320,7 +317,7 @@ def write_fitted_transformed_partitions(
             expected_transformed=train_transformed,
         )
     )
-    for role in _CORE_PARTITION_ROLES:
+    for role in partition_roles(split_protocol):
         matrix = partitions[role].select(feature_names).to_numpy()
         transformed = transform_feature_matrix(fitted_estimator, matrix, role)
         retained = partitions[role].select(
@@ -334,5 +331,5 @@ def write_fitted_transformed_partitions(
         output.write_parquet(temporary / asset_for_partition(role))
 
 
-def core_processed_assets() -> tuple[ProcessedAssetName, ...]:
-    return core_processed_asset_names()
+def processed_assets(split_protocol: SplitProtocolId) -> tuple[ProcessedAssetName, ...]:
+    return processed_asset_names(split_protocol)

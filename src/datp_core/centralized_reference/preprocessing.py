@@ -19,9 +19,9 @@ from datp_core.preprocessing.models import (
     PreprocessingPublishContext,
 )
 from datp_core.preprocessing.validation import (
-    core_processed_assets,
     fit_trusted_batch,
     fitted_state_after_publish,
+    processed_assets,
     publish_preprocessed_partitions,
     validate_branch_isolation,
 )
@@ -57,7 +57,7 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
             client_identity=None,
         ),
     )
-    assets = core_processed_assets()
+    assets = processed_assets(context.split_protocol_identity)
     result = publish_preprocessed_partitions(
         context=context,
         branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,

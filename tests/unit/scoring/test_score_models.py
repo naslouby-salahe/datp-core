@@ -38,7 +38,7 @@ def _manifest(tmp_path: Path) -> ScoreArtifactManifest:
 
 
 def test_score_record_rejects_non_calibration_evaluation_partition_role(tmp_path: Path) -> None:
-    with pytest.raises(ScientificContractError, match="calibration and evaluation"):
+    with pytest.raises(ScientificContractError, match="post-training partitions"):
         _record(PartitionRole.TRAIN, "client_a", tmp_path / "train.parquet")
 
 

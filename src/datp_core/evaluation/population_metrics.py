@@ -34,26 +34,29 @@ def calculate_population_metrics(results: tuple[ClientMetricResult, ...]) -> Pop
         raise ScientificContractError(
             "population results require one fixed coordinate, threshold method, and evidence role"
         )
-    confirmatory = tuple(result for result in results if result.cohort is EvaluationCohort.CONFIRMATORY_ELIGIBLE)
+    fpr_evaluable = tuple(result for result in results if result.cohort is EvaluationCohort.FPR_EVALUABLE)
     fallback = tuple(result for result in results if result.cohort is EvaluationCohort.DEPLOYMENT_FALLBACK)
     unavailable_records = tuple(result for result in results if result.cohort is EvaluationCohort.UNAVAILABLE)
-    fpr_records = tuple(_metric(result, MetricId.FALSE_POSITIVE_RATE) for result in confirmatory)
+    fpr_records = tuple(_metric(result, MetricId.FALSE_POSITIVE_RATE) for result in fpr_evaluable)
     fpr_values = tuple(item.value.value for item in fpr_records if item.value is not None)
-    attack_evaluable = tuple(result for result in confirmatory if result.attack_evaluable)
-    metric_records, warnings = _population_metric_records(confirmatory, fpr_values)
+    attack_evaluable = tuple(result for result in fpr_evaluable if result.attack_evaluable)
+    metric_records, warnings = _population_metric_records(fpr_evaluable, fpr_values)
     return PopulationMetricResult(
         coordinate=first.coordinate,
         threshold_method=first.threshold_method,
-        cohort=EvaluationCohort.CONFIRMATORY_ELIGIBLE,
+        cohort=EvaluationCohort.FPR_EVALUABLE,
         metrics=metric_records,
         candidate_client_count=_count(len(results)),
-        calibration_eligible_client_count=_count(len(confirmatory)),
+        calibration_eligible_client_count=_count(len(fpr_evaluable)),
         fpr_evaluable_client_count=_count(len(fpr_values)),
         attack_evaluable_client_count=_count(len(attack_evaluable)),
         deployment_fallback_count=_count(len(fallback)),
         unavailable_client_count=_count(len(unavailable_records)),
         excluded_clients=tuple(
-            sorted((result.client for result in results if result not in confirmatory), key=lambda item: item.client_id)
+            sorted(
+                (result.client for result in results if result not in fpr_evaluable),
+                key=lambda item: item.client_id,
+            )
         ),
         warnings=warnings,
         evidence_role=first.evidence_role,

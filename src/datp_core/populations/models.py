@@ -182,6 +182,7 @@ class SplitManifestDocument(StrictModel):
     calibration_row_count: int
     evaluation_row_count: int
     future_recalibration_row_count: int
+    static_reference_reserve_row_count: int
     assignment_checksum: Checksum
     population_manifest_checksum: Checksum
 
@@ -192,6 +193,7 @@ class SplitManifestDocument(StrictModel):
             self.calibration_row_count,
             self.evaluation_row_count,
             self.future_recalibration_row_count,
+            self.static_reference_reserve_row_count,
         )
         if min(counts) < 0 or self.assignment_row_count < 0:
             raise ValueError("split counts must be non-negative")

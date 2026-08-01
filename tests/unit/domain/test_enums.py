@@ -96,10 +96,13 @@ EXPECTED_MEMBERS = (
     (ProcessedDataBranch, frozenset(("FEDERATED", "CENTRALIZED_REFERENCE"))),
     (ReusableDataCoordinateKind, frozenset(("CANONICAL", "PROCESSED", "RAW"))),
     (RawDatasetDirectory, frozenset(("NBAIOT", "CICIOT2023", "EDGE_IIOTSET"))),
-    (PartitionRole, frozenset(("TRAIN", "CALIBRATION", "EVALUATION", "FUTURE_RECALIBRATION"))),
+    (
+        PartitionRole,
+        frozenset(("TRAIN", "CALIBRATION", "EVALUATION", "FUTURE_RECALIBRATION", "STATIC_REFERENCE_RESERVE")),
+    ),
     (
         SplitProtocolId,
-        frozenset(("NON_TEMPORAL_EQUAL_THIRDS", "TEMPORAL_HISTORICAL_FUTURE")),
+        frozenset(("NON_TEMPORAL_EQUAL_THIRDS", "TEMPORAL_HISTORICAL_FUTURE", "RANDOM_FRACTIONAL_STATIC_REFERENCE")),
     ),
     (
         PreprocessingProtocolId,
@@ -219,7 +222,7 @@ EXPECTED_MEMBERS = (
     (MultiplicityCorrectionId, frozenset(("HOLM",))),
     (
         EvaluationCohort,
-        frozenset(("CONFIRMATORY_ELIGIBLE", "ATTACK_EVALUABLE", "UNAVAILABLE", "DEPLOYMENT_FALLBACK")),
+        frozenset(("FPR_EVALUABLE", "ATTACK_EVALUABLE", "UNAVAILABLE", "DEPLOYMENT_FALLBACK")),
     ),
     (
         MetricId,
@@ -333,7 +336,7 @@ EXPECTED_MEMBERS = (
             )
         ),
     ),
-    (TemporalState, frozenset(("STATIC_REFERENCE", "FROZEN_FUTURE", "ONE_SHOT_RECALIBRATED_FUTURE"))),
+    (TemporalState, frozenset(("STATIC_REFERENCE", "FROZEN_FUTURE", "RECALIBRATED_FUTURE"))),
     (SerializationFormat, frozenset(("PYDANTIC_JSON", "PARQUET", "SAFETENSORS", "SKOPS"))),
     (
         WarningCode,

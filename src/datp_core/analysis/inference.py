@@ -17,6 +17,7 @@ from datp_core.domain.enums import (
     IntervalMethod,
     MetricId,
     MultiplicityCorrectionId,
+    PopulationId,
     StatisticalTestId,
 )
 from datp_core.domain.values import BootstrapReplicateCount, ConfidenceLevel, MetricValue, Ratio, Seed
@@ -63,6 +64,8 @@ class BcaReason(StrEnum):
     INFINITE_BIAS_CORRECTION = "infinite_bias_correction"
     UNDEFINED_ACCELERATION = "undefined_acceleration"
     INVALID_ADJUSTED_QUANTILES = "invalid_adjusted_quantiles"
+    EXTERNAL_ANALYSIS_PLAN_MISMATCH = "external_analysis_plan_mismatch"
+    EXTERNAL_SEED_COHORT_MISMATCH = "external_seed_cohort_mismatch"
 
 
 class _ConfirmatoryContractError(ValueError):
@@ -102,6 +105,50 @@ class PairedContrast:
             raise ValueError("paired contrast requires the local-threshold method")
         if self.delta.value != self.shared_value.value - self.local_value.value:
             raise ValueError("paired contrast must preserve the exact shared-minus-local difference")
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalPairedAnalysisPlan:
+    """Predeclared supplementary interval plan, intentionally separate from the endpoint."""
+
+    population: PopulationId
+    evidence_role: EvidenceRole
+    metric: MetricId
+    left_method: FederatedThresholdMethod
+    right_method: FederatedThresholdMethod
+    seed_cohort: tuple[Seed, ...]
+    confidence_level: ConfidenceLevel
+
+    def __post_init__(self) -> None:
+        if self.evidence_role not in {EvidenceRole.EXTERNAL_VALIDATION, EvidenceRole.TEMPORAL_BOUNDARY}:
+            raise ValueError("external paired analysis requires external or temporal evidence")
+        if not self.seed_cohort or len(set(self.seed_cohort)) != len(self.seed_cohort):
+            raise ValueError("external paired analysis requires a unique predeclared seed cohort")
+        if self.left_method is self.right_method:
+            raise ValueError("external paired analysis requires two distinct threshold methods")
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalPairedContrast:
+    """A seed-level contrast that may inform supplementary external evidence only."""
+
+    coordinate: FederatedTrainingCoordinate
+    evidence_role: EvidenceRole
+    seed: Seed
+    metric: MetricId
+    left_method: FederatedThresholdMethod
+    right_method: FederatedThresholdMethod
+    left_value: MetricValue
+    right_value: MetricValue
+    delta: MetricValue
+
+    def __post_init__(self) -> None:
+        if self.evidence_role not in {EvidenceRole.EXTERNAL_VALIDATION, EvidenceRole.TEMPORAL_BOUNDARY}:
+            raise ValueError("external paired contrasts cannot carry confirmatory evidence")
+        if self.seed != self.coordinate.training_seed:
+            raise ValueError("external paired contrast seed must equal its coordinate seed")
+        if self.delta.value != self.left_value.value - self.right_value.value:
+            raise ValueError("external paired contrast must preserve the exact left-minus-right difference")
 
 
 @dataclass(frozen=True, slots=True)
@@ -278,8 +325,113 @@ def paired_bca_interval(
     )
 
 
+def external_paired_bca_interval(
+    contrasts: tuple[ExternalPairedContrast, ...],
+    *,
+    plan: ExternalPairedAnalysisPlan,
+    replicate_count: BootstrapReplicateCount,
+    analysis_seed: Seed,
+) -> BootstrapInterval:
+    """Supplementary paired BCa interval without a confirmatory decision pathway."""
+    try:
+        validated = validate_external_contrasts(contrasts, plan)
+    except _ConfirmatoryContractError as error:
+        return _blocked_interval(
+            _point_estimate_or_none(contrasts),
+            plan.confidence_level,
+            replicate_count,
+            analysis_seed,
+            error.reason,
+        )
+    bootstrap = _bootstrap_distribution(validated, replicate_count, analysis_seed)
+    if bootstrap.degeneracy_reason is not None:
+        return _degenerate_interval(
+            bootstrap.estimate,
+            plan.confidence_level,
+            replicate_count,
+            analysis_seed,
+            bootstrap.degeneracy_reason,
+        )
+    if bootstrap.values is None:
+        raise RuntimeError("a non-degenerate bootstrap distribution must be present")
+    interval = _bca_interval_from_distribution(
+        bootstrap.estimate,
+        bootstrap.paired_deltas,
+        bootstrap.values,
+        plan.confidence_level,
+    )
+    if isinstance(interval, BcaReason):
+        return _degenerate_interval(bootstrap.estimate, plan.confidence_level, replicate_count, analysis_seed, interval)
+    lower_bound, upper_bound, bias_correction, acceleration = interval
+    return BootstrapInterval(
+        IntervalMethod.BCA_PAIRED_ARITHMETIC_MEAN,
+        plan.confidence_level,
+        replicate_count,
+        analysis_seed,
+        bootstrap.estimate,
+        lower_bound,
+        upper_bound,
+        bias_correction,
+        acceleration,
+        AvailabilityStatus.AVAILABLE,
+        BcaOutcome.AVAILABLE,
+        BcaReason.NONE,
+    )
+
+
+def validate_external_contrasts(
+    contrasts: tuple[ExternalPairedContrast, ...], plan: ExternalPairedAnalysisPlan
+) -> tuple[ExternalPairedContrast, ...]:
+    _require_external_seed_cohort(contrasts, plan)
+    _require_external_plan_matches(contrasts, plan)
+    _require_external_fixed_coordinate(contrasts)
+    return tuple(sorted(contrasts, key=lambda item: item.seed.value))
+
+
+def _require_external_seed_cohort(
+    contrasts: tuple[ExternalPairedContrast, ...],
+    plan: ExternalPairedAnalysisPlan,
+) -> None:
+    observed = tuple(item.seed for item in contrasts)
+    if len(observed) != len(set(observed)):
+        raise _ConfirmatoryContractError(BcaReason.DUPLICATE_SEED)
+    if frozenset(observed) != frozenset(plan.seed_cohort) or len(contrasts) != len(plan.seed_cohort):
+        raise _ConfirmatoryContractError(BcaReason.EXTERNAL_SEED_COHORT_MISMATCH)
+
+
+def _require_external_plan_matches(
+    contrasts: tuple[ExternalPairedContrast, ...],
+    plan: ExternalPairedAnalysisPlan,
+) -> None:
+    for item in contrasts:
+        if (
+            item.coordinate.population is not plan.population
+            or item.evidence_role is not plan.evidence_role
+            or item.metric is not plan.metric
+            or item.left_method is not plan.left_method
+            or item.right_method is not plan.right_method
+        ):
+            raise _ConfirmatoryContractError(BcaReason.EXTERNAL_ANALYSIS_PLAN_MISMATCH)
+
+
+def _require_external_fixed_coordinate(contrasts: tuple[ExternalPairedContrast, ...]) -> None:
+    baseline = contrasts[0].coordinate
+    for item in contrasts[1:]:
+        coordinate = item.coordinate
+        if (
+            coordinate.population != baseline.population
+            or coordinate.split_protocol != baseline.split_protocol
+            or coordinate.preprocessing_identity != baseline.preprocessing_identity
+            or coordinate.model != baseline.model
+            or coordinate.model_coefficient != baseline.model_coefficient
+        ):
+            raise _ConfirmatoryContractError(BcaReason.FIXED_COORDINATE_MISMATCH)
+
+
 def _bootstrap_distribution(
-    contrasts: tuple[PairedContrast, ...], replicate_count: BootstrapReplicateCount, analysis_seed: Seed
+    contrasts: tuple[PairedContrast, ...] | tuple[ExternalPairedContrast, ...],
+    replicate_count: BootstrapReplicateCount,
+    analysis_seed: Seed,
 ) -> _BootstrapDistribution:
     deltas = _deltas(contrasts)
     estimate = MetricValue(float(np.mean(deltas)))
@@ -415,7 +567,7 @@ def sign_consistency(contrasts: tuple[PairedContrast, ...]) -> PairedDifferenceC
     return count_paired_differences(tuple(item.delta.value for item in contrasts))
 
 
-def _deltas(contrasts: tuple[PairedContrast, ...]) -> np.ndarray:
+def _deltas(contrasts: tuple[PairedContrast, ...] | tuple[ExternalPairedContrast, ...]) -> np.ndarray:
     values = tuple(item.delta.value for item in contrasts)
     if any(not isfinite(value) for value in values):
         raise ValueError("paired contrasts must be finite")
@@ -476,7 +628,9 @@ def _degenerate_interval(
     )
 
 
-def _point_estimate_or_none(contrasts: tuple[PairedContrast, ...]) -> MetricValue | None:
+def _point_estimate_or_none(
+    contrasts: tuple[PairedContrast, ...] | tuple[ExternalPairedContrast, ...],
+) -> MetricValue | None:
     if not contrasts:
         return None
     return MetricValue(float(np.mean(_deltas(contrasts))))

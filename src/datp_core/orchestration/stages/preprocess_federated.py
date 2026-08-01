@@ -7,6 +7,7 @@ import polars as pl
 
 from datp_core.artifacts.coordinates import canonical_root_under
 from datp_core.datasets.catalogue import dataset_binding
+from datp_core.datasets.edge_iiotset.schema import EdgeCanonicalColumn
 from datp_core.domain.enums import (
     DatasetId,
     PartitionRole,
@@ -42,7 +43,7 @@ from datp_core.preprocessing.models import (
     scientific_federated_pooled_min_max_method,
     scientific_preprocessing_method,
 )
-from datp_core.preprocessing.validation import extract_core_partitions, require_canonical_publication_complete
+from datp_core.preprocessing.validation import extract_partitions, require_canonical_publication_complete
 
 _FEDERATED_METHODS = frozenset(
     {
@@ -100,7 +101,7 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
             split_protocol=request.split_protocol,
             dataset=dataset,
             deployment_fallback_client_ids=frozenset(),
-            capture_timestamp_column=request.capture_timestamp_column,
+            capture_timestamp_column=_capture_timestamp_column(request),
         )
     )
     schema = dataset_binding(dataset).schema
@@ -118,9 +119,10 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
 
     client_ids = tuple(sorted(str(value) for value in joined.get_column(CLIENT_ID_COLUMN).unique().to_list()))
     client_partitions: dict[str, ClientPartitionBundle] = {
-        client_id: extract_core_partitions(
+        client_id: extract_partitions(
             joined.filter(pl.col(CLIENT_ID_COLUMN) == client_id),
             schema.feature_columns,
+            split_protocol=request.split_protocol,
             branch=ProcessedDataBranch.FEDERATED,
             deterministic_sort=False,
         )
@@ -154,6 +156,14 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
                 train_row_count=partitions[PartitionRole.TRAIN].height,
                 calibration_row_count=partitions[PartitionRole.CALIBRATION].height,
                 evaluation_row_count=partitions[PartitionRole.EVALUATION].height,
+                future_recalibration_row_count=partitions.get(
+                    PartitionRole.FUTURE_RECALIBRATION,
+                    pl.DataFrame(),
+                ).height,
+                static_reference_reserve_row_count=partitions.get(
+                    PartitionRole.STATIC_REFERENCE_RESERVE,
+                    pl.DataFrame(),
+                ).height,
             )
         )
 
@@ -176,11 +186,25 @@ def _validate_federated_request(request: PreprocessFederatedRequest) -> None:
             "federated preprocess stage requires a federated preprocessing identity",
             subject=request.preprocessing_identity,
         )
-    if request.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
+    if (
+        request.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+        and request.population is not PopulationId.EDGE_TEMPORAL_GROUPS
+    ):
         raise ScientificContractError(
-            "temporal split preprocessing requires future_recalibration assets not yet in the core publish set",
-            subject=request.split_protocol,
+            "chronological preprocessing is defined only for Edge temporal groups",
+            subject=request.population,
         )
+
+
+def _capture_timestamp_column(request: PreprocessFederatedRequest) -> str | None:
+    if request.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
+        if request.capture_timestamp_column not in {None, EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value}:
+            raise ScientificContractError(
+                "temporal preprocessing must use the audited Edge capture timestamp column",
+                subject=request.population,
+            )
+        return EdgeCanonicalColumn.CAPTURE_TIMESTAMP.value
+    return request.capture_timestamp_column
 
 
 def _federated_protocol(

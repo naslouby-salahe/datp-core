@@ -45,7 +45,7 @@ from datp_core.preprocessing.models import (
     scientific_centralized_preprocessing_method,
 )
 from datp_core.preprocessing.validation import (
-    extract_core_partitions,
+    extract_partitions,
     require_canonical_publication_complete,
     validate_no_attack_labels_in_fit,
 )
@@ -164,9 +164,10 @@ def preprocess_centralized_reference_population_stage(
     schema = dataset_binding(dataset).schema
     protocol = build_centralized_preprocessing_protocol(FeatureNameSequence(schema.feature_columns))
     joined = join_handoff_with_canonical_features(canonical_root, handoff, schema.feature_columns)
-    partitions, row_ids, training_labels = extract_core_partitions(
+    partitions, row_ids, training_labels = extract_partitions(
         joined,
         schema.feature_columns,
+        split_protocol=request.split_protocol,
         branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
         deterministic_sort=True,
     )

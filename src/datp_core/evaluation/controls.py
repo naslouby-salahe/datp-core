@@ -2,9 +2,10 @@
 
 from dataclasses import dataclass
 
-from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod
+from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod, MetricId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, MetricValue, floats_absolutely_close
+from datp_core.domain.values import Checksum, floats_absolutely_close
+from datp_core.evaluation.models import MetricAvailability, MetricStatus
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 
@@ -12,7 +13,11 @@ from datp_core.populations.models import ClientIdentity
 @dataclass(frozen=True, slots=True)
 class ClientAurocEvidence:
     client: ClientIdentity
-    value: MetricValue
+    outcome: MetricAvailability
+
+    def __post_init__(self) -> None:
+        if self.outcome.metric is not MetricId.AUROC:
+            raise ValueError("AUROC evidence must carry the AUROC metric")
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,7 +119,20 @@ def _require_auroc_invariance(
             "fixed-score control failed: AUROC clients differ", subject=ContractSubject.CLIENT_IDENTITY
         )
     for left, right in zip(first, second, strict=True):
-        if not floats_absolutely_close(left.value.value, right.value.value, tolerance):
+        if left.outcome.status is not right.outcome.status:
+            raise ScientificContractError(
+                "fixed-score control failed: AUROC availability differs", subject=ContractSubject.HELD_OUT_METRICS
+            )
+        if left.outcome.status is not MetricStatus.AVAILABLE:
+            if left.outcome != right.outcome:
+                raise ScientificContractError(
+                    "fixed-score control failed: AUROC unavailable outcome differs",
+                    subject=ContractSubject.HELD_OUT_METRICS,
+                )
+            continue
+        if left.outcome.value is None or right.outcome.value is None:
+            raise RuntimeError("available AUROC evidence must contain values")
+        if not floats_absolutely_close(left.outcome.value.value, right.outcome.value.value, tolerance):
             raise ScientificContractError(
                 "fixed-score control failed: AUROC differs", subject=ContractSubject.HELD_OUT_METRICS
             )

@@ -20,7 +20,7 @@ def test_temporal_population_excludes_invalid_chronology(edge_canonical_root: Pa
     assert "Modbus" not in diagnostics.document.eligible_group_ids
     assert membership.height == 0
     assert static_membership.height == 0
-    assert static_manifest.document.split_protocol is SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
+    assert static_manifest.document.split_protocol is SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
 
 
 def test_temporal_population_accepts_only_verified_groups(edge_temporal_eligible_root: Path) -> None:

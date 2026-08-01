@@ -140,6 +140,7 @@ class ClientPreprocessingResult:
     fitted_state: FittedPreprocessingState
     transformed_schema: TransformedSchema
     publication_status: PublicationStatus
+    future_recalibration_path: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,6 +153,8 @@ class ClientPreprocessPublication:
     train_row_count: int
     calibration_row_count: int
     evaluation_row_count: int
+    future_recalibration_row_count: int = 0
+    static_reference_reserve_row_count: int = 0
 
 
 @dataclass(frozen=True, slots=True)

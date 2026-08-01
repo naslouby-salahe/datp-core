@@ -11,7 +11,7 @@ from datp_core.evaluation.cohorts import (
 from datp_core.populations.models import ClientPartitionCounts
 
 
-def test_confirmatory_eligible_requires_support_and_benign_eval() -> None:
+def test_fpr_eligibility_requires_support_and_benign_evaluation() -> None:
     counts = (
         ClientPartitionCounts("device_a", 100, 10, 5, True, False),
         ClientPartitionCounts("device_b", 99, 10, 5, True, False),
@@ -22,16 +22,14 @@ def test_confirmatory_eligible_requires_support_and_benign_eval() -> None:
         partition_seed=Seed(0),
         client_counts=counts,
     )
-    confirmatory = {
-        item.client_id for item in manifest.memberships if item.cohort is EvaluationCohort.CONFIRMATORY_ELIGIBLE
-    }
-    assert confirmatory == {"device_a"}
+    fpr_evaluable = {item.client_id for item in manifest.memberships if item.cohort is EvaluationCohort.FPR_EVALUABLE}
+    assert fpr_evaluable == {"device_a"}
     by_id = {record.client_id: record for record in manifest.records}
     assert ClientExclusionReason.INSUFFICIENT_BENIGN_CALIBRATION in by_id["device_b"].exclusion_reasons
     assert ClientExclusionReason.EMPTY_BENIGN_EVALUATION in by_id["device_c"].exclusion_reasons
 
 
-def test_fallback_cannot_enter_confirmatory_cohort() -> None:
+def test_fallback_cannot_enter_fpr_cohort() -> None:
     counts = (ClientPartitionCounts("fallback_client", 1000, 100, 0, True, True),)
     manifest = build_evaluation_cohort_manifest(
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
@@ -40,7 +38,7 @@ def test_fallback_cannot_enter_confirmatory_cohort() -> None:
     )
     cohorts = {item.cohort for item in manifest.memberships if item.client_id == "fallback_client"}
     assert EvaluationCohort.DEPLOYMENT_FALLBACK in cohorts
-    assert EvaluationCohort.CONFIRMATORY_ELIGIBLE not in cohorts
+    assert EvaluationCohort.FPR_EVALUABLE not in cohorts
 
 
 def test_edge_clients_are_not_attack_evaluable() -> None:
@@ -72,7 +70,7 @@ def test_cohort_membership_is_invariant_to_threshold_method() -> None:
         client_counts=counts,
         methods=methods,
     )
-    assert any(item.cohort is EvaluationCohort.CONFIRMATORY_ELIGIBLE for item in manifest.memberships)
+    assert any(item.cohort is EvaluationCohort.FPR_EVALUABLE for item in manifest.memberships)
 
 
 def test_cohort_invariance_requires_methods() -> None:

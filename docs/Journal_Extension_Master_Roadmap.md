@@ -1672,7 +1672,7 @@ Duplicate timestamps preserve original stable row order.
 
 - threshold frozen from historical calibration;
 - one-shot threshold recomputed from the future recalibration window;
-- matched random-fractional static reference over the same nine clients.
+- matched random-fractional static reference over the same nine clients. The static reference uses the same 55/15/10/20 row budget after deterministic client-local randomization: train, calibration, an explicitly retained but non-fitted/non-scored/non-evaluated reserve, and evaluation. The reserve preserves row-budget comparability without assigning a false temporal meaning to static rows.
 
 **Scope boundary**
 

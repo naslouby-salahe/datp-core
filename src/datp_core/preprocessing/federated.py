@@ -9,8 +9,10 @@ import polars as pl
 from datp_core.artifacts.coordinates import ReusableDataCoordinate
 from datp_core.artifacts.layout import (
     ProcessedAssetName,
+    asset_for_partition,
     client_asset_path,
     federated_client_directory,
+    partition_roles,
 )
 from datp_core.artifacts.serialization import TrustedScaler, construct_trusted_estimator
 from datp_core.domain.enums import PartitionRole, PreprocessingFitScope, ProcessedDataBranch
@@ -26,9 +28,9 @@ from datp_core.preprocessing.models import (
     PreprocessingPublishContext,
 )
 from datp_core.preprocessing.validation import (
-    core_processed_assets,
     fit_trusted_batch,
     fitted_state_after_publish,
+    processed_assets,
     publish_preprocessed_partitions,
     validate_branch_isolation,
 )
@@ -154,7 +156,7 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
             client_identity=request.client_identity,
         ),
     )
-    assets = core_processed_assets()
+    assets = processed_assets(context.split_protocol_identity)
     result = publish_preprocessed_partitions(
         context=context,
         branch=ProcessedDataBranch.FEDERATED,
@@ -175,14 +177,19 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
         )
     )
     validate_branch_isolation(state, ProcessedDataBranch.FEDERATED, request.client_identity)
+    paths = {
+        role: client_asset_path(result.coordinate_directory, asset_for_partition(role))
+        for role in partition_roles(context.split_protocol_identity)
+    }
     return ClientPreprocessingResult(
         client_identity=request.client_identity,
-        train_path=client_asset_path(result.coordinate_directory, ProcessedAssetName.TRAIN),
-        calibration_path=client_asset_path(result.coordinate_directory, ProcessedAssetName.CALIBRATION),
-        evaluation_path=client_asset_path(result.coordinate_directory, ProcessedAssetName.EVALUATION),
+        train_path=paths[PartitionRole.TRAIN],
+        calibration_path=paths[PartitionRole.CALIBRATION],
+        evaluation_path=paths[PartitionRole.EVALUATION],
         fitted_state=state,
         transformed_schema=context.protocol.transformed_schema,
         publication_status=result.publication_status,
+        future_recalibration_path=paths.get(PartitionRole.FUTURE_RECALIBRATION),
     )
 
 

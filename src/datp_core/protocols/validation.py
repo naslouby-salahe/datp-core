@@ -33,6 +33,7 @@ from .models import (
     PopulationDeclaration,
     ResolvedProtocolGraph,
     RuntimeProtocol,
+    StaticReferenceSplitProtocol,
     StatisticalInferenceProtocol,
     TemporalSplitProtocol,
     TrafficRateEvidence,
@@ -40,7 +41,7 @@ from .models import (
 from .populations import POPULATIONS
 from .runtime import CANONICAL_RUNTIME
 from .seeds import CONFIRMATORY_SEED_COHORT
-from .splits import NON_TEMPORAL_SPLIT, TEMPORAL_SPLIT
+from .splits import NON_TEMPORAL_SPLIT, STATIC_REFERENCE_SPLIT, TEMPORAL_SPLIT
 from .statistics import CONFIRMATORY_INFERENCE_PROTOCOL
 from .traffic_rates import TRAFFIC_RATE_EVIDENCE
 from .training import CHECKPOINT_PROTOCOL, FEDAVG_TRAINING_PROTOCOL
@@ -64,6 +65,7 @@ class ProtocolGraphInputs:
     populations: tuple[PopulationDeclaration, ...]
     experiments: tuple[ExperimentDeclaration, ...]
     temporal_split: TemporalSplitProtocol
+    static_reference_split: StaticReferenceSplitProtocol
     non_temporal_split: FractionalSplitProtocol
     checkpoint: CheckpointProtocol
     minimum_support: CalibrationSize
@@ -80,6 +82,7 @@ CANONICAL_PROTOCOL_GRAPH = ProtocolGraphInputs(
     populations=POPULATIONS,
     experiments=EXPERIMENTS,
     temporal_split=TEMPORAL_SPLIT,
+    static_reference_split=STATIC_REFERENCE_SPLIT,
     non_temporal_split=NON_TEMPORAL_SPLIT,
     checkpoint=CHECKPOINT_PROTOCOL,
     minimum_support=MINIMUM_BENIGN_SUPPORT,
@@ -121,6 +124,7 @@ def validate_protocol_graph(inputs: ProtocolGraphInputs) -> ResolvedProtocolGrap
         experiments=inputs.experiments,
         suppressed_experiment_ids=tuple(suppressed_experiment_ids),
         temporal_split=inputs.temporal_split,
+        static_reference_split=inputs.static_reference_split,
         non_temporal_split=inputs.non_temporal_split,
         checkpoint=inputs.checkpoint,
         calibration=CalibrationEligibilityProtocol(minimum_support=inputs.minimum_support),

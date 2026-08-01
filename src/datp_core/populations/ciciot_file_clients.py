@@ -14,6 +14,7 @@ from datp_core.datasets.models import CanonicalProvenanceColumn
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import CapabilityError, ScientificContractError
 from datp_core.domain.values import Seed
+from datp_core.populations.capabilities import population_declaration
 from datp_core.populations.integrity import (
     PopulationFinalizationRequest,
     finalize_population,
@@ -48,8 +49,10 @@ def build_ciciot_file_clients(
             subject=_POPULATION,
             reason="merged files retain no audited capture chronology",
         )
+    candidates = _candidate_ids(canonical_root)
     eligible = _load_eligible_membership(canonical_root)
-    candidates = tuple(eligible.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
+    accepted = tuple(eligible.get_column(CLIENT_ID_COLUMN).unique().sort().to_list())
+    excluded = tuple(candidate for candidate in candidates if candidate not in frozenset(accepted))
     membership = select_membership_frame(eligible).sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
     manifest = finalize_population(
         PopulationFinalizationRequest(
@@ -59,9 +62,9 @@ def build_ciciot_file_clients(
             partition_seed=partition_seed,
             split_protocol=split_protocol,
             candidate_ids=candidates,
-            accepted_ids=candidates,
-            excluded_ids=(),
-            expected_identities=None,
+            accepted_ids=accepted,
+            excluded_ids=excluded,
+            expected_identities=candidates,
             chronology_required=False,
             membership=membership,
             canonical_schema_checksum=CICIOT2023_SCHEMA.checksum,
@@ -118,3 +121,32 @@ def _load_eligible_membership(canonical_root: Path) -> pl.DataFrame:
             reason="eligibility exclusions must leave at least one admissible model-input row",
         )
     return frame
+
+
+def _candidate_ids(canonical_root: Path) -> tuple[str, ...]:
+    csv_suffix = CICIoT2023ArtifactName.CSV_SUFFIX.value.replace(".", r"\.")
+    candidates = tuple(
+        pl.scan_parquet(canonical_data_glob(canonical_root))
+        .select(pl.col(CanonicalProvenanceColumn.SOURCE_PATH).alias(SOURCE_PATH_COLUMN))
+        .with_columns(
+            pl.col(SOURCE_PATH_COLUMN)
+            .str.split("/")
+            .list.last()
+            .str.replace_all(csv_suffix, "")
+            .alias(CLIENT_ID_COLUMN)
+        )
+        .select(CLIENT_ID_COLUMN)
+        .unique()
+        .sort(CLIENT_ID_COLUMN)
+        .collect(engine="streaming")
+        .get_column(CLIENT_ID_COLUMN)
+        .to_list()
+    )
+    expected_count = population_declaration(_POPULATION).client_count.value
+    if len(candidates) != expected_count:
+        raise ScientificContractError(
+            "CICIoT2023 source-file candidate count disagrees with the audited population",
+            subject=_POPULATION,
+            reason="file identity must remain the exact audited pseudo-client boundary",
+        )
+    return candidates

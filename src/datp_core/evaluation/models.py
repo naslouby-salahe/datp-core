@@ -191,8 +191,8 @@ class PopulationMetricResult:
             raise ValueError("population metrics must be unique by metric identity")
         if frozenset(metric_ids) != POPULATION_METRIC_IDS:
             raise ValueError("population metrics must contain exactly the declared population metric identities")
-        if self.cohort is not EvaluationCohort.CONFIRMATORY_ELIGIBLE:
-            raise ValueError("population aggregates must be labelled as confirmatory-eligible")
+        if self.cohort is not EvaluationCohort.FPR_EVALUABLE:
+            raise ValueError("population aggregates must be labelled as FPR-evaluable")
         counts = (
             self.candidate_client_count,
             self.calibration_eligible_client_count,
@@ -204,11 +204,11 @@ class PopulationMetricResult:
         if any(count.value < 0 for count in counts):
             raise ValueError("population client counts must be non-negative")
         if self.fpr_evaluable_client_count.value > self.calibration_eligible_client_count.value:
-            raise ValueError("FPR-evaluable clients must belong to the confirmatory cohort")
+            raise ValueError("FPR-evaluable clients must belong to the calibration-eligible cohort")
         if self.attack_evaluable_client_count.value > self.calibration_eligible_client_count.value:
-            raise ValueError("attack-evaluable clients must belong to the confirmatory cohort")
+            raise ValueError("attack-evaluable clients must belong to the calibration-eligible cohort")
         if self.calibration_eligible_client_count.value > self.candidate_client_count.value:
-            raise ValueError("confirmatory client count cannot exceed the candidate count")
+            raise ValueError("calibration-eligible client count cannot exceed the candidate count")
         if (
             self.deployment_fallback_count.value + self.unavailable_client_count.value
             > self.candidate_client_count.value

@@ -28,7 +28,7 @@ def test_external_attack_unavailability_and_bounded_recalibration_are_expressibl
     assert tuple(TemporalState) == (
         TemporalState.STATIC_REFERENCE,
         TemporalState.FROZEN_FUTURE,
-        TemporalState.ONE_SHOT_RECALIBRATED_FUTURE,
+        TemporalState.RECALIBRATED_FUTURE,
     )
     assert all("continuous" not in state.value and "drift" not in state.value for state in TemporalState)
 

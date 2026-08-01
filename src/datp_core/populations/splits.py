@@ -24,8 +24,8 @@ from datp_core.populations.models import (
     hamilton_integer_counts,
     membership_column_names,
 )
-from datp_core.protocols.models import FractionalSplitProtocol, TemporalSplitProtocol
-from datp_core.protocols.splits import NON_TEMPORAL_SPLIT, TEMPORAL_SPLIT
+from datp_core.protocols.models import FractionalSplitProtocol, StaticReferenceSplitProtocol, TemporalSplitProtocol
+from datp_core.protocols.splits import NON_TEMPORAL_SPLIT, STATIC_REFERENCE_SPLIT, TEMPORAL_SPLIT
 
 _BENIGN = PopulationOutcomeLabel.BENIGN
 _ATTACK = PopulationOutcomeLabel.ATTACK
@@ -37,6 +37,10 @@ def non_temporal_split_protocol() -> FractionalSplitProtocol:
 
 def temporal_split_protocol() -> TemporalSplitProtocol:
     return TEMPORAL_SPLIT
+
+
+def static_reference_split_protocol() -> StaticReferenceSplitProtocol:
+    return STATIC_REFERENCE_SPLIT
 
 
 def split_membership(request: SplitConstructionRequest) -> tuple[pl.DataFrame, SplitManifest]:
@@ -59,6 +63,8 @@ def _assignments_for_protocol(membership: pl.DataFrame, request: SplitConstructi
                     reason="chronological partitioning cannot invent time",
                 )
             return _temporal_assignments(membership, request.capture_timestamp_column)
+        case SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE:
+            return _static_reference_assignments(membership, request.partition_seed)
         case _:
             raise ScientificContractError(
                 "unsupported split protocol",
@@ -128,6 +134,36 @@ def _temporal_assignments(membership: pl.DataFrame, capture_timestamp_column: st
     return (
         pl.concat(pieces, how="vertical_relaxed")
         .select(output_columns)
+        .sort([CLIENT_ID_COLUMN, PARTITION_ROLE_COLUMN, STABLE_ROW_ID_COLUMN])
+    )
+
+
+def _static_reference_assignments(membership: pl.DataFrame, partition_seed: Seed) -> pl.DataFrame:
+    """Randomize the same 55/15/10/20 inventory without temporal ordering."""
+    if membership.filter(pl.col(OUTCOME_LABEL_COLUMN) == _ATTACK).height > 0:
+        raise LeakageError(
+            "the matched static reference is benign-only",
+            subject=SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE,
+        )
+    protocol = static_reference_split_protocol()
+    ratios = (protocol.training.value, protocol.calibration.value, protocol.reserve.value, protocol.evaluation.value)
+    roles = (
+        PartitionRole.TRAIN,
+        PartitionRole.CALIBRATION,
+        PartitionRole.STATIC_REFERENCE_RESERVE,
+        PartitionRole.EVALUATION,
+    )
+    pieces = [
+        _fractional_role_frame(
+            membership.filter(pl.col(CLIENT_ID_COLUMN) == client_id), ratios, roles, partition_seed, str(client_id)
+        )
+        for client_id in membership.get_column(CLIENT_ID_COLUMN).unique().sort().to_list()
+    ]
+    if not pieces:
+        return membership.clear().with_columns(pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN))
+    return (
+        pl.concat(pieces, how="vertical_relaxed")
+        .select(assignment_column_names())
         .sort([CLIENT_ID_COLUMN, PARTITION_ROLE_COLUMN, STABLE_ROW_ID_COLUMN])
     )
 
@@ -256,6 +292,7 @@ def _split_manifest(assignments: pl.DataFrame, request: SplitConstructionRequest
         calibration_row_count=count(PartitionRole.CALIBRATION),
         evaluation_row_count=count(PartitionRole.EVALUATION),
         future_recalibration_row_count=count(PartitionRole.FUTURE_RECALIBRATION),
+        static_reference_reserve_row_count=count(PartitionRole.STATIC_REFERENCE_RESERVE),
         assignment_checksum=checksum_text(payload),
         population_manifest_checksum=request.population_manifest_checksum,
     )

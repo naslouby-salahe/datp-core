@@ -12,16 +12,19 @@ from enum import StrEnum
 from pathlib import Path
 from shutil import rmtree
 
+from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.store import AtomicPublication, publish_atomically
 from datp_core.domain.enums import ContractSubject, PublicationStatus, StageOperationId
 from datp_core.domain.errors import ArtifactIntegrityError
 from datp_core.domain.values import Checksum, checksum_file, checksum_text
+from datp_core.scoring.models import ScoreArtifactManifest
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
 from datp_core.thresholding.models import ThresholdConstructionResult
 
 
 class ConstructFederatedThresholdsAssetName(StrEnum):
     RESULT = "threshold_result.txt"
+    TEMPORAL_PROVENANCE = "temporal_threshold_provenance.json"
     COMPLETE = "COMPLETE"
 
 
@@ -30,6 +33,12 @@ class ConstructFederatedThresholdsRequest:
     request: ThresholdConstructionRequest
     output_directory: Path
     overwrite: bool
+    temporal_provenance: TemporalDeploymentProvenance | None = None
+    temporal_score_manifest: ScoreArtifactManifest | None = None
+
+    def __post_init__(self) -> None:
+        if (self.temporal_provenance is None) != (self.temporal_score_manifest is None):
+            raise ValueError("temporal threshold construction requires both provenance and score manifest")
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +47,7 @@ class ConstructFederatedThresholdsResult:
     publication_status: PublicationStatus
     result: ThresholdConstructionResult
     complete_digest: Checksum
+    temporal_provenance: TemporalDeploymentProvenance | None
 
 
 @dataclass
@@ -51,15 +61,28 @@ def threshold_result_checksum(result: ThresholdConstructionResult) -> Checksum:
     return checksum_text(repr(result))
 
 
+def _stage_checksum(
+    result: ThresholdConstructionResult,
+    temporal_provenance: TemporalDeploymentProvenance | None,
+) -> Checksum:
+    return checksum_text(repr(result) + ("" if temporal_provenance is None else repr(temporal_provenance)))
+
+
 def construct_federated_thresholds_stage(
     stage_request: ConstructFederatedThresholdsRequest,
 ) -> ConstructFederatedThresholdsResult:
+    _validate_temporal_request(stage_request)
     box = _ResultBox()
 
     def write(temporary: Path) -> None:
         result = dispatch_federated_threshold(stage_request.request)
         (temporary / ConstructFederatedThresholdsAssetName.RESULT).write_text(repr(result), encoding="utf-8")
-        digest = threshold_result_checksum(result)
+        if stage_request.temporal_provenance is not None:
+            (temporary / ConstructFederatedThresholdsAssetName.TEMPORAL_PROVENANCE).write_text(
+                repr(stage_request.temporal_provenance) + "\n",
+                encoding="utf-8",
+            )
+        digest = _stage_checksum(result, stage_request.temporal_provenance)
         (temporary / ConstructFederatedThresholdsAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
         box.result = result
 
@@ -87,6 +110,7 @@ def construct_federated_thresholds_stage(
         publication_status=status,
         result=result,
         complete_digest=checksum_file(stage_request.output_directory / ConstructFederatedThresholdsAssetName.COMPLETE),
+        temporal_provenance=stage_request.temporal_provenance,
     )
 
 
@@ -95,6 +119,19 @@ def _is_reusable(directory: Path, stage_request: ConstructFederatedThresholdsReq
     document = directory / ConstructFederatedThresholdsAssetName.RESULT
     if not (complete.is_file() and document.is_file()):
         return False
+    provenance = stage_request.temporal_provenance
+    provenance_document = directory / ConstructFederatedThresholdsAssetName.TEMPORAL_PROVENANCE
+    if (provenance is None and provenance_document.exists()) or (
+        provenance is not None and not provenance_document.is_file()
+    ):
+        return False
     result = dispatch_federated_threshold(stage_request.request)
-    expected = threshold_result_checksum(result)
+    expected = _stage_checksum(result, provenance)
     return complete.read_text(encoding="utf-8").strip() == expected.value
+
+
+def _validate_temporal_request(stage_request: ConstructFederatedThresholdsRequest) -> None:
+    if stage_request.temporal_provenance is not None:
+        if stage_request.temporal_score_manifest is None:
+            raise AssertionError("request invariant was checked in __post_init__")
+        stage_request.temporal_provenance.validate_score_manifest(stage_request.temporal_score_manifest)

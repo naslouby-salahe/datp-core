@@ -21,10 +21,21 @@ Implement capability-limited external benign-equity validation on Edge-IIoTset, 
 ## Entry criteria
 
 - Phases 08–10 are complete.
-- The Phase 10 confirmatory CLI artifacts are reusable inputs only; Phase 11 must add explicit external or temporal commands rather than extending `run-confirmatory-grid`.
+- The Phase 10 confirmatory CLI artifacts are reusable inputs only. Phase 11 uses its own typed population, split, preprocessing, scoring, threshold, evaluation, and supplementary-analysis contracts; it never extends `run-confirmatory-grid`.
 - Edge static and temporal capabilities are verified.
 - CIC file-client population is verified.
 - External and temporal experiment declarations are resolved.
+
+## Owner-contract amendment
+
+The user authorized clean corrections in the owning modules where the original Phase 11 file boundary made the scientific contract impossible to implement. The amendment is deliberately narrow: it adds no compatibility aliases, no fallback path, and no new experiment family. It changes the following owner contracts:
+
+- `datp_core/domain/enums.py`: FPR-evaluable cohort identity, temporal deployment state identity, and the explicit static-reference split/partition identities.
+- `datp_core/protocols/models.py`, `datp_core/protocols/splits.py`, and `datp_core/protocols/validation.py`: a declared randomized 55/15/10/20 static-reference inventory, with its 10% reserve persisted but prohibited from fit, calibration, scoring, and evaluation.
+- `datp_core/artifacts/layout.py`, `datp_core/preprocessing/*`, and `datp_core/centralized_reference/preprocessing.py`: protocol-defined temporal partition inventory and train-only fitting across every persisted partition.
+- `datp_core/scoring/*`: immutable future-recalibration scores and checksums.
+- `datp_core/evaluation/*`: FPR aggregation independent of confirmatory eligibility, plus typed unavailable attack-sensitive metrics.
+- `datp_core/analysis/inference.py` and `datp_core/orchestration/stages/construct_federated_thresholds.py`: supplementary external BCa and temporal threshold provenance, separately from confirmatory inference.
 
 ## Source files permitted to change
 
@@ -38,6 +49,7 @@ Implement capability-limited external benign-equity validation on Edge-IIoTset, 
 - `datp_core/orchestration/stages/split.py`
 - `datp_core/orchestration/stages/evaluate_federated.py`
 - `datp_core/orchestration/stages/analyze.py`
+- The owner-contract files listed above
 
 Changes are limited to external/temporal semantics; do not duplicate core metric or threshold implementations.
 
@@ -68,7 +80,7 @@ Every output must include typed availability records for attack-sensitive metric
 - Include only groups with validated genuine chronology.
 - Preserve stable row order for equal timestamps.
 - Split exactly into 55% historical training, 15% historical calibration, 10% future recalibration, 20% future evaluation.
-- Build a matched random-fractional static reference over the same included groups and rows.
+- Build a matched random-fractional static reference over the same included groups and rows. Its randomized 55/15/10/20 allocation mirrors the temporal row inventory: train, calibration, explicitly retained static-reference reserve, and evaluation. The reserve cannot enter fitting, calibration, scoring, or evaluation.
 - Fit preprocessing and model without future leakage.
 
 ## Temporal deployment states
@@ -135,6 +147,14 @@ Reject before execution:
 - Temporal analysis is one-shot, chronological, and leak-free.
 - No unsupported metric or claim is computed.
 - All Phase 11 tests and audits pass.
+
+## Implementation record — owner-contract repair in progress
+
+- Entry audit verified Phases 08–10 as complete, the ten static Edge groups, the nine PCAP-backed temporal Edge groups with Modbus excluded, and the 63 CIC source-file pseudo-clients.
+- Repaired the actual blockers in their owners: FPR-evaluable external cohorts no longer inherit confirmatory eligibility; unavailable Edge AUROC is compared as typed availability rather than fabricated numeric evidence; the supplementary external BCa path cannot yield a confirmatory decision; temporal preprocessing/scoring persist all required partitions; and thresholds/evaluations carry an immutable temporal calibration/evaluation provenance binding.
+- The matched static reference is now a distinct randomized 55/15/10/20 protocol. Its 10% reserve is an auditable, deliberately unused allocation, not an equal-thirds artifact and not a mislabeled future window.
+- The full local suite passes after the repair. Phase closure still requires a real-data external/temporal campaign from the new contracts and the mandatory SonarQube and CodeScene gate; no external or temporal result has been represented as completed before that execution.
+- The explicit `construct-phase11-population` command was exercised against all three canonical corpora at seed 0. It published the 10-group Edge static membership (11,209,913 rows), the 9-group chronology-eligible Edge temporal membership (11,050,411 rows) with its matched static reference, and the 63 CIC file-client membership (45,018,243 rows). It is a verified population-publication boundary, not a substitute for a trained Phase 11 campaign.
 
 ## External code-health gate
 

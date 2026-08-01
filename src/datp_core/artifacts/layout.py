@@ -8,7 +8,7 @@ from datp_core.artifacts.coordinates import (
     federated_client_coordinate,
     processed_branch_coordinate,
 )
-from datp_core.domain.enums import PartitionRole, ProcessedDataBranch
+from datp_core.domain.enums import PartitionRole, ProcessedDataBranch, SplitProtocolId
 
 
 class ProcessedAssetName(StrEnum):
@@ -16,6 +16,7 @@ class ProcessedAssetName(StrEnum):
     CALIBRATION = f"{PartitionRole.CALIBRATION}.parquet"
     EVALUATION = f"{PartitionRole.EVALUATION}.parquet"
     FUTURE_RECALIBRATION = f"{PartitionRole.FUTURE_RECALIBRATION}.parquet"
+    STATIC_REFERENCE_RESERVE = f"{PartitionRole.STATIC_REFERENCE_RESERVE}.parquet"
     STATE = "state.skops"
     SCHEMA = "schema.json"
     SPLIT_MANIFEST = "split_manifest.parquet"
@@ -34,18 +35,54 @@ def asset_for_partition(role: PartitionRole) -> ProcessedAssetName:
             return ProcessedAssetName.EVALUATION
         case PartitionRole.FUTURE_RECALIBRATION:
             return ProcessedAssetName.FUTURE_RECALIBRATION
+        case PartitionRole.STATIC_REFERENCE_RESERVE:
+            return ProcessedAssetName.STATIC_REFERENCE_RESERVE
 
 
-def core_processed_asset_names() -> tuple[ProcessedAssetName, ...]:
+def processed_asset_names(split_protocol: SplitProtocolId) -> tuple[ProcessedAssetName, ...]:
+    """Every persisted partition is declared by its split protocol."""
+    partition_assets = tuple(asset_for_partition(role) for role in partition_roles(split_protocol))
     return (
-        ProcessedAssetName.TRAIN,
-        ProcessedAssetName.CALIBRATION,
-        ProcessedAssetName.EVALUATION,
+        *partition_assets,
         ProcessedAssetName.STATE,
         ProcessedAssetName.SCHEMA,
         ProcessedAssetName.PREPROCESSING_MANIFEST,
         ProcessedAssetName.VALIDATION_REPORT,
         ProcessedAssetName.COMPLETE,
+    )
+
+
+def core_processed_asset_names() -> tuple[ProcessedAssetName, ...]:
+    """The non-temporal core artifact inventory used by common consumers."""
+    return processed_asset_names(SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS)
+
+
+def partition_roles(split_protocol: SplitProtocolId) -> tuple[PartitionRole, ...]:
+    match split_protocol:
+        case SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS:
+            return (PartitionRole.TRAIN, PartitionRole.CALIBRATION, PartitionRole.EVALUATION)
+        case SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
+            return (
+                PartitionRole.TRAIN,
+                PartitionRole.CALIBRATION,
+                PartitionRole.FUTURE_RECALIBRATION,
+                PartitionRole.EVALUATION,
+            )
+        case SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE:
+            return (
+                PartitionRole.TRAIN,
+                PartitionRole.CALIBRATION,
+                PartitionRole.STATIC_REFERENCE_RESERVE,
+                PartitionRole.EVALUATION,
+            )
+
+
+def scored_partition_roles(split_protocol: SplitProtocolId) -> tuple[PartitionRole, ...]:
+    """Post-training partitions that are legitimate detector score inputs."""
+    return tuple(
+        role
+        for role in partition_roles(split_protocol)
+        if role not in {PartitionRole.TRAIN, PartitionRole.STATIC_REFERENCE_RESERVE}
     )
 
 

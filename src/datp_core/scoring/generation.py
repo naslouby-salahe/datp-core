@@ -8,6 +8,7 @@ import polars as pl
 import torch
 from safetensors.torch import load_file
 
+from datp_core.artifacts.layout import scored_partition_roles
 from datp_core.domain.enums import (
     CheckpointStatus,
     ContractSubject,
@@ -42,6 +43,7 @@ from datp_core.scoring.reconstruction import assert_higher_score_is_anomaly_evid
 class FederatedScoreAssetName(StrEnum):
     CALIBRATION = "calibration.parquet"
     EVALUATION = "evaluation.parquet"
+    FUTURE_RECALIBRATION = "future_recalibration.parquet"
     COMPLETE = "COMPLETE"
 
 
@@ -50,6 +52,25 @@ class ClientScoringInput:
     client: ClientIdentity
     calibration_features: pl.DataFrame
     evaluation_features: pl.DataFrame
+    future_recalibration_features: pl.DataFrame | None = None
+
+    def features_for(self, role: PartitionRole) -> pl.DataFrame:
+        match role:
+            case PartitionRole.CALIBRATION:
+                return self.calibration_features
+            case PartitionRole.FUTURE_RECALIBRATION:
+                if self.future_recalibration_features is None:
+                    raise ScientificContractError(
+                        "temporal score input is missing future recalibration features",
+                        subject=role,
+                    )
+                return self.future_recalibration_features
+            case PartitionRole.EVALUATION:
+                return self.evaluation_features
+            case PartitionRole.TRAIN:
+                raise ScientificContractError("training rows are never scored", subject=role)
+            case PartitionRole.STATIC_REFERENCE_RESERVE:
+                raise ScientificContractError("static-reference reserve rows are never scored", subject=role)
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,36 +104,27 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
     model = load_checkpoint_model(request.checkpoint, request.autoencoder, device)
     request.output_directory.mkdir(parents=True, exist_ok=True)
 
-    calibration_records: list[ScoreRecord] = []
-    evaluation_records: list[ScoreRecord] = []
+    scored_roles = scored_partition_roles(request.checkpoint.coordinate.split_protocol)
+    records_by_role: dict[PartitionRole, list[ScoreRecord]] = {role: [] for role in scored_roles}
     for client_input in sorted(request.clients, key=lambda item: item.client.client_id):
         client_directory = request.output_directory / client_input.client.client_id
-        calibration_records.append(
-            _score_partition(
-                frame=client_input.calibration_features,
-                client=client_input.client,
-                partition_role=PartitionRole.CALIBRATION,
-                request=request,
-                model=model,
-                device=device,
-                destination=client_directory / FederatedScoreAssetName.CALIBRATION,
+        for role in records_by_role:
+            records_by_role[role].append(
+                _score_partition(
+                    frame=client_input.features_for(role),
+                    client=client_input.client,
+                    partition_role=role,
+                    request=request,
+                    model=model,
+                    device=device,
+                    destination=client_directory / _asset_name_for_partition(role),
+                )
             )
-        )
-        evaluation_records.append(
-            _score_partition(
-                frame=client_input.evaluation_features,
-                client=client_input.client,
-                partition_role=PartitionRole.EVALUATION,
-                request=request,
-                model=model,
-                device=device,
-                destination=client_directory / FederatedScoreAssetName.EVALUATION,
-            )
-        )
 
     _assert_polarity(model, request, device)
-    for record in (*calibration_records, *evaluation_records):
-        _assert_reload_equality(record)
+    for records in records_by_role.values():
+        for record in records:
+            _assert_reload_equality(record)
 
     manifest = ScoreArtifactManifest(
         coordinate=request.checkpoint.coordinate,
@@ -120,9 +132,10 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
         checkpoint_checksum=request.checkpoint.tensor_checksum,
         preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
-        calibration_records=tuple(calibration_records),
-        evaluation_records=tuple(evaluation_records),
+        calibration_records=tuple(records_by_role[PartitionRole.CALIBRATION]),
+        evaluation_records=tuple(records_by_role[PartitionRole.EVALUATION]),
         higher_score_means_greater_anomaly=True,
+        future_recalibration_records=tuple(records_by_role.get(PartitionRole.FUTURE_RECALIBRATION, ())),
     )
     return ScoreGenerationResult(manifest=manifest, invariant=FixedScoreInvariant.from_manifest(manifest))
 
@@ -178,6 +191,10 @@ def _validate_request(request: ScoreGenerationRequest) -> None:
             "score generation cannot receive duplicate client identities",
             subject=ContractSubject.CLIENT_IDENTITY,
         )
+    expected_roles = set(scored_partition_roles(request.checkpoint.coordinate.split_protocol))
+    for client in request.clients:
+        for role in expected_roles:
+            client.features_for(role)
 
 
 def _score_partition(
@@ -241,3 +258,17 @@ def _assert_reload_equality(record: ScoreRecord) -> None:
         raise ArtifactIntegrityError("score checksum changed after write", subject=ContractSubject.ARTIFACT_PATH)
     if original.height != record.row_count.value:
         raise ArtifactIntegrityError("score artifact row count mismatch", subject=ContractSubject.ARTIFACT_PATH)
+
+
+def _asset_name_for_partition(role: PartitionRole) -> FederatedScoreAssetName:
+    match role:
+        case PartitionRole.CALIBRATION:
+            return FederatedScoreAssetName.CALIBRATION
+        case PartitionRole.FUTURE_RECALIBRATION:
+            return FederatedScoreAssetName.FUTURE_RECALIBRATION
+        case PartitionRole.EVALUATION:
+            return FederatedScoreAssetName.EVALUATION
+        case PartitionRole.TRAIN:
+            raise ScientificContractError("training rows are never scored", subject=role)
+        case PartitionRole.STATIC_REFERENCE_RESERVE:
+            raise ScientificContractError("static-reference reserve rows are never scored", subject=role)

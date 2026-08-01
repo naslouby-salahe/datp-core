@@ -6,6 +6,7 @@ from shutil import rmtree
 
 import polars as pl
 
+from datp_core.artifacts.layout import scored_partition_roles
 from datp_core.artifacts.store import AtomicPublication, publish_atomically
 from datp_core.domain.enums import (
     ContractSubject,
@@ -97,18 +98,23 @@ def score_federated_stage(request: ScoreFederatedRequest) -> ScoreFederatedStage
 
 
 def _score_complete_digest(result: ScoreGenerationResult) -> Checksum:
-    return checksum_text(
-        f"{result.invariant.model_checksum.value}|{result.invariant.calibration_score_set_checksum.value}|"
-        f"{result.invariant.evaluation_score_set_checksum.value}"
+    records = tuple(
+        record
+        for role in scored_partition_roles(result.manifest.coordinate.split_protocol)
+        for record in result.manifest.records_for(role)
     )
+    values = (result.invariant.model_checksum.value, *(record.checksum.value for record in records))
+    return checksum_text("|".join(values))
 
 
-def _client_paths(output_directory: Path, request: ScoreFederatedRequest) -> list[tuple[str, Path, Path]]:
+def _client_paths(output_directory: Path, request: ScoreFederatedRequest) -> list[tuple[str, tuple[Path, ...]]]:
     return [
         (
             client_input.client.client_id,
-            output_directory / client_input.client.client_id / FederatedScoreAssetName.CALIBRATION.value,
-            output_directory / client_input.client.client_id / FederatedScoreAssetName.EVALUATION.value,
+            tuple(
+                output_directory / client_input.client.client_id / _asset_name_for_partition(role).value
+                for role in scored_partition_roles(request.checkpoint.coordinate.split_protocol)
+            ),
         )
         for client_input in sorted(request.clients, key=lambda item: item.client.client_id)
     ]
@@ -118,8 +124,8 @@ def _is_reusable(directory: Path, request: ScoreFederatedRequest) -> bool:
     complete = directory / FederatedScoreAssetName.COMPLETE.value
     if not complete.is_file():
         return False
-    for _, calibration_path, evaluation_path in _client_paths(directory, request):
-        if not (calibration_path.is_file() and evaluation_path.is_file()):
+    for _, paths in _client_paths(directory, request):
+        if any(not path.is_file() for path in paths):
             return False
     return True
 
@@ -132,11 +138,7 @@ def _build_records(
     records: list[ScoreRecord] = []
     for client_input in sorted(request.clients, key=lambda item: item.client.client_id):
         client_directory = output_directory / client_input.client.client_id
-        path = client_directory / (
-            FederatedScoreAssetName.CALIBRATION.value
-            if partition_role is PartitionRole.CALIBRATION
-            else FederatedScoreAssetName.EVALUATION.value
-        )
+        path = client_directory / _asset_name_for_partition(partition_role).value
         if not path.is_file():
             raise ArtifactIntegrityError(
                 f"expected federated score partition is missing: {path}",
@@ -163,6 +165,11 @@ def _build_records(
 def _load_reused_scores(request: ScoreFederatedRequest) -> ScoreGenerationResult:
     calibration_records = _build_records(request.output_directory, request, PartitionRole.CALIBRATION)
     evaluation_records = _build_records(request.output_directory, request, PartitionRole.EVALUATION)
+    future_records = (
+        _build_records(request.output_directory, request, PartitionRole.FUTURE_RECALIBRATION)
+        if request.checkpoint.coordinate.split_protocol.value == "temporal_historical_future"
+        else ()
+    )
     manifest = ScoreArtifactManifest(
         coordinate=request.checkpoint.coordinate,
         checkpoint_round=request.checkpoint.round_number,
@@ -172,6 +179,7 @@ def _load_reused_scores(request: ScoreFederatedRequest) -> ScoreGenerationResult
         calibration_records=calibration_records,
         evaluation_records=evaluation_records,
         higher_score_means_greater_anomaly=True,
+        future_recalibration_records=future_records,
     )
     return ScoreGenerationResult(manifest=manifest, invariant=FixedScoreInvariant.from_manifest(manifest))
 
@@ -183,6 +191,9 @@ def _rebase_scoring(result: ScoreGenerationResult, output_directory: Path) -> Sc
     evaluation_records = tuple(
         _rebased_record(record, output_directory) for record in result.manifest.evaluation_records
     )
+    future_records = tuple(
+        _rebased_record(record, output_directory) for record in result.manifest.future_recalibration_records
+    )
     manifest = ScoreArtifactManifest(
         coordinate=result.manifest.coordinate,
         checkpoint_round=result.manifest.checkpoint_round,
@@ -192,20 +203,13 @@ def _rebase_scoring(result: ScoreGenerationResult, output_directory: Path) -> Sc
         calibration_records=calibration_records,
         evaluation_records=evaluation_records,
         higher_score_means_greater_anomaly=result.manifest.higher_score_means_greater_anomaly,
+        future_recalibration_records=future_records,
     )
     return ScoreGenerationResult(manifest=manifest, invariant=FixedScoreInvariant.from_manifest(manifest))
 
 
 def _rebased_record(record: ScoreRecord, output_directory: Path) -> ScoreRecord:
-    path = (
-        output_directory
-        / record.scored_client.client_id
-        / (
-            FederatedScoreAssetName.CALIBRATION.value
-            if record.partition_role is PartitionRole.CALIBRATION
-            else FederatedScoreAssetName.EVALUATION.value
-        )
-    )
+    path = output_directory / record.scored_client.client_id / _asset_name_for_partition(record.partition_role).value
     if not path.is_file():
         raise ArtifactIntegrityError(
             "published score partition missing after atomic replace",
@@ -223,3 +227,20 @@ def _rebased_record(record: ScoreRecord, output_directory: Path) -> ScoreRecord:
         feature_count=record.feature_count,
         serialization_format=record.serialization_format,
     )
+
+
+def _asset_name_for_partition(role: PartitionRole) -> FederatedScoreAssetName:
+    match role:
+        case PartitionRole.CALIBRATION:
+            return FederatedScoreAssetName.CALIBRATION
+        case PartitionRole.FUTURE_RECALIBRATION:
+            return FederatedScoreAssetName.FUTURE_RECALIBRATION
+        case PartitionRole.EVALUATION:
+            return FederatedScoreAssetName.EVALUATION
+        case PartitionRole.TRAIN:
+            raise ArtifactIntegrityError("training rows are never score assets", subject=ContractSubject.SCORES)
+        case PartitionRole.STATIC_REFERENCE_RESERVE:
+            raise ArtifactIntegrityError(
+                "static-reference reserve rows are never score assets",
+                subject=ContractSubject.SCORES,
+            )

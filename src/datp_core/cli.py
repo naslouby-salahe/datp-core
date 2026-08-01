@@ -40,6 +40,10 @@ from datp_core.orchestration.stages.construct_federated_thresholds import (
     ConstructFederatedThresholdsRequest,
     construct_federated_thresholds_stage,
 )
+from datp_core.orchestration.stages.construct_population import (
+    ConstructPopulationRequest,
+    construct_population_stage,
+)
 from datp_core.orchestration.stages.evaluate_federated import (
     EvaluateFederatedRequest,
     FederatedEvaluationAssetName,
@@ -71,6 +75,7 @@ from datp_core.populations.catalogue import (
     PopulationConstructionRequest,
     PopulationConstructionResult,
     construct_population,
+    resolve_population,
 )
 from datp_core.populations.models import (
     ClientIdentity,
@@ -151,6 +156,40 @@ def materialize_canonical_datasets() -> None:
             f"{publication.dataset.value} {publication.publication_status.value} "
             f"rows={publication.row_count} assets={len(publication.assets)}"
         )
+
+
+@app.command("construct-phase11-population")
+def construct_phase11_population(
+    population: PopulationId = typer.Option(..., help="External or temporal Phase 11 population."),
+    partition_seed: int = typer.Option(..., min=0, help="Non-negative partition seed value."),
+) -> None:
+    """Publish one declared external or temporal population without using the confirmatory route."""
+    if population not in {
+        PopulationId.EDGE_SENSOR_GROUPS,
+        PopulationId.CICIOT_FILE_CLIENTS,
+        PopulationId.EDGE_TEMPORAL_GROUPS,
+    }:
+        raise typer.BadParameter("population must be an external or temporal Phase 11 population")
+    split_protocol = (
+        SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+        if population is PopulationId.EDGE_TEMPORAL_GROUPS
+        else SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS
+    )
+    population_binding = resolve_population(population)
+    result = construct_population_stage(
+        ConstructPopulationRequest(
+            canonical_root=canonical_root_under(DATA_ROOT, population_binding.declaration.dataset),
+            population=population,
+            partition_seed=Seed(partition_seed),
+            split_protocol=split_protocol,
+            output_directory=OUTPUTS_ROOT / "phase11" / population.value / str(partition_seed) / "population",
+            overwrite=False,
+        )
+    )
+    typer.echo(
+        f"{result.stage.value} population={population.value} split={split_protocol.value} "
+        f"status={result.publication_status.value} rows={result.membership.height}"
+    )
 
 
 @app.command("preprocess-federated")

@@ -36,7 +36,8 @@ class ClientEligibilityRecord(StrictModel):
     benign_calibration_count: int
     benign_evaluation_count: int
     attack_evaluation_count: int
-    confirmatory_eligible: bool
+    calibration_eligible: bool
+    fpr_evaluable: bool
     attack_evaluable: bool
     deployment_fallback: bool
     exclusion_reasons: tuple[ClientExclusionReason, ...]
@@ -47,13 +48,15 @@ class ClientEligibilityRecord(StrictModel):
             raise ValueError("client eligibility requires a client identity")
         if min(self.benign_calibration_count, self.benign_evaluation_count, self.attack_evaluation_count) < 0:
             raise ValueError("cohort counts must be non-negative")
-        if self.confirmatory_eligible and self.deployment_fallback:
-            raise ValueError("deployment-fallback clients cannot be confirmatory eligible")
+        if self.calibration_eligible and self.deployment_fallback:
+            raise ValueError("deployment-fallback clients cannot be calibration eligible")
+        if self.fpr_evaluable and not self.calibration_eligible:
+            raise ValueError("FPR-evaluable clients must be calibration eligible")
         if (
-            self.confirmatory_eligible
+            self.calibration_eligible
             and ClientExclusionReason.INSUFFICIENT_BENIGN_CALIBRATION in self.exclusion_reasons
         ):
-            raise ValueError("confirmatory-eligible clients cannot record insufficient calibration")
+            raise ValueError("calibration-eligible clients cannot record insufficient calibration")
         return self
 
 
@@ -66,8 +69,8 @@ class EvaluationCohortMembership(StrictModel):
     def validate_membership(self) -> "EvaluationCohortMembership":
         if not self.client_id:
             raise ValueError("cohort membership requires a client identity")
-        if self.cohort is EvaluationCohort.CONFIRMATORY_ELIGIBLE and self.reasons:
-            raise ValueError("confirmatory-eligible membership cannot carry exclusion reasons")
+        if self.cohort is EvaluationCohort.FPR_EVALUABLE and self.reasons:
+            raise ValueError("FPR-evaluable membership cannot carry exclusion reasons")
         if self.cohort is EvaluationCohort.UNAVAILABLE and not self.reasons:
             raise ValueError("unavailable membership requires at least one exclusion reason")
         return self
@@ -87,14 +90,14 @@ class EvaluationCohortManifest(StrictModel):
             raise ValueError("cohort records must be unique by client")
         if self.minimum_benign_calibration_support != MINIMUM_BENIGN_SUPPORT:
             raise ValueError("cohort manifests must use the locked minimum benign calibration support")
-        confirmatory = frozenset(
-            item.client_id for item in self.memberships if item.cohort is EvaluationCohort.CONFIRMATORY_ELIGIBLE
+        fpr_evaluable = frozenset(
+            item.client_id for item in self.memberships if item.cohort is EvaluationCohort.FPR_EVALUABLE
         )
         fallback = frozenset(
             item.client_id for item in self.memberships if item.cohort is EvaluationCohort.DEPLOYMENT_FALLBACK
         )
-        if confirmatory & fallback:
-            raise ValueError("deployment-fallback clients cannot enter the confirmatory cohort")
+        if fpr_evaluable & fallback:
+            raise ValueError("deployment-fallback clients cannot enter the FPR-evaluable cohort")
         return self
 
 
@@ -110,12 +113,11 @@ def build_evaluation_cohort_manifest(
     ``threshold_method`` is accepted only to prove invariance: it must not alter membership.
     """
     del threshold_method  # explicit non-use: cohorts never depend on threshold identity
-    capabilities = population_capabilities(population)
     support = MINIMUM_BENIGN_SUPPORT
     records: list[ClientEligibilityRecord] = []
     memberships: list[EvaluationCohortMembership] = []
     for counts in sorted(client_counts, key=lambda item: item.client_id):
-        record, client_memberships = _classify_client(population, capabilities.confirmatory_eligible, support, counts)
+        record, client_memberships = _classify_client(population, support, counts)
         records.append(record)
         memberships.extend(client_memberships)
     return EvaluationCohortManifest(
@@ -164,23 +166,24 @@ def assert_cohort_invariant_to_threshold_methods(
 
 def _classify_client(
     population: PopulationId,
-    population_confirmatory: bool,
     support: CalibrationSize,
     counts: ClientPartitionCounts,
 ) -> tuple[ClientEligibilityRecord, tuple[EvaluationCohortMembership, ...]]:
     capabilities = population_capabilities(population)
     reasons = _support_exclusion_reasons(counts, support, capabilities.fpr_evaluation)
-    confirmatory = _is_confirmatory(population_confirmatory, counts, support, reasons)
+    calibration_eligible = _is_calibration_eligible(counts, support)
+    fpr_evaluable = _is_fpr_evaluable(calibration_eligible, reasons)
     attack_reasons = _attack_exclusion_reasons(counts, capabilities)
     attack_evaluable = counts.accepted and not attack_reasons
-    memberships = _cohort_memberships(counts, confirmatory, attack_evaluable, reasons, attack_reasons)
+    memberships = _cohort_memberships(counts, fpr_evaluable, attack_evaluable, reasons, attack_reasons)
     record = ClientEligibilityRecord(
         client_id=counts.client_id,
         population=population,
         benign_calibration_count=counts.benign_calibration_count,
         benign_evaluation_count=counts.benign_evaluation_count,
         attack_evaluation_count=counts.attack_evaluation_count,
-        confirmatory_eligible=confirmatory,
+        calibration_eligible=calibration_eligible,
+        fpr_evaluable=fpr_evaluable,
         attack_evaluable=attack_evaluable,
         deployment_fallback=counts.deployment_fallback,
         exclusion_reasons=tuple(dict.fromkeys((*reasons, *attack_reasons))),
@@ -205,19 +208,21 @@ def _support_exclusion_reasons(
     return reasons
 
 
-def _is_confirmatory(
-    population_confirmatory: bool,
+def _is_calibration_eligible(
     counts: ClientPartitionCounts,
     support: CalibrationSize,
-    reasons: list[ClientExclusionReason],
 ) -> bool:
-    return (
-        population_confirmatory
-        and counts.accepted
-        and counts.benign_calibration_count >= support.value
-        and counts.benign_evaluation_count >= 1
-        and not counts.deployment_fallback
-        and ClientExclusionReason.POPULATION_PROHIBITS_FPR not in reasons
+    return counts.accepted and counts.benign_calibration_count >= support.value and not counts.deployment_fallback
+
+
+def _is_fpr_evaluable(calibration_eligible: bool, reasons: list[ClientExclusionReason]) -> bool:
+    return calibration_eligible and not any(
+        reason
+        in {
+            ClientExclusionReason.EMPTY_BENIGN_EVALUATION,
+            ClientExclusionReason.POPULATION_PROHIBITS_FPR,
+        }
+        for reason in reasons
     )
 
 
@@ -243,17 +248,17 @@ def _attack_exclusion_reasons(
 
 def _cohort_memberships(
     counts: ClientPartitionCounts,
-    confirmatory: bool,
+    fpr_evaluable: bool,
     attack_evaluable: bool,
     reasons: list[ClientExclusionReason],
     attack_reasons: list[ClientExclusionReason],
 ) -> tuple[EvaluationCohortMembership, ...]:
     memberships: list[EvaluationCohortMembership] = []
-    if confirmatory:
+    if fpr_evaluable:
         memberships.append(
             EvaluationCohortMembership(
                 client_id=counts.client_id,
-                cohort=EvaluationCohort.CONFIRMATORY_ELIGIBLE,
+                cohort=EvaluationCohort.FPR_EVALUABLE,
                 reasons=(),
             )
         )
@@ -273,7 +278,7 @@ def _cohort_memberships(
                 reasons=(ClientExclusionReason.DEPLOYMENT_FALLBACK_ONLY, *tuple(reasons)),
             )
         )
-    if not confirmatory and not attack_evaluable:
+    if not fpr_evaluable and not attack_evaluable:
         unavailable = tuple(dict.fromkeys((*reasons, *attack_reasons))) or (ClientExclusionReason.CLIENT_NOT_ACCEPTED,)
         memberships.append(
             EvaluationCohortMembership(
