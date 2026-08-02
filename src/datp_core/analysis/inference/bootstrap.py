@@ -1,4 +1,4 @@
-"""Paired seed-level inference with explicit BCa and secondary methods."""
+"""BCa paired bootstrap intervals, validation, and confirmatory decisions."""
 
 from dataclasses import dataclass
 from enum import StrEnum
@@ -6,21 +6,17 @@ from math import isfinite
 
 import numpy as np
 from scipy import stats
-from statsmodels.stats.multitest import multipletests
 
-from datp_core.analysis.descriptive import PairedDifferenceCounts, count_paired_differences
 from datp_core.domain.enums import (
     AvailabilityStatus,
-    EffectSizeId,
     EvidenceRole,
     FederatedThresholdMethod,
     IntervalMethod,
     MetricId,
-    MultiplicityCorrectionId,
     PopulationId,
-    StatisticalTestId,
+    ScientificDecision,
 )
-from datp_core.domain.values import BootstrapReplicateCount, ConfidenceLevel, MetricValue, Ratio, Seed
+from datp_core.domain.values import BootstrapReplicateCount, ConfidenceLevel, MetricValue, Seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.models import StatisticalInferenceProtocol
 from datp_core.protocols.statistics import BOOTSTRAP_REPLICATE_COUNT
@@ -202,44 +198,13 @@ class BootstrapInterval:
 
 
 @dataclass(frozen=True, slots=True)
-class WilcoxonResult:
-    test: StatisticalTestId
-    alternative: str
-    zero_method: str
-    computation_method: str
-    statistic: float | None
-    p_value: float | None
-    nonzero_pair_count: int
+class ScientificDecisionResult:
+    evidence_role: EvidenceRole
+    decision: ScientificDecision
+    point_estimate: MetricValue | None
+    interval: BootstrapInterval | None
     availability: AvailabilityStatus
-    reason: str
-
-
-@dataclass(frozen=True, slots=True)
-class RankBiserialResult:
-    effect_size: EffectSizeId
-    value: float | None
-    positive_rank_sum: float | None
-    negative_rank_sum: float | None
-    nonzero_pair_count: int
-    availability: AvailabilityStatus
-    reason: str
-
-
-@dataclass(frozen=True, slots=True)
-class MultiplicityResult:
-    correction: MultiplicityCorrectionId
-    family_name: str
-    raw_p_values: tuple[float, ...]
-    adjusted_p_values: tuple[float, ...]
-    rejected: tuple[bool, ...]
-
-    def __post_init__(self) -> None:
-        if not self.family_name or not self.raw_p_values:
-            raise ValueError("multiplicity requires a predeclared non-empty family")
-        if len(self.raw_p_values) != len(self.adjusted_p_values) or len(self.raw_p_values) != len(self.rejected):
-            raise ValueError("multiplicity result lengths must agree")
-        if any(not 0 <= value <= 1 for value in (*self.raw_p_values, *self.adjusted_p_values)):
-            raise ValueError("p-values must lie in [0, 1]")
+    rationale: str
 
 
 def validate_confirmatory_contrasts(
@@ -301,36 +266,7 @@ def paired_bca_interval(
         return _blocked_interval(
             _point_estimate_or_none(contrasts), confidence_level, replicate_count, analysis_seed, error.reason
         )
-    bootstrap = _bootstrap_distribution(validated, replicate_count, analysis_seed)
-    if bootstrap.degeneracy_reason is not None:
-        return _degenerate_interval(
-            bootstrap.estimate, confidence_level, replicate_count, analysis_seed, bootstrap.degeneracy_reason
-        )
-    if bootstrap.values is None:
-        raise RuntimeError("a non-degenerate bootstrap distribution must be present")
-    interval = _bca_interval_from_distribution(
-        bootstrap.estimate,
-        bootstrap.paired_deltas,
-        bootstrap.values,
-        confidence_level,
-    )
-    if isinstance(interval, BcaReason):
-        return _degenerate_interval(bootstrap.estimate, confidence_level, replicate_count, analysis_seed, interval)
-    lower_bound, upper_bound, bias_correction, acceleration = interval
-    return BootstrapInterval(
-        IntervalMethod.BCA_PAIRED_ARITHMETIC_MEAN,
-        confidence_level,
-        replicate_count,
-        analysis_seed,
-        bootstrap.estimate,
-        lower_bound,
-        upper_bound,
-        bias_correction,
-        acceleration,
-        AvailabilityStatus.AVAILABLE,
-        BcaOutcome.AVAILABLE,
-        BcaReason.NONE,
-    )
+    return _construct_bca_interval(validated, confidence_level, replicate_count, analysis_seed)
 
 
 def external_paired_bca_interval(
@@ -359,40 +295,7 @@ def external_paired_bca_interval(
             analysis_seed,
             error.reason,
         )
-    bootstrap = _bootstrap_distribution(validated, replicate_count, analysis_seed)
-    if bootstrap.degeneracy_reason is not None:
-        return _degenerate_interval(
-            bootstrap.estimate,
-            plan.confidence_level,
-            replicate_count,
-            analysis_seed,
-            bootstrap.degeneracy_reason,
-        )
-    if bootstrap.values is None:
-        raise RuntimeError("a non-degenerate bootstrap distribution must be present")
-    interval = _bca_interval_from_distribution(
-        bootstrap.estimate,
-        bootstrap.paired_deltas,
-        bootstrap.values,
-        plan.confidence_level,
-    )
-    if isinstance(interval, BcaReason):
-        return _degenerate_interval(bootstrap.estimate, plan.confidence_level, replicate_count, analysis_seed, interval)
-    lower_bound, upper_bound, bias_correction, acceleration = interval
-    return BootstrapInterval(
-        IntervalMethod.BCA_PAIRED_ARITHMETIC_MEAN,
-        plan.confidence_level,
-        replicate_count,
-        analysis_seed,
-        bootstrap.estimate,
-        lower_bound,
-        upper_bound,
-        bias_correction,
-        acceleration,
-        AvailabilityStatus.AVAILABLE,
-        BcaOutcome.AVAILABLE,
-        BcaReason.NONE,
-    )
+    return _construct_bca_interval(validated, plan.confidence_level, replicate_count, analysis_seed)
 
 
 def validate_external_contrasts(
@@ -402,6 +305,38 @@ def validate_external_contrasts(
     _require_external_plan_matches(contrasts, plan)
     _require_external_fixed_coordinate(contrasts)
     return tuple(sorted(contrasts, key=lambda item: item.seed.value))
+
+
+def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult:
+    if (
+        interval.availability is not AvailabilityStatus.AVAILABLE
+        or interval.point_estimate is None
+        or interval.lower_bound is None
+        or interval.upper_bound is None
+    ):
+        return ScientificDecisionResult(
+            EvidenceRole.CONFIRMATORY,
+            ScientificDecision.BLOCKED,
+            interval.point_estimate,
+            interval,
+            AvailabilityStatus.UNAVAILABLE,
+            "confirmatory BCa interval is unavailable or degenerate",
+        )
+    if interval.lower_bound > 0:
+        decision = ScientificDecision.SUPPORTED
+        rationale = "the paired BCa interval supports lower CV(FPR) under local thresholds"
+    elif interval.upper_bound < 0:
+        decision = ScientificDecision.OPPOSITE_DIRECTION
+        rationale = "the paired BCa interval supports the opposite direction"
+    elif interval.point_estimate > 0:
+        decision = ScientificDecision.DIRECTIONAL_INCONCLUSIVE
+        rationale = "the point estimate is directional but the paired BCa interval crosses zero"
+    else:
+        decision = ScientificDecision.NO_OBSERVED_ADVANTAGE
+        rationale = "the paired BCa interval crosses zero without a positive point estimate"
+    return ScientificDecisionResult(
+        EvidenceRole.CONFIRMATORY, decision, interval.point_estimate, interval, AvailabilityStatus.AVAILABLE, rationale
+    )
 
 
 def _require_external_seed_cohort(
@@ -442,6 +377,44 @@ def _require_external_fixed_coordinate(contrasts: tuple[ExternalPairedContrast, 
             or coordinate.model_coefficient != baseline.model_coefficient
         ):
             raise _ConfirmatoryContractError(BcaReason.FIXED_COORDINATE_MISMATCH)
+
+
+def _construct_bca_interval(
+    contrasts: tuple[PairedContrast, ...] | tuple[ExternalPairedContrast, ...],
+    confidence_level: ConfidenceLevel,
+    replicate_count: BootstrapReplicateCount,
+    analysis_seed: Seed,
+) -> BootstrapInterval:
+    bootstrap = _bootstrap_distribution(contrasts, replicate_count, analysis_seed)
+    if bootstrap.degeneracy_reason is not None:
+        return _degenerate_interval(
+            bootstrap.estimate, confidence_level, replicate_count, analysis_seed, bootstrap.degeneracy_reason
+        )
+    if bootstrap.values is None:
+        raise RuntimeError("a non-degenerate bootstrap distribution must be present")
+    interval = _bca_interval_from_distribution(
+        bootstrap.estimate,
+        bootstrap.paired_deltas,
+        bootstrap.values,
+        confidence_level,
+    )
+    if isinstance(interval, BcaReason):
+        return _degenerate_interval(bootstrap.estimate, confidence_level, replicate_count, analysis_seed, interval)
+    lower_bound, upper_bound, bias_correction, acceleration = interval
+    return BootstrapInterval(
+        IntervalMethod.BCA_PAIRED_ARITHMETIC_MEAN,
+        confidence_level,
+        replicate_count,
+        analysis_seed,
+        bootstrap.estimate,
+        lower_bound,
+        upper_bound,
+        bias_correction,
+        acceleration,
+        AvailabilityStatus.AVAILABLE,
+        BcaOutcome.AVAILABLE,
+        BcaReason.NONE,
+    )
 
 
 def _bootstrap_distribution(
@@ -494,112 +467,13 @@ def _jackknife_acceleration(deltas: np.ndarray) -> float | None:
     return float(np.sum(centered**3) / denominator)
 
 
-def paired_wilcoxon(contrasts: tuple[PairedContrast, ...] | tuple[ExternalPairedContrast, ...]) -> WilcoxonResult:
-    deltas = _deltas(contrasts)
-    nonzero = int(np.count_nonzero(deltas))
-    if not deltas.size or not nonzero:
-        return WilcoxonResult(
-            StatisticalTestId.WILCOXON_SIGNED_RANK,
-            "two-sided",
-            "pratt",
-            "unavailable",
-            None,
-            None,
-            nonzero,
-            AvailabilityStatus.UNDEFINED,
-            "Wilcoxon requires a nonzero paired difference",
-        )
-    values = _wilcoxon_values(stats.wilcoxon(deltas, alternative="two-sided", zero_method="pratt", method="asymptotic"))
-    if values is None:
-        return WilcoxonResult(
-            StatisticalTestId.WILCOXON_SIGNED_RANK,
-            "two-sided",
-            "pratt",
-            "scipy_asymptotic",
-            None,
-            None,
-            nonzero,
-            AvailabilityStatus.UNAVAILABLE,
-            "SciPy Wilcoxon result does not expose statistic and p-value",
-        )
-    return WilcoxonResult(
-        StatisticalTestId.WILCOXON_SIGNED_RANK,
-        "two-sided",
-        "pratt",
-        "scipy_asymptotic",
-        values[0],
-        values[1],
-        nonzero,
-        AvailabilityStatus.AVAILABLE,
-        "",
-    )
-
-
-def matched_pairs_rank_biserial(
+def _deltas(
     contrasts: tuple[PairedContrast, ...] | tuple[ExternalPairedContrast, ...],
-) -> RankBiserialResult:
-    deltas = _deltas(contrasts)
-    nonzero = deltas[deltas != 0]
-    if not nonzero.size:
-        return RankBiserialResult(
-            EffectSizeId.MATCHED_PAIRS_RANK_BISERIAL,
-            None,
-            None,
-            None,
-            0,
-            AvailabilityStatus.UNDEFINED,
-            "rank-biserial correlation requires a nonzero paired difference",
-        )
-    ranks = stats.rankdata(np.abs(nonzero), method="average")
-    positive = float(np.sum(ranks[nonzero > 0]))
-    negative = float(np.sum(ranks[nonzero < 0]))
-    return RankBiserialResult(
-        EffectSizeId.MATCHED_PAIRS_RANK_BISERIAL,
-        (positive - negative) / (positive + negative),
-        positive,
-        negative,
-        int(nonzero.size),
-        AvailabilityStatus.AVAILABLE,
-        "",
-    )
-
-
-def holm_adjust(raw_p_values: tuple[float, ...], *, family_name: str, alpha: Ratio) -> MultiplicityResult:
-    if not family_name or not raw_p_values:
-        raise ValueError("Holm correction requires a predeclared non-empty family")
-    if any(not isfinite(value) or not 0 <= value <= 1 for value in raw_p_values):
-        raise ValueError("raw p-values must be finite values in [0, 1]")
-    rejected, adjusted, _, _ = multipletests(
-        raw_p_values, alpha=alpha.value, method="holm", is_sorted=False, returnsorted=False
-    )
-    return MultiplicityResult(
-        MultiplicityCorrectionId.HOLM,
-        family_name,
-        raw_p_values,
-        tuple(float(value) for value in adjusted),
-        tuple(bool(value) for value in rejected),
-    )
-
-
-def sign_consistency(
-    contrasts: tuple[PairedContrast, ...] | tuple[ExternalPairedContrast, ...],
-) -> PairedDifferenceCounts:
-    return count_paired_differences(tuple(item.delta.value for item in contrasts))
-
-
-def _deltas(contrasts: tuple[PairedContrast, ...] | tuple[ExternalPairedContrast, ...]) -> np.ndarray:
+) -> np.ndarray:
     values = tuple(item.delta.value for item in contrasts)
     if any(not isfinite(value) for value in values):
         raise ValueError("paired contrasts must be finite")
     return np.asarray(values, dtype=np.float64)
-
-
-def _wilcoxon_values(result: object) -> tuple[float, float] | None:
-    statistic = getattr(result, "statistic", None)
-    p_value = getattr(result, "pvalue", None)
-    if not isinstance(statistic, int | float) or not isinstance(p_value, int | float):
-        return None
-    return float(statistic), float(p_value)
 
 
 def _blocked_interval(

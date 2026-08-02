@@ -6,10 +6,10 @@ APPROVED_SOURCE_FILES = frozenset(
     """
 __init__.py
 analysis/__init__.py
-analysis/decision_rules.py
 analysis/descriptive.py
-analysis/divergence.py
-analysis/inference.py
+analysis/inference/__init__.py
+analysis/inference/bootstrap.py
+analysis/inference/paired.py
 analysis/mechanisms.py
 analysis/temporal.py
 anchor/__init__.py

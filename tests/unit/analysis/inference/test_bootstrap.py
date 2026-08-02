@@ -1,21 +1,27 @@
-from datp_core.analysis.inference import (
+from datp_core.analysis.inference.bootstrap import (
     BcaOutcome,
+    BcaReason,
+    BootstrapInterval,
     ExternalPairedAnalysisPlan,
     ExternalPairedContrast,
     PairedContrast,
+    decide_confirmatory,
     external_paired_bca_interval,
     paired_bca_interval,
 )
 from datp_core.domain.enums import (
+    AvailabilityStatus,
     EvidenceRole,
     FederatedThresholdMethod,
+    IntervalMethod,
     MetricId,
     PopulationId,
     PreprocessingProtocolId,
+    ScientificDecision,
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.values import ConfidenceLevel, MetricValue, Seed
+from datp_core.domain.values import BootstrapReplicateCount, ConfidenceLevel, MetricValue, Seed
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.protocols.statistics import BOOTSTRAP_REPLICATE_COUNT, CONFIRMATORY_INFERENCE_PROTOCOL
 
@@ -70,6 +76,28 @@ def test_external_interval_is_explicitly_supplementary_and_not_confirmatory() ->
     )
 
     assert result.outcome is BcaOutcome.AVAILABLE
+
+
+def test_confirmatory_decision_uses_positive_bca_interval_not_secondary_evidence() -> None:
+    interval = BootstrapInterval(
+        IntervalMethod.BCA_PAIRED_ARITHMETIC_MEAN,
+        ConfidenceLevel(0.95),
+        BootstrapReplicateCount(10_000),
+        Seed(3),
+        MetricValue(0.2),
+        MetricValue(0.01),
+        MetricValue(0.4),
+        0.0,
+        0.0,
+        AvailabilityStatus.AVAILABLE,
+        BcaOutcome.AVAILABLE,
+        BcaReason.NONE,
+    )
+
+    result = decide_confirmatory(interval)
+
+    assert result.decision is ScientificDecision.SUPPORTED
+    assert result.availability is AvailabilityStatus.AVAILABLE
 
 
 def _external_contrast(seed: int) -> ExternalPairedContrast:

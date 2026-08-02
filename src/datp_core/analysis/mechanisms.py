@@ -1,13 +1,15 @@
-"""Source-authorized descriptive mechanism analyses over persisted assignments."""
+"""Source-authorized descriptive mechanism analyses, divergence boundary, and absorption decisions."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 from math import isfinite
 
 import numpy as np
 from scipy import stats
 from sklearn.metrics import adjusted_rand_score
 
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
+from datp_core.analysis.inference.bootstrap import ScientificDecisionResult
+from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ScientificDecision
 from datp_core.domain.values import MetricValue, ThresholdValue
 from datp_core.populations.models import ClientIdentity
 from datp_core.thresholding.models import ClusterMembership
@@ -67,6 +69,7 @@ class ClusterStabilityResult:
 
 @dataclass(frozen=True, slots=True)
 class ThresholdMovement:
+    evidence_role: EvidenceRole
     client: ClientIdentity
     delta_threshold: MetricValue
     delta_fpr: MetricValue
@@ -215,6 +218,7 @@ def threshold_movement(
         raise ValueError("TPR movement requires both methods or neither")
     if shared_tpr is None and local_tpr is None:
         return ThresholdMovement(
+            EvidenceRole.MECHANISM,
             client,
             MetricValue(local_threshold.value - shared_threshold.value),
             MetricValue(local_fpr.value - shared_fpr.value),
@@ -225,10 +229,79 @@ def threshold_movement(
     if shared_tpr is None or local_tpr is None:
         raise ValueError("TPR movement requires both methods or neither")
     return ThresholdMovement(
+        EvidenceRole.MECHANISM,
         client,
         MetricValue(local_threshold.value - shared_threshold.value),
         MetricValue(local_fpr.value - shared_fpr.value),
         MetricValue(local_tpr.value - shared_tpr.value),
         AvailabilityStatus.AVAILABLE,
         "",
+    )
+
+
+class DivergenceBlocker(StrEnum):
+    COMMON_SUPPORT_UNRESOLVED = "common_support_unresolved"
+    BINNING_UNRESOLVED = "binning_unresolved"
+    DENSITY_UNRESOLVED = "density_unresolved"
+    SMOOTHING_UNRESOLVED = "smoothing_unresolved"
+    ZERO_MASS_UNRESOLVED = "zero_mass_unresolved"
+    AGGREGATION_UNRESOLVED = "aggregation_unresolved"
+
+
+@dataclass(frozen=True, slots=True)
+class DivergenceResult:
+    evidence_role: EvidenceRole
+    clients: tuple[ClientIdentity, ...]
+    pairwise_values: tuple[MetricValue, ...]
+    aggregate: MetricValue | None
+    availability: AvailabilityStatus
+    blocker: DivergenceBlocker | None
+    reason: str
+
+    def __post_init__(self) -> None:
+        if self.availability is AvailabilityStatus.AVAILABLE:
+            if self.blocker is not None or not self.pairwise_values or self.aggregate is None or self.reason:
+                raise ValueError("available divergence requires values, aggregate, and no blocker")
+        elif self.blocker is None or self.pairwise_values or self.aggregate is not None or not self.reason:
+            raise ValueError("blocked divergence must preserve its explicit unresolved construction")
+
+
+def blocked_jensen_shannon_divergence(
+    clients: tuple[ClientIdentity, ...], blocker: DivergenceBlocker
+) -> DivergenceResult:
+    """Return the required typed blocker instead of selecting histogram semantics ad hoc."""
+    if len(clients) < 2:
+        raise ValueError("divergence analysis requires at least two clients")
+    return DivergenceResult(
+        EvidenceRole.MECHANISM,
+        tuple(sorted(clients, key=lambda item: item.client_id)),
+        (),
+        None,
+        AvailabilityStatus.UNAVAILABLE,
+        blocker,
+        f"Jensen-Shannon divergence is blocked: {blocker.value}",
+    )
+
+
+def decide_model_absorption(
+    delta_fedavg: MetricValue | None, delta_ditto: MetricValue | None
+) -> ScientificDecisionResult:
+    if delta_fedavg is None or delta_ditto is None or delta_fedavg <= 0:
+        return ScientificDecisionResult(
+            EvidenceRole.SUPPORTIVE,
+            ScientificDecision.BLOCKED,
+            delta_ditto,
+            None,
+            AvailabilityStatus.UNAVAILABLE,
+            "model absorption requires a valid positive FedAvg reference effect",
+        )
+    ratio = delta_ditto.value / delta_fedavg.value
+    if ratio >= 0.75:
+        decision, rationale = ScientificDecision.SUPPORTED, "the Ditto effect is retained"
+    elif ratio >= 0.25:
+        decision, rationale = ScientificDecision.PARTIAL_ABSORPTION, "the Ditto effect is partially absorbed"
+    else:
+        decision, rationale = ScientificDecision.FULL_ABSORPTION, "the Ditto effect is largely absorbed"
+    return ScientificDecisionResult(
+        EvidenceRole.SUPPORTIVE, decision, delta_ditto, None, AvailabilityStatus.AVAILABLE, rationale
     )

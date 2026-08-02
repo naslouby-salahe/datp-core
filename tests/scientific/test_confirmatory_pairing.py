@@ -1,4 +1,4 @@
-from datp_core.analysis.inference import BcaOutcome, PairedContrast, paired_bca_interval
+from datp_core.analysis.inference.bootstrap import BcaOutcome, PairedContrast, paired_bca_interval
 from datp_core.domain.enums import (
     EvidenceRole,
     FederatedThresholdMethod,

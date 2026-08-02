@@ -6,7 +6,7 @@ from pathlib import Path
 import polars as pl
 import typer
 
-from datp_core.analysis.inference import PairedContrast
+from datp_core.analysis.inference.bootstrap import PairedContrast
 from datp_core.artifacts.coordinates import canonical_root_under
 from datp_core.datasets.catalogue import dataset_binding
 from datp_core.domain.enums import (

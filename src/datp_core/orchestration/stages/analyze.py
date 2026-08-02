@@ -5,22 +5,25 @@ from enum import StrEnum
 from pathlib import Path
 from shutil import rmtree
 
-from datp_core.analysis.decision_rules import ScientificDecisionResult, decide_confirmatory
 from datp_core.analysis.descriptive import DescriptiveSummary, PairedDifferenceCounts, summarize_values
-from datp_core.analysis.inference import (
+from datp_core.analysis.inference.bootstrap import (
     BcaOutcome,
     BcaReason,
     BootstrapInterval,
     ExternalPairedAnalysisPlan,
     ExternalPairedContrast,
-    MultiplicityResult,
     PairedContrast,
+    ScientificDecisionResult,
+    decide_confirmatory,
+    external_paired_bca_interval,
+    paired_bca_interval,
+)
+from datp_core.analysis.inference.paired import (
+    MultiplicityResult,
     RankBiserialResult,
     WilcoxonResult,
-    external_paired_bca_interval,
     holm_adjust,
     matched_pairs_rank_biserial,
-    paired_bca_interval,
     paired_wilcoxon,
     sign_consistency,
 )

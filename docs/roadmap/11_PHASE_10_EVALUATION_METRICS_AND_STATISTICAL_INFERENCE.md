@@ -53,11 +53,10 @@ Phase 10 exposes `run-confirmatory-seed --training-seed <seed>`, `run-confirmato
 - `datp_core/evaluation/operational.py`
 - `datp_core/evaluation/controls.py`
 - `datp_core/analysis/descriptive.py`
-- `datp_core/analysis/inference.py`
-- `datp_core/analysis/divergence.py`
+- `datp_core/analysis/inference/bootstrap.py`
+- `datp_core/analysis/inference/paired.py`
 - `datp_core/analysis/mechanisms.py`
 - `datp_core/analysis/temporal.py`
-- `datp_core/analysis/decision_rules.py`
 - `datp_core/orchestration/stages/evaluate_federated.py`
 - `datp_core/orchestration/stages/analyze.py`
 
@@ -258,11 +257,10 @@ Decisions use full precision and preserve negative results.
 - `tests/unit/evaluation/test_operational.py`
 - `tests/unit/evaluation/test_controls.py`
 - `tests/unit/analysis/test_descriptive.py`
-- `tests/unit/analysis/test_inference.py`
-- `tests/unit/analysis/test_divergence.py`
+- `tests/unit/analysis/inference/test_bootstrap.py`
+- `tests/unit/analysis/inference/test_paired.py`
 - `tests/unit/analysis/test_mechanisms.py`
 - `tests/unit/analysis/test_temporal.py`
-- `tests/unit/analysis/test_decision_rules.py`
 - `tests/property/test_population_metric_invariants.py`
 - `tests/property/test_confusion_metric_bounds.py`
 - `tests/scientific/test_confirmatory_pairing.py`

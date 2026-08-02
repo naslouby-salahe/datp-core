@@ -35,7 +35,7 @@ The user authorized clean corrections in the owning modules where the original P
 - `datp_core/artifacts/layout.py`, `datp_core/preprocessing/*`, and `datp_core/centralized_reference/preprocessing.py`: protocol-defined temporal partition inventory and train-only fitting across every persisted partition.
 - `datp_core/scoring/*`: immutable future-recalibration scores and checksums.
 - `datp_core/evaluation/*`: FPR aggregation independent of confirmatory eligibility, plus typed unavailable attack-sensitive metrics.
-- `datp_core/analysis/inference.py` and `datp_core/orchestration/stages/construct_federated_thresholds.py`: supplementary external BCa and temporal threshold provenance, separately from confirmatory inference.
+- `datp_core/analysis/inference/bootstrap.py` and `datp_core/orchestration/stages/construct_federated_thresholds.py`: supplementary external BCa and temporal threshold provenance, separately from confirmatory inference.
 
 ## Source files permitted to change
 

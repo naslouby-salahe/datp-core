@@ -1,7 +1,19 @@
 from math import isclose
 
-from datp_core.analysis.mechanisms import heterogeneity_benefit_association, threshold_movement
-from datp_core.domain.enums import AvailabilityStatus, PopulationId, PopulationIdentityKind
+from datp_core.analysis.mechanisms import (
+    DivergenceBlocker,
+    blocked_jensen_shannon_divergence,
+    decide_model_absorption,
+    heterogeneity_benefit_association,
+    threshold_movement,
+)
+from datp_core.domain.enums import (
+    AvailabilityStatus,
+    EvidenceRole,
+    PopulationId,
+    PopulationIdentityKind,
+    ScientificDecision,
+)
 from datp_core.domain.values import MetricValue, ThresholdValue
 from datp_core.populations.models import ClientIdentity
 
@@ -35,7 +47,29 @@ def test_threshold_movement_marks_attack_tradeoff_unavailable_without_attack_ass
         local_tpr=None,
     )
 
+    assert result.evidence_role is EvidenceRole.MECHANISM
     assert isclose(result.delta_threshold.value, 0.2)
     assert isclose(result.delta_fpr.value, -0.1)
     assert result.delta_tpr is None
     assert result.attack_availability is AvailabilityStatus.UNAVAILABLE
+
+
+def test_unresolved_jsd_semantics_produce_a_typed_blocker_without_histogram_estimation() -> None:
+    clients = (
+        ClientIdentity(PopulationId.NBAIOT_NATURAL_DEVICES, "client_a", PopulationIdentityKind.PHYSICAL_DEVICES),
+        ClientIdentity(PopulationId.NBAIOT_NATURAL_DEVICES, "client_b", PopulationIdentityKind.PHYSICAL_DEVICES),
+    )
+
+    result = blocked_jensen_shannon_divergence(clients, DivergenceBlocker.BINNING_UNRESOLVED)
+
+    assert result.availability is AvailabilityStatus.UNAVAILABLE
+    assert result.blocker is DivergenceBlocker.BINNING_UNRESOLVED
+    assert result.pairwise_values == ()
+    assert result.aggregate is None
+
+
+def test_model_absorption_blocks_a_nonpositive_fedavg_reference_effect() -> None:
+    result = decide_model_absorption(MetricValue(0.0), MetricValue(0.2))
+
+    assert result.decision is ScientificDecision.BLOCKED
+    assert result.availability is AvailabilityStatus.UNAVAILABLE

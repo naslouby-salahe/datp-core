@@ -3,7 +3,15 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, PartitionRole, SplitProtocolId, TemporalState
+from datp_core.analysis.inference.bootstrap import ScientificDecisionResult
+from datp_core.domain.enums import (
+    AvailabilityStatus,
+    EvidenceRole,
+    PartitionRole,
+    ScientificDecision,
+    SplitProtocolId,
+    TemporalState,
+)
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, Seed, checksum_text
 from datp_core.protocols.metrics import TEMPORAL_CV_MATERIALITY_CUTOFF
@@ -190,3 +198,32 @@ def _undefined_interpretation(drift_excess: MetricValue) -> TemporalInterpretati
     if drift_excess < 0:
         return TemporalInterpretation.OPPOSITE_TEMPORAL_MOVEMENT
     return TemporalInterpretation.NO_DETECTABLE_TEMPORAL_DEGRADATION
+
+
+def decide_temporal(result: TemporalRecoveryResult) -> ScientificDecisionResult:
+    if result.availability is not AvailabilityStatus.AVAILABLE or result.recovery_ratio is None:
+        return ScientificDecisionResult(
+            EvidenceRole.TEMPORAL_BOUNDARY,
+            ScientificDecision.BLOCKED,
+            None,
+            None,
+            AvailabilityStatus.UNAVAILABLE,
+            result.reason,
+        )
+    if result.recovered_amount > 0:
+        return ScientificDecisionResult(
+            EvidenceRole.TEMPORAL_BOUNDARY,
+            ScientificDecision.SUPPORTED,
+            result.recovery_ratio,
+            None,
+            AvailabilityStatus.AVAILABLE,
+            "temporal degradation has positive one-shot recalibration recovery",
+        )
+    return ScientificDecisionResult(
+        EvidenceRole.TEMPORAL_BOUNDARY,
+        ScientificDecision.BOUNDARY_RESULT,
+        result.recovery_ratio,
+        None,
+        AvailabilityStatus.AVAILABLE,
+        "temporal degradation has no positive one-shot recalibration recovery",
+    )

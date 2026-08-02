@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from datp_core.analysis.inference import PairedContrast
+from datp_core.analysis.inference.bootstrap import PairedContrast
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
