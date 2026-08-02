@@ -1,15 +1,13 @@
 """Immutable records for audited dataset ingestion and publication."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import StrEnum
 from pathlib import Path
-
-from pydantic import Field
 
 import datp_core.domain.enums as domain_enums
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import ByteCount, Checksum, RowCount, checksum_text
+from datp_core.domain.values import ByteCount, Checksum, RowCount
 
 
 class SourceFileRole(StrEnum):
@@ -418,185 +416,40 @@ def _validate_chronology_counts(validation: ChronologyValidation) -> None:
         raise ValueError("parseable and invalid chronology rows must total all rows")
 
 
-class PublicationDocument(StrictModel):
-    """Strict serialized dataset publication document."""
+def _serialize(obj):  # noqa: C901, PLR0911
+    """Serialize domain value objects, enums, dataclasses, and tuples to JSON-compatible primitives."""
+    if obj is None:
+        return None
+    if isinstance(obj, (bool, int, float, str)):
+        return obj
+    if isinstance(obj, Path):
+        return obj.as_posix()
+    if isinstance(obj, StrEnum):
+        return obj.value
+    if isinstance(obj, tuple):
+        return tuple(_serialize(item) for item in obj)
+    if isinstance(obj, list):
+        return [_serialize(item) for item in obj]
+    if isinstance(obj, dict):
+        return {key: _serialize(value) for key, value in obj.items()}
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump(mode="json")
+    if hasattr(obj, "__dataclass_fields__"):
+        own_fields = fields(obj)
+        if len(own_fields) == 1 and own_fields[0].name == "value":
+            return obj.value
+        return {field.name: _serialize(getattr(obj, field.name)) for field in own_fields}
+    raise TypeError(f"cannot serialize {type(obj)}")
 
 
-class CanonicalColumnDocument(PublicationDocument):
-    dtype: ColumnLogicalType
-    name: str
-    nullable: bool
-    position: int
-    role: CanonicalColumnRole
-    source_name: str
-
-    @classmethod
-    def from_column(cls, column: CanonicalColumn) -> "CanonicalColumnDocument":
-        return cls(
-            dtype=column.dtype,
-            name=column.name,
-            nullable=column.nullable,
-            position=column.position,
-            role=column.role,
-            source_name=column.source_name,
-        )
-
-
-class CanonicalSchemaDocument(PublicationDocument):
-    columns: tuple[CanonicalColumnDocument, ...]
-    dataset: DatasetId
-    feature_columns: tuple[str, ...]
-    label_columns: tuple[str, ...]
-    physical_schema: str
-    provenance_columns: tuple[str, ...]
-    schema_checksum: str
-
-    @classmethod
-    def from_schema(cls, schema: CanonicalSchema) -> "CanonicalSchemaDocument":
-        return cls(
-            columns=tuple(CanonicalColumnDocument.from_column(column) for column in schema.columns),
-            dataset=schema.dataset,
-            feature_columns=schema.feature_columns,
-            label_columns=schema.label_columns,
-            physical_schema=schema.physical_schema,
-            provenance_columns=schema.provenance_columns,
-            schema_checksum=schema.checksum.value,
-        )
-
-
-class SchemaChecksumDocument(PublicationDocument):
+class SchemaChecksumDocument(StrictModel):
     canonicalization_contract: str
-    columns: tuple[CanonicalColumnDocument, ...]
+    columns: tuple[CanonicalColumn, ...]
     dataset: DatasetId
     physical_schema: str
 
 
-class RawSourceDocument(PublicationDocument):
-    checksum: str
-    path: str
-    role: SourceFileRole
-    row_count: int | None
-    size_bytes: int
-
-    @classmethod
-    def from_source(cls, source: RawSourceFile) -> "RawSourceDocument":
-        return cls(
-            checksum=source.checksum.value,
-            path=source.relative_path.as_posix(),
-            role=source.role,
-            row_count=source.observed_row_count.value if source.observed_row_count is not None else None,
-            size_bytes=source.size_bytes.value,
-        )
-
-    def to_source(self, dataset: DatasetId) -> RawSourceFile:
-        return RawSourceFile(
-            dataset,
-            Path(self.path),
-            ByteCount(self.size_bytes),
-            Checksum(self.checksum),
-            self.role,
-            RowCount(self.row_count) if self.row_count is not None else None,
-        )
-
-
-class RawInventoryDocument(PublicationDocument):
-    accepted_row_count: int | None
-    accepted_source_count: int
-    checksum: str
-    excluded_source_count: int
-    sources: tuple[RawSourceDocument, ...]
-
-    @classmethod
-    def from_inventory(cls, inventory: RawDatasetInventory) -> "RawInventoryDocument":
-        return cls(
-            accepted_row_count=inventory.accepted_row_count.value if inventory.accepted_row_count is not None else None,
-            accepted_source_count=inventory.accepted_source_count,
-            checksum=inventory.checksum.value,
-            excluded_source_count=inventory.excluded_source_count,
-            sources=tuple(RawSourceDocument.from_source(source) for source in inventory.sources),
-        )
-
-    def to_inventory(self, dataset: DatasetId) -> RawDatasetInventory:
-        sources = tuple(source.to_source(dataset) for source in self.sources)
-        return RawDatasetInventory(
-            dataset,
-            sources,
-            self.accepted_source_count,
-            self.excluded_source_count,
-            RowCount(self.accepted_row_count) if self.accepted_row_count is not None else None,
-            Checksum(self.checksum),
-        )
-
-
-class ValidationIssueDocument(PublicationDocument):
-    affected_count: int
-    code: DatasetValidationCode
-    reason: str
-    severity: ValidationSeverity
-    source_context: str
-
-    @classmethod
-    def from_issue(cls, issue: DatasetValidationIssue) -> "ValidationIssueDocument":
-        return cls(
-            affected_count=issue.affected_count,
-            code=issue.code,
-            reason=issue.reason,
-            severity=issue.severity,
-            source_context=issue.source_context,
-        )
-
-    def to_issue(self, dataset: DatasetId) -> DatasetValidationIssue:
-        return DatasetValidationIssue(
-            self.severity,
-            self.code,
-            dataset,
-            self.source_context,
-            self.reason,
-            self.affected_count,
-        )
-
-
-class ExclusionDocument(PublicationDocument):
-    affected_count: int
-    evidence: str
-    reason: ExclusionReason
-    source_path: str | None
-    source_row_index: int | None
-
-    @classmethod
-    def from_exclusion(cls, exclusion: DatasetExclusion) -> "ExclusionDocument":
-        return cls(
-            affected_count=exclusion.affected_count,
-            evidence=exclusion.evidence,
-            reason=exclusion.reason,
-            source_path=None if exclusion.source_path is None else exclusion.source_path.as_posix(),
-            source_row_index=(None if exclusion.source_row is None else exclusion.source_row.zero_based_row_index),
-        )
-
-
-class ValidationReportDocument(PublicationDocument):
-    accepted_rows: int
-    excluded_rows: int
-    exclusions: tuple[ExclusionDocument, ...]
-    invalid_rows: int
-    issues: tuple[ValidationIssueDocument, ...]
-    status: AvailabilityStatus
-    warning_count: int
-
-    @classmethod
-    def from_report(cls, report: DatasetValidationReport) -> "ValidationReportDocument":
-        return cls(
-            accepted_rows=report.accepted_rows.value,
-            excluded_rows=report.excluded_rows.value,
-            exclusions=tuple(ExclusionDocument.from_exclusion(item) for item in report.exclusions),
-            invalid_rows=report.invalid_rows.value,
-            issues=tuple(ValidationIssueDocument.from_issue(item) for item in report.issues),
-            status=report.status,
-            warning_count=report.warning_count,
-        )
-
-
-class CanonicalAssetDocument(PublicationDocument):
+class _AssetEntry(StrictModel):
     checksum: str
     columns: tuple[str, ...]
     path: str
@@ -605,113 +458,101 @@ class CanonicalAssetDocument(PublicationDocument):
     source_identity: str | None = None
 
 
-class ChronologyDocument(PublicationDocument):
-    alignment_offset_microseconds: int | None
-    alignment_verified: bool
-    duplicate_timestamp_count: int
-    evidence_row_count: int | None
-    evidence_source_path: str | None
+class _ChronologyEntry(StrictModel):
     group_identity: str
-    invalid_rows: int
-    is_monotonic: bool
-    parseable_rows: int
-    reason: str
-    skipped_evidence_rows: int
-    status: AvailabilityStatus
-    temporal_eligible: bool
+    status: str
     total_rows: int
-    trailing_evidence_rows: int
-
-    @classmethod
-    def from_validation(cls, validation: ChronologyValidation) -> "ChronologyDocument":
-        return cls(
-            alignment_offset_microseconds=validation.alignment_offset_microseconds,
-            alignment_verified=validation.alignment_verified,
-            duplicate_timestamp_count=validation.duplicate_timestamp_count,
-            evidence_row_count=(
-                validation.evidence_row_count.value if validation.evidence_row_count is not None else None
-            ),
-            evidence_source_path=(
-                None if validation.evidence_source_path is None else validation.evidence_source_path.as_posix()
-            ),
-            group_identity=validation.group_identity,
-            invalid_rows=validation.invalid_rows.value,
-            is_monotonic=validation.is_monotonic,
-            parseable_rows=validation.parseable_rows.value,
-            reason=validation.reason,
-            skipped_evidence_rows=validation.skipped_evidence_rows.value,
-            status=validation.status,
-            temporal_eligible=validation.temporal_eligible,
-            total_rows=validation.total_rows.value,
-            trailing_evidence_rows=validation.trailing_evidence_rows.value,
-        )
-
-    def to_validation(self) -> ChronologyValidation:
-        return ChronologyValidation(
-            self.group_identity,
-            self.status,
-            RowCount(self.total_rows),
-            RowCount(self.parseable_rows),
-            RowCount(self.invalid_rows),
-            self.duplicate_timestamp_count,
-            self.is_monotonic,
-            self.reason,
-            self.temporal_eligible,
-            None if self.evidence_source_path is None else Path(self.evidence_source_path),
-            RowCount(self.evidence_row_count) if self.evidence_row_count is not None else None,
-            self.alignment_verified,
-            self.alignment_offset_microseconds,
-            RowCount(self.skipped_evidence_rows),
-            RowCount(self.trailing_evidence_rows),
-        )
+    parseable_rows: int
+    invalid_rows: int
+    duplicate_timestamp_count: int
+    is_monotonic: bool
+    reason: str
+    temporal_eligible: bool
+    evidence_source_path: str | None = None
+    evidence_row_count: int | None = None
+    alignment_verified: bool = False
+    alignment_offset_microseconds: int | None = None
+    skipped_evidence_rows: int = 0
+    trailing_evidence_rows: int = 0
 
 
-class EligibilityPolicyDocument(PublicationDocument):
+class _RawSourceEntry(StrictModel):
+    dataset: str = ""
+    relative_path: str
+    size_bytes: int
     checksum: str
-    feature_columns: tuple[str, ...]
+    role: str
+    observed_row_count: int | None = None
+
+
+class _InventoryEntry(StrictModel):
+    dataset: str = ""
+    sources: tuple[_RawSourceEntry, ...]
+    accepted_source_count: int
+    excluded_source_count: int
+    accepted_row_count: int | None = None
+    checksum: str
+
+
+class _SourceRowEntry(StrictModel):
+    source: _RawSourceEntry
+    zero_based_row_index: int
+
+
+class _ExclusionEntry(StrictModel):
+    dataset: str = ""
+    source_path: str | None = None
+    source_row: _SourceRowEntry | None = None
+    reason: str
+    evidence: str
+    affected_count: int
+
+
+class _ValidationIssueEntry(StrictModel):
+    severity: str
+    code: str
+    dataset: str = ""
+    source_context: str
+    reason: str
+    affected_count: int
+
+
+class _ValidationReportEntry(StrictModel):
+    dataset: str = ""
+    issues: tuple[_ValidationIssueEntry, ...]
+    exclusions: tuple[_ExclusionEntry, ...]
+    accepted_rows: int
+    excluded_rows: int
+    invalid_rows: int
+    warning_count: int
+    status: str
+
+
+class _EligibilityPolicyEntry(StrictModel):
+    dataset: str = ""
     label_column: str
-    reasons: tuple[str, ...]
-
-    @classmethod
-    def from_policy[EligibilityReasonT: StrEnum](
-        cls, policy: ModelInputEligibilityPolicy[EligibilityReasonT] | None
-    ) -> "EligibilityPolicyDocument | None":
-        if policy is None:
-            return None
-        semantic_content = "\n".join(
-            (
-                policy.dataset.value,
-                policy.label_column,
-                *policy.feature_columns,
-                *(reason.value for reason in policy.exclusion_reasons),
-            )
-        )
-        return cls(
-            checksum=checksum_text(semantic_content).value,
-            feature_columns=policy.feature_columns,
-            label_column=policy.label_column,
-            reasons=tuple(reason.value for reason in policy.exclusion_reasons),
-        )
+    feature_columns: tuple[str, ...]
+    exclusion_reasons: tuple[str, ...]
 
 
-class CanonicalManifestDocument(PublicationDocument):
-    assets: tuple[CanonicalAssetDocument, ...]
+class CanonicalManifestDocument(StrictModel):
+    assets: tuple[_AssetEntry, ...]
     canonicalization_contract: str
-    chronology: tuple[ChronologyDocument, ...]
+    chronology: tuple[_ChronologyEntry, ...]
     dataset: DatasetId
-    eligibility_policy: EligibilityPolicyDocument | None = Field(default=None, exclude_if=lambda value: value is None)
-    inventory: RawInventoryDocument
+    eligibility_policy: _EligibilityPolicyEntry | None = None
+    inventory: _InventoryEntry
     schema_checksum: str
-    validation_report: ValidationReportDocument
+    validation_report: _ValidationReportEntry
 
 
-class SourceStateEntryDocument(PublicationDocument):
+class SourceStateEntryDocument(StrictModel):
     modified_time_nanoseconds: int
     path: str
     size_bytes: int
 
 
-class SourceStateDocument(PublicationDocument):
+class SourceStateDocument(StrictModel):
     content_checksum_verified: bool = False
     dataset: DatasetId
     manifest_checksum: str

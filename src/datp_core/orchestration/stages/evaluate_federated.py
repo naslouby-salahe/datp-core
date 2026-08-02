@@ -106,7 +106,9 @@ def _serialize(obj):  # noqa: C901, PLR0911
         return obj
     if isinstance(obj, StrEnum):
         return obj.value
-    if isinstance(obj, (tuple, list)):
+    if isinstance(obj, tuple):
+        return tuple(_serialize(item) for item in obj)
+    if isinstance(obj, list):
         return [_serialize(item) for item in obj]
     if isinstance(obj, dict):
         return {key: _serialize(value) for key, value in obj.items()}
@@ -115,7 +117,7 @@ def _serialize(obj):  # noqa: C901, PLR0911
     if hasattr(obj, "__dataclass_fields__"):
         own_fields = fields(obj)
         if len(own_fields) == 1 and own_fields[0].name == "value":
-            return getattr(obj, "value")
+            return obj.value
         return {field.name: _serialize(getattr(obj, field.name)) for field in own_fields}
     raise TypeError(f"cannot serialize {type(obj)}")
 

@@ -16,7 +16,6 @@ from datp_core.datasets.models import (
     CanonicalManifestDocument,
     CanonicalProvenanceColumn,
     CanonicalPublicationArtifact,
-    ChronologyDocument,
 )
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import DataIntegrityError, ScientificContractError
@@ -162,7 +161,7 @@ def _chronology_eligibility(
     return tuple(eligible), tuple(excluded), tuple(reasons), duplicate_total
 
 
-def _chronology_for_group(group_id: str, chronology: tuple[ChronologyDocument, ...]) -> ChronologyDocument | None:
+def _chronology_for_group(group_id: str, chronology) -> dict | None:
     for item in chronology:
         if item.group_identity == group_id:
             return item

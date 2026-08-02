@@ -2,7 +2,9 @@
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from dataclasses import fields as dc_fields
 from enum import StrEnum
+from json import dumps
 from pathlib import Path
 
 import pyarrow as pa
@@ -11,34 +13,30 @@ from filelock import FileLock
 
 from datp_core.artifacts.completion import complete_digest
 from datp_core.datasets.models import (
-    CanonicalAssetDocument,
     CanonicalAssetRole,
     CanonicalColumn,
-    CanonicalColumnDocument,
     CanonicalManifestDocument,
     CanonicalPublicationArtifact,
     CanonicalSchema,
-    CanonicalSchemaDocument,
-    ChronologyDocument,
     ChronologyValidation,
     DatasetExclusion,
+    DatasetValidationCode,
+    DatasetValidationIssue,
     DatasetValidationReport,
-    EligibilityPolicyDocument,
-    ExclusionDocument,
+    ExclusionReason,
     MaterializedCanonicalAsset,
     MaterializedDataset,
     ModelInputEligibilityPolicy,
     RawDatasetInventory,
-    RawInventoryDocument,
     RawSourceFile,
-    SchemaChecksumDocument,
+    SourceFileRole,
     SourceRowReference,
     SourceStateDocument,
     SourceStateEntryDocument,
-    ValidationReportDocument,
+    ValidationSeverity,
 )
-from datp_core.domain.enums import DatasetId, PublicationStatus
-from datp_core.domain.values import Checksum, RowCount, checksum_file, checksum_text
+from datp_core.domain.enums import AvailabilityStatus, DatasetId, PublicationStatus
+from datp_core.domain.values import ByteCount, Checksum, RowCount, checksum_file, checksum_text
 from datp_core.protocols.runtime import DATA_ROOT
 
 _CANONICAL_PUBLICATION_CONTRACT = "canonical_publication_contract"
@@ -48,6 +46,31 @@ _SCHEMA_NAME = CanonicalPublicationArtifact.SCHEMA
 _SOURCE_STATE_NAME = CanonicalPublicationArtifact.SOURCE_STATE
 
 SourcePathResolver = Callable[[Path], Path]
+
+
+def _serialize(obj):
+    if obj is None:
+        return None
+    if isinstance(obj, (bool, int, float, str)):
+        return obj
+    if isinstance(obj, StrEnum):
+        return obj.value
+    if isinstance(obj, tuple):
+        return tuple(_serialize(item) for item in obj)
+    if isinstance(obj, list):
+        return [_serialize(item) for item in obj]
+    if isinstance(obj, dict):
+        return {key: _serialize(value) for key, value in obj.items()}
+    if isinstance(obj, Path):
+        return obj.as_posix()
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump(mode="json")
+    if hasattr(obj, "__dataclass_fields__"):
+        own_fields = dc_fields(obj)
+        if len(own_fields) == 1 and own_fields[0].name == "value":
+            return obj.value
+        return {field.name: _serialize(getattr(obj, field.name)) for field in own_fields}
+    raise TypeError(f"cannot serialize {type(obj)}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,15 +99,15 @@ class CanonicalAsset[AssetRoleT: StrEnum]:
         if not self.columns:
             raise ValueError("canonical assets require a relative path and columns")
 
-    def to_document(self) -> CanonicalAssetDocument:
-        return CanonicalAssetDocument(
-            checksum=self.checksum.value,
-            columns=self.columns,
-            path=self.relative_path.as_posix(),
-            row_count=self.row_count.value,
-            role=self.role.value,
-            source_identity=self.source_identity,
-        )
+    def serialize(self) -> dict[str, str | tuple[str, ...] | int | None]:
+        return {
+            "checksum": self.checksum.value,
+            "columns": self.columns,
+            "path": self.relative_path.as_posix(),
+            "row_count": self.row_count.value,
+            "role": self.role.value,
+            "source_identity": self.source_identity,
+        }
 
 
 def canonical_asset_path(root: Path, relative_path: Path) -> Path:
@@ -105,18 +128,21 @@ def canonical_directory(canonical_root: Path, schema: CanonicalSchema) -> Path:
 
 
 def schema_content(schema: CanonicalSchema) -> str:
-    return CanonicalSchemaDocument.from_schema(schema).model_dump_json()
+    return dumps(_serialize(schema), sort_keys=True)
 
 
 def schema_checksum_document_json(
     dataset: DatasetId, columns: tuple[CanonicalColumn, ...], physical_schema: pa.Schema
 ) -> str:
-    return SchemaChecksumDocument(
-        canonicalization_contract=_CANONICAL_PUBLICATION_CONTRACT,
-        columns=tuple(CanonicalColumnDocument.from_column(column) for column in columns),
-        dataset=dataset,
-        physical_schema=physical_schema.to_string(show_field_metadata=True, show_schema_metadata=True),
-    ).model_dump_json()
+    return dumps(
+        {
+            "canonicalization_contract": _CANONICAL_PUBLICATION_CONTRACT,
+            "columns": [_serialize(column) for column in columns],
+            "dataset": dataset.value,
+            "physical_schema": physical_schema.to_string(show_field_metadata=True, show_schema_metadata=True),
+        },
+        sort_keys=True,
+    )
 
 
 def canonical_publication_contract() -> str:
@@ -226,7 +252,7 @@ def _fast_reusable_manifest[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
         manifest.dataset is schema.dataset,
         manifest.schema_checksum == schema.checksum.value,
         manifest.canonicalization_contract == request.canonicalization_contract,
-        manifest.eligibility_policy == EligibilityPolicyDocument.from_policy(request.eligibility_policy),
+        manifest.eligibility_policy == _serialize(request.eligibility_policy),
         _assets_have_declared_metadata(target, manifest.assets, schema.physical_schema),
         _source_state_matches(
             SourceStateProbe(
@@ -247,7 +273,7 @@ def _reused_materialized_dataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnu
     manifest: CanonicalManifestDocument,
 ) -> MaterializedDataset[AssetRoleT, EligibilityReasonT]:
     schema = request.schema
-    inventory = manifest.inventory.to_inventory(schema.dataset)
+    inventory = _inventory_from_serialized(schema.dataset, manifest.inventory)
     report = _reused_validation_report(schema.dataset, manifest.validation_report, inventory)
     assets = tuple(
         MaterializedCanonicalAsset(
@@ -275,17 +301,27 @@ def _reused_materialized_dataset[AssetRoleT: StrEnum, EligibilityReasonT: StrEnu
         publication_status=PublicationStatus.REUSED,
         inventory=inventory,
         validation_report=report,
-        chronology=tuple(document.to_validation() for document in manifest.chronology),
+        chronology=tuple(_chronology_from_serialized(document) for document in manifest.chronology),
         eligibility_policy=request.eligibility_policy,
     )
 
 
 def _reused_validation_report(
     dataset: DatasetId,
-    report: ValidationReportDocument,
+    report,
     inventory: RawDatasetInventory,
 ) -> DatasetValidationReport:
-    issues = tuple(issue.to_issue(dataset) for issue in report.issues)
+    issues = tuple(
+        DatasetValidationIssue(
+            ValidationSeverity(issue.severity),
+            DatasetValidationCode(issue.code),
+            dataset,
+            issue.source_context,
+            issue.reason,
+            issue.affected_count,
+        )
+        for issue in report.issues
+    )
     exclusions = tuple(_reused_exclusion(dataset, exclusion, inventory) for exclusion in report.exclusions)
     return DatasetValidationReport(
         dataset,
@@ -295,26 +331,27 @@ def _reused_validation_report(
         RowCount(report.excluded_rows),
         RowCount(report.invalid_rows),
         report.warning_count,
-        report.status,
+        AvailabilityStatus(report.status),
     )
 
 
 def _reused_exclusion(
     dataset: DatasetId,
-    exclusion: ExclusionDocument,
+    exclusion,
     inventory: RawDatasetInventory,
 ) -> DatasetExclusion:
     source_path = None if exclusion.source_path is None else Path(exclusion.source_path)
-    source_row = (
+    source_row = exclusion.source_row
+    source_row_reference = (
         None
-        if exclusion.source_row_index is None
-        else SourceRowReference(_reused_inventory_source(inventory, source_path), exclusion.source_row_index)
+        if source_row is None
+        else SourceRowReference(_reused_inventory_source(inventory, source_path), source_row.zero_based_row_index)
     )
     return DatasetExclusion(
         dataset,
         source_path,
-        source_row,
-        exclusion.reason,
+        source_row_reference,
+        ExclusionReason(exclusion.reason),
         exclusion.evidence,
         exclusion.affected_count,
     )
@@ -327,6 +364,48 @@ def _reused_inventory_source(inventory: RawDatasetInventory, source_path: Path |
         if source.relative_path == source_path:
             return source
     raise ValueError("manifest exclusion references an unknown source")
+
+
+def _inventory_from_serialized(dataset: DatasetId, inventory) -> RawDatasetInventory:
+    sources = tuple(
+        RawSourceFile(
+            dataset,
+            Path(source.relative_path),
+            ByteCount(source.size_bytes),
+            Checksum(source.checksum),
+            SourceFileRole(source.role),
+            RowCount(source.observed_row_count) if source.observed_row_count is not None else None,
+        )
+        for source in inventory.sources
+    )
+    return RawDatasetInventory(
+        dataset,
+        sources,
+        inventory.accepted_source_count,
+        inventory.excluded_source_count,
+        RowCount(inventory.accepted_row_count) if inventory.accepted_row_count is not None else None,
+        Checksum(inventory.checksum),
+    )
+
+
+def _chronology_from_serialized(document) -> ChronologyValidation:
+    return ChronologyValidation(
+        document.group_identity,
+        AvailabilityStatus(document.status),
+        RowCount(document.total_rows),
+        RowCount(document.parseable_rows),
+        RowCount(document.invalid_rows),
+        document.duplicate_timestamp_count,
+        document.is_monotonic,
+        document.reason,
+        document.temporal_eligible,
+        None if document.evidence_source_path is None else Path(document.evidence_source_path),
+        RowCount(document.evidence_row_count) if document.evidence_row_count is not None else None,
+        document.alignment_verified,
+        document.alignment_offset_microseconds,
+        RowCount(document.skipped_evidence_rows),
+        RowCount(document.trailing_evidence_rows),
+    )
 
 
 def _source_state_matches(probe: SourceStateProbe) -> bool:
@@ -431,12 +510,12 @@ def _manifest_matches_publication[AssetRoleT: StrEnum, EligibilityReasonT: StrEn
     expected = CanonicalManifestDocument(
         assets=manifest.assets,
         canonicalization_contract=publication.canonicalization_contract,
-        chronology=tuple(ChronologyDocument.from_validation(item) for item in publication.chronology),
+        chronology=tuple(_serialize(item) for item in publication.chronology),
         dataset=publication.schema.dataset,
-        eligibility_policy=EligibilityPolicyDocument.from_policy(publication.eligibility_policy),
-        inventory=RawInventoryDocument.from_inventory(publication.inventory),
+        eligibility_policy=_serialize(publication.eligibility_policy),
+        inventory=_serialize(publication.inventory),
         schema_checksum=publication.schema.checksum.value,
-        validation_report=ValidationReportDocument.from_report(publication.validation_report),
+        validation_report=_serialize(publication.validation_report),
     )
     return (
         manifest.dataset,
@@ -457,18 +536,23 @@ def _manifest_matches_publication[AssetRoleT: StrEnum, EligibilityReasonT: StrEn
     )
 
 
-def asset_is_valid(root: Path, asset: CanonicalAssetDocument, expected_physical_schema: str) -> bool:
+def _asset_field(asset, name: str):
+    """Read a field from either a Pydantic model or a plain dict."""
+    return asset[name] if isinstance(asset, dict) else getattr(asset, name)
+
+
+def asset_is_valid(root: Path, asset, expected_physical_schema: str) -> bool:
     try:
-        path = canonical_asset_path(root, Path(asset.path))
+        path = canonical_asset_path(root, Path(_asset_field(asset, "path")))
     except ValueError:
         return False
-    if not path.is_file() or checksum_file(path).value != asset.checksum:
+    if not path.is_file() or checksum_file(path).value != _asset_field(asset, "checksum"):
         return False
     try:
         parquet = pq.ParquetFile(path)
         return (
-            parquet.metadata.num_rows == asset.row_count
-            and tuple(parquet.schema_arrow.names) == asset.columns
+            parquet.metadata.num_rows == _asset_field(asset, "row_count")
+            and tuple(parquet.schema_arrow.names) == tuple(_asset_field(asset, "columns"))
             and parquet.schema_arrow.to_string(show_field_metadata=True, show_schema_metadata=True)
             == expected_physical_schema
         )
@@ -477,12 +561,12 @@ def asset_is_valid(root: Path, asset: CanonicalAssetDocument, expected_physical_
 
 
 def _assets_have_declared_metadata(
-    root: Path, assets: tuple[CanonicalAssetDocument, ...], expected_physical_schema: str
+    root: Path, assets, expected_physical_schema: str
 ) -> bool:
     return all(_asset_has_declared_metadata(root, asset, expected_physical_schema) for asset in assets)
 
 
-def _asset_has_declared_metadata(root: Path, asset: CanonicalAssetDocument, expected_physical_schema: str) -> bool:
+def _asset_has_declared_metadata(root: Path, asset, expected_physical_schema: str) -> bool:
     try:
         path = canonical_asset_path(root, Path(asset.path))
     except ValueError:
@@ -493,7 +577,7 @@ def _asset_has_declared_metadata(root: Path, asset: CanonicalAssetDocument, expe
         parquet = pq.ParquetFile(path)
         return (
             parquet.metadata.num_rows == asset.row_count
-            and tuple(parquet.schema_arrow.names) == asset.columns
+            and tuple(parquet.schema_arrow.names) == tuple(asset.columns)
             and parquet.schema_arrow.to_string(show_field_metadata=True, show_schema_metadata=True)
             == expected_physical_schema
         )
@@ -501,8 +585,8 @@ def _asset_has_declared_metadata(root: Path, asset: CanonicalAssetDocument, expe
         return False
 
 
-def serialized_asset[AssetRoleT: StrEnum](asset: CanonicalAsset[AssetRoleT]) -> CanonicalAssetDocument:
-    return asset.to_document()
+def serialized_asset[AssetRoleT: StrEnum](asset: CanonicalAsset[AssetRoleT]) -> dict:
+    return asset.serialize()
 
 
 def serialized_manifest_json[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
@@ -510,12 +594,12 @@ def serialized_manifest_json[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     assets: tuple[CanonicalAsset[AssetRoleT], ...],
 ) -> str:
     return CanonicalManifestDocument(
-        assets=tuple(asset.to_document() for asset in assets),
+        assets=tuple(asset.serialize() for asset in assets),
         canonicalization_contract=request.canonicalization_contract,
-        chronology=tuple(ChronologyDocument.from_validation(item) for item in request.chronology),
+        chronology=tuple(_serialize(item) for item in request.chronology),
         dataset=request.dataset,
-        eligibility_policy=EligibilityPolicyDocument.from_policy(request.eligibility_policy),
-        inventory=RawInventoryDocument.from_inventory(request.inventory),
+        eligibility_policy=_serialize(request.eligibility_policy),
+        inventory=_serialize(request.inventory),
         schema_checksum=request.schema_checksum.value,
-        validation_report=ValidationReportDocument.from_report(request.validation_report),
+        validation_report=_serialize(request.validation_report),
     ).model_dump_json()

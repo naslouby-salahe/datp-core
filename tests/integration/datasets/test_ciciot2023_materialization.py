@@ -59,7 +59,7 @@ def test_ciciot_rebuilds_when_the_persisted_eligibility_policy_changes(tmp_path)
     materializer = CICIoT2023Materializer()
     published = materializer.materialize((source,), tmp_path / "canonical")
     manifest = published.manifest_path.read_text(encoding="utf-8")
-    altered_manifest = manifest.replace('"eligibility_policy":{"checksum":"', '"eligibility_policy":{"checksum":"x', 1)
+    altered_manifest = manifest.replace('"label_column":"label"', '"label_column":"label_altered"', 1)
     assert altered_manifest != manifest
     published.manifest_path.write_text(altered_manifest, encoding="utf-8")
     schema = published.canonical_root / "schema.json"
