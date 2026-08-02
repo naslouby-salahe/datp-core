@@ -28,12 +28,36 @@ def construct_family_threshold(
         raise ScientificContractError(
             "family threshold construction requires a non-empty family taxonomy", subject=ContractSubject.THRESHOLD
         )
-    eligible_by_client = {client_scores.client: client_scores for client_scores in eligible}
-    if not eligible_by_client:
+    if not eligible:
         raise ScientificContractError(
             "family threshold construction requires at least one eligible client", subject=ContractSubject.THRESHOLD
         )
-    coordinate = next(iter(eligible_by_client.values())).coordinate
+    eligible_clients = tuple(item.client for item in eligible)
+    if len(set(eligible_clients)) != len(eligible_clients):
+        raise ScientificContractError(
+            "eligible clients must be unique in family threshold construction",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+
+    taxonomy_counts: dict[ClientIdentity, int] = {}
+    for client, _ in family_by_client:
+        taxonomy_counts[client] = taxonomy_counts.get(client, 0) + 1
+
+    for client in eligible_clients:
+        count = taxonomy_counts.get(client, 0)
+        if count == 0:
+            raise ScientificContractError(
+                f"eligible client {client} is missing a family taxonomy entry",
+                subject=ContractSubject.CLIENT_IDENTITY,
+            )
+        if count > 1:
+            raise ScientificContractError(
+                f"eligible client {client} has multiple family taxonomy entries",
+                subject=ContractSubject.CLIENT_IDENTITY,
+            )
+
+    eligible_by_client = {client_scores.client: client_scores for client_scores in eligible}
+    coordinate = eligible[0].coordinate
     families: dict[FamilyIdentity, list[ClientIdentity]] = {}
     for client, family_id in family_by_client:
         families.setdefault(family_id, []).append(client)

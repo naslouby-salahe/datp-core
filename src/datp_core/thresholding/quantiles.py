@@ -65,6 +65,10 @@ class ClientBenignCalibrationScores:
             raise ScientificContractError(
                 "eligible client calibration scores must be non-empty", subject=ContractSubject.CALIBRATION
             )
+        if not all(np.isfinite(score) for score in self.scores):
+            raise ScientificContractError(
+                "every calibration score must be finite", subject=ContractSubject.CALIBRATION
+            )
 
     @property
     def as_array(self) -> np.ndarray:

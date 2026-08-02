@@ -41,6 +41,7 @@ from datp_core.thresholding.models import (
     PooledSharedQuantileResult,
     PooledVarianceDecomposition,
     SharedThresholdResult,
+    SampleWeightedSharedThresholdResult,
     ShrinkageAssignment,
     ShrinkageThresholdResult,
     ThresholdAssignment,
@@ -730,7 +731,7 @@ def test_grouped_threshold_result_rejects_assignment_not_matching_cluster_thresh
                     cluster_index=ClusterIndex(0),
                     members=(CLIENT_A,),
                     contributing_local_quantiles=(_local_quantile(CLIENT_A, 1.0),),
-                    cluster_threshold=ThresholdValue(5.0),
+                    cluster_threshold=ThresholdValue(1.0),
                 ),
                 ClusterMembership(
                     cluster_index=ClusterIndex(1),
@@ -815,7 +816,7 @@ def test_grouped_threshold_result_rejects_duplicate_cluster_indices() -> None:
             **_cluster_protocol_fields(),
         )
 
-    with pytest.raises(ScientificContractError, match="cluster indices must be unique"):
+    with pytest.raises(ScientificContractError, match="cluster indices must equal exactly"):
         build()
 
 
@@ -985,3 +986,125 @@ def test_local_threshold_result_rejects_duplicate_local_quantiles() -> None:
 
     with pytest.raises(ScientificContractError, match="unique client identities"):
         build()
+
+
+def test_shared_threshold_result_rejects_inconsistent_threshold_formula() -> None:
+    local_quantiles = (_local_quantile(CLIENT_A, 1.0), _local_quantile(CLIENT_B, 3.0))
+    wrong_shared_value = ThresholdValue(5.0)
+    assignments = (ThresholdAssignment(CLIENT_A, wrong_shared_value), ThresholdAssignment(CLIENT_B, wrong_shared_value))
+
+    with pytest.raises(ScientificContractError, match="unweighted mean"):
+        SharedThresholdResult(
+            method=FederatedThresholdMethod.SHARED_THRESHOLD,
+            coordinate=COORDINATE,
+            quantile=QUANTILE,
+            contributing_local_quantiles=local_quantiles,
+            shared_threshold=wrong_shared_value,
+            assignments=assignments,
+        )
+
+
+def test_sample_weighted_shared_threshold_result_rejects_inconsistent_threshold_formula() -> None:
+    local_quantiles = (_local_quantile(CLIENT_A, 1.0), _local_quantile(CLIENT_B, 3.0))
+    weights = (0.5, 0.5)
+    wrong_shared_value = ThresholdValue(9.0)
+    assignments = (ThresholdAssignment(CLIENT_A, wrong_shared_value), ThresholdAssignment(CLIENT_B, wrong_shared_value))
+
+    with pytest.raises(ScientificContractError, match="normalized weighted mean"):
+        SampleWeightedSharedThresholdResult(
+            method=FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
+            coordinate=COORDINATE,
+            quantile=QUANTILE,
+            contributing_local_quantiles=local_quantiles,
+            normalized_weights=weights,
+            shared_threshold=wrong_shared_value,
+            assignments=assignments,
+        )
+
+
+def test_family_membership_rejects_inconsistent_family_threshold_formula() -> None:
+    local_quantiles = (_local_quantile(CLIENT_A, 1.0), _local_quantile(CLIENT_B, 3.0))
+    wrong_family_threshold = ThresholdValue(10.0)
+
+    with pytest.raises(ScientificContractError, match="unweighted mean"):
+        FamilyMembership(
+            family_id=FamilyIdentity("doorbell"),
+            members=(CLIENT_A, CLIENT_B),
+            contributing_local_quantiles=local_quantiles,
+            status=AvailabilityStatus.AVAILABLE,
+            family_threshold=wrong_family_threshold,
+        )
+
+
+def test_cluster_membership_rejects_inconsistent_cluster_threshold_formula() -> None:
+    local_quantiles = (_local_quantile(CLIENT_A, 1.0), _local_quantile(CLIENT_B, 3.0))
+    wrong_cluster_threshold = ThresholdValue(10.0)
+
+    with pytest.raises(ScientificContractError, match="unweighted mean"):
+        ClusterMembership(
+            cluster_index=ClusterIndex(0),
+            members=(CLIENT_A, CLIENT_B),
+            contributing_local_quantiles=local_quantiles,
+            cluster_threshold=wrong_cluster_threshold,
+        )
+
+
+def test_grouped_threshold_result_rejects_out_of_range_or_non_canonical_cluster_indices() -> None:
+    cluster_a = ClusterMembership(
+        cluster_index=ClusterIndex(1),
+        members=(CLIENT_A,),
+        contributing_local_quantiles=(_local_quantile(CLIENT_A, 1.0),),
+        cluster_threshold=ThresholdValue(1.0),
+    )
+    fp_a = ClusterFingerprint(CLIENT_A, raw=(1.0, 1.0, 1.0, 1.0), standardized=(1.0, 1.0, 1.0, 1.0))
+    assignment = ThresholdAssignment(CLIENT_A, ThresholdValue(1.0))
+
+    with pytest.raises(ScientificContractError, match=r"cluster indices must equal exactly 0\.\.group_count"):
+        GroupedThresholdResult(
+            method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
+            coordinate=COORDINATE,
+            fingerprints=(fp_a,),
+            clusters=(cluster_a,),
+            assignments=(assignment,),
+            initialization=KMeansInitialization.KMEANS_PLUS_PLUS,
+            initialization_count=KMeansInitializationCount(10),
+            maximum_iterations=KMeansMaximumIterationCount(300),
+            random_state=Seed(42),
+            group_count=GroupCount(1),
+        )
+
+
+def test_centralized_attainment_diagnostic_rejects_inconsistent_signed_error() -> None:
+    with pytest.raises(ScientificContractError, match="signed attainment error"):
+        CentralizedAttainmentDiagnostic(
+            target_exceedance=0.05,
+            achieved_exceedance=0.10,
+            signed_attainment_error=0.0,
+            absolute_attainment_error=0.05,
+            absolute_threshold_error_vs_pooled_quantile=0.0,
+            relative_threshold_error_vs_pooled_quantile=None,
+        )
+
+
+def test_centralized_attainment_diagnostic_rejects_inconsistent_absolute_error() -> None:
+    with pytest.raises(ScientificContractError, match="absolute attainment error"):
+        CentralizedAttainmentDiagnostic(
+            target_exceedance=0.05,
+            achieved_exceedance=0.10,
+            signed_attainment_error=0.05,
+            absolute_attainment_error=0.99,
+            absolute_threshold_error_vs_pooled_quantile=0.0,
+            relative_threshold_error_vs_pooled_quantile=None,
+        )
+
+
+def test_centralized_attainment_diagnostic_rejects_non_finite_fields() -> None:
+    with pytest.raises(ScientificContractError, match="must be finite"):
+        CentralizedAttainmentDiagnostic(
+            target_exceedance=float("nan"),
+            achieved_exceedance=0.10,
+            signed_attainment_error=0.05,
+            absolute_attainment_error=0.05,
+            absolute_threshold_error_vs_pooled_quantile=0.0,
+            relative_threshold_error_vs_pooled_quantile=None,
+        )

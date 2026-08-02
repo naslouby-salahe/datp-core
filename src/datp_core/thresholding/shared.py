@@ -58,7 +58,7 @@ def construct_pooled_shared_quantile(
     eligible: tuple[ClientBenignCalibrationScores, ...],
     protocol: QuantileProtocol,
 ) -> PooledSharedQuantileResult:
-    """`POOLED_SHARED_QUANTILE`: the exact pooled benign quantile, as a federated control."""
+    """`POOLED_SHARED_QUANTILE`: the exact pooled benign quantile, as a centralized pooled-raw-score oracle/control."""
     if protocol.method is not FederatedThresholdMethod.POOLED_SHARED_QUANTILE:
         raise ScientificContractError(
             "pooled shared quantile construction requires the POOLED_SHARED_QUANTILE protocol",

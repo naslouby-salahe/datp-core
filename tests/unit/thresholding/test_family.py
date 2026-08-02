@@ -60,3 +60,17 @@ def test_construct_family_threshold_requires_at_least_one_eligible_client() -> N
 
     with pytest.raises(ScientificContractError, match="at least one eligible client"):
         call()
+
+
+def test_construct_family_threshold_rejects_duplicate_eligible_clients() -> None:
+    family_by_client = ((identity("client_a"), DOORBELL),)
+
+    with pytest.raises(ScientificContractError, match="unique"):
+        construct_family_threshold((CLIENT_A, CLIENT_A), QUANTILE, family_by_client)
+
+
+def test_construct_family_threshold_rejects_missing_taxonomy_for_eligible_client() -> None:
+    family_by_client = ((identity("client_b"), DOORBELL),)
+
+    with pytest.raises(ScientificContractError, match="missing a family taxonomy entry"):
+        construct_family_threshold((CLIENT_A,), QUANTILE, family_by_client)

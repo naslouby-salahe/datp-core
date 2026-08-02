@@ -83,17 +83,44 @@ def _require_uniform_shared_threshold(
 def _require_valid_attainment_diagnostic(
     target_exceedance: float,
     achieved_exceedance: float,
+    signed_attainment_error: float,
     absolute_attainment_error: float,
     absolute_threshold_error_vs_pooled_quantile: float,
+    relative_threshold_error_vs_pooled_quantile: float | None,
 ) -> None:
+    numeric_fields_finite = (
+        np.isfinite(target_exceedance)
+        and np.isfinite(achieved_exceedance)
+        and np.isfinite(signed_attainment_error)
+        and np.isfinite(absolute_attainment_error)
+        and np.isfinite(absolute_threshold_error_vs_pooled_quantile)
+        and (
+            relative_threshold_error_vs_pooled_quantile is None
+            or np.isfinite(relative_threshold_error_vs_pooled_quantile)
+        )
+    )
     _raise_first_violation(
         requirements=(
+            (numeric_fields_finite, "every numeric field in attainment diagnostic must be finite"),
             (0 < target_exceedance < 1, "target exceedance must be in (0, 1)"),
             (0 <= achieved_exceedance <= 1, "achieved exceedance must be in [0, 1]"),
+            (
+                floats_exactly_equal(signed_attainment_error, achieved_exceedance - target_exceedance),
+                "signed attainment error must equal achieved_exceedance - target_exceedance",
+            ),
+            (
+                floats_exactly_equal(absolute_attainment_error, abs(signed_attainment_error)),
+                "absolute attainment error must equal abs(signed_attainment_error)",
+            ),
             (absolute_attainment_error >= 0, "absolute attainment error must be non-negative"),
             (
                 absolute_threshold_error_vs_pooled_quantile >= 0,
                 "absolute threshold error must be non-negative",
+            ),
+            (
+                relative_threshold_error_vs_pooled_quantile is None
+                or relative_threshold_error_vs_pooled_quantile >= 0,
+                "relative threshold error must be non-negative when present",
             ),
         ),
         subject=ContractSubject.THRESHOLD,
@@ -292,11 +319,19 @@ class SharedThresholdResult:
         _require_matching_clients(self.assignments, tuple(item.client for item in self.contributing_local_quantiles))
         _require_uniform_shared_threshold(self.assignments, self.shared_threshold)
         _require_nested_local_quantile_coordinates(self.coordinate, self.contributing_local_quantiles)
+        expected_shared = sum(item.value.value for item in self.contributing_local_quantiles) / len(
+            self.contributing_local_quantiles
+        )
+        if not floats_exactly_equal(self.shared_threshold.value, expected_shared):
+            raise ScientificContractError(
+                "shared_threshold must equal the unweighted mean of contributing local quantiles",
+                subject=ContractSubject.THRESHOLD,
+            )
 
 
 @dataclass(frozen=True, slots=True)
 class PooledSharedQuantileResult:
-    """`POOLED_SHARED_QUANTILE`: the exact pooled benign quantile, as a federated control."""
+    """`POOLED_SHARED_QUANTILE`: the exact pooled benign quantile, as a centralized pooled-raw-score oracle/control."""
 
     method: FederatedThresholdMethod
     coordinate: FederatedTrainingCoordinate
@@ -340,6 +375,15 @@ class SampleWeightedSharedThresholdResult:
         _require_matching_clients(self.assignments, tuple(item.client for item in self.contributing_local_quantiles))
         _require_uniform_shared_threshold(self.assignments, self.shared_threshold)
         _require_nested_local_quantile_coordinates(self.coordinate, self.contributing_local_quantiles)
+        expected_shared = sum(
+            item.value.value * weight
+            for item, weight in zip(self.contributing_local_quantiles, self.normalized_weights, strict=True)
+        )
+        if not floats_exactly_equal(self.shared_threshold.value, expected_shared):
+            raise ScientificContractError(
+                "shared_threshold must equal the declared normalized weighted mean of contributing local quantiles",
+                subject=ContractSubject.THRESHOLD,
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -402,6 +446,15 @@ class FamilyMembership:
                 "contributing local quantile clients must exactly match declared family members",
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
+        if self.status is AvailabilityStatus.AVAILABLE and self.family_threshold is not None:
+            expected_family = sum(item.value.value for item in self.contributing_local_quantiles) / len(
+                self.contributing_local_quantiles
+            )
+            if not floats_exactly_equal(self.family_threshold.value, expected_family):
+                raise ScientificContractError(
+                    "family_threshold must equal the unweighted mean of contributing local quantiles",
+                    subject=ContractSubject.THRESHOLD,
+                )
 
 
 @dataclass(frozen=True, slots=True)
@@ -501,6 +554,14 @@ class ClusterMembership:
                 "contributing local quantile clients must exactly equal cluster members",
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
+        expected_cluster = sum(item.value.value for item in self.contributing_local_quantiles) / len(
+            self.contributing_local_quantiles
+        )
+        if not floats_exactly_equal(self.cluster_threshold.value, expected_cluster):
+            raise ScientificContractError(
+                "cluster_threshold must equal the unweighted mean of contributing local quantiles",
+                subject=ContractSubject.THRESHOLD,
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -527,9 +588,12 @@ class GroupedThresholdResult:
             )
         fingerprint_clients = tuple(fp.client for fp in self.fingerprints)
         _require_unique_clients(fingerprint_clients, "fingerprint")
-        cluster_indices = tuple(cluster.cluster_index for cluster in self.clusters)
-        if len(set(cluster_indices)) != len(cluster_indices):
-            raise ScientificContractError("cluster indices must be unique", subject=ContractSubject.THRESHOLD)
+        cluster_indices = tuple(cluster.cluster_index.value for cluster in self.clusters)
+        expected_indices = set(range(self.group_count.value))
+        if set(cluster_indices) != expected_indices or len(cluster_indices) != len(expected_indices):
+            raise ScientificContractError(
+                "cluster indices must equal exactly 0..group_count.value - 1", subject=ContractSubject.THRESHOLD
+            )
         for cluster in self.clusters:
             _require_nested_local_quantile_coordinates(self.coordinate, cluster.contributing_local_quantiles)
         all_members = _require_disjoint_cluster_membership(self.clusters, self.fingerprints)
@@ -792,21 +856,11 @@ class CentralizedAttainmentDiagnostic:
         _require_valid_attainment_diagnostic(
             self.target_exceedance,
             self.achieved_exceedance,
+            self.signed_attainment_error,
             self.absolute_attainment_error,
             self.absolute_threshold_error_vs_pooled_quantile,
+            self.relative_threshold_error_vs_pooled_quantile,
         )
-        if not np.isfinite(self.achieved_exceedance):
-            raise ScientificContractError(
-                "attainment diagnostic achieved exceedance must be finite", subject=ContractSubject.THRESHOLD
-            )
-        if not np.isfinite(self.absolute_attainment_error):
-            raise ScientificContractError(
-                "attainment diagnostic absolute error must be finite", subject=ContractSubject.THRESHOLD
-            )
-        if not np.isfinite(self.absolute_threshold_error_vs_pooled_quantile):
-            raise ScientificContractError(
-                "attainment diagnostic absolute threshold error must be finite", subject=ContractSubject.THRESHOLD
-            )
 
 
 @dataclass(frozen=True, slots=True)

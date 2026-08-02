@@ -97,17 +97,5 @@ def test_raw_fingerprint_constant_scores_produces_zero_skewness() -> None:
 
 
 def test_construct_grouped_threshold_rejects_non_finite_fingerprint_matrix() -> None:
-    normal = client_scores("client_a", (1.0, 2.0, 3.0, 4.0, 5.0))
-    bad = client_scores("client_b", (float("nan"), float("nan"), float("nan")))
-
-    def call():
-        return construct_grouped_threshold(
-            (normal, bad, client_scores("client_c", (10.0, 11.0, 12.0)),
-             client_scores("client_d", (20.0, 21.0, 22.0)),
-             client_scores("client_e", (30.0, 31.0, 32.0)),
-             client_scores("client_f", (40.0, 41.0, 42.0))),
-            CLUSTER_THRESHOLD_PROTOCOL,
-        )
-
     with pytest.raises(ScientificContractError, match="finite"):
-        call()
+        client_scores("client_b", (float("nan"), float("nan"), float("nan")))
