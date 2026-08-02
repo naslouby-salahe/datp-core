@@ -53,9 +53,7 @@ def test_train_ditto_never_aggregates_personalized_states_into_global(tmp_path: 
     outcome = train_ditto(_request(tmp_path))
     global_checksums = {candidate.tensor_checksum for candidate in outcome.global_candidates}
     personalized_checksums = {
-        candidate.tensor_checksum
-        for pcs in outcome.personalized_candidates
-        for candidate in pcs.candidates
+        candidate.tensor_checksum for pcs in outcome.personalized_candidates for candidate in pcs.candidates
     }
     assert global_checksums.isdisjoint(personalized_checksums)
 

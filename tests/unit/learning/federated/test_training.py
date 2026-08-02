@@ -2,8 +2,6 @@ import pytest
 import torch
 from tests.unit.learning.federated.helpers import (
     AUTOENCODER,
-    FEATURE_NAMES,
-    benign_frame,
     build_client_input,
     client_identity,
     fitted_state,
@@ -11,11 +9,19 @@ from tests.unit.learning.federated.helpers import (
 )
 
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import BatchSize, Checksum, MetricValue, OutcomeLabelSequence, ProximalCoefficient, RoundNumber, RowCount, Seed
+from datp_core.domain.values import (
+    BatchSize,
+    Checksum,
+    MetricValue,
+    OutcomeLabelSequence,
+    ProximalCoefficient,
+    RoundNumber,
+    RowCount,
+    Seed,
+)
 from datp_core.learning.autoencoder import ReconstructionAutoencoder
 from datp_core.learning.federated.models import ClientUpdate
 from datp_core.learning.federated.training import (
-    PreparedFederatedClientData,
     ProximalTerm,
     aggregate_client_updates,
     build_client_loader,

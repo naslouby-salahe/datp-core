@@ -87,8 +87,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
 
     ordered_clients = tuple(sorted(request.clients, key=lambda item: item.client))
     prepared_clients: list[PreparedFederatedClientData] = [
-        prepare_federated_client_data(client_input, request.autoencoder)
-        for client_input in ordered_clients
+        prepare_federated_client_data(client_input, request.autoencoder) for client_input in ordered_clients
     ]
 
     regularization = request.training_protocol.regularization
@@ -148,15 +147,15 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
                 {name: tensor.to(device) for name, tensor in personalized_states[client].items()},
             )
             personalized_optimizer = build_optimizer(personalized_model, OPTIMIZER, request.learning_rate)
-            personalized_loader = build_client_loader(client_data, batch_size=request.batch_size, seed=personalized_seed)
+            personalized_loader = build_client_loader(
+                client_data, batch_size=request.batch_size, seed=personalized_seed
+            )
             personalized_state, personalized_loss, _personalized_sample_count = run_local_epoch(
                 personalized_model,
                 personalized_optimizer,
                 personalized_loader,
                 device,
-                proximal_term=ProximalTerm(
-                    reference_state=reference_state, coefficient=regularization
-                ),
+                proximal_term=ProximalTerm(reference_state=reference_state, coefficient=regularization),
             )
             personalized_states[client] = personalized_state
             if round_index in candidate_rounds:

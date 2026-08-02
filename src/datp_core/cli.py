@@ -71,6 +71,7 @@ from datp_core.populations.catalogue import (
     PopulationConstructionRequest,
     PopulationConstructionResult,
     construct_population,
+    resolve_population,
 )
 from datp_core.populations.models import (
     ClientIdentity,
@@ -328,8 +329,15 @@ def _prepare_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedContext:
             None,
         )
     )
+    identity_kind = resolve_population(population).declaration.identity_kind
     state_set_checksum = preprocessing_state_set_checksum(
-        tuple(item.result.fitted_state.estimator_checksum for item in preprocessing.client_publications)
+        tuple(
+            (
+                ClientIdentity(population, item.client_identity.value, identity_kind),
+                item.result.fitted_state.estimator_checksum,
+            )
+            for item in preprocessing.client_publications
+        )
     )
     return ConfirmatorySeedContext(
         coordinate=coordinate,

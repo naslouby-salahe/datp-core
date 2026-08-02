@@ -208,14 +208,8 @@ def build_client_input(
 
 def build_all_client_inputs(output_directory: Path) -> tuple[ClientTrainingInput, ...]:
     return tuple(
-        build_client_input(client_id, output_directory, seed=Seed(index))
-        for index, client_id in enumerate(CLIENT_IDS)
+        build_client_input(client_id, output_directory, seed=Seed(index)) for index, client_id in enumerate(CLIENT_IDS)
     )
-
-
-# Alias for backward compatibility in tests
-build_client_dataset = build_client_input
-build_all_client_datasets = build_all_client_inputs
 
 
 def require_cuda() -> torch.device:

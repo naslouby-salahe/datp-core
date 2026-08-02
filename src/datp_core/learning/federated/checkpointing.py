@@ -54,7 +54,6 @@ from datp_core.protocols.training import (
 from datp_core.runtime.compute import require_cuda_available
 
 
-
 @dataclass(frozen=True, slots=True)
 class ReusedGlobalCandidatesRequest:
     coordinate: FederatedTrainingCoordinate
@@ -414,7 +413,8 @@ def load_reused_personalized_candidates(
                     subject=ContractSubject.ARTIFACT_PATH,
                 )
             loss_rows = personalized_frame.filter(
-                (pl.col(col.ROUND_NUMBER.value) == candidate_round.value) & (pl.col(col.CLIENT_ID.value) == client.client_id)
+                (pl.col(col.ROUND_NUMBER.value) == candidate_round.value)
+                & (pl.col(col.CLIENT_ID.value) == client.client_id)
             )
             if loss_rows.height != 1:
                 raise ArtifactIntegrityError(
@@ -450,10 +450,14 @@ def rebase_checkpoint_candidates(
     for candidate in candidates:
         path = directory / candidate_tensor_name(candidate.round_number, client)
         if not path.is_file():
-            raise ArtifactIntegrityError("rebased target checkpoint tensor does not exist", subject=ContractSubject.ARTIFACT_PATH)
+            raise ArtifactIntegrityError(
+                "rebased target checkpoint tensor does not exist", subject=ContractSubject.ARTIFACT_PATH
+            )
         actual_checksum = checksum_file(path)
         if actual_checksum != candidate.tensor_checksum:
-            raise ArtifactIntegrityError("rebased target checkpoint tensor checksum mismatch", subject=ContractSubject.ARTIFACT_PATH)
+            raise ArtifactIntegrityError(
+                "rebased target checkpoint tensor checksum mismatch", subject=ContractSubject.ARTIFACT_PATH
+            )
         rebased.append(
             replace(
                 candidate,

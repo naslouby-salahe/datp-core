@@ -26,6 +26,7 @@ from datp_core.domain.values import (
     Checksum,
     ClientCount,
     DittoRegularization,
+    FeatureNameSequence,
     LearningRate,
     MetricValue,
     OutcomeLabelSequence,
@@ -60,6 +61,7 @@ from datp_core.learning.federated.models import (
 )
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
+    STABLE_ROW_ID_COLUMN,
     ClientIdentity,
     PopulationOutcomeLabel,
 )
@@ -113,9 +115,6 @@ def _validate_schema(frame: pl.DataFrame, expected_schema: Mapping[str, type[pl.
             )
 
 
-
-
-
 @dataclass(frozen=True, slots=True)
 class PreparedFederatedClientData:
     client: ClientIdentity
@@ -159,28 +158,54 @@ def reject_attack_rows_in_federated_training(labels: OutcomeLabelSequence) -> No
         )
 
 
+def extract_feature_arrays(
+    frame: pl.DataFrame,
+    feature_names: FeatureNameSequence,
+) -> tuple["np.ndarray[tuple[int, int], np.dtype[np.float32]]", tuple[str, ...], tuple[str, ...]]:
+    """Extract (matrix, labels, row_ids) from a scored or calibration Polars frame.
+
+    Returns a float32 numpy feature matrix, a tuple of outcome-label strings,
+    and a tuple of stable row-ID strings — all aligned by row position.
+    """
+    matrix = frame.select(feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
+    labels = tuple(str(v) for v in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
+    row_ids = tuple(str(v) for v in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
+    return matrix, labels, row_ids
+
+
 def prepare_federated_client_data(
     client_input: ClientTrainingInput,
     autoencoder: AutoencoderProtocol,
 ) -> PreparedFederatedClientData:
     """Validate client data once before round loop and store complete CPU tensors."""
     reject_centralized_preprocessing_for_federated_training(client_input.preprocessing_state)
-    if client_input.preprocessing_state.client_identity is None or client_input.preprocessing_state.client_identity.value != client_input.client.client_id:
+    if (
+        client_input.preprocessing_state.client_identity is None
+        or client_input.preprocessing_state.client_identity.value != client_input.client.client_id
+    ):
         raise ScientificContractError(
             "preprocessing client identity does not match input client",
             subject=ContractSubject.CLIENT_IDENTITY,
         )
 
-    labels = OutcomeLabelSequence(tuple(str(value) for value in client_input.training_features.get_column(OUTCOME_LABEL_COLUMN).to_list()))
+    labels = OutcomeLabelSequence(
+        tuple(str(value) for value in client_input.training_features.get_column(OUTCOME_LABEL_COLUMN).to_list())
+    )
     reject_attack_rows_in_federated_training(labels)
 
-    matrix = client_input.training_features.select(client_input.feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
+    matrix = (
+        client_input.training_features.select(client_input.feature_names.as_list())
+        .to_numpy()
+        .astype(LEARNING_DTYPE, copy=False)
+    )
     if not np.isfinite(matrix).all():
         raise ScientificContractError("federated features must be finite", subject=ContractSubject.FEATURES)
     if matrix.shape[0] < 1:
         raise ScientificContractError("client training input requires at least one row", subject=ContractSubject.ROWS)
     if matrix.shape[1] != autoencoder.widths[0]:
-        raise ScientificContractError("feature width mismatch during dataset preparation", subject=ContractSubject.FEATURES)
+        raise ScientificContractError(
+            "feature width mismatch during dataset preparation", subject=ContractSubject.FEATURES
+        )
     if len(labels) != matrix.shape[0]:
         raise ScientificContractError("federated arrays must align by row", subject=ContractSubject.ROWS)
 
@@ -416,7 +441,10 @@ def validate_federated_training_request(request: FederatedTrainingRequest) -> No
         )
     for client_input in request.clients:
         reject_centralized_preprocessing_for_federated_training(client_input.preprocessing_state)
-        if client_input.preprocessing_state.client_identity is None or client_input.preprocessing_state.client_identity.value != client_input.client.client_id:
+        if (
+            client_input.preprocessing_state.client_identity is None
+            or client_input.preprocessing_state.client_identity.value != client_input.client.client_id
+        ):
             raise ScientificContractError(
                 "preprocessing state client identity must match client training input",
                 subject=ContractSubject.CLIENT_IDENTITY,
@@ -434,8 +462,7 @@ def run_federated_training(
 
     ordered_clients = tuple(sorted(request.clients, key=lambda item: item.client))
     prepared_clients: list[PreparedFederatedClientData] = [
-        prepare_federated_client_data(client_input, request.autoencoder)
-        for client_input in ordered_clients
+        prepare_federated_client_data(client_input, request.autoencoder) for client_input in ordered_clients
     ]
 
     global_model = build_reconstruction_autoencoder(request.autoencoder, initialization_seed=request.training_seed)
@@ -562,7 +589,6 @@ def persist_federated_training_history(
     directory.mkdir(parents=True, exist_ok=True)
     (directory / FederatedHistoryAssetName.DEVICE_NAME.value).write_text(device_name, encoding="utf-8")
 
-    col = FederatedHistoryColumn
     round_rows = [
         (
             r.round_number.value,

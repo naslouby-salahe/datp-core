@@ -1,7 +1,7 @@
 """Typed, immutable federated learning model contracts."""
 
-from enum import StrEnum
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
@@ -12,7 +12,6 @@ from datp_core.domain.enums import (
     CommunicationEstimationMethod,
     ContractSubject,
     PopulationId,
-    PopulationIdentityKind,
     PreprocessingProtocolId,
     ProcessedDataBranch,
     SplitProtocolId,

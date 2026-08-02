@@ -8,7 +8,7 @@ from tests.unit.learning.federated.helpers import (
     LEARNING_RATE,
     POPULATION_CLIENT_COUNT,
     benign_frame,
-    build_all_client_datasets,
+    build_all_client_inputs,
     ditto_coordinates,
     ditto_protocol,
 )
@@ -23,7 +23,7 @@ from datp_core.scoring.generation import ClientScoringInput, ScoreGenerationRequ
 
 def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_path: Path) -> None:
     global_coordinate, personalized_coordinate, regularization = ditto_coordinates(Seed(0))
-    clients = build_all_client_datasets(tmp_path)
+    clients = build_all_client_inputs(tmp_path)
     outcome = train_ditto(
         DittoTrainingRequest(
             global_coordinate=global_coordinate,

@@ -9,7 +9,7 @@ from tests.unit.learning.federated.helpers import (
     LEARNING_RATE,
     POPULATION_CLIENT_COUNT,
     benign_frame,
-    build_all_client_datasets,
+    build_all_client_inputs,
     fedavg_coordinate,
 )
 
@@ -24,7 +24,7 @@ from datp_core.scoring.generation import ClientScoringInput, ScoreGenerationRequ
 
 def test_fedavg_end_to_end_train_select_and_score(tmp_path: Path) -> None:
     coordinate = fedavg_coordinate(Seed(0))
-    clients = build_all_client_datasets(tmp_path)
+    clients = build_all_client_inputs(tmp_path)
     outcome = train_fedavg(
         FedAvgTrainingRequest(
             coordinate=coordinate,
