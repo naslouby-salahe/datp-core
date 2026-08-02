@@ -47,7 +47,6 @@ from datp_core.orchestration.stages.construct_federated_thresholds import (
 from datp_core.populations.models import PopulationCapabilities
 from datp_core.protocols.calibration import (
     CLUSTER_THRESHOLD_PROTOCOL,
-    CONFORMAL_PROTOCOL,
     FEDERATED_STATISTICS_PROTOCOL,
 )
 from datp_core.protocols.models import CalibrationEligibilityProtocol, ClusterThresholdProtocol
@@ -267,7 +266,7 @@ def test_size_aware_shrinkage_never_fabricates_a_lambda_function() -> None:
 def test_conformal_threshold_never_silently_falls_back_for_insufficient_support() -> None:
     sufficient = client_scores("client_a", tuple(float(i) for i in range(1, 101)))
     insufficient = client_scores("client_b", (1.0, 2.0))
-    result = construct_local_conformal_threshold((sufficient, insufficient), CONFORMAL_PROTOCOL)
+    result = construct_local_conformal_threshold((sufficient, insufficient), QUANTILE)
     assert result.unavailable_clients == (insufficient.client,)
     assert insufficient.client not in {assignment.client for assignment in result.assignments}
 
@@ -350,6 +349,7 @@ def test_construct_federated_thresholds_stage_rejects_a_partial_published_artifa
         quantile=QUANTILE,
         capabilities=_capabilities(),
         eligible=eligible,
+        family_by_client=(),
     )
     output_directory = tmp_path / "threshold_output"
     stage_request = ConstructFederatedThresholdsRequest(
@@ -388,6 +388,7 @@ def test_dispatch_rejects_a_method_unsupported_by_population_capabilities_rather
         quantile=QUANTILE,
         capabilities=restricted,
         eligible=eligible,
+        family_by_client=(),
     )
 
     def call():

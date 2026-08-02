@@ -96,13 +96,13 @@ def construct_federated_benign_statistics(
         decomposition.global_mean, decomposition.full_pooled_variance, quantile
     )
     pooled_scores = np.concatenate([client_scores.as_array for client_scores in ordered])
-    exact_pooled_quantile_reference = exact_empirical_quantile(pooled_scores, quantile)
+    centralized_pooled_quantile_diagnostic = exact_empirical_quantile(pooled_scores, quantile)
 
     target_exceedance = 1.0 - quantile.value
     achieved_exceedance = achieved_benign_exceedance(pooled_scores, matched_threshold)
     signed_attainment_error = achieved_exceedance - target_exceedance
-    absolute_threshold_error = abs(matched_threshold.value - exact_pooled_quantile_reference.value)
-    pooled_reference_value = exact_pooled_quantile_reference.value
+    absolute_threshold_error = abs(matched_threshold.value - centralized_pooled_quantile_diagnostic.value)
+    pooled_reference_value = centralized_pooled_quantile_diagnostic.value
     relative_threshold_error = (
         absolute_threshold_error / abs(pooled_reference_value) if pooled_reference_value != 0 else None
     )
@@ -136,7 +136,7 @@ def construct_federated_benign_statistics(
         decomposition=decomposition,
         matched_threshold=matched_threshold,
         matched_diagnostic=matched_diagnostic,
-        exact_pooled_quantile_reference=exact_pooled_quantile_reference,
+        centralized_pooled_quantile_diagnostic=centralized_pooled_quantile_diagnostic,
         fixed_coefficient_curve=fixed_coefficient_curve,
         assignments=assignments,
         communication_payload=communication_payload,

@@ -120,6 +120,7 @@ def test_every_threshold_method_reads_the_same_frozen_score_artifact_unchanged(t
             quantile=QUANTILE,
             capabilities=capabilities,
             eligible=eligible,
+            family_by_client=(),
         )
         results[method] = dispatch_federated_threshold(request)
 
@@ -165,6 +166,7 @@ def test_construct_federated_thresholds_stage_reuses_a_completed_artifact_on_sec
         quantile=QUANTILE,
         capabilities=_capabilities(),
         eligible=(client_scores,),
+        family_by_client=(),
     )
     output_directory = tmp_path / "threshold_output"
     stage_request = ConstructFederatedThresholdsRequest(

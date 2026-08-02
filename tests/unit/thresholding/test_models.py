@@ -420,3 +420,165 @@ def test_threshold_unavailable_result_requires_a_detail() -> None:
 
     with pytest.raises(ScientificContractError, match="human-readable detail"):
         build()
+
+
+def test_family_membership_rejects_quantile_clients_mismatched_with_members() -> None:
+    def build() -> FamilyMembership:
+        return FamilyMembership(
+            family_id=FamilyIdentity("doorbell"),
+            members=(CLIENT_A,),
+            contributing_local_quantiles=(_local_quantile(CLIENT_B, 1.0),),
+            status=AvailabilityStatus.AVAILABLE,
+            family_threshold=ThresholdValue(1.0),
+        )
+
+    with pytest.raises(ScientificContractError, match="exactly match declared family members"):
+        build()
+
+
+def test_family_membership_rejects_duplicate_quantile_clients() -> None:
+    def build() -> FamilyMembership:
+        return FamilyMembership(
+            family_id=FamilyIdentity("doorbell"),
+            members=(CLIENT_A, CLIENT_B),
+            contributing_local_quantiles=(_local_quantile(CLIENT_A, 1.0), _local_quantile(CLIENT_A, 2.0)),
+            status=AvailabilityStatus.AVAILABLE,
+            family_threshold=ThresholdValue(1.0),
+        )
+
+    with pytest.raises(ScientificContractError, match="unique client identities"):
+        build()
+
+
+def test_family_threshold_result_rejects_assignment_not_matching_family_threshold() -> None:
+    family = FamilyMembership(
+        family_id=FamilyIdentity("doorbell"),
+        members=(CLIENT_A,),
+        contributing_local_quantiles=(_local_quantile(CLIENT_A, 1.0),),
+        status=AvailabilityStatus.AVAILABLE,
+        family_threshold=ThresholdValue(1.0),
+    )
+    wrong_assignments = (ThresholdAssignment(CLIENT_A, ThresholdValue(9.0)),)
+
+    def build() -> FamilyThresholdResult:
+        return FamilyThresholdResult(
+            method=FederatedThresholdMethod.FAMILY_THRESHOLD,
+            coordinate=COORDINATE,
+            families=(family,),
+            assignments=wrong_assignments,
+        )
+
+    with pytest.raises(ScientificContractError, match="family's constructed threshold"):
+        build()
+
+
+def test_shrinkage_threshold_result_rejects_empty_assignments() -> None:
+    def build() -> ShrinkageThresholdResult:
+        return ShrinkageThresholdResult(
+            method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
+            coordinate=COORDINATE,
+            weights=(ShrinkageWeight(0.0),),
+            assignments=(),
+        )
+
+    with pytest.raises(ScientificContractError, match="at least one client assignment"):
+        build()
+
+
+def test_shrinkage_threshold_result_rejects_duplicate_client_weight_pair() -> None:
+    duped = (
+        ShrinkageAssignment(
+            CLIENT_A, ShrinkageWeight(0.0), ThresholdValue(1.0), ThresholdValue(2.0), ThresholdValue(2.0)
+        ),
+        ShrinkageAssignment(
+            CLIENT_B, ShrinkageWeight(0.0), ThresholdValue(5.0), ThresholdValue(2.0), ThresholdValue(2.0)
+        ),
+        ShrinkageAssignment(
+            CLIENT_A, ShrinkageWeight(0.0), ThresholdValue(1.0), ThresholdValue(2.0), ThresholdValue(2.0)
+        ),
+    )
+
+    def build() -> ShrinkageThresholdResult:
+        return ShrinkageThresholdResult(
+            method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
+            coordinate=COORDINATE,
+            weights=(ShrinkageWeight(0.0),),
+            assignments=duped,
+        )
+
+    with pytest.raises(ScientificContractError, match="exactly one shrinkage assignment"):
+        build()
+
+
+def test_conformal_threshold_result_requires_at_least_one_assignment() -> None:
+    def build() -> ConformalThresholdResult:
+        return ConformalThresholdResult(
+            method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
+            coordinate=COORDINATE,
+            coverage=CoverageTarget(0.95),
+            significance=Ratio(0.05),
+            assignments=(),
+            unavailable_clients=(),
+        )
+
+    with pytest.raises(ScientificContractError, match="at least one assigned client"):
+        build()
+
+
+def test_conformal_threshold_result_rejects_duplicate_assignments() -> None:
+    assignment = ConformalAssignment(
+        client=CLIENT_A,
+        calibration_count=RowCount(10),
+        rank_index=10,
+        effective_quantile=1.0,
+        selected_score=ScoreValue(1.0),
+        tie_count=0,
+        threshold=ThresholdValue(1.0),
+    )
+    duped = (assignment, assignment)
+
+    def build() -> ConformalThresholdResult:
+        return ConformalThresholdResult(
+            method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
+            coordinate=COORDINATE,
+            coverage=CoverageTarget(0.95),
+            significance=Ratio(0.05),
+            assignments=duped,
+            unavailable_clients=(),
+        )
+
+    with pytest.raises(ScientificContractError, match="unique client identities"):
+        build()
+
+
+def test_conformal_threshold_result_rejects_duplicate_unavailable_clients() -> None:
+    assignment = ConformalAssignment(
+        client=CLIENT_A,
+        calibration_count=RowCount(10),
+        rank_index=10,
+        effective_quantile=1.0,
+        selected_score=ScoreValue(1.0),
+        tie_count=0,
+        threshold=ThresholdValue(1.0),
+    )
+
+    def build() -> ConformalThresholdResult:
+        return ConformalThresholdResult(
+            method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
+            coordinate=COORDINATE,
+            coverage=CoverageTarget(0.95),
+            significance=Ratio(0.05),
+            assignments=(assignment,),
+            unavailable_clients=(CLIENT_B, CLIENT_B),
+        )
+
+    with pytest.raises(ScientificContractError, match="unique identities"):
+        build()
+
+
+def test_federated_statistics_result_uses_centralized_pooled_quantile_diagnostic_field() -> None:
+    from datp_core.thresholding.models import FederatedStatisticsThresholdResult
+
+    fields = {field.name for field in FederatedStatisticsThresholdResult.__dataclass_fields__.values()}
+    assert "centralized_pooled_quantile_diagnostic" in fields
+    assert "exact_pooled_quantile_reference" not in fields

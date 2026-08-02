@@ -6,7 +6,7 @@ threshold method is one explicit `match` arm calling its own construction module
 types `method` as `FederatedThresholdMethod`) and by an explicit runtime guard.
 """
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from datp_core.domain.enums import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
 from datp_core.domain.errors import CapabilityError, LeakageError, ScientificContractError
@@ -15,7 +15,6 @@ from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity, PopulationCapabilities
 from datp_core.protocols.calibration import (
     CLUSTER_THRESHOLD_PROTOCOL,
-    CONFORMAL_PROTOCOL,
     FEDERATED_STATISTICS_PROTOCOL,
     FIXED_SHRINKAGE_PROTOCOL,
 )
@@ -83,12 +82,27 @@ class ThresholdConstructionRequest:
     quantile: Quantile
     capabilities: PopulationCapabilities
     eligible: tuple[ClientBenignCalibrationScores, ...]
-    family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...] = field(default_factory=tuple)
+    family_by_client: tuple[tuple[ClientIdentity, FamilyIdentity], ...]
 
     def __post_init__(self) -> None:
         if not self.eligible:
             raise ScientificContractError(
                 "threshold construction requires at least one eligible client", subject=ContractSubject.THRESHOLD
+            )
+        eligible_clients = tuple(item.client for item in self.eligible)
+        if len(set(eligible_clients)) != len(eligible_clients):
+            raise ScientificContractError(
+                "eligible clients must have unique identities", subject=ContractSubject.CLIENT_IDENTITY
+            )
+        for item in self.eligible:
+            if item.coordinate != self.coordinate:
+                raise ScientificContractError(
+                    "every eligible entry must carry the request coordinate", subject=ContractSubject.COORDINATE
+                )
+        family_clients = tuple(entry[0] for entry in self.family_by_client)
+        if len(set(family_clients)) != len(family_clients):
+            raise ScientificContractError(
+                "family-by-client entries must have unique client identities", subject=ContractSubject.CLIENT_IDENTITY
             )
 
 
@@ -129,7 +143,7 @@ def dispatch_federated_threshold(request: ThresholdConstructionRequest) -> Thres
         case FederatedThresholdMethod.SIZE_AWARE_SHRINKAGE:
             result = construct_size_aware_shrinkage(request.coordinate)
         case FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD:
-            result = construct_local_conformal_threshold(request.eligible, CONFORMAL_PROTOCOL)
+            result = construct_local_conformal_threshold(request.eligible, request.quantile)
         case FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS:
             result = construct_federated_benign_statistics(
                 request.eligible, FEDERATED_STATISTICS_PROTOCOL, request.quantile

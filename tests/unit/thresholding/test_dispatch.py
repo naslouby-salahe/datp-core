@@ -12,7 +12,7 @@ from datp_core.domain.enums import (
     PopulationId,
     PopulationIdentityKind,
 )
-from datp_core.domain.errors import CapabilityError, LeakageError
+from datp_core.domain.errors import CapabilityError, LeakageError, ScientificContractError
 from datp_core.domain.values import ClientCount, FamilyIdentity, Quantile
 from datp_core.populations.models import ClientIdentity, PopulationCapabilities
 from datp_core.thresholding.dispatch import (
@@ -157,4 +157,61 @@ def test_dispatch_rejects_a_centralized_method_disguised_as_federated() -> None:
         return dispatch_federated_threshold(request)
 
     with pytest.raises(LeakageError):
+        call()
+
+
+def test_threshold_construction_request_rejects_duplicate_eligible_clients() -> None:
+    duped = (ELIGIBLE[0], ELIGIBLE[0])
+
+    def call():
+        return ThresholdConstructionRequest(
+            method=FederatedThresholdMethod.SHARED_THRESHOLD,
+            coordinate=COORDINATE,
+            quantile=QUANTILE,
+            capabilities=ALL_METHODS_CAPABILITIES,
+            eligible=duped,
+            family_by_client=(),
+        )
+
+    with pytest.raises(ScientificContractError, match="unique identities"):
+        call()
+
+
+def test_threshold_construction_request_rejects_mixed_coordinates() -> None:
+    from tests.unit.learning.federated.helpers import fedavg_coordinate
+
+    from datp_core.domain.values import Seed
+
+    other_coordinate = fedavg_coordinate(Seed(1))
+    other = client_scores("client_mixed", (1.0, 2.0, 3.0), coordinate=other_coordinate)
+    mixed = (ELIGIBLE[0], other)
+
+    def call():
+        return ThresholdConstructionRequest(
+            method=FederatedThresholdMethod.SHARED_THRESHOLD,
+            coordinate=COORDINATE,
+            quantile=QUANTILE,
+            capabilities=ALL_METHODS_CAPABILITIES,
+            eligible=mixed,
+            family_by_client=(),
+        )
+
+    with pytest.raises(ScientificContractError, match="request coordinate"):
+        call()
+
+
+def test_threshold_construction_request_rejects_duplicate_family_taxonomy_client() -> None:
+    duped_family = ((ELIGIBLE[0].client, FAMILY_A), (ELIGIBLE[0].client, FAMILY_A))
+
+    def call():
+        return ThresholdConstructionRequest(
+            method=FederatedThresholdMethod.FAMILY_THRESHOLD,
+            coordinate=COORDINATE,
+            quantile=QUANTILE,
+            capabilities=ALL_METHODS_CAPABILITIES,
+            eligible=ELIGIBLE,
+            family_by_client=duped_family,
+        )
+
+    with pytest.raises(ScientificContractError, match="unique client identities"):
         call()

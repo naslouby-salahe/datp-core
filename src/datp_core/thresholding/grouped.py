@@ -39,7 +39,14 @@ def _as_quadruple(row: np.ndarray) -> tuple[float, float, float, float]:
 def _raw_fingerprint(scores: np.ndarray) -> tuple[float, float, float, float]:
     mean = float(np.mean(scores))
     standard_deviation = float(np.std(scores, ddof=0))
-    skewness = float(skew(scores, bias=True))
+    if standard_deviation == 0.0 or np.ptp(scores) == 0.0:
+        skewness = 0.0
+    else:
+        skewness = float(skew(scores, bias=True))
+        if not np.isfinite(skewness):
+            raise ScientificContractError(
+                "fingerprint skewness must be finite", subject=ContractSubject.THRESHOLD
+            )
     p95 = exact_empirical_quantile(scores, CANONICAL_QUANTILE).value
     return mean, standard_deviation, skewness, p95
 
@@ -56,6 +63,11 @@ def construct_grouped_threshold(
     ordered = tuple(sorted(eligible, key=lambda item: item.client))
     raw_features = tuple(_raw_fingerprint(client_scores.as_array) for client_scores in ordered)
     matrix = np.asarray(raw_features, dtype=np.float64)
+    if not np.isfinite(matrix).all():
+        raise ScientificContractError(
+            "fingerprint matrix must be finite before scaling and clustering",
+            subject=ContractSubject.THRESHOLD,
+        )
     standardized_matrix = StandardScaler().fit_transform(matrix)
 
     kmeans = KMeans(

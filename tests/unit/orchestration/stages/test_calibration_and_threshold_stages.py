@@ -120,6 +120,7 @@ def _threshold_request(tmp_path: Path, quantile: Quantile) -> ThresholdConstruct
         quantile=quantile,
         capabilities=_capabilities(),
         eligible=(client_scores,),
+        family_by_client=(),
     )
 
 
