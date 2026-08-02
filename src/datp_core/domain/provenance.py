@@ -1,10 +1,57 @@
-"""Immutable provenance records."""
+"""Immutable provenance records and canonical value serialization."""
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, fields, is_dataclass
+from enum import Enum
+from functools import singledispatch
+from math import isfinite
 from pathlib import Path
 
 from .enums import DatasetId, PopulationId, SerializationFormat, TrafficRateEvidenceType
 from .values import ByteCount, Checksum, RowCount
+
+
+@singledispatch
+def canonical_value(value: object) -> object:
+    """Convert a typed domain value into a deterministic JSON-serializable form."""
+    if is_dataclass(value) and not isinstance(value, type):
+        return {field.name: canonical_value(getattr(value, field.name)) for field in fields(value)}
+
+    wrapped = getattr(value, "value", None)
+    if wrapped is not None and wrapped is not value:
+        return canonical_value(wrapped)
+
+    raise TypeError(f"unsupported canonical provenance value: {type(value).__qualname__}")
+
+
+@canonical_value.register(type(None))
+@canonical_value.register(str)
+@canonical_value.register(int)
+def _(value: object) -> object:
+    return value
+
+
+@canonical_value.register(float)
+def _(value: float) -> float:
+    if not isfinite(value):
+        raise ValueError("canonical scientific provenance cannot contain non-finite floats")
+    return value
+
+
+@canonical_value.register(Enum)
+def _(value: Enum) -> object:
+    return canonical_value(value.value)
+
+
+@canonical_value.register(Mapping)
+def _(value: Mapping) -> dict:
+    return {str(key): canonical_value(item) for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))}
+
+
+@canonical_value.register(tuple)
+@canonical_value.register(list)
+def _(value: tuple | list) -> list:
+    return [canonical_value(item) for item in value]
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -60,9 +61,7 @@ def validate_confirmatory_contrasts(
     if len(observed_seeds) != len(contrasts):
         raise _ConfirmatoryContractError(BcaReason.DUPLICATE_SEED)
 
-    if tuple(sorted(c.seed.value for c in contrasts)) != tuple(
-        sorted(s.value for s in endpoint.seed_cohort.values)
-    ):
+    if tuple(sorted(c.seed.value for c in contrasts)) != tuple(sorted(s.value for s in endpoint.seed_cohort.values)):
         raise _ConfirmatoryContractError(BcaReason.SEED_COHORT_MISMATCH)
 
     for c in contrasts:
@@ -116,27 +115,25 @@ def paired_bca_interval(
     analysis_seed: Seed,
 ) -> BootstrapInterval:
     confidence_level = CANONICAL_PROTOCOL_GRAPH.confirmatory_inference.confidence_level
-    if replicate_count != BOOTSTRAP_REPLICATE_COUNT:
-        return _blocked_interval(
-            contrasts=contrasts,
-            confidence_level=confidence_level,
-            replicate_count=replicate_count,
-            analysis_seed=analysis_seed,
-            reason=BcaReason.BOOTSTRAP_REPLICATE_COUNT_MISMATCH,
-        )
+    blocked = _guard_replicate_count(
+        contrasts=contrasts,
+        confidence_level=confidence_level,
+        replicate_count=replicate_count,
+        analysis_seed=analysis_seed,
+    )
+    if blocked is not None:
+        return blocked
 
-    try:
-        validated = validate_confirmatory_contrasts(contrasts, protocol)
-    except _ConfirmatoryContractError as error:
-        return _blocked_interval(
-            contrasts=contrasts,
-            confidence_level=confidence_level,
-            replicate_count=replicate_count,
-            analysis_seed=analysis_seed,
-            reason=error.reason,
-        )
-
-    return _construct_bca_interval(validated, confidence_level, replicate_count, analysis_seed)
+    result = _validate_or_block(
+        contrasts,
+        validator=lambda c: validate_confirmatory_contrasts(c, protocol),
+        confidence_level=confidence_level,
+        replicate_count=replicate_count,
+        analysis_seed=analysis_seed,
+    )
+    if isinstance(result, BootstrapInterval):
+        return result
+    return _construct_bca_interval(result, confidence_level, replicate_count, analysis_seed)
 
 
 def external_paired_bca_interval(
@@ -146,27 +143,25 @@ def external_paired_bca_interval(
     replicate_count: BootstrapReplicateCount,
     analysis_seed: Seed,
 ) -> BootstrapInterval:
-    if replicate_count != BOOTSTRAP_REPLICATE_COUNT:
-        return _blocked_interval(
-            contrasts=contrasts,
-            confidence_level=plan.confidence_level,
-            replicate_count=replicate_count,
-            analysis_seed=analysis_seed,
-            reason=BcaReason.BOOTSTRAP_REPLICATE_COUNT_MISMATCH,
-        )
+    blocked = _guard_replicate_count(
+        contrasts=contrasts,
+        confidence_level=plan.confidence_level,
+        replicate_count=replicate_count,
+        analysis_seed=analysis_seed,
+    )
+    if blocked is not None:
+        return blocked
 
-    try:
-        validated = validate_external_contrasts(contrasts, plan)
-    except _ConfirmatoryContractError as error:
-        return _blocked_interval(
-            contrasts=contrasts,
-            confidence_level=plan.confidence_level,
-            replicate_count=replicate_count,
-            analysis_seed=analysis_seed,
-            reason=error.reason,
-        )
-
-    return _construct_bca_interval(validated, plan.confidence_level, replicate_count, analysis_seed)
+    result = _validate_or_block(
+        contrasts,
+        validator=lambda c: validate_external_contrasts(c, plan),
+        confidence_level=plan.confidence_level,
+        replicate_count=replicate_count,
+        analysis_seed=analysis_seed,
+    )
+    if isinstance(result, BootstrapInterval):
+        return result
+    return _construct_bca_interval(result, plan.confidence_level, replicate_count, analysis_seed)
 
 
 def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult:
@@ -213,6 +208,44 @@ def contrast_deltas(contrasts: PairedContrasts) -> NDArray[np.float64]:
     return values
 
 
+def _guard_replicate_count(
+    *,
+    contrasts: PairedContrasts,
+    confidence_level: ConfidenceLevel,
+    replicate_count: BootstrapReplicateCount,
+    analysis_seed: Seed,
+) -> BootstrapInterval | None:
+    if replicate_count != BOOTSTRAP_REPLICATE_COUNT:
+        return _blocked_interval(
+            contrasts=contrasts,
+            confidence_level=confidence_level,
+            replicate_count=replicate_count,
+            analysis_seed=analysis_seed,
+            reason=BcaReason.BOOTSTRAP_REPLICATE_COUNT_MISMATCH,
+        )
+    return None
+
+
+def _validate_or_block(
+    contrasts: PairedContrasts,
+    *,
+    validator: Callable[[PairedContrasts], PairedContrasts],
+    confidence_level: ConfidenceLevel,
+    replicate_count: BootstrapReplicateCount,
+    analysis_seed: Seed,
+) -> PairedContrasts | BootstrapInterval:
+    try:
+        return validator(contrasts)
+    except _ConfirmatoryContractError as error:
+        return _blocked_interval(
+            contrasts=contrasts,
+            confidence_level=confidence_level,
+            replicate_count=replicate_count,
+            analysis_seed=analysis_seed,
+            reason=error.reason,
+        )
+
+
 def _require_fixed_coordinate(contrasts: PairedContrasts) -> None:
     if not contrasts:
         raise _ConfirmatoryContractError(BcaReason.SEED_COHORT_MISMATCH)
@@ -236,7 +269,7 @@ def _construct_bca_interval(
     analysis_seed: Seed,
 ) -> BootstrapInterval:
     bootstrap = _bootstrap_distribution(contrasts, replicate_count, analysis_seed)
-    
+
     if bootstrap.degeneracy_reason is not None:
         return BootstrapInterval.degenerate(
             method=_INTERVAL_METHOD,
@@ -246,7 +279,7 @@ def _construct_bca_interval(
             point_estimate=bootstrap.estimate,
             reason=bootstrap.degeneracy_reason,
         )
-        
+
     if bootstrap.values is None:
         raise RuntimeError("non-degenerate bootstrap distribution is missing")
 
@@ -348,7 +381,7 @@ def _bca_interval_from_distribution(
         return BcaReason.INVALID_ADJUSTED_QUANTILES
 
     bounds = np.quantile(distribution, adjusted_quantiles, method="linear")
-    
+
     return (
         MetricValue(float(bounds[0])),
         MetricValue(float(bounds[1])),
@@ -363,7 +396,7 @@ def _jackknife_acceleration(deltas: NDArray[np.float64]) -> float | None:
     jackknife = (float(np.sum(deltas)) - deltas) / (deltas.size - 1)
     centered = float(np.mean(jackknife)) - jackknife
     squared_sum = float(np.sum(centered**2))
-    
+
     if squared_sum <= 0.0:
         return None
 

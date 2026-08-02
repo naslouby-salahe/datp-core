@@ -1,7 +1,5 @@
 """Wilcoxon, rank-biserial correlation, Holm correction, and sign consistency."""
 
-from math import isfinite
-
 import numpy as np
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
@@ -15,6 +13,7 @@ from datp_core.analysis.models import (
     RankBiserialResult,
     WilcoxonComputationMethod,
     WilcoxonResult,
+    _extract_named_attributes,
 )
 from datp_core.domain.enums import (
     AvailabilityStatus,
@@ -44,14 +43,8 @@ def paired_wilcoxon(contrasts: PairedContrasts) -> WilcoxonResult:
         method="asymptotic",
     )
 
-    statistic = getattr(res, "statistic", None)
-    pvalue = getattr(res, "pvalue", None)
-    if not (
-        isinstance(statistic, (int, float)) and not isinstance(statistic, bool)
-        and isinstance(pvalue, (int, float)) and not isinstance(pvalue, bool)
-        and isfinite(float(statistic))
-        and isfinite(float(pvalue))
-    ):
+    extracted = _extract_named_attributes(res, ("statistic", "pvalue"))
+    if extracted is None:
         return WilcoxonResult(
             statistic=None,
             p_value=None,
@@ -61,9 +54,10 @@ def paired_wilcoxon(contrasts: PairedContrasts) -> WilcoxonResult:
             reason="SciPy Wilcoxon result does not expose finite statistic and p-value values",
         )
 
+    statistic_val, pvalue_val = extracted
     return WilcoxonResult(
-        statistic=float(statistic),
-        p_value=PValue(float(pvalue)),
+        statistic=statistic_val,
+        p_value=PValue(pvalue_val),
         nonzero_pair_count=nonzero_pair_count,
         computation_method=WilcoxonComputationMethod.SCIPY_ASYMPTOTIC,
         availability=AvailabilityStatus.AVAILABLE,
@@ -125,9 +119,7 @@ def holm_adjust(
             adjusted_p_value=PValue(float(corrected)),
             rejected=bool(is_rejected),
         )
-        for i, (corrected, is_rejected) in enumerate(
-            zip(adjusted, rejected, strict=True)
-        )
+        for i, (corrected, is_rejected) in enumerate(zip(adjusted, rejected, strict=True))
     )
 
     return MultiplicityResult(
@@ -135,4 +127,3 @@ def holm_adjust(
         family_name=family_name,
         decisions=decisions,
     )
-

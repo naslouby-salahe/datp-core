@@ -422,3 +422,23 @@ class MultiplicityResult:
     @property
     def rejected(self) -> tuple[bool, ...]:
         return tuple(decision.rejected for decision in self.decisions)
+
+
+def _extract_named_attributes(
+    result: object,
+    names: tuple[str, ...],
+) -> tuple[float, ...] | None:
+    """Extract finite float attributes from a scipy result object."""
+    values: list[float] = []
+    for name in names:
+        try:
+            raw = getattr(result, name)
+        except AttributeError:
+            return None
+        if isinstance(raw, bool) or not isinstance(raw, int | float):
+            return None
+        value = float(raw)
+        if not isfinite(value):
+            return None
+        values.append(value)
+    return tuple(values)

@@ -9,7 +9,7 @@ import numpy as np
 from scipy import stats
 from sklearn.metrics import adjusted_rand_score
 
-from datp_core.analysis.models import PValue, ScientificDecisionResult
+from datp_core.analysis.models import PValue, ScientificDecisionResult, _extract_named_attributes
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ScientificDecision
 from datp_core.domain.values import MetricValue, Ratio, ThresholdValue
 from datp_core.populations.models import ClientIdentity
@@ -231,9 +231,7 @@ def heterogeneity_benefit_association(
     regression_result = stats.linregress(x_values, y_values, alternative="two-sided")
 
     spearman_values = _extract_named_attributes(spearman_result, ("statistic", "pvalue"))
-    regression_values = _extract_named_attributes(
-        regression_result, ("intercept", "slope", "stderr", "rvalue")
-    )
+    regression_values = _extract_named_attributes(regression_result, ("intercept", "slope", "stderr", "rvalue"))
     if spearman_values is None or regression_values is None:
         return _unavailable_association(observations, AssociationIssue.INVALID_STATISTICS)
 
@@ -352,22 +350,6 @@ def decide_model_absorption(
         interval=None,
         rationale=rationale,
     )
-
-
-def _extract_named_attributes(
-    result: object,
-    names: tuple[str, ...],
-) -> tuple[float, ...] | None:
-    values: list[float] = []
-    for name in names:
-        try:
-            value = float(getattr(result, name))
-        except (AttributeError, TypeError, ValueError):
-            return None
-        if not isfinite(value):
-            return None
-        values.append(value)
-    return tuple(values)
 
 
 def _unavailable_association(

@@ -37,7 +37,6 @@ from .models import (
 CHECKPOINT_PROTOCOL = CheckpointProtocol(
     candidates=tuple(RoundNumber(value) for value in (25, 50, 75, 100, 125, 150, 200)), maximum_round=RoundNumber(200)
 )
-# Prospective research amendment completing Journal §13.2: primary = declared maximum round.
 CHECKPOINT_SELECTION_RULE = CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND
 
 

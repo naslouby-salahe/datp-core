@@ -2,10 +2,8 @@
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass, fields, is_dataclass
-from enum import Enum, StrEnum
-from functools import singledispatch
-from math import isfinite
+from dataclasses import dataclass
+from enum import StrEnum
 
 from datp_core.analysis.models import ScientificDecisionResult
 from datp_core.domain.enums import (
@@ -17,6 +15,7 @@ from datp_core.domain.enums import (
     TemporalState,
 )
 from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.provenance import canonical_value
 from datp_core.domain.values import Checksum, MetricValue, Seed, checksum_text
 from datp_core.protocols.metrics import TEMPORAL_CV_MATERIALITY_CUTOFF
 from datp_core.scoring.models import ScoreArtifactManifest, ScoreRecord
@@ -235,52 +234,10 @@ def _score_set_checksum(records: tuple[ScoreRecord, ...]) -> Checksum:
 
 def _coordinate_checksum(coordinate: object) -> Checksum:
     payload = json.dumps(
-        _canonical_value(coordinate),
+        canonical_value(coordinate),
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=True,
         allow_nan=False,
     )
     return checksum_text(payload)
-
-
-@singledispatch
-def _canonical_value(value: object) -> object:
-    if is_dataclass(value) and not isinstance(value, type):
-        return {field.name: _canonical_value(getattr(value, field.name)) for field in fields(value)}
-
-    wrapped = getattr(value, "value", None)
-    if wrapped is not None and wrapped is not value:
-        return _canonical_value(wrapped)
-
-    raise TypeError(f"unsupported canonical provenance value: {type(value).__qualname__}")
-
-
-@_canonical_value.register(type(None))
-@_canonical_value.register(str)
-@_canonical_value.register(int)
-def _(value: object) -> object:
-    return value
-
-
-@_canonical_value.register(float)
-def _(value: float) -> float:
-    if not isfinite(value):
-        raise ValueError("canonical scientific provenance cannot contain non-finite floats")
-    return value
-
-
-@_canonical_value.register(Enum)
-def _(value: Enum) -> object:
-    return _canonical_value(value.value)
-
-
-@_canonical_value.register(Mapping)
-def _(value: Mapping) -> dict:
-    return {str(key): _canonical_value(item) for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))}
-
-
-@_canonical_value.register(tuple)
-@_canonical_value.register(list)
-def _(value: tuple | list) -> list:
-    return [_canonical_value(item) for item in value]
