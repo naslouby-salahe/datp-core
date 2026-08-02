@@ -85,7 +85,7 @@ def decide_eligibility(
     support: CalibrationSupport,
     protocol: CalibrationEligibilityProtocol,
 ) -> EligibilityDecision:
-    meets_minimum = support.benign_calibration_count.value >= protocol.minimum_support.value
+    meets_minimum = support.benign_calibration_count >= protocol.minimum_support
     return EligibilityDecision(
         client=support.client,
         coordinate=support.coordinate,

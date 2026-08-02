@@ -14,7 +14,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorModule,
 )
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import Checksum, OutcomeLabelSequence
+from datp_core.domain.values import Checksum, OutcomeLabelSequence, RowCount
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.federated import fit_client_preprocessing, reject_centralized_state_for_client
 from datp_core.preprocessing.models import (
@@ -80,7 +80,7 @@ def test_centralized_state_rejected_for_client() -> None:
         estimator_path=Path("state.skops"),
         estimator_checksum=Checksum("a" * 64),
         transformed_schema=protocol.transformed_schema,
-        fit_row_count=2,
+        fit_row_count=RowCount(2),
         fit_partition=PartitionRole.TRAIN,
     )
     with pytest.raises(LeakageError):

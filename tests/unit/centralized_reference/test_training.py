@@ -42,7 +42,7 @@ def test_rejects_federated_preprocessing_state(tmp_path: Path) -> None:
         estimator_path=tmp_path / "state.skops",
         estimator_checksum=Checksum("c" * 64),
         transformed_schema=protocol.transformed_schema,
-        fit_row_count=10,
+        fit_row_count=RowCount(10),
         fit_partition=PartitionRole.TRAIN,
     )
     with pytest.raises(LeakageError, match="federated preprocessing"):

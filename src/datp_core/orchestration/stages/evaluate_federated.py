@@ -411,9 +411,9 @@ def _client_partition_counts(manifest: ScoreArtifactManifest) -> tuple[ClientPar
     )
 
 
-def _label_count(record: ScoreRecord, label: PopulationOutcomeLabel) -> int:
+def _label_count(record: ScoreRecord, label: PopulationOutcomeLabel) -> RowCount:
     frame = pl.read_parquet(record.path)
-    return int((frame[ScoreFrameColumn.OUTCOME_LABEL.value] == label.value).sum())
+    return RowCount(int((frame[ScoreFrameColumn.OUTCOME_LABEL.value] == label.value).sum()))
 
 
 def _client_population_checksum(manifest: ScoreArtifactManifest) -> Checksum:

@@ -20,7 +20,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorClassName,
     TrustedEstimatorModule,
 )
-from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabelSequence, Seed
+from datp_core.domain.values import Checksum, ClientPathToken, FeatureNameSequence, OutcomeLabelSequence, RowCount, Seed
 from datp_core.experiments.models import ExecutionIdentityDocument
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
@@ -122,7 +122,7 @@ class FittedPreprocessingState:
     estimator_path: Path
     estimator_checksum: Checksum
     transformed_schema: TransformedSchema
-    fit_row_count: int
+    fit_row_count: RowCount
     fit_partition: PartitionRole
 
     def __post_init__(self) -> None:
@@ -151,11 +151,11 @@ class ClientPreprocessPublication:
     client_identity: ClientPathToken
     result: ClientPreprocessingResult
     publication_status: PublicationStatus
-    train_row_count: int
-    calibration_row_count: int
-    evaluation_row_count: int
-    future_recalibration_row_count: int = 0
-    static_reference_reserve_row_count: int = 0
+    train_row_count: RowCount
+    calibration_row_count: RowCount
+    evaluation_row_count: RowCount
+    future_recalibration_row_count: RowCount = RowCount(0)
+    static_reference_reserve_row_count: RowCount = RowCount(0)
 
 
 @dataclass(frozen=True, slots=True)
@@ -265,7 +265,7 @@ class FittedStatePublishSpec:
     protocol: PreprocessingProtocol
     branch: ProcessedDataBranch
     estimator_path: Path
-    fit_row_count: int
+    fit_row_count: RowCount
     client_identity: ClientPathToken | None = None
 
 
@@ -338,20 +338,18 @@ def scientific_centralized_preprocessing_method() -> ScientificPreprocessingMeth
 
 def build_preprocessing_protocol(
     method: ScientificPreprocessingMethod,
-    feature_names: tuple[str, ...],
+    feature_names: FeatureNameSequence,
 ) -> PreprocessingProtocol:
     """Bind a locked scientific method to an ordered model-input feature schema."""
-    if not feature_names:
-        raise ValueError("preprocessing requires ordered model-input feature names")
-    if len(feature_names) != len(frozenset(feature_names)):
-        raise ValueError("preprocessing feature names must be unique")
     transformed_schema = TransformedSchema(
-        features=tuple(TransformedFeature(name=name, position=index) for index, name in enumerate(feature_names))
+        features=tuple(
+            TransformedFeature(name=name, position=index) for index, name in enumerate(feature_names)
+        )
     )
     return PreprocessingProtocol(
         identity=method.identity,
         fit_scope=method.fit_scope,
-        input_feature_names=feature_names,
+        input_feature_names=tuple(feature_names),
         transformed_schema=transformed_schema,
         serialization_format=method.serialization_format,
         estimator_module=method.estimator_module,

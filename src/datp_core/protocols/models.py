@@ -297,7 +297,7 @@ class ClusterThresholdProtocol(Declaration):
                 "cluster max_iter must match the locked maximum iteration count",
             ),
             (
-                self.random_state.value == LOCKED_CLUSTER_RANDOM_STATE.value,
+                self.random_state == LOCKED_CLUSTER_RANDOM_STATE,
                 "cluster random_state must match the locked seed",
             ),
             (

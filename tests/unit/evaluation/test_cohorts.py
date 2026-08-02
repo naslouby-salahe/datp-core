@@ -2,7 +2,7 @@ import pytest
 
 from datp_core.domain.enums import EvaluationCohort, FederatedThresholdMethod, PopulationId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Seed
+from datp_core.domain.values import RowCount, Seed
 from datp_core.evaluation.cohorts import (
     ClientExclusionReason,
     assert_cohort_invariant_to_threshold_methods,
@@ -13,9 +13,9 @@ from datp_core.populations.models import ClientPartitionCounts
 
 def test_fpr_eligibility_requires_support_and_benign_evaluation() -> None:
     counts = (
-        ClientPartitionCounts("device_a", 100, 10, 5, True, False),
-        ClientPartitionCounts("device_b", 99, 10, 5, True, False),
-        ClientPartitionCounts("device_c", 100, 0, 5, True, False),
+        ClientPartitionCounts("device_a", RowCount(100), RowCount(10), RowCount(5), True, False),
+        ClientPartitionCounts("device_b", RowCount(99), RowCount(10), RowCount(5), True, False),
+        ClientPartitionCounts("device_c", RowCount(100), RowCount(0), RowCount(5), True, False),
     )
     manifest = build_evaluation_cohort_manifest(
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
@@ -30,7 +30,7 @@ def test_fpr_eligibility_requires_support_and_benign_evaluation() -> None:
 
 
 def test_fallback_cannot_enter_fpr_cohort() -> None:
-    counts = (ClientPartitionCounts("fallback_client", 1000, 100, 0, True, True),)
+    counts = (ClientPartitionCounts("fallback_client", RowCount(1000), RowCount(100), RowCount(0), True, True),)
     manifest = build_evaluation_cohort_manifest(
         population=PopulationId.NBAIOT_NATURAL_DEVICES,
         partition_seed=Seed(0),
@@ -42,7 +42,7 @@ def test_fallback_cannot_enter_fpr_cohort() -> None:
 
 
 def test_edge_clients_are_not_attack_evaluable() -> None:
-    counts = (ClientPartitionCounts("Distance", 200, 50, 0, True, False),)
+    counts = (ClientPartitionCounts("Distance", RowCount(200), RowCount(50), RowCount(0), True, False),)
     manifest = build_evaluation_cohort_manifest(
         population=PopulationId.EDGE_SENSOR_GROUPS,
         partition_seed=Seed(0),
@@ -56,8 +56,8 @@ def test_edge_clients_are_not_attack_evaluable() -> None:
 
 def test_cohort_membership_is_invariant_to_threshold_method() -> None:
     counts = (
-        ClientPartitionCounts("device_a", 150, 20, 8, True, False),
-        ClientPartitionCounts("device_b", 80, 20, 8, True, False),
+        ClientPartitionCounts("device_a", RowCount(150), RowCount(20), RowCount(8), True, False),
+        ClientPartitionCounts("device_b", RowCount(80), RowCount(20), RowCount(8), True, False),
     )
     methods = (
         FederatedThresholdMethod.SHARED_THRESHOLD,

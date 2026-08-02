@@ -169,7 +169,7 @@ def fitted_state(path: Path, client_id: str, *, checksum_suffix: str = "a") -> F
         estimator_path=path,
         estimator_checksum=Checksum((checksum_suffix * 64)[:64]),
         transformed_schema=protocol.transformed_schema,
-        fit_row_count=32,
+        fit_row_count=RowCount(32),
         fit_partition=PartitionRole.TRAIN,
     )
 

@@ -106,7 +106,7 @@ def test_fedavg_reruns_the_identical_coordinate_and_reuses_the_published_trainin
             estimator_path=estimator_path,
             estimator_checksum=Checksum(f"{client_id[-1]}" * 64),
             transformed_schema=protocol.transformed_schema,
-            fit_row_count=16,
+            fit_row_count=RowCount(16),
             fit_partition=PartitionRole.TRAIN,
         )
         result = ClientPreprocessingResult(
@@ -122,9 +122,9 @@ def test_fedavg_reruns_the_identical_coordinate_and_reuses_the_published_trainin
             client_identity=PreprocessingClientPathToken(client_id),
             result=result,
             publication_status=PublicationStatus.PUBLISHED,
-            train_row_count=16,
-            calibration_row_count=8,
-            evaluation_row_count=8,
+            train_row_count=RowCount(16),
+            calibration_row_count=RowCount(8),
+            evaluation_row_count=RowCount(8),
         )
 
     publications = tuple(publication(client_id, tmp_path / "preprocessed" / client_id) for client_id in CLIENT_IDS)

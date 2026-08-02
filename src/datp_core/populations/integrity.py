@@ -49,9 +49,9 @@ def membership_frame_checksum(membership: pl.DataFrame) -> Checksum:
     )
 
 
-def outcome_row_counts(membership: pl.DataFrame) -> tuple[int, int]:
+def outcome_row_counts(membership: pl.DataFrame) -> tuple[RowCount, RowCount]:
     benign = int(membership.filter(pl.col(OUTCOME_LABEL_COLUMN) == _BENIGN).height)
-    return benign, membership.height - benign
+    return RowCount(benign), RowCount(membership.height - benign)
 
 
 def validate_population_manifest(
@@ -64,7 +64,7 @@ def validate_population_manifest(
     _require_columns(membership, membership_column_names(), StageOperationId.CONSTRUCT_POPULATION)
     _require_membership_row_contract(membership, document.total_membership_rows, document.population)
     _require_membership_client_subset(membership, document.accepted_clients, document.population)
-    _require_candidate_count(document.candidate_clients, declaration.client_count.value, document.population)
+    _require_candidate_count(document.candidate_clients, declaration.client_count, document.population)
     if capabilities.population is not document.population:
         raise ScientificContractError(
             "capability profile population mismatch",
@@ -117,7 +117,7 @@ def validate_dirichlet_conservation(
     client_count: ClientCount,
 ) -> None:
     population = PopulationId.NBAIOT_DIRICHLET_CLIENTS
-    if membership.height != source_row_count.value:
+    if membership.height != source_row_count:
         raise DataIntegrityError(
             "Dirichlet partition does not conserve source rows",
             subject=population,
@@ -139,7 +139,7 @@ def validate_dirichlet_conservation(
 
 @dataclass(frozen=True, slots=True)
 class FeasibilityAssessmentRequest:
-    expected_count: int
+    expected_count: ClientCount
     candidate_ids: tuple[str, ...]
     accepted_ids: tuple[str, ...]
     expected_identities: tuple[str, ...] | None
@@ -165,7 +165,7 @@ class PopulationFinalizationRequest:
 
 def assess_declared_feasibility(
     *,
-    expected_count: int,
+    expected_count: ClientCount,
     candidate_ids: tuple[str, ...],
     accepted_ids: tuple[str, ...],
     expected_identities: tuple[str, ...] | None,
@@ -195,7 +195,7 @@ def finalize_population(request: PopulationFinalizationRequest) -> PopulationMan
     membership = select_membership_frame(request.membership)
     benign, attack = outcome_row_counts(membership)
     feasibility = assess_declared_feasibility(
-        expected_count=declaration.client_count.value,
+        expected_count=declaration.client_count,
         candidate_ids=request.candidate_ids,
         accepted_ids=request.accepted_ids,
         expected_identities=request.expected_identities,
@@ -211,7 +211,7 @@ def finalize_population(request: PopulationFinalizationRequest) -> PopulationMan
             candidate_clients=request.candidate_ids,
             accepted_clients=request.accepted_ids,
             excluded_client_ids=request.excluded_ids,
-            total_membership_rows=membership.height,
+            total_membership_rows=RowCount(membership.height),
             benign_row_count=benign,
             attack_row_count=attack,
             membership_checksum=membership_frame_checksum(membership),
@@ -227,7 +227,7 @@ def finalize_population(request: PopulationFinalizationRequest) -> PopulationMan
 
 
 def feasibility_from_candidates(request: FeasibilityAssessmentRequest) -> PopulationFeasibility:
-    expected = ClientCount(request.expected_count)
+    expected = request.expected_count
     accepted_n = len(request.accepted_ids)
     identity_mismatch = request.expected_identities is not None and tuple(sorted(request.candidate_ids)) != tuple(
         sorted(request.expected_identities)
@@ -278,7 +278,7 @@ def _infeasible(
     return PopulationFeasibility(PopulationFeasibilityStatus.INFEASIBLE, reason, expected, observed, evidence)
 
 
-def _require_membership_row_contract(membership: pl.DataFrame, expected_rows: int, population: PopulationId) -> None:
+def _require_membership_row_contract(membership: pl.DataFrame, expected_rows: RowCount, population: PopulationId) -> None:
     if membership.height != expected_rows:
         raise DataIntegrityError(
             "membership row count disagrees with the population manifest",
@@ -315,7 +315,7 @@ def _require_membership_client_subset(
         )
 
 
-def _require_candidate_count(candidates: tuple[str, ...], expected: int, population: PopulationId) -> None:
+def _require_candidate_count(candidates: tuple[str, ...], expected: ClientCount, population: PopulationId) -> None:
     if len(candidates) != expected:
         raise DataIntegrityError(
             "candidate client count disagrees with the population declaration",
@@ -327,7 +327,7 @@ def _require_candidate_count(candidates: tuple[str, ...], expected: int, populat
 def _require_assignment_row_contract(
     assignments: pl.DataFrame,
     membership: pl.DataFrame,
-    expected_rows: int,
+    expected_rows: RowCount,
     population: PopulationId,
 ) -> None:
     if assignments.height != expected_rows:
@@ -399,7 +399,7 @@ def _reject_client_future_history_leakage(
         )
 
 
-def _validate_label_counts(membership: pl.DataFrame, benign_count: int, attack_count: int) -> None:
+def _validate_label_counts(membership: pl.DataFrame, benign_count: RowCount, attack_count: RowCount) -> None:
     observed_benign, observed_attack = outcome_row_counts(membership)
     if observed_benign != benign_count or observed_attack != attack_count:
         raise DataIntegrityError(

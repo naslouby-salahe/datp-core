@@ -24,7 +24,7 @@ from datp_core.domain.enums import (
     TemporalState,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount, ClientPathToken, Seed, checksum_text
+from datp_core.domain.values import Checksum, ClientCount, ClientPathToken, FeatureNameSequence, RowCount, Seed, checksum_text
 from datp_core.experiments.models import (
     ExecutionIdentityDocument,
     ExternalTemporalExecutionIdentity,
@@ -156,7 +156,7 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
     schema = dataset_binding(dataset).schema
     feature_names = _model_feature_names(dataset, schema.feature_columns)
     protocol = _federated_protocol(request.preprocessing_identity, feature_names)
-    joined = join_handoff_with_canonical_features(canonical_root, handoff, schema.feature_columns)
+    joined = join_handoff_with_canonical_features(canonical_root, handoff, feature_names)
     context = PreprocessingPublishContext(
         dataset=dataset,
         population=request.population,
@@ -171,7 +171,7 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
     client_partitions: dict[str, ClientPartitionBundle] = {
         client_id: extract_partitions(
             joined.filter(pl.col(CLIENT_ID_COLUMN) == client_id),
-            schema.feature_columns,
+            feature_names,
             split_protocol=request.split_protocol,
             branch=ProcessedDataBranch.FEDERATED,
             deterministic_sort=False,
@@ -203,17 +203,21 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
                 client_identity=result.client_identity,
                 result=result,
                 publication_status=result.publication_status,
-                train_row_count=partitions[PartitionRole.TRAIN].height,
-                calibration_row_count=partitions[PartitionRole.CALIBRATION].height,
-                evaluation_row_count=partitions[PartitionRole.EVALUATION].height,
-                future_recalibration_row_count=partitions.get(
-                    PartitionRole.FUTURE_RECALIBRATION,
-                    pl.DataFrame(),
-                ).height,
-                static_reference_reserve_row_count=partitions.get(
-                    PartitionRole.STATIC_REFERENCE_RESERVE,
-                    pl.DataFrame(),
-                ).height,
+                train_row_count=RowCount(partitions[PartitionRole.TRAIN].height),
+                calibration_row_count=RowCount(partitions[PartitionRole.CALIBRATION].height),
+                evaluation_row_count=RowCount(partitions[PartitionRole.EVALUATION].height),
+                future_recalibration_row_count=RowCount(
+                    partitions.get(
+                        PartitionRole.FUTURE_RECALIBRATION,
+                        pl.DataFrame(),
+                    ).height
+                ),
+                static_reference_reserve_row_count=RowCount(
+                    partitions.get(
+                        PartitionRole.STATIC_REFERENCE_RESERVE,
+                        pl.DataFrame(),
+                    ).height
+                ),
             )
         )
 
@@ -309,7 +313,7 @@ def _preprocess_ciciot_client_local(
     context: PreprocessingPublishContext,
     assignments: pl.DataFrame,
     canonical_root: Path,
-    feature_names: tuple[str, ...],
+    feature_names: FeatureNameSequence,
     identity: ExternalTemporalExecutionIdentity,
 ) -> PreprocessFederatedResult:
     """Fit and publish one file-defined client at a time without materializing the federation-wide join."""
@@ -388,7 +392,7 @@ def _single_client_source_path(assignments: pl.DataFrame, client_id: str) -> str
 def _join_published_handoff(
     canonical_root: Path,
     handoff: PreprocessingHandoff,
-    feature_names: tuple[str, ...],
+    feature_names: FeatureNameSequence,
     identity: ExternalTemporalExecutionIdentity,
 ) -> pl.DataFrame:
     if (
@@ -419,12 +423,12 @@ def _join_published_handoff(
     return joined
 
 
-def _model_feature_names(dataset: DatasetId, feature_names: tuple[str, ...]) -> tuple[str, ...]:
+def _model_feature_names(dataset: DatasetId, feature_names: tuple[str, ...]) -> FeatureNameSequence:
     if dataset is not DatasetId.EDGE_IIOTSET:
-        return feature_names
+        return FeatureNameSequence(feature_names)
     if set(EDGE_NUMERIC_FEATURE_COLUMNS) - set(feature_names):
         raise ScientificContractError("Edge numeric feature declaration must be a canonical feature subset")
-    return EDGE_NUMERIC_FEATURE_COLUMNS
+    return FeatureNameSequence(EDGE_NUMERIC_FEATURE_COLUMNS)
 
 
 def _validate_federated_request(request: PreprocessFederatedRequest) -> None:
@@ -509,13 +513,15 @@ def _publish_client_partition(
         client_identity=result.client_identity,
         result=result,
         publication_status=result.publication_status,
-        train_row_count=partitions[PartitionRole.TRAIN].height,
-        calibration_row_count=partitions[PartitionRole.CALIBRATION].height,
-        evaluation_row_count=partitions[PartitionRole.EVALUATION].height,
-        future_recalibration_row_count=partitions.get(PartitionRole.FUTURE_RECALIBRATION, pl.DataFrame()).height,
-        static_reference_reserve_row_count=partitions.get(
-            PartitionRole.STATIC_REFERENCE_RESERVE, pl.DataFrame()
-        ).height,
+        train_row_count=RowCount(partitions[PartitionRole.TRAIN].height),
+        calibration_row_count=RowCount(partitions[PartitionRole.CALIBRATION].height),
+        evaluation_row_count=RowCount(partitions[PartitionRole.EVALUATION].height),
+        future_recalibration_row_count=RowCount(
+            partitions.get(PartitionRole.FUTURE_RECALIBRATION, pl.DataFrame()).height
+        ),
+        static_reference_reserve_row_count=RowCount(
+            partitions.get(PartitionRole.STATIC_REFERENCE_RESERVE, pl.DataFrame()).height
+        ),
     )
 
 
@@ -724,7 +730,7 @@ def _capture_timestamp_column_for(
 
 def _federated_protocol(
     identity: PreprocessingProtocolId,
-    feature_names: tuple[str, ...],
+    feature_names: FeatureNameSequence,
 ) -> PreprocessingProtocol:
     match identity:
         case PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD:

@@ -56,7 +56,7 @@ def build_calibration_replicate(
     subsamples: list[CalibrationSubsample] = []
     unavailable_sizes: list[CalibrationSize] = []
     for size in sorted(sizes, key=lambda item: item.value):
-        if size.value > len(permuted):
+        if size > len(permuted):
             unavailable_sizes.append(size)
             continue
         subsamples.append(

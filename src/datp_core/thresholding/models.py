@@ -218,7 +218,7 @@ class LocalQuantile:
     diagnostic: ThresholdDiagnostic
 
     def __post_init__(self) -> None:
-        if self.calibration_count.value < 1:
+        if self.calibration_count < 1:
             raise ScientificContractError(
                 "a local quantile requires at least one benign calibration score",
                 subject=ContractSubject.CALIBRATION,
@@ -269,7 +269,7 @@ class PooledSharedQuantileResult:
 
     def __post_init__(self) -> None:
         _require_method(self.method, FederatedThresholdMethod.POOLED_SHARED_QUANTILE)
-        if self.pooled_benign_score_count.value < 1:
+        if self.pooled_benign_score_count < 1:
             raise ScientificContractError(
                 "pooled shared quantile requires at least one pooled benign score",
                 subject=ContractSubject.CALIBRATION,
@@ -526,7 +526,7 @@ class ClientBenignSummary:
     benign_exceedance_count: int | None
 
     def __post_init__(self) -> None:
-        if self.count.value < 1:
+        if self.count < 1:
             raise ScientificContractError(
                 "a benign summary requires at least one calibration score", subject=ContractSubject.CALIBRATION
             )

@@ -256,7 +256,7 @@ def _validate_request(request: FedProxTrainingRequest) -> None:
             "FedProx training requires exactly the declared population client count",
             subject=ContractSubject.CLIENT,
         )
-    if request.batch_size.value < 1:
+    if request.batch_size < 1:
         raise ScientificContractError(
             "FedProx batch size must remain the declared positive value",
             subject=ContractSubject.BATCH_SIZE,

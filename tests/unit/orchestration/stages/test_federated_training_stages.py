@@ -50,7 +50,7 @@ def _client_publication(client_id: str, directory: Path) -> ClientPreprocessPubl
         estimator_path=estimator_path,
         estimator_checksum=Checksum(f"{client_id[-1]}" * 64),
         transformed_schema=protocol.transformed_schema,
-        fit_row_count=16,
+        fit_row_count=RowCount(16),
         fit_partition=PartitionRole.TRAIN,
     )
     result = ClientPreprocessingResult(
@@ -66,9 +66,9 @@ def _client_publication(client_id: str, directory: Path) -> ClientPreprocessPubl
         client_identity=PreprocessingClientPathToken(client_id),
         result=result,
         publication_status=PublicationStatus.PUBLISHED,
-        train_row_count=16,
-        calibration_row_count=8,
-        evaluation_row_count=8,
+        train_row_count=RowCount(16),
+        calibration_row_count=RowCount(8),
+        evaluation_row_count=RowCount(8),
     )
 
 

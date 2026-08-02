@@ -154,9 +154,9 @@ class PopulationManifestDocument(StrictModel):
     candidate_clients: tuple[str, ...]
     accepted_clients: tuple[str, ...]
     excluded_client_ids: tuple[str, ...]
-    total_membership_rows: int
-    benign_row_count: int
-    attack_row_count: int
+    total_membership_rows: RowCount
+    benign_row_count: RowCount
+    attack_row_count: RowCount
     membership_checksum: Checksum
     canonical_schema_checksum: Checksum
     feasibility_status: PopulationFeasibilityStatus
@@ -185,12 +185,12 @@ class SplitManifestDocument(StrictModel):
     dataset: DatasetId
     partition_seed: Seed
     split_protocol: SplitProtocolId
-    assignment_row_count: int
-    train_row_count: int
-    calibration_row_count: int
-    evaluation_row_count: int
-    future_recalibration_row_count: int
-    static_reference_reserve_row_count: int
+    assignment_row_count: RowCount
+    train_row_count: RowCount
+    calibration_row_count: RowCount
+    evaluation_row_count: RowCount
+    future_recalibration_row_count: RowCount
+    static_reference_reserve_row_count: RowCount
     assignment_checksum: Checksum
     population_manifest_checksum: Checksum
 
@@ -203,8 +203,6 @@ class SplitManifestDocument(StrictModel):
             self.future_recalibration_row_count,
             self.static_reference_reserve_row_count,
         )
-        if min(counts) < 0 or self.assignment_row_count < 0:
-            raise ValueError("split counts must be non-negative")
         if sum(counts) != self.assignment_row_count:
             raise ValueError("partition role counts must sum to assignment rows")
         return self
@@ -217,10 +215,10 @@ class DirichletPartitionDiagnosticsDocument(StrictModel):
     concentration: DirichletConcentration | None
     client_count: ClientCount
     client_ids: tuple[str, ...]
-    total_rows: int
-    client_row_counts: tuple[int, ...]
-    benign_row_counts: tuple[int, ...]
-    attack_row_counts: tuple[int, ...]
+    total_rows: RowCount
+    client_row_counts: tuple[RowCount, ...]
+    benign_row_counts: tuple[RowCount, ...]
+    attack_row_counts: tuple[RowCount, ...]
     empty_client_ids: tuple[str, ...]
     insufficient_benign_client_ids: tuple[str, ...]
     allocation_checksum: Checksum
@@ -262,17 +260,15 @@ class ClientPartitionCounts:
     """Per-client partition support counts used to construct evaluation cohorts."""
 
     client_id: str
-    benign_calibration_count: int
-    benign_evaluation_count: int
-    attack_evaluation_count: int
+    benign_calibration_count: RowCount
+    benign_evaluation_count: RowCount
+    attack_evaluation_count: RowCount
     accepted: bool
     deployment_fallback: bool
 
     def __post_init__(self) -> None:
         if not self.client_id:
             raise ValueError("client partition counts require a client identity")
-        if min(self.benign_calibration_count, self.benign_evaluation_count, self.attack_evaluation_count) < 0:
-            raise ValueError("partition support counts must be non-negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -492,9 +488,7 @@ def _require_client_set_partition(
         raise ValueError(f"{PopulationManifestField.EXCLUDED_CLIENT_IDS.value} cannot also be accepted")
 
 
-def _require_non_negative_row_counts(total: int, benign: int, attack: int) -> None:
-    if min(total, benign, attack) < 0:
-        raise ValueError("row counts must be non-negative")
+def _require_non_negative_row_counts(total: RowCount, benign: RowCount, attack: RowCount) -> None:
     if benign + attack != total:
         raise ValueError("benign and attack rows must sum to total membership rows")
 
@@ -504,8 +498,8 @@ def _require_client_series_shape(document: DirichletPartitionDiagnosticsDocument
     if len(document.client_ids) != expected:
         raise ValueError("client identity count must match declared client count")
     for series in (document.client_row_counts, document.benign_row_counts, document.attack_row_counts):
-        if len(series) != expected or min(series) < 0:
-            raise ValueError("per-client count series must be non-negative and complete")
+        if len(series) != expected:
+            raise ValueError("per-client count series must be complete")
 
 
 def _require_row_conservation(document: DirichletPartitionDiagnosticsDocument) -> None:

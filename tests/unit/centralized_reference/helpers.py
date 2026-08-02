@@ -103,7 +103,7 @@ def fitted_state(path: Path) -> FittedPreprocessingState:
         estimator_path=path,
         estimator_checksum=Checksum("a" * 64),
         transformed_schema=protocol.transformed_schema,
-        fit_row_count=64,
+        fit_row_count=RowCount(64),
         fit_partition=PartitionRole.TRAIN,
     )
 

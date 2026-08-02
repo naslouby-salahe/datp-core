@@ -81,12 +81,14 @@ def test_scientific_preprocessing_methods_are_locked() -> None:
 
 
 def test_build_preprocessing_protocol_binds_feature_order() -> None:
+    from datp_core.domain.values import FeatureNameSequence
+
     protocol = build_preprocessing_protocol(
         SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD,
-        ("f0", "f1"),
+        FeatureNameSequence(("f0", "f1")),
     )
     assert protocol.input_feature_names == ("f0", "f1")
     assert protocol.transformed_schema.feature_names == ("f0", "f1")
     assert protocol.identity is PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
-    with pytest.raises(ValueError, match="ordered model-input"):
-        build_preprocessing_protocol(SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD, ())
+    with pytest.raises(ValueError, match="non-empty"):
+        build_preprocessing_protocol(SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD, FeatureNameSequence(()))

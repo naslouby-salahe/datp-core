@@ -15,7 +15,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorModule,
 )
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabelSequence
+from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabelSequence, RowCount
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
@@ -63,7 +63,7 @@ def test_pooled_fit_is_independent_of_federated_state() -> None:
         estimator_path=Path("state.skops"),
         estimator_checksum=Checksum("b" * 64),
         transformed_schema=protocol.transformed_schema,
-        fit_row_count=2,
+        fit_row_count=RowCount(2),
         fit_partition=PartitionRole.TRAIN,
     )
     with pytest.raises(LeakageError):

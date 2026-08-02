@@ -12,7 +12,7 @@ from datp_core.domain.enums import (
     PopulationId,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CalibrationSize, Seed
+from datp_core.domain.values import CalibrationSize, RowCount, Seed
 from datp_core.populations.capabilities import population_capabilities
 from datp_core.populations.models import ClientPartitionCounts, PopulationCapabilities
 from datp_core.protocols.calibration import MINIMUM_BENIGN_SUPPORT
@@ -33,9 +33,9 @@ class ClientExclusionReason(StrEnum):
 class ClientEligibilityRecord(StrictModel):
     client_id: str
     population: PopulationId
-    benign_calibration_count: int
-    benign_evaluation_count: int
-    attack_evaluation_count: int
+    benign_calibration_count: RowCount
+    benign_evaluation_count: RowCount
+    attack_evaluation_count: RowCount
     calibration_eligible: bool
     fpr_evaluable: bool
     attack_evaluable: bool
@@ -199,7 +199,7 @@ def _support_exclusion_reasons(
     reasons: list[ClientExclusionReason] = []
     if not counts.accepted:
         reasons.append(ClientExclusionReason.CLIENT_NOT_ACCEPTED)
-    if counts.benign_calibration_count < support.value:
+    if counts.benign_calibration_count < support:
         reasons.append(ClientExclusionReason.INSUFFICIENT_BENIGN_CALIBRATION)
     if counts.benign_evaluation_count < 1:
         reasons.append(ClientExclusionReason.EMPTY_BENIGN_EVALUATION)
@@ -212,7 +212,7 @@ def _is_calibration_eligible(
     counts: ClientPartitionCounts,
     support: CalibrationSize,
 ) -> bool:
-    return counts.accepted and counts.benign_calibration_count >= support.value and not counts.deployment_fallback
+    return counts.accepted and counts.benign_calibration_count >= support and not counts.deployment_fallback
 
 
 def _is_fpr_evaluable(calibration_eligible: bool, reasons: list[ClientExclusionReason]) -> bool:

@@ -10,6 +10,7 @@ from datp_core.artifacts.layout import ProcessedAssetName, branch_asset_path, ce
 from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.domain.enums import PartitionRole, PreprocessingFitScope, ProcessedDataBranch
 from datp_core.domain.errors import LeakageError
+from datp_core.domain.values import RowCount
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     FittedStatePublishSpec,
@@ -73,7 +74,7 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
             protocol=context.protocol,
             branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
             estimator_path=branch_asset_path(result.coordinate_directory, ProcessedAssetName.STATE),
-            fit_row_count=request.partitions[PartitionRole.TRAIN].height,
+            fit_row_count=RowCount(request.partitions[PartitionRole.TRAIN].height),
         )
     )
     validate_branch_isolation(state, ProcessedDataBranch.CENTRALIZED_REFERENCE, None)

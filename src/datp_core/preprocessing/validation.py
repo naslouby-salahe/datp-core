@@ -26,7 +26,7 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabelSequence, checksum_file, checksum_text
+from datp_core.domain.values import Checksum, ClientPathToken, FeatureNameSequence, OutcomeLabelSequence, checksum_file, checksum_text
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
     PARTITION_ROLE_COLUMN,
@@ -68,7 +68,7 @@ def require_partitions(
 
 def extract_partitions(
     frame: pl.DataFrame,
-    feature_names: tuple[str, ...],
+    feature_names: FeatureNameSequence,
     *,
     split_protocol: SplitProtocolId,
     branch: ProcessedDataBranch,

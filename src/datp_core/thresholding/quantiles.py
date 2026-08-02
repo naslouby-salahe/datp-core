@@ -153,7 +153,7 @@ def sample_weighted_mean(values: tuple[float, ...], weights: tuple[float, ...]) 
     return sum(value * weight for value, weight in zip(values, weights, strict=True)) / total_weight
 
 
-def conformal_rank_index(calibration_count: int, coverage: CoverageTarget) -> int:
+def conformal_rank_index(calibration_count: RowCount, coverage: CoverageTarget) -> int:
     """Classical split-conformal rank correction: `ceil((n + 1) * coverage)`."""
     if calibration_count < 1:
         raise ScientificContractError(

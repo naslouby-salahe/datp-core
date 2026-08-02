@@ -17,7 +17,7 @@ from datp_core.artifacts.layout import (
 from datp_core.artifacts.serialization import TrustedScaler, construct_trusted_estimator
 from datp_core.domain.enums import PartitionRole, PreprocessingFitScope, ProcessedDataBranch
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import ClientPathToken, OutcomeLabelSequence
+from datp_core.domain.values import ClientPathToken, OutcomeLabelSequence, RowCount
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.models import (
     ClientPreprocessingResult,
@@ -172,7 +172,7 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
             protocol=context.protocol,
             branch=ProcessedDataBranch.FEDERATED,
             estimator_path=client_asset_path(result.coordinate_directory, ProcessedAssetName.STATE),
-            fit_row_count=request.partitions[PartitionRole.TRAIN].height,
+            fit_row_count=RowCount(request.partitions[PartitionRole.TRAIN].height),
             client_identity=request.client_identity,
         )
     )

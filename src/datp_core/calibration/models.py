@@ -53,7 +53,7 @@ class EligibilityDecision:
     reason: CalibrationUnavailableReason | None
 
     def __post_init__(self) -> None:
-        meets_minimum = self.benign_calibration_count.value >= self.minimum_support.value
+        meets_minimum = self.benign_calibration_count >= self.minimum_support
         is_eligible = self.status is EligibilityStatus.ELIGIBLE
         is_excluded = self.status is EligibilityStatus.EXCLUDED
         _raise_first_violation(

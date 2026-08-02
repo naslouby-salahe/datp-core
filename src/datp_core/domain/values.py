@@ -1,10 +1,11 @@
 """Validated scalar scientific values."""
 
 from dataclasses import dataclass
+from functools import total_ordering
 from hashlib import file_digest, sha256
 from math import isclose, isfinite
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 # Shared math.isclose controls for absolute-only floating comparisons.
 NUMERIC_ZERO: float = 0.0
@@ -41,6 +42,64 @@ def _number(value: int | float, name: str) -> float:
     return float(value)
 
 
+def _ordering_compare(left: Any, right: object, op) -> bool:
+    """Cross-type total ordering for integer and float value objects.
+
+    Accepts ``left`` (``self``), ``right`` (another value object or a raw
+    ``int`` / ``float``), and a two-argument operator (e.g. ``int.__lt__``).
+    Returns ``NotImplemented`` for unrecognized types so Python can try the
+    reflected operator on ``right``.
+    """
+    if isinstance(right, (int, float)) and not isinstance(right, bool):
+        return op(left.value, right)  # type: ignore[union-attr]
+    other_value = getattr(right, "value", None)
+    if isinstance(other_value, (int, float)):
+        return op(left.value, other_value)  # type: ignore[union-attr]
+    return NotImplemented
+
+
+def _add_impl(self: Any, other: object) -> Any:
+    """Shared __add__ for integer value types. Returns same type as self."""
+    if isinstance(other, int) and not isinstance(other, bool):
+        return type(self)(self.value + other)
+    other_value = getattr(other, "value", None)
+    if isinstance(other_value, int):
+        return type(self)(self.value + other_value)
+    return NotImplemented
+
+
+def _radd_impl(self: Any, other: object) -> Any:
+    """Shared __radd__ for integer value types."""
+    if isinstance(other, int) and not isinstance(other, bool):
+        return type(self)(other + self.value)
+    return NotImplemented
+
+
+def _pydantic_value_schema(cls, _source_type, _handler):
+    """Shared Pydantic v2 schema: validates raw scalar → cls, serializes as .value."""
+    from pydantic_core import core_schema as _cs
+
+    def _validate(v):
+        if isinstance(v, cls):
+            return v
+        return cls(v)
+
+    return _cs.no_info_plain_validator_function(
+        _validate,
+        serialization=_cs.plain_serializer_function_ser_schema(lambda instance: instance.value),
+    )
+
+
+def _typed_eq(self: Any, other: object) -> bool:
+    """Equality: true if same type with same value, or against a raw scalar."""
+    if isinstance(other, (int, float)) and not isinstance(other, bool):
+        return self.value == other
+    if type(other) is type(self):
+        return self.value == other.value
+    return NotImplemented
+
+
+@total_ordering
 @dataclass(frozen=True, slots=True)
 class PositiveIntegerValue:
     value: int
@@ -49,7 +108,18 @@ class PositiveIntegerValue:
     def __post_init__(self) -> None:
         _integer(self.value, self.validation_name, 1)
 
+    def __lt__(self, other: object) -> bool:
+        return _ordering_compare(self, other, int.__lt__)
 
+    def __eq__(self, other: object) -> bool:
+        return _typed_eq(self, other)
+
+    __add__ = _add_impl
+    __radd__ = _radd_impl
+    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+
+
+@total_ordering
 @dataclass(frozen=True, slots=True)
 class NonNegativeIntegerValue:
     value: int
@@ -58,7 +128,18 @@ class NonNegativeIntegerValue:
     def __post_init__(self) -> None:
         _integer(self.value, self.validation_name, 0)
 
+    def __lt__(self, other: object) -> bool:
+        return _ordering_compare(self, other, int.__lt__)
 
+    def __eq__(self, other: object) -> bool:
+        return _typed_eq(self, other)
+
+    __add__ = _add_impl
+    __radd__ = _radd_impl
+    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+
+
+@total_ordering
 @dataclass(frozen=True, slots=True)
 class PositiveFiniteFloatValue:
     value: float
@@ -68,7 +149,18 @@ class PositiveFiniteFloatValue:
         if _number(self.value, self.validation_name) <= 0:
             raise ValueError(f"{self.validation_name} must be positive")
 
+    def __lt__(self, other: object) -> bool:
+        return _ordering_compare(self, other, float.__lt__)
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, (int, float)) and not isinstance(other, bool):
+            return self.value == other
+        if hasattr(other, "value") and isinstance(other.value, (int, float)):  # type: ignore[union-attr]
+            return self.value == other.value
+        return NotImplemented
+
+
+@total_ordering
 @dataclass(frozen=True, slots=True)
 class NonNegativeFiniteFloatValue:
     value: float
@@ -78,7 +170,20 @@ class NonNegativeFiniteFloatValue:
         if _number(self.value, self.validation_name) < 0:
             raise ValueError(f"{self.validation_name} must be non-negative")
 
+    def __lt__(self, other: object) -> bool:
+        return _ordering_compare(self, other, float.__lt__)
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, (int, float)) and not isinstance(other, bool):
+            return self.value == other
+        if hasattr(other, "value") and isinstance(other.value, (int, float)):  # type: ignore[union-attr]
+            return self.value == other.value
+        return NotImplemented
+
+    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+
+
+@total_ordering
 @dataclass(frozen=True, slots=True)
 class OpenUnitIntervalValue:
     value: float
@@ -89,7 +194,20 @@ class OpenUnitIntervalValue:
         if not 0 < value < 1:
             raise ValueError(f"{self.validation_name} must be in (0, 1)")
 
+    def __lt__(self, other: object) -> bool:
+        return _ordering_compare(self, other, float.__lt__)
 
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, (int, float)) and not isinstance(other, bool):
+            return self.value == other
+        if hasattr(other, "value") and isinstance(other.value, (int, float)):  # type: ignore[union-attr]
+            return self.value == other.value
+        return NotImplemented
+
+    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+
+
+@total_ordering
 @dataclass(frozen=True, slots=True)
 class ClosedUnitIntervalValue:
     value: float
@@ -100,123 +218,109 @@ class ClosedUnitIntervalValue:
         if not 0 <= value <= 1:
             raise ValueError(f"{self.validation_name} must be in [0, 1]")
 
+    def __lt__(self, other: object) -> bool:
+        return _ordering_compare(self, other, float.__lt__)
 
-@dataclass(frozen=True, slots=True)
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, (int, float)) and not isinstance(other, bool):
+            return self.value == other
+        if hasattr(other, "value") and isinstance(other.value, (int, float)):  # type: ignore[union-attr]
+            return self.value == other.value
+        return NotImplemented
+
+
 class Seed(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "seed"
 
 
-@dataclass(frozen=True, slots=True)
 class Ratio(ClosedUnitIntervalValue):
     validation_name: ClassVar[str] = "ratio"
 
 
-@dataclass(frozen=True, slots=True)
 class Quantile(OpenUnitIntervalValue):
     validation_name: ClassVar[str] = "quantile"
 
 
-@dataclass(frozen=True, slots=True)
 class CoverageTarget(OpenUnitIntervalValue):
     validation_name: ClassVar[str] = "coverage target"
 
 
-@dataclass(frozen=True, slots=True)
 class CalibrationSize(PositiveIntegerValue):
     validation_name: ClassVar[str] = "calibration size"
 
 
-@dataclass(frozen=True, slots=True)
 class ClientCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "client count"
 
 
-@dataclass(frozen=True, slots=True)
 class SeedCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "seed count"
 
 
-@dataclass(frozen=True, slots=True)
 class RoundNumber(PositiveIntegerValue):
     validation_name: ClassVar[str] = "round number"
 
 
-@dataclass(frozen=True, slots=True)
 class LocalEpochCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "local epoch count"
 
 
-@dataclass(frozen=True, slots=True)
 class BatchSize(PositiveIntegerValue):
     validation_name: ClassVar[str] = "batch size"
 
 
-@dataclass(frozen=True, slots=True)
 class BootstrapReplicateCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "bootstrap replicate count"
 
 
-@dataclass(frozen=True, slots=True)
 class SubsampleReplicateCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "subsample replicate count"
 
 
-@dataclass(frozen=True, slots=True)
 class GroupCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "group count"
 
 
-@dataclass(frozen=True, slots=True)
 class ReplicateIndex(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "replicate index"
 
 
-@dataclass(frozen=True, slots=True)
 class ClusterIndex(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "cluster index"
 
 
-@dataclass(frozen=True, slots=True)
 class KMeansInitializationCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "k-means initialization count"
 
 
-@dataclass(frozen=True, slots=True)
 class KMeansMaximumIterationCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "k-means maximum iteration count"
 
 
-@dataclass(frozen=True, slots=True)
 class ByteCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "byte count"
 
 
-@dataclass(frozen=True, slots=True)
 class LearningRate(PositiveFiniteFloatValue):
     validation_name: ClassVar[str] = "learning rate"
 
 
-@dataclass(frozen=True, slots=True)
 class WeightDecay(NonNegativeFiniteFloatValue):
     validation_name: ClassVar[str] = "weight decay"
 
 
-@dataclass(frozen=True, slots=True)
 class DataLoaderWorkerCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "data loader worker count"
 
 
-@dataclass(frozen=True, slots=True)
 class WorkerCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "worker count"
 
 
-@dataclass(frozen=True, slots=True)
 class FeatureCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "feature count"
 
 
-@dataclass(frozen=True, slots=True)
 class RowCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "row count"
 
@@ -260,32 +364,26 @@ class OutcomeLabelSequence:
         return iter(self.labels)
 
 
-@dataclass(frozen=True, slots=True)
 class DirichletConcentration(PositiveFiniteFloatValue):
     validation_name: ClassVar[str] = "Dirichlet concentration"
 
 
-@dataclass(frozen=True, slots=True)
 class ProximalCoefficient(PositiveFiniteFloatValue):
     validation_name: ClassVar[str] = "proximal coefficient"
 
 
-@dataclass(frozen=True, slots=True)
 class DittoRegularization(NonNegativeFiniteFloatValue):
     validation_name: ClassVar[str] = "Ditto regularization"
 
 
-@dataclass(frozen=True, slots=True)
 class ShrinkageWeight(ClosedUnitIntervalValue):
     validation_name: ClassVar[str] = "shrinkage weight"
 
 
-@dataclass(frozen=True, slots=True)
 class SummaryCoefficient(PositiveFiniteFloatValue):
     validation_name: ClassVar[str] = "summary coefficient"
 
 
-@dataclass(frozen=True, slots=True)
 class ConfidenceLevel(OpenUnitIntervalValue):
     validation_name: ClassVar[str] = "confidence level"
 
@@ -314,7 +412,6 @@ class MetricValue:
         _number(self.value, "metric")
 
 
-@dataclass(frozen=True, slots=True)
 class TrafficRatePerDay(NonNegativeFiniteFloatValue):
     validation_name: ClassVar[str] = "traffic rate"
 

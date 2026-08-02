@@ -163,10 +163,10 @@ def preprocess_centralized_reference_population_stage(
     )
     schema = dataset_binding(dataset).schema
     protocol = build_centralized_preprocessing_protocol(FeatureNameSequence(schema.feature_columns))
-    joined = join_handoff_with_canonical_features(canonical_root, handoff, schema.feature_columns)
+    joined = join_handoff_with_canonical_features(canonical_root, handoff, FeatureNameSequence(schema.feature_columns))
     partitions, row_ids, training_labels = extract_partitions(
         joined,
-        schema.feature_columns,
+        FeatureNameSequence(schema.feature_columns),
         split_protocol=request.split_protocol,
         branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
         deterministic_sort=True,
@@ -192,4 +192,4 @@ def preprocess_centralized_reference_population_stage(
 
 
 def build_centralized_preprocessing_protocol(feature_names: FeatureNameSequence) -> PreprocessingProtocol:
-    return build_preprocessing_protocol(scientific_centralized_preprocessing_method(), feature_names.names)
+    return build_preprocessing_protocol(scientific_centralized_preprocessing_method(), feature_names)

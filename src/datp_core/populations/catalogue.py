@@ -16,7 +16,7 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.errors import CapabilityError, ScientificContractError
-from datp_core.domain.values import Seed
+from datp_core.domain.values import FeatureNameSequence, RowCount, Seed
 from datp_core.populations.capabilities import POPULATION_EVIDENCE_ROLES, population_capabilities
 from datp_core.populations.ciciot_file_clients import build_ciciot_file_clients
 from datp_core.populations.edge_sensor_groups import build_edge_sensor_groups
@@ -232,9 +232,9 @@ def build_preprocessing_handoff(request: PreprocessingHandoffRequest) -> Preproc
         counts = tuple(
             ClientPartitionCounts(
                 client_id=client_id,
-                benign_calibration_count=0,
-                benign_evaluation_count=0,
-                attack_evaluation_count=0,
+                benign_calibration_count=RowCount(0),
+                benign_evaluation_count=RowCount(0),
+                attack_evaluation_count=RowCount(0),
                 accepted=False,
                 deployment_fallback=client_id in request.deployment_fallback_client_ids,
             )
@@ -264,7 +264,7 @@ def build_preprocessing_handoff(request: PreprocessingHandoffRequest) -> Preproc
 def join_handoff_with_canonical_features(
     canonical_root: Path,
     handoff: PreprocessingHandoff,
-    feature_names: tuple[str, ...],
+    feature_names: FeatureNameSequence,
 ) -> pl.DataFrame:
     """Join split assignments to canonical feature columns for preprocess publication."""
     assignments = handoff.assignments
@@ -337,9 +337,9 @@ def _client_partition_counts(
     return tuple(
         ClientPartitionCounts(
             client_id=str(row[0]),
-            benign_calibration_count=int(row[1]),
-            benign_evaluation_count=int(row[2]),
-            attack_evaluation_count=int(row[3]),
+            benign_calibration_count=RowCount(int(row[1])),
+            benign_evaluation_count=RowCount(int(row[2])),
+            attack_evaluation_count=RowCount(int(row[3])),
             accepted=str(row[0]) in accepted,
             deployment_fallback=str(row[0]) in deployment_fallback_client_ids,
         )
