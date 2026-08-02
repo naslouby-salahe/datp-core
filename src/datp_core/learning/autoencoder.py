@@ -14,6 +14,7 @@ from datp_core.runtime.compute import require_cuda_available
 
 type AutoencoderState = dict[str, torch.Tensor]
 LEARNING_DTYPE = np.float32
+TORCH_LEARNING_DTYPE = torch.float32
 
 
 class ReconstructionAutoencoder(nn.Module):

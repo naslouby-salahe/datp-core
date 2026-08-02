@@ -2,12 +2,11 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import IntEnum
 from hashlib import sha256
 from pathlib import Path
-from typing import Generic, TypeVar
 
 import numpy as np
-import polars as pl
 import torch
 from safetensors.torch import save
 from torch import nn
@@ -17,7 +16,6 @@ from datp_core.domain.enums import (
     CommunicationEstimationMethod,
     ContractSubject,
     OptimizerId,
-    ProcessedDataBranch,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import (
@@ -36,6 +34,7 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.autoencoder import (
     LEARNING_DTYPE,
+    TORCH_LEARNING_DTYPE,
     AutoencoderState,
     ReconstructionAutoencoder,
     build_reconstruction_autoencoder,
@@ -45,14 +44,10 @@ from datp_core.learning.autoencoder import (
 )
 from datp_core.learning.federated.checkpointing import retain_checkpoint_candidates
 from datp_core.learning.federated.models import (
-    CLIENT_ROUNDS_SCHEMA,
-    PERSONALIZED_ROUNDS_SCHEMA,
-    ROUND_SUMMARY_SCHEMA,
     ClientTrainingInput,
     ClientTrainingResult,
     ClientUpdate,
     CommunicationRecord,
-    FederatedHistoryAssetName,
     FederatedRoundResult,
     FederatedTrainingCoordinate,
     FederatedTrainingHistory,
@@ -66,7 +61,6 @@ from datp_core.populations.models import (
     ClientIdentity,
     PopulationOutcomeLabel,
 )
-from datp_core.preprocessing.models import FittedPreprocessingState
 from datp_core.protocols.models import (
     AutoencoderProtocol,
     CheckpointProtocol,
@@ -78,7 +72,10 @@ from datp_core.protocols.training import FEDERATED_DATALOADER_WORKER_COUNT
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution, derive_worker_seed
 
-TrainingProtocolT = TypeVar("TrainingProtocolT", FedAvgProtocol, FedProxProtocol)
+
+class TrainingStream(IntEnum):
+    GLOBAL_CLIENT_UPDATE = 0
+    PERSONALIZED_CLIENT_UPDATE = 1
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,7 +95,7 @@ class PreparedFederatedClientData:
                 "prepared features must reside on CPU",
                 subject=ContractSubject.RUNTIME,
             )
-        if self.features_cpu.dtype != torch.float32:
+        if self.features_cpu.dtype != TORCH_LEARNING_DTYPE:
             raise ScientificContractError(
                 "prepared features must use the canonical torch learning dtype",
                 subject=ContractSubject.FEATURES,
@@ -111,31 +108,18 @@ class PreparedFederatedClientData:
 
 
 @dataclass(frozen=True, slots=True)
-class FederatedTrainingRequest(Generic[TrainingProtocolT]):  # noqa: UP046
+class FederatedTrainingRequest[T: (FedAvgProtocol, FedProxProtocol)]:
     coordinate: FederatedTrainingCoordinate
     clients: tuple[ClientTrainingInput, ...]
     population_client_count: ClientCount
     autoencoder: AutoencoderProtocol
-    training_protocol: TrainingProtocolT
+    training_protocol: T
     checkpoint_protocol: CheckpointProtocol
     training_seed: Seed
     batch_size: BatchSize
     learning_rate: LearningRate
     split_manifest_checksum: Checksum
     output_directory: Path
-
-
-def reject_centralized_preprocessing_for_federated_training(state: FittedPreprocessingState) -> None:
-    if state.branch is not ProcessedDataBranch.FEDERATED:
-        raise LeakageError(
-            "centralized preprocessing state cannot enter federated training",
-            subject=state.branch,
-        )
-    if state.client_identity is None:
-        raise LeakageError(
-            "federated training requires client-scoped preprocessing state",
-            subject=ContractSubject.CLIENT_IDENTITY,
-        )
 
 
 def reject_attack_rows_in_federated_training(labels: OutcomeLabelSequence) -> None:
@@ -150,15 +134,6 @@ def prepare_federated_client_data(
     client_input: ClientTrainingInput,
     autoencoder: AutoencoderProtocol,
 ) -> PreparedFederatedClientData:
-    if (
-        client_input.preprocessing_state.client_identity is None
-        or client_input.preprocessing_state.client_identity.value != client_input.client.client_id
-    ):
-        raise ScientificContractError(
-            "preprocessing client identity does not match input client",
-            subject=ContractSubject.CLIENT_IDENTITY,
-        )
-
     labels = OutcomeLabelSequence(
         tuple(str(value) for value in client_input.training_features.get_column(OUTCOME_LABEL_COLUMN).to_list())
     )
@@ -178,7 +153,7 @@ def prepare_federated_client_data(
     if len(labels) != matrix.shape[0]:
         raise ScientificContractError("federated arrays must align by row", subject=ContractSubject.ROWS)
 
-    features_cpu = torch.tensor(matrix, dtype=torch.float32, device="cpu")
+    features_cpu = torch.tensor(matrix, dtype=TORCH_LEARNING_DTYPE, device="cpu")
     return PreparedFederatedClientData(
         client=client_input.client,
         features_cpu=features_cpu,
@@ -186,13 +161,15 @@ def prepare_federated_client_data(
     )
 
 
-def client_round_seed(
+def derive_client_stream_seed(
     training_seed: Seed,
     round_number: RoundNumber,
     client_index: int,
+    stream: TrainingStream,
 ) -> Seed:
     round_seed = derive_worker_seed(training_seed, round_number.value)
-    return derive_worker_seed(round_seed, client_index)
+    client_seed = derive_worker_seed(round_seed, client_index)
+    return derive_worker_seed(client_seed, stream.value)
 
 
 def build_client_loader(
@@ -201,14 +178,7 @@ def build_client_loader(
     batch_size: BatchSize,
     seed: Seed,
 ) -> DataLoader:
-    features_cpu = data.features_cpu
-    if features_cpu.shape[0] == 0:
-        raise ScientificContractError(
-            "federated local training produced no batches; declared batch size cannot be relaxed",
-            subject=ContractSubject.BATCH_SIZE,
-        )
-
-    dataset = TensorDataset(features_cpu)
+    dataset = TensorDataset(data.features_cpu)
     generator = torch.Generator(device="cpu")
     generator.manual_seed(seed.value)
     return DataLoader(
@@ -283,8 +253,33 @@ def run_local_epoch(
             subject=ContractSubject.BATCH_SIZE,
         )
     mean_loss = MetricValue(accumulated_weighted_loss / total_samples)
-    state = {name: tensor.detach().cpu().clone() for name, tensor in model.state_dict().items()}
+    state = clone_state(dict(model.state_dict()))
     return state, mean_loss, RowCount(total_samples)
+
+
+def train_client_update(
+    client_data: PreparedFederatedClientData,
+    initial_state: AutoencoderState,
+    autoencoder: AutoencoderProtocol,
+    optimizer_protocol: OptimizerProtocol,
+    learning_rate: LearningRate,
+    batch_size: BatchSize,
+    seed: Seed,
+    device: torch.device,
+    *,
+    proximal_term: ProximalTerm | None = None,
+) -> tuple[ClientUpdate, ClientTrainingResult]:
+    local_model = ReconstructionAutoencoder(autoencoder.widths).to(device)
+    load_autoencoder_state(local_model, initial_state)
+    optimizer = build_optimizer(local_model, optimizer_protocol, learning_rate)
+    loader = build_client_loader(client_data, batch_size=batch_size, seed=seed)
+    local_state, local_loss, sample_count = run_local_epoch(
+        local_model, optimizer, loader, device, proximal_term=proximal_term
+    )
+    client = client_data.client
+    update = ClientUpdate(client=client, state_dict=local_state, sample_count=sample_count, local_loss=local_loss)
+    result = ClientTrainingResult(client=client, sample_count=sample_count, local_loss=local_loss)
+    return update, result
 
 
 def _resolve_reference_parameters(
@@ -369,19 +364,22 @@ def serialize_and_checksum_state_dict(
     return checksum, byte_count
 
 
-def validate_federated_training_request(request: FederatedTrainingRequest[TrainingProtocolT]) -> None:  # noqa: UP047
-    if not request.clients:
+def validate_common_request(
+    clients: tuple[ClientTrainingInput, ...],
+    population_client_count: ClientCount,
+) -> None:
+    if not clients:
         raise ScientificContractError(
             "training requires at least one client dataset",
             subject=ContractSubject.CLIENT,
         )
-    client_ids = tuple(item.client.client_id for item in request.clients)
+    client_ids = tuple(item.client.client_id for item in clients)
     if len(set(client_ids)) != len(client_ids):
         raise ScientificContractError(
             "training cannot receive duplicate client identities",
             subject=ContractSubject.CLIENT_IDENTITY,
         )
-    if len(request.clients) != request.population_client_count.value:
+    if len(clients) != population_client_count.value:
         raise ScientificContractError(
             "training requires exactly the declared population client count",
             subject=ContractSubject.CLIENT,
@@ -389,6 +387,11 @@ def validate_federated_training_request(request: FederatedTrainingRequest[Traini
 
 
 def compute_weighted_aggregate_loss(updates: Sequence[ClientUpdate]) -> MetricValue:
+    if not updates:
+        raise ScientificContractError(
+            "aggregate loss requires at least one client update",
+            subject=ContractSubject.CLIENT,
+        )
     total_samples = sum(u.sample_count.value for u in updates)
     return MetricValue(sum(u.local_loss.value * u.sample_count.value for u in updates) / total_samples)
 
@@ -396,14 +399,13 @@ def compute_weighted_aggregate_loss(updates: Sequence[ClientUpdate]) -> MetricVa
 def create_communication_record(
     round_number: RoundNumber,
     state_bytes: ByteCount,
-    client_count: int,
+    upload_count: int,
+    download_count: int,
 ) -> CommunicationRecord:
-    upload_bytes = client_count * state_bytes.value
-    download_bytes = client_count * state_bytes.value
     return CommunicationRecord(
         round_number=round_number,
-        estimated_upload_bytes=ByteCount(upload_bytes),
-        estimated_download_bytes=ByteCount(download_bytes),
+        estimated_upload_bytes=ByteCount(upload_count * state_bytes.value),
+        estimated_download_bytes=ByteCount(download_count * state_bytes.value),
         estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
     )
 
@@ -416,10 +418,10 @@ def create_round_snapshot(
     return RoundSnapshot(round_number, clone_state(state), loss)
 
 
-def run_federated_training(  # noqa: UP047
-    request: FederatedTrainingRequest[TrainingProtocolT],
+def run_federated_training(
+    request: FederatedTrainingRequest,
 ) -> FederatedTrainingOutcome:
-    validate_federated_training_request(request)
+    validate_common_request(request.clients, request.population_client_count)
     configure_deterministic_execution(request.training_seed)
     device = resolve_cuda_device()
 
@@ -429,8 +431,8 @@ def run_federated_training(  # noqa: UP047
     ]
 
     global_model = build_reconstruction_autoencoder(request.autoencoder, initialization_seed=request.training_seed)
-    global_model.to(device)
     global_state = clone_autoencoder_state(global_model)
+    global_model.to(device)
     del global_model
 
     candidate_rounds: set[RoundNumber] = set(request.checkpoint_protocol.candidates)
@@ -445,24 +447,27 @@ def run_federated_training(  # noqa: UP047
         reference_state = {name: tensor.to(device) for name, tensor in global_state.items()}
 
         for client_index, client_data in enumerate(prepared_clients):
-            client_seed = client_round_seed(request.training_seed, round_number, client_index)
-            local_model = ReconstructionAutoencoder(request.autoencoder.widths).to(device)
-            load_autoencoder_state(local_model, clone_state(reference_state))
-            optimizer = build_optimizer(local_model, request.training_protocol.optimizer, request.learning_rate)
-            loader = build_client_loader(client_data, batch_size=request.batch_size, seed=client_seed)
+            client_seed = derive_client_stream_seed(
+                request.training_seed, round_number, client_index, TrainingStream.GLOBAL_CLIENT_UPDATE
+            )
             proximal_term = (
                 ProximalTerm(reference_state=reference_state, coefficient=proximal_coefficient)
                 if proximal_coefficient is not None
                 else None
             )
-            local_state, local_loss, sample_count = run_local_epoch(
-                local_model, optimizer, loader, device, proximal_term=proximal_term
+            update, result = train_client_update(
+                client_data=client_data,
+                initial_state=reference_state,
+                autoencoder=request.autoencoder,
+                optimizer_protocol=request.training_protocol.optimizer,
+                learning_rate=request.learning_rate,
+                batch_size=request.batch_size,
+                seed=client_seed,
+                device=device,
+                proximal_term=proximal_term,
             )
-            client = client_data.client
-            client_updates.append(
-                ClientUpdate(client=client, state_dict=local_state, sample_count=sample_count, local_loss=local_loss)
-            )
-            client_results.append(ClientTrainingResult(client=client, sample_count=sample_count, local_loss=local_loss))
+            client_updates.append(update)
+            client_results.append(result)
 
         aggregated = aggregate_client_updates(client_updates)
         global_state = aggregated
@@ -470,7 +475,8 @@ def run_federated_training(  # noqa: UP047
         aggregate_loss = compute_weighted_aggregate_loss(client_updates)
         state_checksum, single_state_bytes = serialize_and_checksum_state_dict(aggregated)
 
-        communication = create_communication_record(round_number, single_state_bytes, len(ordered_clients))
+        client_count = len(ordered_clients)
+        communication = create_communication_record(round_number, single_state_bytes, client_count, client_count)
         global_reference = GlobalModelStateReference(
             coordinate=request.coordinate,
             round_number=round_number,
@@ -529,60 +535,8 @@ def _resolve_proximal_coefficient(
             return None
         case FedProxProtocol(coefficient=coefficient):
             return coefficient
-
-
-def persist_federated_training_history(
-    history: FederatedTrainingHistory,
-    directory: Path,
-    *,
-    device_name: str,
-) -> None:
-    if not device_name:
-        raise ScientificContractError(
-            "training publication requires a non-empty device name",
-            subject=ContractSubject.CUDA,
-        )
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / FederatedHistoryAssetName.DEVICE_NAME.value).write_text(device_name, encoding="utf-8")
-
-    round_rows = [
-        (
-            r.round_number.value,
-            r.aggregate_loss.value,
-            r.communication.estimated_upload_bytes.value,
-            r.communication.estimated_download_bytes.value,
-            r.global_state_reference.state_checksum.value,
-        )
-        for r in history.rounds
-    ]
-    client_rows = [
-        (
-            r.round_number.value,
-            cr.client.client_id,
-            cr.sample_count.value,
-            cr.local_loss.value,
-        )
-        for r in history.rounds
-        for cr in r.client_results
-    ]
-    personalized_rows = [
-        (
-            r.round_number.value,
-            pr.client.client_id,
-            pr.local_loss.value,
-            pr.state_checksum.value,
-        )
-        for r in history.rounds
-        for pr in r.personalized_state_references
-    ]
-
-    pl.DataFrame(round_rows, schema=ROUND_SUMMARY_SCHEMA, orient="row").write_parquet(
-        directory / FederatedHistoryAssetName.ROUND_SUMMARY.value
-    )
-    pl.DataFrame(client_rows, schema=CLIENT_ROUNDS_SCHEMA, orient="row").write_parquet(
-        directory / FederatedHistoryAssetName.CLIENT_ROUNDS.value
-    )
-    if personalized_rows:
-        pl.DataFrame(personalized_rows, schema=PERSONALIZED_ROUNDS_SCHEMA, orient="row").write_parquet(
-            directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
-        )
+        case _:
+            raise ScientificContractError(
+                f"unsupported training protocol {type(protocol).__name__}",
+                subject=ContractSubject.TRAINING,
+            )

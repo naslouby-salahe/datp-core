@@ -20,12 +20,14 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.federated.checkpointing import (
     CheckpointCandidate,
+    FederatedHistoryAssetName,
     ReusedFederatedTrainingRequest,
     ReusedPersonalizedCandidatesRequest,
     candidate_set_digest,
     federated_training_directory_is_reusable,
     load_reused_federated_training,
     load_reused_personalized_candidates,
+    persist_federated_training_history,
     rebase_checkpoint_candidates,
 )
 from datp_core.learning.federated.ditto import DittoTrainingOutcome, DittoTrainingRequest, train_ditto
@@ -33,14 +35,12 @@ from datp_core.learning.federated.fedavg import train_fedavg
 from datp_core.learning.federated.fedprox import train_fedprox
 from datp_core.learning.federated.models import (
     ClientTrainingInput,
-    FederatedHistoryAssetName,
     FederatedTrainingCoordinate,
     FederatedTrainingOutcome,
     FederatedTrainingResult,
 )
 from datp_core.learning.federated.training import (
     FederatedTrainingRequest,
-    persist_federated_training_history,
     preprocessing_state_set_checksum,
 )
 from datp_core.orchestration.stages import _Box

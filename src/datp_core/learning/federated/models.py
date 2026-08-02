@@ -1,12 +1,9 @@
 """Typed, immutable federated learning model contracts."""
 
-from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 
 import polars as pl
-import torch
 
 from datp_core.domain.enums import (
     CheckpointStatus,
@@ -48,54 +45,6 @@ class RoundSnapshot:
     round_number: RoundNumber
     state_dict: AutoencoderState
     mean_training_loss: MetricValue
-
-
-class FederatedHistoryAssetName(StrEnum):
-    ROUND_SUMMARY = "round_summary.parquet"
-    CLIENT_ROUNDS = "client_rounds.parquet"
-    PERSONALIZED_ROUNDS = "personalized_rounds.parquet"
-    DEVICE_NAME = "device_name.txt"
-    COMPLETE = "COMPLETE"
-
-
-class FederatedHistoryColumn(StrEnum):
-    ROUND_NUMBER = "round_number"
-    AGGREGATE_LOSS = "aggregate_loss"
-    UPLOAD_BYTES = "upload_bytes"
-    DOWNLOAD_BYTES = "download_bytes"
-    GLOBAL_STATE_CHECKSUM = "global_state_checksum"
-    CLIENT_ID = "client_id"
-    SAMPLE_COUNT = "sample_count"
-    LOCAL_LOSS = "local_loss"
-    STATE_CHECKSUM = "state_checksum"
-
-
-_ROUND_SUMMARY_DTYPE: Mapping[str, type[pl.DataType]] = {
-    FederatedHistoryColumn.ROUND_NUMBER.value: pl.Int64,
-    FederatedHistoryColumn.AGGREGATE_LOSS.value: pl.Float64,
-    FederatedHistoryColumn.UPLOAD_BYTES.value: pl.Int64,
-    FederatedHistoryColumn.DOWNLOAD_BYTES.value: pl.Int64,
-    FederatedHistoryColumn.GLOBAL_STATE_CHECKSUM.value: pl.String,
-}
-
-_CLIENT_ROUNDS_DTYPE: Mapping[str, type[pl.DataType]] = {
-    FederatedHistoryColumn.ROUND_NUMBER.value: pl.Int64,
-    FederatedHistoryColumn.CLIENT_ID.value: pl.String,
-    FederatedHistoryColumn.SAMPLE_COUNT.value: pl.Int64,
-    FederatedHistoryColumn.LOCAL_LOSS.value: pl.Float64,
-}
-
-_PERSONALIZED_ROUNDS_DTYPE: Mapping[str, type[pl.DataType]] = {
-    FederatedHistoryColumn.ROUND_NUMBER.value: pl.Int64,
-    FederatedHistoryColumn.CLIENT_ID.value: pl.String,
-    FederatedHistoryColumn.LOCAL_LOSS.value: pl.Float64,
-    FederatedHistoryColumn.STATE_CHECKSUM.value: pl.String,
-}
-
-
-ROUND_SUMMARY_SCHEMA: Mapping[str, type[pl.DataType]] = _ROUND_SUMMARY_DTYPE
-CLIENT_ROUNDS_SCHEMA: Mapping[str, type[pl.DataType]] = _CLIENT_ROUNDS_DTYPE
-PERSONALIZED_ROUNDS_SCHEMA: Mapping[str, type[pl.DataType]] = _PERSONALIZED_ROUNDS_DTYPE
 
 
 def candidate_tensor_name(round_number: RoundNumber, client: ClientIdentity | None = None) -> str:
@@ -174,7 +123,7 @@ class ClientTrainingInput:
 @dataclass(frozen=True, slots=True)
 class ClientUpdate:
     client: ClientIdentity
-    state_dict: dict[str, torch.Tensor]
+    state_dict: AutoencoderState
     sample_count: RowCount
     local_loss: MetricValue
 
@@ -458,6 +407,29 @@ class FederatedTrainingOutcome:
     training_result: FederatedTrainingResult
     candidates: tuple[CheckpointCandidate, ...]
 
+    def __post_init__(self) -> None:
+        if not self.candidates:
+            raise ScientificContractError(
+                "federated training outcome requires at least one candidate",
+                subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            )
+        for candidate in self.candidates:
+            if candidate.coordinate != self.training_result.coordinate:
+                raise ScientificContractError(
+                    "candidate coordinate must match the training result coordinate",
+                    subject=ContractSubject.COORDINATE,
+                )
+            if candidate.preprocessing_state_set_checksum != self.training_result.preprocessing_state_set_checksum:
+                raise ScientificContractError(
+                    "candidate preprocessing checksum must match training result",
+                    subject=ContractSubject.PREPROCESSING,
+                )
+            if candidate.split_manifest_checksum != self.training_result.split_manifest_checksum:
+                raise ScientificContractError(
+                    "candidate split manifest checksum must match training result",
+                    subject=ContractSubject.SPLIT,
+                )
+
 
 @dataclass(frozen=True, slots=True)
 class PersonalizedCandidateSet:
@@ -483,6 +455,11 @@ class PersonalizedCandidateSet:
             )
         reference = self.candidates[0]
         for candidate in self.candidates:
+            if candidate.coordinate.model is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+                raise ScientificContractError(
+                    "personalized candidates must use DITTO_PERSONALIZED_AUTOENCODER model",
+                    subject=ContractSubject.COORDINATE,
+                )
             if candidate.client != self.client:
                 raise ScientificContractError(
                     "every personalized candidate must belong to the declared client",
@@ -507,6 +484,11 @@ class DittoTrainingOutcome:
     personalized_candidates: tuple[PersonalizedCandidateSet, ...]
 
     def __post_init__(self) -> None:
+        if not self.global_candidates:
+            raise ScientificContractError(
+                "Ditto training requires at least one global candidate",
+                subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            )
         if not self.personalized_candidates:
             raise ScientificContractError(
                 "Ditto training requires at least one personalized candidate set",

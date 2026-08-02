@@ -6,7 +6,6 @@ and scores are structurally distinct coordinates.
 """
 
 from dataclasses import dataclass
-from enum import IntEnum
 from pathlib import Path
 
 import torch
@@ -23,11 +22,9 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.autoencoder import (
     AutoencoderState,
-    ReconstructionAutoencoder,
     build_reconstruction_autoencoder,
     clone_autoencoder_state,
     clone_state,
-    load_autoencoder_state,
 )
 from datp_core.learning.federated.checkpointing import retain_checkpoint_candidates
 from datp_core.learning.federated.models import (
@@ -47,27 +44,22 @@ from datp_core.learning.federated.models import (
 from datp_core.learning.federated.training import (
     PreparedFederatedClientData,
     ProximalTerm,
+    TrainingStream,
     aggregate_client_updates,
-    build_client_loader,
-    build_optimizer,
-    client_round_seed,
     compute_weighted_aggregate_loss,
     create_communication_record,
     create_round_snapshot,
+    derive_client_stream_seed,
     prepare_federated_client_data,
     preprocessing_state_set_checksum,
-    run_local_epoch,
     serialize_and_checksum_state_dict,
+    train_client_update,
+    validate_common_request,
 )
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol, DittoProtocol
 from datp_core.runtime.compute import resolve_cuda_device
-from datp_core.runtime.determinism import configure_deterministic_execution, derive_worker_seed
-
-
-class _TrainingStream(IntEnum):
-    GLOBAL_CLIENT_UPDATE = 0
-    PERSONALIZED_CLIENT_UPDATE = 1
+from datp_core.runtime.determinism import configure_deterministic_execution
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,8 +91,8 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
 
     regularization = request.training_protocol.regularization
     global_model = build_reconstruction_autoencoder(request.autoencoder, initialization_seed=request.training_seed)
-    global_model.to(device)
     global_state = clone_autoencoder_state(global_model)
+    global_model.to(device)
     del global_model
 
     personalized_states: dict[ClientIdentity, AutoencoderState] = {
@@ -123,61 +115,50 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
 
         for client_index, client_data in enumerate(prepared_clients):
             client = client_data.client
-            base_seed = client_round_seed(request.training_seed, round_number, client_index)
-            global_seed = _ditto_stream_seed(base_seed, _TrainingStream.GLOBAL_CLIENT_UPDATE)
-            personalized_seed = _ditto_stream_seed(base_seed, _TrainingStream.PERSONALIZED_CLIENT_UPDATE)
-
-            global_local_model = ReconstructionAutoencoder(request.autoencoder.widths).to(device)
-            load_autoencoder_state(global_local_model, clone_state(reference_state))
-            global_optimizer = build_optimizer(
-                global_local_model, request.training_protocol.optimizer, request.learning_rate
+            global_seed = derive_client_stream_seed(
+                request.training_seed, round_number, client_index, TrainingStream.GLOBAL_CLIENT_UPDATE
             )
-            global_loader = build_client_loader(client_data, batch_size=request.batch_size, seed=global_seed)
-            global_local_state, global_local_loss, sample_count = run_local_epoch(
-                global_local_model, global_optimizer, global_loader, device
-            )
-            client_updates.append(
-                ClientUpdate(
-                    client=client,
-                    state_dict=global_local_state,
-                    sample_count=sample_count,
-                    local_loss=global_local_loss,
-                )
-            )
-            client_results.append(
-                ClientTrainingResult(client=client, sample_count=sample_count, local_loss=global_local_loss)
+            personalized_seed = derive_client_stream_seed(
+                request.training_seed, round_number, client_index, TrainingStream.PERSONALIZED_CLIENT_UPDATE
             )
 
-            personalized_model = ReconstructionAutoencoder(request.autoencoder.widths).to(device)
-            load_autoencoder_state(
-                personalized_model,
-                {name: tensor.to(device) for name, tensor in personalized_states[client].items()},
+            update, result = train_client_update(
+                client_data=client_data,
+                initial_state=reference_state,
+                autoencoder=request.autoencoder,
+                optimizer_protocol=request.training_protocol.optimizer,
+                learning_rate=request.learning_rate,
+                batch_size=request.batch_size,
+                seed=global_seed,
+                device=device,
             )
-            personalized_optimizer = build_optimizer(
-                personalized_model, request.training_protocol.optimizer, request.learning_rate
-            )
-            personalized_loader = build_client_loader(
-                client_data, batch_size=request.batch_size, seed=personalized_seed
-            )
-            personalized_state, personalized_loss, _personalized_sample_count = run_local_epoch(
-                personalized_model,
-                personalized_optimizer,
-                personalized_loader,
-                device,
+            client_updates.append(update)
+            client_results.append(result)
+
+            personalized_state = clone_state(personalized_states[client])
+            personalized_update, _ = train_client_update(
+                client_data=client_data,
+                initial_state=personalized_state,
+                autoencoder=request.autoencoder,
+                optimizer_protocol=request.training_protocol.optimizer,
+                learning_rate=request.learning_rate,
+                batch_size=request.batch_size,
+                seed=personalized_seed,
+                device=device,
                 proximal_term=ProximalTerm(reference_state=reference_state, coefficient=regularization),
             )
-            personalized_states[client] = personalized_state
+            personalized_states[client] = personalized_update.state_dict
             if round_number in candidate_rounds:
                 personalized_snapshots[client].append(
-                    create_round_snapshot(round_number, personalized_state, personalized_loss)
+                    create_round_snapshot(round_number, personalized_update.state_dict, personalized_update.local_loss)
                 )
-            personalized_state_checksum, _ = serialize_and_checksum_state_dict(personalized_state)
+            personalized_state_checksum, _ = serialize_and_checksum_state_dict(personalized_update.state_dict)
             personalized_references.append(
                 PersonalizedModelStateReference(
                     coordinate=request.personalized_coordinate,
                     client=client,
                     round_number=round_number,
-                    local_loss=personalized_loss,
+                    local_loss=personalized_update.local_loss,
                     state_checksum=personalized_state_checksum,
                     tensor_path=None,
                 )
@@ -188,7 +169,9 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
 
         aggregate_loss = compute_weighted_aggregate_loss(client_updates)
         global_state_checksum, single_state_bytes = serialize_and_checksum_state_dict(aggregated)
-        communication = create_communication_record(round_number, single_state_bytes, len(prepared_clients))
+        communication = create_communication_record(
+            round_number, single_state_bytes, len(prepared_clients), len(prepared_clients)
+        )
 
         global_reference = GlobalModelStateReference(
             coordinate=request.global_coordinate,
@@ -260,10 +243,6 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     )
 
 
-def _ditto_stream_seed(base_seed: Seed, stream: _TrainingStream) -> Seed:
-    return derive_worker_seed(base_seed, stream.value)
-
-
 def _validate_request(request: DittoTrainingRequest) -> None:
     if request.global_coordinate.model is not TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
         raise ScientificContractError(
@@ -275,7 +254,7 @@ def _validate_request(request: DittoTrainingRequest) -> None:
             "Ditto personalized training requires the DITTO_PERSONALIZED_AUTOENCODER coordinate",
             subject=request.personalized_coordinate.model,
         )
-    if request.training_protocol.kind != TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+    if request.training_protocol.kind is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
         raise ScientificContractError(
             "Ditto training protocol must declare DITTO_PERSONALIZED_AUTOENCODER",
             subject=request.training_protocol.kind,
@@ -290,19 +269,4 @@ def _validate_request(request: DittoTrainingRequest) -> None:
             "Ditto personalized coordinate regularization must match the training protocol",
             subject=ContractSubject.COORDINATE,
         )
-    if not request.clients:
-        raise ScientificContractError(
-            "Ditto training requires at least one client dataset",
-            subject=ContractSubject.CLIENT,
-        )
-    client_ids = tuple(item.client.client_id for item in request.clients)
-    if len(set(client_ids)) != len(client_ids):
-        raise ScientificContractError(
-            "Ditto training cannot receive duplicate client identities",
-            subject=ContractSubject.CLIENT_IDENTITY,
-        )
-    if len(request.clients) != request.population_client_count.value:
-        raise ScientificContractError(
-            "Ditto training requires exactly the declared population client count",
-            subject=ContractSubject.CLIENT,
-        )
+    validate_common_request(request.clients, request.population_client_count)

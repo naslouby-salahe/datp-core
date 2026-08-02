@@ -4,7 +4,6 @@ from tests.unit.learning.federated.helpers import (
     AUTOENCODER,
     build_client_input,
     client_identity,
-    fitted_state,
     require_cuda,
 )
 
@@ -23,27 +22,27 @@ from datp_core.learning.autoencoder import ReconstructionAutoencoder
 from datp_core.learning.federated.models import ClientUpdate
 from datp_core.learning.federated.training import (
     ProximalTerm,
+    TrainingStream,
     aggregate_client_updates,
     build_client_loader,
-    client_round_seed,
+    derive_client_stream_seed,
     prepare_federated_client_data,
     preprocessing_state_set_checksum,
     proximal_penalty,
     reject_attack_rows_in_federated_training,
-    reject_centralized_preprocessing_for_federated_training,
     run_local_epoch,
     serialize_and_checksum_state_dict,
 )
 from datp_core.populations.models import PopulationOutcomeLabel
 
 
-def test_client_round_seed_is_deterministic_and_client_specific() -> None:
-    first = client_round_seed(Seed(3), RoundNumber(1), 0)
-    second = client_round_seed(Seed(3), RoundNumber(1), 1)
-    third = client_round_seed(Seed(3), RoundNumber(2), 0)
+def test_derive_client_stream_seed_is_deterministic_and_client_specific() -> None:
+    first = derive_client_stream_seed(Seed(3), RoundNumber(1), 0, TrainingStream.GLOBAL_CLIENT_UPDATE)
+    second = derive_client_stream_seed(Seed(3), RoundNumber(1), 1, TrainingStream.GLOBAL_CLIENT_UPDATE)
+    third = derive_client_stream_seed(Seed(3), RoundNumber(2), 0, TrainingStream.GLOBAL_CLIENT_UPDATE)
     assert first != second
     assert first != third
-    assert client_round_seed(Seed(3), RoundNumber(1), 0) == first
+    assert derive_client_stream_seed(Seed(3), RoundNumber(1), 0, TrainingStream.GLOBAL_CLIENT_UPDATE) == first
 
 
 def test_reject_attack_rows_in_federated_training_raises_on_any_attack_label() -> None:
@@ -55,15 +54,6 @@ def test_reject_attack_rows_in_federated_training_raises_on_any_attack_label() -
 def test_reject_attack_rows_in_federated_training_accepts_all_benign() -> None:
     labels = OutcomeLabelSequence((PopulationOutcomeLabel.BENIGN.value, PopulationOutcomeLabel.BENIGN.value))
     reject_attack_rows_in_federated_training(labels)
-
-
-def test_reject_centralized_preprocessing_for_federated_training(tmp_path) -> None:
-    from datp_core.domain.enums import ProcessedDataBranch
-
-    state = fitted_state(tmp_path / "state.skops", "client_a")
-    object.__setattr__(state, "branch", ProcessedDataBranch.CENTRALIZED_REFERENCE)
-    with pytest.raises(LeakageError, match="centralized preprocessing state"):
-        reject_centralized_preprocessing_for_federated_training(state)
 
 
 def test_prepare_federated_client_data_validates_client_identity_and_preprocessing(tmp_path) -> None:
