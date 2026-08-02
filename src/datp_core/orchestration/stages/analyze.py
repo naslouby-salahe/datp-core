@@ -5,7 +5,7 @@ from enum import StrEnum
 from pathlib import Path
 from shutil import rmtree
 
-from datp_core.analysis.descriptive import DescriptiveSummary, QuantileRange, summarize_values
+from datp_core.analysis.descriptive import DescriptiveSummary, QuantileRange, count_paired_differences, summarize_values
 from datp_core.analysis.inference.bootstrap import (
     decide_confirmatory,
     external_paired_bca_interval,
@@ -15,7 +15,6 @@ from datp_core.analysis.inference.paired import (
     holm_adjust,
     matched_pairs_rank_biserial,
     paired_wilcoxon,
-    sign_consistency,
 )
 from datp_core.analysis.mechanisms import MechanismResult
 from datp_core.analysis.models import (
@@ -247,7 +246,7 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
         evidence_role=request.plan.evidence_role,
         interval=interval,
         descriptive=descriptive,
-        sign_consistency=sign_consistency(request.contrasts),
+        sign_consistency=count_paired_differences(deltas),
         wilcoxon=paired_wilcoxon(request.contrasts),
         rank_biserial=matched_pairs_rank_biserial(request.contrasts),
     )
@@ -318,7 +317,7 @@ def _analyze(request: AnalyzeRequest, interval: BootstrapInterval) -> AnalyzeRes
             excluded_count=0,
             quantiles=_DEFAULT_QUANTILES,
         ),
-        sign_consistency=sign_consistency(request.contrasts),
+        sign_consistency=count_paired_differences(deltas),
         wilcoxon=paired_wilcoxon(request.contrasts),
         rank_biserial=matched_pairs_rank_biserial(request.contrasts),
         multiplicity=multiplicity,

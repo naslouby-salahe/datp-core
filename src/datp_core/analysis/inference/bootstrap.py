@@ -1,5 +1,3 @@
-"""BCa paired bootstrap intervals, validation, and confirmatory decisions."""
-
 from dataclasses import dataclass
 
 import numpy as np
@@ -57,54 +55,57 @@ def validate_confirmatory_contrasts(
         raise _ConfirmatoryContractError(BcaReason.CANONICAL_PROTOCOL_MISMATCH)
 
     endpoint = canonical.confirmatory_endpoint
-    observed_seeds = tuple(contrast.seed for contrast in contrasts)
-    if len(observed_seeds) != len(set(observed_seeds)):
+    observed_seeds = {c.seed for c in contrasts}
+
+    if len(observed_seeds) != len(contrasts):
         raise _ConfirmatoryContractError(BcaReason.DUPLICATE_SEED)
-    if (
-        frozenset(observed_seeds) != frozenset(endpoint.seed_cohort.values)
-        or len(contrasts) != endpoint.seed_cohort.member_count.value
+
+    if tuple(sorted(c.seed.value for c in contrasts)) != tuple(
+        sorted(s.value for s in endpoint.seed_cohort.values)
     ):
         raise _ConfirmatoryContractError(BcaReason.SEED_COHORT_MISMATCH)
 
-    for contrast in contrasts:
+    for c in contrasts:
         if (
-            contrast.evidence_role is not EvidenceRole.CONFIRMATORY
-            or contrast.coordinate.population is not endpoint.population
-            or contrast.coordinate.model is not endpoint.training_model
-            or contrast.metric is not endpoint.metric
-            or contrast.left_method is not endpoint.shared_threshold
-            or contrast.right_method is not endpoint.local_threshold
-            or contrast.left_method is not FederatedThresholdMethod.SHARED_THRESHOLD
-            or contrast.right_method is not FederatedThresholdMethod.LOCAL_THRESHOLD
+            c.evidence_role is not EvidenceRole.CONFIRMATORY
+            or c.coordinate.population is not endpoint.population
+            or c.coordinate.model is not endpoint.training_model
+            or c.metric is not endpoint.metric
+            or c.left_method is not endpoint.shared_threshold
+            or c.right_method is not endpoint.local_threshold
+            or c.left_method is not FederatedThresholdMethod.SHARED_THRESHOLD
+            or c.right_method is not FederatedThresholdMethod.LOCAL_THRESHOLD
         ):
             raise _ConfirmatoryContractError(BcaReason.CONFIRMATORY_ENDPOINT_MISMATCH)
 
     _require_fixed_coordinate(contrasts)
-    return tuple(sorted(contrasts, key=lambda contrast: contrast.seed.value))
+    return tuple(sorted(contrasts, key=lambda c: c.seed.value))
 
 
 def validate_external_contrasts(
     contrasts: PairedContrasts,
     plan: ExternalPairedAnalysisPlan,
 ) -> PairedContrasts:
-    observed_seeds = tuple(contrast.seed for contrast in contrasts)
-    if len(observed_seeds) != len(set(observed_seeds)):
+    observed_seeds = {c.seed for c in contrasts}
+
+    if len(observed_seeds) != len(contrasts):
         raise _ConfirmatoryContractError(BcaReason.DUPLICATE_SEED)
-    if frozenset(observed_seeds) != frozenset(plan.seed_cohort) or len(contrasts) != len(plan.seed_cohort):
+
+    if tuple(sorted(c.seed.value for c in contrasts)) != tuple(sorted(s.value for s in plan.seed_cohort)):
         raise _ConfirmatoryContractError(BcaReason.EXTERNAL_SEED_COHORT_MISMATCH)
 
-    for contrast in contrasts:
+    for c in contrasts:
         if (
-            contrast.coordinate.population is not plan.population
-            or contrast.evidence_role is not plan.evidence_role
-            or contrast.metric is not plan.metric
-            or contrast.left_method is not plan.left_method
-            or contrast.right_method is not plan.right_method
+            c.coordinate.population is not plan.population
+            or c.evidence_role is not plan.evidence_role
+            or c.metric is not plan.metric
+            or c.left_method is not plan.left_method
+            or c.right_method is not plan.right_method
         ):
             raise _ConfirmatoryContractError(BcaReason.EXTERNAL_ANALYSIS_PLAN_MISMATCH)
 
     _require_fixed_coordinate(contrasts)
-    return tuple(sorted(contrasts, key=lambda contrast: contrast.seed.value))
+    return tuple(sorted(contrasts, key=lambda c: c.seed.value))
 
 
 def paired_bca_interval(
@@ -114,7 +115,6 @@ def paired_bca_interval(
     replicate_count: BootstrapReplicateCount,
     analysis_seed: Seed,
 ) -> BootstrapInterval:
-    """Resample paired seed deltas only."""
     confidence_level = CANONICAL_PROTOCOL_GRAPH.confirmatory_inference.confidence_level
     if replicate_count != BOOTSTRAP_REPLICATE_COUNT:
         return _blocked_interval(
@@ -126,10 +126,7 @@ def paired_bca_interval(
         )
 
     try:
-        validated = validate_confirmatory_contrasts(
-            contrasts,
-            protocol,
-        )
+        validated = validate_confirmatory_contrasts(contrasts, protocol)
     except _ConfirmatoryContractError as error:
         return _blocked_interval(
             contrasts=contrasts,
@@ -138,12 +135,8 @@ def paired_bca_interval(
             analysis_seed=analysis_seed,
             reason=error.reason,
         )
-    return _construct_bca_interval(
-        validated,
-        confidence_level,
-        replicate_count,
-        analysis_seed,
-    )
+
+    return _construct_bca_interval(validated, confidence_level, replicate_count, analysis_seed)
 
 
 def external_paired_bca_interval(
@@ -153,7 +146,6 @@ def external_paired_bca_interval(
     replicate_count: BootstrapReplicateCount,
     analysis_seed: Seed,
 ) -> BootstrapInterval:
-    """Build a supplementary paired BCa interval."""
     if replicate_count != BOOTSTRAP_REPLICATE_COUNT:
         return _blocked_interval(
             contrasts=contrasts,
@@ -164,10 +156,7 @@ def external_paired_bca_interval(
         )
 
     try:
-        validated = validate_external_contrasts(
-            contrasts,
-            plan,
-        )
+        validated = validate_external_contrasts(contrasts, plan)
     except _ConfirmatoryContractError as error:
         return _blocked_interval(
             contrasts=contrasts,
@@ -176,17 +165,11 @@ def external_paired_bca_interval(
             analysis_seed=analysis_seed,
             reason=error.reason,
         )
-    return _construct_bca_interval(
-        validated,
-        plan.confidence_level,
-        replicate_count,
-        analysis_seed,
-    )
+
+    return _construct_bca_interval(validated, plan.confidence_level, replicate_count, analysis_seed)
 
 
-def decide_confirmatory(
-    interval: BootstrapInterval,
-) -> ScientificDecisionResult:
+def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult:
     if (
         interval.availability is not AvailabilityStatus.AVAILABLE
         or interval.point_estimate is None
@@ -198,7 +181,7 @@ def decide_confirmatory(
             decision=ScientificDecision.BLOCKED,
             point_estimate=interval.point_estimate,
             interval=interval,
-            rationale=("confirmatory BCa interval is unavailable or degenerate"),
+            rationale="confirmatory BCa interval is unavailable or degenerate",
         )
 
     if interval.lower_bound.value > 0.0:
@@ -223,34 +206,25 @@ def decide_confirmatory(
     )
 
 
-def contrast_deltas(
-    contrasts: PairedContrasts,
-) -> NDArray[np.float64]:
-    values = np.fromiter(
-        (contrast.delta.value for contrast in contrasts),
-        dtype=np.float64,
-        count=len(contrasts),
-    )
+def contrast_deltas(contrasts: PairedContrasts) -> NDArray[np.float64]:
+    values = np.array([c.delta.value for c in contrasts], dtype=np.float64)
     if np.any(~np.isfinite(values)):
         raise ValueError("paired contrasts must be finite")
     return values
 
 
-def _require_fixed_coordinate(
-    contrasts: PairedContrasts,
-) -> None:
+def _require_fixed_coordinate(contrasts: PairedContrasts) -> None:
     if not contrasts:
         raise _ConfirmatoryContractError(BcaReason.SEED_COHORT_MISMATCH)
 
     baseline = contrasts[0].coordinate
-    for contrast in contrasts[1:]:
-        coordinate = contrast.coordinate
+    for c in contrasts[1:]:
         if (
-            coordinate.population != baseline.population
-            or coordinate.split_protocol != baseline.split_protocol
-            or coordinate.preprocessing_identity != baseline.preprocessing_identity
-            or coordinate.model != baseline.model
-            or coordinate.model_coefficient != baseline.model_coefficient
+            c.coordinate.population != baseline.population
+            or c.coordinate.split_protocol != baseline.split_protocol
+            or c.coordinate.preprocessing_identity != baseline.preprocessing_identity
+            or c.coordinate.model != baseline.model
+            or c.coordinate.model_coefficient != baseline.model_coefficient
         ):
             raise _ConfirmatoryContractError(BcaReason.FIXED_COORDINATE_MISMATCH)
 
@@ -261,11 +235,8 @@ def _construct_bca_interval(
     replicate_count: BootstrapReplicateCount,
     analysis_seed: Seed,
 ) -> BootstrapInterval:
-    bootstrap = _bootstrap_distribution(
-        contrasts,
-        replicate_count,
-        analysis_seed,
-    )
+    bootstrap = _bootstrap_distribution(contrasts, replicate_count, analysis_seed)
+    
     if bootstrap.degeneracy_reason is not None:
         return BootstrapInterval.degenerate(
             method=_INTERVAL_METHOD,
@@ -275,6 +246,7 @@ def _construct_bca_interval(
             point_estimate=bootstrap.estimate,
             reason=bootstrap.degeneracy_reason,
         )
+        
     if bootstrap.values is None:
         raise RuntimeError("non-degenerate bootstrap distribution is missing")
 
@@ -284,6 +256,7 @@ def _construct_bca_interval(
         distribution=bootstrap.values,
         confidence_level=confidence_level,
     )
+
     if isinstance(interval, BcaReason):
         return BootstrapInterval.degenerate(
             method=_INTERVAL_METHOD,
@@ -317,7 +290,7 @@ def _bootstrap_distribution(
         raise ValueError("bootstrap requires at least one paired contrast")
 
     estimate = MetricValue(float(np.mean(deltas)))
-    if np.ptp(deltas) == 0.0:
+    if np.ptp(deltas) <= 0.0:
         return _BootstrapDistribution(
             estimate=estimate,
             paired_deltas=deltas,
@@ -325,21 +298,18 @@ def _bootstrap_distribution(
             degeneracy_reason=BcaReason.IDENTICAL_PAIRED_DELTAS,
         )
 
-    generator = np.random.Generator(np.random.PCG64(analysis_seed.value))
-    indexes = generator.integers(
-        0,
-        deltas.size,
-        size=(replicate_count.value, deltas.size),
-        endpoint=False,
-    )
+    rng = np.random.default_rng(analysis_seed.value)
+    indexes = rng.integers(0, deltas.size, size=(replicate_count.value, deltas.size))
     values = np.mean(deltas[indexes], axis=1)
-    if np.ptp(values) == 0.0:
+
+    if np.ptp(values) <= 0.0:
         return _BootstrapDistribution(
             estimate=estimate,
             paired_deltas=deltas,
             values=None,
-            degeneracy_reason=(BcaReason.DEGENERATE_BOOTSTRAP_DISTRIBUTION),
+            degeneracy_reason=BcaReason.DEGENERATE_BOOTSTRAP_DISTRIBUTION,
         )
+
     return _BootstrapDistribution(
         estimate=estimate,
         paired_deltas=deltas,
@@ -361,55 +331,43 @@ def _bca_interval_from_distribution(
 
     bias_correction = float(stats.norm.ppf(proportion_less))
     acceleration = _jackknife_acceleration(deltas)
+
     if acceleration is None:
         return BcaReason.UNDEFINED_ACCELERATION
 
     alpha = (1.0 - confidence_level.value) / 2.0
-    standard_quantiles = np.asarray(
-        (
-            stats.norm.ppf(alpha),
-            stats.norm.ppf(1.0 - alpha),
-        ),
-        dtype=np.float64,
-    )
+    standard_quantiles = np.array([stats.norm.ppf(alpha), stats.norm.ppf(1.0 - alpha)], dtype=np.float64)
     shifted = bias_correction + standard_quantiles
     denominator = 1.0 - acceleration * shifted
-    if np.any(denominator == 0.0):
+
+    if np.any(np.abs(denominator) <= np.finfo(np.float64).eps):
         return BcaReason.INVALID_ADJUSTED_QUANTILES
 
     adjusted_quantiles = stats.norm.cdf(bias_correction + shifted / denominator)
     if np.any(~np.isfinite(adjusted_quantiles)) or np.any((adjusted_quantiles < 0.0) | (adjusted_quantiles > 1.0)):
         return BcaReason.INVALID_ADJUSTED_QUANTILES
 
-    bounds = np.quantile(
-        distribution,
-        adjusted_quantiles,
-        method="linear",
-    )
+    bounds = np.quantile(distribution, adjusted_quantiles, method="linear")
+    
     return (
         MetricValue(float(bounds[0])),
         MetricValue(float(bounds[1])),
-        BcaAdjustment(
-            bias_correction=bias_correction,
-            acceleration=acceleration,
-        ),
+        BcaAdjustment(bias_correction=bias_correction, acceleration=acceleration),
     )
 
 
-def _jackknife_acceleration(
-    deltas: NDArray[np.float64],
-) -> float | None:
+def _jackknife_acceleration(deltas: NDArray[np.float64]) -> float | None:
     if deltas.size < 2:
         return None
 
     jackknife = (float(np.sum(deltas)) - deltas) / (deltas.size - 1)
     centered = float(np.mean(jackknife)) - jackknife
     squared_sum = float(np.sum(centered**2))
-    if squared_sum == 0.0:
+    
+    if squared_sum <= 0.0:
         return None
 
-    denominator = 6.0 * squared_sum**1.5
-    acceleration = float(np.sum(centered**3) / denominator)
+    acceleration = float(np.sum(centered**3) / (6.0 * squared_sum**1.5))
     return acceleration if np.isfinite(acceleration) else None
 
 
@@ -431,8 +389,6 @@ def _blocked_interval(
     )
 
 
-def _point_estimate_or_none(
-    contrasts: PairedContrasts,
-) -> MetricValue | None:
+def _point_estimate_or_none(contrasts: PairedContrasts) -> MetricValue | None:
     deltas = contrast_deltas(contrasts)
     return MetricValue(float(np.mean(deltas))) if deltas.size else None

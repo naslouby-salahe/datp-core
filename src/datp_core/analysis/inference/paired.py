@@ -6,13 +6,11 @@ import numpy as np
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
-from datp_core.analysis.descriptive import count_paired_differences
 from datp_core.analysis.inference.bootstrap import contrast_deltas
 from datp_core.analysis.models import (
     MultiplicityDecision,
     MultiplicityResult,
     PairedContrasts,
-    PairedDifferenceCounts,
     PValue,
     RankBiserialResult,
     WilcoxonComputationMethod,
@@ -138,6 +136,3 @@ def holm_adjust(
         decisions=decisions,
     )
 
-
-def sign_consistency(contrasts: PairedContrasts) -> PairedDifferenceCounts:
-    return count_paired_differences(tuple(contrast.delta for contrast in contrasts))

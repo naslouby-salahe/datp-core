@@ -20,7 +20,6 @@ from datp_core.analysis.inference.paired import (
     holm_adjust,
     matched_pairs_rank_biserial,
     paired_wilcoxon,
-    sign_consistency,
 )
 from datp_core.analysis.mechanisms import (
     AssociationResult,
