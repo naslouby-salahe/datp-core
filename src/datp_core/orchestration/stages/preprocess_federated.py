@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from json import dumps, loads
 from pathlib import Path
 
 import polars as pl
@@ -34,7 +35,6 @@ from datp_core.domain.values import (
     checksum_text,
 )
 from datp_core.experiments.models import (
-    ExecutionIdentityDocument,
     ExternalTemporalExecutionIdentity,
     require_execution_identity,
 )
@@ -267,7 +267,7 @@ def preprocess_federated_artifacts_stage(
         protocol=protocol,
         canonical_schema_checksum=schema.checksum,
         data_root=request.data_root,
-        execution_identity=identity.document,
+        execution_identity=identity,
     )
     handoff = PreprocessingHandoff(
         population_manifest=published.population_manifest,
@@ -586,7 +586,7 @@ def _validate_population_publication(directory: Path, identity: ExternalTemporal
     complete = _read_complete_digest(directory, population)
     _validate_persisted_execution_identity(directory, identity)
     primary = _read_population_document(directory / "population_manifest.json")
-    payload = "\n".join((identity.document.model_dump_json(indent=2), primary.model_dump_json(indent=2)))
+    payload = "\n".join((dumps(identity.serialize(), indent=2), primary.model_dump_json(indent=2)))
     if primary.population is PopulationId.EDGE_TEMPORAL_GROUPS:
         chronology = _read_chronology_document(directory / "chronology.json")
         static = _read_population_document(directory / "matched_static_reference_manifest.json")
@@ -603,7 +603,7 @@ def _validate_split_publication(directory: Path, identity: ExternalTemporalExecu
     complete = _read_complete_digest(directory, population)
     _validate_persisted_execution_identity(directory, identity)
     primary = _read_split_document(directory / "split_manifest.json")
-    payload = "\n".join((identity.document.model_dump_json(indent=2), primary.model_dump_json(indent=2)))
+    payload = "\n".join((dumps(identity.serialize(), indent=2), primary.model_dump_json(indent=2)))
     if primary.population is PopulationId.EDGE_TEMPORAL_GROUPS:
         static = _read_split_document(directory / "matched_static_reference_split_manifest.json")
         payload = "\n".join((payload, static.model_dump_json(indent=2)))
@@ -619,15 +619,13 @@ def _validate_persisted_execution_identity(
     identity: ExternalTemporalExecutionIdentity,
 ) -> None:
     try:
-        persisted = ExecutionIdentityDocument.model_validate_json(
-            (directory / "execution_identity.json").read_text(encoding="utf-8")
-        )
+        persisted = loads((directory / "execution_identity.json").read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
         raise ScientificContractError(
             "published artifact lacks a valid execution identity",
             subject=identity.population,
         ) from error
-    if persisted != identity.document:
+    if persisted != identity.serialize():
         raise ScientificContractError(
             "published artifact execution identity does not match the request",
             subject=identity.population,

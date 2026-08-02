@@ -21,7 +21,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorModule,
 )
 from datp_core.domain.values import Checksum, ClientPathToken, FeatureNameSequence, OutcomeLabelSequence, RowCount, Seed
-from datp_core.experiments.models import ExecutionIdentityDocument
+from datp_core.experiments.models import ExternalTemporalExecutionIdentity
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
 
@@ -182,7 +182,7 @@ class PreprocessingManifest(StrictModel):
     serialization_format: SerializationFormat
     asset_paths: tuple[str, ...]
     fit_partition: PartitionRole
-    execution_identity: ExecutionIdentityDocument | None = None
+    execution_identity: ExternalTemporalExecutionIdentity | None = None
 
     @model_validator(mode="after")
     def validate_manifest(self) -> "PreprocessingManifest":
@@ -248,7 +248,7 @@ class PreprocessingPublishContext:
     protocol: PreprocessingProtocol
     canonical_schema_checksum: Checksum
     data_root: Path
-    execution_identity: ExecutionIdentityDocument | None = None
+    execution_identity: ExternalTemporalExecutionIdentity | None = None
 
 
 @dataclass(frozen=True, slots=True)

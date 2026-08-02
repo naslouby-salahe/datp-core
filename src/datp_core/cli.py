@@ -28,6 +28,7 @@ from datp_core.domain.values import (
     FamilyIdentity,
     FeatureNameSequence,
     MetricValue,
+    ProximalCoefficient,
     Seed,
     checksum_file,
 )
@@ -43,7 +44,6 @@ from datp_core.orchestration.stages.construct_federated_thresholds import (
 from datp_core.orchestration.stages.evaluate_federated import (
     EvaluateFederatedRequest,
     FederatedEvaluationAssetName,
-    FederatedEvaluationDocument,
     build_federated_evaluation_inputs,
     evaluate_federated_stage,
 )
@@ -489,14 +489,20 @@ def _client_with_id(clients: tuple[ClientIdentity, ...], client_id: str) -> Clie
 
 
 def _confirmatory_contrast(training_seed: Seed) -> PairedContrast:
-    shared = _evaluation_document(training_seed, FederatedThresholdMethod.SHARED_THRESHOLD)
-    local = _evaluation_document(training_seed, FederatedThresholdMethod.LOCAL_THRESHOLD)
-    if shared.score_coordinate != local.score_coordinate:
+    from json import loads
+
+    shared = loads(
+        _evaluation_path(training_seed, FederatedThresholdMethod.SHARED_THRESHOLD).read_text(encoding="utf-8")
+    )
+    local = loads(
+        _evaluation_path(training_seed, FederatedThresholdMethod.LOCAL_THRESHOLD).read_text(encoding="utf-8")
+    )
+    if shared["score_coordinate"] != local["score_coordinate"]:
         raise ScientificContractError("paired evaluation documents use different training coordinates")
     shared_value = _population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)
     local_value = _population_metric(local, MetricId.FPR_COEFFICIENT_OF_VARIATION)
     return PairedContrast(
-        coordinate=shared.score_coordinate,
+        coordinate=_deserialize_coordinate(shared["score_coordinate"]),
         evidence_role=EvidenceRole.CONFIRMATORY,
         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
         left_method=FederatedThresholdMethod.SHARED_THRESHOLD,
@@ -506,7 +512,7 @@ def _confirmatory_contrast(training_seed: Seed) -> PairedContrast:
     )
 
 
-def _evaluation_document(training_seed: Seed, method: FederatedThresholdMethod) -> FederatedEvaluationDocument:
+def _evaluation_path(training_seed: Seed, method: FederatedThresholdMethod) -> Path:
     path = (
         _confirmatory_seed_directory(training_seed)
         / "evaluations"
@@ -515,18 +521,36 @@ def _evaluation_document(training_seed: Seed, method: FederatedThresholdMethod) 
     )
     if not path.is_file():
         raise ScientificContractError(f"missing completed evaluation document: {path}")
-    return FederatedEvaluationDocument.model_validate_json(path.read_text(encoding="utf-8"))
+    return path
 
 
-def _population_metric(document: FederatedEvaluationDocument, metric: MetricId) -> MetricValue:
-    result = next((item for item in document.population.metrics if item.metric is metric), None)
+def _deserialize_coordinate(data: dict) -> FederatedTrainingCoordinate:
+    return FederatedTrainingCoordinate(
+        population=PopulationId(data["population"]),
+        training_seed=Seed(data["training_seed"]),
+        split_protocol=SplitProtocolId(data["split_protocol"]),
+        preprocessing_identity=PreprocessingProtocolId(data["preprocessing_identity"]),
+        model=TrainingModelId(data["model"]),
+        model_coefficient=_deserialize_model_coefficient(data.get("model_coefficient")),
+    )
+
+
+def _deserialize_model_coefficient(value: float | None) -> ProximalCoefficient | None:
+    if value is None:
+        return None
+    return ProximalCoefficient(value)
+
+
+def _population_metric(document: dict, metric: MetricId) -> MetricValue:
+    population = document["population"]
+    result = next((item for item in population["metrics"] if item["metric"] == metric.value), None)
     if result is None:
         raise ScientificContractError(f"required confirmatory metric is missing: {metric.value}")
-    if result.status is not MetricStatus.AVAILABLE:
+    if result["status"] != MetricStatus.AVAILABLE.value:
         raise ScientificContractError(f"required confirmatory metric is unavailable: {metric.value}")
-    if result.value is None:
+    if result["value"] is None:
         raise ScientificContractError(f"required confirmatory metric is unavailable: {metric.value}")
-    return result.value
+    return MetricValue(result["value"])
 
 
 def _federated_training_directory(coordinate: FederatedTrainingCoordinate) -> Path:

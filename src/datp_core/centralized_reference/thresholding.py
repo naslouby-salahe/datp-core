@@ -197,20 +197,24 @@ def reject_centralized_threshold_in_federated_dispatch(method: CentralizedThresh
 
 
 def write_threshold_document(result: PooledThresholdResult, directory: Path) -> Path:
+    from json import dumps
+
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / CentralizedThresholdAssetName.THRESHOLD
-    payload = (
-        "{\n"
-        f'  "method": "{result.method.value}",\n'
-        f'  "quantile": {result.quantile.value},\n'
-        f'  "quantile_interpolation": "{result.quantile_interpolation.value}",\n'
-        f'  "threshold": {result.threshold.value},\n'
-        f'  "calibration_score_count": {result.calibration_score_count},\n'
-        f'  "checkpoint_round": {result.checkpoint_round.value},\n'
-        f'  "score_artifact_checksum": "{result.score_artifact_checksum.value}"\n'
-        "}\n"
+    payload = dumps(
+        {
+            "method": result.method.value,
+            "quantile": result.quantile.value,
+            "quantile_interpolation": result.quantile_interpolation.value,
+            "threshold": result.threshold.value,
+            "calibration_score_count": result.calibration_score_count.value,
+            "checkpoint_round": result.checkpoint_round.value,
+            "score_artifact_checksum": result.score_artifact_checksum.value,
+        },
+        indent=2,
+        sort_keys=True,
     )
-    path.write_text(payload, encoding="utf-8")
+    path.write_text(payload + "\n", encoding="utf-8")
     return path
 
 

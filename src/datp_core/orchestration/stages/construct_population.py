@@ -1,6 +1,7 @@
 """External and temporal population construction with deterministic publication."""
 
 from dataclasses import dataclass
+from json import dumps, loads
 from pathlib import Path
 from shutil import rmtree
 
@@ -11,7 +12,6 @@ from datp_core.domain.enums import PopulationId, PublicationStatus, SplitProtoco
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, Seed, checksum_file, checksum_text
 from datp_core.experiments.models import (
-    ExecutionIdentityDocument,
     ExternalTemporalExecutionIdentity,
     require_execution_identity,
 )
@@ -66,7 +66,7 @@ def construct_population_stage(request: ConstructPopulationRequest) -> Construct
 
     def write(temporary: Path) -> None:
         (temporary / "execution_identity.json").write_text(
-            request.execution_identity.document.model_dump_json(indent=2) + "\n", encoding="utf-8"
+            dumps(request.execution_identity.serialize(), indent=2) + "\n", encoding="utf-8"
         )
         (temporary / "population_manifest.json").write_text(
             result.population_manifest.document.model_dump_json(indent=2) + "\n",
@@ -168,7 +168,7 @@ def _build(request: ConstructPopulationRequest) -> ConstructPopulationResult:
 
 def _manifest_payload(result: ConstructPopulationResult, identity: ExternalTemporalExecutionIdentity) -> str:
     sections = [
-        identity.document.model_dump_json(indent=2),
+        dumps(identity.serialize(), indent=2),
         result.population_manifest.document.model_dump_json(indent=2),
     ]
     if result.chronology is not None:
@@ -197,7 +197,7 @@ def _is_reusable(
     ):
         return False
     try:
-        if identity.document != _read_execution_identity(identity_path):
+        if identity.serialize() != _read_execution_identity(identity_path):
             return False
         persisted = PopulationManifestDocument.model_validate_json(manifest.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -205,8 +205,8 @@ def _is_reusable(
     return _matches_population_artifacts(directory, expected, persisted, membership)
 
 
-def _read_execution_identity(path: Path) -> ExecutionIdentityDocument:
-    return ExecutionIdentityDocument.model_validate_json(path.read_text(encoding="utf-8"))
+def _read_execution_identity(path: Path) -> dict:
+    return loads(path.read_text(encoding="utf-8"))
 
 
 def _matches_population_artifacts(

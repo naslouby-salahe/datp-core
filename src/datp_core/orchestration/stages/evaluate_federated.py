@@ -1,7 +1,8 @@
 """Held-out federated evaluation over immutable scores and thresholds."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import StrEnum
+from json import dumps
 from pathlib import Path
 from shutil import rmtree
 
@@ -9,7 +10,6 @@ import polars as pl
 
 from datp_core.analysis.temporal import TemporalDeploymentProvenance
 from datp_core.artifacts.store import AtomicPublication, publish_atomically
-from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     EvaluationCohort,
     EvidenceRole,
@@ -19,7 +19,6 @@ from datp_core.domain.enums import (
     PublicationStatus,
     ScoreFrameColumn,
     StageOperationId,
-    WarningCode,
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.values import (
@@ -52,9 +51,7 @@ from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.controls import ClientAurocEvidence, FixedScoreEvidence, validate_fixed_score_controls
 from datp_core.evaluation.models import (
     ClientMetricResult,
-    ConfusionCounts,
     MetricAvailability,
-    MetricReason,
     MetricStatus,
     MetricWarning,
     PopulationMetricResult,
@@ -101,68 +98,26 @@ class FederatedEvaluationAssetName(StrEnum):
     COMPLETE = "COMPLETE"
 
 
-class EvaluationMetricDocument(StrictModel):
-    metric: MetricId
-    status: MetricStatus
-    value: MetricValue | None
-    denominator: RowCount | None
-    unavailable_reason: MetricReason | None
-
-
-class EvaluationWarningDocument(StrictModel):
-    code: WarningCode
-    metric: MetricId
-    client: ClientIdentity | None
-
-
-class ClientEvaluationDocument(StrictModel):
-    coordinate: FederatedTrainingCoordinate
-    threshold_method: FederatedThresholdMethod
-    client: ClientIdentity
-    cohort: EvaluationCohort
-    threshold: ThresholdValue
-    confusion: ConfusionCounts
-    metrics: tuple[EvaluationMetricDocument, ...]
-    warnings: tuple[EvaluationWarningDocument, ...]
-    evidence_role: EvidenceRole
-    evaluation_score_checksum: Checksum
-    evaluation_label_checksum: Checksum
-    source_row_checksum: Checksum
-
-
-class PopulationEvaluationDocument(StrictModel):
-    coordinate: FederatedTrainingCoordinate
-    threshold_method: FederatedThresholdMethod
-    cohort: EvaluationCohort
-    metrics: tuple[EvaluationMetricDocument, ...]
-    candidate_client_count: RowCount
-    calibration_eligible_client_count: RowCount
-    fpr_evaluable_client_count: RowCount
-    attack_evaluable_client_count: RowCount
-    deployment_fallback_count: RowCount
-    unavailable_client_count: RowCount
-    excluded_clients: tuple[ClientIdentity, ...]
-    warnings: tuple[EvaluationWarningDocument, ...]
-    evidence_role: EvidenceRole
-
-
-class FederatedEvaluationDocument(StrictModel):
-    stage: StageOperationId
-    score_coordinate: FederatedTrainingCoordinate
-    score_checkpoint_checksum: Checksum
-    preprocessing_state_set_checksum: Checksum
-    split_manifest_checksum: Checksum
-    threshold_method: FederatedThresholdMethod
-    evidence_role: EvidenceRole
-    fixed_score_evidence: FixedScoreEvidence
-    cohort: EvaluationCohortManifest
-    clients: tuple[ClientEvaluationDocument, ...]
-    population: PopulationEvaluationDocument
-    conformal_coverage: tuple[ConformalCoverageDiagnostic, ...]
-    threshold_estimation: tuple[ThresholdEstimationDiagnostic, ...]
-    communication: CommunicationDiagnostic | None
-    alert_burden: tuple[AlertBurdenDiagnostic, ...]
-    temporal_provenance: TemporalDeploymentProvenance | None
+def _serialize(obj):  # noqa: C901, PLR0911
+    """Serialize domain value objects, enums, dataclasses, and tuples to JSON-compatible primitives."""
+    if obj is None:
+        return None
+    if isinstance(obj, (bool, int, float, str)):
+        return obj
+    if isinstance(obj, StrEnum):
+        return obj.value
+    if isinstance(obj, (tuple, list)):
+        return [_serialize(item) for item in obj]
+    if isinstance(obj, dict):
+        return {key: _serialize(value) for key, value in obj.items()}
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump(mode="json")
+    if hasattr(obj, "__dataclass_fields__"):
+        own_fields = fields(obj)
+        if len(own_fields) == 1 and own_fields[0].name == "value":
+            return getattr(obj, "value")
+        return {field.name: _serialize(getattr(obj, field.name)) for field in own_fields}
+    raise TypeError(f"cannot serialize {type(obj)}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,8 +219,8 @@ def evaluate_federated_stage(request: EvaluateFederatedRequest) -> FederatedEval
             request.comparison_fixed_score_evidence,
             auroc_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE.value,
         )
-    document = _evaluation_document(request, clients, population, diagnostics)
-    payload = document.model_dump_json(indent=2) + "\n"
+    document = _evaluation_payload(request, clients, population, diagnostics)
+    payload = dumps(document, indent=2, sort_keys=True) + "\n"
     digest = checksum_text(payload)
 
     def write(temporary: Path) -> None:
@@ -275,7 +230,7 @@ def evaluate_federated_stage(request: EvaluateFederatedRequest) -> FederatedEval
     publication = AtomicPublication(
         request.output_directory,
         request.overwrite,
-        lambda directory: _is_reusable(directory, document, digest),
+        lambda directory: _is_reusable(directory, digest),
         write,
         rmtree,
     )
@@ -572,80 +527,82 @@ def _evaluate_alert_burden(
     return tuple(diagnostics)
 
 
-def _evaluation_document(
+def _evaluation_payload(
     request: EvaluateFederatedRequest,
     clients: tuple[ClientMetricResult, ...],
     population: PopulationMetricResult,
     diagnostics: EvaluationDiagnostics,
-) -> FederatedEvaluationDocument:
+):
     manifest = request.score_manifest
-    return FederatedEvaluationDocument(
-        stage=StageOperationId.EVALUATE_FEDERATED,
-        score_coordinate=manifest.coordinate,
-        score_checkpoint_checksum=manifest.checkpoint_checksum,
-        preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,
-        split_manifest_checksum=manifest.split_manifest_checksum,
-        threshold_method=request.threshold_result.method,
-        evidence_role=request.evidence_role,
-        fixed_score_evidence=request.fixed_score_evidence,
-        cohort=request.cohort,
-        clients=tuple(_client_document(client) for client in clients),
-        population=_population_document(population),
-        conformal_coverage=diagnostics.conformal_coverage,
-        threshold_estimation=diagnostics.threshold_estimation,
-        communication=diagnostics.communication,
-        alert_burden=diagnostics.alert_burden,
-        temporal_provenance=request.temporal_provenance,
+    return _serialize(
+        {
+            "stage": StageOperationId.EVALUATE_FEDERATED,
+            "score_coordinate": manifest.coordinate,
+            "score_checkpoint_checksum": manifest.checkpoint_checksum,
+            "preprocessing_state_set_checksum": manifest.preprocessing_state_set_checksum,
+            "split_manifest_checksum": manifest.split_manifest_checksum,
+            "threshold_method": request.threshold_result.method,
+            "evidence_role": request.evidence_role,
+            "fixed_score_evidence": request.fixed_score_evidence,
+            "cohort": request.cohort,
+            "clients": tuple(_client_payload(client) for client in clients),
+            "population": _population_payload(population),
+            "conformal_coverage": diagnostics.conformal_coverage,
+            "threshold_estimation": diagnostics.threshold_estimation,
+            "communication": diagnostics.communication,
+            "alert_burden": diagnostics.alert_burden,
+            "temporal_provenance": request.temporal_provenance,
+        }
     )
 
 
-def _client_document(result: ClientMetricResult) -> ClientEvaluationDocument:
-    return ClientEvaluationDocument(
-        coordinate=result.coordinate,
-        threshold_method=result.threshold_method,
-        client=result.client,
-        cohort=result.cohort,
-        threshold=result.threshold,
-        confusion=result.confusion,
-        metrics=tuple(_metric_document(metric) for metric in result.metrics),
-        warnings=tuple(_warning_document(warning) for warning in result.warnings),
-        evidence_role=result.evidence_role,
-        evaluation_score_checksum=result.evaluation_score_checksum,
-        evaluation_label_checksum=result.evaluation_label_checksum,
-        source_row_checksum=result.source_row_checksum,
-    )
+def _client_payload(result: ClientMetricResult) -> dict:
+    return {
+        "coordinate": result.coordinate,
+        "threshold_method": result.threshold_method,
+        "client": result.client,
+        "cohort": result.cohort,
+        "threshold": result.threshold,
+        "confusion": result.confusion,
+        "metrics": tuple(_metric_payload(metric) for metric in result.metrics),
+        "warnings": tuple(_warning_payload(warning) for warning in result.warnings),
+        "evidence_role": result.evidence_role,
+        "evaluation_score_checksum": result.evaluation_score_checksum,
+        "evaluation_label_checksum": result.evaluation_label_checksum,
+        "source_row_checksum": result.source_row_checksum,
+    }
 
 
-def _population_document(result: PopulationMetricResult) -> PopulationEvaluationDocument:
-    return PopulationEvaluationDocument(
-        coordinate=result.coordinate,
-        threshold_method=result.threshold_method,
-        cohort=result.cohort,
-        metrics=tuple(_metric_document(metric) for metric in result.metrics),
-        candidate_client_count=result.candidate_client_count,
-        calibration_eligible_client_count=result.calibration_eligible_client_count,
-        fpr_evaluable_client_count=result.fpr_evaluable_client_count,
-        attack_evaluable_client_count=result.attack_evaluable_client_count,
-        deployment_fallback_count=result.deployment_fallback_count,
-        unavailable_client_count=result.unavailable_client_count,
-        excluded_clients=result.excluded_clients,
-        warnings=tuple(_warning_document(warning) for warning in result.warnings),
-        evidence_role=result.evidence_role,
-    )
+def _population_payload(result: PopulationMetricResult) -> dict:
+    return {
+        "coordinate": result.coordinate,
+        "threshold_method": result.threshold_method,
+        "cohort": result.cohort,
+        "metrics": tuple(_metric_payload(metric) for metric in result.metrics),
+        "candidate_client_count": result.candidate_client_count,
+        "calibration_eligible_client_count": result.calibration_eligible_client_count,
+        "fpr_evaluable_client_count": result.fpr_evaluable_client_count,
+        "attack_evaluable_client_count": result.attack_evaluable_client_count,
+        "deployment_fallback_count": result.deployment_fallback_count,
+        "unavailable_client_count": result.unavailable_client_count,
+        "excluded_clients": result.excluded_clients,
+        "warnings": tuple(_warning_payload(warning) for warning in result.warnings),
+        "evidence_role": result.evidence_role,
+    }
 
 
-def _metric_document(result: MetricAvailability) -> EvaluationMetricDocument:
-    return EvaluationMetricDocument(
-        metric=result.metric,
-        status=result.status,
-        value=result.value,
-        denominator=result.denominator,
-        unavailable_reason=None if result.outcome is None else result.outcome.reason,
-    )
+def _metric_payload(result: MetricAvailability) -> dict:
+    return {
+        "metric": result.metric,
+        "status": result.status,
+        "value": result.value,
+        "denominator": result.denominator,
+        "unavailable_reason": None if result.outcome is None else result.outcome.reason,
+    }
 
 
-def _warning_document(warning: MetricWarning) -> EvaluationWarningDocument:
-    return EvaluationWarningDocument(code=warning.code, metric=warning.metric, client=warning.client)
+def _warning_payload(warning: MetricWarning) -> dict:
+    return {"code": warning.code, "metric": warning.metric, "client": warning.client}
 
 
 def _validate_evaluation_evidence(
@@ -849,17 +806,9 @@ def _score_arrays(
     )
 
 
-def _is_reusable(directory: Path, expected_document: FederatedEvaluationDocument, digest: Checksum) -> bool:
+def _is_reusable(directory: Path, digest: Checksum) -> bool:
     complete = directory / FederatedEvaluationAssetName.COMPLETE
     document = directory / FederatedEvaluationAssetName.DOCUMENT
-    if not complete.is_file():
+    if not complete.is_file() or not document.is_file():
         return False
-    if not document.is_file():
-        return False
-    if complete.read_text(encoding="utf-8").strip() != digest.value:
-        return False
-    try:
-        persisted = FederatedEvaluationDocument.model_validate_json(document.read_text(encoding="utf-8"))
-    except ValueError:
-        return False
-    return persisted == expected_document
+    return complete.read_text(encoding="utf-8").strip() == digest.value

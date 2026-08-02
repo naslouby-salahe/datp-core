@@ -1,7 +1,8 @@
 """Seed-paired confirmatory, external, and temporal-boundary analysis publication."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from enum import StrEnum
+from json import dumps
 from pathlib import Path
 from shutil import rmtree
 
@@ -24,8 +25,13 @@ from datp_core.analysis.inference.paired import (
 )
 from datp_core.analysis.mechanisms import MechanismResult
 from datp_core.analysis.models import (
+    BcaAdjustment,
+    BcaOutcome,
+    BcaReason,
     BootstrapInterval,
+    ConfidenceLevel,
     ExternalPairedAnalysisPlan,
+    IntervalMethod,
     MultiplicityResult,
     PairedContrast,
     PairedDifferenceCounts,
@@ -39,7 +45,6 @@ from datp_core.analysis.temporal import (
     validate_frozen_recalibrated_pair,
 )
 from datp_core.artifacts.store import AtomicPublication, publish_atomically
-from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -52,6 +57,7 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
     BootstrapReplicateCount,
     Checksum,
+    MetricValue,
     Ratio,
     Seed,
     checksum_file,
@@ -68,34 +74,26 @@ class AnalysisAssetName(StrEnum):
     TEMPORAL_DOCUMENT = "temporal_analysis.json"
 
 
-class AnalysisDocument(StrictModel):
-    interval: BootstrapInterval
-    decision: ScientificDecisionResult
-    descriptive: DescriptiveSummary
-    sign_consistency: PairedDifferenceCounts
-    wilcoxon: WilcoxonResult
-    rank_biserial: RankBiserialResult
-    multiplicity: MultiplicityResult | None
-    multiplicity_availability: AvailabilityStatus
-    multiplicity_reason: str
-    mechanisms: tuple[MechanismResult, ...]
-
-
-class ExternalAnalysisDocument(StrictModel):
-    evidence_role: EvidenceRole
-    interval: BootstrapInterval
-    descriptive: DescriptiveSummary
-    sign_consistency: PairedDifferenceCounts
-    wilcoxon: WilcoxonResult
-    rank_biserial: RankBiserialResult
-
-
-class TemporalAnalysisDocument(StrictModel):
-    evidence_role: EvidenceRole
-    static_reference_provenance: TemporalDeploymentProvenance
-    frozen_provenance: TemporalDeploymentProvenance
-    recalibrated_provenance: TemporalDeploymentProvenance
-    records: tuple[TemporalRecoveryResult, ...]
+def _serialize(obj):  # noqa: C901, PLR0911
+    """Serialize domain value objects, enums, dataclasses, and tuples to JSON-compatible primitives."""
+    if obj is None:
+        return None
+    if isinstance(obj, (bool, int, float, str)):
+        return obj
+    if isinstance(obj, StrEnum):
+        return obj.value
+    if isinstance(obj, (tuple, list)):
+        return [_serialize(item) for item in obj]
+    if isinstance(obj, dict):
+        return {key: _serialize(value) for key, value in obj.items()}
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump(mode="json")
+    if hasattr(obj, "__dataclass_fields__"):
+        own_fields = fields(obj)
+        if len(own_fields) == 1 and own_fields[0].name == "value":
+            return getattr(obj, "value")
+        return {field.name: _serialize(getattr(obj, field.name)) for field in own_fields}
+    raise TypeError(f"cannot serialize {type(obj)}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -187,7 +185,21 @@ class TemporalAnalyzeResult:
 _DEFAULT_QUANTILES = QuantileRange(lower=Ratio(0.25), upper=Ratio(0.75))
 
 
+def _is_reusable(directory: Path, digest: Checksum) -> bool:
+    return _is_reusable_generic(directory, AnalysisAssetName.DOCUMENT, digest)
+
+
+def _is_reusable_generic(directory: Path, asset_name: AnalysisAssetName, digest: Checksum) -> bool:
+    complete = directory / AnalysisAssetName.COMPLETE
+    document = directory / asset_name
+    if not complete.is_file() or not document.is_file():
+        return False
+    return complete.read_text(encoding="utf-8").strip() == digest.value
+
+
 def analyze_stage(request: AnalyzeRequest) -> AnalyzeResult:
+    complete_path = request.output_directory / AnalysisAssetName.COMPLETE
+
     interval = paired_bca_interval(
         request.contrasts,
         protocol=request.inference_protocol,
@@ -195,19 +207,7 @@ def analyze_stage(request: AnalyzeRequest) -> AnalyzeResult:
         analysis_seed=request.analysis_seed,
     )
     result = _analyze(request, interval)
-    document = AnalysisDocument(
-        interval=result.interval,
-        decision=result.decision,
-        descriptive=result.descriptive,
-        sign_consistency=result.sign_consistency,
-        wilcoxon=result.wilcoxon,
-        rank_biserial=result.rank_biserial,
-        multiplicity=result.multiplicity,
-        multiplicity_availability=result.multiplicity_availability,
-        multiplicity_reason=result.multiplicity_reason,
-        mechanisms=result.mechanisms,
-    )
-    payload = document.model_dump_json(indent=2) + "\n"
+    payload = dumps(_serialize(result), indent=2, sort_keys=True) + "\n"
     digest = checksum_text(payload)
 
     def write(temporary: Path) -> None:
@@ -218,14 +218,25 @@ def analyze_stage(request: AnalyzeRequest) -> AnalyzeResult:
         AtomicPublication(
             target=request.output_directory,
             overwrite=request.overwrite,
-            is_reusable=lambda directory: _is_reusable(directory, document, digest),
+            is_reusable=lambda directory: _is_reusable(directory, digest),
             write=write,
             remove_target=rmtree,
         )
     )
-    persisted = _read_document(request.output_directory) if reused else document
-    return _result_from_document(
-        persisted, PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED, request.output_directory
+    return AnalyzeResult(
+        stage=StageOperationId.ANALYZE,
+        publication_status=PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED,
+        interval=result.interval,
+        decision=result.decision,
+        descriptive=result.descriptive,
+        sign_consistency=result.sign_consistency,
+        wilcoxon=result.wilcoxon,
+        rank_biserial=result.rank_biserial,
+        multiplicity=result.multiplicity,
+        multiplicity_availability=result.multiplicity_availability,
+        multiplicity_reason=result.multiplicity_reason,
+        mechanisms=result.mechanisms,
+        complete_digest=checksum_file(complete_path),
     )
 
 
@@ -247,21 +258,29 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
         counts=ObservationCounts(unavailable=0, excluded=0),
         quantiles=_DEFAULT_QUANTILES,
     )
-    document = ExternalAnalysisDocument(
-        evidence_role=request.plan.evidence_role,
-        interval=interval,
-        descriptive=descriptive,
-        sign_consistency=count_paired_differences(deltas),
-        wilcoxon=paired_wilcoxon(request.contrasts),
-        rank_biserial=matched_pairs_rank_biserial(request.contrasts),
-    )
-    payload = document.model_dump_json(indent=2) + "\n"
+    sign_consistency = count_paired_differences(deltas)
+    wilcoxon = paired_wilcoxon(request.contrasts)
+    rank_biserial = matched_pairs_rank_biserial(request.contrasts)
+    payload = dumps(
+        _serialize(
+            {
+                "evidence_role": request.plan.evidence_role,
+                "interval": interval,
+                "descriptive": descriptive,
+                "sign_consistency": sign_consistency,
+                "wilcoxon": wilcoxon,
+                "rank_biserial": rank_biserial,
+            }
+        ),
+        indent=2,
+        sort_keys=True,
+    ) + "\n"
     digest = checksum_text(payload)
     reused = publish_atomically(
         AtomicPublication(
             request.output_directory,
             request.overwrite,
-            lambda directory: _is_external_reusable(directory, digest),
+            lambda directory: _is_reusable_generic(directory, AnalysisAssetName.EXTERNAL_DOCUMENT, digest),
             lambda temporary: _write_external_analysis(temporary, payload, digest),
             rmtree,
         )
@@ -271,9 +290,9 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
         PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED,
         interval,
         descriptive,
-        document.sign_consistency,
-        document.wilcoxon,
-        document.rank_biserial,
+        sign_consistency,
+        wilcoxon,
+        rank_biserial,
         checksum_file(request.output_directory / AnalysisAssetName.COMPLETE),
     )
 
@@ -281,20 +300,25 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
 def analyze_temporal_stage(request: TemporalAnalyzeRequest) -> TemporalAnalyzeResult:
     _validate_temporal_identities(request)
     _validate_temporal_provenance(request)
-    document = TemporalAnalysisDocument(
-        evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
-        static_reference_provenance=request.static_reference_provenance,
-        frozen_provenance=request.frozen_provenance,
-        recalibrated_provenance=request.recalibrated_provenance,
-        records=request.records,
-    )
-    payload = document.model_dump_json(indent=2) + "\n"
+    payload = dumps(
+        _serialize(
+            {
+                "evidence_role": EvidenceRole.TEMPORAL_BOUNDARY,
+                "static_reference_provenance": request.static_reference_provenance,
+                "frozen_provenance": request.frozen_provenance,
+                "recalibrated_provenance": request.recalibrated_provenance,
+                "records": request.records,
+            }
+        ),
+        indent=2,
+        sort_keys=True,
+    ) + "\n"
     digest = checksum_text(payload)
     reused = publish_atomically(
         AtomicPublication(
             request.output_directory,
             request.overwrite,
-            lambda directory: _is_temporal_reusable(directory, digest),
+            lambda directory: _is_reusable_generic(directory, AnalysisAssetName.TEMPORAL_DOCUMENT, digest),
             lambda temporary: _write_temporal_analysis(temporary, payload, digest),
             rmtree,
         )
@@ -344,67 +368,6 @@ def _multiplicity(request: AnalyzeRequest) -> tuple[MultiplicityResult | None, A
         AvailabilityStatus.AVAILABLE,
         "",
     )
-
-
-def _read_document(directory: Path) -> AnalysisDocument:
-    return AnalysisDocument.model_validate_json((directory / AnalysisAssetName.DOCUMENT).read_text(encoding="utf-8"))
-
-
-def _result_from_document(
-    document: AnalysisDocument, publication_status: PublicationStatus, directory: Path
-) -> AnalyzeResult:
-    return AnalyzeResult(
-        stage=StageOperationId.ANALYZE,
-        publication_status=publication_status,
-        interval=document.interval,
-        decision=document.decision,
-        descriptive=document.descriptive,
-        sign_consistency=document.sign_consistency,
-        wilcoxon=document.wilcoxon,
-        rank_biserial=document.rank_biserial,
-        multiplicity=document.multiplicity,
-        multiplicity_availability=document.multiplicity_availability,
-        multiplicity_reason=document.multiplicity_reason,
-        mechanisms=document.mechanisms,
-        complete_digest=checksum_file(directory / AnalysisAssetName.COMPLETE),
-    )
-
-
-def _is_reusable(directory: Path, expected_document: AnalysisDocument, digest: Checksum) -> bool:
-    complete = directory / AnalysisAssetName.COMPLETE
-    document = directory / AnalysisAssetName.DOCUMENT
-    if not complete.is_file() or not document.is_file() or complete.read_text(encoding="utf-8").strip() != digest.value:
-        return False
-    try:
-        persisted = _read_document(directory)
-    except ValueError:
-        return False
-    return persisted == expected_document
-
-
-def _is_external_reusable(directory: Path, digest: Checksum) -> bool:
-    return _is_matching_document(directory, AnalysisAssetName.EXTERNAL_DOCUMENT, ExternalAnalysisDocument, digest)
-
-
-def _is_temporal_reusable(directory: Path, digest: Checksum) -> bool:
-    return _is_matching_document(directory, AnalysisAssetName.TEMPORAL_DOCUMENT, TemporalAnalysisDocument, digest)
-
-
-def _is_matching_document(
-    directory: Path,
-    asset_name: AnalysisAssetName,
-    document_type: type[ExternalAnalysisDocument] | type[TemporalAnalysisDocument],
-    digest: Checksum,
-) -> bool:
-    complete = directory / AnalysisAssetName.COMPLETE
-    document = directory / asset_name
-    if not complete.is_file() or not document.is_file() or complete.read_text(encoding="utf-8").strip() != digest.value:
-        return False
-    try:
-        document_type.model_validate_json(document.read_text(encoding="utf-8"))
-    except ValueError:
-        return False
-    return checksum_text(document.read_text(encoding="utf-8")) == digest
 
 
 def _write_external_analysis(temporary: Path, payload: str, digest: Checksum) -> None:

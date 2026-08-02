@@ -1,6 +1,7 @@
 """External and temporal split publication without mutating canonical membership."""
 
 from dataclasses import dataclass
+from json import dumps, loads
 from pathlib import Path
 from shutil import rmtree
 
@@ -12,7 +13,6 @@ from datp_core.domain.enums import PopulationId, PublicationStatus, SplitProtoco
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, Seed, checksum_file, checksum_text
 from datp_core.experiments.models import (
-    ExecutionIdentityDocument,
     ExternalTemporalExecutionIdentity,
     require_execution_identity,
 )
@@ -61,7 +61,7 @@ def split_stage(request: SplitRequest) -> SplitResult:
 
     def write(temporary: Path) -> None:
         (temporary / "execution_identity.json").write_text(
-            request.execution_identity.document.model_dump_json(indent=2) + "\n", encoding="utf-8"
+            dumps(request.execution_identity.serialize(), indent=2) + "\n", encoding="utf-8"
         )
         result.assignments.write_parquet(temporary / "split_assignments.parquet")
         (temporary / "split_manifest.json").write_text(
@@ -169,7 +169,7 @@ def _require_matching_reference_rows(temporal: pl.DataFrame, static: pl.DataFram
 
 
 def _manifest_payload(result: SplitResult, identity: ExternalTemporalExecutionIdentity) -> str:
-    payload = "\n".join((identity.document.model_dump_json(indent=2), result.manifest.model_dump_json(indent=2)))
+    payload = "\n".join((dumps(identity.serialize(), indent=2), result.manifest.model_dump_json(indent=2)))
     if result.matched_static_reference_manifest is not None:
         payload += "\n" + result.matched_static_reference_manifest.model_dump_json(indent=2)
     return payload + "\n"
@@ -189,10 +189,7 @@ def _is_reusable(directory: Path, request: SplitRequest, expected: SplitResult, 
     ):
         return False
     try:
-        if (
-            ExecutionIdentityDocument.model_validate_json(identity_path.read_text(encoding="utf-8"))
-            != request.execution_identity.document
-        ):
+        if loads(identity_path.read_text(encoding="utf-8")) != request.execution_identity.serialize():
             return False
         persisted = SplitManifestDocument.model_validate_json(manifest.read_text(encoding="utf-8"))
         if persisted != expected.manifest:

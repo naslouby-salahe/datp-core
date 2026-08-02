@@ -2,24 +2,8 @@
 
 from dataclasses import dataclass
 
-from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import EvidenceRole, ExperimentId, PopulationId, TemporalState
 from datp_core.domain.errors import ScientificContractError
-
-
-class ExecutionIdentityDocument(StrictModel):
-    experiment: ExperimentId
-    population: PopulationId
-    evidence_role: EvidenceRole
-    temporal_state: TemporalState | None
-
-    def to_identity(self) -> "ExternalTemporalExecutionIdentity":
-        return ExternalTemporalExecutionIdentity(
-            experiment=self.experiment,
-            population=self.population,
-            evidence_role=self.evidence_role,
-            temporal_state=self.temporal_state,
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,14 +25,13 @@ class ExternalTemporalExecutionIdentity:
         if self.evidence_role is not evidence_role:
             raise ScientificContractError("execution identity evidence role must match", subject=evidence_role)
 
-    @property
-    def document(self) -> ExecutionIdentityDocument:
-        return ExecutionIdentityDocument(
-            experiment=self.experiment,
-            population=self.population,
-            evidence_role=self.evidence_role,
-            temporal_state=self.temporal_state,
-        )
+    def serialize(self) -> dict:
+        return {
+            "experiment": self.experiment.value,
+            "population": self.population.value,
+            "evidence_role": self.evidence_role.value,
+            "temporal_state": self.temporal_state.value if self.temporal_state is not None else None,
+        }
 
 
 def require_execution_identity(
