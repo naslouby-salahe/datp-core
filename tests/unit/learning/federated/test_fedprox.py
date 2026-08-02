@@ -7,26 +7,22 @@ from tests.unit.learning.federated.helpers import (
     CHECKPOINT,
     LEARNING_RATE,
     POPULATION_CLIENT_COUNT,
-    build_all_client_datasets,
+    build_all_client_inputs,
     fedprox_coordinate,
     fedprox_protocol,
 )
 
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, ProximalCoefficient, Seed
-from datp_core.learning.federated.fedprox import (
-    FedProxPrimarySelectionStatus,
-    FedProxTrainingRequest,
-    fedprox_primary_selection_outcome,
-    train_fedprox,
-)
+from datp_core.learning.federated.fedprox import train_fedprox
+from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.protocols.training import FEDPROX_COEFFICIENTS
 
 
-def _request(tmp_path: Path, coefficient: ProximalCoefficient) -> FedProxTrainingRequest:
-    return FedProxTrainingRequest(
+def _request(tmp_path: Path, coefficient: ProximalCoefficient) -> FederatedTrainingRequest:
+    return FederatedTrainingRequest(
         coordinate=fedprox_coordinate(Seed(0), coefficient),
-        clients=build_all_client_datasets(tmp_path),
+        clients=build_all_client_inputs(tmp_path),
         population_client_count=POPULATION_CLIENT_COUNT,
         autoencoder=AUTOENCODER,
         training_protocol=fedprox_protocol(coefficient),
@@ -62,8 +58,8 @@ def test_train_fedprox_produces_independent_model_per_coefficient(tmp_path: Path
 
 def test_train_fedprox_rejects_partial_participation(tmp_path: Path) -> None:
     coefficient = FEDPROX_COEFFICIENTS[0]
-    clients = build_all_client_datasets(tmp_path)
-    request = FedProxTrainingRequest(
+    clients = build_all_client_inputs(tmp_path)
+    request = FederatedTrainingRequest(
         coordinate=fedprox_coordinate(Seed(0), coefficient),
         clients=(clients[0],),
         population_client_count=POPULATION_CLIENT_COUNT,
@@ -82,7 +78,7 @@ def test_train_fedprox_rejects_partial_participation(tmp_path: Path) -> None:
 
 def test_train_fedprox_rejects_mismatched_coordinate_and_protocol_coefficient(tmp_path: Path) -> None:
     request = _request(tmp_path, FEDPROX_COEFFICIENTS[0])
-    mismatched = FedProxTrainingRequest(
+    mismatched = FederatedTrainingRequest(
         coordinate=fedprox_coordinate(Seed(0), FEDPROX_COEFFICIENTS[1]),
         clients=request.clients,
         population_client_count=request.population_client_count,
@@ -99,8 +95,9 @@ def test_train_fedprox_rejects_mismatched_coordinate_and_protocol_coefficient(tm
         train_fedprox(mismatched)
 
 
-def test_fedprox_primary_selection_outcome_is_unresolved_not_invented() -> None:
-    outcome = fedprox_primary_selection_outcome(FEDPROX_COEFFICIENTS)
-    assert outcome.status is FedProxPrimarySelectionStatus.UNRESOLVED_NO_SOURCE_BACKED_RULE
-    assert outcome.declared_coefficients == FEDPROX_COEFFICIENTS
-    assert "not declared" in outcome.detail
+def test_fedprox_does_not_import_private_fedavg_symbols() -> None:
+    import datp_core.learning.federated.fedprox as fedprox_module
+
+    module_dict = vars(fedprox_module)
+    assert not any(name.startswith("_run_") for name in module_dict)
+    assert "fedavg" not in fedprox_module.__file__

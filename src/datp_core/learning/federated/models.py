@@ -1,6 +1,7 @@
-from collections.abc import Mapping
-from dataclasses import dataclass, replace
+"""Typed, immutable federated learning model contracts."""
+
 from enum import StrEnum
+from dataclasses import dataclass
 from pathlib import Path
 
 import polars as pl
@@ -13,10 +14,11 @@ from datp_core.domain.enums import (
     PopulationId,
     PopulationIdentityKind,
     PreprocessingProtocolId,
+    ProcessedDataBranch,
     SplitProtocolId,
     TrainingModelId,
 )
-from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
     BatchSize,
     ByteCount,
@@ -28,48 +30,51 @@ from datp_core.domain.values import (
     RoundNumber,
     RowCount,
     Seed,
-    checksum_file,
-    checksum_text,
 )
+from datp_core.learning.autoencoder import ModelStateMap
 from datp_core.populations.models import ClientIdentity
-from datp_core.protocols.models import CheckpointProtocol
+from datp_core.preprocessing.models import FittedPreprocessingState
+from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
+
+CANDIDATE_PREFIX: str = "checkpoint_round_"
+CANDIDATE_SUFFIX: str = ".safetensors"
+PERSONALIZED_INFIX: str = "_client_"
 
 
-ROUND_SUMMARY_SCHEMA: Mapping[str, type[pl.DataType]] = {
-    "round_number": pl.Int64,
-    "aggregate_loss": pl.Float64,
-    "upload_bytes": pl.Int64,
-    "download_bytes": pl.Int64,
-    "global_state_checksum": pl.String,
-}
+@dataclass(frozen=True, slots=True)
+class RoundSnapshot:
+    """In-memory candidate-round state prior to persistence."""
 
-CLIENT_ROUNDS_SCHEMA: Mapping[str, type[pl.DataType]] = {
-    "round_number": pl.Int64,
-    "client_id": pl.String,
-    "sample_count": pl.Int64,
-    "local_loss": pl.Float64,
-}
-
-PERSONALIZED_ROUNDS_SCHEMA: Mapping[str, type[pl.DataType]] = {
-    "round_number": pl.Int64,
-    "client_id": pl.String,
-    "local_loss": pl.Float64,
-    "state_checksum": pl.String,
-}
+    round_number: RoundNumber
+    state_dict: ModelStateMap
+    mean_training_loss: MetricValue
 
 
-def _validate_schema(frame: pl.DataFrame, expected_schema: Mapping[str, type[pl.DataType]]) -> None:
-    for col, dtype in expected_schema.items():
-        if col not in frame.columns:
-            raise ArtifactIntegrityError(
-                f"Parquet table missing required column '{col}'",
-                subject=ContractSubject.SCHEMA,
-            )
-        if frame.schema[col] != dtype:
-            raise ArtifactIntegrityError(
-                f"Parquet column '{col}' has type {frame.schema[col]}, expected {dtype}",
-                subject=ContractSubject.SCHEMA,
-            )
+class FederatedHistoryAssetName(StrEnum):
+    ROUND_SUMMARY = "round_summary.parquet"
+    CLIENT_ROUNDS = "client_rounds.parquet"
+    PERSONALIZED_ROUNDS = "personalized_rounds.parquet"
+    DEVICE_NAME = "device_name.txt"
+    COMPLETE = "COMPLETE"
+
+
+class FederatedHistoryColumn(StrEnum):
+    ROUND_NUMBER = "round_number"
+    AGGREGATE_LOSS = "aggregate_loss"
+    UPLOAD_BYTES = "upload_bytes"
+    DOWNLOAD_BYTES = "download_bytes"
+    GLOBAL_STATE_CHECKSUM = "global_state_checksum"
+    CLIENT_ID = "client_id"
+    SAMPLE_COUNT = "sample_count"
+    LOCAL_LOSS = "local_loss"
+    STATE_CHECKSUM = "state_checksum"
+
+
+def candidate_tensor_name(round_number: RoundNumber, client: ClientIdentity | None = None) -> str:
+    base = f"{CANDIDATE_PREFIX}{round_number.value}"
+    if client is not None:
+        base = f"{base}{PERSONALIZED_INFIX}{client.client_id}"
+    return f"{base}{CANDIDATE_SUFFIX}"
 
 
 def _require_model_coefficient_matches_kind(
@@ -115,12 +120,26 @@ class ClientTrainingInput:
     client: ClientIdentity
     training_features: pl.DataFrame
     feature_names: FeatureNameSequence
+    preprocessing_state: FittedPreprocessingState
 
     def __post_init__(self) -> None:
         if self.training_features.height < 1:
             raise ScientificContractError(
                 "client training input requires at least one benign training row",
                 subject=ContractSubject.ROWS,
+            )
+        if self.preprocessing_state.branch is not ProcessedDataBranch.FEDERATED:
+            raise ScientificContractError(
+                "federated training requires federated preprocessing branch",
+                subject=self.preprocessing_state.branch,
+            )
+        if (
+            self.preprocessing_state.client_identity is None
+            or self.preprocessing_state.client_identity.value != self.client.client_id
+        ):
+            raise ScientificContractError(
+                "preprocessing state client identity must match client training input",
+                subject=ContractSubject.CLIENT_IDENTITY,
             )
 
 
@@ -303,8 +322,8 @@ class CheckpointDecision:
                 "a checkpoint decision requires retained candidates",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
-        selected_rounds = {item.round_number.value for item in self.candidates}
-        if self.selected.round_number.value not in selected_rounds:
+        selected_rounds = {item.round_number for item in self.candidates}
+        if self.selected.round_number not in selected_rounds:
             raise ScientificContractError(
                 "the selected checkpoint must be one of the retained candidates",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
@@ -329,7 +348,7 @@ class CheckpointDecision:
 @dataclass(frozen=True, slots=True)
 class FederatedTrainingResult:
     coordinate: FederatedTrainingCoordinate
-    autoencoder_widths: tuple[int, ...]
+    autoencoder: AutoencoderProtocol
     checkpoint_protocol: CheckpointProtocol
     history: FederatedTrainingHistory
     preprocessing_state_set_checksum: Checksum
@@ -345,365 +364,20 @@ class FederatedTrainingResult:
             )
 
 
-class FederatedCheckpointAssetName(StrEnum):
-    CANDIDATE_PREFIX = "checkpoint_round_"
-    CANDIDATE_SUFFIX = ".safetensors"
-    PERSONALIZED_INFIX = "_client_"
-
-
-class FederatedHistoryAssetName(StrEnum):
-    ROUND_SUMMARY = "round_summary.parquet"
-    CLIENT_ROUNDS = "client_rounds.parquet"
-    PERSONALIZED_ROUNDS = "personalized_rounds.parquet"
-    DEVICE_NAME = "device_name.txt"
-    COMPLETE = "COMPLETE"
-
-
-def candidate_tensor_name(round_number: RoundNumber, client: ClientIdentity | None = None) -> str:
-    base = f"{FederatedCheckpointAssetName.CANDIDATE_PREFIX}{round_number.value}"
-    if client is not None:
-        base = f"{base}{FederatedCheckpointAssetName.PERSONALIZED_INFIX}{client.client_id}"
-    return f"{base}{FederatedCheckpointAssetName.CANDIDATE_SUFFIX}"
-
-
-class FederatedHistoryColumn(StrEnum):
-    ROUND_NUMBER = "round_number"
-    AGGREGATE_LOSS = "aggregate_loss"
-    UPLOAD_BYTES = "upload_bytes"
-    DOWNLOAD_BYTES = "download_bytes"
-    GLOBAL_STATE_CHECKSUM = "global_state_checksum"
-    CLIENT_ID = "client_id"
-    SAMPLE_COUNT = "sample_count"
-    LOCAL_LOSS = "local_loss"
-    STATE_CHECKSUM = "state_checksum"
-
-
-def persist_federated_training_history(
-    history: FederatedTrainingHistory,
-    directory: Path,
-    *,
-    device_name: str,
-) -> None:
-    if not device_name:
-        raise ArtifactIntegrityError(
-            "training publication requires a non-empty device name",
-            subject=ContractSubject.CUDA,
-        )
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / FederatedHistoryAssetName.DEVICE_NAME).write_text(device_name, encoding="utf-8")
-    
-    round_rows = [
-        {
-            "round_number": r.round_number.value,
-            "aggregate_loss": r.aggregate_loss.value,
-            "upload_bytes": r.communication.estimated_upload_bytes.value,
-            "download_bytes": r.communication.estimated_download_bytes.value,
-            "global_state_checksum": r.global_state_reference.state_checksum.value,
-        }
-        for r in history.rounds
-    ]
-    client_rows = [
-        {
-            "round_number": r.round_number.value,
-            "client_id": cr.client.client_id,
-            "sample_count": cr.sample_count.value,
-            "local_loss": cr.local_loss.value,
-        }
-        for r in history.rounds
-        for cr in r.client_results
-    ]
-    personalized_rows = [
-        {
-            "round_number": r.round_number.value,
-            "client_id": pr.client.client_id,
-            "local_loss": pr.local_loss.value,
-            "state_checksum": pr.state_checksum.value,
-        }
-        for r in history.rounds
-        for pr in r.personalized_state_references
-    ]
-
-    pl.DataFrame(round_rows, schema=ROUND_SUMMARY_SCHEMA).write_parquet(
-        directory / FederatedHistoryAssetName.ROUND_SUMMARY
-    )
-    pl.DataFrame(client_rows, schema=CLIENT_ROUNDS_SCHEMA).write_parquet(
-        directory / FederatedHistoryAssetName.CLIENT_ROUNDS
-    )
-    if personalized_rows:
-        pl.DataFrame(personalized_rows, schema=PERSONALIZED_ROUNDS_SCHEMA).write_parquet(
-            directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS
-        )
-
-
-def load_federated_training_history(
-    coordinate: FederatedTrainingCoordinate,
-    directory: Path,
-    identity_kind: PopulationIdentityKind,
-) -> FederatedTrainingHistory:
-    column = FederatedHistoryColumn
-    round_summary_path = directory / FederatedHistoryAssetName.ROUND_SUMMARY
-    client_rounds_path = directory / FederatedHistoryAssetName.CLIENT_ROUNDS
-    if not round_summary_path.is_file() or not client_rounds_path.is_file():
-        raise ArtifactIntegrityError("history parquet file missing", subject=ContractSubject.ARTIFACT_PATH)
-    
-    round_frame = pl.read_parquet(round_summary_path).sort(column.ROUND_NUMBER.value)
-    _validate_schema(round_frame, ROUND_SUMMARY_SCHEMA)
-    client_frame = pl.read_parquet(client_rounds_path)
-    _validate_schema(client_frame, CLIENT_ROUNDS_SCHEMA)
-    
-    personalized_path = directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS
-    personalized_frame = None
-    if personalized_path.is_file():
-        personalized_frame = pl.read_parquet(personalized_path)
-        _validate_schema(personalized_frame, PERSONALIZED_ROUNDS_SCHEMA)
-
-    rounds: list[FederatedRoundResult] = []
-    for round_row in round_frame.iter_rows(named=True):
-        round_number = RoundNumber(int(round_row[column.ROUND_NUMBER.value]))
-        client_rows = client_frame.filter(pl.col(column.ROUND_NUMBER.value) == round_row[column.ROUND_NUMBER.value])
-        client_results = tuple(
-            ClientTrainingResult(
-                client=ClientIdentity(coordinate.population, str(row[column.CLIENT_ID.value]), identity_kind),
-                sample_count=RowCount(int(row[column.SAMPLE_COUNT.value])),
-                local_loss=MetricValue(float(row[column.LOCAL_LOSS.value])),
-            )
-            for row in client_rows.iter_rows(named=True)
-        )
-        personalized_references: tuple[PersonalizedModelStateReference, ...] = ()
-        if personalized_frame is not None:
-            rows = personalized_frame.filter(pl.col(column.ROUND_NUMBER.value) == round_row[column.ROUND_NUMBER.value])
-            personalized_references = tuple(
-                PersonalizedModelStateReference(
-                    coordinate=coordinate,
-                    client=ClientIdentity(coordinate.population, str(row[column.CLIENT_ID.value]), identity_kind),
-                    round_number=round_number,
-                    local_loss=MetricValue(float(row[column.LOCAL_LOSS.value])),
-                    state_checksum=Checksum(str(row[column.STATE_CHECKSUM.value])),
-                    tensor_path=None,
-                )
-                for row in rows.iter_rows(named=True)
-            )
-        communication = CommunicationRecord(
-            round_number=round_number,
-            estimated_upload_bytes=ByteCount(int(round_row[column.UPLOAD_BYTES.value])),
-            estimated_download_bytes=ByteCount(int(round_row[column.DOWNLOAD_BYTES.value])),
-            estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
-        )
-        global_reference = GlobalModelStateReference(
-            coordinate=coordinate,
-            round_number=round_number,
-            state_checksum=Checksum(str(round_row[column.GLOBAL_STATE_CHECKSUM.value])),
-            tensor_path=None,
-        )
-        rounds.append(
-            FederatedRoundResult(
-                round_number=round_number,
-                client_results=client_results,
-                aggregate_loss=MetricValue(float(round_row[column.AGGREGATE_LOSS.value])),
-                communication=communication,
-                global_state_reference=global_reference,
-                personalized_state_references=personalized_references,
-            )
-        )
-    return FederatedTrainingHistory(coordinate=coordinate, rounds=tuple(rounds))
-
-
-def training_complete_digest(candidates: tuple[CheckpointCandidate, ...]) -> Checksum:
-    set_payload = "|".join(
-        f"{item.round_number.value}:{item.tensor_checksum.value}:{item.status.value}" for item in candidates
-    )
-    return checksum_text(f"{checksum_text(set_payload).value}|{len(candidates)}")
-
-
-def federated_training_directory_is_reusable(directory: Path, candidate_rounds: tuple[RoundNumber, ...]) -> bool:
-    complete = directory / FederatedHistoryAssetName.COMPLETE
-    round_summary = directory / FederatedHistoryAssetName.ROUND_SUMMARY
-    client_rounds = directory / FederatedHistoryAssetName.CLIENT_ROUNDS
-    device_name = directory / FederatedHistoryAssetName.DEVICE_NAME
-    if not all(path.is_file() for path in (complete, round_summary, client_rounds, device_name)):
-        return False
-    if not device_name.read_text(encoding="utf-8").strip():
-        return False
-    try:
-        round_frame = pl.read_parquet(round_summary)
-        _validate_schema(round_frame, ROUND_SUMMARY_SCHEMA)
-        client_frame = pl.read_parquet(client_rounds)
-        _validate_schema(client_frame, CLIENT_ROUNDS_SCHEMA)
-    except Exception:
-        return False
-    return all((directory / candidate_tensor_name(round_number)).is_file() for round_number in candidate_rounds)
-
-
-def load_published_device_name(directory: Path) -> str:
-    device_path = directory / FederatedHistoryAssetName.DEVICE_NAME
-    if not device_path.is_file():
-        raise ArtifactIntegrityError(
-            "reused federated training is missing the published device name",
-            subject=ContractSubject.CUDA,
-        )
-    device_name = device_path.read_text(encoding="utf-8").strip()
-    if not device_name:
-        raise ArtifactIntegrityError(
-            "reused federated training device name is empty",
-            subject=ContractSubject.CUDA,
-        )
-    return device_name
+@dataclass(frozen=True, slots=True)
+class FederatedTrainingOutcome:
+    training_result: FederatedTrainingResult
+    candidates: tuple[CheckpointCandidate, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class ReusedGlobalCandidatesRequest:
-    coordinate: FederatedTrainingCoordinate
-    directory: Path
-    checkpoint_protocol: CheckpointProtocol
-    preprocessing_state_set_checksum: Checksum
-    split_manifest_checksum: Checksum
+class PersonalizedCandidateSet:
+    client: ClientIdentity
+    candidates: tuple[CheckpointCandidate, ...]
 
 
 @dataclass(frozen=True, slots=True)
-class ReusedPersonalizedCandidatesRequest:
-    personalized_coordinate: FederatedTrainingCoordinate
-    personalized_output_directory: Path
-    global_history_directory: Path
-    clients: tuple[ClientIdentity, ...]
-    checkpoint_protocol: CheckpointProtocol
-    preprocessing_state_set_checksum: Checksum
-    split_manifest_checksum: Checksum
-
-
-@dataclass(frozen=True, slots=True)
-class ReusedFederatedTrainingRequest:
-    coordinate: FederatedTrainingCoordinate
-    directory: Path
-    checkpoint_protocol: CheckpointProtocol
-    identity_kind: PopulationIdentityKind
-    autoencoder_widths: tuple[int, ...]
-    batch_size: BatchSize
-    preprocessing_state_set_checksum: Checksum
-    split_manifest_checksum: Checksum
-
-
-def load_reused_global_candidates(request: ReusedGlobalCandidatesRequest) -> tuple[CheckpointCandidate, ...]:
-    column = FederatedHistoryColumn
-    round_summary_path = request.directory / FederatedHistoryAssetName.ROUND_SUMMARY
-    if not round_summary_path.is_file():
-        raise ArtifactIntegrityError(
-            "reused global candidates missing history summary",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    round_frame = pl.read_parquet(round_summary_path)
-    _validate_schema(round_frame, ROUND_SUMMARY_SCHEMA)
-    loss_by_round = {
-        int(row[column.ROUND_NUMBER.value]): MetricValue(float(row[column.AGGREGATE_LOSS.value]))
-        for row in round_frame.iter_rows(named=True)
-    }
-    candidates: list[CheckpointCandidate] = []
-    for candidate_round in request.checkpoint_protocol.candidates:
-        path = request.directory / candidate_tensor_name(candidate_round)
-        if not path.is_file():
-            raise ArtifactIntegrityError("reused checkpoint candidate missing", subject=ContractSubject.ARTIFACT_PATH)
-        candidates.append(
-            CheckpointCandidate(
-                coordinate=request.coordinate,
-                round_number=candidate_round,
-                client=None,
-                tensor_path=path,
-                tensor_checksum=checksum_file(path),
-                mean_training_loss=loss_by_round[candidate_round.value],
-                status=CheckpointStatus.CANDIDATE,
-                preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
-                split_manifest_checksum=request.split_manifest_checksum,
-            )
-        )
-    return tuple(candidates)
-
-
-def load_reused_personalized_candidates(
-    request: ReusedPersonalizedCandidatesRequest,
-) -> dict[ClientIdentity, tuple[CheckpointCandidate, ...]]:
-    personalized_rounds_path = request.global_history_directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS
-    if not personalized_rounds_path.is_file():
-        raise ArtifactIntegrityError(
-            "reused personalized candidates require published personalized round losses",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    personalized_frame = pl.read_parquet(personalized_rounds_path)
-    _validate_schema(personalized_frame, PERSONALIZED_ROUNDS_SCHEMA)
-    result: dict[ClientIdentity, tuple[CheckpointCandidate, ...]] = {}
-    for client in request.clients:
-        candidates: list[CheckpointCandidate] = []
-        for candidate_round in request.checkpoint_protocol.candidates:
-            path = request.personalized_output_directory / candidate_tensor_name(candidate_round, client)
-            if not path.is_file():
-                raise ArtifactIntegrityError(
-                    "reused personalized checkpoint candidate missing",
-                    subject=ContractSubject.ARTIFACT_PATH,
-                )
-            loss_rows = personalized_frame.filter(
-                (pl.col("round_number") == candidate_round.value) & (pl.col("client_id") == client.client_id)
-            )
-            if loss_rows.height != 1:
-                raise ArtifactIntegrityError(
-                    "reused personalized candidate is missing its published local loss",
-                    subject=ContractSubject.TRAINING,
-                )
-            local_loss = MetricValue(float(loss_rows.item(0, "local_loss")))
-            candidates.append(
-                CheckpointCandidate(
-                    coordinate=request.personalized_coordinate,
-                    round_number=candidate_round,
-                    client=client,
-                    tensor_path=path,
-                    tensor_checksum=checksum_file(path),
-                    mean_training_loss=local_loss,
-                    status=CheckpointStatus.CANDIDATE,
-                    preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
-                    split_manifest_checksum=request.split_manifest_checksum,
-                )
-            )
-        result[client] = tuple(candidates)
-    return result
-
-
-def rebase_checkpoint_candidates(
-    candidates: tuple[CheckpointCandidate, ...],
-    directory: Path,
-    *,
-    client: ClientIdentity | None,
-) -> tuple[CheckpointCandidate, ...]:
-    rebased: list[CheckpointCandidate] = []
-    for candidate in candidates:
-        path = directory / candidate_tensor_name(candidate.round_number, client)
-        rebased.append(
-            replace(
-                candidate,
-                tensor_path=path,
-                tensor_checksum=checksum_file(path),
-            )
-        )
-    return tuple(rebased)
-
-
-def load_reused_federated_training(
-    request: ReusedFederatedTrainingRequest,
-) -> tuple[FederatedTrainingResult, tuple[CheckpointCandidate, ...]]:
-    history = load_federated_training_history(request.coordinate, request.directory, request.identity_kind)
-    candidates = load_reused_global_candidates(
-        ReusedGlobalCandidatesRequest(
-            coordinate=request.coordinate,
-            directory=request.directory,
-            checkpoint_protocol=request.checkpoint_protocol,
-            preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
-            split_manifest_checksum=request.split_manifest_checksum,
-        )
-    )
-    training_result = FederatedTrainingResult(
-        coordinate=request.coordinate,
-        autoencoder_widths=request.autoencoder_widths,
-        checkpoint_protocol=request.checkpoint_protocol,
-        history=history,
-        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
-        split_manifest_checksum=request.split_manifest_checksum,
-        device_name=load_published_device_name(request.directory),
-        batch_size_used=request.batch_size,
-    )
-    return training_result, candidates
+class DittoTrainingOutcome:
+    global_training_result: FederatedTrainingResult
+    global_candidates: tuple[CheckpointCandidate, ...]
+    personalized_candidates: tuple[PersonalizedCandidateSet, ...]

@@ -8,20 +8,23 @@ from tests.unit.learning.federated.helpers import (
     FEDAVG_PROTOCOL,
     LEARNING_RATE,
     POPULATION_CLIENT_COUNT,
-    build_all_client_datasets,
+    build_all_client_inputs,
+    build_client_input,
     fedavg_coordinate,
 )
 
-from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, Seed
-from datp_core.learning.federated.fedavg import FedAvgTrainingRequest, train_fedavg
+from datp_core.domain.errors import LeakageError, ScientificContractError
+from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.learning.federated.fedavg import train_fedavg
+from datp_core.learning.federated.training import FederatedTrainingRequest
+from datp_core.populations.models import PopulationOutcomeLabel
 
 
-def _request(tmp_path: Path, seed: Seed | None = None) -> FedAvgTrainingRequest:
+def _request(tmp_path: Path, seed: Seed | None = None) -> FederatedTrainingRequest:
     resolved_seed = Seed(0) if seed is None else seed
-    return FedAvgTrainingRequest(
+    return FederatedTrainingRequest(
         coordinate=fedavg_coordinate(resolved_seed),
-        clients=build_all_client_datasets(tmp_path),
+        clients=build_all_client_inputs(tmp_path),
         population_client_count=POPULATION_CLIENT_COUNT,
         autoencoder=AUTOENCODER,
         training_protocol=FEDAVG_PROTOCOL,
@@ -64,8 +67,8 @@ def test_train_fedavg_is_deterministic_given_the_same_seed(tmp_path: Path) -> No
 
 
 def test_train_fedavg_rejects_partial_client_participation(tmp_path: Path) -> None:
-    clients = build_all_client_datasets(tmp_path)
-    request = FedAvgTrainingRequest(
+    clients = build_all_client_inputs(tmp_path)
+    request = FederatedTrainingRequest(
         coordinate=fedavg_coordinate(Seed(0)),
         clients=(clients[0],),
         population_client_count=POPULATION_CLIENT_COUNT,
@@ -91,7 +94,7 @@ def test_train_fedavg_rejects_a_fedprox_coordinate(tmp_path: Path) -> None:
     wrong_coordinate = fedprox_coordinate(Seed(0), ProximalCoefficient(0.1))
     with pytest.raises(ScientificContractError, match="FEDAVG_AUTOENCODER coordinate"):
         train_fedavg(
-            FedAvgTrainingRequest(
+            FederatedTrainingRequest(
                 coordinate=wrong_coordinate,
                 clients=request.clients,
                 population_client_count=request.population_client_count,
@@ -108,23 +111,20 @@ def test_train_fedavg_rejects_a_fedprox_coordinate(tmp_path: Path) -> None:
 
 
 def test_train_fedavg_never_trains_on_attack_labelled_rows(tmp_path: Path) -> None:
-    from tests.unit.learning.federated.helpers import FEATURE_NAMES, benign_frame, build_client_dataset, client_identity
+    from tests.unit.learning.federated.helpers import FEATURE_NAMES, benign_frame, client_identity, fitted_state
 
-    from datp_core.domain.values import RowCount, Seed
-    from datp_core.learning.federated.models import ClientTrainingInput
-    from datp_core.populations.models import PopulationOutcomeLabel
-
-    clients = list(build_all_client_datasets(tmp_path))
+    clients = list(build_all_client_inputs(tmp_path))
     attack_frame = benign_frame(RowCount(16), seed=Seed(99), label=PopulationOutcomeLabel.ATTACK.value)
-    poisoned = build_client_dataset("client_a", tmp_path, row_count=RowCount(16))
+    poisoned_state = fitted_state(tmp_path / "client_a_state.skops", "client_a")
+    poisoned = build_client_input("client_a", tmp_path, row_count=RowCount(16))
     poisoned = poisoned.__class__(
-        training_input=ClientTrainingInput(
-            client=client_identity("client_a"), training_features=attack_frame, feature_names=FEATURE_NAMES
-        ),
-        preprocessing_state=poisoned.preprocessing_state,
+        client=client_identity("client_a"),
+        training_features=attack_frame,
+        feature_names=FEATURE_NAMES,
+        preprocessing_state=poisoned_state,
     )
     clients[0] = poisoned
-    request = FedAvgTrainingRequest(
+    request = FederatedTrainingRequest(
         coordinate=fedavg_coordinate(Seed(0)),
         clients=tuple(clients),
         population_client_count=POPULATION_CLIENT_COUNT,
@@ -137,7 +137,6 @@ def test_train_fedavg_never_trains_on_attack_labelled_rows(tmp_path: Path) -> No
         split_manifest_checksum=Checksum("a" * 64),
         output_directory=tmp_path / "output",
     )
-    from datp_core.domain.errors import LeakageError
 
     with pytest.raises(LeakageError, match="attack-labelled rows"):
         train_fedavg(request)

@@ -34,7 +34,6 @@ from datp_core.domain.values import (
     Seed,
 )
 from datp_core.domain.values import ClientPathToken as PreprocessingClientIdentity
-from datp_core.learning.federated.fedavg import FederatedClientDataset
 from datp_core.learning.federated.models import ClientTrainingInput, FederatedTrainingCoordinate
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
@@ -191,27 +190,32 @@ def benign_frame(
     )
 
 
-def build_client_dataset(
+def build_client_input(
     client_id: str,
     output_directory: Path,
     *,
     row_count: RowCount = DEFAULT_CLIENT_ROW_COUNT,
     seed: Seed = DEFAULT_FRAME_SEED,
-) -> FederatedClientDataset:
-    training_input = ClientTrainingInput(
+) -> ClientTrainingInput:
+    state = fitted_state(output_directory / f"{client_id}_state.skops", client_id, checksum_suffix=client_id[-1])
+    return ClientTrainingInput(
         client=client_identity(client_id),
         training_features=benign_frame(row_count, seed=seed),
         feature_names=FEATURE_NAMES,
+        preprocessing_state=state,
     )
-    state = fitted_state(output_directory / f"{client_id}_state.skops", client_id, checksum_suffix=client_id[-1])
-    return FederatedClientDataset(training_input=training_input, preprocessing_state=state)
 
 
-def build_all_client_datasets(output_directory: Path) -> tuple[FederatedClientDataset, ...]:
+def build_all_client_inputs(output_directory: Path) -> tuple[ClientTrainingInput, ...]:
     return tuple(
-        build_client_dataset(client_id, output_directory, seed=Seed(index))
+        build_client_input(client_id, output_directory, seed=Seed(index))
         for index, client_id in enumerate(CLIENT_IDS)
     )
+
+
+# Alias for backward compatibility in tests
+build_client_dataset = build_client_input
+build_all_client_datasets = build_all_client_inputs
 
 
 def require_cuda() -> torch.device:

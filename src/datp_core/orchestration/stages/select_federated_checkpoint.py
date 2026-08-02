@@ -52,6 +52,8 @@ def select_federated_checkpoint_stage(
         selection_rule=CHECKPOINT_SELECTION_RULE,
         held_out_metrics=request.held_out_metrics,
         attack_labels_present=request.attack_labels_present,
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+        split_manifest_checksum=request.split_manifest_checksum,
     )
     return SelectFederatedCheckpointResult(
         stage=StageOperationId.SELECT_FEDERATED_CHECKPOINT,

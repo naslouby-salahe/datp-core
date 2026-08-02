@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 from tests.unit.learning.federated.helpers import (
+    AUTOENCODER,
     CHECKPOINT,
     client_identity,
     ditto_coordinates,
@@ -204,7 +205,7 @@ def test_training_result_requires_matching_history_coordinate() -> None:
     with pytest.raises(ScientificContractError, match="own history coordinate"):
         FederatedTrainingResult(
             coordinate=coordinate,
-            autoencoder_widths=(4, 3, 2, 3, 4),
+            autoencoder=AUTOENCODER,
             checkpoint_protocol=CHECKPOINT,
             history=history,
             preprocessing_state_set_checksum=Checksum("a" * 64),

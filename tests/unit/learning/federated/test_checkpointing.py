@@ -14,8 +14,10 @@ from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, Scient
 from datp_core.domain.values import Checksum, MetricValue, RoundNumber, Seed
 from datp_core.learning.federated.checkpointing import (
     RoundSnapshot,
-    candidate_set_checksum,
+    candidate_set_digest,
     candidate_tensor_name,
+    rebase_checkpoint_candidates,
+    reject_centralized_checkpoint,
     retain_checkpoint_candidates,
     select_checkpoint,
     validate_candidate_coordinates,
@@ -208,7 +210,7 @@ def test_candidate_tensor_name_distinguishes_personalized_clients() -> None:
     assert "client_a" in personalized_name
 
 
-def test_candidate_set_checksum_is_order_independent_of_input_but_content_sensitive(tmp_path: Path) -> None:
+def test_candidate_set_digest_is_deterministic(tmp_path: Path) -> None:
     coordinate = fedavg_coordinate(Seed(0))
     device = resolve_cuda_device()
     candidates = retain_checkpoint_candidates(
@@ -222,6 +224,41 @@ def test_candidate_set_checksum_is_order_independent_of_input_but_content_sensit
         client=None,
         device=device,
     )
-    first = candidate_set_checksum(candidates)
-    second = candidate_set_checksum(candidates)
+    first = candidate_set_digest(candidates)
+    second = candidate_set_digest(candidates)
     assert first == second
+
+
+def test_rebase_checkpoint_candidates_rejects_target_checksum_mismatch(tmp_path: Path) -> None:
+    coordinate = fedavg_coordinate(Seed(0))
+    device = resolve_cuda_device()
+    dir_a = tmp_path / "a"
+    dir_b = tmp_path / "b"
+    dir_a.mkdir()
+    dir_b.mkdir()
+
+    candidates = retain_checkpoint_candidates(
+        coordinate,
+        _snapshots(),
+        checkpoint_protocol=CHECKPOINT,
+        autoencoder=AUTOENCODER,
+        output_directory=dir_a,
+        preprocessing_state_set_checksum=Checksum("a" * 64),
+        split_manifest_checksum=Checksum("b" * 64),
+        client=None,
+        device=device,
+    )
+
+    # Create dummy files in dir_b with wrong content
+    for c in candidates:
+        target_path = dir_b / candidate_tensor_name(c.round_number)
+        target_path.write_bytes(b"corrupted")
+
+    with pytest.raises(ArtifactIntegrityError, match="checksum mismatch"):
+        rebase_checkpoint_candidates(candidates, dir_b, client=None)
+
+
+def test_reject_centralized_checkpoint_raises_leakage_error() -> None:
+    coordinate = fedavg_coordinate(Seed(0))
+    with pytest.raises(LeakageError, match="centralized checkpoint cannot enter"):
+        reject_centralized_checkpoint(coordinate)

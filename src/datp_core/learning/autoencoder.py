@@ -1,6 +1,6 @@
 """Shared protocol-driven reconstruction autoencoder architecture."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 import torch
@@ -8,9 +8,13 @@ from torch import nn
 
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import BatchSize, ModelStateMap, Seed
+from datp_core.domain.values import BatchSize, Seed
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import require_cuda_available
+
+ModelStateMap = Mapping[str, torch.Tensor]
+LEARNING_DTYPE = np.float32
+TORCH_LEARNING_DTYPE = torch.float32
 
 
 class ReconstructionAutoencoder(nn.Module):
@@ -105,13 +109,14 @@ def reconstruction_errors(
     require_cuda_available()
     _require_scoreable_feature_matrix(model, features)
     model.eval()
-    tensor = torch.as_tensor(np.array(features, dtype=np.float32), device=device)
     scores: list[np.ndarray] = []
+    total_rows = features.shape[0]
     with torch.inference_mode():
-        for start in range(0, tensor.shape[0], batch_size.value):
-            batch = tensor[start : start + batch_size.value]
-            reconstructed = model(batch)
-            per_row = torch.mean((reconstructed - batch) ** 2, dim=1)
+        for start in range(0, total_rows, batch_size.value):
+            batch_np = np.asarray(features[start : start + batch_size.value], dtype=LEARNING_DTYPE)
+            batch_tensor = torch.as_tensor(batch_np, device=device)
+            reconstructed = model(batch_tensor)
+            per_row = torch.mean((reconstructed - batch_tensor) ** 2, dim=1)
             scores.append(per_row.detach().cpu().numpy())
     if not scores:
         return np.asarray([], dtype=np.float64)

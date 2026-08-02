@@ -17,30 +17,31 @@ from datp_core.domain.values import (
     LearningRate,
     Seed,
 )
-from datp_core.learning.federated.checkpointing import CheckpointCandidate
-from datp_core.learning.federated.ditto import DittoTrainingOutcome, DittoTrainingRequest, train_ditto
-from datp_core.learning.federated.fedavg import (
-    FederatedClientDataset,
-    FederatedTrainingOutcome,
-    FedAvgTrainingRequest,
-    train_fedavg,
+from datp_core.learning.federated.checkpointing import (
+    CheckpointCandidate,
+    ReusedFederatedTrainingRequest,
+    ReusedPersonalizedCandidatesRequest,
+    candidate_set_digest,
+    federated_training_directory_is_reusable,
+    load_reused_federated_training,
+    load_reused_personalized_candidates,
+    rebase_checkpoint_candidates,
 )
-from datp_core.learning.federated.fedprox import FedProxTrainingRequest, train_fedprox
+from datp_core.learning.federated.ditto import DittoTrainingOutcome, DittoTrainingRequest, train_ditto
+from datp_core.learning.federated.fedavg import train_fedavg
+from datp_core.learning.federated.fedprox import train_fedprox
 from datp_core.learning.federated.models import (
     ClientTrainingInput,
     FederatedHistoryAssetName,
     FederatedTrainingCoordinate,
+    FederatedTrainingOutcome,
     FederatedTrainingResult,
-    ReusedFederatedTrainingRequest,
-    ReusedPersonalizedCandidatesRequest,
-    federated_training_directory_is_reusable,
-    load_reused_federated_training,
-    load_reused_personalized_candidates,
-    persist_federated_training_history,
-    rebase_checkpoint_candidates,
-    training_complete_digest,
 )
-from datp_core.learning.federated.training import preprocessing_state_set_checksum
+from datp_core.learning.federated.training import (
+    FederatedTrainingRequest,
+    persist_federated_training_history,
+    preprocessing_state_set_checksum,
+)
 from datp_core.orchestration.stages import _Box
 from datp_core.populations.catalogue import resolve_population
 from datp_core.populations.models import ClientIdentity
@@ -123,15 +124,15 @@ class TrainDittoStageResult:
 
 def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult:
     _require_autoencoder_matches_preprocessing(request.autoencoder, request.client_publications)
-    clients = _client_datasets(request.coordinate, request.client_publications)
+    clients = _client_inputs(request.coordinate, request.client_publications)
     preprocessing_checksum = preprocessing_state_set_checksum(
-        tuple(client.preprocessing_state.estimator_checksum for client in clients)
+        tuple((client.client, client.preprocessing_state.estimator_checksum) for client in clients)
     )
     box: _Box[FederatedTrainingOutcome] = _Box()
 
     def write(temporary: Path) -> None:
         outcome = train_fedavg(
-            FedAvgTrainingRequest(
+            FederatedTrainingRequest(
                 coordinate=request.coordinate,
                 clients=clients,
                 population_client_count=request.population_client_count,
@@ -165,7 +166,7 @@ def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult
             directory=request.output_directory,
             checkpoint_protocol=request.checkpoint_protocol,
             identity_kind=resolve_population(request.coordinate.population).declaration.identity_kind,
-            autoencoder_widths=tuple(request.autoencoder.widths),
+            autoencoder=request.autoencoder,
             batch_size=request.batch_size,
             preprocessing_state_set_checksum=preprocessing_checksum,
             split_manifest_checksum=request.split_manifest_checksum,
@@ -177,15 +178,15 @@ def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult
 
 def train_fedprox_stage(request: TrainFedProxRequest) -> TrainFederatedStageResult:
     _require_autoencoder_matches_preprocessing(request.autoencoder, request.client_publications)
-    clients = _client_datasets(request.coordinate, request.client_publications)
+    clients = _client_inputs(request.coordinate, request.client_publications)
     preprocessing_checksum = preprocessing_state_set_checksum(
-        tuple(client.preprocessing_state.estimator_checksum for client in clients)
+        tuple((client.client, client.preprocessing_state.estimator_checksum) for client in clients)
     )
     box: _Box[FederatedTrainingOutcome] = _Box()
 
     def write(temporary: Path) -> None:
         outcome = train_fedprox(
-            FedProxTrainingRequest(
+            FederatedTrainingRequest(
                 coordinate=request.coordinate,
                 clients=clients,
                 population_client_count=request.population_client_count,
@@ -219,7 +220,7 @@ def train_fedprox_stage(request: TrainFedProxRequest) -> TrainFederatedStageResu
             directory=request.output_directory,
             checkpoint_protocol=request.checkpoint_protocol,
             identity_kind=resolve_population(request.coordinate.population).declaration.identity_kind,
-            autoencoder_widths=tuple(request.autoencoder.widths),
+            autoencoder=request.autoencoder,
             batch_size=request.batch_size,
             preprocessing_state_set_checksum=preprocessing_checksum,
             split_manifest_checksum=request.split_manifest_checksum,
@@ -231,9 +232,9 @@ def train_fedprox_stage(request: TrainFedProxRequest) -> TrainFederatedStageResu
 
 def train_ditto_stage(request: TrainDittoRequest) -> TrainDittoStageResult:
     _require_autoencoder_matches_preprocessing(request.autoencoder, request.client_publications)
-    clients = _client_datasets(request.global_coordinate, request.client_publications)
+    clients = _client_inputs(request.global_coordinate, request.client_publications)
     preprocessing_checksum = preprocessing_state_set_checksum(
-        tuple(client.preprocessing_state.estimator_checksum for client in clients)
+        tuple((client.client, client.preprocessing_state.estimator_checksum) for client in clients)
     )
     box: _Box[DittoTrainingOutcome] = _Box()
 
@@ -283,12 +284,12 @@ def train_ditto_stage(request: TrainDittoRequest) -> TrainDittoStageResult:
         box.value.global_candidates, request.global_output_directory, client=None
     )
     personalized_candidates = {
-        client: rebase_checkpoint_candidates(
-            candidates,
+        pcs.client: rebase_checkpoint_candidates(
+            pcs.candidates,
             request.personalized_output_directory,
-            client=client,
+            client=pcs.client,
         )
-        for client, candidates in box.value.personalized_candidates_by_client.items()
+        for pcs in box.value.personalized_candidates
     }
     return TrainDittoStageResult(
         stage=StageOperationId.TRAIN_FEDERATED,
@@ -301,7 +302,7 @@ def train_ditto_stage(request: TrainDittoRequest) -> TrainDittoStageResult:
 
 def _finalize_reused_ditto_stage(
     request: TrainDittoRequest,
-    clients: tuple[FederatedClientDataset, ...],
+    clients: tuple[ClientTrainingInput, ...],
     preprocessing_checksum: Checksum,
 ) -> TrainDittoStageResult:
     identity_kind = resolve_population(request.global_coordinate.population).declaration.identity_kind
@@ -311,23 +312,24 @@ def _finalize_reused_ditto_stage(
             directory=request.global_output_directory,
             checkpoint_protocol=request.checkpoint_protocol,
             identity_kind=identity_kind,
-            autoencoder_widths=tuple(request.autoencoder.widths),
+            autoencoder=request.autoencoder,
             batch_size=request.batch_size,
             preprocessing_state_set_checksum=preprocessing_checksum,
             split_manifest_checksum=request.split_manifest_checksum,
         )
     )
-    personalized_candidates = load_reused_personalized_candidates(
+    reused_personalized_sets = load_reused_personalized_candidates(
         ReusedPersonalizedCandidatesRequest(
             personalized_coordinate=request.personalized_coordinate,
             personalized_output_directory=request.personalized_output_directory,
             global_history_directory=request.global_output_directory,
-            clients=tuple(client.training_input.client for client in clients),
+            clients=tuple(client.client for client in clients),
             checkpoint_protocol=request.checkpoint_protocol,
             preprocessing_state_set_checksum=preprocessing_checksum,
             split_manifest_checksum=request.split_manifest_checksum,
         )
     )
+    personalized_candidates = {pcs.client: pcs.candidates for pcs in reused_personalized_sets}
     return TrainDittoStageResult(
         stage=StageOperationId.TRAIN_FEDERATED,
         publication_status=PublicationStatus.REUSED,
@@ -347,8 +349,8 @@ def _publish_training_artifacts(
         directory,
         device_name=training_result.device_name,
     )
-    digest = training_complete_digest(candidates)
-    (directory / FederatedHistoryAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
+    digest = candidate_set_digest(candidates)
+    (directory / FederatedHistoryAssetName.COMPLETE.value).write_text(digest.value, encoding="utf-8")
 
 
 def _finalize_global_training_stage(
@@ -376,12 +378,12 @@ def _finalize_global_training_stage(
     )
 
 
-def _client_datasets(
+def _client_inputs(
     coordinate: FederatedTrainingCoordinate,
     client_publications: tuple[ClientPreprocessPublication, ...],
-) -> tuple[FederatedClientDataset, ...]:
+) -> tuple[ClientTrainingInput, ...]:
     identity_kind = resolve_population(coordinate.population).declaration.identity_kind
-    datasets: list[FederatedClientDataset] = []
+    inputs: list[ClientTrainingInput] = []
     for publication in client_publications:
         client = ClientIdentity(coordinate.population, publication.client_identity.value, identity_kind)
         frame = pl.read_parquet(publication.result.train_path)
@@ -389,11 +391,10 @@ def _client_datasets(
             client=client,
             training_features=frame,
             feature_names=FeatureNameSequence(publication.result.transformed_schema.feature_names),
+            preprocessing_state=publication.result.fitted_state,
         )
-        datasets.append(
-            FederatedClientDataset(training_input=training_input, preprocessing_state=publication.result.fitted_state)
-        )
-    return tuple(datasets)
+        inputs.append(training_input)
+    return tuple(inputs)
 
 
 def _require_autoencoder_matches_preprocessing(

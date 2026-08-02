@@ -7,7 +7,7 @@ from tests.unit.learning.federated.helpers import (
     CHECKPOINT,
     LEARNING_RATE,
     POPULATION_CLIENT_COUNT,
-    build_all_client_datasets,
+    build_all_client_inputs,
     ditto_coordinates,
     ditto_protocol,
 )
@@ -15,6 +15,7 @@ from tests.unit.learning.federated.helpers import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, Seed
 from datp_core.learning.federated.ditto import DittoTrainingRequest, train_ditto
+from datp_core.learning.federated.models import FederatedTrainingCoordinate
 
 
 def _request(tmp_path: Path) -> DittoTrainingRequest:
@@ -22,7 +23,7 @@ def _request(tmp_path: Path) -> DittoTrainingRequest:
     return DittoTrainingRequest(
         global_coordinate=global_coordinate,
         personalized_coordinate=personalized_coordinate,
-        clients=build_all_client_datasets(tmp_path),
+        clients=build_all_client_inputs(tmp_path),
         population_client_count=POPULATION_CLIENT_COUNT,
         autoencoder=AUTOENCODER,
         training_protocol=ditto_protocol(regularization),
@@ -39,12 +40,13 @@ def _request(tmp_path: Path) -> DittoTrainingRequest:
 def test_train_ditto_produces_distinct_global_and_personalized_checkpoints(tmp_path: Path) -> None:
     outcome = train_ditto(_request(tmp_path))
     assert len(outcome.global_candidates) == len(CHECKPOINT.candidates)
-    assert {c.client_id for c in outcome.personalized_candidates_by_client.keys()} == {"client_a", "client_b"}
-    for client, candidates in outcome.personalized_candidates_by_client.items():
-        assert len(candidates) == len(CHECKPOINT.candidates)
-        for candidate in candidates:
+    assert len(outcome.personalized_candidates) == 2
+    for pcs in outcome.personalized_candidates:
+        assert pcs.client.client_id in {"client_a", "client_b"}
+        assert len(pcs.candidates) == len(CHECKPOINT.candidates)
+        for candidate in pcs.candidates:
             assert candidate.client is not None
-            assert candidate.client == client
+            assert candidate.client == pcs.client
 
 
 def test_train_ditto_never_aggregates_personalized_states_into_global(tmp_path: Path) -> None:
@@ -52,8 +54,8 @@ def test_train_ditto_never_aggregates_personalized_states_into_global(tmp_path: 
     global_checksums = {candidate.tensor_checksum for candidate in outcome.global_candidates}
     personalized_checksums = {
         candidate.tensor_checksum
-        for candidates in outcome.personalized_candidates_by_client.values()
-        for candidate in candidates
+        for pcs in outcome.personalized_candidates
+        for candidate in pcs.candidates
     }
     assert global_checksums.isdisjoint(personalized_checksums)
 
@@ -62,18 +64,18 @@ def test_train_ditto_personalized_states_differ_by_client(tmp_path: Path) -> Non
     outcome = train_ditto(_request(tmp_path))
     terminal_round = CHECKPOINT.maximum_round
     terminal_checksums = {
-        client: next(
-            candidate.tensor_checksum for candidate in candidates if candidate.round_number == terminal_round
+        pcs.client: next(
+            candidate.tensor_checksum for candidate in pcs.candidates if candidate.round_number == terminal_round
         )
-        for client, candidates in outcome.personalized_candidates_by_client.items()
+        for pcs in outcome.personalized_candidates
     }
     assert len(set(terminal_checksums.values())) == len(terminal_checksums)
 
 
 def test_train_ditto_personalized_states_persist_across_rounds(tmp_path: Path) -> None:
     outcome = train_ditto(_request(tmp_path))
-    for candidates in outcome.personalized_candidates_by_client.values():
-        checksums = tuple(candidate.tensor_checksum for candidate in candidates)
+    for pcs in outcome.personalized_candidates:
+        checksums = tuple(candidate.tensor_checksum for candidate in pcs.candidates)
         assert len(set(checksums)) >= 1
 
 
@@ -109,7 +111,6 @@ def test_train_ditto_rejects_mismatched_global_and_personalized_regularization(t
     from datp_core.protocols.training import DITTO_REGULARIZATION_GRID
 
     request = _request(tmp_path)
-    from datp_core.learning.federated.models import FederatedTrainingCoordinate
 
     mismatched_personalized = FederatedTrainingCoordinate(
         population=request.personalized_coordinate.population,
