@@ -5,7 +5,13 @@ from enum import StrEnum
 from pathlib import Path
 from shutil import rmtree
 
-from datp_core.analysis.descriptive import DescriptiveSummary, QuantileRange, count_paired_differences, summarize_values
+from datp_core.analysis.descriptive import (
+    DescriptiveSummary,
+    ObservationCounts,
+    QuantileRange,
+    count_paired_differences,
+    summarize_values,
+)
 from datp_core.analysis.inference.bootstrap import (
     decide_confirmatory,
     external_paired_bca_interval,
@@ -238,8 +244,7 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
     descriptive = summarize_values(
         deltas,
         evidence_role=request.plan.evidence_role,
-        unavailable_count=0,
-        excluded_count=0,
+        counts=ObservationCounts(unavailable=0, excluded=0),
         quantiles=_DEFAULT_QUANTILES,
     )
     document = ExternalAnalysisDocument(
@@ -313,8 +318,7 @@ def _analyze(request: AnalyzeRequest, interval: BootstrapInterval) -> AnalyzeRes
         descriptive=summarize_values(
             deltas,
             evidence_role=EvidenceRole.CONFIRMATORY,
-            unavailable_count=0,
-            excluded_count=0,
+            counts=ObservationCounts(unavailable=0, excluded=0),
             quantiles=_DEFAULT_QUANTILES,
         ),
         sign_consistency=count_paired_differences(deltas),

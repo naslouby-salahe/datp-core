@@ -21,40 +21,49 @@ class QuantileRange:
 
 
 @dataclass(frozen=True, slots=True)
+class ObservationCounts:
+    unavailable: int
+    excluded: int
+
+    def __post_init__(self) -> None:
+        if self.unavailable < 0 or self.excluded < 0:
+            raise ValueError("observation counts must be non-negative")
+
+
+@dataclass(frozen=True, slots=True)
+class DescriptiveStatistics:
+    mean: MetricValue
+    median: MetricValue
+    lower_quantile_value: MetricValue
+    upper_quantile_value: MetricValue
+    minimum: MetricValue
+    maximum: MetricValue
+
+    def __post_init__(self) -> None:
+        if self.minimum.value > self.maximum.value:
+            raise ValueError("descriptive minimum cannot exceed maximum")
+
+    @property
+    def spread(self) -> MetricValue:
+        return MetricValue(self.maximum.value - self.minimum.value)
+
+
+@dataclass(frozen=True, slots=True)
 class DescriptiveSummary:
     evidence_role: EvidenceRole
     values: MetricSeries
-    unavailable_count: int
-    excluded_count: int
+    counts: ObservationCounts
     quantiles: QuantileRange
-    mean: MetricValue | None
-    median: MetricValue | None
-    lower_quantile_value: MetricValue | None
-    upper_quantile_value: MetricValue | None
-    minimum: MetricValue | None
-    maximum: MetricValue | None
+    statistics: DescriptiveStatistics | None
     reason: str
 
     def __post_init__(self) -> None:
-        if min(self.unavailable_count, self.excluded_count) < 0:
-            raise ValueError("descriptive counts must be non-negative")
         if any(not isfinite(value.value) for value in self.values):
             raise ValueError("descriptive values must be finite")
-
-        statistics = (
-            self.mean,
-            self.median,
-            self.lower_quantile_value,
-            self.upper_quantile_value,
-            self.minimum,
-            self.maximum,
-        )
         if self.values:
-            if any(value is None for value in statistics) or self.reason:
+            if self.statistics is None or self.reason:
                 raise ValueError("available descriptive summaries require complete statistics and no reason")
-            if self.minimum is not None and self.maximum is not None and self.minimum.value > self.maximum.value:
-                raise ValueError("descriptive minimum cannot exceed maximum")
-        elif any(value is not None for value in statistics) or not self.reason:
+        elif self.statistics is not None or not self.reason:
             raise ValueError("unavailable descriptive summaries require no statistics and an explicit reason")
 
     @property
@@ -64,12 +73,6 @@ class DescriptiveSummary:
     @property
     def availability(self) -> AvailabilityStatus:
         return AvailabilityStatus.AVAILABLE if self.values else AvailabilityStatus.UNAVAILABLE
-
-    @property
-    def spread(self) -> MetricValue | None:
-        if self.minimum is None or self.maximum is None:
-            return None
-        return MetricValue(self.maximum.value - self.minimum.value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,41 +93,34 @@ def summarize_values(
     values: MetricSeries,
     *,
     evidence_role: EvidenceRole,
-    unavailable_count: int,
-    excluded_count: int,
+    counts: ObservationCounts,
     quantiles: QuantileRange,
 ) -> DescriptiveSummary:
-    if unavailable_count < 0 or excluded_count < 0:
-        raise ValueError("counts must be non-negative")
     if not values:
         return DescriptiveSummary(
             evidence_role=evidence_role,
             values=(),
-            unavailable_count=unavailable_count,
-            excluded_count=excluded_count,
+            counts=counts,
             quantiles=quantiles,
-            mean=None,
-            median=None,
-            lower_quantile_value=None,
-            upper_quantile_value=None,
-            minimum=None,
-            maximum=None,
+            statistics=None,
             reason="no available values",
         )
 
     array = _metric_array(values)
-    return DescriptiveSummary(
-        evidence_role=evidence_role,
-        values=values,
-        unavailable_count=unavailable_count,
-        excluded_count=excluded_count,
-        quantiles=quantiles,
+    statistics = DescriptiveStatistics(
         mean=MetricValue(float(np.mean(array))),
         median=MetricValue(float(np.median(array))),
         lower_quantile_value=MetricValue(float(np.quantile(array, quantiles.lower.value, method="linear"))),
         upper_quantile_value=MetricValue(float(np.quantile(array, quantiles.upper.value, method="linear"))),
         minimum=MetricValue(float(np.min(array))),
         maximum=MetricValue(float(np.max(array))),
+    )
+    return DescriptiveSummary(
+        evidence_role=evidence_role,
+        values=values,
+        counts=counts,
+        quantiles=quantiles,
+        statistics=statistics,
         reason="",
     )
 

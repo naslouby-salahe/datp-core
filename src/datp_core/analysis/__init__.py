@@ -1,8 +1,10 @@
 """Statistical summaries, inference, mechanisms, and temporal analysis."""
 
 from datp_core.analysis.descriptive import (
+    DescriptiveStatistics,
     DescriptiveSummary,
     NestedSeedSummary,
+    ObservationCounts,
     QuantileRange,
     count_paired_differences,
     summarize_nested_replicates,
