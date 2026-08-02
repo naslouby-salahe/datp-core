@@ -1,157 +1,160 @@
-"""Wilcoxon signed-rank, rank-biserial correlation, Holm correction, and sign consistency."""
+"""Wilcoxon, rank-biserial correlation, Holm correction, and sign consistency."""
 
-from dataclasses import dataclass
 from math import isfinite
+from numbers import Real
 
 import numpy as np
 from scipy import stats
 from statsmodels.stats.multitest import multipletests
 
-from datp_core.analysis.descriptive import PairedDifferenceCounts, count_paired_differences
-from datp_core.analysis.inference.bootstrap import _deltas
-from datp_core.domain.enums import AvailabilityStatus, EffectSizeId, MultiplicityCorrectionId, StatisticalTestId
+from datp_core.analysis.descriptive import count_paired_differences
+from datp_core.analysis.inference.bootstrap import contrast_deltas
+from datp_core.analysis.models import (
+    MultiplicityDecision,
+    MultiplicityResult,
+    PairedContrasts,
+    PairedDifferenceCounts,
+    PValue,
+    RankBiserialResult,
+    WilcoxonComputationMethod,
+    WilcoxonResult,
+)
+from datp_core.domain.enums import (
+    AvailabilityStatus,
+    MultiplicityCorrectionId,
+)
 from datp_core.domain.values import Ratio
 
 
-@dataclass(frozen=True, slots=True)
-class WilcoxonResult: # TODO: move this to /home/naslouby/Projects/datp-core/src/datp_core/analysis/models.py
-    test: StatisticalTestId
-    alternative: str # TODO: make this enum
-    zero_method: str # TODO: make this enum
-    computation_method: str # TODO: make this enum
-    statistic: float | None # TODO: make this a dataclass for statistics in the codebase and see if it can be replaced with a more specific type
-    p_value: float | None # TODO: make this a dataclass for p-values in the codebase and see if it can be replaced with a more specific type
-    nonzero_pair_count: int # TODO: make this a dataclass for counts in the codebase and see if it can be replaced with a more specific type
-    availability: AvailabilityStatus
-    reason: str
-
-
-@dataclass(frozen=True, slots=True)
-class RankBiserialResult: # TODO: move this to /home/naslouby/Projects/datp-core/src/datp_core/analysis/models.py
-    effect_size: EffectSizeId
-    value: float | None
-    positive_rank_sum: float | None
-    negative_rank_sum: float | None
-    nonzero_pair_count: int
-    availability: AvailabilityStatus
-    reason: str
-
-
-@dataclass(frozen=True, slots=True)
-class MultiplicityResult: # TODO: move this to /home/naslouby/Projects/datp-core/src/datp_core/analysis/models.py
-    correction: MultiplicityCorrectionId
-    family_name: str # TODO: search for the dataclass of family_name in the codebase and see if it can be replaced with a more specific type
-    raw_p_values: tuple[float, ...]  # TODO: find if there is a dataclass for p-values in the codebase and see if it can be replaced with a more specific type
-    adjusted_p_values: tuple[float, ...] # TODO: find if there is a dataclass for p-values in the codebase and see if it can be replaced with a more specific type
-    rejected: tuple[bool, ...] # TODO: find if there is a dataclass for rejected in the codebase and see if it can be replaced with a more specific type
-
-    def __post_init__(self) -> None:
-        if not self.family_name or not self.raw_p_values:
-            raise ValueError("multiplicity requires a predeclared non-empty family")
-        if len(self.raw_p_values) != len(self.adjusted_p_values) or len(self.raw_p_values) != len(self.rejected):
-            raise ValueError("multiplicity result lengths must agree")
-        if any(not 0 <= value <= 1 for value in (*self.raw_p_values, *self.adjusted_p_values)):
-            raise ValueError("p-values must lie in [0, 1]")
-
-
 def paired_wilcoxon(
-    contrasts: tuple,
+    contrasts: PairedContrasts,
 ) -> WilcoxonResult:
-    deltas = _deltas(contrasts)
-    nonzero = int(np.count_nonzero(deltas))
-    if not deltas.size or not nonzero:
+    deltas = contrast_deltas(contrasts)
+    nonzero_pair_count = int(np.count_nonzero(deltas))
+    if not deltas.size or not nonzero_pair_count:
         return WilcoxonResult(
-            StatisticalTestId.WILCOXON_SIGNED_RANK,
-            "two-sided",
-            "pratt",
-            "unavailable",
-            None,
-            None,
-            nonzero,
-            AvailabilityStatus.UNDEFINED,
-            "Wilcoxon requires a nonzero paired difference",
+            statistic=None,
+            p_value=None,
+            nonzero_pair_count=nonzero_pair_count,
+            computation_method=None,
+            availability=AvailabilityStatus.UNDEFINED,
+            reason=("Wilcoxon requires at least one nonzero paired difference"),
         )
-    values = _wilcoxon_values(stats.wilcoxon(deltas, alternative="two-sided", zero_method="pratt", method="asymptotic"))
+
+    values = _wilcoxon_values(
+        stats.wilcoxon(
+            deltas,
+            alternative="two-sided",
+            zero_method="pratt",
+            method="asymptotic",
+        )
+    )
     if values is None:
         return WilcoxonResult(
-            StatisticalTestId.WILCOXON_SIGNED_RANK,
-            "two-sided",
-            "pratt",
-            "scipy_asymptotic",
-            None,
-            None,
-            nonzero,
-            AvailabilityStatus.UNAVAILABLE,
-            "SciPy Wilcoxon result does not expose statistic and p-value",
+            statistic=None,
+            p_value=None,
+            nonzero_pair_count=nonzero_pair_count,
+            computation_method=(WilcoxonComputationMethod.SCIPY_ASYMPTOTIC),
+            availability=AvailabilityStatus.UNAVAILABLE,
+            reason=("SciPy Wilcoxon result does not expose finite statistic and p-value values"),
         )
+
+    statistic, p_value = values
     return WilcoxonResult(
-        StatisticalTestId.WILCOXON_SIGNED_RANK,
-        "two-sided",
-        "pratt",
-        "scipy_asymptotic",
-        values[0],
-        values[1],
-        nonzero,
-        AvailabilityStatus.AVAILABLE,
-        "",
+        statistic=statistic,
+        p_value=PValue(p_value),
+        nonzero_pair_count=nonzero_pair_count,
+        computation_method=(WilcoxonComputationMethod.SCIPY_ASYMPTOTIC),
+        availability=AvailabilityStatus.AVAILABLE,
+        reason="",
     )
 
 
 def matched_pairs_rank_biserial(
-    contrasts: tuple,
+    contrasts: PairedContrasts,
 ) -> RankBiserialResult:
-    deltas = _deltas(contrasts)
-    nonzero = deltas[deltas != 0]
+    deltas = contrast_deltas(contrasts)
+    nonzero = deltas[deltas != 0.0]
     if not nonzero.size:
         return RankBiserialResult(
-            EffectSizeId.MATCHED_PAIRS_RANK_BISERIAL,
-            None,
-            None,
-            None,
-            0,
-            AvailabilityStatus.UNDEFINED,
-            "rank-biserial correlation requires a nonzero paired difference",
+            value=None,
+            positive_rank_sum=None,
+            negative_rank_sum=None,
+            nonzero_pair_count=0,
+            availability=AvailabilityStatus.UNDEFINED,
+            reason=("rank-biserial correlation requires at least one nonzero paired difference"),
         )
-    ranks = stats.rankdata(np.abs(nonzero), method="average")
-    positive = float(np.sum(ranks[nonzero > 0]))
-    negative = float(np.sum(ranks[nonzero < 0]))
+
+    ranks = stats.rankdata(
+        np.abs(nonzero),
+        method="average",
+    )
+    positive_rank_sum = float(np.sum(ranks[nonzero > 0.0]))
+    negative_rank_sum = float(np.sum(ranks[nonzero < 0.0]))
+    total_rank_sum = positive_rank_sum + negative_rank_sum
     return RankBiserialResult(
-        EffectSizeId.MATCHED_PAIRS_RANK_BISERIAL,
-        (positive - negative) / (positive + negative),
-        positive,
-        negative,
-        int(nonzero.size),
-        AvailabilityStatus.AVAILABLE,
-        "",
+        value=(positive_rank_sum - negative_rank_sum) / total_rank_sum,
+        positive_rank_sum=positive_rank_sum,
+        negative_rank_sum=negative_rank_sum,
+        nonzero_pair_count=int(nonzero.size),
+        availability=AvailabilityStatus.AVAILABLE,
+        reason="",
     )
 
 
-def holm_adjust(raw_p_values: tuple[float, ...], *, family_name: str, alpha: Ratio) -> MultiplicityResult:
-    if not family_name or not raw_p_values:
-        raise ValueError("Holm correction requires a predeclared non-empty family")
-    if any(not isfinite(value) or not 0 <= value <= 1 for value in raw_p_values):
-        raise ValueError("raw p-values must be finite values in [0, 1]")
+def holm_adjust(
+    raw_p_values: tuple[float, ...],
+    *,
+    family_name: str,
+    alpha: Ratio,
+) -> MultiplicityResult:
+    if not family_name.strip() or not raw_p_values:
+        raise ValueError("Holm correction requires a named non-empty test family")
+    if any(not isfinite(value) or not 0.0 <= value <= 1.0 for value in raw_p_values):
+        raise ValueError("raw p-values must be finite and lie in [0, 1]")
+
     rejected, adjusted, _, _ = multipletests(
-        raw_p_values, alpha=alpha.value, method="holm", is_sorted=False, returnsorted=False
+        raw_p_values,
+        alpha=alpha.value,
+        method="holm",
+        is_sorted=False,
+        returnsorted=False,
+    )
+    decisions = tuple(
+        MultiplicityDecision(
+            raw_p_value=PValue(raw),
+            adjusted_p_value=PValue(float(corrected)),
+            rejected=bool(is_rejected),
+        )
+        for raw, corrected, is_rejected in zip(
+            raw_p_values,
+            adjusted,
+            rejected,
+            strict=True,
+        )
     )
     return MultiplicityResult(
-        MultiplicityCorrectionId.HOLM,
-        family_name,
-        raw_p_values,
-        tuple(float(value) for value in adjusted),
-        tuple(bool(value) for value in rejected),
+        correction=MultiplicityCorrectionId.HOLM,
+        family_name=family_name,
+        decisions=decisions,
     )
 
 
 def sign_consistency(
-    contrasts: tuple,
+    contrasts: PairedContrasts,
 ) -> PairedDifferenceCounts:
-    return count_paired_differences(tuple(item.delta.value for item in contrasts))
+    return count_paired_differences(tuple(contrast.delta for contrast in contrasts))
 
 
-def _wilcoxon_values(result: object) -> tuple[float, float] | None:
+def _wilcoxon_values(
+    result: object,
+) -> tuple[float, float] | None:
     statistic = getattr(result, "statistic", None)
     p_value = getattr(result, "pvalue", None)
-    if not isinstance(statistic, int | float) or not isinstance(p_value, int | float):
+    if not _is_finite_real(statistic) or not _is_finite_real(p_value):
         return None
     return float(statistic), float(p_value)
+
+
+def _is_finite_real(value: object) -> bool:
+    return isinstance(value, Real) and not isinstance(value, bool) and isfinite(float(value))

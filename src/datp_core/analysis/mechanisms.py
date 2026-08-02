@@ -1,26 +1,43 @@
-"""Source-authorized descriptive mechanism analyses, divergence boundary, and absorption decisions."""
+"""Descriptive mechanism analyses, divergence boundaries, and absorption decisions."""
 
 from dataclasses import dataclass
 from enum import StrEnum
 from math import isfinite
+from numbers import Real
 
 import numpy as np
 from scipy import stats
 from sklearn.metrics import adjusted_rand_score
 
-from datp_core.analysis.inference.bootstrap import ScientificDecisionResult
-from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ScientificDecision
-from datp_core.domain.values import MetricValue, ThresholdValue
+from datp_core.analysis.models import (
+    PValue,
+    ScientificDecisionResult,
+)
+from datp_core.domain.enums import (
+    AvailabilityStatus,
+    EvidenceRole,
+    ScientificDecision,
+)
+from datp_core.domain.values import (
+    MetricValue,
+    Ratio,
+    ThresholdValue,
+)
 from datp_core.populations.models import ClientIdentity
 from datp_core.thresholding.models import ClusterMembership
+
+MINIMUM_ASSOCIATION_OBSERVATIONS = 3
+MINIMUM_DIVERGENCE_CLIENTS = 2
+
+MODEL_EFFECT_PARTIAL_RETENTION_CUTOFF = Ratio(0.25)
+MODEL_EFFECT_FULL_RETENTION_CUTOFF = Ratio(0.75)
 
 
 @dataclass(frozen=True, slots=True)
 class AssociationResult:
-    evidence_role: EvidenceRole
     observations: tuple[tuple[float, float], ...]
     spearman_rho: float | None
-    spearman_p_value: float | None
+    spearman_p_value: PValue | None
     intercept: float | None
     slope: float | None
     slope_standard_error: float | None
@@ -29,178 +46,267 @@ class AssociationResult:
     availability: AvailabilityStatus
     reason: str
 
+    def __post_init__(self) -> None:
+        if any(not isfinite(x) or not isfinite(y) for x, y in self.observations):
+            raise ValueError("association observations must be finite")
+
+        available = self.availability is AvailabilityStatus.AVAILABLE
+        values = (
+            self.spearman_rho,
+            self.intercept,
+            self.slope,
+            self.slope_standard_error,
+            self.r_squared,
+        )
+        if available:
+            if (
+                any(value is None or not isfinite(value) for value in values)
+                or self.spearman_p_value is None
+                or len(self.leverage) != len(self.observations)
+                or any(not isfinite(value) for value in self.leverage)
+                or self.reason
+            ):
+                raise ValueError("available association requires complete finite statistics and no reason")
+        elif any(value is not None for value in values) or self.spearman_p_value is not None or self.leverage:
+            raise ValueError("unavailable association cannot contain calculated statistics")
+        elif not self.reason:
+            raise ValueError("unavailable association requires an explicit reason")
+
+    @property
+    def evidence_role(self) -> EvidenceRole:
+        return EvidenceRole.MECHANISM
+
     @property
     def observation_count(self) -> int:
         return len(self.observations)
 
 
 @dataclass(frozen=True, slots=True)
-class MechanismResult:
-    evidence_role: EvidenceRole
+class ClusterPartitionSummary:
     group_sizes: tuple[int, ...]
-    within_group_threshold_spreads: tuple[MetricValue, ...]
-    within_group_fpr_spreads: tuple[MetricValue, ...]
-    across_group_threshold_spread: MetricValue | None
-    across_group_mean_fpr_spread: MetricValue | None
-    singleton_groups: tuple[int, ...]
-    empty_groups: tuple[int, ...]
-    recovery_fraction: MetricValue | None
-    availability: AvailabilityStatus
-    reason: str
+
+    def __post_init__(self) -> None:
+        if any(size < 0 for size in self.group_sizes):
+            raise ValueError("cluster group sizes must be non-negative")
 
     @property
-    def group_count(self) -> int:
-        return len(self.group_sizes)
+    def singleton_groups(self) -> tuple[int, ...]:
+        return tuple(index for index, size in enumerate(self.group_sizes) if size == 1)
+
+    @property
+    def empty_groups(self) -> tuple[int, ...]:
+        return tuple(index for index, size in enumerate(self.group_sizes) if size == 0)
 
 
 @dataclass(frozen=True, slots=True)
 class ClusterStabilityResult:
-    evidence_role: EvidenceRole
     adjusted_rand_index: MetricValue
     compared_clients: tuple[ClientIdentity, ...]
-    left_group_sizes: tuple[int, ...]
-    right_group_sizes: tuple[int, ...]
+    left_partition: ClusterPartitionSummary
+    right_partition: ClusterPartitionSummary
     contingency: tuple[tuple[int, ...], ...]
-    left_singleton_groups: tuple[int, ...]
-    right_singleton_groups: tuple[int, ...]
-    left_empty_groups: tuple[int, ...]
-    right_empty_groups: tuple[int, ...]
+
+    def __post_init__(self) -> None:
+        if not self.compared_clients:
+            raise ValueError("cluster stability requires at least one client")
+        if len(self.contingency) != len(self.left_partition.group_sizes):
+            raise ValueError("cluster contingency row count must match the left partition")
+        if any(len(row) != len(self.right_partition.group_sizes) for row in self.contingency):
+            raise ValueError("cluster contingency column count must match the right partition")
+        if sum(sum(row) for row in self.contingency) != len(self.compared_clients):
+            raise ValueError("cluster contingency must account for every client")
+
+    @property
+    def evidence_role(self) -> EvidenceRole:
+        return EvidenceRole.MECHANISM
 
 
 @dataclass(frozen=True, slots=True)
 class ThresholdMovement:
-    evidence_role: EvidenceRole
     client: ClientIdentity
     delta_threshold: MetricValue
     delta_fpr: MetricValue
     delta_tpr: MetricValue | None
-    attack_availability: AvailabilityStatus
     reason: str
 
+    def __post_init__(self) -> None:
+        if self.delta_tpr is None and not self.reason:
+            raise ValueError("unavailable attack movement requires an explicit reason")
+        if self.delta_tpr is not None and self.reason:
+            raise ValueError("available attack movement cannot carry an unavailable reason")
 
-def heterogeneity_benefit_association(observations: tuple[tuple[float, float], ...]) -> AssociationResult:
-    if len(observations) < 3 or any(not isfinite(x) or not isfinite(y) for x, y in observations):
-        return AssociationResult(
-            EvidenceRole.MECHANISM,
+    @property
+    def evidence_role(self) -> EvidenceRole:
+        return EvidenceRole.MECHANISM
+
+    @property
+    def attack_availability(self) -> AvailabilityStatus:
+        return AvailabilityStatus.AVAILABLE if self.delta_tpr is not None else AvailabilityStatus.UNAVAILABLE
+
+
+class DivergenceBlocker(StrEnum):
+    COMMON_SUPPORT_UNRESOLVED = "common_support_unresolved"
+    BINNING_UNRESOLVED = "binning_unresolved"
+    DENSITY_UNRESOLVED = "density_unresolved"
+    SMOOTHING_UNRESOLVED = "smoothing_unresolved"
+    ZERO_MASS_UNRESOLVED = "zero_mass_unresolved"
+    AGGREGATION_UNRESOLVED = "aggregation_unresolved"
+
+
+@dataclass(frozen=True, slots=True)
+class DivergenceResult:
+    clients: tuple[ClientIdentity, ...]
+    pairwise_values: tuple[MetricValue, ...]
+    aggregate: MetricValue | None
+    blocker: DivergenceBlocker | None
+    reason: str
+
+    def __post_init__(self) -> None:
+        if len(self.clients) < MINIMUM_DIVERGENCE_CLIENTS:
+            raise ValueError("divergence analysis requires at least two clients")
+        if len(set(self.clients)) != len(self.clients):
+            raise ValueError("divergence analysis requires unique clients")
+
+        if self.blocker is None:
+            if not self.pairwise_values or self.aggregate is None or self.reason:
+                raise ValueError("available divergence requires values, aggregate, and no blocker")
+        elif self.pairwise_values or self.aggregate is not None or not self.reason:
+            raise ValueError("blocked divergence must preserve its unresolved construction")
+
+    @property
+    def evidence_role(self) -> EvidenceRole:
+        return EvidenceRole.MECHANISM
+
+    @property
+    def availability(self) -> AvailabilityStatus:
+        return AvailabilityStatus.AVAILABLE if self.blocker is None else AvailabilityStatus.UNAVAILABLE
+
+
+def heterogeneity_benefit_association(
+    observations: tuple[tuple[float, float], ...],
+) -> AssociationResult:
+    if len(observations) < MINIMUM_ASSOCIATION_OBSERVATIONS or any(
+        not isfinite(x) or not isfinite(y) for x, y in observations
+    ):
+        return _unavailable_association(
             observations,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            (),
             AvailabilityStatus.UNAVAILABLE,
             "association requires at least three finite observations",
         )
-    x_values = np.asarray(tuple(item[0] for item in observations), dtype=np.float64)
-    y_values = np.asarray(tuple(item[1] for item in observations), dtype=np.float64)
-    if np.all(x_values == x_values[0]):
-        return AssociationResult(
-            EvidenceRole.MECHANISM,
+
+    x_values = np.fromiter(
+        (x for x, _ in observations),
+        dtype=np.float64,
+        count=len(observations),
+    )
+    y_values = np.fromiter(
+        (y for _, y in observations),
+        dtype=np.float64,
+        count=len(observations),
+    )
+    if np.ptp(x_values) == 0.0:
+        return _unavailable_association(
             observations,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            (),
             AvailabilityStatus.UNDEFINED,
             "heterogeneity has zero variation",
         )
-    spearman = _spearman_values(stats.spearmanr(x_values, y_values, alternative="two-sided"))
-    regression = _regression_values(stats.linregress(x_values, y_values, alternative="two-sided"))
-    if spearman is None or regression is None:
-        return AssociationResult(
-            EvidenceRole.MECHANISM,
+    if np.ptp(y_values) == 0.0:
+        return _unavailable_association(
             observations,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            (),
-            AvailabilityStatus.UNAVAILABLE,
-            "statistics library result is incompatible with the declared association record",
+            AvailabilityStatus.UNDEFINED,
+            "benefit has zero variation",
         )
-    design = np.column_stack((np.ones(x_values.size), x_values))
-    leverage = tuple(float(value) for value in np.diag(design @ np.linalg.inv(design.T @ design) @ design.T))
-    return AssociationResult(
-        EvidenceRole.MECHANISM,
-        observations,
-        spearman[0],
-        spearman[1],
-        regression[0],
-        regression[1],
-        regression[2],
-        regression[3] ** 2, 
-        leverage,
-        AvailabilityStatus.AVAILABLE,
-        "",
+
+    spearman = _numeric_attributes(
+        stats.spearmanr(
+            x_values,
+            y_values,
+            alternative="two-sided",
+        ),
+        ("statistic", "pvalue"),
     )
+    regression = _numeric_attributes(
+        stats.linregress(
+            x_values,
+            y_values,
+            alternative="two-sided",
+        ),
+        ("intercept", "slope", "stderr", "rvalue"),
+    )
+    if spearman is None or regression is None:
+        return _unavailable_association(
+            observations,
+            AvailabilityStatus.UNAVAILABLE,
+            ("statistics library result is incompatible with the association contract"),
+        )
 
-
-def _spearman_values(result: object) -> tuple[float, float] | None:
-    values = _numeric_attributes(result, ("statistic", "pvalue"))
-    if values is None:
-        return None
-    return values[0], values[1]
-
-
-def _regression_values(result: object) -> tuple[float, float, float, float] | None:
-    values = _numeric_attributes(result, ("intercept", "slope", "stderr", "rvalue"))
-    if values is None:
-        return None
-    return values[0], values[1], values[2], values[3]
-
-
-def _numeric_attributes(result: object, names: tuple[str, ...]) -> tuple[float, ...] | None:
-    values: list[float] = []
-    for name in names:
-        value = getattr(result, name, None)
-        if not isinstance(value, int | float):
-            return None
-        values.append(float(value))
-    return tuple(values)
+    design = np.column_stack((np.ones(x_values.size), x_values))
+    leverage = tuple(
+        float(value)
+        for value in np.einsum(
+            "ij,ji->i",
+            design,
+            np.linalg.pinv(design),
+        )
+    )
+    return AssociationResult(
+        observations=observations,
+        spearman_rho=spearman[0],
+        spearman_p_value=PValue(spearman[1]),
+        intercept=regression[0],
+        slope=regression[1],
+        slope_standard_error=regression[2],
+        r_squared=regression[3] ** 2,
+        leverage=leverage,
+        availability=AvailabilityStatus.AVAILABLE,
+        reason="",
+    )
 
 
 def cluster_stability(
-    left: tuple[ClusterMembership, ...], right: tuple[ClusterMembership, ...]
+    left: tuple[ClusterMembership, ...],
+    right: tuple[ClusterMembership, ...],
 ) -> ClusterStabilityResult:
-    left_clients = tuple(client for group in left for client in group.members)
-    right_clients = tuple(client for group in right for client in group.members)
-    if frozenset(left_clients) != frozenset(right_clients):
+    left_assignments = _cluster_assignments(left)
+    right_assignments = _cluster_assignments(right)
+    if left_assignments.keys() != right_assignments.keys():
         raise ValueError("cluster stability requires identical persisted client memberships")
-    clients = tuple(sorted(left_clients, key=lambda item: item.client_id))
-    left_labels = tuple(
-        next(index for index, group in enumerate(left) if client in group.members) for client in clients
+
+    clients = tuple(
+        sorted(
+            left_assignments,
+            key=lambda client: client.client_id,
+        )
     )
-    right_labels = tuple(
-        next(index for index, group in enumerate(right) if client in group.members) for client in clients
-    )
+    left_labels = tuple(left_assignments[client] for client in clients)
+    right_labels = tuple(right_assignments[client] for client in clients)
     contingency = tuple(
         tuple(
             sum(
-                left_label == row and right_label == column
-                for left_label, right_label in zip(left_labels, right_labels, strict=True)
+                left_label == left_index and right_label == right_index
+                for left_label, right_label in zip(
+                    left_labels,
+                    right_labels,
+                    strict=True,
+                )
             )
-            for column in range(len(right))
+            for right_index in range(len(right))
         )
-        for row in range(len(left))
+        for left_index in range(len(left))
     )
     return ClusterStabilityResult(
-        EvidenceRole.MECHANISM,
-        MetricValue(float(adjusted_rand_score(left_labels, right_labels))),
-        clients,
-        tuple(len(group.members) for group in left),
-        tuple(len(group.members) for group in right),
-        contingency,
-        tuple(index for index, group in enumerate(left) if len(group.members) == 1),
-        tuple(index for index, group in enumerate(right) if len(group.members) == 1),
-        tuple(index for index, group in enumerate(left) if not group.members),
-        tuple(index for index, group in enumerate(right) if not group.members),
+        adjusted_rand_index=MetricValue(
+            float(
+                adjusted_rand_score(
+                    left_labels,
+                    right_labels,
+                )
+            )
+        ),
+        compared_clients=clients,
+        left_partition=ClusterPartitionSummary(tuple(len(group.members) for group in left)),
+        right_partition=ClusterPartitionSummary(tuple(len(group.members) for group in right)),
+        contingency=contingency,
     )
 
 
@@ -215,93 +321,113 @@ def threshold_movement(
     local_tpr: MetricValue | None,
 ) -> ThresholdMovement:
     if (shared_tpr is None) != (local_tpr is None):
-        raise ValueError("TPR movement requires both methods or neither")
-    if shared_tpr is None and local_tpr is None:
-        return ThresholdMovement(
-            EvidenceRole.MECHANISM,
-            client,
-            MetricValue(local_threshold.value - shared_threshold.value),
-            MetricValue(local_fpr.value - shared_fpr.value),
-            None,
-            AvailabilityStatus.UNAVAILABLE,
-            "attack-sensitive movement unavailable",
-        )
-    if shared_tpr is None or local_tpr is None:
-        raise ValueError("TPR movement requires both methods or neither")
+        raise ValueError("TPR movement requires both threshold methods or neither")
+
     return ThresholdMovement(
-        EvidenceRole.MECHANISM,
-        client,
-        MetricValue(local_threshold.value - shared_threshold.value),
-        MetricValue(local_fpr.value - shared_fpr.value),
-        MetricValue(local_tpr.value - shared_tpr.value),
-        AvailabilityStatus.AVAILABLE,
-        "",
+        client=client,
+        delta_threshold=MetricValue(local_threshold.value - shared_threshold.value),
+        delta_fpr=MetricValue(local_fpr.value - shared_fpr.value),
+        delta_tpr=(
+            None if shared_tpr is None or local_tpr is None else MetricValue(local_tpr.value - shared_tpr.value)
+        ),
+        reason=("" if shared_tpr is not None else "attack-sensitive movement unavailable"),
     )
 
 
-class DivergenceBlocker(StrEnum):
-    COMMON_SUPPORT_UNRESOLVED = "common_support_unresolved"
-    BINNING_UNRESOLVED = "binning_unresolved"
-    DENSITY_UNRESOLVED = "density_unresolved"
-    SMOOTHING_UNRESOLVED = "smoothing_unresolved"
-    ZERO_MASS_UNRESOLVED = "zero_mass_unresolved"
-    AGGREGATION_UNRESOLVED = "aggregation_unresolved"
-
-
-@dataclass(frozen=True, slots=True)
-class DivergenceResult:
-    evidence_role: EvidenceRole
-    clients: tuple[ClientIdentity, ...]
-    pairwise_values: tuple[MetricValue, ...]
-    aggregate: MetricValue | None
-    availability: AvailabilityStatus
-    blocker: DivergenceBlocker | None
-    reason: str
-
-    def __post_init__(self) -> None:
-        if self.availability is AvailabilityStatus.AVAILABLE:
-            if self.blocker is not None or not self.pairwise_values or self.aggregate is None or self.reason:
-                raise ValueError("available divergence requires values, aggregate, and no blocker")
-        elif self.blocker is None or self.pairwise_values or self.aggregate is not None or not self.reason:
-            raise ValueError("blocked divergence must preserve its explicit unresolved construction")
-
-
 def blocked_jensen_shannon_divergence(
-    clients: tuple[ClientIdentity, ...], blocker: DivergenceBlocker
+    clients: tuple[ClientIdentity, ...],
+    blocker: DivergenceBlocker,
 ) -> DivergenceResult:
-    """Return the required typed blocker instead of selecting histogram semantics ad hoc."""
-    if len(clients) < 2: # TODO: this should be a constant in the codebase, not a magic number
-        raise ValueError("divergence analysis requires at least two clients")
+    """Return a typed blocker without inventing histogram semantics."""
     return DivergenceResult(
-        EvidenceRole.MECHANISM,
-        tuple(sorted(clients, key=lambda item: item.client_id)),
-        (),
-        None,
-        AvailabilityStatus.UNAVAILABLE,
-        blocker,
-        f"Jensen-Shannon divergence is blocked: {blocker.value}",
+        clients=tuple(
+            sorted(
+                clients,
+                key=lambda client: client.client_id,
+            )
+        ),
+        pairwise_values=(),
+        aggregate=None,
+        blocker=blocker,
+        reason=(f"Jensen-Shannon divergence is blocked: {blocker.value}"),
     )
 
 
 def decide_model_absorption(
-    delta_fedavg: MetricValue | None, delta_ditto: MetricValue | None
+    reference_effect: MetricValue | None,
+    personalized_effect: MetricValue | None,
 ) -> ScientificDecisionResult:
-    if delta_fedavg is None or delta_ditto is None or delta_fedavg <= 0:
+    if reference_effect is None or personalized_effect is None or reference_effect.value <= 0.0:
         return ScientificDecisionResult(
-            EvidenceRole.SUPPORTIVE,
-            ScientificDecision.BLOCKED,
-            delta_ditto,
-            None,
-            AvailabilityStatus.UNAVAILABLE,
-            "model absorption requires a valid positive FedAvg reference effect",
+            evidence_role=EvidenceRole.SUPPORTIVE,
+            decision=ScientificDecision.BLOCKED,
+            point_estimate=None,
+            interval=None,
+            rationale=("model absorption requires a valid positive reference effect"),
         )
-    ratio = delta_ditto.value / delta_fedavg.value
-    if ratio >= 0.75: # TODO: this should be a constant in the codebase, not a magic number
-        decision, rationale = ScientificDecision.SUPPORTED, "the Ditto effect is retained"
-    elif ratio >= 0.25: # TODO: this should be a constant in the codebase, not a magic number
-        decision, rationale = ScientificDecision.PARTIAL_ABSORPTION, "the Ditto effect is partially absorbed"
+
+    retention_ratio = MetricValue(personalized_effect.value / reference_effect.value)
+    if retention_ratio.value >= MODEL_EFFECT_FULL_RETENTION_CUTOFF.value:
+        decision = ScientificDecision.SUPPORTED
+        rationale = "the personalized-model effect is retained"
+    elif retention_ratio.value >= MODEL_EFFECT_PARTIAL_RETENTION_CUTOFF.value:
+        decision = ScientificDecision.PARTIAL_ABSORPTION
+        rationale = "the personalized-model effect is partially absorbed"
     else:
-        decision, rationale = ScientificDecision.FULL_ABSORPTION, "the Ditto effect is largely absorbed"
+        decision = ScientificDecision.FULL_ABSORPTION
+        rationale = "the personalized-model effect is largely absorbed"
+
     return ScientificDecisionResult(
-        EvidenceRole.SUPPORTIVE, decision, delta_ditto, None, AvailabilityStatus.AVAILABLE, rationale
+        evidence_role=EvidenceRole.SUPPORTIVE,
+        decision=decision,
+        point_estimate=retention_ratio,
+        interval=None,
+        rationale=rationale,
     )
+
+
+def _unavailable_association(
+    observations: tuple[tuple[float, float], ...],
+    availability: AvailabilityStatus,
+    reason: str,
+) -> AssociationResult:
+    return AssociationResult(
+        observations=observations,
+        spearman_rho=None,
+        spearman_p_value=None,
+        intercept=None,
+        slope=None,
+        slope_standard_error=None,
+        r_squared=None,
+        leverage=(),
+        availability=availability,
+        reason=reason,
+    )
+
+
+def _numeric_attributes(
+    result: object,
+    names: tuple[str, ...],
+) -> tuple[float, ...] | None:
+    values: list[float] = []
+    for name in names:
+        value = getattr(result, name, None)
+        if not isinstance(value, Real) or isinstance(value, bool) or not isfinite(float(value)):
+            return None
+        values.append(float(value))
+    return tuple(values)
+
+
+def _cluster_assignments(
+    memberships: tuple[ClusterMembership, ...],
+) -> dict[ClientIdentity, int]:
+    assignments: dict[ClientIdentity, int] = {}
+    for group_index, membership in enumerate(memberships):
+        for client in membership.members:
+            if client in assignments:
+                raise ValueError("each client must belong to exactly one cluster")
+            assignments[client] = group_index
+
+    if not assignments:
+        raise ValueError("cluster stability requires at least one persisted client")
+    return assignments

@@ -1,139 +1,157 @@
-"""Deterministic descriptive summaries for seed and client level evidence."""
+"""Deterministic descriptive summaries for seed- and client-level evidence."""
 
 from dataclasses import dataclass
 from math import isfinite
 
 import numpy as np
 
+from datp_core.analysis.models import MetricSeries, PairedDifferenceCounts
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
-from datp_core.domain.values import MetricValue, Seed
+from datp_core.domain.values import MetricValue, Ratio, Seed
+
+
+@dataclass(frozen=True, slots=True)
+class QuantileRange:
+    lower: Ratio
+    upper: Ratio
+
+    def __post_init__(self) -> None:
+        if self.lower.value > self.upper.value:
+            raise ValueError("quantile bounds must be ordered")
 
 
 @dataclass(frozen=True, slots=True)
 class DescriptiveSummary:
     evidence_role: EvidenceRole
-    values: tuple[float, ...]
-    available_count: int
+    values: MetricSeries
     unavailable_count: int
     excluded_count: int
-    mean: float | None
-    median: float | None
-    lower_quantile: float | None
-    upper_quantile: float | None
-    minimum: float | None
-    maximum: float | None
-    spread: float | None
-    availability: AvailabilityStatus
+    quantiles: QuantileRange
+    mean: MetricValue | None
+    median: MetricValue | None
+    lower_quantile_value: MetricValue | None
+    upper_quantile_value: MetricValue | None
+    minimum: MetricValue | None
+    maximum: MetricValue | None
     reason: str
 
     def __post_init__(self) -> None:
-        if min(self.available_count, self.unavailable_count, self.excluded_count) < 0:
+        if min(self.unavailable_count, self.excluded_count) < 0:
             raise ValueError("descriptive counts must be non-negative")
-        if self.available_count != len(self.values):
-            raise ValueError("available count must equal the numeric value count")
-        if any(not isfinite(value) for value in self.values):
+        if any(not isfinite(value.value) for value in self.values):
             raise ValueError("descriptive values must be finite")
-        if self.availability is AvailabilityStatus.AVAILABLE:
-            if not self.values or self.reason:
-                raise ValueError("available descriptive summaries require values and no reason")
-        elif self.reason == "":
-            raise ValueError("unavailable descriptive summaries require a reason")
+
+        statistics = (
+            self.mean,
+            self.median,
+            self.lower_quantile_value,
+            self.upper_quantile_value,
+            self.minimum,
+            self.maximum,
+        )
+        if self.values:
+            if any(value is None for value in statistics) or self.reason:
+                raise ValueError("available descriptive summaries require complete statistics and no reason")
+            if self.minimum is not None and self.maximum is not None and self.minimum.value > self.maximum.value:
+                raise ValueError("descriptive minimum cannot exceed maximum")
+        elif any(value is not None for value in statistics) or not self.reason:
+            raise ValueError("unavailable descriptive summaries require no statistics and an explicit reason")
+
+    @property
+    def available_count(self) -> int:
+        return len(self.values)
+
+    @property
+    def availability(self) -> AvailabilityStatus:
+        return AvailabilityStatus.AVAILABLE if self.values else AvailabilityStatus.UNAVAILABLE
+
+    @property
+    def spread(self) -> MetricValue | None:
+        if self.minimum is None or self.maximum is None:
+            return None
+        return MetricValue(self.maximum.value - self.minimum.value)
 
 
 @dataclass(frozen=True, slots=True)
 class NestedSeedSummary:
     seed: Seed
-    replicate_values: tuple[float, ...]
-    summary: MetricValue
+    replicate_values: MetricSeries
 
     def __post_init__(self) -> None:
-        if not self.replicate_values or any(not isfinite(value) for value in self.replicate_values):
-            raise ValueError("nested summaries require finite replicate values")
-
-
-@dataclass(frozen=True, slots=True)
-class PairedDifferenceCounts: # TODO: move this to /home/naslouby/Projects/datp-core/src/datp_core/analysis/models.py
-    positive: int # TODO: make this a dataclass for counts in the codebase and see if it can be replaced with a more specific type
-    zero: int # TODO: make this a dataclass for counts in the codebase and see if it can be replaced with a more specific type
-    negative: int # TODO: make this a dataclass for counts in the codebase and see if it can be replaced with a more specific type
-
-    def __post_init__(self) -> None:
-        if min(self.positive, self.zero, self.negative) < 0:
-            raise ValueError("paired-difference counts must be non-negative")
+        if not self.replicate_values or any(not isfinite(value.value) for value in self.replicate_values):
+            raise ValueError("nested summaries require finite non-empty replicate values")
 
     @property
-    def total(self) -> int:
-        return self.positive + self.zero + self.negative
-
-    @property
-    def positive_proportion(self) -> float | None:
-        return self.positive / self.total if self.total else None
+    def summary(self) -> MetricValue:
+        return MetricValue(float(np.mean(_metric_array(self.replicate_values))))
 
 
 def summarize_values(
-    values: tuple[float, ...], # TODO: make this a dataclass for values in the codebase and see if it can be replaced with a more specific type
+    values: MetricSeries,
     *,
     evidence_role: EvidenceRole,
-    unavailable_count: int = 0, # TODO: make this a dataclass for counts in the codebase and see if it can be replaced with a more specific type
-    excluded_count: int = 0, # TODO: make this a dataclass for counts in the codebase and see if it can be replaced with a more specific type
-    lower_quantile: float = 0.25, # TODO: make this a dataclass for quantiles in the codebase and see if it can be replaced with a more specific type
-    upper_quantile: float = 0.75, # TODO: make this a dataclass for quantiles in the codebase and see if it can be replaced with a more specific type
+    unavailable_count: int,
+    excluded_count: int,
+    quantiles: QuantileRange,
 ) -> DescriptiveSummary:
-    if not 0 <= lower_quantile <= upper_quantile <= 1:
-        raise ValueError("quantiles must be ordered values in [0, 1]")
     if unavailable_count < 0 or excluded_count < 0:
         raise ValueError("counts must be non-negative")
-    if any(not isfinite(value) for value in values):
-        raise ValueError("descriptive values must be finite")
     if not values:
         return DescriptiveSummary(
-            evidence_role,
-            (),
-            0,
-            unavailable_count,
-            excluded_count,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            AvailabilityStatus.UNAVAILABLE,
-            "no available values",
+            evidence_role=evidence_role,
+            values=(),
+            unavailable_count=unavailable_count,
+            excluded_count=excluded_count,
+            quantiles=quantiles,
+            mean=None,
+            median=None,
+            lower_quantile_value=None,
+            upper_quantile_value=None,
+            minimum=None,
+            maximum=None,
+            reason="no available values",
         )
-    array = np.asarray(values, dtype=np.float64)
-    minimum = float(np.min(array))
-    maximum = float(np.max(array))
+
+    array = _metric_array(values)
     return DescriptiveSummary(
-        evidence_role,
-        values,
-        len(values),
-        unavailable_count,
-        excluded_count,
-        float(np.mean(array)),
-        float(np.median(array)),
-        float(np.quantile(array, lower_quantile, method="linear")),
-        float(np.quantile(array, upper_quantile, method="linear")),
-        minimum,
-        maximum,
-        maximum - minimum,
-        AvailabilityStatus.AVAILABLE,
-        "",
+        evidence_role=evidence_role,
+        values=values,
+        unavailable_count=unavailable_count,
+        excluded_count=excluded_count,
+        quantiles=quantiles,
+        mean=MetricValue(float(np.mean(array))),
+        median=MetricValue(float(np.median(array))),
+        lower_quantile_value=MetricValue(float(np.quantile(array, quantiles.lower.value, method="linear"))),
+        upper_quantile_value=MetricValue(float(np.quantile(array, quantiles.upper.value, method="linear"))),
+        minimum=MetricValue(float(np.min(array))),
+        maximum=MetricValue(float(np.max(array))),
+        reason="",
     )
 
 
-def summarize_nested_replicates(seed: Seed, replicate_values: tuple[float, ...]) -> NestedSeedSummary:
-    if not replicate_values or any(not isfinite(value) for value in replicate_values):
-        raise ValueError("nested replicate values must be finite and non-empty")
-    return NestedSeedSummary(
-        seed, replicate_values, MetricValue(float(np.mean(np.asarray(replicate_values, dtype=np.float64))))
-    )
+def summarize_nested_replicates(
+    seed: Seed,
+    replicate_values: MetricSeries,
+) -> NestedSeedSummary:
+    return NestedSeedSummary(seed=seed, replicate_values=replicate_values)
 
 
-def count_paired_differences(values: tuple[float, ...]) -> PairedDifferenceCounts:
-    if any(not isfinite(value) for value in values):
-        raise ValueError("paired differences must be finite")
+def count_paired_differences(
+    values: MetricSeries,
+) -> PairedDifferenceCounts:
     return PairedDifferenceCounts(
-        sum(value > 0 for value in values), sum(value == 0 for value in values), sum(value < 0 for value in values)
+        positive=sum(value.value > 0.0 for value in values),
+        zero=sum(value.value == 0.0 for value in values),
+        negative=sum(value.value < 0.0 for value in values),
     )
+
+
+def _metric_array(values: MetricSeries) -> np.ndarray:
+    array = np.fromiter(
+        (value.value for value in values),
+        dtype=np.float64,
+        count=len(values),
+    )
+    if np.any(~np.isfinite(array)):
+        raise ValueError("metric values must be finite")
+    return array
