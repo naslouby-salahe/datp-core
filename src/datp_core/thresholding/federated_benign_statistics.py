@@ -17,6 +17,8 @@ are centralized oracle diagnostics computed from the full pooled raw scores —
 they are never federated comparators and raw pooled scores are never communicated.
 """
 
+import math
+
 import numpy as np
 
 from datp_core.domain.enums import ContractSubject
@@ -105,9 +107,11 @@ def construct_federated_benign_statistics(
     signed_attainment_error = achieved_exceedance.value - target_exceedance.value
     absolute_threshold_error = abs(matched_threshold.value - centralized_pooled_quantile_diagnostic.value)
     pooled_reference_value = centralized_pooled_quantile_diagnostic.value
-    relative_threshold_error = (
-        absolute_threshold_error / abs(pooled_reference_value) if pooled_reference_value != 0 else None
-    )
+    relative_threshold_error: float | None = None
+    if pooled_reference_value != 0:
+        candidate = absolute_threshold_error / abs(pooled_reference_value)
+        if math.isfinite(candidate):
+            relative_threshold_error = candidate
     centralized_attainment_diagnostic = CentralizedAttainmentDiagnostic(
         target_exceedance=target_exceedance,
         achieved_exceedance=achieved_exceedance,
