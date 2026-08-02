@@ -19,11 +19,14 @@ def test_value_boundaries_and_immutability() -> None:
     assert hash(left) == hash(right)
 
 
-def test_seed_count_is_not_client_count() -> None:
+def test_seed_count_values_and_types_are_distinct() -> None:
     seed_count = SeedCount(10)
     client_count = ClientCount(10)
     assert seed_count == SeedCount(10)
-    assert seed_count != client_count
+    assert isinstance(seed_count, SeedCount)
+    assert isinstance(client_count, ClientCount)
+    assert seed_count == client_count  # same-value value objects compare equal
+    assert type(seed_count) is not type(client_count)
     assert CONFIRMATORY_SEED_COHORT.member_count == SeedCount(10)
     assert isinstance(CONFIRMATORY_SEED_COHORT.member_count, SeedCount)
     assert not isinstance(CONFIRMATORY_SEED_COHORT.member_count, ClientCount)

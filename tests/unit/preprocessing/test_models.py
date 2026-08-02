@@ -1,6 +1,7 @@
 import pytest
 from pydantic import ValidationError
 
+from datp_core.domain.values import FeatureNameSequence
 from datp_core.domain.enums import (
     PartitionRole,
     PreprocessingFitScope,
@@ -30,7 +31,7 @@ def test_preprocessing_protocol_uses_descriptive_enum_identity() -> None:
     protocol = PreprocessingProtocol(
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        input_feature_names=("f0", "f1"),
+        input_feature_names=FeatureNameSequence(("f0", "f1")),
         transformed_schema=_schema(),
         serialization_format=SerializationFormat.SKOPS,
         estimator_module=TrustedEstimatorModule.SKLEARN_PREPROCESSING,
@@ -87,7 +88,7 @@ def test_build_preprocessing_protocol_binds_feature_order() -> None:
         SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD,
         FeatureNameSequence(("f0", "f1")),
     )
-    assert protocol.input_feature_names == ("f0", "f1")
+    assert tuple(protocol.input_feature_names) == ("f0", "f1")
     assert protocol.transformed_schema.feature_names == ("f0", "f1")
     assert protocol.identity is PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
     with pytest.raises(ValueError, match="non-empty"):

@@ -21,7 +21,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorModule,
 )
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import Checksum, ClientPathToken, RowCount
+from datp_core.domain.values import Checksum, ClientPathToken, FeatureNameSequence, RowCount
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     PreprocessingProtocol,
@@ -35,7 +35,7 @@ def _federated_state(path: Path) -> FittedPreprocessingState:
     protocol = PreprocessingProtocol(
         identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        input_feature_names=("f0",),
+        input_feature_names=FeatureNameSequence(("f0",)),
         transformed_schema=TransformedSchema(features=(TransformedFeature(name="f0", position=0),)),
         serialization_format=SerializationFormat.SKOPS,
         estimator_module=TrustedEstimatorModule.SKLEARN_PREPROCESSING,

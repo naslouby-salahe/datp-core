@@ -91,11 +91,12 @@ def _pydantic_value_schema(cls, _source_type, _handler):
 
 
 def _typed_eq(self: Any, other: object) -> bool:
-    """Equality: true if same type with same value, or against a raw scalar."""
+    """Equality: true if both are value objects with matching value, or against a raw scalar."""
     if isinstance(other, (int, float)) and not isinstance(other, bool):
         return self.value == other
-    if type(other) is type(self):
-        return self.value == other.value
+    other_value = getattr(other, "value", None)
+    if isinstance(other_value, (int, float)):
+        return self.value == other_value
     return NotImplemented
 
 
@@ -346,6 +347,22 @@ class FeatureNameSequence:
     def as_list(self) -> list[str]:
         return list(self.names)
 
+    @classmethod
+    def __get_pydantic_core_schema__(cls, _source_type, _handler):
+        from pydantic_core import core_schema as _cs
+
+        def _validate(v):
+            if isinstance(v, cls):
+                return v
+            if isinstance(v, (list, tuple)):
+                return cls(tuple(v))
+            raise ValueError(f"expected sequence of feature names, got {type(v)}")
+
+        return _cs.no_info_plain_validator_function(
+            _validate,
+            serialization=_cs.plain_serializer_function_ser_schema(lambda instance: list(instance.names)),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class OutcomeLabelSequence:
@@ -388,6 +405,7 @@ class ConfidenceLevel(OpenUnitIntervalValue):
     validation_name: ClassVar[str] = "confidence level"
 
 
+@total_ordering
 @dataclass(frozen=True, slots=True)
 class ThresholdValue:
     value: float
@@ -395,7 +413,14 @@ class ThresholdValue:
     def __post_init__(self) -> None:
         _number(self.value, "threshold")
 
+    def __lt__(self, other: object) -> bool:
+        return _ordering_compare(self, other, float.__lt__)
 
+    def __eq__(self, other: object) -> bool:
+        return _typed_eq(self, other)
+
+
+@total_ordering
 @dataclass(frozen=True, slots=True)
 class ScoreValue:
     value: float
@@ -403,13 +428,26 @@ class ScoreValue:
     def __post_init__(self) -> None:
         _number(self.value, "score")
 
+    def __lt__(self, other: object) -> bool:
+        return _ordering_compare(self, other, float.__lt__)
 
+    def __eq__(self, other: object) -> bool:
+        return _typed_eq(self, other)
+
+
+@total_ordering
 @dataclass(frozen=True, slots=True)
 class MetricValue:
     value: float
 
     def __post_init__(self) -> None:
         _number(self.value, "metric")
+
+    def __lt__(self, other: object) -> bool:
+        return _ordering_compare(self, other, float.__lt__)
+
+    def __eq__(self, other: object) -> bool:
+        return _typed_eq(self, other)
 
 
 class TrafficRatePerDay(NonNegativeFiniteFloatValue):

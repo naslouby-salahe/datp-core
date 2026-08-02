@@ -69,7 +69,7 @@ def feature_protocol() -> PreprocessingProtocol:
     return PreprocessingProtocol(
         identity=PreprocessingProtocolId.CENTRALIZED_POOLED_MIN_MAX,
         fit_scope=PreprocessingFitScope.POOLED_TRAINING,
-        input_feature_names=FEATURE_NAMES.names,
+        input_feature_names=FEATURE_NAMES,
         transformed_schema=TransformedSchema(
             features=tuple(
                 TransformedFeature(name=name, position=index) for index, name in enumerate(FEATURE_NAMES.names)

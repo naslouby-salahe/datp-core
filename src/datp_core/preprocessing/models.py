@@ -69,7 +69,7 @@ class TransformedSchema(StrictModel):
 class PreprocessingProtocol(StrictModel):
     identity: PreprocessingProtocolId
     fit_scope: PreprocessingFitScope
-    input_feature_names: tuple[str, ...]
+    input_feature_names: FeatureNameSequence
     transformed_schema: TransformedSchema
     serialization_format: SerializationFormat
     estimator_module: TrustedEstimatorModule
@@ -78,7 +78,6 @@ class PreprocessingProtocol(StrictModel):
 
     @model_validator(mode="after")
     def validate_protocol(self) -> "PreprocessingProtocol":
-        _require_ordered_unique_features(self.input_feature_names, "preprocessing")
         _require_skops(self.serialization_format, "fitted preprocessing state")
         _require_positive_tolerance(
             self.numerical_equivalence_absolute_tolerance,
@@ -177,8 +176,8 @@ class PreprocessingManifest(StrictModel):
     branch: ProcessedDataBranch
     protocol_checksum: Checksum
     canonical_schema_checksum: Checksum
-    input_feature_names: tuple[str, ...]
-    transformed_feature_names: tuple[str, ...]
+    input_feature_names: FeatureNameSequence
+    transformed_feature_names: FeatureNameSequence
     estimator_class_name: TrustedEstimatorClassName
     serialization_format: SerializationFormat
     asset_paths: tuple[str, ...]
@@ -349,7 +348,7 @@ def build_preprocessing_protocol(
     return PreprocessingProtocol(
         identity=method.identity,
         fit_scope=method.fit_scope,
-        input_feature_names=tuple(feature_names),
+        input_feature_names=feature_names,
         transformed_schema=transformed_schema,
         serialization_format=method.serialization_format,
         estimator_module=method.estimator_module,

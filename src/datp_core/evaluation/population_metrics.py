@@ -4,7 +4,7 @@ import numpy as np
 
 from datp_core.domain.enums import EvaluationCohort, MetricId, WarningCode
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import RowCount
+from datp_core.domain.values import Quantile, RowCount
 from datp_core.evaluation.metric_semantics import available, unavailable
 from datp_core.evaluation.models import (
     FPR_POPULATION_METRIC_IDS,
@@ -114,7 +114,7 @@ def _attack_aggregates(results: tuple[ClientMetricResult, ...]) -> tuple[MetricA
     tpr_cv = _coefficient_of_variation(MetricId.TPR_COEFFICIENT_OF_VARIATION, tpr)
     return (
         tpr_cv,
-        _quantile_or_unavailable(MetricId.P10_BINARY_MACRO_F1, macro, 0.10),
+        _quantile_or_unavailable(MetricId.P10_BINARY_MACRO_F1, macro, Quantile(0.10)),
         _minimum_or_unavailable(MetricId.WORST_CLIENT_BALANCED_ACCURACY, balanced),
         _mean_or_unavailable(MetricId.MEAN_CLIENT_MACRO_F1, macro),
         _pooled_macro_f1_or_unavailable(results),
@@ -142,11 +142,11 @@ def _coefficient_of_variation(metric: MetricId, values: tuple[float, ...]) -> Me
     return available(metric, float(np.std(values, ddof=0)) / mean, denominator=len(values))
 
 
-def _quantile_or_unavailable(metric: MetricId, values: tuple[float, ...], probability: float) -> MetricAvailability:
+def _quantile_or_unavailable(metric: MetricId, values: tuple[float, ...], probability: Quantile) -> MetricAvailability:
     if not values:
         return unavailable(metric, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
     return available(
-        metric, float(np.quantile(np.asarray(values), probability, method="linear")), denominator=len(values)
+        metric, float(np.quantile(np.asarray(values), probability.value, method="linear")), denominator=len(values)
     )
 
 

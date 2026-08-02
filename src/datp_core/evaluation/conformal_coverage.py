@@ -117,7 +117,7 @@ def evaluate_held_out_conformal_coverage(
                 ),
             ),
         )
-    achieved = sum(score.score.value <= assignment.threshold.value for score in held_out_benign_scores) / len(
+    achieved = sum(score.score <= assignment.threshold for score in held_out_benign_scores) / len(
         held_out_benign_scores
     )
     signed_error = achieved - target_coverage.value

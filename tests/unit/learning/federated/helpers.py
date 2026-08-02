@@ -141,7 +141,7 @@ def feature_protocol() -> PreprocessingProtocol:
     return PreprocessingProtocol(
         identity=PREPROCESSING_IDENTITY,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        input_feature_names=FEATURE_NAMES.names,
+        input_feature_names=FEATURE_NAMES,
         transformed_schema=TransformedSchema(
             features=tuple(
                 TransformedFeature(name=name, position=index) for index, name in enumerate(FEATURE_NAMES.names)

@@ -237,7 +237,7 @@ def _validate_experiment_thresholds(
     ):
         raise ProtocolValidationError("Family thresholding requires a family taxonomy")
     if FederatedThresholdMethod.CLUSTER_THRESHOLD in experiment.federated_thresholds:
-        if cluster_threshold.group_count.value >= population.client_count.value:
+        if cluster_threshold.group_count >= population.client_count:
             raise ProtocolValidationError("Grouped thresholding requires more eligible clients than canonical groups")
 
 

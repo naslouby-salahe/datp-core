@@ -12,7 +12,7 @@ from datp_core.populations.models import PopulationOutcomeLabel
 
 def predicted_attack(score: ScoreValue, threshold: ThresholdValue) -> bool:
     """The sole global operating rule: reconstruction error strictly exceeds threshold."""
-    return score.value > threshold.value
+    return score > threshold
 
 
 def calculate_confusion_counts(

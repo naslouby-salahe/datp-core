@@ -7,7 +7,7 @@ import polars as pl
 
 from datp_core.domain.enums import ContractSubject, PartitionRole, SplitProtocolId, StageOperationId
 from datp_core.domain.errors import DataIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Seed, checksum_text
+from datp_core.domain.values import RowCount, Seed, checksum_text
 from datp_core.populations.models import (
     CLIENT_ID_COLUMN,
     ORDER_COLUMN,
@@ -194,7 +194,7 @@ def _fractional_role_frame(
     if frame.height == 0:
         return frame.with_columns(pl.lit(None, dtype=pl.String).alias(PARTITION_ROLE_COLUMN))
     ordered = frame.sort(STABLE_ROW_ID_COLUMN)
-    permutation = _client_permutation(ordered.height, partition_seed, client_id)
+    permutation = _client_permutation(RowCount(ordered.height), partition_seed, client_id)
     shuffled = (
         ordered.with_row_index(ORDER_COLUMN)
         .with_columns(pl.Series(PERM_COLUMN, permutation))
@@ -222,12 +222,12 @@ def _sequential_role_frame(
     return ordered.with_columns(pl.Series(PARTITION_ROLE_COLUMN, role_values))
 
 
-def _client_permutation(size: int, partition_seed: Seed, client_id: str) -> np.ndarray:
+def _client_permutation(size: RowCount, partition_seed: Seed, client_id: str) -> np.ndarray:
     material = f"{partition_seed.value}:{client_id}".encode()
     digest = sha256(material).digest()
     seed_value = int.from_bytes(digest[:8], byteorder="big", signed=False)
     generator = np.random.Generator(np.random.PCG64(seed_value))
-    return generator.permutation(size)
+    return generator.permutation(size.value)
 
 
 def _assert_split_invariants(assignments: pl.DataFrame, membership: pl.DataFrame) -> None:
@@ -286,12 +286,12 @@ def _split_manifest(assignments: pl.DataFrame, request: SplitConstructionRequest
         dataset=request.dataset,
         partition_seed=request.partition_seed,
         split_protocol=request.split_protocol,
-        assignment_row_count=assignments.height,
-        train_row_count=count(PartitionRole.TRAIN),
-        calibration_row_count=count(PartitionRole.CALIBRATION),
-        evaluation_row_count=count(PartitionRole.EVALUATION),
-        future_recalibration_row_count=count(PartitionRole.FUTURE_RECALIBRATION),
-        static_reference_reserve_row_count=count(PartitionRole.STATIC_REFERENCE_RESERVE),
+        assignment_row_count=RowCount(assignments.height),
+        train_row_count=RowCount(count(PartitionRole.TRAIN)),
+        calibration_row_count=RowCount(count(PartitionRole.CALIBRATION)),
+        evaluation_row_count=RowCount(count(PartitionRole.EVALUATION)),
+        future_recalibration_row_count=RowCount(count(PartitionRole.FUTURE_RECALIBRATION)),
+        static_reference_reserve_row_count=RowCount(count(PartitionRole.STATIC_REFERENCE_RESERVE)),
         assignment_checksum=checksum_text(payload),
         population_manifest_checksum=request.population_manifest_checksum,
     )

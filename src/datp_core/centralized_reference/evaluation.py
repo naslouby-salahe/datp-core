@@ -73,7 +73,7 @@ class CentralizedEvaluationResult:
     threshold: ThresholdValue
     confusion: ConfusionCounts
     metrics: tuple[CentralizedMetricRecord, ...]
-    evaluation_row_count: int
+    evaluation_row_count: RowCount
     evidence_role: EvidenceRole
     is_confirmatory_ladder_member: bool
     score_artifact_checksum: Checksum
@@ -132,7 +132,7 @@ def evaluate_centralized_reference(
         threshold=threshold_result.threshold,
         confusion=confusion,
         metrics=metrics,
-        evaluation_row_count=int(scores.shape[0]),
+        evaluation_row_count=RowCount(int(scores.shape[0])),
         evidence_role=EvidenceRole.SUPPORTIVE,
         is_confirmatory_ladder_member=False,
         score_artifact_checksum=evaluation_scores.checksum,
@@ -235,7 +235,7 @@ def write_evaluation_document(evaluation: CentralizedEvaluationResult, directory
         false_positive=evaluation.confusion.false_positive,
         true_positive=evaluation.confusion.true_positive,
         false_negative=evaluation.confusion.false_negative,
-        evaluation_row_count=RowCount(evaluation.evaluation_row_count),
+        evaluation_row_count=evaluation.evaluation_row_count,
         evidence_role=evaluation.evidence_role,
         is_confirmatory_ladder_member=evaluation.is_confirmatory_ladder_member,
         metrics=tuple(

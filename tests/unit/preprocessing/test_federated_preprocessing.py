@@ -14,7 +14,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorModule,
 )
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import Checksum, OutcomeLabelSequence, RowCount
+from datp_core.domain.values import Checksum, FeatureNameSequence, OutcomeLabelSequence, RowCount
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.federated import fit_client_preprocessing, reject_centralized_state_for_client
 from datp_core.preprocessing.models import (
@@ -30,7 +30,7 @@ def _protocol() -> PreprocessingProtocol:
     return PreprocessingProtocol(
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        input_feature_names=("f0", "f1"),
+        input_feature_names=FeatureNameSequence(("f0", "f1")),
         transformed_schema=TransformedSchema(
             features=(TransformedFeature(name="f0", position=0), TransformedFeature(name="f1", position=1))
         ),
