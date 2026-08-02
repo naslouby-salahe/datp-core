@@ -1,32 +1,23 @@
 """Gate decision for historical anchor reproduction and dependent-experiment readiness."""
 
+from json import dumps
 from pathlib import Path
 
 from datp_core.anchor.models import (
     DECLARED_NON_BLOCKING_DISCREPANCY_REASONS,
     AnchorArtifactFileName,
     AnchorComparisonDecision,
-    AnchorComparisonStrategy,
     AnchorDependencyBlocker,
-    AnchorDependencyKind,
     AnchorDiscrepancy,
-    AnchorDiscrepancyReason,
     AnchorGateDecision,
     AnchorGateStatus,
     AnchorMetricComparison,
     AnchorReproductionResult,
     AnchorSeedSubsetComparison,
 )
-from datp_core.domain.contracts import StrictModel
-from datp_core.domain.enums import (
-    EvidenceRole,
-    ExperimentId,
-    ExperimentReadiness,
-    FederatedThresholdMethod,
-    MetricId,
-)
+from datp_core.domain.enums import ExperimentReadiness
 from datp_core.domain.errors import AnchorReproductionError
-from datp_core.domain.values import Checksum, MetricValue, Seed, checksum_text
+from datp_core.domain.values import Checksum, checksum_text
 
 
 def decide_anchor_gate(reproduction: AnchorReproductionResult) -> AnchorGateDecision:
@@ -117,153 +108,94 @@ def _partition_discrepancies(
     return blocking, declared
 
 
-class DependencyBlockerDocument(StrictModel):
-    kind: AnchorDependencyKind
-    detail: str
-
-
-class SeedSubsetComparisonDocument(StrictModel):
-    expected_seeds: tuple[Seed, ...]
-    observed_seeds: tuple[Seed, ...]
-    decision: AnchorComparisonDecision
-    reason: AnchorDiscrepancyReason | None
-
-
-class MetricComparisonDocument(StrictModel):
-    seed: Seed
-    threshold_method: FederatedThresholdMethod
-    metric: MetricId
-    expected: MetricValue
-    observed: MetricValue | None
-    decision: AnchorComparisonDecision
-    signed_difference: float | None
-    relative_difference: float | None
-    tolerance_strategy: AnchorComparisonStrategy
-    reason: AnchorDiscrepancyReason | None
-
-
-class DiscrepancyDocument(StrictModel):
-    reason: AnchorDiscrepancyReason
-    seed: Seed | None
-    threshold_method: FederatedThresholdMethod | None
-    metric: MetricId | None
-    expected_value: MetricValue | None
-    observed_value: MetricValue | None
-    signed_difference: float | None
-    relative_difference: float | None
-    tolerance_strategy: AnchorComparisonStrategy | None
-    artifact_path: str | None
-    artifact_checksum: Checksum | None
-    detail: str
-
-
-class ReproductionDocument(StrictModel):
-    experiment: ExperimentId
-    evidence_role: EvidenceRole
-    seed_cohort: tuple[Seed, ...]
-    reference_count: int
-    observation_count: int
-    seed_subset: SeedSubsetComparisonDocument
-    metric_comparisons: tuple[MetricComparisonDocument, ...]
-    discrepancies: tuple[DiscrepancyDocument, ...]
-    dependency_blocker: DependencyBlockerDocument | None
-
-
-class GateDecisionDocument(StrictModel):
-    status: AnchorGateStatus
-    dependent_readiness: ExperimentReadiness
-    blocking_discrepancies: tuple[DiscrepancyDocument, ...]
-    declared_discrepancies: tuple[DiscrepancyDocument, ...]
-    reproduction: ReproductionDocument
-
-
 def persist_anchor_gate_diagnostics(decision: AnchorGateDecision, diagnostics_directory: Path | None) -> Checksum:
-    document = gate_decision_document(decision)
-    payload = document.model_dump_json()
-    checksum = checksum_text(payload)
+    """Write gate decision and discrepancy diagnostics, returning a deterministic checksum."""
+    gate_payload = _serialize_gate_decision(decision)
+    gate_json = dumps(gate_payload, sort_keys=True, separators=(",", ":"))
+    checksum = checksum_text(gate_json)
     if diagnostics_directory is None:
         return checksum
     diagnostics_directory.mkdir(parents=True, exist_ok=True)
-    (diagnostics_directory / AnchorArtifactFileName.GATE_DECISION.value).write_text(payload, encoding="utf-8")
-    discrepancies = tuple(discrepancy_document(item) for item in decision.reproduction.discrepancies)
+    (diagnostics_directory / AnchorArtifactFileName.GATE_DECISION.value).write_text(gate_json, encoding="utf-8")
+    discrepancies_json = dumps(
+        [_serialize_discrepancy(item) for item in decision.reproduction.discrepancies],
+        sort_keys=True,
+        separators=(",", ":"),
+    )
     (diagnostics_directory / AnchorArtifactFileName.DISCREPANCIES.value).write_text(
-        _encode_discrepancies(discrepancies), encoding="utf-8"
+        discrepancies_json, encoding="utf-8"
     )
     return checksum
 
 
-def _encode_discrepancies(discrepancies: tuple[DiscrepancyDocument, ...]) -> str:
-    from json import dumps
-
-    return dumps([item.model_dump(mode="json") for item in discrepancies], sort_keys=True, separators=(",", ":"))
-
-
-def gate_decision_document(decision: AnchorGateDecision) -> GateDecisionDocument:
-    return GateDecisionDocument(
-        status=decision.status,
-        dependent_readiness=decision.dependent_readiness,
-        blocking_discrepancies=tuple(discrepancy_document(item) for item in decision.blocking_discrepancies),
-        declared_discrepancies=tuple(discrepancy_document(item) for item in decision.declared_discrepancies),
-        reproduction=reproduction_document(decision.reproduction),
-    )
+def _serialize_gate_decision(decision: AnchorGateDecision) -> dict:
+    return {
+        "status": decision.status.value,
+        "dependent_readiness": decision.dependent_readiness.value,
+        "blocking_discrepancies": [_serialize_discrepancy(d) for d in decision.blocking_discrepancies],
+        "declared_discrepancies": [_serialize_discrepancy(d) for d in decision.declared_discrepancies],
+        "reproduction": _serialize_reproduction(decision.reproduction),
+    }
 
 
-def reproduction_document(reproduction: AnchorReproductionResult) -> ReproductionDocument:
-    return ReproductionDocument(
-        experiment=reproduction.experiment,
-        evidence_role=reproduction.evidence_role,
-        seed_cohort=reproduction.seed_cohort.values,
-        reference_count=len(reproduction.references),
-        observation_count=len(reproduction.observations),
-        seed_subset=seed_subset_document(reproduction.seed_subset_comparison),
-        metric_comparisons=tuple(comparison_document(item) for item in reproduction.metric_comparisons),
-        discrepancies=tuple(discrepancy_document(item) for item in reproduction.discrepancies),
-        dependency_blocker=dependency_blocker_document(reproduction.dependency_blocker),
-    )
+def _serialize_reproduction(reproduction: AnchorReproductionResult) -> dict:
+    return {
+        "experiment": reproduction.experiment.value,
+        "evidence_role": reproduction.evidence_role.value,
+        "seed_cohort": [s.value for s in reproduction.seed_cohort.values],
+        "reference_count": len(reproduction.references),
+        "observation_count": len(reproduction.observations),
+        "seed_subset": _serialize_seed_subset(reproduction.seed_subset_comparison),
+        "metric_comparisons": [_serialize_metric_comparison(c) for c in reproduction.metric_comparisons],
+        "discrepancies": [_serialize_discrepancy(d) for d in reproduction.discrepancies],
+        "dependency_blocker": _serialize_dependency_blocker(reproduction.dependency_blocker),
+    }
 
 
-def seed_subset_document(comparison: AnchorSeedSubsetComparison) -> SeedSubsetComparisonDocument:
-    return SeedSubsetComparisonDocument(
-        expected_seeds=comparison.expected_seeds,
-        observed_seeds=comparison.observed_seeds,
-        decision=comparison.decision,
-        reason=comparison.reason,
-    )
+def _serialize_seed_subset(comparison: AnchorSeedSubsetComparison) -> dict:
+    return {
+        "expected_seeds": [s.value for s in comparison.expected_seeds],
+        "observed_seeds": [s.value for s in comparison.observed_seeds],
+        "decision": comparison.decision.value,
+        "reason": comparison.reason.value if comparison.reason is not None else None,
+    }
 
 
-def dependency_blocker_document(blocker: AnchorDependencyBlocker | None) -> DependencyBlockerDocument | None:
+def _serialize_dependency_blocker(blocker: AnchorDependencyBlocker | None) -> dict | None:
     if blocker is None:
         return None
-    return DependencyBlockerDocument(kind=blocker.kind, detail=blocker.detail)
+    return {"kind": blocker.kind.value, "detail": blocker.detail}
 
 
-def comparison_document(comparison: AnchorMetricComparison) -> MetricComparisonDocument:
-    return MetricComparisonDocument(
-        seed=comparison.reference.seed,
-        threshold_method=comparison.reference.threshold_method,
-        metric=comparison.reference.metric,
-        expected=comparison.reference.value,
-        observed=None if comparison.observation is None else comparison.observation.value,
-        decision=comparison.decision,
-        signed_difference=comparison.signed_difference,
-        relative_difference=comparison.relative_difference,
-        tolerance_strategy=comparison.tolerance_rule.strategy,
-        reason=comparison.reason,
-    )
+def _serialize_metric_comparison(comparison: AnchorMetricComparison) -> dict:
+    return {
+        "seed": comparison.reference.seed.value,
+        "threshold_method": comparison.reference.threshold_method.value,
+        "metric": comparison.reference.metric.value,
+        "expected": comparison.reference.value.value,
+        "observed": comparison.observation.value.value if comparison.observation is not None else None,
+        "decision": comparison.decision.value,
+        "signed_difference": comparison.signed_difference,
+        "relative_difference": comparison.relative_difference,
+        "tolerance_strategy": comparison.tolerance_rule.strategy.value,
+        "reason": comparison.reason.value if comparison.reason is not None else None,
+    }
 
 
-def discrepancy_document(discrepancy: AnchorDiscrepancy) -> DiscrepancyDocument:
-    return DiscrepancyDocument(
-        reason=discrepancy.reason,
-        seed=discrepancy.seed,
-        threshold_method=discrepancy.threshold_method,
-        metric=discrepancy.metric,
-        expected_value=discrepancy.expected_value,
-        observed_value=discrepancy.observed_value,
-        signed_difference=discrepancy.signed_difference,
-        relative_difference=discrepancy.relative_difference,
-        tolerance_strategy=(None if discrepancy.tolerance_rule is None else discrepancy.tolerance_rule.strategy),
-        artifact_path=None if discrepancy.artifact_path is None else discrepancy.artifact_path.as_posix(),
-        artifact_checksum=discrepancy.artifact_checksum,
-        detail=discrepancy.detail,
-    )
+def _serialize_discrepancy(discrepancy: AnchorDiscrepancy) -> dict:
+    return {
+        "reason": discrepancy.reason.value,
+        "seed": discrepancy.seed.value if discrepancy.seed is not None else None,
+        "threshold_method": discrepancy.threshold_method.value if discrepancy.threshold_method is not None else None,
+        "metric": discrepancy.metric.value if discrepancy.metric is not None else None,
+        "expected_value": discrepancy.expected_value.value if discrepancy.expected_value is not None else None,
+        "observed_value": discrepancy.observed_value.value if discrepancy.observed_value is not None else None,
+        "signed_difference": discrepancy.signed_difference,
+        "relative_difference": discrepancy.relative_difference,
+        "tolerance_strategy": (
+            discrepancy.tolerance_rule.strategy.value if discrepancy.tolerance_rule is not None else None
+        ),
+        "artifact_path": discrepancy.artifact_path.as_posix() if discrepancy.artifact_path is not None else None,
+        "artifact_checksum": discrepancy.artifact_checksum.value if discrepancy.artifact_checksum is not None else None,
+        "detail": discrepancy.detail,
+    }
