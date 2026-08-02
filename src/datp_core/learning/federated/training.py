@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import TypeVar
+from typing import Generic, TypeVar
 
 import numpy as np
 import polars as pl
@@ -111,7 +111,7 @@ class PreparedFederatedClientData:
 
 
 @dataclass(frozen=True, slots=True)
-class FederatedTrainingRequest[TrainingProtocolT]:
+class FederatedTrainingRequest(Generic[TrainingProtocolT]):  # noqa: UP046
     coordinate: FederatedTrainingCoordinate
     clients: tuple[ClientTrainingInput, ...]
     population_client_count: ClientCount
@@ -369,7 +369,7 @@ def serialize_and_checksum_state_dict(
     return checksum, byte_count
 
 
-def validate_federated_training_request(request: FederatedTrainingRequest[TrainingProtocolT]) -> None:
+def validate_federated_training_request(request: FederatedTrainingRequest[TrainingProtocolT]) -> None:  # noqa: UP047
     if not request.clients:
         raise ScientificContractError(
             "training requires at least one client dataset",
@@ -390,9 +390,7 @@ def validate_federated_training_request(request: FederatedTrainingRequest[Traini
 
 def compute_weighted_aggregate_loss(updates: Sequence[ClientUpdate]) -> MetricValue:
     total_samples = sum(u.sample_count.value for u in updates)
-    return MetricValue(
-        sum(u.local_loss.value * u.sample_count.value for u in updates) / total_samples
-    )
+    return MetricValue(sum(u.local_loss.value * u.sample_count.value for u in updates) / total_samples)
 
 
 def create_communication_record(
@@ -418,7 +416,7 @@ def create_round_snapshot(
     return RoundSnapshot(round_number, clone_state(state), loss)
 
 
-def run_federated_training(
+def run_federated_training(  # noqa: UP047
     request: FederatedTrainingRequest[TrainingProtocolT],
 ) -> FederatedTrainingOutcome:
     validate_federated_training_request(request)

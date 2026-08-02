@@ -310,18 +310,14 @@ class FederatedTrainingHistory:
                 "federated training history must record consecutive rounds starting at one",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
-        reference_client_ids = frozenset(
-            item.client.client_id for item in self.rounds[0].client_results
-        )
+        reference_client_ids = frozenset(item.client.client_id for item in self.rounds[0].client_results)
         for round_result in self.rounds:
             if round_result.global_state_reference.coordinate != self.coordinate:
                 raise ScientificContractError(
                     "every round in a training history must share the training coordinate",
                     subject=ContractSubject.COORDINATE,
                 )
-            current_client_ids = frozenset(
-                item.client.client_id for item in round_result.client_results
-            )
+            current_client_ids = frozenset(item.client.client_id for item in round_result.client_results)
             if current_client_ids != reference_client_ids:
                 raise ScientificContractError(
                     "every round must contain the same client identity set",

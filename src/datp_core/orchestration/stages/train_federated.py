@@ -38,17 +38,6 @@ from datp_core.learning.federated.models import (
     FederatedTrainingOutcome,
     FederatedTrainingResult,
 )
-
-
-def _training_is_reusable(directory: Path, candidate_rounds: tuple[RoundNumber, ...]) -> bool:
-    complete = directory / FederatedHistoryAssetName.COMPLETE.value
-    if not complete.is_file():
-        return False
-    try:
-        expected_digest = Checksum(complete.read_text(encoding="utf-8").strip())
-    except (OSError, UnicodeError, ValueError):
-        return False
-    return federated_training_directory_is_reusable(directory, candidate_rounds, expected_digest)
 from datp_core.learning.federated.training import (
     FederatedTrainingRequest,
     persist_federated_training_history,
@@ -65,6 +54,17 @@ from datp_core.protocols.models import (
     FedAvgProtocol,
     FedProxProtocol,
 )
+
+
+def _training_is_reusable(directory: Path, candidate_rounds: tuple[RoundNumber, ...]) -> bool:
+    complete = directory / FederatedHistoryAssetName.COMPLETE.value
+    if not complete.is_file():
+        return False
+    try:
+        expected_digest = Checksum(complete.read_text(encoding="utf-8").strip())
+    except (OSError, UnicodeError, ValueError):
+        return False
+    return federated_training_directory_is_reusable(directory, candidate_rounds, expected_digest)
 
 
 @dataclass(frozen=True, slots=True)
