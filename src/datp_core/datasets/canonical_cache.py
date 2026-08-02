@@ -6,6 +6,7 @@ from dataclasses import fields as dc_fields
 from enum import StrEnum
 from json import dumps
 from pathlib import Path
+from typing import cast
 
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -34,6 +35,11 @@ from datp_core.datasets.models import (
     SourceStateDocument,
     SourceStateEntryDocument,
     ValidationSeverity,
+    _AssetEntry,
+    _ChronologyEntry,
+    _EligibilityPolicyEntry,
+    _InventoryEntry,
+    _ValidationReportEntry,
 )
 from datp_core.domain.enums import AvailabilityStatus, DatasetId, PublicationStatus
 from datp_core.domain.values import ByteCount, Checksum, RowCount, checksum_file, checksum_text
@@ -510,12 +516,15 @@ def _manifest_matches_publication[AssetRoleT: StrEnum, EligibilityReasonT: StrEn
     expected = CanonicalManifestDocument(
         assets=manifest.assets,
         canonicalization_contract=publication.canonicalization_contract,
-        chronology=tuple(_serialize(item) for item in publication.chronology),
+        chronology=cast(
+            "tuple[_ChronologyEntry, ...]",
+            tuple(_serialize(item) for item in publication.chronology),
+        ),
         dataset=publication.schema.dataset,
-        eligibility_policy=_serialize(publication.eligibility_policy),
-        inventory=_serialize(publication.inventory),
+        eligibility_policy=cast("_EligibilityPolicyEntry | None", _serialize(publication.eligibility_policy)),
+        inventory=cast("_InventoryEntry", _serialize(publication.inventory)),
         schema_checksum=publication.schema.checksum.value,
-        validation_report=_serialize(publication.validation_report),
+        validation_report=cast("_ValidationReportEntry", _serialize(publication.validation_report)),
     )
     return (
         manifest.dataset,
@@ -592,12 +601,18 @@ def serialized_manifest_json[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     assets: tuple[CanonicalAsset[AssetRoleT], ...],
 ) -> str:
     return CanonicalManifestDocument(
-        assets=tuple(asset.serialize() for asset in assets),
+        assets=cast(
+            "tuple[_AssetEntry, ...]",
+            tuple(asset.serialize() for asset in assets),
+        ),
         canonicalization_contract=request.canonicalization_contract,
-        chronology=tuple(_serialize(item) for item in request.chronology),
+        chronology=cast(
+            "tuple[_ChronologyEntry, ...]",
+            tuple(_serialize(item) for item in request.chronology),
+        ),
         dataset=request.dataset,
-        eligibility_policy=_serialize(request.eligibility_policy),
-        inventory=_serialize(request.inventory),
+        eligibility_policy=cast("_EligibilityPolicyEntry | None", _serialize(request.eligibility_policy)),
+        inventory=cast("_InventoryEntry", _serialize(request.inventory)),
         schema_checksum=request.schema_checksum.value,
-        validation_report=_serialize(request.validation_report),
+        validation_report=cast("_ValidationReportEntry", _serialize(request.validation_report)),
     ).model_dump_json()

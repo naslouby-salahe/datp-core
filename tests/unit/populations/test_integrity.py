@@ -5,7 +5,7 @@ import pytest
 
 from datp_core.domain.enums import DatasetId, PartitionRole, PopulationId, SplitProtocolId
 from datp_core.domain.errors import DataIntegrityError, LeakageError
-from datp_core.domain.values import Checksum, Seed
+from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.populations.integrity import validate_population_manifest, validate_split_manifest
 from datp_core.populations.models import SplitConstructionRequest, SplitManifestDocument
 from datp_core.populations.nbaiot_natural_devices import build_nbaiot_natural_devices
@@ -65,12 +65,12 @@ def test_integrity_detects_attack_in_calibration() -> None:
         dataset=DatasetId.NBAIOT,
         partition_seed=Seed(0),
         split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-        assignment_row_count=2,
-        train_row_count=0,
-        calibration_row_count=2,
-        evaluation_row_count=0,
-        future_recalibration_row_count=0,
-        static_reference_reserve_row_count=0,
+        assignment_row_count=RowCount(2),
+        train_row_count=RowCount(0),
+        calibration_row_count=RowCount(2),
+        evaluation_row_count=RowCount(0),
+        future_recalibration_row_count=RowCount(0),
+        static_reference_reserve_row_count=RowCount(0),
         assignment_checksum=Checksum("b" * 64),
         population_manifest_checksum=Checksum("c" * 64),
     )

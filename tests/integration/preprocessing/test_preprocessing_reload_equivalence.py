@@ -16,7 +16,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorClassName,
     TrustedEstimatorModule,
 )
-from datp_core.domain.values import Checksum, ClientPathToken, Seed
+from datp_core.domain.values import Checksum, ClientPathToken, FeatureNameSequence, Seed
 from datp_core.preprocessing.federated import ClientPublishRequest, publish_client_preprocessing
 from datp_core.preprocessing.models import (
     PreprocessingProtocol,
@@ -30,7 +30,7 @@ def _protocol(fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING) -> Preproce
     return PreprocessingProtocol(
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=fit_scope,
-        input_feature_names=("f0", "f1"),
+        input_feature_names=FeatureNameSequence(("f0", "f1")),
         transformed_schema=TransformedSchema(
             features=(TransformedFeature(name="f0", position=0), TransformedFeature(name="f1", position=1))
         ),

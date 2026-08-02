@@ -15,7 +15,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorClassName,
     TrustedEstimatorModule,
 )
-from datp_core.domain.values import Checksum, ClientPathToken, Seed
+from datp_core.domain.values import Checksum, ClientPathToken, FeatureNameSequence, Seed
 from datp_core.preprocessing.federated import ClientPublishRequest, publish_client_preprocessing
 from datp_core.preprocessing.models import (
     PreprocessingProtocol,
@@ -29,7 +29,7 @@ def _protocol() -> PreprocessingProtocol:
     return PreprocessingProtocol(
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        input_feature_names=("f0", "f1"),
+        input_feature_names=FeatureNameSequence(("f0", "f1")),
         transformed_schema=TransformedSchema(
             features=(TransformedFeature(name="f0", position=0), TransformedFeature(name="f1", position=1))
         ),
@@ -63,7 +63,7 @@ def test_identical_coordinates_reuse_completed_federated_asset(tmp_path: Path) -
     data_root = tmp_path / "data"
     protocol = _protocol()
     partitions, row_ids = _partitions()
-    fitted = _fitted_estimator(partitions, protocol.input_feature_names)
+    fitted = _fitted_estimator(partitions, protocol.input_feature_names.names)
     first = publish_client_preprocessing(
         ClientPublishRequest(
             context=PreprocessingPublishContext(

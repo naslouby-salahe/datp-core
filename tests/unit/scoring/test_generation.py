@@ -6,7 +6,7 @@ from tests.unit.scoring.helpers import selected_checkpoint
 
 from datp_core.domain.enums import CheckpointStatus
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.domain.values import Checksum, OutcomeLabelSequence, RowCount, Seed
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.scoring.generation import (
     ClientScoringInput,
@@ -163,6 +163,6 @@ def test_reject_attack_calibration_rows_rejects_any_attack_label() -> None:
 
     with pytest.raises(LeakageError, match="benign calibration"):
         reject_attack_calibration_rows(
-            (PopulationOutcomeLabel.BENIGN.value, PopulationOutcomeLabel.ATTACK.value),
+            OutcomeLabelSequence((PopulationOutcomeLabel.BENIGN.value, PopulationOutcomeLabel.ATTACK.value)),
             PopulationOutcomeLabel.BENIGN.value,
         )
