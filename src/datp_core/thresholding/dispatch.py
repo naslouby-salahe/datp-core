@@ -4,9 +4,12 @@ No registry dictionary, plugin discovery, or fallback estimator: every federated
 threshold method is one explicit `match` arm calling its own construction module.
 `CentralizedThresholdMethod` is rejected both structurally (the request only ever
 types `method` as `FederatedThresholdMethod`) and by an explicit runtime guard.
+A newly added `FederatedThresholdMethod` triggers ``assert_never`` so it fails
+immediately rather than leaving ``result`` unbound.
 """
 
 from dataclasses import dataclass
+from typing import assert_never
 
 from datp_core.domain.enums import CentralizedThresholdMethod, ContractSubject, FederatedThresholdMethod
 from datp_core.domain.errors import CapabilityError, LeakageError, ScientificContractError
@@ -148,4 +151,6 @@ def dispatch_federated_threshold(request: ThresholdConstructionRequest) -> Thres
             result = construct_federated_benign_statistics(
                 request.eligible, FEDERATED_STATISTICS_PROTOCOL, request.quantile
             )
+        case _:
+            assert_never(request.method)
     return result

@@ -9,9 +9,12 @@ population variance; a sample (`ddof=1`) variance would break that identity.
 The matched-exceedance threshold is the Gaussian-tail plug-in documented in
 `thresholding.quantiles.gaussian_matched_exceedance_threshold`: the same
 `mean + k * std` family used for the fixed-coefficient sensitivity curve, with
-`k` solved analytically for the quantile target instead of held fixed. The exact
-pooled quantile is retained only as a diagnostic reference, never as the
-comparator itself.
+`k` solved analytically for the quantile target instead of held fixed.
+
+Only count, mean, and variance are federated inputs.  Both
+``centralized_attainment_diagnostic`` and ``centralized_pooled_quantile_diagnostic``
+are centralized oracle diagnostics computed from the full pooled raw scores —
+they are never federated comparators and raw pooled scores are never communicated.
 """
 
 import numpy as np
@@ -21,11 +24,11 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import ByteCount, Quantile, RowCount
 from datp_core.protocols.models import FederatedStatisticsProtocol
 from datp_core.thresholding.models import (
+    CentralizedAttainmentDiagnostic,
     ClientBenignSummary,
     CommunicationPayload,
     FederatedStatisticsThresholdResult,
     FixedCoefficientResult,
-    MatchedAttainmentDiagnostic,
     PooledVarianceDecomposition,
     ThresholdAssignment,
 )
@@ -95,6 +98,7 @@ def construct_federated_benign_statistics(
     matched_threshold = gaussian_matched_exceedance_threshold(
         decomposition.global_mean, decomposition.full_pooled_variance, quantile
     )
+    # ── centralized oracle diagnostics (pooled raw scores, never communicated) ──
     pooled_scores = np.concatenate([client_scores.as_array for client_scores in ordered])
     centralized_pooled_quantile_diagnostic = exact_empirical_quantile(pooled_scores, quantile)
 
@@ -106,7 +110,7 @@ def construct_federated_benign_statistics(
     relative_threshold_error = (
         absolute_threshold_error / abs(pooled_reference_value) if pooled_reference_value != 0 else None
     )
-    matched_diagnostic = MatchedAttainmentDiagnostic(
+    centralized_attainment_diagnostic = CentralizedAttainmentDiagnostic(
         target_exceedance=target_exceedance,
         achieved_exceedance=achieved_exceedance,
         signed_attainment_error=signed_attainment_error,
@@ -135,7 +139,7 @@ def construct_federated_benign_statistics(
         client_summaries=summaries,
         decomposition=decomposition,
         matched_threshold=matched_threshold,
-        matched_diagnostic=matched_diagnostic,
+        centralized_attainment_diagnostic=centralized_attainment_diagnostic,
         centralized_pooled_quantile_diagnostic=centralized_pooled_quantile_diagnostic,
         fixed_coefficient_curve=fixed_coefficient_curve,
         assignments=assignments,

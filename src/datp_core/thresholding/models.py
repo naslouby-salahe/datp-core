@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
+import numpy as np
+
 from datp_core.domain.enums import (
     AvailabilityStatus,
     ContractSubject,
@@ -54,6 +56,13 @@ class ThresholdInfeasibilityReason(StrEnum):
 def _require_method(actual: FederatedThresholdMethod, expected: FederatedThresholdMethod) -> None:
     if actual is not expected:
         raise ScientificContractError(f"threshold result method must be {expected.value}", subject=actual)
+
+
+def _require_unique_clients(clients: tuple[ClientIdentity, ...], label: str) -> None:
+    if len(set(clients)) != len(clients):
+        raise ScientificContractError(
+            f"{label} must have unique client identities", subject=ContractSubject.CLIENT_IDENTITY
+        )
 
 
 def _require_uniform_shared_threshold(
@@ -186,21 +195,30 @@ def _require_matching_clients(
     assignments: tuple["ThresholdAssignment", ...], clients: tuple[ClientIdentity, ...]
 ) -> None:
     assigned_ids = tuple(assignment.client for assignment in assignments)
-    if len(set(assigned_ids)) != len(assigned_ids):
-        raise ScientificContractError(
-            "threshold assignments must have unique client identities", subject=ContractSubject.CLIENT_IDENTITY
-        )
-    if len(set(clients)) != len(clients):
-        raise ScientificContractError(
-            "expected clients must have unique identities", subject=ContractSubject.CLIENT_IDENTITY
-        )
-    assigned = frozenset(assigned_ids)
-    expected = frozenset(clients)
-    if assigned != expected:
+    _require_unique_clients(assigned_ids, "threshold assignments")
+    _require_unique_clients(clients, "expected clients")
+    if frozenset(assigned_ids) != frozenset(clients):
         raise ScientificContractError(
             "threshold assignments must cover exactly the contributing client set",
             subject=ContractSubject.CLIENT_IDENTITY,
         )
+
+
+def _require_nested_local_quantile_coordinates(
+    container_coordinate: FederatedTrainingCoordinate,
+    items: tuple["LocalQuantile", ...],
+) -> None:
+    for item in items:
+        if item.coordinate != container_coordinate:
+            raise ScientificContractError(
+                "every nested quantile must carry the containing result coordinate",
+                subject=ContractSubject.COORDINATE,
+            )
+
+
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,24 +255,17 @@ class LocalQuantile:
             )
 
 
-def _require_nested_coordinates_match(
-    container_coordinate: FederatedTrainingCoordinate,
-    items: tuple[LocalQuantile, ...],
-) -> None:
-    for item in items:
-        if item.coordinate != container_coordinate:
-            raise ScientificContractError(
-                "every nested quantile must carry the containing result coordinate",
-                subject=ContractSubject.COORDINATE,
-            )
-
-
 @dataclass(frozen=True, slots=True)
 class ThresholdAssignment:
     """One client's assigned operating threshold."""
 
     client: ClientIdentity
     threshold: ThresholdValue
+
+
+# ---------------------------------------------------------------------------
+# Shared-threshold family
+# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -275,9 +286,12 @@ class SharedThresholdResult:
                 "shared threshold construction requires at least one contributing local quantile",
                 subject=ContractSubject.THRESHOLD,
             )
+        _require_unique_clients(
+            tuple(item.client for item in self.contributing_local_quantiles), "contributing local quantiles"
+        )
         _require_matching_clients(self.assignments, tuple(item.client for item in self.contributing_local_quantiles))
         _require_uniform_shared_threshold(self.assignments, self.shared_threshold)
-        _require_nested_coordinates_match(self.coordinate, self.contributing_local_quantiles)
+        _require_nested_local_quantile_coordinates(self.coordinate, self.contributing_local_quantiles)
 
 
 @dataclass(frozen=True, slots=True)
@@ -299,6 +313,9 @@ class PooledSharedQuantileResult:
                 "pooled shared quantile requires at least one pooled benign score",
                 subject=ContractSubject.CALIBRATION,
             )
+        _require_unique_clients(
+            tuple(assignment.client for assignment in self.assignments), "pooled shared quantile assignments"
+        )
         _require_uniform_shared_threshold(self.assignments, self.shared_threshold)
 
 
@@ -317,9 +334,17 @@ class SampleWeightedSharedThresholdResult:
     def __post_init__(self) -> None:
         _require_method(self.method, FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD)
         _require_normalized_weights(self.normalized_weights, len(self.contributing_local_quantiles))
+        _require_unique_clients(
+            tuple(item.client for item in self.contributing_local_quantiles), "contributing local quantiles"
+        )
         _require_matching_clients(self.assignments, tuple(item.client for item in self.contributing_local_quantiles))
         _require_uniform_shared_threshold(self.assignments, self.shared_threshold)
-        _require_nested_coordinates_match(self.coordinate, self.contributing_local_quantiles)
+        _require_nested_local_quantile_coordinates(self.coordinate, self.contributing_local_quantiles)
+
+
+# ---------------------------------------------------------------------------
+# Local
+# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -338,8 +363,11 @@ class LocalThresholdResult:
                 "local threshold construction requires at least one eligible client",
                 subject=ContractSubject.THRESHOLD,
             )
+        _require_unique_clients(
+            tuple(item.client for item in self.local_quantiles), "local quantiles"
+        )
         _require_matching_clients(self.assignments, tuple(item.client for item in self.local_quantiles))
-        _require_nested_coordinates_match(self.coordinate, self.local_quantiles)
+        _require_nested_local_quantile_coordinates(self.coordinate, self.local_quantiles)
         by_client = {item.client: item.value for item in self.local_quantiles}
         for assignment in self.assignments:
             if not floats_exactly_equal(assignment.threshold.value, by_client[assignment.client].value):
@@ -347,6 +375,11 @@ class LocalThresholdResult:
                     "a local threshold assignment must equal the client's own local quantile",
                     subject=ContractSubject.THRESHOLD,
                 )
+
+
+# ---------------------------------------------------------------------------
+# Family
+# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -361,12 +394,9 @@ class FamilyMembership:
 
     def __post_init__(self) -> None:
         _require_family_availability_consistency(self.status, self.members, self.family_threshold)
+        _require_unique_clients(self.members, "family members")
         quantile_clients = tuple(item.client for item in self.contributing_local_quantiles)
-        if len(set(quantile_clients)) != len(quantile_clients):
-            raise ScientificContractError(
-                "contributing local quantiles must have unique client identities",
-                subject=ContractSubject.CLIENT_IDENTITY,
-            )
+        _require_unique_clients(quantile_clients, "contributing local quantiles")
         if set(quantile_clients) != set(self.members):
             raise ScientificContractError(
                 "contributing local quantile clients must exactly match declared family members",
@@ -393,6 +423,8 @@ class FamilyThresholdResult:
         family_ids = tuple(family.family_id for family in self.families)
         if len(set(family_ids)) != len(family_ids):
             raise ScientificContractError("family identities must be unique", subject=ContractSubject.THRESHOLD)
+        for family in self.families:
+            _require_nested_local_quantile_coordinates(self.coordinate, family.contributing_local_quantiles)
         available_members = tuple(
             client
             for family in self.families
@@ -418,6 +450,11 @@ class FamilyThresholdResult:
                 )
 
 
+# ---------------------------------------------------------------------------
+# Cluster / Grouped
+# ---------------------------------------------------------------------------
+
+
 @dataclass(frozen=True, slots=True)
 class ClusterFingerprint:
     """Locked four-feature benign reconstruction-error fingerprint for one client."""
@@ -431,6 +468,14 @@ class ClusterFingerprint:
             raise ScientificContractError(
                 "a cluster fingerprint must carry exactly mean, standard deviation, skewness, and p95",
                 subject=ContractSubject.THRESHOLD,
+            )
+        if not all(np.isfinite(value) for value in self.raw):
+            raise ScientificContractError(
+                "every raw fingerprint feature must be finite", subject=ContractSubject.THRESHOLD
+            )
+        if not all(np.isfinite(value) for value in self.standardized):
+            raise ScientificContractError(
+                "every standardized fingerprint feature must be finite", subject=ContractSubject.THRESHOLD
             )
 
 
@@ -447,6 +492,14 @@ class ClusterMembership:
         if not self.members:
             raise ScientificContractError(
                 "a cluster membership requires at least one member", subject=ContractSubject.THRESHOLD
+            )
+        _require_unique_clients(self.members, "cluster members")
+        quantile_clients = tuple(item.client for item in self.contributing_local_quantiles)
+        _require_unique_clients(quantile_clients, "contributing local quantiles")
+        if set(quantile_clients) != set(self.members):
+            raise ScientificContractError(
+                "contributing local quantile clients must exactly equal cluster members",
+                subject=ContractSubject.CLIENT_IDENTITY,
             )
 
 
@@ -472,8 +525,35 @@ class GroupedThresholdResult:
                 "the number of clusters must equal the declared group count",
                 subject=ContractSubject.THRESHOLD,
             )
+        fingerprint_clients = tuple(fp.client for fp in self.fingerprints)
+        _require_unique_clients(fingerprint_clients, "fingerprint")
+        cluster_indices = tuple(cluster.cluster_index for cluster in self.clusters)
+        if len(set(cluster_indices)) != len(cluster_indices):
+            raise ScientificContractError("cluster indices must be unique", subject=ContractSubject.THRESHOLD)
+        for cluster in self.clusters:
+            _require_nested_local_quantile_coordinates(self.coordinate, cluster.contributing_local_quantiles)
         all_members = _require_disjoint_cluster_membership(self.clusters, self.fingerprints)
         _require_matching_clients(self.assignments, all_members)
+        cluster_threshold_by_client: dict[ClientIdentity, ThresholdValue] = {}
+        for cluster in self.clusters:
+            for client in cluster.members:
+                cluster_threshold_by_client[client] = cluster.cluster_threshold
+        for assignment in self.assignments:
+            expected = cluster_threshold_by_client.get(assignment.client)
+            if expected is None:
+                raise ScientificContractError(
+                    "each assigned client must belong to a cluster", subject=ContractSubject.THRESHOLD
+                )
+            if not floats_exactly_equal(assignment.threshold.value, expected.value):
+                raise ScientificContractError(
+                    "a cluster threshold assignment must use its cluster's threshold",
+                    subject=ContractSubject.THRESHOLD,
+                )
+
+
+# ---------------------------------------------------------------------------
+# Shrinkage
+# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -513,13 +593,23 @@ class ShrinkageThresholdResult:
             raise ScientificContractError(
                 "shrinkage construction requires at least one declared lambda", subject=ContractSubject.THRESHOLD
             )
+        if len(set(self.weights)) != len(self.weights):
+            raise ScientificContractError(
+                "declared shrinkage weights must be unique", subject=ContractSubject.THRESHOLD
+            )
         if not self.assignments:
             raise ScientificContractError(
                 "shrinkage construction requires at least one client assignment",
                 subject=ContractSubject.THRESHOLD,
             )
+        declared_weight_set = frozenset(self.weights)
         assignments_by_key: dict[tuple[ClientIdentity, ShrinkageWeight], int] = {}
         for assignment in self.assignments:
+            if assignment.lambda_weight not in declared_weight_set:
+                raise ScientificContractError(
+                    "every shrinkage assignment must use a declared lambda weight",
+                    subject=ContractSubject.THRESHOLD,
+                )
             key = (assignment.client, assignment.lambda_weight)
             if key in assignments_by_key:
                 raise ScientificContractError(
@@ -537,6 +627,17 @@ class ShrinkageThresholdResult:
                     "every declared lambda must be evaluated for exactly the same client set",
                     subject=ContractSubject.THRESHOLD,
                 )
+        expected_combinations = len(clients) * len(self.weights)
+        if len(self.assignments) != expected_combinations:
+            raise ScientificContractError(
+                "every declared (client, lambda_weight) combination must exist exactly once",
+                subject=ContractSubject.THRESHOLD,
+            )
+
+
+# ---------------------------------------------------------------------------
+# Conformal
+# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -555,6 +656,24 @@ class ConformalAssignment:
         _require_valid_conformal_assignment(
             self.rank_index, self.calibration_count, self.effective_quantile, self.tie_count
         )
+        if not floats_exactly_equal(self.threshold.value, self.selected_score.value):
+            raise ScientificContractError(
+                "conformal threshold value must equal the selected score", subject=ContractSubject.THRESHOLD
+            )
+        if not np.isfinite(self.effective_quantile):
+            raise ScientificContractError(
+                "conformal effective quantile must be finite", subject=ContractSubject.THRESHOLD
+            )
+        if not np.isfinite(self.selected_score.value):
+            raise ScientificContractError(
+                "conformal selected score must be finite", subject=ContractSubject.THRESHOLD
+            )
+        expected_quantile = self.rank_index / self.calibration_count.value
+        if not floats_absolutely_close(self.effective_quantile, expected_quantile, _UNIT_TOTAL_ABSOLUTE_TOLERANCE):
+            raise ScientificContractError(
+                "conformal effective quantile must equal rank_index / calibration_count",
+                subject=ContractSubject.THRESHOLD,
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -565,6 +684,7 @@ class ConformalThresholdResult:
     coordinate: FederatedTrainingCoordinate
     coverage: CoverageTarget
     significance: Ratio
+    eligible_clients: tuple[ClientIdentity, ...]
     assignments: tuple[ConformalAssignment, ...]
     unavailable_clients: tuple[ClientIdentity, ...]
 
@@ -576,26 +696,31 @@ class ConformalThresholdResult:
             raise ScientificContractError(
                 "conformal coverage and significance must be complements", subject=ContractSubject.THRESHOLD
             )
+        _require_unique_clients(self.eligible_clients, "eligible clients")
         if not self.assignments:
             raise ScientificContractError(
                 "a conformal threshold result requires at least one assigned client",
                 subject=ContractSubject.THRESHOLD,
             )
         assigned_clients = tuple(assignment.client for assignment in self.assignments)
-        if len(set(assigned_clients)) != len(assigned_clients):
-            raise ScientificContractError(
-                "conformal assignments must have unique client identities", subject=ContractSubject.CLIENT_IDENTITY
-            )
-        if len(set(self.unavailable_clients)) != len(self.unavailable_clients):
-            raise ScientificContractError(
-                "unavailable clients must have unique identities", subject=ContractSubject.CLIENT_IDENTITY
-            )
-        assigned = frozenset(assigned_clients)
-        unavailable = frozenset(self.unavailable_clients)
-        if assigned & unavailable:
+        _require_unique_clients(assigned_clients, "conformal assignments")
+        _require_unique_clients(self.unavailable_clients, "unavailable clients")
+        assigned_set = frozenset(assigned_clients)
+        unavailable_set = frozenset(self.unavailable_clients)
+        if assigned_set & unavailable_set:
             raise ScientificContractError(
                 "a client cannot be both assigned and unavailable", subject=ContractSubject.CLIENT_IDENTITY
             )
+        if assigned_set | unavailable_set != frozenset(self.eligible_clients):
+            raise ScientificContractError(
+                "assigned and unavailable clients must exactly cover the eligible client set",
+                subject=ContractSubject.CLIENT_IDENTITY,
+            )
+
+
+# ---------------------------------------------------------------------------
+# Federated benign statistics
+# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
@@ -619,6 +744,10 @@ class ClientBenignSummary:
             raise ScientificContractError(
                 "benign exceedance count must be non-negative", subject=ContractSubject.THRESHOLD
             )
+        if not np.isfinite(self.mean):
+            raise ScientificContractError("summary mean must be finite", subject=ContractSubject.THRESHOLD)
+        if not np.isfinite(self.variance):
+            raise ScientificContractError("summary variance must be finite", subject=ContractSubject.THRESHOLD)
 
 
 @dataclass(frozen=True, slots=True)
@@ -635,11 +764,22 @@ class PooledVarianceDecomposition:
         _require_valid_variance_decomposition(
             self.within_client_variance, self.between_client_variance, self.full_pooled_variance, self.between_ratio
         )
+        if not np.isfinite(self.global_mean):
+            raise ScientificContractError("decomposition global mean must be finite", subject=ContractSubject.THRESHOLD)
+        if not np.isfinite(self.full_pooled_variance):
+            raise ScientificContractError(
+                "decomposition full pooled variance must be finite", subject=ContractSubject.THRESHOLD
+            )
 
 
 @dataclass(frozen=True, slots=True)
-class MatchedAttainmentDiagnostic:
-    """Attainment and threshold-error diagnostics for the matched-exceedance comparator."""
+class CentralizedAttainmentDiagnostic:
+    """Centralized oracle attainment diagnostic computed from full pooled raw scores.
+
+    All fields depend on access to the complete pooled raw scores, which are never
+    communicated in the federated protocol.  This record is a centralized diagnostic,
+    not a federated input.
+    """
 
     target_exceedance: float
     achieved_exceedance: float
@@ -655,6 +795,18 @@ class MatchedAttainmentDiagnostic:
             self.absolute_attainment_error,
             self.absolute_threshold_error_vs_pooled_quantile,
         )
+        if not np.isfinite(self.achieved_exceedance):
+            raise ScientificContractError(
+                "attainment diagnostic achieved exceedance must be finite", subject=ContractSubject.THRESHOLD
+            )
+        if not np.isfinite(self.absolute_attainment_error):
+            raise ScientificContractError(
+                "attainment diagnostic absolute error must be finite", subject=ContractSubject.THRESHOLD
+            )
+        if not np.isfinite(self.absolute_threshold_error_vs_pooled_quantile):
+            raise ScientificContractError(
+                "attainment diagnostic absolute threshold error must be finite", subject=ContractSubject.THRESHOLD
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -663,6 +815,12 @@ class FixedCoefficientResult:
 
     coefficient: SummaryCoefficient
     threshold: ThresholdValue
+
+    def __post_init__(self) -> None:
+        if not np.isfinite(self.threshold.value):
+            raise ScientificContractError(
+                "fixed-coefficient threshold must be finite", subject=ContractSubject.THRESHOLD
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -678,6 +836,10 @@ class CommunicationPayload:
                 "a communication payload must declare at least one communicated field",
                 subject=ContractSubject.THRESHOLD,
             )
+        if len(set(self.fields)) != len(self.fields):
+            raise ScientificContractError(
+                "communication payload fields must be unique", subject=ContractSubject.THRESHOLD
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -686,9 +848,9 @@ class FederatedStatisticsThresholdResult:
 
     Only count, mean, and variance are federated inputs.  The matched-exceedance
     threshold is constructed from those summaries under a Gaussian-tail assumption.
-    ``centralized_pooled_quantile_diagnostic`` is a centralized oracle diagnostic
-    computed from the full pooled raw scores — it is never the federated comparator
-    and raw pooled scores are never communicated.
+    ``centralized_pooled_quantile_diagnostic`` and ``centralized_attainment_diagnostic``
+    are centralized oracle diagnostics computed from the full pooled raw scores —
+    they are never federated comparators and raw pooled scores are never communicated.
     """
 
     method: FederatedThresholdMethod
@@ -697,7 +859,7 @@ class FederatedStatisticsThresholdResult:
     client_summaries: tuple[ClientBenignSummary, ...]
     decomposition: PooledVarianceDecomposition
     matched_threshold: ThresholdValue
-    matched_diagnostic: MatchedAttainmentDiagnostic
+    centralized_attainment_diagnostic: CentralizedAttainmentDiagnostic
     centralized_pooled_quantile_diagnostic: ThresholdValue
     fixed_coefficient_curve: tuple[FixedCoefficientResult, ...]
     assignments: tuple[ThresholdAssignment, ...]
@@ -710,7 +872,17 @@ class FederatedStatisticsThresholdResult:
                 "the federated benign-statistics comparator requires at least one client summary",
                 subject=ContractSubject.THRESHOLD,
             )
+        summary_clients = tuple(summary.client for summary in self.client_summaries)
+        _require_unique_clients(summary_clients, "client summaries")
+        _require_matching_clients(self.assignments, summary_clients)
         _require_uniform_shared_threshold(self.assignments, self.matched_threshold)
+        if not np.isfinite(self.matched_threshold.value):
+            raise ScientificContractError("matched threshold must be finite", subject=ContractSubject.THRESHOLD)
+        if set(self.communication_payload.fields) != {"count", "mean", "variance"}:
+            raise ScientificContractError(
+                "communication payload fields must be exactly count, mean, and variance",
+                subject=ContractSubject.THRESHOLD,
+            )
 
 
 @dataclass(frozen=True, slots=True)

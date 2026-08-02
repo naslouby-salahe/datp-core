@@ -28,7 +28,8 @@ def test_construct_local_conformal_threshold_marks_insufficient_clients_unavaila
 
 
 def test_construct_local_conformal_threshold_propagates_non_finite_scores() -> None:
-    bad_client = client_scores("client_bad", (float("nan"), 2.0))
+    bad_scores = tuple(float(i) if i != 50 else float("nan") for i in range(1, 101))
+    bad_client = client_scores("client_bad", bad_scores)
 
     with pytest.raises(ScientificContractError, match="finite"):
         construct_local_conformal_threshold((SUFFICIENT_CLIENT, bad_client), QUANTILE)
