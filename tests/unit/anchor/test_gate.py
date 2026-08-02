@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError as PydanticValidationError
 from tests.unit.anchor.helpers import matching_anchor_observations
 
 from datp_core.anchor.gate import assert_gate_not_bypassable, decide_anchor_gate, dependent_readiness_from_gate
@@ -84,7 +85,7 @@ def test_no_manual_override_api_on_gate_decision() -> None:
     decision = decide_anchor_gate(reproduce_anchor(observations=matching_anchor_observations()))
     assert not hasattr(decision, "override")
     assert not hasattr(decision, "force_pass")
-    with pytest.raises(AttributeError):
+    with pytest.raises((AttributeError, PydanticValidationError)):
         decision.__setattr__("status", AnchorGateStatus.BLOCKED)
 
 

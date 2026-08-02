@@ -122,9 +122,9 @@ def test_interval_overlap_preserves_interval_semantics() -> None:
     comparison = compare_anchor_metric(
         make_reference(
             rule=IntervalOverlapRule(),
-            interval=MetricInterval(MetricValue(0.1), MetricValue(0.3)),
+            interval=MetricInterval(lower=MetricValue(0.1), upper=MetricValue(0.3)),
         ),
-        make_observation(interval=MetricInterval(MetricValue(0.25), MetricValue(0.4))),
+        make_observation(interval=MetricInterval(lower=MetricValue(0.25), upper=MetricValue(0.4))),
     )
     assert comparison.decision is AnchorComparisonDecision.EQUIVALENT
 

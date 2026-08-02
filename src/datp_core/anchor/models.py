@@ -4,7 +4,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from math import isfinite
 from pathlib import Path
+from typing import Annotated, Literal
 
+from pydantic import Field, field_validator, model_validator
+
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     CheckpointStatus,
     EvidenceRole,
@@ -119,87 +123,82 @@ HISTORICAL_ELIGIBLE_CLIENT_COUNT: ClientCount = NBAIOT_NATURAL_DEVICES.client_co
 DECLARED_NON_BLOCKING_DISCREPANCY_REASONS: frozenset[AnchorDiscrepancyReason] = frozenset()
 
 
-@dataclass(frozen=True, slots=True)
-class ExactEqualityRule:
-    strategy: AnchorComparisonStrategy = AnchorComparisonStrategy.EXACT_EQUALITY
-
-    def __post_init__(self) -> None:
-        if self.strategy is not AnchorComparisonStrategy.EXACT_EQUALITY:
-            raise ValueError("exact equality rule requires exact_equality strategy")
+# ---------------------------------------------------------------------------
+# Tolerance rule models
+# ---------------------------------------------------------------------------
 
 
-@dataclass(frozen=True, slots=True)
-class AbsoluteToleranceRule:
+class ExactEqualityRule(StrictModel):
+    strategy: Literal[AnchorComparisonStrategy.EXACT_EQUALITY] = AnchorComparisonStrategy.EXACT_EQUALITY
+
+
+class AbsoluteToleranceRule(StrictModel):
     absolute_tolerance: MetricValue
-    strategy: AnchorComparisonStrategy = AnchorComparisonStrategy.ABSOLUTE_TOLERANCE
+    strategy: Literal[AnchorComparisonStrategy.ABSOLUTE_TOLERANCE] = AnchorComparisonStrategy.ABSOLUTE_TOLERANCE
 
-    def __post_init__(self) -> None:
-        if self.strategy is not AnchorComparisonStrategy.ABSOLUTE_TOLERANCE:
-            raise ValueError("absolute tolerance rule requires absolute_tolerance strategy")
+    @model_validator(mode="after")
+    def validate_tolerance(self) -> "AbsoluteToleranceRule":
         if self.absolute_tolerance < 0:
             raise ValueError("absolute tolerance must be non-negative")
+        return self
 
 
-@dataclass(frozen=True, slots=True)
-class RelativeToleranceRule:
+class RelativeToleranceRule(StrictModel):
     relative_tolerance: MetricValue
-    strategy: AnchorComparisonStrategy = AnchorComparisonStrategy.RELATIVE_TOLERANCE
+    strategy: Literal[AnchorComparisonStrategy.RELATIVE_TOLERANCE] = AnchorComparisonStrategy.RELATIVE_TOLERANCE
 
-    def __post_init__(self) -> None:
-        if self.strategy is not AnchorComparisonStrategy.RELATIVE_TOLERANCE:
-            raise ValueError("relative tolerance rule requires relative_tolerance strategy")
+    @model_validator(mode="after")
+    def validate_tolerance(self) -> "RelativeToleranceRule":
         if self.relative_tolerance <= 0:
             raise ValueError("relative tolerance must be positive")
+        return self
 
 
-@dataclass(frozen=True, slots=True)
-class IntervalOverlapRule:
-    strategy: AnchorComparisonStrategy = AnchorComparisonStrategy.INTERVAL_OVERLAP
-
-    def __post_init__(self) -> None:
-        if self.strategy is not AnchorComparisonStrategy.INTERVAL_OVERLAP:
-            raise ValueError("interval overlap rule requires interval_overlap strategy")
+class IntervalOverlapRule(StrictModel):
+    strategy: Literal[AnchorComparisonStrategy.INTERVAL_OVERLAP] = AnchorComparisonStrategy.INTERVAL_OVERLAP
 
 
-@dataclass(frozen=True, slots=True)
-class ExactCountRule:
-    strategy: AnchorComparisonStrategy = AnchorComparisonStrategy.EXACT_COUNT
-
-    def __post_init__(self) -> None:
-        if self.strategy is not AnchorComparisonStrategy.EXACT_COUNT:
-            raise ValueError("exact count rule requires exact_count strategy")
+class ExactCountRule(StrictModel):
+    strategy: Literal[AnchorComparisonStrategy.EXACT_COUNT] = AnchorComparisonStrategy.EXACT_COUNT
 
 
-@dataclass(frozen=True, slots=True)
-class SourceDefinedRule:
+class SourceDefinedRule(StrictModel):
     description: str
-    strategy: AnchorComparisonStrategy = AnchorComparisonStrategy.SOURCE_DEFINED
+    strategy: Literal[AnchorComparisonStrategy.SOURCE_DEFINED] = AnchorComparisonStrategy.SOURCE_DEFINED
 
-    def __post_init__(self) -> None:
-        if self.strategy is not AnchorComparisonStrategy.SOURCE_DEFINED:
-            raise ValueError("source-defined rule requires source_defined strategy")
-        if not isinstance(self.description, str) or not self.description:
+    @field_validator("description")
+    @classmethod
+    def validate_description(cls, v: str) -> str:
+        if not v:
             raise ValueError("source-defined rule requires a non-empty description")
+        return v
 
 
-type AnchorToleranceRule = (
+AnchorToleranceRule = Annotated[
     ExactEqualityRule
     | AbsoluteToleranceRule
     | RelativeToleranceRule
     | IntervalOverlapRule
     | ExactCountRule
-    | SourceDefinedRule
-)
+    | SourceDefinedRule,
+    Field(discriminator="strategy"),
+]
 
 
-@dataclass(frozen=True, slots=True)
-class MetricInterval:
+# ---------------------------------------------------------------------------
+# Scientific identity models
+# ---------------------------------------------------------------------------
+
+
+class MetricInterval(StrictModel):
     lower: MetricValue
     upper: MetricValue
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def validate_bounds(self) -> "MetricInterval":
         if self.lower > self.upper:
             raise ValueError("metric interval lower bound cannot exceed upper bound")
+        return self
 
 
 @dataclass(frozen=True, slots=True)
@@ -211,8 +210,7 @@ class AnchorScientificCoordinates:
     checkpoint_status: CheckpointStatus
 
 
-@dataclass(frozen=True, slots=True)
-class AnchorMetricReference:
+class AnchorMetricReference(StrictModel):
     seed: Seed
     population: PopulationId
     training_model: TrainingModelId
@@ -224,7 +222,8 @@ class AnchorMetricReference:
     interval: MetricInterval | None = None
     count: ClientCount | None = None
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def validate_coordinates(self) -> "AnchorMetricReference":
         _require_anchor_coordinates(
             AnchorScientificCoordinates(
                 population=self.population,
@@ -234,10 +233,10 @@ class AnchorMetricReference:
                 checkpoint_status=self.checkpoint_status,
             )
         )
+        return self
 
 
-@dataclass(frozen=True, slots=True)
-class AnchorObservedMetric:
+class AnchorObservedMetric(StrictModel):
     """Observed metric candidate.
 
     Coordinates are not pre-forced to the historical identity so mismatched
@@ -260,15 +259,15 @@ class AnchorObservedMetric:
     interval: MetricInterval | None = None
     count: ClientCount | None = None
 
-    def __post_init__(self) -> None:
-        if self.evidence_role is not EvidenceRole.ANCHOR_REPRODUCTION:
+    @field_validator("evidence_role")
+    @classmethod
+    def validate_evidence_role(cls, v: EvidenceRole) -> EvidenceRole:
+        if v is not EvidenceRole.ANCHOR_REPRODUCTION:
             raise ValueError("anchor observations must use the anchor_reproduction evidence role")
-        if not isinstance(self.artifact_path, Path):
-            raise TypeError("artifact path must be a Path")
+        return v
 
 
-@dataclass(frozen=True, slots=True)
-class AnchorMetricComparison:
+class AnchorMetricComparison(StrictModel):
     reference: AnchorMetricReference
     observation: AnchorObservedMetric | None
     decision: AnchorComparisonDecision
@@ -277,57 +276,57 @@ class AnchorMetricComparison:
     tolerance_rule: AnchorToleranceRule
     reason: AnchorDiscrepancyReason | None
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def validate_finite(self) -> "AnchorMetricComparison":
         if self.signed_difference is not None and not isfinite(self.signed_difference):
             raise ValueError("signed difference must be finite when present")
         if self.relative_difference is not None and not isfinite(self.relative_difference):
             raise ValueError("relative difference must be finite when present")
+        return self
 
 
-@dataclass(frozen=True, slots=True)
-class AnchorSeedSubsetComparison:
+class AnchorSeedSubsetComparison(StrictModel):
     expected_seeds: tuple[Seed, ...]
     observed_seeds: tuple[Seed, ...]
     decision: AnchorComparisonDecision
     reason: AnchorDiscrepancyReason | None
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.expected_seeds, tuple) or not isinstance(self.observed_seeds, tuple):
-            raise TypeError("seed subsets must be immutable tuples")
 
-
-@dataclass(frozen=True, slots=True)
-class AnchorDiscrepancy:
+class AnchorDiscrepancy(StrictModel):
     reason: AnchorDiscrepancyReason
-    seed: Seed | None
-    threshold_method: FederatedThresholdMethod | None
-    metric: MetricId | None
-    expected_value: MetricValue | None
-    observed_value: MetricValue | None
-    signed_difference: float | None
-    relative_difference: float | None
-    tolerance_rule: AnchorToleranceRule | None
-    artifact_path: Path | None
-    artifact_checksum: Checksum | None
+    seed: Seed | None = None
+    threshold_method: FederatedThresholdMethod | None = None
+    metric: MetricId | None = None
+    expected_value: MetricValue | None = None
+    observed_value: MetricValue | None = None
+    signed_difference: float | None = None
+    relative_difference: float | None = None
+    tolerance_rule: AnchorToleranceRule | None = None
+    artifact_path: Path | None = None
+    artifact_checksum: Checksum | None = None
     detail: str
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.detail, str) or not self.detail:
+    @field_validator("detail")
+    @classmethod
+    def validate_detail(cls, v: str) -> str:
+        if not v:
             raise ValueError("discrepancy detail must be non-empty")
+        return v
 
 
-@dataclass(frozen=True, slots=True)
-class AnchorDependencyBlocker:
+class AnchorDependencyBlocker(StrictModel):
     kind: AnchorDependencyKind
     detail: str
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.detail, str) or not self.detail:
+    @field_validator("detail")
+    @classmethod
+    def validate_detail(cls, v: str) -> str:
+        if not v:
             raise ValueError("dependency blocker detail must be non-empty")
+        return v
 
 
-@dataclass(frozen=True, slots=True)
-class AnchorReproductionResult:
+class AnchorReproductionResult(StrictModel):
     experiment: ExperimentId
     evidence_role: EvidenceRole
     seed_cohort: SeedCohort
@@ -336,30 +335,26 @@ class AnchorReproductionResult:
     seed_subset_comparison: AnchorSeedSubsetComparison
     metric_comparisons: tuple[AnchorMetricComparison, ...]
     discrepancies: tuple[AnchorDiscrepancy, ...]
-    dependency_blocker: AnchorDependencyBlocker | None
+    dependency_blocker: AnchorDependencyBlocker | None = None
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def validate_identity(self) -> "AnchorReproductionResult":
         if self.experiment is not ExperimentId.HISTORICAL_DATP_REPRODUCTION:
             raise ValueError("anchor reproduction requires the historical DATP reproduction experiment")
         if self.evidence_role is not EvidenceRole.ANCHOR_REPRODUCTION:
             raise ValueError("anchor reproduction requires the anchor_reproduction evidence role")
-        if not isinstance(self.references, tuple) or not isinstance(self.observations, tuple):
-            raise TypeError("references and observations must be immutable tuples")
-        if not isinstance(self.metric_comparisons, tuple) or not isinstance(self.discrepancies, tuple):
-            raise TypeError("comparisons and discrepancies must be immutable tuples")
+        return self
 
 
-@dataclass(frozen=True, slots=True)
-class AnchorGateDecision:
+class AnchorGateDecision(StrictModel):
     status: AnchorGateStatus
     dependent_readiness: ExperimentReadiness
     reproduction: AnchorReproductionResult
     blocking_discrepancies: tuple[AnchorDiscrepancy, ...]
     declared_discrepancies: tuple[AnchorDiscrepancy, ...]
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.blocking_discrepancies, tuple) or not isinstance(self.declared_discrepancies, tuple):
-            raise TypeError("gate discrepancy collections must be immutable tuples")
+    @model_validator(mode="after")
+    def validate_gate_integrity(self) -> "AnchorGateDecision":
         match self.status:
             case AnchorGateStatus.PASS:
                 _require_clean_pass(self)
@@ -367,6 +362,27 @@ class AnchorGateDecision:
                 _require_declared_discrepancy_pass(self)
             case AnchorGateStatus.BLOCKED:
                 _require_blocked_gate(self)
+        return self
+
+
+class HistoricalMetricArtifactSource(StrictModel):
+    path: Path
+    seed: Seed
+    threshold_method: FederatedThresholdMethod
+
+    @model_validator(mode="after")
+    def validate_threshold_method(self) -> "HistoricalMetricArtifactSource":
+        if self.threshold_method not in {
+            FederatedThresholdMethod.SHARED_THRESHOLD,
+            FederatedThresholdMethod.LOCAL_THRESHOLD,
+        }:
+            raise ValueError("historical anchor artifacts support only shared and local thresholds")
+        return self
+
+
+# ---------------------------------------------------------------------------
+# Gate integrity validators (package-private)
+# ---------------------------------------------------------------------------
 
 
 def _require_clean_pass(decision: AnchorGateDecision) -> None:
@@ -388,22 +404,6 @@ def _require_blocked_gate(decision: AnchorGateDecision) -> None:
         raise ValueError("BLOCKED requires blocking discrepancies or a dependency blocker")
     if decision.dependent_readiness is not ExperimentReadiness.BLOCKED:
         raise ValueError("blocked anchor gate must block dependent readiness")
-
-
-@dataclass(frozen=True, slots=True)
-class HistoricalMetricArtifactSource:
-    path: Path
-    seed: Seed
-    threshold_method: FederatedThresholdMethod
-
-    def __post_init__(self) -> None:
-        if self.threshold_method not in {
-            FederatedThresholdMethod.SHARED_THRESHOLD,
-            FederatedThresholdMethod.LOCAL_THRESHOLD,
-        }:
-            raise ValueError("historical anchor artifacts support only shared and local thresholds")
-        if not isinstance(self.path, Path):
-            raise TypeError("historical artifact path must be a Path")
 
 
 def _require_anchor_coordinates(coordinates: AnchorScientificCoordinates) -> None:
