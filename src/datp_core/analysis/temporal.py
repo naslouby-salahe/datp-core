@@ -4,6 +4,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, fields, is_dataclass
 from enum import Enum, StrEnum
+from functools import singledispatch
 from math import isfinite
 
 from datp_core.analysis.models import ScientificDecisionResult
@@ -16,19 +17,21 @@ from datp_core.domain.enums import (
     TemporalState,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import (
-    Checksum,
-    MetricValue,
-    Seed,
-    checksum_text,
-)
-from datp_core.protocols.metrics import (
-    TEMPORAL_CV_MATERIALITY_CUTOFF,
-)
-from datp_core.scoring.models import (
-    ScoreArtifactManifest,
-    ScoreRecord,
-)
+from datp_core.domain.values import Checksum, MetricValue, Seed, checksum_text
+from datp_core.protocols.metrics import TEMPORAL_CV_MATERIALITY_CUTOFF
+from datp_core.scoring.models import ScoreArtifactManifest, ScoreRecord
+
+_PARTITION_ROLES_BY_STATE: Mapping[TemporalState, tuple[PartitionRole, PartitionRole]] = {
+    TemporalState.STATIC_REFERENCE: (PartitionRole.CALIBRATION, PartitionRole.EVALUATION),
+    TemporalState.FROZEN_FUTURE: (PartitionRole.CALIBRATION, PartitionRole.EVALUATION),
+    TemporalState.RECALIBRATED_FUTURE: (PartitionRole.FUTURE_RECALIBRATION, PartitionRole.EVALUATION),
+}
+
+_SPLIT_PROTOCOL_BY_STATE: Mapping[TemporalState, SplitProtocolId] = {
+    TemporalState.STATIC_REFERENCE: SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE,
+    TemporalState.FROZEN_FUTURE: SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
+    TemporalState.RECALIBRATED_FUTURE: SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE,
+}
 
 
 class TemporalInterpretation(StrEnum):
@@ -69,19 +72,17 @@ class TemporalRecoveryResult:
 
     @property
     def availability(self) -> AvailabilityStatus:
-        if self.recovery_ratio is None:
-            return AvailabilityStatus.UNDEFINED
-        return AvailabilityStatus.AVAILABLE
+        return AvailabilityStatus.UNDEFINED if self.recovery_ratio is None else AvailabilityStatus.AVAILABLE
 
     @property
     def interpretation(self) -> TemporalInterpretation:
-        if self.recovery_ratio is not None:
-            if self.recovered_amount.value > 0.0:
-                return TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_RECOVERY
-            return TemporalInterpretation.TEMPORAL_DEGRADATION_WITHOUT_RECOVERY
-        if self.drift_excess.value < 0.0:
-            return TemporalInterpretation.OPPOSITE_TEMPORAL_MOVEMENT
-        return TemporalInterpretation.NO_DETECTABLE_TEMPORAL_DEGRADATION
+        if self.recovery_ratio is None:
+            if self.drift_excess.value < 0.0:
+                return TemporalInterpretation.OPPOSITE_TEMPORAL_MOVEMENT
+            return TemporalInterpretation.NO_DETECTABLE_TEMPORAL_DEGRADATION
+        if self.recovered_amount.value > 0.0:
+            return TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_RECOVERY
+        return TemporalInterpretation.TEMPORAL_DEGRADATION_WITHOUT_RECOVERY
 
     @property
     def reason(self) -> str:
@@ -117,18 +118,10 @@ class TemporalDeploymentProvenance:
     evaluation_score_set_checksum: Checksum
 
     def __post_init__(self) -> None:
-        expected_roles = _expected_partition_roles(self.state)
-        if (
-            self.calibration_role,
-            self.evaluation_role,
-        ) != expected_roles:
+        if (self.calibration_role, self.evaluation_role) != _partition_roles(self.state):
             raise ValueError("temporal deployment state has an invalid partition binding")
-
-        if self.state is TemporalState.STATIC_REFERENCE:
-            if self.split_protocol is not SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE:
-                raise ValueError("static reference requires its random-fractional split protocol")
-        elif self.split_protocol is not SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE:
-            raise ValueError("future deployment states require the chronological split protocol")
+        if self.split_protocol is not _SPLIT_PROTOCOL_BY_STATE[self.state]:
+            raise ValueError(f"{self.state.name.lower()} requires its designated split protocol")
 
     @property
     def future_identity(self) -> TemporalFutureIdentity:
@@ -137,18 +130,16 @@ class TemporalDeploymentProvenance:
             evaluation_role=self.evaluation_role,
             coordinate_checksum=self.coordinate_checksum,
             checkpoint_checksum=self.checkpoint_checksum,
-            preprocessing_state_set_checksum=(self.preprocessing_state_set_checksum),
-            split_manifest_checksum=(self.split_manifest_checksum),
-            evaluation_score_set_checksum=(self.evaluation_score_set_checksum),
+            preprocessing_state_set_checksum=self.preprocessing_state_set_checksum,
+            split_manifest_checksum=self.split_manifest_checksum,
+            evaluation_score_set_checksum=self.evaluation_score_set_checksum,
         )
 
     @classmethod
     def from_score_manifest(
-        cls,
-        state: TemporalState,
-        manifest: ScoreArtifactManifest,
+        cls, state: TemporalState, manifest: ScoreArtifactManifest
     ) -> "TemporalDeploymentProvenance":
-        calibration_role, evaluation_role = _expected_partition_roles(state)
+        calibration_role, evaluation_role = _partition_roles(state)
         calibration_records = manifest.records_for(calibration_role)
         evaluation_records = manifest.records_for(evaluation_role)
         if not calibration_records or not evaluation_records:
@@ -164,22 +155,18 @@ class TemporalDeploymentProvenance:
             evaluation_role=evaluation_role,
             coordinate_checksum=_coordinate_checksum(manifest.coordinate),
             checkpoint_checksum=manifest.checkpoint_checksum,
-            preprocessing_state_set_checksum=(manifest.preprocessing_state_set_checksum),
-            split_manifest_checksum=(manifest.split_manifest_checksum),
-            calibration_score_set_checksum=(_score_set_checksum(calibration_records)),
-            evaluation_score_set_checksum=(_score_set_checksum(evaluation_records)),
+            preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,
+            split_manifest_checksum=manifest.split_manifest_checksum,
+            calibration_score_set_checksum=_score_set_checksum(calibration_records),
+            evaluation_score_set_checksum=_score_set_checksum(evaluation_records),
         )
 
-    def validate_score_manifest(
-        self,
-        manifest: ScoreArtifactManifest,
-    ) -> None:
-        observed = TemporalDeploymentProvenance.from_score_manifest(self.state, manifest)
-        if observed != self:
+    def validate_score_manifest(self, manifest: ScoreArtifactManifest) -> None:
+        if TemporalDeploymentProvenance.from_score_manifest(self.state, manifest) != self:
             raise ScientificContractError(
                 "temporal deployment provenance does not match immutable score artifacts",
                 subject=self.state,
-                reason=("calibration, evaluation, model, preprocessing, or split evidence changed"),
+                reason="calibration, evaluation, model, preprocessing, or split evidence changed",
             )
 
 
@@ -193,7 +180,6 @@ def validate_frozen_recalibrated_pair(
             "temporal comparison requires frozen and recalibrated future states",
             subject=EvidenceRole.TEMPORAL_BOUNDARY,
         )
-
     if frozen.future_identity != recalibrated.future_identity:
         raise ScientificContractError(
             "frozen and recalibrated future must share detector, split, and evaluation scores",
@@ -208,65 +194,41 @@ def temporal_recovery(
     frozen_future_cv: MetricValue,
     recalibrated_future_cv: MetricValue,
 ) -> TemporalRecoveryResult:
-    return TemporalRecoveryResult(
-        seed=seed,
-        static_reference_cv=static_reference_cv,
-        frozen_future_cv=frozen_future_cv,
-        recalibrated_future_cv=recalibrated_future_cv,
-    )
+    return TemporalRecoveryResult(seed, static_reference_cv, frozen_future_cv, recalibrated_future_cv)
 
 
-def decide_temporal(
-    result: TemporalRecoveryResult,
-) -> ScientificDecisionResult:
-    if result.recovery_ratio is None:
-        return ScientificDecisionResult(
-            evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
-            decision=ScientificDecision.BLOCKED,
-            point_estimate=None,
-            interval=None,
-            rationale=result.reason,
-        )
-
-    if result.recovered_amount.value > 0.0:
-        return ScientificDecisionResult(
-            evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
-            decision=ScientificDecision.SUPPORTED,
-            point_estimate=result.recovery_ratio,
-            interval=None,
-            rationale=("temporal degradation has positive one-shot recalibration recovery"),
-        )
+def decide_temporal(result: TemporalRecoveryResult) -> ScientificDecisionResult:
+    match result.recovery_ratio:
+        case None:
+            decision, rationale = ScientificDecision.BLOCKED, result.reason
+        case _ if result.recovered_amount.value > 0.0:
+            decision, rationale = (
+                ScientificDecision.SUPPORTED,
+                "temporal degradation has positive one-shot recalibration recovery",
+            )
+        case _:
+            decision, rationale = (
+                ScientificDecision.BOUNDARY_RESULT,
+                "temporal degradation has no positive one-shot recalibration recovery",
+            )
 
     return ScientificDecisionResult(
         evidence_role=EvidenceRole.TEMPORAL_BOUNDARY,
-        decision=ScientificDecision.BOUNDARY_RESULT,
+        decision=decision,
         point_estimate=result.recovery_ratio,
         interval=None,
-        rationale=("temporal degradation has no positive one-shot recalibration recovery"),
+        rationale=rationale,
     )
 
 
-def _expected_partition_roles(
-    state: TemporalState,
-) -> tuple[PartitionRole, PartitionRole]:
-    match state:
-        case TemporalState.STATIC_REFERENCE | TemporalState.FROZEN_FUTURE:
-            return (
-                PartitionRole.CALIBRATION,
-                PartitionRole.EVALUATION,
-            )
-        case TemporalState.RECALIBRATED_FUTURE:
-            return (
-                PartitionRole.FUTURE_RECALIBRATION,
-                PartitionRole.EVALUATION,
-            )
-
-    raise ValueError(f"unsupported temporal state: {state}")
+def _partition_roles(state: TemporalState) -> tuple[PartitionRole, PartitionRole]:
+    try:
+        return _PARTITION_ROLES_BY_STATE[state]
+    except KeyError as error:
+        raise ValueError(f"unsupported temporal state: {state}") from error
 
 
-def _score_set_checksum(
-    records: tuple[ScoreRecord, ...],
-) -> Checksum:
+def _score_set_checksum(records: tuple[ScoreRecord, ...]) -> Checksum:
     entries = sorted(f"{record.scored_client.client_id}:{record.checksum.value}" for record in records)
     return checksum_text("|".join(entries))
 
@@ -282,35 +244,43 @@ def _coordinate_checksum(coordinate: object) -> Checksum:
     return checksum_text(payload)
 
 
+@singledispatch
 def _canonical_value(value: object) -> object:
-    if isinstance(value, Enum):
-        return _canonical_value(value.value)
-
     if is_dataclass(value) and not isinstance(value, type):
         return {field.name: _canonical_value(getattr(value, field.name)) for field in fields(value)}
-
-    if isinstance(value, Mapping):
-        return {
-            str(key): _canonical_value(item)
-            for key, item in sorted(
-                value.items(),
-                key=lambda pair: str(pair[0]),
-            )
-        }
-
-    if isinstance(value, tuple | list):
-        return [_canonical_value(item) for item in value]
-
-    if value is None or isinstance(value, str | int | bool):
-        return value
-
-    if isinstance(value, float):
-        if not isfinite(value):
-            raise ValueError("canonical scientific provenance cannot contain non-finite floats")
-        return value
 
     wrapped = getattr(value, "value", None)
     if wrapped is not None and wrapped is not value:
         return _canonical_value(wrapped)
 
     raise TypeError(f"unsupported canonical provenance value: {type(value).__qualname__}")
+
+
+@_canonical_value.register(type(None))
+@_canonical_value.register(str)
+@_canonical_value.register(int)
+def _(value: object) -> object:
+    return value
+
+
+@_canonical_value.register(float)
+def _(value: float) -> float:
+    if not isfinite(value):
+        raise ValueError("canonical scientific provenance cannot contain non-finite floats")
+    return value
+
+
+@_canonical_value.register(Enum)
+def _(value: Enum) -> object:
+    return _canonical_value(value.value)
+
+
+@_canonical_value.register(Mapping)
+def _(value: Mapping) -> dict:
+    return {str(key): _canonical_value(item) for key, item in sorted(value.items(), key=lambda pair: str(pair[0]))}
+
+
+@_canonical_value.register(tuple)
+@_canonical_value.register(list)
+def _(value: tuple | list) -> list:
+    return [_canonical_value(item) for item in value]
