@@ -107,7 +107,7 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
 
     scored_roles = scored_partition_roles(request.checkpoint.coordinate.split_protocol)
     records_by_role: dict[PartitionRole, list[ScoreRecord]] = {role: [] for role in scored_roles}
-    for client_input in sorted(request.clients, key=lambda item: item.client.client_id):
+    for client_input in sorted(request.clients, key=lambda item: item.client):
         client_directory = request.output_directory / client_input.client.client_id
         for role in records_by_role:
             records_by_role[role].append(

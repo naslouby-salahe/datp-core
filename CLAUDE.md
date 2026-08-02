@@ -365,11 +365,20 @@ Prefer the repository’s established modeling approach.
 
 Typical roles are:
 
-* Pydantic v2 models for configuration, validation, serialization, and external boundaries;
-* frozen dataclasses or existing immutable value objects for internal domain state;
+* Pydantic v2 `StrictModel` (from `domain.contracts`) for configuration, validation, serialization, external boundaries, and analysis domain contracts — statistical results, interval estimates, mechanism evidence, temporal provenance records, and decision records;
+* frozen dataclasses or existing immutable value objects for lightweight internal domain state, simple value wrappers that do not require cross-field validation, and performance-sensitive paths;
 * enums for closed vocabularies;
 * protocols or abstract interfaces only when multiple real implementations exist;
 * standard library or established project libraries instead of handwritten boilerplate.
+
+When using `StrictModel`:
+
+* inherit from `datp_core.domain.contracts.StrictModel` (provides `frozen=True`, `extra="forbid"`, `strict=True`);
+* use `@field_validator` for single-field validation;
+* use `@model_validator(mode="after")` for cross-field validation;
+* keep `@property` for derived values;
+* use `ClassVar` from `typing` for class-level constants;
+* construct models with keyword arguments — Pydantic v2 does not accept positional constructor arguments.
 
 Do not introduce a second modeling framework for the same responsibility.
 

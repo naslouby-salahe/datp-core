@@ -20,7 +20,7 @@ def construct_local_conformal_threshold(
         )
     assignments: list[ConformalAssignment] = []
     unavailable: list[ClientIdentity] = []
-    for client_scores in sorted(eligible, key=lambda item: item.client.client_id):
+    for client_scores in sorted(eligible, key=lambda item: item.client):
         try:
             threshold, rank_index, effective_quantile, tie_count = finite_sample_conformal_threshold(
                 client_scores.as_array, protocol.coverage

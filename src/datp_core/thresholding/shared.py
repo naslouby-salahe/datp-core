@@ -128,7 +128,7 @@ def _require_common_score_set_checksum(eligible: tuple[ClientBenignCalibrationSc
 
 
 def _pooled_calibration_manifest_checksum(eligible: tuple[ClientBenignCalibrationScores, ...]) -> Checksum:
-    ordered = sorted(eligible, key=lambda client_scores: client_scores.client.client_id)
+    ordered = sorted(eligible, key=lambda client_scores: client_scores.client)
     payload = "|".join(
         f"{client_scores.client.client_id}:{client_scores.calibration_manifest_checksum.value}"
         for client_scores in ordered

@@ -44,7 +44,7 @@ def construct_fixed_shrinkage(
         eligible, QuantileProtocol(method=FederatedThresholdMethod.SHARED_THRESHOLD, quantile=quantile)
     )
     shared_value = shared_result.shared_threshold
-    local_quantiles = sorted(shared_result.contributing_local_quantiles, key=lambda item: item.client.client_id)
+    local_quantiles = sorted(shared_result.contributing_local_quantiles, key=lambda item: item.client)
 
     assignments: list[ShrinkageAssignment] = []
     for weight in protocol.weights:

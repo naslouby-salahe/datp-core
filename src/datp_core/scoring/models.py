@@ -1,6 +1,7 @@
 """Typed, immutable federated score-artifact records."""
 
 from dataclasses import dataclass
+from functools import total_ordering
 from pathlib import Path
 
 from datp_core.domain.enums import ContractSubject, PartitionRole, SerializationFormat, SplitProtocolId
@@ -10,6 +11,7 @@ from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 
 
+@total_ordering
 @dataclass(frozen=True, slots=True)
 class ScoreRecord:
     coordinate: FederatedTrainingCoordinate
@@ -38,6 +40,9 @@ class ScoreRecord:
                 "federated scores must use Parquet serialization",
                 subject=self.serialization_format,
             )
+
+    def __lt__(self, other: "ScoreRecord") -> bool:
+        return self.scored_client < other.scored_client
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,6 +181,6 @@ def _require_matching_client_inventory(left: tuple[ScoreRecord, ...], right: tup
 
 
 def _record_set_checksum(records: tuple[ScoreRecord, ...]) -> Checksum:
-    ordered = sorted(records, key=lambda record: record.scored_client.client_id)
+    ordered = sorted(records)
     payload = "|".join(f"{record.scored_client.client_id}:{record.checksum.value}" for record in ordered)
     return checksum_text(payload)

@@ -252,8 +252,7 @@ def _evaluate(request: EvaluateFederatedRequest) -> tuple[tuple[ClientMetricResu
     _validate_evaluation_request(request)
     assignments = _assignments(request.threshold_result)
     ordered = tuple(
-        _evaluate_score_record(request, assignments, record)
-        for record in sorted(manifest.evaluation_records, key=lambda item: item.scored_client.client_id)
+        _evaluate_score_record(request, assignments, record) for record in sorted(manifest.evaluation_records)
     )
     return ordered, calculate_population_metrics(ordered)
 
@@ -351,8 +350,8 @@ def build_federated_evaluation_inputs(
 
 
 def _client_partition_counts(manifest: ScoreArtifactManifest) -> tuple[ClientPartitionCounts, ...]:
-    calibration = tuple(sorted(manifest.calibration_records, key=lambda item: item.scored_client.client_id))
-    evaluation = tuple(sorted(manifest.evaluation_records, key=lambda item: item.scored_client.client_id))
+    calibration = tuple(sorted(manifest.calibration_records))
+    evaluation = tuple(sorted(manifest.evaluation_records))
     if tuple(record.scored_client for record in calibration) != tuple(record.scored_client for record in evaluation):
         raise ScientificContractError("evaluation inputs require matching calibration and evaluation score clients")
     return tuple(
@@ -417,7 +416,7 @@ def _client_aurocs(
     manifest: ScoreArtifactManifest, cohort: EvaluationCohortManifest
 ) -> tuple[ClientAurocEvidence, ...]:
     eligibility = tuple(sorted(cohort.records, key=lambda item: item.client_id))
-    records = tuple(sorted(manifest.evaluation_records, key=lambda item: item.scored_client.client_id))
+    records = tuple(sorted(manifest.evaluation_records))
     if tuple(item.client_id for item in eligibility) != tuple(record.scored_client.client_id for record in records):
         raise ScientificContractError("evaluation inputs require cohort coverage for every score client")
     return tuple(
@@ -748,7 +747,7 @@ def _metric_availability(result: ClientMetricResult, metric_id: MetricId) -> Met
 
 def _score_order_checksum(manifest: ScoreArtifactManifest) -> Checksum:
     payloads: list[str] = []
-    for record in sorted(manifest.evaluation_records, key=lambda item: item.scored_client.client_id):
+    for record in sorted(manifest.evaluation_records):
         frame = pl.read_parquet(record.path)
         payloads.append(
             f"{record.scored_client.client_id}:"

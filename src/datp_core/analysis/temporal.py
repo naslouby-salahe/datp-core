@@ -2,10 +2,12 @@
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass
 from enum import StrEnum
 
+from pydantic import model_validator
+
 from datp_core.analysis.models import ScientificDecisionResult
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -40,8 +42,7 @@ class TemporalInterpretation(StrEnum):
     OPPOSITE_TEMPORAL_MOVEMENT = "opposite_temporal_movement"
 
 
-@dataclass(frozen=True, slots=True)
-class TemporalRecoveryResult:
+class TemporalRecoveryResult(StrictModel):
     seed: Seed
     static_reference_cv: MetricValue
     frozen_future_cv: MetricValue
@@ -90,8 +91,7 @@ class TemporalRecoveryResult:
         return "drift excess does not satisfy the declared positive-materiality rule"
 
 
-@dataclass(frozen=True, slots=True)
-class TemporalFutureIdentity:
+class TemporalFutureIdentity(StrictModel):
     split_protocol: SplitProtocolId
     evaluation_role: PartitionRole
     coordinate_checksum: Checksum
@@ -101,8 +101,7 @@ class TemporalFutureIdentity:
     evaluation_score_set_checksum: Checksum
 
 
-@dataclass(frozen=True, slots=True)
-class TemporalDeploymentProvenance:
+class TemporalDeploymentProvenance(StrictModel):
     """Immutable calibration/evaluation binding for one temporal state."""
 
     state: TemporalState
@@ -116,11 +115,13 @@ class TemporalDeploymentProvenance:
     calibration_score_set_checksum: Checksum
     evaluation_score_set_checksum: Checksum
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate(self) -> "TemporalDeploymentProvenance":
         if (self.calibration_role, self.evaluation_role) != _partition_roles(self.state):
             raise ValueError("temporal deployment state has an invalid partition binding")
         if self.split_protocol is not _SPLIT_PROTOCOL_BY_STATE[self.state]:
             raise ValueError(f"{self.state.name.lower()} requires its designated split protocol")
+        return self
 
     @property
     def future_identity(self) -> TemporalFutureIdentity:
@@ -193,7 +194,12 @@ def temporal_recovery(
     frozen_future_cv: MetricValue,
     recalibrated_future_cv: MetricValue,
 ) -> TemporalRecoveryResult:
-    return TemporalRecoveryResult(seed, static_reference_cv, frozen_future_cv, recalibrated_future_cv)
+    return TemporalRecoveryResult(
+        seed=seed,
+        static_reference_cv=static_reference_cv,
+        frozen_future_cv=frozen_future_cv,
+        recalibrated_future_cv=recalibrated_future_cv,
+    )
 
 
 def decide_temporal(result: TemporalRecoveryResult) -> ScientificDecisionResult:

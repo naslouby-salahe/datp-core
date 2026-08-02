@@ -1,9 +1,11 @@
 """Shared immutable contracts for statistical analysis."""
 
-from dataclasses import dataclass
 from enum import StrEnum
 from math import isfinite
 
+from pydantic import field_validator, model_validator
+
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EffectSizeId,
@@ -72,40 +74,28 @@ class WilcoxonComputationMethod(StrEnum):
     SCIPY_ASYMPTOTIC = "scipy_asymptotic"
 
 
-@dataclass(frozen=True, slots=True)
-class PValue:
+class PValue(StrictModel):
     value: float
 
-    def __post_init__(self) -> None:
-        if not isfinite(self.value) or not 0.0 <= self.value <= 1.0:
-            raise ValueError("p-value must be finite and lie in [0, 1]")
-
+    @field_validator("value")
     @classmethod
-    def __get_pydantic_core_schema__(cls, _source_type: object, _handler: object) -> object:
-        from pydantic_core import core_schema as _cs
-
-        def _validate(v: object) -> "PValue":
-            if isinstance(v, cls):
-                return v
-            if isinstance(v, int | float) and not isinstance(v, bool):
-                return cls(float(v))
-            raise ValueError(f"cannot construct PValue from {type(v).__qualname__}")
-
-        return _cs.no_info_plain_validator_function(
-            _validate,
-            serialization=_cs.plain_serializer_function_ser_schema(lambda instance: instance.value),
-        )
+    def _validate(cls, v: float) -> float:
+        if not isfinite(v) or not 0.0 <= v <= 1.0:
+            raise ValueError("p-value must be finite and lie in [0, 1]")
+        return v
 
 
-@dataclass(frozen=True, slots=True)
-class PairedDifferenceCounts:
+class PairedDifferenceCounts(StrictModel):
     positive: int
     zero: int
     negative: int
 
-    def __post_init__(self) -> None:
-        if min(self.positive, self.zero, self.negative) < 0:
+    @field_validator("positive", "zero", "negative")
+    @classmethod
+    def _validate_non_negative(cls, v: int) -> int:
+        if v < 0:
             raise ValueError("paired-difference counts must be non-negative")
+        return v
 
     @property
     def total(self) -> int:
@@ -116,8 +106,7 @@ class PairedDifferenceCounts:
         return self.positive / self.total if self.total else None
 
 
-@dataclass(frozen=True, slots=True)
-class PairedContrast:
+class PairedContrast(StrictModel):
     coordinate: FederatedTrainingCoordinate
     evidence_role: EvidenceRole
     metric: MetricId
@@ -126,9 +115,11 @@ class PairedContrast:
     left_value: MetricValue
     right_value: MetricValue
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate_distinct_methods(self) -> "PairedContrast":
         if self.left_method is self.right_method:
             raise ValueError("paired contrast requires two distinct threshold methods")
+        return self
 
     @property
     def seed(self) -> Seed:
@@ -142,10 +133,7 @@ class PairedContrast:
 type PairedContrasts = tuple[PairedContrast, ...]
 
 
-@dataclass(frozen=True, slots=True)
-class ExternalPairedAnalysisPlan:
-    """Predeclared supplementary interval plan kept separate from the endpoint."""
-
+class ExternalPairedAnalysisPlan(StrictModel):
     population: PopulationId
     evidence_role: EvidenceRole
     metric: MetricId
@@ -154,7 +142,8 @@ class ExternalPairedAnalysisPlan:
     seed_cohort: tuple[Seed, ...]
     confidence_level: ConfidenceLevel
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate(self) -> "ExternalPairedAnalysisPlan":
         if self.evidence_role not in {
             EvidenceRole.EXTERNAL_VALIDATION,
             EvidenceRole.APPLICABILITY_BOUNDARY,
@@ -165,20 +154,22 @@ class ExternalPairedAnalysisPlan:
             raise ValueError("external paired analysis requires a unique non-empty seed cohort")
         if self.left_method is self.right_method:
             raise ValueError("external paired analysis requires two distinct threshold methods")
+        return self
 
 
-@dataclass(frozen=True, slots=True)
-class BcaAdjustment:
+class BcaAdjustment(StrictModel):
     bias_correction: float
     acceleration: float
 
-    def __post_init__(self) -> None:
-        if not isfinite(self.bias_correction) or not isfinite(self.acceleration):
+    @field_validator("bias_correction", "acceleration")
+    @classmethod
+    def _validate_finite(cls, v: float) -> float:
+        if not isfinite(v):
             raise ValueError("BCa adjustment values must be finite")
+        return v
 
 
-@dataclass(frozen=True, slots=True)
-class BootstrapInterval:
+class BootstrapInterval(StrictModel):
     method: IntervalMethod
     confidence_level: ConfidenceLevel
     replicate_count: BootstrapReplicateCount
@@ -190,7 +181,8 @@ class BootstrapInterval:
     outcome: BcaOutcome
     reason: BcaReason
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate(self) -> "BootstrapInterval":
         bounds_present = self.lower_bound is not None and self.upper_bound is not None
         if (self.lower_bound is None) != (self.upper_bound is None):
             raise ValueError("bootstrap interval bounds must occur together")
@@ -222,6 +214,7 @@ class BootstrapInterval:
                     or self.reason is BcaReason.NONE
                 ):
                     raise ValueError("degenerate BCa interval requires an estimate and typed reason")
+        return self
 
     @property
     def availability(self) -> AvailabilityStatus:
@@ -302,19 +295,20 @@ class BootstrapInterval:
         )
 
 
-@dataclass(frozen=True, slots=True)
-class ScientificDecisionResult:
+class ScientificDecisionResult(StrictModel):
     evidence_role: EvidenceRole
     decision: ScientificDecision
     point_estimate: MetricValue | None
     interval: BootstrapInterval | None
     rationale: str
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate(self) -> "ScientificDecisionResult":
         if not self.rationale:
             raise ValueError("scientific decisions require a rationale")
         if self.interval is not None and self.point_estimate != self.interval.point_estimate:
             raise ValueError("decision estimate must match its interval estimate")
+        return self
 
     @property
     def availability(self) -> AvailabilityStatus:
@@ -323,8 +317,7 @@ class ScientificDecisionResult:
         return AvailabilityStatus.AVAILABLE
 
 
-@dataclass(frozen=True, slots=True)
-class WilcoxonResult:
+class WilcoxonResult(StrictModel):
     statistic: float | None
     p_value: PValue | None
     nonzero_pair_count: int
@@ -332,10 +325,10 @@ class WilcoxonResult:
     availability: AvailabilityStatus
     reason: str
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate(self) -> "WilcoxonResult":
         if self.nonzero_pair_count < 0:
             raise ValueError("nonzero pair count must be non-negative")
-
         available = self.availability is AvailabilityStatus.AVAILABLE
         if available:
             if (
@@ -348,6 +341,7 @@ class WilcoxonResult:
                 raise ValueError("available Wilcoxon result requires finite values and no reason")
         elif self.statistic is not None or self.p_value is not None or not self.reason:
             raise ValueError("unavailable Wilcoxon result requires no values and an explicit reason")
+        return self
 
     @property
     def test(self) -> StatisticalTestId:
@@ -362,8 +356,7 @@ class WilcoxonResult:
         return WilcoxonZeroMethod.PRATT
 
 
-@dataclass(frozen=True, slots=True)
-class RankBiserialResult:
+class RankBiserialResult(StrictModel):
     value: float | None
     positive_rank_sum: float | None
     negative_rank_sum: float | None
@@ -371,10 +364,10 @@ class RankBiserialResult:
     availability: AvailabilityStatus
     reason: str
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate(self) -> "RankBiserialResult":
         if self.nonzero_pair_count < 0:
             raise ValueError("nonzero pair count must be non-negative")
-
         available = self.availability is AvailabilityStatus.AVAILABLE
         values = (
             self.value,
@@ -388,28 +381,29 @@ class RankBiserialResult:
                 raise ValueError("rank-biserial correlation must lie in [-1, 1]")
         elif any(value is not None for value in values) or not self.reason:
             raise ValueError("unavailable rank-biserial result requires no values and an explicit reason")
+        return self
 
     @property
     def effect_size(self) -> EffectSizeId:
         return EffectSizeId.MATCHED_PAIRS_RANK_BISERIAL
 
 
-@dataclass(frozen=True, slots=True)
-class MultiplicityDecision:
+class MultiplicityDecision(StrictModel):
     raw_p_value: PValue
     adjusted_p_value: PValue
     rejected: bool
 
 
-@dataclass(frozen=True, slots=True)
-class MultiplicityResult:
+class MultiplicityResult(StrictModel):
     correction: MultiplicityCorrectionId
     family_name: str
     decisions: tuple[MultiplicityDecision, ...]
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate(self) -> "MultiplicityResult":
         if not self.family_name.strip() or not self.decisions:
             raise ValueError("multiplicity requires a named non-empty test family")
+        return self
 
     @property
     def raw_p_values(self) -> tuple[PValue, ...]:

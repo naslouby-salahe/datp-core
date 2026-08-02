@@ -117,7 +117,7 @@ def _client_paths(output_directory: Path, request: ScoreFederatedRequest) -> lis
                 for role in scored_partition_roles(request.checkpoint.coordinate.split_protocol)
             ),
         )
-        for client_input in sorted(request.clients, key=lambda item: item.client.client_id)
+        for client_input in sorted(request.clients, key=lambda item: item.client)
     ]
 
 
@@ -137,7 +137,7 @@ def _build_records(
     partition_role: PartitionRole,
 ) -> tuple[ScoreRecord, ...]:
     records: list[ScoreRecord] = []
-    for client_input in sorted(request.clients, key=lambda item: item.client.client_id):
+    for client_input in sorted(request.clients, key=lambda item: item.client):
         client_directory = output_directory / client_input.client.client_id
         path = client_directory / _asset_name_for_partition(partition_role).value
         if not path.is_file():

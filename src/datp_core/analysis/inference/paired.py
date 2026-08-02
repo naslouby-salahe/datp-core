@@ -57,7 +57,7 @@ def paired_wilcoxon(contrasts: PairedContrasts) -> WilcoxonResult:
     statistic_val, pvalue_val = extracted
     return WilcoxonResult(
         statistic=statistic_val,
-        p_value=PValue(pvalue_val),
+        p_value=PValue(value=pvalue_val),
         nonzero_pair_count=nonzero_pair_count,
         computation_method=WilcoxonComputationMethod.SCIPY_ASYMPTOTIC,
         availability=AvailabilityStatus.AVAILABLE,
@@ -104,7 +104,7 @@ def holm_adjust(
     if not family_name.strip() or not raw_p_values:
         raise ValueError("Holm correction requires a named non-empty test family")
 
-    raw_pvs = tuple(PValue(v) for v in raw_p_values)
+    raw_pvs = tuple(PValue(value=v) for v in raw_p_values)
     rejected, adjusted, _, _ = multipletests(
         tuple(pv.value for pv in raw_pvs),
         alpha=alpha.value,
@@ -116,7 +116,7 @@ def holm_adjust(
     decisions = tuple(
         MultiplicityDecision(
             raw_p_value=raw_pvs[i],
-            adjusted_p_value=PValue(float(corrected)),
+            adjusted_p_value=PValue(value=float(corrected)),
             rejected=bool(is_rejected),
         )
         for i, (corrected, is_rejected) in enumerate(zip(adjusted, rejected, strict=True))

@@ -100,7 +100,6 @@ def eligible_clients(decisions: tuple[EligibilityDecision, ...]) -> tuple[Client
     return tuple(
         sorted(
             (decision.client for decision in decisions if decision.is_eligible),
-            key=lambda client: client.client_id,
         )
     )
 

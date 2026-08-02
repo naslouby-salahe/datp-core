@@ -1,15 +1,20 @@
 """Mechanism analyses, divergence boundaries, and absorption decisions."""
 
-from dataclasses import dataclass
 from enum import StrEnum
 from math import isfinite
 from typing import ClassVar
 
 import numpy as np
+from pydantic import model_validator
 from scipy import stats
 from sklearn.metrics import adjusted_rand_score
 
-from datp_core.analysis.models import PValue, ScientificDecisionResult, _extract_named_attributes
+from datp_core.analysis.models import (
+    PValue,
+    ScientificDecisionResult,
+    _extract_named_attributes,
+)
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole, ScientificDecision
 from datp_core.domain.values import MetricValue, Ratio, ThresholdValue
 from datp_core.populations.models import ClientIdentity
@@ -51,18 +56,12 @@ class DivergenceBlocker(StrEnum):
         return f"Jensen-Shannon divergence is blocked: {self.value}"
 
 
-@dataclass(frozen=True, slots=True)
-class AssociationObservation:
+class AssociationObservation(StrictModel):
     heterogeneity: MetricValue
     benefit: MetricValue
 
-    def __post_init__(self) -> None:
-        if not isfinite(self.heterogeneity.value) or not isfinite(self.benefit.value):
-            raise ValueError(AssociationIssue.NON_FINITE_OBSERVATION.value)
 
-
-@dataclass(frozen=True, slots=True)
-class AssociationStatistics:
+class AssociationStatistics(StrictModel):
     spearman_rho: MetricValue
     spearman_p_value: PValue
     regression_intercept: MetricValue
@@ -72,19 +71,20 @@ class AssociationStatistics:
     leverage: tuple[Ratio, ...]
 
 
-@dataclass(frozen=True, slots=True)
-class AssociationResult:
+class AssociationResult(StrictModel):
     observations: tuple[AssociationObservation, ...]
     statistics: AssociationStatistics | None
     issue: AssociationIssue | None
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate(self) -> "AssociationResult":
         if (self.statistics is None) == (self.issue is None):
             raise ValueError("association result requires either statistics or one issue")
         if self.statistics is not None and len(self.statistics.leverage) != len(self.observations):
             raise ValueError("association leverage must cover every observation")
+        return self
 
     @property
     def availability(self) -> AvailabilityStatus:
@@ -99,20 +99,15 @@ class AssociationResult:
         return len(self.observations)
 
 
-@dataclass(frozen=True, slots=True)
-class ClusterPartitionSummary:
+class ClusterPartitionSummary(StrictModel):
     group_sizes: tuple[int, ...]
-
-    def __post_init__(self) -> None:
-        if any(size < 0 for size in self.group_sizes):
-            raise ValueError("cluster group sizes must be non-negative")
 
     @classmethod
     def from_memberships(
         cls,
         memberships: tuple[ClusterMembership, ...],
     ) -> "ClusterPartitionSummary":
-        return cls(tuple(len(membership.members) for membership in memberships))
+        return cls(group_sizes=tuple(len(membership.members) for membership in memberships))
 
     @property
     def singleton_groups(self) -> tuple[int, ...]:
@@ -123,14 +118,15 @@ class ClusterPartitionSummary:
         return tuple(index for index, size in enumerate(self.group_sizes) if size == 0)
 
 
-@dataclass(frozen=True, slots=True)
-class ClusterAssignment:
+class ClusterAssignment(StrictModel):
     client: ClientIdentity
     cluster_index: int
 
+    def __lt__(self, other: "ClusterAssignment") -> bool:
+        return self.client < other.client
 
-@dataclass(frozen=True, slots=True)
-class ClusterStabilityResult:
+
+class ClusterStabilityResult(StrictModel):
     adjusted_rand_index: MetricValue
     compared_clients: tuple[ClientIdentity, ...]
     left_partition: ClusterPartitionSummary
@@ -139,7 +135,8 @@ class ClusterStabilityResult:
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate(self) -> "ClusterStabilityResult":
         if not self.compared_clients:
             raise ValueError("cluster stability requires at least one client")
         if len(self.contingency) != len(self.left_partition.group_sizes):
@@ -148,17 +145,16 @@ class ClusterStabilityResult:
             raise ValueError("cluster contingency column count must match the right partition")
         if sum(map(sum, self.contingency)) != len(self.compared_clients):
             raise ValueError("cluster contingency must account for every client")
+        return self
 
 
-@dataclass(frozen=True, slots=True)
-class ThresholdOperatingPoint:
+class ThresholdOperatingPoint(StrictModel):
     threshold: ThresholdValue
     fpr: MetricValue
     tpr: MetricValue | None
 
 
-@dataclass(frozen=True, slots=True)
-class ThresholdMovement:
+class ThresholdMovement(StrictModel):
     client: ClientIdentity
     delta_threshold: MetricValue
     delta_fpr: MetricValue
@@ -175,8 +171,7 @@ class ThresholdMovement:
         return "" if self.delta_tpr is not None else "attack-sensitive movement unavailable"
 
 
-@dataclass(frozen=True, slots=True)
-class DivergenceResult:
+class DivergenceResult(StrictModel):
     clients: tuple[ClientIdentity, ...]
     pairwise_values: tuple[MetricValue, ...]
     aggregate: MetricValue | None
@@ -184,7 +179,8 @@ class DivergenceResult:
 
     evidence_role: ClassVar[EvidenceRole] = EvidenceRole.MECHANISM
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate(self) -> "DivergenceResult":
         if len(self.clients) < MINIMUM_DIVERGENCE_CLIENTS:
             raise ValueError("divergence analysis requires at least two clients")
         if len(set(self.clients)) != len(self.clients):
@@ -195,6 +191,7 @@ class DivergenceResult:
             raise ValueError("available divergence requires pairwise values and an aggregate")
         if not available and (self.pairwise_values or self.aggregate is not None):
             raise ValueError("blocked divergence cannot contain calculated values")
+        return self
 
     @property
     def availability(self) -> AvailabilityStatus:
@@ -247,7 +244,7 @@ def heterogeneity_benefit_association(
         observations=observations,
         statistics=AssociationStatistics(
             spearman_rho=MetricValue(values[0]),
-            spearman_p_value=PValue(values[1]),
+            spearman_p_value=PValue(value=values[1]),
             regression_intercept=MetricValue(values[2]),
             regression_slope=MetricValue(values[3]),
             regression_slope_standard_error=MetricValue(values[4]),
@@ -312,7 +309,7 @@ def blocked_jensen_shannon_divergence(
     blocker: DivergenceBlocker,
 ) -> DivergenceResult:
     return DivergenceResult(
-        clients=_sorted_clients(clients),
+        clients=tuple(sorted(clients)),
         pairwise_values=(),
         aggregate=None,
         blocker=blocker,
@@ -371,7 +368,7 @@ def _cluster_assignments(
         raise ValueError("cluster stability requires at least one persisted client")
     if len({assignment.client for assignment in assignments}) != len(assignments):
         raise ValueError("each client must belong to exactly one cluster")
-    return tuple(sorted(assignments, key=lambda assignment: assignment.client.client_id))
+    return tuple(sorted(assignments))
 
 
 def _contingency(
@@ -392,12 +389,7 @@ def _contingency(
     )
 
 
-def _sorted_clients(clients: tuple[ClientIdentity, ...]) -> tuple[ClientIdentity, ...]:
-    return tuple(sorted(clients, key=lambda client: client.client_id))
-
-
-@dataclass(frozen=True, slots=True)
-class MechanismResult:
+class MechanismResult(StrictModel):
     """Aggregated mechanism evidence from a federated threshold evaluation."""
 
     evidence_role: EvidenceRole
@@ -412,10 +404,12 @@ class MechanismResult:
     availability: AvailabilityStatus
     reason: str
 
-    def __post_init__(self) -> None:
+    @model_validator(mode="after")
+    def _validate(self) -> "MechanismResult":
         if any(size < 0 for size in self.group_sizes):
             raise ValueError("mechanism group sizes must be non-negative")
         if self.availability is AvailabilityStatus.AVAILABLE and self.reason:
             raise ValueError("available mechanism result cannot carry a reason")
         if self.availability is not AvailabilityStatus.AVAILABLE and not self.reason:
             raise ValueError("unavailable mechanism result requires an explicit reason")
+        return self

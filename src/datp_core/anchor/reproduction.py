@@ -276,7 +276,6 @@ def reproduce_anchor(
     )
 
 
-
 def _compare_seed_subsets(
     seed_cohort: SeedCohort,
     observations: tuple[AnchorObservedMetric, ...],

@@ -88,7 +88,7 @@ def construct_federated_benign_statistics(
             "the federated benign-statistics comparator requires at least one eligible client",
             subject=ContractSubject.THRESHOLD,
         )
-    ordered = tuple(sorted(eligible, key=lambda item: item.client.client_id))
+    ordered = tuple(sorted(eligible, key=lambda item: item.client))
     summaries = tuple(_client_summary(client_scores) for client_scores in ordered)
     decomposition = _decomposition(summaries)
 

@@ -53,7 +53,7 @@ def construct_grouped_threshold(
             "grouped thresholding requires more eligible clients than the declared group count",
             subject=ContractSubject.THRESHOLD,
         )
-    ordered = tuple(sorted(eligible, key=lambda item: item.client.client_id))
+    ordered = tuple(sorted(eligible, key=lambda item: item.client))
     raw_features = tuple(_raw_fingerprint(client_scores.as_array) for client_scores in ordered)
     matrix = np.asarray(raw_features, dtype=np.float64)
     standardized_matrix = StandardScaler().fit_transform(matrix)

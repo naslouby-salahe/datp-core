@@ -82,16 +82,16 @@ def test_external_interval_is_explicitly_supplementary_and_not_confirmatory() ->
 
 def test_confirmatory_decision_uses_positive_bca_interval_not_secondary_evidence() -> None:
     interval = BootstrapInterval(
-        IntervalMethod.BCA_PAIRED_ARITHMETIC_MEAN,
-        ConfidenceLevel(0.95),
-        BootstrapReplicateCount(10_000),
-        Seed(3),
-        MetricValue(0.2),
-        MetricValue(0.01),
-        MetricValue(0.4),
-        BcaAdjustment(bias_correction=0.0, acceleration=0.0),
-        BcaOutcome.AVAILABLE,
-        BcaReason.NONE,
+        method=IntervalMethod.BCA_PAIRED_ARITHMETIC_MEAN,
+        confidence_level=ConfidenceLevel(0.95),
+        replicate_count=BootstrapReplicateCount(10_000),
+        analysis_seed=Seed(3),
+        point_estimate=MetricValue(0.2),
+        lower_bound=MetricValue(0.01),
+        upper_bound=MetricValue(0.4),
+        adjustment=BcaAdjustment(bias_correction=0.0, acceleration=0.0),
+        outcome=BcaOutcome.AVAILABLE,
+        reason=BcaReason.NONE,
     )
 
     result = decide_confirmatory(interval)

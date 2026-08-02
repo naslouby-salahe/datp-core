@@ -106,7 +106,7 @@ def train_fedprox(request: FedProxTrainingRequest) -> FedAvgTrainingOutcome:
     configure_deterministic_execution(request.training_seed)
     device = resolve_cuda_device()
 
-    ordered_clients = tuple(sorted(request.clients, key=lambda item: item.training_input.client.client_id))
+    ordered_clients = tuple(sorted(request.clients, key=lambda item: item.training_input.client))
     for client_dataset in ordered_clients:
         reject_centralized_preprocessing_for_federated_training(client_dataset.preprocessing_state)
 

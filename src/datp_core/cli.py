@@ -456,7 +456,7 @@ def _eligible_calibration_scores(score_manifest: ScoreArtifactManifest) -> tuple
             checksum_file(record.path),
             invariant.calibration_score_set_checksum,
         )
-        for record in sorted(score_manifest.calibration_records, key=lambda item: item.scored_client.client_id)
+        for record in sorted(score_manifest.calibration_records)
     )
 
 
@@ -494,9 +494,7 @@ def _confirmatory_contrast(training_seed: Seed) -> PairedContrast:
     shared = loads(
         _evaluation_path(training_seed, FederatedThresholdMethod.SHARED_THRESHOLD).read_text(encoding="utf-8")
     )
-    local = loads(
-        _evaluation_path(training_seed, FederatedThresholdMethod.LOCAL_THRESHOLD).read_text(encoding="utf-8")
-    )
+    local = loads(_evaluation_path(training_seed, FederatedThresholdMethod.LOCAL_THRESHOLD).read_text(encoding="utf-8"))
     if shared["score_coordinate"] != local["score_coordinate"]:
         raise ScientificContractError("paired evaluation documents use different training coordinates")
     shared_value = _population_metric(shared, MetricId.FPR_COEFFICIENT_OF_VARIATION)

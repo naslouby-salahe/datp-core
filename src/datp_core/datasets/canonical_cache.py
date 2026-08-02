@@ -560,9 +560,7 @@ def asset_is_valid(root: Path, asset, expected_physical_schema: str) -> bool:
         return False
 
 
-def _assets_have_declared_metadata(
-    root: Path, assets, expected_physical_schema: str
-) -> bool:
+def _assets_have_declared_metadata(root: Path, assets, expected_physical_schema: str) -> bool:
     return all(_asset_has_declared_metadata(root, asset, expected_physical_schema) for asset in assets)
 
 

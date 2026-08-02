@@ -35,8 +35,6 @@ class _NumericDelta:
         return self.signed / abs(self.expected)
 
 
-
-
 def compare_anchor_metric(
     reference: AnchorMetricReference,
     observation: AnchorObservedMetric | None,
@@ -45,7 +43,9 @@ def compare_anchor_metric(
     rule = reference.tolerance_rule
     if observation is None:
         return _build(
-            reference, None, rule,
+            reference,
+            None,
+            rule,
             decision=AnchorComparisonDecision.BLOCKED_INVALID_INPUT,
             reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
         )
@@ -54,7 +54,9 @@ def compare_anchor_metric(
     delta = _NumericDelta(reference.value.value, observation.value.value)
     if coordinate_failure is not None:
         return _build(
-            reference, observation, rule,
+            reference,
+            observation,
+            rule,
             decision=AnchorComparisonDecision.BLOCKED_INVALID_INPUT,
             reason=coordinate_failure,
             signed=delta.signed,
@@ -131,7 +133,9 @@ def _relative_result(
 ) -> AnchorMetricComparison:
     if is_numeric_zero(delta.expected):
         return _build(
-            reference, observation, rule,
+            reference,
+            observation,
+            rule,
             decision=AnchorComparisonDecision.UNAVAILABLE,
             reason=AnchorDiscrepancyReason.RELATIVE_COMPARISON_UNDEFINED_FOR_ZERO_REFERENCE,
             signed=delta.signed,
@@ -149,7 +153,9 @@ def _interval_result(
 ) -> AnchorMetricComparison:
     if reference.interval is None or observation.interval is None:
         return _build(
-            reference, observation, rule,
+            reference,
+            observation,
+            rule,
             decision=AnchorComparisonDecision.UNAVAILABLE,
             reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
             signed=delta.signed,
@@ -173,7 +179,9 @@ def _count_result(
 ) -> AnchorMetricComparison:
     if reference.count is None or observation.count is None:
         return _build(
-            reference, observation, rule,
+            reference,
+            observation,
+            rule,
             decision=AnchorComparisonDecision.UNAVAILABLE,
             reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
             signed=delta.signed,
@@ -182,7 +190,9 @@ def _count_result(
     if reference.count == observation.count:
         return _pass(reference, observation, rule, delta)
     return _build(
-        reference, observation, rule,
+        reference,
+        observation,
+        rule,
         decision=AnchorComparisonDecision.MATERIAL_DISCREPANCY,
         reason=AnchorDiscrepancyReason.COUNT_MISMATCH,
         signed=float(observation.count.value - reference.count.value),
@@ -221,7 +231,9 @@ def _pass(
     delta: _NumericDelta,
 ) -> AnchorMetricComparison:
     return _build(
-        reference, observation, rule,
+        reference,
+        observation,
+        rule,
         decision=AnchorComparisonDecision.EQUIVALENT,
         signed=delta.signed,
         relative=delta.relative,
@@ -236,7 +248,9 @@ def _fail(
     reason: AnchorDiscrepancyReason,
 ) -> AnchorMetricComparison:
     return _build(
-        reference, observation, rule,
+        reference,
+        observation,
+        rule,
         decision=AnchorComparisonDecision.MATERIAL_DISCREPANCY,
         reason=reason,
         signed=delta.signed,

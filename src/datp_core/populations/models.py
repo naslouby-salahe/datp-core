@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import total_ordering
 from math import floor, fsum
 from pathlib import Path
 
@@ -271,6 +272,7 @@ class ClientPartitionCounts:
             raise ValueError("client partition counts require a client identity")
 
 
+@total_ordering
 @dataclass(frozen=True, slots=True)
 class ClientIdentity:
     population: PopulationId
@@ -280,6 +282,9 @@ class ClientIdentity:
     def __post_init__(self) -> None:
         if not self.client_id or any(separator in self.client_id for separator in ("=", "/", "\\")):
             raise ValueError("client identity must be a non-empty path-safe token")
+
+    def __lt__(self, other: "ClientIdentity") -> bool:
+        return self.client_id < other.client_id
 
 
 @dataclass(frozen=True, slots=True)

@@ -257,20 +257,23 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
     sign_consistency = count_paired_differences(deltas)
     wilcoxon = paired_wilcoxon(request.contrasts)
     rank_biserial = matched_pairs_rank_biserial(request.contrasts)
-    payload = dumps(
-        _serialize(
-            {
-                "evidence_role": request.plan.evidence_role,
-                "interval": interval,
-                "descriptive": descriptive,
-                "sign_consistency": sign_consistency,
-                "wilcoxon": wilcoxon,
-                "rank_biserial": rank_biserial,
-            }
-        ),
-        indent=2,
-        sort_keys=True,
-    ) + "\n"
+    payload = (
+        dumps(
+            _serialize(
+                {
+                    "evidence_role": request.plan.evidence_role,
+                    "interval": interval,
+                    "descriptive": descriptive,
+                    "sign_consistency": sign_consistency,
+                    "wilcoxon": wilcoxon,
+                    "rank_biserial": rank_biserial,
+                }
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
     digest = checksum_text(payload)
     reused = publish_atomically(
         AtomicPublication(
@@ -296,19 +299,22 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
 def analyze_temporal_stage(request: TemporalAnalyzeRequest) -> TemporalAnalyzeResult:
     _validate_temporal_identities(request)
     _validate_temporal_provenance(request)
-    payload = dumps(
-        _serialize(
-            {
-                "evidence_role": EvidenceRole.TEMPORAL_BOUNDARY,
-                "static_reference_provenance": request.static_reference_provenance,
-                "frozen_provenance": request.frozen_provenance,
-                "recalibrated_provenance": request.recalibrated_provenance,
-                "records": request.records,
-            }
-        ),
-        indent=2,
-        sort_keys=True,
-    ) + "\n"
+    payload = (
+        dumps(
+            _serialize(
+                {
+                    "evidence_role": EvidenceRole.TEMPORAL_BOUNDARY,
+                    "static_reference_provenance": request.static_reference_provenance,
+                    "frozen_provenance": request.frozen_provenance,
+                    "recalibrated_provenance": request.recalibrated_provenance,
+                    "records": request.records,
+                }
+            ),
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
     digest = checksum_text(payload)
     reused = publish_atomically(
         AtomicPublication(

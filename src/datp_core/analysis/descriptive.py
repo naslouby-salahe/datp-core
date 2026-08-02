@@ -1,37 +1,28 @@
 """Deterministic descriptive summaries for seed- and client-level evidence."""
 
-from dataclasses import dataclass
-from math import isfinite
-
 import numpy as np
 
 from datp_core.analysis.models import MetricSeries, PairedDifferenceCounts
+from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
 from datp_core.domain.values import MetricValue, Ratio, Seed
 
 
-@dataclass(frozen=True, slots=True)
-class QuantileRange:
+class QuantileRange(StrictModel):
     lower: Ratio
     upper: Ratio
 
-    def __post_init__(self) -> None:
-        if self.lower.value > self.upper.value:
-            raise ValueError("quantile bounds must be ordered")
+    @property
+    def availability(self) -> AvailabilityStatus:
+        return AvailabilityStatus.AVAILABLE
 
 
-@dataclass(frozen=True, slots=True)
-class ObservationCounts:
+class ObservationCounts(StrictModel):
     unavailable: int
     excluded: int
 
-    def __post_init__(self) -> None:
-        if self.unavailable < 0 or self.excluded < 0:
-            raise ValueError("observation counts must be non-negative")
 
-
-@dataclass(frozen=True, slots=True)
-class DescriptiveStatistics:
+class DescriptiveStatistics(StrictModel):
     mean: MetricValue
     median: MetricValue
     lower_quantile_value: MetricValue
@@ -39,32 +30,18 @@ class DescriptiveStatistics:
     minimum: MetricValue
     maximum: MetricValue
 
-    def __post_init__(self) -> None:
-        if self.minimum.value > self.maximum.value:
-            raise ValueError("descriptive minimum cannot exceed maximum")
-
     @property
     def spread(self) -> MetricValue:
         return MetricValue(self.maximum.value - self.minimum.value)
 
 
-@dataclass(frozen=True, slots=True)
-class DescriptiveSummary:
+class DescriptiveSummary(StrictModel):
     evidence_role: EvidenceRole
     values: MetricSeries
     counts: ObservationCounts
     quantiles: QuantileRange
     statistics: DescriptiveStatistics | None
     reason: str
-
-    def __post_init__(self) -> None:
-        if any(not isfinite(value.value) for value in self.values):
-            raise ValueError("descriptive values must be finite")
-        if self.values:
-            if self.statistics is None or self.reason:
-                raise ValueError("available descriptive summaries require complete statistics and no reason")
-        elif self.statistics is not None or not self.reason:
-            raise ValueError("unavailable descriptive summaries require no statistics and an explicit reason")
 
     @property
     def available_count(self) -> int:
@@ -75,14 +52,9 @@ class DescriptiveSummary:
         return AvailabilityStatus.AVAILABLE if self.values else AvailabilityStatus.UNAVAILABLE
 
 
-@dataclass(frozen=True, slots=True)
-class NestedSeedSummary:
+class NestedSeedSummary(StrictModel):
     seed: Seed
     replicate_values: MetricSeries
-
-    def __post_init__(self) -> None:
-        if not self.replicate_values or any(not isfinite(value.value) for value in self.replicate_values):
-            raise ValueError("nested summaries require finite non-empty replicate values")
 
     @property
     def summary(self) -> MetricValue:
