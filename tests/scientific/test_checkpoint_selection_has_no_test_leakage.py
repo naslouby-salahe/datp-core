@@ -46,6 +46,8 @@ def test_selection_ignores_training_loss_even_when_a_non_terminal_round_looks_be
         coordinate=coordinate,
         client=None,
         selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
+        preprocessing_state_set_checksum=Checksum("a" * 64),
+        split_manifest_checksum=Checksum("b" * 64),
     )
     assert decision.selected.round_number == CHECKPOINT.maximum_round
     assert decision.selected.mean_training_loss.value == 99.0
@@ -69,6 +71,8 @@ def test_selection_rejects_every_shape_of_held_out_metrics(tmp_path: Path, held_
             client=None,
             selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
             held_out_metrics=held_out_metrics,
+            preprocessing_state_set_checksum=Checksum("a" * 64),
+            split_manifest_checksum=Checksum("b" * 64),
         )
 
 
@@ -82,6 +86,8 @@ def test_selection_rejects_attack_label_presence_regardless_of_other_arguments(t
             client=None,
             selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
             attack_labels_present=True,
+            preprocessing_state_set_checksum=Checksum("a" * 64),
+            split_manifest_checksum=Checksum("b" * 64),
         )
 
 
@@ -112,6 +118,8 @@ def test_only_the_declared_maximum_round_is_ever_marked_selected(tmp_path: Path)
         coordinate=coordinate,
         client=None,
         selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
+        preprocessing_state_set_checksum=Checksum("a" * 64),
+        split_manifest_checksum=Checksum("b" * 64),
     )
     selected_candidates = [
         item for item in decision.candidates if item.status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE

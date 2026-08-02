@@ -74,6 +74,8 @@ def test_select_checkpoint_chooses_maximum_round(tmp_path: Path) -> None:
         coordinate=coordinate,
         client=None,
         selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
+        preprocessing_state_set_checksum=Checksum("a" * 64),
+        split_manifest_checksum=Checksum("b" * 64),
     )
     assert decision.selected.round_number == CHECKPOINT.maximum_round
     assert decision.status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE
@@ -103,6 +105,8 @@ def test_select_checkpoint_rejects_held_out_metrics(tmp_path: Path) -> None:
             client=None,
             selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
             held_out_metrics=(MetricValue(0.9),),
+            preprocessing_state_set_checksum=Checksum("a" * 64),
+            split_manifest_checksum=Checksum("b" * 64),
         )
 
 
@@ -128,6 +132,8 @@ def test_select_checkpoint_rejects_attack_labels(tmp_path: Path) -> None:
             client=None,
             selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
             attack_labels_present=True,
+            preprocessing_state_set_checksum=Checksum("a" * 64),
+            split_manifest_checksum=Checksum("b" * 64),
         )
 
 
@@ -175,6 +181,8 @@ def test_select_checkpoint_rejects_missing_tensor_file(tmp_path: Path) -> None:
             coordinate=coordinate,
             client=None,
             selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
+            preprocessing_state_set_checksum=Checksum("a" * 64),
+            split_manifest_checksum=Checksum("b" * 64),
         )
 
 

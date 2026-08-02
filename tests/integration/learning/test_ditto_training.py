@@ -48,13 +48,15 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
         coordinate=global_coordinate,
         client=None,
         selection_rule=CHECKPOINT_SELECTION_RULE,
+        preprocessing_state_set_checksum=outcome.global_candidates[0].preprocessing_state_set_checksum,
+        split_manifest_checksum=outcome.global_candidates[0].split_manifest_checksum,
     )
     assert global_decision.selected.round_number == CHECKPOINT.maximum_round
 
     device = resolve_cuda_device()
     scoring_clients = tuple(
         ClientScoringInput(
-            client=client_dataset.training_input.client,
+            client=client_dataset.client,
             calibration_features=benign_frame(RowCount(8), seed=Seed(index)),
             evaluation_features=benign_frame(RowCount(8), seed=Seed(index + 50)),
         )
@@ -75,15 +77,16 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
     )
 
     personalized_score_checksums = []
-    for client_dataset in clients:
-        client = client_dataset.training_input.client
-        candidates = outcome.personalized_candidates_by_client[client]
+    for pcs in outcome.personalized_candidates:
+        client = pcs.client
         decision = select_checkpoint(
-            candidates,
+            pcs.candidates,
             CHECKPOINT,
             coordinate=personalized_coordinate,
             client=client,
             selection_rule=CHECKPOINT_SELECTION_RULE,
+            preprocessing_state_set_checksum=pcs.candidates[0].preprocessing_state_set_checksum,
+            split_manifest_checksum=pcs.candidates[0].split_manifest_checksum,
         )
         personalized_scores = generate_federated_scores(
             ScoreGenerationRequest(

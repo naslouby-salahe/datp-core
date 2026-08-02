@@ -15,6 +15,7 @@ from datp_core.domain.values import (
     ClientCount,
     FeatureNameSequence,
     LearningRate,
+    RoundNumber,
     Seed,
 )
 from datp_core.learning.federated.checkpointing import (
@@ -37,6 +38,17 @@ from datp_core.learning.federated.models import (
     FederatedTrainingOutcome,
     FederatedTrainingResult,
 )
+
+
+def _training_is_reusable(directory: Path, candidate_rounds: tuple[RoundNumber, ...]) -> bool:
+    complete = directory / FederatedHistoryAssetName.COMPLETE.value
+    if not complete.is_file():
+        return False
+    try:
+        expected_digest = Checksum(complete.read_text(encoding="utf-8").strip())
+    except (OSError, UnicodeError, ValueError):
+        return False
+    return federated_training_directory_is_reusable(directory, candidate_rounds, expected_digest)
 from datp_core.learning.federated.training import (
     FederatedTrainingRequest,
     persist_federated_training_history,
@@ -153,9 +165,7 @@ def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult
         AtomicPublication(
             target=request.output_directory,
             overwrite=request.overwrite,
-            is_reusable=lambda directory: federated_training_directory_is_reusable(
-                directory, request.checkpoint_protocol.candidates
-            ),
+            is_reusable=lambda directory: _training_is_reusable(directory, request.checkpoint_protocol.candidates),
             write=write,
             remove_target=rmtree,
         )
@@ -207,9 +217,7 @@ def train_fedprox_stage(request: TrainFedProxRequest) -> TrainFederatedStageResu
         AtomicPublication(
             target=request.output_directory,
             overwrite=request.overwrite,
-            is_reusable=lambda directory: federated_training_directory_is_reusable(
-                directory, request.checkpoint_protocol.candidates
-            ),
+            is_reusable=lambda directory: _training_is_reusable(directory, request.checkpoint_protocol.candidates),
             write=write,
             remove_target=rmtree,
         )
@@ -267,9 +275,7 @@ def train_ditto_stage(request: TrainDittoRequest) -> TrainDittoStageResult:
         AtomicPublication(
             target=request.global_output_directory,
             overwrite=request.overwrite,
-            is_reusable=lambda directory: federated_training_directory_is_reusable(
-                directory, request.checkpoint_protocol.candidates
-            ),
+            is_reusable=lambda directory: _training_is_reusable(directory, request.checkpoint_protocol.candidates),
             write=write_global,
             remove_target=rmtree,
         )

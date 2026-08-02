@@ -25,7 +25,6 @@ from datp_core.learning.federated.training import (
     ProximalTerm,
     aggregate_client_updates,
     build_client_loader,
-    checksum_state_dict,
     client_round_seed,
     prepare_federated_client_data,
     preprocessing_state_set_checksum,
@@ -33,7 +32,7 @@ from datp_core.learning.federated.training import (
     reject_attack_rows_in_federated_training,
     reject_centralized_preprocessing_for_federated_training,
     run_local_epoch,
-    serialized_state_dict_bytes,
+    serialize_and_checksum_state_dict,
 )
 from datp_core.populations.models import PopulationOutcomeLabel
 
@@ -163,11 +162,12 @@ def test_aggregate_client_updates_requires_at_least_one_update() -> None:
         aggregate_client_updates([])
 
 
-def test_serialized_state_dict_bytes_and_checksum_are_deterministic() -> None:
+def test_serialize_and_checksum_state_dict_is_deterministic() -> None:
     first_state = {"w": torch.arange(4, dtype=torch.float32)}
     second_state = {"w": torch.arange(4, dtype=torch.float32)}
-    assert serialized_state_dict_bytes(first_state) == serialized_state_dict_bytes(second_state)
-    assert checksum_state_dict(first_state) == checksum_state_dict(second_state)
+    first_checksum, _first_bytes = serialize_and_checksum_state_dict(first_state)
+    second_checksum, _second_bytes = serialize_and_checksum_state_dict(second_state)
+    assert first_checksum == second_checksum
 
 
 def test_preprocessing_state_set_checksum_binds_client_identity() -> None:

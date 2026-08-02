@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+import numpy as np
 import polars as pl
 import torch
 from safetensors.torch import load_file
@@ -26,10 +27,13 @@ from datp_core.domain.values import (
     RowCount,
     checksum_file,
 )
-from datp_core.learning.autoencoder import ReconstructionAutoencoder, reconstruction_errors
+from datp_core.learning.autoencoder import LEARNING_DTYPE, ReconstructionAutoencoder, reconstruction_errors
 from datp_core.learning.federated.checkpointing import CheckpointCandidate
-from datp_core.learning.federated.training import extract_feature_arrays
-from datp_core.populations.models import ClientIdentity
+from datp_core.populations.models import (
+    OUTCOME_LABEL_COLUMN,
+    STABLE_ROW_ID_COLUMN,
+    ClientIdentity,
+)
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import require_cuda_available
 from datp_core.scoring.models import (
@@ -165,6 +169,16 @@ def reject_attack_calibration_rows(labels: OutcomeLabelSequence, benign_label: s
         )
 
 
+def _extract_feature_arrays(
+    frame: pl.DataFrame,
+    feature_names: FeatureNameSequence,
+) -> tuple["np.ndarray[tuple[int, int], np.dtype[np.float32]]", tuple[str, ...], tuple[str, ...]]:
+    matrix = frame.select(feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
+    labels = tuple(str(v) for v in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
+    row_ids = tuple(str(v) for v in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
+    return matrix, labels, row_ids
+
+
 def _validate_request(request: ScoreGenerationRequest) -> None:
     if request.checkpoint.status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
         raise ScientificContractError(
@@ -208,7 +222,7 @@ def _score_partition(
     device: torch.device,
     destination: Path,
 ) -> ScoreRecord:
-    matrix, labels, row_ids = extract_feature_arrays(frame, request.feature_names)
+    matrix, labels, row_ids = _extract_feature_arrays(frame, request.feature_names)
     scores = reconstruction_errors(model, matrix, batch_size=request.batch_size, device=device)
     if scores.shape[0] != matrix.shape[0]:
         raise ScientificContractError("score count must equal partition row count", subject=partition_role)
@@ -237,7 +251,7 @@ def _score_partition(
 
 def _assert_polarity(model: ReconstructionAutoencoder, request: ScoreGenerationRequest, device: torch.device) -> None:
     for client_input in request.clients:
-        matrix, _labels, _row_ids = extract_feature_arrays(client_input.calibration_features, request.feature_names)
+        matrix, _labels, _row_ids = _extract_feature_arrays(client_input.calibration_features, request.feature_names)
         if matrix.shape[0] == 0:
             continue
         assert_higher_score_is_anomaly_evidence(model, matrix, batch_size=request.batch_size, device=device)

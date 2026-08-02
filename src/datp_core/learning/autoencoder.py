@@ -1,6 +1,6 @@
 """Shared protocol-driven reconstruction autoencoder architecture."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 
 import numpy as np
 import torch
@@ -12,9 +12,8 @@ from datp_core.domain.values import BatchSize, Seed
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import require_cuda_available
 
-ModelStateMap = Mapping[str, torch.Tensor]
+type AutoencoderState = dict[str, torch.Tensor]
 LEARNING_DTYPE = np.float32
-TORCH_LEARNING_DTYPE = torch.float32
 
 
 class ReconstructionAutoencoder(nn.Module):
@@ -78,12 +77,16 @@ def build_reconstruction_autoencoder(
     return model
 
 
-def clone_autoencoder_state(model: ReconstructionAutoencoder) -> dict[str, torch.Tensor]:
-    return {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
+def clone_state(state: AutoencoderState) -> AutoencoderState:
+    return {name: tensor.detach().clone() for name, tensor in state.items()}
 
 
-def load_autoencoder_state(model: ReconstructionAutoencoder, state: ModelStateMap) -> None:
-    model.load_state_dict(dict(state), strict=True)
+def clone_autoencoder_state(model: ReconstructionAutoencoder) -> AutoencoderState:
+    return clone_state(dict(model.state_dict()))
+
+
+def load_autoencoder_state(model: ReconstructionAutoencoder, state: AutoencoderState) -> None:
+    model.load_state_dict(state, strict=True)
 
 
 def _require_scoreable_feature_matrix(model: ReconstructionAutoencoder, features: np.ndarray) -> None:

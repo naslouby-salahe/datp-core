@@ -38,5 +38,7 @@ def selected_checkpoint(output_directory: Path, seed: Seed | None = None) -> Che
         coordinate=coordinate,
         client=None,
         selection_rule=CheckpointSelectionRule.FIXED_TERMINAL_MAXIMUM_ROUND,
+        preprocessing_state_set_checksum=Checksum("a" * 64),
+        split_manifest_checksum=Checksum("b" * 64),
     )
     return decision.selected

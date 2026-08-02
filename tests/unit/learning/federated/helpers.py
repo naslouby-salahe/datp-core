@@ -133,7 +133,11 @@ def ditto_coordinates(
 
 
 def ditto_protocol(regularization: DittoRegularization) -> DittoProtocol:
-    return DittoProtocol(kind=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER, regularization=regularization)
+    return DittoProtocol(
+        kind=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+        regularization=regularization,
+        optimizer=OPTIMIZER,
+    )
 
 
 def feature_protocol() -> PreprocessingProtocol:

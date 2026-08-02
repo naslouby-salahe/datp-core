@@ -1,9 +1,10 @@
 """Shared client-local training mechanics reused by FedAvg, FedProx, and Ditto."""
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from typing import TypeVar
 
 import numpy as np
 import polars as pl
@@ -16,17 +17,15 @@ from datp_core.domain.enums import (
     CommunicationEstimationMethod,
     ContractSubject,
     OptimizerId,
-    PopulationIdentityKind,
     ProcessedDataBranch,
 )
-from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
+from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import (
     BatchSize,
     ByteCount,
     Checksum,
     ClientCount,
     DittoRegularization,
-    FeatureNameSequence,
     LearningRate,
     MetricValue,
     OutcomeLabelSequence,
@@ -37,31 +36,33 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.autoencoder import (
     LEARNING_DTYPE,
-    ModelStateMap,
+    AutoencoderState,
     ReconstructionAutoencoder,
     build_reconstruction_autoencoder,
     clone_autoencoder_state,
+    clone_state,
     load_autoencoder_state,
 )
+from datp_core.learning.federated.checkpointing import retain_checkpoint_candidates
 from datp_core.learning.federated.models import (
+    CLIENT_ROUNDS_SCHEMA,
+    PERSONALIZED_ROUNDS_SCHEMA,
+    ROUND_SUMMARY_SCHEMA,
     ClientTrainingInput,
     ClientTrainingResult,
     ClientUpdate,
     CommunicationRecord,
     FederatedHistoryAssetName,
-    FederatedHistoryColumn,
     FederatedRoundResult,
     FederatedTrainingCoordinate,
     FederatedTrainingHistory,
     FederatedTrainingOutcome,
     FederatedTrainingResult,
     GlobalModelStateReference,
-    PersonalizedModelStateReference,
     RoundSnapshot,
 )
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
-    STABLE_ROW_ID_COLUMN,
     ClientIdentity,
     PopulationOutcomeLabel,
 )
@@ -77,42 +78,7 @@ from datp_core.protocols.training import FEDERATED_DATALOADER_WORKER_COUNT
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.runtime.determinism import configure_deterministic_execution, derive_worker_seed
 
-ROUND_SUMMARY_SCHEMA: Mapping[str, type[pl.DataType]] = {
-    FederatedHistoryColumn.ROUND_NUMBER.value: pl.Int64,
-    FederatedHistoryColumn.AGGREGATE_LOSS.value: pl.Float64,
-    FederatedHistoryColumn.UPLOAD_BYTES.value: pl.Int64,
-    FederatedHistoryColumn.DOWNLOAD_BYTES.value: pl.Int64,
-    FederatedHistoryColumn.GLOBAL_STATE_CHECKSUM.value: pl.String,
-}
-
-CLIENT_ROUNDS_SCHEMA: Mapping[str, type[pl.DataType]] = {
-    FederatedHistoryColumn.ROUND_NUMBER.value: pl.Int64,
-    FederatedHistoryColumn.CLIENT_ID.value: pl.String,
-    FederatedHistoryColumn.SAMPLE_COUNT.value: pl.Int64,
-    FederatedHistoryColumn.LOCAL_LOSS.value: pl.Float64,
-}
-
-PERSONALIZED_ROUNDS_SCHEMA: Mapping[str, type[pl.DataType]] = {
-    FederatedHistoryColumn.ROUND_NUMBER.value: pl.Int64,
-    FederatedHistoryColumn.CLIENT_ID.value: pl.String,
-    FederatedHistoryColumn.LOCAL_LOSS.value: pl.Float64,
-    FederatedHistoryColumn.STATE_CHECKSUM.value: pl.String,
-}
-
-
-def _validate_schema(frame: pl.DataFrame, expected_schema: Mapping[str, type[pl.DataType]]) -> None:
-    expected_cols = list(expected_schema.keys())
-    if set(frame.columns) != set(expected_cols) or list(frame.columns) != expected_cols:
-        raise ArtifactIntegrityError(
-            "Parquet table columns do not match expected schema exactly in names and order",
-            subject=ContractSubject.SCHEMA,
-        )
-    for col, dtype in expected_schema.items():
-        if frame.schema[col] != dtype:
-            raise ArtifactIntegrityError(
-                f"Parquet column '{col}' has type {frame.schema[col]}, expected {dtype}",
-                subject=ContractSubject.SCHEMA,
-            )
+TrainingProtocolT = TypeVar("TrainingProtocolT", FedAvgProtocol, FedProxProtocol)
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,14 +87,36 @@ class PreparedFederatedClientData:
     features_cpu: torch.Tensor
     preprocessing_checksum: Checksum
 
+    def __post_init__(self) -> None:
+        if self.features_cpu.dim() != 2:
+            raise ScientificContractError(
+                "prepared features tensor must be two-dimensional",
+                subject=ContractSubject.FEATURES,
+            )
+        if self.features_cpu.device.type != "cpu":
+            raise ScientificContractError(
+                "prepared features must reside on CPU",
+                subject=ContractSubject.RUNTIME,
+            )
+        if self.features_cpu.dtype != torch.float32:
+            raise ScientificContractError(
+                "prepared features must use the canonical torch learning dtype",
+                subject=ContractSubject.FEATURES,
+            )
+        if self.features_cpu.shape[0] < 1:
+            raise ScientificContractError(
+                "prepared client data requires at least one row",
+                subject=ContractSubject.ROWS,
+            )
+
 
 @dataclass(frozen=True, slots=True)
-class FederatedTrainingRequest:
+class FederatedTrainingRequest[TrainingProtocolT]:
     coordinate: FederatedTrainingCoordinate
     clients: tuple[ClientTrainingInput, ...]
     population_client_count: ClientCount
     autoencoder: AutoencoderProtocol
-    training_protocol: FedAvgProtocol | FedProxProtocol
+    training_protocol: TrainingProtocolT
     checkpoint_protocol: CheckpointProtocol
     training_seed: Seed
     batch_size: BatchSize
@@ -158,27 +146,10 @@ def reject_attack_rows_in_federated_training(labels: OutcomeLabelSequence) -> No
         )
 
 
-def extract_feature_arrays(
-    frame: pl.DataFrame,
-    feature_names: FeatureNameSequence,
-) -> tuple["np.ndarray[tuple[int, int], np.dtype[np.float32]]", tuple[str, ...], tuple[str, ...]]:
-    """Extract (matrix, labels, row_ids) from a scored or calibration Polars frame.
-
-    Returns a float32 numpy feature matrix, a tuple of outcome-label strings,
-    and a tuple of stable row-ID strings — all aligned by row position.
-    """
-    matrix = frame.select(feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
-    labels = tuple(str(v) for v in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
-    row_ids = tuple(str(v) for v in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
-    return matrix, labels, row_ids
-
-
 def prepare_federated_client_data(
     client_input: ClientTrainingInput,
     autoencoder: AutoencoderProtocol,
 ) -> PreparedFederatedClientData:
-    """Validate client data once before round loop and store complete CPU tensors."""
-    reject_centralized_preprocessing_for_federated_training(client_input.preprocessing_state)
     if (
         client_input.preprocessing_state.client_identity is None
         or client_input.preprocessing_state.client_identity.value != client_input.client.client_id
@@ -200,8 +171,6 @@ def prepare_federated_client_data(
     )
     if not np.isfinite(matrix).all():
         raise ScientificContractError("federated features must be finite", subject=ContractSubject.FEATURES)
-    if matrix.shape[0] < 1:
-        raise ScientificContractError("client training input requires at least one row", subject=ContractSubject.ROWS)
     if matrix.shape[1] != autoencoder.widths[0]:
         raise ScientificContractError(
             "feature width mismatch during dataset preparation", subject=ContractSubject.FEATURES
@@ -222,7 +191,6 @@ def client_round_seed(
     round_number: RoundNumber,
     client_index: int,
 ) -> Seed:
-    """Deterministic per-round per-client seed derived from training seed."""
     round_seed = derive_worker_seed(training_seed, round_number.value)
     return derive_worker_seed(round_seed, client_index)
 
@@ -233,7 +201,6 @@ def build_client_loader(
     batch_size: BatchSize,
     seed: Seed,
 ) -> DataLoader:
-    """Build a CPU DataLoader for federated client training batches."""
     features_cpu = data.features_cpu
     if features_cpu.shape[0] == 0:
         raise ScientificContractError(
@@ -259,7 +226,6 @@ def proximal_penalty(
     reference_parameters: Sequence[torch.Tensor],
     coefficient: ProximalCoefficient | DittoRegularization,
 ) -> torch.Tensor:
-    """The proximal term (coefficient / 2) * sum ||local - reference||^2."""
     total = torch.zeros((), device=local_parameters[0].device)
     for local, reference in zip(local_parameters, reference_parameters, strict=True):
         total = total + torch.sum((local - reference) ** 2)
@@ -287,9 +253,7 @@ def build_optimizer(
 
 @dataclass(frozen=True, slots=True)
 class ProximalTerm:
-    """A fixed reference state and coefficient for a proximal penalty toward that state."""
-
-    reference_state: ModelStateMap
+    reference_state: AutoencoderState
     coefficient: ProximalCoefficient | DittoRegularization
 
 
@@ -300,8 +264,7 @@ def run_local_epoch(
     device: torch.device,
     *,
     proximal_term: ProximalTerm | None = None,
-) -> tuple[dict[str, torch.Tensor], MetricValue, RowCount]:
-    """Run exactly one local training epoch and return the resulting CPU state dict."""
+) -> tuple[AutoencoderState, MetricValue, RowCount]:
     reference_parameters = _resolve_reference_parameters(model, proximal_term, device)
     model.train()
     accumulated_weighted_loss = 0.0
@@ -352,8 +315,7 @@ def _train_one_batch(
     return float(loss.detach().cpu().item())
 
 
-def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> dict[str, torch.Tensor]:
-    """Sample-count-weighted average of client parameters (McMahan FedAvg aggregation)."""
+def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> AutoencoderState:
     if not updates:
         raise ScientificContractError(
             "aggregation requires at least one client update",
@@ -380,7 +342,7 @@ def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> dict[str, torch
                     "parameter shape or dtype mismatch during aggregation",
                     subject=ContractSubject.TRAINING,
                 )
-    aggregated: dict[str, torch.Tensor] = {}
+    aggregated: AutoencoderState = {}
     for key in reference_keys:
         weighted_sum = torch.zeros_like(updates[0].state_dict[key], dtype=torch.float64)
         for update in updates:
@@ -393,31 +355,21 @@ def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> dict[str, torch
 def preprocessing_state_set_checksum(
     client_checksum_pairs: Sequence[tuple[ClientIdentity, Checksum]],
 ) -> Checksum:
-    """One deterministic checksum binding every client identity to its preprocessing checksum."""
     entries = sorted(f"{client.client_id}:{checksum.value}" for client, checksum in client_checksum_pairs)
     return Checksum(sha256("|".join(entries).encode()).hexdigest())
 
 
-def serialized_state_dict_bytes(state_dict: ModelStateMap) -> bytes:
-    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
-    return save(cpu_state)
-
-
-def checksum_state_dict(state_dict: ModelStateMap) -> Checksum:
-    return Checksum(sha256(serialized_state_dict_bytes(state_dict)).hexdigest())
-
-
 def serialize_and_checksum_state_dict(
-    state_dict: ModelStateMap,
-) -> tuple[bytes, Checksum, ByteCount]:
-    """Serialize state dict once and return serialized bytes, checksum, and byte count."""
-    payload = serialized_state_dict_bytes(state_dict)
+    state_dict: AutoencoderState,
+) -> tuple[Checksum, ByteCount]:
+    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
+    payload = save(cpu_state)
     checksum = Checksum(sha256(payload).hexdigest())
     byte_count = ByteCount(len(payload))
-    return payload, checksum, byte_count
+    return checksum, byte_count
 
 
-def validate_federated_training_request(request: FederatedTrainingRequest) -> None:
+def validate_federated_training_request(request: FederatedTrainingRequest[TrainingProtocolT]) -> None:
     if not request.clients:
         raise ScientificContractError(
             "training requires at least one client dataset",
@@ -434,27 +386,40 @@ def validate_federated_training_request(request: FederatedTrainingRequest) -> No
             "training requires exactly the declared population client count",
             subject=ContractSubject.CLIENT,
         )
-    if request.batch_size.value < 1:
-        raise ScientificContractError(
-            "training batch size must remain positive",
-            subject=ContractSubject.BATCH_SIZE,
-        )
-    for client_input in request.clients:
-        reject_centralized_preprocessing_for_federated_training(client_input.preprocessing_state)
-        if (
-            client_input.preprocessing_state.client_identity is None
-            or client_input.preprocessing_state.client_identity.value != client_input.client.client_id
-        ):
-            raise ScientificContractError(
-                "preprocessing state client identity must match client training input",
-                subject=ContractSubject.CLIENT_IDENTITY,
-            )
+
+
+def compute_weighted_aggregate_loss(updates: Sequence[ClientUpdate]) -> MetricValue:
+    total_samples = sum(u.sample_count.value for u in updates)
+    return MetricValue(
+        sum(u.local_loss.value * u.sample_count.value for u in updates) / total_samples
+    )
+
+
+def create_communication_record(
+    round_number: RoundNumber,
+    state_bytes: ByteCount,
+    client_count: int,
+) -> CommunicationRecord:
+    upload_bytes = client_count * state_bytes.value
+    download_bytes = client_count * state_bytes.value
+    return CommunicationRecord(
+        round_number=round_number,
+        estimated_upload_bytes=ByteCount(upload_bytes),
+        estimated_download_bytes=ByteCount(download_bytes),
+        estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+    )
+
+
+def create_round_snapshot(
+    round_number: RoundNumber,
+    state: AutoencoderState,
+    loss: MetricValue,
+) -> RoundSnapshot:
+    return RoundSnapshot(round_number, clone_state(state), loss)
 
 
 def run_federated_training(
-    request: FederatedTrainingRequest,
-    *,
-    proximal_coefficient: ProximalCoefficient | None,
+    request: FederatedTrainingRequest[TrainingProtocolT],
 ) -> FederatedTrainingOutcome:
     validate_federated_training_request(request)
     configure_deterministic_execution(request.training_seed)
@@ -470,7 +435,8 @@ def run_federated_training(
     global_state = clone_autoencoder_state(global_model)
     del global_model
 
-    candidate_rounds = {candidate.value for candidate in request.checkpoint_protocol.candidates}
+    candidate_rounds: set[RoundNumber] = set(request.checkpoint_protocol.candidates)
+    proximal_coefficient = _resolve_proximal_coefficient(request.training_protocol)
     rounds: list[FederatedRoundResult] = []
     snapshots: list[RoundSnapshot] = []
 
@@ -483,7 +449,7 @@ def run_federated_training(
         for client_index, client_data in enumerate(prepared_clients):
             client_seed = client_round_seed(request.training_seed, round_number, client_index)
             local_model = ReconstructionAutoencoder(request.autoencoder.widths).to(device)
-            load_autoencoder_state(local_model, {name: tensor.clone() for name, tensor in reference_state.items()})
+            load_autoencoder_state(local_model, clone_state(reference_state))
             optimizer = build_optimizer(local_model, request.training_protocol.optimizer, request.learning_rate)
             loader = build_client_loader(client_data, batch_size=request.batch_size, seed=client_seed)
             proximal_term = (
@@ -503,20 +469,10 @@ def run_federated_training(
         aggregated = aggregate_client_updates(client_updates)
         global_state = aggregated
 
-        total_samples = sum(u.sample_count.value for u in client_updates)
-        aggregate_loss = MetricValue(
-            sum(u.local_loss.value * u.sample_count.value for u in client_updates) / total_samples
-        )
-        _, state_checksum, single_state_bytes = serialize_and_checksum_state_dict(aggregated)
-        upload_bytes = len(client_updates) * single_state_bytes.value
-        download_bytes = len(ordered_clients) * single_state_bytes.value
+        aggregate_loss = compute_weighted_aggregate_loss(client_updates)
+        state_checksum, single_state_bytes = serialize_and_checksum_state_dict(aggregated)
 
-        communication = CommunicationRecord(
-            round_number=round_number,
-            estimated_upload_bytes=ByteCount(upload_bytes),
-            estimated_download_bytes=ByteCount(download_bytes),
-            estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
-        )
+        communication = create_communication_record(round_number, single_state_bytes, len(ordered_clients))
         global_reference = GlobalModelStateReference(
             coordinate=request.coordinate,
             round_number=round_number,
@@ -534,21 +490,13 @@ def run_federated_training(
             )
         )
 
-        if round_index in candidate_rounds:
-            snapshots.append(
-                RoundSnapshot(
-                    round_number,
-                    {name: tensor.clone() for name, tensor in aggregated.items()},
-                    aggregate_loss,
-                )
-            )
+        if round_number in candidate_rounds:
+            snapshots.append(create_round_snapshot(round_number, aggregated, aggregate_loss))
 
     history = FederatedTrainingHistory(coordinate=request.coordinate, rounds=tuple(rounds))
     preprocessing_checksum = preprocessing_state_set_checksum(
         tuple((client.client, client.preprocessing_checksum) for client in prepared_clients)
     )
-
-    from datp_core.learning.federated.checkpointing import retain_checkpoint_candidates
 
     candidates = retain_checkpoint_candidates(
         request.coordinate,
@@ -575,6 +523,16 @@ def run_federated_training(
     return FederatedTrainingOutcome(training_result=training_result, candidates=candidates)
 
 
+def _resolve_proximal_coefficient(
+    protocol: FedAvgProtocol | FedProxProtocol,
+) -> ProximalCoefficient | None:
+    match protocol:
+        case FedAvgProtocol():
+            return None
+        case FedProxProtocol(coefficient=coefficient):
+            return coefficient
+
+
 def persist_federated_training_history(
     history: FederatedTrainingHistory,
     directory: Path,
@@ -582,7 +540,7 @@ def persist_federated_training_history(
     device_name: str,
 ) -> None:
     if not device_name:
-        raise ArtifactIntegrityError(
+        raise ScientificContractError(
             "training publication requires a non-empty device name",
             subject=ContractSubject.CUDA,
         )
@@ -630,84 +588,3 @@ def persist_federated_training_history(
         pl.DataFrame(personalized_rows, schema=PERSONALIZED_ROUNDS_SCHEMA, orient="row").write_parquet(
             directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
         )
-
-
-def load_federated_training_history(
-    coordinate: FederatedTrainingCoordinate,
-    directory: Path,
-    identity_kind: PopulationIdentityKind,
-    *,
-    personalized_coordinate: FederatedTrainingCoordinate | None = None,
-) -> FederatedTrainingHistory:
-    col = FederatedHistoryColumn
-    round_summary_path = directory / FederatedHistoryAssetName.ROUND_SUMMARY.value
-    client_rounds_path = directory / FederatedHistoryAssetName.CLIENT_ROUNDS.value
-    if not round_summary_path.is_file() or not client_rounds_path.is_file():
-        raise ArtifactIntegrityError("history parquet file missing", subject=ContractSubject.ARTIFACT_PATH)
-
-    round_frame = pl.read_parquet(round_summary_path).sort(col.ROUND_NUMBER.value)
-    _validate_schema(round_frame, ROUND_SUMMARY_SCHEMA)
-
-    client_frame = pl.read_parquet(client_rounds_path)
-    _validate_schema(client_frame, CLIENT_ROUNDS_SCHEMA)
-
-    personalized_path = directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
-    personalized_frame = None
-    if personalized_path.is_file():
-        personalized_frame = pl.read_parquet(personalized_path)
-        _validate_schema(personalized_frame, PERSONALIZED_ROUNDS_SCHEMA)
-
-    rounds: list[FederatedRoundResult] = []
-    for round_row in round_frame.iter_rows(named=True):
-        round_number = RoundNumber(int(round_row[col.ROUND_NUMBER.value]))
-        client_rows = client_frame.filter(pl.col(col.ROUND_NUMBER.value) == round_row[col.ROUND_NUMBER.value])
-        client_results = tuple(
-            ClientTrainingResult(
-                client=ClientIdentity(coordinate.population, str(row[col.CLIENT_ID.value]), identity_kind),
-                sample_count=RowCount(int(row[col.SAMPLE_COUNT.value])),
-                local_loss=MetricValue(float(row[col.LOCAL_LOSS.value])),
-            )
-            for row in client_rows.iter_rows(named=True)
-        )
-        personalized_references: tuple[PersonalizedModelStateReference, ...] = ()
-        if personalized_frame is not None:
-            if personalized_coordinate is None:
-                raise ScientificContractError(
-                    "personalized training history requires personalized coordinate",
-                    subject=ContractSubject.COORDINATE,
-                )
-            rows = personalized_frame.filter(pl.col(col.ROUND_NUMBER.value) == round_row[col.ROUND_NUMBER.value])
-            personalized_references = tuple(
-                PersonalizedModelStateReference(
-                    coordinate=personalized_coordinate,
-                    client=ClientIdentity(coordinate.population, str(row[col.CLIENT_ID.value]), identity_kind),
-                    round_number=round_number,
-                    local_loss=MetricValue(float(row[col.LOCAL_LOSS.value])),
-                    state_checksum=Checksum(str(row[col.STATE_CHECKSUM.value])),
-                    tensor_path=None,
-                )
-                for row in rows.iter_rows(named=True)
-            )
-        communication = CommunicationRecord(
-            round_number=round_number,
-            estimated_upload_bytes=ByteCount(int(round_row[col.UPLOAD_BYTES.value])),
-            estimated_download_bytes=ByteCount(int(round_row[col.DOWNLOAD_BYTES.value])),
-            estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
-        )
-        global_reference = GlobalModelStateReference(
-            coordinate=coordinate,
-            round_number=round_number,
-            state_checksum=Checksum(str(round_row[col.GLOBAL_STATE_CHECKSUM.value])),
-            tensor_path=None,
-        )
-        rounds.append(
-            FederatedRoundResult(
-                round_number=round_number,
-                client_results=client_results,
-                aggregate_loss=MetricValue(float(round_row[col.AGGREGATE_LOSS.value])),
-                communication=communication,
-                global_state_reference=global_reference,
-                personalized_state_references=personalized_references,
-            )
-        )
-    return FederatedTrainingHistory(coordinate=coordinate, rounds=tuple(rounds))

@@ -113,6 +113,7 @@ DITTO_TRAINING_PROTOCOLS = tuple(
     DittoProtocol(
         kind=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
         regularization=regularization,
+        optimizer=OPTIMIZER,
     )
     for regularization in DITTO_REGULARIZATION_GRID
 )

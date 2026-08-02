@@ -16,7 +16,8 @@ from tests.unit.learning.federated.helpers import (
 from datp_core.domain.enums import PublicationStatus
 from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.learning.federated.checkpointing import select_checkpoint
-from datp_core.learning.federated.fedavg import FedAvgTrainingRequest, train_fedavg
+from datp_core.learning.federated.fedavg import train_fedavg
+from datp_core.learning.federated.training import FederatedTrainingRequest
 from datp_core.protocols.training import CHECKPOINT_SELECTION_RULE
 from datp_core.runtime.compute import resolve_cuda_device
 from datp_core.scoring.generation import ClientScoringInput, ScoreGenerationRequest, generate_federated_scores
@@ -26,7 +27,7 @@ def test_fedavg_end_to_end_train_select_and_score(tmp_path: Path) -> None:
     coordinate = fedavg_coordinate(Seed(0))
     clients = build_all_client_inputs(tmp_path)
     outcome = train_fedavg(
-        FedAvgTrainingRequest(
+        FederatedTrainingRequest(
             coordinate=coordinate,
             clients=clients,
             population_client_count=POPULATION_CLIENT_COUNT,
@@ -48,13 +49,15 @@ def test_fedavg_end_to_end_train_select_and_score(tmp_path: Path) -> None:
         coordinate=coordinate,
         client=None,
         selection_rule=CHECKPOINT_SELECTION_RULE,
+        preprocessing_state_set_checksum=outcome.candidates[0].preprocessing_state_set_checksum,
+        split_manifest_checksum=outcome.candidates[0].split_manifest_checksum,
     )
     assert decision.selected.round_number == CHECKPOINT.maximum_round
 
     device = resolve_cuda_device()
     scoring_clients = tuple(
         ClientScoringInput(
-            client=client_dataset.training_input.client,
+            client=client_dataset.client,
             calibration_features=benign_frame(RowCount(8), seed=Seed(index)),
             evaluation_features=benign_frame(RowCount(8), seed=Seed(index + 50)),
         )
