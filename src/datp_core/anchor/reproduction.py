@@ -34,7 +34,6 @@ from datp_core.anchor.models import (
     HistoricalMetricArtifactSource,
     HistoricalMetricsDocument,
     HistoricalRegimeToken,
-    HistoricalThresholdScopeToken,
 )
 from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod, MetricId
 from datp_core.domain.errors import AnchorReproductionError
@@ -179,7 +178,7 @@ def _validate_historical_document(
             AnchorDiscrepancyReason.WRONG_POPULATION,
         ),
         (
-            threshold_method_from_historical_scope(document.threshold_scope) is not source.threshold_method,
+            document.threshold_scope.to_threshold_method() is not source.threshold_method,
             "historical threshold scope does not match the artifact coordinate",
             AnchorDiscrepancyReason.WRONG_THRESHOLD_METHOD,
         ),
@@ -231,27 +230,6 @@ def historical_sources_for_seed_directories(
             )
         )
     return tuple(sources)
-
-
-def threshold_method_from_historical_scope(
-    scope_token: HistoricalThresholdScopeToken | str,
-) -> FederatedThresholdMethod:
-    token = (
-        scope_token
-        if isinstance(scope_token, HistoricalThresholdScopeToken)
-        else HistoricalThresholdScopeToken(scope_token)
-    )
-    match token:
-        case HistoricalThresholdScopeToken.ELIGIBLE_CLIENT_ARITHMETIC_MEAN:
-            return FederatedThresholdMethod.SHARED_THRESHOLD
-        case HistoricalThresholdScopeToken.PER_CLIENT_PERCENTILE:
-            return FederatedThresholdMethod.LOCAL_THRESHOLD
-        case _:
-            raise AnchorReproductionError(
-                "unrecognized historical threshold scope token",
-                subject=token,
-                reason=AnchorDiscrepancyReason.WRONG_THRESHOLD_METHOD.value,
-            )
 
 
 def reproduce_anchor(

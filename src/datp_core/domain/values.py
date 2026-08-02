@@ -90,6 +90,20 @@ def _pydantic_value_schema(cls, _source_type, _handler):
     )
 
 
+def _str_enum_schema(cls, _source_type, _handler):
+    """Pydantic v2 schema for StrEnum: validates raw str → cls, passes through members."""
+    from pydantic_core import core_schema as _cs
+
+    def _validate(v):
+        if isinstance(v, cls):
+            return v
+        if not isinstance(v, str):
+            raise TypeError(f"expected {cls.__name__} or str")
+        return cls(v)
+
+    return _cs.no_info_plain_validator_function(_validate)
+
+
 def _typed_eq(self: Any, other: object) -> bool:
     """Equality: true if both are value objects with matching value, or against a raw scalar."""
     if isinstance(other, (int, float)) and not isinstance(other, bool):

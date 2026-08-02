@@ -19,7 +19,7 @@ from datp_core.domain.enums import (
     PopulationId,
     TrainingModelId,
 )
-from datp_core.domain.values import Checksum, ClientCount, MetricValue, Seed, SeedCount
+from datp_core.domain.values import Checksum, ClientCount, MetricValue, Seed, SeedCount, _str_enum_schema
 from datp_core.protocols.anchor import HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.protocols.models import SeedCohort
 from datp_core.protocols.populations import NBAIOT_NATURAL_DEVICES
@@ -82,20 +82,6 @@ class AnchorDependencyKind(StrEnum):
     HISTORICAL_ARTIFACT_ROOT = "historical_artifact_root"
 
 
-def _str_enum_schema(cls, _source_type, _handler):
-    """Pydantic v2 schema: validates raw str → cls, passes through existing members."""
-    from pydantic_core import core_schema as _cs
-
-    def _validate(v):
-        if isinstance(v, cls):
-            return v
-        if not isinstance(v, str):
-            raise TypeError(f"expected {cls.__name__} or str")
-        return cls(v)
-
-    return _cs.no_info_plain_validator_function(_validate)
-
-
 class HistoricalThresholdScopeToken(StrEnum):
     """Semantic threshold-scope tokens stored in historical metrics artifacts."""
 
@@ -103,6 +89,13 @@ class HistoricalThresholdScopeToken(StrEnum):
     PER_CLIENT_PERCENTILE = "per_client_percentile"
 
     __get_pydantic_core_schema__ = classmethod(_str_enum_schema)
+
+    def to_threshold_method(self) -> FederatedThresholdMethod:
+        match self:
+            case HistoricalThresholdScopeToken.ELIGIBLE_CLIENT_ARITHMETIC_MEAN:
+                return FederatedThresholdMethod.SHARED_THRESHOLD
+            case HistoricalThresholdScopeToken.PER_CLIENT_PERCENTILE:
+                return FederatedThresholdMethod.LOCAL_THRESHOLD
 
 
 class HistoricalDatasetToken(StrEnum):
@@ -372,9 +365,7 @@ class AnchorDiscrepancy(StrictModel):
     @field_validator("detail")
     @classmethod
     def validate_detail(cls, v: str) -> str:
-        if not v:
-            raise ValueError("discrepancy detail must be non-empty")
-        return v
+        return _require_non_empty_detail(v)
 
     @classmethod
     def from_seed_subset(cls, seed_subset: AnchorSeedSubsetComparison) -> "AnchorDiscrepancy":
@@ -419,9 +410,7 @@ class AnchorDependencyBlocker(StrictModel):
     @field_validator("detail")
     @classmethod
     def validate_detail(cls, v: str) -> str:
-        if not v:
-            raise ValueError("dependency blocker detail must be non-empty")
-        return v
+        return _require_non_empty_detail(v)
 
 
 class AnchorReproductionResult(StrictModel):
@@ -481,6 +470,12 @@ class HistoricalMetricArtifactSource(StrictModel):
 # ---------------------------------------------------------------------------
 # Gate integrity validators (package-private)
 # ---------------------------------------------------------------------------
+
+
+def _require_non_empty_detail(v: str) -> str:
+    if not v:
+        raise ValueError("detail must be non-empty")
+    return v
 
 
 def _require_clean_pass(decision: AnchorGateDecision) -> None:

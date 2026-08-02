@@ -3,13 +3,12 @@ from pathlib import Path
 
 import pytest
 
-from datp_core.anchor.models import AnchorGateStatus
+from datp_core.anchor.models import AnchorGateStatus, HistoricalThresholdScopeToken
 from datp_core.anchor.reproduction import (
     historical_sources_for_seed_directories,
     load_historical_observations,
     references_from_protocol,
     reproduce_anchor,
-    threshold_method_from_historical_scope,
 )
 from datp_core.domain.enums import ExperimentReadiness, FederatedThresholdMethod
 from datp_core.domain.errors import AnchorReproductionError
@@ -138,10 +137,13 @@ def test_pipeline_rejects_wrong_threshold_scope_token(tmp_path: Path) -> None:
 
 def test_historical_scope_tokens_map_only_to_shared_and_local() -> None:
     assert (
-        threshold_method_from_historical_scope("eligible_client_arithmetic_mean")
+        HistoricalThresholdScopeToken("eligible_client_arithmetic_mean").to_threshold_method()
         is FederatedThresholdMethod.SHARED_THRESHOLD
     )
-    assert threshold_method_from_historical_scope("per_client_percentile") is FederatedThresholdMethod.LOCAL_THRESHOLD
+    assert (
+        HistoricalThresholdScopeToken("per_client_percentile").to_threshold_method()
+        is FederatedThresholdMethod.LOCAL_THRESHOLD
+    )
 
 
 def test_references_and_fixture_observations_are_full_precision_aligned(tmp_path: Path) -> None:
