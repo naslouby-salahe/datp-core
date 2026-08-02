@@ -80,6 +80,22 @@ class PValue:
         if not isfinite(self.value) or not 0.0 <= self.value <= 1.0:
             raise ValueError("p-value must be finite and lie in [0, 1]")
 
+    @classmethod
+    def __get_pydantic_core_schema__(cls, _source_type: object, _handler: object) -> object:
+        from pydantic_core import core_schema as _cs
+
+        def _validate(v: object) -> "PValue":
+            if isinstance(v, cls):
+                return v
+            if isinstance(v, int | float) and not isinstance(v, bool):
+                return cls(float(v))
+            raise ValueError(f"cannot construct PValue from {type(v).__qualname__}")
+
+        return _cs.no_info_plain_validator_function(
+            _validate,
+            serialization=_cs.plain_serializer_function_ser_schema(lambda instance: instance.value),
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class PairedDifferenceCounts:

@@ -11,6 +11,7 @@ analysis/inference/__init__.py
 analysis/inference/bootstrap.py
 analysis/inference/paired.py
 analysis/mechanisms.py
+analysis/models.py
 analysis/temporal.py
 anchor/__init__.py
 anchor/comparison.py

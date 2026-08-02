@@ -1,4 +1,5 @@
-from datp_core.analysis.inference.bootstrap import BcaOutcome, PairedContrast, paired_bca_interval
+from datp_core.analysis.inference.bootstrap import paired_bca_interval
+from datp_core.analysis.models import BcaOutcome, PairedContrast
 from datp_core.domain.enums import (
     EvidenceRole,
     FederatedThresholdMethod,
@@ -29,20 +30,18 @@ def _contrast(seed: int) -> PairedContrast:
     local = MetricValue(0.02)
     shared = MetricValue(0.03 + seed / 10000)
     return PairedContrast(
-        FederatedTrainingCoordinate(
-            PopulationId.NBAIOT_NATURAL_DEVICES,
-            Seed(seed),
-            SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
-            PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
-            TrainingModelId.FEDAVG_AUTOENCODER,
-            None,
+        coordinate=FederatedTrainingCoordinate(
+            population=PopulationId.NBAIOT_NATURAL_DEVICES,
+            training_seed=Seed(seed),
+            split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
+            preprocessing_identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
+            model=TrainingModelId.FEDAVG_AUTOENCODER,
+            model_coefficient=None,
         ),
-        EvidenceRole.CONFIRMATORY,
-        Seed(seed),
-        MetricId.FPR_COEFFICIENT_OF_VARIATION,
-        FederatedThresholdMethod.SHARED_THRESHOLD,
-        FederatedThresholdMethod.LOCAL_THRESHOLD,
-        shared,
-        local,
-        MetricValue(shared.value - local.value),
+        evidence_role=EvidenceRole.CONFIRMATORY,
+        metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
+        left_method=FederatedThresholdMethod.SHARED_THRESHOLD,
+        right_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+        left_value=shared,
+        right_value=local,
     )

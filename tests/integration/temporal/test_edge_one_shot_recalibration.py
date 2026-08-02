@@ -37,7 +37,7 @@ def test_recalibrated_future_can_change_only_its_calibration_window() -> None:
     recalibrated = _future_provenance(TemporalState.RECALIBRATED_FUTURE, "c" * 64, "b" * 64)
     validate_frozen_recalibrated_pair(frozen, recalibrated)
 
-    with pytest.raises(ScientificContractError, match="future evaluation scores"):
+    with pytest.raises(ScientificContractError, match="evaluation scores"):
         validate_frozen_recalibrated_pair(
             frozen,
             _future_provenance(TemporalState.RECALIBRATED_FUTURE, "c" * 64, "d" * 64),

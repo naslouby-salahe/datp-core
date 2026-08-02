@@ -454,6 +454,8 @@ class MetricValue:
     def __float__(self) -> float:
         return self.value
 
+    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+
 
 class TrafficRatePerDay(NonNegativeFiniteFloatValue):
     validation_name: ClassVar[str] = "traffic rate"

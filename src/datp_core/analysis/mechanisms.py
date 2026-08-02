@@ -431,3 +431,28 @@ def _cluster_assignments(
     if not assignments:
         raise ValueError("cluster stability requires at least one persisted client")
     return assignments
+
+
+@dataclass(frozen=True, slots=True)
+class MechanismResult:
+    """Aggregated mechanism evidence from a federated threshold evaluation."""
+
+    evidence_role: EvidenceRole
+    group_sizes: tuple[int, ...]
+    within_group_threshold_spreads: tuple[MetricValue, ...]
+    within_group_fpr_spreads: tuple[MetricValue, ...]
+    across_group_threshold_spread: MetricValue | None
+    across_group_mean_fpr_spread: MetricValue | None
+    singleton_groups: tuple[int, ...]
+    empty_groups: tuple[int, ...]
+    recovery_fraction: MetricValue | None
+    availability: AvailabilityStatus
+    reason: str
+
+    def __post_init__(self) -> None:
+        if any(size < 0 for size in self.group_sizes):
+            raise ValueError("mechanism group sizes must be non-negative")
+        if self.availability is AvailabilityStatus.AVAILABLE and self.reason:
+            raise ValueError("available mechanism result cannot carry a reason")
+        if self.availability is not AvailabilityStatus.AVAILABLE and not self.reason:
+            raise ValueError("unavailable mechanism result requires an explicit reason")

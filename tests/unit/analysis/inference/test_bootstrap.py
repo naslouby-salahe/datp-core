@@ -1,13 +1,15 @@
 from datp_core.analysis.inference.bootstrap import (
+    decide_confirmatory,
+    external_paired_bca_interval,
+    paired_bca_interval,
+)
+from datp_core.analysis.models import (
+    BcaAdjustment,
     BcaOutcome,
     BcaReason,
     BootstrapInterval,
     ExternalPairedAnalysisPlan,
-    ExternalPairedContrast,
     PairedContrast,
-    decide_confirmatory,
-    external_paired_bca_interval,
-    paired_bca_interval,
 )
 from datp_core.domain.enums import (
     AvailabilityStatus,
@@ -87,9 +89,7 @@ def test_confirmatory_decision_uses_positive_bca_interval_not_secondary_evidence
         MetricValue(0.2),
         MetricValue(0.01),
         MetricValue(0.4),
-        0.0,
-        0.0,
-        AvailabilityStatus.AVAILABLE,
+        BcaAdjustment(bias_correction=0.0, acceleration=0.0),
         BcaOutcome.AVAILABLE,
         BcaReason.NONE,
     )
@@ -100,10 +100,10 @@ def test_confirmatory_decision_uses_positive_bca_interval_not_secondary_evidence
     assert result.availability is AvailabilityStatus.AVAILABLE
 
 
-def _external_contrast(seed: int) -> ExternalPairedContrast:
+def _external_contrast(seed: int) -> PairedContrast:
     right = MetricValue(0.02 + seed / 10_000)
     left = MetricValue(right.value + 0.01 + seed / 100_000)
-    return ExternalPairedContrast(
+    return PairedContrast(
         coordinate=FederatedTrainingCoordinate(
             population=PopulationId.EDGE_SENSOR_GROUPS,
             training_seed=Seed(seed),
@@ -113,13 +113,11 @@ def _external_contrast(seed: int) -> ExternalPairedContrast:
             model_coefficient=None,
         ),
         evidence_role=EvidenceRole.EXTERNAL_VALIDATION,
-        seed=Seed(seed),
         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
         left_method=FederatedThresholdMethod.SHARED_THRESHOLD,
         right_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
         left_value=left,
         right_value=right,
-        delta=MetricValue(left.value - right.value),
     )
 
 
@@ -136,11 +134,9 @@ def _contrast(seed: int) -> PairedContrast:
             model_coefficient=None,
         ),
         evidence_role=EvidenceRole.CONFIRMATORY,
-        seed=Seed(seed),
         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
-        shared_method=FederatedThresholdMethod.SHARED_THRESHOLD,
-        local_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
-        shared_value=shared,
-        local_value=local,
-        delta=MetricValue(shared.value - local.value),
+        left_method=FederatedThresholdMethod.SHARED_THRESHOLD,
+        right_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+        left_value=shared,
+        right_value=local,
     )

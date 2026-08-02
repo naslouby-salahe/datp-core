@@ -151,10 +151,12 @@ def _wilcoxon_values(
 ) -> tuple[float, float] | None:
     statistic = getattr(result, "statistic", None)
     p_value = getattr(result, "pvalue", None)
-    if not _is_finite_real(statistic) or not _is_finite_real(p_value):
+    if not isinstance(statistic, Real) or isinstance(statistic, bool):
         return None
-    return float(statistic), float(p_value)
-
-
-def _is_finite_real(value: object) -> bool:
-    return isinstance(value, Real) and not isinstance(value, bool) and isfinite(float(value))
+    if not isinstance(p_value, Real) or isinstance(p_value, bool):
+        return None
+    stat_float = float(statistic)
+    pval_float = float(p_value)
+    if not isfinite(stat_float) or not isfinite(pval_float):
+        return None
+    return stat_float, pval_float

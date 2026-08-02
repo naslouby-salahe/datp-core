@@ -5,29 +5,29 @@ from enum import StrEnum
 from pathlib import Path
 from shutil import rmtree
 
-from datp_core.analysis.descriptive import DescriptiveSummary, PairedDifferenceCounts, summarize_values
+from datp_core.analysis.descriptive import DescriptiveSummary, QuantileRange, summarize_values
 from datp_core.analysis.inference.bootstrap import (
-    BcaOutcome,
-    BcaReason,
-    BootstrapInterval,
-    ExternalPairedAnalysisPlan,
-    ExternalPairedContrast,
-    PairedContrast,
-    ScientificDecisionResult,
     decide_confirmatory,
     external_paired_bca_interval,
     paired_bca_interval,
 )
 from datp_core.analysis.inference.paired import (
-    MultiplicityResult,
-    RankBiserialResult,
-    WilcoxonResult,
     holm_adjust,
     matched_pairs_rank_biserial,
     paired_wilcoxon,
     sign_consistency,
 )
 from datp_core.analysis.mechanisms import MechanismResult
+from datp_core.analysis.models import (
+    BootstrapInterval,
+    ExternalPairedAnalysisPlan,
+    MultiplicityResult,
+    PairedContrast,
+    PairedDifferenceCounts,
+    RankBiserialResult,
+    ScientificDecisionResult,
+    WilcoxonResult,
+)
 from datp_core.analysis.temporal import (
     TemporalDeploymentProvenance,
     TemporalRecoveryResult,
@@ -37,23 +37,16 @@ from datp_core.artifacts.store import AtomicPublication, publish_atomically
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     AvailabilityStatus,
-    EffectSizeId,
     EvidenceRole,
-    IntervalMethod,
-    MultiplicityCorrectionId,
     PopulationId,
     PublicationStatus,
-    ScientificDecision,
     StageOperationId,
-    StatisticalTestId,
     TemporalState,
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
     BootstrapReplicateCount,
     Checksum,
-    ConfidenceLevel,
-    MetricValue,
     Ratio,
     Seed,
     checksum_file,
@@ -71,45 +64,25 @@ class AnalysisAssetName(StrEnum):
 
 
 class AnalysisDocument(StrictModel):
-    interval_method: IntervalMethod
-    confidence_level: ConfidenceLevel
-    replicate_count: BootstrapReplicateCount
-    analysis_seed: Seed
-    point_estimate: MetricValue | None
-    lower_bound: MetricValue | None
-    upper_bound: MetricValue | None
-    bias_correction: float | None
-    acceleration: float | None
-    interval_availability: AvailabilityStatus
-    outcome: BcaOutcome
-    reason: BcaReason
-    decision: ScientificDecision
-    decision_availability: AvailabilityStatus
-    decision_rationale: str
-    descriptive: "DescriptiveDocument"
-    sign_consistency: "PairedDifferenceCountsDocument"
-    wilcoxon: "WilcoxonDocument"
-    rank_biserial: "RankBiserialDocument"
-    multiplicity: "MultiplicityDocument"
-    mechanisms: tuple["MechanismDocument", ...]
+    interval: BootstrapInterval
+    decision: ScientificDecisionResult
+    descriptive: DescriptiveSummary
+    sign_consistency: PairedDifferenceCounts
+    wilcoxon: WilcoxonResult
+    rank_biserial: RankBiserialResult
+    multiplicity: MultiplicityResult | None
+    multiplicity_availability: AvailabilityStatus
+    multiplicity_reason: str
+    mechanisms: tuple[MechanismResult, ...]
 
 
 class ExternalAnalysisDocument(StrictModel):
     evidence_role: EvidenceRole
-    interval_method: IntervalMethod
-    confidence_level: ConfidenceLevel
-    replicate_count: BootstrapReplicateCount
-    analysis_seed: Seed
-    point_estimate: MetricValue | None
-    lower_bound: MetricValue | None
-    upper_bound: MetricValue | None
-    interval_availability: AvailabilityStatus
-    outcome: BcaOutcome
-    reason: BcaReason
-    descriptive: "DescriptiveDocument"
-    sign_consistency: "PairedDifferenceCountsDocument"
-    wilcoxon: "WilcoxonDocument"
-    rank_biserial: "RankBiserialDocument"
+    interval: BootstrapInterval
+    descriptive: DescriptiveSummary
+    sign_consistency: PairedDifferenceCounts
+    wilcoxon: WilcoxonResult
+    rank_biserial: RankBiserialResult
 
 
 class TemporalAnalysisDocument(StrictModel):
@@ -118,75 +91,6 @@ class TemporalAnalysisDocument(StrictModel):
     frozen_provenance: TemporalDeploymentProvenance
     recalibrated_provenance: TemporalDeploymentProvenance
     records: tuple[TemporalRecoveryResult, ...]
-
-
-class DescriptiveDocument(StrictModel):
-    evidence_role: EvidenceRole
-    values: tuple[float, ...]
-    available_count: int
-    unavailable_count: int
-    excluded_count: int
-    mean: float | None
-    median: float | None
-    lower_quantile: float | None
-    upper_quantile: float | None
-    minimum: float | None
-    maximum: float | None
-    spread: float | None
-    availability: AvailabilityStatus
-    reason: str
-
-
-class PairedDifferenceCountsDocument(StrictModel):
-    positive: int
-    zero: int
-    negative: int
-
-
-class WilcoxonDocument(StrictModel):
-    test: StatisticalTestId
-    alternative: str
-    zero_method: str
-    computation_method: str
-    statistic: float | None
-    p_value: float | None
-    nonzero_pair_count: int
-    availability: AvailabilityStatus
-    reason: str
-
-
-class RankBiserialDocument(StrictModel):
-    effect_size: EffectSizeId
-    value: float | None
-    positive_rank_sum: float | None
-    negative_rank_sum: float | None
-    nonzero_pair_count: int
-    availability: AvailabilityStatus
-    reason: str
-
-
-class MultiplicityDocument(StrictModel):
-    correction: MultiplicityCorrectionId | None
-    family_name: str | None
-    raw_p_values: tuple[float, ...]
-    adjusted_p_values: tuple[float, ...]
-    rejected: tuple[bool, ...]
-    availability: AvailabilityStatus
-    reason: str
-
-
-class MechanismDocument(StrictModel):
-    evidence_role: EvidenceRole
-    group_sizes: tuple[int, ...]
-    within_group_threshold_spreads: tuple[MetricValue, ...]
-    within_group_fpr_spreads: tuple[MetricValue, ...]
-    across_group_threshold_spread: MetricValue | None
-    across_group_mean_fpr_spread: MetricValue | None
-    singleton_groups: tuple[int, ...]
-    empty_groups: tuple[int, ...]
-    recovery_fraction: MetricValue | None
-    availability: AvailabilityStatus
-    reason: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -234,7 +138,7 @@ class AnalyzeResult:
 @dataclass(frozen=True, slots=True)
 class ExternalAnalyzeRequest:
     execution_identity: ExternalTemporalExecutionIdentity
-    contrasts: tuple[ExternalPairedContrast, ...]
+    contrasts: tuple[PairedContrast, ...]
     plan: ExternalPairedAnalysisPlan
     bootstrap_replicates: BootstrapReplicateCount
     analysis_seed: Seed
@@ -275,8 +179,10 @@ class TemporalAnalyzeResult:
     complete_digest: Checksum
 
 
+_DEFAULT_QUANTILES = QuantileRange(lower=Ratio(0.25), upper=Ratio(0.75))
+
+
 def analyze_stage(request: AnalyzeRequest) -> AnalyzeResult:
-    """Run only declared seed-paired inference and preserve degenerate outcomes."""
     interval = paired_bca_interval(
         request.contrasts,
         protocol=request.inference_protocol,
@@ -284,7 +190,18 @@ def analyze_stage(request: AnalyzeRequest) -> AnalyzeResult:
         analysis_seed=request.analysis_seed,
     )
     result = _analyze(request, interval)
-    document = _analysis_document(result)
+    document = AnalysisDocument(
+        interval=result.interval,
+        decision=result.decision,
+        descriptive=result.descriptive,
+        sign_consistency=result.sign_consistency,
+        wilcoxon=result.wilcoxon,
+        rank_biserial=result.rank_biserial,
+        multiplicity=result.multiplicity,
+        multiplicity_availability=result.multiplicity_availability,
+        multiplicity_reason=result.multiplicity_reason,
+        mechanisms=result.mechanisms,
+    )
     payload = document.model_dump_json(indent=2) + "\n"
     digest = checksum_text(payload)
 
@@ -308,7 +225,6 @@ def analyze_stage(request: AnalyzeRequest) -> AnalyzeResult:
 
 
 def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeResult:
-    """Publish supplementary external evidence without a confirmatory decision."""
     identity = require_execution_identity(request.execution_identity, request.plan.population)
     if identity is None:
         raise RuntimeError("external analysis requires an execution identity")
@@ -319,31 +235,21 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
         replicate_count=request.bootstrap_replicates,
         analysis_seed=request.analysis_seed,
     )
-    deltas = tuple(contrast.delta.value for contrast in request.contrasts)
-    descriptive = summarize_values(deltas, evidence_role=request.plan.evidence_role)
-    signs = sign_consistency(request.contrasts)
-    wilcoxon = paired_wilcoxon(request.contrasts)
-    rank_biserial = matched_pairs_rank_biserial(request.contrasts)
+    deltas = tuple(contrast.delta for contrast in request.contrasts)
+    descriptive = summarize_values(
+        deltas,
+        evidence_role=request.plan.evidence_role,
+        unavailable_count=0,
+        excluded_count=0,
+        quantiles=_DEFAULT_QUANTILES,
+    )
     document = ExternalAnalysisDocument(
         evidence_role=request.plan.evidence_role,
-        interval_method=interval.method,
-        confidence_level=interval.confidence_level,
-        replicate_count=interval.replicate_count,
-        analysis_seed=interval.analysis_seed,
-        point_estimate=interval.point_estimate,
-        lower_bound=interval.lower_bound,
-        upper_bound=interval.upper_bound,
-        interval_availability=interval.availability,
-        outcome=interval.outcome,
-        reason=interval.reason,
-        descriptive=_descriptive_document(descriptive),
-        sign_consistency=PairedDifferenceCountsDocument(
-            positive=signs.positive,
-            zero=signs.zero,
-            negative=signs.negative,
-        ),
-        wilcoxon=_wilcoxon_document(wilcoxon),
-        rank_biserial=_rank_biserial_document(rank_biserial),
+        interval=interval,
+        descriptive=descriptive,
+        sign_consistency=sign_consistency(request.contrasts),
+        wilcoxon=paired_wilcoxon(request.contrasts),
+        rank_biserial=matched_pairs_rank_biserial(request.contrasts),
     )
     payload = document.model_dump_json(indent=2) + "\n"
     digest = checksum_text(payload)
@@ -361,15 +267,14 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
         PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED,
         interval,
         descriptive,
-        signs,
-        wilcoxon,
-        rank_biserial,
+        document.sign_consistency,
+        document.wilcoxon,
+        document.rank_biserial,
         checksum_file(request.output_directory / AnalysisAssetName.COMPLETE),
     )
 
 
 def analyze_temporal_stage(request: TemporalAnalyzeRequest) -> TemporalAnalyzeResult:
-    """Publish one-shot temporal trajectories after enforcing the shared future evaluation binding."""
     _validate_temporal_identities(request)
     _validate_temporal_provenance(request)
     document = TemporalAnalysisDocument(
@@ -399,14 +304,20 @@ def analyze_temporal_stage(request: TemporalAnalyzeRequest) -> TemporalAnalyzeRe
 
 
 def _analyze(request: AnalyzeRequest, interval: BootstrapInterval) -> AnalyzeResult:
-    deltas = tuple(contrast.delta.value for contrast in request.contrasts)
+    deltas = tuple(contrast.delta for contrast in request.contrasts)
     multiplicity, multiplicity_availability, multiplicity_reason = _multiplicity(request)
     return AnalyzeResult(
         stage=StageOperationId.ANALYZE,
         publication_status=PublicationStatus.PUBLISHED,
         interval=interval,
         decision=decide_confirmatory(interval),
-        descriptive=summarize_values(deltas, evidence_role=EvidenceRole.CONFIRMATORY),
+        descriptive=summarize_values(
+            deltas,
+            evidence_role=EvidenceRole.CONFIRMATORY,
+            unavailable_count=0,
+            excluded_count=0,
+            quantiles=_DEFAULT_QUANTILES,
+        ),
         sign_consistency=sign_consistency(request.contrasts),
         wilcoxon=paired_wilcoxon(request.contrasts),
         rank_biserial=matched_pairs_rank_biserial(request.contrasts),
@@ -432,125 +343,6 @@ def _multiplicity(request: AnalyzeRequest) -> tuple[MultiplicityResult | None, A
     )
 
 
-def _analysis_document(result: AnalyzeResult) -> AnalysisDocument:
-    interval = result.interval
-    decision = result.decision
-    return AnalysisDocument(
-        interval_method=interval.method,
-        confidence_level=interval.confidence_level,
-        replicate_count=interval.replicate_count,
-        analysis_seed=interval.analysis_seed,
-        point_estimate=interval.point_estimate,
-        lower_bound=interval.lower_bound,
-        upper_bound=interval.upper_bound,
-        bias_correction=interval.bias_correction,
-        acceleration=interval.acceleration,
-        interval_availability=interval.availability,
-        outcome=interval.outcome,
-        reason=interval.reason,
-        decision=decision.decision,
-        decision_availability=decision.availability,
-        decision_rationale=decision.rationale,
-        descriptive=_descriptive_document(result.descriptive),
-        sign_consistency=PairedDifferenceCountsDocument(
-            positive=result.sign_consistency.positive,
-            zero=result.sign_consistency.zero,
-            negative=result.sign_consistency.negative,
-        ),
-        wilcoxon=_wilcoxon_document(result.wilcoxon),
-        rank_biserial=_rank_biserial_document(result.rank_biserial),
-        multiplicity=_multiplicity_document(
-            result.multiplicity, result.multiplicity_availability, result.multiplicity_reason
-        ),
-        mechanisms=tuple(_mechanism_document(item) for item in result.mechanisms),
-    )
-
-
-def _descriptive_document(result: DescriptiveSummary) -> DescriptiveDocument:
-    return DescriptiveDocument(
-        evidence_role=result.evidence_role,
-        values=result.values,
-        available_count=result.available_count,
-        unavailable_count=result.unavailable_count,
-        excluded_count=result.excluded_count,
-        mean=result.mean,
-        median=result.median,
-        lower_quantile=result.lower_quantile,
-        upper_quantile=result.upper_quantile,
-        minimum=result.minimum,
-        maximum=result.maximum,
-        spread=result.spread,
-        availability=result.availability,
-        reason=result.reason,
-    )
-
-
-def _wilcoxon_document(result: WilcoxonResult) -> WilcoxonDocument:
-    return WilcoxonDocument(
-        test=result.test,
-        alternative=result.alternative,
-        zero_method=result.zero_method,
-        computation_method=result.computation_method,
-        statistic=result.statistic,
-        p_value=result.p_value,
-        nonzero_pair_count=result.nonzero_pair_count,
-        availability=result.availability,
-        reason=result.reason,
-    )
-
-
-def _rank_biserial_document(result: RankBiserialResult) -> RankBiserialDocument:
-    return RankBiserialDocument(
-        effect_size=result.effect_size,
-        value=result.value,
-        positive_rank_sum=result.positive_rank_sum,
-        negative_rank_sum=result.negative_rank_sum,
-        nonzero_pair_count=result.nonzero_pair_count,
-        availability=result.availability,
-        reason=result.reason,
-    )
-
-
-def _multiplicity_document(
-    result: MultiplicityResult | None, availability: AvailabilityStatus, reason: str
-) -> MultiplicityDocument:
-    if result is None:
-        return MultiplicityDocument(
-            correction=None,
-            family_name=None,
-            raw_p_values=(),
-            adjusted_p_values=(),
-            rejected=(),
-            availability=availability,
-            reason=reason,
-        )
-    return MultiplicityDocument(
-        correction=result.correction,
-        family_name=result.family_name,
-        raw_p_values=result.raw_p_values,
-        adjusted_p_values=result.adjusted_p_values,
-        rejected=result.rejected,
-        availability=availability,
-        reason=reason,
-    )
-
-
-def _mechanism_document(result: MechanismResult) -> MechanismDocument:
-    return MechanismDocument(
-        evidence_role=result.evidence_role,
-        group_sizes=result.group_sizes,
-        within_group_threshold_spreads=result.within_group_threshold_spreads,
-        within_group_fpr_spreads=result.within_group_fpr_spreads,
-        across_group_threshold_spread=result.across_group_threshold_spread,
-        across_group_mean_fpr_spread=result.across_group_mean_fpr_spread,
-        singleton_groups=result.singleton_groups,
-        empty_groups=result.empty_groups,
-        recovery_fraction=result.recovery_fraction,
-        availability=result.availability,
-        reason=result.reason,
-    )
-
-
 def _read_document(directory: Path) -> AnalysisDocument:
     return AnalysisDocument.model_validate_json((directory / AnalysisAssetName.DOCUMENT).read_text(encoding="utf-8"))
 
@@ -558,57 +350,20 @@ def _read_document(directory: Path) -> AnalysisDocument:
 def _result_from_document(
     document: AnalysisDocument, publication_status: PublicationStatus, directory: Path
 ) -> AnalyzeResult:
-    interval = BootstrapInterval(
-        method=document.interval_method,
-        confidence_level=document.confidence_level,
-        replicate_count=document.replicate_count,
-        analysis_seed=document.analysis_seed,
-        point_estimate=document.point_estimate,
-        lower_bound=document.lower_bound,
-        upper_bound=document.upper_bound,
-        bias_correction=document.bias_correction,
-        acceleration=document.acceleration,
-        availability=document.interval_availability,
-        outcome=document.outcome,
-        reason=document.reason,
-    )
-    decision = ScientificDecisionResult(
-        evidence_role=EvidenceRole.CONFIRMATORY,
-        decision=document.decision,
-        point_estimate=interval.point_estimate,
-        interval=interval,
-        availability=document.decision_availability,
-        rationale=document.decision_rationale,
-    )
-    multiplicity = _multiplicity_from_document(document.multiplicity)
     return AnalyzeResult(
         stage=StageOperationId.ANALYZE,
         publication_status=publication_status,
-        interval=interval,
-        decision=decision,
-        descriptive=DescriptiveSummary(**document.descriptive.model_dump()),
-        sign_consistency=PairedDifferenceCounts(**document.sign_consistency.model_dump()),
-        wilcoxon=WilcoxonResult(**document.wilcoxon.model_dump()),
-        rank_biserial=RankBiserialResult(**document.rank_biserial.model_dump()),
-        multiplicity=multiplicity,
-        multiplicity_availability=document.multiplicity.availability,
-        multiplicity_reason=document.multiplicity.reason,
-        mechanisms=tuple(MechanismResult(**item.model_dump()) for item in document.mechanisms),
+        interval=document.interval,
+        decision=document.decision,
+        descriptive=document.descriptive,
+        sign_consistency=document.sign_consistency,
+        wilcoxon=document.wilcoxon,
+        rank_biserial=document.rank_biserial,
+        multiplicity=document.multiplicity,
+        multiplicity_availability=document.multiplicity_availability,
+        multiplicity_reason=document.multiplicity_reason,
+        mechanisms=document.mechanisms,
         complete_digest=checksum_file(directory / AnalysisAssetName.COMPLETE),
-    )
-
-
-def _multiplicity_from_document(document: MultiplicityDocument) -> MultiplicityResult | None:
-    if document.correction is None:
-        return None
-    if document.family_name is None:
-        raise ValueError("available multiplicity output requires a family identity")
-    return MultiplicityResult(
-        correction=document.correction,
-        family_name=document.family_name,
-        raw_p_values=document.raw_p_values,
-        adjusted_p_values=document.adjusted_p_values,
-        rejected=document.rejected,
     )
 
 

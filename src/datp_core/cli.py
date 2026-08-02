@@ -6,7 +6,7 @@ from pathlib import Path
 import polars as pl
 import typer
 
-from datp_core.analysis.inference.bootstrap import PairedContrast
+from datp_core.analysis.models import PairedContrast
 from datp_core.artifacts.coordinates import canonical_root_under
 from datp_core.datasets.catalogue import dataset_binding
 from datp_core.domain.enums import (
@@ -498,13 +498,11 @@ def _confirmatory_contrast(training_seed: Seed) -> PairedContrast:
     return PairedContrast(
         coordinate=shared.score_coordinate,
         evidence_role=EvidenceRole.CONFIRMATORY,
-        seed=training_seed,
         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
-        shared_method=FederatedThresholdMethod.SHARED_THRESHOLD,
-        local_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
-        shared_value=shared_value,
-        local_value=local_value,
-        delta=MetricValue(shared_value.value - local_value.value),
+        left_method=FederatedThresholdMethod.SHARED_THRESHOLD,
+        right_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+        left_value=shared_value,
+        right_value=local_value,
     )
 
 

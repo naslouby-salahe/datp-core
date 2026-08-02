@@ -1,14 +1,19 @@
-from datp_core.analysis.descriptive import count_paired_differences, summarize_nested_replicates, summarize_values
+from datp_core.analysis.descriptive import QuantileRange, count_paired_differences, summarize_nested_replicates, summarize_values
+from datp_core.analysis.models import MetricSeries
 from datp_core.domain.enums import AvailabilityStatus, EvidenceRole
-from datp_core.domain.values import Seed
+from datp_core.domain.values import MetricValue, Ratio, Seed
+
+_DEFAULT_QUANTILES = QuantileRange(lower=Ratio(0.25), upper=Ratio(0.75))
 
 
 def test_descriptive_summary_preserves_available_unavailable_and_excluded_counts() -> None:
+    values: MetricSeries = (MetricValue(0.0), MetricValue(0.5), MetricValue(1.0))
     summary = summarize_values(
-        (0.0, 0.5, 1.0),
+        values,
         evidence_role=EvidenceRole.CONFIRMATORY,
         unavailable_count=2,
         excluded_count=1,
+        quantiles=_DEFAULT_QUANTILES,
     )
 
     assert summary.availability is AvailabilityStatus.AVAILABLE
@@ -19,8 +24,9 @@ def test_descriptive_summary_preserves_available_unavailable_and_excluded_counts
 
 
 def test_nested_replicates_are_summarized_within_seed_and_signs_preserve_zeroes() -> None:
-    nested = summarize_nested_replicates(Seed(4), (0.1, 0.3, 0.5))
-    signs = count_paired_differences((0.4, 0.0, -0.2, 0.1))
+    replicate_values: MetricSeries = (MetricValue(0.1), MetricValue(0.3), MetricValue(0.5))
+    nested = summarize_nested_replicates(Seed(4), replicate_values)
+    signs = count_paired_differences((MetricValue(0.4), MetricValue(0.0), MetricValue(-0.2), MetricValue(0.1)))
 
     assert nested.seed == Seed(4)
     assert nested.summary.value == 0.3

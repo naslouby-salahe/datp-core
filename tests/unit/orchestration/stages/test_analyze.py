@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from datp_core.analysis.inference.bootstrap import PairedContrast
+from datp_core.analysis.models import PairedContrast
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -38,12 +38,12 @@ def test_analyze_stage_persists_secondary_and_descriptive_outputs_and_reuses_the
 
     assert first.publication_status is PublicationStatus.PUBLISHED
     assert second.publication_status is PublicationStatus.REUSED
-    assert second.descriptive.values == tuple(item.delta.value for item in request.contrasts)
+    assert second.descriptive.values == tuple(item.delta for item in request.contrasts)
     assert second.sign_consistency.total == 10
     assert second.wilcoxon.availability is AvailabilityStatus.AVAILABLE
     assert second.rank_biserial.availability is AvailabilityStatus.AVAILABLE
     assert second.multiplicity is not None
-    assert second.multiplicity.adjusted_p_values[0] <= second.multiplicity.adjusted_p_values[1]
+    assert second.multiplicity.adjusted_p_values[0].value <= second.multiplicity.adjusted_p_values[1].value
     assert (request.output_directory / "analysis.json").is_file()
 
 
@@ -60,11 +60,9 @@ def _contrast(seed: int) -> PairedContrast:
             model_coefficient=None,
         ),
         evidence_role=EvidenceRole.CONFIRMATORY,
-        seed=Seed(seed),
         metric=MetricId.FPR_COEFFICIENT_OF_VARIATION,
-        shared_method=FederatedThresholdMethod.SHARED_THRESHOLD,
-        local_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
-        shared_value=shared,
-        local_value=local,
-        delta=MetricValue(shared.value - local.value),
+        left_method=FederatedThresholdMethod.SHARED_THRESHOLD,
+        right_method=FederatedThresholdMethod.LOCAL_THRESHOLD,
+        left_value=shared,
+        right_value=local,
     )
