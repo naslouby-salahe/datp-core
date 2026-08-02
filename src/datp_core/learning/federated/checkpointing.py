@@ -1,14 +1,19 @@
-"""Federated checkpoint candidate persistence and FIXED_TERMINAL_MAXIMUM_ROUND selection."""
-
-from collections.abc import Sequence
+from dataclasses import dataclass, replace
 from pathlib import Path
+from typing import Sequence
 
 import torch
 from safetensors.torch import load_file, save_file
 
-from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus, ContractSubject
+from datp_core.domain.enums import (
+    CheckpointSelectionRule,
+    CheckpointStatus,
+    ContractSubject,
+    ProcessedDataBranch,
+    TrainingModelId,
+)
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, MetricValue, RoundNumber, checksum_file, checksum_text
+from datp_core.domain.values import Checksum, MetricValue, ModelStateMap, RoundNumber, checksum_file, checksum_text
 from datp_core.learning.autoencoder import ReconstructionAutoencoder
 from datp_core.learning.federated.models import (
     CheckpointCandidate,
@@ -23,23 +28,16 @@ from datp_core.protocols.training import fixed_terminal_checkpoint_status, requi
 from datp_core.runtime.compute import require_cuda_available
 
 
+@dataclass(frozen=True, slots=True)
 class RoundSnapshot:
     """In-memory candidate-round state prior to persistence. Not a public dataclass."""
 
-    __slots__ = ("round_number", "state_dict", "mean_training_loss")
-
-    def __init__(
-        self,
-        round_number: RoundNumber,
-        state_dict: dict[str, torch.Tensor],
-        mean_training_loss: MetricValue,
-    ) -> None:
-        self.round_number = round_number
-        self.state_dict = state_dict
-        self.mean_training_loss = mean_training_loss
+    round_number: RoundNumber
+    state_dict: ModelStateMap
+    mean_training_loss: MetricValue
 
 
-def persist_checkpoint_tensor(state_dict: dict[str, torch.Tensor], path: Path) -> Checksum:
+def persist_checkpoint_tensor(state_dict: ModelStateMap, path: Path) -> Checksum:
     path.parent.mkdir(parents=True, exist_ok=True)
     cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
     save_file(cpu_state, str(path))
@@ -47,7 +45,7 @@ def persist_checkpoint_tensor(state_dict: dict[str, torch.Tensor], path: Path) -
 
 
 def assert_checkpoint_reload_equality(
-    state_dict: dict[str, torch.Tensor],
+    state_dict: ModelStateMap,
     path: Path,
     autoencoder: AutoencoderProtocol,
     device: torch.device,
@@ -55,6 +53,11 @@ def assert_checkpoint_reload_equality(
     require_cuda_available()
     reloaded_model = ReconstructionAutoencoder(autoencoder.widths).to(device)
     loaded_state = load_file(str(path), device=str(device))
+    if set(state_dict.keys()) != set(loaded_state.keys()):
+        raise ArtifactIntegrityError(
+            "SafeTensors reload tensor names do not match expected parameter keys",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
     reloaded_model.load_state_dict(loaded_state, strict=True)
     for name, tensor in state_dict.items():
         reference = tensor.detach().to(device)
@@ -126,24 +129,27 @@ def select_checkpoint(
         selection_rule=selection_rule,
         held_out_metrics=held_out_metrics,
         attack_labels_present=attack_labels_present,
-        branch_label="federated",
+        branch_label=ProcessedDataBranch.FEDERATED,
     )
     ordered = tuple(candidates)
     _reject_duplicate_or_missing_candidates(ordered, protocol)
     for candidate in ordered:
+        if candidate.coordinate != coordinate:
+            raise ScientificContractError(
+                "checkpoint candidate coordinate mismatch",
+                subject=ContractSubject.COORDINATE,
+            )
+        if candidate.client != client:
+            raise ScientificContractError(
+                "checkpoint candidate client identity mismatch",
+                subject=ContractSubject.CLIENT_IDENTITY,
+            )
         if candidate.status is CheckpointStatus.HISTORICAL_ENDPOINT:
             raise ScientificContractError(
                 "historical anchor endpoint status is incompatible with federated candidates",
                 subject=candidate.status,
             )
         _verify_candidate_file(candidate)
-
-    terminal = next((item for item in ordered if item.round_number == protocol.maximum_round), None)
-    if terminal is None:
-        raise ArtifactIntegrityError(
-            "declared maximum-round checkpoint candidate is missing",
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
-        )
 
     statused, selected = _statused_candidates(ordered, protocol.maximum_round)
     return CheckpointDecision(
@@ -164,17 +170,7 @@ def _statused_candidates(
     selected: CheckpointCandidate | None = None
     for item in ordered:
         status = fixed_terminal_checkpoint_status(item.round_number, maximum_round)
-        rebuilt = CheckpointCandidate(
-            coordinate=item.coordinate,
-            round_number=item.round_number,
-            client=item.client,
-            tensor_path=item.tensor_path,
-            tensor_checksum=item.tensor_checksum,
-            mean_training_loss=item.mean_training_loss,
-            status=status,
-            preprocessing_state_set_checksum=item.preprocessing_state_set_checksum,
-            split_manifest_checksum=item.split_manifest_checksum,
-        )
+        rebuilt = replace(item, status=status)
         statused.append(rebuilt)
         if status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
             selected = rebuilt
@@ -186,7 +182,7 @@ def _statused_candidates(
     return tuple(statused), selected
 
 
-def reject_centralized_checkpoint(marker_identity: str) -> None:
+def reject_centralized_checkpoint(marker_identity: FederatedTrainingCoordinate | TrainingModelId | str) -> None:
     raise LeakageError(
         f"centralized checkpoint cannot enter federated scoring or selection ({marker_identity})",
         subject=ContractSubject.CHECKPOINT_CANDIDATES,

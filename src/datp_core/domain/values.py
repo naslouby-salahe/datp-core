@@ -1,11 +1,16 @@
 """Validated scalar scientific values."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from functools import total_ordering
 from hashlib import file_digest, sha256
 from math import isclose, isfinite
 from pathlib import Path
 from typing import Any, ClassVar
+
+import torch
+
+ModelStateMap = Mapping[str, torch.Tensor]
 
 # Shared math.isclose controls for absolute-only floating comparisons.
 NUMERIC_ZERO: float = 0.0

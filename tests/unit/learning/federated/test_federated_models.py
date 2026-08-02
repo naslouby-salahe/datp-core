@@ -9,7 +9,7 @@ from tests.unit.learning.federated.helpers import (
     fedprox_coordinate,
 )
 
-from datp_core.domain.enums import CheckpointStatus, TrainingModelId, WarningCode
+from datp_core.domain.enums import CheckpointStatus, CommunicationEstimationMethod, TrainingModelId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
     BatchSize,
@@ -42,7 +42,7 @@ def _communication(round_number: RoundNumber) -> CommunicationRecord:
         round_number=round_number,
         estimated_upload_bytes=ByteCount(100),
         estimated_download_bytes=ByteCount(100),
-        estimation_basis=WarningCode.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+        estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
     )
 
 
@@ -103,6 +103,7 @@ def test_personalized_state_reference_requires_personalized_coordinate() -> None
             coordinate=fedavg_coordinate(SEED),
             client=client_identity("client_a"),
             round_number=RoundNumber(1),
+            local_loss=MetricValue(0.1),
             state_checksum=Checksum("a" * 64),
             tensor_path=None,
         )
@@ -114,7 +115,7 @@ def test_communication_record_requires_serialized_message_size_basis() -> None:
             round_number=RoundNumber(1),
             estimated_upload_bytes=ByteCount(1),
             estimated_download_bytes=ByteCount(1),
-            estimation_basis=WarningCode.NEAR_ZERO_MEAN_FPR,
+            estimation_basis=CommunicationEstimationMethod.MEASURED_NETWORK_TRAFFIC,
         )
 
 

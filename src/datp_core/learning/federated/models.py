@@ -1,6 +1,5 @@
-"""Typed federated training, checkpoint, and communication records."""
-
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
@@ -9,13 +8,13 @@ import torch
 
 from datp_core.domain.enums import (
     CheckpointStatus,
+    CommunicationEstimationMethod,
     ContractSubject,
     PopulationId,
     PopulationIdentityKind,
     PreprocessingProtocolId,
     SplitProtocolId,
     TrainingModelId,
-    WarningCode,
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.values import (
@@ -34,6 +33,43 @@ from datp_core.domain.values import (
 )
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import CheckpointProtocol
+
+
+ROUND_SUMMARY_SCHEMA: Mapping[str, type[pl.DataType]] = {
+    "round_number": pl.Int64,
+    "aggregate_loss": pl.Float64,
+    "upload_bytes": pl.Int64,
+    "download_bytes": pl.Int64,
+    "global_state_checksum": pl.String,
+}
+
+CLIENT_ROUNDS_SCHEMA: Mapping[str, type[pl.DataType]] = {
+    "round_number": pl.Int64,
+    "client_id": pl.String,
+    "sample_count": pl.Int64,
+    "local_loss": pl.Float64,
+}
+
+PERSONALIZED_ROUNDS_SCHEMA: Mapping[str, type[pl.DataType]] = {
+    "round_number": pl.Int64,
+    "client_id": pl.String,
+    "local_loss": pl.Float64,
+    "state_checksum": pl.String,
+}
+
+
+def _validate_schema(frame: pl.DataFrame, expected_schema: Mapping[str, type[pl.DataType]]) -> None:
+    for col, dtype in expected_schema.items():
+        if col not in frame.columns:
+            raise ArtifactIntegrityError(
+                f"Parquet table missing required column '{col}'",
+                subject=ContractSubject.SCHEMA,
+            )
+        if frame.schema[col] != dtype:
+            raise ArtifactIntegrityError(
+                f"Parquet column '{col}' has type {frame.schema[col]}, expected {dtype}",
+                subject=ContractSubject.SCHEMA,
+            )
 
 
 def _require_model_coefficient_matches_kind(
@@ -115,10 +151,10 @@ class CommunicationRecord:
     round_number: RoundNumber
     estimated_upload_bytes: ByteCount
     estimated_download_bytes: ByteCount
-    estimation_basis: WarningCode
+    estimation_basis: CommunicationEstimationMethod
 
     def __post_init__(self) -> None:
-        if self.estimation_basis is not WarningCode.SERIALIZED_MESSAGE_SIZE_ESTIMATE:
+        if self.estimation_basis is not CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE:
             raise ScientificContractError(
                 "communication bytes must be tagged as a serialized-message-size estimate, "
                 "never a measured network cost",
@@ -146,6 +182,7 @@ class PersonalizedModelStateReference:
     coordinate: FederatedTrainingCoordinate
     client: ClientIdentity
     round_number: RoundNumber
+    local_loss: MetricValue
     state_checksum: Checksum
     tensor_path: Path | None
 
@@ -297,8 +334,6 @@ class FederatedTrainingResult:
     history: FederatedTrainingHistory
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
-    # Free-form CUDA device name (e.g. torch.cuda.get_device_name()); unbounded provenance
-    # text, not a closed categorical domain, so a plain str is the correct type here.
     device_name: str
     batch_size_used: BatchSize
 
@@ -314,7 +349,6 @@ class FederatedCheckpointAssetName(StrEnum):
     CANDIDATE_PREFIX = "checkpoint_round_"
     CANDIDATE_SUFFIX = ".safetensors"
     PERSONALIZED_INFIX = "_client_"
-    COMPLETE = "COMPLETE"
 
 
 class FederatedHistoryAssetName(StrEnum):
@@ -357,41 +391,48 @@ def persist_federated_training_history(
         )
     directory.mkdir(parents=True, exist_ok=True)
     (directory / FederatedHistoryAssetName.DEVICE_NAME).write_text(device_name, encoding="utf-8")
-    column = FederatedHistoryColumn
-    round_rows: list[dict[str, object]] = []
-    client_rows: list[dict[str, object]] = []
-    personalized_rows: list[dict[str, object]] = []
-    for round_result in history.rounds:
-        round_rows.append(
-            {
-                column.ROUND_NUMBER.value: round_result.round_number.value,
-                column.AGGREGATE_LOSS.value: round_result.aggregate_loss.value,
-                column.UPLOAD_BYTES.value: round_result.communication.estimated_upload_bytes.value,
-                column.DOWNLOAD_BYTES.value: round_result.communication.estimated_download_bytes.value,
-                column.GLOBAL_STATE_CHECKSUM.value: round_result.global_state_reference.state_checksum.value,
-            }
-        )
-        for client_result in round_result.client_results:
-            client_rows.append(
-                {
-                    column.ROUND_NUMBER.value: round_result.round_number.value,
-                    column.CLIENT_ID.value: client_result.client.client_id,
-                    column.SAMPLE_COUNT.value: client_result.sample_count.value,
-                    column.LOCAL_LOSS.value: client_result.local_loss.value,
-                }
-            )
-        for personalized_reference in round_result.personalized_state_references:
-            personalized_rows.append(
-                {
-                    column.ROUND_NUMBER.value: round_result.round_number.value,
-                    column.CLIENT_ID.value: personalized_reference.client.client_id,
-                    column.STATE_CHECKSUM.value: personalized_reference.state_checksum.value,
-                }
-            )
-    pl.DataFrame(round_rows).write_parquet(directory / FederatedHistoryAssetName.ROUND_SUMMARY)
-    pl.DataFrame(client_rows).write_parquet(directory / FederatedHistoryAssetName.CLIENT_ROUNDS)
+    
+    round_rows = [
+        {
+            "round_number": r.round_number.value,
+            "aggregate_loss": r.aggregate_loss.value,
+            "upload_bytes": r.communication.estimated_upload_bytes.value,
+            "download_bytes": r.communication.estimated_download_bytes.value,
+            "global_state_checksum": r.global_state_reference.state_checksum.value,
+        }
+        for r in history.rounds
+    ]
+    client_rows = [
+        {
+            "round_number": r.round_number.value,
+            "client_id": cr.client.client_id,
+            "sample_count": cr.sample_count.value,
+            "local_loss": cr.local_loss.value,
+        }
+        for r in history.rounds
+        for cr in r.client_results
+    ]
+    personalized_rows = [
+        {
+            "round_number": r.round_number.value,
+            "client_id": pr.client.client_id,
+            "local_loss": pr.local_loss.value,
+            "state_checksum": pr.state_checksum.value,
+        }
+        for r in history.rounds
+        for pr in r.personalized_state_references
+    ]
+
+    pl.DataFrame(round_rows, schema=ROUND_SUMMARY_SCHEMA).write_parquet(
+        directory / FederatedHistoryAssetName.ROUND_SUMMARY
+    )
+    pl.DataFrame(client_rows, schema=CLIENT_ROUNDS_SCHEMA).write_parquet(
+        directory / FederatedHistoryAssetName.CLIENT_ROUNDS
+    )
     if personalized_rows:
-        pl.DataFrame(personalized_rows).write_parquet(directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS)
+        pl.DataFrame(personalized_rows, schema=PERSONALIZED_ROUNDS_SCHEMA).write_parquet(
+            directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS
+        )
 
 
 def load_federated_training_history(
@@ -400,10 +441,22 @@ def load_federated_training_history(
     identity_kind: PopulationIdentityKind,
 ) -> FederatedTrainingHistory:
     column = FederatedHistoryColumn
-    round_frame = pl.read_parquet(directory / FederatedHistoryAssetName.ROUND_SUMMARY).sort(column.ROUND_NUMBER.value)
-    client_frame = pl.read_parquet(directory / FederatedHistoryAssetName.CLIENT_ROUNDS)
+    round_summary_path = directory / FederatedHistoryAssetName.ROUND_SUMMARY
+    client_rounds_path = directory / FederatedHistoryAssetName.CLIENT_ROUNDS
+    if not round_summary_path.is_file() or not client_rounds_path.is_file():
+        raise ArtifactIntegrityError("history parquet file missing", subject=ContractSubject.ARTIFACT_PATH)
+    
+    round_frame = pl.read_parquet(round_summary_path).sort(column.ROUND_NUMBER.value)
+    _validate_schema(round_frame, ROUND_SUMMARY_SCHEMA)
+    client_frame = pl.read_parquet(client_rounds_path)
+    _validate_schema(client_frame, CLIENT_ROUNDS_SCHEMA)
+    
     personalized_path = directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS
-    personalized_frame = pl.read_parquet(personalized_path) if personalized_path.is_file() else None
+    personalized_frame = None
+    if personalized_path.is_file():
+        personalized_frame = pl.read_parquet(personalized_path)
+        _validate_schema(personalized_frame, PERSONALIZED_ROUNDS_SCHEMA)
+
     rounds: list[FederatedRoundResult] = []
     for round_row in round_frame.iter_rows(named=True):
         round_number = RoundNumber(int(round_row[column.ROUND_NUMBER.value]))
@@ -424,6 +477,7 @@ def load_federated_training_history(
                     coordinate=coordinate,
                     client=ClientIdentity(coordinate.population, str(row[column.CLIENT_ID.value]), identity_kind),
                     round_number=round_number,
+                    local_loss=MetricValue(float(row[column.LOCAL_LOSS.value])),
                     state_checksum=Checksum(str(row[column.STATE_CHECKSUM.value])),
                     tensor_path=None,
                 )
@@ -433,7 +487,7 @@ def load_federated_training_history(
             round_number=round_number,
             estimated_upload_bytes=ByteCount(int(round_row[column.UPLOAD_BYTES.value])),
             estimated_download_bytes=ByteCount(int(round_row[column.DOWNLOAD_BYTES.value])),
-            estimation_basis=WarningCode.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+            estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
         )
         global_reference = GlobalModelStateReference(
             coordinate=coordinate,
@@ -469,6 +523,13 @@ def federated_training_directory_is_reusable(directory: Path, candidate_rounds: 
     if not all(path.is_file() for path in (complete, round_summary, client_rounds, device_name)):
         return False
     if not device_name.read_text(encoding="utf-8").strip():
+        return False
+    try:
+        round_frame = pl.read_parquet(round_summary)
+        _validate_schema(round_frame, ROUND_SUMMARY_SCHEMA)
+        client_frame = pl.read_parquet(client_rounds)
+        _validate_schema(client_frame, CLIENT_ROUNDS_SCHEMA)
+    except Exception:
         return False
     return all((directory / candidate_tensor_name(round_number)).is_file() for round_number in candidate_rounds)
 
@@ -523,7 +584,14 @@ class ReusedFederatedTrainingRequest:
 
 def load_reused_global_candidates(request: ReusedGlobalCandidatesRequest) -> tuple[CheckpointCandidate, ...]:
     column = FederatedHistoryColumn
-    round_frame = pl.read_parquet(request.directory / FederatedHistoryAssetName.ROUND_SUMMARY)
+    round_summary_path = request.directory / FederatedHistoryAssetName.ROUND_SUMMARY
+    if not round_summary_path.is_file():
+        raise ArtifactIntegrityError(
+            "reused global candidates missing history summary",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+    round_frame = pl.read_parquet(round_summary_path)
+    _validate_schema(round_frame, ROUND_SUMMARY_SCHEMA)
     loss_by_round = {
         int(row[column.ROUND_NUMBER.value]): MetricValue(float(row[column.AGGREGATE_LOSS.value]))
         for row in round_frame.iter_rows(named=True)
@@ -549,35 +617,18 @@ def load_reused_global_candidates(request: ReusedGlobalCandidatesRequest) -> tup
     return tuple(candidates)
 
 
-def _local_loss_for_client_round(
-    client_frame: pl.DataFrame,
-    *,
-    round_number: RoundNumber,
-    client_id: str,
-) -> MetricValue:
-    column = FederatedHistoryColumn
-    loss_rows = client_frame.filter(
-        (pl.col(column.ROUND_NUMBER.value) == round_number.value) & (pl.col(column.CLIENT_ID.value) == client_id)
-    )
-    if loss_rows.height != 1:
-        raise ArtifactIntegrityError(
-            "reused personalized candidate is missing its published local loss",
-            subject=ContractSubject.TRAINING,
-        )
-    return MetricValue(float(loss_rows.item(0, column.LOCAL_LOSS.value)))
-
-
 def load_reused_personalized_candidates(
     request: ReusedPersonalizedCandidatesRequest,
-) -> dict[str, tuple[CheckpointCandidate, ...]]:
-    client_rounds_path = request.global_history_directory / FederatedHistoryAssetName.CLIENT_ROUNDS
-    if not client_rounds_path.is_file():
+) -> dict[ClientIdentity, tuple[CheckpointCandidate, ...]]:
+    personalized_rounds_path = request.global_history_directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS
+    if not personalized_rounds_path.is_file():
         raise ArtifactIntegrityError(
-            "reused personalized candidates require published client round losses",
+            "reused personalized candidates require published personalized round losses",
             subject=ContractSubject.ARTIFACT_PATH,
         )
-    client_frame = pl.read_parquet(client_rounds_path)
-    result: dict[str, tuple[CheckpointCandidate, ...]] = {}
+    personalized_frame = pl.read_parquet(personalized_rounds_path)
+    _validate_schema(personalized_frame, PERSONALIZED_ROUNDS_SCHEMA)
+    result: dict[ClientIdentity, tuple[CheckpointCandidate, ...]] = {}
     for client in request.clients:
         candidates: list[CheckpointCandidate] = []
         for candidate_round in request.checkpoint_protocol.candidates:
@@ -587,6 +638,15 @@ def load_reused_personalized_candidates(
                     "reused personalized checkpoint candidate missing",
                     subject=ContractSubject.ARTIFACT_PATH,
                 )
+            loss_rows = personalized_frame.filter(
+                (pl.col("round_number") == candidate_round.value) & (pl.col("client_id") == client.client_id)
+            )
+            if loss_rows.height != 1:
+                raise ArtifactIntegrityError(
+                    "reused personalized candidate is missing its published local loss",
+                    subject=ContractSubject.TRAINING,
+                )
+            local_loss = MetricValue(float(loss_rows.item(0, "local_loss")))
             candidates.append(
                 CheckpointCandidate(
                     coordinate=request.personalized_coordinate,
@@ -594,15 +654,13 @@ def load_reused_personalized_candidates(
                     client=client,
                     tensor_path=path,
                     tensor_checksum=checksum_file(path),
-                    mean_training_loss=_local_loss_for_client_round(
-                        client_frame, round_number=candidate_round, client_id=client.client_id
-                    ),
+                    mean_training_loss=local_loss,
                     status=CheckpointStatus.CANDIDATE,
                     preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
                     split_manifest_checksum=request.split_manifest_checksum,
                 )
             )
-        result[client.client_id] = tuple(candidates)
+        result[client] = tuple(candidates)
     return result
 
 
@@ -616,16 +674,10 @@ def rebase_checkpoint_candidates(
     for candidate in candidates:
         path = directory / candidate_tensor_name(candidate.round_number, client)
         rebased.append(
-            CheckpointCandidate(
-                coordinate=candidate.coordinate,
-                round_number=candidate.round_number,
-                client=candidate.client,
+            replace(
+                candidate,
                 tensor_path=path,
                 tensor_checksum=checksum_file(path),
-                mean_training_loss=candidate.mean_training_loss,
-                status=candidate.status,
-                preprocessing_state_set_checksum=candidate.preprocessing_state_set_checksum,
-                split_manifest_checksum=candidate.split_manifest_checksum,
             )
         )
     return tuple(rebased)

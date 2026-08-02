@@ -34,7 +34,7 @@ from datp_core.domain.values import (
     Seed,
 )
 from datp_core.domain.values import ClientPathToken as PreprocessingClientIdentity
-from datp_core.learning.federated.fedavg import FedAvgClientDataset
+from datp_core.learning.federated.fedavg import FederatedClientDataset
 from datp_core.learning.federated.models import ClientTrainingInput, FederatedTrainingCoordinate
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
@@ -197,17 +197,17 @@ def build_client_dataset(
     *,
     row_count: RowCount = DEFAULT_CLIENT_ROW_COUNT,
     seed: Seed = DEFAULT_FRAME_SEED,
-) -> FedAvgClientDataset:
+) -> FederatedClientDataset:
     training_input = ClientTrainingInput(
         client=client_identity(client_id),
         training_features=benign_frame(row_count, seed=seed),
         feature_names=FEATURE_NAMES,
     )
     state = fitted_state(output_directory / f"{client_id}_state.skops", client_id, checksum_suffix=client_id[-1])
-    return FedAvgClientDataset(training_input=training_input, preprocessing_state=state)
+    return FederatedClientDataset(training_input=training_input, preprocessing_state=state)
 
 
-def build_all_client_datasets(output_directory: Path) -> tuple[FedAvgClientDataset, ...]:
+def build_all_client_datasets(output_directory: Path) -> tuple[FederatedClientDataset, ...]:
     return tuple(
         build_client_dataset(client_id, output_directory, seed=Seed(index))
         for index, client_id in enumerate(CLIENT_IDS)

@@ -8,7 +8,7 @@ from torch import nn
 
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import BatchSize, Seed
+from datp_core.domain.values import BatchSize, ModelStateMap, Seed
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import require_cuda_available
 
@@ -63,12 +63,13 @@ def build_reconstruction_autoencoder(
     generator.manual_seed(initialization_seed.value)
     model = ReconstructionAutoencoder(protocol.widths)
     with torch.no_grad():
-        for parameter in model.parameters():
-            if parameter.dim() >= 2:
-                nn.init.kaiming_uniform_(parameter, a=5**0.5, generator=generator)
-            else:
-                bound = 1.0 / max(parameter.shape[0], 1) ** 0.5
-                parameter.uniform_(-bound, bound, generator=generator)
+        for module in model.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.kaiming_uniform_(module.weight, a=5**0.5, generator=generator)
+                if module.bias is not None:
+                    fan_in, _ = nn.init._calculate_fan_in_and_fan_out(module.weight)
+                    bound = 1.0 / (fan_in**0.5) if fan_in > 0 else 0.0
+                    nn.init.uniform_(module.bias, -bound, bound, generator=generator)
     model.train()
     return model
 
@@ -77,8 +78,8 @@ def clone_autoencoder_state(model: ReconstructionAutoencoder) -> dict[str, torch
     return {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
 
 
-def load_autoencoder_state(model: ReconstructionAutoencoder, state: dict[str, torch.Tensor]) -> None:
-    model.load_state_dict(state, strict=True)
+def load_autoencoder_state(model: ReconstructionAutoencoder, state: ModelStateMap) -> None:
+    model.load_state_dict(dict(state), strict=True)
 
 
 def _require_scoreable_feature_matrix(model: ReconstructionAutoencoder, features: np.ndarray) -> None:

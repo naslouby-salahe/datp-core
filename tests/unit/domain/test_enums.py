@@ -56,6 +56,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorClassName,
     TrustedEstimatorModule,
     WarningCode,
+    CommunicationEstimationMethod,
 )
 
 EXPECTED_MEMBERS = (
@@ -348,7 +349,15 @@ EXPECTED_MEMBERS = (
                 "INVALID_TEMPORAL_CHRONOLOGY",
                 "UNRESOLVED_CLUSTER_ASSIGNMENTS",
                 "MISSING_TRAFFIC_RATE_EVIDENCE",
+            )
+        ),
+    ),
+    (
+        CommunicationEstimationMethod,
+        frozenset(
+            (
                 "SERIALIZED_MESSAGE_SIZE_ESTIMATE",
+                "MEASURED_NETWORK_TRAFFIC",
             )
         ),
     ),

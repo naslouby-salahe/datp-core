@@ -1,7 +1,7 @@
 import pytest
 from tests.unit.learning.federated.helpers import fedavg_coordinate
 
-from datp_core.domain.enums import WarningCode
+from datp_core.domain.enums import CommunicationEstimationMethod
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Seed
 from datp_core.evaluation.communication import (
@@ -25,7 +25,7 @@ def test_communication_totals_are_exact_serialized_byte_counts() -> None:
         SerializedPayloadEvidence(b"abc", 1),
         None,
         None,
-        WarningCode.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+        CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
     )
 
     result = summarize_communication(Seed(6), coordinate, (message,))

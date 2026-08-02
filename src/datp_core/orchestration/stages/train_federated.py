@@ -20,8 +20,8 @@ from datp_core.domain.values import (
 from datp_core.learning.federated.checkpointing import CheckpointCandidate
 from datp_core.learning.federated.ditto import DittoTrainingOutcome, DittoTrainingRequest, train_ditto
 from datp_core.learning.federated.fedavg import (
-    FedAvgClientDataset,
-    FedAvgTrainingOutcome,
+    FederatedClientDataset,
+    FederatedTrainingOutcome,
     FedAvgTrainingRequest,
     train_fedavg,
 )
@@ -118,7 +118,7 @@ class TrainDittoStageResult:
     publication_status: PublicationStatus
     global_training: FederatedTrainingResult
     global_candidates: tuple[CheckpointCandidate, ...]
-    personalized_candidates_by_client: dict[str, tuple[CheckpointCandidate, ...]]
+    personalized_candidates_by_client: dict[ClientIdentity, tuple[CheckpointCandidate, ...]]
 
 
 def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult:
@@ -127,7 +127,7 @@ def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult
     preprocessing_checksum = preprocessing_state_set_checksum(
         tuple(client.preprocessing_state.estimator_checksum for client in clients)
     )
-    box: _Box[FedAvgTrainingOutcome] = _Box()
+    box: _Box[FederatedTrainingOutcome] = _Box()
 
     def write(temporary: Path) -> None:
         outcome = train_fedavg(
@@ -181,7 +181,7 @@ def train_fedprox_stage(request: TrainFedProxRequest) -> TrainFederatedStageResu
     preprocessing_checksum = preprocessing_state_set_checksum(
         tuple(client.preprocessing_state.estimator_checksum for client in clients)
     )
-    box: _Box[FedAvgTrainingOutcome] = _Box()
+    box: _Box[FederatedTrainingOutcome] = _Box()
 
     def write(temporary: Path) -> None:
         outcome = train_fedprox(
@@ -283,12 +283,12 @@ def train_ditto_stage(request: TrainDittoRequest) -> TrainDittoStageResult:
         box.value.global_candidates, request.global_output_directory, client=None
     )
     personalized_candidates = {
-        client_id: rebase_checkpoint_candidates(
+        client: rebase_checkpoint_candidates(
             candidates,
             request.personalized_output_directory,
-            client=_client_by_id(clients, client_id),
+            client=client,
         )
-        for client_id, candidates in box.value.personalized_candidates_by_client.items()
+        for client, candidates in box.value.personalized_candidates_by_client.items()
     }
     return TrainDittoStageResult(
         stage=StageOperationId.TRAIN_FEDERATED,
@@ -301,7 +301,7 @@ def train_ditto_stage(request: TrainDittoRequest) -> TrainDittoStageResult:
 
 def _finalize_reused_ditto_stage(
     request: TrainDittoRequest,
-    clients: tuple[FedAvgClientDataset, ...],
+    clients: tuple[FederatedClientDataset, ...],
     preprocessing_checksum: Checksum,
 ) -> TrainDittoStageResult:
     identity_kind = resolve_population(request.global_coordinate.population).declaration.identity_kind
@@ -354,7 +354,7 @@ def _publish_training_artifacts(
 def _finalize_global_training_stage(
     *,
     reload: ReusedFederatedTrainingRequest,
-    outcome: FedAvgTrainingOutcome | None,
+    outcome: FederatedTrainingOutcome | None,
     reused: bool,
 ) -> TrainFederatedStageResult:
     if reused:
@@ -376,22 +376,12 @@ def _finalize_global_training_stage(
     )
 
 
-def _client_by_id(clients: tuple[FedAvgClientDataset, ...], client_id: str) -> ClientIdentity:
-    for client in clients:
-        if client.training_input.client.client_id == client_id:
-            return client.training_input.client
-    raise ScientificContractError(
-        f"no client dataset found for personalized checkpoint client {client_id}",
-        subject=ContractSubject.CLIENT_IDENTITY,
-    )
-
-
 def _client_datasets(
     coordinate: FederatedTrainingCoordinate,
     client_publications: tuple[ClientPreprocessPublication, ...],
-) -> tuple[FedAvgClientDataset, ...]:
+) -> tuple[FederatedClientDataset, ...]:
     identity_kind = resolve_population(coordinate.population).declaration.identity_kind
-    datasets: list[FedAvgClientDataset] = []
+    datasets: list[FederatedClientDataset] = []
     for publication in client_publications:
         client = ClientIdentity(coordinate.population, publication.client_identity.value, identity_kind)
         frame = pl.read_parquet(publication.result.train_path)
@@ -401,7 +391,7 @@ def _client_datasets(
             feature_names=FeatureNameSequence(publication.result.transformed_schema.feature_names),
         )
         datasets.append(
-            FedAvgClientDataset(training_input=training_input, preprocessing_state=publication.result.fitted_state)
+            FederatedClientDataset(training_input=training_input, preprocessing_state=publication.result.fitted_state)
         )
     return tuple(datasets)
 

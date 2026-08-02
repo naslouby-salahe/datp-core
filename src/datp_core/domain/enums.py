@@ -301,6 +301,11 @@ class SerializationFormat(StrEnum):
     SKOPS = "skops"
 
 
+class CommunicationEstimationMethod(StrEnum):
+    SERIALIZED_MESSAGE_SIZE_ESTIMATE = "serialized_message_size_estimate"
+    MEASURED_NETWORK_TRAFFIC = "measured_network_traffic"
+
+
 class WarningCode(StrEnum):
     NEAR_ZERO_MEAN_FPR = "near_zero_mean_fpr"
     UNDEFINED_COEFFICIENT_OF_VARIATION = "undefined_coefficient_of_variation"
@@ -308,7 +313,6 @@ class WarningCode(StrEnum):
     INVALID_TEMPORAL_CHRONOLOGY = "invalid_temporal_chronology"
     UNRESOLVED_CLUSTER_ASSIGNMENTS = "unresolved_cluster_assignments"
     MISSING_TRAFFIC_RATE_EVIDENCE = "missing_traffic_rate_evidence"
-    SERIALIZED_MESSAGE_SIZE_ESTIMATE = "serialized_message_size_estimate"
 
 
 class TrafficRateEvidenceType(StrEnum):

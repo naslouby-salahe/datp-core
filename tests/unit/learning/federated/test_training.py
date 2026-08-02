@@ -79,9 +79,9 @@ def test_run_local_epoch_requires_at_least_one_full_batch() -> None:
     device = require_cuda()
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-    short_matrix = benign_frame(RowCount(2)).select(FEATURE_NAMES.as_list()).to_numpy()
-    loader = build_client_loader(short_matrix, batch_size=BatchSize(4), seed=Seed(1), device=device)
+    short_matrix = benign_frame(RowCount(0)).select(FEATURE_NAMES.as_list()).to_numpy()
     with pytest.raises(ScientificContractError, match="no batches"):
+        loader = build_client_loader(short_matrix, batch_size=BatchSize(4), seed=Seed(1), device=device)
         run_local_epoch(model, optimizer, loader, device)
 
 

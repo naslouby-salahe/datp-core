@@ -77,7 +77,7 @@ def test_ditto_end_to_end_train_select_and_score_global_and_personalized(tmp_pat
     personalized_score_checksums = []
     for client_dataset in clients:
         client = client_dataset.training_input.client
-        candidates = outcome.personalized_candidates_by_client[client.client_id]
+        candidates = outcome.personalized_candidates_by_client[client]
         decision = select_checkpoint(
             candidates,
             CHECKPOINT,

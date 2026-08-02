@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.domain.enums import MetricId, WarningCode
+from datp_core.domain.enums import CommunicationEstimationMethod, MetricId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import ByteCount, Seed
 from datp_core.evaluation.metric_semantics import available
@@ -50,7 +50,7 @@ class CommunicationMessageDiagnostic:
     payload: SerializedPayloadEvidence
     client: ClientIdentity | None
     group_identity: str | None
-    estimation_basis: WarningCode
+    estimation_basis: CommunicationEstimationMethod
 
     def __post_init__(self) -> None:
         if not self.sender.strip() or not self.receiver.strip() or self.sender == self.receiver:
@@ -61,7 +61,7 @@ class CommunicationMessageDiagnostic:
             raise ScientificContractError("communication coordinate must match training seed")
         if self.group_identity is not None and not self.group_identity.strip():
             raise ScientificContractError("grouped communication identity must be non-empty when declared")
-        if self.estimation_basis is not WarningCode.SERIALIZED_MESSAGE_SIZE_ESTIMATE:
+        if self.estimation_basis is not CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE:
             raise ScientificContractError("communication diagnostics require serialized-size estimate evidence")
 
     @property
