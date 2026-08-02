@@ -24,13 +24,18 @@ from datp_core.analysis.inference.paired import (
     paired_wilcoxon,
 )
 from datp_core.analysis.mechanisms import (
+    AssociationIssue,
+    AssociationObservation,
     AssociationResult,
+    AssociationStatistics,
+    ClusterAssignment,
     ClusterPartitionSummary,
     ClusterStabilityResult,
     DivergenceBlocker,
     DivergenceResult,
     MechanismResult,
     ThresholdMovement,
+    ThresholdOperatingPoint,
     blocked_jensen_shannon_divergence,
     cluster_stability,
     decide_model_absorption,

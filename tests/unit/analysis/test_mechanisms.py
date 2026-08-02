@@ -1,7 +1,9 @@
 from math import isclose
 
 from datp_core.analysis.mechanisms import (
+    AssociationObservation,
     DivergenceBlocker,
+    ThresholdOperatingPoint,
     blocked_jensen_shannon_divergence,
     decide_model_absorption,
     heterogeneity_benefit_association,
@@ -19,15 +21,20 @@ from datp_core.populations.models import ClientIdentity
 
 
 def test_association_is_associative_and_reports_all_observations() -> None:
-    observations = ((0.1, 0.01), (0.3, 0.04), (0.7, 0.09))
+    observations = (
+        AssociationObservation(heterogeneity=MetricValue(0.1), benefit=MetricValue(0.01)),
+        AssociationObservation(heterogeneity=MetricValue(0.3), benefit=MetricValue(0.04)),
+        AssociationObservation(heterogeneity=MetricValue(0.7), benefit=MetricValue(0.09)),
+    )
 
     result = heterogeneity_benefit_association(observations)
 
     assert result.availability is AvailabilityStatus.AVAILABLE
     assert result.observations == observations
     assert result.observation_count == 3
-    assert result.slope is not None
-    assert len(result.leverage) == len(observations)
+    assert result.statistics is not None
+    assert result.statistics.regression_slope is not None
+    assert len(result.statistics.leverage) == len(observations)
 
 
 def test_threshold_movement_marks_attack_tradeoff_unavailable_without_attack_assignment() -> None:
@@ -39,12 +46,16 @@ def test_threshold_movement_marks_attack_tradeoff_unavailable_without_attack_ass
 
     result = threshold_movement(
         client=client,
-        shared_threshold=ThresholdValue(0.4),
-        local_threshold=ThresholdValue(0.6),
-        shared_fpr=MetricValue(0.2),
-        local_fpr=MetricValue(0.1),
-        shared_tpr=None,
-        local_tpr=None,
+        shared=ThresholdOperatingPoint(
+            threshold=ThresholdValue(0.4),
+            fpr=MetricValue(0.2),
+            tpr=None,
+        ),
+        local=ThresholdOperatingPoint(
+            threshold=ThresholdValue(0.6),
+            fpr=MetricValue(0.1),
+            tpr=None,
+        ),
     )
 
     assert result.evidence_role is EvidenceRole.MECHANISM
