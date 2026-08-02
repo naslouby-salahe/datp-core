@@ -2,9 +2,8 @@
 
 from json import loads
 from pathlib import Path
-from typing import Annotated
 
-from pydantic import BaseModel, BeforeValidator, ConfigDict, ValidationError
+from pydantic import ValidationError
 
 from datp_core.anchor.comparison import compare_anchor_metric
 from datp_core.anchor.models import (
@@ -33,119 +32,43 @@ from datp_core.anchor.models import (
     AnchorSeedSubsetComparison,
     HistoricalDatasetToken,
     HistoricalMetricArtifactSource,
+    HistoricalMetricsDocument,
     HistoricalRegimeToken,
     HistoricalThresholdScopeToken,
 )
 from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod, MetricId
 from datp_core.domain.errors import AnchorReproductionError
-from datp_core.domain.values import Checksum, ClientCount, MetricValue, Seed, checksum_file
+from datp_core.domain.values import Seed, checksum_file
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
-from datp_core.protocols.models import AnchorDecisionProtocol, AnchorReference, SeedCohort
+from datp_core.protocols.models import AnchorDecisionProtocol, SeedCohort
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
-
-
-def _as_seed(value: Seed | int) -> Seed:
-    if isinstance(value, Seed):
-        return value
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise TypeError("seed must be an integer")
-    return Seed(value)
-
-
-def _as_metric_value(value: MetricValue | int | float) -> MetricValue:
-    if isinstance(value, MetricValue):
-        return value
-    if isinstance(value, bool) or not isinstance(value, (int, float)):
-        raise TypeError("metric value must be numeric")
-    return MetricValue(float(value))
-
-
-def _as_client_count(value: ClientCount | int) -> ClientCount:
-    if isinstance(value, ClientCount):
-        return value
-    if isinstance(value, bool) or not isinstance(value, int):
-        raise TypeError("client count must be an integer")
-    return ClientCount(value)
-
-
-def _as_checksum(value: Checksum | str) -> Checksum:
-    if isinstance(value, Checksum):
-        return value
-    if not isinstance(value, str):
-        raise TypeError("checksum must be a string")
-    return Checksum(value)
-
-
-def _as_dataset_token(value: HistoricalDatasetToken | str) -> HistoricalDatasetToken:
-    if isinstance(value, HistoricalDatasetToken):
-        return value
-    if not isinstance(value, str):
-        raise TypeError("dataset token must be a string")
-    return HistoricalDatasetToken(value)
-
-
-def _as_regime_token(value: HistoricalRegimeToken | str) -> HistoricalRegimeToken:
-    if isinstance(value, HistoricalRegimeToken):
-        return value
-    if not isinstance(value, str):
-        raise TypeError("regime token must be a string")
-    return HistoricalRegimeToken(value)
-
-
-def _as_threshold_scope_token(
-    value: HistoricalThresholdScopeToken | str,
-) -> HistoricalThresholdScopeToken:
-    if isinstance(value, HistoricalThresholdScopeToken):
-        return value
-    if not isinstance(value, str):
-        raise TypeError("threshold scope token must be a string")
-    return HistoricalThresholdScopeToken(value)
-
-
-SeedField = Annotated[Seed, BeforeValidator(_as_seed)]
-MetricValueField = Annotated[MetricValue, BeforeValidator(_as_metric_value)]
-ClientCountField = Annotated[ClientCount, BeforeValidator(_as_client_count)]
-ChecksumField = Annotated[Checksum, BeforeValidator(_as_checksum)]
-DatasetField = Annotated[HistoricalDatasetToken, BeforeValidator(_as_dataset_token)]
-RegimeField = Annotated[HistoricalRegimeToken, BeforeValidator(_as_regime_token)]
-ThresholdScopeField = Annotated[HistoricalThresholdScopeToken, BeforeValidator(_as_threshold_scope_token)]
-
-
-class HistoricalBoundaryModel(BaseModel):
-    """External historical-artifact boundary. Extra legacy fields are ignored, never trusted."""
-
-    model_config = ConfigDict(frozen=True, extra="ignore", strict=True)
-
-
-class HistoricalArtifactProvenanceDocument(HistoricalBoundaryModel):
-    model_checkpoint_identity: ChecksumField
-    score_artifact_identity: ChecksumField
-    split_manifest_identity: ChecksumField
-    config_identity: ChecksumField
-    metric_code_version: ChecksumField
-    threshold_code_version: ChecksumField
-    package_version: ChecksumField
-    generated_at_utc: str
-
-
-class HistoricalMetricsDocument(HistoricalBoundaryModel):
-    """Boundary model for historical seed-level metrics artifacts."""
-
-    seed: SeedField
-    dataset: DatasetField
-    regime: RegimeField
-    threshold_scope: ThresholdScopeField
-    cv_fpr: MetricValueField
-    client_count: ClientCountField
-    eligible_count: ClientCountField
-    provenance: HistoricalArtifactProvenanceDocument
 
 
 def references_from_protocol(
     protocol: AnchorDecisionProtocol = ANCHOR_DECISION_PROTOCOL,
 ) -> tuple[AnchorMetricReference, ...]:
     validate_historical_seed_cohort(protocol.seed_cohort)
-    return tuple(_reference_from_declaration(item) for item in protocol.references)
+    references: list[AnchorMetricReference] = []
+    for item in protocol.references:
+        if item.metric is not MetricId.FPR_COEFFICIENT_OF_VARIATION:
+            raise AnchorReproductionError(
+                "anchor protocol reference metric is not CV(FPR)",
+                subject=item.metric,
+                reason=AnchorDiscrepancyReason.WRONG_METRIC.value,
+            )
+        references.append(
+            AnchorMetricReference(
+                seed=item.seed,
+                population=ANCHOR_POPULATION,
+                training_model=ANCHOR_TRAINING_MODEL,
+                threshold_method=item.threshold_method,
+                metric=item.metric,
+                value=item.value,
+                tolerance_rule=AbsoluteToleranceRule(absolute_tolerance=item.absolute_tolerance),
+                checkpoint_status=ANCHOR_CHECKPOINT_STATUS,
+            )
+        )
+    return tuple(references)
 
 
 def validate_historical_seed_cohort(seed_cohort: SeedCohort) -> SeedCohort:
@@ -375,24 +298,6 @@ def reproduce_anchor(
     )
 
 
-def _reference_from_declaration(declaration: AnchorReference) -> AnchorMetricReference:
-    if declaration.metric is not MetricId.FPR_COEFFICIENT_OF_VARIATION:
-        raise AnchorReproductionError(
-            "anchor protocol reference metric is not CV(FPR)",
-            subject=declaration.metric,
-            reason=AnchorDiscrepancyReason.WRONG_METRIC.value,
-        )
-    return AnchorMetricReference(
-        seed=declaration.seed,
-        population=ANCHOR_POPULATION,
-        training_model=ANCHOR_TRAINING_MODEL,
-        threshold_method=declaration.threshold_method,
-        metric=declaration.metric,
-        value=declaration.value,
-        tolerance_rule=AbsoluteToleranceRule(absolute_tolerance=declaration.absolute_tolerance),
-        checkpoint_status=ANCHOR_CHECKPOINT_STATUS,
-    )
-
 
 def _compare_seed_subsets(
     seed_cohort: SeedCohort,
@@ -463,73 +368,11 @@ def _collect_discrepancies(
 ) -> tuple[AnchorDiscrepancy, ...]:
     discrepancies: list[AnchorDiscrepancy] = []
     if seed_subset.decision is not AnchorComparisonDecision.EQUIVALENT:
-        discrepancies.append(
-            AnchorDiscrepancy(
-                reason=seed_subset.reason or AnchorDiscrepancyReason.WRONG_SEED_SUBSET,
-                seed=None,
-                threshold_method=None,
-                metric=None,
-                expected_value=None,
-                observed_value=None,
-                signed_difference=None,
-                relative_difference=None,
-                tolerance_rule=None,
-                artifact_path=None,
-                artifact_checksum=None,
-                detail=(
-                    f"expected seeds {[seed.value for seed in seed_subset.expected_seeds]}; "
-                    f"observed seeds {[seed.value for seed in seed_subset.observed_seeds]}"
-                ),
-            )
-        )
+        discrepancies.append(AnchorDiscrepancy.from_seed_subset(seed_subset))
     for comparison in comparisons:
         if comparison.decision is AnchorComparisonDecision.EQUIVALENT:
             continue
-        observation = comparison.observation
-        discrepancies.append(
-            AnchorDiscrepancy(
-                reason=comparison.reason or AnchorDiscrepancyReason.EXACT_MISMATCH,
-                seed=comparison.reference.seed,
-                threshold_method=comparison.reference.threshold_method,
-                metric=comparison.reference.metric,
-                expected_value=comparison.reference.value,
-                observed_value=None if observation is None else observation.value,
-                signed_difference=comparison.signed_difference,
-                relative_difference=comparison.relative_difference,
-                tolerance_rule=comparison.tolerance_rule,
-                artifact_path=None if observation is None else observation.artifact_path,
-                artifact_checksum=None if observation is None else observation.artifact_checksum,
-                detail=_comparison_detail(comparison),
-            )
-        )
+        discrepancies.append(AnchorDiscrepancy.from_comparison(comparison))
     if dependency_blocker is not None:
-        discrepancies.append(
-            AnchorDiscrepancy(
-                reason=AnchorDiscrepancyReason.DEPENDENCY_BLOCKER,
-                seed=None,
-                threshold_method=None,
-                metric=None,
-                expected_value=None,
-                observed_value=None,
-                signed_difference=None,
-                relative_difference=None,
-                tolerance_rule=None,
-                artifact_path=None,
-                artifact_checksum=None,
-                detail=dependency_blocker.detail,
-            )
-        )
+        discrepancies.append(AnchorDiscrepancy.from_dependency_blocker(dependency_blocker))
     return tuple(discrepancies)
-
-
-def _comparison_detail(comparison: AnchorMetricComparison) -> str:
-    expected = comparison.reference.value.value
-    observed = None if comparison.observation is None else comparison.observation.value.value
-    return (
-        f"seed={comparison.reference.seed.value} "
-        f"method={comparison.reference.threshold_method.value} "
-        f"metric={comparison.reference.metric.value} "
-        f"expected={expected!r} observed={observed!r} "
-        f"decision={comparison.decision.value} "
-        f"reason={None if comparison.reason is None else comparison.reason.value}"
-    )

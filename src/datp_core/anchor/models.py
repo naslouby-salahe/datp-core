@@ -6,7 +6,7 @@ from math import isfinite
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
 
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
@@ -82,19 +82,39 @@ class AnchorDependencyKind(StrEnum):
     HISTORICAL_ARTIFACT_ROOT = "historical_artifact_root"
 
 
+def _str_enum_schema(cls, _source_type, _handler):
+    """Pydantic v2 schema: validates raw str → cls, passes through existing members."""
+    from pydantic_core import core_schema as _cs
+
+    def _validate(v):
+        if isinstance(v, cls):
+            return v
+        if not isinstance(v, str):
+            raise TypeError(f"expected {cls.__name__} or str")
+        return cls(v)
+
+    return _cs.no_info_plain_validator_function(_validate)
+
+
 class HistoricalThresholdScopeToken(StrEnum):
     """Semantic threshold-scope tokens stored in historical metrics artifacts."""
 
     ELIGIBLE_CLIENT_ARITHMETIC_MEAN = "eligible_client_arithmetic_mean"
     PER_CLIENT_PERCENTILE = "per_client_percentile"
 
+    __get_pydantic_core_schema__ = classmethod(_str_enum_schema)
+
 
 class HistoricalDatasetToken(StrEnum):
     NBAIOT = "nbaiot"
 
+    __get_pydantic_core_schema__ = classmethod(_str_enum_schema)
+
 
 class HistoricalRegimeToken(StrEnum):
     PHYSICAL_DEVICE_ANCHOR = "a"
+
+    __get_pydantic_core_schema__ = classmethod(_str_enum_schema)
 
 
 class AnchorArtifactFileName(StrEnum):
@@ -107,6 +127,36 @@ class AnchorArtifactFileName(StrEnum):
 
 class AnchorSeedDirectoryPrefix(StrEnum):
     SEED = "seed_"
+
+
+class HistoricalBoundaryModel(StrictModel):
+    """External historical-artifact boundary. Extra legacy fields are ignored, never trusted."""
+
+    model_config = ConfigDict(frozen=True, extra="ignore", strict=True)
+
+
+class HistoricalArtifactProvenanceDocument(HistoricalBoundaryModel):
+    model_checkpoint_identity: Checksum
+    score_artifact_identity: Checksum
+    split_manifest_identity: Checksum
+    config_identity: Checksum
+    metric_code_version: Checksum
+    threshold_code_version: Checksum
+    package_version: Checksum
+    generated_at_utc: str
+
+
+class HistoricalMetricsDocument(HistoricalBoundaryModel):
+    """Boundary model for historical seed-level metrics artifacts."""
+
+    seed: Seed
+    dataset: HistoricalDatasetToken
+    regime: HistoricalRegimeToken
+    threshold_scope: HistoricalThresholdScopeToken
+    cv_fpr: MetricValue
+    client_count: ClientCount
+    eligible_count: ClientCount
+    provenance: HistoricalArtifactProvenanceDocument
 
 
 ANCHOR_EXPERIMENT: ExperimentId = ExperimentId.HISTORICAL_DATP_REPRODUCTION
@@ -284,6 +334,19 @@ class AnchorMetricComparison(StrictModel):
             raise ValueError("relative difference must be finite when present")
         return self
 
+    @property
+    def detail(self) -> str:
+        expected = self.reference.value.value
+        observed = None if self.observation is None else self.observation.value.value
+        return (
+            f"seed={self.reference.seed.value} "
+            f"method={self.reference.threshold_method.value} "
+            f"metric={self.reference.metric.value} "
+            f"expected={expected!r} observed={observed!r} "
+            f"decision={self.decision.value} "
+            f"reason={None if self.reason is None else self.reason.value}"
+        )
+
 
 class AnchorSeedSubsetComparison(StrictModel):
     expected_seeds: tuple[Seed, ...]
@@ -312,6 +375,41 @@ class AnchorDiscrepancy(StrictModel):
         if not v:
             raise ValueError("discrepancy detail must be non-empty")
         return v
+
+    @classmethod
+    def from_seed_subset(cls, seed_subset: AnchorSeedSubsetComparison) -> "AnchorDiscrepancy":
+        return cls(
+            reason=seed_subset.reason or AnchorDiscrepancyReason.WRONG_SEED_SUBSET,
+            detail=(
+                f"expected seeds {[seed.value for seed in seed_subset.expected_seeds]}; "
+                f"observed seeds {[seed.value for seed in seed_subset.observed_seeds]}"
+            ),
+        )
+
+    @classmethod
+    def from_comparison(cls, comparison: AnchorMetricComparison) -> "AnchorDiscrepancy":
+        observation = comparison.observation
+        return cls(
+            reason=comparison.reason or AnchorDiscrepancyReason.EXACT_MISMATCH,
+            seed=comparison.reference.seed,
+            threshold_method=comparison.reference.threshold_method,
+            metric=comparison.reference.metric,
+            expected_value=comparison.reference.value,
+            observed_value=None if observation is None else observation.value,
+            signed_difference=comparison.signed_difference,
+            relative_difference=comparison.relative_difference,
+            tolerance_rule=comparison.tolerance_rule,
+            artifact_path=None if observation is None else observation.artifact_path,
+            artifact_checksum=None if observation is None else observation.artifact_checksum,
+            detail=comparison.detail,
+        )
+
+    @classmethod
+    def from_dependency_blocker(cls, blocker: "AnchorDependencyBlocker") -> "AnchorDiscrepancy":
+        return cls(
+            reason=AnchorDiscrepancyReason.DEPENDENCY_BLOCKER,
+            detail=blocker.detail,
+        )
 
 
 class AnchorDependencyBlocker(StrictModel):

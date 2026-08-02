@@ -470,6 +470,8 @@ class Checksum:
             raise ValueError("checksum must be non-empty")
         object.__setattr__(self, "value", self.value.strip().lower())
 
+    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+
 
 @dataclass(frozen=True, slots=True)
 class ClientPathToken:
