@@ -45,7 +45,6 @@ def construct_shared_threshold(
     shared_value = ThresholdValue(unweighted_mean(tuple(item.value.value for item in local_quantiles)))
     assignments = tuple(ThresholdAssignment(item.client, shared_value) for item in local_quantiles)
     return SharedThresholdResult(
-        method=FederatedThresholdMethod.SHARED_THRESHOLD,
         coordinate=eligible[0].coordinate,
         quantile=protocol.quantile,
         contributing_local_quantiles=local_quantiles,
@@ -74,12 +73,11 @@ def construct_pooled_shared_quantile(
         quantile_interpolation=quantile_interpolation_semantics(),
         score_set_checksum=score_set_checksum,
         calibration_manifest_checksum=calibration_manifest_checksum,
-        tie_count=0,
+        tie_count=RowCount(0),
         availability=AvailabilityStatus.AVAILABLE,
     )
     assignments = tuple(ThresholdAssignment(client_scores.client, shared_value) for client_scores in eligible)
     return PooledSharedQuantileResult(
-        method=FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
         coordinate=coordinate,
         quantile=protocol.quantile,
         pooled_benign_score_count=RowCount(len(pooled_scores)),
@@ -107,7 +105,6 @@ def construct_sample_weighted_shared_threshold(
     shared_value = ThresholdValue(sample_weighted_mean(tuple(item.value.value for item in local_quantiles), counts))
     assignments = tuple(ThresholdAssignment(item.client, shared_value) for item in local_quantiles)
     return SampleWeightedSharedThresholdResult(
-        method=FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
         coordinate=eligible[0].coordinate,
         quantile=protocol.quantile,
         contributing_local_quantiles=local_quantiles,

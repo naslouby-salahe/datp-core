@@ -23,7 +23,6 @@ def construct_local_threshold(
     local_quantiles = tuple(local_quantile(client_scores, protocol.quantile) for client_scores in eligible)
     assignments = tuple(ThresholdAssignment(item.client, item.value) for item in local_quantiles)
     return LocalThresholdResult(
-        method=FederatedThresholdMethod.LOCAL_THRESHOLD,
         coordinate=eligible[0].coordinate,
         local_quantiles=local_quantiles,
         assignments=assignments,

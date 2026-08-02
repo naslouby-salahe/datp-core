@@ -7,7 +7,7 @@ finite-sample conformal rank exceeds the available calibration count
 score errors propagate; they are never silently converted into unavailability.
 """
 
-from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod
+from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import CoverageTarget, Quantile, Ratio, RowCount, ScoreValue
 from datp_core.populations.models import ClientIdentity
@@ -62,7 +62,6 @@ def construct_local_conformal_threshold(
             subject=ContractSubject.CALIBRATION,
         )
     return ConformalThresholdResult(
-        method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
         coordinate=eligible[0].coordinate,
         coverage=coverage,
         significance=significance,

@@ -40,8 +40,8 @@ from datp_core.thresholding.models import (
     LocalThresholdResult,
     PooledSharedQuantileResult,
     PooledVarianceDecomposition,
-    SharedThresholdResult,
     SampleWeightedSharedThresholdResult,
+    SharedThresholdResult,
     ShrinkageAssignment,
     ShrinkageThresholdResult,
     ThresholdAssignment,
@@ -60,7 +60,7 @@ def _diagnostic() -> ThresholdDiagnostic:
         quantile_interpolation=None,
         score_set_checksum=Checksum("a" * 64),
         calibration_manifest_checksum=Checksum("b" * 64),
-        tie_count=0,
+        tie_count=RowCount(0),
         availability=AvailabilityStatus.AVAILABLE,
     )
 
@@ -82,11 +82,11 @@ def test_threshold_diagnostic_rejects_negative_tie_count() -> None:
             quantile_interpolation=None,
             score_set_checksum=Checksum("a" * 64),
             calibration_manifest_checksum=Checksum("b" * 64),
-            tie_count=-1,
+            tie_count=RowCount(-1),
             availability=AvailabilityStatus.AVAILABLE,
         )
 
-    with pytest.raises(ScientificContractError, match="non-negative"):
+    with pytest.raises(ValueError, match="row count"):
         build()
 
 
@@ -99,7 +99,6 @@ def test_shared_threshold_result_requires_uniform_assignments() -> None:
 
     def build() -> SharedThresholdResult:
         return SharedThresholdResult(
-            method=FederatedThresholdMethod.SHARED_THRESHOLD,
             coordinate=COORDINATE,
             quantile=QUANTILE,
             contributing_local_quantiles=local_quantiles,
@@ -116,7 +115,6 @@ def test_shared_threshold_result_accepts_consistent_assignments() -> None:
     shared_value = ThresholdValue(1.5)
     assignments = (ThresholdAssignment(CLIENT_A, shared_value), ThresholdAssignment(CLIENT_B, shared_value))
     result = SharedThresholdResult(
-        method=FederatedThresholdMethod.SHARED_THRESHOLD,
         coordinate=COORDINATE,
         quantile=QUANTILE,
         contributing_local_quantiles=local_quantiles,
@@ -126,32 +124,12 @@ def test_shared_threshold_result_accepts_consistent_assignments() -> None:
     assert result.shared_threshold == shared_value
 
 
-def test_shared_threshold_result_rejects_wrong_method() -> None:
-    local_quantiles = (_local_quantile(CLIENT_A, 1.0),)
-    shared_value = ThresholdValue(1.0)
-    assignments = (ThresholdAssignment(CLIENT_A, shared_value),)
-
-    def build() -> SharedThresholdResult:
-        return SharedThresholdResult(
-            method=FederatedThresholdMethod.LOCAL_THRESHOLD,
-            coordinate=COORDINATE,
-            quantile=QUANTILE,
-            contributing_local_quantiles=local_quantiles,
-            shared_threshold=shared_value,
-            assignments=assignments,
-        )
-
-    with pytest.raises(ScientificContractError, match="method must be"):
-        build()
-
-
 def test_local_threshold_result_requires_assignment_to_match_own_quantile() -> None:
     local_quantiles = (_local_quantile(CLIENT_A, 1.0),)
     wrong_assignments = (ThresholdAssignment(CLIENT_A, ThresholdValue(9.0)),)
 
     def build() -> LocalThresholdResult:
         return LocalThresholdResult(
-            method=FederatedThresholdMethod.LOCAL_THRESHOLD,
             coordinate=COORDINATE,
             local_quantiles=local_quantiles,
             assignments=wrong_assignments,
@@ -201,7 +179,6 @@ def test_family_threshold_result_assignments_must_match_available_members() -> N
 
     def build() -> FamilyThresholdResult:
         return FamilyThresholdResult(
-            method=FederatedThresholdMethod.FAMILY_THRESHOLD,
             coordinate=COORDINATE,
             families=(family,),
             assignments=wrong_assignments,
@@ -225,8 +202,6 @@ def test_cluster_membership_requires_at_least_one_member() -> None:
 
 
 def test_cluster_fingerprint_requires_exactly_four_features() -> None:
-    # A malformed length can only reach this boundary through a bypass of the type
-    # system (e.g. deserialized data); the cast constructs exactly that scenario.
     short_raw = cast(tuple[float, float, float, float], (1.0, 2.0, 3.0))
 
     def build() -> ClusterFingerprint:
@@ -257,7 +232,6 @@ def test_grouped_threshold_result_requires_cluster_count_to_match_group_count() 
 
     def build() -> GroupedThresholdResult:
         return GroupedThresholdResult(
-            method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
             coordinate=COORDINATE,
             fingerprints=(fingerprint,),
             clusters=(membership,),
@@ -309,7 +283,6 @@ def test_shrinkage_threshold_result_requires_every_weight_over_same_clients() ->
 
     def build() -> ShrinkageThresholdResult:
         return ShrinkageThresholdResult(
-            method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
             coordinate=COORDINATE,
             weights=(ShrinkageWeight(0.0), ShrinkageWeight(1.0)),
             assignments=complete_weight_assignments,
@@ -325,9 +298,9 @@ def test_conformal_assignment_rejects_rank_index_out_of_bounds() -> None:
             client=CLIENT_A,
             calibration_count=RowCount(10),
             rank_index=11,
-            effective_quantile=0.95,
+            effective_quantile=Quantile(0.95),
             selected_score=ScoreValue(1.0),
-            tie_count=0,
+            tie_count=RowCount(0),
             threshold=ThresholdValue(1.0),
         )
 
@@ -339,16 +312,15 @@ def test_conformal_threshold_result_rejects_client_both_assigned_and_unavailable
     assignment = ConformalAssignment(
         client=CLIENT_A,
         calibration_count=RowCount(10),
-        rank_index=10,
-        effective_quantile=1.0,
+        rank_index=9,
+        effective_quantile=Quantile(0.9),
         selected_score=ScoreValue(1.0),
-        tie_count=0,
+        tie_count=RowCount(0),
         threshold=ThresholdValue(1.0),
     )
 
     def build() -> ConformalThresholdResult:
         return ConformalThresholdResult(
-            method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
             significance=Ratio(0.05),
@@ -388,24 +360,22 @@ def test_pooled_variance_decomposition_requires_the_additive_identity() -> None:
 def test_centralized_attainment_diagnostic_rejects_out_of_range_target() -> None:
     def build() -> CentralizedAttainmentDiagnostic:
         return CentralizedAttainmentDiagnostic(
-            target_exceedance=1.5,
-            achieved_exceedance=0.1,
+            target_exceedance=Quantile(1.5),
+            achieved_exceedance=Ratio(0.1),
             signed_attainment_error=0.0,
-            absolute_attainment_error=0.0,
+            absolute_attainment_error=Ratio(0.0),
             absolute_threshold_error_vs_pooled_quantile=0.0,
             relative_threshold_error_vs_pooled_quantile=None,
         )
 
-    with pytest.raises(ScientificContractError, match="target exceedance"):
+    with pytest.raises(ValueError, match="quantile"):
         build()
 
 
-def test_communication_payload_requires_at_least_one_field() -> None:
-    def build() -> CommunicationPayload:
-        return CommunicationPayload(fields=(), estimated_bytes=ByteCount(0))
-
-    with pytest.raises(ScientificContractError, match="at least one communicated field"):
-        build()
+def test_communication_payload_declares_fixed_fields() -> None:
+    payload = CommunicationPayload(estimated_bytes=ByteCount(10))
+    assert payload.fields == ("count", "mean", "variance")
+    assert payload.estimated_bytes == ByteCount(10)
 
 
 def test_fixed_coefficient_result_holds_its_value() -> None:
@@ -466,7 +436,6 @@ def test_family_threshold_result_rejects_assignment_not_matching_family_threshol
 
     def build() -> FamilyThresholdResult:
         return FamilyThresholdResult(
-            method=FederatedThresholdMethod.FAMILY_THRESHOLD,
             coordinate=COORDINATE,
             families=(family,),
             assignments=wrong_assignments,
@@ -479,7 +448,6 @@ def test_family_threshold_result_rejects_assignment_not_matching_family_threshol
 def test_shrinkage_threshold_result_rejects_empty_assignments() -> None:
     def build() -> ShrinkageThresholdResult:
         return ShrinkageThresholdResult(
-            method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
             coordinate=COORDINATE,
             weights=(ShrinkageWeight(0.0),),
             assignments=(),
@@ -504,7 +472,6 @@ def test_shrinkage_threshold_result_rejects_duplicate_client_weight_pair() -> No
 
     def build() -> ShrinkageThresholdResult:
         return ShrinkageThresholdResult(
-            method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
             coordinate=COORDINATE,
             weights=(ShrinkageWeight(0.0),),
             assignments=duped,
@@ -517,7 +484,6 @@ def test_shrinkage_threshold_result_rejects_duplicate_client_weight_pair() -> No
 def test_conformal_threshold_result_requires_at_least_one_assignment() -> None:
     def build() -> ConformalThresholdResult:
         return ConformalThresholdResult(
-            method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
             significance=Ratio(0.05),
@@ -534,17 +500,16 @@ def test_conformal_threshold_result_rejects_duplicate_assignments() -> None:
     assignment = ConformalAssignment(
         client=CLIENT_A,
         calibration_count=RowCount(10),
-        rank_index=10,
-        effective_quantile=1.0,
+        rank_index=9,
+        effective_quantile=Quantile(0.9),
         selected_score=ScoreValue(1.0),
-        tie_count=0,
+        tie_count=RowCount(0),
         threshold=ThresholdValue(1.0),
     )
     duped = (assignment, assignment)
 
     def build() -> ConformalThresholdResult:
         return ConformalThresholdResult(
-            method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
             significance=Ratio(0.05),
@@ -561,16 +526,15 @@ def test_conformal_threshold_result_rejects_duplicate_unavailable_clients() -> N
     assignment = ConformalAssignment(
         client=CLIENT_A,
         calibration_count=RowCount(10),
-        rank_index=10,
-        effective_quantile=1.0,
+        rank_index=9,
+        effective_quantile=Quantile(0.9),
         selected_score=ScoreValue(1.0),
-        tie_count=0,
+        tie_count=RowCount(0),
         threshold=ThresholdValue(1.0),
     )
 
     def build() -> ConformalThresholdResult:
         return ConformalThresholdResult(
-            method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
             significance=Ratio(0.05),
@@ -600,9 +564,9 @@ def test_conformal_assignment_rejects_threshold_not_equal_to_selected_score() ->
             client=CLIENT_A,
             calibration_count=RowCount(10),
             rank_index=5,
-            effective_quantile=0.5,
+            effective_quantile=Quantile(0.5),
             selected_score=ScoreValue(3.0),
-            tie_count=0,
+            tie_count=RowCount(0),
             threshold=ThresholdValue(9.0),
         )
 
@@ -616,9 +580,9 @@ def test_conformal_assignment_rejects_effective_quantile_not_equal_to_rank_over_
             client=CLIENT_A,
             calibration_count=RowCount(10),
             rank_index=5,
-            effective_quantile=0.9,
+            effective_quantile=Quantile(0.9),
             selected_score=ScoreValue(3.0),
-            tie_count=0,
+            tie_count=RowCount(0),
             threshold=ThresholdValue(3.0),
         )
 
@@ -633,16 +597,15 @@ def test_conformal_threshold_result_rejects_incomplete_client_coverage() -> None
     assignment = ConformalAssignment(
         client=CLIENT_A,
         calibration_count=RowCount(10),
-        rank_index=10,
-        effective_quantile=1.0,
+        rank_index=9,
+        effective_quantile=Quantile(0.9),
         selected_score=ScoreValue(1.0),
-        tie_count=0,
+        tie_count=RowCount(0),
         threshold=ThresholdValue(1.0),
     )
 
     def build() -> ConformalThresholdResult:
         return ConformalThresholdResult(
-            method=FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD,
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
             significance=Ratio(0.05),
@@ -723,7 +686,6 @@ def test_grouped_threshold_result_rejects_assignment_not_matching_cluster_thresh
 
     def build() -> GroupedThresholdResult:
         return GroupedThresholdResult(
-            method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
             coordinate=COORDINATE,
             fingerprints=(fp_a, fp_b),
             clusters=(
@@ -758,7 +720,6 @@ def test_grouped_threshold_result_rejects_duplicate_fingerprint_clients() -> Non
 
     def build() -> GroupedThresholdResult:
         return GroupedThresholdResult(
-            method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
             coordinate=COORDINATE,
             fingerprints=(fp_a, fp_a2, fp_b),
             clusters=(
@@ -792,7 +753,6 @@ def test_grouped_threshold_result_rejects_duplicate_cluster_indices() -> None:
 
     def build() -> GroupedThresholdResult:
         return GroupedThresholdResult(
-            method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
             coordinate=COORDINATE,
             fingerprints=(fp_a, fp_b),
             clusters=(
@@ -826,7 +786,6 @@ def test_grouped_threshold_result_rejects_duplicate_cluster_indices() -> None:
 def test_shrinkage_threshold_result_rejects_duplicate_declared_weights() -> None:
     def build() -> ShrinkageThresholdResult:
         return ShrinkageThresholdResult(
-            method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
             coordinate=COORDINATE,
             weights=(ShrinkageWeight(0.5), ShrinkageWeight(0.5)),
             assignments=(),
@@ -839,7 +798,6 @@ def test_shrinkage_threshold_result_rejects_duplicate_declared_weights() -> None
 def test_shrinkage_threshold_result_rejects_undeclared_weight_in_assignment() -> None:
     def build() -> ShrinkageThresholdResult:
         return ShrinkageThresholdResult(
-            method=FederatedThresholdMethod.LOCAL_GLOBAL_SHRINKAGE,
             coordinate=COORDINATE,
             weights=(ShrinkageWeight(0.0),),
             assignments=(
@@ -857,74 +815,66 @@ def test_shrinkage_threshold_result_rejects_undeclared_weight_in_assignment() ->
 
 
 def test_federated_statistics_result_rejects_duplicate_client_summaries() -> None:
-    summary = ClientBenignSummary(client=CLIENT_A, count=RowCount(10), mean=0.0, variance=1.0, benign_exceedance_count=None)
+    summary = ClientBenignSummary(
+        client=CLIENT_A, count=RowCount(10), mean=0.0, variance=1.0, benign_exceedance_count=None
+    )
 
     def build() -> FederatedStatisticsThresholdResult:
         return FederatedStatisticsThresholdResult(
-            method=FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
             coordinate=COORDINATE,
             quantile=QUANTILE,
             client_summaries=(summary, summary),
             decomposition=PooledVarianceDecomposition(
-                global_mean=0.0, within_client_variance=0.5, between_client_variance=0.5,
-                full_pooled_variance=1.0, between_ratio=0.5,
+                global_mean=0.0,
+                within_client_variance=0.5,
+                between_client_variance=0.5,
+                full_pooled_variance=1.0,
+                between_ratio=Ratio(0.5),
             ),
             matched_threshold=ThresholdValue(1.0),
             centralized_attainment_diagnostic=CentralizedAttainmentDiagnostic(
-                target_exceedance=0.05, achieved_exceedance=0.05, signed_attainment_error=0.0,
-                absolute_attainment_error=0.0, absolute_threshold_error_vs_pooled_quantile=0.0,
+                target_exceedance=Quantile(0.05),
+                achieved_exceedance=Ratio(0.05),
+                signed_attainment_error=0.0,
+                absolute_attainment_error=Ratio(0.0),
+                absolute_threshold_error_vs_pooled_quantile=0.0,
                 relative_threshold_error_vs_pooled_quantile=None,
             ),
             centralized_pooled_quantile_diagnostic=ThresholdValue(1.0),
             fixed_coefficient_curve=(),
             assignments=(ThresholdAssignment(CLIENT_A, ThresholdValue(1.0)),),
-            communication_payload=CommunicationPayload(
-                fields=("count", "mean", "variance"), estimated_bytes=ByteCount(10),
-            ),
+            communication_payload=CommunicationPayload(estimated_bytes=ByteCount(10)),
         )
 
     with pytest.raises(ScientificContractError, match="unique client identities"):
         build()
 
 
-def test_federated_statistics_result_rejects_wrong_communication_fields() -> None:
-    summary = ClientBenignSummary(client=CLIENT_A, count=RowCount(10), mean=0.0, variance=1.0, benign_exceedance_count=None)
-
-    def build() -> FederatedStatisticsThresholdResult:
-        return FederatedStatisticsThresholdResult(
-            method=FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS,
-            coordinate=COORDINATE,
-            quantile=QUANTILE,
-            client_summaries=(summary,),
-            decomposition=PooledVarianceDecomposition(
-                global_mean=0.0, within_client_variance=1.0, between_client_variance=0.0,
-                full_pooled_variance=1.0, between_ratio=0.0,
-            ),
-            matched_threshold=ThresholdValue(1.0),
-            centralized_attainment_diagnostic=CentralizedAttainmentDiagnostic(
-                target_exceedance=0.05, achieved_exceedance=0.05, signed_attainment_error=0.0,
-                absolute_attainment_error=0.0, absolute_threshold_error_vs_pooled_quantile=0.0,
-                relative_threshold_error_vs_pooled_quantile=None,
-            ),
-            centralized_pooled_quantile_diagnostic=ThresholdValue(1.0),
-            fixed_coefficient_curve=(),
-            assignments=(ThresholdAssignment(CLIENT_A, ThresholdValue(1.0)),),
-            communication_payload=CommunicationPayload(
-                fields=("count", "extra_field"), estimated_bytes=ByteCount(10),
-            ),
-        )
-
-    with pytest.raises(ScientificContractError, match="exactly count, mean, and variance"):
-        build()
-
-
 def test_client_benign_summary_rejects_non_finite_mean() -> None:
     def build() -> ClientBenignSummary:
         return ClientBenignSummary(
-            client=CLIENT_A, count=RowCount(10), mean=float("inf"), variance=1.0, benign_exceedance_count=None,
+            client=CLIENT_A,
+            count=RowCount(10),
+            mean=float("inf"),
+            variance=1.0,
+            benign_exceedance_count=None,
         )
 
     with pytest.raises(ScientificContractError, match="finite"):
+        build()
+
+
+def test_client_benign_summary_rejects_exceedance_count_exceeding_count() -> None:
+    def build() -> ClientBenignSummary:
+        return ClientBenignSummary(
+            client=CLIENT_A,
+            count=RowCount(10),
+            mean=0.0,
+            variance=1.0,
+            benign_exceedance_count=RowCount(11),
+        )
+
+    with pytest.raises(ScientificContractError, match="cannot exceed"):
         build()
 
 
@@ -938,7 +888,6 @@ def test_shared_threshold_result_rejects_duplicate_contributing_clients() -> Non
 
     def build() -> SharedThresholdResult:
         return SharedThresholdResult(
-            method=FederatedThresholdMethod.SHARED_THRESHOLD,
             coordinate=COORDINATE,
             quantile=QUANTILE,
             contributing_local_quantiles=local_quantiles,
@@ -953,7 +902,6 @@ def test_shared_threshold_result_rejects_duplicate_contributing_clients() -> Non
 def test_pooled_shared_quantile_rejects_duplicate_assignments() -> None:
     def build() -> PooledSharedQuantileResult:
         return PooledSharedQuantileResult(
-            method=FederatedThresholdMethod.POOLED_SHARED_QUANTILE,
             coordinate=COORDINATE,
             quantile=QUANTILE,
             pooled_benign_score_count=RowCount(100),
@@ -978,7 +926,6 @@ def test_local_threshold_result_rejects_duplicate_local_quantiles() -> None:
 
     def build() -> LocalThresholdResult:
         return LocalThresholdResult(
-            method=FederatedThresholdMethod.LOCAL_THRESHOLD,
             coordinate=COORDINATE,
             local_quantiles=local_quantiles,
             assignments=assignments,
@@ -995,7 +942,6 @@ def test_shared_threshold_result_rejects_inconsistent_threshold_formula() -> Non
 
     with pytest.raises(ScientificContractError, match="unweighted mean"):
         SharedThresholdResult(
-            method=FederatedThresholdMethod.SHARED_THRESHOLD,
             coordinate=COORDINATE,
             quantile=QUANTILE,
             contributing_local_quantiles=local_quantiles,
@@ -1012,7 +958,6 @@ def test_sample_weighted_shared_threshold_result_rejects_inconsistent_threshold_
 
     with pytest.raises(ScientificContractError, match="normalized weighted mean"):
         SampleWeightedSharedThresholdResult(
-            method=FederatedThresholdMethod.SAMPLE_WEIGHTED_SHARED_THRESHOLD,
             coordinate=COORDINATE,
             quantile=QUANTILE,
             contributing_local_quantiles=local_quantiles,
@@ -1061,7 +1006,6 @@ def test_grouped_threshold_result_rejects_out_of_range_or_non_canonical_cluster_
 
     with pytest.raises(ScientificContractError, match=r"cluster indices must equal exactly 0\.\.group_count"):
         GroupedThresholdResult(
-            method=FederatedThresholdMethod.CLUSTER_THRESHOLD,
             coordinate=COORDINATE,
             fingerprints=(fp_a,),
             clusters=(cluster_a,),
@@ -1077,10 +1021,10 @@ def test_grouped_threshold_result_rejects_out_of_range_or_non_canonical_cluster_
 def test_centralized_attainment_diagnostic_rejects_inconsistent_signed_error() -> None:
     with pytest.raises(ScientificContractError, match="signed attainment error"):
         CentralizedAttainmentDiagnostic(
-            target_exceedance=0.05,
-            achieved_exceedance=0.10,
+            target_exceedance=Quantile(0.05),
+            achieved_exceedance=Ratio(0.10),
             signed_attainment_error=0.0,
-            absolute_attainment_error=0.05,
+            absolute_attainment_error=Ratio(0.05),
             absolute_threshold_error_vs_pooled_quantile=0.0,
             relative_threshold_error_vs_pooled_quantile=None,
         )
@@ -1089,22 +1033,22 @@ def test_centralized_attainment_diagnostic_rejects_inconsistent_signed_error() -
 def test_centralized_attainment_diagnostic_rejects_inconsistent_absolute_error() -> None:
     with pytest.raises(ScientificContractError, match="absolute attainment error"):
         CentralizedAttainmentDiagnostic(
-            target_exceedance=0.05,
-            achieved_exceedance=0.10,
+            target_exceedance=Quantile(0.05),
+            achieved_exceedance=Ratio(0.10),
             signed_attainment_error=0.05,
-            absolute_attainment_error=0.99,
+            absolute_attainment_error=Ratio(0.99),
             absolute_threshold_error_vs_pooled_quantile=0.0,
             relative_threshold_error_vs_pooled_quantile=None,
         )
 
 
 def test_centralized_attainment_diagnostic_rejects_non_finite_fields() -> None:
-    with pytest.raises(ScientificContractError, match="must be finite"):
+    with pytest.raises(ValueError, match="quantile"):
         CentralizedAttainmentDiagnostic(
-            target_exceedance=float("nan"),
-            achieved_exceedance=0.10,
+            target_exceedance=Quantile(float("nan")),
+            achieved_exceedance=Ratio(0.10),
             signed_attainment_error=0.05,
-            absolute_attainment_error=0.05,
+            absolute_attainment_error=Ratio(0.05),
             absolute_threshold_error_vs_pooled_quantile=0.0,
             relative_threshold_error_vs_pooled_quantile=None,
         )

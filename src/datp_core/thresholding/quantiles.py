@@ -40,6 +40,7 @@ from datp_core.domain.values import (
     Checksum,
     CoverageTarget,
     Quantile,
+    Ratio,
     RowCount,
     SummaryCoefficient,
     ThresholdValue,
@@ -66,9 +67,7 @@ class ClientBenignCalibrationScores:
                 "eligible client calibration scores must be non-empty", subject=ContractSubject.CALIBRATION
             )
         if not all(np.isfinite(score) for score in self.scores):
-            raise ScientificContractError(
-                "every calibration score must be finite", subject=ContractSubject.CALIBRATION
-            )
+            raise ScientificContractError("every calibration score must be finite", subject=ContractSubject.CALIBRATION)
 
     @property
     def as_array(self) -> np.ndarray:
@@ -100,7 +99,7 @@ def local_quantile(client_scores: ClientBenignCalibrationScores, quantile: Quant
         quantile_interpolation=quantile_interpolation_semantics(),
         score_set_checksum=client_scores.score_set_checksum,
         calibration_manifest_checksum=client_scores.calibration_manifest_checksum,
-        tie_count=0,
+        tie_count=RowCount(0),
         availability=AvailabilityStatus.AVAILABLE,
     )
     return LocalQuantile(
@@ -154,7 +153,7 @@ def sample_weighted_mean(values: tuple[float, ...], weights: tuple[float, ...]) 
         raise ScientificContractError(
             "sample-weighted mean requires positive total support", subject=ContractSubject.THRESHOLD
         )
-    return sum(value * weight for value, weight in zip(values, weights, strict=True)) / total_weight
+    return sum(v * w for v, w in zip(values, weights, strict=True)) / total_weight
 
 
 def conformal_rank_index(calibration_count: RowCount, coverage: CoverageTarget) -> int:
@@ -169,7 +168,7 @@ def conformal_rank_index(calibration_count: RowCount, coverage: CoverageTarget) 
 
 def finite_sample_conformal_threshold(
     scores: np.ndarray, coverage: CoverageTarget
-) -> tuple[ThresholdValue, int, float, int]:
+) -> tuple[ThresholdValue, int, Quantile, RowCount]:
     """Return (threshold, rank_index, effective_quantile, tie_count) or raise if infeasible."""
     _require_score_vector(scores)
     calibration_count = int(scores.size)
@@ -181,14 +180,14 @@ def finite_sample_conformal_threshold(
         )
     ordered = np.sort(scores)
     selected = float(ordered[rank_index - 1])
-    tie_count = int(np.count_nonzero(ordered == selected)) - 1
-    effective_quantile = rank_index / calibration_count
+    tie_count = RowCount(int(np.count_nonzero(ordered == selected)) - 1)
+    effective_quantile = Quantile(rank_index / calibration_count)
     return ThresholdValue(selected), rank_index, effective_quantile, tie_count
 
 
-def achieved_benign_exceedance(scores: np.ndarray, threshold: ThresholdValue) -> float:
+def achieved_benign_exceedance(scores: np.ndarray, threshold: ThresholdValue) -> Ratio:
     _require_score_vector(scores)
-    return float(np.mean(scores > threshold.value))
+    return Ratio(float(np.mean(scores > threshold.value)))
 
 
 def gaussian_matched_exceedance_threshold(mean: float, variance: float, quantile: Quantile) -> ThresholdValue:

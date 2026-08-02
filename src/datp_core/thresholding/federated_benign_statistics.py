@@ -21,7 +21,7 @@ import numpy as np
 
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import ByteCount, Quantile, RowCount
+from datp_core.domain.values import ByteCount, Quantile, Ratio, RowCount
 from datp_core.protocols.models import FederatedStatisticsProtocol
 from datp_core.thresholding.models import (
     CentralizedAttainmentDiagnostic,
@@ -39,8 +39,6 @@ from datp_core.thresholding.quantiles import (
     fixed_coefficient_threshold,
     gaussian_matched_exceedance_threshold,
 )
-
-_COMMUNICATED_FIELDS = ("count", "mean", "variance")
 
 
 def _client_summary(client_scores: ClientBenignCalibrationScores) -> ClientBenignSummary:
@@ -63,7 +61,7 @@ def _decomposition(summaries: tuple[ClientBenignSummary, ...]) -> PooledVariance
         sum(count * (summary.mean - global_mean) ** 2 for count, summary in zip(counts, summaries, strict=True)) / total
     )
     full_pooled_variance = within + between
-    between_ratio = between / full_pooled_variance if full_pooled_variance > 0 else None
+    between_ratio = Ratio(between / full_pooled_variance) if full_pooled_variance > 0 else None
     return PooledVarianceDecomposition(
         global_mean=global_mean,
         within_client_variance=within,
@@ -102,9 +100,9 @@ def construct_federated_benign_statistics(
     pooled_scores = np.concatenate([client_scores.as_array for client_scores in ordered])
     centralized_pooled_quantile_diagnostic = exact_empirical_quantile(pooled_scores, quantile)
 
-    target_exceedance = 1.0 - quantile.value
+    target_exceedance = Quantile(1.0 - quantile.value)
     achieved_exceedance = achieved_benign_exceedance(pooled_scores, matched_threshold)
-    signed_attainment_error = achieved_exceedance - target_exceedance
+    signed_attainment_error = achieved_exceedance.value - target_exceedance.value
     absolute_threshold_error = abs(matched_threshold.value - centralized_pooled_quantile_diagnostic.value)
     pooled_reference_value = centralized_pooled_quantile_diagnostic.value
     relative_threshold_error = (
@@ -114,7 +112,7 @@ def construct_federated_benign_statistics(
         target_exceedance=target_exceedance,
         achieved_exceedance=achieved_exceedance,
         signed_attainment_error=signed_attainment_error,
-        absolute_attainment_error=abs(signed_attainment_error),
+        absolute_attainment_error=Ratio(abs(signed_attainment_error)),
         absolute_threshold_error_vs_pooled_quantile=absolute_threshold_error,
         relative_threshold_error_vs_pooled_quantile=relative_threshold_error,
     )
@@ -129,11 +127,8 @@ def construct_federated_benign_statistics(
         for coefficient in protocol.coefficients
     )
     assignments = tuple(ThresholdAssignment(client_scores.client, matched_threshold) for client_scores in ordered)
-    communication_payload = CommunicationPayload(
-        fields=_COMMUNICATED_FIELDS, estimated_bytes=_serialized_payload_bytes(summaries)
-    )
+    communication_payload = CommunicationPayload(estimated_bytes=_serialized_payload_bytes(summaries))
     return FederatedStatisticsThresholdResult(
-        method=protocol.method,
         coordinate=ordered[0].coordinate,
         quantile=quantile,
         client_summaries=summaries,

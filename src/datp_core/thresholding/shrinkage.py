@@ -60,7 +60,6 @@ def construct_fixed_shrinkage(
                 )
             )
     return ShrinkageThresholdResult(
-        method=protocol.method,
         coordinate=eligible[0].coordinate,
         weights=protocol.weights,
         assignments=tuple(assignments),

@@ -28,6 +28,11 @@ class ScientificContractError(DatpCoreError):
     pass
 
 
+def require_contract(condition: bool, message: str, subject: Enum | None = None) -> None:
+    if not condition:
+        raise ScientificContractError(message, subject=subject)
+
+
 class UnresolvedScientificValueError(ScientificContractError):
     pass
 

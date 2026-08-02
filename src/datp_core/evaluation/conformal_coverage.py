@@ -8,7 +8,7 @@ import polars as pl
 
 from datp_core.domain.enums import MetricId, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CoverageTarget, RowCount, Seed, ThresholdValue, checksum_file
+from datp_core.domain.values import CoverageTarget, Quantile, RowCount, Seed, ThresholdValue, checksum_file
 from datp_core.evaluation.metric_semantics import available, unavailable
 from datp_core.evaluation.models import CoverageResult, HeldOutBenignScore, MetricReason, MetricStatus
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
@@ -33,8 +33,8 @@ class ConformalCoverageDiagnostic:
     target_coverage: CoverageTarget
     calibration_count: RowCount
     finite_sample_rank_index: int
-    effective_quantile: float
-    tie_count: int
+    effective_quantile: Quantile
+    tie_count: RowCount
     threshold: ThresholdValue
     achieved_held_out_benign_coverage: float | None
     signed_coverage_error: float | None
@@ -49,16 +49,16 @@ class ConformalCoverageDiagnostic:
             self.signed_coverage_error,
             self.absolute_coverage_error,
         )
-        if self.calibration_count < 1 or self.finite_sample_rank_index < 1:
+        if self.calibration_count.value < 1 or self.finite_sample_rank_index < 1:
             raise ScientificContractError("conformal diagnostics require a positive calibration count and rank")
         if (
             self.coordinate.population is not self.client.population
             or self.coordinate.training_seed != self.training_seed
         ):
             raise ScientificContractError("conformal coverage coordinate must match the client and training seed")
-        if not isfinite(self.effective_quantile) or not 0 < self.effective_quantile <= 1:
+        if not isfinite(self.effective_quantile.value) or not 0 < self.effective_quantile.value <= 1:
             raise ScientificContractError("conformal effective quantile must be finite and in (0, 1]")
-        if self.tie_count < 0 or not isfinite(self.threshold.value):
+        if self.tie_count.value < 0 or not isfinite(self.threshold.value):
             raise ScientificContractError("conformal threshold provenance must be finite")
         if is_available:
             if any(value is None for value in values) or self.unavailable_reason is not None:

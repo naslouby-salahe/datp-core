@@ -11,7 +11,6 @@ methods only).
 """
 
 from datp_core.domain.enums import AvailabilityStatus, ContractSubject
-from datp_core.domain.enums import FederatedThresholdMethod as Method
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import FamilyIdentity, Quantile, ThresholdValue
 from datp_core.populations.models import ClientIdentity
@@ -72,7 +71,6 @@ def construct_family_threshold(
         assignments.extend(family_assignments)
 
     return FamilyThresholdResult(
-        method=Method.FAMILY_THRESHOLD,
         coordinate=coordinate,
         families=tuple(memberships),
         assignments=tuple(assignments),

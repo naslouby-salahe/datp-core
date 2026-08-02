@@ -44,9 +44,7 @@ def _raw_fingerprint(scores: np.ndarray) -> tuple[float, float, float, float]:
     else:
         skewness = float(skew(scores, bias=True))
         if not np.isfinite(skewness):
-            raise ScientificContractError(
-                "fingerprint skewness must be finite", subject=ContractSubject.THRESHOLD
-            )
+            raise ScientificContractError("fingerprint skewness must be finite", subject=ContractSubject.THRESHOLD)
     p95 = exact_empirical_quantile(scores, CANONICAL_QUANTILE).value
     return mean, standard_deviation, skewness, p95
 
@@ -93,7 +91,6 @@ def construct_grouped_threshold(
     clusters, assignments = _build_clusters(ordered, labels, protocol.group_count, local_quantiles_by_client)
 
     return GroupedThresholdResult(
-        method=protocol.method,
         coordinate=ordered[0].coordinate,
         fingerprints=fingerprints,
         clusters=clusters,
