@@ -119,7 +119,7 @@ def validate_frozen_recalibrated_pair(
             "temporal comparison requires frozen and recalibrated future states",
             subject=EvidenceRole.TEMPORAL_BOUNDARY,
         )
-    fixed_fields = (
+    fixed_fields = ( # TODO: this should be an enum of fields in the codebase, not a magic tuple
         "split_protocol",
         "evaluation_role",
         "coordinate_checksum",

@@ -52,10 +52,10 @@ class NestedSeedSummary:
 
 
 @dataclass(frozen=True, slots=True)
-class PairedDifferenceCounts:
-    positive: int
-    zero: int
-    negative: int
+class PairedDifferenceCounts: # TODO: move this to /home/naslouby/Projects/datp-core/src/datp_core/analysis/models.py
+    positive: int # TODO: make this a dataclass for counts in the codebase and see if it can be replaced with a more specific type
+    zero: int # TODO: make this a dataclass for counts in the codebase and see if it can be replaced with a more specific type
+    negative: int # TODO: make this a dataclass for counts in the codebase and see if it can be replaced with a more specific type
 
     def __post_init__(self) -> None:
         if min(self.positive, self.zero, self.negative) < 0:
@@ -71,13 +71,13 @@ class PairedDifferenceCounts:
 
 
 def summarize_values(
-    values: tuple[float, ...],
+    values: tuple[float, ...], # TODO: make this a dataclass for values in the codebase and see if it can be replaced with a more specific type
     *,
     evidence_role: EvidenceRole,
-    unavailable_count: int = 0,
-    excluded_count: int = 0,
-    lower_quantile: float = 0.25,
-    upper_quantile: float = 0.75,
+    unavailable_count: int = 0, # TODO: make this a dataclass for counts in the codebase and see if it can be replaced with a more specific type
+    excluded_count: int = 0, # TODO: make this a dataclass for counts in the codebase and see if it can be replaced with a more specific type
+    lower_quantile: float = 0.25, # TODO: make this a dataclass for quantiles in the codebase and see if it can be replaced with a more specific type
+    upper_quantile: float = 0.75, # TODO: make this a dataclass for quantiles in the codebase and see if it can be replaced with a more specific type
 ) -> DescriptiveSummary:
     if not 0 <= lower_quantile <= upper_quantile <= 1:
         raise ValueError("quantiles must be ordered values in [0, 1]")

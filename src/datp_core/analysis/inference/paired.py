@@ -14,20 +14,20 @@ from datp_core.domain.values import Ratio
 
 
 @dataclass(frozen=True, slots=True)
-class WilcoxonResult:
+class WilcoxonResult: # TODO: move this to /home/naslouby/Projects/datp-core/src/datp_core/analysis/models.py
     test: StatisticalTestId
-    alternative: str
-    zero_method: str
-    computation_method: str
-    statistic: float | None
-    p_value: float | None
-    nonzero_pair_count: int
+    alternative: str # TODO: make this enum
+    zero_method: str # TODO: make this enum
+    computation_method: str # TODO: make this enum
+    statistic: float | None # TODO: make this a dataclass for statistics in the codebase and see if it can be replaced with a more specific type
+    p_value: float | None # TODO: make this a dataclass for p-values in the codebase and see if it can be replaced with a more specific type
+    nonzero_pair_count: int # TODO: make this a dataclass for counts in the codebase and see if it can be replaced with a more specific type
     availability: AvailabilityStatus
     reason: str
 
 
 @dataclass(frozen=True, slots=True)
-class RankBiserialResult:
+class RankBiserialResult: # TODO: move this to /home/naslouby/Projects/datp-core/src/datp_core/analysis/models.py
     effect_size: EffectSizeId
     value: float | None
     positive_rank_sum: float | None
@@ -38,12 +38,12 @@ class RankBiserialResult:
 
 
 @dataclass(frozen=True, slots=True)
-class MultiplicityResult:
+class MultiplicityResult: # TODO: move this to /home/naslouby/Projects/datp-core/src/datp_core/analysis/models.py
     correction: MultiplicityCorrectionId
-    family_name: str
-    raw_p_values: tuple[float, ...]
-    adjusted_p_values: tuple[float, ...]
-    rejected: tuple[bool, ...]
+    family_name: str # TODO: search for the dataclass of family_name in the codebase and see if it can be replaced with a more specific type
+    raw_p_values: tuple[float, ...]  # TODO: find if there is a dataclass for p-values in the codebase and see if it can be replaced with a more specific type
+    adjusted_p_values: tuple[float, ...] # TODO: find if there is a dataclass for p-values in the codebase and see if it can be replaced with a more specific type
+    rejected: tuple[bool, ...] # TODO: find if there is a dataclass for rejected in the codebase and see if it can be replaced with a more specific type
 
     def __post_init__(self) -> None:
         if not self.family_name or not self.raw_p_values:

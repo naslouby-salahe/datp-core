@@ -71,7 +71,7 @@ class _ConfirmatoryContractError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
-class _BootstrapDistribution:
+class _BootstrapDistribution: # TODO: move this to /home/naslouby/Projects/datp-core/src/datp_core/analysis/models.py and make public not private
     estimate: MetricValue
     paired_deltas: np.ndarray
     values: np.ndarray | None
@@ -79,7 +79,7 @@ class _BootstrapDistribution:
 
 
 @dataclass(frozen=True, slots=True)
-class PairedContrast:
+class PairedContrast: # TODO: move this to /home/naslouby/Projects/datp-core/src/datp_core/analysis/models.py
     coordinate: FederatedTrainingCoordinate
     evidence_role: EvidenceRole
     seed: Seed
@@ -104,7 +104,7 @@ class PairedContrast:
 
 
 @dataclass(frozen=True, slots=True)
-class ExternalPairedAnalysisPlan:
+class ExternalPairedAnalysisPlan: # TODO: move this to /home/naslouby/Projects/datp-core/src/datp_core/analysis/models.py
     """Predeclared supplementary interval plan, intentionally separate from the endpoint."""
 
     population: PopulationId
@@ -129,7 +129,7 @@ class ExternalPairedAnalysisPlan:
 
 
 @dataclass(frozen=True, slots=True)
-class ExternalPairedContrast:
+class ExternalPairedContrast: # TODO: move this to /home/naslouby/Projects/datp-core/src/datp_core/analysis/models.py
     """A seed-level contrast that may inform supplementary external evidence only."""
 
     coordinate: FederatedTrainingCoordinate
@@ -156,7 +156,7 @@ class ExternalPairedContrast:
 
 
 @dataclass(frozen=True, slots=True)
-class BootstrapInterval:
+class BootstrapInterval: # TODO: move this to /home/naslouby/Projects/datp-core/src/datp_core/analysis/models.py
     method: IntervalMethod
     confidence_level: ConfidenceLevel
     replicate_count: BootstrapReplicateCount
@@ -165,7 +165,7 @@ class BootstrapInterval:
     lower_bound: MetricValue | None
     upper_bound: MetricValue | None
     bias_correction: float | None
-    acceleration: float | None
+    acceleration: float | None # TODO: make this a dataclass for acceleration in the codebase and see if it can be replaced with a more specific type
     availability: AvailabilityStatus
     outcome: BcaOutcome
     reason: BcaReason

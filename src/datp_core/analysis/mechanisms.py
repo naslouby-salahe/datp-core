@@ -135,7 +135,7 @@ def heterogeneity_benefit_association(observations: tuple[tuple[float, float], .
         regression[0],
         regression[1],
         regression[2],
-        regression[3] ** 2,
+        regression[3] ** 2, 
         leverage,
         AvailabilityStatus.AVAILABLE,
         "",
@@ -270,7 +270,7 @@ def blocked_jensen_shannon_divergence(
     clients: tuple[ClientIdentity, ...], blocker: DivergenceBlocker
 ) -> DivergenceResult:
     """Return the required typed blocker instead of selecting histogram semantics ad hoc."""
-    if len(clients) < 2:
+    if len(clients) < 2: # TODO: this should be a constant in the codebase, not a magic number
         raise ValueError("divergence analysis requires at least two clients")
     return DivergenceResult(
         EvidenceRole.MECHANISM,
@@ -296,9 +296,9 @@ def decide_model_absorption(
             "model absorption requires a valid positive FedAvg reference effect",
         )
     ratio = delta_ditto.value / delta_fedavg.value
-    if ratio >= 0.75:
+    if ratio >= 0.75: # TODO: this should be a constant in the codebase, not a magic number
         decision, rationale = ScientificDecision.SUPPORTED, "the Ditto effect is retained"
-    elif ratio >= 0.25:
+    elif ratio >= 0.25: # TODO: this should be a constant in the codebase, not a magic number
         decision, rationale = ScientificDecision.PARTIAL_ABSORPTION, "the Ditto effect is partially absorbed"
     else:
         decision, rationale = ScientificDecision.FULL_ABSORPTION, "the Ditto effect is largely absorbed"
