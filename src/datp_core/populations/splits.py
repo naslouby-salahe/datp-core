@@ -18,7 +18,6 @@ from datp_core.populations.models import (
     STABLE_ROW_ID_COLUMN,
     PopulationOutcomeLabel,
     SplitConstructionRequest,
-    SplitManifest,
     SplitManifestDocument,
     assignment_column_names,
     hamilton_integer_counts,
@@ -43,7 +42,7 @@ def static_reference_split_protocol() -> StaticReferenceSplitProtocol:
     return STATIC_REFERENCE_SPLIT
 
 
-def split_membership(request: SplitConstructionRequest) -> tuple[pl.DataFrame, SplitManifest]:
+def split_membership(request: SplitConstructionRequest) -> tuple[pl.DataFrame, SplitManifestDocument]:
     frame = request.membership
     _require_membership_schema(frame)
     assignments = _assignments_for_protocol(frame, request)
@@ -267,7 +266,7 @@ def _require_conserved_identities(assignments: pl.DataFrame, membership: pl.Data
         )
 
 
-def _split_manifest(assignments: pl.DataFrame, request: SplitConstructionRequest) -> SplitManifest:
+def _split_manifest(assignments: pl.DataFrame, request: SplitConstructionRequest) -> SplitManifestDocument:
     def count(role: PartitionRole) -> int:
         return int(assignments.filter(pl.col(PARTITION_ROLE_COLUMN) == role).height)
 
@@ -296,7 +295,7 @@ def _split_manifest(assignments: pl.DataFrame, request: SplitConstructionRequest
         assignment_checksum=checksum_text(payload),
         population_manifest_checksum=request.population_manifest_checksum,
     )
-    return SplitManifest(document)
+    return document
 
 
 def _require_membership_schema(membership: pl.DataFrame) -> None:

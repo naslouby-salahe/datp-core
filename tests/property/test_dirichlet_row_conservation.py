@@ -21,7 +21,7 @@ def test_dirichlet_never_drops_or_duplicates_rows(seed: Seed, alpha: float, nbai
         split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
     )
     assert membership.get_column("stable_row_id").n_unique() == membership.height
-    assert sum(diagnostics.document.client_row_counts) == membership.height
+    assert sum(diagnostics.client_row_counts) == membership.height
     assert membership.group_by("stable_row_id").len().filter(pl.col("len") != 1).height == 0
 
 
@@ -32,4 +32,4 @@ def test_iid_conserves_rows(nbaiot_canonical_root: Path) -> None:
         condition=iid_condition(),
         split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
     )
-    assert sum(diagnostics.document.client_row_counts) == membership.height
+    assert sum(diagnostics.client_row_counts) == membership.height

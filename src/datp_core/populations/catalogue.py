@@ -25,11 +25,11 @@ from datp_core.populations.models import (
     CLIENT_ID_COLUMN,
     PARTITION_ROLE_COLUMN,
     STABLE_ROW_ID_COLUMN,
-    ChronologicalPartitionDiagnostics,
+    ChronologicalPartitionDiagnosticsDocument,
     ClientPartitionCounts,
     CohortAggregationColumn,
     ControlledPartitionCondition,
-    DirichletPartitionDiagnostics,
+    DirichletPartitionDiagnosticsDocument,
     PopulationCapabilities,
     PopulationFrameColumn,
     PopulationManifest,
@@ -64,7 +64,7 @@ class PopulationConstructionResult:
     population: PopulationId
     manifest: PopulationManifest
     membership: pl.DataFrame
-    diagnostics: DirichletPartitionDiagnostics | ChronologicalPartitionDiagnostics | None
+    diagnostics: DirichletPartitionDiagnosticsDocument | ChronologicalPartitionDiagnosticsDocument | None
 
 
 @dataclass(frozen=True, slots=True)

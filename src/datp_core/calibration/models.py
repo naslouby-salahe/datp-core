@@ -10,10 +10,12 @@ from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 
 
-def _raise_first_violation(requirements: tuple[tuple[bool, str], ...]) -> None:
+def _raise_first_violation(
+    *, requirements: tuple[tuple[bool, str], ...], subject: ContractSubject
+) -> None:
     for satisfied, message in requirements:
         if not satisfied:
-            raise ScientificContractError(message, subject=ContractSubject.CALIBRATION)
+            raise ScientificContractError(message, subject=subject)
 
 
 class CalibrationUnavailableReason(StrEnum):
@@ -55,14 +57,15 @@ class EligibilityDecision:
         is_eligible = self.status is EligibilityStatus.ELIGIBLE
         is_excluded = self.status is EligibilityStatus.EXCLUDED
         _raise_first_violation(
-            (
+            requirements=(
                 (
                     not is_eligible or meets_minimum,
                     "eligible status requires benign calibration count to meet the minimum support",
                 ),
                 (not is_eligible or self.reason is None, "eligible clients cannot carry an unavailability reason"),
                 (not is_excluded or self.reason is not None, "excluded clients require a typed unavailability reason"),
-            )
+            ),
+            subject=ContractSubject.CALIBRATION,
         )
 
     @property

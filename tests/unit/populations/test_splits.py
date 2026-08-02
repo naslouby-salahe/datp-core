@@ -32,9 +32,9 @@ def test_non_temporal_equal_thirds_are_disjoint_and_benign_only_for_train_cal(
     )
     assert train_cal.filter(pl.col("outcome_label") == "attack").height == 0
     assert (
-        split_manifest.document.train_row_count
-        + split_manifest.document.calibration_row_count
-        + (split_manifest.document.evaluation_row_count)
+        split_manifest.train_row_count
+        + split_manifest.calibration_row_count
+        + (split_manifest.evaluation_row_count)
         == assignments.height
     )
 
@@ -84,7 +84,7 @@ def test_split_is_deterministic_for_fixed_seed(nbaiot_canonical_root: Path) -> N
         )
     )
     assert first.equals(second)
-    assert first_manifest.document.assignment_checksum == second_manifest.document.assignment_checksum
+    assert first_manifest.assignment_checksum == second_manifest.assignment_checksum
 
 
 def test_row_cannot_appear_in_two_splits(nbaiot_canonical_root: Path) -> None:

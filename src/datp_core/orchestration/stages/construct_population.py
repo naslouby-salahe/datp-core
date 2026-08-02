@@ -24,7 +24,6 @@ from datp_core.populations.edge_sensor_groups import build_edge_sensor_groups
 from datp_core.populations.edge_temporal_groups import build_edge_temporal_groups
 from datp_core.populations.integrity import membership_frame_checksum
 from datp_core.populations.models import (
-    ChronologicalPartitionDiagnostics,
     ChronologicalPartitionDiagnosticsDocument,
     PopulationManifest,
     PopulationManifestDocument,
@@ -51,7 +50,7 @@ class ConstructPopulationResult:
     publication_status: PublicationStatus
     population_manifest: PopulationManifest
     membership: pl.DataFrame
-    chronology: ChronologicalPartitionDiagnostics | None
+    chronology: ChronologicalPartitionDiagnosticsDocument | None
     matched_static_reference_manifest: PopulationManifest | None
     matched_static_reference_membership: pl.DataFrame | None
     complete_digest: Checksum
@@ -76,7 +75,7 @@ def construct_population_stage(request: ConstructPopulationRequest) -> Construct
         result.membership.write_parquet(temporary / "membership.parquet")
         if result.chronology is not None:
             (temporary / "chronology.json").write_text(
-                result.chronology.document.model_dump_json(indent=2) + "\n", encoding="utf-8"
+                result.chronology.model_dump_json(indent=2) + "\n", encoding="utf-8"
             )
         if (
             result.matched_static_reference_manifest is not None
@@ -173,7 +172,7 @@ def _manifest_payload(result: ConstructPopulationResult, identity: ExternalTempo
         result.population_manifest.document.model_dump_json(indent=2),
     ]
     if result.chronology is not None:
-        sections.append(result.chronology.document.model_dump_json(indent=2))
+        sections.append(result.chronology.model_dump_json(indent=2))
     if result.matched_static_reference_manifest is not None:
         sections.append(result.matched_static_reference_manifest.document.model_dump_json(indent=2))
     return "\n".join(sections) + "\n"
@@ -240,14 +239,14 @@ def _matches_ciciot_evidence(directory: Path, expected: ConstructPopulationResul
     )
 
 
-def _matches_chronology(directory: Path, expected: ChronologicalPartitionDiagnostics) -> bool:
+def _matches_chronology(directory: Path, expected: ChronologicalPartitionDiagnosticsDocument) -> bool:
     try:
         persisted = ChronologicalPartitionDiagnosticsDocument.model_validate_json(
             (directory / "chronology.json").read_text(encoding="utf-8")
         )
     except (OSError, ValueError):
         return False
-    return persisted == expected.document
+    return persisted == expected
 
 
 def _matches_static_reference(directory: Path, expected: PopulationManifest) -> bool:

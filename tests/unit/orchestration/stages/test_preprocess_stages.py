@@ -180,7 +180,7 @@ def test_artifact_preprocess_selects_matched_static_reference(
         identity,
     )
 
-    assert published.split_manifest.document.split_protocol is SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
+    assert published.split_manifest.split_protocol is SplitProtocolId.RANDOM_FRACTIONAL_STATIC_REFERENCE
     assert construction.matched_static_reference_membership is not None
     assert published.membership.equals(construction.matched_static_reference_membership)
 

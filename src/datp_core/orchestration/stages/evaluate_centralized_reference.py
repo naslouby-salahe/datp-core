@@ -18,6 +18,7 @@ from datp_core.centralized_reference.training import CentralizedTrainingCoordina
 from datp_core.domain.enums import ContractSubject, PublicationStatus, StageOperationId
 from datp_core.domain.errors import ArtifactIntegrityError
 from datp_core.domain.values import Checksum, checksum_file
+from datp_core.orchestration.stages import _Box
 
 
 class CentralizedEvaluationAssetName(StrEnum):
@@ -42,15 +43,10 @@ class EvaluateCentralizedReferenceResult:
     complete_digest: Checksum
 
 
-@dataclass
-class _EvaluationBox:
-    evaluation: CentralizedEvaluationResult | None = None
-
-
 def evaluate_centralized_reference_stage(
     request: EvaluateCentralizedReferenceRequest,
 ) -> EvaluateCentralizedReferenceResult:
-    box = _EvaluationBox()
+    box = _Box[CentralizedEvaluationResult]()
 
     def write(temporary: Path) -> None:
         evaluation = evaluate_centralized_reference(
@@ -61,7 +57,7 @@ def evaluate_centralized_reference_stage(
         write_evaluation_document(evaluation, temporary)
         digest = evaluation_result_checksum(evaluation)
         (temporary / CentralizedEvaluationAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
-        box.evaluation = evaluation
+        box.value = evaluation
 
     reused = publish_atomically(
         AtomicPublication(
@@ -80,12 +76,12 @@ def evaluate_centralized_reference_stage(
         )
         status = PublicationStatus.REUSED
     else:
-        if box.evaluation is None:
+        if box.value is None:
             raise ArtifactIntegrityError(
                 "centralized evaluation write did not populate a result",
                 subject=ContractSubject.THRESHOLD,
             )
-        evaluation = box.evaluation
+        evaluation = box.value
         status = PublicationStatus.PUBLISHED
     return EvaluateCentralizedReferenceResult(
         stage=StageOperationId.EVALUATE_CENTRALIZED_REFERENCE,

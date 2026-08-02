@@ -76,7 +76,7 @@ from datp_core.populations.models import (
     ClientIdentity,
     ControlledPartitionCondition,
     SplitConstructionRequest,
-    SplitManifest,
+    SplitManifestDocument,
     dirichlet_condition,
     iid_condition,
 )
@@ -117,7 +117,7 @@ class ConfirmatorySeedContext:
     coordinate: FederatedTrainingCoordinate
     construction: PopulationConstructionResult
     preprocessing: PreprocessFederatedResult
-    split_manifest: SplitManifest
+    split_manifest: SplitManifestDocument
     state_set_checksum: Checksum
     training_directory: Path
 
@@ -353,7 +353,7 @@ def _score_confirmatory_seed(context: ConfirmatorySeedContext) -> ScoreArtifactM
             context.coordinate.training_seed,
             BATCH_SIZE,
             LEARNING_RATE,
-            context.split_manifest.document.assignment_checksum,
+            context.split_manifest.assignment_checksum,
             context.training_directory,
             False,
         )
@@ -365,7 +365,7 @@ def _score_confirmatory_seed(context: ConfirmatorySeedContext) -> ScoreArtifactM
             training.candidates,
             CHECKPOINT_PROTOCOL,
             context.state_set_checksum,
-            context.split_manifest.document.assignment_checksum,
+            context.split_manifest.assignment_checksum,
             None,
             False,
         )
@@ -379,7 +379,7 @@ def _score_confirmatory_seed(context: ConfirmatorySeedContext) -> ScoreArtifactM
             BATCH_SIZE,
             context.training_directory / "scores",
             context.state_set_checksum,
-            context.split_manifest.document.assignment_checksum,
+            context.split_manifest.assignment_checksum,
             False,
         )
     ).result.manifest

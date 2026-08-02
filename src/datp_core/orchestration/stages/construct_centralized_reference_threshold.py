@@ -17,6 +17,7 @@ from datp_core.centralized_reference.training import CentralizedTrainingCoordina
 from datp_core.domain.enums import ContractSubject, PublicationStatus, StageOperationId
 from datp_core.domain.errors import ArtifactIntegrityError
 from datp_core.domain.values import Checksum, checksum_file
+from datp_core.orchestration.stages import _Box
 from datp_core.protocols.models import CentralizedQuantileProtocol
 
 
@@ -37,17 +38,10 @@ class ConstructCentralizedThresholdResult:
     complete_digest: Checksum
 
 
-@dataclass
-class _ThresholdBox:
-    """A single-slot mutable box for an `AtomicPublication.write` closure to populate."""
-
-    threshold: PooledThresholdResult | None = None
-
-
 def construct_centralized_reference_threshold_stage(
     request: ConstructCentralizedThresholdRequest,
 ) -> ConstructCentralizedThresholdResult:
-    box = _ThresholdBox()
+    box = _Box[PooledThresholdResult]()
 
     def write(temporary: Path) -> None:
         threshold = construct_pooled_benign_quantile(
@@ -58,7 +52,7 @@ def construct_centralized_reference_threshold_stage(
         write_threshold_document(threshold, temporary)
         digest = threshold_result_checksum(threshold)
         (temporary / CentralizedThresholdAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
-        box.threshold = threshold
+        box.value = threshold
 
     reused = publish_atomically(
         AtomicPublication(
@@ -77,11 +71,11 @@ def construct_centralized_reference_threshold_stage(
         )
         status = PublicationStatus.REUSED
     else:
-        if box.threshold is None:
+        if box.value is None:
             raise ArtifactIntegrityError(
                 "centralized threshold write did not populate a result", subject=ContractSubject.THRESHOLD
             )
-        threshold = box.threshold
+        threshold = box.value
         status = PublicationStatus.PUBLISHED
     return ConstructCentralizedThresholdResult(
         stage=StageOperationId.CONSTRUCT_CENTRALIZED_REFERENCE_THRESHOLD,

@@ -6,11 +6,11 @@ from math import isfinite
 
 import polars as pl
 
-from datp_core.domain.enums import MetricId, PartitionRole, ScoreFrameColumn
+from datp_core.domain.enums import MetricId, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CoverageTarget, ScoreValue, Seed, checksum_file
+from datp_core.domain.values import CoverageTarget, Seed, checksum_file
 from datp_core.evaluation.metric_semantics import available, unavailable
-from datp_core.evaluation.models import CoverageResult, MetricReason, MetricStatus
+from datp_core.evaluation.models import CoverageResult, HeldOutBenignScore, MetricReason, MetricStatus
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.scoring.models import ScoreRecord
@@ -21,30 +21,6 @@ class CoverageUnavailableReason(StrEnum):
     """Closed reasons held-out conformal coverage cannot be calculated."""
 
     NO_HELD_OUT_BENIGN_SCORES = "no_held_out_benign_scores"
-
-
-@dataclass(frozen=True, slots=True)
-class HeldOutBenignScore:
-    """One verified benign evaluation score with immutable score-artifact provenance."""
-
-    client: ClientIdentity
-    stable_row_id: str
-    score: ScoreValue
-    partition_role: PartitionRole
-    outcome_label: PopulationOutcomeLabel
-    score_record: ScoreRecord
-
-    def __post_init__(self) -> None:
-        if not self.stable_row_id:
-            raise ScientificContractError("held-out coverage requires a stable row identity")
-        if self.partition_role is not PartitionRole.EVALUATION:
-            raise ScientificContractError("held-out coverage rejects non-evaluation score rows")
-        if self.outcome_label is not PopulationOutcomeLabel.BENIGN:
-            raise ScientificContractError("held-out coverage rejects attack-labelled score rows")
-        if self.score_record.partition_role is not self.partition_role:
-            raise ScientificContractError("held-out coverage score provenance has a partition-role mismatch")
-        if self.score_record.scored_client != self.client:
-            raise ScientificContractError("held-out coverage score provenance has a client mismatch")
 
 
 @dataclass(frozen=True, slots=True)

@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
+from datp_core.calibration.models import _raise_first_violation
 from datp_core.domain.enums import (
     AvailabilityStatus,
     ContractSubject,
@@ -67,12 +68,6 @@ def _require_uniform_shared_threshold(
         )
 
 
-def _raise_first_violation(requirements: tuple[tuple[bool, str], ...]) -> None:
-    for satisfied, message in requirements:
-        if not satisfied:
-            raise ScientificContractError(message, subject=ContractSubject.THRESHOLD)
-
-
 def _require_valid_attainment_diagnostic(
     target_exceedance: float,
     achieved_exceedance: float,
@@ -80,7 +75,7 @@ def _require_valid_attainment_diagnostic(
     absolute_threshold_error_vs_pooled_quantile: float,
 ) -> None:
     _raise_first_violation(
-        (
+        requirements=(
             (0 < target_exceedance < 1, "target exceedance must be in (0, 1)"),
             (0 <= achieved_exceedance <= 1, "achieved exceedance must be in [0, 1]"),
             (absolute_attainment_error >= 0, "absolute attainment error must be non-negative"),
@@ -88,7 +83,8 @@ def _require_valid_attainment_diagnostic(
                 absolute_threshold_error_vs_pooled_quantile >= 0,
                 "absolute threshold error must be non-negative",
             ),
-        )
+        ),
+        subject=ContractSubject.THRESHOLD,
     )
 
 
@@ -99,7 +95,7 @@ def _require_valid_variance_decomposition(
     between_ratio: float | None,
 ) -> None:
     _raise_first_violation(
-        (
+        requirements=(
             (within_client_variance >= 0, "within-client variance must be non-negative"),
             (between_client_variance >= 0, "between-client variance must be non-negative"),
             (
@@ -110,7 +106,8 @@ def _require_valid_variance_decomposition(
                 between_ratio is None or 0 <= between_ratio <= 1,
                 "the between-client ratio must be in [0, 1] when defined",
             ),
-        )
+        ),
+        subject=ContractSubject.THRESHOLD,
     )
 
 
@@ -118,14 +115,15 @@ def _require_valid_conformal_assignment(
     rank_index: int, calibration_count: RowCount, effective_quantile: float, tie_count: int
 ) -> None:
     _raise_first_violation(
-        (
+        requirements=(
             (
                 1 <= rank_index <= calibration_count.value,
                 "conformal rank index must fall within the calibration sample",
             ),
             (0 < effective_quantile <= 1, "conformal effective quantile must be in (0, 1]"),
             (tie_count >= 0, "tie count must be non-negative"),
-        )
+        ),
+        subject=ContractSubject.THRESHOLD,
     )
 
 
@@ -155,7 +153,7 @@ def _require_family_availability_consistency(
     has_support = bool(members) and family_threshold is not None
     has_leftover_support = bool(members) or family_threshold is not None
     _raise_first_violation(
-        (
+        requirements=(
             (
                 not is_available or has_support,
                 "an available family requires eligible members and a constructed threshold",
@@ -164,7 +162,8 @@ def _require_family_availability_consistency(
                 is_available or not has_leftover_support,
                 "an unavailable family must carry no members and no threshold",
             ),
-        )
+        ),
+        subject=ContractSubject.THRESHOLD,
     )
 
 

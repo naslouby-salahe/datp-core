@@ -48,9 +48,6 @@ from datp_core.evaluation.conformal_coverage import (
     ConformalCoverageDiagnostic,
     evaluate_held_out_conformal_coverage,
 )
-from datp_core.evaluation.conformal_coverage import (
-    HeldOutBenignScore as ConformalHeldOutBenignScore,
-)
 from datp_core.evaluation.confusion import calculate_confusion_counts
 from datp_core.evaluation.controls import ClientAurocEvidence, FixedScoreEvidence, validate_fixed_score_controls
 from datp_core.evaluation.models import (
@@ -62,11 +59,14 @@ from datp_core.evaluation.models import (
     MetricWarning,
     PopulationMetricResult,
 )
-from datp_core.evaluation.operational import AlertBurdenDiagnostic, calculate_alert_burden
-from datp_core.evaluation.population_metrics import calculate_population_metrics
-from datp_core.evaluation.threshold_estimation import (
+from datp_core.evaluation.models import (
+    HeldOutBenignScore as ConformalHeldOutBenignScore,
+)
+from datp_core.evaluation.models import (
     HeldOutBenignScore as ThresholdEstimationHeldOutBenignScore,
 )
+from datp_core.evaluation.operational import AlertBurdenDiagnostic, calculate_alert_burden
+from datp_core.evaluation.population_metrics import calculate_population_metrics
 from datp_core.evaluation.threshold_estimation import (
     ThresholdEstimationDiagnostic,
     ThresholdEstimationProvenance,

@@ -31,7 +31,6 @@ from datp_core.populations.models import (
     SOURCE_ROW_INDEX_COLUMN,
     STABLE_ROW_ID_COLUMN,
     ControlledPartitionCondition,
-    DirichletPartitionDiagnostics,
     DirichletPartitionDiagnosticsDocument,
     PopulationManifest,
     PopulationOutcomeLabel,
@@ -53,7 +52,7 @@ def build_nbaiot_dirichlet_clients(
     partition_seed: Seed,
     condition: ControlledPartitionCondition,
     split_protocol: SplitProtocolId,
-) -> tuple[PopulationManifest, pl.DataFrame, DirichletPartitionDiagnostics]:
+) -> tuple[PopulationManifest, pl.DataFrame, DirichletPartitionDiagnosticsDocument]:
     declaration = population_declaration(_POPULATION)
     source = _load_source_rows(canonical_root)
     client_ids = synthetic_client_ids(declaration.client_count)
@@ -129,7 +128,7 @@ def _build_diagnostics(
     attack_counts: tuple[int, ...],
     condition: ControlledPartitionCondition,
     partition_seed: Seed,
-) -> DirichletPartitionDiagnostics:
+) -> DirichletPartitionDiagnosticsDocument:
     client_row_counts = tuple(benign + attack for benign, attack in zip(benign_counts, attack_counts, strict=True))
     empty_ids = tuple(client_id for client_id, count in zip(client_ids, client_row_counts, strict=True) if count == 0)
     insufficient = tuple(
@@ -137,22 +136,20 @@ def _build_diagnostics(
         for client_id, benign in zip(client_ids, benign_counts, strict=True)
         if benign < MINIMUM_BENIGN_SUPPORT.value
     )
-    return DirichletPartitionDiagnostics(
-        DirichletPartitionDiagnosticsDocument(
-            population=_POPULATION,
-            partition_seed=partition_seed,
-            partition_kind=condition.kind,
-            concentration=condition.concentration,
-            client_count=client_count,
-            client_ids=client_ids,
-            total_rows=membership_height,
-            client_row_counts=client_row_counts,
-            benign_row_counts=benign_counts,
-            attack_row_counts=attack_counts,
-            empty_client_ids=empty_ids,
-            insufficient_benign_client_ids=insufficient,
-            allocation_checksum=_allocation_checksum(client_ids, client_row_counts, condition, partition_seed),
-        )
+    return DirichletPartitionDiagnosticsDocument(
+        population=_POPULATION,
+        partition_seed=partition_seed,
+        partition_kind=condition.kind,
+        concentration=condition.concentration,
+        client_count=client_count,
+        client_ids=client_ids,
+        total_rows=membership_height,
+        client_row_counts=client_row_counts,
+        benign_row_counts=benign_counts,
+        attack_row_counts=attack_counts,
+        empty_client_ids=empty_ids,
+        insufficient_benign_client_ids=insufficient,
+        allocation_checksum=_allocation_checksum(client_ids, client_row_counts, condition, partition_seed),
     )
 
 

@@ -3,10 +3,43 @@
 from dataclasses import dataclass
 from enum import StrEnum
 
-from datp_core.domain.enums import EvaluationCohort, EvidenceRole, FederatedThresholdMethod, MetricId, WarningCode
-from datp_core.domain.values import Checksum, MetricValue, RowCount, ThresholdValue
+from datp_core.domain.enums import (
+    EvaluationCohort,
+    EvidenceRole,
+    FederatedThresholdMethod,
+    MetricId,
+    PartitionRole,
+    WarningCode,
+)
+from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.values import Checksum, MetricValue, RowCount, ScoreValue, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
-from datp_core.populations.models import ClientIdentity
+from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
+from datp_core.scoring.models import ScoreRecord
+
+
+@dataclass(frozen=True, slots=True)
+class HeldOutBenignScore:
+    """One verified benign evaluation score with immutable score-artifact provenance."""
+
+    client: ClientIdentity
+    stable_row_id: str
+    score: ScoreValue
+    partition_role: PartitionRole
+    outcome_label: PopulationOutcomeLabel
+    score_record: ScoreRecord
+
+    def __post_init__(self) -> None:
+        if not self.stable_row_id:
+            raise ScientificContractError("held-out score evidence requires a stable row identity")
+        if self.partition_role is not PartitionRole.EVALUATION:
+            raise ScientificContractError("held-out score evidence rejects non-evaluation score rows")
+        if self.outcome_label is not PopulationOutcomeLabel.BENIGN:
+            raise ScientificContractError("held-out score evidence rejects attack-labelled score rows")
+        if self.score_record.partition_role is not self.partition_role:
+            raise ScientificContractError("held-out score evidence score provenance has a partition-role mismatch")
+        if self.score_record.scored_client != self.client:
+            raise ScientificContractError("held-out score evidence score provenance has a client mismatch")
 
 
 class MetricStatus(StrEnum):

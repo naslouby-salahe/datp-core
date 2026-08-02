@@ -7,19 +7,18 @@ from itertools import groupby
 import numpy as np
 import polars as pl
 
-from datp_core.domain.enums import MetricId, PartitionRole, ScoreFrameColumn
+from datp_core.domain.enums import MetricId, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
     CalibrationSize,
     Quantile,
     ReplicateIndex,
-    ScoreValue,
     Seed,
     ThresholdValue,
     checksum_file,
 )
 from datp_core.evaluation.metric_semantics import available, unavailable
-from datp_core.evaluation.models import MetricReason, MetricStatus, ThresholdEstimationResult
+from datp_core.evaluation.models import HeldOutBenignScore, MetricReason, MetricStatus, ThresholdEstimationResult
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.scoring.models import ScoreRecord
@@ -29,30 +28,6 @@ class ThresholdEstimationUnavailableReason(StrEnum):
     """Closed undefined states for threshold-estimation quantities."""
 
     REFERENCE_THRESHOLD_IS_ZERO = "reference_threshold_is_zero"
-
-
-@dataclass(frozen=True, slots=True)
-class HeldOutBenignScore:
-    """One verified benign evaluation score with immutable score-artifact provenance."""
-
-    client: ClientIdentity
-    stable_row_id: str
-    score: ScoreValue
-    partition_role: PartitionRole
-    outcome_label: PopulationOutcomeLabel
-    score_record: ScoreRecord
-
-    def __post_init__(self) -> None:
-        if not self.stable_row_id:
-            raise ScientificContractError("threshold diagnostics require a stable row identity")
-        if self.partition_role is not PartitionRole.EVALUATION:
-            raise ScientificContractError("threshold diagnostics reject non-evaluation score rows")
-        if self.outcome_label is not PopulationOutcomeLabel.BENIGN:
-            raise ScientificContractError("threshold diagnostics reject attack-labelled score rows")
-        if self.score_record.partition_role is not self.partition_role:
-            raise ScientificContractError("threshold diagnostics score provenance has a partition-role mismatch")
-        if self.score_record.scored_client != self.client:
-            raise ScientificContractError("threshold diagnostics score provenance has a client mismatch")
 
 
 @dataclass(frozen=True, slots=True)

@@ -21,7 +21,6 @@ from datp_core.populations.integrity import validate_no_future_history_leakage, 
 from datp_core.populations.models import (
     PopulationManifest,
     SplitConstructionRequest,
-    SplitManifest,
     SplitManifestDocument,
 )
 from datp_core.populations.splits import split_membership
@@ -48,9 +47,9 @@ class SplitResult:
     stage: StageOperationId
     publication_status: PublicationStatus
     assignments: pl.DataFrame
-    manifest: SplitManifest
+    manifest: SplitManifestDocument
     matched_static_reference_assignments: pl.DataFrame | None
-    matched_static_reference_manifest: SplitManifest | None
+    matched_static_reference_manifest: SplitManifestDocument | None
     complete_digest: Checksum
 
 
@@ -66,7 +65,7 @@ def split_stage(request: SplitRequest) -> SplitResult:
         )
         result.assignments.write_parquet(temporary / "split_assignments.parquet")
         (temporary / "split_manifest.json").write_text(
-            result.manifest.document.model_dump_json(indent=2) + "\n",
+            result.manifest.model_dump_json(indent=2) + "\n",
             encoding="utf-8",
         )
         if (
@@ -77,7 +76,7 @@ def split_stage(request: SplitRequest) -> SplitResult:
                 temporary / "matched_static_reference_assignments.parquet"
             )
             (temporary / "matched_static_reference_split_manifest.json").write_text(
-                result.matched_static_reference_manifest.document.model_dump_json(indent=2) + "\n", encoding="utf-8"
+                result.matched_static_reference_manifest.model_dump_json(indent=2) + "\n", encoding="utf-8"
             )
         (temporary / "COMPLETE").write_text(digest.value, encoding="utf-8")
 
@@ -170,11 +169,9 @@ def _require_matching_reference_rows(temporal: pl.DataFrame, static: pl.DataFram
 
 
 def _manifest_payload(result: SplitResult, identity: ExternalTemporalExecutionIdentity) -> str:
-    payload = "\n".join(
-        (identity.document.model_dump_json(indent=2), result.manifest.document.model_dump_json(indent=2))
-    )
+    payload = "\n".join((identity.document.model_dump_json(indent=2), result.manifest.model_dump_json(indent=2)))
     if result.matched_static_reference_manifest is not None:
-        payload += "\n" + result.matched_static_reference_manifest.document.model_dump_json(indent=2)
+        payload += "\n" + result.matched_static_reference_manifest.model_dump_json(indent=2)
     return payload + "\n"
 
 
@@ -198,14 +195,14 @@ def _is_reusable(directory: Path, request: SplitRequest, expected: SplitResult, 
         ):
             return False
         persisted = SplitManifestDocument.model_validate_json(manifest.read_text(encoding="utf-8"))
-        if persisted != expected.manifest.document:
+        if persisted != expected.manifest:
             return False
-        validate_split_manifest(request.membership, pl.read_parquet(assignments), SplitManifest(persisted))
+        validate_split_manifest(request.membership, pl.read_parquet(assignments), persisted)
         if expected.matched_static_reference_manifest is not None:
             static_manifest = SplitManifestDocument.model_validate_json(
                 (directory / "matched_static_reference_split_manifest.json").read_text(encoding="utf-8")
             )
-            if static_manifest != expected.matched_static_reference_manifest.document:
+            if static_manifest != expected.matched_static_reference_manifest:
                 return False
             static_assignments = directory / "matched_static_reference_assignments.parquet"
             if not static_assignments.is_file() or request.matched_static_reference_membership is None:
@@ -213,7 +210,7 @@ def _is_reusable(directory: Path, request: SplitRequest, expected: SplitResult, 
             validate_split_manifest(
                 request.matched_static_reference_membership,
                 pl.read_parquet(static_assignments),
-                SplitManifest(static_manifest),
+                static_manifest,
             )
     except (OSError, ValueError):
         return False

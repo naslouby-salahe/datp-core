@@ -17,6 +17,7 @@ from datp_core.artifacts.store import AtomicPublication, publish_atomically
 from datp_core.domain.enums import ContractSubject, PublicationStatus, StageOperationId
 from datp_core.domain.errors import ArtifactIntegrityError
 from datp_core.domain.values import Checksum, checksum_file, checksum_text
+from datp_core.orchestration.stages import _Box
 from datp_core.scoring.models import ScoreArtifactManifest
 from datp_core.thresholding.dispatch import ThresholdConstructionRequest, dispatch_federated_threshold
 from datp_core.thresholding.models import ThresholdConstructionResult
@@ -50,13 +51,6 @@ class ConstructFederatedThresholdsResult:
     temporal_provenance: TemporalDeploymentProvenance | None
 
 
-@dataclass
-class _ResultBox:
-    """A single-slot mutable box for an `AtomicPublication.write` closure to populate."""
-
-    result: ThresholdConstructionResult | None = None
-
-
 def threshold_result_checksum(result: ThresholdConstructionResult) -> Checksum:
     return checksum_text(repr(result))
 
@@ -72,7 +66,7 @@ def construct_federated_thresholds_stage(
     stage_request: ConstructFederatedThresholdsRequest,
 ) -> ConstructFederatedThresholdsResult:
     _validate_temporal_request(stage_request)
-    box = _ResultBox()
+    box = _Box[ThresholdConstructionResult]()
 
     def write(temporary: Path) -> None:
         result = dispatch_federated_threshold(stage_request.request)
@@ -84,7 +78,7 @@ def construct_federated_thresholds_stage(
             )
         digest = _stage_checksum(result, stage_request.temporal_provenance)
         (temporary / ConstructFederatedThresholdsAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
-        box.result = result
+        box.value = result
 
     reused = publish_atomically(
         AtomicPublication(
@@ -99,11 +93,11 @@ def construct_federated_thresholds_stage(
         result = dispatch_federated_threshold(stage_request.request)
         status = PublicationStatus.REUSED
     else:
-        if box.result is None:
+        if box.value is None:
             raise ArtifactIntegrityError(
                 "federated threshold write did not populate a result", subject=ContractSubject.THRESHOLD
             )
-        result = box.result
+        result = box.value
         status = PublicationStatus.PUBLISHED
     return ConstructFederatedThresholdsResult(
         stage=StageOperationId.CONSTRUCT_FEDERATED_THRESHOLDS,

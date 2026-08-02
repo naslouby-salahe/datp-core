@@ -25,9 +25,8 @@ from datp_core.populations.models import (
     PopulationFeasibilityStatus,
     PopulationFrameColumn,
     PopulationManifest,
-    PopulationManifestSpec,
+    PopulationManifestDocument,
     PopulationOutcomeLabel,
-    SplitManifest,
     SplitManifestDocument,
     WorkingFrameColumn,
     assignment_column_names,
@@ -78,10 +77,10 @@ def validate_population_manifest(
 def validate_split_manifest(
     membership: pl.DataFrame,
     assignments: pl.DataFrame,
-    split_manifest: SplitManifest,
+    split_manifest: SplitManifestDocument,
 ) -> None:
     _require_columns(assignments, assignment_column_names(), StageOperationId.SPLIT)
-    document = split_manifest.document
+    document = split_manifest
     population = document.population
     _require_assignment_row_contract(assignments, membership, document.assignment_row_count, population)
     _require_role_counts(assignments, document)
@@ -203,7 +202,7 @@ def finalize_population(request: PopulationFinalizationRequest) -> PopulationMan
         chronology_required=request.chronology_required,
     )
     manifest = build_population_manifest(
-        PopulationManifestSpec(
+        PopulationManifestDocument(
             population=request.population,
             dataset=request.dataset,
             identity_kind=request.identity_kind,
@@ -217,9 +216,11 @@ def finalize_population(request: PopulationFinalizationRequest) -> PopulationMan
             attack_row_count=attack,
             membership_checksum=membership_frame_checksum(membership),
             canonical_schema_checksum=request.canonical_schema_checksum,
-            feasibility=feasibility,
-            family_by_client=request.family_by_client,
-        )
+            feasibility_status=feasibility.status,
+            feasibility_reason=feasibility.reason,
+        ),
+        feasibility=feasibility,
+        family_by_client=request.family_by_client,
     )
     validate_population_manifest(manifest, membership)
     return manifest

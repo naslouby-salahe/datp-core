@@ -41,6 +41,7 @@ from datp_core.learning.federated.models import (
     training_complete_digest,
 )
 from datp_core.learning.federated.training import preprocessing_state_set_checksum
+from datp_core.orchestration.stages import _Box
 from datp_core.populations.catalogue import resolve_population
 from datp_core.populations.models import ClientIdentity
 from datp_core.preprocessing.models import ClientPreprocessPublication
@@ -51,13 +52,6 @@ from datp_core.protocols.models import (
     FedAvgProtocol,
     FedProxProtocol,
 )
-
-
-@dataclass
-class _OutcomeBox[OutcomeT]:
-    """A single-slot mutable box for an `AtomicPublication.write` closure to populate."""
-
-    outcome: OutcomeT | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,7 +127,7 @@ def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult
     preprocessing_checksum = preprocessing_state_set_checksum(
         tuple(client.preprocessing_state.estimator_checksum for client in clients)
     )
-    box: _OutcomeBox[FedAvgTrainingOutcome] = _OutcomeBox()
+    box: _Box[FedAvgTrainingOutcome] = _Box()
 
     def write(temporary: Path) -> None:
         outcome = train_fedavg(
@@ -152,7 +146,7 @@ def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult
             )
         )
         _publish_training_artifacts(temporary, outcome.training_result, outcome.candidates)
-        box.outcome = outcome
+        box.value = outcome
 
     reused = publish_atomically(
         AtomicPublication(
@@ -176,7 +170,7 @@ def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult
             preprocessing_state_set_checksum=preprocessing_checksum,
             split_manifest_checksum=request.split_manifest_checksum,
         ),
-        outcome=box.outcome,
+        outcome=box.value,
         reused=reused,
     )
 
@@ -187,7 +181,7 @@ def train_fedprox_stage(request: TrainFedProxRequest) -> TrainFederatedStageResu
     preprocessing_checksum = preprocessing_state_set_checksum(
         tuple(client.preprocessing_state.estimator_checksum for client in clients)
     )
-    box: _OutcomeBox[FedAvgTrainingOutcome] = _OutcomeBox()
+    box: _Box[FedAvgTrainingOutcome] = _Box()
 
     def write(temporary: Path) -> None:
         outcome = train_fedprox(
@@ -206,7 +200,7 @@ def train_fedprox_stage(request: TrainFedProxRequest) -> TrainFederatedStageResu
             )
         )
         _publish_training_artifacts(temporary, outcome.training_result, outcome.candidates)
-        box.outcome = outcome
+        box.value = outcome
 
     reused = publish_atomically(
         AtomicPublication(
@@ -230,7 +224,7 @@ def train_fedprox_stage(request: TrainFedProxRequest) -> TrainFederatedStageResu
             preprocessing_state_set_checksum=preprocessing_checksum,
             split_manifest_checksum=request.split_manifest_checksum,
         ),
-        outcome=box.outcome,
+        outcome=box.value,
         reused=reused,
     )
 
@@ -241,11 +235,11 @@ def train_ditto_stage(request: TrainDittoRequest) -> TrainDittoStageResult:
     preprocessing_checksum = preprocessing_state_set_checksum(
         tuple(client.preprocessing_state.estimator_checksum for client in clients)
     )
-    box: _OutcomeBox[DittoTrainingOutcome] = _OutcomeBox()
+    box: _Box[DittoTrainingOutcome] = _Box()
 
     def write_global(temporary: Path) -> None:
-        if box.outcome is None:
-            box.outcome = train_ditto(
+        if box.value is None:
+            box.value = train_ditto(
                 DittoTrainingRequest(
                     global_coordinate=request.global_coordinate,
                     personalized_coordinate=request.personalized_coordinate,
@@ -264,8 +258,8 @@ def train_ditto_stage(request: TrainDittoRequest) -> TrainDittoStageResult:
             )
         _publish_training_artifacts(
             temporary,
-            box.outcome.global_training_result,
-            box.outcome.global_candidates,
+            box.value.global_training_result,
+            box.value.global_candidates,
         )
 
     reused = publish_atomically(
@@ -281,12 +275,12 @@ def train_ditto_stage(request: TrainDittoRequest) -> TrainDittoStageResult:
     )
     if reused:
         return _finalize_reused_ditto_stage(request, clients, preprocessing_checksum)
-    if box.outcome is None:
+    if box.value is None:
         raise ArtifactIntegrityError(
             "Ditto training write did not populate an outcome", subject=ContractSubject.TRAINING
         )
     global_candidates = rebase_checkpoint_candidates(
-        box.outcome.global_candidates, request.global_output_directory, client=None
+        box.value.global_candidates, request.global_output_directory, client=None
     )
     personalized_candidates = {
         client_id: rebase_checkpoint_candidates(
@@ -294,12 +288,12 @@ def train_ditto_stage(request: TrainDittoRequest) -> TrainDittoStageResult:
             request.personalized_output_directory,
             client=_client_by_id(clients, client_id),
         )
-        for client_id, candidates in box.outcome.personalized_candidates_by_client.items()
+        for client_id, candidates in box.value.personalized_candidates_by_client.items()
     }
     return TrainDittoStageResult(
         stage=StageOperationId.TRAIN_FEDERATED,
         publication_status=PublicationStatus.PUBLISHED,
-        global_training=box.outcome.global_training_result,
+        global_training=box.value.global_training_result,
         global_candidates=global_candidates,
         personalized_candidates_by_client=personalized_candidates,
     )

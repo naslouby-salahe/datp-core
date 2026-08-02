@@ -377,21 +377,6 @@ class PopulationManifest:
 
 
 @dataclass(frozen=True, slots=True)
-class SplitManifest:
-    document: SplitManifestDocument
-
-
-@dataclass(frozen=True, slots=True)
-class DirichletPartitionDiagnostics:
-    document: DirichletPartitionDiagnosticsDocument
-
-
-@dataclass(frozen=True, slots=True)
-class ChronologicalPartitionDiagnostics:
-    document: ChronologicalPartitionDiagnosticsDocument
-
-
-@dataclass(frozen=True, slots=True)
 class ControlledPartitionCondition:
     kind: ControlledPartitionKind
     concentration: DirichletConcentration | None
@@ -404,27 +389,6 @@ class ControlledPartitionCondition:
             case ControlledPartitionKind.IID:
                 if self.concentration is not None:
                     raise ValueError("IID construction must not carry a concentration")
-
-
-@dataclass(frozen=True, slots=True)
-class PopulationManifestSpec:
-    """Shared construction contract for every population builder."""
-
-    population: PopulationId
-    dataset: DatasetId
-    identity_kind: PopulationIdentityKind
-    partition_seed: Seed
-    split_protocol: SplitProtocolId
-    candidate_clients: tuple[str, ...]
-    accepted_clients: tuple[str, ...]
-    excluded_client_ids: tuple[str, ...]
-    total_membership_rows: int
-    benign_row_count: int
-    attack_row_count: int
-    membership_checksum: Checksum
-    canonical_schema_checksum: Checksum
-    feasibility: PopulationFeasibility
-    family_by_client: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -456,29 +420,16 @@ def client_identities(
     return tuple(ClientIdentity(population, client_id, identity_kind) for client_id in client_ids)
 
 
-def build_population_manifest(spec: PopulationManifestSpec) -> PopulationManifest:
-    document = PopulationManifestDocument(
-        population=spec.population,
-        dataset=spec.dataset,
-        identity_kind=spec.identity_kind,
-        partition_seed=spec.partition_seed,
-        split_protocol=spec.split_protocol,
-        candidate_clients=spec.candidate_clients,
-        accepted_clients=spec.accepted_clients,
-        excluded_client_ids=spec.excluded_client_ids,
-        total_membership_rows=spec.total_membership_rows,
-        benign_row_count=spec.benign_row_count,
-        attack_row_count=spec.attack_row_count,
-        membership_checksum=spec.membership_checksum,
-        canonical_schema_checksum=spec.canonical_schema_checksum,
-        feasibility_status=spec.feasibility.status,
-        feasibility_reason=spec.feasibility.reason,
-    )
+def build_population_manifest(
+    document: PopulationManifestDocument,
+    feasibility: PopulationFeasibility,
+    family_by_client: tuple[tuple[str, str], ...] = (),
+) -> PopulationManifest:
     return PopulationManifest(
         document,
-        client_identities(spec.population, spec.candidate_clients, spec.identity_kind),
-        spec.feasibility,
-        spec.family_by_client,
+        client_identities(document.population, document.candidate_clients, document.identity_kind),
+        feasibility,
+        family_by_client,
     )
 
 

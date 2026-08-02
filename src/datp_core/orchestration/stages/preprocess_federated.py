@@ -54,7 +54,6 @@ from datp_core.populations.models import (
     PopulationFeasibility,
     PopulationManifest,
     PopulationManifestDocument,
-    SplitManifest,
     SplitManifestDocument,
     client_identities,
 )
@@ -123,7 +122,7 @@ class PreprocessFederatedArtifactsRequest:
 class _PublishedPopulationSplit:
     population_manifest: PopulationManifest
     membership: pl.DataFrame
-    split_manifest: SplitManifest
+    split_manifest: SplitManifestDocument
     assignments: pl.DataFrame
 
 
@@ -252,7 +251,7 @@ def preprocess_federated_artifacts_stage(
         dataset=dataset,
         population=document.population,
         partition_seed=document.partition_seed,
-        split_protocol_identity=published.split_manifest.document.split_protocol,
+        split_protocol_identity=published.split_manifest.split_protocol,
         protocol=protocol,
         canonical_schema_checksum=schema.checksum,
         data_root=request.data_root,
@@ -278,7 +277,7 @@ def preprocess_federated_artifacts_stage(
         client_id: extract_partitions(
             joined.filter(pl.col(CLIENT_ID_COLUMN) == client_id),
             feature_names,
-            split_protocol=published.split_manifest.document.split_protocol,
+            split_protocol=published.split_manifest.split_protocol,
             branch=ProcessedDataBranch.FEDERATED,
             deterministic_sort=False,
         )
@@ -296,7 +295,7 @@ def preprocess_federated_artifacts_stage(
         population=document.population,
         dataset=dataset,
         partition_seed=document.partition_seed,
-        split_protocol=published.split_manifest.document.split_protocol,
+        split_protocol=published.split_manifest.split_protocol,
         preprocessing_identity=request.preprocessing_identity,
         client_publications=publications,
         published_count=published_count,
@@ -542,7 +541,7 @@ def _load_published_population_split(
     _validate_population_publication(request.population_directory, identity)
     _validate_split_publication(request.split_directory, identity)
     manifest = _population_manifest_from_document(population_document)
-    split_manifest = SplitManifest(split_document)
+    split_manifest = split_document
     _validate_published_pair(manifest, membership, split_manifest, assignments, identity, use_static_reference)
     return _PublishedPopulationSplit(manifest, membership, split_manifest, assignments)
 
@@ -658,14 +657,14 @@ def _population_manifest_from_document(document: PopulationManifestDocument) -> 
 def _validate_published_pair(
     population_manifest: PopulationManifest,
     membership: pl.DataFrame,
-    split_manifest: SplitManifest,
+    split_manifest: SplitManifestDocument,
     assignments: pl.DataFrame,
     identity: ExternalTemporalExecutionIdentity,
     use_static_reference: bool,
 ) -> None:
     population = identity.population
     document = population_manifest.document
-    split_document = split_manifest.document
+    split_document = split_manifest
     if document.population is not population or split_document.population is not population:
         raise ScientificContractError(
             "published population and split must match execution identity", subject=population

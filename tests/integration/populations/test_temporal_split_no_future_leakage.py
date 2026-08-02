@@ -18,7 +18,7 @@ def test_temporal_split_preserves_history_before_future(edge_temporal_eligible_r
         partition_seed=Seed(0),
         population_manifest_checksum=manifest.document.membership_checksum,
     )
-    assert split_manifest.document.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
+    assert split_manifest.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
     assert assignments.height == membership.height
     validate_no_future_history_leakage(assignments, "capture_timestamp")
     historical = assignments.filter(

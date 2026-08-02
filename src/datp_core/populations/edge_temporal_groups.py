@@ -32,13 +32,12 @@ from datp_core.populations.models import (
     SOURCE_PATH_COLUMN,
     SOURCE_ROW_INDEX_COLUMN,
     STABLE_ROW_ID_COLUMN,
-    ChronologicalPartitionDiagnostics,
     ChronologicalPartitionDiagnosticsDocument,
     ChronologyExclusionReason,
     PopulationManifest,
     PopulationOutcomeLabel,
     SplitConstructionRequest,
-    SplitManifest,
+    SplitManifestDocument,
     canonical_branch_directory,
     select_membership_frame,
 )
@@ -58,7 +57,7 @@ def build_edge_temporal_groups(
 ) -> tuple[
     PopulationManifest,
     pl.DataFrame,
-    ChronologicalPartitionDiagnostics,
+    ChronologicalPartitionDiagnosticsDocument,
     PopulationManifest,
     pl.DataFrame,
 ]:
@@ -73,17 +72,15 @@ def build_edge_temporal_groups(
     eligible_ids, excluded_ids, exclusion_reasons, duplicate_timestamps = _chronology_eligibility(canonical_root)
     programme_candidates = tuple(group.value for group in sorted(EDGE_TEMPORAL_SENSOR_GROUPS))
     membership = _load_temporal_membership(canonical_root, eligible_ids) if eligible_ids else _empty_membership()
-    diagnostics = ChronologicalPartitionDiagnostics(
-        ChronologicalPartitionDiagnosticsDocument(
-            population=_POPULATION,
-            expected_group_count=declaration.client_count,
-            observed_eligible_group_count=len(eligible_ids),
-            eligible_group_ids=eligible_ids,
-            excluded_group_ids=excluded_ids,
-            exclusion_reasons=exclusion_reasons,
-            duplicate_timestamp_rows=RowCount(duplicate_timestamps),
-            total_temporal_rows=RowCount(membership.height),
-        )
+    diagnostics = ChronologicalPartitionDiagnosticsDocument(
+        population=_POPULATION,
+        expected_group_count=declaration.client_count,
+        observed_eligible_group_count=len(eligible_ids),
+        eligible_group_ids=eligible_ids,
+        excluded_group_ids=excluded_ids,
+        exclusion_reasons=exclusion_reasons,
+        duplicate_timestamp_rows=RowCount(duplicate_timestamps),
+        total_temporal_rows=RowCount(membership.height),
     )
     temporal_manifest = _assemble_manifest(
         partition_seed=partition_seed,
@@ -243,7 +240,7 @@ def split_temporal_membership(
     *,
     partition_seed: Seed,
     population_manifest_checksum: Checksum,
-) -> tuple[pl.DataFrame, SplitManifest]:
+) -> tuple[pl.DataFrame, SplitManifestDocument]:
     return split_membership(
         SplitConstructionRequest(
             membership=membership.select(

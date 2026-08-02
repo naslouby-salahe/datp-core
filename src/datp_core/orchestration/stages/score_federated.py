@@ -13,6 +13,7 @@ from datp_core.domain.enums import (
     PartitionRole,
     PublicationStatus,
     SerializationFormat,
+    SplitProtocolId,
     StageOperationId,
 )
 from datp_core.domain.errors import ArtifactIntegrityError
@@ -167,7 +168,7 @@ def _load_reused_scores(request: ScoreFederatedRequest) -> ScoreGenerationResult
     evaluation_records = _build_records(request.output_directory, request, PartitionRole.EVALUATION)
     future_records = (
         _build_records(request.output_directory, request, PartitionRole.FUTURE_RECALIBRATION)
-        if request.checkpoint.coordinate.split_protocol.value == "temporal_historical_future"
+        if request.checkpoint.coordinate.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
         else ()
     )
     manifest = ScoreArtifactManifest(
