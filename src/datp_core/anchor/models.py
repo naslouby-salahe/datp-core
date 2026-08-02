@@ -136,7 +136,7 @@ class AbsoluteToleranceRule:
     def __post_init__(self) -> None:
         if self.strategy is not AnchorComparisonStrategy.ABSOLUTE_TOLERANCE:
             raise ValueError("absolute tolerance rule requires absolute_tolerance strategy")
-        if self.absolute_tolerance.value < 0:
+        if self.absolute_tolerance < 0:
             raise ValueError("absolute tolerance must be non-negative")
 
 
@@ -148,7 +148,7 @@ class RelativeToleranceRule:
     def __post_init__(self) -> None:
         if self.strategy is not AnchorComparisonStrategy.RELATIVE_TOLERANCE:
             raise ValueError("relative tolerance rule requires relative_tolerance strategy")
-        if self.relative_tolerance.value <= 0:
+        if self.relative_tolerance <= 0:
             raise ValueError("relative tolerance must be positive")
 
 
@@ -198,7 +198,7 @@ class MetricInterval:
     upper: MetricValue
 
     def __post_init__(self) -> None:
-        if self.lower.value > self.upper.value:
+        if self.lower > self.upper:
             raise ValueError("metric interval lower bound cannot exceed upper bound")
 
 

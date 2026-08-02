@@ -154,11 +154,10 @@ class PositiveFiniteFloatValue:
         return _ordering_compare(self, other, float.__lt__)
 
     def __eq__(self, other: object) -> bool:
-        if isinstance(other, (int, float)) and not isinstance(other, bool):
-            return self.value == other
-        if hasattr(other, "value") and isinstance(other.value, (int, float)):  # type: ignore[union-attr]
-            return self.value == other.value
-        return NotImplemented
+        return _typed_eq(self, other)
+
+    def __float__(self) -> float:
+        return self.value
 
 
 @total_ordering
@@ -175,11 +174,10 @@ class NonNegativeFiniteFloatValue:
         return _ordering_compare(self, other, float.__lt__)
 
     def __eq__(self, other: object) -> bool:
-        if isinstance(other, (int, float)) and not isinstance(other, bool):
-            return self.value == other
-        if hasattr(other, "value") and isinstance(other.value, (int, float)):  # type: ignore[union-attr]
-            return self.value == other.value
-        return NotImplemented
+        return _typed_eq(self, other)
+
+    def __float__(self) -> float:
+        return self.value
 
     __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
 
@@ -199,11 +197,10 @@ class OpenUnitIntervalValue:
         return _ordering_compare(self, other, float.__lt__)
 
     def __eq__(self, other: object) -> bool:
-        if isinstance(other, (int, float)) and not isinstance(other, bool):
-            return self.value == other
-        if hasattr(other, "value") and isinstance(other.value, (int, float)):  # type: ignore[union-attr]
-            return self.value == other.value
-        return NotImplemented
+        return _typed_eq(self, other)
+
+    def __float__(self) -> float:
+        return self.value
 
     __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
 
@@ -223,11 +220,10 @@ class ClosedUnitIntervalValue:
         return _ordering_compare(self, other, float.__lt__)
 
     def __eq__(self, other: object) -> bool:
-        if isinstance(other, (int, float)) and not isinstance(other, bool):
-            return self.value == other
-        if hasattr(other, "value") and isinstance(other.value, (int, float)):  # type: ignore[union-attr]
-            return self.value == other.value
-        return NotImplemented
+        return _typed_eq(self, other)
+
+    def __float__(self) -> float:
+        return self.value
 
 
 class Seed(NonNegativeIntegerValue):
@@ -419,6 +415,9 @@ class ThresholdValue:
     def __eq__(self, other: object) -> bool:
         return _typed_eq(self, other)
 
+    def __float__(self) -> float:
+        return self.value
+
 
 @total_ordering
 @dataclass(frozen=True, slots=True)
@@ -434,6 +433,9 @@ class ScoreValue:
     def __eq__(self, other: object) -> bool:
         return _typed_eq(self, other)
 
+    def __float__(self) -> float:
+        return self.value
+
 
 @total_ordering
 @dataclass(frozen=True, slots=True)
@@ -448,6 +450,9 @@ class MetricValue:
 
     def __eq__(self, other: object) -> bool:
         return _typed_eq(self, other)
+
+    def __float__(self) -> float:
+        return self.value
 
 
 class TrafficRatePerDay(NonNegativeFiniteFloatValue):

@@ -26,6 +26,7 @@ from datp_core.domain.values import (
     OutcomeLabelSequence,
     Quantile,
     RoundNumber,
+    RowCount,
     ThresholdValue,
     checksum_text,
 )
@@ -52,7 +53,7 @@ class PooledThresholdResult:
     quantile: Quantile
     quantile_interpolation: QuantileInterpolationSemantics
     threshold: ThresholdValue
-    calibration_score_count: int
+    calibration_score_count: RowCount
     score_artifact_checksum: Checksum
     checkpoint_round: RoundNumber
     score_coordinate_checksum: Checksum
@@ -96,7 +97,7 @@ def construct_pooled_benign_quantile(
         quantile=protocol.quantile,
         quantile_interpolation=QuantileInterpolationSemantics.NUMPY_QUANTILE_LINEAR,
         threshold=threshold,
-        calibration_score_count=int(scores.size),
+        calibration_score_count=RowCount(int(scores.size)),
         score_artifact_checksum=calibration_scores.checksum,
         checkpoint_round=calibration_scores.checkpoint_round,
         score_coordinate_checksum=score_coordinate_checksum,

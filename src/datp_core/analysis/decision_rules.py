@@ -33,13 +33,13 @@ def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult
             AvailabilityStatus.UNAVAILABLE,
             "confirmatory BCa interval is unavailable or degenerate",
         )
-    if interval.lower_bound.value > 0:
+    if interval.lower_bound > 0:
         decision = ScientificDecision.SUPPORTED
         rationale = "the paired BCa interval supports lower CV(FPR) under local thresholds"
-    elif interval.upper_bound.value < 0:
+    elif interval.upper_bound < 0:
         decision = ScientificDecision.OPPOSITE_DIRECTION
         rationale = "the paired BCa interval supports the opposite direction"
-    elif interval.point_estimate.value > 0:
+    elif interval.point_estimate > 0:
         decision = ScientificDecision.DIRECTIONAL_INCONCLUSIVE
         rationale = "the point estimate is directional but the paired BCa interval crosses zero"
     else:
@@ -53,7 +53,7 @@ def decide_confirmatory(interval: BootstrapInterval) -> ScientificDecisionResult
 def decide_model_absorption(
     delta_fedavg: MetricValue | None, delta_ditto: MetricValue | None
 ) -> ScientificDecisionResult:
-    if delta_fedavg is None or delta_ditto is None or delta_fedavg.value <= 0:
+    if delta_fedavg is None or delta_ditto is None or delta_fedavg <= 0:
         return ScientificDecisionResult(
             EvidenceRole.SUPPORTIVE,
             ScientificDecision.BLOCKED,
@@ -84,7 +84,7 @@ def decide_temporal(result: TemporalRecoveryResult) -> ScientificDecisionResult:
             AvailabilityStatus.UNAVAILABLE,
             result.reason,
         )
-    if result.recovered_amount.value > 0:
+    if result.recovered_amount > 0:
         return ScientificDecisionResult(
             EvidenceRole.TEMPORAL_BOUNDARY,
             ScientificDecision.SUPPORTED,

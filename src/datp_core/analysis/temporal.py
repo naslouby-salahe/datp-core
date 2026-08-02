@@ -149,7 +149,7 @@ def temporal_recovery(
 ) -> TemporalRecoveryResult:
     drift_excess = MetricValue(frozen_future_cv.value - static_reference_cv.value)
     recovered_amount = MetricValue(frozen_future_cv.value - recalibrated_future_cv.value)
-    if drift_excess.value > TEMPORAL_CV_MATERIALITY_CUTOFF.value:
+    if drift_excess > TEMPORAL_CV_MATERIALITY_CUTOFF:
         return TemporalRecoveryResult(
             EvidenceRole.TEMPORAL_BOUNDARY,
             seed,
@@ -181,12 +181,12 @@ def temporal_recovery(
 
 
 def _available_interpretation(recovered_amount: MetricValue) -> TemporalInterpretation:
-    if recovered_amount.value > 0:
+    if recovered_amount > 0:
         return TemporalInterpretation.TEMPORAL_DEGRADATION_WITH_RECOVERY
     return TemporalInterpretation.TEMPORAL_DEGRADATION_WITHOUT_RECOVERY
 
 
 def _undefined_interpretation(drift_excess: MetricValue) -> TemporalInterpretation:
-    if drift_excess.value < 0:
+    if drift_excess < 0:
         return TemporalInterpretation.OPPOSITE_TEMPORAL_MOVEMENT
     return TemporalInterpretation.NO_DETECTABLE_TEMPORAL_DEGRADATION

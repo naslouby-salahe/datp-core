@@ -24,7 +24,15 @@ from datp_core.domain.enums import (
     TemporalState,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount, ClientPathToken, FeatureNameSequence, RowCount, Seed, checksum_text
+from datp_core.domain.values import (
+    Checksum,
+    ClientCount,
+    ClientPathToken,
+    FeatureNameSequence,
+    RowCount,
+    Seed,
+    checksum_text,
+)
 from datp_core.experiments.models import (
     ExecutionIdentityDocument,
     ExternalTemporalExecutionIdentity,

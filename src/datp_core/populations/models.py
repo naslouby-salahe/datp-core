@@ -512,7 +512,7 @@ def _require_row_conservation(document: DirichletPartitionDiagnosticsDocument) -
 def _require_partition_kind_fields(document: DirichletPartitionDiagnosticsDocument) -> None:
     match document.partition_kind:
         case ControlledPartitionKind.DIRICHLET:
-            if document.concentration is None or document.concentration.value <= 0:
+            if document.concentration is None or document.concentration <= 0:
                 raise ValueError("Dirichlet diagnostics require a positive concentration")
         case ControlledPartitionKind.IID:
             if document.concentration is not None:

@@ -100,13 +100,13 @@ def build_client_loader(
 def proximal_penalty(
     local_parameters: Sequence[torch.Tensor],
     reference_parameters: Sequence[torch.Tensor],
-    coefficient: float,
+    coefficient: ProximalCoefficient,
 ) -> torch.Tensor:
     """The proximal term (coefficient / 2) * sum ||local - reference||^2."""
     total = torch.zeros((), device=local_parameters[0].device)
     for local, reference in zip(local_parameters, reference_parameters, strict=True):
         total = total + torch.sum((local - reference) ** 2)
-    return (coefficient / 2.0) * total
+    return (coefficient.value / 2.0) * total
 
 
 def build_optimizer(
@@ -183,7 +183,7 @@ def _train_one_batch(
     loss = nn.functional.mse_loss(reconstruction, batch)
     if reference_parameters is not None and proximal_term is not None:
         local_parameters = tuple(parameter for _, parameter in model.named_parameters())
-        loss = loss + proximal_penalty(local_parameters, reference_parameters, proximal_term.coefficient.value)
+        loss = loss + proximal_penalty(local_parameters, reference_parameters, proximal_term.coefficient)
     loss.backward()
     optimizer.step()
     return float(loss.detach().cpu().item())

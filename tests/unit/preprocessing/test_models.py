@@ -1,7 +1,6 @@
 import pytest
 from pydantic import ValidationError
 
-from datp_core.domain.values import FeatureNameSequence
 from datp_core.domain.enums import (
     PartitionRole,
     PreprocessingFitScope,
@@ -10,6 +9,7 @@ from datp_core.domain.enums import (
     TrustedEstimatorClassName,
     TrustedEstimatorModule,
 )
+from datp_core.domain.values import FeatureNameSequence
 from datp_core.preprocessing.models import (
     SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD,
     SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD,
@@ -82,8 +82,6 @@ def test_scientific_preprocessing_methods_are_locked() -> None:
 
 
 def test_build_preprocessing_protocol_binds_feature_order() -> None:
-    from datp_core.domain.values import FeatureNameSequence
-
     protocol = build_preprocessing_protocol(
         SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD,
         FeatureNameSequence(("f0", "f1")),

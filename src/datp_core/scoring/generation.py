@@ -22,6 +22,7 @@ from datp_core.domain.values import (
     Checksum,
     FeatureCount,
     FeatureNameSequence,
+    OutcomeLabelSequence,
     RowCount,
     checksum_file,
 )
@@ -155,7 +156,7 @@ def reject_threshold_identity_in_score_coordinate(threshold_identity: str | None
         )
 
 
-def reject_attack_calibration_rows(labels: tuple[str, ...], benign_label: str) -> None:
+def reject_attack_calibration_rows(labels: OutcomeLabelSequence, benign_label: str) -> None:
     """Structural guard reused by downstream calibration construction: benign-only calibration."""
     if any(label != benign_label for label in labels):
         raise LeakageError(

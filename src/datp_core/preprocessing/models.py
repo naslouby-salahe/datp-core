@@ -341,9 +341,7 @@ def build_preprocessing_protocol(
 ) -> PreprocessingProtocol:
     """Bind a locked scientific method to an ordered model-input feature schema."""
     transformed_schema = TransformedSchema(
-        features=tuple(
-            TransformedFeature(name=name, position=index) for index, name in enumerate(feature_names)
-        )
+        features=tuple(TransformedFeature(name=name, position=index) for index, name in enumerate(feature_names))
     )
     return PreprocessingProtocol(
         identity=method.identity,

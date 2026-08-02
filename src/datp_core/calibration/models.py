@@ -10,9 +10,7 @@ from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 
 
-def _raise_first_violation(
-    *, requirements: tuple[tuple[bool, str], ...], subject: ContractSubject
-) -> None:
+def _raise_first_violation(*, requirements: tuple[tuple[bool, str], ...], subject: ContractSubject) -> None:
     for satisfied, message in requirements:
         if not satisfied:
             raise ScientificContractError(message, subject=subject)

@@ -69,7 +69,7 @@ UNIT_FRACTION_TOTAL = 1.0
 FRACTION_TOTAL_ABSOLUTE_TOLERANCE = 1e-12
 
 
-def _sums_to_unit_fraction(*values: float) -> bool:
+def _sums_to_unit_fraction(*values: Ratio | CoverageTarget) -> bool:
     """Compare declared fractional quantities with one shared tolerance."""
     return floats_absolutely_close(fsum(values), UNIT_FRACTION_TOTAL, FRACTION_TOTAL_ABSOLUTE_TOLERANCE)
 
@@ -102,9 +102,9 @@ class FractionalSplitProtocol(Declaration):
     @model_validator(mode="after")
     def validate_total(self) -> "FractionalSplitProtocol":
         if not _sums_to_unit_fraction(
-            self.training.value,
-            self.calibration.value,
-            self.evaluation.value,
+            self.training,
+            self.calibration,
+            self.evaluation,
         ):
             raise ValueError("fractional split must sum to one")
         return self
@@ -119,10 +119,10 @@ class TemporalSplitProtocol(Declaration):
     @model_validator(mode="after")
     def validate_total(self) -> "TemporalSplitProtocol":
         if not _sums_to_unit_fraction(
-            self.historical_training.value,
-            self.historical_calibration.value,
-            self.future_recalibration.value,
-            self.future_evaluation.value,
+            self.historical_training,
+            self.historical_calibration,
+            self.future_recalibration,
+            self.future_evaluation,
         ):
             raise ValueError("temporal split must sum to one")
         return self
@@ -144,10 +144,10 @@ class StaticReferenceSplitProtocol(Declaration):
     @model_validator(mode="after")
     def validate_total(self) -> "StaticReferenceSplitProtocol":
         if not _sums_to_unit_fraction(
-            self.training.value,
-            self.calibration.value,
-            self.reserve.value,
-            self.evaluation.value,
+            self.training,
+            self.calibration,
+            self.reserve,
+            self.evaluation,
         ):
             raise ValueError("static-reference split must sum to one")
         return self
@@ -248,7 +248,7 @@ class ConformalProtocol(Declaration):
 
     @model_validator(mode="after")
     def validate_complement(self) -> "ConformalProtocol":
-        if not _sums_to_unit_fraction(self.coverage.value, self.significance.value):
+        if not _sums_to_unit_fraction(self.coverage, self.significance):
             raise ValueError("coverage and significance must be complements")
         return self
 

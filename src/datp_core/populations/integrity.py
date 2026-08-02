@@ -278,7 +278,9 @@ def _infeasible(
     return PopulationFeasibility(PopulationFeasibilityStatus.INFEASIBLE, reason, expected, observed, evidence)
 
 
-def _require_membership_row_contract(membership: pl.DataFrame, expected_rows: RowCount, population: PopulationId) -> None:
+def _require_membership_row_contract(
+    membership: pl.DataFrame, expected_rows: RowCount, population: PopulationId
+) -> None:
     if membership.height != expected_rows:
         raise DataIntegrityError(
             "membership row count disagrees with the population manifest",

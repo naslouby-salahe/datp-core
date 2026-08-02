@@ -96,7 +96,7 @@ class ClientUpdate:
     local_loss: MetricValue
 
     def __post_init__(self) -> None:
-        if self.sample_count.value < 1:
+        if self.sample_count < 1:
             raise ScientificContractError(
                 "a client update requires at least one training sample",
                 subject=ContractSubject.ROWS,

@@ -67,7 +67,7 @@ def build_nbaiot_dirichlet_clients(
     diagnostics = _build_diagnostics(
         client_ids=client_ids,
         client_count=declaration.client_count,
-        membership_height=source.height,
+        membership_height=RowCount(source.height),
         benign_counts=benign_counts,
         attack_counts=attack_counts,
         condition=condition,
@@ -99,22 +99,23 @@ def _partition_source(
     client_count: ClientCount,
     condition: ControlledPartitionCondition,
     partition_seed: Seed,
-) -> tuple[pl.DataFrame, tuple[int, ...], tuple[int, ...]]:
+) -> tuple[pl.DataFrame, tuple[RowCount, ...], tuple[RowCount, ...]]:
     generator = np.random.Generator(np.random.PCG64(partition_seed.value))
     membership_parts: list[pl.DataFrame] = []
-    benign_counts = [0] * client_count.value
-    attack_counts = [0] * client_count.value
+    benign_counts: list[RowCount] = [RowCount(0)] * client_count.value
+    attack_counts: list[RowCount] = [RowCount(0)] * client_count.value
     for label, outcome in (
         (NBaIoTSourceLabel.BENIGN, PopulationOutcomeLabel.BENIGN),
         (NBaIoTSourceLabel.ATTACK, PopulationOutcomeLabel.ATTACK),
     ):
         stratum = source.filter(pl.col(_SOURCE_LABEL) == label).sort(STABLE_ROW_ID_COLUMN)
         stratum = _permute_stratum(stratum, generator)
-        counts = _allocate_stratum(RowCount(stratum.height), client_count, condition, generator)
-        membership_parts.append(_assign_stratum(stratum, client_ids, counts, outcome))
+        counts_int = _allocate_stratum(RowCount(stratum.height), client_count, condition, generator)
+        counts = tuple(RowCount(c) for c in counts_int)
+        membership_parts.append(_assign_stratum(stratum, client_ids, counts_int, outcome))
         target = benign_counts if outcome is PopulationOutcomeLabel.BENIGN else attack_counts
-        for index, count in enumerate(counts):
-            target[index] += count
+        for index, row_count in enumerate(counts):
+            target[index] = RowCount(target[index].value + row_count.value)
     membership = pl.concat(membership_parts, how="vertical_relaxed").sort([CLIENT_ID_COLUMN, STABLE_ROW_ID_COLUMN])
     return membership, tuple(benign_counts), tuple(attack_counts)
 
@@ -123,9 +124,9 @@ def _build_diagnostics(
     *,
     client_ids: tuple[str, ...],
     client_count: ClientCount,
-    membership_height: int,
-    benign_counts: tuple[int, ...],
-    attack_counts: tuple[int, ...],
+    membership_height: RowCount,
+    benign_counts: tuple[RowCount, ...],
+    attack_counts: tuple[RowCount, ...],
     condition: ControlledPartitionCondition,
     partition_seed: Seed,
 ) -> DirichletPartitionDiagnosticsDocument:
@@ -159,7 +160,7 @@ def _allocate_stratum(
     condition: ControlledPartitionCondition,
     generator: np.random.Generator,
 ) -> tuple[int, ...]:
-    if row_count.value == 0:
+    if row_count == 0:
         return tuple(0 for _ in range(client_count.value))
     match condition.kind:
         case ControlledPartitionKind.IID:
@@ -180,7 +181,7 @@ def _allocate_stratum(
                 reason="only Dirichlet and IID constructions are authorized",
             )
     counts = hamilton_integer_counts(row_count.value, proportions)
-    if sum(counts) != row_count.value:
+    if sum(counts) != row_count:
         raise DataIntegrityError(
             "controlled partition allocation failed to conserve stratum rows",
             subject=_POPULATION,

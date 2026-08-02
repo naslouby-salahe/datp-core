@@ -131,7 +131,7 @@ def test_run_local_epoch_with_larger_proximal_coefficient_stays_closer_to_refere
 def test_proximal_penalty_is_zero_when_parameters_match() -> None:
     device = require_cuda()
     parameters = [torch.zeros(3, device=device), torch.ones(2, device=device)]
-    penalty = proximal_penalty(parameters, parameters, 1.0)
+    penalty = proximal_penalty(parameters, parameters, ProximalCoefficient(1.0))
     assert float(penalty.item()) == 0.0
 
 
@@ -139,8 +139,8 @@ def test_proximal_penalty_scales_with_coefficient() -> None:
     device = require_cuda()
     local = [torch.ones(2, device=device)]
     reference = [torch.zeros(2, device=device)]
-    small = proximal_penalty(local, reference, 1.0)
-    large = proximal_penalty(local, reference, 4.0)
+    small = proximal_penalty(local, reference, ProximalCoefficient(1.0))
+    large = proximal_penalty(local, reference, ProximalCoefficient(4.0))
     assert float(large.item()) == pytest.approx(float(small.item()) * 4.0)
 
 

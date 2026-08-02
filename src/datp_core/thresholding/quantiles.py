@@ -155,11 +155,12 @@ def sample_weighted_mean(values: tuple[float, ...], weights: tuple[float, ...]) 
 
 def conformal_rank_index(calibration_count: RowCount, coverage: CoverageTarget) -> int:
     """Classical split-conformal rank correction: `ceil((n + 1) * coverage)`."""
-    if calibration_count < 1:
+    n = calibration_count.value
+    if n < 1:
         raise ScientificContractError(
             "conformal rank requires at least one calibration score", subject=ContractSubject.CALIBRATION
         )
-    return ceil((calibration_count + 1) * coverage.value)
+    return ceil((n + 1) * coverage.value)
 
 
 def finite_sample_conformal_threshold(
@@ -168,7 +169,7 @@ def finite_sample_conformal_threshold(
     """Return (threshold, rank_index, effective_quantile, tie_count) or raise if infeasible."""
     _require_score_vector(scores)
     calibration_count = int(scores.size)
-    rank_index = conformal_rank_index(calibration_count, coverage)
+    rank_index = conformal_rank_index(RowCount(calibration_count), coverage)
     if rank_index > calibration_count:
         raise ScientificContractError(
             "finite-sample conformal rank exceeds the available calibration count",

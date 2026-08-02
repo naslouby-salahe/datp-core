@@ -110,9 +110,7 @@ def evaluate_threshold_estimate(
     """Calculate one declared diagnostic without using attack labels or scores."""
     _validate_benign_scores(provenance, held_out_benign_scores)
     target_exceedance = 1.0 - provenance.quantile.value
-    achieved = sum(score.score > estimated_threshold for score in held_out_benign_scores) / len(
-        held_out_benign_scores
-    )
+    achieved = sum(score.score > estimated_threshold for score in held_out_benign_scores) / len(held_out_benign_scores)
     signed_attainment_error = achieved - target_exceedance
     absolute_error = abs(estimated_threshold.value - exact_pooled_benign_quantile_reference.value)
     reference = exact_pooled_benign_quantile_reference.value

@@ -26,7 +26,14 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientPathToken, FeatureNameSequence, OutcomeLabelSequence, checksum_file, checksum_text
+from datp_core.domain.values import (
+    Checksum,
+    ClientPathToken,
+    FeatureNameSequence,
+    OutcomeLabelSequence,
+    checksum_file,
+    checksum_text,
+)
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
     PARTITION_ROLE_COLUMN,
@@ -328,7 +335,7 @@ def write_fitted_transformed_partitions(
         if retained.width == 0:
             output = transformed_frame
         else:
-            output = pl.concat([retained, transformed_frame], how="horizontal_extend")
+            output = pl.concat([retained, transformed_frame], how="horizontal")
         output.write_parquet(temporary / asset_for_partition(role))
 
 

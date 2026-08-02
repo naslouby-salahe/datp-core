@@ -134,7 +134,7 @@ class CentralizedTrainingResult:
     final_epoch: RoundNumber
 
     def __post_init__(self) -> None:
-        if self.train_row_count.value < 1:
+        if self.train_row_count < 1:
             raise ValueError("centralized training requires at least one benign training row")
         if self.batch_size_used != self.optimizer.batch_size:
             raise ScientificContractError(
@@ -377,7 +377,7 @@ def _require_centralized_model_identities(request: CentralizedTrainingRequest) -
             "training coordinate model identity is invalid",
             subject=request.coordinate.model,
         )
-    if request.batch_size.value < 1:
+    if request.batch_size < 1:
         raise ScientificContractError(
             "batch size must remain the declared positive value",
             subject=ContractSubject.BATCH_SIZE,

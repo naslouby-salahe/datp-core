@@ -32,9 +32,7 @@ def test_non_temporal_equal_thirds_are_disjoint_and_benign_only_for_train_cal(
     )
     assert train_cal.filter(pl.col("outcome_label") == "attack").height == 0
     assert (
-        split_manifest.train_row_count
-        + split_manifest.calibration_row_count
-        + (split_manifest.evaluation_row_count)
+        split_manifest.train_row_count + split_manifest.calibration_row_count + (split_manifest.evaluation_row_count)
         == assignments.height
     )
 

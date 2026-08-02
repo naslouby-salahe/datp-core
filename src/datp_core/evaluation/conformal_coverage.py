@@ -8,7 +8,7 @@ import polars as pl
 
 from datp_core.domain.enums import MetricId, ScoreFrameColumn
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CoverageTarget, Seed, checksum_file
+from datp_core.domain.values import CoverageTarget, RowCount, Seed, ThresholdValue, checksum_file
 from datp_core.evaluation.metric_semantics import available, unavailable
 from datp_core.evaluation.models import CoverageResult, HeldOutBenignScore, MetricReason, MetricStatus
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
@@ -31,11 +31,11 @@ class ConformalCoverageDiagnostic:
     coordinate: FederatedTrainingCoordinate
     training_seed: Seed
     target_coverage: CoverageTarget
-    calibration_count: int
+    calibration_count: RowCount
     finite_sample_rank_index: int
     effective_quantile: float
     tie_count: int
-    threshold: float
+    threshold: ThresholdValue
     achieved_held_out_benign_coverage: float | None
     signed_coverage_error: float | None
     absolute_coverage_error: float | None
@@ -58,7 +58,7 @@ class ConformalCoverageDiagnostic:
             raise ScientificContractError("conformal coverage coordinate must match the client and training seed")
         if not isfinite(self.effective_quantile) or not 0 < self.effective_quantile <= 1:
             raise ScientificContractError("conformal effective quantile must be finite and in (0, 1]")
-        if self.tie_count < 0 or not isfinite(self.threshold):
+        if self.tie_count < 0 or not isfinite(self.threshold.value):
             raise ScientificContractError("conformal threshold provenance must be finite")
         if is_available:
             if any(value is None for value in values) or self.unavailable_reason is not None:
@@ -86,11 +86,11 @@ def evaluate_held_out_conformal_coverage(
             coordinate=coordinate,
             training_seed=training_seed,
             target_coverage=target_coverage,
-            calibration_count=assignment.calibration_count.value,
+            calibration_count=assignment.calibration_count,
             finite_sample_rank_index=assignment.rank_index,
             effective_quantile=assignment.effective_quantile,
             tie_count=assignment.tie_count,
-            threshold=assignment.threshold.value,
+            threshold=assignment.threshold,
             achieved_held_out_benign_coverage=None,
             signed_coverage_error=None,
             absolute_coverage_error=None,
@@ -126,11 +126,11 @@ def evaluate_held_out_conformal_coverage(
         coordinate=coordinate,
         training_seed=training_seed,
         target_coverage=target_coverage,
-        calibration_count=assignment.calibration_count.value,
+        calibration_count=assignment.calibration_count,
         finite_sample_rank_index=assignment.rank_index,
         effective_quantile=assignment.effective_quantile,
         tie_count=assignment.tie_count,
-        threshold=assignment.threshold.value,
+        threshold=assignment.threshold,
         achieved_held_out_benign_coverage=achieved,
         signed_coverage_error=signed_error,
         absolute_coverage_error=abs(signed_error),
