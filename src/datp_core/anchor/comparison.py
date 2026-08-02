@@ -35,12 +35,6 @@ class _NumericDelta:
         return self.signed / abs(self.expected)
 
 
-@dataclass(frozen=True, slots=True)
-class _ComparisonOutcome:
-    decision: AnchorComparisonDecision
-    reason: AnchorDiscrepancyReason | None
-    signed: float | None
-    relative: float | None
 
 
 def compare_anchor_metric(
@@ -51,35 +45,25 @@ def compare_anchor_metric(
     rule = reference.tolerance_rule
     if observation is None:
         return _build(
-            reference,
-            None,
-            rule,
-            _ComparisonOutcome(
-                AnchorComparisonDecision.BLOCKED_INVALID_INPUT,
-                AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
-                None,
-                None,
-            ),
+            reference, None, rule,
+            decision=AnchorComparisonDecision.BLOCKED_INVALID_INPUT,
+            reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
         )
 
     coordinate_failure = _coordinate_mismatch_reason(reference, observation)
     delta = _NumericDelta(reference.value.value, observation.value.value)
     if coordinate_failure is not None:
         return _build(
-            reference,
-            observation,
-            rule,
-            _ComparisonOutcome(
-                AnchorComparisonDecision.BLOCKED_INVALID_INPUT,
-                coordinate_failure,
-                delta.signed,
-                delta.relative,
-            ),
+            reference, observation, rule,
+            decision=AnchorComparisonDecision.BLOCKED_INVALID_INPUT,
+            reason=coordinate_failure,
+            signed=delta.signed,
+            relative=delta.relative,
         )
     return _compare_with_rule(reference, observation, rule, delta)
 
 
-def reject_global_floating_point_tolerance() -> AnchorMetricComparison:
+def reject_global_floating_point_tolerance() -> None:
     """Explicit rejection of an undifferentiated global floating-point tolerance."""
     raise ValueError("global floating-point tolerance is unsupported; declare a metric-specific rule")
 
@@ -147,15 +131,10 @@ def _relative_result(
 ) -> AnchorMetricComparison:
     if is_numeric_zero(delta.expected):
         return _build(
-            reference,
-            observation,
-            rule,
-            _ComparisonOutcome(
-                AnchorComparisonDecision.UNAVAILABLE,
-                AnchorDiscrepancyReason.RELATIVE_COMPARISON_UNDEFINED_FOR_ZERO_REFERENCE,
-                delta.signed,
-                None,
-            ),
+            reference, observation, rule,
+            decision=AnchorComparisonDecision.UNAVAILABLE,
+            reason=AnchorDiscrepancyReason.RELATIVE_COMPARISON_UNDEFINED_FOR_ZERO_REFERENCE,
+            signed=delta.signed,
         )
     if delta.relative is not None and abs(delta.relative) <= rule.relative_tolerance.value:
         return _pass(reference, observation, rule, delta)
@@ -170,15 +149,11 @@ def _interval_result(
 ) -> AnchorMetricComparison:
     if reference.interval is None or observation.interval is None:
         return _build(
-            reference,
-            observation,
-            rule,
-            _ComparisonOutcome(
-                AnchorComparisonDecision.UNAVAILABLE,
-                AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
-                delta.signed,
-                delta.relative,
-            ),
+            reference, observation, rule,
+            decision=AnchorComparisonDecision.UNAVAILABLE,
+            reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
+            signed=delta.signed,
+            relative=delta.relative,
         )
     left = reference.interval
     right = observation.interval
@@ -198,28 +173,20 @@ def _count_result(
 ) -> AnchorMetricComparison:
     if reference.count is None or observation.count is None:
         return _build(
-            reference,
-            observation,
-            rule,
-            _ComparisonOutcome(
-                AnchorComparisonDecision.UNAVAILABLE,
-                AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
-                delta.signed,
-                delta.relative,
-            ),
+            reference, observation, rule,
+            decision=AnchorComparisonDecision.UNAVAILABLE,
+            reason=AnchorDiscrepancyReason.MISSING_MANDATORY_OBSERVATION,
+            signed=delta.signed,
+            relative=delta.relative,
         )
     if reference.count == observation.count:
         return _pass(reference, observation, rule, delta)
     return _build(
-        reference,
-        observation,
-        rule,
-        _ComparisonOutcome(
-            AnchorComparisonDecision.MATERIAL_DISCREPANCY,
-            AnchorDiscrepancyReason.COUNT_MISMATCH,
-            float(observation.count.value - reference.count.value),
-            delta.relative,
-        ),
+        reference, observation, rule,
+        decision=AnchorComparisonDecision.MATERIAL_DISCREPANCY,
+        reason=AnchorDiscrepancyReason.COUNT_MISMATCH,
+        signed=float(observation.count.value - reference.count.value),
+        relative=delta.relative,
     )
 
 
@@ -254,10 +221,10 @@ def _pass(
     delta: _NumericDelta,
 ) -> AnchorMetricComparison:
     return _build(
-        reference,
-        observation,
-        rule,
-        _ComparisonOutcome(AnchorComparisonDecision.EQUIVALENT, None, delta.signed, delta.relative),
+        reference, observation, rule,
+        decision=AnchorComparisonDecision.EQUIVALENT,
+        signed=delta.signed,
+        relative=delta.relative,
     )
 
 
@@ -269,15 +236,11 @@ def _fail(
     reason: AnchorDiscrepancyReason,
 ) -> AnchorMetricComparison:
     return _build(
-        reference,
-        observation,
-        rule,
-        _ComparisonOutcome(
-            AnchorComparisonDecision.MATERIAL_DISCREPANCY,
-            reason,
-            delta.signed,
-            delta.relative,
-        ),
+        reference, observation, rule,
+        decision=AnchorComparisonDecision.MATERIAL_DISCREPANCY,
+        reason=reason,
+        signed=delta.signed,
+        relative=delta.relative,
     )
 
 
@@ -285,14 +248,18 @@ def _build(
     reference: AnchorMetricReference,
     observation: AnchorObservedMetric | None,
     rule: AnchorToleranceRule,
-    outcome: _ComparisonOutcome,
+    *,
+    decision: AnchorComparisonDecision,
+    reason: AnchorDiscrepancyReason | None = None,
+    signed: float | None = None,
+    relative: float | None = None,
 ) -> AnchorMetricComparison:
     return AnchorMetricComparison(
         reference=reference,
         observation=observation,
-        decision=outcome.decision,
-        signed_difference=outcome.signed,
-        relative_difference=outcome.relative,
+        decision=decision,
+        signed_difference=signed,
+        relative_difference=relative,
         tolerance_rule=rule,
-        reason=outcome.reason,
+        reason=reason,
     )
