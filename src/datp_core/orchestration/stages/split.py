@@ -8,11 +8,11 @@ from typing import ClassVar
 
 import polars as pl
 
-from datp_core.artifacts.store import AtomicPublication, publish_atomically
+from datp_core.artifacts.store import publish_atomically
 from datp_core.datasets.edge_iiotset.schema import EdgeCanonicalColumn
 from datp_core.domain.enums import PopulationId, PublicationStatus, SplitProtocolId, StageOperationId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, Seed, checksum_file, checksum_text
+from datp_core.domain.values import Checksum, Seed, checksum_text
 from datp_core.experiments.models import ExternalTemporalExecutionIdentity, require_execution_identity
 from datp_core.populations.edge_temporal_groups import split_temporal_membership
 from datp_core.populations.integrity import validate_no_future_history_leakage, validate_split_manifest
@@ -61,7 +61,7 @@ def split_stage(request: SplitRequest) -> SplitResult:
     payload = _manifest_payload(artifacts, request.execution_identity)
     digest = checksum_text(payload)
 
-    def write(temporary: Path) -> None:
+    def write(temporary: Path) -> _SplitArtifacts:
         (temporary / "execution_identity.json").write_text(
             dumps(request.execution_identity.serialize(), indent=2) + "\n", encoding="utf-8"
         )
@@ -81,23 +81,23 @@ def split_stage(request: SplitRequest) -> SplitResult:
                 artifacts.matched_static_reference_manifest.model_dump_json(indent=2) + "\n", encoding="utf-8"
             )
         (temporary / "COMPLETE").write_text(digest.value, encoding="utf-8")
+        return artifacts
 
-    reused = publish_atomically(
-        AtomicPublication(
-            request.output_directory,
-            request.overwrite,
-            lambda directory: _is_reusable(directory, request, artifacts, digest),
-            write,
-            rmtree,
-        )
+    outcome = publish_atomically(
+        target=request.output_directory,
+        overwrite=request.overwrite,
+        is_reusable=lambda directory: _is_reusable(directory, request, artifacts, digest),
+        write=write,
+        reusable_value=lambda _directory: artifacts,
+        remove_target=rmtree,
     )
     return SplitResult(
-        publication_status=PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED,
-        assignments=artifacts.assignments,
-        manifest=artifacts.manifest,
-        matched_static_reference_assignments=artifacts.matched_static_reference_assignments,
-        matched_static_reference_manifest=artifacts.matched_static_reference_manifest,
-        complete_digest=checksum_file(request.output_directory / "COMPLETE"),
+        publication_status=outcome.status,
+        assignments=outcome.value.assignments,
+        manifest=outcome.value.manifest,
+        matched_static_reference_assignments=outcome.value.matched_static_reference_assignments,
+        matched_static_reference_manifest=outcome.value.matched_static_reference_manifest,
+        complete_digest=outcome.complete_digest,
     )
 
 
