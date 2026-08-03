@@ -14,7 +14,6 @@ from tests.unit.centralized_reference.helpers import (
 )
 
 from datp_core.centralized_reference.checkpointing import (
-    FederatedCheckpointMarker,
     reject_federated_checkpoint,
     retain_centralized_checkpoint_candidates,
 )
@@ -52,9 +51,9 @@ def test_deterministic_scoring_and_reload(tmp_path: Path) -> None:
     assert first.evaluation_scores.row_count.value == 32
 
 
-def test_rejects_federated_checkpoint_for_scoring(tmp_path: Path) -> None:
+def test_rejects_federated_checkpoint_for_scoring() -> None:
     with pytest.raises(LeakageError, match="federated checkpoint"):
-        reject_federated_checkpoint(FederatedCheckpointMarker("fedavg", tmp_path / "x.pt"))
+        reject_federated_checkpoint("fedavg")
 
 
 def test_score_polarity_higher_is_more_anomalous(tmp_path: Path) -> None:
