@@ -80,7 +80,6 @@ class CohortAggregationColumn(StrEnum):
     ATTACK_EVALUATION_COUNT = "attack_evaluation_count"
 
 
-# Single definition site for frame-column handles used by builders and integrity.
 CLIENT_ID_COLUMN = PopulationFrameColumn.CLIENT_ID
 STABLE_ROW_ID_COLUMN = PopulationFrameColumn.STABLE_ROW_ID
 OUTCOME_LABEL_COLUMN = PopulationFrameColumn.OUTCOME_LABEL
@@ -90,7 +89,6 @@ SOURCE_ROW_INDEX_COLUMN = PopulationFrameColumn.SOURCE_ROW_INDEX
 FAMILY_ID_COLUMN = PopulationFrameColumn.FAMILY_ID
 ORDER_COLUMN = WorkingFrameColumn.ORDER
 PERM_COLUMN = WorkingFrameColumn.PERM
-
 
 MEMBERSHIP_COLUMNS: tuple[PopulationFrameColumn, ...] = (
     PopulationFrameColumn.CLIENT_ID,
@@ -168,16 +166,8 @@ class PopulationManifestDocument(StrictModel):
         _require_unique_ordered(self.candidate_clients, PopulationManifestField.CANDIDATE_CLIENTS)
         _require_unique_ordered(self.accepted_clients, PopulationManifestField.ACCEPTED_CLIENTS)
         _require_unique_ordered(self.excluded_client_ids, PopulationManifestField.EXCLUDED_CLIENT_IDS)
-        _require_client_set_partition(
-            self.candidate_clients,
-            self.accepted_clients,
-            self.excluded_client_ids,
-        )
-        _require_non_negative_row_counts(
-            self.total_membership_rows,
-            self.benign_row_count,
-            self.attack_row_count,
-        )
+        _require_client_set_partition(self.candidate_clients, self.accepted_clients, self.excluded_client_ids)
+        _require_non_negative_row_counts(self.total_membership_rows, self.benign_row_count, self.attack_row_count)
         return self
 
 
@@ -248,10 +238,11 @@ class ChronologicalPartitionDiagnosticsDocument(StrictModel):
             raise ValueError("observed eligible count must match eligible identities")
         if len(self.excluded_group_ids) != len(self.exclusion_reasons):
             raise ValueError("each excluded group requires one typed reason")
-        if (
-            min(self.duplicate_timestamp_rows.value, self.total_temporal_rows.value, self.observed_eligible_group_count)
-            < 0
-        ):
+        if min(
+            self.duplicate_timestamp_rows.value,
+            self.total_temporal_rows.value,
+            self.observed_eligible_group_count,
+        ) < 0:
             raise ValueError("chronology diagnostic counts must be non-negative")
         return self
 
@@ -285,21 +276,6 @@ class ClientIdentity:
 
     def __lt__(self, other: "ClientIdentity") -> bool:
         return self.client_id < other.client_id
-
-
-@dataclass(frozen=True, slots=True)
-class ClientMembership:
-    client: ClientIdentity
-    stable_row_id: str
-    outcome_label: PopulationOutcomeLabel
-    source_path: str
-    source_row_index: int
-
-    def __post_init__(self) -> None:
-        if not self.stable_row_id or not self.source_path:
-            raise ValueError("membership requires stable row identity and source path")
-        if self.source_row_index < 0:
-            raise ValueError("source row indexes are zero-based and non-negative")
 
 
 @dataclass(frozen=True, slots=True)
@@ -337,31 +313,6 @@ class PopulationFeasibility:
             raise ValueError("observed client count must be non-negative")
         if not self.evidence:
             raise ValueError("feasibility requires evidence")
-
-
-@dataclass(frozen=True, slots=True)
-class PartitionAssignment:
-    client_id: str
-    stable_row_id: str
-    outcome_label: PopulationOutcomeLabel
-
-    def __post_init__(self) -> None:
-        if not self.client_id or not self.stable_row_id:
-            raise ValueError("partition assignment requires client and stable row identities")
-
-
-@dataclass(frozen=True, slots=True)
-class SplitAssignment:
-    client_id: str
-    stable_row_id: str
-    outcome_label: PopulationOutcomeLabel
-    partition_role: PartitionRole
-
-    def __post_init__(self) -> None:
-        if not self.client_id or not self.stable_row_id:
-            raise ValueError("split assignment requires client, row, and partition role")
-        if not isinstance(self.partition_role, PartitionRole):
-            raise ValueError("split assignment requires a PartitionRole")
 
 
 @dataclass(frozen=True, slots=True)
