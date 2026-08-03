@@ -1,7 +1,7 @@
 from tests.unit.learning.federated.helpers import client_identity, fedavg_coordinate
 
 from datp_core.domain.enums import EvaluationCohort, EvidenceRole, FederatedThresholdMethod, MetricId
-from datp_core.domain.values import Checksum, ScoreValue, Seed, ThresholdValue
+from datp_core.domain.values import Checksum, RowCount, ScoreValue, Seed, ThresholdValue
 from datp_core.evaluation.client_metrics import calculate_client_metrics
 from datp_core.evaluation.models import ClientMetricResult, ConfusionCounts
 from datp_core.evaluation.population_metrics import calculate_population_metrics
@@ -29,7 +29,13 @@ def _client_result(
 ) -> ClientMetricResult:
     coordinate = fedavg_coordinate(seed=Seed(3))
     client = client_identity(client_id)
-    confusion = ConfusionCounts(1, false_positive, true_positive, 0, True)
+    confusion = ConfusionCounts(
+        true_negative=RowCount(1),
+        false_positive=RowCount(false_positive),
+        true_positive=RowCount(true_positive),
+        false_negative=RowCount(0),
+        attack_assignment_valid=True,
+    )
     scores = (ScoreValue(0.1), *(ScoreValue(0.9) for _ in range(false_positive + true_positive)))
     labels = (
         PopulationOutcomeLabel.BENIGN,
