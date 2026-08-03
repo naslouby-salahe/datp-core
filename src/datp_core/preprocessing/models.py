@@ -7,6 +7,7 @@ import numpy as np
 import polars as pl
 from pydantic import model_validator
 
+from datp_core.artifacts.layout import RelativeAssetPathSequence
 from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
@@ -24,18 +25,20 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     AbsoluteTolerance,
     Checksum,
     ClientPathToken,
     FeatureNameSequence,
+    OutcomeLabel,
     OutcomeLabelSequence,
     RowCount,
     Seed,
+    StableRowId,
     StableRowIdSequence,
 )
 from datp_core.experiments.models import ExternalTemporalExecutionIdentity
-from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN
-from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
+from datp_core.populations.models import OUTCOME_LABEL_COLUMN, PARTITION_ROLE_COLUMN, STABLE_ROW_ID_COLUMN
 
 
 class TransformedSchema(StrictModel):
@@ -46,7 +49,6 @@ class PreprocessingProtocol(StrictModel):
     identity: PreprocessingProtocolId
     fit_scope: PreprocessingFitScope
     input_feature_names: FeatureNameSequence
-    transformed_schema: TransformedSchema
     serialization_format: SerializationFormat
     estimator_class_name: TrustedEstimatorClassName
     numerical_equivalence_absolute_tolerance: AbsoluteTolerance
@@ -54,6 +56,9 @@ class PreprocessingProtocol(StrictModel):
     @model_validator(mode="after")
     def validate_protocol(self) -> "PreprocessingProtocol":
         _require_skops(self.serialization_format, "fitted preprocessing state")
+        forbidden = {STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, PARTITION_ROLE_COLUMN}
+        if any(name in forbidden for name in self.input_feature_names.names):
+            raise ValueError("input_feature_names cannot contain structural columns")
         return self
 
 
@@ -62,14 +67,27 @@ class PreprocessingPartition:
     role: PartitionRole
     frame: pl.DataFrame
 
+    def __post_init__(self) -> None:
+        if self.frame.height == 0:
+            raise ValueError(f"PreprocessingPartition frame for role {self.role.value} cannot be empty")
+        for col in (STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN):
+            if col not in self.frame.columns:
+                raise ScientificContractError(f"missing structural column {col}", subject=ContractSubject.SCHEMA)
+        if self.frame.get_column(STABLE_ROW_ID_COLUMN).null_count() > 0:
+            raise ValueError("STABLE_ROW_ID_COLUMN cannot contain null values")
+        if self.frame.get_column(OUTCOME_LABEL_COLUMN).null_count() > 0:
+            raise ValueError("OUTCOME_LABEL_COLUMN cannot contain null values")
+        _ = self.row_ids
+        _ = self.outcome_labels
+
     @property
     def row_ids(self) -> StableRowIdSequence:
-        ids = tuple(str(v) for v in self.frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
+        ids = tuple(StableRowId(str(v)) for v in self.frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
         return StableRowIdSequence(ids)
 
     @property
     def outcome_labels(self) -> OutcomeLabelSequence:
-        labels = tuple(str(v) for v in self.frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
+        labels = tuple(OutcomeLabel(str(v)) for v in self.frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
         return OutcomeLabelSequence(labels)
 
 
@@ -78,6 +96,8 @@ class PreprocessingPartitionSet:
     partitions: tuple[PreprocessingPartition, ...]
 
     def __post_init__(self) -> None:
+        if not self.partitions:
+            raise ValueError("PreprocessingPartitionSet cannot be empty")
         roles = tuple(p.role for p in self.partitions)
         if len(frozenset(roles)) != len(roles):
             raise ValueError("PreprocessingPartitionSet cannot contain duplicate partition roles")
@@ -93,6 +113,24 @@ class PreprocessingPartitionSet:
 
 
 @dataclass(frozen=True, slots=True)
+class ClientPreprocessingPartitions:
+    client_identity: ClientPathToken
+    partitions: PreprocessingPartitionSet
+
+
+@dataclass(frozen=True, slots=True)
+class ClientPreprocessingPartitionSet:
+    clients: tuple[ClientPreprocessingPartitions, ...]
+
+    def __post_init__(self) -> None:
+        if not self.clients:
+            raise ValueError("ClientPreprocessingPartitionSet cannot be empty")
+        identities = tuple(item.client_identity for item in self.clients)
+        if len(frozenset(identities)) != len(identities):
+            raise ValueError("ClientPreprocessingPartitionSet cannot contain duplicate client identities")
+
+
+@dataclass(frozen=True, slots=True)
 class ClientFittedEstimator:
     client_identity: ClientPathToken
     estimator: TrustedScaler
@@ -103,9 +141,13 @@ class ClientLocalFittedEstimators:
     estimators: tuple[ClientFittedEstimator, ...]
 
     def __post_init__(self) -> None:
+        if not self.estimators:
+            raise ValueError("ClientLocalFittedEstimators cannot be empty")
         clients = tuple(item.client_identity for item in self.estimators)
         if len(frozenset(clients)) != len(clients):
             raise ValueError("ClientLocalFittedEstimators cannot contain duplicate client identities")
+        if len({id(item.estimator) for item in self.estimators}) != len(self.estimators):
+            raise ValueError("client-local estimators must be distinct objects")
 
     def require(self, client_identity: ClientPathToken) -> TrustedScaler:
         for item in self.estimators:
@@ -125,30 +167,33 @@ class PooledFittedEstimator:
 type FederatedFittedEstimators = ClientLocalFittedEstimators | PooledFittedEstimator
 
 
-def _require_branch_client_pairing(branch: ProcessedDataBranch, client_identity: ClientPathToken | None) -> None:
-    if branch is ProcessedDataBranch.FEDERATED:
-        if not client_identity:
-            raise ValueError("federated fitted state requires a client identity")
-        return
-    if client_identity is not None:
-        raise ValueError("centralized fitted state cannot carry a federated client identity")
-
-
 @dataclass(frozen=True, slots=True)
-class FittedPreprocessingState:
+class _FittedPreprocessingStateBase:
     protocol: PreprocessingProtocol
-    branch: ProcessedDataBranch
-    client_identity: ClientPathToken | None
     estimator_path: Path
     estimator_checksum: Checksum
     fit_row_count: RowCount
-    fit_partition: PartitionRole
 
     def __post_init__(self) -> None:
         if self.fit_row_count < 1:
             raise ValueError("fitted preprocessing requires at least one training row")
-        _require_train_partition(self.fit_partition, "fitted preprocessing")
-        _require_branch_client_pairing(self.branch, self.client_identity)
+
+    @property
+    def fit_partition(self) -> PartitionRole:
+        return PartitionRole.TRAIN
+
+
+@dataclass(frozen=True, slots=True)
+class CentralizedFittedPreprocessingState(_FittedPreprocessingStateBase):
+    pass
+
+
+@dataclass(frozen=True, slots=True)
+class FederatedFittedPreprocessingState(_FittedPreprocessingStateBase):
+    client_identity: ClientPathToken
+
+
+type FittedPreprocessingState = CentralizedFittedPreprocessingState | FederatedFittedPreprocessingState
 
 
 @dataclass(frozen=True, slots=True)
@@ -156,15 +201,15 @@ class PreprocessedPartitionPaths:
     train: Path
     calibration: Path
     evaluation: Path
-    future_recalibration: Path | None = None
-    static_reference_reserve: Path | None = None
+    future_recalibration: Path | None
+    static_reference_reserve: Path | None
 
 
 @dataclass(frozen=True, slots=True)
 class ClientPreprocessingResult:
     client_identity: ClientPathToken
     paths: PreprocessedPartitionPaths
-    fitted_state: FittedPreprocessingState
+    fitted_state: FederatedFittedPreprocessingState
     publication_status: PublicationStatus
 
 
@@ -181,7 +226,7 @@ class ClientPreprocessPublication:
 @dataclass(frozen=True, slots=True)
 class PooledPreprocessingResult:
     paths: PreprocessedPartitionPaths
-    fitted_state: FittedPreprocessingState
+    fitted_state: CentralizedFittedPreprocessingState
     publication_status: PublicationStatus
 
 
@@ -198,7 +243,7 @@ class PreprocessingManifest(StrictModel):
     transformed_feature_names: FeatureNameSequence
     estimator_class_name: TrustedEstimatorClassName
     serialization_format: SerializationFormat
-    asset_paths: tuple[str, ...]
+    asset_paths: RelativeAssetPathSequence
     fit_partition: PartitionRole
     execution_identity: ExternalTemporalExecutionIdentity | None = None
 
@@ -208,8 +253,6 @@ class PreprocessingManifest(StrictModel):
             raise ValueError("preprocessing manifests must record train-only fitting")
         if not self.asset_paths:
             raise ValueError("preprocessing manifests require published assets")
-        if any("=" in path for path in self.asset_paths):
-            raise ValueError("reusable data paths must not contain key=value segments")
         return self
 
 
@@ -220,25 +263,20 @@ class PartitionTransformationEvidence(StrictModel):
 
 
 class PreprocessingValidationReport(StrictModel):
-    fit_partition: PartitionRole
-    validated_roles: tuple[PartitionRole, ...]
     partition_evidence: tuple[PartitionTransformationEvidence, ...]
-    estimator_reload_verified: bool
 
     @model_validator(mode="after")
     def validate_report(self) -> "PreprocessingValidationReport":
-        if self.fit_partition is not PartitionRole.TRAIN:
-            raise ValueError("fit_partition must be TRAIN")
-        if len(self.validated_roles) != len(frozenset(self.validated_roles)):
-            raise ValueError("validated_roles must be unique")
-        evidence_roles = tuple(item.role for item in self.partition_evidence)
-        if set(evidence_roles) != set(self.validated_roles) or len(evidence_roles) != len(self.partition_evidence):
-            raise ValueError("every validated role must have exactly one evidence record")
+        if not self.partition_evidence:
+            raise ValueError("partition_evidence cannot be empty")
+        roles = tuple(item.role for item in self.partition_evidence)
+        if len(roles) != len(frozenset(roles)):
+            raise ValueError("partition evidence roles must be unique")
+        if PartitionRole.TRAIN not in roles:
+            raise ValueError("partition evidence must contain TRAIN")
         for item in self.partition_evidence:
             if item.source_row_count != item.output_row_count:
                 raise ValueError("source and output row counts must match")
-        if not self.estimator_reload_verified:
-            raise ValueError("estimator_reload_verified must be true")
         return self
 
 
@@ -280,12 +318,18 @@ class PreprocessingFitBatch:
 
 
 @dataclass(frozen=True, slots=True)
-class FittedStatePublishSpec:
+class CentralizedFittedStatePublishSpec:
     protocol: PreprocessingProtocol
-    branch: ProcessedDataBranch
     estimator_path: Path
     fit_row_count: RowCount
-    client_identity: ClientPathToken | None
+
+
+@dataclass(frozen=True, slots=True)
+class FederatedFittedStatePublishSpec:
+    protocol: PreprocessingProtocol
+    estimator_path: Path
+    fit_row_count: RowCount
+    client_identity: ClientPathToken
 
 
 @dataclass(frozen=True, slots=True)
@@ -310,7 +354,7 @@ SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD = ScientificPreprocessingMethod(
     estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
     serialization_format=SerializationFormat.SKOPS,
     fit_partition=PartitionRole.TRAIN,
-    numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
+    numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
 )
 
 SCIENTIFIC_FEDERATED_POOLED_MIN_MAX_METHOD = ScientificPreprocessingMethod(
@@ -319,7 +363,7 @@ SCIENTIFIC_FEDERATED_POOLED_MIN_MAX_METHOD = ScientificPreprocessingMethod(
     estimator_class_name=TrustedEstimatorClassName.MIN_MAX_SCALER,
     serialization_format=SerializationFormat.SKOPS,
     fit_partition=PartitionRole.TRAIN,
-    numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
+    numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
 )
 
 SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD = ScientificPreprocessingMethod(
@@ -328,7 +372,7 @@ SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD = ScientificPreprocessingMethod(
     estimator_class_name=TrustedEstimatorClassName.MIN_MAX_SCALER,
     serialization_format=SerializationFormat.SKOPS,
     fit_partition=PartitionRole.TRAIN,
-    numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
+    numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
 )
 
 
@@ -337,12 +381,10 @@ def build_preprocessing_protocol(
     feature_names: FeatureNameSequence,
 ) -> PreprocessingProtocol:
     """Bind a locked scientific method to an ordered model-input feature schema."""
-    transformed_schema = TransformedSchema(feature_names=feature_names)
     return PreprocessingProtocol(
         identity=method.identity,
         fit_scope=method.fit_scope,
         input_feature_names=feature_names,
-        transformed_schema=transformed_schema,
         serialization_format=method.serialization_format,
         estimator_class_name=method.estimator_class_name,
         numerical_equivalence_absolute_tolerance=method.numerical_equivalence_absolute_tolerance,

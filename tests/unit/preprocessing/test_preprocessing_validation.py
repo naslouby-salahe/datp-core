@@ -3,6 +3,7 @@ import polars as pl
 import pytest
 
 from datp_core.domain.enums import (
+    ContractSubject,
     PartitionOrdering,
     PartitionRole,
     PreprocessingFitScope,
@@ -14,7 +15,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import (
-    AbsoluteTolerance,
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     FeatureNameSequence,
     OutcomeLabelSequence,
     StableRowIdSequence,
@@ -25,13 +26,12 @@ from datp_core.preprocessing.models import (
     PreprocessingPartition,
     PreprocessingPartitionSet,
     PreprocessingProtocol,
-    TransformedSchema,
 )
 from datp_core.preprocessing.validation import (
     extract_partitions,
     fit_trusted_batch,
+    require_finite_matrix,
     transform_feature_matrix,
-    validate_finite_matrix,
     validate_no_partition_overlap,
 )
 
@@ -41,10 +41,9 @@ def _protocol() -> PreprocessingProtocol:
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         input_feature_names=FeatureNameSequence(("f0", "f1")),
-        transformed_schema=TransformedSchema(feature_names=FeatureNameSequence(("f0", "f1"))),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
-        numerical_equivalence_absolute_tolerance=AbsoluteTolerance(1e-12),
+        numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     )
 
 
@@ -95,15 +94,11 @@ def test_extract_partitions_returns_partition_set_with_ordering() -> None:
 
 
 def test_fit_trusted_batch_validation_rules() -> None:
-    from datp_core.artifacts.serialization import construct_trusted_estimator
-
     protocol = _protocol()
-    estimator = construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER)
     # 0-row matrix
     with pytest.raises(ScientificContractError, match="at least one row"):
         fit_trusted_batch(
             protocol,
-            estimator,
             PreprocessingFitBatch(
                 training_matrix=np.empty((0, 2)),
                 training_row_ids=StableRowIdSequence(("r0",)),
@@ -116,7 +111,6 @@ def test_fit_trusted_batch_validation_rules() -> None:
     with pytest.raises(ScientificContractError, match="two-dimensional"):
         fit_trusted_batch(
             protocol,
-            estimator,
             PreprocessingFitBatch(
                 training_matrix=np.array([1.0, 2.0]),
                 training_row_ids=StableRowIdSequence(("r0",)),
@@ -129,7 +123,6 @@ def test_fit_trusted_batch_validation_rules() -> None:
     with pytest.raises(ScientificContractError, match="width must match"):
         fit_trusted_batch(
             protocol,
-            estimator,
             PreprocessingFitBatch(
                 training_matrix=np.array([[1.0, 2.0, 3.0]]),
                 training_row_ids=StableRowIdSequence(("r0",)),
@@ -139,10 +132,9 @@ def test_fit_trusted_batch_validation_rules() -> None:
         )
 
     # Non-finite matrix
-    with pytest.raises(ScientificContractError, match="non-finite"):
+    with pytest.raises(ScientificContractError, match="training matrix must be finite"):
         fit_trusted_batch(
             protocol,
-            estimator,
             PreprocessingFitBatch(
                 training_matrix=np.array([[1.0, np.nan]]),
                 training_row_ids=StableRowIdSequence(("r0",)),
@@ -160,9 +152,15 @@ def test_transform_feature_matrix_validations() -> None:
 
     # 1D matrix
     with pytest.raises(ScientificContractError, match="two-dimensional"):
-        transform_feature_matrix(fitted, np.array([1.0, 2.0]), protocol.transformed_schema, PartitionRole.TRAIN)
+        transform_feature_matrix(
+            fitted,
+            np.array([1.0, 2.0]),
+            protocol.input_feature_names,
+            PartitionRole.TRAIN,
+            description="transformed evaluation matrix",
+        )
 
     # Finite matrix validation
-    validate_finite_matrix(np.asarray([[1.0, 2.0]]), PartitionRole.TRAIN)
+    require_finite_matrix(np.asarray([[1.0, 2.0]]), subject=ContractSubject.FEATURES, description="test matrix")
     with pytest.raises(ScientificContractError):
-        validate_finite_matrix(np.asarray([[1.0, np.nan]]), PartitionRole.TRAIN)
+        require_finite_matrix(np.asarray([[1.0, np.nan]]), subject=ContractSubject.FEATURES, description="test matrix")

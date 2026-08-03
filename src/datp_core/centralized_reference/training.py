@@ -50,7 +50,11 @@ from datp_core.populations.models import (
     PopulationFrameColumn,
     PopulationOutcomeLabel,
 )
-from datp_core.preprocessing.models import FittedPreprocessingState
+from datp_core.preprocessing.models import (
+    CentralizedFittedPreprocessingState,
+    FederatedFittedPreprocessingState,
+    FittedPreprocessingState,
+)
 from datp_core.protocols.models import (
     AutoencoderProtocol,
     CentralizedTrainingProtocol,
@@ -148,7 +152,7 @@ class CentralizedTrainingRequest:
     coordinate: CentralizedTrainingCoordinate
     training_features: pl.DataFrame
     feature_names: FeatureNameSequence
-    preprocessing_state: FittedPreprocessingState
+    preprocessing_state: CentralizedFittedPreprocessingState
     split_manifest_checksum: Checksum
     output_directory: Path
     training_seed: Seed
@@ -161,15 +165,10 @@ class CentralizedTrainingRequest:
 
 
 def reject_federated_preprocessing_for_training(state: FittedPreprocessingState) -> None:
-    if state.branch is not ProcessedDataBranch.CENTRALIZED_REFERENCE:
+    if isinstance(state, FederatedFittedPreprocessingState):
         raise LeakageError(
             "federated preprocessing state cannot enter centralized training",
-            subject=state.branch,
-        )
-    if state.client_identity is not None:
-        raise LeakageError(
-            "centralized training rejects client-scoped preprocessing state",
-            subject=ContractSubject.CLIENT_IDENTITY,
+            subject=ProcessedDataBranch.FEDERATED,
         )
 
 

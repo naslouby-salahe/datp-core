@@ -468,6 +468,9 @@ class AbsoluteTolerance(PositiveFiniteFloatValue):
     validation_name: ClassVar[str] = "absolute tolerance"
 
 
+NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE = AbsoluteTolerance(1e-12)
+
+
 class DirichletConcentration(PositiveFiniteFloatValue):
     validation_name: ClassVar[str] = "Dirichlet concentration"
 

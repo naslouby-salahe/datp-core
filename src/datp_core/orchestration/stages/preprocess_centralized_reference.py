@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from datp_core.artifacts.coordinates import canonical_root_under
-from datp_core.artifacts.serialization import construct_trusted_estimator
 from datp_core.centralized_reference.preprocessing import (
     PooledPublishRequest,
     fit_pooled_preprocessing,
@@ -87,16 +86,15 @@ def preprocess_centralized_reference_stage(
     train_partition = request.partitions.require(PartitionRole.TRAIN)
     feature_names = context.protocol.input_feature_names
     matrix = train_partition.frame.select(list(feature_names)).to_numpy()
-    estimator = construct_trusted_estimator(context.protocol.estimator_class_name)
     fitted = fit_pooled_preprocessing(
         context.protocol,
-        estimator,
         PreprocessingFitBatch(
             training_matrix=matrix,
             training_row_ids=train_partition.row_ids,
             training_labels=train_partition.outcome_labels,
         ),
     )
+
     published = publish_pooled_preprocessing(
         PooledPublishRequest(
             context=context,

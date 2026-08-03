@@ -14,13 +14,13 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrustedEstimatorClassName,
 )
-from datp_core.domain.values import AbsoluteTolerance, Checksum, FeatureNameSequence, Seed
+from datp_core.domain.values import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, Checksum, FeatureNameSequence, Seed
 from datp_core.preprocessing.models import (
+    CentralizedFittedPreprocessingState,
     PreprocessingPartition,
     PreprocessingPartitionSet,
     PreprocessingProtocol,
     PreprocessingPublishContext,
-    TransformedSchema,
 )
 
 
@@ -29,10 +29,9 @@ def test_centralized_publication_is_independent_and_reusable(tmp_path: Path) -> 
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=PreprocessingFitScope.POOLED_TRAINING,
         input_feature_names=FeatureNameSequence(("f0", "f1")),
-        transformed_schema=TransformedSchema(feature_names=FeatureNameSequence(("f0", "f1"))),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
-        numerical_equivalence_absolute_tolerance=AbsoluteTolerance(1e-12),
+        numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     )
     frame_train = pl.DataFrame(
         {"stable_row_id": ["t0", "t1"], "outcome_label": ["benign", "benign"], "f0": [0.0, 2.0], "f1": [1.0, 3.0]}
@@ -80,6 +79,6 @@ def test_centralized_publication_is_independent_and_reusable(tmp_path: Path) -> 
             partitions=partitions,
         )
     )
-    assert first.fitted_state.client_identity is None
+    assert isinstance(first.fitted_state, CentralizedFittedPreprocessingState)
     assert first.paths.train == second.paths.train
     assert "centralized_reference" in first.paths.train.parts

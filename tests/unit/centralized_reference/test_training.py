@@ -26,23 +26,20 @@ from datp_core.centralized_reference.training import (
     reject_federated_preprocessing_for_training,
     train_centralized_autoencoder,
 )
-from datp_core.domain.enums import PartitionRole, ProcessedDataBranch
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabelSequence, RowCount, Seed
 from datp_core.populations.models import PopulationOutcomeLabel
-from datp_core.preprocessing.models import FittedPreprocessingState
+from datp_core.preprocessing.models import FederatedFittedPreprocessingState
 
 
 def test_rejects_federated_preprocessing_state(tmp_path: Path) -> None:
     protocol = feature_protocol()
-    state = FittedPreprocessingState(
+    state = FederatedFittedPreprocessingState(
         protocol=protocol,
-        branch=ProcessedDataBranch.FEDERATED,
         client_identity=ClientPathToken("device_a"),
         estimator_path=tmp_path / "state.skops",
         estimator_checksum=Checksum("c" * 64),
         fit_row_count=RowCount(10),
-        fit_partition=PartitionRole.TRAIN,
     )
     with pytest.raises(LeakageError, match="federated preprocessing"):
         reject_federated_preprocessing_for_training(state)

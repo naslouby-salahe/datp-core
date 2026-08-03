@@ -99,24 +99,26 @@ def test_fedavg_reruns_the_identical_coordinate_and_reuses_the_published_trainin
         estimator_path = directory / "state.skops"
         estimator_path.write_bytes(b"placeholder")
         protocol = feature_protocol()
-        from datp_core.domain.enums import PartitionRole, ProcessedDataBranch
-        from datp_core.preprocessing.models import FittedPreprocessingState
+        from datp_core.preprocessing.models import FederatedFittedPreprocessingState
 
-        fitted_state = FittedPreprocessingState(
+        fitted_state = FederatedFittedPreprocessingState(
             protocol=protocol,
-            branch=ProcessedDataBranch.FEDERATED,
             client_identity=PreprocessingClientPathToken(client_id),
             estimator_path=estimator_path,
             estimator_checksum=Checksum(f"{client_id[-1]}" * 64),
             fit_row_count=RowCount(16),
-            fit_partition=PartitionRole.TRAIN,
         )
+
         from datp_core.preprocessing.models import PreprocessedPartitionPaths
 
         result = ClientPreprocessingResult(
             client_identity=PreprocessingClientPathToken(client_id),
             paths=PreprocessedPartitionPaths(
-                train=train_path, calibration=calibration_path, evaluation=evaluation_path
+                train=train_path,
+                calibration=calibration_path,
+                evaluation=evaluation_path,
+                future_recalibration=None,
+                static_reference_reserve=None,
             ),
             fitted_state=fitted_state,
             publication_status=PublicationStatus.PUBLISHED,

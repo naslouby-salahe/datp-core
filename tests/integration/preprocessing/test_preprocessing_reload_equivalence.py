@@ -22,7 +22,6 @@ from datp_core.preprocessing.models import (
     PreprocessingPartitionSet,
     PreprocessingProtocol,
     PreprocessingPublishContext,
-    TransformedSchema,
 )
 
 
@@ -31,7 +30,6 @@ def _protocol(fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING) -> Preproce
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=fit_scope,
         input_feature_names=FeatureNameSequence(("f0", "f1")),
-        transformed_schema=TransformedSchema(feature_names=FeatureNameSequence(("f0", "f1"))),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
         numerical_equivalence_absolute_tolerance=AbsoluteTolerance(1e-12),

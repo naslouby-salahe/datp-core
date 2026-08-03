@@ -1,12 +1,19 @@
 """Scientific leakage and schema validation for preprocessing."""
 
+from collections.abc import Iterable
 from itertools import combinations
 from pathlib import Path
 
 import numpy as np
 import polars as pl
 
-from datp_core.artifacts.layout import ProcessedAssetName, asset_for_partition, partition_roles, processed_asset_names
+from datp_core.artifacts.layout import (
+    ProcessedAssetName,
+    RelativeAssetPathSequence,
+    asset_for_partition,
+    partition_roles,
+    processed_asset_names,
+)
 from datp_core.artifacts.reload_validation import TransformReloadCheck, reload_and_compare_transform
 from datp_core.artifacts.serialization import (
     TrustedScaler,
@@ -25,7 +32,6 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import (
     Checksum,
-    ClientPathToken,
     FeatureNameSequence,
     RowCount,
     checksum_file,
@@ -38,8 +44,10 @@ from datp_core.populations.models import (
     PopulationOutcomeLabel,
 )
 from datp_core.preprocessing.models import (
-    FittedPreprocessingState,
-    FittedStatePublishSpec,
+    CentralizedFittedPreprocessingState,
+    CentralizedFittedStatePublishSpec,
+    FederatedFittedPreprocessingState,
+    FederatedFittedStatePublishSpec,
     PartitionTransformationEvidence,
     PreprocessingFitBatch,
     PreprocessingManifest,
@@ -52,6 +60,20 @@ from datp_core.preprocessing.models import (
 )
 
 
+def require_columns(
+    frame: pl.DataFrame,
+    columns: Iterable[str],
+    *,
+    subject: ContractSubject | PartitionRole | PreprocessingFitScope | SplitProtocolId,
+) -> None:
+    missing = [col for col in columns if col not in frame.columns]
+    if missing:
+        raise ScientificContractError(
+            f"missing required column(s): {', '.join(missing)}",
+            subject=subject,
+        )
+
+
 def require_partitions(
     partitions: PreprocessingPartitionSet,
     *,
@@ -59,7 +81,7 @@ def require_partitions(
     subject: PreprocessingFitScope,
 ) -> None:
     required = partition_roles(split_protocol)
-    if frozenset(partitions.roles()) != frozenset(required):
+    if partitions.roles() != required:
         raise ScientificContractError(
             f"{subject.value} partition inventory does not match {split_protocol.value}",
             subject=split_protocol,
@@ -74,10 +96,32 @@ def extract_partitions(
     branch: ProcessedDataBranch,
     ordering: PartitionOrdering,
 ) -> PreprocessingPartitionSet:
+    require_columns(
+        frame,
+        [PARTITION_ROLE_COLUMN, STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names.names],
+        subject=ContractSubject.SCHEMA,
+    )
+    normalized = frame.with_columns(pl.col(PARTITION_ROLE_COLUMN).cast(pl.String))
+    role_series = normalized.get_column(PARTITION_ROLE_COLUMN)
+    if role_series.null_count() > 0:
+        raise ScientificContractError(
+            "partition role column contains null values",
+            subject=ContractSubject.SCHEMA,
+        )
+    expected_roles = partition_roles(split_protocol)
+    expected_role_strs = {r.value for r in expected_roles}
+    actual_role_strs = set(role_series.unique().to_list())
+    if actual_role_strs != expected_role_strs:
+        raise ScientificContractError(
+            f"extracted roles {actual_role_strs} do not match expected roles {expected_role_strs} "
+            f"for {split_protocol.value}",
+            subject=ContractSubject.SCHEMA,
+        )
+
     extracted: list[PreprocessingPartition] = []
-    keep = [STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names]
-    for role in partition_roles(split_protocol):
-        role_frame = frame.filter(pl.col(PARTITION_ROLE_COLUMN) == role.value).select(keep)
+    keep = [STABLE_ROW_ID_COLUMN, OUTCOME_LABEL_COLUMN, *feature_names.names]
+    for role in expected_roles:
+        role_frame = normalized.filter(pl.col(PARTITION_ROLE_COLUMN) == role.value).select(keep)
         if ordering is PartitionOrdering.STABLE_ROW_ID:
             role_frame = role_frame.sort([STABLE_ROW_ID_COLUMN])
         if role_frame.height == 0:
@@ -86,7 +130,14 @@ def extract_partitions(
                 subject=role,
             )
         extracted.append(PreprocessingPartition(role=role, frame=role_frame))
-    return PreprocessingPartitionSet(partitions=tuple(extracted))
+    partition_set = PreprocessingPartitionSet(partitions=tuple(extracted))
+    total_extracted = sum(p.frame.height for p in partition_set.partitions)
+    if total_extracted != normalized.height:
+        raise ScientificContractError(
+            f"extracted row count ({total_extracted}) does not match source frame row count ({normalized.height})",
+            subject=ContractSubject.ROWS,
+        )
+    return partition_set
 
 
 def validate_no_partition_overlap(
@@ -99,24 +150,30 @@ def validate_no_partition_overlap(
     for (left_role, left_ids), (right_role, right_ids) in combinations(groups, 2):
         overlap = left_ids & right_ids
         if overlap:
+            first_overlap = min(str(row_id) for row_id in overlap)
             raise LeakageError(
-                f"source-row overlap between {left_role.value} and {right_role.value}: {next(iter(sorted(overlap)))}",
+                f"source-row overlap between {left_role.value} and {right_role.value}: {first_overlap}",
                 subject=left_role,
             )
 
 
-def validate_finite_matrix(
-    matrix: np.ndarray, subject: PartitionRole | PreprocessingFitScope | ContractSubject
+def require_finite_matrix(
+    matrix: np.ndarray,
+    *,
+    subject: PartitionRole | PreprocessingFitScope | ContractSubject,
+    description: str,
 ) -> None:
     if not np.isfinite(matrix).all():
-        raise ScientificContractError("transformed values must be finite", subject=subject)
+        raise ScientificContractError(f"{description} must be finite", subject=subject)
 
 
 def transform_feature_matrix(
     fitted_estimator: TrustedScaler,
     matrix: np.ndarray,
-    schema: TransformedSchema,
+    feature_names: FeatureNameSequence,
     subject: PartitionRole | PreprocessingFitScope,
+    *,
+    description: str,
 ) -> np.ndarray:
     if matrix.ndim != 2:
         raise ScientificContractError("source matrix must be two-dimensional", subject=subject)
@@ -128,29 +185,10 @@ def transform_feature_matrix(
         raise ScientificContractError("transformed matrix must be two-dimensional", subject=subject)
     if transformed.shape[0] != matrix.shape[0]:
         raise ScientificContractError("transformed row count must match input matrix", subject=subject)
-    if transformed.shape[1] != len(schema.feature_names):
+    if transformed.shape[1] != len(feature_names):
         raise ScientificContractError("transformed matrix width must match schema", subject=subject)
-    validate_finite_matrix(transformed, subject)
+    require_finite_matrix(transformed, subject=subject, description=description)
     return transformed
-
-
-def validate_branch_isolation(
-    fitted_state: FittedPreprocessingState,
-    expected_branch: ProcessedDataBranch,
-    client_identity: ClientPathToken | None,
-) -> None:
-    if fitted_state.branch is not expected_branch:
-        raise ScientificContractError("fitted-state branch mismatch", subject=fitted_state.branch)
-    if expected_branch is ProcessedDataBranch.FEDERATED:
-        if fitted_state.client_identity != client_identity:
-            raise ScientificContractError(
-                "federated fitted state client mismatch",
-                subject=ContractSubject.CLIENT_IDENTITY,
-            )
-    elif fitted_state.client_identity is not None:
-        raise ScientificContractError(
-            "centralized fitted state must not carry a client identity", subject=ContractSubject.CLIENT
-        )
 
 
 def protocol_content_checksum(protocol: PreprocessingProtocol) -> Checksum:
@@ -161,7 +199,7 @@ def build_preprocessing_manifest(
     context: PreprocessingPublishContext,
     *,
     branch: ProcessedDataBranch,
-    asset_paths: tuple[str, ...],
+    asset_paths: RelativeAssetPathSequence,
 ) -> PreprocessingManifest:
     protocol = context.protocol
     return PreprocessingManifest(
@@ -174,7 +212,7 @@ def build_preprocessing_manifest(
         protocol_checksum=protocol_content_checksum(protocol),
         canonical_schema_checksum=context.canonical_schema_checksum,
         input_feature_names=protocol.input_feature_names,
-        transformed_feature_names=FeatureNameSequence(protocol.transformed_schema.feature_names.names),
+        transformed_feature_names=protocol.input_feature_names,
         estimator_class_name=protocol.estimator_class_name,
         serialization_format=protocol.serialization_format,
         asset_paths=asset_paths,
@@ -183,26 +221,49 @@ def build_preprocessing_manifest(
     )
 
 
-def fitted_state_after_publish(spec: FittedStatePublishSpec) -> FittedPreprocessingState:
-    return FittedPreprocessingState(
+def centralized_fitted_state_after_publish(
+    spec: CentralizedFittedStatePublishSpec,
+) -> CentralizedFittedPreprocessingState:
+    checksum = checksum_file(spec.estimator_path)
+    return CentralizedFittedPreprocessingState(
         protocol=spec.protocol,
-        branch=spec.branch,
+        estimator_path=spec.estimator_path,
+        estimator_checksum=checksum,
+        fit_row_count=spec.fit_row_count,
+    )
+
+
+def federated_fitted_state_after_publish(
+    spec: FederatedFittedStatePublishSpec,
+) -> FederatedFittedPreprocessingState:
+    checksum = checksum_file(spec.estimator_path)
+    return FederatedFittedPreprocessingState(
+        protocol=spec.protocol,
         client_identity=spec.client_identity,
         estimator_path=spec.estimator_path,
-        estimator_checksum=checksum_file(spec.estimator_path),
+        estimator_checksum=checksum,
         fit_row_count=spec.fit_row_count,
-        fit_partition=PartitionRole.TRAIN,
     )
 
 
 def fit_trusted_batch(
     protocol: PreprocessingProtocol,
-    estimator: TrustedScaler,
     batch: PreprocessingFitBatch,
     *,
     subject: PreprocessingFitScope,
 ) -> TrustedScaler:
-    matrix = np.asarray(batch.training_matrix, dtype=float)
+    if subject is not protocol.fit_scope:
+        raise ScientificContractError(
+            f"subject {subject.value} does not match protocol fit scope {protocol.fit_scope.value}",
+            subject=subject,
+        )
+    try:
+        matrix = np.asarray(batch.training_matrix, dtype=float)
+    except Exception as error:
+        raise ScientificContractError(
+            "training matrix must contain numeric values",
+            subject=subject,
+        ) from error
     if matrix.ndim != 2:
         raise ScientificContractError(
             f"{subject.value} matrix must be two-dimensional",
@@ -228,11 +289,7 @@ def fit_trusted_batch(
             f"{subject.value} width must match protocol input features",
             subject=ContractSubject.FEATURES,
         )
-    if not np.isfinite(matrix).all():
-        raise ScientificContractError(
-            "training matrix contains non-finite values",
-            subject=subject,
-        )
+    require_finite_matrix(matrix, subject=subject, description="training matrix")
     if any(label != PopulationOutcomeLabel.BENIGN.value for label in batch.training_labels.labels):
         raise LeakageError(
             "attack-labelled rows cannot enter benign preprocessing fit",
@@ -241,7 +298,13 @@ def fit_trusted_batch(
     try:
         fitted = resolve_trusted_estimator_type(protocol.estimator_class_name)()
         fitted.fit(matrix)
-        validate_finite_matrix(np.asarray(fitted.transform(matrix), dtype=float), subject)
+        transform_feature_matrix(
+            fitted,
+            matrix,
+            protocol.input_feature_names,
+            subject,
+            description=f"{subject.value} training matrix round-trip transform",
+        )
         return fitted
     except (LeakageError, ScientificContractError):
         raise
@@ -259,16 +322,16 @@ def publish_preprocessed_partitions(
     coordinate_directory: Path,
     fitted_estimator: TrustedScaler,
     partitions: PreprocessingPartitionSet,
-    fit_scope: PreprocessingFitScope,
-    asset_paths: tuple[str, ...],
+    asset_paths: RelativeAssetPathSequence,
 ) -> ProcessedPublicationResult[PreprocessingManifest]:
+    fit_scope = context.protocol.fit_scope
     require_partitions(partitions, split_protocol=context.split_protocol_identity, subject=fit_scope)
     validate_no_partition_overlap(partitions, split_protocol=context.split_protocol_identity)
     return publish_processed(
         ProcessedPublication(
             coordinate_directory=coordinate_directory,
             manifest=build_preprocessing_manifest(context, branch=branch, asset_paths=asset_paths),
-            schema=context.protocol.transformed_schema,
+            schema=TransformedSchema(feature_names=context.protocol.input_feature_names),
             writer=lambda temporary: write_fitted_transformed_partitions(
                 temporary,
                 protocol=context.protocol,
@@ -299,11 +362,15 @@ def write_fitted_transformed_partitions(
             subject=ContractSubject.FEATURES,
         )
     feature_names = protocol.input_feature_names
-    transformed_names = protocol.transformed_schema.feature_names
     train_partition = partitions.require(PartitionRole.TRAIN)
+    require_columns(train_partition.frame, feature_names.names, subject=ContractSubject.SCHEMA)
     train_matrix = train_partition.frame.select(list(feature_names)).to_numpy()
     train_transformed = transform_feature_matrix(
-        fitted_estimator, train_matrix, protocol.transformed_schema, PartitionRole.TRAIN
+        fitted_estimator,
+        train_matrix,
+        feature_names,
+        PartitionRole.TRAIN,
+        description="client-local transformed training matrix",
     )
     state_path = temporary / ProcessedAssetName.STATE
     serialize_estimator(fitted_estimator, state_path)
@@ -320,12 +387,23 @@ def write_fitted_transformed_partitions(
     evidence_records: list[PartitionTransformationEvidence] = []
     for role in partition_roles(split_protocol):
         partition = partitions.require(role)
-        matrix = partition.frame.select(list(feature_names)).to_numpy()
-        transformed = transform_feature_matrix(fitted_estimator, matrix, protocol.transformed_schema, role)
+        require_columns(partition.frame, feature_names.names, subject=ContractSubject.SCHEMA)
+        if role is PartitionRole.TRAIN:
+            transformed = train_transformed
+        else:
+            matrix = partition.frame.select(list(feature_names)).to_numpy()
+            description = _transform_description_for_role(role)
+            transformed = transform_feature_matrix(
+                fitted_estimator,
+                matrix,
+                feature_names,
+                role,
+                description=description,
+            )
         retained = partition.frame.drop(feature_names.as_list())
-        transformed_frame = pl.from_numpy(transformed, schema=transformed_names.as_list())
+        transformed_frame = pl.from_numpy(transformed, schema=feature_names.as_list())
         output = transformed_frame if retained.width == 0 else retained.hstack(transformed_frame)
-        expected_columns = list(retained.columns) + transformed_names.as_list()
+        expected_columns = list(retained.columns) + feature_names.as_list()
         if output.columns != expected_columns or len(frozenset(output.columns)) != len(output.columns):
             raise ScientificContractError(
                 "output dataframe columns do not match expected ordering or uniqueness",
@@ -341,8 +419,19 @@ def write_fitted_transformed_partitions(
         )
 
     return PreprocessingValidationReport(
-        fit_partition=PartitionRole.TRAIN,
-        validated_roles=partition_roles(split_protocol),
         partition_evidence=tuple(evidence_records),
-        estimator_reload_verified=True,
     )
+
+
+def _transform_description_for_role(role: PartitionRole) -> str:
+    match role:
+        case PartitionRole.TRAIN:
+            return "transformed train matrix"
+        case PartitionRole.CALIBRATION:
+            return "transformed calibration matrix"
+        case PartitionRole.EVALUATION:
+            return "transformed evaluation matrix"
+        case PartitionRole.FUTURE_RECALIBRATION:
+            return "transformed future recalibration matrix"
+        case PartitionRole.STATIC_REFERENCE_RESERVE:
+            return "transformed static reference reserve matrix"

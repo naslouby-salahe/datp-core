@@ -12,42 +12,41 @@ from datp_core.centralized_reference.thresholding import (
 from datp_core.centralized_reference.training import reject_federated_preprocessing_for_training
 from datp_core.domain.enums import (
     FederatedThresholdMethod,
-    PartitionRole,
     PreprocessingFitScope,
     PreprocessingProtocolId,
-    ProcessedDataBranch,
     SerializationFormat,
     TrustedEstimatorClassName,
 )
 from datp_core.domain.errors import LeakageError
-from datp_core.domain.values import Checksum, ClientPathToken, FeatureNameSequence, RowCount
-from datp_core.preprocessing.models import (
-    FittedPreprocessingState,
-    PreprocessingProtocol,
-    TransformedSchema,
+from datp_core.domain.values import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    Checksum,
+    ClientPathToken,
+    FeatureNameSequence,
+    RowCount,
 )
-from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
+from datp_core.preprocessing.models import (
+    FederatedFittedPreprocessingState,
+    PreprocessingProtocol,
+)
 
 
-def _federated_state(path: Path) -> FittedPreprocessingState:
+def _federated_state(path: Path) -> FederatedFittedPreprocessingState:
     protocol = PreprocessingProtocol(
         identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         input_feature_names=FeatureNameSequence(("f0",)),
-        transformed_schema=TransformedSchema(feature_names=FeatureNameSequence(("f0",))),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
-        numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
+        numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     )
     path.write_bytes(b"x")
-    return FittedPreprocessingState(
+    return FederatedFittedPreprocessingState(
         protocol=protocol,
-        branch=ProcessedDataBranch.FEDERATED,
         client_identity=ClientPathToken("device_a"),
         estimator_path=path,
         estimator_checksum=Checksum("1" * 64),
         fit_row_count=RowCount(3),
-        fit_partition=PartitionRole.TRAIN,
     )
 
 

@@ -8,18 +8,17 @@ import torch
 
 from datp_core.domain.enums import (
     OptimizerId,
-    PartitionRole,
     PopulationId,
     PopulationIdentityKind,
     PreprocessingFitScope,
     PreprocessingProtocolId,
-    ProcessedDataBranch,
     SerializationFormat,
     SplitProtocolId,
     TrainingModelId,
     TrustedEstimatorClassName,
 )
 from datp_core.domain.values import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     BatchSize,
     Checksum,
     ClientCount,
@@ -41,11 +40,9 @@ from datp_core.populations.models import (
     PopulationOutcomeLabel,
 )
 from datp_core.preprocessing.models import (
-    FittedPreprocessingState,
+    FederatedFittedPreprocessingState,
     PreprocessingProtocol,
-    TransformedSchema,
 )
-from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
 from datp_core.protocols.models import (
     AutoencoderProtocol,
     CheckpointProtocol,
@@ -141,13 +138,12 @@ def ditto_protocol(regularization: DittoRegularization) -> DittoProtocol:
 
 def feature_protocol() -> PreprocessingProtocol:
     return PreprocessingProtocol(
-        identity=PREPROCESSING_IDENTITY,
+        identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         input_feature_names=FEATURE_NAMES,
-        transformed_schema=TransformedSchema(feature_names=FEATURE_NAMES),
         serialization_format=SerializationFormat.SKOPS,
-        estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
-        numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
+        estimator_class_name=TrustedEstimatorClassName.MIN_MAX_SCALER,
+        numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     )
 
 
@@ -155,18 +151,16 @@ def client_identity(client_id: str) -> ClientIdentity:
     return ClientIdentity(POPULATION, client_id, PopulationIdentityKind.PHYSICAL_DEVICES)
 
 
-def fitted_state(path: Path, client_id: str, *, checksum_suffix: str = "a") -> FittedPreprocessingState:
+def fitted_state(path: Path, client_id: str, *, checksum_suffix: str = "a") -> FederatedFittedPreprocessingState:
     protocol = feature_protocol()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"placeholder")
-    return FittedPreprocessingState(
+    return FederatedFittedPreprocessingState(
         protocol=protocol,
-        branch=ProcessedDataBranch.FEDERATED,
         client_identity=PreprocessingClientIdentity(client_id),
         estimator_path=path,
         estimator_checksum=Checksum((checksum_suffix * 64)[:64]),
         fit_row_count=RowCount(32),
-        fit_partition=PartitionRole.TRAIN,
     )
 
 

@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datp_core.artifacts.coordinates import ReusableDataCoordinate
 from datp_core.artifacts.layout import (
     ProcessedAssetName,
+    RelativeAssetPathSequence,
+    asset_for_partition,
     branch_asset_path,
     canonical_relative_asset_path,
     centralized_branch_directory,
@@ -16,8 +18,9 @@ from datp_core.domain.enums import PartitionRole, PreprocessingFitScope, Process
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import RowCount
 from datp_core.preprocessing.models import (
+    CentralizedFittedStatePublishSpec,
+    FederatedFittedPreprocessingState,
     FittedPreprocessingState,
-    FittedStatePublishSpec,
     PooledPreprocessingResult,
     PreprocessedPartitionPaths,
     PreprocessingFitBatch,
@@ -26,10 +29,9 @@ from datp_core.preprocessing.models import (
     PreprocessingPublishContext,
 )
 from datp_core.preprocessing.validation import (
+    centralized_fitted_state_after_publish,
     fit_trusted_batch,
-    fitted_state_after_publish,
     publish_preprocessed_partitions,
-    validate_branch_isolation,
 )
 
 
@@ -42,10 +44,9 @@ class PooledPublishRequest:
 
 def fit_pooled_preprocessing(
     protocol: PreprocessingProtocol,
-    estimator: TrustedScaler,
     batch: PreprocessingFitBatch,
 ) -> TrustedScaler:
-    return fit_trusted_batch(protocol, estimator, batch, subject=PreprocessingFitScope.POOLED_TRAINING)
+    return fit_trusted_batch(protocol, batch, subject=PreprocessingFitScope.POOLED_TRAINING)
 
 
 def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreprocessingResult:
@@ -63,33 +64,29 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
         ),
     )
     asset_names = processed_asset_names(context.split_protocol_identity)
+    asset_paths = RelativeAssetPathSequence(
+        tuple(
+            canonical_relative_asset_path(asset, ProcessedDataBranch.CENTRALIZED_REFERENCE, None)
+            for asset in asset_names
+        )
+    )
     result = publish_preprocessed_partitions(
         context=context,
         branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
         coordinate_directory=branch_coordinate_directory,
         fitted_estimator=request.fitted_estimator,
         partitions=request.partitions,
-        fit_scope=PreprocessingFitScope.POOLED_TRAINING,
-        asset_paths=tuple(
-            canonical_relative_asset_path(asset, ProcessedDataBranch.CENTRALIZED_REFERENCE, None)
-            for asset in asset_names
-        ),
+        asset_paths=asset_paths,
     )
-    state = fitted_state_after_publish(
-        FittedStatePublishSpec(
+    state = centralized_fitted_state_after_publish(
+        CentralizedFittedStatePublishSpec(
             protocol=context.protocol,
-            branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
             estimator_path=branch_asset_path(result.coordinate_directory, ProcessedAssetName.STATE),
             fit_row_count=RowCount(request.partitions.require(PartitionRole.TRAIN).frame.height),
-            client_identity=None,
         )
     )
-    validate_branch_isolation(state, ProcessedDataBranch.CENTRALIZED_REFERENCE, None)
     roles = partition_roles(context.split_protocol_identity)
-    paths_by_role = {
-        role: branch_asset_path(result.coordinate_directory, ProcessedAssetName(f"{role.value}.parquet"))
-        for role in roles
-    }
+    paths_by_role = {role: branch_asset_path(result.coordinate_directory, asset_for_partition(role)) for role in roles}
     paths = PreprocessedPartitionPaths(
         train=paths_by_role[PartitionRole.TRAIN],
         calibration=paths_by_role[PartitionRole.CALIBRATION],
@@ -105,8 +102,8 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
 
 
 def reject_federated_state_for_pooled(state: FittedPreprocessingState) -> None:
-    if state.branch is not ProcessedDataBranch.CENTRALIZED_REFERENCE:
+    if isinstance(state, FederatedFittedPreprocessingState):
         raise LeakageError(
             "federated client fitted state cannot be reused by the centralized reference",
-            subject=state.branch,
+            subject=ProcessedDataBranch.FEDERATED,
         )

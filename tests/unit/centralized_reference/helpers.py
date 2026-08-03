@@ -15,16 +15,15 @@ from datp_core.centralized_reference.training import (
 from datp_core.domain.enums import (
     CentralizedModelId,
     OptimizerId,
-    PartitionRole,
     PopulationId,
     PreprocessingFitScope,
     PreprocessingProtocolId,
-    ProcessedDataBranch,
     SerializationFormat,
     SplitProtocolId,
     TrustedEstimatorClassName,
 )
 from datp_core.domain.values import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     BatchSize,
     Checksum,
     FeatureNameSequence,
@@ -37,11 +36,9 @@ from datp_core.domain.values import (
 )
 from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
 from datp_core.preprocessing.models import (
-    FittedPreprocessingState,
+    CentralizedFittedPreprocessingState,
     PreprocessingProtocol,
-    TransformedSchema,
 )
-from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
 from datp_core.protocols.models import (
     AutoencoderProtocol,
     CentralizedTrainingProtocol,
@@ -68,10 +65,9 @@ def feature_protocol() -> PreprocessingProtocol:
         identity=PreprocessingProtocolId.CENTRALIZED_POOLED_MIN_MAX,
         fit_scope=PreprocessingFitScope.POOLED_TRAINING,
         input_feature_names=FEATURE_NAMES,
-        transformed_schema=TransformedSchema(feature_names=FEATURE_NAMES),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.MIN_MAX_SCALER,
-        numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
+        numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     )
 
 
@@ -85,18 +81,15 @@ def training_coordinate() -> CentralizedTrainingCoordinate:
     )
 
 
-def fitted_state(path: Path) -> FittedPreprocessingState:
+def fitted_state(path: Path) -> CentralizedFittedPreprocessingState:
     protocol = feature_protocol()
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(b"placeholder")
-    return FittedPreprocessingState(
+    return CentralizedFittedPreprocessingState(
         protocol=protocol,
-        branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
-        client_identity=None,
         estimator_path=path,
         estimator_checksum=Checksum("a" * 64),
         fit_row_count=RowCount(64),
-        fit_partition=PartitionRole.TRAIN,
     )
 
 

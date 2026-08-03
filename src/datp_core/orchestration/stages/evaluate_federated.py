@@ -22,6 +22,7 @@ from datp_core.domain.enums import (
 )
 from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
 from datp_core.domain.values import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     Checksum,
     CoverageTarget,
     MetricValue,
@@ -74,7 +75,6 @@ from datp_core.experiments.models import ExternalTemporalExecutionIdentity, requ
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.capabilities import population_capabilities
 from datp_core.populations.models import ClientIdentity, ClientPartitionCounts, PopulationOutcomeLabel
-from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
 from datp_core.scoring.models import FixedScoreInvariant, ScoreArtifactManifest, ScoreRecord
 from datp_core.thresholding.models import (
     ConformalAssignment,
@@ -219,8 +219,9 @@ def evaluate_federated_stage(request: EvaluateFederatedRequest) -> FederatedEval
         validate_fixed_score_controls(
             request.fixed_score_evidence,
             request.comparison_fixed_score_evidence,
-            auroc_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
+            auroc_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
         )
+
     document = _evaluation_payload(request, clients, population, diagnostics)
     payload = dumps(document, indent=2, sort_keys=True) + "\n"
     digest = checksum_text(payload)
@@ -716,7 +717,7 @@ def _require_matching_available_auroc(expected: MetricAvailability, observed: Me
     if not floats_absolutely_close(
         expected.value.value,
         observed.value.value,
-        FIXED_SCORE_ABSOLUTE_TOLERANCE.value,
+        NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE.value,
     ):
         raise ScientificContractError("fixed-score AUROC evidence does not match held-out evaluation")
 

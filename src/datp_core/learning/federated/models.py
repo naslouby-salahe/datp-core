@@ -11,7 +11,6 @@ from datp_core.domain.enums import (
     ContractSubject,
     PopulationId,
     PreprocessingProtocolId,
-    ProcessedDataBranch,
     SplitProtocolId,
     TrainingModelId,
 )
@@ -31,8 +30,47 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.autoencoder import AutoencoderState
 from datp_core.populations.models import ClientIdentity
-from datp_core.preprocessing.models import FittedPreprocessingState
+from datp_core.preprocessing.models import FederatedFittedPreprocessingState
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
+
+
+def validate_client_preprocessing_match(
+    client: ClientIdentity,
+    preprocessing_state: FederatedFittedPreprocessingState,
+    feature_names: FeatureNameSequence,
+) -> None:
+    state_identity = preprocessing_state.client_identity
+    if state_identity.value != client.client_id:
+        raise ScientificContractError(
+            "preprocessing state client identity token must match the client training input",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+    if preprocessing_state.protocol.input_feature_names != feature_names:
+        raise ScientificContractError(
+            "preprocessing transformed feature schema must match the declared training feature names",
+            subject=ContractSubject.SCHEMA,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class ClientTrainingInput:
+    client: ClientIdentity
+    training_features: pl.DataFrame
+    feature_names: FeatureNameSequence
+    preprocessing_state: FederatedFittedPreprocessingState
+
+    def __post_init__(self) -> None:
+        if self.training_features.height < 1:
+            raise ScientificContractError(
+                "client training input requires at least one benign training row",
+                subject=ContractSubject.ROWS,
+            )
+        validate_client_preprocessing_match(
+            self.client,
+            self.preprocessing_state,
+            self.feature_names,
+        )
+
 
 _GLOBAL_MODELS = frozenset(
     {
@@ -90,54 +128,6 @@ class FederatedTrainingCoordinate:
                 TrainingModelId.DITTO_GLOBAL_AUTOENCODER,
                 TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
             }
-        )
-
-
-def validate_client_preprocessing_match(
-    client: ClientIdentity,
-    preprocessing_state: FittedPreprocessingState,
-    feature_names: FeatureNameSequence,
-) -> None:
-    state_identity = preprocessing_state.client_identity
-    if state_identity is None:
-        raise ScientificContractError(
-            "federated preprocessing state requires a client identity",
-            subject=ContractSubject.CLIENT_IDENTITY,
-        )
-    if state_identity.value != client.client_id:
-        raise ScientificContractError(
-            "preprocessing state client identity token must match the client training input",
-            subject=ContractSubject.CLIENT_IDENTITY,
-        )
-    if preprocessing_state.protocol.transformed_schema.feature_names != feature_names:
-        raise ScientificContractError(
-            "preprocessing transformed feature schema must match the declared training feature names",
-            subject=ContractSubject.SCHEMA,
-        )
-
-
-@dataclass(frozen=True, slots=True)
-class ClientTrainingInput:
-    client: ClientIdentity
-    training_features: pl.DataFrame
-    feature_names: FeatureNameSequence
-    preprocessing_state: FittedPreprocessingState
-
-    def __post_init__(self) -> None:
-        if self.training_features.height < 1:
-            raise ScientificContractError(
-                "client training input requires at least one benign training row",
-                subject=ContractSubject.ROWS,
-            )
-        if self.preprocessing_state.branch is not ProcessedDataBranch.FEDERATED:
-            raise ScientificContractError(
-                "federated training requires a federated preprocessing state",
-                subject=self.preprocessing_state.branch,
-            )
-        validate_client_preprocessing_match(
-            self.client,
-            self.preprocessing_state,
-            self.feature_names,
         )
 
 

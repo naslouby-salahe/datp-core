@@ -67,7 +67,6 @@ from datp_core.populations.models import (
     client_identities,
 )
 from datp_core.preprocessing.federated import (
-    ClientPreprocessingPartitions,
     fit_estimators_for_federated_clients,
     publish_client_preprocessing,
 )
@@ -75,6 +74,8 @@ from datp_core.preprocessing.models import (
     SCIENTIFIC_FEDERATED_POOLED_MIN_MAX_METHOD,
     SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD,
     ClientLocalFittedEstimators,
+    ClientPreprocessingPartitions,
+    ClientPreprocessingPartitionSet,
     ClientPreprocessPublication,
     ClientPublishRequest,
     FederatedFittedEstimators,
@@ -193,12 +194,12 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
         )
         for client_id in client_ids
     ]
-    fitted_by_client = fit_estimators_for_federated_clients(protocol, client_ids, tuple(client_partitions))
+    partition_set = ClientPreprocessingPartitionSet(clients=tuple(client_partitions))
+    fitted_by_client = fit_estimators_for_federated_clients(protocol, partition_set)
 
     publications, published_count, reused_count = _publish_client_partitions(
         context,
-        client_ids,
-        tuple(client_partitions),
+        partition_set,
         fitted_by_client,
     )
 
@@ -271,13 +272,14 @@ def preprocess_federated_artifacts_stage(
         )
         for client_id in client_ids
     ]
-    fitted_by_client = fit_estimators_for_federated_clients(protocol, client_ids, tuple(client_partitions))
+    partition_set = ClientPreprocessingPartitionSet(clients=tuple(client_partitions))
+    fitted_by_client = fit_estimators_for_federated_clients(protocol, partition_set)
     publications, published_count, reused_count = _publish_client_partitions(
         context,
-        client_ids,
-        tuple(client_partitions),
+        partition_set,
         fitted_by_client,
     )
+
     return PreprocessFederatedResult(
         stage=StageOperationId.PREPROCESS_FEDERATED,
         population=document.population,
@@ -333,9 +335,9 @@ def _preprocess_ciciot_client_local(
         client_partition_obj = ClientPreprocessingPartitions(client_identity=client_id, partitions=partitions)
         fitted_set = fit_estimators_for_federated_clients(
             context.protocol,
-            (client_id,),
-            (client_partition_obj,),
+            ClientPreprocessingPartitionSet(clients=(client_partition_obj,)),
         )
+
         fitted = (
             fitted_set.require(client_id)
             if isinstance(fitted_set, ClientLocalFittedEstimators)
@@ -460,16 +462,15 @@ def _validate_artifact_request(request: PreprocessFederatedArtifactsRequest) -> 
 
 def _publish_client_partitions(
     context: PreprocessingPublishContext,
-    client_ids: tuple[ClientPathToken, ...],
-    client_partitions: tuple[ClientPreprocessingPartitions, ...],
+    client_partitions: ClientPreprocessingPartitionSet,
     fitted_by_client: FederatedFittedEstimators,
 ) -> tuple[tuple[ClientPreprocessPublication, ...], int, int]:
-    partitions_by_client = {cp.client_identity: cp.partitions for cp in client_partitions}
     publications: list[ClientPreprocessPublication] = []
     published_count = 0
     reused_count = 0
-    for client_id in client_ids:
-        partitions = partitions_by_client[client_id]
+    for item in client_partitions.clients:
+        client_id = item.client_identity
+        partitions = item.partitions
         estimator = (
             fitted_by_client.require(client_id)
             if isinstance(fitted_by_client, ClientLocalFittedEstimators)

@@ -1,7 +1,7 @@
 from datp_core.domain.enums import FederatedThresholdMethod, MetricId
+from datp_core.domain.values import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
 from datp_core.protocols.anchor import (
     ANCHOR_DECISION_PROTOCOL,
-    FIXED_SCORE_ABSOLUTE_TOLERANCE,
     HISTORICAL_ANCHOR_SEED_COHORT,
     HISTORICAL_LOCAL_THRESHOLD_CV_FPR,
     HISTORICAL_SHARED_THRESHOLD_CV_FPR,
@@ -26,9 +26,10 @@ def test_anchor_references_lock_each_historical_threshold_scope() -> None:
         reference.metric is MetricId.FPR_COEFFICIENT_OF_VARIATION for reference in ANCHOR_DECISION_PROTOCOL.references
     )
     assert all(
-        reference.absolute_tolerance == FIXED_SCORE_ABSOLUTE_TOLERANCE
+        reference.absolute_tolerance == NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE
         for reference in ANCHOR_DECISION_PROTOCOL.references
     )
+
     assert tuple(reference.seed for reference in shared_references) == HISTORICAL_ANCHOR_SEED_COHORT.values
     assert tuple(reference.seed for reference in local_references) == HISTORICAL_ANCHOR_SEED_COHORT.values
     assert tuple(reference.value for reference in shared_references) == HISTORICAL_SHARED_THRESHOLD_CV_FPR

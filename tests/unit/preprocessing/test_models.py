@@ -7,7 +7,6 @@ from datp_core.domain.enums import (
     PartitionRole,
     PreprocessingFitScope,
     PreprocessingProtocolId,
-    ProcessedDataBranch,
     SerializationFormat,
     TrustedEstimatorClassName,
 )
@@ -24,17 +23,12 @@ from datp_core.preprocessing.models import (
     SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD,
     ClientFittedEstimator,
     ClientLocalFittedEstimators,
-    FittedStatePublishSpec,
+    FederatedFittedStatePublishSpec,
     PartitionTransformationEvidence,
     PreprocessingProtocol,
     PreprocessingValidationReport,
-    TransformedSchema,
     build_preprocessing_protocol,
 )
-
-
-def _schema() -> TransformedSchema:
-    return TransformedSchema(feature_names=FeatureNameSequence(("f0", "f1")))
 
 
 def test_preprocessing_protocol_uses_descriptive_enum_identity() -> None:
@@ -42,20 +36,18 @@ def test_preprocessing_protocol_uses_descriptive_enum_identity() -> None:
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         input_feature_names=FeatureNameSequence(("f0", "f1")),
-        transformed_schema=_schema(),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
         numerical_equivalence_absolute_tolerance=AbsoluteTolerance(1e-12),
     )
     assert protocol.identity is PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION
-    assert protocol.transformed_schema.feature_names.names == ("f0", "f1")
+    assert protocol.input_feature_names.names == ("f0", "f1")
     with pytest.raises(ValidationError):
         PreprocessingProtocol.model_validate(
             {
                 "identity": "not_an_enum_member",
                 "fit_scope": PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
                 "input_feature_names": ["f0", "f1"],
-                "transformed_schema": _schema().model_dump(),
                 "serialization_format": SerializationFormat.SKOPS,
                 "estimator_class_name": TrustedEstimatorClassName.STANDARD_SCALER,
                 "numerical_equivalence_absolute_tolerance": 1e-12,
@@ -88,7 +80,7 @@ def test_build_preprocessing_protocol_binds_feature_order() -> None:
         FeatureNameSequence(("f0", "f1")),
     )
     assert tuple(protocol.input_feature_names) == ("f0", "f1")
-    assert protocol.transformed_schema.feature_names.names == ("f0", "f1")
+    assert protocol.input_feature_names.names == ("f0", "f1")
     assert protocol.identity is PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD
     with pytest.raises(ValueError, match="non-empty"):
         build_preprocessing_protocol(SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD, FeatureNameSequence(()))
@@ -118,51 +110,38 @@ def test_client_local_fitted_estimators_rejects_duplicate_clients() -> None:
         )
 
 
-def test_fitted_state_publish_spec_requires_explicit_client_identity() -> None:
+def test_federated_fitted_state_publish_spec_requires_client_identity() -> None:
     protocol = build_preprocessing_protocol(
         SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD,
         FeatureNameSequence(("f0", "f1")),
     )
-    spec = FittedStatePublishSpec(
+    spec = FederatedFittedStatePublishSpec(
         protocol=protocol,
-        branch=ProcessedDataBranch.FEDERATED,
         estimator_path=Path("state.skops"),
         fit_row_count=RowCount(10),
         client_identity=ClientPathToken("c1"),
     )
+
     assert spec.client_identity == ClientPathToken("c1")
 
 
-def test_validation_report_rejects_mismatched_counts_and_unverified_reload() -> None:
+def test_validation_report_rejects_mismatched_counts_and_duplicate_roles() -> None:
     evidence = (
         PartitionTransformationEvidence(
             role=PartitionRole.TRAIN, source_row_count=RowCount(10), output_row_count=RowCount(10)
         ),
     )
-    report = PreprocessingValidationReport(
-        fit_partition=PartitionRole.TRAIN,
-        validated_roles=(PartitionRole.TRAIN,),
-        partition_evidence=evidence,
-        estimator_reload_verified=True,
-    )
-    assert report.fit_partition is PartitionRole.TRAIN
+    report = PreprocessingValidationReport(partition_evidence=evidence)
+    assert len(report.partition_evidence) == 1
 
     with pytest.raises(ValidationError):
         PreprocessingValidationReport(
-            fit_partition=PartitionRole.TRAIN,
-            validated_roles=(PartitionRole.TRAIN,),
             partition_evidence=(
                 PartitionTransformationEvidence(
                     role=PartitionRole.TRAIN, source_row_count=RowCount(10), output_row_count=RowCount(5)
                 ),
             ),
-            estimator_reload_verified=True,
         )
 
     with pytest.raises(ValidationError):
-        PreprocessingValidationReport(
-            fit_partition=PartitionRole.TRAIN,
-            validated_roles=(PartitionRole.TRAIN,),
-            partition_evidence=evidence,
-            estimator_reload_verified=False,
-        )
+        PreprocessingValidationReport(partition_evidence=())

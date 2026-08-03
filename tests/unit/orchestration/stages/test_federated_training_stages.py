@@ -16,7 +16,7 @@ from tests.unit.learning.federated.helpers import (
     fedavg_coordinate,
 )
 
-from datp_core.domain.enums import PartitionRole, ProcessedDataBranch, PublicationStatus
+from datp_core.domain.enums import PublicationStatus
 from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.domain.values import ClientPathToken as PreprocessingClientPathToken
 from datp_core.orchestration.stages.score_federated import ScoreFederatedRequest, score_federated_stage
@@ -28,7 +28,7 @@ from datp_core.orchestration.stages.train_federated import TrainFedAvgRequest, t
 from datp_core.preprocessing.models import (
     ClientPreprocessingResult,
     ClientPreprocessPublication,
-    FittedPreprocessingState,
+    FederatedFittedPreprocessingState,
     PreprocessedPartitionPaths,
 )
 from datp_core.scoring.generation import ClientScoringInput
@@ -46,21 +46,26 @@ def _client_publication(client_id: str, directory: Path) -> ClientPreprocessPubl
     estimator_path.write_bytes(b"placeholder")
     protocol = feature_protocol()
 
-    fitted_state = FittedPreprocessingState(
+    fitted_state = FederatedFittedPreprocessingState(
         protocol=protocol,
-        branch=ProcessedDataBranch.FEDERATED,
         client_identity=PreprocessingClientPathToken(client_id),
         estimator_path=estimator_path,
         estimator_checksum=Checksum(f"{client_id[-1]}" * 64),
         fit_row_count=RowCount(16),
-        fit_partition=PartitionRole.TRAIN,
     )
     result = ClientPreprocessingResult(
         client_identity=PreprocessingClientPathToken(client_id),
-        paths=PreprocessedPartitionPaths(train=train_path, calibration=calibration_path, evaluation=evaluation_path),
+        paths=PreprocessedPartitionPaths(
+            train=train_path,
+            calibration=calibration_path,
+            evaluation=evaluation_path,
+            future_recalibration=None,
+            static_reference_reserve=None,
+        ),
         fitted_state=fitted_state,
         publication_status=PublicationStatus.PUBLISHED,
     )
+
     return ClientPreprocessPublication(
         result=result,
         train_row_count=RowCount(16),

@@ -382,7 +382,7 @@ def _client_inputs(
         training_input = ClientTrainingInput(
             client=client,
             training_features=frame,
-            feature_names=publication.result.fitted_state.protocol.transformed_schema.feature_names,
+            feature_names=publication.result.fitted_state.protocol.input_feature_names,
             preprocessing_state=publication.result.fitted_state,
         )
         inputs.append(training_input)
@@ -398,7 +398,7 @@ def _require_autoencoder_matches_preprocessing(
         raise ScientificContractError(
             "federated training requires published client preprocessing", subject=ContractSubject.TRAINING
         )
-    expected_names = client_publications[0].result.fitted_state.protocol.transformed_schema.feature_names
+    expected_names = client_publications[0].result.fitted_state.protocol.input_feature_names
     expected_width = len(expected_names)
     if autoencoder.widths[0] != expected_width or autoencoder.widths[-1] != expected_width:
         raise ScientificContractError(
@@ -406,7 +406,7 @@ def _require_autoencoder_matches_preprocessing(
             subject=ContractSubject.WIDTHS,
         )
     if any(
-        publication.result.fitted_state.protocol.transformed_schema.feature_names != expected_names
+        publication.result.fitted_state.protocol.input_feature_names != expected_names
         for publication in client_publications
     ):
         raise ScientificContractError(
