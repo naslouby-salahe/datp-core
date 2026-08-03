@@ -3,11 +3,12 @@
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
+from typing import ClassVar
 
 import polars as pl
 
 from datp_core.artifacts.layout import scored_partition_roles
-from datp_core.artifacts.store import AtomicPublication, publish_atomically
+from datp_core.artifacts.store import publish_atomically
 from datp_core.domain.enums import (
     ContractSubject,
     PartitionRole,
@@ -17,14 +18,7 @@ from datp_core.domain.enums import (
     StageOperationId,
 )
 from datp_core.domain.errors import ArtifactIntegrityError
-from datp_core.domain.values import (
-    BatchSize,
-    Checksum,
-    FeatureCount,
-    FeatureNameSequence,
-    RowCount,
-    checksum_file,
-)
+from datp_core.domain.values import BatchSize, Checksum, FeatureCount, FeatureNameSequence, RowCount, checksum_file
 from datp_core.learning.federated.checkpointing import CheckpointCandidate
 from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import resolve_cuda_device
@@ -34,10 +28,10 @@ from datp_core.scoring.generation import (
     ScoreGenerationRequest,
     generate_federated_scores,
 )
-from datp_core.scoring.models import FixedScoreInvariant, ScoreArtifactManifest, ScoreGenerationResult, ScoreRecord
+from datp_core.scoring.models import ScoreArtifactManifest, ScoreGenerationResult, ScoreRecord
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True, eq=False)
 class ScoreFederatedRequest:
     checkpoint: CheckpointCandidate
     autoencoder: AutoencoderProtocol
@@ -52,17 +46,16 @@ class ScoreFederatedRequest:
 
 @dataclass(frozen=True, slots=True)
 class ScoreFederatedStageResult:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.SCORE_FEDERATED
     publication_status: PublicationStatus
     result: ScoreGenerationResult
 
 
 def score_federated_stage(request: ScoreFederatedRequest) -> ScoreFederatedStageResult:
     device = resolve_cuda_device()
-    holder: dict[str, ScoreGenerationResult] = {}
 
-    def write(temporary: Path) -> None:
-        result = generate_federated_scores(
+    def write(temporary: Path) -> ScoreGenerationResult:
+        return generate_federated_scores(
             ScoreGenerationRequest(
                 checkpoint=request.checkpoint,
                 autoencoder=request.autoencoder,
@@ -75,24 +68,21 @@ def score_federated_stage(request: ScoreFederatedRequest) -> ScoreFederatedStage
             ),
             device,
         )
-        holder["result"] = result
 
-    reused = publish_atomically(
-        AtomicPublication(
-            target=request.output_directory,
-            overwrite=request.overwrite,
-            is_reusable=lambda directory: _is_reusable(directory, request),
-            write=write,
-            remove_target=rmtree,
-        )
+    outcome = publish_atomically(
+        target=request.output_directory,
+        overwrite=request.overwrite,
+        is_reusable=lambda directory: _is_reusable(directory, request),
+        write=write,
+        reusable_value=lambda _directory: _load_reused_scores(request),
+        remove_target=rmtree,
     )
-    if reused:
-        result = _load_reused_scores(request)
-        status = PublicationStatus.REUSED
-    else:
-        result = _rebase_scoring(holder["result"], request.output_directory)
-        status = PublicationStatus.PUBLISHED
-    return ScoreFederatedStageResult(stage=StageOperationId.SCORE_FEDERATED, publication_status=status, result=result)
+    result = (
+        _rebase_scoring(outcome.value, request.output_directory)
+        if outcome.status is PublicationStatus.PUBLISHED
+        else outcome.value
+    )
+    return ScoreFederatedStageResult(publication_status=outcome.status, result=result)
 
 
 def _client_paths(output_directory: Path, request: ScoreFederatedRequest) -> list[tuple[str, tuple[Path, ...]]]:
@@ -112,10 +102,7 @@ def _is_reusable(directory: Path, request: ScoreFederatedRequest) -> bool:
     complete = directory / FederatedScoreAssetName.COMPLETE.value
     if not complete.is_file():
         return False
-    for _, paths in _client_paths(directory, request):
-        if any(not path.is_file() for path in paths):
-            return False
-    return True
+    return all(path.is_file() for _, paths in _client_paths(directory, request) for path in paths)
 
 
 def _build_records(
@@ -158,40 +145,36 @@ def _load_reused_scores(request: ScoreFederatedRequest) -> ScoreGenerationResult
         if request.checkpoint.coordinate.split_protocol is SplitProtocolId.TEMPORAL_HISTORICAL_FUTURE
         else ()
     )
-    manifest = ScoreArtifactManifest(
-        coordinate=request.checkpoint.coordinate,
-        checkpoint_round=request.checkpoint.round_number,
-        checkpoint_checksum=request.checkpoint.tensor_checksum,
-        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
-        split_manifest_checksum=request.split_manifest_checksum,
-        calibration_records=calibration_records,
-        evaluation_records=evaluation_records,
-        future_recalibration_records=future_records,
+    return ScoreGenerationResult(
+        manifest=ScoreArtifactManifest(
+            coordinate=request.checkpoint.coordinate,
+            checkpoint_round=request.checkpoint.round_number,
+            checkpoint_checksum=request.checkpoint.tensor_checksum,
+            preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+            split_manifest_checksum=request.split_manifest_checksum,
+            calibration_records=calibration_records,
+            evaluation_records=evaluation_records,
+            future_recalibration_records=future_records,
+        )
     )
-    return ScoreGenerationResult(manifest=manifest, invariant=FixedScoreInvariant.from_manifest(manifest))
 
 
 def _rebase_scoring(result: ScoreGenerationResult, output_directory: Path) -> ScoreGenerationResult:
-    calibration_records = tuple(
-        _rebased_record(record, output_directory) for record in result.manifest.calibration_records
+    manifest = result.manifest
+    return ScoreGenerationResult(
+        manifest=ScoreArtifactManifest(
+            coordinate=manifest.coordinate,
+            checkpoint_round=manifest.checkpoint_round,
+            checkpoint_checksum=manifest.checkpoint_checksum,
+            preprocessing_state_set_checksum=manifest.preprocessing_state_set_checksum,
+            split_manifest_checksum=manifest.split_manifest_checksum,
+            calibration_records=tuple(_rebased_record(record, output_directory) for record in manifest.calibration_records),
+            evaluation_records=tuple(_rebased_record(record, output_directory) for record in manifest.evaluation_records),
+            future_recalibration_records=tuple(
+                _rebased_record(record, output_directory) for record in manifest.future_recalibration_records
+            ),
+        )
     )
-    evaluation_records = tuple(
-        _rebased_record(record, output_directory) for record in result.manifest.evaluation_records
-    )
-    future_records = tuple(
-        _rebased_record(record, output_directory) for record in result.manifest.future_recalibration_records
-    )
-    manifest = ScoreArtifactManifest(
-        coordinate=result.manifest.coordinate,
-        checkpoint_round=result.manifest.checkpoint_round,
-        checkpoint_checksum=result.manifest.checkpoint_checksum,
-        preprocessing_state_set_checksum=result.manifest.preprocessing_state_set_checksum,
-        split_manifest_checksum=result.manifest.split_manifest_checksum,
-        calibration_records=calibration_records,
-        evaluation_records=evaluation_records,
-        future_recalibration_records=future_records,
-    )
-    return ScoreGenerationResult(manifest=manifest, invariant=FixedScoreInvariant.from_manifest(manifest))
 
 
 def _rebased_record(record: ScoreRecord, output_directory: Path) -> ScoreRecord:
