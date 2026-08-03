@@ -15,6 +15,7 @@ from datp_core.domain.enums import (
     ClusterFeatureStandardization,
     ClusterFingerprintFeature,
     ClusterThresholdAggregation,
+    CommunicationEstimationMethod,
     CompletionStatus,
     ConfirmatoryDeltaDirection,
     ContractSubject,
@@ -56,7 +57,6 @@ from datp_core.domain.enums import (
     TrustedEstimatorClassName,
     TrustedEstimatorModule,
     WarningCode,
-    CommunicationEstimationMethod,
 )
 
 EXPECTED_MEMBERS = (

@@ -184,7 +184,9 @@ def test_checkpoint_decision_requires_selected_round_equal_maximum_round() -> No
         preprocessing_state_set_checksum=Checksum("b" * 64),
         split_manifest_checksum=Checksum("c" * 64),
     )
-    with pytest.raises(ScientificContractError, match="checkpoint decision candidates must equal the declared ordered rounds"):
+    with pytest.raises(
+        ScientificContractError, match="checkpoint decision candidates must equal the declared ordered rounds"
+    ):
         CheckpointDecision(
             coordinate=coordinate,
             client=None,

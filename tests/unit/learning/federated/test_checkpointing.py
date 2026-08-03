@@ -135,7 +135,9 @@ def test_retain_checkpoint_candidates_rejects_missing_declared_round(tmp_path: P
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
     only_one_snapshot = (RoundSnapshot(CHECKPOINT.candidates[0], state, MetricValue(0.1)),)
-    with pytest.raises(ScientificContractError, match="checkpoint snapshots must equal the exact ordered protocol candidates"):
+    with pytest.raises(
+        ScientificContractError, match="checkpoint snapshots must equal the exact ordered protocol candidates"
+    ):
         retain_checkpoint_candidates(
             coordinate,
             only_one_snapshot,
@@ -145,7 +147,7 @@ def test_retain_checkpoint_candidates_rejects_missing_declared_round(tmp_path: P
             preprocessing_state_set_checksum=Checksum("a" * 64),
             split_manifest_checksum=Checksum("b" * 64),
             client=None,
-            )
+        )
 
 
 def test_select_checkpoint_rejects_missing_tensor_file(tmp_path: Path) -> None:
@@ -203,7 +205,6 @@ def test_candidate_tensor_name_distinguishes_personalized_clients() -> None:
     assert "client_a" in personalized_name
 
 
-
 def test_rebase_checkpoint_candidates_rejects_target_checksum_mismatch(tmp_path: Path) -> None:
     coordinate = fedavg_coordinate(Seed(0))
     dir_a = tmp_path / "a"
@@ -227,7 +228,9 @@ def test_rebase_checkpoint_candidates_rejects_target_checksum_mismatch(tmp_path:
         target_path = dir_b / candidate_tensor_name(c.round_number)
         target_path.write_bytes(b"corrupted")
 
-    with pytest.raises(ArtifactIntegrityError, match="rebased checkpoint checksum does not match the original candidate"):
+    with pytest.raises(
+        ArtifactIntegrityError, match="rebased checkpoint checksum does not match the original candidate"
+    ):
         rebase_checkpoint_candidates(candidates, dir_b)
 
 

@@ -168,10 +168,19 @@ def test_preprocessing_state_set_checksum_binds_client_identity() -> None:
     c1, c2 = client_identity("client_a"), client_identity("client_b")
     chk1, chk2 = Checksum("a" * 64), Checksum("b" * 64)
 
-    pairs1 = (PreparedClientProvenance(client=c1, preprocessing_checksum=chk1), PreparedClientProvenance(client=c2, preprocessing_checksum=chk2))
-    pairs1_reversed = (PreparedClientProvenance(client=c2, preprocessing_checksum=chk2), PreparedClientProvenance(client=c1, preprocessing_checksum=chk1))
+    pairs1 = (
+        PreparedClientProvenance(client=c1, preprocessing_checksum=chk1),
+        PreparedClientProvenance(client=c2, preprocessing_checksum=chk2),
+    )
+    pairs1_reversed = (
+        PreparedClientProvenance(client=c2, preprocessing_checksum=chk2),
+        PreparedClientProvenance(client=c1, preprocessing_checksum=chk1),
+    )
     assert preprocessing_state_set_checksum(pairs1) == preprocessing_state_set_checksum(pairs1_reversed)
 
     # Swapping checksums between client_a and client_b must change set checksum!
-    pairs_swapped = (PreparedClientProvenance(client=c1, preprocessing_checksum=chk2), PreparedClientProvenance(client=c2, preprocessing_checksum=chk1))
+    pairs_swapped = (
+        PreparedClientProvenance(client=c1, preprocessing_checksum=chk2),
+        PreparedClientProvenance(client=c2, preprocessing_checksum=chk1),
+    )
     assert preprocessing_state_set_checksum(pairs1) != preprocessing_state_set_checksum(pairs_swapped)
