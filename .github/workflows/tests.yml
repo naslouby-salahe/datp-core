@@ -135,7 +135,7 @@ jobs:
           domain_tests = Path("tests/unit/domain/test_values.py")
           text = domain_tests.read_text(encoding="utf-8")
           text = text.replace("    ClientCount,\n", "    ClientCount,\n    ObservedClientCount,\n", 1)
-          marker = "\ndef test_unrelated_integer_value_objects_do_not_compare_or_add() -> None:\n"
+          marker = "\ndef test_unrelated_integer_value_objects_cannot_be_ordered() -> None:\n"
           addition = '''
           def test_observed_client_count_allows_zero_and_matches_population_cardinality() -> None:
               assert ObservedClientCount(0).value == 0
