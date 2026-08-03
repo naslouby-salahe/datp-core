@@ -1,7 +1,6 @@
 """Threshold-estimation diagnostics against an exact pooled benign reference."""
 
 from dataclasses import dataclass
-from enum import StrEnum
 from itertools import groupby
 
 import numpy as np
@@ -12,22 +11,33 @@ from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
     CalibrationSize,
     Quantile,
+    Ratio,
     ReplicateIndex,
     Seed,
     ThresholdValue,
     checksum_file,
 )
-from datp_core.evaluation.metric_semantics import available, unavailable
-from datp_core.evaluation.models import HeldOutBenignScore, MetricReason, MetricStatus, ThresholdEstimationResult
+from datp_core.evaluation.metric_semantics import available, metric_value, unavailable
+from datp_core.evaluation.models import (
+    HeldOutBenignScore,
+    MetricAvailability,
+    MetricReason,
+    MetricStatus,
+    metric_by_id,
+    validate_metric_set,
+)
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.scoring.models import ScoreRecord
 
-
-class ThresholdEstimationUnavailableReason(StrEnum):
-    """Closed undefined states for threshold-estimation quantities."""
-
-    REFERENCE_THRESHOLD_IS_ZERO = "reference_threshold_is_zero"
+_THRESHOLD_ESTIMATION_METRICS = frozenset(
+    {
+        MetricId.ABSOLUTE_THRESHOLD_ERROR,
+        MetricId.RELATIVE_THRESHOLD_ERROR,
+        MetricId.SIGNED_ATTAINMENT_ERROR,
+        MetricId.ABSOLUTE_ATTAINMENT_ERROR,
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -56,26 +66,58 @@ class ThresholdEstimationDiagnostic:
     provenance: ThresholdEstimationProvenance
     estimated_threshold: ThresholdValue
     exact_pooled_benign_quantile_reference: ThresholdValue
-    target_exceedance: float
-    achieved_benign_exceedance: float
-    absolute_threshold_error: float
-    relative_threshold_error_status: MetricStatus
-    relative_threshold_error: float | None
-    signed_attainment_error: float
-    absolute_attainment_error: float
-    relative_error_unavailable_reason: ThresholdEstimationUnavailableReason | None
-    result: ThresholdEstimationResult
+    target_exceedance: Ratio
+    achieved_benign_exceedance: Ratio
+    metrics: tuple[MetricAvailability, ...]
 
     def __post_init__(self) -> None:
-        if not 0 < self.target_exceedance < 1 or not 0 <= self.achieved_benign_exceedance <= 1:
-            raise ScientificContractError("threshold-estimation exceedance values must be valid probabilities")
-        if min(self.absolute_threshold_error, self.absolute_attainment_error) < 0:
+        validate_metric_set(self.metrics, _THRESHOLD_ESTIMATION_METRICS)
+        absolute_threshold = metric_by_id(self.metrics, MetricId.ABSOLUTE_THRESHOLD_ERROR)
+        relative_threshold = metric_by_id(self.metrics, MetricId.RELATIVE_THRESHOLD_ERROR)
+        signed_attainment = metric_by_id(self.metrics, MetricId.SIGNED_ATTAINMENT_ERROR)
+        absolute_attainment = metric_by_id(self.metrics, MetricId.ABSOLUTE_ATTAINMENT_ERROR)
+        if absolute_threshold.value is None or signed_attainment.value is None or absolute_attainment.value is None:
+            raise ScientificContractError("absolute and attainment threshold diagnostics must be available")
+        if absolute_threshold.value.value < 0 or absolute_attainment.value.value < 0:
             raise ScientificContractError("absolute threshold diagnostics must be non-negative")
-        is_available = self.relative_threshold_error_status is MetricStatus.AVAILABLE
-        if is_available != (self.relative_threshold_error is not None):
-            raise ScientificContractError("relative threshold-error availability must match its value")
-        if is_available == (self.relative_error_unavailable_reason is not None):
-            raise ScientificContractError("relative threshold-error availability must match its reason")
+        if relative_threshold.value is None and relative_threshold.reason is not MetricReason.ZERO_MEAN:
+            raise ScientificContractError("undefined relative threshold error requires a zero-reference reason")
+        expected_signed = self.achieved_benign_exceedance.value - self.target_exceedance.value
+        if signed_attainment.value.value != expected_signed:
+            raise ScientificContractError("signed attainment error must match achieved minus target exceedance")
+
+    @property
+    def absolute_threshold_error(self) -> float:
+        value = metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_THRESHOLD_ERROR))
+        if value is None:
+            raise RuntimeError("absolute threshold error is required")
+        return value
+
+    @property
+    def relative_threshold_error_status(self) -> MetricStatus:
+        return metric_by_id(self.metrics, MetricId.RELATIVE_THRESHOLD_ERROR).status
+
+    @property
+    def relative_threshold_error(self) -> float | None:
+        return metric_value(metric_by_id(self.metrics, MetricId.RELATIVE_THRESHOLD_ERROR))
+
+    @property
+    def signed_attainment_error(self) -> float:
+        value = metric_value(metric_by_id(self.metrics, MetricId.SIGNED_ATTAINMENT_ERROR))
+        if value is None:
+            raise RuntimeError("signed attainment error is required")
+        return value
+
+    @property
+    def absolute_attainment_error(self) -> float:
+        value = metric_value(metric_by_id(self.metrics, MetricId.ABSOLUTE_ATTAINMENT_ERROR))
+        if value is None:
+            raise RuntimeError("absolute attainment error is required")
+        return value
+
+    @property
+    def relative_error_unavailable_reason(self) -> MetricReason | None:
+        return metric_by_id(self.metrics, MetricId.RELATIVE_THRESHOLD_ERROR).reason
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,39 +156,26 @@ def evaluate_threshold_estimate(
     signed_attainment_error = achieved - target_exceedance
     absolute_error = abs(estimated_threshold.value - exact_pooled_benign_quantile_reference.value)
     reference = exact_pooled_benign_quantile_reference.value
+    relative_metric: MetricAvailability
     if reference == 0.0:
-        relative_status = MetricStatus.UNDEFINED
-        relative_error = None
-        reason = ThresholdEstimationUnavailableReason.REFERENCE_THRESHOLD_IS_ZERO
+        relative_metric = unavailable(
+            MetricId.RELATIVE_THRESHOLD_ERROR,
+            MetricStatus.UNDEFINED,
+            MetricReason.ZERO_MEAN,
+        )
     else:
-        relative_status = MetricStatus.AVAILABLE
-        relative_error = absolute_error / abs(reference)
-        reason = None
+        relative_metric = available(MetricId.RELATIVE_THRESHOLD_ERROR, absolute_error / abs(reference))
     return ThresholdEstimationDiagnostic(
         provenance=provenance,
         estimated_threshold=estimated_threshold,
         exact_pooled_benign_quantile_reference=exact_pooled_benign_quantile_reference,
-        target_exceedance=target_exceedance,
-        achieved_benign_exceedance=achieved,
-        absolute_threshold_error=absolute_error,
-        relative_threshold_error_status=relative_status,
-        relative_threshold_error=relative_error,
-        signed_attainment_error=signed_attainment_error,
-        absolute_attainment_error=abs(signed_attainment_error),
-        relative_error_unavailable_reason=reason,
-        result=ThresholdEstimationResult(
-            absolute_threshold_error=available(MetricId.ABSOLUTE_THRESHOLD_ERROR, absolute_error),
-            relative_threshold_error=(
-                unavailable(
-                    MetricId.RELATIVE_THRESHOLD_ERROR,
-                    MetricStatus.UNDEFINED,
-                    MetricReason.ZERO_MEAN,
-                )
-                if relative_error is None
-                else available(MetricId.RELATIVE_THRESHOLD_ERROR, relative_error)
-            ),
-            signed_attainment_error=available(MetricId.SIGNED_ATTAINMENT_ERROR, signed_attainment_error),
-            absolute_attainment_error=available(MetricId.ABSOLUTE_ATTAINMENT_ERROR, abs(signed_attainment_error)),
+        target_exceedance=Ratio(target_exceedance),
+        achieved_benign_exceedance=Ratio(achieved),
+        metrics=(
+            available(MetricId.ABSOLUTE_THRESHOLD_ERROR, absolute_error),
+            relative_metric,
+            available(MetricId.SIGNED_ATTAINMENT_ERROR, signed_attainment_error),
+            available(MetricId.ABSOLUTE_ATTAINMENT_ERROR, abs(signed_attainment_error)),
         ),
     )
 
