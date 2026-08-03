@@ -169,14 +169,8 @@ def test_fixed_score_invariant_is_derived_deterministically_from_the_manifest(tm
     assert first.model_checksum == manifest.checkpoint_checksum
 
 
-def test_score_generation_result_rejects_a_foreign_invariant(tmp_path: Path) -> None:
+def test_score_generation_result_derives_its_invariant_from_the_manifest(tmp_path: Path) -> None:
     manifest = _manifest(tmp_path)
-    foreign_invariant = FixedScoreInvariant(
-        model_checksum=Checksum("f" * 64),
-        calibration_score_set_checksum=Checksum("f" * 64),
-        evaluation_score_set_checksum=Checksum("f" * 64),
-        preprocessing_state_set_checksum=Checksum("f" * 64),
-        split_manifest_checksum=Checksum("f" * 64),
-    )
-    with pytest.raises(ScientificContractError, match="derived from its own manifest"):
-        ScoreGenerationResult(manifest=manifest, invariant=foreign_invariant)
+    result = ScoreGenerationResult(manifest=manifest)
+
+    assert result.invariant == FixedScoreInvariant.from_manifest(manifest)
