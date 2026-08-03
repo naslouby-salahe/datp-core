@@ -87,7 +87,7 @@ def test_unrelated_float_value_objects_are_not_equal() -> None:
 
 
 def test_float_values_validate_and_serialize_through_pydantic() -> None:
-    document = _ValueDocument(threshold=0.5, metric=0.75, ratio=0.25)
+    document = _ValueDocument.model_validate({"threshold": 0.5, "metric": 0.75, "ratio": 0.25})
 
     assert document.threshold == ThresholdValue(0.5)
     assert document.model_dump(mode="json") == {
