@@ -38,7 +38,7 @@ def test_reconstruction_errors_rejects_one_dimensional_input() -> None:
     device = resolve_cuda_device()
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     features = np.zeros(4, dtype=np.float32)
-    with pytest.raises(ScientificContractError, match="2-D"):
+    with pytest.raises(ScientificContractError, match="two-dimensional"):
         reconstruction_errors(model, features, batch_size=BatchSize(4), device=device)
 
 

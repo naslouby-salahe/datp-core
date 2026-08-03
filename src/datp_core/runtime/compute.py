@@ -35,7 +35,7 @@ def require_cuda_available() -> None:
 def resolve_cuda_device() -> torch.device:
     """Return the canonical CUDA device. Never falls back to CPU."""
     require_cuda_available()
-    return torch.device("cuda")
+    return torch.device(f"cuda:{torch.cuda.current_device()}")
 
 
 def canonical_worker_count() -> WorkerCount:
