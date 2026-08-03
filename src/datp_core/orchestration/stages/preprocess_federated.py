@@ -29,6 +29,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
     Checksum,
+    ClientPublicationCount,
     ClientCount,
     ClientPathToken,
     FeatureName,
@@ -106,10 +107,17 @@ class PreprocessFederatedResult:
     split_protocol: SplitProtocolId
     preprocessing_identity: PreprocessingProtocolId
     client_publications: tuple[ClientPreprocessingResult, ...]
-    published_count: int
-    reused_count: int
+    published_count: ClientPublicationCount
+    reused_count: ClientPublicationCount
     execution_identity: ExternalTemporalExecutionIdentity | None = None
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.published_count, ClientPublicationCount) or not isinstance(
+            self.reused_count, ClientPublicationCount
+        ):
+            raise TypeError("preprocessing results require typed publication counts")
+        if self.published_count.value + self.reused_count.value != len(self.client_publications):
+            raise ValueError("published and reused counts must cover every client publication")
 
 @dataclass(frozen=True, slots=True)
 class PreprocessFederatedArtifactsRequest:
@@ -178,8 +186,8 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
         split_protocol=document.split_protocol,
         preprocessing_identity=request.preprocessing_identity,
         client_publications=publications,
-        published_count=published_count,
-        reused_count=reused_count,
+        published_count=ClientPublicationCount(published_count),
+        reused_count=ClientPublicationCount(reused_count),
     )
 
 
@@ -236,8 +244,8 @@ def preprocess_federated_artifacts_stage(
         split_protocol=published.split_manifest.split_protocol,
         preprocessing_identity=request.preprocessing_identity,
         client_publications=publications,
-        published_count=published_count,
-        reused_count=reused_count,
+        published_count=ClientPublicationCount(published_count),
+        reused_count=ClientPublicationCount(reused_count),
         execution_identity=identity,
     )
 
@@ -324,8 +332,8 @@ def _preprocess_ciciot_client_local(
         split_protocol=context.split_protocol_identity,
         preprocessing_identity=context.protocol.identity,
         client_publications=tuple(publications),
-        published_count=published_count,
-        reused_count=reused_count,
+        published_count=ClientPublicationCount(published_count),
+        reused_count=ClientPublicationCount(reused_count),
         execution_identity=identity,
     )
 

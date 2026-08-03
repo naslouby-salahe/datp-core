@@ -2,6 +2,7 @@
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
+from os import replace as atomic_replace
 from enum import StrEnum
 from json import dumps
 from pathlib import Path

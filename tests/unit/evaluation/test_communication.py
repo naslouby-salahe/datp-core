@@ -3,7 +3,7 @@ from tests.unit.learning.federated.helpers import fedavg_coordinate
 
 from datp_core.domain.enums import CommunicationEstimationMethod
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Seed
+from datp_core.domain.values import LogicalElementCount, Seed
 from datp_core.evaluation.communication import (
     CommunicationMessageDiagnostic,
     MessageDirection,
@@ -22,7 +22,7 @@ def test_communication_totals_are_exact_serialized_byte_counts() -> None:
         "coordinator",
         MessageDirection.CLIENT_TO_COORDINATOR,
         ThresholdPayloadKind.THRESHOLD_TRANSMISSION,
-        SerializedPayloadEvidence(b"abc", 1),
+        SerializedPayloadEvidence(b"abc", LogicalElementCount(1)),
         None,
         None,
         CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
@@ -35,5 +35,5 @@ def test_communication_totals_are_exact_serialized_byte_counts() -> None:
 
 
 def test_empty_payload_is_rejected() -> None:
-    with pytest.raises(ScientificContractError, match="at least one"):
-        SerializedPayloadEvidence(b"", 0)
+    with pytest.raises(ScientificContractError, match="typed logical element count"):
+        SerializedPayloadEvidence(b"", 0)  # type: ignore[arg-type]

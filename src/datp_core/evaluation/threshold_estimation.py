@@ -14,6 +14,7 @@ from datp_core.domain.values import (
     Ratio,
     ReplicateIndex,
     Seed,
+    SubsampleReplicateCount,
     ThresholdValue,
     checksum_file,
 )
@@ -128,7 +129,7 @@ class SampleEfficiencyPoint:
     coordinate: FederatedTrainingCoordinate
     training_seed: Seed
     calibration_size: CalibrationSize
-    replicate_count: int
+    replicate_count: SubsampleReplicateCount
     mean_threshold: float
     threshold_variance_across_nested_replicates: float
 
@@ -138,7 +139,7 @@ class SampleEfficiencyPoint:
             or self.coordinate.training_seed != self.training_seed
         ):
             raise ScientificContractError("sample-efficiency coordinate must match client and training seed")
-        if self.replicate_count < 1 or self.threshold_variance_across_nested_replicates < 0:
+        if self.threshold_variance_across_nested_replicates < 0:
             raise ScientificContractError("sample-efficiency points require non-negative population variance")
 
 
@@ -217,7 +218,7 @@ def sample_efficiency_curve(
                 coordinate=key[1],
                 training_seed=key[2],
                 calibration_size=key[3],
-                replicate_count=len(replicate_group),
+                replicate_count=SubsampleReplicateCount(len(replicate_group)),
                 mean_threshold=float(np.mean(values)),
                 threshold_variance_across_nested_replicates=float(np.var(values, ddof=0)),
             )
