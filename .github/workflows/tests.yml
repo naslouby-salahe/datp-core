@@ -1,4 +1,4 @@
-name: Apply typed-model cleanup
+name: Repair threshold formatting
 
 "on": [push]
 
@@ -15,257 +15,120 @@ jobs:
         with:
           persist-credentials: true
 
-      - name: Apply cleanup
+      - name: Repair exact generated blocks
         run: |
           python - <<'PY'
           from pathlib import Path
-          import re
 
-          def edit(path: str, transform) -> None:
-              file = Path(path)
-              original = file.read_text(encoding="utf-8")
-              updated = transform(original)
-              if updated == original:
-                  print(f"unchanged: {path}")
-              else:
-                  file.write_text(updated, encoding="utf-8")
-                  print(f"updated: {path}")
+          replacements = {
+              Path("src/datp_core/thresholding/models.py"): (
+                  '''    def __post_init__(self) -> None:
+                      require_contract(
+                0.0 < self.coverage.value <= 1.0,
+                "conformal coverage must be in (0, 1]",
+                ContractSubject.THRESHOLD,
+                      )
+                      require_contract(
+                bool(self.assignments),
+                "a conformal threshold result requires at least one assigned client",
+                ContractSubject.THRESHOLD,
+                      )
+                      _validate_client_partition(
+                self.eligible_clients, tuple(a.client for a in self.assignments), self.unavailable_clients
+                      )
 
-          edit(
-              "src/datp_core/analysis/inference/bootstrap.py",
-              lambda text: text.replace(
-                  "@dataclass(frozen=True, slots=True)\nclass _BootstrapDistribution:",
-                  "@dataclass(frozen=True, slots=True, eq=False)\nclass _BootstrapDistribution:",
+                  @property
+                  def significance(self) -> Ratio:
+                      """Conformal miscoverage derived from the single authoritative coverage target."""
+                      return Ratio(1.0 - self.coverage.value)
+
+              @dataclass(frozen=True, slots=True)
+              class ClientBenignSummary:'''.replace("              ", ""),
+                  '''    def __post_init__(self) -> None:
+                      require_contract(
+                          0.0 < self.coverage.value <= 1.0,
+                          "conformal coverage must be in (0, 1]",
+                          ContractSubject.THRESHOLD,
+                      )
+                      require_contract(
+                          bool(self.assignments),
+                          "a conformal threshold result requires at least one assigned client",
+                          ContractSubject.THRESHOLD,
+                      )
+                      _validate_client_partition(
+                          self.eligible_clients, tuple(a.client for a in self.assignments), self.unavailable_clients
+                      )
+
+                  @property
+                  def significance(self) -> Ratio:
+                      """Conformal miscoverage derived from the single authoritative coverage target."""
+                      return Ratio(1.0 - self.coverage.value)
+
+
+              @dataclass(frozen=True, slots=True)
+              class ClientBenignSummary:'''.replace("              ", ""),
               ),
-          )
+              Path("tests/unit/thresholding/test_models.py"): (
+                  '''def test_conformal_significance_is_derived_from_coverage() -> None:
+                      result = ConformalThresholdResult(
+                          coordinate=COORDINATE,
+                          coverage=CoverageTarget(0.95),
+                          eligible_clients=(CLIENT_A,),
+                          assignments=(
+                ConformalAssignment(
+                    client=CLIENT_A,
+                    calibration_count=RowCount(20),
+                    rank_index=19,
+                    effective_quantile=Quantile(0.95),
+                    selected_score=ScoreValue(1.0),
+                    tie_count=RowCount(1),
+                    threshold=ThresholdValue(1.0),
+                ),
+                          ),
+                          unavailable_clients=(),
+                      )
+                      assert result.significance == Ratio(0.05)
 
-          def centralized(text: str) -> str:
-              text = text.replace(
-                  "from datp_core.learning.autoencoder import ReconstructionAutoencoder",
-                  "from datp_core.learning.autoencoder import (\n"
-                  "    AutoencoderState,\n"
-                  "    AutoencoderStateView,\n"
-                  "    ReconstructionAutoencoder,\n"
-                  ")",
-              )
-              text = text.replace("    state_dict: dict[str, torch.Tensor]", "    state_dict: AutoencoderState")
-              return text.replace(
-                  "def persist_state_dict_tensors(state_dict: dict[str, torch.Tensor], path: Path) -> Checksum:",
-                  "def persist_state_dict_tensors(state_dict: AutoencoderStateView, path: Path) -> Checksum:",
-              )
+              def test_fixed_coefficient_result_holds_its_value() -> None:'''.replace("              ", ""),
+                  '''def test_conformal_significance_is_derived_from_coverage() -> None:
+                      result = ConformalThresholdResult(
+                          coordinate=COORDINATE,
+                          coverage=CoverageTarget(0.95),
+                          eligible_clients=(CLIENT_A,),
+                          assignments=(
+                              ConformalAssignment(
+                                  client=CLIENT_A,
+                                  calibration_count=RowCount(20),
+                                  rank_index=19,
+                                  effective_quantile=Quantile(0.95),
+                                  selected_score=ScoreValue(1.0),
+                                  tie_count=RowCount(1),
+                                  threshold=ThresholdValue(1.0),
+                              ),
+                          ),
+                          unavailable_clients=(),
+                      )
+                      assert result.significance == Ratio(0.05)
 
-          edit("src/datp_core/centralized_reference/training.py", centralized)
 
-          def population_models(text: str) -> str:
-              text = text.replace("    observed_eligible_group_count: int", "    observed_eligible_group_count: ClientCount")
-              text = text.replace(
-                  "        if self.observed_eligible_group_count != len(self.eligible_group_ids):",
-                  "        if self.observed_eligible_group_count.value != len(self.eligible_group_ids):",
-              )
-              text = text.replace(
-                  "            self.observed_eligible_group_count,",
-                  "            self.observed_eligible_group_count.value,",
-              )
-              text = text.replace("    observed_client_count: int", "    observed_client_count: ClientCount")
-              text = text.replace(
-                  "    def __post_init__(self) -> None:\n"
-                  "        if self.observed_client_count < 0:\n"
-                  "            raise ValueError(\"observed client count must be non-negative\")\n"
-                  "        if not self.evidence:\n",
-                  "    def __post_init__(self) -> None:\n        if not self.evidence:\n",
-              )
-              return text
-
-          edit("src/datp_core/populations/models.py", population_models)
-
-          def integrity(text: str) -> str:
-              text = text.replace(
-                  "        accepted_n,\n        \"candidate and accepted client sets match the locked construction contract\",",
-                  "        ClientCount(accepted_n),\n        \"candidate and accepted client sets match the locked construction contract\",",
-              )
-              return text.replace(
-                  "    return PopulationFeasibility(PopulationFeasibilityStatus.INFEASIBLE, reason, expected, observed, evidence)",
-                  "    return PopulationFeasibility(\n"
-                  "        PopulationFeasibilityStatus.INFEASIBLE, reason, expected, ClientCount(observed), evidence\n"
-                  "    )",
-              )
-
-          edit("src/datp_core/populations/integrity.py", integrity)
-          edit(
-              "src/datp_core/orchestration/stages/preprocess_federated.py",
-              lambda text: text.replace(
-                  "            observed_client_count=len(document.accepted_clients),",
-                  "            observed_client_count=ClientCount(len(document.accepted_clients)),",
+              def test_fixed_coefficient_result_holds_its_value() -> None:'''.replace("              ", ""),
               ),
-          )
+          }
 
-          def edge_temporal(text: str) -> str:
-              text = text.replace(
-                  "from datp_core.domain.values import Checksum, RowCount, Seed",
-                  "from datp_core.domain.values import Checksum, ClientCount, RowCount, Seed",
-              )
-              return text.replace(
-                  "        observed_eligible_group_count=len(eligible_ids),",
-                  "        observed_eligible_group_count=ClientCount(len(eligible_ids)),",
-              )
-
-          edit("src/datp_core/populations/edge_temporal_groups.py", edge_temporal)
-
-          def edge_test(text: str) -> str:
-              text = text.replace(
-                  "from datp_core.domain.values import Seed",
-                  "from datp_core.domain.values import ClientCount, Seed",
-              )
-              text = text.replace(
-                  "    assert diagnostics.observed_eligible_group_count == 0",
-                  "    assert diagnostics.observed_eligible_group_count == ClientCount(0)",
-              )
-              return text.replace(
-                  "    assert diagnostics.observed_eligible_group_count == 9",
-                  "    assert diagnostics.observed_eligible_group_count == ClientCount(9)",
-              )
-
-          edit("tests/unit/populations/test_edge_temporal_groups.py", edge_test)
-
-          def threshold_models(text: str) -> str:
-              conformal_block = '''@dataclass(frozen=True, slots=True)
-          class ConformalThresholdResult:
-              """`LOCAL_CONFORMAL_THRESHOLD`: finite-sample local conformal thresholds."""
-
-              coordinate: FederatedTrainingCoordinate
-              coverage: CoverageTarget
-              eligible_clients: tuple[ClientIdentity, ...]
-              assignments: tuple[ConformalAssignment, ...]
-              unavailable_clients: tuple[ClientIdentity, ...]
-              method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD
-
-              def __post_init__(self) -> None:
-                  require_contract(
-                      0.0 < self.coverage.value <= 1.0,
-                      "conformal coverage must be in (0, 1]",
-                      ContractSubject.THRESHOLD,
-                  )
-                  require_contract(
-                      bool(self.assignments),
-                      "a conformal threshold result requires at least one assigned client",
-                      ContractSubject.THRESHOLD,
-                  )
-                  _validate_client_partition(
-                      self.eligible_clients, tuple(a.client for a in self.assignments), self.unavailable_clients
-                  )
-
-              @property
-              def significance(self) -> Ratio:
-                  """Conformal miscoverage derived from the single authoritative coverage target."""
-                  return Ratio(1.0 - self.coverage.value)
-          '''.replace("          ", "")
-              text, count = re.subn(
-                  r"@dataclass\(frozen=True, slots=True\)\nclass ConformalThresholdResult:.*?(?=\n\n@dataclass\(frozen=True, slots=True\)\nclass ClientBenignSummary:)",
-                  conformal_block.rstrip(),
-                  text,
-                  count=1,
-                  flags=re.DOTALL,
-              )
-              if count != 1 and "def significance(self) -> Ratio:" not in text:
-                  raise SystemExit("could not rewrite ConformalThresholdResult")
-              text, count = re.subn(
-                  r"@dataclass\(frozen=True, slots=True\)\nclass CommunicationPayload:.*?(?=@dataclass\(frozen=True, slots=True\)\nclass FederatedStatisticsThresholdResult:)",
-                  "",
-                  text,
-                  count=1,
-                  flags=re.DOTALL,
-              )
-              if count == 0 and "class CommunicationPayload:" in text:
-                  raise SystemExit("could not remove CommunicationPayload")
-              return text.replace(
-                  "    communication_payload: CommunicationPayload",
-                  "    estimated_communication_bytes: ByteCount",
-              )
-
-          edit("src/datp_core/thresholding/models.py", threshold_models)
-
-          def conformal(text: str) -> str:
-              text = text.replace(
-                  "from datp_core.domain.values import CoverageTarget, Quantile, Ratio, RowCount, ScoreValue",
-                  "from datp_core.domain.values import CoverageTarget, Quantile, RowCount, ScoreValue",
-              )
-              text = text.replace("    significance = Ratio(1.0 - coverage_value)\n", "")
-              return text.replace("        significance=significance,\n", "")
-
-          edit("src/datp_core/thresholding/conformal.py", conformal)
-
-          def statistics(text: str) -> str:
-              text = text.replace("    CommunicationPayload,\n", "")
-              text = text.replace(
-                  "    communication_payload = CommunicationPayload(estimated_bytes=_serialized_payload_bytes(summaries))",
-                  "    estimated_communication_bytes = _serialized_payload_bytes(summaries)",
-              )
-              return text.replace(
-                  "        communication_payload=communication_payload,",
-                  "        estimated_communication_bytes=estimated_communication_bytes,",
-              )
-
-          edit("src/datp_core/thresholding/federated_benign_statistics.py", statistics)
-
-          def threshold_model_tests(text: str) -> str:
-              text = text.replace("    CommunicationPayload,\n", "")
-              text = re.sub(r"^\s+significance=Ratio\([^\n]+\),\n", "", text, flags=re.MULTILINE)
-              significance_test = '''def test_conformal_significance_is_derived_from_coverage() -> None:
-              result = ConformalThresholdResult(
-                  coordinate=COORDINATE,
-                  coverage=CoverageTarget(0.95),
-                  eligible_clients=(CLIENT_A,),
-                  assignments=(
-                      ConformalAssignment(
-                          client=CLIENT_A,
-                          calibration_count=RowCount(20),
-                          rank_index=19,
-                          effective_quantile=Quantile(0.95),
-                          selected_score=ScoreValue(1.0),
-                          tie_count=RowCount(1),
-                          threshold=ThresholdValue(1.0),
-                      ),
-                  ),
-                  unavailable_clients=(),
-              )
-              assert result.significance == Ratio(0.05)
-          '''.replace("          ", "")
-              text = re.sub(
-                  r"def test_communication_payload_declares_fixed_fields\(\) -> None:.*?(?=\n\ndef test_fixed_coefficient_result_holds_its_value)",
-                  significance_test.rstrip(),
-                  text,
-                  count=1,
-                  flags=re.DOTALL,
-              )
-              return text.replace(
-                  "            communication_payload=CommunicationPayload(estimated_bytes=ByteCount(10)),",
-                  "            estimated_communication_bytes=ByteCount(10),",
-              )
-
-          edit("tests/unit/thresholding/test_models.py", threshold_model_tests)
-
-          def statistics_tests(text: str) -> str:
-              replacement = '''def test_estimated_communication_bytes_are_reported_directly() -> None:
-              clients = _homogeneous_clients()
-              result = construct_federated_benign_statistics(clients, FEDERATED_STATISTICS_PROTOCOL, QUANTILE)
-              assert result.estimated_communication_bytes.value > 0
-          '''.replace("          ", "")
-              return re.sub(
-                  r"def test_communication_payload_only_declares_count_mean_variance\(\) -> None:.*?\Z",
-                  replacement.rstrip() + "\n",
-                  text,
-                  count=1,
-                  flags=re.DOTALL,
-              )
-
-          edit("tests/unit/thresholding/test_federated_benign_statistics.py", statistics_tests)
+          for path, (old, new) in replacements.items():
+              text = path.read_text(encoding="utf-8")
+              if new in text and old not in text:
+                  continue
+              if text.count(old) != 1:
+                  raise SystemExit(f"expected exactly one malformed block in {path}")
+              path.write_text(text.replace(old, new, 1), encoding="utf-8")
           PY
 
-      - name: Commit cleanup
+      - name: Commit repairs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src tests
+          git add src/datp_core/thresholding/models.py tests/unit/thresholding/test_models.py
           git diff --cached --quiet && exit 0
-          git commit -m "Finish typed model contract cleanup"
+          git commit -m "Repair threshold model formatting"
           git push origin "HEAD:${GITHUB_REF_NAME}"
