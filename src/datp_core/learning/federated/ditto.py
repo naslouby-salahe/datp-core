@@ -11,6 +11,7 @@ from datp_core.domain.values import (
     BatchSize,
     Checksum,
     ClientCount,
+    CudaDeviceName,
     LearningRate,
     RoundNumber,
     Seed,
@@ -254,7 +255,7 @@ def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
         ),
         preprocessing_state_set_checksum=preprocessing_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
-        device_name=torch.cuda.get_device_name(device).strip(),
+        device_name=CudaDeviceName(torch.cuda.get_device_name(device).strip()),
         batch_size_used=request.batch_size,
     )
     return publish_ditto_training(

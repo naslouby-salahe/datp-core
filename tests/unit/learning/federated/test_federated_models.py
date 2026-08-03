@@ -16,6 +16,7 @@ from datp_core.domain.values import (
     BatchSize,
     ByteCount,
     Checksum,
+    CudaDeviceName,
     MetricValue,
     ProximalCoefficient,
     RoundNumber,
@@ -210,6 +211,6 @@ def test_training_result_requires_matching_history_coordinate() -> None:
             history=history,
             preprocessing_state_set_checksum=Checksum("a" * 64),
             split_manifest_checksum=Checksum("b" * 64),
-            device_name="cuda",
+            device_name=CudaDeviceName("cuda"),
             batch_size_used=BatchSize(4),
         )

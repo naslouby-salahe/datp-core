@@ -403,6 +403,12 @@ class DittoRegularization(NonNegativeFiniteFloatValue):
     validation_name: ClassVar[str] = "Ditto regularization"
 
 
+class ModelCoefficientValue(NonNegativeFiniteFloatValue):
+    """Serialized form of either ProximalCoefficient or DittoRegularization at manifest boundaries."""
+
+    validation_name: ClassVar[str] = "model coefficient value"
+
+
 class ShrinkageWeight(ClosedUnitIntervalValue):
     validation_name: ClassVar[str] = "shrinkage weight"
 
@@ -497,6 +503,8 @@ class ClientPathToken:
         if self.value in {".", ".."} or any(token in self.value for token in ("=", "/", "\\")):
             raise ValueError("client path token must be a single non-relative path segment without key=value syntax")
 
+    __get_pydantic_core_schema__ = classmethod(_pydantic_value_schema)
+
 
 @dataclass(frozen=True, slots=True)
 class FamilyIdentity:
@@ -505,6 +513,45 @@ class FamilyIdentity:
     def __post_init__(self) -> None:
         if not isinstance(self.value, str) or not self.value:
             raise ValueError("family identity must be non-empty")
+
+
+def _str_subclass_schema(cls, _source_type, _handler):
+    """Pydantic v2 schema for str subclasses: validates via cls(...), serializes as str."""
+    from pydantic_core import core_schema as _cs
+
+    def _validate(v):
+        if isinstance(v, cls):
+            return v
+        return cls(v)
+
+    return _cs.no_info_plain_validator_function(
+        _validate,
+        serialization=_cs.plain_serializer_function_ser_schema(lambda instance: str(instance)),
+    )
+
+
+class SafeTensorFilename(str):
+    def __new__(cls, value: str) -> "SafeTensorFilename":
+        if not isinstance(value, str) or not value:
+            raise ValueError("SafeTensors filename must be non-empty")
+        if not value.endswith(".safetensors"):
+            raise ValueError("SafeTensors filename must end with .safetensors")
+        return super().__new__(cls, value)
+
+    __get_pydantic_core_schema__ = classmethod(_str_subclass_schema)
+
+
+class ManifestSchemaVersion(PositiveIntegerValue):
+    validation_name: ClassVar[str] = "manifest schema version"
+
+
+class CudaDeviceName(str):
+    def __new__(cls, value: str) -> "CudaDeviceName":
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("CUDA device name must be a non-empty string")
+        return super().__new__(cls, value)
+
+    __get_pydantic_core_schema__ = classmethod(_str_subclass_schema)
 
 
 def checksum_text(payload: str) -> Checksum:

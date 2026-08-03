@@ -20,6 +20,7 @@ from datp_core.domain.values import (
     BatchSize,
     ByteCount,
     Checksum,
+    CudaDeviceName,
     DittoRegularization,
     FeatureNameSequence,
     MetricValue,
@@ -481,7 +482,7 @@ class FederatedTrainingResult:
     history: FederatedTrainingHistory
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
-    device_name: str
+    device_name: CudaDeviceName
     batch_size_used: BatchSize
 
     def __post_init__(self) -> None:

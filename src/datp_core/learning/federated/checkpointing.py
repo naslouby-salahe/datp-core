@@ -22,8 +22,11 @@ from datp_core.domain.enums import (
     CheckpointStatus,
     CommunicationEstimationMethod,
     ContractSubject,
+    PopulationId,
     PopulationIdentityKind,
+    PreprocessingProtocolId,
     ProcessedDataBranch,
+    SplitProtocolId,
     TrainingModelId,
 )
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
@@ -31,9 +34,15 @@ from datp_core.domain.values import (
     BatchSize,
     ByteCount,
     Checksum,
+    ClientPathToken,
+    CudaDeviceName,
+    ManifestSchemaVersion,
     MetricValue,
+    ModelCoefficientValue,
     RoundNumber,
     RowCount,
+    SafeTensorFilename,
+    Seed,
     checksum_file,
     checksum_text,
 )
@@ -69,7 +78,7 @@ from datp_core.protocols.training import (
 _CANDIDATE_PREFIX = "checkpoint_round_"
 _CANDIDATE_SUFFIX = ".safetensors"
 _PERSONALIZED_INFIX = "_client_"
-_MANIFEST_SCHEMA_VERSION = 1
+_MANIFEST_SCHEMA_VERSION = ManifestSchemaVersion(1)
 
 
 class FederatedHistoryAssetName(StrEnum):
@@ -122,27 +131,27 @@ class CandidateManifestKind(StrEnum):
 
 
 class CandidateManifestEntry(StrictModel):
-    round_number: int
-    client_id: str | None
-    tensor_name: str
-    tensor_checksum: str
+    round_number: RoundNumber
+    client_id: ClientPathToken | None
+    tensor_name: SafeTensorFilename
+    tensor_checksum: Checksum
 
 
 class CandidateManifest(StrictModel):
-    schema_version: int
+    schema_version: ManifestSchemaVersion
     kind: CandidateManifestKind
-    coordinate_population: str
-    coordinate_training_seed: int
-    coordinate_split_protocol: str
-    coordinate_preprocessing_identity: str
-    coordinate_model: str
-    coordinate_model_coefficient: float | None
-    preprocessing_state_set_checksum: str
-    split_manifest_checksum: str
-    checkpoint_rounds: tuple[int, ...]
+    coordinate_population: PopulationId
+    coordinate_training_seed: Seed
+    coordinate_split_protocol: SplitProtocolId
+    coordinate_preprocessing_identity: PreprocessingProtocolId
+    coordinate_model: TrainingModelId
+    coordinate_model_coefficient: ModelCoefficientValue | None
+    preprocessing_state_set_checksum: Checksum
+    split_manifest_checksum: Checksum
+    checkpoint_rounds: tuple[RoundNumber, ...]
     autoencoder_widths: tuple[int, ...]
-    batch_size: int
-    linked_personalized_digest: str | None
+    batch_size: BatchSize
+    linked_personalized_digest: Checksum | None
     entries: tuple[CandidateManifestEntry, ...]
 
 
@@ -201,11 +210,11 @@ class ReusedDittoTrainingRequest:
 def candidate_tensor_name(
     round_number: RoundNumber,
     client: ClientIdentity | None = None,
-) -> str:
+) -> SafeTensorFilename:
     base = f"{_CANDIDATE_PREFIX}{round_number.value}"
     if client is not None:
         base = f"{base}{_PERSONALIZED_INFIX}{client.client_id}"
-    return f"{base}{_CANDIDATE_SUFFIX}"
+    return SafeTensorFilename(f"{base}{_CANDIDATE_SUFFIX}")
 
 
 def _read_parquet(path: Path) -> pl.DataFrame:
@@ -423,32 +432,32 @@ def _build_manifest(
 ) -> CandidateManifest:
     entries = tuple(
         CandidateManifestEntry(
-            round_number=candidate.round_number.value,
-            client_id=candidate.client.client_id if candidate.client is not None else None,
-            tensor_name=candidate.tensor_path.name,
-            tensor_checksum=candidate.tensor_checksum.value,
+            round_number=candidate.round_number,
+            client_id=ClientPathToken(candidate.client.client_id) if candidate.client is not None else None,
+            tensor_name=SafeTensorFilename(candidate.tensor_path.name),
+            tensor_checksum=candidate.tensor_checksum,
         )
         for candidate in candidates
     )
     return CandidateManifest(
         schema_version=_MANIFEST_SCHEMA_VERSION,
         kind=kind,
-        coordinate_population=coordinate.population.value,
-        coordinate_training_seed=coordinate.training_seed.value,
-        coordinate_split_protocol=coordinate.split_protocol.value,
-        coordinate_preprocessing_identity=coordinate.preprocessing_identity.value,
-        coordinate_model=coordinate.model.value,
+        coordinate_population=coordinate.population,
+        coordinate_training_seed=coordinate.training_seed,
+        coordinate_split_protocol=coordinate.split_protocol,
+        coordinate_preprocessing_identity=coordinate.preprocessing_identity,
+        coordinate_model=coordinate.model,
         coordinate_model_coefficient=(
-            coordinate.model_coefficient.value if coordinate.model_coefficient is not None else None
+            ModelCoefficientValue(coordinate.model_coefficient.value)
+            if coordinate.model_coefficient is not None
+            else None
         ),
-        preprocessing_state_set_checksum=preprocessing_state_set_checksum.value,
-        split_manifest_checksum=split_manifest_checksum.value,
-        checkpoint_rounds=tuple(round_number.value for round_number in checkpoint_protocol.candidates),
+        preprocessing_state_set_checksum=preprocessing_state_set_checksum,
+        split_manifest_checksum=split_manifest_checksum,
+        checkpoint_rounds=checkpoint_protocol.candidates,
         autoencoder_widths=tuple(autoencoder.widths),
-        batch_size=batch_size.value,
-        linked_personalized_digest=(
-            linked_personalized_digest.value if linked_personalized_digest is not None else None
-        ),
+        batch_size=batch_size,
+        linked_personalized_digest=linked_personalized_digest,
         entries=entries,
     )
 
@@ -492,7 +501,7 @@ def _expected_publication_files(
                 FederatedHistoryAssetName.DEVICE_NAME.value,
             ]
         )
-        if manifest.coordinate_model == TrainingModelId.DITTO_GLOBAL_AUTOENCODER.value:
+        if manifest.coordinate_model == TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
             names.append(FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value)
     return tuple(sorted(names))
 
@@ -588,7 +597,7 @@ def persist_federated_training_history(
     history: FederatedTrainingHistory,
     directory: Path,
     *,
-    device_name: str,
+    device_name: CudaDeviceName,
 ) -> None:
     normalized_device = device_name.strip()
     if not normalized_device:
@@ -1046,13 +1055,17 @@ def _validate_manifest(
     split_manifest_checksum: Checksum,
 ) -> None:
     if (
-        manifest.coordinate_population != coordinate.population.value
-        or manifest.coordinate_training_seed != coordinate.training_seed.value
-        or manifest.coordinate_split_protocol != coordinate.split_protocol.value
-        or manifest.coordinate_preprocessing_identity != coordinate.preprocessing_identity.value
-        or manifest.coordinate_model != coordinate.model.value
+        manifest.coordinate_population != coordinate.population
+        or manifest.coordinate_training_seed != coordinate.training_seed
+        or manifest.coordinate_split_protocol != coordinate.split_protocol
+        or manifest.coordinate_preprocessing_identity != coordinate.preprocessing_identity
+        or manifest.coordinate_model != coordinate.model
         or manifest.coordinate_model_coefficient
-        != (coordinate.model_coefficient.value if coordinate.model_coefficient is not None else None)
+        != (
+            ModelCoefficientValue(coordinate.model_coefficient.value)
+            if coordinate.model_coefficient is not None
+            else None
+        )
     ):
         raise ArtifactIntegrityError(
             "candidate manifest coordinate does not match the requested experiment",
@@ -1063,17 +1076,17 @@ def _validate_manifest(
             "candidate manifest kind mismatch",
             subject=ContractSubject.ARTIFACT_PATH,
         )
-    if manifest.preprocessing_state_set_checksum != preprocessing_state_set_checksum.value:
+    if manifest.preprocessing_state_set_checksum != preprocessing_state_set_checksum:
         raise ArtifactIntegrityError(
             "candidate manifest preprocessing checksum mismatch",
             subject=ContractSubject.PREPROCESSING,
         )
-    if manifest.split_manifest_checksum != split_manifest_checksum.value:
+    if manifest.split_manifest_checksum != split_manifest_checksum:
         raise ArtifactIntegrityError(
             "candidate manifest split checksum mismatch",
             subject=ContractSubject.SPLIT,
         )
-    if manifest.checkpoint_rounds != tuple(round_number.value for round_number in checkpoint_protocol.candidates):
+    if manifest.checkpoint_rounds != checkpoint_protocol.candidates:
         raise ArtifactIntegrityError(
             "candidate manifest rounds do not match the checkpoint protocol",
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
@@ -1083,7 +1096,7 @@ def _validate_manifest(
             "candidate manifest autoencoder architecture mismatch",
             subject=ContractSubject.WIDTHS,
         )
-    if manifest.batch_size != batch_size.value:
+    if manifest.batch_size != batch_size:
         raise ArtifactIntegrityError(
             "candidate manifest batch size mismatch",
             subject=ContractSubject.BATCH_SIZE,
@@ -1111,7 +1124,7 @@ def _validated_global_manifest(
     )
     expected_entries = tuple(
         (
-            round_number.value,
+            round_number,
             None,
             candidate_tensor_name(round_number),
         )
@@ -1154,12 +1167,12 @@ def load_reused_global_candidates(
     for entry in manifest.entries:
         path = request.directory / entry.tensor_name
         actual = checksum_file(path)
-        if actual.value != entry.tensor_checksum:
+        if actual != entry.tensor_checksum:
             raise ArtifactIntegrityError(
                 "reused global checkpoint checksum mismatch",
                 subject=ContractSubject.ARTIFACT_PATH,
             )
-        round_number = RoundNumber(entry.round_number)
+        round_number = entry.round_number
         candidates.append(
             CheckpointCandidate(
                 coordinate=request.coordinate,
@@ -1197,7 +1210,7 @@ def _validated_personalized_manifest(
     )
     expected_entries = tuple(
         (
-            round_number.value,
+            round_number,
             client.client_id,
             candidate_tensor_name(round_number, client),
         )
@@ -1246,12 +1259,12 @@ def load_reused_personalized_candidates(
         for entry in entries_by_client[client.client_id]:
             path = request.personalized_output_directory / entry.tensor_name
             actual = checksum_file(path)
-            if actual.value != entry.tensor_checksum:
+            if actual != entry.tensor_checksum:
                 raise ArtifactIntegrityError(
                     "reused personalized checkpoint checksum mismatch",
                     subject=ContractSubject.ARTIFACT_PATH,
                 )
-            round_number = RoundNumber(entry.round_number)
+            round_number = entry.round_number
             candidates.append(
                 CheckpointCandidate(
                     coordinate=request.personalized_coordinate,
@@ -1274,7 +1287,7 @@ def load_reused_personalized_candidates(
     return tuple(result)
 
 
-def load_published_device_name(directory: Path) -> str:
+def load_published_device_name(directory: Path) -> CudaDeviceName:
     path = directory / FederatedHistoryAssetName.DEVICE_NAME.value
     try:
         value = path.read_text(encoding="utf-8").strip()
@@ -1288,7 +1301,7 @@ def load_published_device_name(directory: Path) -> str:
             "published CUDA device name is empty",
             subject=ContractSubject.CUDA,
         )
-    return value
+    return CudaDeviceName(value)
 
 
 def load_federated_training_history(
@@ -1487,7 +1500,7 @@ def load_reused_ditto_training(
         personalized_manifest,
         include_history=False,
     )
-    if global_manifest.linked_personalized_digest != personalized_digest.value:
+    if global_manifest.linked_personalized_digest != personalized_digest:
         raise ArtifactIntegrityError(
             "Ditto global publication is linked to a different personalized publication",
             subject=ContractSubject.ARTIFACT_PATH,

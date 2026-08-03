@@ -24,6 +24,7 @@ from datp_core.domain.values import (
     ByteCount,
     Checksum,
     ClientCount,
+    CudaDeviceName,
     DittoRegularization,
     LearningRate,
     MetricValue,
@@ -646,7 +647,7 @@ def run_federated_training[T: (FedAvgProtocol, FedProxProtocol)](
         history=history,
         preprocessing_state_set_checksum=preprocessing_state_set_checksum(provenance),
         split_manifest_checksum=request.split_manifest_checksum,
-        device_name=torch.cuda.get_device_name(device).strip(),
+        device_name=CudaDeviceName(torch.cuda.get_device_name(device).strip()),
         batch_size_used=request.batch_size,
     )
     return FederatedTrainingExecution(
