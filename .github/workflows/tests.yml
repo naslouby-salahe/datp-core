@@ -1,4 +1,4 @@
-name: Validate typed dataset coordinates
+name: Validate typed dataset persistence
 
 "on": [push, pull_request]
 
@@ -74,21 +74,15 @@ jobs:
           models_path = Path("src/datp_core/datasets/models.py")
           models = models_path.read_text(encoding="utf-8")
           persisted_field = "    duplicate_timestamp_count: int"
-          typed_persisted_field = "    duplicate_timestamp_count: RowCount"
           if models.count(persisted_field) != 1:
               raise SystemExit(
                   f"persisted chronology duplicate-count fields: {models.count(persisted_field)}"
               )
-          models = models.replace(persisted_field, typed_persisted_field, 1)
+          models = models.replace(persisted_field, "    duplicate_timestamp_count: RowCount", 1)
           models_path.write_text(models, encoding="utf-8")
 
           tests_path = Path("tests/unit/datasets/test_dataset_models.py")
           tests = tests_path.read_text(encoding="utf-8")
-          tests = tests.replace(
-              "from datp_core.datasets.models import (",
-              "from datp_core.datasets.models import (",
-              1,
-          )
           if "    _ChronologyEntry,\n" not in tests:
               if "from datp_core.datasets.models import (" in tests:
                   tests = tests.replace(
