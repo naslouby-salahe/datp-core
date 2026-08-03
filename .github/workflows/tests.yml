@@ -1,17 +1,19 @@
-name: Validate typed dataset persistence
+name: Refactor validation
 
 "on": [push, pull_request]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  patch:
+  test:
+    name: Run complete test suite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
@@ -24,129 +26,186 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-groups --all-extras --frozen
 
-      - name: Apply dataset coordinate contracts
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          from textwrap import dedent
-          import subprocess
-
-          source_commit = "be06766ee3ff5ba371e5120ca0d5b97c50196892"
-          subprocess.run(
-              ["git", "fetch", "origin", source_commit, "--depth=1"],
-              check=True,
-              stdout=subprocess.DEVNULL,
-          )
-          workflow = subprocess.check_output(
-              ["git", "show", f"{source_commit}:.github/workflows/tests.yml"],
-              text=True,
-          )
-          start_marker = "          python - <<'PY'\n"
-          start = workflow.index(start_marker) + len(start_marker)
-          end = workflow.index("\n          PY", start)
-          patch_script = dedent(workflow[start:end])
-          exec(compile(patch_script, "typed-dataset-coordinate-patch", "exec"), {})
-
-          materialization_path = Path("src/datp_core/datasets/materialization.py")
-          materialization = materialization_path.read_text(encoding="utf-8")
-          if "CanonicalColumnPosition" not in materialization:
-              materialization = materialization.replace(
-                  "from datp_core.domain.values import ByteCount, Checksum, RowCount, checksum_file, checksum_text",
-                  "from datp_core.domain.values import (\n"
-                  "    ByteCount,\n"
-                  "    CanonicalColumnPosition,\n"
-                  "    Checksum,\n"
-                  "    RowCount,\n"
-                  "    checksum_file,\n"
-                  "    checksum_text,\n"
-                  ")",
-                  1,
-              )
-          materialization = materialization.replace(
-              "        position,\n    )\n\n\ndef canonical_provenance_arrow_field",
-              "        CanonicalColumnPosition(position),\n    )\n\n\ndef canonical_provenance_arrow_field",
-              1,
-          )
-          if "CanonicalColumnPosition(position)" not in materialization:
-              raise SystemExit("canonical provenance position boundary was not converted")
-          materialization_path.write_text(materialization, encoding="utf-8")
-
-          models_path = Path("src/datp_core/datasets/models.py")
-          models = models_path.read_text(encoding="utf-8")
-          persisted_field = "    duplicate_timestamp_count: int"
-          if models.count(persisted_field) != 1:
-              raise SystemExit(
-                  f"persisted chronology duplicate-count fields: {models.count(persisted_field)}"
-              )
-          models = models.replace(persisted_field, "    duplicate_timestamp_count: RowCount", 1)
-          models_path.write_text(models, encoding="utf-8")
-
-          tests_path = Path("tests/unit/datasets/test_dataset_models.py")
-          tests = tests_path.read_text(encoding="utf-8")
-          if "    _ChronologyEntry,\n" not in tests:
-              if "from datp_core.datasets.models import (" in tests:
-                  tests = tests.replace(
-                      "from datp_core.datasets.models import (\n",
-                      "from datp_core.datasets.models import (\n    _ChronologyEntry,\n",
-                      1,
-                  )
-              else:
-                  tests = tests.replace(
-                      "from datp_core.datasets.models import ",
-                      "from datp_core.datasets.models import _ChronologyEntry, ",
-                      1,
-                  )
-          regression = dedent('''
-              def test_manifest_chronology_rehydrates_typed_duplicate_count() -> None:
-                  entry = _ChronologyEntry.model_validate_json(
-                      """{
-                          "group_identity": "Modbus",
-                          "status": "available",
-                          "total_rows": 10,
-                          "parseable_rows": 10,
-                          "invalid_rows": 0,
-                          "duplicate_timestamp_count": 2,
-                          "is_monotonic": true,
-                          "reason": "verified chronology",
-                          "temporal_eligible": true
-                      }"""
-                  )
-                  assert entry.duplicate_timestamp_count == RowCount(2)
-          ''').lstrip()
-          if regression.strip() not in tests:
-              marker = "\ndef test_canonical_coordinate_is_a_stable_human_readable_dataset_root"
-              if marker not in tests:
-                  raise SystemExit("dataset model round-trip insertion marker missing")
-              tests = tests.replace(
-                  marker,
-                  "\n" + regression.rstrip() + "\n\n" + marker.lstrip(),
-                  1,
-              )
-          tests_path.write_text(tests, encoding="utf-8")
-          PY
-
-      - name: Compile transformed source and tests
-        run: python -m compileall -q src tests
+      - name: Provision empty raw-data root
+        run: mkdir -p data/raw
 
       - name: Run persisted chronology regressions
         run: |
-          mkdir -p data/raw
-          uv run pytest -vv \
+          uv run pytest -q \
             tests/unit/datasets/test_dataset_models.py \
             tests/unit/populations/test_edge_temporal_groups.py \
             tests/unit/orchestration/stages/test_preprocess_stages.py \
             tests/integration/populations/test_temporal_split_no_future_leakage.py
 
-      - name: Run full regression suite
+      - name: Run complete suite
         run: |
-          uv run pytest --ignore=tests/integration/configuration/test_raw_source_contracts_are_ready.py
+          uv run pytest \
+            --ignore=tests/integration/configuration/test_raw_source_contracts_are_ready.py
 
-      - name: Commit dataset contracts
-        if: github.event_name == 'push' && github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
+  audit:
+    name: Audit structural contracts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+        with:
+          persist-credentials: false
+
+      - name: Audit production source
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src tests
-          git diff --cached --quiet && exit 0
-          git commit -m "Type dataset ingestion coordinates and counts"
-          git push origin "HEAD:${GITHUB_REF_NAME}"
+          python - <<'PY'
+          from __future__ import annotations
+
+          import ast
+          import hashlib
+          from collections import defaultdict
+          from pathlib import Path
+
+          root = Path("src/datp_core")
+          paths = tuple(sorted(root.rglob("*.py")))
+          trees = {path: ast.parse(path.read_text(encoding="utf-8"), filename=str(path)) for path in paths}
+
+          def location(path: Path, node: ast.AST) -> str:
+              return f"{path}:{getattr(node, 'lineno', '?')}"
+
+          def dataclass_call(node: ast.ClassDef) -> ast.Call | None:
+              for decorator in node.decorator_list:
+                  call = decorator if isinstance(decorator, ast.Call) else None
+                  target = call.func if call else decorator
+                  name = target.id if isinstance(target, ast.Name) else target.attr if isinstance(target, ast.Attribute) else ""
+                  if name == "dataclass":
+                      return call
+              return None
+
+          def keyword_bool(call: ast.Call | None, name: str, default: bool) -> bool:
+              if call is None:
+                  return default
+              for keyword in call.keywords:
+                  if keyword.arg == name and isinstance(keyword.value, ast.Constant):
+                      return bool(keyword.value.value)
+              return default
+
+          def annotation_names(annotation: ast.expr) -> set[str]:
+              names: set[str] = set()
+              for node in ast.walk(annotation):
+                  if isinstance(node, ast.Name):
+                      names.add(node.id)
+                  elif isinstance(node, ast.Attribute):
+                      names.add(node.attr)
+              return names
+
+          explicit_any: set[str] = set()
+          mutable_frozen: list[str] = []
+          instance_stage_fields: list[str] = []
+          primitive_semantic_fields: list[str] = []
+          one_field_dataclasses: list[str] = []
+          class_locations: dict[str, list[str]] = defaultdict(list)
+          function_bodies: dict[str, list[str]] = defaultdict(list)
+          oversized_functions: list[str] = []
+
+          primitive_annotations = {"int", "float", "int | None", "float | None"}
+          semantic_tokens = (
+              "count",
+              "index",
+              "rank",
+              "round",
+              "seed",
+              "bytes",
+              "size",
+              "epoch",
+              "batch",
+              "worker",
+              "support",
+              "position",
+          )
+          mutable_names = {"DataFrame", "LazyFrame", "ndarray", "Tensor", "dict", "list", "set"}
+
+          for path, tree in trees.items():
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.ImportFrom) and any(alias.name == "Any" for alias in node.names):
+                      explicit_any.add(location(path, node))
+                  elif isinstance(node, ast.Name) and node.id == "Any":
+                      explicit_any.add(location(path, node))
+                  elif isinstance(node, ast.Attribute) and node.attr == "Any":
+                      explicit_any.add(location(path, node))
+
+                  if isinstance(node, ast.ClassDef):
+                      class_locations[node.name].append(location(path, node))
+                      call = dataclass_call(node)
+                      if call is None:
+                          continue
+                      fields = [
+                          item
+                          for item in node.body
+                          if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)
+                      ]
+                      instance_fields = [
+                          field
+                          for field in fields
+                          if not ast.unparse(field.annotation).startswith("ClassVar[")
+                      ]
+                      if len(instance_fields) == 1:
+                          field = instance_fields[0]
+                          one_field_dataclasses.append(
+                              f"{location(path, node)} {node.name}.{field.target.id}: {ast.unparse(field.annotation)}"
+                          )
+                      frozen = keyword_bool(call, "frozen", False)
+                      equality = keyword_bool(call, "eq", True)
+                      for field in instance_fields:
+                          name = field.target.id
+                          annotation = ast.unparse(field.annotation)
+                          if name == "stage":
+                              instance_stage_fields.append(f"{location(path, field)} {node.name}.stage: {annotation}")
+                          if annotation in primitive_annotations and any(token in name.lower() for token in semantic_tokens):
+                              primitive_semantic_fields.append(
+                                  f"{location(path, field)} {node.name}.{name}: {annotation}"
+                              )
+                          if frozen and equality and annotation_names(field.annotation) & mutable_names:
+                              mutable_frozen.append(
+                                  f"{location(path, field)} {node.name}.{name}: {annotation}"
+                              )
+
+                  if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("__"):
+                      body = ast.dump(ast.Module(body=node.body, type_ignores=[]), include_attributes=False)
+                      if len(body) >= 180:
+                          function_bodies[hashlib.sha256(body.encode()).hexdigest()].append(
+                              f"{location(path, node)} {node.name}"
+                          )
+                      end = getattr(node, "end_lineno", node.lineno)
+                      if end - node.lineno + 1 > 100:
+                          oversized_functions.append(
+                              f"{location(path, node)} {node.name}: {end - node.lineno + 1} lines"
+                          )
+
+          duplicate_classes = [
+              f"{name}: {' | '.join(locations)}"
+              for name, locations in sorted(class_locations.items())
+              if len(locations) > 1
+          ]
+          duplicate_functions = [
+              " | ".join(locations)
+              for locations in function_bodies.values()
+              if len(locations) > 1
+          ]
+
+          blocking = {
+              "EXPLICIT_ANY": sorted(explicit_any),
+              "MUTABLE_FROZEN_EQUALITY": mutable_frozen,
+              "INSTANCE_STAGE_FIELDS": instance_stage_fields,
+              "PRIMITIVE_SEMANTIC_FIELDS": primitive_semantic_fields,
+              "DUPLICATE_CLASS_NAMES": duplicate_classes,
+          }
+          informational = {
+              "DUPLICATE_FUNCTION_BODIES": duplicate_functions,
+              "OVERSIZED_FUNCTIONS": oversized_functions,
+              "ONE_FIELD_DATACLASSES": one_field_dataclasses,
+          }
+          for title, findings in (*blocking.items(), *informational.items()):
+              print(f"\n=== {title} ({len(findings)}) ===")
+              for finding in findings:
+                  print(finding)
+
+          failures = {title: findings for title, findings in blocking.items() if findings}
+          if failures:
+              raise SystemExit(f"blocking structural findings remain: {', '.join(failures)}")
+          PY
