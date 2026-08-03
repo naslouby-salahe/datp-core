@@ -5,7 +5,8 @@ from functools import total_ordering
 from hashlib import file_digest, sha256
 from math import isclose, isfinite
 from pathlib import Path
-from typing import Any, ClassVar
+from types import NotImplementedType
+from typing import Callable, ClassVar, cast
 
 NUMERIC_ZERO: float = 0.0
 NO_RELATIVE_TOLERANCE: float = 0.0
@@ -39,42 +40,62 @@ def _number(value: int | float, name: str) -> float:
     return float(value)
 
 
-def _compatible_value(self: Any, other: object) -> Any:
+NumericValue = int | float
+
+
+def _numeric_value(instance: object) -> NumericValue:
+    value = getattr(instance, "value", None)
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TypeError(f"{type(instance).__name__} does not expose a numeric value")
+    return value
+
+
+def _compatible_value(self: object, other: object) -> NumericValue | NotImplementedType:
     if isinstance(other, (int, float)) and not isinstance(other, bool):
         return other
     if type(other) is type(self):
-        return getattr(other, "value")
-    family = self.comparison_family
+        return _numeric_value(other)
+    family = getattr(self, "comparison_family", None)
     if family is not None and getattr(other, "comparison_family", None) == family:
-        return getattr(other, "value")
+        return _numeric_value(other)
     return NotImplemented
 
 
-def _ordering_compare(self: Any, other: object) -> Any:
+def _ordering_compare(self: object, other: object) -> bool | NotImplementedType:
     other_value = _compatible_value(self, other)
     if other_value is NotImplemented:
         return NotImplemented
-    return self.value < other_value
+    return _numeric_value(self) < other_value
 
 
-def _typed_eq(self: Any, other: object) -> Any:
+def _typed_eq(self: object, other: object) -> bool | NotImplementedType:
     other_value = _compatible_value(self, other)
     if other_value is NotImplemented:
         return NotImplemented
-    return self.value == other_value
+    return _numeric_value(self) == other_value
 
 
-def _add_impl(self: Any, other: object) -> Any:
+def _integer_constructor(instance: object) -> Callable[[int], object]:
+    return cast(Callable[[int], object], type(instance))
+
+
+def _add_impl(self: object, other: object) -> object | NotImplementedType:
+    self_value = _numeric_value(self)
+    if not isinstance(self_value, int):
+        return NotImplemented
+    constructor = _integer_constructor(self)
     if isinstance(other, int) and not isinstance(other, bool):
-        return type(self)(self.value + other)
+        return constructor(self_value + other)
     if type(other) is type(self):
-        return type(self)(self.value + getattr(other, "value"))
+        other_value = _numeric_value(other)
+        return constructor(self_value + int(other_value))
     return NotImplemented
 
 
-def _radd_impl(self: Any, other: object) -> Any:
-    if isinstance(other, int) and not isinstance(other, bool):
-        return type(self)(other + self.value)
+def _radd_impl(self: object, other: object) -> object | NotImplementedType:
+    self_value = _numeric_value(self)
+    if isinstance(self_value, int) and isinstance(other, int) and not isinstance(other, bool):
+        return _integer_constructor(self)(other + self_value)
     return NotImplemented
 
 

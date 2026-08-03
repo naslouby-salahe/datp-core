@@ -4,7 +4,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, fields, is_dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 import numpy as np
 import skops.io as skops_io
@@ -103,7 +103,7 @@ def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
     return checksum_text(payload)
 
 
-def to_json_compatible(value: Any) -> JsonCompatible:
+def to_json_compatible(value: object) -> JsonCompatible:
     """Convert supported domain values to deterministic JSON-compatible primitives."""
     if value is None or isinstance(value, (bool, int, float, str)):
         return value
