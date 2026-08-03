@@ -28,146 +28,123 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          from textwrap import dedent
+          import re
 
           path = Path("src/datp_core/centralized_reference/evaluation.py")
           text = path.read_text(encoding="utf-8")
+          text = text.replace("ConfusionCounts", "CentralizedConfusionCounts")
+          class_block = dedent('''
+              @dataclass(frozen=True, slots=True)
+              class CentralizedConfusionCounts:
+                  true_negative: RowCount
+                  false_positive: RowCount
+                  true_positive: RowCount
+                  false_negative: RowCount
 
-          old_class = '''@dataclass(frozen=True, slots=True)
-          class ConfusionCounts:
-              true_negative: int
-              false_positive: int
-              true_positive: int
-              false_negative: int
-
-              def __post_init__(self) -> None:
-                  for name, value in (
-                      ("true_negative", self.true_negative),
-                      ("false_positive", self.false_positive),
-                      ("true_positive", self.true_positive),
-                      ("false_negative", self.false_negative),
-                  ):
-                      if isinstance(value, bool) or value < 0:
-                          raise ValueError(f"{name} must be a non-negative integer")
-          '''.replace("          ", "")
-          new_class = '''@dataclass(frozen=True, slots=True)
-          class CentralizedConfusionCounts:
-              true_negative: RowCount
-              false_positive: RowCount
-              true_positive: RowCount
-              false_negative: RowCount
-
-              def __post_init__(self) -> None:
-                  for name, value in (
-                      ("true_negative", self.true_negative),
-                      ("false_positive", self.false_positive),
-                      ("true_positive", self.true_positive),
-                      ("false_negative", self.false_negative),
-                  ):
-                      if not isinstance(value, RowCount):
-                          raise TypeError(f"{name} must be a RowCount")
-          '''.replace("          ", "")
-          if text.count(old_class) != 1:
-              raise SystemExit(f"centralized confusion class count: {text.count(old_class)}")
-          text = text.replace(old_class, new_class, 1)
-          text = text.replace("    confusion: ConfusionCounts", "    confusion: CentralizedConfusionCounts", 1)
+                  def __post_init__(self) -> None:
+                      for name, value in (
+                          ("true_negative", self.true_negative),
+                          ("false_positive", self.false_positive),
+                          ("true_positive", self.true_positive),
+                          ("false_negative", self.false_negative),
+                      ):
+                          if not isinstance(value, RowCount):
+                              raise TypeError(f"{name} must be a RowCount")
+          ''').lstrip()
+          text, count = re.subn(
+              r"@dataclass\(frozen=True, slots=True\)\nclass CentralizedConfusionCounts:.*?"
+              r"(?=\n\n@dataclass\(frozen=True, slots=True\)\nclass CentralizedMetricRecord:)",
+              class_block.rstrip(),
+              text,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit(f"centralized confusion class replacements: {count}")
           text = text.replace(
               "        if self.evaluation_row_count < 0:\n"
               "            raise ValueError(\"evaluation row count must be non-negative\")\n",
               "",
               1,
           )
-          text = text.replace(") -> ConfusionCounts:", ") -> CentralizedConfusionCounts:", 1)
-          text = text.replace("    return ConfusionCounts(", "    return CentralizedConfusionCounts(", 1)
-          for field in ("true_negative", "false_positive", "true_positive", "false_negative"):
-              text = text.replace(f"        {field}={field},", f"        {field}=RowCount({field}),", 1)
-          text = text.replace("    confusion: ConfusionCounts,", "    confusion: CentralizedConfusionCounts,", 1)
+          text = text.replace("    return CentralizedConfusionCounts(\n        true_negative=true_negative,", "    return CentralizedConfusionCounts(\n        true_negative=RowCount(true_negative),", 1)
+          text = text.replace("        false_positive=false_positive,", "        false_positive=RowCount(false_positive),", 1)
+          text = text.replace("        true_positive=true_positive,", "        true_positive=RowCount(true_positive),", 1)
+          text = text.replace("        false_negative=false_negative,", "        false_negative=RowCount(false_negative),", 1)
           text = text.replace(
               "def _rate_metric(metric: MetricId, numerator: int, denominator: int) -> CentralizedMetricRecord:",
               "def _rate_metric(metric: MetricId, numerator: RowCount, denominator: RowCount) -> CentralizedMetricRecord:",
               1,
           )
-          text = text.replace(
-              "        value=MetricValue(numerator / denominator),",
-              "        value=MetricValue(numerator.value / denominator.value),",
-              1,
-          )
-          text = text.replace("def _binary_macro_f1(confusion: ConfusionCounts)", "def _binary_macro_f1(confusion: CentralizedConfusionCounts)", 1)
-          text = text.replace("def _pooled_macro_f1(confusion: ConfusionCounts)", "def _pooled_macro_f1(confusion: CentralizedConfusionCounts)", 1)
-          text = text.replace("def _macro_f1_record(metric: MetricId, confusion: ConfusionCounts)", "def _macro_f1_record(metric: MetricId, confusion: CentralizedConfusionCounts)", 1)
-          text = text.replace("    attack_precision = confusion.true_positive / attack_precision_den", "    attack_precision = confusion.true_positive.value / attack_precision_den.value", 1)
-          text = text.replace("    attack_recall = confusion.true_positive / attack_recall_den", "    attack_recall = confusion.true_positive.value / attack_recall_den.value", 1)
-          text = text.replace("    benign_precision = confusion.true_negative / benign_precision_den", "    benign_precision = confusion.true_negative.value / benign_precision_den.value", 1)
-          text = text.replace("    benign_recall = confusion.true_negative / benign_recall_den", "    benign_recall = confusion.true_negative.value / benign_recall_den.value", 1)
+          text = text.replace("value=MetricValue(numerator / denominator)", "value=MetricValue(numerator.value / denominator.value)", 1)
+          text = text.replace("confusion.true_positive / attack_precision_den", "confusion.true_positive.value / attack_precision_den.value", 1)
+          text = text.replace("confusion.true_positive / attack_recall_den", "confusion.true_positive.value / attack_recall_den.value", 1)
+          text = text.replace("confusion.true_negative / benign_precision_den", "confusion.true_negative.value / benign_precision_den.value", 1)
+          text = text.replace("confusion.true_negative / benign_recall_den", "confusion.true_negative.value / benign_recall_den.value", 1)
           for field in ("true_negative", "false_positive", "true_positive", "false_negative"):
               text = text.replace(
                   f'            "{field}": evaluation.confusion.{field},',
                   f'            "{field}": evaluation.confusion.{field}.value,',
                   1,
               )
-          checksum_old = '''        f"{result.confusion.true_negative},{result.confusion.false_positive},"
-                  f"{result.confusion.true_positive},{result.confusion.false_negative}|{metric_payload}"
-          '''.replace("          ", "")
-          checksum_new = '''        f"{result.confusion.true_negative.value},{result.confusion.false_positive.value},"
-                  f"{result.confusion.true_positive.value},{result.confusion.false_negative.value}|{metric_payload}"
-          '''.replace("          ", "")
-          if text.count(checksum_old) != 1:
-              raise SystemExit(f"confusion checksum block count: {text.count(checksum_old)}")
-          text = text.replace(checksum_old, checksum_new, 1)
+              text = text.replace(f"result.confusion.{field}", f"result.confusion.{field}.value", 1)
           path.write_text(text, encoding="utf-8")
 
           tests_path = Path("tests/unit/centralized_reference/test_evaluation.py")
           tests = tests_path.read_text(encoding="utf-8")
-          tests = tests.replace(
-              "from datp_core.centralized_reference.evaluation import (\n    evaluate_centralized_reference,",
+          anchor = "from datp_core.centralized_reference.evaluation import (\n    evaluate_centralized_reference,"
+          replacement = (
               "from datp_core.centralized_reference.evaluation import (\n"
               "    CentralizedConfusionCounts,\n"
-              "    evaluate_centralized_reference,",
-              1,
+              "    evaluate_centralized_reference,"
           )
-          test = '''
-          def test_centralized_confusion_counts_require_row_count_values() -> None:
-              confusion = CentralizedConfusionCounts(
-                  true_negative=RowCount(10),
-                  false_positive=RowCount(2),
-                  true_positive=RowCount(7),
-                  false_negative=RowCount(1),
-              )
-              assert sum(
-                  (
-                      confusion.true_negative,
-                      confusion.false_positive,
-                      confusion.true_positive,
-                      confusion.false_negative,
-                  )
-              ) == RowCount(20)
-              with pytest.raises(TypeError, match="RowCount"):
-                  CentralizedConfusionCounts(  # type: ignore[arg-type]
-                      true_negative=10,
+          if tests.count(anchor) != 1:
+              raise SystemExit(f"centralized evaluation import anchor count: {tests.count(anchor)}")
+          tests = tests.replace(anchor, replacement, 1)
+          regression = dedent('''
+              def test_centralized_confusion_counts_require_row_count_values() -> None:
+                  confusion = CentralizedConfusionCounts(
+                      true_negative=RowCount(10),
                       false_positive=RowCount(2),
                       true_positive=RowCount(7),
                       false_negative=RowCount(1),
                   )
-          '''.replace("          ", "")
-          if test.strip() not in tests:
-              marker = "\ndef test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:\n"
-              if marker not in tests:
-                  raise SystemExit("centralized evaluation test insertion marker missing")
-              tests = tests.replace(marker, "\n" + test + marker, 1)
+                  assert sum(
+                      (
+                          confusion.true_negative,
+                          confusion.false_positive,
+                          confusion.true_positive,
+                          confusion.false_negative,
+                      )
+                  ) == RowCount(20)
+                  with pytest.raises(TypeError, match="RowCount"):
+                      CentralizedConfusionCounts(  # type: ignore[arg-type]
+                          true_negative=10,
+                          false_positive=RowCount(2),
+                          true_positive=RowCount(7),
+                          false_negative=RowCount(1),
+                      )
+          ''').lstrip()
+          marker = "\ndef test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:\n"
+          if tests.count(marker) != 1:
+              raise SystemExit(f"centralized test marker count: {tests.count(marker)}")
+          tests = tests.replace(marker, "\n" + regression.rstrip() + "\n\n" + marker.lstrip(), 1)
           tests_path.write_text(tests, encoding="utf-8")
 
           architecture_path = Path("tests/architecture/test_no_compatibility_surfaces.py")
           architecture = architecture_path.read_text(encoding="utf-8")
-          guard = '''
-          def test_source_uses_no_explicit_any_type() -> None:
-              for source_path, tree in parsed_source_files():
-                  for node in ast.walk(tree):
-                      if isinstance(node, ast.ImportFrom):
-                          assert all(alias.name != "Any" for alias in node.names), source_path
-                      elif isinstance(node, ast.Name):
-                          assert node.id != "Any", source_path
-                      elif isinstance(node, ast.Attribute):
-                          assert node.attr != "Any", source_path
-          '''.replace("          ", "")
+          guard = dedent('''
+              def test_source_uses_no_explicit_any_type() -> None:
+                  for source_path, tree in parsed_source_files():
+                      for node in ast.walk(tree):
+                          if isinstance(node, ast.ImportFrom):
+                              assert all(alias.name != "Any" for alias in node.names), source_path
+                          elif isinstance(node, ast.Name):
+                              assert node.id != "Any", source_path
+                          elif isinstance(node, ast.Attribute):
+                              assert node.attr != "Any", source_path
+          ''').lstrip()
           if guard.strip() not in architecture:
               architecture = architecture.rstrip() + "\n\n" + guard
           architecture_path.write_text(architecture, encoding="utf-8")
