@@ -19,32 +19,24 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          from textwrap import dedent
+          import re
 
-          replacements = {
-              Path("src/datp_core/thresholding/models.py"): (
-                  '''    def __post_init__(self) -> None:
-                      require_contract(
-                0.0 < self.coverage.value <= 1.0,
-                "conformal coverage must be in (0, 1]",
-                ContractSubject.THRESHOLD,
-                      )
-                      require_contract(
-                bool(self.assignments),
-                "a conformal threshold result requires at least one assigned client",
-                ContractSubject.THRESHOLD,
-                      )
-                      _validate_client_partition(
-                self.eligible_clients, tuple(a.client for a in self.assignments), self.unavailable_clients
-                      )
-
-                  @property
-                  def significance(self) -> Ratio:
-                      """Conformal miscoverage derived from the single authoritative coverage target."""
-                      return Ratio(1.0 - self.coverage.value)
-
+          models_path = Path("src/datp_core/thresholding/models.py")
+          models = models_path.read_text(encoding="utf-8")
+          replacement = dedent('''
               @dataclass(frozen=True, slots=True)
-              class ClientBenignSummary:'''.replace("              ", ""),
-                  '''    def __post_init__(self) -> None:
+              class ConformalThresholdResult:
+                  """`LOCAL_CONFORMAL_THRESHOLD`: finite-sample local conformal thresholds."""
+
+                  coordinate: FederatedTrainingCoordinate
+                  coverage: CoverageTarget
+                  eligible_clients: tuple[ClientIdentity, ...]
+                  assignments: tuple[ConformalAssignment, ...]
+                  unavailable_clients: tuple[ClientIdentity, ...]
+                  method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.LOCAL_CONFORMAL_THRESHOLD
+
+                  def __post_init__(self) -> None:
                       require_contract(
                           0.0 < self.coverage.value <= 1.0,
                           "conformal coverage must be in (0, 1]",
@@ -66,62 +58,57 @@ jobs:
 
 
               @dataclass(frozen=True, slots=True)
-              class ClientBenignSummary:'''.replace("              ", ""),
-              ),
-              Path("tests/unit/thresholding/test_models.py"): (
-                  '''def test_conformal_significance_is_derived_from_coverage() -> None:
-                      result = ConformalThresholdResult(
-                          coordinate=COORDINATE,
-                          coverage=CoverageTarget(0.95),
-                          eligible_clients=(CLIENT_A,),
-                          assignments=(
-                ConformalAssignment(
-                    client=CLIENT_A,
-                    calibration_count=RowCount(20),
-                    rank_index=19,
-                    effective_quantile=Quantile(0.95),
-                    selected_score=ScoreValue(1.0),
-                    tie_count=RowCount(1),
-                    threshold=ThresholdValue(1.0),
-                ),
+              class ClientBenignSummary:
+          ''').lstrip()
+          models, count = re.subn(
+              r"@dataclass\(frozen=True, slots=True\)\nclass ConformalThresholdResult:.*?"
+              r"@dataclass\(frozen=True, slots=True\)\nclass ClientBenignSummary:\n",
+              replacement,
+              models,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit("ConformalThresholdResult repair target not found")
+          models_path.write_text(models, encoding="utf-8")
+
+          tests_path = Path("tests/unit/thresholding/test_models.py")
+          tests = tests_path.read_text(encoding="utf-8")
+          replacement = dedent('''
+              def test_conformal_significance_is_derived_from_coverage() -> None:
+                  result = ConformalThresholdResult(
+                      coordinate=COORDINATE,
+                      coverage=CoverageTarget(0.95),
+                      eligible_clients=(CLIENT_A,),
+                      assignments=(
+                          ConformalAssignment(
+                              client=CLIENT_A,
+                              calibration_count=RowCount(20),
+                              rank_index=19,
+                              effective_quantile=Quantile(0.95),
+                              selected_score=ScoreValue(1.0),
+                              tie_count=RowCount(1),
+                              threshold=ThresholdValue(1.0),
                           ),
-                          unavailable_clients=(),
-                      )
-                      assert result.significance == Ratio(0.05)
-
-              def test_fixed_coefficient_result_holds_its_value() -> None:'''.replace("              ", ""),
-                  '''def test_conformal_significance_is_derived_from_coverage() -> None:
-                      result = ConformalThresholdResult(
-                          coordinate=COORDINATE,
-                          coverage=CoverageTarget(0.95),
-                          eligible_clients=(CLIENT_A,),
-                          assignments=(
-                              ConformalAssignment(
-                                  client=CLIENT_A,
-                                  calibration_count=RowCount(20),
-                                  rank_index=19,
-                                  effective_quantile=Quantile(0.95),
-                                  selected_score=ScoreValue(1.0),
-                                  tie_count=RowCount(1),
-                                  threshold=ThresholdValue(1.0),
-                              ),
-                          ),
-                          unavailable_clients=(),
-                      )
-                      assert result.significance == Ratio(0.05)
+                      ),
+                      unavailable_clients=(),
+                  )
+                  assert result.significance == Ratio(0.05)
 
 
-              def test_fixed_coefficient_result_holds_its_value() -> None:'''.replace("              ", ""),
-              ),
-          }
-
-          for path, (old, new) in replacements.items():
-              text = path.read_text(encoding="utf-8")
-              if new in text and old not in text:
-                  continue
-              if text.count(old) != 1:
-                  raise SystemExit(f"expected exactly one malformed block in {path}")
-              path.write_text(text.replace(old, new, 1), encoding="utf-8")
+              def test_fixed_coefficient_result_holds_its_value() -> None:
+          ''').lstrip()
+          tests, count = re.subn(
+              r"def test_conformal_significance_is_derived_from_coverage\(\) -> None:.*?"
+              r"def test_fixed_coefficient_result_holds_its_value\(\) -> None:\n",
+              replacement,
+              tests,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit("conformal significance test repair target not found")
+          tests_path.write_text(tests, encoding="utf-8")
           PY
 
       - name: Commit repairs
