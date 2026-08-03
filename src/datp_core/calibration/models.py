@@ -5,7 +5,15 @@ from enum import StrEnum
 
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CalibrationSize, Checksum, ReplicateIndex, RowCount, ScoreValue, Seed, StableRowId
+from datp_core.domain.values import (
+    CalibrationSize,
+    Checksum,
+    ReplicateIndex,
+    RowCount,
+    ScoreValue,
+    Seed,
+    StableRowId,
+)
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 
@@ -41,17 +49,15 @@ class CalibrationSupport:
 
 @dataclass(frozen=True, slots=True)
 class EligibilityDecision:
-    """The single, immutable eligibility decision for one client, fixed before evaluation."""
+    """The single eligibility decision for one immutable calibration support record."""
 
-    client: ClientIdentity
-    coordinate: FederatedTrainingCoordinate
-    benign_calibration_count: RowCount
+    support: CalibrationSupport
     minimum_support: CalibrationSize
     status: EligibilityStatus
     reason: CalibrationUnavailableReason | None
 
     def __post_init__(self) -> None:
-        meets_minimum = self.benign_calibration_count >= self.minimum_support
+        meets_minimum = self.support.benign_calibration_count >= self.minimum_support
         is_eligible = self.status is EligibilityStatus.ELIGIBLE
         is_excluded = self.status is EligibilityStatus.EXCLUDED
         _raise_first_violation(
@@ -65,6 +71,18 @@ class EligibilityDecision:
             ),
             subject=ContractSubject.CALIBRATION,
         )
+
+    @property
+    def client(self) -> ClientIdentity:
+        return self.support.client
+
+    @property
+    def coordinate(self) -> FederatedTrainingCoordinate:
+        return self.support.coordinate
+
+    @property
+    def benign_calibration_count(self) -> RowCount:
+        return self.support.benign_calibration_count
 
     @property
     def is_eligible(self) -> bool:
@@ -89,9 +107,8 @@ class CalibrationSampleReference:
 
 @dataclass(frozen=True, slots=True)
 class CalibrationSubsample:
-    """One deterministic, without-replacement subsample of a declared calibration size."""
+    """One deterministic, single-client, without-replacement calibration subsample."""
 
-    client: ClientIdentity
     size: CalibrationSize
     replicate_index: ReplicateIndex
     references: tuple[CalibrationSampleReference, ...]
@@ -108,6 +125,15 @@ class CalibrationSubsample:
                 "subsample references must be drawn without replacement",
                 subject=ContractSubject.CALIBRATION,
             )
+        if len({reference.client for reference in self.references}) != 1:
+            raise ScientificContractError(
+                "subsample references must belong to exactly one client",
+                subject=ContractSubject.CALIBRATION,
+            )
+
+    @property
+    def client(self) -> ClientIdentity:
+        return self.references[0].client
 
     @property
     def stable_row_id_set(self) -> frozenset[str]:
@@ -148,12 +174,11 @@ def _require_ascending_subsample_order(subsamples: tuple[CalibrationSubsample, .
 
 
 def _require_subsamples_belong_to_client(subsamples: tuple[CalibrationSubsample, ...], client: ClientIdentity) -> None:
-    for subsample in subsamples:
-        if any(reference.client != client for reference in subsample.references):
-            raise ScientificContractError(
-                "subsample references must belong to the manifest client",
-                subject=ContractSubject.CALIBRATION,
-            )
+    if any(subsample.client != client for subsample in subsamples):
+        raise ScientificContractError(
+            "subsample references must belong to the manifest client",
+            subject=ContractSubject.CALIBRATION,
+        )
 
 
 def _require_nested_subsamples(subsamples: tuple[CalibrationSubsample, ...]) -> None:
