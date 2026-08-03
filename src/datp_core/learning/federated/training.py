@@ -84,7 +84,7 @@ class TrainingStream(IntEnum):
     PERSONALIZED_CLIENT_UPDATE = 2
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class PreparedFederatedClientData:
     client: ClientIdentity
     features_cpu: torch.Tensor

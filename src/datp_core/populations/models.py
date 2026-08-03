@@ -343,7 +343,7 @@ class ControlledPartitionCondition:
                     raise ValueError("IID construction must not carry a concentration")
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class SplitConstructionRequest:
     """Typed request boundary for residual and chronological splits."""
 

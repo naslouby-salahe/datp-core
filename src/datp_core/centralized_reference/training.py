@@ -110,7 +110,7 @@ class CentralizedEpochLoss:
     mean_training_loss: MetricValue
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class CentralizedModelSnapshot:
     round_number: RoundNumber
     state_dict: dict[str, torch.Tensor]
@@ -148,7 +148,7 @@ class CentralizedTrainingResult:
             )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class CentralizedTrainingRequest:
     coordinate: CentralizedTrainingCoordinate
     training_features: pl.DataFrame

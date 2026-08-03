@@ -146,7 +146,7 @@ class FeasibilityAssessmentRequest:
     chronology_required: bool
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class PopulationFinalizationRequest:
     population: PopulationId
     dataset: DatasetId

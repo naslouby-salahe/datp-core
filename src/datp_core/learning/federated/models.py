@@ -52,7 +52,7 @@ def validate_client_preprocessing_match(
         )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class ClientTrainingInput:
     client: ClientIdentity
     training_features: pl.DataFrame

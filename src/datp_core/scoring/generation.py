@@ -56,7 +56,7 @@ class FederatedScoreAssetName(StrEnum):
     COMPLETE = "COMPLETE"
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class ClientScoringInput:
     client: ClientIdentity
     calibration_features: pl.DataFrame
