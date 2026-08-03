@@ -28,7 +28,6 @@ from datp_core.protocols.models import FederatedStatisticsProtocol
 from datp_core.thresholding.models import (
     CentralizedAttainmentDiagnostic,
     ClientBenignSummary,
-    CommunicationPayload,
     FederatedStatisticsThresholdResult,
     FixedCoefficientResult,
     PooledVarianceDecomposition,
@@ -131,7 +130,7 @@ def construct_federated_benign_statistics(
         for coefficient in protocol.coefficients
     )
     assignments = tuple(ThresholdAssignment(client_scores.client, matched_threshold) for client_scores in ordered)
-    communication_payload = CommunicationPayload(estimated_bytes=_serialized_payload_bytes(summaries))
+    estimated_communication_bytes = _serialized_payload_bytes(summaries)
     return FederatedStatisticsThresholdResult(
         coordinate=ordered[0].coordinate,
         quantile=quantile,
@@ -142,5 +141,5 @@ def construct_federated_benign_statistics(
         centralized_pooled_quantile_diagnostic=centralized_pooled_quantile_diagnostic,
         fixed_coefficient_curve=fixed_coefficient_curve,
         assignments=assignments,
-        communication_payload=communication_payload,
+        estimated_communication_bytes=estimated_communication_bytes,
     )

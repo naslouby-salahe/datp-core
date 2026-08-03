@@ -264,7 +264,7 @@ def feasibility_from_candidates(request: FeasibilityAssessmentRequest) -> Popula
         PopulationFeasibilityStatus.FEASIBLE,
         PopulationFeasibilityReason.CANDIDATE_SET_MATCHES_DECLARATION,
         expected,
-        accepted_n,
+        ClientCount(accepted_n),
         "candidate and accepted client sets match the locked construction contract",
     )
 
@@ -275,7 +275,9 @@ def _infeasible(
     observed: int,
     evidence: str,
 ) -> PopulationFeasibility:
-    return PopulationFeasibility(PopulationFeasibilityStatus.INFEASIBLE, reason, expected, observed, evidence)
+    return PopulationFeasibility(
+        PopulationFeasibilityStatus.INFEASIBLE, reason, expected, ClientCount(observed), evidence
+    )
 
 
 def _require_membership_row_contract(

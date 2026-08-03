@@ -44,7 +44,11 @@ from datp_core.domain.values import (
     checksum_file,
     checksum_text,
 )
-from datp_core.learning.autoencoder import ReconstructionAutoencoder
+from datp_core.learning.autoencoder import (
+    AutoencoderState,
+    AutoencoderStateView,
+    ReconstructionAutoencoder,
+)
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
     STABLE_ROW_ID_COLUMN,
@@ -113,7 +117,7 @@ class CentralizedEpochLoss:
 @dataclass(frozen=True, slots=True, eq=False)
 class CentralizedModelSnapshot:
     round_number: RoundNumber
-    state_dict: dict[str, torch.Tensor]
+    state_dict: AutoencoderState
     mean_training_loss: MetricValue
 
 
@@ -293,7 +297,7 @@ def declared_centralized_training_values() -> tuple[
     return CENTRALIZED_TRAINING_PROTOCOL, NBAIOT_AUTOENCODER, LEARNING_RATE, BATCH_SIZE, WEIGHT_DECAY
 
 
-def persist_state_dict_tensors(state_dict: dict[str, torch.Tensor], path: Path) -> Checksum:
+def persist_state_dict_tensors(state_dict: AutoencoderStateView, path: Path) -> Checksum:
     path.parent.mkdir(parents=True, exist_ok=True)
     cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
     save_file(cpu_state, str(path))

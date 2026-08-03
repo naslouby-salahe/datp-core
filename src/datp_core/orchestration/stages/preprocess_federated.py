@@ -577,7 +577,7 @@ def _population_manifest_from_document(document: PopulationManifestDocument) -> 
             status=document.feasibility_status,
             reason=document.feasibility_reason,
             expected_client_count=ClientCount(len(document.candidate_clients)),
-            observed_client_count=len(document.accepted_clients),
+            observed_client_count=ClientCount(len(document.accepted_clients)),
             evidence="persisted population manifest",
         ),
         family_by_client=(),

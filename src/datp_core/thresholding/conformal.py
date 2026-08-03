@@ -9,7 +9,7 @@ score errors propagate; they are never silently converted into unavailability.
 
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CoverageTarget, Quantile, Ratio, RowCount, ScoreValue
+from datp_core.domain.values import CoverageTarget, Quantile, RowCount, ScoreValue
 from datp_core.populations.models import ClientIdentity
 from datp_core.thresholding.models import ConformalAssignment, ConformalThresholdResult
 from datp_core.thresholding.quantiles import (
@@ -30,7 +30,6 @@ def construct_local_conformal_threshold(
         )
     coverage_value = quantile.value
     coverage = CoverageTarget(coverage_value)
-    significance = Ratio(1.0 - coverage_value)
 
     eligible_clients = tuple(item.client for item in eligible)
 
@@ -64,7 +63,6 @@ def construct_local_conformal_threshold(
     return ConformalThresholdResult(
         coordinate=eligible[0].coordinate,
         coverage=coverage,
-        significance=significance,
         eligible_clients=eligible_clients,
         assignments=tuple(assignments),
         unavailable_clients=tuple(unavailable),

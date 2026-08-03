@@ -28,7 +28,6 @@ from datp_core.thresholding.models import (
     ClientBenignSummary,
     ClusterFingerprint,
     ClusterMembership,
-    CommunicationPayload,
     ConformalAssignment,
     ConformalThresholdResult,
     FamilyMembership,
@@ -323,7 +322,6 @@ def test_conformal_threshold_result_rejects_client_both_assigned_and_unavailable
         return ConformalThresholdResult(
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
-            significance=Ratio(0.05),
             eligible_clients=(CLIENT_A,),
             assignments=(assignment,),
             unavailable_clients=(CLIENT_A,),
@@ -372,11 +370,25 @@ def test_centralized_attainment_diagnostic_rejects_out_of_range_target() -> None
         build()
 
 
-def test_communication_payload_declares_fixed_fields() -> None:
-    payload = CommunicationPayload(estimated_bytes=ByteCount(10))
-    assert payload.fields == ("count", "mean", "variance")
-    assert payload.estimated_bytes == ByteCount(10)
-
+def test_conformal_significance_is_derived_from_coverage() -> None:
+    result = ConformalThresholdResult(
+        coordinate=COORDINATE,
+        coverage=CoverageTarget(0.95),
+        eligible_clients=(CLIENT_A,),
+        assignments=(
+  ConformalAssignment(
+      client=CLIENT_A,
+      calibration_count=RowCount(20),
+      rank_index=19,
+      effective_quantile=Quantile(0.95),
+      selected_score=ScoreValue(1.0),
+      tie_count=RowCount(1),
+      threshold=ThresholdValue(1.0),
+  ),
+        ),
+        unavailable_clients=(),
+    )
+    assert result.significance == Ratio(0.05)
 
 def test_fixed_coefficient_result_holds_its_value() -> None:
     result = FixedCoefficientResult(coefficient=SummaryCoefficient(2.0), threshold=ThresholdValue(3.0))
@@ -486,7 +498,6 @@ def test_conformal_threshold_result_requires_at_least_one_assignment() -> None:
         return ConformalThresholdResult(
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
-            significance=Ratio(0.05),
             eligible_clients=(),
             assignments=(),
             unavailable_clients=(),
@@ -512,7 +523,6 @@ def test_conformal_threshold_result_rejects_duplicate_assignments() -> None:
         return ConformalThresholdResult(
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
-            significance=Ratio(0.05),
             eligible_clients=(CLIENT_A,),
             assignments=duped,
             unavailable_clients=(),
@@ -537,7 +547,6 @@ def test_conformal_threshold_result_rejects_duplicate_unavailable_clients() -> N
         return ConformalThresholdResult(
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
-            significance=Ratio(0.05),
             eligible_clients=(CLIENT_A, CLIENT_B),
             assignments=(assignment,),
             unavailable_clients=(CLIENT_B, CLIENT_B),
@@ -608,7 +617,6 @@ def test_conformal_threshold_result_rejects_incomplete_client_coverage() -> None
         return ConformalThresholdResult(
             coordinate=COORDINATE,
             coverage=CoverageTarget(0.95),
-            significance=Ratio(0.05),
             eligible_clients=(CLIENT_A, CLIENT_B),
             assignments=(assignment,),
             unavailable_clients=(),
@@ -843,7 +851,7 @@ def test_federated_statistics_result_rejects_duplicate_client_summaries() -> Non
             centralized_pooled_quantile_diagnostic=ThresholdValue(1.0),
             fixed_coefficient_curve=(),
             assignments=(ThresholdAssignment(CLIENT_A, ThresholdValue(1.0)),),
-            communication_payload=CommunicationPayload(estimated_bytes=ByteCount(10)),
+            estimated_communication_bytes=ByteCount(10),
         )
 
     with pytest.raises(ScientificContractError, match="unique client identities"):

@@ -61,8 +61,7 @@ def test_client_summaries_never_carry_a_benign_exceedance_count_for_this_constru
     assert all(summary.benign_exceedance_count is None for summary in result.client_summaries)
 
 
-def test_communication_payload_only_declares_count_mean_variance() -> None:
+def test_estimated_communication_bytes_are_reported_directly() -> None:
     clients = _homogeneous_clients()
     result = construct_federated_benign_statistics(clients, FEDERATED_STATISTICS_PROTOCOL, QUANTILE)
-    assert result.communication_payload.fields == ("count", "mean", "variance")
-    assert result.communication_payload.estimated_bytes.value > 0
+    assert result.estimated_communication_bytes.value > 0

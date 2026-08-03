@@ -225,7 +225,7 @@ class DirichletPartitionDiagnosticsDocument(StrictModel):
 class ChronologicalPartitionDiagnosticsDocument(StrictModel):
     population: PopulationId
     expected_group_count: ClientCount
-    observed_eligible_group_count: int
+    observed_eligible_group_count: ClientCount
     eligible_group_ids: tuple[str, ...]
     excluded_group_ids: tuple[str, ...]
     exclusion_reasons: tuple[ChronologyExclusionReason, ...]
@@ -234,14 +234,14 @@ class ChronologicalPartitionDiagnosticsDocument(StrictModel):
 
     @model_validator(mode="after")
     def validate_diagnostics(self) -> "ChronologicalPartitionDiagnosticsDocument":
-        if self.observed_eligible_group_count != len(self.eligible_group_ids):
+        if self.observed_eligible_group_count.value != len(self.eligible_group_ids):
             raise ValueError("observed eligible count must match eligible identities")
         if len(self.excluded_group_ids) != len(self.exclusion_reasons):
             raise ValueError("each excluded group requires one typed reason")
         if min(
             self.duplicate_timestamp_rows.value,
             self.total_temporal_rows.value,
-            self.observed_eligible_group_count,
+            self.observed_eligible_group_count.value,
         ) < 0:
             raise ValueError("chronology diagnostic counts must be non-negative")
         return self
@@ -305,12 +305,10 @@ class PopulationFeasibility:
     status: PopulationFeasibilityStatus
     reason: PopulationFeasibilityReason
     expected_client_count: ClientCount
-    observed_client_count: int
+    observed_client_count: ClientCount
     evidence: str
 
     def __post_init__(self) -> None:
-        if self.observed_client_count < 0:
-            raise ValueError("observed client count must be non-negative")
         if not self.evidence:
             raise ValueError("feasibility requires evidence")
 

@@ -607,7 +607,6 @@ class ConformalThresholdResult:
 
     coordinate: FederatedTrainingCoordinate
     coverage: CoverageTarget
-    significance: Ratio
     eligible_clients: tuple[ClientIdentity, ...]
     assignments: tuple[ConformalAssignment, ...]
     unavailable_clients: tuple[ClientIdentity, ...]
@@ -615,21 +614,23 @@ class ConformalThresholdResult:
 
     def __post_init__(self) -> None:
         require_contract(
-            floats_absolutely_close(
-                self.coverage.value + self.significance.value, 1.0, FRACTION_TOTAL_ABSOLUTE_TOLERANCE
-            ),
-            "conformal coverage and significance must be complements",
-            ContractSubject.THRESHOLD,
+  0.0 < self.coverage.value <= 1.0,
+  "conformal coverage must be in (0, 1]",
+  ContractSubject.THRESHOLD,
         )
         require_contract(
-            bool(self.assignments),
-            "a conformal threshold result requires at least one assigned client",
-            ContractSubject.THRESHOLD,
+  bool(self.assignments),
+  "a conformal threshold result requires at least one assigned client",
+  ContractSubject.THRESHOLD,
         )
         _validate_client_partition(
-            self.eligible_clients, tuple(a.client for a in self.assignments), self.unavailable_clients
+  self.eligible_clients, tuple(a.client for a in self.assignments), self.unavailable_clients
         )
 
+    @property
+    def significance(self) -> Ratio:
+        """Conformal miscoverage derived from the single authoritative coverage target."""
+        return Ratio(1.0 - self.coverage.value)
 
 @dataclass(frozen=True, slots=True)
 class ClientBenignSummary:
@@ -746,14 +747,6 @@ class FixedCoefficientResult:
 
 
 @dataclass(frozen=True, slots=True)
-class CommunicationPayload:
-    """Estimated (not measured) serialized byte size of one round of communicated fields."""
-
-    fields: ClassVar[tuple[str, ...]] = ("count", "mean", "variance")
-    estimated_bytes: ByteCount
-
-
-@dataclass(frozen=True, slots=True)
 class FederatedStatisticsThresholdResult:
     """`FEDERATED_BENIGN_STATISTICS`: federated benign summary-statistics comparator."""
 
@@ -766,7 +759,7 @@ class FederatedStatisticsThresholdResult:
     centralized_pooled_quantile_diagnostic: ThresholdValue
     fixed_coefficient_curve: tuple[FixedCoefficientResult, ...]
     assignments: tuple[ThresholdAssignment, ...]
-    communication_payload: CommunicationPayload
+    estimated_communication_bytes: ByteCount
     method: ClassVar[FederatedThresholdMethod] = FederatedThresholdMethod.FEDERATED_BENIGN_STATISTICS
 
     def __post_init__(self) -> None:

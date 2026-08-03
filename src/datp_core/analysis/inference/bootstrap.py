@@ -39,7 +39,7 @@ class _ConfirmatoryContractError(ValueError):
         self.reason = reason
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class _BootstrapDistribution:
     estimate: MetricValue
     paired_deltas: NDArray[np.float64]
