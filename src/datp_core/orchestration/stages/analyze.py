@@ -37,7 +37,7 @@ from datp_core.analysis.temporal import (
     validate_frozen_recalibrated_pair,
 )
 from datp_core.artifacts.serialization import to_json_compatible
-from datp_core.artifacts.store import AtomicPublication, publish_atomically
+from datp_core.artifacts.store import publish_atomically
 from datp_core.domain.enums import (
     AvailabilityStatus,
     EvidenceRole,
@@ -47,7 +47,7 @@ from datp_core.domain.enums import (
     TemporalState,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import BootstrapReplicateCount, Checksum, Ratio, Seed, checksum_file, checksum_text
+from datp_core.domain.values import BootstrapReplicateCount, Checksum, Ratio, Seed, checksum_text
 from datp_core.experiments.models import ExternalTemporalExecutionIdentity, require_execution_identity
 from datp_core.protocols.models import StatisticalInferenceProtocol
 
@@ -96,6 +96,15 @@ class _AnalysisArtifacts:
     multiplicity_availability: AvailabilityStatus
     multiplicity_reason: str
     mechanisms: tuple[MechanismResult, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class _ExternalAnalysisArtifacts:
+    interval: BootstrapInterval
+    descriptive: DescriptiveSummary
+    sign_consistency: PairedDifferenceCounts
+    wilcoxon: WilcoxonResult
+    rank_biserial: RankBiserialResult
 
 
 @dataclass(frozen=True, slots=True)
@@ -169,47 +178,49 @@ def _is_reusable(directory: Path, digest: Checksum) -> bool:
 def _is_reusable_generic(directory: Path, asset_name: AnalysisAssetName, digest: Checksum) -> bool:
     complete = directory / AnalysisAssetName.COMPLETE
     document = directory / asset_name
-    if not complete.is_file() or not document.is_file():
-        return False
-    return complete.read_text(encoding="utf-8").strip() == digest.value
+    return complete.is_file() and document.is_file() and complete.read_text(encoding="utf-8").strip() == digest.value
 
 
 def analyze_stage(request: AnalyzeRequest) -> AnalyzeResult:
-    artifacts = _analyze(request, paired_bca_interval(
-        request.contrasts,
-        protocol=request.inference_protocol,
-        replicate_count=request.bootstrap_replicates,
-        analysis_seed=request.analysis_seed,
-    ))
+    artifacts = _analyze(
+        request,
+        paired_bca_interval(
+            request.contrasts,
+            protocol=request.inference_protocol,
+            replicate_count=request.bootstrap_replicates,
+            analysis_seed=request.analysis_seed,
+        ),
+    )
     payload = dumps(to_json_compatible(artifacts), indent=2, sort_keys=True) + "\n"
     digest = checksum_text(payload)
 
-    def write(temporary: Path) -> None:
+    def write(temporary: Path) -> _AnalysisArtifacts:
         (temporary / AnalysisAssetName.DOCUMENT).write_text(payload, encoding="utf-8")
         (temporary / AnalysisAssetName.COMPLETE).write_text(digest.value, encoding="utf-8")
+        return artifacts
 
-    reused = publish_atomically(
-        AtomicPublication(
-            target=request.output_directory,
-            overwrite=request.overwrite,
-            is_reusable=lambda directory: _is_reusable(directory, digest),
-            write=write,
-            remove_target=rmtree,
-        )
+    outcome = publish_atomically(
+        target=request.output_directory,
+        overwrite=request.overwrite,
+        is_reusable=lambda directory: _is_reusable(directory, digest),
+        write=write,
+        reusable_value=lambda _directory: artifacts,
+        remove_target=rmtree,
     )
+    value = outcome.value
     return AnalyzeResult(
-        publication_status=PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED,
-        interval=artifacts.interval,
-        decision=artifacts.decision,
-        descriptive=artifacts.descriptive,
-        sign_consistency=artifacts.sign_consistency,
-        wilcoxon=artifacts.wilcoxon,
-        rank_biserial=artifacts.rank_biserial,
-        multiplicity=artifacts.multiplicity,
-        multiplicity_availability=artifacts.multiplicity_availability,
-        multiplicity_reason=artifacts.multiplicity_reason,
-        mechanisms=artifacts.mechanisms,
-        complete_digest=checksum_file(request.output_directory / AnalysisAssetName.COMPLETE),
+        publication_status=outcome.status,
+        interval=value.interval,
+        decision=value.decision,
+        descriptive=value.descriptive,
+        sign_consistency=value.sign_consistency,
+        wilcoxon=value.wilcoxon,
+        rank_biserial=value.rank_biserial,
+        multiplicity=value.multiplicity,
+        multiplicity_availability=value.multiplicity_availability,
+        multiplicity_reason=value.multiplicity_reason,
+        mechanisms=value.mechanisms,
+        complete_digest=outcome.complete_digest,
     )
 
 
@@ -218,54 +229,52 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
     if identity is None:
         raise RuntimeError("external analysis requires an execution identity")
     identity.require_evidence_role(request.plan.evidence_role)
-    interval = external_paired_bca_interval(
-        request.contrasts,
-        plan=request.plan,
-        replicate_count=request.bootstrap_replicates,
-        analysis_seed=request.analysis_seed,
-    )
     deltas = tuple(contrast.delta for contrast in request.contrasts)
-    descriptive = summarize_values(
-        deltas,
-        evidence_role=request.plan.evidence_role,
-        counts=ObservationCounts(unavailable=0, excluded=0),
-        quantiles=_DEFAULT_QUANTILES,
-    )
-    sign_consistency = count_paired_differences(deltas)
-    wilcoxon = paired_wilcoxon(request.contrasts)
-    rank_biserial = matched_pairs_rank_biserial(request.contrasts)
-    payload = dumps(
-        to_json_compatible(
-            {
-                "evidence_role": request.plan.evidence_role,
-                "interval": interval,
-                "descriptive": descriptive,
-                "sign_consistency": sign_consistency,
-                "wilcoxon": wilcoxon,
-                "rank_biserial": rank_biserial,
-            }
+    artifacts = _ExternalAnalysisArtifacts(
+        interval=external_paired_bca_interval(
+            request.contrasts,
+            plan=request.plan,
+            replicate_count=request.bootstrap_replicates,
+            analysis_seed=request.analysis_seed,
         ),
+        descriptive=summarize_values(
+            deltas,
+            evidence_role=request.plan.evidence_role,
+            counts=ObservationCounts(unavailable=0, excluded=0),
+            quantiles=_DEFAULT_QUANTILES,
+        ),
+        sign_consistency=count_paired_differences(deltas),
+        wilcoxon=paired_wilcoxon(request.contrasts),
+        rank_biserial=matched_pairs_rank_biserial(request.contrasts),
+    )
+    payload = dumps(
+        to_json_compatible({"evidence_role": request.plan.evidence_role, **to_json_compatible(artifacts)}),
         indent=2,
         sort_keys=True,
     ) + "\n"
     digest = checksum_text(payload)
-    reused = publish_atomically(
-        AtomicPublication(
-            request.output_directory,
-            request.overwrite,
-            lambda directory: _is_reusable_generic(directory, AnalysisAssetName.EXTERNAL_DOCUMENT, digest),
-            lambda temporary: _write_external_analysis(temporary, payload, digest),
-            rmtree,
-        )
+
+    def write(temporary: Path) -> _ExternalAnalysisArtifacts:
+        _write_external_analysis(temporary, payload, digest)
+        return artifacts
+
+    outcome = publish_atomically(
+        target=request.output_directory,
+        overwrite=request.overwrite,
+        is_reusable=lambda directory: _is_reusable_generic(directory, AnalysisAssetName.EXTERNAL_DOCUMENT, digest),
+        write=write,
+        reusable_value=lambda _directory: artifacts,
+        remove_target=rmtree,
     )
+    value = outcome.value
     return ExternalAnalyzeResult(
-        publication_status=PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED,
-        interval=interval,
-        descriptive=descriptive,
-        sign_consistency=sign_consistency,
-        wilcoxon=wilcoxon,
-        rank_biserial=rank_biserial,
-        complete_digest=checksum_file(request.output_directory / AnalysisAssetName.COMPLETE),
+        publication_status=outcome.status,
+        interval=value.interval,
+        descriptive=value.descriptive,
+        sign_consistency=value.sign_consistency,
+        wilcoxon=value.wilcoxon,
+        rank_biserial=value.rank_biserial,
+        complete_digest=outcome.complete_digest,
     )
 
 
@@ -286,19 +295,23 @@ def analyze_temporal_stage(request: TemporalAnalyzeRequest) -> TemporalAnalyzeRe
         sort_keys=True,
     ) + "\n"
     digest = checksum_text(payload)
-    reused = publish_atomically(
-        AtomicPublication(
-            request.output_directory,
-            request.overwrite,
-            lambda directory: _is_reusable_generic(directory, AnalysisAssetName.TEMPORAL_DOCUMENT, digest),
-            lambda temporary: _write_temporal_analysis(temporary, payload, digest),
-            rmtree,
-        )
+
+    def write(temporary: Path) -> tuple[TemporalRecoveryResult, ...]:
+        _write_temporal_analysis(temporary, payload, digest)
+        return request.records
+
+    outcome = publish_atomically(
+        target=request.output_directory,
+        overwrite=request.overwrite,
+        is_reusable=lambda directory: _is_reusable_generic(directory, AnalysisAssetName.TEMPORAL_DOCUMENT, digest),
+        write=write,
+        reusable_value=lambda _directory: request.records,
+        remove_target=rmtree,
     )
     return TemporalAnalyzeResult(
-        publication_status=PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED,
-        records=request.records,
-        complete_digest=checksum_file(request.output_directory / AnalysisAssetName.COMPLETE),
+        publication_status=outcome.status,
+        records=outcome.value,
+        complete_digest=outcome.complete_digest,
     )
 
 
