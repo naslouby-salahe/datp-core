@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar
 
 from datp_core.anchor.gate import assert_gate_not_bypassable, decide_anchor_gate, persist_anchor_gate_diagnostics
 from datp_core.anchor.models import (
@@ -24,11 +23,6 @@ from datp_core.protocols.models import AnchorDecisionProtocol
 
 
 @dataclass(frozen=True, slots=True)
-class CollectionCount(NonNegativeIntegerValue):
-    validation_name: ClassVar[str] = "collection count"
-
-
-@dataclass(frozen=True, slots=True)
 class VerifyAnchorStageRequest:
     protocol: AnchorDecisionProtocol
     observations: tuple[AnchorObservedMetric, ...] | None = None
@@ -42,9 +36,9 @@ class VerifyAnchorStageStatus:
     stage: StageOperationId
     gate_status: AnchorGateStatus
     dependent_readiness: ExperimentReadiness
-    discrepancy_count: CollectionCount
-    observation_count: CollectionCount
-    reference_count: CollectionCount
+    discrepancy_count: NonNegativeIntegerValue
+    observation_count: NonNegativeIntegerValue
+    reference_count: NonNegativeIntegerValue
     dependency_blocker: str | None
     diagnostics_checksum: Checksum
 
@@ -83,9 +77,9 @@ def verify_anchor_stage(request: VerifyAnchorStageRequest) -> VerifyAnchorStageR
         stage=StageOperationId.VERIFY_ANCHOR,
         gate_status=decision.status,
         dependent_readiness=decision.dependent_readiness,
-        discrepancy_count=CollectionCount(len(decision.reproduction.discrepancies)),
-        observation_count=CollectionCount(len(decision.reproduction.observations)),
-        reference_count=CollectionCount(len(decision.reproduction.references)),
+        discrepancy_count=NonNegativeIntegerValue(len(decision.reproduction.discrepancies)),
+        observation_count=NonNegativeIntegerValue(len(decision.reproduction.observations)),
+        reference_count=NonNegativeIntegerValue(len(decision.reproduction.references)),
         dependency_blocker=blocker_detail,
         diagnostics_checksum=diagnostics_checksum,
     )
