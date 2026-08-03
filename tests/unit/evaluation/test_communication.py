@@ -31,8 +31,7 @@ def test_communication_totals_are_exact_serialized_byte_counts() -> None:
     result = summarize_communication(Seed(6), coordinate, (message,))
 
     assert result.total_estimated_serialized_bytes.value == 3
-    assert result.result.estimated_serialized_bytes.value is not None
-    assert result.result.estimated_serialized_bytes.value.value == 3.0
+    assert result.estimated_serialized_bytes_metric.value.value == 3.0
 
 
 def test_empty_payload_is_rejected() -> None:
