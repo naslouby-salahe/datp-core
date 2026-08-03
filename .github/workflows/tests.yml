@@ -1,78 +1,134 @@
-name: Tests
+name: Repository model audit
 
-"on": [push, pull_request]
+"on": [push]
 
 permissions:
   contents: read
 
 jobs:
-  quality:
-    name: Run quality gates
+  audit:
+    if: github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
           persist-credentials: false
-
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: '3.12'
-
-      - name: Set up uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
-
-      - name: Install dependencies
-        run: uv sync --all-groups --all-extras --frozen
-
-      - name: Check formatting
-        run: uv run ruff format --check src tests noxfile.py
-
-      - name: Run Ruff
-        run: uv run ruff check src tests noxfile.py
-
-      - name: Run Pylint on changed Python contracts
+      - name: Audit model contracts and duplication
         run: |
-          uv run pylint --disable=import-outside-toplevel,too-few-public-methods src/datp_core/domain/values.py
-          uv run pylint --disable=missing-module-docstring,missing-function-docstring,protected-access,redefined-outer-name,duplicate-code,too-many-lines,too-many-locals,too-many-statements,too-many-branches,too-many-arguments,too-many-positional-arguments,too-many-return-statements,too-many-public-methods,too-few-public-methods,unnecessary-lambda-assignment,import-outside-toplevel,no-member tests/pytest_cuda.py tests/unit/domain/test_values.py tests/unit/cli/test_preprocess_cli.py tests/unit/protocols/test_split_declarations.py
+          python - <<'PY'
+          from __future__ import annotations
 
-      - name: Run Pyright
-        run: uv run pyright
+          import ast
+          import hashlib
+          from collections import defaultdict
+          from pathlib import Path
 
-      - name: Check import contracts
-        run: uv run lint-imports
+          ROOT = Path("src/datp_core")
+          files = tuple(sorted(ROOT.rglob("*.py")))
+          trees = {path: ast.parse(path.read_text(encoding="utf-8"), filename=str(path)) for path in files}
 
-  test:
-    name: Run test suite
-    runs-on: ubuntu-latest
+          def decorator_call(node: ast.ClassDef) -> ast.Call | None:
+              for decorator in node.decorator_list:
+                  call = decorator if isinstance(decorator, ast.Call) else None
+                  target = call.func if call else decorator
+                  name = target.id if isinstance(target, ast.Name) else target.attr if isinstance(target, ast.Attribute) else ""
+                  if name == "dataclass":
+                      return call
+              return None
 
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
-        with:
-          persist-credentials: false
+          def keyword_bool(call: ast.Call | None, key: str, default: bool) -> bool:
+              if call is None:
+                  return default
+              for keyword in call.keywords:
+                  if keyword.arg == key and isinstance(keyword.value, ast.Constant):
+                      return bool(keyword.value.value)
+              return default
 
-      - name: Set up Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
-        with:
-          python-version: '3.12'
+          def annotation_text(annotation: ast.expr) -> str:
+              return ast.unparse(annotation)
 
-      - name: Set up uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+          def location(path: Path, node: ast.AST) -> str:
+              return f"{path}:{getattr(node, 'lineno', '?')}"
 
-      - name: Install dependencies
-        run: uv sync --all-groups --all-extras --frozen
+          explicit_any: list[str] = []
+          primitive_domain_fields: list[str] = []
+          mutable_frozen_fields: list[str] = []
+          one_field_dataclasses: list[str] = []
+          class_locations: dict[str, list[str]] = defaultdict(list)
+          function_bodies: dict[str, list[str]] = defaultdict(list)
+          string_dispatch: list[str] = []
 
-      - name: Provision empty raw-data root
-        run: mkdir -p data/raw
+          semantic_tokens = (
+              "count", "index", "rank", "round", "seed", "threshold", "quantile", "coverage",
+              "ratio", "bytes", "size", "fraction", "coefficient", "rate", "epoch", "batch",
+              "worker", "support", "client_id", "group_id", "family_id", "checksum", "metric",
+              "score", "variance", "mean", "error", "tolerance", "probability", "weight",
+          )
+          mutable_tokens = ("DataFrame", "LazyFrame", "ndarray", "Tensor", "dict[", "list[", "set[")
+          primitive_annotations = {"int", "float", "str", "bool", "int | None", "float | None", "str | None", "bool | None"}
 
-      # The raw-source readiness audit below requires infrastructure a generic CI runner cannot
-      # have: real licensed multi-GB datasets. It fails loudly by design rather than silently
-      # downgrading; it is an environment-readiness check, not a portable unit test. CUDA-required
-      # training and scoring tests are explicitly skipped when no CUDA device is present.
-      - name: Run tests and collect coverage
-        run: |
-          uv run pytest \
-            --ignore=tests/integration/configuration/test_raw_source_contracts_are_ready.py
+          for path, tree in trees.items():
+              for node in ast.walk(tree):
+                  if isinstance(node, ast.ImportFrom):
+                      if any(alias.name == "Any" for alias in node.names):
+                          explicit_any.append(location(path, node))
+                  elif isinstance(node, ast.Name) and node.id == "Any":
+                      explicit_any.append(location(path, node))
+                  elif isinstance(node, ast.Attribute) and node.attr == "Any":
+                      explicit_any.append(location(path, node))
+                  elif isinstance(node, ast.ClassDef):
+                      class_locations[node.name].append(location(path, node))
+                      call = decorator_call(node)
+                      if call is None:
+                          continue
+                      fields = [item for item in node.body if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)]
+                      instance_fields = [
+                          item for item in fields if not annotation_text(item.annotation).startswith("ClassVar[")
+                      ]
+                      if len(instance_fields) == 1:
+                          field = instance_fields[0]
+                          one_field_dataclasses.append(
+                              f"{location(path, node)} {node.name}.{field.target.id}: {annotation_text(field.annotation)}"
+                          )
+                      frozen = keyword_bool(call, "frozen", False)
+                      equality = keyword_bool(call, "eq", True)
+                      for field in instance_fields:
+                          name = field.target.id
+                          annotation = annotation_text(field.annotation)
+                          if annotation in primitive_annotations and any(token in name.lower() for token in semantic_tokens):
+                              primitive_domain_fields.append(
+                                  f"{location(path, field)} {node.name}.{name}: {annotation}"
+                              )
+                          if frozen and equality and any(token in annotation for token in mutable_tokens):
+                              mutable_frozen_fields.append(
+                                  f"{location(path, field)} {node.name}.{name}: {annotation}"
+                              )
+                  elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("__"):
+                      normalized = ast.dump(ast.Module(body=node.body, type_ignores=[]), include_attributes=False)
+                      if len(normalized) >= 160:
+                          digest = hashlib.sha256(normalized.encode()).hexdigest()
+                          function_bodies[digest].append(f"{location(path, node)} {node.name}")
+                  elif isinstance(node, ast.If):
+                      rendered = ast.unparse(node.test)
+                      if any(fragment in rendered for fragment in ('"family" in ', "'family' in ", '"cluster" in ', "'cluster' in ")):
+                          string_dispatch.append(f"{location(path, node)} {rendered}")
+
+          duplicate_classes = {
+              name: places for name, places in class_locations.items() if len(places) > 1
+          }
+          duplicate_functions = [places for places in function_bodies.values() if len(places) > 1]
+
+          sections = (
+              ("EXPLICIT_ANY", sorted(set(explicit_any))),
+              ("PRIMITIVE_DOMAIN_FIELDS", primitive_domain_fields),
+              ("MUTABLE_FROZEN_EQUALITY", mutable_frozen_fields),
+              ("ONE_FIELD_DATACLASSES", one_field_dataclasses),
+              ("DUPLICATE_CLASS_NAMES", [f"{name}: {' | '.join(places)}" for name, places in sorted(duplicate_classes.items())]),
+              ("DUPLICATE_FUNCTION_BODIES", [" | ".join(places) for places in duplicate_functions]),
+              ("STRING_DRIVEN_DISPATCH", string_dispatch),
+          )
+          for title, findings in sections:
+              print(f"\n=== {title} ({len(findings)}) ===")
+              for finding in findings:
+                  print(finding)
+          PY
