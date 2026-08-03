@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 from datp_core.anchor.gate import assert_gate_not_bypassable, decide_anchor_gate, persist_anchor_gate_diagnostics
 from datp_core.anchor.models import (
@@ -33,7 +34,7 @@ class VerifyAnchorStageRequest:
 
 @dataclass(frozen=True, slots=True)
 class VerifyAnchorStageStatus:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.VERIFY_ANCHOR
     gate_status: AnchorGateStatus
     dependent_readiness: ExperimentReadiness
     discrepancy_count: NonNegativeIntegerValue
@@ -74,7 +75,6 @@ def verify_anchor_stage(request: VerifyAnchorStageRequest) -> VerifyAnchorStageR
         None if decision.reproduction.dependency_blocker is None else decision.reproduction.dependency_blocker.detail
     )
     status = VerifyAnchorStageStatus(
-        stage=StageOperationId.VERIFY_ANCHOR,
         gate_status=decision.status,
         dependent_readiness=decision.dependent_readiness,
         discrepancy_count=NonNegativeIntegerValue(len(decision.reproduction.discrepancies)),
