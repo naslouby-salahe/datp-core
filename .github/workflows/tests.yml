@@ -1,6 +1,6 @@
 name: Tests
 
-"on": [push]
+"on": [push, pull_request]
 
 permissions:
   contents: read
@@ -31,11 +31,9 @@ jobs:
         run: mkdir -p data/raw
 
       # The raw-source readiness audit below requires infrastructure a generic CI runner cannot
-      # have: real licensed multi-GB datasets. It fails loudly by design (configs/runtime.yaml:
-      # raw_source_policy) rather than silently downgrading -- it is an environment-readiness
-      # check, not a portable unit test, and is exercised on real developer hardware instead.
-      # CUDA-required training/scoring tests self-skip via torch.cuda.is_available() when no
-      # CUDA device is present, so they need no CI-side exclusion.
+      # have: real licensed multi-GB datasets. It fails loudly by design rather than silently
+      # downgrading; it is an environment-readiness check, not a portable unit test. CUDA-required
+      # training and scoring tests self-skip when no CUDA device is present.
       - name: Run tests and collect coverage
         run: |
           uv run pytest \
