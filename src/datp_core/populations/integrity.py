@@ -13,7 +13,7 @@ from datp_core.domain.enums import (
     StageOperationId,
 )
 from datp_core.domain.errors import DataIntegrityError, LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount, RowCount, Seed
+from datp_core.domain.values import Checksum, ClientCount, NonNegativeIntegerValue, RowCount, Seed
 from datp_core.populations.capabilities import population_capabilities, population_declaration
 from datp_core.populations.models import (
     CLIENT_ID_COLUMN,
@@ -264,7 +264,7 @@ def feasibility_from_candidates(request: FeasibilityAssessmentRequest) -> Popula
         PopulationFeasibilityStatus.FEASIBLE,
         PopulationFeasibilityReason.CANDIDATE_SET_MATCHES_DECLARATION,
         expected,
-        ClientCount(accepted_n),
+        NonNegativeIntegerValue(accepted_n),
         "candidate and accepted client sets match the locked construction contract",
     )
 
@@ -276,7 +276,7 @@ def _infeasible(
     evidence: str,
 ) -> PopulationFeasibility:
     return PopulationFeasibility(
-        PopulationFeasibilityStatus.INFEASIBLE, reason, expected, ClientCount(observed), evidence
+        PopulationFeasibilityStatus.INFEASIBLE, reason, expected, NonNegativeIntegerValue(observed), evidence
     )
 
 

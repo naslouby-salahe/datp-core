@@ -388,7 +388,7 @@ def test_conformal_significance_is_derived_from_coverage() -> None:
         ),
         unavailable_clients=(),
     )
-    assert result.significance == Ratio(0.05)
+    assert result.significance.value == pytest.approx(0.05)
 
 
 def test_fixed_coefficient_result_holds_its_value() -> None:

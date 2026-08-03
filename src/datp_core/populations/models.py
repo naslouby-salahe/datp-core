@@ -26,6 +26,7 @@ from datp_core.domain.values import (
     Checksum,
     ClientCount,
     DirichletConcentration,
+    NonNegativeIntegerValue,
     RowCount,
     Seed,
     checksum_text,
@@ -225,7 +226,7 @@ class DirichletPartitionDiagnosticsDocument(StrictModel):
 class ChronologicalPartitionDiagnosticsDocument(StrictModel):
     population: PopulationId
     expected_group_count: ClientCount
-    observed_eligible_group_count: ClientCount
+    observed_eligible_group_count: NonNegativeIntegerValue
     eligible_group_ids: tuple[str, ...]
     excluded_group_ids: tuple[str, ...]
     exclusion_reasons: tuple[ChronologyExclusionReason, ...]
@@ -305,7 +306,7 @@ class PopulationFeasibility:
     status: PopulationFeasibilityStatus
     reason: PopulationFeasibilityReason
     expected_client_count: ClientCount
-    observed_client_count: ClientCount
+    observed_client_count: NonNegativeIntegerValue
     evidence: str
 
     def __post_init__(self) -> None:

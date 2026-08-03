@@ -19,7 +19,7 @@ from datp_core.datasets.models import (
 )
 from datp_core.domain.enums import DatasetId, PopulationId, PopulationIdentityKind, SplitProtocolId
 from datp_core.domain.errors import DataIntegrityError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientCount, RowCount, Seed
+from datp_core.domain.values import Checksum, ClientCount, NonNegativeIntegerValue, RowCount, Seed
 from datp_core.populations.capabilities import population_declaration
 from datp_core.populations.integrity import (
     PopulationFinalizationRequest,
@@ -74,7 +74,7 @@ def build_edge_temporal_groups(
     diagnostics = ChronologicalPartitionDiagnosticsDocument(
         population=_POPULATION,
         expected_group_count=declaration.client_count,
-        observed_eligible_group_count=ClientCount(len(eligible_ids)),
+        observed_eligible_group_count=NonNegativeIntegerValue(len(eligible_ids)),
         eligible_group_ids=eligible_ids,
         excluded_group_ids=excluded_ids,
         exclusion_reasons=exclusion_reasons,
