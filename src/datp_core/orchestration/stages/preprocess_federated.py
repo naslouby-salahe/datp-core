@@ -147,9 +147,6 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
     handoff = build_preprocessing_handoff(
         PreprocessingHandoffRequest(
             construction=construction,
-            partition_seed=request.partition_seed,
-            split_protocol=request.split_protocol,
-            dataset=dataset,
             deployment_fallback_client_ids=frozenset(),
             capture_timestamp_column=_capture_timestamp_column(request),
         )
@@ -158,26 +155,27 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
     feature_names = _model_feature_names(dataset, schema.feature_columns)
     protocol = _federated_protocol(request.preprocessing_identity, feature_names)
     joined = join_handoff_with_canonical_features(canonical_root, handoff, feature_names)
+    document = construction.manifest.document
     context = PreprocessingPublishContext(
-        dataset=dataset,
-        population=request.population,
-        partition_seed=request.partition_seed,
-        split_protocol_identity=request.split_protocol,
+        dataset=document.dataset,
+        population=document.population,
+        partition_seed=document.partition_seed,
+        split_protocol_identity=document.split_protocol,
         protocol=protocol,
         canonical_schema_checksum=schema.checksum,
         data_root=request.data_root,
     )
-    partitions = _client_partitions(joined, feature_names, request.split_protocol)
+    partitions = _client_partitions(joined, feature_names, document.split_protocol)
     publications, published_count, reused_count = _publish_client_partitions(
         context,
         partitions,
         fit_estimators_for_federated_clients(protocol, partitions),
     )
     return PreprocessFederatedResult(
-        population=request.population,
-        dataset=dataset,
-        partition_seed=request.partition_seed,
-        split_protocol=request.split_protocol,
+        population=document.population,
+        dataset=document.dataset,
+        partition_seed=document.partition_seed,
+        split_protocol=document.split_protocol,
         preprocessing_identity=request.preprocessing_identity,
         client_publications=publications,
         published_count=published_count,
