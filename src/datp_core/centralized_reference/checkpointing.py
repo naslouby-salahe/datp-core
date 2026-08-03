@@ -103,14 +103,6 @@ class CentralizedCheckpointDecision:
             )
 
 
-@dataclass(frozen=True, slots=True)
-class FederatedCheckpointMarker:
-    """Structural marker used only to reject federated artifacts at the centralized boundary."""
-
-    identity: str
-    tensor_path: Path
-
-
 def candidate_tensor_name(round_number: RoundNumber) -> str:
     return (
         f"{CentralizedCheckpointAssetName.CANDIDATE_PREFIX}"
@@ -237,9 +229,9 @@ def _statused_candidates(
     return tuple(statused), selected
 
 
-def reject_federated_checkpoint(marker: FederatedCheckpointMarker) -> None:
+def reject_federated_checkpoint(identity: str) -> None:
     raise LeakageError(
-        f"federated checkpoint cannot enter centralized scoring or selection ({marker.identity})",
+        f"federated checkpoint cannot enter centralized scoring or selection ({identity})",
         subject=ContractSubject.CHECKPOINT_CANDIDATES,
     )
 
