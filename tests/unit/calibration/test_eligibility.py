@@ -13,13 +13,22 @@ from datp_core.calibration.eligibility import (
     reject_score_coordinate_mismatch,
     require_common_eligible_cohort,
 )
-from datp_core.calibration.models import EligibilityDecision, EligibilityStatus
+from datp_core.calibration.models import CalibrationSupport, EligibilityDecision, EligibilityStatus
 from datp_core.domain.enums import PartitionRole
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import CalibrationSize, Checksum, RowCount, Seed
 from datp_core.protocols.models import CalibrationEligibilityProtocol
 
 PROTOCOL = CalibrationEligibilityProtocol(minimum_support=CalibrationSize(100))
+
+
+def _support(client_id: str, count: int) -> CalibrationSupport:
+    return CalibrationSupport(
+        client=some_client(client_id),
+        coordinate=fedavg_coordinate(Seed(0)),
+        benign_calibration_count=RowCount(count),
+        calibration_score_set_checksum=Checksum("a" * 64),
+    )
 
 
 def test_reject_evaluation_partition_in_eligibility_accepts_calibration() -> None:
@@ -80,9 +89,7 @@ def test_load_benign_calibration_references_returns_one_reference_per_row(tmp_pa
 
 def test_load_benign_calibration_references_rejects_duplicate_stable_row_ids(tmp_path) -> None:
     record = benign_score_record(tmp_path, "client_a", (0.1, 0.2), row_id_prefix="duplicate-row-prefix")
-    # Force a duplicate stable-row identity onto the underlying file.
-    frame = pl.read_parquet(record.path)
-    frame = frame.with_columns(pl.lit("same-row").alias("stable_row_id"))
+    frame = pl.read_parquet(record.path).with_columns(pl.lit("same-row").alias("stable_row_id"))
     frame.write_parquet(record.path)
 
     def call() -> None:
@@ -104,6 +111,7 @@ def test_decide_eligibility_marks_sufficient_support_as_eligible(tmp_path) -> No
     references = load_benign_calibration_references(record)
     support = calibration_support(record, references, Checksum("a" * 64))
     decision = decide_eligibility(support, PROTOCOL)
+    assert decision.support is support
     assert decision.status is EligibilityStatus.ELIGIBLE
     assert decision.reason is None
 
@@ -113,25 +121,21 @@ def test_decide_eligibility_marks_insufficient_support_as_excluded(tmp_path) -> 
     references = load_benign_calibration_references(record)
     support = calibration_support(record, references, Checksum("a" * 64))
     decision = decide_eligibility(support, PROTOCOL)
+    assert decision.support is support
     assert decision.status is EligibilityStatus.EXCLUDED
     assert decision.reason is not None
 
 
 def test_eligible_clients_filters_and_orders_deterministically() -> None:
-    coordinate = fedavg_coordinate(Seed(0))
     decisions = (
         EligibilityDecision(
-            client=some_client("client_b"),
-            coordinate=coordinate,
-            benign_calibration_count=RowCount(150),
+            support=_support("client_b", 150),
             minimum_support=CalibrationSize(100),
             status=EligibilityStatus.ELIGIBLE,
             reason=None,
         ),
         EligibilityDecision(
-            client=some_client("client_a"),
-            coordinate=coordinate,
-            benign_calibration_count=RowCount(150),
+            support=_support("client_a", 150),
             minimum_support=CalibrationSize(100),
             status=EligibilityStatus.ELIGIBLE,
             reason=None,
