@@ -5,7 +5,7 @@ from math import isfinite
 
 from datp_core.domain.enums import ContractSubject, PartitionRole
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import ScoreValue, ThresholdValue
+from datp_core.domain.values import RowCount, ScoreValue, ThresholdValue
 from datp_core.evaluation.models import ConfusionCounts
 from datp_core.populations.models import PopulationOutcomeLabel
 
@@ -39,10 +39,10 @@ def calculate_confusion_counts(
             subject=ContractSubject.ATTACK_LABELS,
         )
     return ConfusionCounts(
-        true_negative=sum(not prediction for prediction in benign_predictions),
-        false_positive=sum(benign_predictions),
-        true_positive=sum(attack_predictions),
-        false_negative=sum(not prediction for prediction in attack_predictions),
+        true_negative=RowCount(sum(not prediction for prediction in benign_predictions)),
+        false_positive=RowCount(sum(benign_predictions)),
+        true_positive=RowCount(sum(attack_predictions)),
+        false_negative=RowCount(sum(not prediction for prediction in attack_predictions)),
         attack_assignment_valid=attack_assignment_valid,
     )
 
