@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import ClassVar
 
 from datp_core.artifacts.coordinates import raw_dataset_root
 from datp_core.datasets.catalogue import DatasetPublication, dataset_binding
@@ -16,7 +17,7 @@ class MaterializeCanonicalDatasetsRequest:
 
 @dataclass(frozen=True, slots=True)
 class MaterializeCanonicalDatasetsResult:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.MATERIALIZE
     publications: tuple[DatasetPublication, ...]
 
 
@@ -28,7 +29,4 @@ def materialize_canonical_datasets_stage(
     publications = tuple(
         dataset_binding(dataset).publish(raw_dataset_root(dataset), canonical_root) for dataset in request.datasets
     )
-    return MaterializeCanonicalDatasetsResult(
-        stage=StageOperationId.MATERIALIZE,
-        publications=publications,
-    )
+    return MaterializeCanonicalDatasetsResult(publications=publications)
