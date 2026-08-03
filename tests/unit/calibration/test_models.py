@@ -12,7 +12,7 @@ from datp_core.calibration.models import (
     EligibilityStatus,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CalibrationSize, Checksum, ReplicateIndex, RowCount, ScoreValue, Seed
+from datp_core.domain.values import CalibrationSize, Checksum, ReplicateIndex, RowCount, ScoreValue, Seed, StableRowId
 
 CLIENT_A = some_client("client_a")
 CLIENT_B = some_client("client_b")
@@ -21,7 +21,7 @@ REPLICATE_ZERO = ReplicateIndex(0)
 
 
 def _reference(client, row_id: str, value: float = 1.0) -> CalibrationSampleReference:
-    return CalibrationSampleReference(client=client, stable_row_id=row_id, score=ScoreValue(value))
+    return CalibrationSampleReference(client=client, stable_row_id=StableRowId(row_id), score=ScoreValue(value))
 
 
 def _subsample(size: int, row_ids: tuple[str, ...]) -> CalibrationSubsample:

@@ -22,6 +22,7 @@ from datp_core.domain.values import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     Checksum,
     ClientPathToken,
+    FeatureName,
     FeatureNameSequence,
     RowCount,
 )
@@ -35,7 +36,7 @@ def _federated_state(path: Path) -> FederatedFittedPreprocessingState:
     protocol = PreprocessingProtocol(
         identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        input_feature_names=FeatureNameSequence(("f0",)),
+        input_feature_names=FeatureNameSequence((FeatureName("f0"),)),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
         numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,

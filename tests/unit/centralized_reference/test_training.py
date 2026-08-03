@@ -27,7 +27,7 @@ from datp_core.centralized_reference.training import (
     train_centralized_autoencoder,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabelSequence, RowCount, Seed
+from datp_core.domain.values import Checksum, ClientPathToken, OutcomeLabel, OutcomeLabelSequence, RowCount, Seed
 from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.models import FederatedFittedPreprocessingState
 
@@ -48,7 +48,9 @@ def test_rejects_federated_preprocessing_state(tmp_path: Path) -> None:
 def test_rejects_attack_rows_in_training() -> None:
     with pytest.raises(LeakageError, match="attack-labelled"):
         reject_attack_rows_in_centralized_training(
-            OutcomeLabelSequence((PopulationOutcomeLabel.BENIGN, PopulationOutcomeLabel.ATTACK)),
+            OutcomeLabelSequence(
+                (OutcomeLabel(PopulationOutcomeLabel.BENIGN.value), OutcomeLabel(PopulationOutcomeLabel.ATTACK.value))
+            ),
             PopulationOutcomeLabel.BENIGN,
         )
 

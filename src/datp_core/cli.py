@@ -26,6 +26,7 @@ from datp_core.domain.values import (
     ClientCount,
     DirichletConcentration,
     FamilyIdentity,
+    FeatureName,
     FeatureNameSequence,
     MetricValue,
     ProximalCoefficient,
@@ -382,7 +383,9 @@ def _score_confirmatory_seed(context: ConfirmatorySeedContext) -> ScoreArtifactM
         ScoreFederatedRequest(
             selected,
             NBAIOT_AUTOENCODER,
-            FeatureNameSequence(dataset_binding(DatasetId.NBAIOT).schema.feature_columns),
+            FeatureNameSequence(
+                tuple(FeatureName(name) for name in dataset_binding(DatasetId.NBAIOT).schema.feature_columns)
+            ),
             _client_scoring_inputs(context.preprocessing.client_publications, context.construction.manifest.clients),
             BATCH_SIZE,
             context.training_directory / "scores",

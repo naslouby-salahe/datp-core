@@ -13,6 +13,7 @@ from datp_core.artifacts.serialization import (
 )
 from datp_core.domain.enums import TrustedEstimatorClassName
 from datp_core.domain.errors import SerializationSafetyError
+from datp_core.domain.values import AbsoluteTolerance
 
 
 def test_skops_round_trip_and_untrusted_rejection(tmp_path: Path) -> None:
@@ -27,7 +28,7 @@ def test_skops_round_trip_and_untrusted_rejection(tmp_path: Path) -> None:
         TransformReloadCheck(
             state_path=state_path,
             class_name=TrustedEstimatorClassName.STANDARD_SCALER,
-            absolute_tolerance=1e-12,
+            absolute_tolerance=AbsoluteTolerance(1e-12),
             source_matrix=matrix,
             expected_transformed=expected,
         )

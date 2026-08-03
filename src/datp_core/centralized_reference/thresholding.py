@@ -23,6 +23,7 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import (
     Checksum,
+    OutcomeLabel,
     OutcomeLabelSequence,
     Quantile,
     RoundNumber,
@@ -130,7 +131,7 @@ def _benign_calibration_scores(
 ) -> np.ndarray:
     frame = load_score_frame(calibration_scores)
     labels = OutcomeLabelSequence(
-        tuple(str(value) for value in frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list())
+        tuple(OutcomeLabel(str(value)) for value in frame.get_column(ScoreFrameColumn.OUTCOME_LABEL.value).to_list())
     )
     reject_attack_rows_in_benign_calibration(labels, benign_label)
     scores = np.asarray(

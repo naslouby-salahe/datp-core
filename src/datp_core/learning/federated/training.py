@@ -28,6 +28,7 @@ from datp_core.domain.values import (
     DittoRegularization,
     LearningRate,
     MetricValue,
+    OutcomeLabel,
     OutcomeLabelSequence,
     ProximalCoefficient,
     RoundNumber,
@@ -147,7 +148,9 @@ def prepare_federated_client_data(
 ) -> PreparedFederatedClientData:
     frame = client_input.training_features
     try:
-        labels = OutcomeLabelSequence(tuple(str(value) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list()))
+        labels = OutcomeLabelSequence(
+            tuple(OutcomeLabel(str(value)) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
+        )
         matrix = frame.select(client_input.feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
     except (pl.exceptions.ColumnNotFoundError, pl.exceptions.SchemaError) as exc:
         raise ScientificContractError(

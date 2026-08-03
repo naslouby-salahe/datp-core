@@ -14,7 +14,7 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrustedEstimatorClassName,
 )
-from datp_core.domain.values import AbsoluteTolerance, Checksum, ClientPathToken, FeatureNameSequence, Seed
+from datp_core.domain.values import AbsoluteTolerance, Checksum, ClientPathToken, FeatureName, FeatureNameSequence, Seed
 from datp_core.preprocessing.federated import ClientPublishRequest, publish_client_preprocessing
 from datp_core.preprocessing.models import (
     PreprocessingPartition,
@@ -28,7 +28,7 @@ def test_partial_asset_is_rebuilt_after_cleanup(tmp_path: Path) -> None:
     protocol = PreprocessingProtocol(
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        input_feature_names=FeatureNameSequence(("f0", "f1")),
+        input_feature_names=FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
         numerical_equivalence_absolute_tolerance=AbsoluteTolerance(1e-12),

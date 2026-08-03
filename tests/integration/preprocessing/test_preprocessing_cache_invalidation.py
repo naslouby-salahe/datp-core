@@ -13,7 +13,7 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrustedEstimatorClassName,
 )
-from datp_core.domain.values import AbsoluteTolerance, Checksum, ClientPathToken, FeatureNameSequence, Seed
+from datp_core.domain.values import AbsoluteTolerance, Checksum, ClientPathToken, FeatureName, FeatureNameSequence, Seed
 from datp_core.preprocessing.federated import ClientPublishRequest, publish_client_preprocessing
 from datp_core.preprocessing.models import (
     PreprocessingPartition,
@@ -27,7 +27,7 @@ def _protocol(fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING) -> Preproce
     return PreprocessingProtocol(
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=fit_scope,
-        input_feature_names=FeatureNameSequence(("f0", "f1")),
+        input_feature_names=FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
         numerical_equivalence_absolute_tolerance=AbsoluteTolerance(1e-12),
@@ -53,7 +53,7 @@ def _publish(tmp_path: Path, seed: Seed, identity: PreprocessingProtocolId) -> P
     protocol = PreprocessingProtocol(
         identity=identity,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        input_feature_names=FeatureNameSequence(("f0", "f1")),
+        input_feature_names=FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
         numerical_equivalence_absolute_tolerance=AbsoluteTolerance(1e-12),

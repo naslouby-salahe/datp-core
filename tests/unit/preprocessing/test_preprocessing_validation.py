@@ -16,8 +16,11 @@ from datp_core.domain.enums import (
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    FeatureName,
     FeatureNameSequence,
+    OutcomeLabel,
     OutcomeLabelSequence,
+    StableRowId,
     StableRowIdSequence,
 )
 from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN
@@ -40,7 +43,7 @@ def _protocol() -> PreprocessingProtocol:
     return PreprocessingProtocol(
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        input_feature_names=FeatureNameSequence(("f0", "f1")),
+        input_feature_names=FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
         numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
@@ -84,7 +87,7 @@ def test_extract_partitions_returns_partition_set_with_ordering() -> None:
     )
     pset = extract_partitions(
         frame,
-        FeatureNameSequence(("f0", "f1")),
+        FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
         split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
         branch=ProcessedDataBranch.FEDERATED,
         ordering=PartitionOrdering.STABLE_ROW_ID,
@@ -101,8 +104,8 @@ def test_fit_trusted_batch_validation_rules() -> None:
             protocol,
             PreprocessingFitBatch(
                 training_matrix=np.empty((0, 2)),
-                training_row_ids=StableRowIdSequence(("r0",)),
-                training_labels=OutcomeLabelSequence(("benign",)),
+                training_row_ids=StableRowIdSequence((StableRowId("r0"),)),
+                training_labels=OutcomeLabelSequence((OutcomeLabel("benign"),)),
             ),
             subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         )
@@ -113,8 +116,8 @@ def test_fit_trusted_batch_validation_rules() -> None:
             protocol,
             PreprocessingFitBatch(
                 training_matrix=np.array([1.0, 2.0]),
-                training_row_ids=StableRowIdSequence(("r0",)),
-                training_labels=OutcomeLabelSequence(("benign",)),
+                training_row_ids=StableRowIdSequence((StableRowId("r0"),)),
+                training_labels=OutcomeLabelSequence((OutcomeLabel("benign"),)),
             ),
             subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         )
@@ -125,8 +128,8 @@ def test_fit_trusted_batch_validation_rules() -> None:
             protocol,
             PreprocessingFitBatch(
                 training_matrix=np.array([[1.0, 2.0, 3.0]]),
-                training_row_ids=StableRowIdSequence(("r0",)),
-                training_labels=OutcomeLabelSequence(("benign",)),
+                training_row_ids=StableRowIdSequence((StableRowId("r0"),)),
+                training_labels=OutcomeLabelSequence((OutcomeLabel("benign"),)),
             ),
             subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         )
@@ -137,8 +140,8 @@ def test_fit_trusted_batch_validation_rules() -> None:
             protocol,
             PreprocessingFitBatch(
                 training_matrix=np.array([[1.0, np.nan]]),
-                training_row_ids=StableRowIdSequence(("r0",)),
-                training_labels=OutcomeLabelSequence(("benign",)),
+                training_row_ids=StableRowIdSequence((StableRowId("r0"),)),
+                training_labels=OutcomeLabelSequence((OutcomeLabel("benign"),)),
             ),
             subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         )

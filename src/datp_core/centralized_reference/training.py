@@ -35,6 +35,7 @@ from datp_core.domain.values import (
     FeatureNameSequence,
     LearningRate,
     MetricValue,
+    OutcomeLabel,
     OutcomeLabelSequence,
     RoundNumber,
     RowCount,
@@ -409,7 +410,9 @@ def _extract_training_arrays(
     request: CentralizedTrainingRequest,
 ) -> tuple[np.ndarray, OutcomeLabelSequence, tuple[str, ...]]:
     frame = request.training_features
-    labels = OutcomeLabelSequence(tuple(str(value) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list()))
+    labels = OutcomeLabelSequence(
+        tuple(OutcomeLabel(str(value)) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
+    )
     row_ids = tuple(str(value) for value in frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
     matrix = frame.select(request.feature_names.as_list()).to_numpy().astype(np.float32, copy=False)
     if not np.isfinite(matrix).all():

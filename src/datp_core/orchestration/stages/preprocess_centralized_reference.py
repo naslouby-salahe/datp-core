@@ -25,7 +25,7 @@ from datp_core.domain.enums import (
     StageOperationId,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import FeatureNameSequence, Seed
+from datp_core.domain.values import FeatureName, FeatureNameSequence, Seed
 from datp_core.populations.catalogue import (
     PopulationConstructionRequest,
     PreprocessingHandoffRequest,
@@ -147,11 +147,12 @@ def preprocess_centralized_reference_population_stage(
         )
     )
     schema = dataset_binding(dataset).schema
-    protocol = build_centralized_preprocessing_protocol(FeatureNameSequence(schema.feature_columns))
-    joined = join_handoff_with_canonical_features(canonical_root, handoff, FeatureNameSequence(schema.feature_columns))
+    feature_names = FeatureNameSequence(tuple(FeatureName(name) for name in schema.feature_columns))
+    protocol = build_centralized_preprocessing_protocol(feature_names)
+    joined = join_handoff_with_canonical_features(canonical_root, handoff, feature_names)
     partitions = extract_partitions(
         joined,
-        FeatureNameSequence(schema.feature_columns),
+        feature_names,
         split_protocol=request.split_protocol,
         branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
         ordering=PartitionOrdering.STABLE_ROW_ID,

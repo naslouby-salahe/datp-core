@@ -13,8 +13,10 @@ from datp_core.domain.enums import (
 from datp_core.domain.values import (
     AbsoluteTolerance,
     ClientPathToken,
+    FeatureName,
     FeatureNameSequence,
     RowCount,
+    StableRowId,
     StableRowIdSequence,
 )
 from datp_core.preprocessing.models import (
@@ -35,7 +37,7 @@ def test_preprocessing_protocol_uses_descriptive_enum_identity() -> None:
     protocol = PreprocessingProtocol(
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        input_feature_names=FeatureNameSequence(("f0", "f1")),
+        input_feature_names=FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
         numerical_equivalence_absolute_tolerance=AbsoluteTolerance(1e-12),
@@ -77,7 +79,7 @@ def test_scientific_preprocessing_methods_are_locked() -> None:
 def test_build_preprocessing_protocol_binds_feature_order() -> None:
     protocol = build_preprocessing_protocol(
         SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD,
-        FeatureNameSequence(("f0", "f1")),
+        FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
     )
     assert tuple(protocol.input_feature_names) == ("f0", "f1")
     assert protocol.input_feature_names.names == ("f0", "f1")
@@ -87,11 +89,11 @@ def test_build_preprocessing_protocol_binds_feature_order() -> None:
 
 
 def test_stable_row_id_sequence_rejects_empty_and_duplicates() -> None:
-    assert len(StableRowIdSequence(("r1", "r2"))) == 2
+    assert len(StableRowIdSequence((StableRowId("r1"), StableRowId("r2")))) == 2
     with pytest.raises(ValueError, match="requires a non-empty tuple"):
         StableRowIdSequence(())
     with pytest.raises(ValueError, match="must be unique"):
-        StableRowIdSequence(("r1", "r1"))
+        StableRowIdSequence((StableRowId("r1"), StableRowId("r1")))
 
 
 def test_client_local_fitted_estimators_rejects_duplicate_clients() -> None:
@@ -113,7 +115,7 @@ def test_client_local_fitted_estimators_rejects_duplicate_clients() -> None:
 def test_federated_fitted_state_publish_spec_requires_client_identity() -> None:
     protocol = build_preprocessing_protocol(
         SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD,
-        FeatureNameSequence(("f0", "f1")),
+        FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
     )
     spec = FederatedFittedStatePublishSpec(
         protocol=protocol,

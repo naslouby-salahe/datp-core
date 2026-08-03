@@ -26,8 +26,10 @@ from datp_core.domain.values import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     BatchSize,
     Checksum,
+    FeatureName,
     FeatureNameSequence,
     LearningRate,
+    OutcomeLabel,
     OutcomeLabelSequence,
     RoundNumber,
     RowCount,
@@ -46,7 +48,7 @@ from datp_core.protocols.models import (
     OptimizerProtocol,
 )
 
-FEATURE_NAMES = FeatureNameSequence(("f0", "f1", "f2", "f3"))
+FEATURE_NAMES = FeatureNameSequence((FeatureName("f0"), FeatureName("f1"), FeatureName("f2"), FeatureName("f3")))
 AUTOENCODER = AutoencoderProtocol(widths=(4, 3, 2, 3, 4))
 CHECKPOINT = CheckpointProtocol(candidates=(RoundNumber(2),), maximum_round=RoundNumber(2))
 TRAINING_PROTOCOL = CentralizedTrainingProtocol(
@@ -154,4 +156,4 @@ def require_cuda() -> torch.device:
 
 
 def benign_labels(count: int) -> OutcomeLabelSequence:
-    return OutcomeLabelSequence(tuple(PopulationOutcomeLabel.BENIGN.value for _ in range(count)))
+    return OutcomeLabelSequence(tuple(OutcomeLabel(PopulationOutcomeLabel.BENIGN.value) for _ in range(count)))

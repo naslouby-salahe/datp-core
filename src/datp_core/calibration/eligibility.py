@@ -11,7 +11,7 @@ from datp_core.calibration.models import (
 )
 from datp_core.domain.enums import ContractSubject, PartitionRole, ScoreFrameColumn
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, RowCount, ScoreValue
+from datp_core.domain.values import Checksum, RowCount, ScoreValue, StableRowId
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.protocols.models import CalibrationEligibilityProtocol
 from datp_core.scoring.models import ScoreRecord
@@ -66,7 +66,9 @@ def load_benign_calibration_references(
         )
     scores = tuple(float(value) for value in frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list())
     return tuple(
-        CalibrationSampleReference(client=record.scored_client, stable_row_id=row_id, score=ScoreValue(score))
+        CalibrationSampleReference(
+            client=record.scored_client, stable_row_id=StableRowId(row_id), score=ScoreValue(score)
+        )
         for row_id, score in zip(stable_row_ids, scores, strict=True)
     )
 

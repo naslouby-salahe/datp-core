@@ -5,7 +5,7 @@ from tests.unit.learning.federated.helpers import fedavg_coordinate
 from datp_core.calibration.models import CalibrationSampleReference
 from datp_core.calibration.sampling import build_calibration_replicate, replicate_seed
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CalibrationSize, ReplicateIndex, ScoreValue, Seed
+from datp_core.domain.values import CalibrationSize, ReplicateIndex, ScoreValue, Seed, StableRowId
 
 CLIENT_A = some_client("client_a")
 CLIENT_B = some_client("client_b")
@@ -17,7 +17,9 @@ REPLICATE_ONE = ReplicateIndex(1)
 
 def _references(count: int, client=CLIENT_A) -> tuple[CalibrationSampleReference, ...]:
     return tuple(
-        CalibrationSampleReference(client=client, stable_row_id=f"row-{index}", score=ScoreValue(float(index)))
+        CalibrationSampleReference(
+            client=client, stable_row_id=StableRowId(f"row-{index}"), score=ScoreValue(float(index))
+        )
         for index in range(count)
     )
 

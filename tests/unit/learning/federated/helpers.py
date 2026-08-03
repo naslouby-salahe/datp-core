@@ -23,6 +23,7 @@ from datp_core.domain.values import (
     Checksum,
     ClientCount,
     DittoRegularization,
+    FeatureName,
     FeatureNameSequence,
     LearningRate,
     LocalEpochCount,
@@ -53,7 +54,7 @@ from datp_core.protocols.models import (
 )
 from datp_core.protocols.training import DITTO_REGULARIZATION_GRID, WEIGHT_DECAY
 
-FEATURE_NAMES = FeatureNameSequence(("f0", "f1", "f2", "f3"))
+FEATURE_NAMES = FeatureNameSequence((FeatureName("f0"), FeatureName("f1"), FeatureName("f2"), FeatureName("f3")))
 AUTOENCODER = AutoencoderProtocol(widths=(4, 3, 2, 3, 4))
 CHECKPOINT = CheckpointProtocol(candidates=(RoundNumber(1), RoundNumber(2)), maximum_round=RoundNumber(2))
 LEARNING_RATE = LearningRate(0.01)

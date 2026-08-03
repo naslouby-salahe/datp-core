@@ -15,9 +15,12 @@ from datp_core.domain.values import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     Checksum,
     ClientPathToken,
+    FeatureName,
     FeatureNameSequence,
+    OutcomeLabel,
     OutcomeLabelSequence,
     RowCount,
+    StableRowId,
     StableRowIdSequence,
 )
 from datp_core.preprocessing.models import (
@@ -31,7 +34,7 @@ def _protocol() -> PreprocessingProtocol:
     return PreprocessingProtocol(
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=PreprocessingFitScope.POOLED_TRAINING,
-        input_feature_names=FeatureNameSequence(("f0", "f1")),
+        input_feature_names=FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
         numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
@@ -45,8 +48,8 @@ def test_pooled_fit_is_independent_of_federated_state() -> None:
         protocol,
         PreprocessingFitBatch(
             training_matrix=matrix,
-            training_row_ids=StableRowIdSequence(("a", "b")),
-            training_labels=OutcomeLabelSequence(("benign", "benign")),
+            training_row_ids=StableRowIdSequence((StableRowId("a"), StableRowId("b"))),
+            training_labels=OutcomeLabelSequence((OutcomeLabel("benign"), OutcomeLabel("benign"))),
         ),
     )
     assert np.asarray(fitted.transform(matrix), dtype=float).shape == matrix.shape

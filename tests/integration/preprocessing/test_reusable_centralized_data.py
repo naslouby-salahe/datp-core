@@ -14,7 +14,13 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrustedEstimatorClassName,
 )
-from datp_core.domain.values import NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE, Checksum, FeatureNameSequence, Seed
+from datp_core.domain.values import (
+    NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
+    Checksum,
+    FeatureName,
+    FeatureNameSequence,
+    Seed,
+)
 from datp_core.preprocessing.models import (
     CentralizedFittedPreprocessingState,
     PreprocessingPartition,
@@ -28,7 +34,7 @@ def test_centralized_publication_is_independent_and_reusable(tmp_path: Path) -> 
     protocol = PreprocessingProtocol(
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=PreprocessingFitScope.POOLED_TRAINING,
-        input_feature_names=FeatureNameSequence(("f0", "f1")),
+        input_feature_names=FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
         numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,

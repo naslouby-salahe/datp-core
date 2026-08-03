@@ -12,6 +12,7 @@ from datp_core.domain.values import (
     BatchSize,
     Checksum,
     MetricValue,
+    OutcomeLabel,
     OutcomeLabelSequence,
     ProximalCoefficient,
     RoundNumber,
@@ -48,13 +49,17 @@ def test_derive_client_stream_seed_is_deterministic_and_client_specific() -> Non
 
 
 def test_reject_attack_rows_in_federated_training_raises_on_any_attack_label() -> None:
-    labels = OutcomeLabelSequence((PopulationOutcomeLabel.BENIGN.value, PopulationOutcomeLabel.ATTACK.value))
+    labels = OutcomeLabelSequence(
+        (OutcomeLabel(PopulationOutcomeLabel.BENIGN.value), OutcomeLabel(PopulationOutcomeLabel.ATTACK.value))
+    )
     with pytest.raises(LeakageError, match="attack-labelled rows"):
         reject_attack_rows_in_federated_training(labels)
 
 
 def test_reject_attack_rows_in_federated_training_accepts_all_benign() -> None:
-    labels = OutcomeLabelSequence((PopulationOutcomeLabel.BENIGN.value, PopulationOutcomeLabel.BENIGN.value))
+    labels = OutcomeLabelSequence(
+        (OutcomeLabel(PopulationOutcomeLabel.BENIGN.value), OutcomeLabel(PopulationOutcomeLabel.BENIGN.value))
+    )
     reject_attack_rows_in_federated_training(labels)
 
 

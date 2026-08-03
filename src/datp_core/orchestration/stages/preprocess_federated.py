@@ -30,6 +30,7 @@ from datp_core.domain.values import (
     Checksum,
     ClientCount,
     ClientPathToken,
+    FeatureName,
     FeatureNameSequence,
     RowCount,
     Seed,
@@ -419,10 +420,10 @@ def _join_published_handoff(
 
 def _model_feature_names(dataset: DatasetId, feature_names: tuple[str, ...]) -> FeatureNameSequence:
     if dataset is not DatasetId.EDGE_IIOTSET:
-        return FeatureNameSequence(feature_names)
+        return FeatureNameSequence(tuple(FeatureName(name) for name in feature_names))
     if set(EDGE_NUMERIC_FEATURE_COLUMNS) - set(feature_names):
         raise ScientificContractError("Edge numeric feature declaration must be a canonical feature subset")
-    return FeatureNameSequence(EDGE_NUMERIC_FEATURE_COLUMNS)
+    return FeatureNameSequence(tuple(FeatureName(name) for name in EDGE_NUMERIC_FEATURE_COLUMNS))
 
 
 def _validate_federated_request(request: PreprocessFederatedRequest) -> None:

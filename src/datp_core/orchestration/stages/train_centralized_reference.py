@@ -47,7 +47,7 @@ from datp_core.domain.values import (
     checksum_text,
 )
 from datp_core.populations.models import PopulationOutcomeLabel
-from datp_core.preprocessing.models import FittedPreprocessingState
+from datp_core.preprocessing.models import CentralizedFittedPreprocessingState
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 
@@ -57,7 +57,7 @@ class TrainCentralizedReferenceRequest:
     coordinate: CentralizedTrainingCoordinate
     training_features: pl.DataFrame
     feature_names: FeatureNameSequence
-    preprocessing_state: FittedPreprocessingState
+    preprocessing_state: CentralizedFittedPreprocessingState
     split_manifest_checksum: Checksum
     output_directory: Path
     training_seed: Seed

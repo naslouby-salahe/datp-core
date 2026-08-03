@@ -16,9 +16,12 @@ from datp_core.domain.values import (
     NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
     Checksum,
     ClientPathToken,
+    FeatureName,
     FeatureNameSequence,
+    OutcomeLabel,
     OutcomeLabelSequence,
     RowCount,
+    StableRowId,
     StableRowIdSequence,
 )
 from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN, PopulationOutcomeLabel
@@ -44,7 +47,7 @@ def _protocol(scope: PreprocessingFitScope = PreprocessingFitScope.CLIENT_LOCAL_
     return PreprocessingProtocol(
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=scope,
-        input_feature_names=FeatureNameSequence(("f0", "f1")),
+        input_feature_names=FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
         serialization_format=SerializationFormat.SKOPS,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
         numerical_equivalence_absolute_tolerance=NUMERICAL_EQUIVALENCE_ABSOLUTE_TOLERANCE,
@@ -110,8 +113,8 @@ def test_fit_trusted_batch_rejects_attack_labels() -> None:
             protocol,
             PreprocessingFitBatch(
                 training_matrix=matrix,
-                training_row_ids=StableRowIdSequence(("r0", "r1")),
-                training_labels=OutcomeLabelSequence(("benign", "attack")),
+                training_row_ids=StableRowIdSequence((StableRowId("r0"), StableRowId("r1"))),
+                training_labels=OutcomeLabelSequence((OutcomeLabel("benign"), OutcomeLabel("attack"))),
             ),
             subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         )
