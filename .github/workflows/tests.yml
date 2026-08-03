@@ -27,18 +27,8 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-groups --all-extras --frozen
 
-      - name: Format temporary quality checkout
-        run: uv run ruff format src tests noxfile.py
-
-      - name: Package formatted repository snapshot
-        run: tar --exclude=.git --exclude=.venv --exclude=data -czf /tmp/formatted-repository.tar.gz .
-
-      - name: Upload formatted repository snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: formatted-repository
-          path: /tmp/formatted-repository.tar.gz
-          retention-days: 1
+      - name: Check formatting
+        run: uv run ruff format --check src tests noxfile.py
 
       - name: Run Ruff
         run: uv run ruff check src tests noxfile.py
