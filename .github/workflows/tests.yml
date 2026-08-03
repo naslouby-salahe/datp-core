@@ -28,196 +28,207 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+          from textwrap import dedent
+          import re
 
-          def replace_once(path: str, old: str, new: str) -> None:
-              file = Path(path)
-              text = file.read_text(encoding="utf-8")
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
               if new in text and old not in text:
-                  return
+                  return text
               if text.count(old) != 1:
-                  raise SystemExit(f"{path}: expected one occurrence, found {text.count(old)}: {old!r}")
-              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+                  raise SystemExit(f"{label}: expected one occurrence, found {text.count(old)}")
+              return text.replace(old, new, 1)
 
-          replace_once(
-              "src/datp_core/domain/values.py",
-              '''class ByteCount(NonNegativeIntegerValue):
-                  validation_name: ClassVar[str] = "byte count"
-
-
-              class LearningRate'''.replace("              ", ""),
-              '''class ByteCount(NonNegativeIntegerValue):
-                  validation_name: ClassVar[str] = "byte count"
-
-
-              class LogicalElementCount(PositiveIntegerValue):
-                  validation_name: ClassVar[str] = "logical element count"
-
-
-              class CudaDeviceCount(NonNegativeIntegerValue):
-                  validation_name: ClassVar[str] = "CUDA device count"
-
-
-              class ClientPublicationCount(NonNegativeIntegerValue):
-                  validation_name: ClassVar[str] = "client publication count"
-
-
-              class LearningRate'''.replace("              ", ""),
+          values_path = Path("src/datp_core/domain/values.py")
+          values = values_path.read_text(encoding="utf-8")
+          values = replace_once(
+              values,
+              "class LearningRate(PositiveFiniteFloatValue):",
+              "class LogicalElementCount(PositiveIntegerValue):\n"
+              "    validation_name: ClassVar[str] = \"logical element count\"\n\n\n"
+              "class CudaDeviceCount(NonNegativeIntegerValue):\n"
+              "    validation_name: ClassVar[str] = \"CUDA device count\"\n\n\n"
+              "class ClientPublicationCount(NonNegativeIntegerValue):\n"
+              "    validation_name: ClassVar[str] = \"client publication count\"\n\n\n"
+              "class LearningRate(PositiveFiniteFloatValue):",
+              "cardinality value insertion",
           )
+          values_path.write_text(values, encoding="utf-8")
 
           communication_path = Path("src/datp_core/evaluation/communication.py")
           communication = communication_path.read_text(encoding="utf-8")
-          communication = communication.replace(
+          communication = replace_once(
+              communication,
               "from datp_core.domain.values import ByteCount, Seed",
               "from datp_core.domain.values import ByteCount, LogicalElementCount, Seed",
-              1,
+              "communication value import",
           )
-          communication = communication.replace(
+          communication = replace_once(
+              communication,
               "    logical_element_count: int",
               "    logical_element_count: LogicalElementCount",
-              1,
+              "payload logical count field",
           )
-          communication = communication.replace(
-              '''    def __post_init__(self) -> None:
-                      if self.logical_element_count < 1:
-                          raise ScientificContractError("a communication payload requires at least one logical element")
-
-
-              '''.replace("              ", ""),
-              '''    def __post_init__(self) -> None:
-                      if not isinstance(self.logical_element_count, LogicalElementCount):
-                          raise ScientificContractError("communication payloads require a typed logical element count")
-
-
-              '''.replace("              ", ""),
-              1,
+          communication, count = re.subn(
+              r"    def __post_init__\(self\) -> None:\n"
+              r"        if self\.logical_element_count < 1:\n"
+              r"            raise ScientificContractError\(\"a communication payload requires at least one logical element\"\)",
+              "    def __post_init__(self) -> None:\n"
+              "        if not isinstance(self.logical_element_count, LogicalElementCount):\n"
+              "            raise ScientificContractError(\"communication payloads require a typed logical element count\")",
+              communication,
+              count=1,
           )
-          communication = communication.replace(
+          if count != 1:
+              raise SystemExit(f"payload logical count validation replacements: {count}")
+          communication = replace_once(
+              communication,
               "    total_logical_element_count: int",
               "    total_logical_element_count: LogicalElementCount",
-              1,
+              "diagnostic logical count field",
           )
-          communication = communication.replace(
+          communication = replace_once(
+              communication,
               "        expected_elements = sum(message.payload.logical_element_count for message in self.messages)",
               "        expected_elements = sum(message.payload.logical_element_count.value for message in self.messages)",
-              1,
+              "communication expected logical count",
           )
-          communication = communication.replace(
+          communication = replace_once(
+              communication,
               "            self.total_logical_element_count != expected_elements",
               "            self.total_logical_element_count.value != expected_elements",
-              1,
+              "communication total logical count validation",
           )
-          communication = communication.replace(
+          communication = replace_once(
+              communication,
               "        total_logical_element_count=sum(message.payload.logical_element_count for message in messages),",
               "        total_logical_element_count=LogicalElementCount(\n"
               "            sum(message.payload.logical_element_count.value for message in messages)\n"
               "        ),",
-              1,
+              "communication total logical count construction",
           )
           communication_path.write_text(communication, encoding="utf-8")
 
           communication_test_path = Path("tests/unit/evaluation/test_communication.py")
           communication_test = communication_test_path.read_text(encoding="utf-8")
-          communication_test = communication_test.replace(
+          communication_test = replace_once(
+              communication_test,
               "from datp_core.domain.values import Seed",
               "from datp_core.domain.values import LogicalElementCount, Seed",
-              1,
+              "communication test import",
           )
-          communication_test = communication_test.replace(
+          communication_test = replace_once(
+              communication_test,
               "SerializedPayloadEvidence(b\"abc\", 1)",
               "SerializedPayloadEvidence(b\"abc\", LogicalElementCount(1))",
-              1,
+              "valid communication payload test",
           )
-          communication_test = communication_test.replace(
-              "        SerializedPayloadEvidence(b\"\", 0)",
-              "        SerializedPayloadEvidence(b\"\", 0)  # type: ignore[arg-type]",
-              1,
-          )
-          communication_test = communication_test.replace(
+          communication_test = replace_once(
+              communication_test,
               'with pytest.raises(ScientificContractError, match="at least one"):',
               'with pytest.raises(ScientificContractError, match="typed logical element count"):',
-              1,
+              "invalid communication payload expectation",
+          )
+          communication_test = replace_once(
+              communication_test,
+              "        SerializedPayloadEvidence(b\"\", 0)",
+              "        SerializedPayloadEvidence(b\"\", 0)  # type: ignore[arg-type]",
+              "invalid communication payload construction",
           )
           communication_test_path.write_text(communication_test, encoding="utf-8")
 
           compute_path = Path("src/datp_core/runtime/compute.py")
           compute = compute_path.read_text(encoding="utf-8")
-          compute = compute.replace(
+          compute = replace_once(
+              compute,
               "from datp_core.domain.values import WorkerCount",
               "from datp_core.domain.values import CudaDeviceCount, WorkerCount",
-              1,
+              "CUDA count import",
           )
-          compute = compute.replace("    device_count: int", "    device_count: CudaDeviceCount", 1)
-          compute = compute.replace(
+          compute = replace_once(compute, "    device_count: int", "    device_count: CudaDeviceCount", "CUDA count field")
+          compute = replace_once(
+              compute,
               "    device_count = torch.cuda.device_count() if available else 0",
               "    device_count = CudaDeviceCount(torch.cuda.device_count() if available else 0)",
-              1,
+              "CUDA count construction",
           )
-          compute = compute.replace(
+          compute = replace_once(
+              compute,
               "available and device_count > 0",
               "available and device_count.value > 0",
-              1,
+              "CUDA count condition",
           )
           compute_path.write_text(compute, encoding="utf-8")
 
           threshold_path = Path("src/datp_core/evaluation/threshold_estimation.py")
           threshold = threshold_path.read_text(encoding="utf-8")
           if "    SubsampleReplicateCount,\n" not in threshold:
-              threshold = threshold.replace(
+              threshold = replace_once(
+                  threshold,
                   "    Seed,\n",
                   "    Seed,\n    SubsampleReplicateCount,\n",
-                  1,
+                  "subsample count import",
               )
-          threshold = threshold.replace(
+          threshold = replace_once(
+              threshold,
               "    replicate_count: int",
               "    replicate_count: SubsampleReplicateCount",
-              1,
+              "sample-efficiency replicate field",
           )
-          threshold = threshold.replace(
+          threshold = replace_once(
+              threshold,
               "        if self.replicate_count < 1 or self.threshold_variance_across_nested_replicates < 0:",
               "        if self.threshold_variance_across_nested_replicates < 0:",
-              1,
+              "sample-efficiency duplicate validation",
           )
-          threshold = threshold.replace(
+          threshold = replace_once(
+              threshold,
               "                replicate_count=len(replicate_group),",
               "                replicate_count=SubsampleReplicateCount(len(replicate_group)),",
-              1,
+              "sample-efficiency count construction",
           )
           threshold_path.write_text(threshold, encoding="utf-8")
 
           preprocess_path = Path("src/datp_core/orchestration/stages/preprocess_federated.py")
           preprocess = preprocess_path.read_text(encoding="utf-8")
           if "    ClientPublicationCount,\n" not in preprocess:
-              preprocess = preprocess.replace(
+              preprocess = replace_once(
+                  preprocess,
                   "    Checksum,\n",
                   "    Checksum,\n    ClientPublicationCount,\n",
-                  1,
+                  "publication count import",
               )
-          preprocess = preprocess.replace("    published_count: int", "    published_count: ClientPublicationCount", 1)
-          preprocess = preprocess.replace("    reused_count: int", "    reused_count: ClientPublicationCount", 1)
-          result_marker = '''    execution_identity: ExternalTemporalExecutionIdentity | None = None
+          result_class = dedent('''
+              @dataclass(frozen=True, slots=True)
+              class PreprocessFederatedResult:
+                  stage: ClassVar[StageOperationId] = StageOperationId.PREPROCESS_FEDERATED
+                  population: PopulationId
+                  dataset: DatasetId
+                  partition_seed: Seed
+                  split_protocol: SplitProtocolId
+                  preprocessing_identity: PreprocessingProtocolId
+                  client_publications: tuple[ClientPreprocessingResult, ...]
+                  published_count: ClientPublicationCount
+                  reused_count: ClientPublicationCount
+                  execution_identity: ExternalTemporalExecutionIdentity | None = None
 
-
-          @dataclass(frozen=True, slots=True)
-          class PreprocessFederatedArtifactsRequest:
-          '''.replace("          ", "")
-          result_replacement = '''    execution_identity: ExternalTemporalExecutionIdentity | None = None
-
-              def __post_init__(self) -> None:
-                  if not isinstance(self.published_count, ClientPublicationCount) or not isinstance(
-                      self.reused_count, ClientPublicationCount
-                  ):
-                      raise TypeError("preprocessing results require typed publication counts")
-                  if self.published_count.value + self.reused_count.value != len(self.client_publications):
-                      raise ValueError("published and reused counts must cover every client publication")
-
-
-          @dataclass(frozen=True, slots=True)
-          class PreprocessFederatedArtifactsRequest:
-          '''.replace("          ", "")
-          if result_replacement not in preprocess:
-              if preprocess.count(result_marker) != 1:
-                  raise SystemExit("PreprocessFederatedResult insertion point did not match")
-              preprocess = preprocess.replace(result_marker, result_replacement, 1)
+                  def __post_init__(self) -> None:
+                      if not isinstance(self.published_count, ClientPublicationCount) or not isinstance(
+                          self.reused_count, ClientPublicationCount
+                      ):
+                          raise TypeError("preprocessing results require typed publication counts")
+                      if self.published_count.value + self.reused_count.value != len(self.client_publications):
+                          raise ValueError("published and reused counts must cover every client publication")
+          ''').lstrip()
+          preprocess, count = re.subn(
+              r"@dataclass\(frozen=True, slots=True\)\nclass PreprocessFederatedResult:.*?"
+              r"(?=\n\n@dataclass\(frozen=True, slots=True\)\nclass PreprocessFederatedArtifactsRequest:)",
+              result_class.rstrip(),
+              preprocess,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if count != 1:
+              raise SystemExit(f"PreprocessFederatedResult replacements: {count}")
           preprocess = preprocess.replace(
               "        published_count=published_count,",
               "        published_count=ClientPublicationCount(published_count),",
@@ -226,6 +237,10 @@ jobs:
               "        reused_count=reused_count,",
               "        reused_count=ClientPublicationCount(reused_count),",
           )
+          if preprocess.count("published_count=ClientPublicationCount(published_count)") != 3:
+              raise SystemExit("not every preprocessing result wraps published_count")
+          if preprocess.count("reused_count=ClientPublicationCount(reused_count)") != 3:
+              raise SystemExit("not every preprocessing result wraps reused_count")
           preprocess_path.write_text(preprocess, encoding="utf-8")
           PY
 
@@ -238,13 +253,10 @@ jobs:
             src/datp_core/runtime/compute.py \
             src/datp_core/orchestration/stages/preprocess_federated.py
 
-      - name: Run cardinality regression tests
+      - name: Run full regression suite
         run: |
-          uv run pytest \
-            tests/unit/evaluation/test_communication.py \
-            tests/unit/evaluation/test_threshold_estimation.py \
-            tests/unit/runtime/test_compute_and_determinism.py \
-            tests/unit/orchestration/stages/test_preprocess_federated.py
+          mkdir -p data/raw
+          uv run pytest --ignore=tests/integration/configuration/test_raw_source_contracts_are_ready.py
 
       - name: Commit cardinality contracts
         if: github.event_name == 'push' && github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
