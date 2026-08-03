@@ -1,6 +1,5 @@
 """Stage: federated preprocessing publication under processed coordinates."""
 
-from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from json import dumps, loads
 from pathlib import Path
@@ -9,11 +8,13 @@ import polars as pl
 
 from datp_core.artifacts.coordinates import canonical_root_under
 from datp_core.artifacts.serialization import TrustedScaler
+from datp_core.datasets.canonical_cache import require_canonical_publication_complete
 from datp_core.datasets.catalogue import dataset_binding
 from datp_core.datasets.edge_iiotset.schema import EDGE_NUMERIC_FEATURE_COLUMNS, EdgeAssetRole, EdgeCanonicalColumn
 from datp_core.domain.enums import (
     ContractSubject,
     DatasetId,
+    PartitionOrdering,
     PartitionRole,
     PopulationId,
     PreprocessingFitScope,
@@ -66,20 +67,23 @@ from datp_core.populations.models import (
     client_identities,
 )
 from datp_core.preprocessing.federated import (
-    ClientPartitionBundle,
-    ClientPublishRequest,
+    ClientPreprocessingPartitions,
     fit_estimators_for_federated_clients,
     publish_client_preprocessing,
 )
 from datp_core.preprocessing.models import (
+    SCIENTIFIC_FEDERATED_POOLED_MIN_MAX_METHOD,
+    SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD,
+    ClientLocalFittedEstimators,
     ClientPreprocessPublication,
+    ClientPublishRequest,
+    FederatedFittedEstimators,
+    PreprocessingPartitionSet,
     PreprocessingProtocol,
     PreprocessingPublishContext,
     build_preprocessing_protocol,
-    scientific_federated_pooled_min_max_method,
-    scientific_preprocessing_method,
 )
-from datp_core.preprocessing.validation import extract_partitions, require_canonical_publication_complete
+from datp_core.preprocessing.validation import extract_partitions
 
 _FEDERATED_METHODS = frozenset(
     {
@@ -140,7 +144,7 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
     binding = resolve_population(request.population)
     dataset = binding.declaration.dataset
     canonical_root = canonical_root_under(request.data_root, dataset)
-    require_canonical_publication_complete(canonical_root, dataset, "federated preprocessing")
+    require_canonical_publication_complete(canonical_root, dataset, ContractSubject.PREPROCESSING)
 
     construction = construct_population(
         PopulationConstructionRequest(
@@ -175,59 +179,28 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
         data_root=request.data_root,
     )
 
-    client_ids = tuple(sorted(str(value) for value in joined.get_column(CLIENT_ID_COLUMN).unique().to_list()))
-    client_partitions: dict[str, ClientPartitionBundle] = {
-        client_id: extract_partitions(
-            joined.filter(pl.col(CLIENT_ID_COLUMN) == client_id),
-            feature_names,
-            split_protocol=request.split_protocol,
-            branch=ProcessedDataBranch.FEDERATED,
-            deterministic_sort=False,
+    client_ids = tuple(ClientPathToken(str(v)) for v in sorted(joined.get_column(CLIENT_ID_COLUMN).unique().to_list()))
+    client_partitions: list[ClientPreprocessingPartitions] = [
+        ClientPreprocessingPartitions(
+            client_identity=client_id,
+            partitions=extract_partitions(
+                joined.filter(pl.col(CLIENT_ID_COLUMN) == client_id.value),
+                feature_names,
+                split_protocol=request.split_protocol,
+                branch=ProcessedDataBranch.FEDERATED,
+                ordering=PartitionOrdering.PRESERVE_SOURCE_ORDER,
+            ),
         )
         for client_id in client_ids
-    }
-    fitted_by_client = fit_estimators_for_federated_clients(protocol, client_ids, client_partitions)
+    ]
+    fitted_by_client = fit_estimators_for_federated_clients(protocol, client_ids, tuple(client_partitions))
 
-    publications: list[ClientPreprocessPublication] = []
-    published_count = 0
-    reused_count = 0
-    for client_id in client_ids:
-        partitions, row_ids, _train_labels = client_partitions[client_id]
-        result = publish_client_preprocessing(
-            ClientPublishRequest(
-                context=context,
-                client_identity=ClientPathToken(client_id),
-                fitted_estimator=fitted_by_client[client_id],
-                partitions=partitions,
-                row_ids=row_ids,
-            )
-        )
-        if result.publication_status is PublicationStatus.REUSED:
-            reused_count += 1
-        else:
-            published_count += 1
-        publications.append(
-            ClientPreprocessPublication(
-                client_identity=result.client_identity,
-                result=result,
-                publication_status=result.publication_status,
-                train_row_count=RowCount(partitions[PartitionRole.TRAIN].height),
-                calibration_row_count=RowCount(partitions[PartitionRole.CALIBRATION].height),
-                evaluation_row_count=RowCount(partitions[PartitionRole.EVALUATION].height),
-                future_recalibration_row_count=RowCount(
-                    partitions.get(
-                        PartitionRole.FUTURE_RECALIBRATION,
-                        pl.DataFrame(),
-                    ).height
-                ),
-                static_reference_reserve_row_count=RowCount(
-                    partitions.get(
-                        PartitionRole.STATIC_REFERENCE_RESERVE,
-                        pl.DataFrame(),
-                    ).height
-                ),
-            )
-        )
+    publications, published_count, reused_count = _publish_client_partitions(
+        context,
+        client_ids,
+        tuple(client_partitions),
+        fitted_by_client,
+    )
 
     return PreprocessFederatedResult(
         stage=StageOperationId.PREPROCESS_FEDERATED,
@@ -236,7 +209,7 @@ def preprocess_federated_stage(request: PreprocessFederatedRequest) -> Preproces
         partition_seed=request.partition_seed,
         split_protocol=request.split_protocol,
         preprocessing_identity=request.preprocessing_identity,
-        client_publications=tuple(publications),
+        client_publications=publications,
         published_count=published_count,
         reused_count=reused_count,
     )
@@ -254,7 +227,7 @@ def preprocess_federated_artifacts_stage(
     document = published.population_manifest.document
     dataset = document.dataset
     canonical_root = canonical_root_under(request.data_root, dataset)
-    require_canonical_publication_complete(canonical_root, dataset, "federated preprocessing")
+    require_canonical_publication_complete(canonical_root, dataset, ContractSubject.PREPROCESSING)
 
     schema = dataset_binding(dataset).schema
     feature_names = _model_feature_names(dataset, schema.feature_columns)
@@ -284,22 +257,25 @@ def preprocess_federated_artifacts_stage(
             identity=identity,
         )
     joined = _join_published_handoff(canonical_root, handoff, feature_names, identity)
-    client_ids = tuple(sorted(str(value) for value in joined.get_column(CLIENT_ID_COLUMN).unique().to_list()))
-    client_partitions: dict[str, ClientPartitionBundle] = {
-        client_id: extract_partitions(
-            joined.filter(pl.col(CLIENT_ID_COLUMN) == client_id),
-            feature_names,
-            split_protocol=published.split_manifest.split_protocol,
-            branch=ProcessedDataBranch.FEDERATED,
-            deterministic_sort=False,
+    client_ids = tuple(ClientPathToken(str(v)) for v in sorted(joined.get_column(CLIENT_ID_COLUMN).unique().to_list()))
+    client_partitions: list[ClientPreprocessingPartitions] = [
+        ClientPreprocessingPartitions(
+            client_identity=client_id,
+            partitions=extract_partitions(
+                joined.filter(pl.col(CLIENT_ID_COLUMN) == client_id.value),
+                feature_names,
+                split_protocol=published.split_manifest.split_protocol,
+                branch=ProcessedDataBranch.FEDERATED,
+                ordering=PartitionOrdering.PRESERVE_SOURCE_ORDER,
+            ),
         )
         for client_id in client_ids
-    }
-    fitted_by_client = fit_estimators_for_federated_clients(protocol, client_ids, client_partitions)
+    ]
+    fitted_by_client = fit_estimators_for_federated_clients(protocol, client_ids, tuple(client_partitions))
     publications, published_count, reused_count = _publish_client_partitions(
         context,
         client_ids,
-        client_partitions,
+        tuple(client_partitions),
         fitted_by_client,
     )
     return PreprocessFederatedResult(
@@ -325,14 +301,16 @@ def _preprocess_ciciot_client_local(
     identity: ExternalTemporalExecutionIdentity,
 ) -> PreprocessFederatedResult:
     """Fit and publish one file-defined client at a time without materializing the federation-wide join."""
-    client_ids = tuple(sorted(str(value) for value in assignments.get_column(CLIENT_ID_COLUMN).unique().to_list()))
+    client_ids = tuple(
+        ClientPathToken(str(v)) for v in sorted(assignments.get_column(CLIENT_ID_COLUMN).unique().to_list())
+    )
     source_files = _ciciot_source_files(canonical_root)
     publications: list[ClientPreprocessPublication] = []
     published_count = 0
     reused_count = 0
     for client_id in client_ids:
-        client_assignments = assignments.filter(pl.col(CLIENT_ID_COLUMN) == client_id)
-        source_path = _single_client_source_path(client_assignments, client_id)
+        client_assignments = assignments.filter(pl.col(CLIENT_ID_COLUMN) == client_id.value)
+        source_path = _single_client_source_path(client_assignments, client_id.value)
         feature_frame = pl.read_parquet(
             source_files[source_path],
             columns=[STABLE_ROW_ID_COLUMN, *feature_names],
@@ -345,20 +323,26 @@ def _preprocess_ciciot_client_local(
                 "canonical feature join lost file-client assignment rows",
                 subject=identity.population,
             )
-        partitions, row_ids, _train_labels = extract_partitions(
+        partitions = extract_partitions(
             joined,
             feature_names,
             split_protocol=context.split_protocol_identity,
             branch=ProcessedDataBranch.FEDERATED,
-            deterministic_sort=False,
+            ordering=PartitionOrdering.PRESERVE_SOURCE_ORDER,
         )
-        fitted = fit_estimators_for_federated_clients(
+        client_partition_obj = ClientPreprocessingPartitions(client_identity=client_id, partitions=partitions)
+        fitted_set = fit_estimators_for_federated_clients(
             context.protocol,
             (client_id,),
-            {client_id: (partitions, row_ids, _train_labels)},
-        )[client_id]
-        publication = _publish_client_partition(context, client_id, partitions, row_ids, fitted)
-        if publication.publication_status is PublicationStatus.REUSED:
+            (client_partition_obj,),
+        )
+        fitted = (
+            fitted_set.require(client_id)
+            if isinstance(fitted_set, ClientLocalFittedEstimators)
+            else fitted_set.estimator
+        )
+        publication = _publish_client_partition(context, client_id, partitions, fitted)
+        if publication.result.publication_status is PublicationStatus.REUSED:
             reused_count += 1
         else:
             published_count += 1
@@ -476,23 +460,28 @@ def _validate_artifact_request(request: PreprocessFederatedArtifactsRequest) -> 
 
 def _publish_client_partitions(
     context: PreprocessingPublishContext,
-    client_ids: tuple[str, ...],
-    client_partitions: dict[str, ClientPartitionBundle],
-    fitted_by_client: dict[str, TrustedScaler],
+    client_ids: tuple[ClientPathToken, ...],
+    client_partitions: tuple[ClientPreprocessingPartitions, ...],
+    fitted_by_client: FederatedFittedEstimators,
 ) -> tuple[tuple[ClientPreprocessPublication, ...], int, int]:
+    partitions_by_client = {cp.client_identity: cp.partitions for cp in client_partitions}
     publications: list[ClientPreprocessPublication] = []
     published_count = 0
     reused_count = 0
     for client_id in client_ids:
-        partitions, row_ids, _train_labels = client_partitions[client_id]
+        partitions = partitions_by_client[client_id]
+        estimator = (
+            fitted_by_client.require(client_id)
+            if isinstance(fitted_by_client, ClientLocalFittedEstimators)
+            else fitted_by_client.estimator
+        )
         publication = _publish_client_partition(
             context,
             client_id,
             partitions,
-            row_ids,
-            fitted_by_client[client_id],
+            estimator,
         )
-        if publication.publication_status is PublicationStatus.REUSED:
+        if publication.result.publication_status is PublicationStatus.REUSED:
             reused_count += 1
         else:
             published_count += 1
@@ -502,33 +491,34 @@ def _publish_client_partitions(
 
 def _publish_client_partition(
     context: PreprocessingPublishContext,
-    client_id: str,
-    partitions: Mapping[PartitionRole, pl.DataFrame],
-    row_ids: Mapping[PartitionRole, Sequence[str]],
+    client_id: ClientPathToken,
+    partitions: PreprocessingPartitionSet,
     fitted_estimator: TrustedScaler,
 ) -> ClientPreprocessPublication:
-    """Persist one already-fitted client partition bundle."""
+    """Persist one already-fitted client partition set."""
     result = publish_client_preprocessing(
         ClientPublishRequest(
             context=context,
-            client_identity=ClientPathToken(client_id),
+            client_identity=client_id,
             fitted_estimator=fitted_estimator,
             partitions=partitions,
-            row_ids=row_ids,
         )
     )
+    roles = partitions.roles()
     return ClientPreprocessPublication(
-        client_identity=result.client_identity,
         result=result,
-        publication_status=result.publication_status,
-        train_row_count=RowCount(partitions[PartitionRole.TRAIN].height),
-        calibration_row_count=RowCount(partitions[PartitionRole.CALIBRATION].height),
-        evaluation_row_count=RowCount(partitions[PartitionRole.EVALUATION].height),
+        train_row_count=RowCount(partitions.require(PartitionRole.TRAIN).frame.height),
+        calibration_row_count=RowCount(partitions.require(PartitionRole.CALIBRATION).frame.height),
+        evaluation_row_count=RowCount(partitions.require(PartitionRole.EVALUATION).frame.height),
         future_recalibration_row_count=RowCount(
-            partitions.get(PartitionRole.FUTURE_RECALIBRATION, pl.DataFrame()).height
+            partitions.require(PartitionRole.FUTURE_RECALIBRATION).frame.height
+            if PartitionRole.FUTURE_RECALIBRATION in roles
+            else 0
         ),
         static_reference_reserve_row_count=RowCount(
-            partitions.get(PartitionRole.STATIC_REFERENCE_RESERVE, pl.DataFrame()).height
+            partitions.require(PartitionRole.STATIC_REFERENCE_RESERVE).frame.height
+            if PartitionRole.STATIC_REFERENCE_RESERVE in roles
+            else 0
         ),
     )
 
@@ -740,9 +730,9 @@ def _federated_protocol(
 ) -> PreprocessingProtocol:
     match identity:
         case PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD:
-            method = scientific_preprocessing_method()
+            method = SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD
         case PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX:
-            method = scientific_federated_pooled_min_max_method()
+            method = SCIENTIFIC_FEDERATED_POOLED_MIN_MAX_METHOD
         case _:
             raise ScientificContractError(
                 "unsupported federated preprocessing identity",

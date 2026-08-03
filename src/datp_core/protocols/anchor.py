@@ -1,11 +1,11 @@
 """Historical anchor declarations."""
 
 from datp_core.domain.enums import FederatedThresholdMethod, MetricId
-from datp_core.domain.values import MetricValue, Seed
+from datp_core.domain.values import AbsoluteTolerance, MetricValue, Seed
 
 from .models import AnchorDecisionProtocol, AnchorReference, SeedCohort
 
-FIXED_SCORE_ABSOLUTE_TOLERANCE = MetricValue(1e-12)
+FIXED_SCORE_ABSOLUTE_TOLERANCE = AbsoluteTolerance(1e-12)
 HISTORICAL_SHARED_THRESHOLD_CV_FPR = (
     MetricValue(1.0448312675151203),
     MetricValue(1.016550264110769),

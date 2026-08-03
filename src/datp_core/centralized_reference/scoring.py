@@ -218,5 +218,3 @@ def score_artifact_set_checksum(result: CentralizedScoringResult) -> Checksum:
         f"{result.calibration_scores.checksum.value}|{result.evaluation_scores.checksum.value}|"
         f"{result.model_tensor_checksum.value}"
     )
-
-

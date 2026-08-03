@@ -18,7 +18,6 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrainingModelId,
     TrustedEstimatorClassName,
-    TrustedEstimatorModule,
 )
 from datp_core.domain.values import (
     BatchSize,
@@ -44,7 +43,6 @@ from datp_core.populations.models import (
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     PreprocessingProtocol,
-    TransformedFeature,
     TransformedSchema,
 )
 from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
@@ -146,15 +144,10 @@ def feature_protocol() -> PreprocessingProtocol:
         identity=PREPROCESSING_IDENTITY,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         input_feature_names=FEATURE_NAMES,
-        transformed_schema=TransformedSchema(
-            features=tuple(
-                TransformedFeature(name=name, position=index) for index, name in enumerate(FEATURE_NAMES.names)
-            )
-        ),
+        transformed_schema=TransformedSchema(feature_names=FEATURE_NAMES),
         serialization_format=SerializationFormat.SKOPS,
-        estimator_module=TrustedEstimatorModule.SKLEARN_PREPROCESSING,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
-        numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE.value,
+        numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
     )
 
 
@@ -172,7 +165,6 @@ def fitted_state(path: Path, client_id: str, *, checksum_suffix: str = "a") -> F
         client_identity=PreprocessingClientIdentity(client_id),
         estimator_path=path,
         estimator_checksum=Checksum((checksum_suffix * 64)[:64]),
-        transformed_schema=protocol.transformed_schema,
         fit_row_count=RowCount(32),
         fit_partition=PartitionRole.TRAIN,
     )

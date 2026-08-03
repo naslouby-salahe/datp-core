@@ -1,10 +1,7 @@
 """Stage: independent pooled preprocessing for the centralized reference."""
 
-from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-
-import polars as pl
 
 from datp_core.artifacts.coordinates import canonical_root_under
 from datp_core.artifacts.serialization import construct_trusted_estimator
@@ -14,9 +11,12 @@ from datp_core.centralized_reference.preprocessing import (
     publish_pooled_preprocessing,
     reject_federated_state_for_pooled,
 )
+from datp_core.datasets.canonical_cache import require_canonical_publication_complete
 from datp_core.datasets.catalogue import dataset_binding
 from datp_core.domain.enums import (
+    ContractSubject,
     DatasetId,
+    PartitionOrdering,
     PartitionRole,
     PopulationId,
     PreprocessingProtocolId,
@@ -26,7 +26,7 @@ from datp_core.domain.enums import (
     StageOperationId,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import FeatureNameSequence, OutcomeLabelSequence, Seed
+from datp_core.domain.values import FeatureNameSequence, Seed
 from datp_core.populations.catalogue import (
     PopulationConstructionRequest,
     PreprocessingHandoffRequest,
@@ -35,29 +35,23 @@ from datp_core.populations.catalogue import (
     join_handoff_with_canonical_features,
     resolve_population,
 )
-from datp_core.populations.models import ControlledPartitionCondition, PopulationOutcomeLabel
+from datp_core.populations.models import ControlledPartitionCondition
 from datp_core.preprocessing.models import (
+    SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD,
     PooledPreprocessingResult,
     PreprocessingFitBatch,
+    PreprocessingPartitionSet,
     PreprocessingProtocol,
     PreprocessingPublishContext,
     build_preprocessing_protocol,
-    scientific_centralized_preprocessing_method,
 )
-from datp_core.preprocessing.validation import (
-    extract_partitions,
-    require_canonical_publication_complete,
-    validate_no_attack_labels_in_fit,
-)
+from datp_core.preprocessing.validation import extract_partitions
 
 
 @dataclass(frozen=True, slots=True)
 class PreprocessCentralizedReferenceRequest:
     dataset_context: PreprocessingPublishContext
-    partitions: Mapping[PartitionRole, pl.DataFrame]
-    row_ids: Mapping[PartitionRole, Sequence[str]]
-    training_labels: OutcomeLabelSequence
-    benign_label: PopulationOutcomeLabel
+    partitions: PreprocessingPartitionSet
 
 
 @dataclass(frozen=True, slots=True)
@@ -90,23 +84,17 @@ def preprocess_centralized_reference_stage(
             "centralized preprocessing stage requires CENTRALIZED_POOLED_MIN_MAX",
             subject=context.protocol.identity,
         )
-    validate_no_attack_labels_in_fit(request.training_labels, request.benign_label)
-    if PartitionRole.TRAIN not in request.partitions:
-        raise ScientificContractError(
-            "centralized preprocessing requires a train partition", subject=PartitionRole.TRAIN
-        )
-    train = request.partitions[PartitionRole.TRAIN]
+    train_partition = request.partitions.require(PartitionRole.TRAIN)
     feature_names = context.protocol.input_feature_names
-    matrix = train.select(list(feature_names)).to_numpy()
+    matrix = train_partition.frame.select(list(feature_names)).to_numpy()
     estimator = construct_trusted_estimator(context.protocol.estimator_class_name)
     fitted = fit_pooled_preprocessing(
         context.protocol,
         estimator,
         PreprocessingFitBatch(
             training_matrix=matrix,
-            training_row_ids=tuple(request.row_ids[PartitionRole.TRAIN]),
-            training_labels=request.training_labels,
-            benign_label=request.benign_label,
+            training_row_ids=train_partition.row_ids,
+            training_labels=train_partition.outcome_labels,
         ),
     )
     published = publish_pooled_preprocessing(
@@ -114,7 +102,6 @@ def preprocess_centralized_reference_stage(
             context=context,
             fitted_estimator=fitted,
             partitions=request.partitions,
-            row_ids=request.row_ids,
         )
     )
     reject_federated_state_for_pooled(published.fitted_state)
@@ -141,7 +128,7 @@ def preprocess_centralized_reference_population_stage(
     binding = resolve_population(request.population)
     dataset = binding.declaration.dataset
     canonical_root = canonical_root_under(request.data_root, dataset)
-    require_canonical_publication_complete(canonical_root, dataset, "centralized preprocessing")
+    require_canonical_publication_complete(canonical_root, dataset, ContractSubject.PREPROCESSING)
     construction = construct_population(
         PopulationConstructionRequest(
             population_id=request.population,
@@ -164,12 +151,12 @@ def preprocess_centralized_reference_population_stage(
     schema = dataset_binding(dataset).schema
     protocol = build_centralized_preprocessing_protocol(FeatureNameSequence(schema.feature_columns))
     joined = join_handoff_with_canonical_features(canonical_root, handoff, FeatureNameSequence(schema.feature_columns))
-    partitions, row_ids, training_labels = extract_partitions(
+    partitions = extract_partitions(
         joined,
         FeatureNameSequence(schema.feature_columns),
         split_protocol=request.split_protocol,
         branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
-        deterministic_sort=True,
+        ordering=PartitionOrdering.STABLE_ROW_ID,
     )
     context = PreprocessingPublishContext(
         dataset=dataset,
@@ -184,12 +171,9 @@ def preprocess_centralized_reference_population_stage(
         PreprocessCentralizedReferenceRequest(
             dataset_context=context,
             partitions=partitions,
-            row_ids=row_ids,
-            training_labels=training_labels,
-            benign_label=PopulationOutcomeLabel.BENIGN,
         )
     )
 
 
 def build_centralized_preprocessing_protocol(feature_names: FeatureNameSequence) -> PreprocessingProtocol:
-    return build_preprocessing_protocol(scientific_centralized_preprocessing_method(), feature_names)
+    return build_preprocessing_protocol(SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD, feature_names)

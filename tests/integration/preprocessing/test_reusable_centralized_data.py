@@ -13,13 +13,13 @@ from datp_core.domain.enums import (
     SerializationFormat,
     SplitProtocolId,
     TrustedEstimatorClassName,
-    TrustedEstimatorModule,
 )
-from datp_core.domain.values import Checksum, FeatureNameSequence, Seed
+from datp_core.domain.values import AbsoluteTolerance, Checksum, FeatureNameSequence, Seed
 from datp_core.preprocessing.models import (
+    PreprocessingPartition,
+    PreprocessingPartitionSet,
     PreprocessingProtocol,
     PreprocessingPublishContext,
-    TransformedFeature,
     TransformedSchema,
 )
 
@@ -29,27 +29,26 @@ def test_centralized_publication_is_independent_and_reusable(tmp_path: Path) -> 
         identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
         fit_scope=PreprocessingFitScope.POOLED_TRAINING,
         input_feature_names=FeatureNameSequence(("f0", "f1")),
-        transformed_schema=TransformedSchema(
-            features=(TransformedFeature(name="f0", position=0), TransformedFeature(name="f1", position=1))
-        ),
+        transformed_schema=TransformedSchema(feature_names=FeatureNameSequence(("f0", "f1"))),
         serialization_format=SerializationFormat.SKOPS,
-        estimator_module=TrustedEstimatorModule.SKLEARN_PREPROCESSING,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
-        numerical_equivalence_absolute_tolerance=1e-12,
+        numerical_equivalence_absolute_tolerance=AbsoluteTolerance(1e-12),
     )
-    partitions = {
-        PartitionRole.TRAIN: pl.DataFrame({"row_id": ["t0", "t1"], "f0": [0.0, 2.0], "f1": [1.0, 3.0]}),
-        PartitionRole.CALIBRATION: pl.DataFrame({"row_id": ["c0"], "f0": [1.0], "f1": [2.0]}),
-        PartitionRole.EVALUATION: pl.DataFrame({"row_id": ["e0"], "f0": [3.0], "f1": [4.0]}),
-    }
-    row_ids: dict[PartitionRole, tuple[str, ...]] = {
-        PartitionRole.TRAIN: ("t0", "t1"),
-        PartitionRole.CALIBRATION: ("c0",),
-        PartitionRole.EVALUATION: ("e0",),
-    }
+    frame_train = pl.DataFrame(
+        {"stable_row_id": ["t0", "t1"], "outcome_label": ["benign", "benign"], "f0": [0.0, 2.0], "f1": [1.0, 3.0]}
+    )
+    frame_cal = pl.DataFrame({"stable_row_id": ["c0"], "outcome_label": ["benign"], "f0": [1.0], "f1": [2.0]})
+    frame_eval = pl.DataFrame({"stable_row_id": ["e0"], "outcome_label": ["benign"], "f0": [3.0], "f1": [4.0]})
+    partitions = PreprocessingPartitionSet(
+        partitions=(
+            PreprocessingPartition(PartitionRole.TRAIN, frame_train),
+            PreprocessingPartition(PartitionRole.CALIBRATION, frame_cal),
+            PreprocessingPartition(PartitionRole.EVALUATION, frame_eval),
+        )
+    )
     data_root = tmp_path / "data"
     fitted = construct_trusted_estimator(TrustedEstimatorClassName.STANDARD_SCALER).fit(
-        partitions[PartitionRole.TRAIN].select(list(protocol.input_feature_names)).to_numpy()
+        frame_train.select(list(protocol.input_feature_names)).to_numpy()
     )
     first = publish_pooled_preprocessing(
         PooledPublishRequest(
@@ -64,7 +63,6 @@ def test_centralized_publication_is_independent_and_reusable(tmp_path: Path) -> 
             ),
             fitted_estimator=fitted,
             partitions=partitions,
-            row_ids=row_ids,
         )
     )
     second = publish_pooled_preprocessing(
@@ -80,9 +78,8 @@ def test_centralized_publication_is_independent_and_reusable(tmp_path: Path) -> 
             ),
             fitted_estimator=fitted,
             partitions=partitions,
-            row_ids=row_ids,
         )
     )
     assert first.fitted_state.client_identity is None
-    assert first.train_path == second.train_path
-    assert "centralized_reference" in first.train_path.parts
+    assert first.paths.train == second.paths.train
+    assert "centralized_reference" in first.paths.train.parts

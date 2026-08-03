@@ -109,20 +109,7 @@ def validate_client_preprocessing_match(
             "preprocessing state client identity token must match the client training input",
             subject=ContractSubject.CLIENT_IDENTITY,
         )
-    if preprocessing_state.client_population is not None and preprocessing_state.client_population != client.population:
-        raise ScientificContractError(
-            "preprocessing state client population must match the client training input",
-            subject=ContractSubject.CLIENT_IDENTITY,
-        )
-    if (
-        preprocessing_state.client_identity_kind is not None
-        and preprocessing_state.client_identity_kind != client.identity_kind
-    ):
-        raise ScientificContractError(
-            "preprocessing state client identity kind must match the client training input",
-            subject=ContractSubject.CLIENT_IDENTITY,
-        )
-    if preprocessing_state.protocol.transformed_schema.feature_names != feature_names.names:
+    if preprocessing_state.protocol.transformed_schema.feature_names != feature_names:
         raise ScientificContractError(
             "preprocessing transformed feature schema must match the declared training feature names",
             subject=ContractSubject.SCHEMA,

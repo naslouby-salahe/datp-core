@@ -151,12 +151,8 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
 
         invariant = FixedScoreInvariant(
             model_checksum=request.checkpoint.tensor_checksum,
-            calibration_score_set_checksum=_record_set_checksum(
-                tuple(records_by_role[PartitionRole.CALIBRATION])
-            ),
-            evaluation_score_set_checksum=_record_set_checksum(
-                tuple(records_by_role[PartitionRole.EVALUATION])
-            ),
+            calibration_score_set_checksum=_record_set_checksum(tuple(records_by_role[PartitionRole.CALIBRATION])),
+            evaluation_score_set_checksum=_record_set_checksum(tuple(records_by_role[PartitionRole.EVALUATION])),
             preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
             split_manifest_checksum=request.split_manifest_checksum,
             future_recalibration_score_set_checksum=(

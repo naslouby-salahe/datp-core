@@ -24,6 +24,7 @@ from datp_core.centralized_reference.thresholding import (
 )
 from datp_core.centralized_reference.training import CentralizedTrainingRequest, train_centralized_autoencoder
 from datp_core.domain.values import Checksum, RowCount, Seed
+from datp_core.populations.models import PopulationOutcomeLabel
 
 
 def test_end_to_end_centralized_pipeline_without_federated_artifacts(tmp_path: Path) -> None:
@@ -44,6 +45,7 @@ def test_end_to_end_centralized_pipeline_without_federated_artifacts(tmp_path: P
             checkpoint_protocol=CHECKPOINT,
             learning_rate=LEARNING_RATE,
             batch_size=BATCH_SIZE,
+            benign_label=PopulationOutcomeLabel.BENIGN,
         )
     )
     candidates = retain_centralized_checkpoint_candidates(training, AUTOENCODER)

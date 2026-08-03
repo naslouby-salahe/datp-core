@@ -36,8 +36,7 @@ from datp_core.domain.values import (
 )
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
-
-_UNIT_TOTAL_ABSOLUTE_TOLERANCE = 1e-9
+from datp_core.protocols.models import FRACTION_TOTAL_ABSOLUTE_TOLERANCE
 
 
 def _mean_threshold(quantiles: tuple["LocalQuantile", ...]) -> float:
@@ -98,7 +97,7 @@ def _validate_normalized_weights(weights: tuple[float, ...], expected_count: int
     )
     require_contract(all(w >= 0 for w in weights), "normalized weights must be non-negative", ContractSubject.THRESHOLD)
     require_contract(
-        floats_absolutely_close(sum(weights), 1.0, _UNIT_TOTAL_ABSOLUTE_TOLERANCE),
+        floats_absolutely_close(sum(weights), 1.0, FRACTION_TOTAL_ABSOLUTE_TOLERANCE),
         "normalized weights must sum to one",
         ContractSubject.THRESHOLD,
     )
@@ -594,7 +593,9 @@ class ConformalAssignment:
         )
         expected_quantile = self.rank_index / self.calibration_count.value
         require_contract(
-            floats_absolutely_close(self.effective_quantile.value, expected_quantile, _UNIT_TOTAL_ABSOLUTE_TOLERANCE),
+            floats_absolutely_close(
+                self.effective_quantile.value, expected_quantile, FRACTION_TOTAL_ABSOLUTE_TOLERANCE
+            ),
             "conformal effective quantile must equal rank_index / calibration_count",
             ContractSubject.THRESHOLD,
         )
@@ -614,7 +615,9 @@ class ConformalThresholdResult:
 
     def __post_init__(self) -> None:
         require_contract(
-            floats_absolutely_close(self.coverage.value + self.significance.value, 1.0, _UNIT_TOTAL_ABSOLUTE_TOLERANCE),
+            floats_absolutely_close(
+                self.coverage.value + self.significance.value, 1.0, FRACTION_TOTAL_ABSOLUTE_TOLERANCE
+            ),
             "conformal coverage and significance must be complements",
             ContractSubject.THRESHOLD,
         )

@@ -32,8 +32,7 @@ class ProcessedPublication[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: Ba
     coordinate_directory: Path
     manifest: ManifestT
     schema: SchemaT
-    validation_report: ReportT
-    writer: Callable[[Path], None]
+    writer: Callable[[Path], ReportT]
     required_assets: tuple[ProcessedAssetName, ...]
     overwrite: bool
     manifest_type: type[ManifestT]
@@ -98,10 +97,10 @@ def publish_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseMod
 def _write_processed[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     temporary: Path, publication: ProcessedPublication[ManifestT, SchemaT, ReportT]
 ) -> None:
-    publication.writer(temporary)
+    report = publication.writer(temporary)
     write_preprocessing_manifest(temporary, publication.manifest)
     write_transformed_schema(temporary, publication.schema)
-    write_validation_report(temporary, publication.validation_report)
+    write_validation_report(temporary, report)
     digest = complete_digest(
         (temporary / ProcessedAssetName.PREPROCESSING_MANIFEST).read_text(encoding="utf-8"),
         (temporary / ProcessedAssetName.SCHEMA).read_text(encoding="utf-8"),
@@ -120,7 +119,7 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     try:
         manifest = read_preprocessing_manifest(target, publication.manifest_type)
         schema = read_transformed_schema(target, publication.schema_type)
-        report = read_validation_report(target, publication.report_type)
+        _report = read_validation_report(target, publication.report_type)
     except (OSError, ArtifactIntegrityError, ValueError):
         return False
     expected = complete_digest(
@@ -134,8 +133,6 @@ def _is_reusable[ManifestT: BaseModel, SchemaT: BaseModel, ReportT: BaseModel](
     if manifest != publication.manifest:
         return False
     if schema != publication.schema:
-        return False
-    if report != publication.validation_report:
         return False
     return _assets_exist(target, publication.required_assets)
 

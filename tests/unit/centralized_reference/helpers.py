@@ -23,7 +23,6 @@ from datp_core.domain.enums import (
     SerializationFormat,
     SplitProtocolId,
     TrustedEstimatorClassName,
-    TrustedEstimatorModule,
 )
 from datp_core.domain.values import (
     BatchSize,
@@ -40,7 +39,6 @@ from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COL
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     PreprocessingProtocol,
-    TransformedFeature,
     TransformedSchema,
 )
 from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
@@ -70,15 +68,10 @@ def feature_protocol() -> PreprocessingProtocol:
         identity=PreprocessingProtocolId.CENTRALIZED_POOLED_MIN_MAX,
         fit_scope=PreprocessingFitScope.POOLED_TRAINING,
         input_feature_names=FEATURE_NAMES,
-        transformed_schema=TransformedSchema(
-            features=tuple(
-                TransformedFeature(name=name, position=index) for index, name in enumerate(FEATURE_NAMES.names)
-            )
-        ),
+        transformed_schema=TransformedSchema(feature_names=FEATURE_NAMES),
         serialization_format=SerializationFormat.SKOPS,
-        estimator_module=TrustedEstimatorModule.SKLEARN_PREPROCESSING,
         estimator_class_name=TrustedEstimatorClassName.MIN_MAX_SCALER,
-        numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE.value,
+        numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
     )
 
 
@@ -102,7 +95,6 @@ def fitted_state(path: Path) -> FittedPreprocessingState:
         client_identity=None,
         estimator_path=path,
         estimator_checksum=Checksum("a" * 64),
-        transformed_schema=protocol.transformed_schema,
         fit_row_count=RowCount(64),
         fit_partition=PartitionRole.TRAIN,
     )
@@ -157,6 +149,7 @@ def run_miniature_training(output_directory: Path) -> CentralizedTrainingResult:
             checkpoint_protocol=CHECKPOINT,
             learning_rate=LEARNING_RATE,
             batch_size=BATCH_SIZE,
+            benign_label=PopulationOutcomeLabel.BENIGN,
         )
     )
 

@@ -41,7 +41,8 @@ from datp_core.datasets.models import (
     _InventoryEntry,
     _ValidationReportEntry,
 )
-from datp_core.domain.enums import AvailabilityStatus, DatasetId, PublicationStatus
+from datp_core.domain.enums import AvailabilityStatus, ContractSubject, DatasetId, PublicationStatus
+from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import ByteCount, Checksum, RowCount, checksum_file, checksum_text
 from datp_core.protocols.runtime import DATA_ROOT
 
@@ -616,3 +617,15 @@ def serialized_manifest_json[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
         schema_checksum=request.schema_checksum.value,
         validation_report=cast("_ValidationReportEntry", _serialize(request.validation_report)),
     ).model_dump_json()
+
+
+def require_canonical_publication_complete(
+    canonical_root: Path,
+    dataset: DatasetId,
+    subject: ContractSubject = ContractSubject.PREPROCESSING,
+) -> None:
+    if not (canonical_root / CanonicalPublicationArtifact.COMPLETE).is_file():
+        raise ScientificContractError(
+            "canonical COMPLETE marker is required",
+            subject=subject,
+        )

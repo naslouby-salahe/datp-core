@@ -238,10 +238,7 @@ def _score_set_checksum(records: tuple[ScoreRecord, ...]) -> Checksum:
 
     ordered = sorted(records, key=lambda record: record.scored_client)
     payload = json.dumps(
-        [
-            {"client_id": record.scored_client.client_id, "checksum": record.checksum.value}
-            for record in ordered
-        ],
+        [{"client_id": record.scored_client.client_id, "checksum": record.checksum.value} for record in ordered],
         sort_keys=True,
         separators=(",", ":"),
         ensure_ascii=True,

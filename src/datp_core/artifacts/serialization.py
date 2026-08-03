@@ -14,7 +14,7 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 from datp_core.domain.enums import TrustedEstimatorClassName
 from datp_core.domain.errors import SerializationSafetyError
-from datp_core.domain.values import Checksum, checksum_file, checksum_text
+from datp_core.domain.values import AbsoluteTolerance, Checksum, checksum_file, checksum_text
 
 TrustedScaler = StandardScaler | MinMaxScaler
 
@@ -105,8 +105,9 @@ def serialize_json_model(model: BaseModel, destination: Path) -> Checksum:
 def transforms_are_equivalent(
     left: np.ndarray,
     right: np.ndarray,
-    absolute_tolerance: float,
+    absolute_tolerance: float | AbsoluteTolerance,
 ) -> bool:
     if left.shape != right.shape:
         return False
-    return bool(np.allclose(left, right, rtol=0.0, atol=absolute_tolerance, equal_nan=False))
+    tol = absolute_tolerance.value if isinstance(absolute_tolerance, AbsoluteTolerance) else absolute_tolerance
+    return bool(np.allclose(left, right, rtol=0.0, atol=tol, equal_nan=False))

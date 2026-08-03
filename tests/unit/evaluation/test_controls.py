@@ -3,7 +3,7 @@ from tests.unit.learning.federated.helpers import client_identity, fedavg_coordi
 
 from datp_core.domain.enums import FederatedThresholdMethod, MetricId
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, MetricValue, Seed
+from datp_core.domain.values import AbsoluteTolerance, Checksum, MetricValue, Seed
 from datp_core.evaluation.controls import ClientAurocEvidence, FixedScoreEvidence, validate_fixed_score_controls
 from datp_core.evaluation.metric_semantics import available, unavailable
 from datp_core.evaluation.models import MetricAvailability, MetricReason, MetricStatus
@@ -13,7 +13,7 @@ def test_fixed_score_controls_allow_only_threshold_method_to_change() -> None:
     first = _evidence(FederatedThresholdMethod.SHARED_THRESHOLD, MetricValue(0.8))
     second = _evidence(FederatedThresholdMethod.LOCAL_THRESHOLD, MetricValue(0.8))
 
-    validate_fixed_score_controls(first, second, auroc_absolute_tolerance=0.0)
+    validate_fixed_score_controls(first, second, auroc_absolute_tolerance=AbsoluteTolerance(1e-12))
 
 
 def test_fixed_score_controls_reject_changed_auroc() -> None:
@@ -21,7 +21,7 @@ def test_fixed_score_controls_reject_changed_auroc() -> None:
         validate_fixed_score_controls(
             _evidence(FederatedThresholdMethod.SHARED_THRESHOLD, MetricValue(0.8)),
             _evidence(FederatedThresholdMethod.LOCAL_THRESHOLD, MetricValue(0.7)),
-            auroc_absolute_tolerance=0.0,
+            auroc_absolute_tolerance=AbsoluteTolerance(1e-12),
         )
 
 
@@ -30,7 +30,7 @@ def test_fixed_score_controls_allow_matched_unavailable_auroc() -> None:
     validate_fixed_score_controls(
         _evidence(FederatedThresholdMethod.SHARED_THRESHOLD, unavailable_auroc),
         _evidence(FederatedThresholdMethod.LOCAL_THRESHOLD, unavailable_auroc),
-        auroc_absolute_tolerance=0.0,
+        auroc_absolute_tolerance=AbsoluteTolerance(1e-12),
     )
 
 

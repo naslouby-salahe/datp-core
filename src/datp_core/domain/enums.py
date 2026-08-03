@@ -462,3 +462,8 @@ class QuantileInterpolationSemantics(StrEnum):
     """Operationalization of the exact empirical quantile via NumPy linear interpolation."""
 
     NUMPY_QUANTILE_LINEAR = "numpy_quantile_linear"
+
+
+class PartitionOrdering(StrEnum):
+    PRESERVE_SOURCE_ORDER = "preserve_source_order"
+    STABLE_ROW_ID = "stable_row_id"

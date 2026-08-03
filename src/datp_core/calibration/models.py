@@ -5,7 +5,7 @@ from enum import StrEnum
 
 from datp_core.domain.enums import ContractSubject
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CalibrationSize, Checksum, ReplicateIndex, RowCount, ScoreValue, Seed
+from datp_core.domain.values import CalibrationSize, Checksum, ReplicateIndex, RowCount, ScoreValue, Seed, StableRowId
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 
@@ -76,7 +76,7 @@ class CalibrationSampleReference:
     """A reference to one immutable benign calibration score row; never a copy of it."""
 
     client: ClientIdentity
-    stable_row_id: str
+    stable_row_id: StableRowId
     score: ScoreValue
 
     def __post_init__(self) -> None:

@@ -219,7 +219,7 @@ def evaluate_federated_stage(request: EvaluateFederatedRequest) -> FederatedEval
         validate_fixed_score_controls(
             request.fixed_score_evidence,
             request.comparison_fixed_score_evidence,
-            auroc_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE.value,
+            auroc_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
         )
     document = _evaluation_payload(request, clients, population, diagnostics)
     payload = dumps(document, indent=2, sort_keys=True) + "\n"

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from functools import total_ordering
 from hashlib import file_digest, sha256
 from math import isclose, isfinite
+from operator import lt as _lt
 from pathlib import Path
 from typing import Any, ClassVar
 
@@ -42,19 +43,19 @@ def _number(value: int | float, name: str) -> float:
     return float(value)
 
 
-def _ordering_compare(left: Any, right: object, op) -> bool:
+def _ordering_compare(left: Any, right: object, op: Any = None) -> bool:
     """Cross-type total ordering for integer and float value objects.
 
-    Accepts ``left`` (``self``), ``right`` (another value object or a raw
-    ``int`` / ``float``), and a two-argument operator (e.g. ``int.__lt__``).
+    Accepts ``left`` (``self``) and ``right`` (another value object or a raw
+    ``int`` / ``float``).
     Returns ``NotImplemented`` for unrecognized types so Python can try the
     reflected operator on ``right``.
     """
     if isinstance(right, (int, float)) and not isinstance(right, bool):
-        return op(left.value, right)  # type: ignore[union-attr]
+        return _lt(left.value, right)
     other_value = getattr(right, "value", None)
     if isinstance(other_value, (int, float)):
-        return op(left.value, other_value)  # type: ignore[union-attr]
+        return _lt(left.value, other_value)
     return NotImplemented
 
 
@@ -102,6 +103,20 @@ def _str_enum_schema(cls, _source_type, _handler):
         return cls(v)
 
     return _cs.no_info_plain_validator_function(_validate)
+
+
+def _str_subclass_schema(cls, _source_type, _handler):
+    from pydantic_core import core_schema as _cs
+
+    def _validate(v):
+        if isinstance(v, cls):
+            return v
+        return cls(v)
+
+    return _cs.no_info_plain_validator_function(
+        _validate,
+        serialization=_cs.plain_serializer_function_ser_schema(str),
+    )
 
 
 def _typed_eq(self: Any, other: object) -> bool:
@@ -336,17 +351,70 @@ class RowCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "row count"
 
 
+class FeatureName(str):
+    def __new__(cls, value: str) -> "FeatureName":
+        if not isinstance(value, str) or not value:
+            raise ValueError("feature name must be a non-empty string")
+        return super().__new__(cls, value)
+
+    __get_pydantic_core_schema__ = classmethod(_str_subclass_schema)
+
+
+class OutcomeLabel(str):
+    def __new__(cls, value: str) -> "OutcomeLabel":
+        if not isinstance(value, str) or not value:
+            raise ValueError("outcome label must be a non-empty string")
+        return super().__new__(cls, value)
+
+    __get_pydantic_core_schema__ = classmethod(_str_subclass_schema)
+
+
+class StableRowId(str):
+    def __new__(cls, value: str) -> "StableRowId":
+        if not isinstance(value, str) or not value:
+            raise ValueError("stable row ID must be a non-empty string")
+        if "/" in value or "\\" in value:
+            raise ValueError("stable row ID must not contain path separators")
+        return super().__new__(cls, value)
+
+    __get_pydantic_core_schema__ = classmethod(_str_subclass_schema)
+
+
+def _validate_non_empty_tuple(values: tuple, field_name: str) -> None:
+    if not isinstance(values, tuple) or not values:
+        raise ValueError(f"{field_name} requires a non-empty tuple")
+
+
+def _validate_unique(values: tuple, field_name: str) -> None:
+    if len(frozenset(values)) != len(values):
+        raise ValueError(f"{field_name} must be unique")
+
+
+def _sequence_pydantic_schema(cls, _source_type, _handler):
+    from pydantic_core import core_schema as _cs
+
+    def _validate(v):
+        if isinstance(v, cls):
+            return v
+        if isinstance(v, (list, tuple)):
+            return cls(tuple(v))
+        raise ValueError(f"expected sequence, got {type(v)}")
+
+    return _cs.no_info_plain_validator_function(
+        _validate,
+        serialization=_cs.plain_serializer_function_ser_schema(list),
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class FeatureNameSequence:
-    names: tuple[str, ...]
+    names: tuple[FeatureName, ...]
 
     def __post_init__(self) -> None:
-        if not isinstance(self.names, tuple) or not self.names:
-            raise ValueError("feature name sequence requires a non-empty tuple")
-        if any(not isinstance(name, str) or not name for name in self.names):
-            raise ValueError("feature names must be non-empty strings")
-        if len(frozenset(self.names)) != len(self.names):
-            raise ValueError("feature names must be unique")
+        wrapped = tuple(item if isinstance(item, FeatureName) else FeatureName(item) for item in self.names)
+        object.__setattr__(self, "names", wrapped)
+        _validate_non_empty_tuple(self.names, "feature name sequence")
+        _validate_unique(self.names, "feature names")
 
     def __len__(self) -> int:
         return len(self.names)
@@ -357,38 +425,47 @@ class FeatureNameSequence:
     def as_list(self) -> list[str]:
         return list(self.names)
 
-    @classmethod
-    def __get_pydantic_core_schema__(cls, _source_type, _handler):
-        from pydantic_core import core_schema as _cs
-
-        def _validate(v):
-            if isinstance(v, cls):
-                return v
-            if isinstance(v, (list, tuple)):
-                return cls(tuple(v))
-            raise ValueError(f"expected sequence of feature names, got {type(v)}")
-
-        return _cs.no_info_plain_validator_function(
-            _validate,
-            serialization=_cs.plain_serializer_function_ser_schema(lambda instance: list(instance.names)),
-        )
+    __get_pydantic_core_schema__ = classmethod(_sequence_pydantic_schema)
 
 
 @dataclass(frozen=True, slots=True)
 class OutcomeLabelSequence:
-    labels: tuple[str, ...]
+    labels: tuple[OutcomeLabel, ...]
 
     def __post_init__(self) -> None:
         if not isinstance(self.labels, tuple):
             raise TypeError("outcome labels must be an immutable tuple")
-        if any(not isinstance(label, str) or not label for label in self.labels):
-            raise ValueError("outcome labels must be non-empty strings")
+        wrapped = tuple(item if isinstance(item, OutcomeLabel) else OutcomeLabel(item) for item in self.labels)
+        object.__setattr__(self, "labels", wrapped)
 
     def __len__(self) -> int:
         return len(self.labels)
 
     def __iter__(self):
         return iter(self.labels)
+
+
+@dataclass(frozen=True, slots=True)
+class StableRowIdSequence:
+    row_ids: tuple[StableRowId, ...]
+
+    def __post_init__(self) -> None:
+        wrapped = tuple(item if isinstance(item, StableRowId) else StableRowId(item) for item in self.row_ids)
+        object.__setattr__(self, "row_ids", wrapped)
+        _validate_non_empty_tuple(self.row_ids, "stable row ID sequence")
+        _validate_unique(self.row_ids, "stable row IDs")
+
+    def __len__(self) -> int:
+        return len(self.row_ids)
+
+    def __iter__(self):
+        return iter(self.row_ids)
+
+    __get_pydantic_core_schema__ = classmethod(_sequence_pydantic_schema)
+
+
+class AbsoluteTolerance(PositiveFiniteFloatValue):
+    validation_name: ClassVar[str] = "absolute tolerance"
 
 
 class DirichletConcentration(PositiveFiniteFloatValue):
@@ -513,21 +590,6 @@ class FamilyIdentity:
     def __post_init__(self) -> None:
         if not isinstance(self.value, str) or not self.value:
             raise ValueError("family identity must be non-empty")
-
-
-def _str_subclass_schema(cls, _source_type, _handler):
-    """Pydantic v2 schema for str subclasses: validates via cls(...), serializes as str."""
-    from pydantic_core import core_schema as _cs
-
-    def _validate(v):
-        if isinstance(v, cls):
-            return v
-        return cls(v)
-
-    return _cs.no_info_plain_validator_function(
-        _validate,
-        serialization=_cs.plain_serializer_function_ser_schema(lambda instance: str(instance)),
-    )
 
 
 class SafeTensorFilename(str):

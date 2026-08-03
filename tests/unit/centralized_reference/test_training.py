@@ -41,7 +41,6 @@ def test_rejects_federated_preprocessing_state(tmp_path: Path) -> None:
         client_identity=ClientPathToken("device_a"),
         estimator_path=tmp_path / "state.skops",
         estimator_checksum=Checksum("c" * 64),
-        transformed_schema=protocol.transformed_schema,
         fit_row_count=RowCount(10),
         fit_partition=PartitionRole.TRAIN,
     )
@@ -52,8 +51,8 @@ def test_rejects_federated_preprocessing_state(tmp_path: Path) -> None:
 def test_rejects_attack_rows_in_training() -> None:
     with pytest.raises(LeakageError, match="attack-labelled"):
         reject_attack_rows_in_centralized_training(
-            OutcomeLabelSequence((PopulationOutcomeLabel.BENIGN.value, PopulationOutcomeLabel.ATTACK.value)),
-            PopulationOutcomeLabel.BENIGN.value,
+            OutcomeLabelSequence((PopulationOutcomeLabel.BENIGN, PopulationOutcomeLabel.ATTACK)),
+            PopulationOutcomeLabel.BENIGN,
         )
 
 
@@ -92,6 +91,7 @@ def test_training_rejects_undersized_batch(tmp_path: Path) -> None:
                 checkpoint_protocol=CHECKPOINT,
                 learning_rate=LEARNING_RATE,
                 batch_size=BATCH_SIZE,
+                benign_label=PopulationOutcomeLabel.BENIGN,
             )
         )
 

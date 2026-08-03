@@ -37,7 +37,7 @@ from datp_core.anchor.models import (
 )
 from datp_core.domain.enums import ContractSubject, FederatedThresholdMethod, MetricId
 from datp_core.domain.errors import AnchorReproductionError
-from datp_core.domain.values import Seed, checksum_file
+from datp_core.domain.values import MetricValue, Seed, checksum_file
 from datp_core.protocols.anchor import ANCHOR_DECISION_PROTOCOL, HISTORICAL_ANCHOR_SEED_COHORT
 from datp_core.protocols.models import AnchorDecisionProtocol, SeedCohort
 from datp_core.protocols.seeds import CONFIRMATORY_SEED_COHORT
@@ -63,7 +63,13 @@ def references_from_protocol(
                 threshold_method=item.threshold_method,
                 metric=item.metric,
                 value=item.value,
-                tolerance_rule=AbsoluteToleranceRule(absolute_tolerance=item.absolute_tolerance),
+                tolerance_rule=AbsoluteToleranceRule(
+                    absolute_tolerance=(
+                        item.absolute_tolerance
+                        if isinstance(item.absolute_tolerance, MetricValue)
+                        else MetricValue(item.absolute_tolerance.value)
+                    )
+                ),
                 checkpoint_status=ANCHOR_CHECKPOINT_STATUS,
             )
         )

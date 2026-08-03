@@ -46,6 +46,7 @@ from datp_core.domain.values import (
     checksum_file,
     checksum_text,
 )
+from datp_core.populations.models import PopulationOutcomeLabel
 from datp_core.preprocessing.models import FittedPreprocessingState
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
 from datp_core.runtime.compute import resolve_cuda_device
@@ -109,6 +110,7 @@ def train_centralized_reference_stage(
                 checkpoint_protocol=request.checkpoint_protocol,
                 learning_rate=learning_rate,
                 batch_size=batch_size,
+                benign_label=PopulationOutcomeLabel.BENIGN,
             )
         )
         candidates = retain_centralized_checkpoint_candidates(training, request.autoencoder)

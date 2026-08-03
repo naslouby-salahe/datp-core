@@ -12,7 +12,7 @@ from datp_core.domain.enums import (
     WarningCode,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import Checksum, MetricValue, RowCount, ScoreValue, ThresholdValue
+from datp_core.domain.values import Checksum, MetricValue, RowCount, ScoreValue, StableRowId, ThresholdValue
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity, PopulationOutcomeLabel
 from datp_core.scoring.models import ScoreRecord
@@ -23,7 +23,7 @@ class HeldOutBenignScore:
     """One verified benign evaluation score with immutable score-artifact provenance."""
 
     client: ClientIdentity
-    stable_row_id: str
+    stable_row_id: StableRowId
     score: ScoreValue
     partition_role: PartitionRole
     outcome_label: PopulationOutcomeLabel

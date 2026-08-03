@@ -16,7 +16,7 @@ from tests.unit.learning.federated.helpers import (
     fedavg_coordinate,
 )
 
-from datp_core.domain.enums import PublicationStatus
+from datp_core.domain.enums import PartitionRole, ProcessedDataBranch, PublicationStatus
 from datp_core.domain.values import Checksum, RowCount, Seed
 from datp_core.domain.values import ClientPathToken as PreprocessingClientPathToken
 from datp_core.orchestration.stages.score_federated import ScoreFederatedRequest, score_federated_stage
@@ -25,7 +25,12 @@ from datp_core.orchestration.stages.select_federated_checkpoint import (
     select_federated_checkpoint_stage,
 )
 from datp_core.orchestration.stages.train_federated import TrainFedAvgRequest, train_fedavg_stage
-from datp_core.preprocessing.models import ClientPreprocessingResult, ClientPreprocessPublication
+from datp_core.preprocessing.models import (
+    ClientPreprocessingResult,
+    ClientPreprocessPublication,
+    FittedPreprocessingState,
+    PreprocessedPartitionPaths,
+)
 from datp_core.scoring.generation import ClientScoringInput
 
 
@@ -40,8 +45,6 @@ def _client_publication(client_id: str, directory: Path) -> ClientPreprocessPubl
     estimator_path = directory / "state.skops"
     estimator_path.write_bytes(b"placeholder")
     protocol = feature_protocol()
-    from datp_core.domain.enums import PartitionRole, ProcessedDataBranch
-    from datp_core.preprocessing.models import FittedPreprocessingState
 
     fitted_state = FittedPreprocessingState(
         protocol=protocol,
@@ -49,26 +52,22 @@ def _client_publication(client_id: str, directory: Path) -> ClientPreprocessPubl
         client_identity=PreprocessingClientPathToken(client_id),
         estimator_path=estimator_path,
         estimator_checksum=Checksum(f"{client_id[-1]}" * 64),
-        transformed_schema=protocol.transformed_schema,
         fit_row_count=RowCount(16),
         fit_partition=PartitionRole.TRAIN,
     )
     result = ClientPreprocessingResult(
         client_identity=PreprocessingClientPathToken(client_id),
-        train_path=train_path,
-        calibration_path=calibration_path,
-        evaluation_path=evaluation_path,
+        paths=PreprocessedPartitionPaths(train=train_path, calibration=calibration_path, evaluation=evaluation_path),
         fitted_state=fitted_state,
-        transformed_schema=protocol.transformed_schema,
         publication_status=PublicationStatus.PUBLISHED,
     )
     return ClientPreprocessPublication(
-        client_identity=PreprocessingClientPathToken(client_id),
         result=result,
-        publication_status=PublicationStatus.PUBLISHED,
         train_row_count=RowCount(16),
         calibration_row_count=RowCount(8),
         evaluation_row_count=RowCount(8),
+        future_recalibration_row_count=RowCount(0),
+        static_reference_reserve_row_count=RowCount(0),
     )
 
 
@@ -136,9 +135,9 @@ def test_select_and_score_federated_stages(tmp_path: Path) -> None:
 
     clients = tuple(
         ClientScoringInput(
-            client=client_identity(publication.client_identity.value),
-            calibration_features=pl.read_parquet(publication.result.calibration_path),
-            evaluation_features=pl.read_parquet(publication.result.evaluation_path),
+            client=client_identity(publication.result.client_identity.value),
+            calibration_features=pl.read_parquet(publication.result.paths.calibration),
+            evaluation_features=pl.read_parquet(publication.result.paths.evaluation),
         )
         for publication in publications
     )

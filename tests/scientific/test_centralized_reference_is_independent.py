@@ -18,14 +18,12 @@ from datp_core.domain.enums import (
     ProcessedDataBranch,
     SerializationFormat,
     TrustedEstimatorClassName,
-    TrustedEstimatorModule,
 )
 from datp_core.domain.errors import LeakageError
 from datp_core.domain.values import Checksum, ClientPathToken, FeatureNameSequence, RowCount
 from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     PreprocessingProtocol,
-    TransformedFeature,
     TransformedSchema,
 )
 from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
@@ -36,11 +34,10 @@ def _federated_state(path: Path) -> FittedPreprocessingState:
         identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
         fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         input_feature_names=FeatureNameSequence(("f0",)),
-        transformed_schema=TransformedSchema(features=(TransformedFeature(name="f0", position=0),)),
+        transformed_schema=TransformedSchema(feature_names=FeatureNameSequence(("f0",))),
         serialization_format=SerializationFormat.SKOPS,
-        estimator_module=TrustedEstimatorModule.SKLEARN_PREPROCESSING,
         estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
-        numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE.value,
+        numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
     )
     path.write_bytes(b"x")
     return FittedPreprocessingState(
@@ -49,7 +46,6 @@ def _federated_state(path: Path) -> FittedPreprocessingState:
         client_identity=ClientPathToken("device_a"),
         estimator_path=path,
         estimator_checksum=Checksum("1" * 64),
-        transformed_schema=protocol.transformed_schema,
         fit_row_count=RowCount(3),
         fit_partition=PartitionRole.TRAIN,
     )

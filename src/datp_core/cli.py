@@ -203,7 +203,7 @@ def preprocess_federated(
     )
     for publication in result.client_publications:
         typer.echo(
-            f"  {publication.client_identity.value} {publication.publication_status.value} "
+            f"  {publication.result.client_identity.value} {publication.result.publication_status.value} "
             f"train={publication.train_row_count} "
             f"calibration={publication.calibration_row_count} "
             f"evaluation={publication.evaluation_row_count}"
@@ -242,9 +242,9 @@ def preprocess_centralized_reference(
         f"seed={result.partition_seed.value} "
         f"preprocessing={result.preprocessing_identity.value} "
         f"status={result.publication_status.value} "
-        f"train={result.result.train_path} "
-        f"calibration={result.result.calibration_path} "
-        f"evaluation={result.result.evaluation_path}"
+        f"train={result.result.paths.train} "
+        f"calibration={result.result.paths.calibration} "
+        f"evaluation={result.result.paths.evaluation}"
     )
 
 
@@ -333,7 +333,7 @@ def _prepare_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedContext:
     state_set_checksum = preprocessing_state_set_checksum(
         tuple(
             PreparedClientProvenance(
-                client=ClientIdentity(population, item.client_identity.value, identity_kind),
+                client=ClientIdentity(population, item.result.client_identity.value, identity_kind),
                 preprocessing_checksum=item.result.fitted_state.estimator_checksum,
             )
             for item in preprocessing.client_publications
@@ -473,9 +473,9 @@ def _client_scoring_inputs(
 ) -> tuple[ClientScoringInput, ...]:
     return tuple(
         ClientScoringInput(
-            _client_with_id(clients, publication.client_identity.value),
-            pl.read_parquet(publication.result.calibration_path),
-            pl.read_parquet(publication.result.evaluation_path),
+            _client_with_id(clients, publication.result.client_identity.value),
+            pl.read_parquet(publication.result.paths.calibration),
+            pl.read_parquet(publication.result.paths.evaluation),
         )
         for publication in publications
     )

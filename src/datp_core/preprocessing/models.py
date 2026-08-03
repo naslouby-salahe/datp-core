@@ -4,14 +4,16 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
+import polars as pl
 from pydantic import model_validator
 
+from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
+    ContractSubject,
     DatasetId,
     PartitionRole,
     PopulationId,
-    PopulationIdentityKind,
     PreprocessingFitScope,
     PreprocessingProtocolId,
     ProcessedDataBranch,
@@ -19,52 +21,25 @@ from datp_core.domain.enums import (
     SerializationFormat,
     SplitProtocolId,
     TrustedEstimatorClassName,
-    TrustedEstimatorModule,
 )
-from datp_core.domain.values import Checksum, ClientPathToken, FeatureNameSequence, OutcomeLabelSequence, RowCount, Seed
+from datp_core.domain.errors import ScientificContractError
+from datp_core.domain.values import (
+    AbsoluteTolerance,
+    Checksum,
+    ClientPathToken,
+    FeatureNameSequence,
+    OutcomeLabelSequence,
+    RowCount,
+    Seed,
+    StableRowIdSequence,
+)
 from datp_core.experiments.models import ExternalTemporalExecutionIdentity
-from datp_core.populations.models import PopulationOutcomeLabel
+from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COLUMN
 from datp_core.protocols.anchor import FIXED_SCORE_ABSOLUTE_TOLERANCE
-
-SCIENTIFIC_TRANSFORM_ABSOLUTE_TOLERANCE = FIXED_SCORE_ABSOLUTE_TOLERANCE.value
-
-
-class TransformedFeature(StrictModel):
-    name: str
-    position: int
-
-    @model_validator(mode="after")
-    def validate_feature(self) -> "TransformedFeature":
-        if not self.name or self.position < 0:
-            raise ValueError("transformed features require a name and non-negative position")
-        return self
-
-
-def _require_unique_names(names: tuple[str, ...], subject: str) -> None:
-    if len(names) != len(frozenset(names)):
-        raise ValueError(f"{subject} must be unique")
-
-
-def _require_contiguous_positions(features: tuple[TransformedFeature, ...]) -> None:
-    positions = tuple(feature.position for feature in features)
-    if positions != tuple(range(len(features))):
-        raise ValueError("transformed feature positions must be contiguous and ordered")
 
 
 class TransformedSchema(StrictModel):
-    features: tuple[TransformedFeature, ...]
-
-    @model_validator(mode="after")
-    def validate_schema(self) -> "TransformedSchema":
-        if not self.features:
-            raise ValueError("transformed schemas require at least one feature")
-        _require_unique_names(tuple(feature.name for feature in self.features), "transformed feature names")
-        _require_contiguous_positions(self.features)
-        return self
-
-    @property
-    def feature_names(self) -> tuple[str, ...]:
-        return tuple(feature.name for feature in self.features)
+    feature_names: FeatureNameSequence
 
 
 class PreprocessingProtocol(StrictModel):
@@ -73,36 +48,81 @@ class PreprocessingProtocol(StrictModel):
     input_feature_names: FeatureNameSequence
     transformed_schema: TransformedSchema
     serialization_format: SerializationFormat
-    estimator_module: TrustedEstimatorModule
     estimator_class_name: TrustedEstimatorClassName
-    numerical_equivalence_absolute_tolerance: float
+    numerical_equivalence_absolute_tolerance: AbsoluteTolerance
 
     @model_validator(mode="after")
     def validate_protocol(self) -> "PreprocessingProtocol":
         _require_skops(self.serialization_format, "fitted preprocessing state")
-        _require_positive_tolerance(
-            self.numerical_equivalence_absolute_tolerance,
-            "numerical equivalence tolerance",
-        )
         return self
 
+
+@dataclass(frozen=True, slots=True)
+class PreprocessingPartition:
+    role: PartitionRole
+    frame: pl.DataFrame
+
     @property
-    def qualified_estimator_name(self) -> str:
-        return f"{_estimator_module_path(self.estimator_module)}.{_estimator_class_name(self.estimator_class_name)}"
+    def row_ids(self) -> StableRowIdSequence:
+        ids = tuple(str(v) for v in self.frame.get_column(STABLE_ROW_ID_COLUMN).to_list())
+        return StableRowIdSequence(ids)
+
+    @property
+    def outcome_labels(self) -> OutcomeLabelSequence:
+        labels = tuple(str(v) for v in self.frame.get_column(OUTCOME_LABEL_COLUMN).to_list())
+        return OutcomeLabelSequence(labels)
 
 
-def _estimator_module_path(module: TrustedEstimatorModule) -> str:
-    match module:
-        case TrustedEstimatorModule.SKLEARN_PREPROCESSING:
-            return "sklearn.preprocessing"
+@dataclass(frozen=True, slots=True)
+class PreprocessingPartitionSet:
+    partitions: tuple[PreprocessingPartition, ...]
+
+    def __post_init__(self) -> None:
+        roles = tuple(p.role for p in self.partitions)
+        if len(frozenset(roles)) != len(roles):
+            raise ValueError("PreprocessingPartitionSet cannot contain duplicate partition roles")
+
+    def require(self, role: PartitionRole) -> PreprocessingPartition:
+        for partition in self.partitions:
+            if partition.role is role:
+                return partition
+        raise ScientificContractError(f"missing preprocessing partition {role.value}", subject=role)
+
+    def roles(self) -> tuple[PartitionRole, ...]:
+        return tuple(p.role for p in self.partitions)
 
 
-def _estimator_class_name(class_name: TrustedEstimatorClassName) -> str:
-    match class_name:
-        case TrustedEstimatorClassName.STANDARD_SCALER:
-            return "StandardScaler"
-        case TrustedEstimatorClassName.MIN_MAX_SCALER:
-            return "MinMaxScaler"
+@dataclass(frozen=True, slots=True)
+class ClientFittedEstimator:
+    client_identity: ClientPathToken
+    estimator: TrustedScaler
+
+
+@dataclass(frozen=True, slots=True)
+class ClientLocalFittedEstimators:
+    estimators: tuple[ClientFittedEstimator, ...]
+
+    def __post_init__(self) -> None:
+        clients = tuple(item.client_identity for item in self.estimators)
+        if len(frozenset(clients)) != len(clients):
+            raise ValueError("ClientLocalFittedEstimators cannot contain duplicate client identities")
+
+    def require(self, client_identity: ClientPathToken) -> TrustedScaler:
+        for item in self.estimators:
+            if item.client_identity == client_identity:
+                return item.estimator
+        raise ScientificContractError(
+            f"missing estimator for client {client_identity.value}",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PooledFittedEstimator:
+    estimator: TrustedScaler
+
+
+type FederatedFittedEstimators = ClientLocalFittedEstimators | PooledFittedEstimator
 
 
 def _require_branch_client_pairing(branch: ProcessedDataBranch, client_identity: ClientPathToken | None) -> None:
@@ -121,11 +141,8 @@ class FittedPreprocessingState:
     client_identity: ClientPathToken | None
     estimator_path: Path
     estimator_checksum: Checksum
-    transformed_schema: TransformedSchema
     fit_row_count: RowCount
     fit_partition: PartitionRole
-    client_population: PopulationId | None = None
-    client_identity_kind: PopulationIdentityKind | None = None
 
     def __post_init__(self) -> None:
         if self.fit_row_count < 1:
@@ -135,38 +152,36 @@ class FittedPreprocessingState:
 
 
 @dataclass(frozen=True, slots=True)
+class PreprocessedPartitionPaths:
+    train: Path
+    calibration: Path
+    evaluation: Path
+    future_recalibration: Path | None = None
+    static_reference_reserve: Path | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class ClientPreprocessingResult:
     client_identity: ClientPathToken
-    train_path: Path
-    calibration_path: Path
-    evaluation_path: Path
+    paths: PreprocessedPartitionPaths
     fitted_state: FittedPreprocessingState
-    transformed_schema: TransformedSchema
     publication_status: PublicationStatus
-    future_recalibration_path: Path | None = None
 
 
 @dataclass(frozen=True, slots=True)
 class ClientPreprocessPublication:
-    """Published federated client preprocessing artifact with partition row counts."""
-
-    client_identity: ClientPathToken
     result: ClientPreprocessingResult
-    publication_status: PublicationStatus
     train_row_count: RowCount
     calibration_row_count: RowCount
     evaluation_row_count: RowCount
-    future_recalibration_row_count: RowCount = RowCount(0)
-    static_reference_reserve_row_count: RowCount = RowCount(0)
+    future_recalibration_row_count: RowCount
+    static_reference_reserve_row_count: RowCount
 
 
 @dataclass(frozen=True, slots=True)
 class PooledPreprocessingResult:
-    train_path: Path
-    calibration_path: Path
-    evaluation_path: Path
+    paths: PreprocessedPartitionPaths
     fitted_state: FittedPreprocessingState
-    transformed_schema: TransformedSchema
     publication_status: PublicationStatus
 
 
@@ -198,25 +213,32 @@ class PreprocessingManifest(StrictModel):
         return self
 
 
+class PartitionTransformationEvidence(StrictModel):
+    role: PartitionRole
+    source_row_count: RowCount
+    output_row_count: RowCount
+
+
 class PreprocessingValidationReport(StrictModel):
-    finite_transformed_values: bool
-    train_only_fit: bool
-    no_partition_overlap: bool
-    schema_matches_protocol: bool
-    branch_isolation: bool
+    fit_partition: PartitionRole
+    validated_roles: tuple[PartitionRole, ...]
+    partition_evidence: tuple[PartitionTransformationEvidence, ...]
+    estimator_reload_verified: bool
 
     @model_validator(mode="after")
     def validate_report(self) -> "PreprocessingValidationReport":
-        if not all(
-            (
-                self.finite_transformed_values,
-                self.train_only_fit,
-                self.no_partition_overlap,
-                self.schema_matches_protocol,
-                self.branch_isolation,
-            )
-        ):
-            raise ValueError("preprocessing validation report contains failed checks")
+        if self.fit_partition is not PartitionRole.TRAIN:
+            raise ValueError("fit_partition must be TRAIN")
+        if len(self.validated_roles) != len(frozenset(self.validated_roles)):
+            raise ValueError("validated_roles must be unique")
+        evidence_roles = tuple(item.role for item in self.partition_evidence)
+        if set(evidence_roles) != set(self.validated_roles) or len(evidence_roles) != len(self.partition_evidence):
+            raise ValueError("every validated role must have exactly one evidence record")
+        for item in self.partition_evidence:
+            if item.source_row_count != item.output_row_count:
+                raise ValueError("source and output row counts must match")
+        if not self.estimator_reload_verified:
+            raise ValueError("estimator_reload_verified must be true")
         return self
 
 
@@ -228,18 +250,6 @@ def _require_train_partition(partition: PartitionRole, subject: str) -> None:
 def _require_skops(serialization_format: SerializationFormat, subject: str) -> None:
     if serialization_format is not SerializationFormat.SKOPS:
         raise ValueError(f"{subject} fitted state must use skops")
-
-
-def _require_positive_tolerance(value: float, subject: str) -> None:
-    if isinstance(value, bool) or value <= 0:
-        raise ValueError(f"{subject} must be a positive float")
-
-
-def _require_ordered_unique_features(feature_names: tuple[str, ...], subject: str) -> None:
-    if not feature_names:
-        raise ValueError(f"{subject} requires ordered input features")
-    if len(feature_names) != len(frozenset(feature_names)):
-        raise ValueError(f"{subject} input features must be unique")
 
 
 @dataclass(frozen=True, slots=True)
@@ -255,11 +265,18 @@ class PreprocessingPublishContext:
 
 
 @dataclass(frozen=True, slots=True)
+class ClientPublishRequest:
+    context: PreprocessingPublishContext
+    client_identity: ClientPathToken
+    fitted_estimator: TrustedScaler
+    partitions: PreprocessingPartitionSet
+
+
+@dataclass(frozen=True, slots=True)
 class PreprocessingFitBatch:
     training_matrix: np.ndarray
-    training_row_ids: tuple[str, ...]
+    training_row_ids: StableRowIdSequence
     training_labels: OutcomeLabelSequence
-    benign_label: PopulationOutcomeLabel
 
 
 @dataclass(frozen=True, slots=True)
@@ -268,7 +285,7 @@ class FittedStatePublishSpec:
     branch: ProcessedDataBranch
     estimator_path: Path
     fit_row_count: RowCount
-    client_identity: ClientPathToken | None = None
+    client_identity: ClientPathToken | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,65 +294,42 @@ class ScientificPreprocessingMethod:
 
     identity: PreprocessingProtocolId
     fit_scope: PreprocessingFitScope
-    estimator_module: TrustedEstimatorModule
     estimator_class_name: TrustedEstimatorClassName
     serialization_format: SerializationFormat
     fit_partition: PartitionRole
-    numerical_equivalence_absolute_tolerance: float
+    numerical_equivalence_absolute_tolerance: AbsoluteTolerance
 
     def __post_init__(self) -> None:
         _require_train_partition(self.fit_partition, "scientific preprocessing")
         _require_skops(self.serialization_format, "scientific preprocessing")
-        _require_positive_tolerance(
-            self.numerical_equivalence_absolute_tolerance,
-            "scientific transform tolerance",
-        )
 
 
 SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD = ScientificPreprocessingMethod(
     identity=PreprocessingProtocolId.FEDERATED_CLIENT_LOCAL_STANDARD,
     fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-    estimator_module=TrustedEstimatorModule.SKLEARN_PREPROCESSING,
     estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
     serialization_format=SerializationFormat.SKOPS,
     fit_partition=PartitionRole.TRAIN,
-    numerical_equivalence_absolute_tolerance=SCIENTIFIC_TRANSFORM_ABSOLUTE_TOLERANCE,
+    numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
 )
 
 SCIENTIFIC_FEDERATED_POOLED_MIN_MAX_METHOD = ScientificPreprocessingMethod(
     identity=PreprocessingProtocolId.FEDERATED_POOLED_MIN_MAX,
     fit_scope=PreprocessingFitScope.POOLED_TRAINING,
-    estimator_module=TrustedEstimatorModule.SKLEARN_PREPROCESSING,
     estimator_class_name=TrustedEstimatorClassName.MIN_MAX_SCALER,
     serialization_format=SerializationFormat.SKOPS,
     fit_partition=PartitionRole.TRAIN,
-    numerical_equivalence_absolute_tolerance=SCIENTIFIC_TRANSFORM_ABSOLUTE_TOLERANCE,
+    numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
 )
 
 SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD = ScientificPreprocessingMethod(
     identity=PreprocessingProtocolId.CENTRALIZED_POOLED_MIN_MAX,
     fit_scope=PreprocessingFitScope.POOLED_TRAINING,
-    estimator_module=TrustedEstimatorModule.SKLEARN_PREPROCESSING,
     estimator_class_name=TrustedEstimatorClassName.MIN_MAX_SCALER,
     serialization_format=SerializationFormat.SKOPS,
     fit_partition=PartitionRole.TRAIN,
-    numerical_equivalence_absolute_tolerance=SCIENTIFIC_TRANSFORM_ABSOLUTE_TOLERANCE,
+    numerical_equivalence_absolute_tolerance=FIXED_SCORE_ABSOLUTE_TOLERANCE,
 )
-
-
-def scientific_preprocessing_method() -> ScientificPreprocessingMethod:
-    """Confirmatory federated method: paper-locked client-local StandardScaler."""
-    return SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD
-
-
-def scientific_federated_pooled_min_max_method() -> ScientificPreprocessingMethod:
-    """Supportive FL-aligned method: pooled MinMax (not confirmatory)."""
-    return SCIENTIFIC_FEDERATED_POOLED_MIN_MAX_METHOD
-
-
-def scientific_centralized_preprocessing_method() -> ScientificPreprocessingMethod:
-    """Scientific method for the independent centralized-reference branch."""
-    return SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD
 
 
 def build_preprocessing_protocol(
@@ -343,16 +337,13 @@ def build_preprocessing_protocol(
     feature_names: FeatureNameSequence,
 ) -> PreprocessingProtocol:
     """Bind a locked scientific method to an ordered model-input feature schema."""
-    transformed_schema = TransformedSchema(
-        features=tuple(TransformedFeature(name=name, position=index) for index, name in enumerate(feature_names))
-    )
+    transformed_schema = TransformedSchema(feature_names=feature_names)
     return PreprocessingProtocol(
         identity=method.identity,
         fit_scope=method.fit_scope,
         input_feature_names=feature_names,
         transformed_schema=transformed_schema,
         serialization_format=method.serialization_format,
-        estimator_module=method.estimator_module,
         estimator_class_name=method.estimator_class_name,
         numerical_equivalence_absolute_tolerance=method.numerical_equivalence_absolute_tolerance,
     )

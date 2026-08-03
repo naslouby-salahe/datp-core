@@ -1,12 +1,16 @@
 """Independent pooled preprocessing for the centralized reference branch."""
 
-from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-import polars as pl
-
 from datp_core.artifacts.coordinates import ReusableDataCoordinate
-from datp_core.artifacts.layout import ProcessedAssetName, branch_asset_path, centralized_branch_directory
+from datp_core.artifacts.layout import (
+    ProcessedAssetName,
+    branch_asset_path,
+    canonical_relative_asset_path,
+    centralized_branch_directory,
+    partition_roles,
+    processed_asset_names,
+)
 from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.domain.enums import PartitionRole, PreprocessingFitScope, ProcessedDataBranch
 from datp_core.domain.errors import LeakageError
@@ -15,14 +19,15 @@ from datp_core.preprocessing.models import (
     FittedPreprocessingState,
     FittedStatePublishSpec,
     PooledPreprocessingResult,
+    PreprocessedPartitionPaths,
     PreprocessingFitBatch,
+    PreprocessingPartitionSet,
     PreprocessingProtocol,
     PreprocessingPublishContext,
 )
 from datp_core.preprocessing.validation import (
     fit_trusted_batch,
     fitted_state_after_publish,
-    processed_assets,
     publish_preprocessed_partitions,
     validate_branch_isolation,
 )
@@ -32,8 +37,7 @@ from datp_core.preprocessing.validation import (
 class PooledPublishRequest:
     context: PreprocessingPublishContext
     fitted_estimator: TrustedScaler
-    partitions: Mapping[PartitionRole, pl.DataFrame]
-    row_ids: Mapping[PartitionRole, Sequence[str]]
+    partitions: PreprocessingPartitionSet
 
 
 def fit_pooled_preprocessing(
@@ -58,32 +62,44 @@ def publish_pooled_preprocessing(request: PooledPublishRequest) -> PooledPreproc
             client_identity=None,
         ),
     )
-    assets = processed_assets(context.split_protocol_identity)
+    asset_names = processed_asset_names(context.split_protocol_identity)
     result = publish_preprocessed_partitions(
         context=context,
         branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
         coordinate_directory=branch_coordinate_directory,
         fitted_estimator=request.fitted_estimator,
         partitions=request.partitions,
-        row_ids=request.row_ids,
         fit_scope=PreprocessingFitScope.POOLED_TRAINING,
-        asset_paths=tuple(asset.value for asset in assets),
+        asset_paths=tuple(
+            canonical_relative_asset_path(asset, ProcessedDataBranch.CENTRALIZED_REFERENCE, None)
+            for asset in asset_names
+        ),
     )
     state = fitted_state_after_publish(
         FittedStatePublishSpec(
             protocol=context.protocol,
             branch=ProcessedDataBranch.CENTRALIZED_REFERENCE,
             estimator_path=branch_asset_path(result.coordinate_directory, ProcessedAssetName.STATE),
-            fit_row_count=RowCount(request.partitions[PartitionRole.TRAIN].height),
+            fit_row_count=RowCount(request.partitions.require(PartitionRole.TRAIN).frame.height),
+            client_identity=None,
         )
     )
     validate_branch_isolation(state, ProcessedDataBranch.CENTRALIZED_REFERENCE, None)
+    roles = partition_roles(context.split_protocol_identity)
+    paths_by_role = {
+        role: branch_asset_path(result.coordinate_directory, ProcessedAssetName(f"{role.value}.parquet"))
+        for role in roles
+    }
+    paths = PreprocessedPartitionPaths(
+        train=paths_by_role[PartitionRole.TRAIN],
+        calibration=paths_by_role[PartitionRole.CALIBRATION],
+        evaluation=paths_by_role[PartitionRole.EVALUATION],
+        future_recalibration=paths_by_role.get(PartitionRole.FUTURE_RECALIBRATION),
+        static_reference_reserve=paths_by_role.get(PartitionRole.STATIC_REFERENCE_RESERVE),
+    )
     return PooledPreprocessingResult(
-        train_path=branch_asset_path(result.coordinate_directory, ProcessedAssetName.TRAIN),
-        calibration_path=branch_asset_path(result.coordinate_directory, ProcessedAssetName.CALIBRATION),
-        evaluation_path=branch_asset_path(result.coordinate_directory, ProcessedAssetName.EVALUATION),
+        paths=paths,
         fitted_state=state,
-        transformed_schema=context.protocol.transformed_schema,
         publication_status=result.publication_status,
     )
 

@@ -157,7 +157,7 @@ class CentralizedTrainingRequest:
     checkpoint_protocol: CheckpointProtocol
     learning_rate: LearningRate
     batch_size: BatchSize
-    benign_label: str = PopulationOutcomeLabel.BENIGN.value
+    benign_label: PopulationOutcomeLabel
 
 
 def reject_federated_preprocessing_for_training(state: FittedPreprocessingState) -> None:
@@ -173,7 +173,9 @@ def reject_federated_preprocessing_for_training(state: FittedPreprocessingState)
         )
 
 
-def reject_attack_rows_in_centralized_training(labels: OutcomeLabelSequence, benign_label: str) -> None:
+def reject_attack_rows_in_centralized_training(
+    labels: OutcomeLabelSequence, benign_label: PopulationOutcomeLabel
+) -> None:
     if any(label != benign_label for label in labels):
         raise LeakageError(
             "attack-labelled rows cannot enter centralized benign training",

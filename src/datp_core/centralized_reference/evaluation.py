@@ -113,8 +113,8 @@ def evaluate_centralized_reference(
     coordinate: CentralizedTrainingCoordinate,
     evaluation_scores: PooledScoreArtifact,
     threshold_result: PooledThresholdResult,
-    benign_label: str = PopulationOutcomeLabel.BENIGN.value,
-    attack_label: str = PopulationOutcomeLabel.ATTACK.value,
+    benign_label: PopulationOutcomeLabel = PopulationOutcomeLabel.BENIGN,
+    attack_label: PopulationOutcomeLabel = PopulationOutcomeLabel.ATTACK,
 ) -> CentralizedEvaluationResult:
     """Evaluate pooled centralized scores under the fixed score > threshold rule."""
     _validate_evaluation_inputs(coordinate, evaluation_scores, threshold_result)
@@ -251,8 +251,8 @@ def _confusion_counts(
     labels: np.ndarray,
     predictions: np.ndarray,
     *,
-    benign_label: str,
-    attack_label: str,
+    benign_label: PopulationOutcomeLabel,
+    attack_label: PopulationOutcomeLabel,
 ) -> ConfusionCounts:
     true_negative = 0
     false_positive = 0

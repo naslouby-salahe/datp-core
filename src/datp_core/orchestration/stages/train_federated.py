@@ -14,7 +14,6 @@ from datp_core.domain.values import (
     BatchSize,
     Checksum,
     ClientCount,
-    FeatureNameSequence,
     LearningRate,
     Seed,
 )
@@ -378,12 +377,12 @@ def _client_inputs(
     identity_kind = resolve_population(coordinate.population).declaration.identity_kind
     inputs: list[ClientTrainingInput] = []
     for publication in client_publications:
-        client = ClientIdentity(coordinate.population, publication.client_identity.value, identity_kind)
-        frame = pl.read_parquet(publication.result.train_path)
+        client = ClientIdentity(coordinate.population, publication.result.client_identity.value, identity_kind)
+        frame = pl.read_parquet(publication.result.paths.train)
         training_input = ClientTrainingInput(
             client=client,
             training_features=frame,
-            feature_names=FeatureNameSequence(publication.result.transformed_schema.feature_names),
+            feature_names=publication.result.fitted_state.protocol.transformed_schema.feature_names,
             preprocessing_state=publication.result.fitted_state,
         )
         inputs.append(training_input)
@@ -399,7 +398,7 @@ def _require_autoencoder_matches_preprocessing(
         raise ScientificContractError(
             "federated training requires published client preprocessing", subject=ContractSubject.TRAINING
         )
-    expected_names = client_publications[0].result.transformed_schema.feature_names
+    expected_names = client_publications[0].result.fitted_state.protocol.transformed_schema.feature_names
     expected_width = len(expected_names)
     if autoencoder.widths[0] != expected_width or autoencoder.widths[-1] != expected_width:
         raise ScientificContractError(
@@ -407,7 +406,8 @@ def _require_autoencoder_matches_preprocessing(
             subject=ContractSubject.WIDTHS,
         )
     if any(
-        publication.result.transformed_schema.feature_names != expected_names for publication in client_publications
+        publication.result.fitted_state.protocol.transformed_schema.feature_names != expected_names
+        for publication in client_publications
     ):
         raise ScientificContractError(
             "federated clients must publish one identical transformed feature schema",

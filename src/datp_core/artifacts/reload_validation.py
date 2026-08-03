@@ -9,13 +9,14 @@ from datp_core.artifacts.layout import ProcessedAssetName
 from datp_core.artifacts.serialization import TrustedScaler, load_estimator, transforms_are_equivalent
 from datp_core.domain.enums import ContractSubject, TrustedEstimatorClassName
 from datp_core.domain.errors import ArtifactIntegrityError, SerializationSafetyError
+from datp_core.domain.values import AbsoluteTolerance
 
 
 @dataclass(frozen=True, slots=True)
 class TransformReloadCheck:
     state_path: Path
     class_name: TrustedEstimatorClassName
-    absolute_tolerance: float
+    absolute_tolerance: AbsoluteTolerance
     source_matrix: np.ndarray
     expected_transformed: np.ndarray
 

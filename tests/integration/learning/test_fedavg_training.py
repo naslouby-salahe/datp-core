@@ -108,26 +108,26 @@ def test_fedavg_reruns_the_identical_coordinate_and_reuses_the_published_trainin
             client_identity=PreprocessingClientPathToken(client_id),
             estimator_path=estimator_path,
             estimator_checksum=Checksum(f"{client_id[-1]}" * 64),
-            transformed_schema=protocol.transformed_schema,
             fit_row_count=RowCount(16),
             fit_partition=PartitionRole.TRAIN,
         )
+        from datp_core.preprocessing.models import PreprocessedPartitionPaths
+
         result = ClientPreprocessingResult(
             client_identity=PreprocessingClientPathToken(client_id),
-            train_path=train_path,
-            calibration_path=calibration_path,
-            evaluation_path=evaluation_path,
+            paths=PreprocessedPartitionPaths(
+                train=train_path, calibration=calibration_path, evaluation=evaluation_path
+            ),
             fitted_state=fitted_state,
-            transformed_schema=protocol.transformed_schema,
             publication_status=PublicationStatus.PUBLISHED,
         )
         return ClientPreprocessPublication(
-            client_identity=PreprocessingClientPathToken(client_id),
             result=result,
-            publication_status=PublicationStatus.PUBLISHED,
             train_row_count=RowCount(16),
             calibration_row_count=RowCount(8),
             evaluation_row_count=RowCount(8),
+            future_recalibration_row_count=RowCount(0),
+            static_reference_reserve_row_count=RowCount(0),
         )
 
     publications = tuple(publication(client_id, tmp_path / "preprocessed" / client_id) for client_id in CLIENT_IDS)

@@ -29,6 +29,7 @@ from datp_core.domain.enums import (
     TrainingModelId,
 )
 from datp_core.domain.values import (
+    AbsoluteTolerance,
     CalibrationSize,
     ClientCount,
     ConfidenceLevel,
@@ -435,7 +436,7 @@ class AnchorReference(Declaration):
     ]
     metric: MetricId
     value: MetricValue
-    absolute_tolerance: MetricValue
+    absolute_tolerance: AbsoluteTolerance | MetricValue
 
 
 class AnchorDecisionProtocol(Declaration):

@@ -96,9 +96,9 @@ def test_federated_preprocess_publishes_client_local_assets(tmp_path: Path) -> N
     assert result.reused_count == 0
     assert len(result.client_publications) == 9
     for publication in result.client_publications:
-        assert publication.publication_status is PublicationStatus.PUBLISHED
-        assert publication.result.train_path.is_file()
-        assert (publication.result.train_path.parent / "COMPLETE").is_file()
+        assert publication.result.publication_status is PublicationStatus.PUBLISHED
+        assert publication.result.paths.train.is_file()
+        assert (publication.result.paths.train.parent / "COMPLETE").is_file()
 
     reused = preprocess_federated_stage(
         PreprocessFederatedRequest(
@@ -199,6 +199,6 @@ def test_centralized_preprocess_publishes_pooled_assets(tmp_path: Path) -> None:
     )
     assert result.stage is StageOperationId.PREPROCESS_CENTRALIZED_REFERENCE
     assert result.publication_status is PublicationStatus.PUBLISHED
-    assert result.result.train_path.is_file()
-    assert (result.result.train_path.parent / "COMPLETE").is_file()
-    assert "centralized_reference" in result.result.train_path.parts
+    assert result.result.paths.train.is_file()
+    assert (result.result.paths.train.parent / "COMPLETE").is_file()
+    assert "centralized_reference" in result.result.paths.train.parts
