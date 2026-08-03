@@ -26,7 +26,14 @@ from datp_core.domain.enums import (
     SplitProtocolId,
 )
 from datp_core.domain.errors import LeakageError, ScientificContractError
-from datp_core.domain.values import Checksum, ClientPathToken, FeatureNameSequence, RowCount, checksum_file, checksum_text
+from datp_core.domain.values import (
+    Checksum,
+    ClientPathToken,
+    FeatureNameSequence,
+    RowCount,
+    checksum_file,
+    checksum_text,
+)
 from datp_core.populations.models import (
     OUTCOME_LABEL_COLUMN,
     PARTITION_ROLE_COLUMN,
@@ -191,10 +198,10 @@ def centralized_fitted_state_after_publish(
     if spec.owner is not PooledPreprocessingOwner.POOLED:
         raise ValueError("centralized fitted state requires the pooled owner")
     return CentralizedFittedPreprocessingState(
-        spec.protocol,
-        spec.estimator_path,
-        checksum_file(spec.estimator_path),
-        spec.fit_row_count,
+        protocol=spec.protocol,
+        estimator_path=spec.estimator_path,
+        estimator_checksum=checksum_file(spec.estimator_path),
+        fit_row_count=spec.fit_row_count,
     )
 
 
@@ -202,11 +209,11 @@ def federated_fitted_state_after_publish(
     spec: FittedStatePublishSpec[ClientPathToken],
 ) -> FederatedFittedPreprocessingState:
     return FederatedFittedPreprocessingState(
-        spec.protocol,
-        spec.estimator_path,
-        checksum_file(spec.estimator_path),
-        spec.fit_row_count,
-        spec.owner,
+        protocol=spec.protocol,
+        estimator_path=spec.estimator_path,
+        estimator_checksum=checksum_file(spec.estimator_path),
+        fit_row_count=spec.fit_row_count,
+        client_identity=spec.owner,
     )
 
 
@@ -224,8 +231,6 @@ def fit_trusted_batch(
         raise ScientificContractError("training matrix must contain numeric values", subject=subject) from error
     if matrix.ndim != 2 or not matrix.shape[0]:
         raise ScientificContractError("training matrix must be non-empty and two-dimensional", subject=subject)
-    if matrix.shape[0] not in {len(batch.training_row_ids), len(batch.training_labels)}:
-        raise ScientificContractError("training matrix, rows, and labels must align", subject=PartitionRole.TRAIN)
     if matrix.shape[0] != len(batch.training_row_ids) or matrix.shape[0] != len(batch.training_labels):
         raise ScientificContractError("training matrix, rows, and labels must align", subject=PartitionRole.TRAIN)
     if matrix.shape[1] != len(protocol.input_feature_names):
@@ -342,9 +347,9 @@ def write_fitted_transformed_partitions(
         output.write_parquet(temporary / asset_for_partition(role))
         evidence.append(
             PartitionTransformationEvidence(
-                role,
-                RowCount(partition.frame.height),
-                RowCount(output.height),
+                role=role,
+                source_row_count=RowCount(partition.frame.height),
+                output_row_count=RowCount(output.height),
             )
         )
     return PreprocessingValidationReport(partition_evidence=tuple(evidence))
