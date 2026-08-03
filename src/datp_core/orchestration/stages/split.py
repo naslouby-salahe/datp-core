@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from json import dumps, loads
 from pathlib import Path
 from shutil import rmtree
+from typing import ClassVar
 
 import polars as pl
 
@@ -12,21 +13,14 @@ from datp_core.datasets.edge_iiotset.schema import EdgeCanonicalColumn
 from datp_core.domain.enums import PopulationId, PublicationStatus, SplitProtocolId, StageOperationId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import Checksum, Seed, checksum_file, checksum_text
-from datp_core.experiments.models import (
-    ExternalTemporalExecutionIdentity,
-    require_execution_identity,
-)
+from datp_core.experiments.models import ExternalTemporalExecutionIdentity, require_execution_identity
 from datp_core.populations.edge_temporal_groups import split_temporal_membership
 from datp_core.populations.integrity import validate_no_future_history_leakage, validate_split_manifest
-from datp_core.populations.models import (
-    PopulationManifest,
-    SplitConstructionRequest,
-    SplitManifestDocument,
-)
+from datp_core.populations.models import PopulationManifest, SplitConstructionRequest, SplitManifestDocument
 from datp_core.populations.splits import split_membership
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True, eq=False)
 class SplitRequest:
     population: PopulationId
     execution_identity: ExternalTemporalExecutionIdentity
@@ -42,9 +36,17 @@ class SplitRequest:
         require_execution_identity(self.execution_identity, self.population)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True, eq=False)
+class _SplitArtifacts:
+    assignments: pl.DataFrame
+    manifest: SplitManifestDocument
+    matched_static_reference_assignments: pl.DataFrame | None
+    matched_static_reference_manifest: SplitManifestDocument | None
+
+
+@dataclass(slots=True, eq=False)
 class SplitResult:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.SPLIT
     publication_status: PublicationStatus
     assignments: pl.DataFrame
     manifest: SplitManifestDocument
@@ -55,28 +57,28 @@ class SplitResult:
 
 def split_stage(request: SplitRequest) -> SplitResult:
     """Split an external or temporal population and its row-matched static reference when required."""
-    result = _split(request)
-    payload = _manifest_payload(result, request.execution_identity)
+    artifacts = _split(request)
+    payload = _manifest_payload(artifacts, request.execution_identity)
     digest = checksum_text(payload)
 
     def write(temporary: Path) -> None:
         (temporary / "execution_identity.json").write_text(
             dumps(request.execution_identity.serialize(), indent=2) + "\n", encoding="utf-8"
         )
-        result.assignments.write_parquet(temporary / "split_assignments.parquet")
+        artifacts.assignments.write_parquet(temporary / "split_assignments.parquet")
         (temporary / "split_manifest.json").write_text(
-            result.manifest.model_dump_json(indent=2) + "\n",
+            artifacts.manifest.model_dump_json(indent=2) + "\n",
             encoding="utf-8",
         )
         if (
-            result.matched_static_reference_assignments is not None
-            and result.matched_static_reference_manifest is not None
+            artifacts.matched_static_reference_assignments is not None
+            and artifacts.matched_static_reference_manifest is not None
         ):
-            result.matched_static_reference_assignments.write_parquet(
+            artifacts.matched_static_reference_assignments.write_parquet(
                 temporary / "matched_static_reference_assignments.parquet"
             )
             (temporary / "matched_static_reference_split_manifest.json").write_text(
-                result.matched_static_reference_manifest.model_dump_json(indent=2) + "\n", encoding="utf-8"
+                artifacts.matched_static_reference_manifest.model_dump_json(indent=2) + "\n", encoding="utf-8"
             )
         (temporary / "COMPLETE").write_text(digest.value, encoding="utf-8")
 
@@ -84,23 +86,22 @@ def split_stage(request: SplitRequest) -> SplitResult:
         AtomicPublication(
             request.output_directory,
             request.overwrite,
-            lambda directory: _is_reusable(directory, request, result, digest),
+            lambda directory: _is_reusable(directory, request, artifacts, digest),
             write,
             rmtree,
         )
     )
     return SplitResult(
-        StageOperationId.SPLIT,
-        PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED,
-        result.assignments,
-        result.manifest,
-        result.matched_static_reference_assignments,
-        result.matched_static_reference_manifest,
-        checksum_file(request.output_directory / "COMPLETE"),
+        publication_status=PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED,
+        assignments=artifacts.assignments,
+        manifest=artifacts.manifest,
+        matched_static_reference_assignments=artifacts.matched_static_reference_assignments,
+        matched_static_reference_manifest=artifacts.matched_static_reference_manifest,
+        complete_digest=checksum_file(request.output_directory / "COMPLETE"),
     )
 
 
-def _split(request: SplitRequest) -> SplitResult:
+def _split(request: SplitRequest) -> _SplitArtifacts:
     document = request.population_manifest.document
     if document.population is not request.population:
         raise ScientificContractError("split request population must match its manifest", subject=request.population)
@@ -128,15 +129,7 @@ def _split(request: SplitRequest) -> SplitResult:
         )
         _require_matching_reference_rows(request.membership, request.matched_static_reference_membership)
         validate_split_manifest(request.matched_static_reference_membership, static_assignments, static_manifest)
-        return SplitResult(
-            StageOperationId.SPLIT,
-            PublicationStatus.PUBLISHED,
-            assignments,
-            manifest,
-            static_assignments,
-            static_manifest,
-            checksum_text("unpublished"),
-        )
+        return _SplitArtifacts(assignments, manifest, static_assignments, static_manifest)
     assignments, manifest = split_membership(
         SplitConstructionRequest(
             membership=request.membership,
@@ -148,15 +141,7 @@ def _split(request: SplitRequest) -> SplitResult:
         )
     )
     validate_split_manifest(request.membership, assignments, manifest)
-    return SplitResult(
-        StageOperationId.SPLIT,
-        PublicationStatus.PUBLISHED,
-        assignments,
-        manifest,
-        None,
-        None,
-        checksum_text("unpublished"),
-    )
+    return _SplitArtifacts(assignments, manifest, None, None)
 
 
 def _require_matching_reference_rows(temporal: pl.DataFrame, static: pl.DataFrame) -> None:
@@ -168,14 +153,14 @@ def _require_matching_reference_rows(temporal: pl.DataFrame, static: pl.DataFram
         )
 
 
-def _manifest_payload(result: SplitResult, identity: ExternalTemporalExecutionIdentity) -> str:
-    payload = "\n".join((dumps(identity.serialize(), indent=2), result.manifest.model_dump_json(indent=2)))
-    if result.matched_static_reference_manifest is not None:
-        payload += "\n" + result.matched_static_reference_manifest.model_dump_json(indent=2)
+def _manifest_payload(artifacts: _SplitArtifacts, identity: ExternalTemporalExecutionIdentity) -> str:
+    payload = "\n".join((dumps(identity.serialize(), indent=2), artifacts.manifest.model_dump_json(indent=2)))
+    if artifacts.matched_static_reference_manifest is not None:
+        payload += "\n" + artifacts.matched_static_reference_manifest.model_dump_json(indent=2)
     return payload + "\n"
 
 
-def _is_reusable(directory: Path, request: SplitRequest, expected: SplitResult, digest: Checksum) -> bool:
+def _is_reusable(directory: Path, request: SplitRequest, expected: _SplitArtifacts, digest: Checksum) -> bool:
     complete = directory / "COMPLETE"
     identity_path = directory / "execution_identity.json"
     manifest = directory / "split_manifest.json"
