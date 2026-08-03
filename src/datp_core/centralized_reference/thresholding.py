@@ -69,14 +69,6 @@ class PooledThresholdResult:
             raise ValueError("pooled threshold requires at least one benign calibration score")
 
 
-@dataclass(frozen=True, slots=True)
-class FederatedScoreMarker:
-    """Structural marker used only to reject federated artifacts at the centralized boundary."""
-
-    identity: str
-    method: FederatedThresholdMethod
-
-
 def construct_pooled_benign_quantile(
     *,
     coordinate: CentralizedTrainingCoordinate,
@@ -167,9 +159,12 @@ def reject_attack_rows_in_benign_calibration(
         )
 
 
-def reject_federated_scores_for_centralized_threshold(marker: FederatedScoreMarker) -> None:
+def reject_federated_scores_for_centralized_threshold(
+    identity: str,
+    method: FederatedThresholdMethod,
+) -> None:
     raise LeakageError(
-        f"federated score artifact '{marker.identity}' (method={marker.method.value}) "
+        f"federated score artifact '{identity}' (method={method.value}) "
         "cannot enter centralized threshold construction",
         subject=ContractSubject.ARTIFACT_PATH,
     )
