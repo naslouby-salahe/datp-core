@@ -24,7 +24,7 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-groups --all-extras --frozen
 
-      - name: Apply cardinality typing
+      - name: Apply cardinality typing and checkpoint fix
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -37,6 +37,16 @@ jobs:
               if text.count(old) != 1:
                   raise SystemExit(f"{label}: expected one occurrence, found {text.count(old)}")
               return text.replace(old, new, 1)
+
+          checkpoint_path = Path("src/datp_core/learning/federated/checkpointing.py")
+          checkpoint = checkpoint_path.read_text(encoding="utf-8")
+          if "from os import replace as atomic_replace\n" not in checkpoint:
+              checkpoint = checkpoint.replace(
+                  "from dataclasses import dataclass, replace\n",
+                  "from dataclasses import dataclass, replace\nfrom os import replace as atomic_replace\n",
+                  1,
+              )
+          checkpoint_path.write_text(checkpoint, encoding="utf-8")
 
           values_path = Path("src/datp_core/domain/values.py")
           values = values_path.read_text(encoding="utf-8")
@@ -251,7 +261,8 @@ jobs:
             src/datp_core/evaluation/communication.py \
             src/datp_core/evaluation/threshold_estimation.py \
             src/datp_core/runtime/compute.py \
-            src/datp_core/orchestration/stages/preprocess_federated.py
+            src/datp_core/orchestration/stages/preprocess_federated.py \
+            src/datp_core/learning/federated/checkpointing.py
 
       - name: Run full regression suite
         run: |
