@@ -12,7 +12,15 @@ from datp_core.calibration.models import (
     EligibilityStatus,
 )
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import CalibrationSize, Checksum, ReplicateIndex, RowCount, ScoreValue, Seed, StableRowId
+from datp_core.domain.values import (
+    CalibrationSize,
+    Checksum,
+    ReplicateIndex,
+    RowCount,
+    ScoreValue,
+    Seed,
+    StableRowId,
+)
 
 CLIENT_A = some_client("client_a")
 CLIENT_B = some_client("client_b")
@@ -24,29 +32,32 @@ def _reference(client, row_id: str, value: float = 1.0) -> CalibrationSampleRefe
     return CalibrationSampleReference(client=client, stable_row_id=StableRowId(row_id), score=ScoreValue(value))
 
 
+def _support(count: int) -> CalibrationSupport:
+    return CalibrationSupport(
+        client=CLIENT_A,
+        coordinate=COORDINATE,
+        benign_calibration_count=RowCount(count),
+        calibration_score_set_checksum=Checksum("a" * 64),
+    )
+
+
 def _subsample(size: int, row_ids: tuple[str, ...]) -> CalibrationSubsample:
-    references = tuple(_reference(CLIENT_A, row_id) for row_id in row_ids)
     return CalibrationSubsample(
-        client=CLIENT_A, size=CalibrationSize(size), replicate_index=REPLICATE_ZERO, references=references
+        size=CalibrationSize(size),
+        replicate_index=REPLICATE_ZERO,
+        references=tuple(_reference(CLIENT_A, row_id) for row_id in row_ids),
     )
 
 
 def test_calibration_support_is_frozen_and_holds_provenance() -> None:
-    support = CalibrationSupport(
-        client=CLIENT_A,
-        coordinate=COORDINATE,
-        benign_calibration_count=RowCount(120),
-        calibration_score_set_checksum=Checksum("a" * 64),
-    )
+    support = _support(120)
     assert support.benign_calibration_count.value == 120
 
 
 def test_eligibility_decision_eligible_requires_meeting_minimum_support() -> None:
     def build() -> EligibilityDecision:
         return EligibilityDecision(
-            client=CLIENT_A,
-            coordinate=COORDINATE,
-            benign_calibration_count=RowCount(50),
+            support=_support(50),
             minimum_support=CalibrationSize(100),
             status=EligibilityStatus.ELIGIBLE,
             reason=None,
@@ -59,9 +70,7 @@ def test_eligibility_decision_eligible_requires_meeting_minimum_support() -> Non
 def test_eligibility_decision_eligible_cannot_carry_a_reason() -> None:
     def build() -> EligibilityDecision:
         return EligibilityDecision(
-            client=CLIENT_A,
-            coordinate=COORDINATE,
-            benign_calibration_count=RowCount(120),
+            support=_support(120),
             minimum_support=CalibrationSize(100),
             status=EligibilityStatus.ELIGIBLE,
             reason=CalibrationUnavailableReason.INSUFFICIENT_BENIGN_SUPPORT,
@@ -74,9 +83,7 @@ def test_eligibility_decision_eligible_cannot_carry_a_reason() -> None:
 def test_eligibility_decision_excluded_requires_a_reason() -> None:
     def build() -> EligibilityDecision:
         return EligibilityDecision(
-            client=CLIENT_A,
-            coordinate=COORDINATE,
-            benign_calibration_count=RowCount(50),
+            support=_support(50),
             minimum_support=CalibrationSize(100),
             status=EligibilityStatus.EXCLUDED,
             reason=None,
@@ -86,16 +93,18 @@ def test_eligibility_decision_excluded_requires_a_reason() -> None:
         build()
 
 
-def test_eligibility_decision_is_eligible_property() -> None:
+def test_eligibility_decision_derives_support_coordinates() -> None:
+    support = _support(120)
     decision = EligibilityDecision(
-        client=CLIENT_A,
-        coordinate=COORDINATE,
-        benign_calibration_count=RowCount(120),
+        support=support,
         minimum_support=CalibrationSize(100),
         status=EligibilityStatus.ELIGIBLE,
         reason=None,
     )
     assert decision.is_eligible
+    assert decision.client == support.client
+    assert decision.coordinate == support.coordinate
+    assert decision.benign_calibration_count == support.benign_calibration_count
 
 
 def test_calibration_subsample_rejects_size_mismatch() -> None:
@@ -103,7 +112,9 @@ def test_calibration_subsample_rejects_size_mismatch() -> None:
 
     def build() -> CalibrationSubsample:
         return CalibrationSubsample(
-            client=CLIENT_A, size=CalibrationSize(2), replicate_index=REPLICATE_ZERO, references=references
+            size=CalibrationSize(2),
+            replicate_index=REPLICATE_ZERO,
+            references=references,
         )
 
     with pytest.raises(ScientificContractError, match="equal the declared calibration size"):
@@ -115,10 +126,26 @@ def test_calibration_subsample_rejects_duplicate_references() -> None:
 
     def build() -> CalibrationSubsample:
         return CalibrationSubsample(
-            client=CLIENT_A, size=CalibrationSize(2), replicate_index=REPLICATE_ZERO, references=references
+            size=CalibrationSize(2),
+            replicate_index=REPLICATE_ZERO,
+            references=references,
         )
 
     with pytest.raises(ScientificContractError, match="without replacement"):
+        build()
+
+
+def test_calibration_subsample_rejects_mixed_clients() -> None:
+    references = (_reference(CLIENT_A, "r0"), _reference(CLIENT_B, "r1"))
+
+    def build() -> CalibrationSubsample:
+        return CalibrationSubsample(
+            size=CalibrationSize(2),
+            replicate_index=REPLICATE_ZERO,
+            references=references,
+        )
+
+    with pytest.raises(ScientificContractError, match="exactly one client"):
         build()
 
 
@@ -185,7 +212,6 @@ def test_replicate_manifest_requires_reason_for_unavailable_sizes() -> None:
 
 def test_replicate_manifest_rejects_foreign_client_references() -> None:
     foreign_subsample = CalibrationSubsample(
-        client=CLIENT_B,
         size=CalibrationSize(1),
         replicate_index=REPLICATE_ZERO,
         references=(_reference(CLIENT_B, "r0"),),
