@@ -7,6 +7,7 @@ durable, atomically-reusable artifacts.
 """
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 import polars as pl
 
@@ -37,7 +38,7 @@ class CalibrateRequest:
 
 @dataclass(frozen=True, slots=True)
 class CalibrateStageResult:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.CALIBRATE
     eligibility: tuple[EligibilityDecision, ...]
     eligible_clients: tuple[ClientIdentity, ...]
     replicate_manifests: tuple[CalibrationReplicateManifest, ...]
@@ -86,7 +87,6 @@ def calibrate_stage(request: CalibrateRequest) -> CalibrateStageResult:
         for replicate_index in range(request.replicate_count.value)
     )
     return CalibrateStageResult(
-        stage=StageOperationId.CALIBRATE,
         eligibility=tuple(decisions),
         eligible_clients=eligible,
         replicate_manifests=replicate_manifests,
