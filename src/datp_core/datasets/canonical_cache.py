@@ -43,7 +43,16 @@ from datp_core.datasets.models import (
 )
 from datp_core.domain.enums import AvailabilityStatus, ContractSubject, DatasetId, PublicationStatus
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import ByteCount, Checksum, RowCount, checksum_file, checksum_text
+from datp_core.domain.values import (
+    ByteCount,
+    Checksum,
+    RowCount,
+    SourceFileCount,
+    SourceRowIndex,
+    ValidationIssueCount,
+    checksum_file,
+    checksum_text,
+)
 from datp_core.protocols.runtime import DATA_ROOT
 
 _CANONICAL_PUBLICATION_CONTRACT = "canonical_publication_contract"
@@ -325,7 +334,7 @@ def _reused_validation_report(
             dataset,
             issue.source_context,
             issue.reason,
-            issue.affected_count,
+            RowCount(issue.affected_count),
         )
         for issue in report.issues
     )
@@ -337,7 +346,7 @@ def _reused_validation_report(
         RowCount(report.accepted_rows),
         RowCount(report.excluded_rows),
         RowCount(report.invalid_rows),
-        report.warning_count,
+        ValidationIssueCount(report.warning_count),
         AvailabilityStatus(report.status),
     )
 
@@ -352,7 +361,7 @@ def _reused_exclusion(
     source_row_reference = (
         None
         if source_row is None
-        else SourceRowReference(_reused_inventory_source(inventory, source_path), source_row.zero_based_row_index)
+        else SourceRowReference(_reused_inventory_source(inventory, source_path), SourceRowIndex(source_row.zero_based_row_index))
     )
     return DatasetExclusion(
         dataset,
@@ -360,7 +369,7 @@ def _reused_exclusion(
         source_row_reference,
         ExclusionReason(exclusion.reason),
         exclusion.evidence,
-        exclusion.affected_count,
+        RowCount(exclusion.affected_count),
     )
 
 
@@ -388,8 +397,8 @@ def _inventory_from_serialized(dataset: DatasetId, inventory) -> RawDatasetInven
     return RawDatasetInventory(
         dataset,
         sources,
-        inventory.accepted_source_count,
-        inventory.excluded_source_count,
+        SourceFileCount(inventory.accepted_source_count),
+        SourceFileCount(inventory.excluded_source_count),
         RowCount(inventory.accepted_row_count) if inventory.accepted_row_count is not None else None,
         Checksum(inventory.checksum),
     )
@@ -402,7 +411,7 @@ def _chronology_from_serialized(document) -> ChronologyValidation:
         RowCount(document.total_rows),
         RowCount(document.parseable_rows),
         RowCount(document.invalid_rows),
-        document.duplicate_timestamp_count,
+        RowCount(document.duplicate_timestamp_count),
         document.is_monotonic,
         document.reason,
         document.temporal_eligible,

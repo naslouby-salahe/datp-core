@@ -29,7 +29,10 @@ from datp_core.datasets.models import (
     ValidationSeverity,
 )
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import RowCount
+from datp_core.domain.values import (
+    RowCount,
+    ValidationIssueCount,
+)
 
 from .reader import CICIoT2023AuditSummary, CICIoT2023Reader
 from .schema import (
@@ -132,7 +135,7 @@ def _validation_report(summaries: tuple[CICIoT2023AuditSummary, ...]) -> Dataset
         RowCount(sum(summary.total_rows for summary in summaries)),
         RowCount(0),
         RowCount(ineligible_rows),
-        sum(issue.severity is ValidationSeverity.WARNING for issue in issues),
+        ValidationIssueCount(sum(issue.severity is ValidationSeverity.WARNING for issue in issues)),
         AvailabilityStatus.AVAILABLE if not issues else AvailabilityStatus.UNAVAILABLE,
     )
 
@@ -193,5 +196,5 @@ def _validation_issue(affected_count: int, code: DatasetValidationCode, reason: 
         DatasetId.CICIOT2023,
         CICIoT2023ArtifactName.MERGED_CSV_DIRECTORY,
         reason,
-        affected_count,
+        RowCount(affected_count),
     )

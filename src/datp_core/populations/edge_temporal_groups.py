@@ -152,7 +152,7 @@ def _chronology_eligibility(
             excluded.append(group_id)
             reasons.append(ChronologyExclusionReason.CANONICAL_CHRONOLOGY_MISSING)
             continue
-        duplicate_total += evidence.duplicate_timestamp_count
+        duplicate_total += evidence.duplicate_timestamp_count.value
         if evidence.temporal_eligible:
             eligible.append(group_id)
         else:

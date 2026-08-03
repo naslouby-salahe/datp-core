@@ -318,6 +318,22 @@ class ByteCount(NonNegativeIntegerValue):
     validation_name: ClassVar[str] = "byte count"
 
 
+class SourceFileCount(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "source file count"
+
+
+class CanonicalColumnPosition(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "canonical column position"
+
+
+class SourceRowIndex(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "source row index"
+
+
+class ValidationIssueCount(NonNegativeIntegerValue):
+    validation_name: ClassVar[str] = "validation issue count"
+
+
 class LogicalElementCount(PositiveIntegerValue):
     validation_name: ClassVar[str] = "logical element count"
 

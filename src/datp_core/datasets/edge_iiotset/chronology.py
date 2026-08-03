@@ -13,7 +13,9 @@ import pyarrow.parquet as pq
 from datp_core.datasets.materialization import canonical_provenance_arrow_field
 from datp_core.datasets.models import CanonicalProvenanceColumn, ChronologyValidation
 from datp_core.domain.enums import AvailabilityStatus
-from datp_core.domain.values import RowCount
+from datp_core.domain.values import (
+    RowCount,
+)
 
 from .schema import EdgeArtifactSuffix, EdgeCanonicalColumn, source_relative_path
 
@@ -87,7 +89,7 @@ class _PcapAligner:
             total_rows=RowCount(self.total_rows),
             parseable_rows=RowCount(self.total_rows),
             invalid_rows=RowCount(0),
-            duplicate_timestamp_count=self.duplicate_timestamp_count,
+            duplicate_timestamp_count=RowCount(self.duplicate_timestamp_count),
             is_monotonic=is_monotonic,
             reason=reason,
             temporal_eligible=True,
@@ -181,7 +183,7 @@ def _unavailable_validation(group_identity: str, csv_path: Path, reason: str) ->
         total_rows=RowCount(total_rows),
         parseable_rows=RowCount(0),
         invalid_rows=RowCount(total_rows),
-        duplicate_timestamp_count=0,
+        duplicate_timestamp_count=RowCount(0),
         is_monotonic=False,
         reason=reason,
         temporal_eligible=False,

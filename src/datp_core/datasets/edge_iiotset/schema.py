@@ -18,6 +18,9 @@ from datp_core.datasets.models import (
     ColumnLogicalType,
 )
 from datp_core.domain.enums import DatasetId
+from datp_core.domain.values import (
+    CanonicalColumnPosition,
+)
 
 
 class EdgeArtifactSuffix(StrEnum):
@@ -140,7 +143,7 @@ EDGE_PROVENANCE_COLUMNS: tuple[str, ...] = (
 
 def _canonical_columns() -> tuple[CanonicalColumn, ...]:
     feature_columns = tuple(
-        CanonicalColumn(column, source, ColumnLogicalType.STRING, CanonicalColumnRole.FEATURE, True, position)
+        CanonicalColumn(column, source, ColumnLogicalType.STRING, CanonicalColumnRole.FEATURE, True, CanonicalColumnPosition(position))
         for position, (column, source) in enumerate(
             zip(EDGE_CANONICAL_FEATURE_COLUMNS, EDGE_FEATURE_COLUMNS, strict=True)
         )
@@ -153,7 +156,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
             ColumnLogicalType.STRING,
             CanonicalColumnRole.LABEL,
             True,
-            trailing_start,
+            CanonicalColumnPosition(trailing_start),
         ),
         CanonicalColumn(
             EdgeCanonicalColumn.ATTACK_TYPE,
@@ -161,7 +164,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
             ColumnLogicalType.STRING,
             CanonicalColumnRole.LABEL,
             True,
-            trailing_start + 1,
+            CanonicalColumnPosition(trailing_start + 1),
         ),
         canonical_provenance_column(CanonicalProvenanceColumn.SOURCE_ROW_INDEX, trailing_start + 2),
         CanonicalColumn(
@@ -170,7 +173,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
             ColumnLogicalType.TIMESTAMP_NS_UTC,
             CanonicalColumnRole.PROVENANCE,
             True,
-            trailing_start + 3,
+            CanonicalColumnPosition(trailing_start + 3),
         ),
         CanonicalColumn(
             EdgeCanonicalColumn.SOURCE_FOLDER,
@@ -178,7 +181,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
             ColumnLogicalType.STRING,
             CanonicalColumnRole.IDENTITY,
             True,
-            trailing_start + 4,
+            CanonicalColumnPosition(trailing_start + 4),
         ),
         CanonicalColumn(
             EdgeCanonicalColumn.BENIGN_SENSOR_GROUP,
@@ -186,7 +189,7 @@ def _canonical_columns() -> tuple[CanonicalColumn, ...]:
             ColumnLogicalType.STRING,
             CanonicalColumnRole.IDENTITY,
             True,
-            trailing_start + 5,
+            CanonicalColumnPosition(trailing_start + 5),
         ),
         canonical_provenance_column(CanonicalProvenanceColumn.SOURCE_PATH, trailing_start + 6),
         canonical_provenance_column(CanonicalProvenanceColumn.STABLE_ROW_ID, trailing_start + 7),

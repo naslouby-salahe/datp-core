@@ -10,10 +10,14 @@ from datp_core.datasets.ciciot2023.schema import (
     CICIoT2023EligibilityReason,
 )
 from datp_core.datasets.materialization import canonical_schema_checksum
-from datp_core.datasets.models import ChronologyValidation, RawSourceFile, SourceFileRole
+from datp_core.datasets.models import _ChronologyEntry, ChronologyValidation, RawSourceFile, SourceFileRole
 from datp_core.datasets.nbaiot.schema import NBAIOT_ARROW_SCHEMA, NBAIOT_CANONICAL_COLUMNS, NBAIOT_SCHEMA
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import ByteCount, Checksum, RowCount
+from datp_core.domain.values import (
+    ByteCount,
+    Checksum,
+    RowCount,
+)
 
 
 def test_raw_source_is_immutable_and_relative() -> None:
@@ -40,7 +44,7 @@ def test_chronology_preserves_static_and_temporal_status() -> None:
         RowCount(1),
         RowCount(0),
         RowCount(1),
-        0,
+        RowCount(0),
         True,
         "address literal",
         False,
@@ -48,6 +52,36 @@ def test_chronology_preserves_static_and_temporal_status() -> None:
     assert result.temporal_eligible is False
     assert result.total_rows.value == result.parseable_rows.value + result.invalid_rows.value
 
+
+def test_chronology_rejects_raw_duplicate_timestamp_count() -> None:
+    with pytest.raises(TypeError, match="typed duplicate timestamp count"):
+        ChronologyValidation(
+            "Modbus",
+            AvailabilityStatus.UNAVAILABLE,
+            RowCount(1),
+            RowCount(0),
+            RowCount(1),
+            0,  # type: ignore[arg-type]
+            True,
+            "address literal",
+            False,
+        )
+
+def test_manifest_chronology_rehydrates_typed_duplicate_count() -> None:
+    entry = _ChronologyEntry.model_validate_json(
+        """{
+            "group_identity": "Modbus",
+            "status": "available",
+            "total_rows": 10,
+            "parseable_rows": 10,
+            "invalid_rows": 0,
+            "duplicate_timestamp_count": 2,
+            "is_monotonic": true,
+            "reason": "verified chronology",
+            "temporal_eligible": true
+        }"""
+    )
+    assert entry.duplicate_timestamp_count == RowCount(2)
 
 def test_canonical_coordinate_is_a_stable_human_readable_dataset_root(tmp_path) -> None:
     changed_schema = replace(NBAIOT_SCHEMA, checksum=Checksum("different"))

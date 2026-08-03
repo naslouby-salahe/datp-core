@@ -18,7 +18,10 @@ from datp_core.datasets.materialization import (
 )
 from datp_core.datasets.models import CanonicalAssetRole, DatasetValidationReport, MaterializedDataset, SourceFileRole
 from datp_core.domain.enums import AvailabilityStatus, DatasetId
-from datp_core.domain.values import RowCount
+from datp_core.domain.values import (
+    RowCount,
+    ValidationIssueCount,
+)
 
 from .reader import NBaIoTReader
 from .schema import NBAIOT_ARROW_SCHEMA, NBAIOT_SCHEMA, NBaIoTSourceLabel, parse_source_identity, source_relative_path
@@ -73,7 +76,7 @@ class NBaIoTMaterializer:
             RowCount(sum(row_counts)),
             RowCount(0),
             RowCount(0),
-            0,
+            ValidationIssueCount(0),
             AvailabilityStatus.AVAILABLE,
         )
         expected_assets = canonical_data_partition_assets(len(frames))

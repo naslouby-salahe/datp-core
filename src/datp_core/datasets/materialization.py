@@ -45,7 +45,15 @@ from datp_core.datasets.models import (
     SourceFileRole,
 )
 from datp_core.domain.enums import DatasetId, PublicationStatus
-from datp_core.domain.values import ByteCount, Checksum, RowCount, checksum_file, checksum_text
+from datp_core.domain.values import (
+    ByteCount,
+    CanonicalColumnPosition,
+    Checksum,
+    RowCount,
+    SourceFileCount,
+    checksum_file,
+    checksum_text,
+)
 from datp_core.protocols.runtime import DATA_ROOT
 
 _COMPLETE_NAME, _MANIFEST_NAME, _SCHEMA_NAME, _SOURCE_STATE_NAME = publication_artifact_names()
@@ -175,8 +183,8 @@ def raw_inventory(dataset: DatasetId, sources: tuple[RawSourceFile, ...]) -> Raw
     return RawDatasetInventory(
         dataset=dataset,
         sources=ordered_sources,
-        accepted_source_count=len(ordered_sources),
-        excluded_source_count=0,
+        accepted_source_count=SourceFileCount(len(ordered_sources)),
+        excluded_source_count=SourceFileCount(0),
         accepted_row_count=total_rows,
         checksum=_inventory_checksum(ordered_sources),
     )
@@ -231,7 +239,7 @@ def canonical_provenance_column(column: CanonicalProvenanceColumn, position: int
         dtype,
         CanonicalColumnRole.PROVENANCE,
         True,
-        position,
+        CanonicalColumnPosition(position),
     )
 
 
