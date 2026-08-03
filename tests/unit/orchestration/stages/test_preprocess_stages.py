@@ -96,9 +96,9 @@ def test_federated_preprocess_publishes_client_local_assets(tmp_path: Path) -> N
     assert result.reused_count == 0
     assert len(result.client_publications) == 9
     for publication in result.client_publications:
-        assert publication.result.publication_status is PublicationStatus.PUBLISHED
-        assert publication.result.paths.train.is_file()
-        assert (publication.result.paths.train.parent / "COMPLETE").is_file()
+        assert publication.publication_status is PublicationStatus.PUBLISHED
+        assert publication.paths.train.is_file()
+        assert (publication.paths.train.parent / "COMPLETE").is_file()
 
     reused = preprocess_federated_stage(
         PreprocessFederatedRequest(
