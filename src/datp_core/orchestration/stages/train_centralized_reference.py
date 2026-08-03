@@ -3,10 +3,11 @@
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
+from typing import ClassVar
 
 import polars as pl
 
-from datp_core.artifacts.store import AtomicPublication, publish_atomically
+from datp_core.artifacts.store import publish_atomically
 from datp_core.centralized_reference.checkpointing import (
     CentralizedCheckpointCandidate,
     candidate_tensor_name,
@@ -52,7 +53,7 @@ from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
 from datp_core.runtime.compute import resolve_cuda_device
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(slots=True, eq=False)
 class TrainCentralizedReferenceRequest:
     coordinate: CentralizedTrainingCoordinate
     training_features: pl.DataFrame
@@ -67,8 +68,14 @@ class TrainCentralizedReferenceRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class _CentralizedTrainingArtifacts:
+    training: CentralizedTrainingResult
+    candidates: tuple[CentralizedCheckpointCandidate, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class TrainCentralizedReferenceResult:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.TRAIN_CENTRALIZED_REFERENCE
     publication_status: PublicationStatus
     training: CentralizedTrainingResult
     candidates: tuple[CentralizedCheckpointCandidate, ...]
@@ -82,20 +89,9 @@ def train_centralized_reference_stage(
     training_protocol, _declared_autoencoder, learning_rate, batch_size, weight_decay = (
         declared_centralized_training_values()
     )
-    if request.autoencoder.widths[0] != len(request.feature_names):
-        raise ScientificContractError(
-            "autoencoder input width must match the feature schema",
-            subject=ContractSubject.AUTOENCODER,
-        )
-    if request.coordinate.model is not CentralizedModelId.CENTRALIZED_AUTOENCODER:
-        raise ScientificContractError(
-            "train stage requires CENTRALIZED_AUTOENCODER",
-            subject=request.coordinate.model,
-        )
+    _validate_request(request)
 
-    holder: dict[str, CentralizedTrainingResult | tuple[CentralizedCheckpointCandidate, ...]] = {}
-
-    def write(temporary: Path) -> None:
+    def write(temporary: Path) -> _CentralizedTrainingArtifacts:
         training = train_centralized_autoencoder(
             CentralizedTrainingRequest(
                 coordinate=request.coordinate,
@@ -115,49 +111,47 @@ def train_centralized_reference_stage(
         )
         candidates = retain_centralized_checkpoint_candidates(training, request.autoencoder)
         training_history_frame(training).write_parquet(temporary / CentralizedArtifactName.TRAINING_HISTORY)
-        digest = _complete_digest(training)
-        (temporary / CentralizedArtifactName.COMPLETE).write_text(digest.value, encoding="utf-8")
-        holder["training"] = training
-        holder["candidates"] = candidates
-
-    reused = publish_atomically(
-        AtomicPublication(
-            target=request.output_directory,
-            overwrite=request.overwrite,
-            is_reusable=lambda directory: _is_reusable(directory, request),
-            write=write,
-            remove_target=lambda directory: rmtree(directory),
+        (temporary / CentralizedArtifactName.COMPLETE).write_text(
+            _complete_digest(training).value,
+            encoding="utf-8",
         )
+        return _CentralizedTrainingArtifacts(training, candidates)
+
+    outcome = publish_atomically(
+        target=request.output_directory,
+        overwrite=request.overwrite,
+        is_reusable=lambda directory: _is_reusable(directory, request),
+        write=write,
+        reusable_value=lambda _directory: _CentralizedTrainingArtifacts(
+            *_load_reused_training(request, training_protocol, learning_rate, batch_size, weight_decay)
+        ),
+        remove_target=rmtree,
     )
-
-    if reused:
-        training, candidates = _load_reused_training(
-            request, training_protocol, learning_rate, batch_size, weight_decay
+    artifacts = outcome.value
+    if outcome.status is PublicationStatus.PUBLISHED:
+        artifacts = _CentralizedTrainingArtifacts(
+            _rebase_training_paths(artifacts.training, request.output_directory),
+            _rebase_candidates(artifacts.candidates, request.output_directory),
         )
-        status = PublicationStatus.REUSED
-    else:
-        training = holder["training"]
-        candidates = holder["candidates"]
-        if not isinstance(training, CentralizedTrainingResult):
-            raise ArtifactIntegrityError(
-                "centralized training write failed to produce a result", subject=ContractSubject.TRAINING
-            )
-        if not isinstance(candidates, tuple):
-            raise ArtifactIntegrityError(
-                "centralized training write failed to produce candidates", subject=ContractSubject.CANDIDATES
-            )
-        # Re-bind paths from temporary directory to the final published directory.
-        training = _rebase_training_paths(training, request.output_directory)
-        candidates = _rebase_candidates(candidates, request.output_directory)
-        status = PublicationStatus.PUBLISHED
-
     return TrainCentralizedReferenceResult(
-        stage=StageOperationId.TRAIN_CENTRALIZED_REFERENCE,
-        publication_status=status,
-        training=training,
-        candidates=candidates,
-        complete_digest=checksum_file(request.output_directory / CentralizedArtifactName.COMPLETE),
+        publication_status=outcome.status,
+        training=artifacts.training,
+        candidates=artifacts.candidates,
+        complete_digest=outcome.complete_digest,
     )
+
+
+def _validate_request(request: TrainCentralizedReferenceRequest) -> None:
+    if request.autoencoder.widths[0] != len(request.feature_names):
+        raise ScientificContractError(
+            "autoencoder input width must match the feature schema",
+            subject=ContractSubject.AUTOENCODER,
+        )
+    if request.coordinate.model is not CentralizedModelId.CENTRALIZED_AUTOENCODER:
+        raise ScientificContractError(
+            "train stage requires CENTRALIZED_AUTOENCODER",
+            subject=request.coordinate.model,
+        )
 
 
 def _complete_digest(training: CentralizedTrainingResult) -> Checksum:
@@ -172,9 +166,11 @@ def _is_reusable(directory: Path, request: TrainCentralizedReferenceRequest) -> 
     history = directory / CentralizedArtifactName.TRAINING_HISTORY
     if not (complete.is_file() and model.is_file() and history.is_file()):
         return False
-    for candidate in request.checkpoint_protocol.candidates:
-        if not (directory / candidate_tensor_name(candidate)).is_file():
-            return False
+    if any(
+        not (directory / candidate_tensor_name(candidate)).is_file()
+        for candidate in request.checkpoint_protocol.candidates
+    ):
+        return False
     try:
         expected = checksum_text(
             f"{checksum_file(model).value}|{request.checkpoint_protocol.maximum_round.value}|"
@@ -290,21 +286,18 @@ def _rebase_candidates(
     candidates: tuple[CentralizedCheckpointCandidate, ...],
     directory: Path,
 ) -> tuple[CentralizedCheckpointCandidate, ...]:
-    rebased: list[CentralizedCheckpointCandidate] = []
-    for candidate in candidates:
-        path = directory / candidate_tensor_name(candidate.round_number)
-        rebased.append(
-            CentralizedCheckpointCandidate(
-                coordinate=candidate.coordinate,
-                round_number=candidate.round_number,
-                tensor_path=path,
-                tensor_checksum=checksum_file(path),
-                mean_training_loss=candidate.mean_training_loss,
-                status=candidate.status,
-                preprocessing_state_checksum=candidate.preprocessing_state_checksum,
-                split_manifest_checksum=candidate.split_manifest_checksum,
-                training_seed=candidate.training_seed,
-                autoencoder_widths=candidate.autoencoder_widths,
-            )
+    return tuple(
+        CentralizedCheckpointCandidate(
+            coordinate=candidate.coordinate,
+            round_number=candidate.round_number,
+            tensor_path=directory / candidate_tensor_name(candidate.round_number),
+            tensor_checksum=checksum_file(directory / candidate_tensor_name(candidate.round_number)),
+            mean_training_loss=candidate.mean_training_loss,
+            status=candidate.status,
+            preprocessing_state_checksum=candidate.preprocessing_state_checksum,
+            split_manifest_checksum=candidate.split_manifest_checksum,
+            training_seed=candidate.training_seed,
+            autoencoder_widths=candidate.autoencoder_widths,
         )
-    return tuple(rebased)
+        for candidate in candidates
+    )
