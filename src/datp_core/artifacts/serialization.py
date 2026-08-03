@@ -1,7 +1,7 @@
 """Generic safe serialization for trusted estimators, models, and domain values."""
 
 from collections.abc import Callable
-from dataclasses import fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, cast
@@ -134,5 +134,5 @@ def transforms_are_equivalent(
 ) -> bool:
     if left.shape != right.shape:
         return False
-    tol = absolute_tolerance.value if isinstance(absolute_tolerance, AbsoluteTolerance) else absolute_tolerance
-    return bool(np.allclose(left, right, rtol=0.0, atol=tol, equal_nan=False))
+    tolerance = absolute_tolerance.value if isinstance(absolute_tolerance, AbsoluteTolerance) else absolute_tolerance
+    return bool(np.allclose(left, right, rtol=0.0, atol=tolerance, equal_nan=False))
