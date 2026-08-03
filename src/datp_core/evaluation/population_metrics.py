@@ -166,15 +166,17 @@ def _pooled_macro_f1_or_unavailable(results: tuple[ClientMetricResult, ...]) -> 
     eligible = tuple(result for result in results if result.confusion.attack_assignment_valid)
     if not eligible:
         return unavailable(MetricId.POOLED_MACRO_F1, MetricStatus.UNAVAILABLE, MetricReason.NO_EVALUABLE_CLIENTS)
-    tn = sum(result.confusion.true_negative for result in eligible)
-    fp = sum(result.confusion.false_positive for result in eligible)
-    tp = sum(result.confusion.true_positive for result in eligible)
-    fn = sum(result.confusion.false_negative for result in eligible)
-    attack_denominator = 2 * tp + fp + fn
-    benign_denominator = 2 * tn + fp + fn
+    true_negative = sum(result.confusion.true_negative.value for result in eligible)
+    false_positive = sum(result.confusion.false_positive.value for result in eligible)
+    true_positive = sum(result.confusion.true_positive.value for result in eligible)
+    false_negative = sum(result.confusion.false_negative.value for result in eligible)
+    attack_denominator = 2 * true_positive + false_positive + false_negative
+    benign_denominator = 2 * true_negative + false_positive + false_negative
     if attack_denominator == 0 or benign_denominator == 0:
         return unavailable(MetricId.POOLED_MACRO_F1, MetricStatus.UNDEFINED, MetricReason.UNDEFINED_CLASS_F1)
-    return available(MetricId.POOLED_MACRO_F1, (2.0 * tp / attack_denominator + 2.0 * tn / benign_denominator) / 2.0)
+    attack_f1 = 2.0 * true_positive / attack_denominator
+    benign_f1 = 2.0 * true_negative / benign_denominator
+    return available(MetricId.POOLED_MACRO_F1, (attack_f1 + benign_f1) / 2.0)
 
 
 def _count(value: int) -> RowCount:
