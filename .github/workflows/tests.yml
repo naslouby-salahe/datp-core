@@ -1,4 +1,4 @@
-name: Validate atomic staging consolidation
+name: Validate centralized confusion cleanup
 
 "on": [push, pull_request]
 
@@ -13,169 +13,179 @@ jobs:
         with:
           persist-credentials: true
 
-      - name: Apply staging cleanup
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+
+      - name: Install dependencies
+        run: uv sync --all-groups --all-extras --frozen
+
+      - name: Apply centralized evaluation cleanup
         run: |
           python - <<'PY'
           from pathlib import Path
 
-          def replace_once(path: str, old: str, new: str) -> None:
-              file = Path(path)
-              text = file.read_text(encoding="utf-8")
-              if text.count(old) != 1:
-                  raise SystemExit(f"{path}: expected one occurrence, found {text.count(old)}: {old!r}")
-              file.write_text(text.replace(old, new, 1), encoding="utf-8")
+          path = Path("src/datp_core/centralized_reference/evaluation.py")
+          text = path.read_text(encoding="utf-8")
 
-          replace_once(
-              "src/datp_core/datasets/edge_iiotset/materialize.py",
-              "@dataclass(frozen=True, slots=True)\nclass _EdgePublicationInputs:",
-              "@dataclass(frozen=True, slots=True, eq=False)\nclass _EdgePublicationInputs:",
-          )
+          old_class = '''@dataclass(frozen=True, slots=True)
+          class ConfusionCounts:
+              true_negative: int
+              false_positive: int
+              true_positive: int
+              false_negative: int
 
-          store_path = Path("src/datp_core/artifacts/store.py")
-          store = store_path.read_text(encoding="utf-8")
-          marker = """@dataclass(frozen=True, slots=True)
-          class PublicationOutcome[ValueT]:
-              status: PublicationStatus
-              value: ValueT
-              complete_digest: Checksum
+              def __post_init__(self) -> None:
+                  for name, value in (
+                      ("true_negative", self.true_negative),
+                      ("false_positive", self.false_positive),
+                      ("true_positive", self.true_positive),
+                      ("false_negative", self.false_negative),
+                  ):
+                      if isinstance(value, bool) or value < 0:
+                          raise ValueError(f"{name} must be a non-negative integer")
+          '''.replace("          ", "")
+          new_class = '''@dataclass(frozen=True, slots=True)
+          class CentralizedConfusionCounts:
+              true_negative: RowCount
+              false_positive: RowCount
+              true_positive: RowCount
+              false_negative: RowCount
 
-
-          """.replace("          ", "")
-          helpers = """@dataclass(frozen=True, slots=True)
-          class PublicationOutcome[ValueT]:
-              status: PublicationStatus
-              value: ValueT
-              complete_digest: Checksum
-
-
-          def create_staging_directory(target: Path) -> Path:
-              target.parent.mkdir(parents=True, exist_ok=True)
-              return Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
-
-
-          def replace_directory(staging: Path, target: Path) -> None:
-              if target.exists():
-                  rmtree(target)
-              staging.replace(target)
-
-
-          def cleanup_staging_directory(staging: Path, *, ignore_errors: bool) -> None:
-              if staging.exists():
-                  rmtree(staging, ignore_errors=ignore_errors)
-
-
-          """.replace("          ", "")
-          if store.count(marker) != 1:
-              raise SystemExit(f"store marker count: {store.count(marker)}")
-          store = store.replace(marker, helpers, 1)
-          store = store.replace(
-              "        target.parent.mkdir(parents=True, exist_ok=True)\n"
-              "        temporary = Path(mkdtemp(prefix=f\".{target.name}.\", dir=target.parent))",
-              "        temporary = create_staging_directory(target)",
+              def __post_init__(self) -> None:
+                  for name, value in (
+                      ("true_negative", self.true_negative),
+                      ("false_positive", self.false_positive),
+                      ("true_positive", self.true_positive),
+                      ("false_negative", self.false_negative),
+                  ):
+                      if not isinstance(value, RowCount):
+                          raise TypeError(f"{name} must be a RowCount")
+          '''.replace("          ", "")
+          if text.count(old_class) != 1:
+              raise SystemExit(f"centralized confusion class count: {text.count(old_class)}")
+          text = text.replace(old_class, new_class, 1)
+          text = text.replace("    confusion: ConfusionCounts", "    confusion: CentralizedConfusionCounts", 1)
+          text = text.replace(
+              "        if self.evaluation_row_count < 0:\n"
+              "            raise ValueError(\"evaluation row count must be non-negative\")\n",
+              "",
               1,
           )
-          store = store.replace("            temporary.replace(target)", "            replace_directory(temporary, target)", 1)
-          store = store.replace(
-              "            rmtree(temporary, ignore_errors=True)",
-              "            cleanup_staging_directory(temporary, ignore_errors=True)",
+          text = text.replace(") -> ConfusionCounts:", ") -> CentralizedConfusionCounts:", 1)
+          text = text.replace("    return ConfusionCounts(", "    return CentralizedConfusionCounts(", 1)
+          for field in ("true_negative", "false_positive", "true_positive", "false_negative"):
+              text = text.replace(f"        {field}={field},", f"        {field}=RowCount({field}),", 1)
+          text = text.replace("    confusion: ConfusionCounts,", "    confusion: CentralizedConfusionCounts,", 1)
+          text = text.replace(
+              "def _rate_metric(metric: MetricId, numerator: int, denominator: int) -> CentralizedMetricRecord:",
+              "def _rate_metric(metric: MetricId, numerator: RowCount, denominator: RowCount) -> CentralizedMetricRecord:",
               1,
           )
-          store_path.write_text(store, encoding="utf-8")
-
-          def migrate(path: str, import_anchor: str, shared_import: str, helper_block: str, ignore_errors: bool) -> None:
-              file = Path(path)
-              text = file.read_text(encoding="utf-8")
-              if text.count(helper_block) != 1:
-                  raise SystemExit(f"{path}: helper block count {text.count(helper_block)}")
-              text = text.replace(helper_block, "", 1)
-              text = text.replace("from os import replace as atomic_replace\n", "", 1)
-              text = text.replace("from shutil import rmtree\n", "", 1)
-              text = text.replace("from tempfile import mkdtemp\n", "", 1)
-              if text.count(import_anchor) != 1:
-                  raise SystemExit(f"{path}: import anchor count {text.count(import_anchor)}")
-              text = text.replace(import_anchor, shared_import, 1)
-              text = text.replace("_new_staging_directory(", "create_staging_directory(")
-              text = text.replace("_replace_directory(", "replace_directory(")
-              text = text.replace("_cleanup_staging(", "cleanup_staging_directory(")
+          text = text.replace(
+              "        value=MetricValue(numerator / denominator),",
+              "        value=MetricValue(numerator.value / denominator.value),",
+              1,
+          )
+          text = text.replace("def _binary_macro_f1(confusion: ConfusionCounts)", "def _binary_macro_f1(confusion: CentralizedConfusionCounts)", 1)
+          text = text.replace("def _pooled_macro_f1(confusion: ConfusionCounts)", "def _pooled_macro_f1(confusion: CentralizedConfusionCounts)", 1)
+          text = text.replace("def _macro_f1_record(metric: MetricId, confusion: ConfusionCounts)", "def _macro_f1_record(metric: MetricId, confusion: CentralizedConfusionCounts)", 1)
+          text = text.replace("    attack_precision = confusion.true_positive / attack_precision_den", "    attack_precision = confusion.true_positive.value / attack_precision_den.value", 1)
+          text = text.replace("    attack_recall = confusion.true_positive / attack_recall_den", "    attack_recall = confusion.true_positive.value / attack_recall_den.value", 1)
+          text = text.replace("    benign_precision = confusion.true_negative / benign_precision_den", "    benign_precision = confusion.true_negative.value / benign_precision_den.value", 1)
+          text = text.replace("    benign_recall = confusion.true_negative / benign_recall_den", "    benign_recall = confusion.true_negative.value / benign_recall_den.value", 1)
+          for field in ("true_negative", "false_positive", "true_positive", "false_negative"):
               text = text.replace(
-                  "cleanup_staging_directory(staging)",
-                  f"cleanup_staging_directory(staging, ignore_errors={ignore_errors})",
+                  f'            "{field}": evaluation.confusion.{field},',
+                  f'            "{field}": evaluation.confusion.{field}.value,',
+                  1,
               )
-              file.write_text(text, encoding="utf-8")
+          checksum_old = '''        f"{result.confusion.true_negative},{result.confusion.false_positive},"
+                  f"{result.confusion.true_positive},{result.confusion.false_negative}|{metric_payload}"
+          '''.replace("          ", "")
+          checksum_new = '''        f"{result.confusion.true_negative.value},{result.confusion.false_positive.value},"
+                  f"{result.confusion.true_positive.value},{result.confusion.false_negative.value}|{metric_payload}"
+          '''.replace("          ", "")
+          if text.count(checksum_old) != 1:
+              raise SystemExit(f"confusion checksum block count: {text.count(checksum_old)}")
+          text = text.replace(checksum_old, checksum_new, 1)
+          path.write_text(text, encoding="utf-8")
 
-          checkpoint_helpers = """
-          def _new_staging_directory(target: Path) -> Path:
-              target.parent.mkdir(parents=True, exist_ok=True)
-              return Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
-
-
-          def _replace_directory(staging: Path, target: Path) -> None:
-              if target.exists():
-                  rmtree(target)
-              atomic_replace(staging, target)
-
-
-          def _cleanup_staging(staging: Path) -> None:
-              if staging.exists():
-                  rmtree(staging)
-          """.replace("          ", "")
-          migrate(
-              "src/datp_core/learning/federated/checkpointing.py",
-              "from datp_core.artifacts.serialization import serialize_json_model",
-              "from datp_core.artifacts.serialization import serialize_json_model\n"
-              "from datp_core.artifacts.store import (\n"
-              "    cleanup_staging_directory,\n"
-              "    create_staging_directory,\n"
-              "    replace_directory,\n"
-              ")",
-              checkpoint_helpers,
-              False,
+          tests_path = Path("tests/unit/centralized_reference/test_evaluation.py")
+          tests = tests_path.read_text(encoding="utf-8")
+          tests = tests.replace(
+              "from datp_core.centralized_reference.evaluation import (\n    evaluate_centralized_reference,",
+              "from datp_core.centralized_reference.evaluation import (\n"
+              "    CentralizedConfusionCounts,\n"
+              "    evaluate_centralized_reference,",
+              1,
           )
+          test = '''
+          def test_centralized_confusion_counts_require_row_count_values() -> None:
+              confusion = CentralizedConfusionCounts(
+                  true_negative=RowCount(10),
+                  false_positive=RowCount(2),
+                  true_positive=RowCount(7),
+                  false_negative=RowCount(1),
+              )
+              assert sum(
+                  (
+                      confusion.true_negative,
+                      confusion.false_positive,
+                      confusion.true_positive,
+                      confusion.false_negative,
+                  )
+              ) == RowCount(20)
+              with pytest.raises(TypeError, match="RowCount"):
+                  CentralizedConfusionCounts(  # type: ignore[arg-type]
+                      true_negative=10,
+                      false_positive=RowCount(2),
+                      true_positive=RowCount(7),
+                      false_negative=RowCount(1),
+                  )
+          '''.replace("          ", "")
+          if test.strip() not in tests:
+              marker = "\ndef test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:\n"
+              if marker not in tests:
+                  raise SystemExit("centralized evaluation test insertion marker missing")
+              tests = tests.replace(marker, "\n" + test + marker, 1)
+          tests_path.write_text(tests, encoding="utf-8")
 
-          scoring_helpers = """
-          def _new_staging_directory(target: Path) -> Path:
-              target.parent.mkdir(parents=True, exist_ok=True)
-              return Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
-
-
-          def _replace_directory(staging: Path, target: Path) -> None:
-              if target.exists():
-                  rmtree(target)
-              atomic_replace(staging, target)
-
-
-          def _cleanup_staging(staging: Path) -> None:
-              if staging.exists():
-                  rmtree(staging, ignore_errors=True)
-          """.replace("          ", "")
-          migrate(
-              "src/datp_core/scoring/generation.py",
-              "from datp_core.artifacts.layout import scored_partition_roles",
-              "from datp_core.artifacts.layout import scored_partition_roles\n"
-              "from datp_core.artifacts.store import (\n"
-              "    cleanup_staging_directory,\n"
-              "    create_staging_directory,\n"
-              "    replace_directory,\n"
-              ")",
-              scoring_helpers,
-              True,
-          )
+          architecture_path = Path("tests/architecture/test_no_compatibility_surfaces.py")
+          architecture = architecture_path.read_text(encoding="utf-8")
+          guard = '''
+          def test_source_uses_no_explicit_any_type() -> None:
+              for source_path, tree in parsed_source_files():
+                  for node in ast.walk(tree):
+                      if isinstance(node, ast.ImportFrom):
+                          assert all(alias.name != "Any" for alias in node.names), source_path
+                      elif isinstance(node, ast.Name):
+                          assert node.id != "Any", source_path
+                      elif isinstance(node, ast.Attribute):
+                          assert node.attr != "Any", source_path
+          '''.replace("          ", "")
+          if guard.strip() not in architecture:
+              architecture = architecture.rstrip() + "\n\n" + guard
+          architecture_path.write_text(architecture, encoding="utf-8")
           PY
 
-      - name: Compile changed modules
+      - name: Run focused regression tests
         run: |
-          python -m compileall -q \
-            src/datp_core/artifacts/store.py \
-            src/datp_core/datasets/edge_iiotset/materialize.py \
-            src/datp_core/learning/federated/checkpointing.py \
-            src/datp_core/scoring/generation.py
+          python -m compileall -q src/datp_core/centralized_reference/evaluation.py
+          uv run pytest \
+            tests/architecture/test_no_compatibility_surfaces.py \
+            tests/unit/centralized_reference/test_evaluation.py
 
       - name: Commit cleanup
         if: github.event_name == 'push' && github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src
+          git add src tests
           git diff --cached --quiet && exit 0
-          git commit -m "Centralize atomic directory staging"
+          git commit -m "Type centralized confusion counts"
           git push origin "HEAD:${GITHUB_REF_NAME}"
