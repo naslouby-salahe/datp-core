@@ -32,6 +32,11 @@ jobs:
           import subprocess
 
           source_commit = "be06766ee3ff5ba371e5120ca0d5b97c50196892"
+          subprocess.run(
+              ["git", "fetch", "origin", source_commit, "--depth=1"],
+              check=True,
+              stdout=subprocess.DEVNULL,
+          )
           workflow = subprocess.check_output(
               ["git", "show", f"{source_commit}:.github/workflows/tests.yml"],
               text=True,
