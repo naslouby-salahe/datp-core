@@ -13,10 +13,17 @@ from datp_core.artifacts.layout import (
     partition_roles,
     processed_asset_names,
 )
+from datp_core.artifacts.serialization import TrustedScaler
 from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import ContractSubject, PartitionRole, PreprocessingFitScope, ProcessedDataBranch
 from datp_core.domain.errors import ScientificContractError
-from datp_core.domain.values import ClientPathToken, OutcomeLabelSequence, RowCount, StableRowIdSequence
+from datp_core.domain.values import (
+    ClientPathToken,
+    FeatureNameSequence,
+    OutcomeLabelSequence,
+    RowCount,
+    StableRowIdSequence,
+)
 from datp_core.preprocessing.models import (
     ClientPreprocessingResult,
     ClientPublishRequest,
@@ -24,6 +31,7 @@ from datp_core.preprocessing.models import (
     FittedStatePublishSpec,
     PreprocessedPartitionPaths,
     PreprocessingFitBatch,
+    PreprocessingPartition,
     PreprocessingPartitions,
     PreprocessingProtocol,
 )
@@ -55,7 +63,7 @@ def fit_estimators_for_federated_clients(
 def _fit_client_local_estimators(
     protocol: PreprocessingProtocol,
     client_partitions: ClientCollection[ClientPathToken, PreprocessingPartitions],
-) -> ClientCollection[ClientPathToken, object]:
+) -> ClientCollection[ClientPathToken, TrustedScaler]:
     feature_names = protocol.input_feature_names
     fitted = tuple(
         ClientOwned(
@@ -79,7 +87,7 @@ def _fit_client_local_estimators(
 def _fit_pooled_estimator(
     protocol: PreprocessingProtocol,
     client_partitions: ClientCollection[ClientPathToken, PreprocessingPartitions],
-):
+) -> TrustedScaler:
     feature_names = protocol.input_feature_names
     training = tuple(item.value.require(PartitionRole.TRAIN) for item in client_partitions.items)
     for partition in training:
@@ -101,7 +109,10 @@ def _fit_pooled_estimator(
     )
 
 
-def _fit_batch(partition, feature_names) -> PreprocessingFitBatch:
+def _fit_batch(
+    partition: PreprocessingPartition,
+    feature_names: FeatureNameSequence,
+) -> PreprocessingFitBatch:
     require_columns(partition.frame, feature_names.names, subject=ContractSubject.SCHEMA)
     return PreprocessingFitBatch(
         training_matrix=partition.frame.select(list(feature_names)).to_numpy(),
@@ -150,7 +161,10 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
     paths_by_role = {
         role: client_asset_path(publication.coordinate_directory, asset_for_partition(role)) for role in roles
     }
-    count = lambda role: RowCount(request.partitions.require(role).frame.height) if role in roles else RowCount(0)
+
+    def row_count(role: PartitionRole) -> RowCount:
+        return RowCount(request.partitions.require(role).frame.height) if role in roles else RowCount(0)
+
     return ClientPreprocessingResult(
         client_identity=request.client_identity,
         paths=PreprocessedPartitionPaths(
@@ -162,9 +176,9 @@ def publish_client_preprocessing(request: ClientPublishRequest) -> ClientPreproc
         ),
         fitted_state=state,
         publication_status=publication.publication_status,
-        train_row_count=count(PartitionRole.TRAIN),
-        calibration_row_count=count(PartitionRole.CALIBRATION),
-        evaluation_row_count=count(PartitionRole.EVALUATION),
-        future_recalibration_row_count=count(PartitionRole.FUTURE_RECALIBRATION),
-        static_reference_reserve_row_count=count(PartitionRole.STATIC_REFERENCE_RESERVE),
+        train_row_count=row_count(PartitionRole.TRAIN),
+        calibration_row_count=row_count(PartitionRole.CALIBRATION),
+        evaluation_row_count=row_count(PartitionRole.EVALUATION),
+        future_recalibration_row_count=row_count(PartitionRole.FUTURE_RECALIBRATION),
+        static_reference_reserve_row_count=row_count(PartitionRole.STATIC_REFERENCE_RESERVE),
     )
