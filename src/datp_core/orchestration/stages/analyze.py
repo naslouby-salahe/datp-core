@@ -1,6 +1,6 @@
 """Seed-paired confirmatory, external, and temporal-boundary analysis publication."""
 
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from enum import StrEnum
 from json import dumps
 from pathlib import Path
@@ -39,6 +39,7 @@ from datp_core.analysis.temporal import (
     TemporalRecoveryResult,
     validate_frozen_recalibrated_pair,
 )
+from datp_core.artifacts.serialization import to_json_compatible
 from datp_core.artifacts.store import AtomicPublication, publish_atomically
 from datp_core.domain.enums import (
     AvailabilityStatus,
@@ -66,30 +67,6 @@ class AnalysisAssetName(StrEnum):
     COMPLETE = "COMPLETE"
     EXTERNAL_DOCUMENT = "external_analysis.json"
     TEMPORAL_DOCUMENT = "temporal_analysis.json"
-
-
-def _serialize(obj):  # noqa: C901, PLR0911
-    """Serialize domain value objects, enums, dataclasses, and tuples to JSON-compatible primitives."""
-    if obj is None:
-        return None
-    if isinstance(obj, (bool, int, float, str)):
-        return obj
-    if isinstance(obj, StrEnum):
-        return obj.value
-    if isinstance(obj, tuple):
-        return tuple(_serialize(item) for item in obj)
-    if isinstance(obj, list):
-        return [_serialize(item) for item in obj]
-    if isinstance(obj, dict):
-        return {key: _serialize(value) for key, value in obj.items()}
-    if hasattr(obj, "model_dump"):
-        return obj.model_dump(mode="json")
-    if hasattr(obj, "__dataclass_fields__"):
-        own_fields = fields(obj)
-        if len(own_fields) == 1 and own_fields[0].name == "value":
-            return obj.value
-        return {field.name: _serialize(getattr(obj, field.name)) for field in own_fields}
-    raise TypeError(f"cannot serialize {type(obj)}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -203,7 +180,7 @@ def analyze_stage(request: AnalyzeRequest) -> AnalyzeResult:
         analysis_seed=request.analysis_seed,
     )
     result = _analyze(request, interval)
-    payload = dumps(_serialize(result), indent=2, sort_keys=True) + "\n"
+    payload = dumps(to_json_compatible(result), indent=2, sort_keys=True) + "\n"
     digest = checksum_text(payload)
 
     def write(temporary: Path) -> None:
@@ -259,7 +236,7 @@ def analyze_external_stage(request: ExternalAnalyzeRequest) -> ExternalAnalyzeRe
     rank_biserial = matched_pairs_rank_biserial(request.contrasts)
     payload = (
         dumps(
-            _serialize(
+            to_json_compatible(
                 {
                     "evidence_role": request.plan.evidence_role,
                     "interval": interval,
@@ -301,7 +278,7 @@ def analyze_temporal_stage(request: TemporalAnalyzeRequest) -> TemporalAnalyzeRe
     _validate_temporal_provenance(request)
     payload = (
         dumps(
-            _serialize(
+            to_json_compatible(
                 {
                     "evidence_role": EvidenceRole.TEMPORAL_BOUNDARY,
                     "static_reference_provenance": request.static_reference_provenance,
