@@ -51,6 +51,22 @@ class PublicationOutcome[ValueT]:
     complete_digest: Checksum
 
 
+def create_staging_directory(target: Path) -> Path:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    return Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
+
+
+def replace_directory(staging: Path, target: Path) -> None:
+    if target.exists():
+        rmtree(target)
+    staging.replace(target)
+
+
+def cleanup_staging_directory(staging: Path, *, ignore_errors: bool) -> None:
+    if staging.exists():
+        rmtree(staging, ignore_errors=ignore_errors)
+
+
 def publish_atomically[ValueT](
     *,
     target: Path,
@@ -72,13 +88,12 @@ def publish_atomically[ValueT](
             )
         if target.exists():
             remove_target(target)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        temporary = Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
+        temporary = create_staging_directory(target)
         try:
             value = write(temporary)
-            temporary.replace(target)
+            replace_directory(temporary, target)
         except Exception:
-            rmtree(temporary, ignore_errors=True)
+            cleanup_staging_directory(temporary, ignore_errors=True)
             raise
     return PublicationOutcome(
         status=PublicationStatus.PUBLISHED,

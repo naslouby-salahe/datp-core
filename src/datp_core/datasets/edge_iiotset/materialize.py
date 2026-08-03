@@ -48,7 +48,7 @@ from .schema import (
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class _EdgePublicationInputs:
     benign_paths: tuple[Path, ...]
     benign_frames: tuple[pl.LazyFrame, ...]

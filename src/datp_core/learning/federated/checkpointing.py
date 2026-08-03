@@ -4,10 +4,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from json import dumps
-from os import replace as atomic_replace
 from pathlib import Path
-from shutil import rmtree
-from tempfile import mkdtemp
 
 import polars as pl
 import torch
@@ -16,6 +13,11 @@ from pydantic import ValidationError
 from safetensors.torch import load_file, save_file
 
 from datp_core.artifacts.serialization import serialize_json_model
+from datp_core.artifacts.store import (
+    cleanup_staging_directory,
+    create_staging_directory,
+    replace_directory,
+)
 from datp_core.domain.contracts import StrictModel
 from datp_core.domain.enums import (
     CheckpointSelectionRule,
@@ -577,21 +579,6 @@ def _verify_completion(
     return recomputed
 
 
-def _new_staging_directory(target: Path) -> Path:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    return Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
-
-
-def _replace_directory(staging: Path, target: Path) -> None:
-    if target.exists():
-        rmtree(target)
-    atomic_replace(staging, target)
-
-
-def _cleanup_staging(staging: Path) -> None:
-    if staging.exists():
-        rmtree(staging)
-
 
 def persist_federated_training_history(
     history: FederatedTrainingHistory,
@@ -689,7 +676,7 @@ def publish_federated_training(
     output_directory: Path,
 ) -> FederatedTrainingOutcome:
     result = execution.training_result
-    staging = _new_staging_directory(output_directory)
+    staging = create_staging_directory(output_directory)
     try:
         persist_federated_training_history(
             result.history,
@@ -721,9 +708,9 @@ def publish_federated_training(
             staging / FederatedHistoryAssetName.CANDIDATE_MANIFEST.value,
         )
         _write_completion(staging, manifest, include_history=True)
-        _replace_directory(staging, output_directory)
+        replace_directory(staging, output_directory)
     finally:
-        _cleanup_staging(staging)
+        cleanup_staging_directory(staging, ignore_errors=False)
 
     return FederatedTrainingOutcome(
         training_result=result,
@@ -763,7 +750,7 @@ def _stage_personalized_candidates(
     tuple[PersonalizedCandidateSet, ...],
     Checksum,
 ]:
-    staging = _new_staging_directory(output_directory)
+    staging = create_staging_directory(output_directory)
     all_candidates: list[CheckpointCandidate] = []
     candidate_sets: list[PersonalizedCandidateSet] = []
     for snapshot_set in snapshot_sets:
@@ -834,7 +821,7 @@ def publish_ditto_training(
             output_directory=personalized_output_directory,
         )
 
-        global_staging = _new_staging_directory(global_output_directory)
+        global_staging = create_staging_directory(global_output_directory)
         persist_federated_training_history(
             global_result.history,
             global_staging,
@@ -867,19 +854,19 @@ def publish_ditto_training(
         )
         _write_completion(global_staging, manifest, include_history=True)
 
-        _replace_directory(
+        replace_directory(
             personalized_staging,
             personalized_output_directory,
         )
-        _replace_directory(
+        replace_directory(
             global_staging,
             global_output_directory,
         )
     finally:
         if personalized_staging is not None:
-            _cleanup_staging(personalized_staging)
+            cleanup_staging_directory(personalized_staging)
         if global_staging is not None:
-            _cleanup_staging(global_staging)
+            cleanup_staging_directory(global_staging)
 
     personalized_candidates = tuple(
         PersonalizedCandidateSet(

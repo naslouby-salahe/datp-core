@@ -2,10 +2,7 @@
 
 from dataclasses import dataclass
 from enum import StrEnum
-from os import replace as atomic_replace
 from pathlib import Path
-from shutil import rmtree
-from tempfile import mkdtemp
 
 import numpy as np
 import numpy.typing as npt
@@ -14,6 +11,11 @@ import torch
 from safetensors.torch import load_file
 
 from datp_core.artifacts.layout import scored_partition_roles
+from datp_core.artifacts.store import (
+    cleanup_staging_directory,
+    create_staging_directory,
+    replace_directory,
+)
 from datp_core.domain.enums import (
     CheckpointStatus,
     ContractSubject,
@@ -125,7 +127,7 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
     _validate_request(request)
     model = load_checkpoint_model(request.checkpoint, request.autoencoder, device)
 
-    staging = _new_staging_directory(request.output_directory)
+    staging = create_staging_directory(request.output_directory)
     try:
         scored_roles = scored_partition_roles(request.checkpoint.coordinate.split_protocol)
         records_by_role: dict[PartitionRole, list[ScoreRecord]] = {role: [] for role in scored_roles}
@@ -163,9 +165,9 @@ def generate_federated_scores(request: ScoreGenerationRequest, device: torch.dev
             ),
         )
         _write_complete_marker(staging, invariant)
-        _replace_directory(staging, request.output_directory)
+        replace_directory(staging, request.output_directory)
     except Exception:
-        _cleanup_staging(staging)
+        cleanup_staging_directory(staging, ignore_errors=True)
         raise
 
     rebased_by_role: dict[PartitionRole, tuple[ScoreRecord, ...]] = {}
@@ -393,21 +395,6 @@ def _asset_name_for_partition(role: PartitionRole) -> FederatedScoreAssetName:
         case PartitionRole.STATIC_REFERENCE_RESERVE:
             raise ScientificContractError("static-reference reserve rows are never scored", subject=role)
 
-
-def _new_staging_directory(target: Path) -> Path:
-    target.parent.mkdir(parents=True, exist_ok=True)
-    return Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
-
-
-def _replace_directory(staging: Path, target: Path) -> None:
-    if target.exists():
-        rmtree(target)
-    atomic_replace(staging, target)
-
-
-def _cleanup_staging(staging: Path) -> None:
-    if staging.exists():
-        rmtree(staging, ignore_errors=True)
 
 
 def _write_complete_marker(directory: Path, invariant: FixedScoreInvariant) -> None:
