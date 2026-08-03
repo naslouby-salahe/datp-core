@@ -12,7 +12,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from datp_core.artifacts.completion import complete_digest
-from datp_core.artifacts.store import AtomicPublication, publish_atomically
+from datp_core.artifacts.store import publish_atomically
 from datp_core.datasets.canonical_cache import (
     CanonicalAsset,
     CanonicalAssetLayout,
@@ -220,8 +220,7 @@ def canonical_schema_checksum(
 ) -> Checksum:
     if tuple(column.nullable for column in columns) != tuple(field.nullable for field in physical_schema):
         raise ValueError("canonical column nullability must match the physical schema")
-    content = schema_checksum_document_json(dataset, columns, physical_schema)
-    return checksum_text(content)
+    return checksum_text(schema_checksum_document_json(dataset, columns, physical_schema))
 
 
 def canonical_provenance_column(column: CanonicalProvenanceColumn, position: int) -> CanonicalColumn:
@@ -262,7 +261,8 @@ def partition_assets[AssetRoleT: StrEnum](
     if partition_count < 1:
         raise ValueError("canonical partition publication requires at least one partition")
     return tuple(
-        CanonicalAssetLayout(DATA_ROOT / branch / f"part-{index:05d}.parquet", role) for index in range(partition_count)
+        CanonicalAssetLayout(DATA_ROOT / branch / f"part-{index:05d}.parquet", role)
+        for index in range(partition_count)
     )
 
 
@@ -312,24 +312,28 @@ def publish_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
     publication: CanonicalPublication[AssetRoleT, EligibilityReasonT],
 ) -> MaterializedDataset[AssetRoleT, EligibilityReasonT]:
     target = canonical_directory(publication.canonical_root, publication.schema)
-    reused = publish_atomically(
-        AtomicPublication(
-            target=target,
-            overwrite=False,
-            is_reusable=lambda directory: completed_publication_is_reusable(directory, publication.match_request()),
-            write=lambda temporary: _write_canonical(temporary, publication),
-            remove_target=lambda directory: _remove_target(directory, publication.canonical_root),
-        )
+
+    def write(temporary: Path) -> Path:
+        _write_canonical(temporary, publication)
+        return target
+
+    outcome = publish_atomically(
+        target=target,
+        overwrite=False,
+        is_reusable=lambda directory: completed_publication_is_reusable(directory, publication.match_request()),
+        write=write,
+        reusable_value=lambda directory: directory,
+        remove_target=lambda directory: _remove_target(directory, publication.canonical_root),
+        complete_marker=_COMPLETE_NAME,
     )
-    if reused:
+    if outcome.status is PublicationStatus.REUSED:
         write_source_state(
             target,
             publication.schema.dataset,
             publication.source_paths,
             publication.source_path_resolver,
         )
-    status = PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED
-    return _materialized_dataset(target, publication, status)
+    return _materialized_dataset(outcome.value, publication, outcome.status)
 
 
 def _write_canonical[AssetRoleT: StrEnum, EligibilityReasonT: StrEnum](
