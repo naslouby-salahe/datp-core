@@ -1,6 +1,7 @@
 """Stage: select the centralized primary checkpoint under FIXED_TERMINAL_MAXIMUM_ROUND."""
 
 from dataclasses import dataclass
+from typing import ClassVar
 
 from datp_core.centralized_reference.checkpointing import (
     CentralizedCheckpointCandidate,
@@ -29,7 +30,7 @@ class SelectCentralizedCheckpointRequest:
 
 @dataclass(frozen=True, slots=True)
 class SelectCentralizedCheckpointResult:
-    stage: StageOperationId
+    stage: ClassVar[StageOperationId] = StageOperationId.SELECT_CENTRALIZED_REFERENCE_CHECKPOINT
     decision: CentralizedCheckpointDecision
 
 
@@ -50,7 +51,4 @@ def select_centralized_reference_checkpoint_stage(
         held_out_metrics=request.held_out_metrics,
         attack_labels_present=request.attack_labels_present,
     )
-    return SelectCentralizedCheckpointResult(
-        stage=StageOperationId.SELECT_CENTRALIZED_REFERENCE_CHECKPOINT,
-        decision=decision,
-    )
+    return SelectCentralizedCheckpointResult(decision=decision)
