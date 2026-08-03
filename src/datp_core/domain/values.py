@@ -43,10 +43,10 @@ def _compatible_value(self: Any, other: object) -> Any:
     if isinstance(other, (int, float)) and not isinstance(other, bool):
         return other
     if type(other) is type(self):
-        return other.value
+        return getattr(other, "value")
     family = self.comparison_family
     if family is not None and getattr(other, "comparison_family", None) == family:
-        return other.value
+        return getattr(other, "value")
     return NotImplemented
 
 
@@ -68,7 +68,7 @@ def _add_impl(self: Any, other: object) -> Any:
     if isinstance(other, int) and not isinstance(other, bool):
         return type(self)(self.value + other)
     if type(other) is type(self):
-        return type(self)(self.value + other.value)
+        return type(self)(self.value + getattr(other, "value"))
     return NotImplemented
 
 
