@@ -67,7 +67,9 @@ def load_benign_calibration_references(
     scores = tuple(float(value) for value in frame.get_column(ScoreFrameColumn.RECONSTRUCTION_ERROR.value).to_list())
     return tuple(
         CalibrationSampleReference(
-            client=record.scored_client, stable_row_id=StableRowId(row_id), score=ScoreValue(score)
+            client=record.scored_client,
+            stable_row_id=StableRowId(row_id),
+            score=ScoreValue(score),
         )
         for row_id, score in zip(stable_row_ids, scores, strict=True)
     )
@@ -92,9 +94,7 @@ def decide_eligibility(
 ) -> EligibilityDecision:
     meets_minimum = support.benign_calibration_count >= protocol.minimum_support
     return EligibilityDecision(
-        client=support.client,
-        coordinate=support.coordinate,
-        benign_calibration_count=support.benign_calibration_count,
+        support=support,
         minimum_support=protocol.minimum_support,
         status=EligibilityStatus.ELIGIBLE if meets_minimum else EligibilityStatus.EXCLUDED,
         reason=None if meets_minimum else CalibrationUnavailableReason.INSUFFICIENT_BENIGN_SUPPORT,
@@ -102,11 +102,7 @@ def decide_eligibility(
 
 
 def eligible_clients(decisions: tuple[EligibilityDecision, ...]) -> tuple[ClientIdentity, ...]:
-    return tuple(
-        sorted(
-            (decision.client for decision in decisions if decision.is_eligible),
-        )
-    )
+    return tuple(sorted(decision.client for decision in decisions if decision.is_eligible))
 
 
 def require_common_eligible_cohort(
