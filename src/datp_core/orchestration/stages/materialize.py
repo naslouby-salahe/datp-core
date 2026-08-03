@@ -5,7 +5,7 @@ from pathlib import Path
 
 from datp_core.artifacts.coordinates import raw_dataset_root
 from datp_core.datasets.catalogue import DatasetPublication, dataset_binding
-from datp_core.domain.enums import DatasetId, ReusableDataCoordinateKind
+from datp_core.domain.enums import DatasetId, ReusableDataCoordinateKind, StageOperationId
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,11 +14,21 @@ class MaterializeCanonicalDatasetsRequest:
     datasets: tuple[DatasetId, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class MaterializeCanonicalDatasetsResult:
+    stage: StageOperationId
+    publications: tuple[DatasetPublication, ...]
+
+
 def materialize_canonical_datasets_stage(
     request: MaterializeCanonicalDatasetsRequest,
-) -> tuple[DatasetPublication, ...]:
+) -> MaterializeCanonicalDatasetsResult:
     """Materialize every requested dataset under the canonical root of data_root."""
     canonical_root = request.data_root / ReusableDataCoordinateKind.CANONICAL
-    return tuple(
+    publications = tuple(
         dataset_binding(dataset).publish(raw_dataset_root(dataset), canonical_root) for dataset in request.datasets
+    )
+    return MaterializeCanonicalDatasetsResult(
+        stage=StageOperationId.MATERIALIZE,
+        publications=publications,
     )
