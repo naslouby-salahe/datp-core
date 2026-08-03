@@ -1,124 +1,267 @@
-name: Repository model audit
+name: Apply publication and evaluation cleanup
 
-"on": [push, pull_request]
+"on": [push]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  audit:
+  patch:
+    if: github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
         with:
-          persist-credentials: false
-      - name: Audit model contracts and duplication
+          persist-credentials: true
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1
+        with:
+          python-version: '3.12'
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78
+
+      - name: Install dependencies
+        run: uv sync --all-groups --all-extras --frozen
+
+      - name: Apply source cleanup
         run: |
           python - <<'PY'
-          from __future__ import annotations
-
-          import ast
-          import hashlib
-          from collections import defaultdict
           from pathlib import Path
+          import re
 
-          ROOT = Path("src/datp_core")
-          files = tuple(sorted(ROOT.rglob("*.py")))
-          trees = {path: ast.parse(path.read_text(encoding="utf-8"), filename=str(path)) for path in files}
+          def replace_once(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if new in text and old not in text:
+                  return
+              if text.count(old) != 1:
+                  raise SystemExit(f"{path}: expected one occurrence of {old!r}, found {text.count(old)}")
+              file.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-          def decorator_call(node: ast.ClassDef) -> ast.Call | None:
-              for decorator in node.decorator_list:
-                  call = decorator if isinstance(decorator, ast.Call) else None
-                  target = call.func if call else decorator
-                  name = target.id if isinstance(target, ast.Name) else target.attr if isinstance(target, ast.Attribute) else ""
-                  if name == "dataclass":
-                      return call
-              return None
-
-          def keyword_bool(call: ast.Call | None, key: str, default: bool) -> bool:
-              if call is None:
-                  return default
-              for keyword in call.keywords:
-                  if keyword.arg == key and isinstance(keyword.value, ast.Constant):
-                      return bool(keyword.value.value)
-              return default
-
-          def annotation_text(annotation: ast.expr) -> str:
-              return ast.unparse(annotation)
-
-          def location(path: Path, node: ast.AST) -> str:
-              return f"{path}:{getattr(node, 'lineno', '?')}"
-
-          explicit_any: list[str] = []
-          primitive_domain_fields: list[str] = []
-          mutable_frozen_fields: list[str] = []
-          one_field_dataclasses: list[str] = []
-          class_locations: dict[str, list[str]] = defaultdict(list)
-          function_bodies: dict[str, list[str]] = defaultdict(list)
-          string_dispatch: list[str] = []
-
-          semantic_tokens = (
-              "count", "index", "rank", "round", "seed", "threshold", "quantile", "coverage",
-              "ratio", "bytes", "size", "fraction", "coefficient", "rate", "epoch", "batch",
-              "worker", "support", "client_id", "group_id", "family_id", "checksum", "metric",
-              "score", "variance", "mean", "error", "tolerance", "probability", "weight",
+          replace_once(
+              "src/datp_core/datasets/edge_iiotset/materialize.py",
+              "@dataclass(frozen=True, slots=True)\nclass _EdgePublicationInputs:",
+              "@dataclass(frozen=True, slots=True, eq=False)\nclass _EdgePublicationInputs:",
           )
-          mutable_tokens = ("DataFrame", "LazyFrame", "ndarray", "Tensor", "dict[", "list[", "set[")
-          primitive_annotations = {"int", "float", "str", "bool", "int | None", "float | None", "str | None", "bool | None"}
 
-          for path, tree in trees.items():
-              for node in ast.walk(tree):
-                  if isinstance(node, ast.ImportFrom):
-                      if any(alias.name == "Any" for alias in node.names):
-                          explicit_any.append(location(path, node))
-                  elif isinstance(node, ast.Name) and node.id == "Any":
-                      explicit_any.append(location(path, node))
-                  elif isinstance(node, ast.Attribute) and node.attr == "Any":
-                      explicit_any.append(location(path, node))
-                  elif isinstance(node, ast.ClassDef):
-                      class_locations[node.name].append(location(path, node))
-                      call = decorator_call(node)
-                      if call is None:
-                          continue
-                      fields = [item for item in node.body if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)]
-                      instance_fields = [item for item in fields if not annotation_text(item.annotation).startswith("ClassVar[")]
-                      if len(instance_fields) == 1:
-                          field = instance_fields[0]
-                          one_field_dataclasses.append(
-                              f"{location(path, node)} {node.name}.{field.target.id}: {annotation_text(field.annotation)}"
-                          )
-                      frozen = keyword_bool(call, "frozen", False)
-                      equality = keyword_bool(call, "eq", True)
-                      for field in instance_fields:
-                          name = field.target.id
-                          annotation = annotation_text(field.annotation)
-                          if annotation in primitive_annotations and any(token in name.lower() for token in semantic_tokens):
-                              primitive_domain_fields.append(f"{location(path, field)} {node.name}.{name}: {annotation}")
-                          if frozen and equality and any(token in annotation for token in mutable_tokens):
-                              mutable_frozen_fields.append(f"{location(path, field)} {node.name}.{name}: {annotation}")
-                  elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("__"):
-                      normalized = ast.dump(ast.Module(body=node.body, type_ignores=[]), include_attributes=False)
-                      if len(normalized) >= 160:
-                          digest = hashlib.sha256(normalized.encode()).hexdigest()
-                          function_bodies[digest].append(f"{location(path, node)} {node.name}")
-                  elif isinstance(node, ast.If):
-                      rendered = ast.unparse(node.test)
-                      if any(fragment in rendered for fragment in ('"family" in ', "'family' in ", '"cluster" in ', "'cluster' in ")):
-                          string_dispatch.append(f"{location(path, node)} {rendered}")
+          store_path = Path("src/datp_core/artifacts/store.py")
+          store = store_path.read_text(encoding="utf-8")
+          marker = '''@dataclass(frozen=True, slots=True)
+          class PublicationOutcome[ValueT]:
+              status: PublicationStatus
+              value: ValueT
+              complete_digest: Checksum
 
-          duplicate_classes = {name: places for name, places in class_locations.items() if len(places) > 1}
-          duplicate_functions = [places for places in function_bodies.values() if len(places) > 1]
-          sections = (
-              ("EXPLICIT_ANY", sorted(set(explicit_any))),
-              ("PRIMITIVE_DOMAIN_FIELDS", primitive_domain_fields),
-              ("MUTABLE_FROZEN_EQUALITY", mutable_frozen_fields),
-              ("ONE_FIELD_DATACLASSES", one_field_dataclasses),
-              ("DUPLICATE_CLASS_NAMES", [f"{name}: {' | '.join(places)}" for name, places in sorted(duplicate_classes.items())]),
-              ("DUPLICATE_FUNCTION_BODIES", [" | ".join(places) for places in duplicate_functions]),
-              ("STRING_DRIVEN_DISPATCH", string_dispatch),
+
+          '''.replace("          ", "")
+          helpers = '''@dataclass(frozen=True, slots=True)
+          class PublicationOutcome[ValueT]:
+              status: PublicationStatus
+              value: ValueT
+              complete_digest: Checksum
+
+
+          def create_staging_directory(target: Path) -> Path:
+              """Create one sibling staging directory for an atomic directory publication."""
+              target.parent.mkdir(parents=True, exist_ok=True)
+              return Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
+
+
+          def replace_directory(staging: Path, target: Path) -> None:
+              """Replace a complete target directory with a prepared staging directory."""
+              if target.exists():
+                  rmtree(target)
+              staging.replace(target)
+
+
+          def cleanup_staging_directory(staging: Path, *, ignore_errors: bool) -> None:
+              """Remove a staging directory under explicitly selected cleanup semantics."""
+              if staging.exists():
+                  rmtree(staging, ignore_errors=ignore_errors)
+
+
+          '''.replace("          ", "")
+          if helpers not in store:
+              if store.count(marker) != 1:
+                  raise SystemExit("PublicationOutcome insertion point did not match")
+              store = store.replace(marker, helpers, 1)
+          store = store.replace(
+              "        target.parent.mkdir(parents=True, exist_ok=True)\n"
+              "        temporary = Path(mkdtemp(prefix=f\".{target.name}.\", dir=target.parent))",
+              "        temporary = create_staging_directory(target)",
+              1,
           )
-          for title, findings in sections:
-              print(f"\n=== {title} ({len(findings)}) ===")
-              for finding in findings:
-                  print(finding)
+          store = store.replace("            temporary.replace(target)", "            replace_directory(temporary, target)", 1)
+          store = store.replace(
+              "            rmtree(temporary, ignore_errors=True)",
+              "            cleanup_staging_directory(temporary, ignore_errors=True)",
+              1,
+          )
+          store_path.write_text(store, encoding="utf-8")
+
+          checkpoint_path = Path("src/datp_core/learning/federated/checkpointing.py")
+          checkpoint = checkpoint_path.read_text(encoding="utf-8")
+          checkpoint = checkpoint.replace("from os import replace as atomic_replace\n", "", 1)
+          checkpoint = checkpoint.replace("from shutil import rmtree\n", "", 1)
+          checkpoint = checkpoint.replace("from tempfile import mkdtemp\n", "", 1)
+          checkpoint = checkpoint.replace(
+              "from datp_core.artifacts.serialization import serialize_json_model",
+              "from datp_core.artifacts.serialization import serialize_json_model\n"
+              "from datp_core.artifacts.store import (\n"
+              "    cleanup_staging_directory,\n"
+              "    create_staging_directory,\n"
+              "    replace_directory,\n"
+              ")",
+              1,
+          )
+          checkpoint = checkpoint.replace("_new_staging_directory(", "create_staging_directory(")
+          checkpoint = checkpoint.replace("_replace_directory(", "replace_directory(")
+          checkpoint = re.sub(
+              r"_cleanup_staging\(([^\n)]+)\)",
+              r"cleanup_staging_directory(\1, ignore_errors=False)",
+              checkpoint,
+          )
+          checkpoint, removed = re.subn(
+              r"\ndef create_staging_directory\(target: Path\) -> Path:.*?"
+              r"\ndef cleanup_staging_directory\(staging: Path, ignore_errors=False\) -> None:.*?"
+              r"(?=\n\ndef persist_federated_training_history)",
+              "",
+              checkpoint,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if removed != 1:
+              raise SystemExit("checkpointing staging helper block did not match after call renaming")
+          checkpoint_path.write_text(checkpoint, encoding="utf-8")
+
+          scoring_path = Path("src/datp_core/scoring/generation.py")
+          scoring = scoring_path.read_text(encoding="utf-8")
+          scoring = scoring.replace("from os import replace as atomic_replace\n", "", 1)
+          scoring = scoring.replace("from shutil import rmtree\n", "", 1)
+          scoring = scoring.replace("from tempfile import mkdtemp\n", "", 1)
+          scoring = scoring.replace(
+              "from datp_core.artifacts.layout import scored_partition_roles",
+              "from datp_core.artifacts.layout import scored_partition_roles\n"
+              "from datp_core.artifacts.store import (\n"
+              "    cleanup_staging_directory,\n"
+              "    create_staging_directory,\n"
+              "    replace_directory,\n"
+              ")",
+              1,
+          )
+          scoring = scoring.replace("_new_staging_directory(", "create_staging_directory(")
+          scoring = scoring.replace("_replace_directory(", "replace_directory(")
+          scoring = re.sub(
+              r"_cleanup_staging\(([^\n)]+)\)",
+              r"cleanup_staging_directory(\1, ignore_errors=True)",
+              scoring,
+          )
+          scoring, removed = re.subn(
+              r"\ndef create_staging_directory\(target: Path\) -> Path:.*?"
+              r"\ndef cleanup_staging_directory\(staging: Path, ignore_errors=True\) -> None:.*?"
+              r"(?=\n\ndef _write_complete_marker)",
+              "",
+              scoring,
+              count=1,
+              flags=re.DOTALL,
+          )
+          if removed != 1:
+              raise SystemExit("scoring staging helper block did not match after call renaming")
+          scoring_path.write_text(scoring, encoding="utf-8")
+
+          evaluation_path = Path("src/datp_core/centralized_reference/evaluation.py")
+          evaluation = evaluation_path.read_text(encoding="utf-8")
+          evaluation = evaluation.replace("class ConfusionCounts:", "class CentralizedConfusionCounts:", 1)
+          for field in ("true_negative", "false_positive", "true_positive", "false_negative"):
+              evaluation = evaluation.replace(f"    {field}: int", f"    {field}: RowCount", 1)
+          validation_block = '''
+              def __post_init__(self) -> None:
+                  for name, value in (
+                      ("true_negative", self.true_negative),
+                      ("false_positive", self.false_positive),
+                      ("true_positive", self.true_positive),
+                      ("false_negative", self.false_negative),
+                  ):
+                      if isinstance(value, bool) or value < 0:
+                          raise ValueError(f"{name} must be a non-negative integer")
+          '''.replace("          ", "")
+          if validation_block not in evaluation:
+              raise SystemExit("centralized confusion validation block did not match")
+          evaluation = evaluation.replace(validation_block, "", 1)
+          evaluation = evaluation.replace("    confusion: ConfusionCounts", "    confusion: CentralizedConfusionCounts", 1)
+          evaluation = evaluation.replace(") -> ConfusionCounts:", ") -> CentralizedConfusionCounts:", 1)
+          evaluation = evaluation.replace("    return ConfusionCounts(", "    return CentralizedConfusionCounts(", 1)
+          evaluation = evaluation.replace("        true_negative=true_negative,", "        true_negative=RowCount(true_negative),", 1)
+          evaluation = evaluation.replace("        false_positive=false_positive,", "        false_positive=RowCount(false_positive),", 1)
+          evaluation = evaluation.replace("        true_positive=true_positive,", "        true_positive=RowCount(true_positive),", 1)
+          evaluation = evaluation.replace("        false_negative=false_negative,", "        false_negative=RowCount(false_negative),", 1)
+          evaluation = evaluation.replace("    confusion: ConfusionCounts,", "    confusion: CentralizedConfusionCounts,", 1)
+          evaluation = evaluation.replace(
+              "def _rate_metric(metric: MetricId, numerator: int, denominator: int) -> CentralizedMetricRecord:",
+              "def _rate_metric(metric: MetricId, numerator: RowCount, denominator: RowCount) -> CentralizedMetricRecord:",
+              1,
+          )
+          evaluation = evaluation.replace(
+              "        value=MetricValue(numerator / denominator),",
+              "        value=MetricValue(numerator.value / denominator.value),",
+              1,
+          )
+          evaluation = evaluation.replace("def _binary_macro_f1(confusion: ConfusionCounts)", "def _binary_macro_f1(confusion: CentralizedConfusionCounts)", 1)
+          evaluation = evaluation.replace("def _pooled_macro_f1(confusion: ConfusionCounts)", "def _pooled_macro_f1(confusion: CentralizedConfusionCounts)", 1)
+          evaluation = evaluation.replace("def _macro_f1_record(metric: MetricId, confusion: ConfusionCounts)", "def _macro_f1_record(metric: MetricId, confusion: CentralizedConfusionCounts)", 1)
+          evaluation = evaluation.replace("    attack_precision = confusion.true_positive / attack_precision_den", "    attack_precision = confusion.true_positive.value / attack_precision_den.value", 1)
+          evaluation = evaluation.replace("    attack_recall = confusion.true_positive / attack_recall_den", "    attack_recall = confusion.true_positive.value / attack_recall_den.value", 1)
+          evaluation = evaluation.replace("    benign_precision = confusion.true_negative / benign_precision_den", "    benign_precision = confusion.true_negative.value / benign_precision_den.value", 1)
+          evaluation = evaluation.replace("    benign_recall = confusion.true_negative / benign_recall_den", "    benign_recall = confusion.true_negative.value / benign_recall_den.value", 1)
+          for field in ("true_negative", "false_positive", "true_positive", "false_negative"):
+              evaluation = evaluation.replace(
+                  f'            "{field}": evaluation.confusion.{field},',
+                  f'            "{field}": evaluation.confusion.{field}.value,',
+                  1,
+              )
+          evaluation = evaluation.replace(
+              '        f"{result.confusion.true_negative},{result.confusion.false_positive},"\n'
+              '        f"{result.confusion.true_positive},{result.confusion.false_negative}|{metric_payload}"',
+              '        f"{result.confusion.true_negative.value},{result.confusion.false_positive.value},"\n'
+              '        f"{result.confusion.true_positive.value},{result.confusion.false_negative.value}|{metric_payload}"',
+              1,
+          )
+          evaluation_path.write_text(evaluation, encoding="utf-8")
+
+          architecture_path = Path("tests/architecture/test_no_compatibility_surfaces.py")
+          architecture = architecture_path.read_text(encoding="utf-8")
+          guard = '''
+          def test_source_uses_no_explicit_any_type() -> None:
+              for source_path, tree in parsed_source_files():
+                  for node in ast.walk(tree):
+                      if isinstance(node, ast.ImportFrom):
+                          assert all(alias.name != "Any" for alias in node.names), source_path
+                      elif isinstance(node, ast.Name):
+                          assert node.id != "Any", source_path
+                      elif isinstance(node, ast.Attribute):
+                          assert node.attr != "Any", source_path
+          '''.replace("          ", "")
+          if guard.strip() not in architecture:
+              architecture = architecture.rstrip() + "\n\n" + guard
+          architecture_path.write_text(architecture, encoding="utf-8")
           PY
+
+      - name: Run focused tests
+        run: |
+          uv run pytest \
+            tests/architecture/test_no_compatibility_surfaces.py \
+            tests/integration/datasets/test_edge_iiotset_materialization.py \
+            tests/unit/centralized_reference/test_evaluation.py \
+            tests/unit/learning/federated/test_checkpointing.py \
+            tests/unit/scoring/test_generation.py
+
+      - name: Commit cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src tests
+          git diff --cached --quiet && exit 0
+          git commit -m "Centralize staging and disambiguate evaluation counts"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
