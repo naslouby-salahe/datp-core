@@ -2,7 +2,9 @@ from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from sklearn.preprocessing import StandardScaler
 
+from datp_core.domain.contracts import ClientCollection, ClientOwned
 from datp_core.domain.enums import (
     PartitionRole,
     PreprocessingFitScope,
@@ -23,9 +25,7 @@ from datp_core.preprocessing.models import (
     SCIENTIFIC_CENTRALIZED_PREPROCESSING_METHOD,
     SCIENTIFIC_FEDERATED_POOLED_MIN_MAX_METHOD,
     SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD,
-    ClientFittedEstimator,
-    ClientLocalFittedEstimators,
-    FederatedFittedStatePublishSpec,
+    FittedStatePublishSpec,
     PartitionTransformationEvidence,
     PreprocessingProtocol,
     PreprocessingValidationReport,
@@ -96,35 +96,28 @@ def test_stable_row_id_sequence_rejects_empty_and_duplicates() -> None:
         StableRowIdSequence((StableRowId("r1"), StableRowId("r1")))
 
 
-def test_client_local_fitted_estimators_rejects_duplicate_clients() -> None:
-    from sklearn.preprocessing import StandardScaler
-
-    dummy_estimator = StandardScaler()
-    client_a = ClientPathToken("client_a")
-    estimators = ClientLocalFittedEstimators(estimators=(ClientFittedEstimator(client_a, dummy_estimator),))
-    assert estimators.require(client_a) is dummy_estimator
-    with pytest.raises(ValueError, match="cannot contain duplicate client identities"):
-        ClientLocalFittedEstimators(
-            estimators=(
-                ClientFittedEstimator(client_a, dummy_estimator),
-                ClientFittedEstimator(client_a, dummy_estimator),
-            )
-        )
+def test_client_collection_rejects_duplicate_clients() -> None:
+    estimator = StandardScaler()
+    client = ClientPathToken("client_a")
+    estimators = ClientCollection((ClientOwned(client, estimator),))
+    assert estimators.require(client) is estimator
+    with pytest.raises(ValueError, match="duplicate owners"):
+        ClientCollection((ClientOwned(client, estimator), ClientOwned(client, estimator)))
 
 
-def test_federated_fitted_state_publish_spec_requires_client_identity() -> None:
+def test_fitted_state_publish_spec_has_one_authoritative_owner() -> None:
     protocol = build_preprocessing_protocol(
         SCIENTIFIC_FEDERATED_PREPROCESSING_METHOD,
         FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
     )
-    spec = FederatedFittedStatePublishSpec(
+    spec = FittedStatePublishSpec(
         protocol=protocol,
         estimator_path=Path("state.skops"),
         fit_row_count=RowCount(10),
-        client_identity=ClientPathToken("c1"),
+        owner=ClientPathToken("c1"),
     )
 
-    assert spec.client_identity == ClientPathToken("c1")
+    assert spec.owner == ClientPathToken("c1")
 
 
 def test_validation_report_rejects_mismatched_counts_and_duplicate_roles() -> None:
