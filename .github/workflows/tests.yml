@@ -1,4 +1,4 @@
-name: Validate centralized confusion cleanup
+name: Validate typed conformal ranks
 
 "on": [push, pull_request]
 
@@ -24,145 +24,236 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-groups --all-extras --frozen
 
-      - name: Apply centralized evaluation cleanup
+      - name: Apply conformal rank typing
         run: |
           python - <<'PY'
           from pathlib import Path
-          from textwrap import dedent
           import re
 
-          path = Path("src/datp_core/centralized_reference/evaluation.py")
-          text = path.read_text(encoding="utf-8")
-          text = text.replace("ConfusionCounts", "CentralizedConfusionCounts")
-          class_block = dedent('''
-              @dataclass(frozen=True, slots=True)
-              class CentralizedConfusionCounts:
-                  true_negative: RowCount
-                  false_positive: RowCount
-                  true_positive: RowCount
-                  false_negative: RowCount
+          def replace_if_needed(path: str, old: str, new: str) -> None:
+              file = Path(path)
+              text = file.read_text(encoding="utf-8")
+              if new in text and old not in text:
+                  return
+              if text.count(old) != 1:
+                  raise SystemExit(f"{path}: expected one occurrence, found {text.count(old)}: {old!r}")
+              file.write_text(text.replace(old, new, 1), encoding="utf-8")
 
-                  def __post_init__(self) -> None:
-                      for name, value in (
-                          ("true_negative", self.true_negative),
-                          ("false_positive", self.false_positive),
-                          ("true_positive", self.true_positive),
-                          ("false_negative", self.false_negative),
-                      ):
-                          if not isinstance(value, RowCount):
-                              raise TypeError(f"{name} must be a RowCount")
-          ''').lstrip()
-          text, count = re.subn(
-              r"@dataclass\(frozen=True, slots=True\)\nclass CentralizedConfusionCounts:.*?"
-              r"(?=\n\n@dataclass\(frozen=True, slots=True\)\nclass CentralizedMetricRecord:)",
-              class_block.rstrip(),
-              text,
-              count=1,
-              flags=re.DOTALL,
+          replace_if_needed(
+              "src/datp_core/domain/values.py",
+              '''class ReplicateIndex(NonNegativeIntegerValue):
+                  validation_name: ClassVar[str] = "replicate index"
+
+
+              class ClusterIndex'''.replace("              ", ""),
+              '''class ReplicateIndex(NonNegativeIntegerValue):
+                  validation_name: ClassVar[str] = "replicate index"
+
+
+              class ConformalRankIndex(PositiveIntegerValue):
+                  validation_name: ClassVar[str] = "conformal rank index"
+
+
+              class ClusterIndex'''.replace("              ", ""),
           )
-          if count != 1:
-              raise SystemExit(f"centralized confusion class replacements: {count}")
-          text = text.replace(
-              "        if self.evaluation_row_count < 0:\n"
-              "            raise ValueError(\"evaluation row count must be non-negative\")\n",
-              "",
+
+          quantiles_path = Path("src/datp_core/thresholding/quantiles.py")
+          quantiles = quantiles_path.read_text(encoding="utf-8")
+          if "    ConformalRankIndex,\n" not in quantiles:
+              quantiles = quantiles.replace("    Checksum,\n", "    Checksum,\n    ConformalRankIndex,\n", 1)
+          quantiles = quantiles.replace(
+              "def conformal_rank_index(calibration_count: RowCount, coverage: CoverageTarget) -> int:",
+              "def conformal_rank_index(calibration_count: RowCount, coverage: CoverageTarget) -> ConformalRankIndex:",
               1,
           )
-          text = text.replace("    return CentralizedConfusionCounts(\n        true_negative=true_negative,", "    return CentralizedConfusionCounts(\n        true_negative=RowCount(true_negative),", 1)
-          text = text.replace("        false_positive=false_positive,", "        false_positive=RowCount(false_positive),", 1)
-          text = text.replace("        true_positive=true_positive,", "        true_positive=RowCount(true_positive),", 1)
-          text = text.replace("        false_negative=false_negative,", "        false_negative=RowCount(false_negative),", 1)
-          text = text.replace(
-              "def _rate_metric(metric: MetricId, numerator: int, denominator: int) -> CentralizedMetricRecord:",
-              "def _rate_metric(metric: MetricId, numerator: RowCount, denominator: RowCount) -> CentralizedMetricRecord:",
+          quantiles = quantiles.replace(
+              "    return ceil((n + 1) * coverage.value)",
+              "    return ConformalRankIndex(ceil((n + 1) * coverage.value))",
               1,
           )
-          text = text.replace("value=MetricValue(numerator / denominator)", "value=MetricValue(numerator.value / denominator.value)", 1)
-          text = text.replace("confusion.true_positive / attack_precision_den", "confusion.true_positive.value / attack_precision_den.value", 1)
-          text = text.replace("confusion.true_positive / attack_recall_den", "confusion.true_positive.value / attack_recall_den.value", 1)
-          text = text.replace("confusion.true_negative / benign_precision_den", "confusion.true_negative.value / benign_precision_den.value", 1)
-          text = text.replace("confusion.true_negative / benign_recall_den", "confusion.true_negative.value / benign_recall_den.value", 1)
-          for field in ("true_negative", "false_positive", "true_positive", "false_negative"):
-              text = text.replace(
-                  f'            "{field}": evaluation.confusion.{field},',
-                  f'            "{field}": evaluation.confusion.{field}.value,',
-                  1,
-              )
-              text = text.replace(f"result.confusion.{field}", f"result.confusion.{field}.value", 1)
-          path.write_text(text, encoding="utf-8")
-
-          tests_path = Path("tests/unit/centralized_reference/test_evaluation.py")
-          tests = tests_path.read_text(encoding="utf-8")
-          anchor = "from datp_core.centralized_reference.evaluation import (\n    evaluate_centralized_reference,"
-          replacement = (
-              "from datp_core.centralized_reference.evaluation import (\n"
-              "    CentralizedConfusionCounts,\n"
-              "    evaluate_centralized_reference,"
+          quantiles = quantiles.replace(
+              ") -> tuple[ThresholdValue, int, Quantile, RowCount]:",
+              ") -> tuple[ThresholdValue, ConformalRankIndex, Quantile, RowCount]:",
+              1,
           )
-          if tests.count(anchor) != 1:
-              raise SystemExit(f"centralized evaluation import anchor count: {tests.count(anchor)}")
-          tests = tests.replace(anchor, replacement, 1)
-          regression = dedent('''
-              def test_centralized_confusion_counts_require_row_count_values() -> None:
-                  confusion = CentralizedConfusionCounts(
-                      true_negative=RowCount(10),
-                      false_positive=RowCount(2),
-                      true_positive=RowCount(7),
-                      false_negative=RowCount(1),
+          quantiles = quantiles.replace("    if rank_index > calibration_count:", "    if rank_index.value > calibration_count:", 1)
+          quantiles = quantiles.replace("    selected = float(ordered[rank_index - 1])", "    selected = float(ordered[rank_index.value - 1])", 1)
+          quantiles = quantiles.replace(
+              "    effective_quantile = Quantile(rank_index / calibration_count)",
+              "    effective_quantile = Quantile(rank_index.value / calibration_count)",
+              1,
+          )
+          quantiles_path.write_text(quantiles, encoding="utf-8")
+
+          conformal_path = Path("src/datp_core/thresholding/conformal.py")
+          conformal = conformal_path.read_text(encoding="utf-8")
+          conformal = conformal.replace(
+              "        if rank_index > calibration_count_int:",
+              "        if rank_index.value > calibration_count_int:",
+              1,
+          )
+          conformal_path.write_text(conformal, encoding="utf-8")
+
+          models_path = Path("src/datp_core/thresholding/models.py")
+          models = models_path.read_text(encoding="utf-8")
+          if "    ConformalRankIndex,\n" not in models:
+              models = models.replace("    ClusterIndex,\n", "    ClusterIndex,\n    ConformalRankIndex,\n", 1)
+          models = models.replace("    rank_index: int", "    rank_index: ConformalRankIndex", 1)
+          old_validation = '''        require_contract(
+                      1 <= self.rank_index <= self.calibration_count.value,
+                      "conformal rank index must fall within the calibration sample",
+                      ContractSubject.THRESHOLD,
                   )
-                  assert sum(
-                      (
-                          confusion.true_negative,
-                          confusion.false_positive,
-                          confusion.true_positive,
-                          confusion.false_negative,
-                      )
-                  ) == RowCount(20)
-                  with pytest.raises(TypeError, match="RowCount"):
-                      CentralizedConfusionCounts(  # type: ignore[arg-type]
-                          true_negative=10,
-                          false_positive=RowCount(2),
-                          true_positive=RowCount(7),
-                          false_negative=RowCount(1),
-                      )
-          ''').lstrip()
-          marker = "\ndef test_pooled_evaluation_metrics_and_confusion(tmp_path: Path) -> None:\n"
-          if tests.count(marker) != 1:
-              raise SystemExit(f"centralized test marker count: {tests.count(marker)}")
-          tests = tests.replace(marker, "\n" + regression.rstrip() + "\n\n" + marker.lstrip(), 1)
-          tests_path.write_text(tests, encoding="utf-8")
+          '''.replace("          ", "")
+          new_validation = '''        require_contract(
+                      isinstance(self.rank_index, ConformalRankIndex),
+                      "conformal rank index must use the typed rank contract",
+                      ContractSubject.THRESHOLD,
+                  )
+                  require_contract(
+                      self.rank_index.value <= self.calibration_count.value,
+                      "conformal rank index must fall within the calibration sample",
+                      ContractSubject.THRESHOLD,
+                  )
+          '''.replace("          ", "")
+          if old_validation in models:
+              models = models.replace(old_validation, new_validation, 1)
+          elif new_validation not in models:
+              raise SystemExit("ConformalAssignment validation block did not match")
+          models = models.replace(
+              "        expected_quantile = self.rank_index / self.calibration_count.value",
+              "        expected_quantile = self.rank_index.value / self.calibration_count.value",
+              1,
+          )
+          models_path.write_text(models, encoding="utf-8")
 
-          architecture_path = Path("tests/architecture/test_no_compatibility_surfaces.py")
-          architecture = architecture_path.read_text(encoding="utf-8")
-          guard = dedent('''
-              def test_source_uses_no_explicit_any_type() -> None:
-                  for source_path, tree in parsed_source_files():
-                      for node in ast.walk(tree):
-                          if isinstance(node, ast.ImportFrom):
-                              assert all(alias.name != "Any" for alias in node.names), source_path
-                          elif isinstance(node, ast.Name):
-                              assert node.id != "Any", source_path
-                          elif isinstance(node, ast.Attribute):
-                              assert node.attr != "Any", source_path
-          ''').lstrip()
-          if guard.strip() not in architecture:
-              architecture = architecture.rstrip() + "\n\n" + guard
-          architecture_path.write_text(architecture, encoding="utf-8")
+          coverage_path = Path("src/datp_core/evaluation/conformal_coverage.py")
+          coverage = coverage_path.read_text(encoding="utf-8")
+          old_import = "from datp_core.domain.values import CoverageTarget, Quantile, RowCount, Seed, ThresholdValue, checksum_file"
+          new_import = (
+              "from datp_core.domain.values import (\n"
+              "    ConformalRankIndex,\n"
+              "    CoverageTarget,\n"
+              "    Quantile,\n"
+              "    RowCount,\n"
+              "    Seed,\n"
+              "    ThresholdValue,\n"
+              "    checksum_file,\n"
+              ")"
+          )
+          if old_import in coverage:
+              coverage = coverage.replace(old_import, new_import, 1)
+          coverage = coverage.replace("    finite_sample_rank_index: int", "    finite_sample_rank_index: ConformalRankIndex", 1)
+          coverage = coverage.replace(
+              "        if self.calibration_count.value < 1 or self.finite_sample_rank_index < 1:\n"
+              "            raise ScientificContractError(\"conformal diagnostics require a positive calibration count and rank\")",
+              "        if self.calibration_count.value < 1:\n"
+              "            raise ScientificContractError(\"conformal diagnostics require a positive calibration count\")\n"
+              "        if not isinstance(self.finite_sample_rank_index, ConformalRankIndex):\n"
+              "            raise ScientificContractError(\"conformal diagnostics require a typed finite-sample rank\")",
+              1,
+          )
+          coverage_path.write_text(coverage, encoding="utf-8")
+
+          test_quantiles_path = Path("tests/unit/thresholding/test_quantiles.py")
+          test_quantiles = test_quantiles_path.read_text(encoding="utf-8")
+          test_quantiles = test_quantiles.replace(
+              "from datp_core.domain.values import CoverageTarget, Quantile, RowCount, SummaryCoefficient, ThresholdValue",
+              "from datp_core.domain.values import (\n"
+              "    ConformalRankIndex,\n"
+              "    CoverageTarget,\n"
+              "    Quantile,\n"
+              "    RowCount,\n"
+              "    SummaryCoefficient,\n"
+              "    ThresholdValue,\n"
+              ")",
+              1,
+          )
+          test_quantiles = test_quantiles.replace(
+              "assert conformal_rank_index(RowCount(99), coverage) == math.ceil(100 * 0.95)",
+              "assert conformal_rank_index(RowCount(99), coverage) == ConformalRankIndex(math.ceil(100 * 0.95))",
+              1,
+          )
+          test_quantiles = test_quantiles.replace("    assert rank_index == 96", "    assert rank_index == ConformalRankIndex(96)", 1)
+          test_quantiles_path.write_text(test_quantiles, encoding="utf-8")
+
+          test_conformal_path = Path("tests/unit/thresholding/test_conformal.py")
+          test_conformal = test_conformal_path.read_text(encoding="utf-8")
+          test_conformal = test_conformal.replace(
+              "from datp_core.domain.values import Quantile",
+              "from datp_core.domain.values import ConformalRankIndex, Quantile",
+              1,
+          )
+          test_conformal = test_conformal.replace(
+              "    assert assignment.rank_index == 96",
+              "    assert assignment.rank_index == ConformalRankIndex(96)",
+              1,
+          )
+          test_conformal_path.write_text(test_conformal, encoding="utf-8")
+
+          test_models_path = Path("tests/unit/thresholding/test_models.py")
+          test_models = test_models_path.read_text(encoding="utf-8")
+          if "    ConformalRankIndex,\n" not in test_models:
+              test_models = test_models.replace("    ClusterIndex,\n", "    ClusterIndex,\n    ConformalRankIndex,\n", 1)
+          test_models = re.sub(r"rank_index=(\d+)", r"rank_index=ConformalRankIndex(\1)", test_models)
+          raw_test = '''
+          def test_conformal_assignment_rejects_raw_rank_integer() -> None:
+              with pytest.raises(ScientificContractError, match="typed rank contract"):
+                  ConformalAssignment(
+                      client=CLIENT_A,
+                      calibration_count=RowCount(10),
+                      rank_index=9,  # type: ignore[arg-type]
+                      effective_quantile=Quantile(0.9),
+                      selected_score=ScoreValue(1.0),
+                      tie_count=RowCount(0),
+                      threshold=ThresholdValue(1.0),
+                  )
+          '''.replace("          ", "")
+          if raw_test.strip() not in test_models:
+              marker = "\ndef test_conformal_assignment_rejects_rank_index_out_of_bounds() -> None:\n"
+              if marker not in test_models:
+                  raise SystemExit("ConformalAssignment test insertion marker missing")
+              test_models = test_models.replace(marker, "\n" + raw_test + marker, 1)
+          test_models_path.write_text(test_models, encoding="utf-8")
+
+          coverage_test_path = Path("tests/unit/evaluation/test_conformal_coverage.py")
+          coverage_test = coverage_test_path.read_text(encoding="utf-8")
+          coverage_test = coverage_test.replace(
+              "from datp_core.domain.values import CoverageTarget, Quantile, RowCount, ScoreValue, Seed, ThresholdValue",
+              "from datp_core.domain.values import (\n"
+              "    ConformalRankIndex,\n"
+              "    CoverageTarget,\n"
+              "    Quantile,\n"
+              "    RowCount,\n"
+              "    ScoreValue,\n"
+              "    Seed,\n"
+              "    ThresholdValue,\n"
+              ")",
+              1,
+          )
+          coverage_test = coverage_test.replace(
+              "client, RowCount(10), 9, Quantile(0.9)",
+              "client, RowCount(10), ConformalRankIndex(9), Quantile(0.9)",
+              1,
+          )
+          coverage_test_path.write_text(coverage_test, encoding="utf-8")
           PY
 
-      - name: Run focused regression tests
+      - name: Run conformal rank tests
         run: |
-          python -m compileall -q src/datp_core/centralized_reference/evaluation.py
           uv run pytest \
-            tests/architecture/test_no_compatibility_surfaces.py \
-            tests/unit/centralized_reference/test_evaluation.py
+            tests/unit/thresholding/test_quantiles.py \
+            tests/unit/thresholding/test_conformal.py \
+            tests/unit/thresholding/test_models.py \
+            tests/unit/evaluation/test_conformal_coverage.py \
+            tests/property/test_quantile_monotonicity.py
 
-      - name: Commit cleanup
+      - name: Commit typed rank contracts
         if: github.event_name == 'push' && github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src tests
           git diff --cached --quiet && exit 0
-          git commit -m "Type centralized confusion counts"
+          git commit -m "Type finite-sample conformal rank indices"
           git push origin "HEAD:${GITHUB_REF_NAME}"
