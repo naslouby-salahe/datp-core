@@ -7,7 +7,7 @@ from datp_core.domain.enums import CommunicationEstimationMethod, MetricId
 from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import ByteCount, Seed
 from datp_core.evaluation.metric_semantics import available
-from datp_core.evaluation.models import CommunicationResult
+from datp_core.evaluation.models import AvailableMetric
 from datp_core.learning.federated.models import FederatedTrainingCoordinate
 from datp_core.populations.models import ClientIdentity
 
@@ -78,7 +78,6 @@ class CommunicationDiagnostic:
     messages: tuple[CommunicationMessageDiagnostic, ...]
     total_logical_element_count: int
     total_estimated_serialized_bytes: ByteCount
-    result: CommunicationResult
 
     def __post_init__(self) -> None:
         if not self.messages:
@@ -96,8 +95,10 @@ class CommunicationDiagnostic:
             or self.total_estimated_serialized_bytes.value != expected_bytes
         ):
             raise ScientificContractError("communication totals must equal exact message payload totals")
-        if self.result.estimated_serialized_bytes.value is None:
-            raise ScientificContractError("communication payload bytes must be available when messages exist")
+
+    @property
+    def estimated_serialized_bytes_metric(self) -> AvailableMetric:
+        return available(MetricId.COMMUNICATION_BYTES, float(self.total_estimated_serialized_bytes.value))
 
 
 def summarize_communication(
@@ -113,11 +114,5 @@ def summarize_communication(
         total_logical_element_count=sum(message.payload.logical_element_count for message in messages),
         total_estimated_serialized_bytes=ByteCount(
             sum(message.estimated_serialized_bytes.value for message in messages)
-        ),
-        result=CommunicationResult(
-            estimated_serialized_bytes=available(
-                MetricId.COMMUNICATION_BYTES,
-                float(sum(message.estimated_serialized_bytes.value for message in messages)),
-            )
         ),
     )
