@@ -13,35 +13,41 @@ from datp_core.domain.enums import (
     SplitProtocolId,
     TrustedEstimatorClassName,
 )
-from datp_core.domain.values import AbsoluteTolerance, Checksum, ClientPathToken, FeatureName, FeatureNameSequence, Seed
-from datp_core.preprocessing.federated import ClientPublishRequest, publish_client_preprocessing
+from datp_core.domain.values import (
+    AbsoluteTolerance,
+    Checksum,
+    ClientPathToken,
+    FeatureName,
+    FeatureNameSequence,
+    Seed,
+)
+from datp_core.preprocessing.federated import publish_client_preprocessing
 from datp_core.preprocessing.models import (
+    ClientPublishRequest,
     PreprocessingPartition,
-    PreprocessingPartitionSet,
+    PreprocessingPartitions,
     PreprocessingProtocol,
     PreprocessingPublishContext,
 )
 
 
-def _protocol(fit_scope=PreprocessingFitScope.CLIENT_LOCAL_TRAINING) -> PreprocessingProtocol:
-    return PreprocessingProtocol(
-        identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION,
-        fit_scope=fit_scope,
-        input_feature_names=FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
-        serialization_format=SerializationFormat.SKOPS,
-        estimator_class_name=TrustedEstimatorClassName.STANDARD_SCALER,
-        numerical_equivalence_absolute_tolerance=AbsoluteTolerance(1e-12),
-    )
-
-
-def _partitions() -> PreprocessingPartitionSet:
+def _partitions() -> PreprocessingPartitions:
     frame_train = pl.DataFrame(
-        {"stable_row_id": ["t0", "t1"], "outcome_label": ["benign", "benign"], "f0": [0.0, 1.0], "f1": [1.0, 2.0]}
+        {
+            "stable_row_id": ["t0", "t1"],
+            "outcome_label": ["benign", "benign"],
+            "f0": [0.0, 1.0],
+            "f1": [1.0, 2.0],
+        }
     )
-    frame_cal = pl.DataFrame({"stable_row_id": ["c0"], "outcome_label": ["benign"], "f0": [0.5], "f1": [1.5]})
-    frame_eval = pl.DataFrame({"stable_row_id": ["e0"], "outcome_label": ["benign"], "f0": [1.5], "f1": [2.5]})
-    return PreprocessingPartitionSet(
-        partitions=(
+    frame_cal = pl.DataFrame(
+        {"stable_row_id": ["c0"], "outcome_label": ["benign"], "f0": [0.5], "f1": [1.5]}
+    )
+    frame_eval = pl.DataFrame(
+        {"stable_row_id": ["e0"], "outcome_label": ["benign"], "f0": [1.5], "f1": [2.5]}
+    )
+    return PreprocessingPartitions(
+        (
             PreprocessingPartition(PartitionRole.TRAIN, frame_train),
             PreprocessingPartition(PartitionRole.CALIBRATION, frame_cal),
             PreprocessingPartition(PartitionRole.EVALUATION, frame_eval),
@@ -84,6 +90,7 @@ def _publish(tmp_path: Path, seed: Seed, identity: PreprocessingProtocolId) -> P
 def test_changed_seed_or_protocol_creates_distinct_asset(tmp_path: Path) -> None:
     first = _publish(tmp_path, seed=Seed(0), identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION)
     second = _publish(tmp_path, seed=Seed(1), identity=PreprocessingProtocolId.TEST_COLUMN_ORDER_PROJECTION)
+
     assert first != second
     assert first.is_file() and second.is_file()
     assert str(Seed(0).value) in first.parts
