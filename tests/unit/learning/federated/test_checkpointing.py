@@ -14,7 +14,6 @@ from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, Scient
 from datp_core.domain.values import Checksum, MetricValue, RoundNumber, Seed
 from datp_core.learning.federated.checkpointing import (
     RoundSnapshot,
-    candidate_set_digest,
     candidate_tensor_name,
     rebase_checkpoint_candidates,
     reject_centralized_checkpoint,
@@ -22,7 +21,6 @@ from datp_core.learning.federated.checkpointing import (
     select_checkpoint,
     validate_candidate_coordinates,
 )
-from datp_core.runtime.compute import resolve_cuda_device
 
 
 def _snapshots() -> tuple[RoundSnapshot, ...]:
@@ -36,7 +34,6 @@ def _snapshots() -> tuple[RoundSnapshot, ...]:
 
 def test_retain_checkpoint_candidates_persists_and_reloads(tmp_path: Path) -> None:
     coordinate = fedavg_coordinate(Seed(0))
-    device = resolve_cuda_device()
     candidates = retain_checkpoint_candidates(
         coordinate,
         _snapshots(),
@@ -46,7 +43,6 @@ def test_retain_checkpoint_candidates_persists_and_reloads(tmp_path: Path) -> No
         preprocessing_state_set_checksum=Checksum("a" * 64),
         split_manifest_checksum=Checksum("b" * 64),
         client=None,
-        device=device,
     )
     assert len(candidates) == len(CHECKPOINT.candidates)
     for candidate in candidates:
@@ -56,7 +52,6 @@ def test_retain_checkpoint_candidates_persists_and_reloads(tmp_path: Path) -> No
 
 def test_select_checkpoint_chooses_maximum_round(tmp_path: Path) -> None:
     coordinate = fedavg_coordinate(Seed(0))
-    device = resolve_cuda_device()
     candidates = retain_checkpoint_candidates(
         coordinate,
         _snapshots(),
@@ -66,7 +61,6 @@ def test_select_checkpoint_chooses_maximum_round(tmp_path: Path) -> None:
         preprocessing_state_set_checksum=Checksum("a" * 64),
         split_manifest_checksum=Checksum("b" * 64),
         client=None,
-        device=device,
     )
     decision = select_checkpoint(
         candidates,
@@ -85,7 +79,6 @@ def test_select_checkpoint_chooses_maximum_round(tmp_path: Path) -> None:
 
 def test_select_checkpoint_rejects_held_out_metrics(tmp_path: Path) -> None:
     coordinate = fedavg_coordinate(Seed(0))
-    device = resolve_cuda_device()
     candidates = retain_checkpoint_candidates(
         coordinate,
         _snapshots(),
@@ -95,7 +88,6 @@ def test_select_checkpoint_rejects_held_out_metrics(tmp_path: Path) -> None:
         preprocessing_state_set_checksum=Checksum("a" * 64),
         split_manifest_checksum=Checksum("b" * 64),
         client=None,
-        device=device,
     )
     with pytest.raises(LeakageError, match="held-out evaluation outcomes"):
         select_checkpoint(
@@ -112,7 +104,6 @@ def test_select_checkpoint_rejects_held_out_metrics(tmp_path: Path) -> None:
 
 def test_select_checkpoint_rejects_attack_labels(tmp_path: Path) -> None:
     coordinate = fedavg_coordinate(Seed(0))
-    device = resolve_cuda_device()
     candidates = retain_checkpoint_candidates(
         coordinate,
         _snapshots(),
@@ -122,7 +113,6 @@ def test_select_checkpoint_rejects_attack_labels(tmp_path: Path) -> None:
         preprocessing_state_set_checksum=Checksum("a" * 64),
         split_manifest_checksum=Checksum("b" * 64),
         client=None,
-        device=device,
     )
     with pytest.raises(LeakageError, match="attack labels"):
         select_checkpoint(
@@ -145,7 +135,7 @@ def test_retain_checkpoint_candidates_rejects_missing_declared_round(tmp_path: P
     model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
     state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
     only_one_snapshot = (RoundSnapshot(CHECKPOINT.candidates[0], state, MetricValue(0.1)),)
-    with pytest.raises(ScientificContractError, match="declared candidate rounds"):
+    with pytest.raises(ScientificContractError, match="checkpoint snapshots must equal the exact ordered protocol candidates"):
         retain_checkpoint_candidates(
             coordinate,
             only_one_snapshot,
@@ -155,13 +145,11 @@ def test_retain_checkpoint_candidates_rejects_missing_declared_round(tmp_path: P
             preprocessing_state_set_checksum=Checksum("a" * 64),
             split_manifest_checksum=Checksum("b" * 64),
             client=None,
-            device=device,
-        )
+            )
 
 
 def test_select_checkpoint_rejects_missing_tensor_file(tmp_path: Path) -> None:
     coordinate = fedavg_coordinate(Seed(0))
-    device = resolve_cuda_device()
     candidates = retain_checkpoint_candidates(
         coordinate,
         _snapshots(),
@@ -171,10 +159,9 @@ def test_select_checkpoint_rejects_missing_tensor_file(tmp_path: Path) -> None:
         preprocessing_state_set_checksum=Checksum("a" * 64),
         split_manifest_checksum=Checksum("b" * 64),
         client=None,
-        device=device,
     )
     candidates[0].tensor_path.unlink()
-    with pytest.raises(ArtifactIntegrityError, match="tensor file is missing"):
+    with pytest.raises(ArtifactIntegrityError, match="checkpoint candidate file is missing"):
         select_checkpoint(
             candidates,
             CHECKPOINT,
@@ -188,7 +175,6 @@ def test_select_checkpoint_rejects_missing_tensor_file(tmp_path: Path) -> None:
 
 def test_validate_candidate_coordinates_rejects_mismatched_client(tmp_path: Path) -> None:
     coordinate = fedavg_coordinate(Seed(0))
-    device = resolve_cuda_device()
     candidates = retain_checkpoint_candidates(
         coordinate,
         _snapshots(),
@@ -198,9 +184,8 @@ def test_validate_candidate_coordinates_rejects_mismatched_client(tmp_path: Path
         preprocessing_state_set_checksum=Checksum("a" * 64),
         split_manifest_checksum=Checksum("b" * 64),
         client=None,
-        device=device,
     )
-    with pytest.raises(ScientificContractError, match="client identity mismatch"):
+    with pytest.raises(ScientificContractError, match="checkpoint candidate client mismatch"):
         validate_candidate_coordinates(
             candidates,
             coordinate,
@@ -218,28 +203,9 @@ def test_candidate_tensor_name_distinguishes_personalized_clients() -> None:
     assert "client_a" in personalized_name
 
 
-def test_candidate_set_digest_is_deterministic(tmp_path: Path) -> None:
-    coordinate = fedavg_coordinate(Seed(0))
-    device = resolve_cuda_device()
-    candidates = retain_checkpoint_candidates(
-        coordinate,
-        _snapshots(),
-        checkpoint_protocol=CHECKPOINT,
-        autoencoder=AUTOENCODER,
-        output_directory=tmp_path,
-        preprocessing_state_set_checksum=Checksum("a" * 64),
-        split_manifest_checksum=Checksum("b" * 64),
-        client=None,
-        device=device,
-    )
-    first = candidate_set_digest(candidates)
-    second = candidate_set_digest(candidates)
-    assert first == second
-
 
 def test_rebase_checkpoint_candidates_rejects_target_checksum_mismatch(tmp_path: Path) -> None:
     coordinate = fedavg_coordinate(Seed(0))
-    device = resolve_cuda_device()
     dir_a = tmp_path / "a"
     dir_b = tmp_path / "b"
     dir_a.mkdir()
@@ -254,7 +220,6 @@ def test_rebase_checkpoint_candidates_rejects_target_checksum_mismatch(tmp_path:
         preprocessing_state_set_checksum=Checksum("a" * 64),
         split_manifest_checksum=Checksum("b" * 64),
         client=None,
-        device=device,
     )
 
     # Create dummy files in dir_b with wrong content
@@ -262,8 +227,8 @@ def test_rebase_checkpoint_candidates_rejects_target_checksum_mismatch(tmp_path:
         target_path = dir_b / candidate_tensor_name(c.round_number)
         target_path.write_bytes(b"corrupted")
 
-    with pytest.raises(ArtifactIntegrityError, match="checksum mismatch"):
-        rebase_checkpoint_candidates(candidates, dir_b, client=None)
+    with pytest.raises(ArtifactIntegrityError, match="rebased checkpoint checksum does not match the original candidate"):
+        rebase_checkpoint_candidates(candidates, dir_b)
 
 
 def test_reject_centralized_checkpoint_raises_leakage_error() -> None:

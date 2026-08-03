@@ -1,9 +1,4 @@
-"""Genuine Ditto: one global FedAvg-trained model plus persistent per-client personalized models.
-
-Personalized states are regularized toward the global state received at the start of each
-round and are never aggregated into the global model. Global and personalized checkpoints
-and scores are structurally distinct coordinates.
-"""
+"""Ditto training with one global model and persistent client-local personalized models."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,7 +21,7 @@ from datp_core.learning.autoencoder import (
     clone_autoencoder_state,
     clone_state,
 )
-from datp_core.learning.federated.checkpointing import retain_checkpoint_candidates
+from datp_core.learning.federated.checkpointing import publish_ditto_training
 from datp_core.learning.federated.models import (
     ClientTrainingInput,
     ClientTrainingResult,
@@ -37,12 +32,12 @@ from datp_core.learning.federated.models import (
     FederatedTrainingHistory,
     FederatedTrainingResult,
     GlobalModelStateReference,
-    PersonalizedCandidateSet,
     PersonalizedModelStateReference,
+    PersonalizedSnapshotSet,
+    PreparedClientProvenance,
     RoundSnapshot,
 )
 from datp_core.learning.federated.training import (
-    PreparedFederatedClientData,
     ProximalTerm,
     TrainingStream,
     aggregate_client_updates,
@@ -79,194 +74,200 @@ class DittoTrainingRequest:
     personalized_output_directory: Path
 
 
+def _validate_request(request: DittoTrainingRequest) -> None:
+    if request.global_coordinate.model is not TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
+        raise ScientificContractError(
+            "Ditto requires the DITTO_GLOBAL_AUTOENCODER global coordinate",
+            subject=request.global_coordinate.model,
+        )
+    if request.personalized_coordinate.model is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+        raise ScientificContractError(
+            "Ditto requires the DITTO_PERSONALIZED_AUTOENCODER personalized coordinate",
+            subject=request.personalized_coordinate.model,
+        )
+    if request.training_protocol.kind is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+        raise ScientificContractError(
+            "Ditto protocol kind must be DITTO_PERSONALIZED_AUTOENCODER",
+            subject=request.training_protocol.kind,
+        )
+    if not request.global_coordinate.matches_ditto_peer(request.personalized_coordinate):
+        raise ScientificContractError(
+            "Ditto global and personalized coordinates must share one experiment identity",
+            subject=ContractSubject.COORDINATE,
+        )
+    if request.global_coordinate.model_coefficient != request.training_protocol.regularization:
+        raise ScientificContractError(
+            "Ditto coordinate regularization must match the protocol",
+            subject=ContractSubject.COORDINATE,
+        )
+    if request.training_protocol.local_epochs.value != 1:
+        raise ScientificContractError(
+            "Ditto requires exactly one local epoch",
+            subject=ContractSubject.TRAINING,
+        )
+    validate_common_request(
+        request.global_coordinate,
+        request.training_seed,
+        request.clients,
+        request.population_client_count,
+    )
+
+
 def train_ditto(request: DittoTrainingRequest) -> DittoTrainingOutcome:
     _validate_request(request)
     configure_deterministic_execution(request.training_seed)
     device = resolve_cuda_device()
 
-    ordered_clients = tuple(sorted(request.clients, key=lambda item: item.client))
-    prepared_clients: list[PreparedFederatedClientData] = [
-        prepare_federated_client_data(client_input, request.autoencoder) for client_input in ordered_clients
-    ]
+    ordered_inputs = tuple(sorted(request.clients, key=lambda item: item.client))
+    prepared = tuple(prepare_federated_client_data(item, request.autoencoder) for item in ordered_inputs)
+    provenance = tuple(
+        PreparedClientProvenance(
+            client=item.client,
+            preprocessing_checksum=item.preprocessing_checksum,
+        )
+        for item in prepared
+    )
+    preprocessing_checksum = preprocessing_state_set_checksum(provenance)
 
-    regularization = request.training_protocol.regularization
-    global_model = build_reconstruction_autoencoder(request.autoencoder, initialization_seed=request.training_seed)
-    global_state = clone_autoencoder_state(global_model)
-    global_model.to(device)
-    del global_model
-
+    initial_model = build_reconstruction_autoencoder(
+        request.autoencoder,
+        initialization_seed=request.training_seed,
+    )
+    global_state = clone_autoencoder_state(initial_model)
     personalized_states: dict[ClientIdentity, AutoencoderState] = {
-        client_data.client: clone_state(global_state) for client_data in prepared_clients
+        item.client: clone_state(global_state) for item in prepared
     }
 
-    candidate_rounds: set[RoundNumber] = set(request.checkpoint_protocol.candidates)
+    candidate_rounds = frozenset(request.checkpoint_protocol.candidates)
     rounds: list[FederatedRoundResult] = []
     global_snapshots: list[RoundSnapshot] = []
-    personalized_snapshots: dict[ClientIdentity, list[RoundSnapshot]] = {
-        client_data.client: [] for client_data in prepared_clients
-    }
+    personalized_snapshots: dict[ClientIdentity, list[RoundSnapshot]] = {item.client: [] for item in prepared}
 
-    for round_index in range(1, request.checkpoint_protocol.maximum_round.value + 1):
-        round_number = RoundNumber(round_index)
-        reference_state = {name: tensor.to(device) for name, tensor in global_state.items()}
-        client_updates: list[ClientUpdate] = []
-        client_results: list[ClientTrainingResult] = []
+    for round_value in range(1, request.checkpoint_protocol.maximum_round.value + 1):
+        round_number = RoundNumber(round_value)
+        global_updates: list[ClientUpdate] = []
         personalized_references: list[PersonalizedModelStateReference] = []
 
-        for client_index, client_data in enumerate(prepared_clients):
-            client = client_data.client
-            global_seed = derive_client_stream_seed(
-                request.training_seed, round_number, client_index, TrainingStream.GLOBAL_CLIENT_UPDATE
-            )
-            personalized_seed = derive_client_stream_seed(
-                request.training_seed, round_number, client_index, TrainingStream.PERSONALIZED_CLIENT_UPDATE
-            )
-
-            update, result = train_client_update(
+        for client_data in prepared:
+            global_update = train_client_update(
                 client_data=client_data,
-                initial_state=reference_state,
+                initial_state=global_state,
                 autoencoder=request.autoencoder,
                 optimizer_protocol=request.training_protocol.optimizer,
                 learning_rate=request.learning_rate,
                 batch_size=request.batch_size,
-                seed=global_seed,
+                seed=derive_client_stream_seed(
+                    request.training_seed,
+                    round_number,
+                    client_data.client,
+                    TrainingStream.GLOBAL_CLIENT_UPDATE,
+                ),
                 device=device,
             )
-            client_updates.append(update)
-            client_results.append(result)
-
-            personalized_state = clone_state(personalized_states[client])
-            personalized_update, _ = train_client_update(
+            personalized_update = train_client_update(
                 client_data=client_data,
-                initial_state=personalized_state,
+                initial_state=personalized_states[client_data.client],
                 autoencoder=request.autoencoder,
                 optimizer_protocol=request.training_protocol.optimizer,
                 learning_rate=request.learning_rate,
                 batch_size=request.batch_size,
-                seed=personalized_seed,
+                seed=derive_client_stream_seed(
+                    request.training_seed,
+                    round_number,
+                    client_data.client,
+                    TrainingStream.PERSONALIZED_CLIENT_UPDATE,
+                ),
                 device=device,
-                proximal_term=ProximalTerm(reference_state=reference_state, coefficient=regularization),
+                proximal_term=ProximalTerm(
+                    reference_state=global_state,
+                    coefficient=request.training_protocol.regularization,
+                ),
             )
-            personalized_states[client] = personalized_update.state_dict
-            if round_number in candidate_rounds:
-                personalized_snapshots[client].append(
-                    create_round_snapshot(round_number, personalized_update.state_dict, personalized_update.local_loss)
+            if personalized_update.sample_count != global_update.sample_count:
+                raise ScientificContractError(
+                    "Ditto global and personalized updates must process the same client rows",
+                    subject=ContractSubject.ROWS,
                 )
-            personalized_state_checksum, _ = serialize_and_checksum_state_dict(personalized_update.state_dict)
+
+            global_updates.append(global_update)
+            personalized_states[client_data.client] = personalized_update.state_dict
+            personalized_checksum, _ = serialize_and_checksum_state_dict(personalized_update.state_dict)
             personalized_references.append(
                 PersonalizedModelStateReference(
                     coordinate=request.personalized_coordinate,
-                    client=client,
+                    client=client_data.client,
                     round_number=round_number,
                     local_loss=personalized_update.local_loss,
-                    state_checksum=personalized_state_checksum,
+                    state_checksum=personalized_checksum,
                     tensor_path=None,
                 )
             )
+            if round_number in candidate_rounds:
+                personalized_snapshots[client_data.client].append(
+                    create_round_snapshot(
+                        round_number,
+                        personalized_update.state_dict,
+                        personalized_update.local_loss,
+                    )
+                )
 
-        aggregated = aggregate_client_updates(client_updates)
-        global_state = aggregated
-
-        aggregate_loss = compute_weighted_aggregate_loss(client_updates)
-        global_state_checksum, single_state_bytes = serialize_and_checksum_state_dict(aggregated)
-        communication = create_communication_record(
-            round_number, single_state_bytes, len(prepared_clients), len(prepared_clients)
-        )
-
-        global_reference = GlobalModelStateReference(
-            coordinate=request.global_coordinate,
-            round_number=round_number,
-            state_checksum=global_state_checksum,
-            tensor_path=None,
-        )
+        aggregated = aggregate_client_updates(global_updates)
+        aggregate_loss = compute_weighted_aggregate_loss(global_updates)
+        global_checksum, state_size = serialize_and_checksum_state_dict(aggregated)
         rounds.append(
             FederatedRoundResult(
                 round_number=round_number,
-                client_results=tuple(client_results),
+                client_results=tuple(ClientTrainingResult.from_update(update) for update in global_updates),
                 aggregate_loss=aggregate_loss,
-                communication=communication,
-                global_state_reference=global_reference,
+                communication=create_communication_record(
+                    round_number,
+                    state_size,
+                    upload_count=request.population_client_count,
+                    download_count=request.population_client_count,
+                ),
+                global_state_reference=GlobalModelStateReference(
+                    coordinate=request.global_coordinate,
+                    round_number=round_number,
+                    state_checksum=global_checksum,
+                    tensor_path=None,
+                ),
                 personalized_state_references=tuple(personalized_references),
             )
         )
-
+        global_state = aggregated
         if round_number in candidate_rounds:
-            global_snapshots.append(create_round_snapshot(round_number, aggregated, aggregate_loss))
+            global_snapshots.append(
+                create_round_snapshot(
+                    round_number,
+                    global_state,
+                    aggregate_loss,
+                )
+            )
 
-    history = FederatedTrainingHistory(coordinate=request.global_coordinate, rounds=tuple(rounds))
-    preprocessing_checksum = preprocessing_state_set_checksum(
-        tuple((client.client, client.preprocessing_checksum) for client in prepared_clients)
-    )
-
-    global_candidates = retain_checkpoint_candidates(
-        request.global_coordinate,
-        tuple(global_snapshots),
-        checkpoint_protocol=request.checkpoint_protocol,
-        autoencoder=request.autoencoder,
-        output_directory=request.global_output_directory,
-        preprocessing_state_set_checksum=preprocessing_checksum,
-        split_manifest_checksum=request.split_manifest_checksum,
-        client=None,
-        device=device,
-    )
-
-    personalized_candidate_sets: list[PersonalizedCandidateSet] = []
-    for client_data in prepared_clients:
-        client = client_data.client
-        candidates = retain_checkpoint_candidates(
-            request.personalized_coordinate,
-            tuple(personalized_snapshots[client]),
-            checkpoint_protocol=request.checkpoint_protocol,
-            autoencoder=request.autoencoder,
-            output_directory=request.personalized_output_directory,
-            preprocessing_state_set_checksum=preprocessing_checksum,
-            split_manifest_checksum=request.split_manifest_checksum,
-            client=client,
-            device=device,
-        )
-        personalized_candidate_sets.append(PersonalizedCandidateSet(client=client, candidates=candidates))
-
-    global_training_result = FederatedTrainingResult(
+    global_result = FederatedTrainingResult(
         coordinate=request.global_coordinate,
         autoencoder=request.autoencoder,
         checkpoint_protocol=request.checkpoint_protocol,
-        history=history,
+        history=FederatedTrainingHistory(
+            coordinate=request.global_coordinate,
+            rounds=tuple(rounds),
+        ),
         preprocessing_state_set_checksum=preprocessing_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
-        device_name=torch.cuda.get_device_name(device),
+        device_name=torch.cuda.get_device_name(device).strip(),
         batch_size_used=request.batch_size,
     )
-    return DittoTrainingOutcome(
-        global_training_result=global_training_result,
-        global_candidates=global_candidates,
-        personalized_candidates=tuple(personalized_candidate_sets),
+    return publish_ditto_training(
+        global_result=global_result,
+        global_snapshots=tuple(global_snapshots),
+        personalized_coordinate=request.personalized_coordinate,
+        personalized_snapshot_sets=tuple(
+            PersonalizedSnapshotSet(
+                client=item.client,
+                snapshots=tuple(personalized_snapshots[item.client]),
+            )
+            for item in prepared
+        ),
+        global_output_directory=request.global_output_directory,
+        personalized_output_directory=request.personalized_output_directory,
     )
-
-
-def _validate_request(request: DittoTrainingRequest) -> None:
-    if request.global_coordinate.model is not TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
-        raise ScientificContractError(
-            "Ditto global training requires the DITTO_GLOBAL_AUTOENCODER coordinate",
-            subject=request.global_coordinate.model,
-        )
-    if request.personalized_coordinate.model is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
-        raise ScientificContractError(
-            "Ditto personalized training requires the DITTO_PERSONALIZED_AUTOENCODER coordinate",
-            subject=request.personalized_coordinate.model,
-        )
-    if request.training_protocol.kind is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
-        raise ScientificContractError(
-            "Ditto training protocol must declare DITTO_PERSONALIZED_AUTOENCODER",
-            subject=request.training_protocol.kind,
-        )
-    if request.global_coordinate.model_coefficient != request.training_protocol.regularization:
-        raise ScientificContractError(
-            "Ditto global coordinate regularization must match the training protocol",
-            subject=ContractSubject.COORDINATE,
-        )
-    if request.personalized_coordinate.model_coefficient != request.training_protocol.regularization:
-        raise ScientificContractError(
-            "Ditto personalized coordinate regularization must match the training protocol",
-            subject=ContractSubject.COORDINATE,
-        )
-    validate_common_request(request.clients, request.population_client_count)

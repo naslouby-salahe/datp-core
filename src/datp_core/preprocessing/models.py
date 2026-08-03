@@ -11,6 +11,7 @@ from datp_core.domain.enums import (
     DatasetId,
     PartitionRole,
     PopulationId,
+    PopulationIdentityKind,
     PreprocessingFitScope,
     PreprocessingProtocolId,
     ProcessedDataBranch,
@@ -123,6 +124,8 @@ class FittedPreprocessingState:
     transformed_schema: TransformedSchema
     fit_row_count: RowCount
     fit_partition: PartitionRole
+    client_population: PopulationId | None = None
+    client_identity_kind: PopulationIdentityKind | None = None
 
     def __post_init__(self) -> None:
         if self.fit_row_count < 1:

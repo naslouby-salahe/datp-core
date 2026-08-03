@@ -1,12 +1,18 @@
-"""Federated model checkpoint selection, verification, candidate retention, and persistence."""
+"""Federated checkpoint publication, selection, persistence, and trusted reuse."""
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, replace
 from enum import StrEnum
+from json import dumps
+from os import replace as atomic_replace
 from pathlib import Path
+from shutil import rmtree
+from tempfile import mkdtemp
 
 import polars as pl
 import torch
+from polars.exceptions import PolarsError
+from pydantic import ValidationError
 from safetensors.torch import load_file, save_file
 
 from datp_core.artifacts.serialization import serialize_json_model
@@ -18,6 +24,7 @@ from datp_core.domain.enums import (
     ContractSubject,
     PopulationIdentityKind,
     ProcessedDataBranch,
+    TrainingModelId,
 )
 from datp_core.domain.errors import ArtifactIntegrityError, LeakageError, ScientificContractError
 from datp_core.domain.values import (
@@ -31,24 +38,26 @@ from datp_core.domain.values import (
     checksum_text,
 )
 from datp_core.learning.autoencoder import (
-    AutoencoderState,
-    ReconstructionAutoencoder,
+    AutoencoderStateView,
+    build_autoencoder_for_state,
 )
 from datp_core.learning.federated.models import (
-    CANDIDATE_SUFFIX,
     CheckpointCandidate,
     CheckpointDecision,
     ClientTrainingResult,
     CommunicationRecord,
+    DittoTrainingOutcome,
     FederatedRoundResult,
     FederatedTrainingCoordinate,
+    FederatedTrainingExecution,
     FederatedTrainingHistory,
+    FederatedTrainingOutcome,
     FederatedTrainingResult,
     GlobalModelStateReference,
     PersonalizedCandidateSet,
     PersonalizedModelStateReference,
+    PersonalizedSnapshotSet,
     RoundSnapshot,
-    candidate_tensor_name,
 )
 from datp_core.populations.models import ClientIdentity
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
@@ -56,7 +65,11 @@ from datp_core.protocols.training import (
     fixed_terminal_checkpoint_status,
     require_non_test_checkpoint_selection_inputs,
 )
-from datp_core.runtime.compute import require_cuda_available
+
+_CANDIDATE_PREFIX = "checkpoint_round_"
+_CANDIDATE_SUFFIX = ".safetensors"
+_PERSONALIZED_INFIX = "_client_"
+_MANIFEST_SCHEMA_VERSION = 1
 
 
 class FederatedHistoryAssetName(StrEnum):
@@ -64,8 +77,8 @@ class FederatedHistoryAssetName(StrEnum):
     CLIENT_ROUNDS = "client_rounds.parquet"
     PERSONALIZED_ROUNDS = "personalized_rounds.parquet"
     DEVICE_NAME = "device_name.txt"
-    COMPLETE = "COMPLETE"
     CANDIDATE_MANIFEST = "candidate_manifest.json"
+    COMPLETE = "COMPLETE"
 
 
 class FederatedHistoryColumn(StrEnum):
@@ -103,15 +116,21 @@ PERSONALIZED_ROUNDS_SCHEMA: Mapping[str, type[pl.DataType]] = {
 }
 
 
+class CandidateManifestKind(StrEnum):
+    GLOBAL = "global"
+    PERSONALIZED = "personalized"
+
+
 class CandidateManifestEntry(StrictModel):
     round_number: int
-    tensor_checksum: str
-    mean_training_loss: float
-    status: str
     client_id: str | None
+    tensor_name: str
+    tensor_checksum: str
 
 
 class CandidateManifest(StrictModel):
+    schema_version: int
+    kind: CandidateManifestKind
     coordinate_population: str
     coordinate_training_seed: int
     coordinate_split_protocol: str
@@ -120,6 +139,10 @@ class CandidateManifest(StrictModel):
     coordinate_model_coefficient: float | None
     preprocessing_state_set_checksum: str
     split_manifest_checksum: str
+    checkpoint_rounds: tuple[int, ...]
+    autoencoder_widths: tuple[int, ...]
+    batch_size: int
+    linked_personalized_digest: str | None
     entries: tuple[CandidateManifestEntry, ...]
 
 
@@ -130,6 +153,8 @@ class ReusedGlobalCandidatesRequest:
     checkpoint_protocol: CheckpointProtocol
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
+    autoencoder: AutoencoderProtocol
+    batch_size: BatchSize
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,12 +166,15 @@ class ReusedPersonalizedCandidatesRequest:
     checkpoint_protocol: CheckpointProtocol
     preprocessing_state_set_checksum: Checksum
     split_manifest_checksum: Checksum
+    autoencoder: AutoencoderProtocol
+    batch_size: BatchSize
 
 
 @dataclass(frozen=True, slots=True)
 class ReusedFederatedTrainingRequest:
     coordinate: FederatedTrainingCoordinate
     directory: Path
+    clients: tuple[ClientIdentity, ...]
     checkpoint_protocol: CheckpointProtocol
     identity_kind: PopulationIdentityKind
     autoencoder: AutoencoderProtocol
@@ -155,186 +183,190 @@ class ReusedFederatedTrainingRequest:
     split_manifest_checksum: Checksum
 
 
-def validate_parquet_schema(frame: pl.DataFrame, expected_schema: Mapping[str, type[pl.DataType]]) -> None:
-    expected_cols = list(expected_schema.keys())
-    if set(frame.columns) != set(expected_cols) or list(frame.columns) != expected_cols:
+@dataclass(frozen=True, slots=True)
+class ReusedDittoTrainingRequest:
+    global_coordinate: FederatedTrainingCoordinate
+    personalized_coordinate: FederatedTrainingCoordinate
+    global_directory: Path
+    personalized_directory: Path
+    clients: tuple[ClientIdentity, ...]
+    checkpoint_protocol: CheckpointProtocol
+    identity_kind: PopulationIdentityKind
+    autoencoder: AutoencoderProtocol
+    batch_size: BatchSize
+    preprocessing_state_set_checksum: Checksum
+    split_manifest_checksum: Checksum
+
+
+def candidate_tensor_name(
+    round_number: RoundNumber,
+    client: ClientIdentity | None = None,
+) -> str:
+    base = f"{_CANDIDATE_PREFIX}{round_number.value}"
+    if client is not None:
+        base = f"{base}{_PERSONALIZED_INFIX}{client.client_id}"
+    return f"{base}{_CANDIDATE_SUFFIX}"
+
+
+def _read_parquet(path: Path) -> pl.DataFrame:
+    if not path.is_file():
         raise ArtifactIntegrityError(
-            "Parquet table columns do not match expected schema exactly in names and order",
+            f"required Parquet artifact is missing: {path.name}",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+    try:
+        return pl.read_parquet(path)
+    except (OSError, PolarsError) as exc:
+        raise ArtifactIntegrityError(
+            f"Parquet artifact is unreadable or invalid: {path.name}",
+            subject=ContractSubject.ARTIFACT_PATH,
+        ) from exc
+
+
+def validate_parquet_schema(
+    frame: pl.DataFrame,
+    expected_schema: Mapping[str, type[pl.DataType]],
+) -> None:
+    expected_columns = tuple(expected_schema)
+    if tuple(frame.columns) != expected_columns:
+        raise ArtifactIntegrityError(
+            "Parquet columns do not match the exact declared schema order",
             subject=ContractSubject.SCHEMA,
         )
-    for col, dtype in expected_schema.items():
-        if frame.schema[col] != dtype:
+    for column, dtype in expected_schema.items():
+        if frame.schema[column] != dtype:
             raise ArtifactIntegrityError(
-                f"Parquet column '{col}' has type {frame.schema[col]}, expected {dtype}",
+                f"Parquet column {column!r} has type {frame.schema[column]}, expected {dtype}",
                 subject=ContractSubject.SCHEMA,
             )
 
 
-def validate_round_summary_schema(frame: pl.DataFrame) -> None:
+def validate_round_summary(
+    frame: pl.DataFrame,
+    expected_rounds: tuple[RoundNumber, ...],
+) -> None:
     validate_parquet_schema(frame, ROUND_SUMMARY_SCHEMA)
+    observed = tuple(
+        RoundNumber(value) for value in frame.get_column(FederatedHistoryColumn.ROUND_NUMBER.value).to_list()
+    )
+    if observed != expected_rounds:
+        raise ArtifactIntegrityError(
+            "round summary rows must equal the exact ordered training rounds",
+            subject=ContractSubject.SCHEMA,
+        )
+
+
+def _validate_client_rows(
+    frame: pl.DataFrame,
+    schema: Mapping[str, type[pl.DataType]],
+    *,
+    expected_rounds: tuple[RoundNumber, ...],
+    expected_clients: tuple[ClientIdentity, ...],
+    table_name: str,
+) -> None:
+    validate_parquet_schema(frame, schema)
     if frame.height < 1:
-        raise ArtifactIntegrityError("round summary must contain at least one row", subject=ContractSubject.SCHEMA)
-    rounds = tuple(
-        RoundNumber(int(row[FederatedHistoryColumn.ROUND_NUMBER.value])) for row in frame.iter_rows(named=True)
-    )
-    if len(set(rounds)) != len(rounds):
-        raise ArtifactIntegrityError("round summary contains duplicate rounds", subject=ContractSubject.SCHEMA)
-    expected = tuple(range(1, len(rounds) + 1))
-    if tuple(r.value for r in rounds) != expected:
         raise ArtifactIntegrityError(
-            "round summary rounds must be consecutive starting at one", subject=ContractSubject.SCHEMA
+            f"{table_name} must contain rows",
+            subject=ContractSubject.SCHEMA,
+        )
+
+    round_column = FederatedHistoryColumn.ROUND_NUMBER.value
+    client_column = FederatedHistoryColumn.CLIENT_ID.value
+    observed_pairs = tuple(
+        (RoundNumber(int(row[round_column])), str(row[client_column])) for row in frame.iter_rows(named=True)
+    )
+    expected_pairs = tuple(
+        (round_number, client.client_id) for round_number in expected_rounds for client in expected_clients
+    )
+    if observed_pairs != expected_pairs:
+        raise ArtifactIntegrityError(
+            f"{table_name} must contain one ordered row for every declared round and client",
+            subject=ContractSubject.SCHEMA,
         )
 
 
-def validate_client_history_schema(
+def validate_client_history(
     frame: pl.DataFrame,
     *,
-    expected_clients: frozenset[str] | None = None,
+    expected_rounds: tuple[RoundNumber, ...],
+    expected_clients: tuple[ClientIdentity, ...],
 ) -> None:
-    validate_parquet_schema(frame, CLIENT_ROUNDS_SCHEMA)
-    col = FederatedHistoryColumn
-    pairs = tuple(
-        (int(row[col.ROUND_NUMBER.value]), str(row[col.CLIENT_ID.value])) for row in frame.iter_rows(named=True)
+    _validate_client_rows(
+        frame,
+        CLIENT_ROUNDS_SCHEMA,
+        expected_rounds=expected_rounds,
+        expected_clients=expected_clients,
+        table_name="client history",
     )
-    if len(set(pairs)) != len(pairs):
-        raise ArtifactIntegrityError(
-            "client history contains duplicate (round, client) pairs", subject=ContractSubject.SCHEMA
-        )
-    if expected_clients is not None:
-        round_groups: dict[int, set[str]] = {}
-        for round_num, client_id in pairs:
-            round_groups.setdefault(round_num, set()).add(client_id)
-        for round_num, clients in round_groups.items():
-            if clients != expected_clients:
-                raise ArtifactIntegrityError(
-                    f"client history round {round_num} has an incomplete client set",
-                    subject=ContractSubject.CLIENT,
-                )
 
 
-def validate_personalized_history_schema(
+def validate_personalized_history(
     frame: pl.DataFrame,
     *,
-    expected_clients: frozenset[str] | None = None,
+    expected_rounds: tuple[RoundNumber, ...],
+    expected_clients: tuple[ClientIdentity, ...],
 ) -> None:
-    validate_parquet_schema(frame, PERSONALIZED_ROUNDS_SCHEMA)
-    col = FederatedHistoryColumn
-    pairs = tuple(
-        (int(row[col.ROUND_NUMBER.value]), str(row[col.CLIENT_ID.value])) for row in frame.iter_rows(named=True)
-    )
-    if len(set(pairs)) != len(pairs):
-        raise ArtifactIntegrityError(
-            "personalized history contains duplicate (round, client) pairs", subject=ContractSubject.SCHEMA
-        )
-    if expected_clients is not None:
-        round_groups: dict[int, set[str]] = {}
-        for round_num, client_id in pairs:
-            round_groups.setdefault(round_num, set()).add(client_id)
-        for round_num, clients in round_groups.items():
-            if clients != expected_clients:
-                raise ArtifactIntegrityError(
-                    f"personalized history round {round_num} has an incomplete client set",
-                    subject=ContractSubject.CLIENT,
-                )
-
-
-def candidate_set_digest(candidates: Sequence[CheckpointCandidate]) -> Checksum:
-    if not candidates:
-        raise ScientificContractError(
-            "candidate set digest requires at least one candidate",
-            subject=ContractSubject.CHECKPOINT_CANDIDATES,
-        )
-    reference = candidates[0]
-    for candidate in candidates:
-        if candidate.coordinate != reference.coordinate:
-            raise ScientificContractError(
-                "all candidates must share the same coordinate for digest computation",
-                subject=ContractSubject.COORDINATE,
-            )
-        if candidate.client != reference.client:
-            raise ScientificContractError(
-                "all candidates must share the same client identity for digest computation",
-                subject=ContractSubject.CLIENT_IDENTITY,
-            )
-        if candidate.preprocessing_state_set_checksum != reference.preprocessing_state_set_checksum:
-            raise ScientificContractError(
-                "all candidates must share the same preprocessing checksum for digest computation",
-                subject=ContractSubject.PREPROCESSING,
-            )
-        if candidate.split_manifest_checksum != reference.split_manifest_checksum:
-            raise ScientificContractError(
-                "all candidates must share the same split manifest checksum for digest computation",
-                subject=ContractSubject.SPLIT,
-            )
-    prep = reference.preprocessing_state_set_checksum.value
-    split = reference.split_manifest_checksum.value
-    client_id = reference.client.client_id if reference.client else "none"
-    header = f"{client_id}|{prep}|{split}|"
-    payload = "|".join(
-        f"{item.round_number.value}:{item.tensor_checksum.value}:{item.status.value}" for item in candidates
-    )
-    return checksum_text(f"{header}{checksum_text(payload).value}|{len(candidates)}")
-
-
-def _build_candidate_manifest(
-    coordinate: FederatedTrainingCoordinate,
-    preprocessing_state_set_checksum: Checksum,
-    split_manifest_checksum: Checksum,
-    candidates: tuple[CheckpointCandidate, ...],
-) -> CandidateManifest:
-    return CandidateManifest(
-        coordinate_population=coordinate.population.value,
-        coordinate_training_seed=coordinate.training_seed.value,
-        coordinate_split_protocol=coordinate.split_protocol.value,
-        coordinate_preprocessing_identity=coordinate.preprocessing_identity.value,
-        coordinate_model=coordinate.model.value,
-        coordinate_model_coefficient=(
-            coordinate.model_coefficient.value if coordinate.model_coefficient is not None else None
-        ),
-        preprocessing_state_set_checksum=preprocessing_state_set_checksum.value,
-        split_manifest_checksum=split_manifest_checksum.value,
-        entries=tuple(
-            CandidateManifestEntry(
-                round_number=c.round_number.value,
-                tensor_checksum=c.tensor_checksum.value,
-                mean_training_loss=c.mean_training_loss.value,
-                status=c.status.value,
-                client_id=c.client.client_id if c.client else None,
-            )
-            for c in candidates
-        ),
+    _validate_client_rows(
+        frame,
+        PERSONALIZED_ROUNDS_SCHEMA,
+        expected_rounds=expected_rounds,
+        expected_clients=expected_clients,
+        table_name="personalized history",
     )
 
 
-def persist_checkpoint_tensor(state_dict: AutoencoderState, path: Path) -> Checksum:
+def _atomic_write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
-    save_file(cpu_state, str(path))
-    return checksum_file(path)
+    staging = path.with_name(f".{path.name}.tmp")
+    staging.write_text(text, encoding="utf-8")
+    atomic_replace(staging, path)
 
 
-def assert_checkpoint_reload_equality(
-    state_dict: AutoencoderState,
+def _assert_checkpoint_reload_equality(
+    state_dict: AutoencoderStateView,
     path: Path,
     autoencoder: AutoencoderProtocol,
-    device: torch.device,
 ) -> None:
-    require_cuda_available()
-    reloaded_model = ReconstructionAutoencoder(autoencoder.widths).to(device)
-    loaded_state = load_file(str(path), device=str(device))
-    if set(state_dict.keys()) != set(loaded_state.keys()):
+    loaded = load_file(str(path), device="cpu")
+    if loaded.keys() != state_dict.keys():
         raise ArtifactIntegrityError(
-            "SafeTensors reload tensor names do not match expected parameter keys",
+            "checkpoint tensor names do not match the expected model state",
             subject=ContractSubject.ARTIFACT_PATH,
         )
-    reloaded_model.load_state_dict(loaded_state, strict=True)
-    for name, tensor in state_dict.items():
-        reference = tensor.detach().to(device)
-        if not torch.equal(reference, loaded_state[name]):
+    for name, expected in state_dict.items():
+        observed = loaded[name]
+        reference = expected.detach().cpu().contiguous()
+        if observed.shape != reference.shape or observed.dtype != reference.dtype:
             raise ArtifactIntegrityError(
-                "SafeTensors reload does not match saved federated checkpoint weights",
+                "checkpoint tensor shape or dtype differs from the expected model state",
                 subject=ContractSubject.ARTIFACT_PATH,
             )
+        if not torch.equal(observed, reference):
+            raise ArtifactIntegrityError(
+                "checkpoint tensor values differ from the expected model state",
+                subject=ContractSubject.ARTIFACT_PATH,
+            )
+
+    build_autoencoder_for_state(
+        autoencoder,
+        loaded,
+        device=torch.device("cpu"),
+    )
+
+
+def persist_checkpoint_tensor(
+    state_dict: AutoencoderStateView,
+    path: Path,
+    autoencoder: AutoencoderProtocol,
+) -> Checksum:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    staging = path.with_name(f".{path.name}.tmp")
+    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
+    save_file(cpu_state, str(staging))
+    _assert_checkpoint_reload_equality(state_dict, staging, autoencoder)
+    atomic_replace(staging, path)
+    return checksum_file(path)
 
 
 def retain_checkpoint_candidates(
@@ -347,45 +379,552 @@ def retain_checkpoint_candidates(
     preprocessing_state_set_checksum: Checksum,
     split_manifest_checksum: Checksum,
     client: ClientIdentity | None,
-    device: torch.device,
 ) -> tuple[CheckpointCandidate, ...]:
-    declared = tuple(checkpoint_protocol.candidates)
-    observed = tuple(item.round_number for item in snapshots)
-    if observed != declared:
+    observed = tuple(snapshot.round_number for snapshot in snapshots)
+    if observed != tuple(checkpoint_protocol.candidates):
         raise ScientificContractError(
-            "checkpoint snapshots must match the declared candidate rounds exactly and in order",
+            "checkpoint snapshots must equal the exact ordered protocol candidates",
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
-    candidates: list[CheckpointCandidate] = []
-    for snapshot in snapshots:
-        path = output_directory / candidate_tensor_name(snapshot.round_number, client)
-        checksum = persist_checkpoint_tensor(snapshot.state_dict, path)
-        assert_checkpoint_reload_equality(snapshot.state_dict, path, autoencoder, device)
-        candidates.append(
-            CheckpointCandidate(
-                coordinate=coordinate,
-                round_number=snapshot.round_number,
-                client=client,
-                tensor_path=path,
-                tensor_checksum=checksum,
-                mean_training_loss=snapshot.mean_training_loss,
-                status=CheckpointStatus.CANDIDATE,
-                preprocessing_state_set_checksum=preprocessing_state_set_checksum,
-                split_manifest_checksum=split_manifest_checksum,
-            )
+
+    candidates = tuple(
+        CheckpointCandidate(
+            coordinate=coordinate,
+            round_number=snapshot.round_number,
+            client=client,
+            tensor_path=output_directory / candidate_tensor_name(snapshot.round_number, client),
+            tensor_checksum=persist_checkpoint_tensor(
+                snapshot.state_dict,
+                output_directory / candidate_tensor_name(snapshot.round_number, client),
+                autoencoder,
+            ),
+            mean_training_loss=snapshot.mean_training_loss,
+            status=CheckpointStatus.CANDIDATE,
+            preprocessing_state_set_checksum=preprocessing_state_set_checksum,
+            split_manifest_checksum=split_manifest_checksum,
         )
-    result = tuple(candidates)
-    _reject_duplicate_or_missing_candidates(result, checkpoint_protocol)
-    manifest = _build_candidate_manifest(coordinate, preprocessing_state_set_checksum, split_manifest_checksum, result)
-    serialize_json_model(manifest, output_directory / FederatedHistoryAssetName.CANDIDATE_MANIFEST.value)
-    return result
+        for snapshot in snapshots
+    )
+    _validate_candidate_rounds_and_paths(candidates, checkpoint_protocol)
+    return candidates
 
 
-def _load_candidate_manifest(directory: Path) -> CandidateManifest:
+def _build_manifest(
+    *,
+    kind: CandidateManifestKind,
+    coordinate: FederatedTrainingCoordinate,
+    candidates: Sequence[CheckpointCandidate],
+    checkpoint_protocol: CheckpointProtocol,
+    autoencoder: AutoencoderProtocol,
+    batch_size: BatchSize,
+    preprocessing_state_set_checksum: Checksum,
+    split_manifest_checksum: Checksum,
+    linked_personalized_digest: Checksum | None = None,
+) -> CandidateManifest:
+    entries = tuple(
+        CandidateManifestEntry(
+            round_number=candidate.round_number.value,
+            client_id=candidate.client.client_id if candidate.client is not None else None,
+            tensor_name=candidate.tensor_path.name,
+            tensor_checksum=candidate.tensor_checksum.value,
+        )
+        for candidate in candidates
+    )
+    return CandidateManifest(
+        schema_version=_MANIFEST_SCHEMA_VERSION,
+        kind=kind,
+        coordinate_population=coordinate.population.value,
+        coordinate_training_seed=coordinate.training_seed.value,
+        coordinate_split_protocol=coordinate.split_protocol.value,
+        coordinate_preprocessing_identity=coordinate.preprocessing_identity.value,
+        coordinate_model=coordinate.model.value,
+        coordinate_model_coefficient=(
+            coordinate.model_coefficient.value if coordinate.model_coefficient is not None else None
+        ),
+        preprocessing_state_set_checksum=preprocessing_state_set_checksum.value,
+        split_manifest_checksum=split_manifest_checksum.value,
+        checkpoint_rounds=tuple(round_number.value for round_number in checkpoint_protocol.candidates),
+        autoencoder_widths=tuple(autoencoder.widths),
+        batch_size=batch_size.value,
+        linked_personalized_digest=(
+            linked_personalized_digest.value if linked_personalized_digest is not None else None
+        ),
+        entries=entries,
+    )
+
+
+def _load_manifest(directory: Path) -> CandidateManifest:
     path = directory / FederatedHistoryAssetName.CANDIDATE_MANIFEST.value
     if not path.is_file():
-        raise ArtifactIntegrityError("candidate manifest is missing", subject=ContractSubject.ARTIFACT_PATH)
-    return CandidateManifest.model_validate_json(path.read_text(encoding="utf-8"))
+        raise ArtifactIntegrityError(
+            "candidate manifest is missing",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+    try:
+        manifest = CandidateManifest.model_validate_json(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, ValidationError, ValueError) as exc:
+        raise ArtifactIntegrityError(
+            "candidate manifest is unreadable or invalid",
+            subject=ContractSubject.ARTIFACT_PATH,
+        ) from exc
+    if manifest.schema_version != _MANIFEST_SCHEMA_VERSION:
+        raise ArtifactIntegrityError(
+            "candidate manifest schema version is unsupported",
+            subject=ContractSubject.SCHEMA,
+        )
+    return manifest
+
+
+def _expected_publication_files(
+    manifest: CandidateManifest,
+    *,
+    include_history: bool,
+) -> tuple[str, ...]:
+    names = [
+        FederatedHistoryAssetName.CANDIDATE_MANIFEST.value,
+        *(entry.tensor_name for entry in manifest.entries),
+    ]
+    if include_history:
+        names.extend(
+            [
+                FederatedHistoryAssetName.ROUND_SUMMARY.value,
+                FederatedHistoryAssetName.CLIENT_ROUNDS.value,
+                FederatedHistoryAssetName.DEVICE_NAME.value,
+            ]
+        )
+        if manifest.coordinate_model == TrainingModelId.DITTO_GLOBAL_AUTOENCODER.value:
+            names.append(FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value)
+    return tuple(sorted(names))
+
+
+def _publication_digest(
+    directory: Path,
+    expected_files: Sequence[str],
+) -> Checksum:
+    payload = dumps(
+        [
+            {
+                "name": name,
+                "checksum": checksum_file(directory / name).value,
+            }
+            for name in sorted(expected_files)
+        ],
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return checksum_text(payload)
+
+
+def _write_completion(
+    directory: Path,
+    manifest: CandidateManifest,
+    *,
+    include_history: bool,
+) -> Checksum:
+    expected_files = _expected_publication_files(
+        manifest,
+        include_history=include_history,
+    )
+    digest = _publication_digest(directory, expected_files)
+    _atomic_write_text(
+        directory / FederatedHistoryAssetName.COMPLETE.value,
+        digest.value,
+    )
+    return digest
+
+
+def _verify_completion(
+    directory: Path,
+    manifest: CandidateManifest,
+    *,
+    include_history: bool,
+) -> Checksum:
+    expected_without_complete = _expected_publication_files(
+        manifest,
+        include_history=include_history,
+    )
+    expected_all = set(expected_without_complete) | {FederatedHistoryAssetName.COMPLETE.value}
+    actual_files = {path.name for path in directory.iterdir() if path.is_file()}
+    if actual_files != expected_all:
+        raise ArtifactIntegrityError(
+            "publication files do not match the exact declared artifact set",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+
+    complete = directory / FederatedHistoryAssetName.COMPLETE.value
+    try:
+        stored = Checksum(complete.read_text(encoding="utf-8").strip())
+    except (OSError, UnicodeError, ValueError) as exc:
+        raise ArtifactIntegrityError(
+            "completion marker is unreadable or invalid",
+            subject=ContractSubject.ARTIFACT_PATH,
+        ) from exc
+    recomputed = _publication_digest(directory, expected_without_complete)
+    if stored != recomputed:
+        raise ArtifactIntegrityError(
+            "completion marker does not match the current publication",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+    return recomputed
+
+
+def _new_staging_directory(target: Path) -> Path:
+    target.parent.mkdir(parents=True, exist_ok=True)
+    return Path(mkdtemp(prefix=f".{target.name}.", dir=target.parent))
+
+
+def _replace_directory(staging: Path, target: Path) -> None:
+    if target.exists():
+        rmtree(target)
+    atomic_replace(staging, target)
+
+
+def _cleanup_staging(staging: Path) -> None:
+    if staging.exists():
+        rmtree(staging)
+
+
+def persist_federated_training_history(
+    history: FederatedTrainingHistory,
+    directory: Path,
+    *,
+    device_name: str,
+) -> None:
+    normalized_device = device_name.strip()
+    if not normalized_device:
+        raise ScientificContractError(
+            "training publication requires a non-empty CUDA device name",
+            subject=ContractSubject.CUDA,
+        )
+
+    round_rows = [
+        (
+            item.round_number.value,
+            item.aggregate_loss.value,
+            item.communication.estimated_upload_bytes.value,
+            item.communication.estimated_download_bytes.value,
+            item.global_state_reference.state_checksum.value,
+        )
+        for item in history.rounds
+    ]
+    client_rows = [
+        (
+            item.round_number.value,
+            result.client.client_id,
+            result.sample_count.value,
+            result.local_loss.value,
+        )
+        for item in history.rounds
+        for result in item.client_results
+    ]
+    personalized_rows = [
+        (
+            item.round_number.value,
+            reference.client.client_id,
+            reference.local_loss.value,
+            reference.state_checksum.value,
+        )
+        for item in history.rounds
+        for reference in item.personalized_state_references
+    ]
+
+    directory.mkdir(parents=True, exist_ok=True)
+    pl.DataFrame(
+        round_rows,
+        schema=ROUND_SUMMARY_SCHEMA,
+        orient="row",
+    ).write_parquet(directory / FederatedHistoryAssetName.ROUND_SUMMARY.value)
+    pl.DataFrame(
+        client_rows,
+        schema=CLIENT_ROUNDS_SCHEMA,
+        orient="row",
+    ).write_parquet(directory / FederatedHistoryAssetName.CLIENT_ROUNDS.value)
+    if personalized_rows:
+        pl.DataFrame(
+            personalized_rows,
+            schema=PERSONALIZED_ROUNDS_SCHEMA,
+            orient="row",
+        ).write_parquet(directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value)
+    _atomic_write_text(
+        directory / FederatedHistoryAssetName.DEVICE_NAME.value,
+        normalized_device,
+    )
+
+
+def rebase_checkpoint_candidates(
+    candidates: Sequence[CheckpointCandidate],
+    directory: Path,
+) -> tuple[CheckpointCandidate, ...]:
+    rebased: list[CheckpointCandidate] = []
+    for candidate in candidates:
+        path = directory / candidate_tensor_name(
+            candidate.round_number,
+            candidate.client,
+        )
+        if not path.is_file():
+            raise ArtifactIntegrityError(
+                "rebased checkpoint file is missing",
+                subject=ContractSubject.ARTIFACT_PATH,
+            )
+        if checksum_file(path) != candidate.tensor_checksum:
+            raise ArtifactIntegrityError(
+                "rebased checkpoint checksum does not match the original candidate",
+                subject=ContractSubject.ARTIFACT_PATH,
+            )
+        rebased.append(replace(candidate, tensor_path=path))
+    return tuple(rebased)
+
+
+def publish_federated_training(
+    execution: FederatedTrainingExecution,
+    output_directory: Path,
+) -> FederatedTrainingOutcome:
+    result = execution.training_result
+    staging = _new_staging_directory(output_directory)
+    try:
+        persist_federated_training_history(
+            result.history,
+            staging,
+            device_name=result.device_name,
+        )
+        candidates = retain_checkpoint_candidates(
+            result.coordinate,
+            execution.snapshots,
+            checkpoint_protocol=result.checkpoint_protocol,
+            autoencoder=result.autoencoder,
+            output_directory=staging,
+            preprocessing_state_set_checksum=result.preprocessing_state_set_checksum,
+            split_manifest_checksum=result.split_manifest_checksum,
+            client=None,
+        )
+        manifest = _build_manifest(
+            kind=CandidateManifestKind.GLOBAL,
+            coordinate=result.coordinate,
+            candidates=candidates,
+            checkpoint_protocol=result.checkpoint_protocol,
+            autoencoder=result.autoencoder,
+            batch_size=result.batch_size_used,
+            preprocessing_state_set_checksum=result.preprocessing_state_set_checksum,
+            split_manifest_checksum=result.split_manifest_checksum,
+        )
+        serialize_json_model(
+            manifest,
+            staging / FederatedHistoryAssetName.CANDIDATE_MANIFEST.value,
+        )
+        _write_completion(staging, manifest, include_history=True)
+        _replace_directory(staging, output_directory)
+    finally:
+        _cleanup_staging(staging)
+
+    return FederatedTrainingOutcome(
+        training_result=result,
+        candidates=rebase_checkpoint_candidates(candidates, output_directory),
+    )
+
+
+def _require_separate_directories(
+    global_directory: Path,
+    personalized_directory: Path,
+) -> None:
+    global_resolved = global_directory.resolve()
+    personalized_resolved = personalized_directory.resolve()
+    if (
+        global_resolved == personalized_resolved
+        or global_resolved in personalized_resolved.parents
+        or personalized_resolved in global_resolved.parents
+    ):
+        raise ScientificContractError(
+            "Ditto global and personalized output directories must be disjoint",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+
+
+def _stage_personalized_candidates(
+    *,
+    coordinate: FederatedTrainingCoordinate,
+    snapshot_sets: Sequence[PersonalizedSnapshotSet],
+    checkpoint_protocol: CheckpointProtocol,
+    autoencoder: AutoencoderProtocol,
+    batch_size: BatchSize,
+    preprocessing_state_set_checksum: Checksum,
+    split_manifest_checksum: Checksum,
+    output_directory: Path,
+) -> tuple[
+    Path,
+    tuple[PersonalizedCandidateSet, ...],
+    Checksum,
+]:
+    staging = _new_staging_directory(output_directory)
+    all_candidates: list[CheckpointCandidate] = []
+    candidate_sets: list[PersonalizedCandidateSet] = []
+    for snapshot_set in snapshot_sets:
+        candidates = retain_checkpoint_candidates(
+            coordinate,
+            snapshot_set.snapshots,
+            checkpoint_protocol=checkpoint_protocol,
+            autoencoder=autoencoder,
+            output_directory=staging,
+            preprocessing_state_set_checksum=preprocessing_state_set_checksum,
+            split_manifest_checksum=split_manifest_checksum,
+            client=snapshot_set.client,
+        )
+        candidate_sets.append(
+            PersonalizedCandidateSet(
+                client=snapshot_set.client,
+                candidates=candidates,
+            )
+        )
+        all_candidates.extend(candidates)
+
+    manifest = _build_manifest(
+        kind=CandidateManifestKind.PERSONALIZED,
+        coordinate=coordinate,
+        candidates=tuple(all_candidates),
+        checkpoint_protocol=checkpoint_protocol,
+        autoencoder=autoencoder,
+        batch_size=batch_size,
+        preprocessing_state_set_checksum=preprocessing_state_set_checksum,
+        split_manifest_checksum=split_manifest_checksum,
+    )
+    serialize_json_model(
+        manifest,
+        staging / FederatedHistoryAssetName.CANDIDATE_MANIFEST.value,
+    )
+    digest = _write_completion(staging, manifest, include_history=False)
+    return staging, tuple(candidate_sets), digest
+
+
+def publish_ditto_training(
+    *,
+    global_result: FederatedTrainingResult,
+    global_snapshots: Sequence[RoundSnapshot],
+    personalized_coordinate: FederatedTrainingCoordinate,
+    personalized_snapshot_sets: Sequence[PersonalizedSnapshotSet],
+    global_output_directory: Path,
+    personalized_output_directory: Path,
+) -> DittoTrainingOutcome:
+    _require_separate_directories(
+        global_output_directory,
+        personalized_output_directory,
+    )
+    personalized_staging: Path | None = None
+    global_staging: Path | None = None
+    try:
+        (
+            personalized_staging,
+            staged_personalized_candidates,
+            personalized_digest,
+        ) = _stage_personalized_candidates(
+            coordinate=personalized_coordinate,
+            snapshot_sets=personalized_snapshot_sets,
+            checkpoint_protocol=global_result.checkpoint_protocol,
+            autoencoder=global_result.autoencoder,
+            batch_size=global_result.batch_size_used,
+            preprocessing_state_set_checksum=global_result.preprocessing_state_set_checksum,
+            split_manifest_checksum=global_result.split_manifest_checksum,
+            output_directory=personalized_output_directory,
+        )
+
+        global_staging = _new_staging_directory(global_output_directory)
+        persist_federated_training_history(
+            global_result.history,
+            global_staging,
+            device_name=global_result.device_name,
+        )
+        global_candidates = retain_checkpoint_candidates(
+            global_result.coordinate,
+            global_snapshots,
+            checkpoint_protocol=global_result.checkpoint_protocol,
+            autoencoder=global_result.autoencoder,
+            output_directory=global_staging,
+            preprocessing_state_set_checksum=global_result.preprocessing_state_set_checksum,
+            split_manifest_checksum=global_result.split_manifest_checksum,
+            client=None,
+        )
+        manifest = _build_manifest(
+            kind=CandidateManifestKind.GLOBAL,
+            coordinate=global_result.coordinate,
+            candidates=global_candidates,
+            checkpoint_protocol=global_result.checkpoint_protocol,
+            autoencoder=global_result.autoencoder,
+            batch_size=global_result.batch_size_used,
+            preprocessing_state_set_checksum=global_result.preprocessing_state_set_checksum,
+            split_manifest_checksum=global_result.split_manifest_checksum,
+            linked_personalized_digest=personalized_digest,
+        )
+        serialize_json_model(
+            manifest,
+            global_staging / FederatedHistoryAssetName.CANDIDATE_MANIFEST.value,
+        )
+        _write_completion(global_staging, manifest, include_history=True)
+
+        _replace_directory(
+            personalized_staging,
+            personalized_output_directory,
+        )
+        _replace_directory(
+            global_staging,
+            global_output_directory,
+        )
+    finally:
+        if personalized_staging is not None:
+            _cleanup_staging(personalized_staging)
+        if global_staging is not None:
+            _cleanup_staging(global_staging)
+
+    personalized_candidates = tuple(
+        PersonalizedCandidateSet(
+            client=item.client,
+            candidates=rebase_checkpoint_candidates(
+                item.candidates,
+                personalized_output_directory,
+            ),
+        )
+        for item in staged_personalized_candidates
+    )
+    return DittoTrainingOutcome(
+        global_training_result=global_result,
+        global_candidates=rebase_checkpoint_candidates(
+            global_candidates,
+            global_output_directory,
+        ),
+        personalized_candidates=personalized_candidates,
+    )
+
+
+def _validate_candidate_rounds_and_paths(
+    candidates: Sequence[CheckpointCandidate],
+    protocol: CheckpointProtocol,
+) -> None:
+    if tuple(candidate.round_number for candidate in candidates) != tuple(protocol.candidates):
+        raise ArtifactIntegrityError(
+            "checkpoint candidate rounds do not match the protocol",
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    paths = tuple(candidate.tensor_path for candidate in candidates)
+    if len(set(paths)) != len(paths):
+        raise ArtifactIntegrityError(
+            "checkpoint candidate paths must be unique",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+
+
+def _verify_candidate_file(candidate: CheckpointCandidate) -> None:
+    if candidate.tensor_path.suffix != _CANDIDATE_SUFFIX:
+        raise ArtifactIntegrityError(
+            "federated checkpoints must use SafeTensors",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+    if not candidate.tensor_path.is_file():
+        raise ArtifactIntegrityError(
+            "checkpoint candidate file is missing",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+    if checksum_file(candidate.tensor_path) != candidate.tensor_checksum:
+        raise ArtifactIntegrityError(
+            "checkpoint candidate checksum mismatch",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
 
 
 def validate_candidate_coordinates(
@@ -399,11 +938,13 @@ def validate_candidate_coordinates(
     for candidate in candidates:
         if candidate.coordinate != coordinate:
             raise ScientificContractError(
-                "checkpoint candidate coordinate mismatch", subject=ContractSubject.COORDINATE
+                "checkpoint candidate coordinate mismatch",
+                subject=ContractSubject.COORDINATE,
             )
         if candidate.client != client:
             raise ScientificContractError(
-                "checkpoint candidate client identity mismatch", subject=ContractSubject.CLIENT_IDENTITY
+                "checkpoint candidate client mismatch",
+                subject=ContractSubject.CLIENT_IDENTITY,
             )
         if candidate.preprocessing_state_set_checksum != preprocessing_state_set_checksum:
             raise ScientificContractError(
@@ -416,6 +957,31 @@ def validate_candidate_coordinates(
                 subject=ContractSubject.SPLIT,
             )
         _verify_candidate_file(candidate)
+
+
+def _statused_candidates(
+    candidates: tuple[CheckpointCandidate, ...],
+    maximum_round: RoundNumber,
+) -> tuple[tuple[CheckpointCandidate, ...], CheckpointCandidate]:
+    statused = tuple(
+        replace(
+            candidate,
+            status=fixed_terminal_checkpoint_status(
+                candidate.round_number,
+                maximum_round,
+            ),
+        )
+        for candidate in candidates
+    )
+    selected = tuple(
+        candidate for candidate in statused if candidate.status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE
+    )
+    if len(selected) != 1:
+        raise ArtifactIntegrityError(
+            "fixed-terminal checkpoint selection did not produce exactly one selected candidate",
+            subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
+        )
+    return statused, selected[0]
 
 
 def select_checkpoint(
@@ -437,7 +1003,7 @@ def select_checkpoint(
         branch_label=ProcessedDataBranch.FEDERATED,
     )
     ordered = tuple(candidates)
-    _reject_duplicate_or_missing_candidates(ordered, protocol)
+    _validate_candidate_rounds_and_paths(ordered, protocol)
     validate_candidate_coordinates(
         ordered,
         coordinate,
@@ -445,14 +1011,10 @@ def select_checkpoint(
         preprocessing_state_set_checksum=preprocessing_state_set_checksum,
         split_manifest_checksum=split_manifest_checksum,
     )
-    for candidate in ordered:
-        if candidate.status is CheckpointStatus.HISTORICAL_ENDPOINT:
-            raise ScientificContractError(
-                "historical anchor endpoint status is incompatible with federated candidates",
-                subject=candidate.status,
-            )
-
-    statused, selected = _statused_candidates(ordered, protocol.maximum_round)
+    statused, selected = _statused_candidates(
+        ordered,
+        protocol.maximum_round,
+    )
     return CheckpointDecision(
         coordinate=coordinate,
         client=client,
@@ -463,164 +1025,149 @@ def select_checkpoint(
     )
 
 
-def _statused_candidates(
-    ordered: tuple[CheckpointCandidate, ...],
-    maximum_round: RoundNumber,
-) -> tuple[tuple[CheckpointCandidate, ...], CheckpointCandidate]:
-    statused: list[CheckpointCandidate] = []
-    selected: CheckpointCandidate | None = None
-    for item in ordered:
-        status = fixed_terminal_checkpoint_status(item.round_number, maximum_round)
-        rebuilt = replace(item, status=status)
-        statused.append(rebuilt)
-        if status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
-            selected = rebuilt
-    if selected is None:
-        raise ArtifactIntegrityError(
-            "fixed-terminal selection failed to mark the maximum-round candidate",
-            subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
-        )
-    return tuple(statused), selected
-
-
-def reject_centralized_checkpoint(marker_identity: FederatedTrainingCoordinate) -> None:
+def reject_centralized_checkpoint(
+    marker_identity: FederatedTrainingCoordinate,
+) -> None:
     raise LeakageError(
-        f"centralized checkpoint cannot enter federated scoring or selection ({marker_identity})",
+        f"centralized checkpoint cannot enter federated selection ({marker_identity})",
         subject=ContractSubject.CHECKPOINT_CANDIDATES,
     )
 
 
-def _reject_duplicate_or_missing_candidates(
-    candidates: Sequence[CheckpointCandidate],
-    protocol: CheckpointProtocol,
+def _validate_manifest(
+    manifest: CandidateManifest,
+    *,
+    kind: CandidateManifestKind,
+    coordinate: FederatedTrainingCoordinate,
+    checkpoint_protocol: CheckpointProtocol,
+    autoencoder: AutoencoderProtocol,
+    batch_size: BatchSize,
+    preprocessing_state_set_checksum: Checksum,
+    split_manifest_checksum: Checksum,
 ) -> None:
-    observed = tuple(item.round_number for item in candidates)
-    expected = tuple(protocol.candidates)
-    if observed != expected:
+    if (
+        manifest.coordinate_population != coordinate.population.value
+        or manifest.coordinate_training_seed != coordinate.training_seed.value
+        or manifest.coordinate_split_protocol != coordinate.split_protocol.value
+        or manifest.coordinate_preprocessing_identity != coordinate.preprocessing_identity.value
+        or manifest.coordinate_model != coordinate.model.value
+        or manifest.coordinate_model_coefficient
+        != (coordinate.model_coefficient.value if coordinate.model_coefficient is not None else None)
+    ):
         raise ArtifactIntegrityError(
-            "checkpoint candidate rounds must equal the declared ordered protocol",
+            "candidate manifest coordinate does not match the requested experiment",
+            subject=ContractSubject.COORDINATE,
+        )
+    if manifest.kind is not kind:
+        raise ArtifactIntegrityError(
+            "candidate manifest kind mismatch",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+    if manifest.preprocessing_state_set_checksum != preprocessing_state_set_checksum.value:
+        raise ArtifactIntegrityError(
+            "candidate manifest preprocessing checksum mismatch",
+            subject=ContractSubject.PREPROCESSING,
+        )
+    if manifest.split_manifest_checksum != split_manifest_checksum.value:
+        raise ArtifactIntegrityError(
+            "candidate manifest split checksum mismatch",
+            subject=ContractSubject.SPLIT,
+        )
+    if manifest.checkpoint_rounds != tuple(round_number.value for round_number in checkpoint_protocol.candidates):
+        raise ArtifactIntegrityError(
+            "candidate manifest rounds do not match the checkpoint protocol",
             subject=ContractSubject.CHECKPOINT_CANDIDATES,
         )
-    if len(set(observed)) != len(observed):
+    if manifest.autoencoder_widths != tuple(autoencoder.widths):
         raise ArtifactIntegrityError(
-            "duplicate checkpoint candidates are forbidden", subject=ContractSubject.CHECKPOINT_CANDIDATES
+            "candidate manifest autoencoder architecture mismatch",
+            subject=ContractSubject.WIDTHS,
         )
-    paths = tuple(item.tensor_path for item in candidates)
-    if len(set(paths)) != len(paths):
+    if manifest.batch_size != batch_size.value:
         raise ArtifactIntegrityError(
-            "checkpoint candidate paths must be unique", subject=ContractSubject.CHECKPOINT_CANDIDATES
-        )
-
-
-def _verify_candidate_file(candidate: CheckpointCandidate) -> None:
-    if not candidate.tensor_path.is_file():
-        raise ArtifactIntegrityError(
-            "checkpoint candidate tensor file is missing", subject=ContractSubject.ARTIFACT_PATH
-        )
-    actual = checksum_file(candidate.tensor_path)
-    if actual != candidate.tensor_checksum:
-        raise ArtifactIntegrityError(
-            "checkpoint candidate checksum mismatch",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    if candidate.tensor_path.suffix != CANDIDATE_SUFFIX:
-        raise ArtifactIntegrityError(
-            "federated checkpoints must use SafeTensors serialization",
-            subject=ContractSubject.ARTIFACT_PATH,
+            "candidate manifest batch size mismatch",
+            subject=ContractSubject.BATCH_SIZE,
         )
 
 
-def federated_training_directory_is_reusable(
-    directory: Path,
-    candidate_rounds: tuple[RoundNumber, ...],
-    expected_digest: Checksum,
-) -> bool:
-    complete = directory / FederatedHistoryAssetName.COMPLETE.value
-    round_summary = directory / FederatedHistoryAssetName.ROUND_SUMMARY.value
-    client_rounds = directory / FederatedHistoryAssetName.CLIENT_ROUNDS.value
-    device_name = directory / FederatedHistoryAssetName.DEVICE_NAME.value
-    manifest_path = directory / FederatedHistoryAssetName.CANDIDATE_MANIFEST.value
-    if not all(path.is_file() for path in (complete, round_summary, client_rounds, device_name, manifest_path)):
-        return False
-    if not device_name.read_text(encoding="utf-8").strip():
-        return False
-    marker_text = complete.read_text(encoding="utf-8").strip()
-    if marker_text != expected_digest.value:
-        return False
-    try:
-        round_frame = pl.read_parquet(round_summary)
-        validate_parquet_schema(round_frame, ROUND_SUMMARY_SCHEMA)
-        client_frame = pl.read_parquet(client_rounds)
-        validate_parquet_schema(client_frame, CLIENT_ROUNDS_SCHEMA)
-        manifest = _load_candidate_manifest(directory)
-        declared_rounds = frozenset(entry.round_number for entry in manifest.entries)
-        if declared_rounds != frozenset(r.value for r in candidate_rounds):
-            return False
-        for entry in manifest.entries:
-            candidate_path = directory / candidate_tensor_name(RoundNumber(entry.round_number))
-            if not candidate_path.is_file():
-                return False
-            if checksum_file(candidate_path).value != entry.tensor_checksum:
-                return False
-    except (ArtifactIntegrityError, ScientificContractError, OSError, UnicodeError, ValueError):
-        return False
-    for entry in manifest.entries:
-        if not (directory / candidate_tensor_name(RoundNumber(entry.round_number))).is_file():
-            return False
-    return True
+def _validated_global_manifest(
+    request: ReusedGlobalCandidatesRequest,
+) -> CandidateManifest:
+    manifest = _load_manifest(request.directory)
+    _validate_manifest(
+        manifest,
+        kind=CandidateManifestKind.GLOBAL,
+        coordinate=request.coordinate,
+        checkpoint_protocol=request.checkpoint_protocol,
+        autoencoder=request.autoencoder,
+        batch_size=request.batch_size,
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+        split_manifest_checksum=request.split_manifest_checksum,
+    )
+    _verify_completion(
+        request.directory,
+        manifest,
+        include_history=True,
+    )
+    expected_entries = tuple(
+        (
+            round_number.value,
+            None,
+            candidate_tensor_name(round_number),
+        )
+        for round_number in request.checkpoint_protocol.candidates
+    )
+    observed_entries = tuple((entry.round_number, entry.client_id, entry.tensor_name) for entry in manifest.entries)
+    if observed_entries != expected_entries:
+        raise ArtifactIntegrityError(
+            "global candidate manifest entries are incomplete, duplicated, or out of order",
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    return manifest
 
 
-def load_published_device_name(directory: Path) -> str:
-    device_path = directory / FederatedHistoryAssetName.DEVICE_NAME.value
-    if not device_path.is_file():
-        raise ArtifactIntegrityError(
-            "reused federated training is missing the published device name",
-            subject=ContractSubject.CUDA,
-        )
-    device_name = device_path.read_text(encoding="utf-8").strip()
-    if not device_name:
-        raise ArtifactIntegrityError(
-            "reused federated training device name is empty",
-            subject=ContractSubject.CUDA,
-        )
-    return device_name
+def _history_frames(directory: Path) -> tuple[pl.DataFrame, pl.DataFrame, pl.DataFrame | None]:
+    round_frame = _read_parquet(directory / FederatedHistoryAssetName.ROUND_SUMMARY.value)
+    client_frame = _read_parquet(directory / FederatedHistoryAssetName.CLIENT_ROUNDS.value)
+    personalized_path = directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
+    personalized_frame = _read_parquet(personalized_path) if personalized_path.is_file() else None
+    return round_frame, client_frame, personalized_frame
 
 
-def load_reused_global_candidates(request: ReusedGlobalCandidatesRequest) -> tuple[CheckpointCandidate, ...]:
-    manifest = _load_candidate_manifest(request.directory)
-    if manifest.coordinate_model != request.coordinate.model.value:
-        raise ArtifactIntegrityError("candidate manifest model mismatch", subject=ContractSubject.COORDINATE)
-    if manifest.preprocessing_state_set_checksum != request.preprocessing_state_set_checksum.value:
-        raise ArtifactIntegrityError(
-            "candidate manifest preprocessing checksum mismatch", subject=ContractSubject.PREPROCESSING
+def load_reused_global_candidates(
+    request: ReusedGlobalCandidatesRequest,
+) -> tuple[CheckpointCandidate, ...]:
+    manifest = _validated_global_manifest(request)
+    round_frame, _, _ = _history_frames(request.directory)
+    expected_training_rounds = tuple(
+        RoundNumber(value) for value in range(1, request.checkpoint_protocol.maximum_round.value + 1)
+    )
+    validate_round_summary(round_frame, expected_training_rounds)
+    loss_by_round = {
+        RoundNumber(int(row[FederatedHistoryColumn.ROUND_NUMBER.value])): MetricValue(
+            float(row[FederatedHistoryColumn.AGGREGATE_LOSS.value])
         )
-    if manifest.split_manifest_checksum != request.split_manifest_checksum.value:
-        raise ArtifactIntegrityError("candidate manifest split checksum mismatch", subject=ContractSubject.SPLIT)
-    declared_rounds = frozenset(entry.round_number for entry in manifest.entries)
-    expected_rounds = frozenset(r.value for r in request.checkpoint_protocol.candidates)
-    if declared_rounds != expected_rounds:
-        raise ArtifactIntegrityError(
-            "candidate manifest rounds do not match requested protocol", subject=ContractSubject.CHECKPOINT_CANDIDATES
-        )
+        for row in round_frame.iter_rows(named=True)
+    }
+
     candidates: list[CheckpointCandidate] = []
     for entry in manifest.entries:
-        path = request.directory / candidate_tensor_name(RoundNumber(entry.round_number))
-        if not path.is_file():
-            raise ArtifactIntegrityError("reused checkpoint candidate missing", subject=ContractSubject.ARTIFACT_PATH)
-        actual_checksum = checksum_file(path)
-        if actual_checksum.value != entry.tensor_checksum:
+        path = request.directory / entry.tensor_name
+        actual = checksum_file(path)
+        if actual.value != entry.tensor_checksum:
             raise ArtifactIntegrityError(
-                "reused checkpoint candidate checksum mismatch",
+                "reused global checkpoint checksum mismatch",
                 subject=ContractSubject.ARTIFACT_PATH,
             )
+        round_number = RoundNumber(entry.round_number)
         candidates.append(
             CheckpointCandidate(
                 coordinate=request.coordinate,
-                round_number=RoundNumber(entry.round_number),
+                round_number=round_number,
                 client=None,
                 tensor_path=path,
-                tensor_checksum=actual_checksum,
-                mean_training_loss=MetricValue(entry.mean_training_loss),
+                tensor_checksum=actual,
+                mean_training_loss=loss_by_round[round_number],
                 status=CheckpointStatus.CANDIDATE,
                 preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
                 split_manifest_checksum=request.split_manifest_checksum,
@@ -629,98 +1176,119 @@ def load_reused_global_candidates(request: ReusedGlobalCandidatesRequest) -> tup
     return tuple(candidates)
 
 
+def _validated_personalized_manifest(
+    request: ReusedPersonalizedCandidatesRequest,
+) -> CandidateManifest:
+    manifest = _load_manifest(request.personalized_output_directory)
+    _validate_manifest(
+        manifest,
+        kind=CandidateManifestKind.PERSONALIZED,
+        coordinate=request.personalized_coordinate,
+        checkpoint_protocol=request.checkpoint_protocol,
+        autoencoder=request.autoencoder,
+        batch_size=request.batch_size,
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+        split_manifest_checksum=request.split_manifest_checksum,
+    )
+    _verify_completion(
+        request.personalized_output_directory,
+        manifest,
+        include_history=False,
+    )
+    expected_entries = tuple(
+        (
+            round_number.value,
+            client.client_id,
+            candidate_tensor_name(round_number, client),
+        )
+        for client in request.clients
+        for round_number in request.checkpoint_protocol.candidates
+    )
+    observed_entries = tuple((entry.round_number, entry.client_id, entry.tensor_name) for entry in manifest.entries)
+    if observed_entries != expected_entries:
+        raise ArtifactIntegrityError(
+            "personalized candidate manifest entries do not match the expected clients and rounds",
+            subject=ContractSubject.CHECKPOINT_CANDIDATES,
+        )
+    return manifest
+
+
 def load_reused_personalized_candidates(
     request: ReusedPersonalizedCandidatesRequest,
 ) -> tuple[PersonalizedCandidateSet, ...]:
-    manifest_path = request.personalized_output_directory / FederatedHistoryAssetName.CANDIDATE_MANIFEST.value
-    if not manifest_path.is_file():
-        raise ArtifactIntegrityError(
-            "personalized candidate manifest is missing", subject=ContractSubject.ARTIFACT_PATH
-        )
-    personalized_rounds_path = request.global_history_directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
-    if not personalized_rounds_path.is_file():
-        raise ArtifactIntegrityError(
-            "reused personalized candidates require published personalized round losses",
-            subject=ContractSubject.ARTIFACT_PATH,
-        )
-    personalized_frame = pl.read_parquet(personalized_rounds_path)
-    validate_parquet_schema(personalized_frame, PERSONALIZED_ROUNDS_SCHEMA)
-    col = FederatedHistoryColumn
+    manifest = _validated_personalized_manifest(request)
+    personalized_frame = _read_parquet(
+        request.global_history_directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
+    )
+    training_rounds = tuple(
+        RoundNumber(value) for value in range(1, request.checkpoint_protocol.maximum_round.value + 1)
+    )
+    validate_personalized_history(
+        personalized_frame,
+        expected_rounds=training_rounds,
+        expected_clients=request.clients,
+    )
+    loss_by_key = {
+        (
+            str(row[FederatedHistoryColumn.CLIENT_ID.value]),
+            RoundNumber(int(row[FederatedHistoryColumn.ROUND_NUMBER.value])),
+        ): MetricValue(float(row[FederatedHistoryColumn.LOCAL_LOSS.value]))
+        for row in personalized_frame.iter_rows(named=True)
+    }
+    entries_by_client = {
+        client.client_id: tuple(entry for entry in manifest.entries if entry.client_id == client.client_id)
+        for client in request.clients
+    }
+
     result: list[PersonalizedCandidateSet] = []
     for client in request.clients:
-        manifest = _load_candidate_manifest(request.personalized_output_directory)
-        if manifest.coordinate_model != request.personalized_coordinate.model.value:
-            raise ArtifactIntegrityError(
-                "personalized candidate manifest model mismatch", subject=ContractSubject.COORDINATE
-            )
         candidates: list[CheckpointCandidate] = []
-        for entry in manifest.entries:
-            path = request.personalized_output_directory / candidate_tensor_name(
-                RoundNumber(entry.round_number), client
-            )
-            if not path.is_file():
+        for entry in entries_by_client[client.client_id]:
+            path = request.personalized_output_directory / entry.tensor_name
+            actual = checksum_file(path)
+            if actual.value != entry.tensor_checksum:
                 raise ArtifactIntegrityError(
-                    "reused personalized checkpoint candidate missing",
+                    "reused personalized checkpoint checksum mismatch",
                     subject=ContractSubject.ARTIFACT_PATH,
                 )
-            actual_checksum = checksum_file(path)
-            if actual_checksum.value != entry.tensor_checksum:
-                raise ArtifactIntegrityError(
-                    "reused personalized checkpoint candidate checksum mismatch",
-                    subject=ContractSubject.ARTIFACT_PATH,
-                )
-            loss_rows = personalized_frame.filter(
-                (pl.col(col.ROUND_NUMBER.value) == entry.round_number)
-                & (pl.col(col.CLIENT_ID.value) == client.client_id)
-            )
-            if loss_rows.height != 1:
-                raise ArtifactIntegrityError(
-                    "reused personalized candidate is missing its published local loss",
-                    subject=ContractSubject.TRAINING,
-                )
-            local_loss = MetricValue(float(loss_rows.item(0, col.LOCAL_LOSS.value)))
+            round_number = RoundNumber(entry.round_number)
             candidates.append(
                 CheckpointCandidate(
                     coordinate=request.personalized_coordinate,
-                    round_number=RoundNumber(entry.round_number),
+                    round_number=round_number,
                     client=client,
                     tensor_path=path,
-                    tensor_checksum=actual_checksum,
-                    mean_training_loss=local_loss,
+                    tensor_checksum=actual,
+                    mean_training_loss=loss_by_key[(client.client_id, round_number)],
                     status=CheckpointStatus.CANDIDATE,
                     preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
                     split_manifest_checksum=request.split_manifest_checksum,
                 )
             )
-        result.append(PersonalizedCandidateSet(client=client, candidates=tuple(candidates)))
+        result.append(
+            PersonalizedCandidateSet(
+                client=client,
+                candidates=tuple(candidates),
+            )
+        )
     return tuple(result)
 
 
-def rebase_checkpoint_candidates(
-    candidates: tuple[CheckpointCandidate, ...],
-    directory: Path,
-    *,
-    client: ClientIdentity | None,
-) -> tuple[CheckpointCandidate, ...]:
-    rebased: list[CheckpointCandidate] = []
-    for candidate in candidates:
-        path = directory / candidate_tensor_name(candidate.round_number, client)
-        if not path.is_file():
-            raise ArtifactIntegrityError(
-                "rebased target checkpoint tensor does not exist", subject=ContractSubject.ARTIFACT_PATH
-            )
-        actual_checksum = checksum_file(path)
-        if actual_checksum != candidate.tensor_checksum:
-            raise ArtifactIntegrityError(
-                "rebased target checkpoint tensor checksum mismatch", subject=ContractSubject.ARTIFACT_PATH
-            )
-        rebased.append(
-            replace(
-                candidate,
-                tensor_path=path,
-            )
+def load_published_device_name(directory: Path) -> str:
+    path = directory / FederatedHistoryAssetName.DEVICE_NAME.value
+    try:
+        value = path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError) as exc:
+        raise ArtifactIntegrityError(
+            "published CUDA device name is unreadable",
+            subject=ContractSubject.CUDA,
+        ) from exc
+    if not value:
+        raise ArtifactIntegrityError(
+            "published CUDA device name is empty",
+            subject=ContractSubject.CUDA,
         )
-    return tuple(rebased)
+    return value
 
 
 def load_federated_training_history(
@@ -728,86 +1296,133 @@ def load_federated_training_history(
     directory: Path,
     identity_kind: PopulationIdentityKind,
     *,
+    clients: tuple[ClientIdentity, ...],
+    checkpoint_protocol: CheckpointProtocol,
     personalized_coordinate: FederatedTrainingCoordinate | None = None,
 ) -> FederatedTrainingHistory:
-    col = FederatedHistoryColumn
-    round_summary_path = directory / FederatedHistoryAssetName.ROUND_SUMMARY.value
-    client_rounds_path = directory / FederatedHistoryAssetName.CLIENT_ROUNDS.value
-    if not round_summary_path.is_file() or not client_rounds_path.is_file():
-        raise ArtifactIntegrityError("history parquet file missing", subject=ContractSubject.ARTIFACT_PATH)
+    round_frame, client_frame, personalized_frame = _history_frames(directory)
+    training_rounds = tuple(RoundNumber(value) for value in range(1, checkpoint_protocol.maximum_round.value + 1))
+    validate_round_summary(round_frame, training_rounds)
+    validate_client_history(
+        client_frame,
+        expected_rounds=training_rounds,
+        expected_clients=clients,
+    )
 
-    round_frame = pl.read_parquet(round_summary_path).sort(col.ROUND_NUMBER.value)
-    validate_parquet_schema(round_frame, ROUND_SUMMARY_SCHEMA)
-
-    client_frame = pl.read_parquet(client_rounds_path)
-    validate_parquet_schema(client_frame, CLIENT_ROUNDS_SCHEMA)
-
-    personalized_path = directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
-    personalized_frame = None
-    if personalized_path.is_file():
-        personalized_frame = pl.read_parquet(personalized_path)
-        validate_parquet_schema(personalized_frame, PERSONALIZED_ROUNDS_SCHEMA)
-
-    rounds: list[FederatedRoundResult] = []
-    for round_row in round_frame.iter_rows(named=True):
-        round_number = RoundNumber(int(round_row[col.ROUND_NUMBER.value]))
-        client_rows = client_frame.filter(pl.col(col.ROUND_NUMBER.value) == round_row[col.ROUND_NUMBER.value])
-        client_results = tuple(
-            ClientTrainingResult(
-                client=ClientIdentity(coordinate.population, str(row[col.CLIENT_ID.value]), identity_kind),
-                sample_count=RowCount(int(row[col.SAMPLE_COUNT.value])),
-                local_loss=MetricValue(float(row[col.LOCAL_LOSS.value])),
-            )
-            for row in client_rows.iter_rows(named=True)
-        )
-        personalized_references: tuple[PersonalizedModelStateReference, ...] = ()
-        if personalized_frame is not None:
-            if personalized_coordinate is None:
-                raise ScientificContractError(
-                    "personalized training history requires personalized coordinate",
+    match coordinate.model:
+        case TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
+            if personalized_coordinate is None or personalized_frame is None:
+                raise ArtifactIntegrityError(
+                    "Ditto global history requires its personalized coordinate and history",
                     subject=ContractSubject.COORDINATE,
                 )
-            rows = personalized_frame.filter(pl.col(col.ROUND_NUMBER.value) == round_row[col.ROUND_NUMBER.value])
-            personalized_references = tuple(
+            if not coordinate.matches_ditto_peer(personalized_coordinate):
+                raise ArtifactIntegrityError(
+                    "Ditto global and personalized coordinates do not match",
+                    subject=ContractSubject.COORDINATE,
+                )
+            validate_personalized_history(
+                personalized_frame,
+                expected_rounds=training_rounds,
+                expected_clients=clients,
+            )
+        case TrainingModelId.FEDAVG_AUTOENCODER | TrainingModelId.FEDPROX_AUTOENCODER:
+            if personalized_coordinate is not None or personalized_frame is not None:
+                raise ArtifactIntegrityError(
+                    "FedAvg and FedProx publications cannot contain personalized history",
+                    subject=ContractSubject.ARTIFACT_PATH,
+                )
+        case _:
+            raise ArtifactIntegrityError(
+                "unsupported model in federated history publication",
+                subject=ContractSubject.COORDINATE,
+            )
+
+    col = FederatedHistoryColumn
+    client_rows_by_round = {
+        round_number: client_frame.filter(pl.col(col.ROUND_NUMBER.value) == round_number.value)
+        for round_number in training_rounds
+    }
+    personalized_rows_by_round = (
+        {
+            round_number: personalized_frame.filter(pl.col(col.ROUND_NUMBER.value) == round_number.value)
+            for round_number in training_rounds
+        }
+        if personalized_frame is not None
+        else {}
+    )
+
+    rounds: list[FederatedRoundResult] = []
+    for row in round_frame.iter_rows(named=True):
+        round_number = RoundNumber(int(row[col.ROUND_NUMBER.value]))
+        client_results = tuple(
+            ClientTrainingResult(
+                client=ClientIdentity(
+                    coordinate.population,
+                    str(client_row[col.CLIENT_ID.value]),
+                    identity_kind,
+                ),
+                sample_count=RowCount(int(client_row[col.SAMPLE_COUNT.value])),
+                local_loss=MetricValue(float(client_row[col.LOCAL_LOSS.value])),
+            )
+            for client_row in client_rows_by_round[round_number].iter_rows(named=True)
+        )
+        personalized_references = (
+            tuple(
                 PersonalizedModelStateReference(
                     coordinate=personalized_coordinate,
-                    client=ClientIdentity(coordinate.population, str(row[col.CLIENT_ID.value]), identity_kind),
+                    client=ClientIdentity(
+                        coordinate.population,
+                        str(personalized_row[col.CLIENT_ID.value]),
+                        identity_kind,
+                    ),
                     round_number=round_number,
-                    local_loss=MetricValue(float(row[col.LOCAL_LOSS.value])),
-                    state_checksum=Checksum(str(row[col.STATE_CHECKSUM.value])),
+                    local_loss=MetricValue(float(personalized_row[col.LOCAL_LOSS.value])),
+                    state_checksum=Checksum(str(personalized_row[col.STATE_CHECKSUM.value])),
                     tensor_path=None,
                 )
-                for row in rows.iter_rows(named=True)
+                for personalized_row in personalized_rows_by_round[round_number].iter_rows(named=True)
             )
-        communication = CommunicationRecord(
-            round_number=round_number,
-            estimated_upload_bytes=ByteCount(int(round_row[col.UPLOAD_BYTES.value])),
-            estimated_download_bytes=ByteCount(int(round_row[col.DOWNLOAD_BYTES.value])),
-            estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
-        )
-        global_reference = GlobalModelStateReference(
-            coordinate=coordinate,
-            round_number=round_number,
-            state_checksum=Checksum(str(round_row[col.GLOBAL_STATE_CHECKSUM.value])),
-            tensor_path=None,
+            if personalized_coordinate is not None
+            else ()
         )
         rounds.append(
             FederatedRoundResult(
                 round_number=round_number,
                 client_results=client_results,
-                aggregate_loss=MetricValue(float(round_row[col.AGGREGATE_LOSS.value])),
-                communication=communication,
-                global_state_reference=global_reference,
+                aggregate_loss=MetricValue(float(row[col.AGGREGATE_LOSS.value])),
+                communication=CommunicationRecord(
+                    round_number=round_number,
+                    estimated_upload_bytes=ByteCount(int(row[col.UPLOAD_BYTES.value])),
+                    estimated_download_bytes=ByteCount(int(row[col.DOWNLOAD_BYTES.value])),
+                    estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
+                ),
+                global_state_reference=GlobalModelStateReference(
+                    coordinate=coordinate,
+                    round_number=round_number,
+                    state_checksum=Checksum(str(row[col.GLOBAL_STATE_CHECKSUM.value])),
+                    tensor_path=None,
+                ),
                 personalized_state_references=personalized_references,
             )
         )
-    return FederatedTrainingHistory(coordinate=coordinate, rounds=tuple(rounds))
+    return FederatedTrainingHistory(
+        coordinate=coordinate,
+        rounds=tuple(rounds),
+    )
 
 
 def load_reused_federated_training(
     request: ReusedFederatedTrainingRequest,
-) -> tuple[FederatedTrainingResult, tuple[CheckpointCandidate, ...]]:
-    history = load_federated_training_history(request.coordinate, request.directory, request.identity_kind)
+) -> FederatedTrainingOutcome:
+    if request.coordinate.model not in {
+        TrainingModelId.FEDAVG_AUTOENCODER,
+        TrainingModelId.FEDPROX_AUTOENCODER,
+    }:
+        raise ArtifactIntegrityError(
+            "Ditto reuse requires the typed Ditto reuse request",
+            subject=ContractSubject.COORDINATE,
+        )
     candidates = load_reused_global_candidates(
         ReusedGlobalCandidatesRequest(
             coordinate=request.coordinate,
@@ -815,73 +1430,103 @@ def load_reused_federated_training(
             checkpoint_protocol=request.checkpoint_protocol,
             preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
             split_manifest_checksum=request.split_manifest_checksum,
+            autoencoder=request.autoencoder,
+            batch_size=request.batch_size,
         )
     )
-    training_result = FederatedTrainingResult(
-        coordinate=request.coordinate,
+    history = load_federated_training_history(
+        request.coordinate,
+        request.directory,
+        request.identity_kind,
+        clients=request.clients,
+        checkpoint_protocol=request.checkpoint_protocol,
+    )
+    return FederatedTrainingOutcome(
+        training_result=FederatedTrainingResult(
+            coordinate=request.coordinate,
+            autoencoder=request.autoencoder,
+            checkpoint_protocol=request.checkpoint_protocol,
+            history=history,
+            preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+            split_manifest_checksum=request.split_manifest_checksum,
+            device_name=load_published_device_name(request.directory),
+            batch_size_used=request.batch_size,
+        ),
+        candidates=candidates,
+    )
+
+
+def load_reused_ditto_training(
+    request: ReusedDittoTrainingRequest,
+) -> DittoTrainingOutcome:
+    global_request = ReusedGlobalCandidatesRequest(
+        coordinate=request.global_coordinate,
+        directory=request.global_directory,
+        checkpoint_protocol=request.checkpoint_protocol,
+        preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+        split_manifest_checksum=request.split_manifest_checksum,
+        autoencoder=request.autoencoder,
+        batch_size=request.batch_size,
+    )
+    global_manifest = _validated_global_manifest(global_request)
+    personalized_manifest = _validated_personalized_manifest(
+        ReusedPersonalizedCandidatesRequest(
+            personalized_coordinate=request.personalized_coordinate,
+            personalized_output_directory=request.personalized_directory,
+            global_history_directory=request.global_directory,
+            clients=request.clients,
+            checkpoint_protocol=request.checkpoint_protocol,
+            preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+            split_manifest_checksum=request.split_manifest_checksum,
+            autoencoder=request.autoencoder,
+            batch_size=request.batch_size,
+        )
+    )
+    personalized_digest = _verify_completion(
+        request.personalized_directory,
+        personalized_manifest,
+        include_history=False,
+    )
+    if global_manifest.linked_personalized_digest != personalized_digest.value:
+        raise ArtifactIntegrityError(
+            "Ditto global publication is linked to a different personalized publication",
+            subject=ContractSubject.ARTIFACT_PATH,
+        )
+
+    global_candidates = load_reused_global_candidates(global_request)
+    personalized_candidates = load_reused_personalized_candidates(
+        ReusedPersonalizedCandidatesRequest(
+            personalized_coordinate=request.personalized_coordinate,
+            personalized_output_directory=request.personalized_directory,
+            global_history_directory=request.global_directory,
+            clients=request.clients,
+            checkpoint_protocol=request.checkpoint_protocol,
+            preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
+            split_manifest_checksum=request.split_manifest_checksum,
+            autoencoder=request.autoencoder,
+            batch_size=request.batch_size,
+        )
+    )
+    history = load_federated_training_history(
+        request.global_coordinate,
+        request.global_directory,
+        request.identity_kind,
+        clients=request.clients,
+        checkpoint_protocol=request.checkpoint_protocol,
+        personalized_coordinate=request.personalized_coordinate,
+    )
+    result = FederatedTrainingResult(
+        coordinate=request.global_coordinate,
         autoencoder=request.autoencoder,
         checkpoint_protocol=request.checkpoint_protocol,
         history=history,
         preprocessing_state_set_checksum=request.preprocessing_state_set_checksum,
         split_manifest_checksum=request.split_manifest_checksum,
-        device_name=load_published_device_name(request.directory),
+        device_name=load_published_device_name(request.global_directory),
         batch_size_used=request.batch_size,
     )
-    return training_result, candidates
-
-
-def persist_federated_training_history(
-    history: FederatedTrainingHistory,
-    directory: Path,
-    *,
-    device_name: str,
-) -> None:
-    if not device_name:
-        raise ScientificContractError(
-            "training publication requires a non-empty device name",
-            subject=ContractSubject.CUDA,
-        )
-    directory.mkdir(parents=True, exist_ok=True)
-    (directory / FederatedHistoryAssetName.DEVICE_NAME.value).write_text(device_name, encoding="utf-8")
-
-    round_rows = [
-        (
-            r.round_number.value,
-            r.aggregate_loss.value,
-            r.communication.estimated_upload_bytes.value,
-            r.communication.estimated_download_bytes.value,
-            r.global_state_reference.state_checksum.value,
-        )
-        for r in history.rounds
-    ]
-    client_rows = [
-        (
-            r.round_number.value,
-            cr.client.client_id,
-            cr.sample_count.value,
-            cr.local_loss.value,
-        )
-        for r in history.rounds
-        for cr in r.client_results
-    ]
-    personalized_rows = [
-        (
-            r.round_number.value,
-            pr.client.client_id,
-            pr.local_loss.value,
-            pr.state_checksum.value,
-        )
-        for r in history.rounds
-        for pr in r.personalized_state_references
-    ]
-
-    pl.DataFrame(round_rows, schema=ROUND_SUMMARY_SCHEMA, orient="row").write_parquet(
-        directory / FederatedHistoryAssetName.ROUND_SUMMARY.value
+    return DittoTrainingOutcome(
+        global_training_result=result,
+        global_candidates=global_candidates,
+        personalized_candidates=personalized_candidates,
     )
-    pl.DataFrame(client_rows, schema=CLIENT_ROUNDS_SCHEMA, orient="row").write_parquet(
-        directory / FederatedHistoryAssetName.CLIENT_ROUNDS.value
-    )
-    if personalized_rows:
-        pl.DataFrame(personalized_rows, schema=PERSONALIZED_ROUNDS_SCHEMA, orient="row").write_parquet(
-            directory / FederatedHistoryAssetName.PERSONALIZED_ROUNDS.value
-        )

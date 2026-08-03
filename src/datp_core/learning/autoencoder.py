@@ -1,6 +1,6 @@
-"""Shared protocol-driven reconstruction autoencoder architecture."""
+"""Protocol-driven reconstruction autoencoder construction and scoring."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 
 import numpy as np
 import torch
@@ -13,41 +13,30 @@ from datp_core.protocols.models import AutoencoderProtocol
 from datp_core.runtime.compute import require_cuda_available
 
 type AutoencoderState = dict[str, torch.Tensor]
+type AutoencoderStateView = Mapping[str, torch.Tensor]
+
 LEARNING_DTYPE = np.float32
 TORCH_LEARNING_DTYPE = torch.float32
 
 
 class ReconstructionAutoencoder(nn.Module):
-    """Symmetric autoencoder constructed only from the declared width tuple.
-
-    No BatchNorm, dropout, or architecture addition is introduced. Per-row reconstruction-error
-    aggregation is provided by reconstruction_errors; trainers must not invent alternate score semantics.
-    """
+    """Symmetric feed-forward autoencoder defined by the declared widths."""
 
     def __init__(self, widths: Sequence[int]) -> None:
         super().__init__()
-        if len(widths) < 2:
-            raise ScientificContractError(
-                "autoencoder widths require at least input and output layers",
-                subject=ContractSubject.WIDTHS,
-            )
-        if widths[0] != widths[-1]:
-            raise ScientificContractError(
-                "autoencoder input and output widths must match",
-                subject=ContractSubject.WIDTHS,
-            )
+        declared = _validated_widths(widths)
+        final_layer_index = len(declared) - 2
         layers: list[nn.Module] = []
-        for left, right in zip(widths[:-1], widths[1:], strict=True):
+        for layer_index, (left, right) in enumerate(zip(declared[:-1], declared[1:], strict=True)):
             layers.append(nn.Linear(left, right))
-            if right != widths[-1]:
+            if layer_index != final_layer_index:
                 layers.append(nn.ReLU())
         self._network = nn.Sequential(*layers)
-        self._input_width = int(widths[0])
-        self._widths = tuple(int(width) for width in widths)
+        self._widths = declared
 
     @property
     def input_width(self) -> int:
-        return self._input_width
+        return self._widths[0]
 
     @property
     def widths(self) -> tuple[int, ...]:
@@ -57,49 +46,114 @@ class ReconstructionAutoencoder(nn.Module):
         return self._network(features)
 
 
+def _validated_widths(widths: Sequence[int]) -> tuple[int, ...]:
+    declared = tuple(widths)
+    if len(declared) < 2:
+        raise ScientificContractError(
+            "autoencoder widths require at least input and output layers",
+            subject=ContractSubject.WIDTHS,
+        )
+    if any(isinstance(width, bool) or not isinstance(width, int) or width < 1 for width in declared):
+        raise ScientificContractError(
+            "autoencoder widths must be positive integers",
+            subject=ContractSubject.WIDTHS,
+        )
+    if declared[0] != declared[-1]:
+        raise ScientificContractError(
+            "autoencoder input and output widths must match",
+            subject=ContractSubject.WIDTHS,
+        )
+    return declared
+
+
+def _construct_autoencoder(protocol: AutoencoderProtocol) -> ReconstructionAutoencoder:
+    """Construct without advancing the caller's global CPU RNG state."""
+    with torch.random.fork_rng(devices=[]):
+        return ReconstructionAutoencoder(protocol.widths)
+
+
 def build_reconstruction_autoencoder(
     protocol: AutoencoderProtocol,
     *,
     initialization_seed: Seed,
 ) -> ReconstructionAutoencoder:
-    """Construct a fresh autoencoder with initialization deterministic from the seed."""
+    """Construct and initialize a fresh deterministic autoencoder."""
+    model = _construct_autoencoder(protocol)
     generator = torch.Generator(device="cpu")
     generator.manual_seed(initialization_seed.value)
-    model = ReconstructionAutoencoder(protocol.widths)
     with torch.no_grad():
         for module in model.modules():
-            if isinstance(module, nn.Linear):
-                nn.init.kaiming_uniform_(module.weight, a=5**0.5, generator=generator)
-                if module.bias is not None:
-                    fan_in, _ = nn.init._calculate_fan_in_and_fan_out(module.weight)
-                    bound = 1.0 / (fan_in**0.5) if fan_in > 0 else 0.0
-                    nn.init.uniform_(module.bias, -bound, bound, generator=generator)
+            if not isinstance(module, nn.Linear):
+                continue
+            nn.init.kaiming_uniform_(module.weight, a=5**0.5, generator=generator)
+            if module.bias is None:
+                continue
+            fan_in, _ = nn.init._calculate_fan_in_and_fan_out(module.weight)
+            bound = 1.0 / fan_in**0.5
+            nn.init.uniform_(module.bias, -bound, bound, generator=generator)
     model.train()
     return model
 
 
-def clone_state(state: AutoencoderState) -> AutoencoderState:
+def build_autoencoder_for_state(
+    protocol: AutoencoderProtocol,
+    state: AutoencoderStateView,
+    *,
+    device: torch.device,
+) -> ReconstructionAutoencoder:
+    """Construct an isolated model, load a complete state, and place it on the target device."""
+    model = _construct_autoencoder(protocol).to(device)
+    load_autoencoder_state(model, state)
+    return model
+
+
+def clone_state(state: AutoencoderStateView) -> AutoencoderState:
     return {name: tensor.detach().clone() for name, tensor in state.items()}
 
 
 def clone_autoencoder_state(model: ReconstructionAutoencoder) -> AutoencoderState:
-    return clone_state(dict(model.state_dict()))
+    return clone_state(model.state_dict())
 
 
-def load_autoencoder_state(model: ReconstructionAutoencoder, state: AutoencoderState) -> None:
+def load_autoencoder_state(model: ReconstructionAutoencoder, state: AutoencoderStateView) -> None:
     model.load_state_dict(state, strict=True)
 
 
 def _require_scoreable_feature_matrix(model: ReconstructionAutoencoder, features: np.ndarray) -> None:
     if features.ndim != 2:
         raise ScientificContractError(
-            "reconstruction scoring requires a 2-D feature matrix",
+            "reconstruction scoring requires a two-dimensional feature matrix",
             subject=ContractSubject.FEATURES,
         )
     if features.shape[1] != model.input_width:
-        raise ScientificContractError("feature width mismatch during scoring", subject=ContractSubject.FEATURES)
+        raise ScientificContractError(
+            "feature width mismatch during scoring",
+            subject=ContractSubject.FEATURES,
+        )
     if not np.isfinite(features).all():
-        raise ScientificContractError("scoring features must be finite", subject=ContractSubject.FEATURES)
+        raise ScientificContractError(
+            "scoring features must be finite",
+            subject=ContractSubject.FEATURES,
+        )
+
+
+def _require_model_on_device(model: ReconstructionAutoencoder, device: torch.device) -> None:
+    parameters = tuple(model.parameters())
+    if not parameters:
+        raise ScientificContractError(
+            "reconstruction autoencoder has no parameters",
+            subject=ContractSubject.TRAINING,
+        )
+    if any(parameter.device != device for parameter in parameters):
+        raise ScientificContractError(
+            "autoencoder parameters must all reside on the declared scoring device",
+            subject=ContractSubject.CUDA,
+        )
+    if any(parameter.dtype != TORCH_LEARNING_DTYPE for parameter in parameters):
+        raise ScientificContractError(
+            "autoencoder parameters must use the canonical learning dtype",
+            subject=ContractSubject.TRAINING,
+        )
 
 
 def reconstruction_errors(
@@ -109,19 +163,33 @@ def reconstruction_errors(
     batch_size: BatchSize,
     device: torch.device,
 ) -> np.ndarray:
-    """Mean per-row squared reconstruction error; higher means greater anomaly evidence."""
+    """Return mean per-row squared reconstruction error."""
     require_cuda_available()
+    if device.type != "cuda":
+        raise ScientificContractError(
+            "reconstruction scoring requires a CUDA device",
+            subject=ContractSubject.CUDA,
+        )
     _require_scoreable_feature_matrix(model, features)
+    _require_model_on_device(model, device)
+
     model.eval()
     scores: list[np.ndarray] = []
-    total_rows = features.shape[0]
     with torch.inference_mode():
-        for start in range(0, total_rows, batch_size.value):
-            batch_np = np.asarray(features[start : start + batch_size.value], dtype=LEARNING_DTYPE)
-            batch_tensor = torch.as_tensor(batch_np, device=device)
-            reconstructed = model(batch_tensor)
-            per_row = torch.mean((reconstructed - batch_tensor) ** 2, dim=1)
+        for start in range(0, features.shape[0], batch_size.value):
+            batch_array = np.asarray(
+                features[start : start + batch_size.value],
+                dtype=LEARNING_DTYPE,
+            )
+            batch = torch.as_tensor(
+                batch_array,
+                dtype=TORCH_LEARNING_DTYPE,
+                device=device,
+            )
+            reconstruction = model(batch)
+            per_row = torch.mean((reconstruction - batch) ** 2, dim=1)
             scores.append(per_row.detach().cpu().numpy())
+
     if not scores:
-        return np.asarray([], dtype=np.float64)
+        return np.empty(0, dtype=np.float64)
     return np.concatenate(scores).astype(np.float64, copy=False)

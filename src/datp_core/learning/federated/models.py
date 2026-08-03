@@ -1,4 +1,4 @@
-"""Typed, immutable federated learning model contracts."""
+"""Typed immutable contracts for federated autoencoder training."""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,50 +33,36 @@ from datp_core.populations.models import ClientIdentity
 from datp_core.preprocessing.models import FittedPreprocessingState
 from datp_core.protocols.models import AutoencoderProtocol, CheckpointProtocol
 
-CANDIDATE_PREFIX: str = "checkpoint_round_"
-CANDIDATE_SUFFIX: str = ".safetensors"
-PERSONALIZED_INFIX: str = "_client_"
+_GLOBAL_MODELS = frozenset(
+    {
+        TrainingModelId.FEDAVG_AUTOENCODER,
+        TrainingModelId.FEDPROX_AUTOENCODER,
+        TrainingModelId.DITTO_GLOBAL_AUTOENCODER,
+    }
+)
 
 
-@dataclass(frozen=True, slots=True)
-class RoundSnapshot:
-    """In-memory candidate-round state prior to persistence."""
-
-    round_number: RoundNumber
-    state_dict: AutoencoderState
-    mean_training_loss: MetricValue
-
-
-def candidate_tensor_name(round_number: RoundNumber, client: ClientIdentity | None = None) -> str:
-    base = f"{CANDIDATE_PREFIX}{round_number.value}"
-    if client is not None:
-        base = f"{base}{PERSONALIZED_INFIX}{client.client_id}"
-    return f"{base}{CANDIDATE_SUFFIX}"
-
-
-def _require_model_coefficient_matches_kind(
+def _require_model_coefficient(
     model: TrainingModelId,
     coefficient: ProximalCoefficient | DittoRegularization | None,
 ) -> None:
     match model:
         case TrainingModelId.FEDAVG_AUTOENCODER:
-            if coefficient is not None:
-                raise ScientificContractError(
-                    "FedAvg coordinates carry no model coefficient",
-                    subject=ContractSubject.TRAINING,
-                )
+            valid = coefficient is None
+            message = "FedAvg coordinates carry no model coefficient"
         case TrainingModelId.FEDPROX_AUTOENCODER:
-            if not isinstance(coefficient, ProximalCoefficient):
-                raise ScientificContractError(
-                    "FedProx coordinates require a proximal coefficient",
-                    subject=ContractSubject.TRAINING,
-                )
+            valid = isinstance(coefficient, ProximalCoefficient)
+            message = "FedProx coordinates require a proximal coefficient"
         case TrainingModelId.DITTO_GLOBAL_AUTOENCODER | TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
-            if not isinstance(coefficient, DittoRegularization):
-                raise ScientificContractError(
-                    "Ditto coordinates require a personalization regularization value",
-                    subject=ContractSubject.TRAINING,
-                )
+            valid = isinstance(coefficient, DittoRegularization)
+            message = "Ditto coordinates require a personalization regularization value"
+        case _:
+            raise ScientificContractError(
+                f"unsupported federated training model {model}",
+                subject=ContractSubject.TRAINING,
+            )
+    if not valid:
+        raise ScientificContractError(message, subject=ContractSubject.TRAINING)
 
 
 @dataclass(frozen=True, slots=True)
@@ -89,7 +75,57 @@ class FederatedTrainingCoordinate:
     model_coefficient: ProximalCoefficient | DittoRegularization | None
 
     def __post_init__(self) -> None:
-        _require_model_coefficient_matches_kind(self.model, self.model_coefficient)
+        _require_model_coefficient(self.model, self.model_coefficient)
+
+    def matches_ditto_peer(self, other: "FederatedTrainingCoordinate") -> bool:
+        return (
+            self.population == other.population
+            and self.training_seed == other.training_seed
+            and self.split_protocol == other.split_protocol
+            and self.preprocessing_identity == other.preprocessing_identity
+            and self.model_coefficient == other.model_coefficient
+            and {self.model, other.model}
+            == {
+                TrainingModelId.DITTO_GLOBAL_AUTOENCODER,
+                TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
+            }
+        )
+
+
+def validate_client_preprocessing_match(
+    client: ClientIdentity,
+    preprocessing_state: FittedPreprocessingState,
+    feature_names: FeatureNameSequence,
+) -> None:
+    state_identity = preprocessing_state.client_identity
+    if state_identity is None:
+        raise ScientificContractError(
+            "federated preprocessing state requires a client identity",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+    if state_identity.value != client.client_id:
+        raise ScientificContractError(
+            "preprocessing state client identity token must match the client training input",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+    if preprocessing_state.client_population is not None and preprocessing_state.client_population != client.population:
+        raise ScientificContractError(
+            "preprocessing state client population must match the client training input",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+    if (
+        preprocessing_state.client_identity_kind is not None
+        and preprocessing_state.client_identity_kind != client.identity_kind
+    ):
+        raise ScientificContractError(
+            "preprocessing state client identity kind must match the client training input",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+    if preprocessing_state.protocol.transformed_schema.feature_names != feature_names.names:
+        raise ScientificContractError(
+            "preprocessing transformed feature schema must match the declared training feature names",
+            subject=ContractSubject.SCHEMA,
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,17 +143,20 @@ class ClientTrainingInput:
             )
         if self.preprocessing_state.branch is not ProcessedDataBranch.FEDERATED:
             raise ScientificContractError(
-                "federated training requires federated preprocessing branch",
+                "federated training requires a federated preprocessing state",
                 subject=self.preprocessing_state.branch,
             )
-        if (
-            self.preprocessing_state.client_identity is None
-            or self.preprocessing_state.client_identity.value != self.client.client_id
-        ):
-            raise ScientificContractError(
-                "preprocessing state client identity must match client training input",
-                subject=ContractSubject.CLIENT_IDENTITY,
-            )
+        validate_client_preprocessing_match(
+            self.client,
+            self.preprocessing_state,
+            self.feature_names,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedClientProvenance:
+    client: ClientIdentity
+    preprocessing_checksum: Checksum
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,7 +167,7 @@ class ClientUpdate:
     local_loss: MetricValue
 
     def __post_init__(self) -> None:
-        if self.sample_count < 1:
+        if self.sample_count.value < 1:
             raise ScientificContractError(
                 "a client update requires at least one training sample",
                 subject=ContractSubject.ROWS,
@@ -141,6 +180,14 @@ class ClientTrainingResult:
     sample_count: RowCount
     local_loss: MetricValue
 
+    @classmethod
+    def from_update(cls, update: ClientUpdate) -> "ClientTrainingResult":
+        return cls(
+            client=update.client,
+            sample_count=update.sample_count,
+            local_loss=update.local_loss,
+        )
+
 
 @dataclass(frozen=True, slots=True)
 class CommunicationRecord:
@@ -152,8 +199,7 @@ class CommunicationRecord:
     def __post_init__(self) -> None:
         if self.estimation_basis is not CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE:
             raise ScientificContractError(
-                "communication bytes must be tagged as a serialized-message-size estimate, "
-                "never a measured network cost",
+                "communication bytes must remain tagged as serialized-message-size estimates",
                 subject=ContractSubject.RUNTIME,
             )
 
@@ -166,9 +212,9 @@ class GlobalModelStateReference:
     tensor_path: Path | None
 
     def __post_init__(self) -> None:
-        if self.coordinate.model is TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+        if self.coordinate.model not in _GLOBAL_MODELS:
             raise ScientificContractError(
-                "a personalized-model coordinate cannot be referenced as a global state",
+                "a global state reference requires a global federated model coordinate",
                 subject=ContractSubject.COORDINATE,
             )
 
@@ -185,8 +231,13 @@ class PersonalizedModelStateReference:
     def __post_init__(self) -> None:
         if self.coordinate.model is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
             raise ScientificContractError(
-                "personalized-model state references require the Ditto personalized coordinate",
+                "personalized state references require the Ditto personalized coordinate",
                 subject=ContractSubject.COORDINATE,
+            )
+        if self.client.population != self.coordinate.population:
+            raise ScientificContractError(
+                "personalized state client population must match its coordinate",
+                subject=ContractSubject.CLIENT_IDENTITY,
             )
 
 
@@ -205,38 +256,59 @@ class FederatedRoundResult:
                 "a federated round requires at least one client result",
                 subject=ContractSubject.CLIENT,
             )
-        client_ids = tuple(item.client.client_id for item in self.client_results)
-        if len(set(client_ids)) != len(client_ids):
+        clients = tuple(result.client for result in self.client_results)
+        if len(set(clients)) != len(clients):
             raise ScientificContractError(
-                "a federated round cannot report duplicate client results",
-                subject=ContractSubject.CLIENT,
+                "a federated round cannot contain duplicate client results",
+                subject=ContractSubject.CLIENT_IDENTITY,
             )
         if self.communication.round_number != self.round_number:
             raise ScientificContractError(
-                "communication record round number must match the training round",
+                "communication round must match the training round",
                 subject=ContractSubject.COORDINATE,
             )
         if self.global_state_reference.round_number != self.round_number:
             raise ScientificContractError(
-                "global state reference round number must match the training round",
+                "global state round must match the training round",
                 subject=ContractSubject.COORDINATE,
             )
-        personalized_client_ids = tuple(item.client.client_id for item in self.personalized_state_references)
-        if len(set(personalized_client_ids)) != len(personalized_client_ids):
+
+        coordinate = self.global_state_reference.coordinate
+        personalized = self.personalized_state_references
+        personalized_clients = tuple(reference.client for reference in personalized)
+        if len(set(personalized_clients)) != len(personalized_clients):
             raise ScientificContractError(
-                "a federated round cannot report duplicate personalized state references",
-                subject=ContractSubject.CLIENT,
+                "a federated round cannot contain duplicate personalized references",
+                subject=ContractSubject.CLIENT_IDENTITY,
             )
-        if self.personalized_state_references:
-            if self.global_state_reference.coordinate.model is TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
-                if set(personalized_client_ids) != set(client_ids):
+
+        match coordinate.model:
+            case TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
+                if set(personalized_clients) != set(clients):
                     raise ScientificContractError(
-                        "Ditto personalized references must cover exactly the round client set",
+                        "every Ditto global round requires exactly one personalized reference per client",
                         subject=ContractSubject.CLIENT,
                     )
-            elif self.global_state_reference.coordinate.model is not TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
+                for reference in personalized:
+                    if reference.round_number != self.round_number:
+                        raise ScientificContractError(
+                            "personalized state round must match the containing training round",
+                            subject=ContractSubject.COORDINATE,
+                        )
+                    if not coordinate.matches_ditto_peer(reference.coordinate):
+                        raise ScientificContractError(
+                            "Ditto global and personalized references must share one experiment identity",
+                            subject=ContractSubject.COORDINATE,
+                        )
+            case TrainingModelId.FEDAVG_AUTOENCODER | TrainingModelId.FEDPROX_AUTOENCODER:
+                if personalized:
+                    raise ScientificContractError(
+                        "FedAvg and FedProx rounds cannot carry personalized references",
+                        subject=ContractSubject.COORDINATE,
+                    )
+            case _:
                 raise ScientificContractError(
-                    "non-Ditto rounds must not carry personalized state references",
+                    "unsupported global model in a federated round",
                     subject=ContractSubject.COORDINATE,
                 )
 
@@ -250,28 +322,41 @@ class FederatedTrainingHistory:
         if not self.rounds:
             raise ScientificContractError(
                 "federated training history must contain at least one round",
-                subject=ContractSubject.CHECKPOINT_CANDIDATES,
+                subject=ContractSubject.TRAINING,
             )
-        observed = tuple(item.round_number.value for item in self.rounds)
-        expected = tuple(range(1, len(observed) + 1))
-        if observed != expected:
+        observed_rounds = tuple(item.round_number.value for item in self.rounds)
+        if observed_rounds != tuple(range(1, len(self.rounds) + 1)):
             raise ScientificContractError(
-                "federated training history must record consecutive rounds starting at one",
+                "federated history rounds must be consecutive from one",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
-        reference_client_ids = frozenset(item.client.client_id for item in self.rounds[0].client_results)
-        for round_result in self.rounds:
-            if round_result.global_state_reference.coordinate != self.coordinate:
+
+        reference_clients = tuple(item.client for item in self.rounds[0].client_results)
+        for item in self.rounds:
+            if item.global_state_reference.coordinate != self.coordinate:
                 raise ScientificContractError(
-                    "every round in a training history must share the training coordinate",
+                    "every training-history round must use the history coordinate",
                     subject=ContractSubject.COORDINATE,
                 )
-            current_client_ids = frozenset(item.client.client_id for item in round_result.client_results)
-            if current_client_ids != reference_client_ids:
+            current_clients = tuple(result.client for result in item.client_results)
+            if current_clients != reference_clients:
                 raise ScientificContractError(
-                    "every round must contain the same client identity set",
+                    "every training-history round must preserve deterministic client ordering",
                     subject=ContractSubject.CLIENT,
                 )
+
+
+@dataclass(frozen=True, slots=True)
+class RoundSnapshot:
+    round_number: RoundNumber
+    state_dict: AutoencoderState
+    mean_training_loss: MetricValue
+
+
+@dataclass(frozen=True, slots=True)
+class PersonalizedSnapshotSet:
+    client: ClientIdentity
+    snapshots: tuple[RoundSnapshot, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,14 +381,20 @@ class CheckpointCandidate:
                 "federated checkpoint candidate has an invalid status",
                 subject=self.status,
             )
-        if self.client is not None and self.coordinate.model is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+        if self.coordinate.model is TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+            if self.client is None:
+                raise ScientificContractError(
+                    "Ditto personalized checkpoints require a client",
+                    subject=ContractSubject.CLIENT_IDENTITY,
+                )
+            if self.client.population != self.coordinate.population:
+                raise ScientificContractError(
+                    "checkpoint client population must match its coordinate",
+                    subject=ContractSubject.CLIENT_IDENTITY,
+                )
+        elif self.client is not None:
             raise ScientificContractError(
-                "only Ditto personalized checkpoints carry a client identity",
-                subject=ContractSubject.CLIENT_IDENTITY,
-            )
-        if self.client is None and self.coordinate.model is TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
-            raise ScientificContractError(
-                "Ditto personalized checkpoints require a client identity",
+                "global checkpoints cannot carry a client identity",
                 subject=ContractSubject.CLIENT_IDENTITY,
             )
 
@@ -323,64 +414,63 @@ class CheckpointDecision:
                 "a checkpoint decision requires retained candidates",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
-        if self.selected not in self.candidates:
-            raise ScientificContractError(
-                "the selected checkpoint must be exactly one of the retained candidates",
-                subject=ContractSubject.CHECKPOINT_CANDIDATES,
-            )
         if self.status is not CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
             raise ScientificContractError(
-                "a federated checkpoint decision status must be SELECTED_BY_NON_TEST_RULE",
+                "checkpoint decision status must be SELECTED_BY_NON_TEST_RULE",
                 subject=self.status,
+            )
+        if tuple(candidate.round_number for candidate in self.candidates) != tuple(self.checkpoint_protocol.candidates):
+            raise ScientificContractError(
+                "checkpoint decision candidates must equal the declared ordered rounds",
+                subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            )
+
+        reference = self.candidates[0]
+        selected_candidates = tuple(
+            candidate for candidate in self.candidates if candidate.status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE
+        )
+        if selected_candidates != (self.selected,):
+            raise ScientificContractError(
+                "the selected checkpoint must be the unique selected-status candidate",
+                subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
         if self.selected.round_number != self.checkpoint_protocol.maximum_round:
             raise ScientificContractError(
-                "the selected checkpoint must equal the declared maximum round",
+                "the selected checkpoint must be the declared maximum round",
                 subject=ContractSubject.CHECKPOINT_SELECTION_RULE,
             )
-        if self.selected.client != self.client:
-            raise ScientificContractError(
-                "the selected checkpoint client identity must match the decision client identity",
-                subject=ContractSubject.CLIENT_IDENTITY,
-            )
-        self._validate_candidate_set_invariants()
 
-    def _validate_candidate_set_invariants(self) -> None:
-        reference = self.candidates[0]
-        selected_count = 0
         for candidate in self.candidates:
-            if candidate.coordinate != reference.coordinate:
+            if candidate.coordinate != self.coordinate:
                 raise ScientificContractError(
-                    "all checkpoint candidates must share the same coordinate",
+                    "every decision candidate must match the decision coordinate",
                     subject=ContractSubject.COORDINATE,
                 )
             if candidate.client != self.client:
                 raise ScientificContractError(
-                    "all checkpoint candidates must share the same client identity",
+                    "every decision candidate must match the decision client",
                     subject=ContractSubject.CLIENT_IDENTITY,
                 )
             if candidate.preprocessing_state_set_checksum != reference.preprocessing_state_set_checksum:
                 raise ScientificContractError(
-                    "all checkpoint candidates must share the same preprocessing checksum",
+                    "decision candidates must share preprocessing provenance",
                     subject=ContractSubject.PREPROCESSING,
                 )
             if candidate.split_manifest_checksum != reference.split_manifest_checksum:
                 raise ScientificContractError(
-                    "all checkpoint candidates must share the same split manifest checksum",
+                    "decision candidates must share split provenance",
                     subject=ContractSubject.SPLIT,
                 )
-            if candidate.status is CheckpointStatus.CANDIDATE:
+            expected_status = (
+                CheckpointStatus.SELECTED_BY_NON_TEST_RULE
+                if candidate == self.selected
+                else CheckpointStatus.STABILITY_EVIDENCE
+            )
+            if candidate.status is not expected_status:
                 raise ScientificContractError(
-                    "retained checkpoint candidates must have their terminal status assigned",
+                    "checkpoint decision candidates have inconsistent terminal statuses",
                     subject=ContractSubject.CHECKPOINT_CANDIDATES,
                 )
-            if candidate.status is CheckpointStatus.SELECTED_BY_NON_TEST_RULE:
-                selected_count += 1
-        if selected_count != 1:
-            raise ScientificContractError(
-                "exactly one candidate must have SELECTED_BY_NON_TEST_RULE status",
-                subject=ContractSubject.CHECKPOINT_CANDIDATES,
-            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -397,8 +487,39 @@ class FederatedTrainingResult:
     def __post_init__(self) -> None:
         if self.history.coordinate != self.coordinate:
             raise ScientificContractError(
-                "training result coordinate must match its own history coordinate",
+                "training result coordinate must match its history",
                 subject=ContractSubject.COORDINATE,
+            )
+        if not self.device_name.strip():
+            raise ScientificContractError(
+                "training result requires a non-empty CUDA device name",
+                subject=ContractSubject.CUDA,
+            )
+        final_round = self.history.rounds[-1].round_number
+        if final_round != self.checkpoint_protocol.maximum_round:
+            raise ScientificContractError(
+                "history terminal round must equal the checkpoint maximum round",
+                subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            )
+        if any(candidate.value > final_round.value for candidate in self.checkpoint_protocol.candidates):
+            raise ScientificContractError(
+                "checkpoint candidates cannot exceed the training history",
+                subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            )
+
+
+@dataclass(frozen=True, slots=True)
+class FederatedTrainingExecution:
+    training_result: FederatedTrainingResult
+    snapshots: tuple[RoundSnapshot, ...]
+
+    def __post_init__(self) -> None:
+        if tuple(snapshot.round_number for snapshot in self.snapshots) != tuple(
+            self.training_result.checkpoint_protocol.candidates
+        ):
+            raise ScientificContractError(
+                "training execution snapshots must equal the declared checkpoint rounds",
+                subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
 
 
@@ -410,23 +531,40 @@ class FederatedTrainingOutcome:
     def __post_init__(self) -> None:
         if not self.candidates:
             raise ScientificContractError(
-                "federated training outcome requires at least one candidate",
+                "federated training outcome requires candidates",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            )
+        expected_rounds = tuple(self.training_result.checkpoint_protocol.candidates)
+        if tuple(candidate.round_number for candidate in self.candidates) != expected_rounds:
+            raise ScientificContractError(
+                "outcome candidate rounds must equal the checkpoint protocol",
+                subject=ContractSubject.CHECKPOINT_CANDIDATES,
+            )
+        paths = tuple(candidate.tensor_path for candidate in self.candidates)
+        if len(set(paths)) != len(paths):
+            raise ScientificContractError(
+                "outcome checkpoint paths must be unique",
+                subject=ContractSubject.ARTIFACT_PATH,
             )
         for candidate in self.candidates:
             if candidate.coordinate != self.training_result.coordinate:
                 raise ScientificContractError(
-                    "candidate coordinate must match the training result coordinate",
+                    "outcome candidates must match the training coordinate",
                     subject=ContractSubject.COORDINATE,
+                )
+            if candidate.status is not CheckpointStatus.CANDIDATE:
+                raise ScientificContractError(
+                    "training outcomes contain unselected checkpoint candidates",
+                    subject=ContractSubject.CHECKPOINT_CANDIDATES,
                 )
             if candidate.preprocessing_state_set_checksum != self.training_result.preprocessing_state_set_checksum:
                 raise ScientificContractError(
-                    "candidate preprocessing checksum must match training result",
+                    "candidate preprocessing provenance must match the training result",
                     subject=ContractSubject.PREPROCESSING,
                 )
             if candidate.split_manifest_checksum != self.training_result.split_manifest_checksum:
                 raise ScientificContractError(
-                    "candidate split manifest checksum must match training result",
+                    "candidate split provenance must match the training result",
                     subject=ContractSubject.SPLIT,
                 )
 
@@ -439,40 +577,46 @@ class PersonalizedCandidateSet:
     def __post_init__(self) -> None:
         if not self.candidates:
             raise ScientificContractError(
-                "a personalized candidate set requires at least one candidate",
+                "a personalized candidate set requires candidates",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
-        rounds = tuple(c.round_number for c in self.candidates)
-        if len(set(rounds)) != len(rounds):
+        rounds = tuple(candidate.round_number for candidate in self.candidates)
+        if rounds != tuple(sorted(set(rounds))):
             raise ScientificContractError(
-                "personalized candidate rounds must be unique",
+                "personalized candidate rounds must be unique and ordered",
                 subject=ContractSubject.CHECKPOINT_CANDIDATES,
             )
-        if rounds != tuple(sorted(rounds)):
-            raise ScientificContractError(
-                "personalized candidate rounds must be strictly ordered",
-                subject=ContractSubject.CHECKPOINT_CANDIDATES,
-            )
+
         reference = self.candidates[0]
+        if reference.coordinate.model is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+            raise ScientificContractError(
+                "personalized candidate sets require the Ditto personalized coordinate",
+                subject=ContractSubject.COORDINATE,
+            )
         for candidate in self.candidates:
-            if candidate.coordinate.model is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
+            if candidate.coordinate != reference.coordinate:
                 raise ScientificContractError(
-                    "personalized candidates must use DITTO_PERSONALIZED_AUTOENCODER model",
+                    "personalized candidates must share one coordinate",
                     subject=ContractSubject.COORDINATE,
                 )
             if candidate.client != self.client:
                 raise ScientificContractError(
-                    "every personalized candidate must belong to the declared client",
+                    "personalized candidates must belong to the set client",
                     subject=ContractSubject.CLIENT_IDENTITY,
+                )
+            if candidate.status is not CheckpointStatus.CANDIDATE:
+                raise ScientificContractError(
+                    "personalized training outcomes contain unselected candidates",
+                    subject=ContractSubject.CHECKPOINT_CANDIDATES,
                 )
             if candidate.preprocessing_state_set_checksum != reference.preprocessing_state_set_checksum:
                 raise ScientificContractError(
-                    "personalized candidates must share preprocessing checksums",
+                    "personalized candidates must share preprocessing provenance",
                     subject=ContractSubject.PREPROCESSING,
                 )
             if candidate.split_manifest_checksum != reference.split_manifest_checksum:
                 raise ScientificContractError(
-                    "personalized candidates must share split manifest checksums",
+                    "personalized candidates must share split provenance",
                     subject=ContractSubject.SPLIT,
                 )
 
@@ -484,54 +628,50 @@ class DittoTrainingOutcome:
     personalized_candidates: tuple[PersonalizedCandidateSet, ...]
 
     def __post_init__(self) -> None:
-        if not self.global_candidates:
+        if self.global_training_result.coordinate.model is not TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
             raise ScientificContractError(
-                "Ditto training requires at least one global candidate",
-                subject=ContractSubject.CHECKPOINT_CANDIDATES,
-            )
-        if not self.personalized_candidates:
-            raise ScientificContractError(
-                "Ditto training requires at least one personalized candidate set",
-                subject=ContractSubject.CLIENT,
-            )
-        client_ids = tuple(pcs.client.client_id for pcs in self.personalized_candidates)
-        if len(set(client_ids)) != len(client_ids):
-            raise ScientificContractError(
-                "Ditto personalized client identities must be unique",
-                subject=ContractSubject.CLIENT_IDENTITY,
-            )
-        self._validate_ditto_candidate_coordinates()
-
-    def _validate_ditto_candidate_coordinates(self) -> None:
-        for candidate in self.global_candidates:
-            if candidate.coordinate.model is not TrainingModelId.DITTO_GLOBAL_AUTOENCODER:
-                raise ScientificContractError(
-                    "global Ditto candidates must use the DITTO_GLOBAL_AUTOENCODER coordinate",
-                    subject=ContractSubject.COORDINATE,
-                )
-        if not self.global_candidates:
-            return
-        global_ref = self.global_candidates[0]
-        for pcs in self.personalized_candidates:
-            for candidate in pcs.candidates:
-                self._validate_single_personalized_candidate(candidate, global_ref)
-
-    @staticmethod
-    def _validate_single_personalized_candidate(
-        candidate: "CheckpointCandidate", global_ref: "CheckpointCandidate"
-    ) -> None:
-        if candidate.coordinate.model is not TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER:
-            raise ScientificContractError(
-                "personalized Ditto candidates must use DITTO_PERSONALIZED_AUTOENCODER",
+                "Ditto outcome requires a Ditto global training result",
                 subject=ContractSubject.COORDINATE,
             )
-        if candidate.preprocessing_state_set_checksum != global_ref.preprocessing_state_set_checksum:
+        global_outcome = FederatedTrainingOutcome(
+            training_result=self.global_training_result,
+            candidates=self.global_candidates,
+        )
+        del global_outcome
+
+        expected_rounds = tuple(self.global_training_result.checkpoint_protocol.candidates)
+        history_clients = tuple(
+            result.client for result in self.global_training_result.history.rounds[0].client_results
+        )
+        personalized_clients = tuple(item.client for item in self.personalized_candidates)
+        if personalized_clients != history_clients:
             raise ScientificContractError(
-                "global and personalized preprocessing checksums must match",
-                subject=ContractSubject.PREPROCESSING,
+                "Ditto personalized candidate sets must match deterministic history client order",
+                subject=ContractSubject.CLIENT,
             )
-        if candidate.split_manifest_checksum != global_ref.split_manifest_checksum:
-            raise ScientificContractError(
-                "global and personalized split manifest checksums must match",
-                subject=ContractSubject.SPLIT,
-            )
+
+        for candidate_set in self.personalized_candidates:
+            if tuple(candidate.round_number for candidate in candidate_set.candidates) != expected_rounds:
+                raise ScientificContractError(
+                    "global and personalized Ditto candidate rounds must match",
+                    subject=ContractSubject.CHECKPOINT_CANDIDATES,
+                )
+            for candidate in candidate_set.candidates:
+                if not self.global_training_result.coordinate.matches_ditto_peer(candidate.coordinate):
+                    raise ScientificContractError(
+                        "global and personalized Ditto candidates must share one experiment identity",
+                        subject=ContractSubject.COORDINATE,
+                    )
+                if (
+                    candidate.preprocessing_state_set_checksum
+                    != self.global_training_result.preprocessing_state_set_checksum
+                ):
+                    raise ScientificContractError(
+                        "global and personalized preprocessing provenance must match",
+                        subject=ContractSubject.PREPROCESSING,
+                    )
+                if candidate.split_manifest_checksum != self.global_training_result.split_manifest_checksum:
+                    raise ScientificContractError(
+                        "global and personalized split provenance must match",
+                        subject=ContractSubject.SPLIT,
+                    )

@@ -37,12 +37,14 @@ from datp_core.populations.models import PopulationOutcomeLabel
 
 
 def test_derive_client_stream_seed_is_deterministic_and_client_specific() -> None:
-    first = derive_client_stream_seed(Seed(3), RoundNumber(1), 0, TrainingStream.GLOBAL_CLIENT_UPDATE)
-    second = derive_client_stream_seed(Seed(3), RoundNumber(1), 1, TrainingStream.GLOBAL_CLIENT_UPDATE)
-    third = derive_client_stream_seed(Seed(3), RoundNumber(2), 0, TrainingStream.GLOBAL_CLIENT_UPDATE)
+    client_a = client_identity("client_a")
+    client_b = client_identity("client_b")
+    first = derive_client_stream_seed(Seed(3), RoundNumber(1), client_a, TrainingStream.GLOBAL_CLIENT_UPDATE)
+    second = derive_client_stream_seed(Seed(3), RoundNumber(1), client_b, TrainingStream.GLOBAL_CLIENT_UPDATE)
+    third = derive_client_stream_seed(Seed(3), RoundNumber(2), client_a, TrainingStream.GLOBAL_CLIENT_UPDATE)
     assert first != second
     assert first != third
-    assert derive_client_stream_seed(Seed(3), RoundNumber(1), 0, TrainingStream.GLOBAL_CLIENT_UPDATE) == first
+    assert derive_client_stream_seed(Seed(3), RoundNumber(1), client_a, TrainingStream.GLOBAL_CLIENT_UPDATE) == first
 
 
 def test_reject_attack_rows_in_federated_training_raises_on_any_attack_label() -> None:
@@ -161,13 +163,15 @@ def test_serialize_and_checksum_state_dict_is_deterministic() -> None:
 
 
 def test_preprocessing_state_set_checksum_binds_client_identity() -> None:
+    from datp_core.learning.federated.models import PreparedClientProvenance
+
     c1, c2 = client_identity("client_a"), client_identity("client_b")
     chk1, chk2 = Checksum("a" * 64), Checksum("b" * 64)
 
-    pairs1 = ((c1, chk1), (c2, chk2))
-    pairs1_reversed = ((c2, chk2), (c1, chk1))
+    pairs1 = (PreparedClientProvenance(client=c1, preprocessing_checksum=chk1), PreparedClientProvenance(client=c2, preprocessing_checksum=chk2))
+    pairs1_reversed = (PreparedClientProvenance(client=c2, preprocessing_checksum=chk2), PreparedClientProvenance(client=c1, preprocessing_checksum=chk1))
     assert preprocessing_state_set_checksum(pairs1) == preprocessing_state_set_checksum(pairs1_reversed)
 
     # Swapping checksums between client_a and client_b must change set checksum!
-    pairs_swapped = ((c1, chk2), (c2, chk1))
+    pairs_swapped = (PreparedClientProvenance(client=c1, preprocessing_checksum=chk2), PreparedClientProvenance(client=c2, preprocessing_checksum=chk1))
     assert preprocessing_state_set_checksum(pairs1) != preprocessing_state_set_checksum(pairs_swapped)

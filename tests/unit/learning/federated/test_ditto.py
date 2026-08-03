@@ -101,7 +101,7 @@ def test_train_ditto_rejects_partial_participation(tmp_path: Path) -> None:
         global_output_directory=request.global_output_directory,
         personalized_output_directory=request.personalized_output_directory,
     )
-    with pytest.raises(ScientificContractError, match="declared population client count"):
+    with pytest.raises(ScientificContractError, match="does not match the declared population count"):
         train_ditto(single_client_request)
 
 
@@ -133,5 +133,5 @@ def test_train_ditto_rejects_mismatched_global_and_personalized_regularization(t
         global_output_directory=request.global_output_directory,
         personalized_output_directory=request.personalized_output_directory,
     )
-    with pytest.raises(ScientificContractError, match="personalized coordinate regularization"):
+    with pytest.raises(ScientificContractError, match="must share one experiment identity"):
         train_ditto(mismatched)

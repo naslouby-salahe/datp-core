@@ -9,15 +9,13 @@ from datp_core.domain.enums import CheckpointSelectionRule, CheckpointStatus
 from datp_core.domain.errors import LeakageError, ScientificContractError
 from datp_core.domain.values import Checksum, MetricValue, RoundNumber, Seed
 from datp_core.learning.federated.checkpointing import RoundSnapshot, retain_checkpoint_candidates, select_checkpoint
-from datp_core.runtime.compute import resolve_cuda_device
 
 
 def _candidates_with_favorable_non_terminal_loss(tmp_path: Path):
     from datp_core.learning.autoencoder import ReconstructionAutoencoder
 
     coordinate = fedavg_coordinate(Seed(0))
-    device = resolve_cuda_device()
-    model = ReconstructionAutoencoder(AUTOENCODER.widths).to(device)
+    model = ReconstructionAutoencoder(AUTOENCODER.widths)
     state = {name: tensor.detach().clone() for name, tensor in model.state_dict().items()}
     # The non-terminal candidate is given a dramatically better ("lower") loss than the
     # terminal candidate. If any test-adjacent signal ever entered selection, this would
@@ -33,7 +31,6 @@ def _candidates_with_favorable_non_terminal_loss(tmp_path: Path):
         preprocessing_state_set_checksum=Checksum("a" * 64),
         split_manifest_checksum=Checksum("b" * 64),
         client=None,
-        device=device,
     )
     return coordinate, candidates
 

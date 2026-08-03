@@ -92,7 +92,7 @@ def test_ditto_global_and_personalized_coordinates_are_structurally_distinct() -
 
 def test_global_state_reference_rejects_personalized_coordinate() -> None:
     _global, personalized, _regularization = ditto_coordinates(SEED)
-    with pytest.raises(ScientificContractError, match="personalized-model coordinate"):
+    with pytest.raises(ScientificContractError, match="global federated model coordinate"):
         GlobalModelStateReference(
             coordinate=personalized, round_number=RoundNumber(1), state_checksum=Checksum("a" * 64), tensor_path=None
         )
@@ -141,7 +141,7 @@ def test_round_result_rejects_duplicate_client_results() -> None:
 
 def test_history_requires_consecutive_rounds_starting_at_one() -> None:
     coordinate = fedavg_coordinate(SEED)
-    with pytest.raises(ScientificContractError, match="consecutive rounds"):
+    with pytest.raises(ScientificContractError, match="rounds must be consecutive from one"):
         FederatedTrainingHistory(coordinate=coordinate, rounds=(_round_result(coordinate, RoundNumber(2)),))
 
 
@@ -156,7 +156,7 @@ def test_history_accepts_consecutive_rounds() -> None:
 
 def test_checkpoint_candidate_requires_client_only_for_ditto_personalized() -> None:
     coordinate = fedavg_coordinate(SEED)
-    with pytest.raises(ScientificContractError, match="only Ditto personalized checkpoints"):
+    with pytest.raises(ScientificContractError, match="global checkpoints cannot carry a client identity"):
         CheckpointCandidate(
             coordinate=coordinate,
             round_number=RoundNumber(1),
@@ -183,7 +183,7 @@ def test_checkpoint_decision_requires_selected_round_equal_maximum_round() -> No
         preprocessing_state_set_checksum=Checksum("b" * 64),
         split_manifest_checksum=Checksum("c" * 64),
     )
-    with pytest.raises(ScientificContractError, match="declared maximum round"):
+    with pytest.raises(ScientificContractError, match="checkpoint decision candidates must equal the declared ordered rounds"):
         CheckpointDecision(
             coordinate=coordinate,
             client=None,
@@ -202,7 +202,7 @@ def test_training_result_requires_matching_history_coordinate() -> None:
     history = FederatedTrainingHistory(
         coordinate=other_coordinate, rounds=(_round_result(other_coordinate, RoundNumber(1)),)
     )
-    with pytest.raises(ScientificContractError, match="own history coordinate"):
+    with pytest.raises(ScientificContractError, match="training result coordinate must match its history"):
         FederatedTrainingResult(
             coordinate=coordinate,
             autoencoder=AUTOENCODER,

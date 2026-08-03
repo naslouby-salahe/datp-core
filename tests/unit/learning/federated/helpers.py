@@ -135,8 +135,9 @@ def ditto_coordinates(
 def ditto_protocol(regularization: DittoRegularization) -> DittoProtocol:
     return DittoProtocol(
         kind=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
-        regularization=regularization,
+        local_epochs=LOCAL_EPOCHS,
         optimizer=OPTIMIZER,
+        regularization=regularization,
     )
 
 

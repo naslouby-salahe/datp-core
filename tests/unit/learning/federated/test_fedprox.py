@@ -72,7 +72,7 @@ def test_train_fedprox_rejects_partial_participation(tmp_path: Path) -> None:
         split_manifest_checksum=Checksum("a" * 64),
         output_directory=tmp_path / "output",
     )
-    with pytest.raises(ScientificContractError, match="declared population client count"):
+    with pytest.raises(ScientificContractError, match="does not match the declared population count"):
         train_fedprox(request)
 
 

@@ -197,8 +197,9 @@ class FedProxProtocol(Declaration):
 
 class DittoProtocol(Declaration):
     kind: Literal[TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER]
-    regularization: DittoRegularization
+    local_epochs: LocalEpochCount
     optimizer: OptimizerProtocol
+    regularization: DittoRegularization
 
 
 TrainingProtocol = Annotated[FedAvgProtocol | FedProxProtocol | DittoProtocol, Field(discriminator="kind")]

@@ -1,12 +1,13 @@
-"""Shared client-local training mechanics reused by FedAvg, FedProx, and Ditto."""
+"""Shared deterministic client-local mechanics for federated autoencoder training."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import IntEnum
-from hashlib import sha256
+from json import dumps
 from pathlib import Path
 
 import numpy as np
+import polars as pl
 import torch
 from safetensors.torch import save
 from torch import nn
@@ -31,18 +32,20 @@ from datp_core.domain.values import (
     RoundNumber,
     RowCount,
     Seed,
+    checksum_bytes,
+    checksum_text,
 )
 from datp_core.learning.autoencoder import (
     LEARNING_DTYPE,
     TORCH_LEARNING_DTYPE,
     AutoencoderState,
+    AutoencoderStateView,
     ReconstructionAutoencoder,
+    build_autoencoder_for_state,
     build_reconstruction_autoencoder,
     clone_autoencoder_state,
     clone_state,
-    load_autoencoder_state,
 )
-from datp_core.learning.federated.checkpointing import retain_checkpoint_candidates
 from datp_core.learning.federated.models import (
     ClientTrainingInput,
     ClientTrainingResult,
@@ -50,10 +53,11 @@ from datp_core.learning.federated.models import (
     CommunicationRecord,
     FederatedRoundResult,
     FederatedTrainingCoordinate,
+    FederatedTrainingExecution,
     FederatedTrainingHistory,
-    FederatedTrainingOutcome,
     FederatedTrainingResult,
     GlobalModelStateReference,
+    PreparedClientProvenance,
     RoundSnapshot,
 )
 from datp_core.populations.models import (
@@ -74,8 +78,8 @@ from datp_core.runtime.determinism import configure_deterministic_execution, der
 
 
 class TrainingStream(IntEnum):
-    GLOBAL_CLIENT_UPDATE = 0
-    PERSONALIZED_CLIENT_UPDATE = 1
+    GLOBAL_CLIENT_UPDATE = 1
+    PERSONALIZED_CLIENT_UPDATE = 2
 
 
 @dataclass(frozen=True, slots=True)
@@ -85,19 +89,19 @@ class PreparedFederatedClientData:
     preprocessing_checksum: Checksum
 
     def __post_init__(self) -> None:
-        if self.features_cpu.dim() != 2:
+        if self.features_cpu.ndim != 2:
             raise ScientificContractError(
-                "prepared features tensor must be two-dimensional",
+                "prepared features must be a two-dimensional tensor",
                 subject=ContractSubject.FEATURES,
             )
         if self.features_cpu.device.type != "cpu":
             raise ScientificContractError(
-                "prepared features must reside on CPU",
+                "prepared features must remain on CPU",
                 subject=ContractSubject.RUNTIME,
             )
         if self.features_cpu.dtype != TORCH_LEARNING_DTYPE:
             raise ScientificContractError(
-                "prepared features must use the canonical torch learning dtype",
+                "prepared features must use the canonical learning dtype",
                 subject=ContractSubject.FEATURES,
             )
         if self.features_cpu.shape[0] < 1:
@@ -122,6 +126,12 @@ class FederatedTrainingRequest[T: (FedAvgProtocol, FedProxProtocol)]:
     output_directory: Path
 
 
+@dataclass(frozen=True, slots=True)
+class ProximalTerm:
+    reference_state: AutoencoderStateView
+    coefficient: ProximalCoefficient | DittoRegularization
+
+
 def reject_attack_rows_in_federated_training(labels: OutcomeLabelSequence) -> None:
     if any(label != PopulationOutcomeLabel.BENIGN.value for label in labels):
         raise LeakageError(
@@ -134,41 +144,66 @@ def prepare_federated_client_data(
     client_input: ClientTrainingInput,
     autoencoder: AutoencoderProtocol,
 ) -> PreparedFederatedClientData:
-    labels = OutcomeLabelSequence(
-        tuple(str(value) for value in client_input.training_features.get_column(OUTCOME_LABEL_COLUMN).to_list())
-    )
-    reject_attack_rows_in_federated_training(labels)
+    frame = client_input.training_features
+    try:
+        labels = OutcomeLabelSequence(tuple(str(value) for value in frame.get_column(OUTCOME_LABEL_COLUMN).to_list()))
+        matrix = frame.select(client_input.feature_names.as_list()).to_numpy().astype(LEARNING_DTYPE, copy=False)
+    except (pl.exceptions.ColumnNotFoundError, pl.exceptions.SchemaError) as exc:
+        raise ScientificContractError(
+            "federated training input is missing its declared label or feature schema",
+            subject=ContractSubject.SCHEMA,
+        ) from exc
 
-    matrix = (
-        client_input.training_features.select(client_input.feature_names.as_list())
-        .to_numpy()
-        .astype(LEARNING_DTYPE, copy=False)
-    )
-    if not np.isfinite(matrix).all():
-        raise ScientificContractError("federated features must be finite", subject=ContractSubject.FEATURES)
+    reject_attack_rows_in_federated_training(labels)
+    if len(labels) != matrix.shape[0]:
+        raise ScientificContractError(
+            "federated labels and features must align by row",
+            subject=ContractSubject.ROWS,
+        )
     if matrix.shape[1] != autoencoder.widths[0]:
         raise ScientificContractError(
-            "feature width mismatch during dataset preparation", subject=ContractSubject.FEATURES
+            "feature width does not match the autoencoder input width",
+            subject=ContractSubject.FEATURES,
         )
-    if len(labels) != matrix.shape[0]:
-        raise ScientificContractError("federated arrays must align by row", subject=ContractSubject.ROWS)
+    if not np.isfinite(matrix).all():
+        raise ScientificContractError(
+            "federated training features must be finite",
+            subject=ContractSubject.FEATURES,
+        )
 
-    features_cpu = torch.tensor(matrix, dtype=TORCH_LEARNING_DTYPE, device="cpu")
     return PreparedFederatedClientData(
         client=client_input.client,
-        features_cpu=features_cpu,
+        features_cpu=torch.as_tensor(
+            matrix,
+            dtype=TORCH_LEARNING_DTYPE,
+            device="cpu",
+        ),
         preprocessing_checksum=client_input.preprocessing_state.estimator_checksum,
     )
+
+
+def _client_seed_component(client: ClientIdentity) -> int:
+    payload = dumps(
+        {
+            "population": client.population.value,
+            "client_id": client.client_id,
+            "identity_kind": client.identity_kind.value,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    digest = checksum_text(payload).value
+    return int(digest[:16], 16) & 0x7FFF_FFFF
 
 
 def derive_client_stream_seed(
     training_seed: Seed,
     round_number: RoundNumber,
-    client_index: int,
+    client: ClientIdentity,
     stream: TrainingStream,
 ) -> Seed:
     round_seed = derive_worker_seed(training_seed, round_number.value)
-    client_seed = derive_worker_seed(round_seed, client_index)
+    client_seed = derive_worker_seed(round_seed, _client_seed_component(client))
     return derive_worker_seed(client_seed, stream.value)
 
 
@@ -178,28 +213,16 @@ def build_client_loader(
     batch_size: BatchSize,
     seed: Seed,
 ) -> DataLoader:
-    dataset = TensorDataset(data.features_cpu)
     generator = torch.Generator(device="cpu")
     generator.manual_seed(seed.value)
     return DataLoader(
-        dataset,
+        TensorDataset(data.features_cpu),
         batch_size=batch_size.value,
         shuffle=True,
         drop_last=False,
         generator=generator,
         num_workers=FEDERATED_DATALOADER_WORKER_COUNT.value,
     )
-
-
-def proximal_penalty(
-    local_parameters: Sequence[torch.Tensor],
-    reference_parameters: Sequence[torch.Tensor],
-    coefficient: ProximalCoefficient | DittoRegularization,
-) -> torch.Tensor:
-    total = torch.zeros((), device=local_parameters[0].device)
-    for local, reference in zip(local_parameters, reference_parameters, strict=True):
-        total = total + torch.sum((local - reference) ** 2)
-    return (coefficient.value / 2.0) * total
 
 
 def build_optimizer(
@@ -221,75 +244,40 @@ def build_optimizer(
             )
 
 
-@dataclass(frozen=True, slots=True)
-class ProximalTerm:
-    reference_state: AutoencoderState
-    coefficient: ProximalCoefficient | DittoRegularization
-
-
-def run_local_epoch(
-    model: ReconstructionAutoencoder,
-    optimizer: torch.optim.Optimizer,
-    loader: DataLoader,
-    device: torch.device,
-    *,
-    proximal_term: ProximalTerm | None = None,
-) -> tuple[AutoencoderState, MetricValue, RowCount]:
-    reference_parameters = _resolve_reference_parameters(model, proximal_term, device)
-    model.train()
-    accumulated_weighted_loss = 0.0
-    total_samples = 0
-    batch_count = 0
-    for (batch,) in loader:
-        batch_samples = batch.shape[0]
-        batch = batch.to(device, non_blocking=False)
-        batch_loss = _train_one_batch(model, optimizer, batch, reference_parameters, proximal_term)
-        accumulated_weighted_loss += batch_loss * batch_samples
-        total_samples += batch_samples
-        batch_count += 1
-    if batch_count == 0 or total_samples == 0:
+def proximal_penalty(
+    local_parameters: Sequence[torch.Tensor],
+    reference_parameters: Sequence[torch.Tensor],
+    coefficient: ProximalCoefficient | DittoRegularization,
+) -> torch.Tensor:
+    if not local_parameters:
         raise ScientificContractError(
-            "federated local training produced no batches; declared batch size cannot be relaxed",
-            subject=ContractSubject.BATCH_SIZE,
+            "proximal regularization requires model parameters",
+            subject=ContractSubject.TRAINING,
         )
-    mean_loss = MetricValue(accumulated_weighted_loss / total_samples)
-    state = clone_state(dict(model.state_dict()))
-    return state, mean_loss, RowCount(total_samples)
+    total = torch.zeros((), device=local_parameters[0].device)
+    for local, reference in zip(local_parameters, reference_parameters, strict=True):
+        total = total + torch.sum((local - reference) ** 2)
+    return total * (coefficient.value / 2.0)
 
 
-def train_client_update(
-    client_data: PreparedFederatedClientData,
-    initial_state: AutoencoderState,
-    autoencoder: AutoencoderProtocol,
-    optimizer_protocol: OptimizerProtocol,
-    learning_rate: LearningRate,
-    batch_size: BatchSize,
-    seed: Seed,
-    device: torch.device,
-    *,
-    proximal_term: ProximalTerm | None = None,
-) -> tuple[ClientUpdate, ClientTrainingResult]:
-    local_model = ReconstructionAutoencoder(autoencoder.widths).to(device)
-    load_autoencoder_state(local_model, initial_state)
-    optimizer = build_optimizer(local_model, optimizer_protocol, learning_rate)
-    loader = build_client_loader(client_data, batch_size=batch_size, seed=seed)
-    local_state, local_loss, sample_count = run_local_epoch(
-        local_model, optimizer, loader, device, proximal_term=proximal_term
-    )
-    client = client_data.client
-    update = ClientUpdate(client=client, state_dict=local_state, sample_count=sample_count, local_loss=local_loss)
-    result = ClientTrainingResult(client=client, sample_count=sample_count, local_loss=local_loss)
-    return update, result
-
-
-def _resolve_reference_parameters(
+def _reference_parameters(
     model: ReconstructionAutoencoder,
     proximal_term: ProximalTerm | None,
     device: torch.device,
 ) -> tuple[torch.Tensor, ...] | None:
     if proximal_term is None:
         return None
-    return tuple(proximal_term.reference_state[name].detach().to(device) for name, _ in model.named_parameters())
+    reference = proximal_term.reference_state
+    try:
+        return tuple(
+            reference[name].detach().to(device=device, dtype=parameter.dtype)
+            for name, parameter in model.named_parameters()
+        )
+    except KeyError as exc:
+        raise ScientificContractError(
+            "proximal reference state does not match model parameters",
+            subject=ContractSubject.TRAINING,
+        ) from exc
 
 
 def _train_one_batch(
@@ -301,13 +289,98 @@ def _train_one_batch(
 ) -> float:
     optimizer.zero_grad(set_to_none=True)
     reconstruction = model(batch)
-    loss = nn.functional.mse_loss(reconstruction, batch)
+    reconstruction_loss = nn.functional.mse_loss(reconstruction, batch)
+    objective = reconstruction_loss
     if reference_parameters is not None and proximal_term is not None:
         local_parameters = tuple(parameter for _, parameter in model.named_parameters())
-        loss = loss + proximal_penalty(local_parameters, reference_parameters, proximal_term.coefficient)
-    loss.backward()
+        objective = objective + proximal_penalty(
+            local_parameters,
+            reference_parameters,
+            proximal_term.coefficient,
+        )
+    objective.backward()
     optimizer.step()
-    return float(loss.detach().cpu().item())
+    return float(reconstruction_loss.detach().cpu().item())
+
+
+def run_local_epoch(
+    model: ReconstructionAutoencoder,
+    optimizer: torch.optim.Optimizer,
+    loader: DataLoader,
+    device: torch.device,
+    *,
+    proximal_term: ProximalTerm | None = None,
+) -> tuple[AutoencoderState, MetricValue, RowCount]:
+    reference_parameters = _reference_parameters(model, proximal_term, device)
+    model.train()
+    weighted_reconstruction_loss = 0.0
+    total_samples = 0
+
+    for (batch_cpu,) in loader:
+        batch_size = batch_cpu.shape[0]
+        batch = batch_cpu.to(
+            device=device,
+            dtype=TORCH_LEARNING_DTYPE,
+            non_blocking=False,
+        )
+        batch_loss = _train_one_batch(
+            model,
+            optimizer,
+            batch,
+            reference_parameters,
+            proximal_term,
+        )
+        weighted_reconstruction_loss += batch_loss * batch_size
+        total_samples += batch_size
+
+    if total_samples < 1:
+        raise ScientificContractError(
+            "local training produced no samples",
+            subject=ContractSubject.BATCH_SIZE,
+        )
+    return (
+        clone_state(model.state_dict()),
+        MetricValue(weighted_reconstruction_loss / total_samples),
+        RowCount(total_samples),
+    )
+
+
+def train_client_update(
+    *,
+    client_data: PreparedFederatedClientData,
+    initial_state: AutoencoderStateView,
+    autoencoder: AutoencoderProtocol,
+    optimizer_protocol: OptimizerProtocol,
+    learning_rate: LearningRate,
+    batch_size: BatchSize,
+    seed: Seed,
+    device: torch.device,
+    proximal_term: ProximalTerm | None = None,
+) -> ClientUpdate:
+    model = build_autoencoder_for_state(
+        autoencoder,
+        initial_state,
+        device=device,
+    )
+    optimizer = build_optimizer(model, optimizer_protocol, learning_rate)
+    loader = build_client_loader(
+        client_data,
+        batch_size=batch_size,
+        seed=seed,
+    )
+    state, loss, sample_count = run_local_epoch(
+        model,
+        optimizer,
+        loader,
+        device,
+        proximal_term=proximal_term,
+    )
+    return ClientUpdate(
+        client=client_data.client,
+        state_dict=state,
+        sample_count=sample_count,
+        local_loss=loss,
+    )
 
 
 def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> AutoencoderState:
@@ -322,68 +395,32 @@ def aggregate_client_updates(updates: Sequence[ClientUpdate]) -> AutoencoderStat
             "aggregation requires a positive total sample count",
             subject=ContractSubject.ROWS,
         )
-    reference_keys = tuple(updates[0].state_dict.keys())
+
+    reference_state = updates[0].state_dict
+    reference_keys = tuple(reference_state)
     for update in updates:
-        if tuple(update.state_dict.keys()) != reference_keys:
+        if tuple(update.state_dict) != reference_keys:
             raise ScientificContractError(
-                "parameter key mismatch during aggregation",
+                "client update parameter keys do not match",
                 subject=ContractSubject.TRAINING,
             )
-        for key in reference_keys:
-            t1 = updates[0].state_dict[key]
-            t2 = update.state_dict[key]
-            if t1.shape != t2.shape or t1.dtype != t2.dtype:
+        for name in reference_keys:
+            expected = reference_state[name]
+            observed = update.state_dict[name]
+            if expected.shape != observed.shape or expected.dtype != observed.dtype:
                 raise ScientificContractError(
-                    "parameter shape or dtype mismatch during aggregation",
+                    "client update parameter shapes or dtypes do not match",
                     subject=ContractSubject.TRAINING,
                 )
+
     aggregated: AutoencoderState = {}
-    for key in reference_keys:
-        weighted_sum = torch.zeros_like(updates[0].state_dict[key], dtype=torch.float64)
+    for name in reference_keys:
+        weighted_sum = torch.zeros_like(reference_state[name], dtype=torch.float64)
         for update in updates:
             weight = update.sample_count.value / total_samples
-            weighted_sum = weighted_sum + update.state_dict[key].to(torch.float64) * weight
-        aggregated[key] = weighted_sum.to(updates[0].state_dict[key].dtype)
+            weighted_sum.add_(update.state_dict[name].to(torch.float64), alpha=weight)
+        aggregated[name] = weighted_sum.to(reference_state[name].dtype)
     return aggregated
-
-
-def preprocessing_state_set_checksum(
-    client_checksum_pairs: Sequence[tuple[ClientIdentity, Checksum]],
-) -> Checksum:
-    entries = sorted(f"{client.client_id}:{checksum.value}" for client, checksum in client_checksum_pairs)
-    return Checksum(sha256("|".join(entries).encode()).hexdigest())
-
-
-def serialize_and_checksum_state_dict(
-    state_dict: AutoencoderState,
-) -> tuple[Checksum, ByteCount]:
-    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
-    payload = save(cpu_state)
-    checksum = Checksum(sha256(payload).hexdigest())
-    byte_count = ByteCount(len(payload))
-    return checksum, byte_count
-
-
-def validate_common_request(
-    clients: tuple[ClientTrainingInput, ...],
-    population_client_count: ClientCount,
-) -> None:
-    if not clients:
-        raise ScientificContractError(
-            "training requires at least one client dataset",
-            subject=ContractSubject.CLIENT,
-        )
-    client_ids = tuple(item.client.client_id for item in clients)
-    if len(set(client_ids)) != len(client_ids):
-        raise ScientificContractError(
-            "training cannot receive duplicate client identities",
-            subject=ContractSubject.CLIENT_IDENTITY,
-        )
-    if len(clients) != population_client_count.value:
-        raise ScientificContractError(
-            "training requires exactly the declared population client count",
-            subject=ContractSubject.CLIENT,
-        )
 
 
 def compute_weighted_aggregate_loss(updates: Sequence[ClientUpdate]) -> MetricValue:
@@ -392,142 +429,104 @@ def compute_weighted_aggregate_loss(updates: Sequence[ClientUpdate]) -> MetricVa
             "aggregate loss requires at least one client update",
             subject=ContractSubject.CLIENT,
         )
-    total_samples = sum(u.sample_count.value for u in updates)
-    return MetricValue(sum(u.local_loss.value * u.sample_count.value for u in updates) / total_samples)
+    total_samples = sum(update.sample_count.value for update in updates)
+    if total_samples < 1:
+        raise ScientificContractError(
+            "aggregate loss requires a positive total sample count",
+            subject=ContractSubject.ROWS,
+        )
+    return MetricValue(sum(update.local_loss.value * update.sample_count.value for update in updates) / total_samples)
+
+
+def preprocessing_state_set_checksum(
+    provenance: Sequence[PreparedClientProvenance],
+) -> Checksum:
+    payload = dumps(
+        [
+            {
+                "population": item.client.population.value,
+                "client_id": item.client.client_id,
+                "identity_kind": item.client.identity_kind.value,
+                "preprocessing_checksum": item.preprocessing_checksum.value,
+            }
+            for item in sorted(provenance, key=lambda value: value.client)
+        ],
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return checksum_text(payload)
+
+
+def serialize_and_checksum_state_dict(
+    state_dict: AutoencoderStateView,
+) -> tuple[Checksum, ByteCount]:
+    cpu_state = {name: tensor.detach().cpu().contiguous() for name, tensor in state_dict.items()}
+    payload = save(cpu_state)
+    return checksum_bytes(payload), ByteCount(len(payload))
 
 
 def create_communication_record(
     round_number: RoundNumber,
     state_bytes: ByteCount,
-    upload_count: int,
-    download_count: int,
+    *,
+    upload_count: ClientCount,
+    download_count: ClientCount,
 ) -> CommunicationRecord:
     return CommunicationRecord(
         round_number=round_number,
-        estimated_upload_bytes=ByteCount(upload_count * state_bytes.value),
-        estimated_download_bytes=ByteCount(download_count * state_bytes.value),
+        estimated_upload_bytes=ByteCount(upload_count.value * state_bytes.value),
+        estimated_download_bytes=ByteCount(download_count.value * state_bytes.value),
         estimation_basis=CommunicationEstimationMethod.SERIALIZED_MESSAGE_SIZE_ESTIMATE,
     )
 
 
 def create_round_snapshot(
     round_number: RoundNumber,
-    state: AutoencoderState,
+    state: AutoencoderStateView,
     loss: MetricValue,
 ) -> RoundSnapshot:
-    return RoundSnapshot(round_number, clone_state(state), loss)
+    return RoundSnapshot(
+        round_number=round_number,
+        state_dict=clone_state(state),
+        mean_training_loss=loss,
+    )
 
 
-def run_federated_training(
-    request: FederatedTrainingRequest,
-) -> FederatedTrainingOutcome:
-    validate_common_request(request.clients, request.population_client_count)
-    configure_deterministic_execution(request.training_seed)
-    device = resolve_cuda_device()
-
-    ordered_clients = tuple(sorted(request.clients, key=lambda item: item.client))
-    prepared_clients: list[PreparedFederatedClientData] = [
-        prepare_federated_client_data(client_input, request.autoencoder) for client_input in ordered_clients
-    ]
-
-    global_model = build_reconstruction_autoencoder(request.autoencoder, initialization_seed=request.training_seed)
-    global_state = clone_autoencoder_state(global_model)
-    global_model.to(device)
-    del global_model
-
-    candidate_rounds: set[RoundNumber] = set(request.checkpoint_protocol.candidates)
-    proximal_coefficient = _resolve_proximal_coefficient(request.training_protocol)
-    rounds: list[FederatedRoundResult] = []
-    snapshots: list[RoundSnapshot] = []
-
-    for round_index in range(1, request.checkpoint_protocol.maximum_round.value + 1):
-        round_number = RoundNumber(round_index)
-        client_updates: list[ClientUpdate] = []
-        client_results: list[ClientTrainingResult] = []
-        reference_state = {name: tensor.to(device) for name, tensor in global_state.items()}
-
-        for client_index, client_data in enumerate(prepared_clients):
-            client_seed = derive_client_stream_seed(
-                request.training_seed, round_number, client_index, TrainingStream.GLOBAL_CLIENT_UPDATE
-            )
-            proximal_term = (
-                ProximalTerm(reference_state=reference_state, coefficient=proximal_coefficient)
-                if proximal_coefficient is not None
-                else None
-            )
-            update, result = train_client_update(
-                client_data=client_data,
-                initial_state=reference_state,
-                autoencoder=request.autoencoder,
-                optimizer_protocol=request.training_protocol.optimizer,
-                learning_rate=request.learning_rate,
-                batch_size=request.batch_size,
-                seed=client_seed,
-                device=device,
-                proximal_term=proximal_term,
-            )
-            client_updates.append(update)
-            client_results.append(result)
-
-        aggregated = aggregate_client_updates(client_updates)
-        global_state = aggregated
-
-        aggregate_loss = compute_weighted_aggregate_loss(client_updates)
-        state_checksum, single_state_bytes = serialize_and_checksum_state_dict(aggregated)
-
-        client_count = len(ordered_clients)
-        communication = create_communication_record(round_number, single_state_bytes, client_count, client_count)
-        global_reference = GlobalModelStateReference(
-            coordinate=request.coordinate,
-            round_number=round_number,
-            state_checksum=state_checksum,
-            tensor_path=None,
+def validate_common_request(
+    coordinate: FederatedTrainingCoordinate,
+    training_seed: Seed,
+    clients: tuple[ClientTrainingInput, ...],
+    population_client_count: ClientCount,
+) -> None:
+    if not clients:
+        raise ScientificContractError(
+            "federated training requires at least one client",
+            subject=ContractSubject.CLIENT,
         )
-        rounds.append(
-            FederatedRoundResult(
-                round_number=round_number,
-                client_results=tuple(client_results),
-                aggregate_loss=aggregate_loss,
-                communication=communication,
-                global_state_reference=global_reference,
-                personalized_state_references=(),
-            )
+    identities = tuple(item.client for item in clients)
+    if len(set(identities)) != len(identities):
+        raise ScientificContractError(
+            "federated training cannot receive duplicate clients",
+            subject=ContractSubject.CLIENT_IDENTITY,
+        )
+    if len(clients) != population_client_count.value:
+        raise ScientificContractError(
+            "federated training client count does not match the declared population count",
+            subject=ContractSubject.CLIENT,
+        )
+    if training_seed != coordinate.training_seed:
+        raise ScientificContractError(
+            "request and coordinate training seeds must match",
+            subject=ContractSubject.COORDINATE,
+        )
+    if any(client.population != coordinate.population for client in identities):
+        raise ScientificContractError(
+            "every client must belong to the training coordinate population",
+            subject=ContractSubject.CLIENT_IDENTITY,
         )
 
-        if round_number in candidate_rounds:
-            snapshots.append(create_round_snapshot(round_number, aggregated, aggregate_loss))
 
-    history = FederatedTrainingHistory(coordinate=request.coordinate, rounds=tuple(rounds))
-    preprocessing_checksum = preprocessing_state_set_checksum(
-        tuple((client.client, client.preprocessing_checksum) for client in prepared_clients)
-    )
-
-    candidates = retain_checkpoint_candidates(
-        request.coordinate,
-        tuple(snapshots),
-        checkpoint_protocol=request.checkpoint_protocol,
-        autoencoder=request.autoencoder,
-        output_directory=request.output_directory,
-        preprocessing_state_set_checksum=preprocessing_checksum,
-        split_manifest_checksum=request.split_manifest_checksum,
-        client=None,
-        device=device,
-    )
-
-    training_result = FederatedTrainingResult(
-        coordinate=request.coordinate,
-        autoencoder=request.autoencoder,
-        checkpoint_protocol=request.checkpoint_protocol,
-        history=history,
-        preprocessing_state_set_checksum=preprocessing_checksum,
-        split_manifest_checksum=request.split_manifest_checksum,
-        device_name=torch.cuda.get_device_name(device),
-        batch_size_used=request.batch_size,
-    )
-    return FederatedTrainingOutcome(training_result=training_result, candidates=candidates)
-
-
-def _resolve_proximal_coefficient(
+def _proximal_coefficient(
     protocol: FedAvgProtocol | FedProxProtocol,
 ) -> ProximalCoefficient | None:
     match protocol:
@@ -540,3 +539,117 @@ def _resolve_proximal_coefficient(
                 f"unsupported training protocol {type(protocol).__name__}",
                 subject=ContractSubject.TRAINING,
             )
+
+
+def run_federated_training[T: (FedAvgProtocol, FedProxProtocol)](
+    request: FederatedTrainingRequest[T],
+) -> FederatedTrainingExecution:
+    validate_common_request(
+        request.coordinate,
+        request.training_seed,
+        request.clients,
+        request.population_client_count,
+    )
+    configure_deterministic_execution(request.training_seed)
+    device = resolve_cuda_device()
+
+    ordered_inputs = tuple(sorted(request.clients, key=lambda item: item.client))
+    prepared = tuple(prepare_federated_client_data(item, request.autoencoder) for item in ordered_inputs)
+    provenance = tuple(
+        PreparedClientProvenance(
+            client=item.client,
+            preprocessing_checksum=item.preprocessing_checksum,
+        )
+        for item in prepared
+    )
+
+    initial_model = build_reconstruction_autoencoder(
+        request.autoencoder,
+        initialization_seed=request.training_seed,
+    )
+    global_state = clone_autoencoder_state(initial_model)
+
+    candidate_rounds = frozenset(request.checkpoint_protocol.candidates)
+    proximal_coefficient = _proximal_coefficient(request.training_protocol)
+    rounds: list[FederatedRoundResult] = []
+    snapshots: list[RoundSnapshot] = []
+
+    for round_value in range(1, request.checkpoint_protocol.maximum_round.value + 1):
+        round_number = RoundNumber(round_value)
+        updates: list[ClientUpdate] = []
+        for client_data in prepared:
+            seed = derive_client_stream_seed(
+                request.training_seed,
+                round_number,
+                client_data.client,
+                TrainingStream.GLOBAL_CLIENT_UPDATE,
+            )
+            proximal_term = (
+                ProximalTerm(global_state, proximal_coefficient) if proximal_coefficient is not None else None
+            )
+            updates.append(
+                train_client_update(
+                    client_data=client_data,
+                    initial_state=global_state,
+                    autoencoder=request.autoencoder,
+                    optimizer_protocol=request.training_protocol.optimizer,
+                    learning_rate=request.learning_rate,
+                    batch_size=request.batch_size,
+                    seed=seed,
+                    device=device,
+                    proximal_term=proximal_term,
+                )
+            )
+
+        aggregated = aggregate_client_updates(updates)
+        aggregate_loss = compute_weighted_aggregate_loss(updates)
+        state_checksum, state_size = serialize_and_checksum_state_dict(aggregated)
+        communication = create_communication_record(
+            round_number,
+            state_size,
+            upload_count=request.population_client_count,
+            download_count=request.population_client_count,
+        )
+        rounds.append(
+            FederatedRoundResult(
+                round_number=round_number,
+                client_results=tuple(ClientTrainingResult.from_update(update) for update in updates),
+                aggregate_loss=aggregate_loss,
+                communication=communication,
+                global_state_reference=GlobalModelStateReference(
+                    coordinate=request.coordinate,
+                    round_number=round_number,
+                    state_checksum=state_checksum,
+                    tensor_path=None,
+                ),
+                personalized_state_references=(),
+            )
+        )
+        global_state = aggregated
+        if round_number in candidate_rounds:
+            snapshots.append(
+                create_round_snapshot(
+                    round_number,
+                    global_state,
+                    aggregate_loss,
+                )
+            )
+
+    history = FederatedTrainingHistory(
+        coordinate=request.coordinate,
+        rounds=tuple(rounds),
+    )
+    result = FederatedTrainingResult(
+        coordinate=request.coordinate,
+        autoencoder=request.autoencoder,
+        checkpoint_protocol=request.checkpoint_protocol,
+        history=history,
+        preprocessing_state_set_checksum=preprocessing_state_set_checksum(provenance),
+        split_manifest_checksum=request.split_manifest_checksum,
+        device_name=torch.cuda.get_device_name(device).strip(),
+        batch_size_used=request.batch_size,
+    )
+    return FederatedTrainingExecution(
+        training_result=result,
+        snapshots=tuple(snapshots),
+    )

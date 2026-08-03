@@ -34,7 +34,7 @@ from datp_core.domain.values import (
 )
 from datp_core.evaluation.controls import FixedScoreEvidence
 from datp_core.evaluation.models import MetricStatus
-from datp_core.learning.federated.models import FederatedTrainingCoordinate
+from datp_core.learning.federated.models import FederatedTrainingCoordinate, PreparedClientProvenance
 from datp_core.learning.federated.training import preprocessing_state_set_checksum
 from datp_core.orchestration.stages.analyze import AnalyzeRequest, analyze_stage
 from datp_core.orchestration.stages.construct_federated_thresholds import (
@@ -332,9 +332,9 @@ def _prepare_confirmatory_seed(training_seed: Seed) -> ConfirmatorySeedContext:
     identity_kind = resolve_population(population).declaration.identity_kind
     state_set_checksum = preprocessing_state_set_checksum(
         tuple(
-            (
-                ClientIdentity(population, item.client_identity.value, identity_kind),
-                item.result.fitted_state.estimator_checksum,
+            PreparedClientProvenance(
+                client=ClientIdentity(population, item.client_identity.value, identity_kind),
+                preprocessing_checksum=item.result.fitted_state.estimator_checksum,
             )
             for item in preprocessing.client_publications
         )

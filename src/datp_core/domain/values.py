@@ -511,6 +511,10 @@ def checksum_text(payload: str) -> Checksum:
     return Checksum(sha256(payload.encode()).hexdigest())
 
 
+def checksum_bytes(payload: bytes) -> Checksum:
+    return Checksum(sha256(payload).hexdigest())
+
+
 def checksum_file(path: Path) -> Checksum:
     with path.open("rb") as source:
         return Checksum(file_digest(source, "sha256").hexdigest())

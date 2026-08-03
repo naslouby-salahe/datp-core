@@ -81,7 +81,7 @@ def test_train_fedavg_rejects_partial_client_participation(tmp_path: Path) -> No
         split_manifest_checksum=Checksum("a" * 64),
         output_directory=tmp_path / "output",
     )
-    with pytest.raises(ScientificContractError, match="declared population client count"):
+    with pytest.raises(ScientificContractError, match="does not match the declared population count"):
         train_fedavg(request)
 
 

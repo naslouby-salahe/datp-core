@@ -1,49 +1,45 @@
 """Stage: dispatch federated training across FedAvg, FedProx, and genuine Ditto."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from shutil import rmtree
 
 import polars as pl
+from filelock import FileLock
 
-from datp_core.artifacts.store import AtomicPublication, publish_atomically
 from datp_core.domain.enums import ContractSubject, PublicationStatus, StageOperationId
-from datp_core.domain.errors import ArtifactIntegrityError, ScientificContractError
+from datp_core.domain.errors import ScientificContractError
 from datp_core.domain.values import (
     BatchSize,
     Checksum,
     ClientCount,
     FeatureNameSequence,
     LearningRate,
-    RoundNumber,
     Seed,
 )
 from datp_core.learning.federated.checkpointing import (
     CheckpointCandidate,
     FederatedHistoryAssetName,
+    ReusedDittoTrainingRequest,
     ReusedFederatedTrainingRequest,
-    ReusedPersonalizedCandidatesRequest,
-    candidate_set_digest,
-    federated_training_directory_is_reusable,
+    load_reused_ditto_training,
     load_reused_federated_training,
-    load_reused_personalized_candidates,
-    persist_federated_training_history,
     rebase_checkpoint_candidates,
 )
-from datp_core.learning.federated.ditto import DittoTrainingOutcome, DittoTrainingRequest, train_ditto
+from datp_core.learning.federated.ditto import DittoTrainingRequest, train_ditto
 from datp_core.learning.federated.fedavg import train_fedavg
 from datp_core.learning.federated.fedprox import train_fedprox
 from datp_core.learning.federated.models import (
     ClientTrainingInput,
     FederatedTrainingCoordinate,
-    FederatedTrainingOutcome,
     FederatedTrainingResult,
+    PreparedClientProvenance,
 )
 from datp_core.learning.federated.training import (
     FederatedTrainingRequest,
     preprocessing_state_set_checksum,
 )
-from datp_core.orchestration.stages import _Box
 from datp_core.populations.catalogue import resolve_population
 from datp_core.populations.models import ClientIdentity
 from datp_core.preprocessing.models import ClientPreprocessPublication
@@ -56,15 +52,35 @@ from datp_core.protocols.models import (
 )
 
 
-def _training_is_reusable(directory: Path, candidate_rounds: tuple[RoundNumber, ...]) -> bool:
+def _training_is_reusable(directory: Path) -> bool:
     complete = directory / FederatedHistoryAssetName.COMPLETE.value
-    if not complete.is_file():
-        return False
-    try:
-        expected_digest = Checksum(complete.read_text(encoding="utf-8").strip())
-    except (OSError, UnicodeError, ValueError):
-        return False
-    return federated_training_directory_is_reusable(directory, candidate_rounds, expected_digest)
+    return complete.is_file()
+
+
+def _remove_stale_temporary_directories(target: Path) -> None:
+    parent = target.parent
+    if not parent.is_dir():
+        return
+    prefix = f".{target.name}."
+    for candidate in sorted(parent.iterdir()):
+        if candidate.is_dir() and candidate.name.startswith(prefix):
+            rmtree(candidate, ignore_errors=True)
+
+
+def _prepare_and_publish(
+    target: Path,
+    overwrite: bool,
+    train: Callable[[Path], None],
+) -> bool:
+    with FileLock(f"{target}.lock"):
+        _remove_stale_temporary_directories(target)
+        if not overwrite and _training_is_reusable(target):
+            return True
+        if target.exists():
+            rmtree(target)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        train(target)
+    return False
 
 
 @dataclass(frozen=True, slots=True)
@@ -137,13 +153,10 @@ class TrainDittoStageResult:
 def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult:
     _require_autoencoder_matches_preprocessing(request.autoencoder, request.client_publications)
     clients = _client_inputs(request.coordinate, request.client_publications)
-    preprocessing_checksum = preprocessing_state_set_checksum(
-        tuple((client.client, client.preprocessing_state.estimator_checksum) for client in clients)
-    )
-    box: _Box[FederatedTrainingOutcome] = _Box()
+    preprocessing_checksum = _compute_checksum(clients)
 
-    def write(temporary: Path) -> None:
-        outcome = train_fedavg(
+    def train(target: Path) -> None:
+        train_fedavg(
             FederatedTrainingRequest(
                 coordinate=request.coordinate,
                 clients=clients,
@@ -155,33 +168,22 @@ def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult
                 batch_size=request.batch_size,
                 learning_rate=request.learning_rate,
                 split_manifest_checksum=request.split_manifest_checksum,
-                output_directory=temporary,
+                output_directory=target,
             )
         )
-        _publish_training_artifacts(temporary, outcome.training_result, outcome.candidates)
-        box.value = outcome
 
-    reused = publish_atomically(
-        AtomicPublication(
-            target=request.output_directory,
-            overwrite=request.overwrite,
-            is_reusable=lambda directory: _training_is_reusable(directory, request.checkpoint_protocol.candidates),
-            write=write,
-            remove_target=rmtree,
-        )
-    )
-    return _finalize_global_training_stage(
-        reload=ReusedFederatedTrainingRequest(
-            coordinate=request.coordinate,
-            directory=request.output_directory,
-            checkpoint_protocol=request.checkpoint_protocol,
-            identity_kind=resolve_population(request.coordinate.population).declaration.identity_kind,
-            autoencoder=request.autoencoder,
-            batch_size=request.batch_size,
-            preprocessing_state_set_checksum=preprocessing_checksum,
-            split_manifest_checksum=request.split_manifest_checksum,
-        ),
-        outcome=box.value,
+    identity_kind = resolve_population(request.coordinate.population).declaration.identity_kind
+    reused = _prepare_and_publish(request.output_directory, request.overwrite, train)
+    return _finalize_global(
+        coordinate=request.coordinate,
+        directory=request.output_directory,
+        clients=clients,
+        identity_kind=identity_kind,
+        checkpoint_protocol=request.checkpoint_protocol,
+        autoencoder=request.autoencoder,
+        batch_size=request.batch_size,
+        preprocessing_checksum=preprocessing_checksum,
+        split_manifest_checksum=request.split_manifest_checksum,
         reused=reused,
     )
 
@@ -189,13 +191,10 @@ def train_fedavg_stage(request: TrainFedAvgRequest) -> TrainFederatedStageResult
 def train_fedprox_stage(request: TrainFedProxRequest) -> TrainFederatedStageResult:
     _require_autoencoder_matches_preprocessing(request.autoencoder, request.client_publications)
     clients = _client_inputs(request.coordinate, request.client_publications)
-    preprocessing_checksum = preprocessing_state_set_checksum(
-        tuple((client.client, client.preprocessing_state.estimator_checksum) for client in clients)
-    )
-    box: _Box[FederatedTrainingOutcome] = _Box()
+    preprocessing_checksum = _compute_checksum(clients)
 
-    def write(temporary: Path) -> None:
-        outcome = train_fedprox(
+    def train(target: Path) -> None:
+        train_fedprox(
             FederatedTrainingRequest(
                 coordinate=request.coordinate,
                 clients=clients,
@@ -207,33 +206,22 @@ def train_fedprox_stage(request: TrainFedProxRequest) -> TrainFederatedStageResu
                 batch_size=request.batch_size,
                 learning_rate=request.learning_rate,
                 split_manifest_checksum=request.split_manifest_checksum,
-                output_directory=temporary,
+                output_directory=target,
             )
         )
-        _publish_training_artifacts(temporary, outcome.training_result, outcome.candidates)
-        box.value = outcome
 
-    reused = publish_atomically(
-        AtomicPublication(
-            target=request.output_directory,
-            overwrite=request.overwrite,
-            is_reusable=lambda directory: _training_is_reusable(directory, request.checkpoint_protocol.candidates),
-            write=write,
-            remove_target=rmtree,
-        )
-    )
-    return _finalize_global_training_stage(
-        reload=ReusedFederatedTrainingRequest(
-            coordinate=request.coordinate,
-            directory=request.output_directory,
-            checkpoint_protocol=request.checkpoint_protocol,
-            identity_kind=resolve_population(request.coordinate.population).declaration.identity_kind,
-            autoencoder=request.autoencoder,
-            batch_size=request.batch_size,
-            preprocessing_state_set_checksum=preprocessing_checksum,
-            split_manifest_checksum=request.split_manifest_checksum,
-        ),
-        outcome=box.value,
+    identity_kind = resolve_population(request.coordinate.population).declaration.identity_kind
+    reused = _prepare_and_publish(request.output_directory, request.overwrite, train)
+    return _finalize_global(
+        coordinate=request.coordinate,
+        directory=request.output_directory,
+        clients=clients,
+        identity_kind=identity_kind,
+        checkpoint_protocol=request.checkpoint_protocol,
+        autoencoder=request.autoencoder,
+        batch_size=request.batch_size,
+        preprocessing_checksum=preprocessing_checksum,
+        split_manifest_checksum=request.split_manifest_checksum,
         reused=reused,
     )
 
@@ -241,81 +229,44 @@ def train_fedprox_stage(request: TrainFedProxRequest) -> TrainFederatedStageResu
 def train_ditto_stage(request: TrainDittoRequest) -> TrainDittoStageResult:
     _require_autoencoder_matches_preprocessing(request.autoencoder, request.client_publications)
     clients = _client_inputs(request.global_coordinate, request.client_publications)
-    preprocessing_checksum = preprocessing_state_set_checksum(
-        tuple((client.client, client.preprocessing_state.estimator_checksum) for client in clients)
-    )
-    box: _Box[DittoTrainingOutcome] = _Box()
-
-    def write_global(temporary: Path) -> None:
-        if box.value is None:
-            box.value = train_ditto(
-                DittoTrainingRequest(
-                    global_coordinate=request.global_coordinate,
-                    personalized_coordinate=request.personalized_coordinate,
-                    clients=clients,
-                    population_client_count=request.population_client_count,
-                    autoencoder=request.autoencoder,
-                    training_protocol=request.training_protocol,
-                    checkpoint_protocol=request.checkpoint_protocol,
-                    training_seed=request.training_seed,
-                    batch_size=request.batch_size,
-                    learning_rate=request.learning_rate,
-                    split_manifest_checksum=request.split_manifest_checksum,
-                    global_output_directory=temporary,
-                    personalized_output_directory=request.personalized_output_directory,
-                )
-            )
-        _publish_training_artifacts(
-            temporary,
-            box.value.global_training_result,
-            box.value.global_candidates,
-        )
-
-    reused = publish_atomically(
-        AtomicPublication(
-            target=request.global_output_directory,
-            overwrite=request.overwrite,
-            is_reusable=lambda directory: _training_is_reusable(directory, request.checkpoint_protocol.candidates),
-            write=write_global,
-            remove_target=rmtree,
-        )
-    )
-    if reused:
-        return _finalize_reused_ditto_stage(request, clients, preprocessing_checksum)
-    if box.value is None:
-        raise ArtifactIntegrityError(
-            "Ditto training write did not populate an outcome", subject=ContractSubject.TRAINING
-        )
-    global_candidates = rebase_checkpoint_candidates(
-        box.value.global_candidates, request.global_output_directory, client=None
-    )
-    personalized_candidates = {
-        pcs.client: rebase_checkpoint_candidates(
-            pcs.candidates,
-            request.personalized_output_directory,
-            client=pcs.client,
-        )
-        for pcs in box.value.personalized_candidates
-    }
-    return TrainDittoStageResult(
-        stage=StageOperationId.TRAIN_FEDERATED,
-        publication_status=PublicationStatus.PUBLISHED,
-        global_training=box.value.global_training_result,
-        global_candidates=global_candidates,
-        personalized_candidates_by_client=personalized_candidates,
-    )
-
-
-def _finalize_reused_ditto_stage(
-    request: TrainDittoRequest,
-    clients: tuple[ClientTrainingInput, ...],
-    preprocessing_checksum: Checksum,
-) -> TrainDittoStageResult:
+    preprocessing_checksum = _compute_checksum(clients)
     identity_kind = resolve_population(request.global_coordinate.population).declaration.identity_kind
-    global_training, global_candidates = load_reused_federated_training(
-        ReusedFederatedTrainingRequest(
-            coordinate=request.global_coordinate,
-            directory=request.global_output_directory,
+
+    def train(target: Path) -> None:
+        train_ditto(
+            DittoTrainingRequest(
+                global_coordinate=request.global_coordinate,
+                personalized_coordinate=request.personalized_coordinate,
+                clients=clients,
+                population_client_count=request.population_client_count,
+                autoencoder=request.autoencoder,
+                training_protocol=request.training_protocol,
+                checkpoint_protocol=request.checkpoint_protocol,
+                training_seed=request.training_seed,
+                batch_size=request.batch_size,
+                learning_rate=request.learning_rate,
+                split_manifest_checksum=request.split_manifest_checksum,
+                global_output_directory=target,
+                personalized_output_directory=request.personalized_output_directory,
+            )
+        )
+
+    reused = _prepare_and_publish(request.global_output_directory, request.overwrite, train)
+    if reused:
+        return _finalize_reused_ditto(
+            request=request,
+            clients=clients,
+            preprocessing_checksum=preprocessing_checksum,
+            identity_kind=identity_kind,
+        )
+
+    outcome = load_reused_ditto_training(
+        ReusedDittoTrainingRequest(
+            global_coordinate=request.global_coordinate,
+            personalized_coordinate=request.personalized_coordinate,
+            global_directory=request.global_output_directory,
+            personalized_directory=request.personalized_output_directory,
+            clients=tuple(client.client for client in clients),
             checkpoint_protocol=request.checkpoint_protocol,
             identity_kind=identity_kind,
             autoencoder=request.autoencoder,
@@ -324,63 +275,99 @@ def _finalize_reused_ditto_stage(
             split_manifest_checksum=request.split_manifest_checksum,
         )
     )
-    reused_personalized_sets = load_reused_personalized_candidates(
-        ReusedPersonalizedCandidatesRequest(
-            personalized_coordinate=request.personalized_coordinate,
-            personalized_output_directory=request.personalized_output_directory,
-            global_history_directory=request.global_output_directory,
-            clients=tuple(client.client for client in clients),
-            checkpoint_protocol=request.checkpoint_protocol,
-            preprocessing_state_set_checksum=preprocessing_checksum,
-            split_manifest_checksum=request.split_manifest_checksum,
-        )
+    global_candidates = rebase_checkpoint_candidates(
+        outcome.global_candidates,
+        request.global_output_directory,
     )
-    personalized_candidates = {pcs.client: pcs.candidates for pcs in reused_personalized_sets}
+    personalized_candidates = {
+        pcs.client: rebase_checkpoint_candidates(pcs.candidates, request.personalized_output_directory)
+        for pcs in outcome.personalized_candidates
+    }
     return TrainDittoStageResult(
         stage=StageOperationId.TRAIN_FEDERATED,
-        publication_status=PublicationStatus.REUSED,
-        global_training=global_training,
+        publication_status=PublicationStatus.PUBLISHED,
+        global_training=outcome.global_training_result,
         global_candidates=global_candidates,
         personalized_candidates_by_client=personalized_candidates,
     )
 
 
-def _publish_training_artifacts(
-    directory: Path,
-    training_result: FederatedTrainingResult,
-    candidates: tuple[CheckpointCandidate, ...],
-) -> None:
-    persist_federated_training_history(
-        training_result.history,
-        directory,
-        device_name=training_result.device_name,
-    )
-    digest = candidate_set_digest(candidates)
-    (directory / FederatedHistoryAssetName.COMPLETE.value).write_text(digest.value, encoding="utf-8")
-
-
-def _finalize_global_training_stage(
+def _finalize_reused_ditto(
     *,
-    reload: ReusedFederatedTrainingRequest,
-    outcome: FederatedTrainingOutcome | None,
+    request: TrainDittoRequest,
+    clients: tuple[ClientTrainingInput, ...],
+    preprocessing_checksum: Checksum,
+    identity_kind,
+) -> TrainDittoStageResult:
+    outcome = load_reused_ditto_training(
+        ReusedDittoTrainingRequest(
+            global_coordinate=request.global_coordinate,
+            personalized_coordinate=request.personalized_coordinate,
+            global_directory=request.global_output_directory,
+            personalized_directory=request.personalized_output_directory,
+            clients=tuple(client.client for client in clients),
+            checkpoint_protocol=request.checkpoint_protocol,
+            identity_kind=identity_kind,
+            autoencoder=request.autoencoder,
+            batch_size=request.batch_size,
+            preprocessing_state_set_checksum=preprocessing_checksum,
+            split_manifest_checksum=request.split_manifest_checksum,
+        )
+    )
+    personalized_candidates = {pcs.client: pcs.candidates for pcs in outcome.personalized_candidates}
+    return TrainDittoStageResult(
+        stage=StageOperationId.TRAIN_FEDERATED,
+        publication_status=PublicationStatus.REUSED,
+        global_training=outcome.global_training_result,
+        global_candidates=outcome.global_candidates,
+        personalized_candidates_by_client=personalized_candidates,
+    )
+
+
+def _finalize_global(
+    *,
+    coordinate: FederatedTrainingCoordinate,
+    directory: Path,
+    clients: tuple[ClientTrainingInput, ...],
+    identity_kind,
+    checkpoint_protocol: CheckpointProtocol,
+    autoencoder: AutoencoderProtocol,
+    batch_size: BatchSize,
+    preprocessing_checksum: Checksum,
+    split_manifest_checksum: Checksum,
     reused: bool,
 ) -> TrainFederatedStageResult:
-    if reused:
-        training, candidates = load_reused_federated_training(reload)
-        status = PublicationStatus.REUSED
-    else:
-        if outcome is None:
-            raise ArtifactIntegrityError(
-                "federated training write did not populate an outcome", subject=ContractSubject.TRAINING
-            )
-        training = outcome.training_result
-        candidates = rebase_checkpoint_candidates(outcome.candidates, reload.directory, client=None)
-        status = PublicationStatus.PUBLISHED
+    reload_request = ReusedFederatedTrainingRequest(
+        coordinate=coordinate,
+        directory=directory,
+        clients=tuple(client.client for client in clients),
+        checkpoint_protocol=checkpoint_protocol,
+        identity_kind=identity_kind,
+        autoencoder=autoencoder,
+        batch_size=batch_size,
+        preprocessing_state_set_checksum=preprocessing_checksum,
+        split_manifest_checksum=split_manifest_checksum,
+    )
+    outcome = load_reused_federated_training(reload_request)
+    status = PublicationStatus.REUSED if reused else PublicationStatus.PUBLISHED
+    candidates = rebase_checkpoint_candidates(outcome.candidates, directory)
     return TrainFederatedStageResult(
         stage=StageOperationId.TRAIN_FEDERATED,
         publication_status=status,
-        training=training,
+        training=outcome.training_result,
         candidates=candidates,
+    )
+
+
+def _compute_checksum(clients: tuple[ClientTrainingInput, ...]) -> Checksum:
+    return preprocessing_state_set_checksum(
+        tuple(
+            PreparedClientProvenance(
+                client=client.client,
+                preprocessing_checksum=client.preprocessing_state.estimator_checksum,
+            )
+            for client in clients
+        )
     )
 
 

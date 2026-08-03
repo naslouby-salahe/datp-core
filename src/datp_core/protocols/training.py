@@ -112,8 +112,9 @@ FEDPROX_TRAINING_PROTOCOLS = tuple(
 DITTO_TRAINING_PROTOCOLS = tuple(
     DittoProtocol(
         kind=TrainingModelId.DITTO_PERSONALIZED_AUTOENCODER,
-        regularization=regularization,
+        local_epochs=FEDAVG_LOCAL_EPOCHS,
         optimizer=OPTIMIZER,
+        regularization=regularization,
     )
     for regularization in DITTO_REGULARIZATION_GRID
 )
