@@ -70,16 +70,78 @@ jobs:
           if "CanonicalColumnPosition(position)" not in materialization:
               raise SystemExit("canonical provenance position boundary was not converted")
           materialization_path.write_text(materialization, encoding="utf-8")
+
+          models_path = Path("src/datp_core/datasets/models.py")
+          models = models_path.read_text(encoding="utf-8")
+          persisted_field = "    duplicate_timestamp_count: int"
+          typed_persisted_field = "    duplicate_timestamp_count: RowCount"
+          if models.count(persisted_field) != 1:
+              raise SystemExit(
+                  f"persisted chronology duplicate-count fields: {models.count(persisted_field)}"
+              )
+          models = models.replace(persisted_field, typed_persisted_field, 1)
+          models_path.write_text(models, encoding="utf-8")
+
+          tests_path = Path("tests/unit/datasets/test_dataset_models.py")
+          tests = tests_path.read_text(encoding="utf-8")
+          tests = tests.replace(
+              "from datp_core.datasets.models import (",
+              "from datp_core.datasets.models import (",
+              1,
+          )
+          if "    _ChronologyEntry,\n" not in tests:
+              if "from datp_core.datasets.models import (" in tests:
+                  tests = tests.replace(
+                      "from datp_core.datasets.models import (\n",
+                      "from datp_core.datasets.models import (\n    _ChronologyEntry,\n",
+                      1,
+                  )
+              else:
+                  tests = tests.replace(
+                      "from datp_core.datasets.models import ",
+                      "from datp_core.datasets.models import _ChronologyEntry, ",
+                      1,
+                  )
+          regression = dedent('''
+              def test_manifest_chronology_rehydrates_typed_duplicate_count() -> None:
+                  entry = _ChronologyEntry.model_validate_json(
+                      """{
+                          "group_identity": "Modbus",
+                          "status": "available",
+                          "total_rows": 10,
+                          "parseable_rows": 10,
+                          "invalid_rows": 0,
+                          "duplicate_timestamp_count": 2,
+                          "is_monotonic": true,
+                          "reason": "verified chronology",
+                          "temporal_eligible": true
+                      }"""
+                  )
+                  assert entry.duplicate_timestamp_count == RowCount(2)
+          ''').lstrip()
+          if regression.strip() not in tests:
+              marker = "\ndef test_canonical_coordinate_is_a_stable_human_readable_dataset_root"
+              if marker not in tests:
+                  raise SystemExit("dataset model round-trip insertion marker missing")
+              tests = tests.replace(
+                  marker,
+                  "\n" + regression.rstrip() + "\n\n" + marker.lstrip(),
+                  1,
+              )
+          tests_path.write_text(tests, encoding="utf-8")
           PY
 
       - name: Compile transformed source and tests
         run: python -m compileall -q src tests
 
-      - name: Run dataset contract regressions
+      - name: Run persisted chronology regressions
         run: |
           mkdir -p data/raw
           uv run pytest -vv \
-            -k "raw_inventory_rejects_mismatched_source_count or chronology_rejects_parseable_invalid_mismatch or schema_is_locked or schema_construction or chronology_rejects_raw_duplicate_timestamp_count"
+            tests/unit/datasets/test_dataset_models.py \
+            tests/unit/populations/test_edge_temporal_groups.py \
+            tests/unit/orchestration/stages/test_preprocess_stages.py \
+            tests/integration/populations/test_temporal_split_no_future_leakage.py
 
       - name: Run full regression suite
         run: |
