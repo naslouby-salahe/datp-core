@@ -17,7 +17,6 @@ from datp_core.centralized_reference.checkpointing import retain_centralized_che
 from datp_core.centralized_reference.scoring import CentralizedScoringRequest, score_centralized_reference
 from datp_core.centralized_reference.thresholding import (
     CENTRALIZED_POOLED_QUANTILE_PROTOCOL,
-    FederatedScoreMarker,
     construct_pooled_benign_quantile,
     exact_pooled_quantile,
     reject_attack_rows_in_benign_calibration,
@@ -88,7 +87,8 @@ def test_rejects_attack_rows_in_calibration() -> None:
 def test_rejects_federated_scores_and_local_mean() -> None:
     with pytest.raises(LeakageError, match="federated score"):
         reject_federated_scores_for_centralized_threshold(
-            FederatedScoreMarker("fedavg_scores", FederatedThresholdMethod.SHARED_THRESHOLD)
+            "fedavg_scores",
+            FederatedThresholdMethod.SHARED_THRESHOLD,
         )
     with pytest.raises(LeakageError, match="arithmetic mean of local quantiles"):
         reject_local_quantile_mean_as_centralized((0.1, 0.2, 0.3))
