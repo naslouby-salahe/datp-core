@@ -376,19 +376,20 @@ def test_conformal_significance_is_derived_from_coverage() -> None:
         coverage=CoverageTarget(0.95),
         eligible_clients=(CLIENT_A,),
         assignments=(
-  ConformalAssignment(
-      client=CLIENT_A,
-      calibration_count=RowCount(20),
-      rank_index=19,
-      effective_quantile=Quantile(0.95),
-      selected_score=ScoreValue(1.0),
-      tie_count=RowCount(1),
-      threshold=ThresholdValue(1.0),
-  ),
+            ConformalAssignment(
+                client=CLIENT_A,
+                calibration_count=RowCount(20),
+                rank_index=19,
+                effective_quantile=Quantile(0.95),
+                selected_score=ScoreValue(1.0),
+                tie_count=RowCount(1),
+                threshold=ThresholdValue(1.0),
+            ),
         ),
         unavailable_clients=(),
     )
     assert result.significance == Ratio(0.05)
+
 
 def test_fixed_coefficient_result_holds_its_value() -> None:
     result = FixedCoefficientResult(coefficient=SummaryCoefficient(2.0), threshold=ThresholdValue(3.0))

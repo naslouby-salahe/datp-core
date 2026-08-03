@@ -614,23 +614,24 @@ class ConformalThresholdResult:
 
     def __post_init__(self) -> None:
         require_contract(
-  0.0 < self.coverage.value <= 1.0,
-  "conformal coverage must be in (0, 1]",
-  ContractSubject.THRESHOLD,
+            0.0 < self.coverage.value <= 1.0,
+            "conformal coverage must be in (0, 1]",
+            ContractSubject.THRESHOLD,
         )
         require_contract(
-  bool(self.assignments),
-  "a conformal threshold result requires at least one assigned client",
-  ContractSubject.THRESHOLD,
+            bool(self.assignments),
+            "a conformal threshold result requires at least one assigned client",
+            ContractSubject.THRESHOLD,
         )
         _validate_client_partition(
-  self.eligible_clients, tuple(a.client for a in self.assignments), self.unavailable_clients
+            self.eligible_clients, tuple(a.client for a in self.assignments), self.unavailable_clients
         )
 
     @property
     def significance(self) -> Ratio:
         """Conformal miscoverage derived from the single authoritative coverage target."""
         return Ratio(1.0 - self.coverage.value)
+
 
 @dataclass(frozen=True, slots=True)
 class ClientBenignSummary:
