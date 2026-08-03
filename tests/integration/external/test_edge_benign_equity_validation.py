@@ -1,19 +1,16 @@
-from datp_core.domain.enums import EvidenceRole, ExperimentId, FederatedThresholdMethod, MetricId, PopulationId
-from datp_core.experiments.feasibility import ExternalTemporalFeasibilityRequest, assess_external_temporal_feasibility
+from datp_core.domain.enums import FederatedThresholdMethod, MetricId
+from datp_core.experiments.feasibility import EdgeExternalFeasibilityRequest, assess_external_temporal_feasibility
 
 
 def test_edge_validation_keeps_attack_assignment_unavailable() -> None:
     result = assess_external_temporal_feasibility(
-        ExternalTemporalFeasibilityRequest(
-            ExperimentId.EDGE_BENIGN_EQUITY_VALIDATION,
-            PopulationId.EDGE_SENSOR_GROUPS,
-            EvidenceRole.EXTERNAL_VALIDATION,
-            FederatedThresholdMethod.SHARED_THRESHOLD,
-            (MetricId.FALSE_POSITIVE_RATE,),
-            False,
-            False,
-            True,
-            False,
+        EdgeExternalFeasibilityRequest(
+            threshold_method=FederatedThresholdMethod.SHARED_THRESHOLD,
+            requested_metrics=(MetricId.FALSE_POSITIVE_RATE,),
+            routed_through_confirmatory_command=False,
+            grouped_assignment_available=False,
+            required_artifacts_available=True,
+            attack_assignment_claimed_available=False,
         )
     )
     assert result.feasible
