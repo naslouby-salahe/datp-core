@@ -1,13 +1,12 @@
 name: Repository model audit
 
-"on": [push]
+"on": [push, pull_request]
 
 permissions:
   contents: read
 
 jobs:
   audit:
-    if: github.ref == 'refs/heads/agent/consolidate-dataclass-contracts'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10
@@ -82,9 +81,7 @@ jobs:
                       if call is None:
                           continue
                       fields = [item for item in node.body if isinstance(item, ast.AnnAssign) and isinstance(item.target, ast.Name)]
-                      instance_fields = [
-                          item for item in fields if not annotation_text(item.annotation).startswith("ClassVar[")
-                      ]
+                      instance_fields = [item for item in fields if not annotation_text(item.annotation).startswith("ClassVar[")]
                       if len(instance_fields) == 1:
                           field = instance_fields[0]
                           one_field_dataclasses.append(
@@ -96,13 +93,9 @@ jobs:
                           name = field.target.id
                           annotation = annotation_text(field.annotation)
                           if annotation in primitive_annotations and any(token in name.lower() for token in semantic_tokens):
-                              primitive_domain_fields.append(
-                                  f"{location(path, field)} {node.name}.{name}: {annotation}"
-                              )
+                              primitive_domain_fields.append(f"{location(path, field)} {node.name}.{name}: {annotation}")
                           if frozen and equality and any(token in annotation for token in mutable_tokens):
-                              mutable_frozen_fields.append(
-                                  f"{location(path, field)} {node.name}.{name}: {annotation}"
-                              )
+                              mutable_frozen_fields.append(f"{location(path, field)} {node.name}.{name}: {annotation}")
                   elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.name.startswith("__"):
                       normalized = ast.dump(ast.Module(body=node.body, type_ignores=[]), include_attributes=False)
                       if len(normalized) >= 160:
@@ -113,11 +106,8 @@ jobs:
                       if any(fragment in rendered for fragment in ('"family" in ', "'family' in ", '"cluster" in ', "'cluster' in ")):
                           string_dispatch.append(f"{location(path, node)} {rendered}")
 
-          duplicate_classes = {
-              name: places for name, places in class_locations.items() if len(places) > 1
-          }
+          duplicate_classes = {name: places for name, places in class_locations.items() if len(places) > 1}
           duplicate_functions = [places for places in function_bodies.values() if len(places) > 1]
-
           sections = (
               ("EXPLICIT_ANY", sorted(set(explicit_any))),
               ("PRIMITIVE_DOMAIN_FIELDS", primitive_domain_fields),
