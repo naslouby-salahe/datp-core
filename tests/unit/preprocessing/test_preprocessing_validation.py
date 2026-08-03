@@ -1,6 +1,7 @@
 import numpy as np
 import polars as pl
 import pytest
+from sklearn.preprocessing import StandardScaler
 
 from datp_core.domain.enums import (
     ContractSubject,
@@ -27,7 +28,7 @@ from datp_core.populations.models import OUTCOME_LABEL_COLUMN, STABLE_ROW_ID_COL
 from datp_core.preprocessing.models import (
     PreprocessingFitBatch,
     PreprocessingPartition,
-    PreprocessingPartitionSet,
+    PreprocessingPartitions,
     PreprocessingProtocol,
 )
 from datp_core.preprocessing.validation import (
@@ -61,21 +62,26 @@ def _partition_frame(row_ids: list[str], labels: list[str]) -> pl.DataFrame:
     )
 
 
-def test_partition_set_and_overlap_guards() -> None:
+def test_partitions_and_overlap_guards() -> None:
     train = PreprocessingPartition(PartitionRole.TRAIN, _partition_frame(["r0", "r1"], ["benign", "benign"]))
-    cal = PreprocessingPartition(PartitionRole.CALIBRATION, _partition_frame(["r2"], ["benign"]))
-    eval_p = PreprocessingPartition(PartitionRole.EVALUATION, _partition_frame(["r3"], ["benign"]))
-    pset = PreprocessingPartitionSet((train, cal, eval_p))
+    calibration = PreprocessingPartition(PartitionRole.CALIBRATION, _partition_frame(["r2"], ["benign"]))
+    evaluation = PreprocessingPartition(PartitionRole.EVALUATION, _partition_frame(["r3"], ["benign"]))
+    partitions = PreprocessingPartitions((train, calibration, evaluation))
 
-    validate_no_partition_overlap(pset, split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS)
+    validate_no_partition_overlap(partitions, split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS)
 
-    overlap_cal = PreprocessingPartition(PartitionRole.CALIBRATION, _partition_frame(["r1"], ["benign"]))
-    overlap_set = PreprocessingPartitionSet((train, overlap_cal, eval_p))
+    overlap = PreprocessingPartitions(
+        (
+            train,
+            PreprocessingPartition(PartitionRole.CALIBRATION, _partition_frame(["r1"], ["benign"])),
+            evaluation,
+        )
+    )
     with pytest.raises(LeakageError, match="overlap"):
-        validate_no_partition_overlap(overlap_set, split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS)
+        validate_no_partition_overlap(overlap, split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS)
 
 
-def test_extract_partitions_returns_partition_set_with_ordering() -> None:
+def test_extract_partitions_returns_role_indexed_collection() -> None:
     frame = pl.DataFrame(
         {
             "partition_role": ["train", "train", "calibration", "evaluation"],
@@ -85,44 +91,36 @@ def test_extract_partitions_returns_partition_set_with_ordering() -> None:
             "f1": [5.0, 6.0, 7.0, 8.0],
         }
     )
-    pset = extract_partitions(
+    partitions = extract_partitions(
         frame,
         FeatureNameSequence((FeatureName("f0"), FeatureName("f1"))),
         split_protocol=SplitProtocolId.NON_TEMPORAL_EQUAL_THIRDS,
         branch=ProcessedDataBranch.FEDERATED,
         ordering=PartitionOrdering.STABLE_ROW_ID,
     )
-    assert isinstance(pset, PreprocessingPartitionSet)
-    assert pset.require(PartitionRole.TRAIN).row_ids.row_ids == ("r1", "r2")
+
+    assert isinstance(partitions, PreprocessingPartitions)
+    assert partitions.require(PartitionRole.TRAIN).row_ids.row_ids == ("r1", "r2")
 
 
 def test_fit_trusted_batch_validation_rules() -> None:
     protocol = _protocol()
-    # 0-row matrix
-    with pytest.raises(ScientificContractError, match="at least one row"):
-        fit_trusted_batch(
-            protocol,
-            PreprocessingFitBatch(
-                training_matrix=np.empty((0, 2)),
-                training_row_ids=StableRowIdSequence((StableRowId("r0"),)),
-                training_labels=OutcomeLabelSequence((OutcomeLabel("benign"),)),
-            ),
-            subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        )
+    invalid_batches = (
+        PreprocessingFitBatch(
+            training_matrix=np.empty((0, 2)),
+            training_row_ids=StableRowIdSequence((StableRowId("r0"),)),
+            training_labels=OutcomeLabelSequence((OutcomeLabel("benign"),)),
+        ),
+        PreprocessingFitBatch(
+            training_matrix=np.array([1.0, 2.0]),
+            training_row_ids=StableRowIdSequence((StableRowId("r0"),)),
+            training_labels=OutcomeLabelSequence((OutcomeLabel("benign"),)),
+        ),
+    )
+    for batch in invalid_batches:
+        with pytest.raises(ScientificContractError, match="non-empty and two-dimensional"):
+            fit_trusted_batch(protocol, batch, subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING)
 
-    # 1D matrix
-    with pytest.raises(ScientificContractError, match="two-dimensional"):
-        fit_trusted_batch(
-            protocol,
-            PreprocessingFitBatch(
-                training_matrix=np.array([1.0, 2.0]),
-                training_row_ids=StableRowIdSequence((StableRowId("r0"),)),
-                training_labels=OutcomeLabelSequence((OutcomeLabel("benign"),)),
-            ),
-            subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
-        )
-
-    # Wrong width
     with pytest.raises(ScientificContractError, match="width must match"):
         fit_trusted_batch(
             protocol,
@@ -134,7 +132,6 @@ def test_fit_trusted_batch_validation_rules() -> None:
             subject=PreprocessingFitScope.CLIENT_LOCAL_TRAINING,
         )
 
-    # Non-finite matrix
     with pytest.raises(ScientificContractError, match="training matrix must be finite"):
         fit_trusted_batch(
             protocol,
@@ -149,11 +146,8 @@ def test_fit_trusted_batch_validation_rules() -> None:
 
 def test_transform_feature_matrix_validations() -> None:
     protocol = _protocol()
-    from sklearn.preprocessing import StandardScaler
-
     fitted = StandardScaler().fit(np.array([[1.0, 2.0], [3.0, 4.0]]))
 
-    # 1D matrix
     with pytest.raises(ScientificContractError, match="two-dimensional"):
         transform_feature_matrix(
             fitted,
@@ -163,7 +157,6 @@ def test_transform_feature_matrix_validations() -> None:
             description="transformed evaluation matrix",
         )
 
-    # Finite matrix validation
     require_finite_matrix(np.asarray([[1.0, 2.0]]), subject=ContractSubject.FEATURES, description="test matrix")
     with pytest.raises(ScientificContractError):
         require_finite_matrix(np.asarray([[1.0, np.nan]]), subject=ContractSubject.FEATURES, description="test matrix")
